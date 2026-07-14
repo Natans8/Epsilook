@@ -33,6 +33,9 @@ window.EpsilookConfig = {
   // How many tags to show per cell before collapsing behind "+N more".
   tagsCollapsedLimit: 4,
 
+  // How many sound files to show per SoundKit group before collapsing.
+  kitFilesCollapsedLimit: 2,
+
   // Live search: debounce (ms) and minimum query length.
   searchDebounceMs: 250,
   minQueryLength: 2,

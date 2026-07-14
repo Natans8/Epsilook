@@ -40,7 +40,7 @@
           <code>name:</code> <code>model:</code> <code>sound:</code> <code>soundkit:</code> <code>animkit:</code> <code>id:</code></li>
         <li>Prefixes combine — <code>model:missile name:fire</code> finds fire-named spells using a missile model.</li>
         <li>Quotes mean an exact file — <code>model:"spells/cfx_mage_fireball_impact.m2"</code> (clicking a tag does this for you).</li>
-        <li>Click any tag in the results to search for it. On a tag, <b>⧉</b> copies the ID and <b>»</b> copies the in-game command.</li>
+        <li>Click any tag in the results to search for it. On a tag, <b>⧉</b> copies the ID; <b>.lo</b> / <b>/</b> / <b>.mod</b> copy the in-game command (<code>.lookup object</code>, <code>/script PlaySound</code>, <code>.modify animkit</code>).</li>
         <li>Hiding a column (toolbar) also excludes it from All-mode search and from exports.</li>
       </ul>
     </div>
@@ -65,7 +65,7 @@
         <span>Export:</span>
         <button id="export-csv" title="Download the current results as CSV">CSV</button>
         <button id="export-json" title="Download the current results as JSON">JSON</button>
-        <button id="export-discord" title="Copy a pasteable list for Discord and chat">Copy for Discord</button>
+        <button id="export-discord" title="Copy a pasteable text list (works great in Discord and chat)">Copy as Text</button>
       </div>
     </div>
 
