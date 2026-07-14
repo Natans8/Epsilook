@@ -93,10 +93,14 @@ window.EpsilookSearch = (() => {
     all: {
       label: "All", tab: true,
       placeholder: "Search spell names, model files and sound files…",
-      run(tokens, data) {
+      run(tokens, data, disabled) {
         const out = spellsByName(tokens, data);
-        for (const s of spellsByFile(tokens, data, data.modelFids, data.modelSpells)) out.add(s);
-        for (const s of spellsByFile(tokens, data, data.soundFids, data.soundSpells)) out.add(s);
+        if (!disabled.has("model")) {
+          for (const s of spellsByFile(tokens, data, data.modelFids, data.modelSpells)) out.add(s);
+        }
+        if (!disabled.has("sound")) {
+          for (const s of spellsByFile(tokens, data, data.soundFids, data.soundSpells)) out.add(s);
+        }
         // a pure number also hits the exact spell ID
         if (tokens.length === 1 && /^\d+$/.test(tokens[0].text)
             && data.spellIndex.has(Number(tokens[0].text))) {
@@ -147,8 +151,10 @@ window.EpsilookSearch = (() => {
   /* -------------------------------------------------------------- search */
 
   // Returns {spellIds: number[], total, ms} — AND across fields,
-  // token semantics per field as above.
-  function search(raw, mode, data) {
+  // token semantics per field as above. `disabledFields` (from hidden
+  // columns) are skipped inside the All field; explicit prefixes for
+  // them still work.
+  function search(raw, mode, data, disabledFields = new Set()) {
     const t0 = performance.now();
     const tokens = parseQuery(raw, mode);
 
@@ -161,7 +167,7 @@ window.EpsilookSearch = (() => {
 
     let result = null;
     for (const [field, fieldTokens] of byField) {
-      const set = FIELDS[field].run(fieldTokens, data);
+      const set = FIELDS[field].run(fieldTokens, data, disabledFields);
       result = result === null ? set : intersect(result, set);
       if (result.size === 0) break;
     }
