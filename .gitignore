@@ -1,0 +1,12 @@
+# local game database copies (hundreds of MB)
+*.sqlite
+
+# downloaded source data (re-fetched by build/build_data.py)
+build/cache/
+
+# IDE
+.idea/
+.vscode/
+
+# local tooling
+.claude/
