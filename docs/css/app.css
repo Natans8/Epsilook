@@ -140,15 +140,15 @@ main { padding: 0 1.6rem 2rem; max-width: 1600px; margin: 0 auto; }
   padding: 0.4rem 0 0.6rem;
 }
 
-#filters {
+#filters, #columns {
   display: flex;
   gap: 0.9rem;
   align-items: center;
   color: var(--text-dim);
   font-size: 0.9rem;
 }
-#filters label { cursor: pointer; user-select: none; }
-#filters input { accent-color: var(--gold); vertical-align: -2px; }
+#filters label, #columns label { cursor: pointer; user-select: none; }
+#filters input, #columns input { accent-color: var(--gold); vertical-align: -2px; }
 
 #export {
   display: flex;
@@ -215,8 +215,9 @@ tbody tr:hover { background: #1a212c; box-shadow: inset 3px 0 0 var(--gold-dim);
 .c-id { width: 5.5rem; }
 .c-name { min-width: 13rem; max-width: 20rem; }
 .c-cmds { width: 16rem; }
-.c-models, .c-sounds { min-width: 14rem; }
-.c-soundkits, .c-animkits { min-width: 7rem; }
+.c-models { min-width: 14rem; }
+.c-sounds { min-width: 16rem; }
+.c-animkits { min-width: 7rem; }
 
 .id-copy { color: var(--gold); font-variant-numeric: tabular-nums; }
 .id-copy:hover { text-decoration: underline; }
@@ -245,7 +246,26 @@ tbody tr:hover { background: #1a212c; box-shadow: inset 3px 0 0 var(--gold-dim);
   white-space: pre-line;
 }
 
+td.empty { text-align: center; vertical-align: middle; }
 .none { color: var(--text-dim); opacity: 0.5; }
+
+/* column hiding */
+#results.hide-models   .c-models   { display: none; }
+#results.hide-sounds   .c-sounds   { display: none; }
+#results.hide-animkits .c-animkits { display: none; }
+#results.hide-commands .c-cmds     { display: none; }
+
+/* soundkit groups: a kit and the sound files it contains */
+.kit-group {
+  margin: 0.15rem 0 0.35rem;
+  padding-left: 0.55rem;
+  border-left: 2px solid rgba(95, 175, 143, 0.35);
+}
+.kit-group:last-of-type { margin-bottom: 0.15rem; }
+.kit-group > .tag { margin-bottom: 0.15rem; }
+.kit-files { padding-left: 0.55rem; }
+.kit-group.overflow { display: none; }
+td.expanded .kit-group.overflow { display: block; }
 
 /* tags */
 

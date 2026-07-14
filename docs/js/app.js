@@ -21,7 +21,25 @@
     rendered: 0,        // rows currently in the table
     filters: { models: false, sounds: false, animkits: false },
     sort: { key: "auto", dir: 1 },
+    // hidden columns (also excluded from All-mode search and from exports)
+    hiddenCols: { models: false, sounds: false, animkits: false, commands: false },
   };
+
+  // column -> search fields it contributes
+  const COL_FIELDS = { models: ["model"], sounds: ["sound", "soundkit"], animkits: ["animkit"] };
+
+  function disabledFields() {
+    const out = new Set();
+    for (const [col, fields] of Object.entries(COL_FIELDS)) {
+      if (state.hiddenCols[col]) fields.forEach((f) => out.add(f));
+    }
+    return out;
+  }
+
+  // "9.2.7.45745" -> "9.2.7" (used for clean URLs)
+  const shortVersion = (id) => id.split(".").slice(0, 3).join(".");
+
+  const stripExt = (name) => name.replace(/\.[^.]+$/, "");
 
   const $ = (sel) => document.querySelector(sel);
   const el = (tag, className, text) => {
@@ -70,7 +88,7 @@
 
   function stateToHash(push) {
     const params = new URLSearchParams();
-    if (state.version) params.set("v", state.version.id);
+    if (state.version) params.set("v", shortVersion(state.version.id));
     if (state.mode !== "all") params.set("m", state.mode);
     if (state.query) params.set("q", state.query);
     const hash = "#" + params.toString();
@@ -91,6 +109,13 @@
     };
   }
 
+  // accepts both full build ids and short "9.2.7" forms
+  function findVersion(v) {
+    if (!v) return undefined;
+    return state.versions.find((e) => e.id === v) ||
+           state.versions.findLast((e) => shortVersion(e.id) === v);
+  }
+
   /* ------------------------------------------------------------ search */
 
   function runSearch({ push = false } = {}) {
@@ -108,7 +133,7 @@
       return;
     }
 
-    const res = Search.search(raw, state.mode, data);
+    const res = Search.search(raw, state.mode, data, disabledFields());
     state.results = res.spellIds;
     state.tokens = res.tokens;
     state.searchMs = res.ms;
@@ -213,17 +238,9 @@
       (fid) => fileIsHit(d.files.get(fid), "model"));
     tr.appendChild(tagCell("c-models", modelFids.map((fid) => modelTag(fid))));
 
-    // Sounds (unique files) — matched files first
-    const soundEntries = d.spellSounds.get(spellId) || [];
-    const soundFids = hitsFirst([...new Set(soundEntries.map((e) => e.fid))],
-      (fid) => fileIsHit(d.files.get(fid), "sound"));
-    tr.appendChild(tagCell("c-sounds", soundFids.map((fid) => soundTag(fid))));
-
-    // SoundKits (unique kits) — matched kits first
-    const kitIds = hitsFirst(
-      [...new Set(soundEntries.map((e) => e.soundKitId))].sort((a, b) => a - b),
-      (k) => kitIsHit(k, "soundkit"));
-    tr.appendChild(tagCell("c-soundkits", kitIds.map((k) => kitTag(k, "soundkit"))));
+    // Sounds — grouped by SoundKit (a kit contains its sound files);
+    // kits containing a match come first
+    tr.appendChild(soundsCell(d.spellSounds.get(spellId) || []));
 
     // AnimKits — matched kits first
     const animIds = hitsFirst(
@@ -270,6 +287,7 @@
   function tagCell(className, tags) {
     const td = el("td", className);
     if (tags.length === 0) {
+      td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
       return td;
     }
@@ -280,6 +298,61 @@
     });
     if (tags.length > limit) {
       const more = el("button", "more", `+${tags.length - limit} more`);
+      more.dataset.expand = "1";
+      td.appendChild(more);
+    }
+    return td;
+  }
+
+  /* One cell showing each SoundKit with the sound files it contains. */
+  function soundsCell(soundEntries) {
+    const td = el("td", "c-sounds");
+    if (soundEntries.length === 0) {
+      td.classList.add("empty");
+      td.appendChild(el("span", "none", "—"));
+      return td;
+    }
+    const d = state.data;
+
+    const byKit = new Map(); // soundKitId -> [fid]
+    for (const e of soundEntries) {
+      const arr = byKit.get(e.soundKitId);
+      if (arr) arr.push(e.fid); else byKit.set(e.soundKitId, [e.fid]);
+    }
+
+    const kitHasHit = (kitId) =>
+      kitIsHit(kitId, "soundkit") ||
+      byKit.get(kitId).some((fid) => fileIsHit(d.files.get(fid), "sound"));
+    const kitIds = hitsFirst([...byKit.keys()].sort((a, b) => a - b), kitHasHit);
+
+    const groupLimit = Math.max(1, Math.ceil(CFG.tagsCollapsedLimit / 2));
+    let hiddenCount = 0;
+
+    kitIds.forEach((kitId, gi) => {
+      const group = el("div", "kit-group");
+      if (gi >= groupLimit) { group.classList.add("overflow"); }
+      group.appendChild(kitTag(kitId, "soundkit"));
+
+      const filesDiv = el("div", "kit-files");
+      const fids = hitsFirst(byKit.get(kitId), (fid) => fileIsHit(d.files.get(fid), "sound"));
+      fids.forEach((fid, fi) => {
+        const tag = soundTag(fid);
+        if (gi >= groupLimit || fi >= CFG.tagsCollapsedLimit) {
+          tag.classList.add("overflow");
+          hiddenCount++;
+        }
+        filesDiv.appendChild(tag);
+      });
+      group.appendChild(filesDiv);
+      td.appendChild(group);
+    });
+
+    const hiddenGroups = Math.max(0, kitIds.length - groupLimit);
+    if (hiddenGroups > 0 || hiddenCount > 0) {
+      const label = hiddenGroups > 0
+        ? `+${hiddenGroups} more ${hiddenGroups === 1 ? "kit" : "kits"}`
+        : `+${hiddenCount} more`;
+      const more = el("button", "more", label);
       more.dataset.expand = "1";
       td.appendChild(more);
     }
@@ -303,34 +376,38 @@
     return tokensFor(field).some((t) => Number(t.text) === kitId);
   }
 
+  // small helper: a copy button inside a tag. "⧉" copies an ID, "»" a command.
+  function tagButton(glyph, title, copyValue) {
+    const b = el("button", "tag-copy", glyph);
+    b.title = title;
+    b.dataset.copy = copyValue;
+    return b;
+  }
+
   function modelTag(fid) {
     const d = state.data;
     const file = d.files.get(fid) || { fid, path: "", base: "", searchL: "" };
-    const label = file.base || `file #${fid}`;
     const tag = el("span", "tag model");
     if (fileIsHit(file, "model")) tag.classList.add("hit");
 
-    const txt = el("button", "tag-label", label);
+    const txt = el("button", "tag-label", file.base ? stripExt(file.base) : `file #${fid}`);
     txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this model`;
     txt.dataset.search = file.path ? `model:"${file.path}"` : "";
     tag.appendChild(txt);
 
-    const noExt = file.base.replace(/\.[^.]+$/, "");
-    const copy = el("button", "tag-copy", "⧉");
-    copy.title = fillTemplate(CFG.modelCopyTemplate, { base: noExt, file: file.base, path: file.path, fid });
-    copy.dataset.copy = copy.title;
-    tag.appendChild(copy);
+    const cmd = fillTemplate(CFG.modelCopyTemplate,
+      { base: stripExt(file.base), file: file.base, path: file.path, fid });
+    tag.appendChild(tagButton("»", `Copy:  ${cmd}`, cmd));
     return tag;
   }
 
   function soundTag(fid) {
     const d = state.data;
     const file = d.files.get(fid) || { fid, path: "", base: "", searchL: "" };
-    const label = file.base || `file #${fid}`;
     const tag = el("span", "tag sound");
     if (fileIsHit(file, "sound")) tag.classList.add("hit");
 
-    const txt = el("button", "tag-label", label);
+    const txt = el("button", "tag-label", file.base ? stripExt(file.base) : `file #${fid}`);
     txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this sound`;
     txt.dataset.search = file.path ? `sound:"${file.path}"` : "";
     tag.appendChild(txt);
@@ -348,11 +425,12 @@
     txt.dataset.search = `${field}:${kitId}`;
     tag.appendChild(txt);
 
+    const kind = field === "soundkit" ? "SoundKit" : "AnimKit";
+    tag.appendChild(tagButton("⧉", `Copy ${kind} ID ${kitId}`, String(kitId)));
+
     const tpl = field === "soundkit" ? CFG.soundKitCopyTemplate : CFG.animKitCopyTemplate;
-    const copy = el("button", "tag-copy", "⧉");
-    copy.title = `Copy:  ${fillTemplate(tpl, { id: kitId })}`;
-    copy.dataset.copy = fillTemplate(tpl, { id: kitId });
-    tag.appendChild(copy);
+    const cmd = fillTemplate(tpl, { id: kitId });
+    tag.appendChild(tagButton("»", `Copy:  ${cmd}`, cmd));
 
     if (field === "soundkit") {
       tag.appendChild(wowheadLink(fillTemplate(CFG.wowheadSoundUrl, { id: kitId }), `SoundKit ${kitId} on Wowhead`));
@@ -381,21 +459,26 @@
 
   /* ------------------------------------------------------------ export */
 
+  // Hidden columns are excluded from exports.
   function exportRows() {
     const d = state.data;
+    const hc = state.hiddenCols;
     const pathOf = (fid) => (d.files.get(fid) || {}).path || `#${fid}`;
     return state.display.map((id) => {
       const i = d.spellIndex.get(id);
-      const sounds = d.spellSounds.get(id) || [];
-      return {
-        id,
-        name: d.names[i],
-        subtext: d.subtexts[i],
-        models: (d.spellModels.get(id) || []).map(pathOf),
-        sounds: [...new Set(sounds.map((e) => e.fid))].map(pathOf),
-        soundKits: [...new Set(sounds.map((e) => e.soundKitId))].sort((a, b) => a - b),
-        animKits: (d.spellAnimKits.get(id) || []).slice().sort((a, b) => a - b),
-      };
+      const row = { id, name: d.names[i], subtext: d.subtexts[i] };
+      if (!hc.models) row.models = (d.spellModels.get(id) || []).map(pathOf);
+      if (!hc.sounds) {
+        const byKit = new Map();
+        for (const e of d.spellSounds.get(id) || []) {
+          if (!byKit.has(e.soundKitId)) byKit.set(e.soundKitId, []);
+          byKit.get(e.soundKitId).push(pathOf(e.fid));
+        }
+        row.soundKits = [...byKit.keys()].sort((a, b) => a - b)
+          .map((k) => ({ id: k, files: byKit.get(k) }));
+      }
+      if (!hc.animkits) row.animKits = (d.spellAnimKits.get(id) || []).slice().sort((a, b) => a - b);
+      return row;
     });
   }
 
@@ -420,17 +503,25 @@
 
   function exportCsv() {
     if (nothingToExport()) return;
+    const hc = state.hiddenCols;
     const esc = (v) => {
       const s = String(v);
       return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
-    const lines = ["ID,Name,Subtext,Models,Sounds,SoundKits,AnimKits"];
+    const header = ["ID", "Name", "Subtext"];
+    if (!hc.models) header.push("Models");
+    if (!hc.sounds) header.push("SoundKits", "Sounds");
+    if (!hc.animkits) header.push("AnimKits");
+    const lines = [header.join(",")];
     for (const r of exportRows()) {
-      lines.push([
-        r.id, esc(r.name), esc(r.subtext),
-        esc(r.models.join("; ")), esc(r.sounds.join("; ")),
-        esc(r.soundKits.join("; ")), esc(r.animKits.join("; ")),
-      ].join(","));
+      const cols = [r.id, esc(r.name), esc(r.subtext)];
+      if (!hc.models) cols.push(esc(r.models.join("; ")));
+      if (!hc.sounds) {
+        cols.push(esc(r.soundKits.map((k) => k.id).join("; ")));
+        cols.push(esc(r.soundKits.map((k) => `${k.id}: ${k.files.join(" | ")}`).join("; ")));
+      }
+      if (!hc.animkits) cols.push(esc(r.animKits.join("; ")));
+      lines.push(cols.join(","));
     }
     downloadFile(exportFilename("csv"), "text/csv", lines.join("\r\n"));
   }
@@ -543,6 +634,18 @@
       });
     }
 
+    // column visibility
+    for (const box of document.querySelectorAll("#columns input[type=checkbox]")) {
+      box.addEventListener("change", () => {
+        state.hiddenCols[box.dataset.col] = !box.checked;
+        try { localStorage.setItem("epsilook.hiddenCols", JSON.stringify(state.hiddenCols)); } catch (e) {}
+        if (disabledFields().has(state.mode)) state.mode = "all";
+        applyHiddenCols();
+        updateTabs();
+        runSearch();
+      });
+    }
+
     // sorting: click cycles ascending -> descending -> back to automatic order
     for (const th of document.querySelectorAll("th[data-sort]")) {
       th.addEventListener("click", () => {
@@ -585,6 +688,21 @@
     $("#q").placeholder = Search.FIELDS[state.mode].placeholder;
   }
 
+  /* Hide table columns, their search tabs, and sync the checkboxes. */
+  function applyHiddenCols() {
+    const table = $("#results");
+    const disabled = disabledFields();
+    for (const [col, hidden] of Object.entries(state.hiddenCols)) {
+      table.classList.toggle(`hide-${col}`, hidden);
+    }
+    for (const btn of document.querySelectorAll("#tabs button")) {
+      btn.hidden = disabled.has(btn.dataset.mode);
+    }
+    for (const box of document.querySelectorAll("#columns input[type=checkbox]")) {
+      box.checked = !state.hiddenCols[box.dataset.col];
+    }
+  }
+
   /* ------------------------------------------------------------- boot */
 
   function buildTabs() {
@@ -615,7 +733,7 @@
       state.version = entry;
       $("#version").value = entry.id;
       $("#meta-info").textContent =
-        `${entry.label} (${entry.id}) · listfile ${state.data.meta.listfileTag} · built ${state.data.meta.built} · ` +
+        `${entry.label} (${entry.id}) · Listfile ${state.data.meta.listfileTag} · Built ${state.data.meta.built} · ` +
         `${state.data.meta.counts.spells.toLocaleString()} spells`;
       overlay.hidden = true;
       runSearch({ push });
@@ -629,11 +747,11 @@
 
   function applyHash({ push }) {
     const h = hashToState();
-    state.mode = Search.FIELDS[h.m] ? h.m : "all";
+    state.mode = Search.FIELDS[h.m] && !disabledFields().has(h.m) ? h.m : "all";
     state.query = h.q;
     $("#q").value = h.q;
     updateTabs();
-    const wanted = state.versions.find((v) => v.id === h.v);
+    const wanted = findVersion(h.v);
     if (wanted && (!state.version || wanted.id !== state.version.id)) {
       activateVersion(wanted, { push });
     } else {
@@ -642,8 +760,13 @@
   }
 
   async function boot() {
+    try {
+      Object.assign(state.hiddenCols, JSON.parse(localStorage.getItem("epsilook.hiddenCols") || "{}"));
+    } catch (e) { /* corrupted storage — defaults apply */ }
     buildTabs();
     wireEvents();
+    applyHiddenCols();
+    if (disabledFields().has(state.mode)) state.mode = "all";
     try {
       state.versions = await Data.loadVersions();
     } catch (err) {
@@ -665,8 +788,8 @@
     $("#version-wrap").hidden = state.versions.length < 2;
 
     const h = hashToState();
-    const entry = state.versions.find((v) => v.id === h.v) || state.versions[state.versions.length - 1];
-    state.mode = Search.FIELDS[h.m] ? h.m : "all";
+    const entry = findVersion(h.v) || state.versions[state.versions.length - 1];
+    state.mode = Search.FIELDS[h.m] && !disabledFields().has(h.m) ? h.m : "all";
     state.query = h.q;
     $("#q").value = h.q;
     updateTabs();

@@ -13,7 +13,7 @@
 <header>
   <div class="brand">
     <h1>Epsilook</h1>
-    <p class="tagline">spell · model · sound search for Epsilon WoW</p>
+    <p class="tagline">Spell · Model · Sound search for Epsilon WoW</p>
   </div>
   <div id="version-wrap" hidden>
     <label for="version">Game version</label>
@@ -40,7 +40,8 @@
           <code>name:</code> <code>model:</code> <code>sound:</code> <code>soundkit:</code> <code>animkit:</code> <code>id:</code></li>
         <li>Prefixes combine — <code>model:missile name:fire</code> finds fire-named spells using a missile model.</li>
         <li>Quotes mean an exact file — <code>model:"spells/cfx_mage_fireball_impact.m2"</code> (clicking a tag does this for you).</li>
-        <li>Click any tag in the results to search for it; click <span class="tag demo"><span class="tag-copy">⧉</span></span> to copy its command or ID.</li>
+        <li>Click any tag in the results to search for it. On a tag, <b>⧉</b> copies the ID and <b>»</b> copies the in-game command.</li>
+        <li>Hiding a column (toolbar) also excludes it from All-mode search and from exports.</li>
       </ul>
     </div>
   </section>
@@ -49,9 +50,16 @@
     <div id="toolbar">
       <div id="filters">
         <span>Only spells with:</span>
-        <label><input type="checkbox" data-filter="models"> models</label>
-        <label><input type="checkbox" data-filter="sounds"> sounds</label>
-        <label><input type="checkbox" data-filter="animkits"> animkits</label>
+        <label><input type="checkbox" data-filter="models"> Models</label>
+        <label><input type="checkbox" data-filter="sounds"> Sounds</label>
+        <label><input type="checkbox" data-filter="animkits"> AnimKits</label>
+      </div>
+      <div id="columns" title="Hidden columns are also excluded from All-mode search and from exports">
+        <span>Columns:</span>
+        <label><input type="checkbox" data-col="models" checked> Models</label>
+        <label><input type="checkbox" data-col="sounds" checked> Sounds</label>
+        <label><input type="checkbox" data-col="animkits" checked> AnimKits</label>
+        <label><input type="checkbox" data-col="commands" checked> Commands</label>
       </div>
       <div id="export">
         <span>Export:</span>
@@ -68,8 +76,7 @@
             <th data-sort="id" class="c-id">ID <span class="arrow"></span></th>
             <th data-sort="name" class="c-name">Name <span class="arrow"></span></th>
             <th class="c-models">Models</th>
-            <th class="c-sounds">Sounds</th>
-            <th class="c-soundkits">SoundKits</th>
+            <th class="c-sounds">SoundKits &amp; Sounds</th>
             <th class="c-animkits">AnimKits</th>
             <th class="c-cmds">Commands</th>
           </tr>
@@ -84,8 +91,8 @@
 
 <footer>
   <span id="meta-info"></span>
-  <span>made with AI — mistakes are possible</span>
-  <span>data: wago.tools + community listfile · <a href="https://github.com/wowdev/wow-listfile" target="_blank" rel="noopener">wowdev/wow-listfile</a></span>
+  <span>Made with AI — mistakes are possible</span>
+  <span>Data: <a href="https://wago.tools" target="_blank" rel="noopener">wago.tools</a> + <a href="https://github.com/wowdev/wow-listfile" target="_blank" rel="noopener">Community Listfile</a></span>
 </footer>
 
 <div id="tooltip" hidden></div>
@@ -101,6 +108,12 @@
 
 <div id="toast"></div>
 
+<script>
+  // Wowhead hover tooltips on the wowhead links (loads from their CDN; the
+  // app works fine without it when offline)
+  const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
+</script>
+<script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
 <script src="js/config.js"></script>
 <script src="js/data.js"></script>
 <script src="js/search.js"></script>
