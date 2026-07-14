@@ -217,12 +217,14 @@ tbody tr:hover { background: #1a212c; box-shadow: inset 3px 0 0 var(--gold-dim);
 .c-cmds { width: 16rem; }
 .c-models { min-width: 14rem; }
 .c-sounds { min-width: 16rem; }
-.c-animkits { min-width: 7rem; }
+.c-animkits { min-width: 9rem; }
 
 .id-copy { color: var(--gold); font-variant-numeric: tabular-nums; }
 .id-copy:hover { text-decoration: underline; }
 
 .spell-name { color: #e8edf4; font-weight: 600; }
+.spell-name-link { color: inherit; text-decoration: none; }
+.spell-name-link:hover { color: var(--gold); }
 .spell-name.has-desc {
   cursor: help;
   text-decoration: underline dotted rgba(240, 195, 76, 0.45);
@@ -255,15 +257,18 @@ td.empty { text-align: center; vertical-align: middle; }
 #results.hide-animkits .c-animkits { display: none; }
 #results.hide-commands .c-cmds     { display: none; }
 
-/* soundkit groups: a kit and the sound files it contains */
+/* soundkit groups: a kit and the sound files it contains (kept compact) */
 .kit-group {
-  margin: 0.15rem 0 0.35rem;
-  padding-left: 0.55rem;
+  margin: 0.1rem 0 0.2rem;
+  padding-left: 0.5rem;
   border-left: 2px solid rgba(95, 175, 143, 0.35);
 }
-.kit-group:last-of-type { margin-bottom: 0.15rem; }
-.kit-group > .tag { margin-bottom: 0.15rem; }
-.kit-files { padding-left: 0.55rem; }
+.kit-group:last-of-type { margin-bottom: 0.1rem; }
+.kit-group > .tag { margin: 0 0.2rem 0.05rem 0; }
+.kit-files { padding-left: 0.4rem; line-height: 1.15; }
+.kit-files .tag { margin: 0.05rem 0.2rem 0.05rem 0; font-size: 0.78em; }
+.kit-files .tag-label { padding: 0.06rem 0.4rem; }
+.kit-files .tag-copy { padding: 0.06rem 0.35rem 0.06rem 0.3rem; }
 .kit-group.overflow { display: none; }
 td.expanded .kit-group.overflow { display: block; }
 
@@ -296,9 +301,12 @@ td.expanded .kit-group.overflow { display: block; }
 .tag.animkit .tag-label { color: var(--animkit); }
 
 .tag-copy {
-  padding: 0.12rem 0.5rem 0.12rem 0.35rem;
+  padding: 0.12rem 0.45rem 0.12rem 0.35rem;
   color: var(--text-dim);
   border-left: 1px solid var(--border);
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 0.82em;
+  white-space: nowrap;
 }
 .tag-copy:hover { color: var(--gold); background: rgba(240, 195, 76, 0.1); }
 

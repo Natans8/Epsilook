@@ -222,9 +222,15 @@
     tdId.appendChild(idBtn);
     tr.appendChild(tdId);
 
-    // Name — description shows in a styled tooltip on hover
+    // Name — wowhead link (their widget adds a hover tooltip); our own
+    // description tooltip shows too when the spell has one
     const tdName = el("td", "c-name");
-    const nameDiv = el("div", "spell-name", d.names[i] || "(unnamed)");
+    const nameDiv = el("div", "spell-name");
+    const nameLink = el("a", "spell-name-link", d.names[i] || "(unnamed)");
+    nameLink.href = fillTemplate(CFG.wowheadSpellUrl, { id: spellId });
+    nameLink.target = "_blank";
+    nameLink.rel = "noopener";
+    nameDiv.appendChild(nameLink);
     if (d.descriptions[i]) {
       nameDiv.classList.add("has-desc");
       nameDiv.dataset.desc = d.descriptions[i];
@@ -334,10 +340,11 @@
       group.appendChild(kitTag(kitId, "soundkit"));
 
       const filesDiv = el("div", "kit-files");
+      const fileLimit = CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit;
       const fids = hitsFirst(byKit.get(kitId), (fid) => fileIsHit(d.files.get(fid), "sound"));
       fids.forEach((fid, fi) => {
         const tag = soundTag(fid);
-        if (gi >= groupLimit || fi >= CFG.tagsCollapsedLimit) {
+        if (gi >= groupLimit || fi >= fileLimit) {
           tag.classList.add("overflow");
           hiddenCount++;
         }
@@ -376,7 +383,8 @@
     return tokensFor(field).some((t) => Number(t.text) === kitId);
   }
 
-  // small helper: a copy button inside a tag. "⧉" copies an ID, "»" a command.
+  // small helper: a copy button inside a tag. "⧉" copies an ID; command
+  // buttons are labeled after what they copy (".lo", "/", ".mod").
   function tagButton(glyph, title, copyValue) {
     const b = el("button", "tag-copy", glyph);
     b.title = title;
@@ -397,7 +405,7 @@
 
     const cmd = fillTemplate(CFG.modelCopyTemplate,
       { base: stripExt(file.base), file: file.base, path: file.path, fid });
-    tag.appendChild(tagButton("»", `Copy:  ${cmd}`, cmd));
+    tag.appendChild(tagButton(".lo", `Copy:  ${cmd}`, cmd));
     return tag;
   }
 
@@ -407,10 +415,13 @@
     const tag = el("span", "tag sound");
     if (fileIsHit(file, "sound")) tag.classList.add("hit");
 
-    const txt = el("button", "tag-label", file.base ? stripExt(file.base) : `file #${fid}`);
+    // sound extensions stay visible (.ogg/.mp3 differ, unlike models)
+    const txt = el("button", "tag-label", file.base || `file #${fid}`);
     txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this sound`;
     txt.dataset.search = file.path ? `sound:"${file.path}"` : "";
     tag.appendChild(txt);
+
+    tag.appendChild(tagButton("⧉", `Copy FileDataID ${fid}`, String(fid)));
     return tag;
   }
 
@@ -430,7 +441,7 @@
 
     const tpl = field === "soundkit" ? CFG.soundKitCopyTemplate : CFG.animKitCopyTemplate;
     const cmd = fillTemplate(tpl, { id: kitId });
-    tag.appendChild(tagButton("»", `Copy:  ${cmd}`, cmd));
+    tag.appendChild(tagButton(field === "soundkit" ? "/" : ".mod", `Copy:  ${cmd}`, cmd));
 
     if (field === "soundkit") {
       tag.appendChild(wowheadLink(fillTemplate(CFG.wowheadSoundUrl, { id: kitId }), `SoundKit ${kitId} on Wowhead`));
