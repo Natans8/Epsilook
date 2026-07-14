@@ -197,28 +197,38 @@
     tdId.appendChild(idBtn);
     tr.appendChild(tdId);
 
-    // Name
+    // Name — description shows in a styled tooltip on hover
     const tdName = el("td", "c-name");
     const nameDiv = el("div", "spell-name", d.names[i] || "(unnamed)");
-    if (d.descriptions[i]) nameDiv.title = d.descriptions[i];
+    if (d.descriptions[i]) {
+      nameDiv.classList.add("has-desc");
+      nameDiv.dataset.desc = d.descriptions[i];
+    }
     tdName.appendChild(nameDiv);
     if (d.subtexts[i]) tdName.appendChild(el("div", "spell-sub", d.subtexts[i]));
     tr.appendChild(tdName);
 
-    // Models
-    tr.appendChild(tagCell("c-models", (d.spellModels.get(spellId) || []).map((fid) => modelTag(fid))));
+    // Models — matched files first
+    const modelFids = hitsFirst(d.spellModels.get(spellId) || [],
+      (fid) => fileIsHit(d.files.get(fid), "model"));
+    tr.appendChild(tagCell("c-models", modelFids.map((fid) => modelTag(fid))));
 
-    // Sounds (unique files)
+    // Sounds (unique files) — matched files first
     const soundEntries = d.spellSounds.get(spellId) || [];
-    const soundFids = [...new Set(soundEntries.map((e) => e.fid))];
+    const soundFids = hitsFirst([...new Set(soundEntries.map((e) => e.fid))],
+      (fid) => fileIsHit(d.files.get(fid), "sound"));
     tr.appendChild(tagCell("c-sounds", soundFids.map((fid) => soundTag(fid))));
 
-    // SoundKits (unique kits)
-    const kitIds = [...new Set(soundEntries.map((e) => e.soundKitId))].sort((a, b) => a - b);
+    // SoundKits (unique kits) — matched kits first
+    const kitIds = hitsFirst(
+      [...new Set(soundEntries.map((e) => e.soundKitId))].sort((a, b) => a - b),
+      (k) => kitIsHit(k, "soundkit"));
     tr.appendChild(tagCell("c-soundkits", kitIds.map((k) => kitTag(k, "soundkit"))));
 
-    // AnimKits
-    const animIds = (d.spellAnimKits.get(spellId) || []).slice().sort((a, b) => a - b);
+    // AnimKits — matched kits first
+    const animIds = hitsFirst(
+      (d.spellAnimKits.get(spellId) || []).slice().sort((a, b) => a - b),
+      (k) => kitIsHit(k, "animkit"));
     tr.appendChild(tagCell("c-animkits", animIds.map((k) => kitTag(k, "animkit"))));
 
     // Commands
@@ -229,9 +239,32 @@
       b.dataset.copy = fillTemplate(cmd.template, { id: spellId });
       tdCmd.appendChild(b);
     }
+    tdCmd.appendChild(wowheadLink(fillTemplate(CFG.wowheadSpellUrl, { id: spellId }), "Open on Wowhead"));
     tr.appendChild(tdCmd);
 
     return tr;
+  }
+
+  // stable partition: elements matching isHit come first, original order kept
+  function hitsFirst(items, isHit) {
+    if (!state.tokens.length) return items;
+    const hits = [], rest = [];
+    for (const it of items) (isHit(it) ? hits : rest).push(it);
+    return hits.length ? hits.concat(rest) : rest;
+  }
+
+  function wowheadLink(url, title) {
+    const a = el("a", "wowhead");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.title = title;
+    const img = el("img");
+    img.src = "https://wow.zamimg.com/images/logos/favicon-standard.png";
+    img.alt = "WH";
+    img.loading = "lazy";
+    a.appendChild(img);
+    return a;
   }
 
   function tagCell(className, tags) {
@@ -258,11 +291,16 @@
   }
 
   function fileIsHit(file, field) {
+    if (!file) return false;
     const tokens = tokensFor(field);
     if (!tokens.length) return false;
     return tokens.every((t) =>
       t.exact ? (file.searchL === t.text || file.base.toLowerCase() === t.text)
               : file.searchL.includes(t.text));
+  }
+
+  function kitIsHit(kitId, field) {
+    return tokensFor(field).some((t) => Number(t.text) === kitId);
   }
 
   function modelTag(fid) {
@@ -301,8 +339,7 @@
 
   function kitTag(kitId, field) {
     const tag = el("span", `tag ${field}`);
-    const hit = tokensFor(field).some((t) => Number(t.text) === kitId);
-    if (hit) tag.classList.add("hit");
+    if (kitIsHit(kitId, field)) tag.classList.add("hit");
 
     const txt = el("button", "tag-label", String(kitId));
     txt.title = field === "soundkit"
@@ -311,11 +348,119 @@
     txt.dataset.search = `${field}:${kitId}`;
     tag.appendChild(txt);
 
+    const tpl = field === "soundkit" ? CFG.soundKitCopyTemplate : CFG.animKitCopyTemplate;
     const copy = el("button", "tag-copy", "⧉");
-    copy.title = `Copy ${kitId}`;
-    copy.dataset.copy = String(kitId);
+    copy.title = `Copy:  ${fillTemplate(tpl, { id: kitId })}`;
+    copy.dataset.copy = fillTemplate(tpl, { id: kitId });
     tag.appendChild(copy);
+
+    if (field === "soundkit") {
+      tag.appendChild(wowheadLink(fillTemplate(CFG.wowheadSoundUrl, { id: kitId }), `SoundKit ${kitId} on Wowhead`));
+    }
     return tag;
+  }
+
+  /* ----------------------------------------------------------- tooltip */
+
+  function showTooltip(anchor) {
+    const tip = $("#tooltip");
+    tip.textContent = anchor.dataset.desc;
+    tip.hidden = false;
+    const r = anchor.getBoundingClientRect();
+    tip.style.left = Math.min(r.left, window.innerWidth - tip.offsetWidth - 12) + "px";
+    if (r.bottom + tip.offsetHeight + 10 < window.innerHeight) {
+      tip.style.top = r.bottom + 6 + "px";
+    } else {
+      tip.style.top = Math.max(6, r.top - tip.offsetHeight - 6) + "px";
+    }
+  }
+
+  function hideTooltip() {
+    $("#tooltip").hidden = true;
+  }
+
+  /* ------------------------------------------------------------ export */
+
+  function exportRows() {
+    const d = state.data;
+    const pathOf = (fid) => (d.files.get(fid) || {}).path || `#${fid}`;
+    return state.display.map((id) => {
+      const i = d.spellIndex.get(id);
+      const sounds = d.spellSounds.get(id) || [];
+      return {
+        id,
+        name: d.names[i],
+        subtext: d.subtexts[i],
+        models: (d.spellModels.get(id) || []).map(pathOf),
+        sounds: [...new Set(sounds.map((e) => e.fid))].map(pathOf),
+        soundKits: [...new Set(sounds.map((e) => e.soundKitId))].sort((a, b) => a - b),
+        animKits: (d.spellAnimKits.get(id) || []).slice().sort((a, b) => a - b),
+      };
+    });
+  }
+
+  function exportFilename(ext) {
+    const q = state.query.trim().replace(/[^\w-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "results";
+    return `epsilook-${q}.${ext}`;
+  }
+
+  function downloadFile(name, mime, content) {
+    const a = el("a");
+    a.href = URL.createObjectURL(new Blob([content], { type: mime }));
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast(`Exported ${name}`);
+  }
+
+  function nothingToExport() {
+    if (state.display.length === 0) { toast("Nothing to export — search first"); return true; }
+    return false;
+  }
+
+  function exportCsv() {
+    if (nothingToExport()) return;
+    const esc = (v) => {
+      const s = String(v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lines = ["ID,Name,Subtext,Models,Sounds,SoundKits,AnimKits"];
+    for (const r of exportRows()) {
+      lines.push([
+        r.id, esc(r.name), esc(r.subtext),
+        esc(r.models.join("; ")), esc(r.sounds.join("; ")),
+        esc(r.soundKits.join("; ")), esc(r.animKits.join("; ")),
+      ].join(","));
+    }
+    downloadFile(exportFilename("csv"), "text/csv", lines.join("\r\n"));
+  }
+
+  function exportJson() {
+    if (nothingToExport()) return;
+    const payload = {
+      app: "Epsilook",
+      url: location.href,
+      gameVersion: state.version.id,
+      query: state.query.trim(),
+      mode: state.mode,
+      count: state.display.length,
+      spells: exportRows(),
+    };
+    downloadFile(exportFilename("json"), "application/json", JSON.stringify(payload, null, 2));
+  }
+
+  function exportDiscord() {
+    if (nothingToExport()) return;
+    const rows = exportRows();
+    const limit = CFG.discordExportRows;
+    const shown = rows.slice(0, limit);
+    const idWidth = Math.max(...shown.map((r) => String(r.id).length), 2);
+    const lines = shown.map((r) =>
+      `${String(r.id).padEnd(idWidth)}  ${r.name}${r.subtext ? ` (${r.subtext})` : ""}`);
+    let text = `**Epsilook** — ${rows.length.toLocaleString()} ${rows.length === 1 ? "spell" : "spells"} for \`${state.query.trim()}\`\n`;
+    text += `<${location.href}>\n\`\`\`\n${lines.join("\n")}\n\`\`\``;
+    if (rows.length > limit) text += `\n…and ${(rows.length - limit).toLocaleString()} more (full list: link above)`;
+    copyText(text);
   }
 
   function updateSortHeaders() {
@@ -374,6 +519,21 @@
         t.remove();
       }
     });
+
+    // spell description tooltip
+    $("#results").addEventListener("mouseover", (e) => {
+      const n = e.target.closest(".spell-name.has-desc");
+      if (n) showTooltip(n);
+    });
+    $("#results").addEventListener("mouseout", (e) => {
+      if (e.target.closest(".spell-name.has-desc")) hideTooltip();
+    });
+    document.addEventListener("scroll", hideTooltip, { passive: true });
+
+    // export
+    $("#export-csv").addEventListener("click", exportCsv);
+    $("#export-json").addEventListener("click", exportJson);
+    $("#export-discord").addEventListener("click", exportDiscord);
 
     // filters
     for (const box of document.querySelectorAll("#filters input[type=checkbox]")) {
