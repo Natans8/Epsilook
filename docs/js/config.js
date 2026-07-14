@@ -2,18 +2,30 @@
 "use strict";
 
 window.EpsilookConfig = {
-  // Copy-command buttons shown on every spell row.
-  // {id} is replaced with the spell ID.
+  // Copy-command buttons shown on every spell row (the spell ID itself is
+  // copied by clicking it). {id} is replaced with the spell ID.
   spellCommands: [
-    { label: "cast",   template: ".cast {id}",            hint: "Copy .cast command" },
-    { label: "aura",   template: ".aura {id}",            hint: "Copy .aura command" },
-    { label: "lookup", template: ".lookup spell id {id}", hint: "Copy .lookup command" },
-    { label: "ID",     template: "{id}",                  hint: "Copy the spell ID" },
+    { label: ".cast",   template: ".cast {id}",            hint: "Copy .cast command" },
+    { label: ".aura",   template: ".aura {id}",            hint: "Copy .aura command" },
+    { label: ".lookup", template: ".lookup spell id {id}", hint: "Copy .lookup command" },
   ],
 
   // Copy command on each model tag.
   // {base} = file name without path and extension, {file} = file name, {path} = full path, {fid} = FileDataID.
   modelCopyTemplate: ".lookup object {base}",
+
+  // Copy command on each SoundKit tag ({id} = SoundKit ID).
+  soundKitCopyTemplate: "/script PlaySound({id})",
+
+  // Copy command on each AnimKit tag ({id} = AnimKit ID).
+  animKitCopyTemplate: ".modify animkit {id}",
+
+  // External links ({id} = spell / soundkit ID).
+  wowheadSpellUrl: "https://www.wowhead.com/spell={id}",
+  wowheadSoundUrl: "https://www.wowhead.com/sound={id}",
+
+  // "Copy for Discord" export: at most this many rows (Discord caps messages).
+  discordExportRows: 40,
 
   // How many rows to render per infinite-scroll batch.
   scrollBatch: 60,

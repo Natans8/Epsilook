@@ -129,18 +129,48 @@ main { padding: 0 1.6rem 2rem; max-width: 1600px; margin: 0 auto; }
   font-size: 0.88em;
 }
 
-/* --------------------------------------------------------------- filters */
+/* --------------------------------------------------------------- toolbar */
+
+#toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.4rem 0 0.6rem;
+}
 
 #filters {
   display: flex;
   gap: 0.9rem;
   align-items: center;
-  padding: 0.4rem 0 0.6rem;
   color: var(--text-dim);
   font-size: 0.9rem;
 }
 #filters label { cursor: pointer; user-select: none; }
 #filters input { accent-color: var(--gold); vertical-align: -2px; }
+
+#export {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+#export button {
+  padding: 0.22rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 0.85em;
+  transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+#export button:hover {
+  border-color: var(--gold-dim);
+  color: var(--gold);
+  box-shadow: 0 0 10px rgba(240, 195, 76, 0.15);
+}
 
 /* ----------------------------------------------------------------- table */
 
@@ -173,17 +203,18 @@ th.sorted { color: var(--gold); }
 th .arrow { font-size: 0.7em; }
 
 td {
-  padding: 0.45rem 0.6rem;
+  padding: 0.6rem 0.7rem;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
-tbody tr:nth-child(odd) { background: var(--bg-row); }
-tbody tr:nth-child(even) { background: var(--bg-row-alt); }
-tbody tr:hover { background: #1a212c; }
+/* faint column separators keep tall uneven rows readable */
+td:not(:last-child), th:not(:last-child) { border-right: 1px solid rgba(255, 255, 255, 0.045); }
+tbody tr { background: var(--bg-row); }
+tbody tr:hover { background: #1a212c; box-shadow: inset 3px 0 0 var(--gold-dim); }
 
 .c-id { width: 5.5rem; }
 .c-name { min-width: 13rem; max-width: 20rem; }
-.c-cmds { width: 15rem; white-space: nowrap; }
+.c-cmds { width: 16rem; }
 .c-models, .c-sounds { min-width: 14rem; }
 .c-soundkits, .c-animkits { min-width: 7rem; }
 
@@ -191,7 +222,28 @@ tbody tr:hover { background: #1a212c; }
 .id-copy:hover { text-decoration: underline; }
 
 .spell-name { color: #e8edf4; font-weight: 600; }
+.spell-name.has-desc {
+  cursor: help;
+  text-decoration: underline dotted rgba(240, 195, 76, 0.45);
+  text-underline-offset: 3px;
+}
 .spell-sub { color: var(--text-dim); font-size: 0.85em; }
+
+#tooltip {
+  position: fixed;
+  z-index: 30;
+  max-width: 26rem;
+  padding: 0.55rem 0.8rem;
+  background: #1c2431;
+  border: 1px solid var(--gold-dim);
+  border-radius: 8px;
+  color: #e2c98a;
+  font-size: 0.86rem;
+  line-height: 1.4;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  white-space: pre-line;
+}
 
 .none { color: var(--text-dim); opacity: 0.5; }
 
@@ -241,15 +293,56 @@ td.expanded .tag.overflow { display: inline-flex; }
 /* command buttons */
 
 .cmd {
-  margin: 0.08rem 0.25rem 0.08rem 0;
-  padding: 0.16rem 0.6rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-panel);
-  color: var(--text);
+  margin: 0.08rem 0.3rem 0.08rem 0;
+  padding: 0.2rem 0.65rem;
+  border: 1px solid #3a4351;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #232b38, #1a212c);
+  color: #dfe6ef;
   font-size: 0.84em;
+  font-weight: 600;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.06s;
 }
-.cmd:hover { border-color: var(--gold-dim); color: var(--gold); }
+.cmd:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+  box-shadow: 0 0 12px rgba(240, 195, 76, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.cmd:active { transform: translateY(1px); box-shadow: 0 0 6px rgba(240, 195, 76, 0.25); }
+
+/* wowhead links */
+
+.wowhead {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0.08rem 0.25rem 0.08rem 0;
+  border: 1px solid #4a2e1e;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #2b1c12, #1d130c);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.wowhead img { width: 1rem; height: 1rem; }
+.wowhead:hover { border-color: #c04000; box-shadow: 0 0 10px rgba(192, 64, 0, 0.45); }
+
+.tag .wowhead {
+  width: auto;
+  height: auto;
+  margin: 0;
+  border: none;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  padding: 0.12rem 0.45rem 0.12rem 0.4rem;
+  align-self: stretch;
+}
+.tag .wowhead:hover { background: rgba(192, 64, 0, 0.18); box-shadow: none; }
+.tag .wowhead img { width: 0.85rem; height: 0.85rem; }
 
 #empty-note { color: var(--text-dim); padding: 1.6rem 0.5rem; }
 

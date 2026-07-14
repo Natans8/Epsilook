@@ -46,11 +46,19 @@
   </section>
 
   <section id="listing">
-    <div id="filters">
-      <span>Only spells with:</span>
-      <label><input type="checkbox" data-filter="models"> models</label>
-      <label><input type="checkbox" data-filter="sounds"> sounds</label>
-      <label><input type="checkbox" data-filter="animkits"> animkits</label>
+    <div id="toolbar">
+      <div id="filters">
+        <span>Only spells with:</span>
+        <label><input type="checkbox" data-filter="models"> models</label>
+        <label><input type="checkbox" data-filter="sounds"> sounds</label>
+        <label><input type="checkbox" data-filter="animkits"> animkits</label>
+      </div>
+      <div id="export">
+        <span>Export:</span>
+        <button id="export-csv" title="Download the current results as CSV">CSV</button>
+        <button id="export-json" title="Download the current results as JSON">JSON</button>
+        <button id="export-discord" title="Copy a pasteable list for Discord and chat">Copy for Discord</button>
+      </div>
     </div>
 
     <div class="table-wrap">
@@ -76,8 +84,11 @@
 
 <footer>
   <span id="meta-info"></span>
+  <span>made with AI — mistakes are possible</span>
   <span>data: wago.tools + community listfile · <a href="https://github.com/wowdev/wow-listfile" target="_blank" rel="noopener">wowdev/wow-listfile</a></span>
 </footer>
+
+<div id="tooltip" hidden></div>
 
 <div id="loading">
   <div class="load-card">
