@@ -242,14 +242,28 @@
   }
 
   function activateField(field, { not = false } = {}) {
-    commitActiveChip();     // finish any field chip currently being typed
-    insertFreeChipHere();   // and any free words sitting in the gap
+    const input = $("#q");
+    // plain text selected in the input becomes the new chip's text; the
+    // words around the selection stay behind as free text
+    const seed = state.activeField ? ""
+      : input.value.slice(input.selectionStart, input.selectionEnd).trim();
+    if (seed) {
+      const after = input.value.slice(input.selectionEnd).trim();
+      input.value = input.value.slice(0, input.selectionStart);
+      insertFreeChipHere();
+      if (after) state.chips.splice(Math.min(state.pos, state.chips.length), 0, { field: "all", text: after });
+    } else {
+      commitActiveChip();   // finish any field chip currently being typed
+      insertFreeChipHere(); // and any free words sitting in the gap
+    }
     ensureFieldVisible(field);
     state.activeField = field;
     state.activeNot = not;
+    input.value = seed;
     hideSuggest();
     renderBar();
-    $("#q").focus();
+    input.focus();
+    input.setSelectionRange(seed.length, seed.length);
     scheduleSearch();
   }
 
@@ -1209,7 +1223,25 @@
         editChipAt(idx);
         return;
       }
+      if (e.target.closest("#editwrap")) return; // clicks in the editor place the caret natively
+
+      // bar background: commit whatever's pending and move the gap (and
+      // cursor) to where the click landed
+      const past = (elem) => { // is the click past this element in reading order?
+        const r = elem.getBoundingClientRect();
+        return e.clientY > r.bottom || (e.clientY >= r.top && e.clientX > (r.left + r.right) / 2);
+      };
+      let gap = 0;
+      for (const c of $("#qbar").querySelectorAll(".qchip")) {
+        if (past(c)) gap = Number(c.dataset.chipEdit) + 1;
+      }
+      const afterPending = past($("#editwrap"));
+      const insertedAt = flushPending();
+      if (insertedAt !== -1 && (insertedAt < gap || (insertedAt === gap && afterPending))) gap += 1;
+      state.pos = Math.min(gap, state.chips.length);
+      renderBar();
       input.focus();
+      scheduleSearch();
     });
 
     // suggestions
