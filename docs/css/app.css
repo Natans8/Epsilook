@@ -479,7 +479,7 @@ td.empty { text-align: center; vertical-align: middle; }
 }
 .kit-files .tag { margin: 0; font-size: 0.78em; }
 .kit-files .tag-label { padding: 0.06rem 0.4rem; }
-.kit-files .tag-copy { padding: 0.06rem 0.35rem 0.06rem 0.3rem; }
+.kit-files .tag-copy { padding: 0.26rem 0.35rem 0.06rem 0.3rem; } /* +0.2rem top = the baseline nudge */
 .kit-files .tag-play { padding: 0.06rem 0.32rem; }
 .kit-group.overflow { display: none; }
 td.expanded .kit-group.overflow { display: flex; }
@@ -514,8 +514,20 @@ td.expanded .kit-group.overflow { display: flex; }
 .tag.anim .tag-label { color: #d8b4e8; }
 .tag.effect .tag-label { color: #e0a878; }
 
+/* the buttons stretch to the pill's full height so their hover highlight
+   (and separator border) fills the whole section; the glyph re-centers via
+   inline-flex. Asymmetric vertical padding on .tag-copy sinks its smaller
+   text 0.1rem, onto the label's baseline — flex-centering alone leaves it
+   ~1.5px high, and align-items: baseline can't fix it (the label's
+   overflow:hidden makes flexbox use its box bottom). The ▶ is a centered
+   geometric glyph, not baseline text — it stays symmetric. */
+.tag-copy, .tag-play {
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+}
 .tag-copy {
-  padding: 0.12rem 0.45rem 0.12rem 0.35rem;
+  padding: 0.32rem 0.45rem 0.12rem 0.35rem;
   color: var(--text-dim);
   border-left: 1px solid var(--border);
   font-family: Consolas, "Cascadia Mono", monospace;
@@ -543,12 +555,6 @@ td.expanded .kit-group.overflow { display: flex; }
 .tag-copy:last-child { padding-right: 0.6rem; }
 .kit-files .tag-play:first-child { padding-left: 0.45rem; }
 .kit-files .tag-copy:last-child { padding-right: 0.5rem; }
-
-/* flex-centering leaves the copy buttons' smaller text ~1.5px above the
-   label's baseline; nudge it down to sit on it. (align-items: baseline can't
-   do this: the label's overflow:hidden makes flexbox use its box bottom.)
-   The ▶ is a centered geometric glyph, not baseline text — leave it centered. */
-.tag-copy { position: relative; top: 0.1rem; }
 
 .tag.hit { border-color: var(--gold-dim); background: rgba(240, 195, 76, 0.10); }
 
