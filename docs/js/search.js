@@ -5,8 +5,9 @@
  * word must match the SAME entity (the same file name / spell name /
  * effect name). Groups AND together across the result sets, so two
  * model: chips mean "the spell uses a model matching chip 1 AND a model
- * matching chip 2" — not both words in one file. Free text (field "all")
- * matches spell names, model files and sound files.
+ * matching chip 2" — not both words in one file. A group with not: true
+ * excludes its matches instead. Free text (field "all") matches spell
+ * names, model files and sound files.
  *
  * Each field entry implements run(tokens, data, disabled) -> Set of
  * spell IDs. Adding a new searchable relation = adding one entry to
@@ -151,22 +152,31 @@ window.EpsilookSearch = (() => {
 
   /* -------------------------------------------------------------- search */
 
-  // groups: [{field, tokens: [{text}, ...]}] with text lowercased single
-  // words. One result set per group, intersected. `disabledFields`
-  // (hidden columns) are skipped inside the "all" field; explicit fields
-  // always run.
+  // groups: [{field, tokens: [{text}, ...], not}] with text lowercased
+  // single words. One result set per group; positive groups intersect,
+  // negative groups (not: true) subtract from the result. A query of only
+  // negative groups starts from all spells. `disabledFields` (hidden
+  // columns) are skipped inside the "all" field; explicit fields always run.
   function searchGroups(groups, data, disabledFields = new Set()) {
     const t0 = performance.now();
 
     let result = null;
+    const negatives = [];
     for (const g of groups) {
       if (!g.tokens.length) continue;
+      if (g.not) { negatives.push(g); continue; }
       const field = FIELDS[g.field] ? g.field : "all";
       const set = FIELDS[field].run(g.tokens, data, disabledFields);
       result = result === null ? set : intersect(result, set);
       if (result.size === 0) break;
     }
-    if (result === null) result = new Set();
+    if (result === null) result = negatives.length ? new Set(data.ids) : new Set();
+
+    for (const g of negatives) {
+      if (result.size === 0) break;
+      const field = FIELDS[g.field] ? g.field : "all";
+      for (const id of FIELDS[field].run(g.tokens, data, disabledFields)) result.delete(id);
+    }
 
     return { spellIds: [...result], ms: performance.now() - t0 };
   }
