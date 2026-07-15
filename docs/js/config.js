@@ -28,6 +28,16 @@ window.EpsilookConfig = {
   wowheadSpellUrl: "https://www.wowhead.com/spell={id}",
   wowheadSoundUrl: "https://www.wowhead.com/sound={id}",
 
+  // Sound playback: the ▶ on each sound file streams it from Wowhead's CDN,
+  // fetched only when clicked ({fid} = FileDataID, {bucket} = fid % 256,
+  // {base} = file name, cosmetic — the CDN goes by FileDataID alone).
+  // Set to "" to disable playback. Serves the current retail build, so a
+  // file removed from the game since this pack's version plays nothing.
+  soundPlayUrl: "https://wow.zamimg.com/sound-ids/live/enus/{bucket}/{fid}/{base}.ogg",
+
+  // Playback volume, 0–1 (raw game sounds can be loud).
+  soundVolume: 0.5,
+
   // Spell icon shown next to the name, hotlinked from Wowhead's CDN
   // ({icon} = icon name; sizes: tiny/small/medium/large). Set to "" to
   // disable icons entirely.
