@@ -64,10 +64,9 @@ select {
 
 /* ------------------------------------------------------------ search bar */
 
-/* the table uses the full viewport; only the search area stays capped */
 main { padding: 0 1.6rem 2rem; }
 
-#searchbox { padding: 0.8rem 0 0.4rem; position: relative; max-width: 100rem; }
+#searchbox { padding: 0.8rem 0 0.4rem; position: relative; }
 
 .bar { display: flex; gap: 0.5rem; align-items: center; }
 
@@ -705,15 +704,17 @@ footer a { color: var(--text-dim); }
   background: var(--bg-panel);
   border: 1px solid var(--gold-dim);
   color: var(--text);
-  padding: 0.5rem 1.1rem;
+  padding: 0.6rem 1.2rem;
   border-radius: 8px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.18s, transform 0.18s;
-  max-width: 80vw;
+  max-width: min(30rem, 90vw);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
   z-index: 20;
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
