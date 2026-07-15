@@ -2,6 +2,8 @@
 
 Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
 
+**Live at [natans8.github.io/Epsilook](https://natans8.github.io/Epsilook/).**
+
 Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
 AnimKit or animation — with clickable cross-references, spell effect info, and one-click
 copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
@@ -12,16 +14,17 @@ version and every search runs in the browser. No server, no database, no depende
 
 ## Using it
 
-Open the hosted page, type into the search bar. Details are in the `?` popover:
+Open the page, type into the search bar. Full syntax is in the `?` dialog:
 
-- Words match **any part of a name, in any order** — `6dr statue` finds
-  `6dr_draenei_statue_male01.m2`.
-- The tabs (All / Name / Model / Sound / SoundKit / AnimKit / Spell ID) choose what your
-  words match against.
-- Field prefixes combine filters: `model:missile name:fire` finds fire-named spells that
-  use a missile model.
-- Click any tag in the results to search for it; the current search always lives in the
-  URL, so copying the address shares the exact result page.
+- Plain words search names, models and sounds at once and match **any part of a name,
+  in any order** — `6dr statue` finds `6dr_draenei_statue_male01.m2`.
+- Field tags narrow a term to one field: `name:` `model:` `sound:` `soundkit:`
+  `animkit:` `anim:` `effect:` `id:` — type the prefix or click a field button.
+  Tags combine with AND: `model:missile name:fire` finds fire-named spells that use
+  a missile model.
+- A `-` prefix excludes instead: `name:nova -effect:school_damage`.
+- Click any tag in the results to search for it (Shift-click to exclude it). The
+  current search always lives in the URL — the 🔗 Share button copies it.
 
 ## Development
 
