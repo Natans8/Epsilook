@@ -66,22 +66,115 @@ select {
 
 main { padding: 0 1.6rem 2rem; max-width: 1600px; margin: 0 auto; }
 
-#searchbox { padding: 0.8rem 0 0.4rem; }
+#searchbox { padding: 0.8rem 0 0.4rem; position: relative; }
 
 .bar { display: flex; gap: 0.5rem; align-items: center; }
 
-#q {
+/* the chip search bar: committed tags + the text input */
+#qbar {
   flex: 1;
-  font-size: 1.15rem;
-  padding: 0.65rem 1rem;
-  color: var(--text);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 10px;
+  cursor: text;
+}
+#qbar:focus-within { border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(240, 195, 76, 0.12); }
+
+#editwrap { display: inline-flex; align-items: center; flex: 1; min-width: 10rem; }
+
+#q {
+  flex: 1;
+  min-width: 6rem;
+  font-size: 1.1rem;
+  padding: 0.15rem 0;
+  color: var(--text);
+  background: none;
+  border: none;
   outline: none;
 }
-#q:focus { border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(240, 195, 76, 0.12); }
 #q::placeholder { color: var(--text-dim); }
+
+/* the chip being typed */
+#editwrap.editing {
+  flex: 1;
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--gold-dim);
+  border-radius: 999px;
+  background: rgba(240, 195, 76, 0.07);
+}
+#editlabel {
+  margin-right: 0.35rem;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 0.95rem;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+/* committed chips */
+.qchip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.12rem 0.3rem 0.12rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.98rem;
+  cursor: pointer;
+}
+.qchip-field {
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 0.88em;
+  margin-right: 0.3rem;
+}
+.qchip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 24rem; }
+.qchip-x {
+  margin-left: 0.3rem;
+  padding: 0 0.35rem;
+  color: var(--text-dim);
+  font-size: 1.05em;
+  border-radius: 50%;
+}
+.qchip-x:hover { color: var(--danger); background: rgba(224, 112, 112, 0.12); }
+
+/* field colors for chips, edit label and suggestions */
+.f-model .qchip-field, .suggest-field.f-model { color: var(--model); }
+.f-sound .qchip-field, .suggest-field.f-sound { color: var(--sound); }
+.f-soundkit .qchip-field, .suggest-field.f-soundkit { color: var(--soundkit); }
+.f-animkit .qchip-field, .suggest-field.f-animkit { color: var(--animkit); }
+.f-anim .qchip-field, .suggest-field.f-anim { color: #d8b4e8; }
+.f-effect .qchip-field, .suggest-field.f-effect { color: #e0a878; }
+.f-name .qchip-field, .suggest-field.f-name { color: var(--gold); }
+.f-id .qchip-field, .suggest-field.f-id { color: var(--gold); }
+
+/* autocomplete dropdown */
+#suggest {
+  position: absolute;
+  z-index: 5;
+  margin-top: 0.25rem;
+  min-width: 18rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.suggest-item {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.9rem;
+}
+.suggest-item:hover, .suggest-item.selected { background: rgba(240, 195, 76, 0.08); }
+.suggest-field { font-family: Consolas, "Cascadia Mono", monospace; }
+.suggest-hint { color: var(--text-dim); font-size: 0.85em; }
 
 #help-btn {
   width: 2.4rem; height: 2.4rem;
@@ -100,7 +193,8 @@ main { padding: 0 1.6rem 2rem; max-width: 1600px; margin: 0 auto; }
   border: 1px solid transparent;
   color: var(--text-dim);
 }
-#tabs button:hover { color: var(--text); }
+#tabs button::before { content: "+ "; opacity: 0.55; }
+#tabs button:hover { color: var(--text); border-color: var(--border); }
 #tabs button.active {
   color: var(--gold);
   border-color: var(--gold-dim);

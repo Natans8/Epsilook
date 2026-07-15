@@ -138,15 +138,19 @@ window.EpsilookData = (() => {
     }
 
     // spell effects (enum id -> name without the SPELL_EFFECT_ prefix)
-    const spellEffects = new Map(); // spell id -> [effect enum id]
+    const spellEffects = new Map();  // spell id -> [effect enum id]
+    const effectSpells = new Map();  // effect enum id -> [spell id]
     {
       const { spellIds, effects } = pack.spellEffects;
       for (let i = 0; i < spellIds.length; i++) {
         pushTo(spellEffects, spellIds[i], effects[i]);
+        pushTo(effectSpells, effects[i], spellIds[i]);
       }
     }
     const effectNames = new Map(
       Object.entries(pack.effectNames).map(([k, v]) => [Number(k), v]));
+    const effectNamesL = new Map(
+      [...effectNames].map(([k, v]) => [k, v.toLowerCase()]));
 
     // fids referenced as models / as sounds (search scopes)
     const modelFids = [...modelSpells.keys()];
@@ -161,7 +165,7 @@ window.EpsilookData = (() => {
       spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles,
       spellAnimKits, animKitSpells,
       animNames, animNamesL, animKitAnims, animAnimKits,
-      spellEffects, effectNames,
+      spellEffects, effectSpells, effectNames, effectNamesL,
     };
   }
 
