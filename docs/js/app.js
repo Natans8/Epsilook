@@ -465,7 +465,11 @@
     const raw = serializeQuery();
     state.lastQuery = raw;
 
-    if (raw.replace(/-?[a-z]+:|"/gi, "").trim().length < CFG.minQueryLength) {
+    // too little typed to search — counted on the searched tokens, so field
+    // prefixes don't count but an unknown "word:" (literal text) does
+    const groups = currentGroups();
+    const typed = groups.reduce((n, g) => n + g.tokens.reduce((m, t) => m + t.text.length, 0), 0);
+    if (typed < CFG.minQueryLength) {
       state.results = [];
       state.groups = [];
       state.tokens = [];
@@ -475,8 +479,6 @@
       stateToUrl(push);
       return;
     }
-
-    const groups = currentGroups();
     const res = Search.searchGroups(groups, data, disabledFields());
     state.results = res.spellIds;
     state.groups = groups;
