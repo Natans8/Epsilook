@@ -596,7 +596,8 @@
     return td;
   }
 
-  /* Shared group renderer: header tag + nested item tags per group,
+  /* Shared group renderer: each kit is a small box — the kit tag as a
+   * tinted head segment, its items flowing (and wrapping) beside it —
    * collapsing only when it actually saves space. */
   function buildKitGroups(td, kitIds, opts) {
     const groupLimit = kitIds.length <= 2 + 1 ? kitIds.length : 2;
@@ -605,22 +606,27 @@
     kitIds.forEach((kitId, gi) => {
       const group = el("div", "kit-group");
       if (gi >= groupLimit) group.classList.add("overflow");
-      group.appendChild(opts.headerTag(kitId));
 
-      const itemsDiv = el("div", "kit-files");
+      const head = el("div", "kit-head");
+      const headTag = opts.headerTag(kitId);
+      if (headTag.classList.contains("hit")) group.classList.add("hit");
+      head.appendChild(headTag);
+      group.appendChild(head);
+
       const items = opts.itemsOf(kitId);
-      // a kit with a single item shares its line instead of stacking
-      if (items.length === 1) group.classList.add("inline");
-      const limit = items.length <= opts.itemLimit + COLLAPSE_SLACK ? items.length : opts.itemLimit;
-      items.forEach((item, fi) => {
-        const tag = opts.itemTag(item);
-        if (gi >= groupLimit || fi >= limit) {
-          tag.classList.add("overflow");
-          hiddenCount++;
-        }
-        itemsDiv.appendChild(tag);
-      });
-      group.appendChild(itemsDiv);
+      if (items.length) {
+        const itemsDiv = el("div", "kit-files");
+        const limit = items.length <= opts.itemLimit + COLLAPSE_SLACK ? items.length : opts.itemLimit;
+        items.forEach((item, fi) => {
+          const tag = opts.itemTag(item);
+          if (gi >= groupLimit || fi >= limit) {
+            tag.classList.add("overflow");
+            hiddenCount++;
+          }
+          itemsDiv.appendChild(tag);
+        });
+        group.appendChild(itemsDiv);
+      }
       td.appendChild(group);
     });
 
@@ -1128,10 +1134,12 @@
       });
     }
 
-    // help popover
-    $("#help-btn").addEventListener("click", () => $("#help").toggleAttribute("hidden"));
-    document.addEventListener("click", (e) => {
-      if (!e.target.closest("#help") && !e.target.closest("#help-btn")) $("#help").setAttribute("hidden", "");
+    // help dialog (native <dialog>: Esc closes it for free)
+    const help = $("#help");
+    $("#help-btn").addEventListener("click", () => help.showModal());
+    $("#help-close").addEventListener("click", () => help.close());
+    help.addEventListener("click", (e) => {
+      if (e.target === help) help.close(); // backdrop click
     });
 
     // infinite scroll

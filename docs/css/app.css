@@ -64,9 +64,10 @@ select {
 
 /* ------------------------------------------------------------ search bar */
 
-main { padding: 0 1.6rem 2rem; max-width: 1600px; margin: 0 auto; }
+/* the table uses the full viewport; only the search area stays capped */
+main { padding: 0 1.6rem 2rem; }
 
-#searchbox { padding: 0.8rem 0 0.4rem; position: relative; }
+#searchbox { padding: 0.8rem 0 0.4rem; position: relative; max-width: 100rem; }
 
 .bar { display: flex; gap: 0.5rem; align-items: center; }
 
@@ -246,24 +247,56 @@ main { padding: 0 1.6rem 2rem; max-width: 1600px; margin: 0 auto; }
 
 #status { margin-top: 0.45rem; min-height: 1.3em; color: var(--text-dim); font-size: 0.9rem; }
 
+/* help dialog */
 #help {
-  position: relative;
-  margin-top: 0.6rem;
-  padding: 0.9rem 1.2rem;
+  width: min(74rem, calc(100vw - 3rem));
   background: var(--bg-panel);
+  color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  max-width: 46rem;
+  border-radius: 14px;
+  padding: 1.1rem 1.5rem 1.4rem;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
 }
-#help h2 { margin: 0 0 0.4rem; font-size: 1rem; color: var(--gold); }
-#help ul { margin: 0; padding-left: 1.2rem; }
-#help li { margin: 0.25rem 0; }
+#help::backdrop { background: rgba(5, 7, 11, 0.65); }
+.help-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.9rem;
+}
+.help-top h2 { margin: 0; font-size: 1.2rem; color: var(--gold); letter-spacing: 0.04em; }
+#help-close { font-size: 1.5rem; line-height: 1; color: var(--text-dim); padding: 0.1rem 0.45rem; border-radius: 6px; }
+#help-close:hover { color: var(--danger); background: rgba(224, 112, 112, 0.12); }
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1.1rem 1.8rem;
+}
+#help h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gold);
+}
+#help ul { margin: 0; padding-left: 1.1rem; font-size: 0.9rem; }
+#help li { margin: 0.3rem 0; }
+#help li::marker { color: var(--text-dim); }
 #help code {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0 0.3rem;
   font-size: 0.88em;
+}
+#help kbd {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 0 0.35rem;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 0.85em;
 }
 
 /* --------------------------------------------------------------- toolbar */
@@ -395,26 +428,41 @@ td.empty { text-align: center; vertical-align: middle; }
 }
 .cmd-row .wh-cmd img { width: 1rem; height: 1rem; }
 
-/* soundkit groups: a kit and the sound files it contains (kept compact) */
+/* kit boxes: the kit id as a tinted head segment, its files flowing
+ * (and wrapping) beside it — one consistent shape for 1 or 10 files */
 .kit-group {
-  margin: 0.1rem 0 0.2rem;
-  padding-left: 0.5rem;
-  border-left: 2px solid rgba(95, 175, 143, 0.35);
+  display: flex;
+  align-items: stretch;
+  max-width: 100%;
+  margin: 0.18rem 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
 }
-.kit-group:last-of-type { margin-bottom: 0.1rem; }
-.kit-group > .tag { margin: 0 0.2rem 0.05rem 0; }
-.kit-files { padding-left: 0.4rem; line-height: 1.15; }
-.kit-files .tag { margin: 0.05rem 0.2rem 0.05rem 0; font-size: 0.78em; }
+.kit-group:first-of-type { margin-top: 0.05rem; }
+.kit-group:last-of-type { margin-bottom: 0.05rem; }
+.kit-head { display: flex; align-items: center; flex: none; }
+.c-sounds .kit-head { background: rgba(95, 175, 143, 0.10); }
+.c-animkits .kit-head { background: rgba(201, 154, 224, 0.09); }
+.kit-head .tag, .kit-head .tag.hit { border: none; background: none; margin: 0; border-radius: 0; }
+.kit-group.hit { border-color: var(--gold-dim); }
+.kit-group.hit .kit-head { background: rgba(240, 195, 76, 0.13); }
+.kit-files {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.12rem 0.25rem;
+  padding: 0.15rem 0.4rem;
+  border-left: 1px solid var(--border);
+  line-height: 1.15;
+}
+.kit-files .tag { margin: 0; font-size: 0.78em; }
 .kit-files .tag-label { padding: 0.06rem 0.4rem; }
 .kit-files .tag-copy { padding: 0.06rem 0.35rem 0.06rem 0.3rem; }
 .kit-group.overflow { display: none; }
-td.expanded .kit-group.overflow { display: block; }
-
-/* a kit with a single item shares its line */
-.kit-group.inline { display: flex; align-items: center; flex-wrap: wrap; gap: 0 0.15rem; }
-.kit-group.inline.overflow { display: none; }
-td.expanded .kit-group.inline.overflow { display: flex; }
-.kit-group.inline .kit-files { display: inline; padding-left: 0.15rem; }
+td.expanded .kit-group.overflow { display: flex; }
 
 /* tags */
 
