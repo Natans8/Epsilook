@@ -7,7 +7,7 @@
  * model: chips mean "the spell uses a model matching chip 1 AND a model
  * matching chip 2" — not both words in one file. A group with not: true
  * excludes its matches instead. Free text (field "all") matches spell
- * names, model files and sound files.
+ * names, model files, sound files and animation names.
  *
  * Each field entry implements run(tokens, data, disabled) -> Set of
  * spell IDs. Adding a new searchable relation = adding one entry to
@@ -47,6 +47,18 @@ window.EpsilookSearch = (() => {
     return out;
   }
 
+  // Search animation names; return spells whose AnimKits use the matches.
+  function spellsByAnim(tokens, data) {
+    const out = new Set();
+    for (let a = 0; a < data.animNamesL.length; a++) {
+      if (!textMatches(data.animNamesL[a], tokens)) continue;
+      for (const kit of data.animAnimKits.get(a) || []) {
+        for (const s of data.animKitSpells.get(kit) || []) out.add(s);
+      }
+    }
+    return out;
+  }
+
   // Exact numeric lookup against a Map of id -> [spell ids].
   function spellsByKitId(tokens, map) {
     let result = null;
@@ -76,6 +88,9 @@ window.EpsilookSearch = (() => {
         }
         if (!disabled.has("sound")) {
           for (const s of spellsByFile(tokens, data, data.soundFids, data.soundSpells)) out.add(s);
+        }
+        if (!disabled.has("anim")) {
+          for (const s of spellsByAnim(tokens, data)) out.add(s);
         }
         // a pure number also hits the exact spell ID
         if (tokens.length === 1 && /^\d+$/.test(tokens[0].text)
@@ -113,16 +128,7 @@ window.EpsilookSearch = (() => {
     anim: {
       label: "Animation", tab: true,
       hint: "animation name, e.g. kneel", short: "animation",
-      run(tokens, data) {
-        const out = new Set();
-        for (let a = 0; a < data.animNamesL.length; a++) {
-          if (!textMatches(data.animNamesL[a], tokens)) continue;
-          for (const kit of data.animAnimKits.get(a) || []) {
-            for (const s of data.animKitSpells.get(kit) || []) out.add(s);
-          }
-        }
-        return out;
-      },
+      run: (tokens, data) => spellsByAnim(tokens, data),
     },
     effect: {
       label: "Effect", tab: true,

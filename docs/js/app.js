@@ -1015,11 +1015,22 @@
 
     input.addEventListener("input", () => {
       if (!state.activeField) {
-        const m = input.value.match(/(^|\s)(-?)([a-z]+):$/i);
+        // a "field:" tag just typed — anywhere, not only at the end: text
+        // before it stays free words, text after the caret becomes the
+        // tag's content (e.g. "model:|statue" -> model: chip with "statue")
+        const caret = input.selectionStart;
+        const m = input.value.slice(0, caret).match(/(^|\s)(-?)([a-z]+):$/i);
         if (m && isChipField(m[3].toLowerCase())) {
           const field = m[3].toLowerCase();
+          const rest = input.value.slice(caret);
           input.value = input.value.slice(0, m.index + m[1].length);
           activateField(field, { not: m[2] === "-" });
+          if (rest) {
+            input.value = rest;
+            input.setSelectionRange(0, 0);
+            sizeInput();
+            scheduleSearch();
+          }
           return;
         }
         updateSuggest();
