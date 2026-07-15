@@ -210,19 +210,39 @@ main { padding: 0 1.6rem 2rem; max-width: 1600px; margin: 0 auto; }
 #help-btn:hover { color: var(--gold); border-color: var(--gold-dim); }
 
 #tabs { display: flex; gap: 0.25rem; margin-top: 0.6rem; flex-wrap: wrap; }
-#tabs button {
-  padding: 0.32rem 0.9rem;
-  border-radius: 999px;
+
+/* split field pills: "+ Label" includes, the "−" half excludes */
+#tabs .tab {
+  display: inline-flex;
+  align-items: stretch;
   border: 1px solid transparent;
+  border-radius: 999px;
   color: var(--text-dim);
 }
-#tabs button::before { content: "+ "; opacity: 0.55; }
-#tabs button:hover { color: var(--text); border-color: var(--border); }
-#tabs button.active {
+#tabs .tab[hidden] { display: none; }
+#tabs .tab:hover { border-color: var(--border); }
+#tabs .tab-inc { padding: 0.32rem 0.5rem 0.32rem 0.9rem; border-radius: 999px 0 0 999px; }
+#tabs .tab-inc::before { content: "+ "; opacity: 0.55; }
+#tabs .tab-inc:hover { color: var(--text); }
+#tabs .tab-exc {
+  padding: 0.32rem 0.7rem 0.32rem 0.5rem;
+  border-left: 1px solid transparent;
+  border-radius: 0 999px 999px 0;
+  opacity: 0.6;
+}
+#tabs .tab:hover .tab-exc { border-left-color: var(--border); }
+#tabs .tab-exc:hover { color: var(--danger); opacity: 1; }
+#tabs .tab.active {
   color: var(--gold);
   border-color: var(--gold-dim);
   background: rgba(240, 195, 76, 0.08);
 }
+#tabs .tab.active-not {
+  color: var(--danger);
+  border-color: rgba(224, 112, 112, 0.5);
+  background: rgba(224, 112, 112, 0.08);
+}
+#tabs .tab.active-not .tab-exc { opacity: 1; }
 
 #status { margin-top: 0.45rem; min-height: 1.3em; color: var(--text-dim); font-size: 0.9rem; }
 
