@@ -6,6 +6,10 @@
   const Data = window.EpsilookData;
   const Search = window.EpsilookSearch;
 
+  // the empty-bar placeholder lives in index.html; grab it before render()
+  // starts swapping the property around
+  const DEFAULT_PLACEHOLDER = document.getElementById("q").placeholder;
+
   /* ------------------------------------------------------------- state */
 
   const state = {
@@ -218,7 +222,7 @@
     editlabel.hidden = !state.activeField;
     $("#q").placeholder = state.activeField
       ? (state.activeNot ? "exclude: " : "") + Search.FIELDS[state.activeField].short
-      : (state.chips.length ? "" : "Search names, models and sounds — or type model: for a field tag");
+      : (state.chips.length ? "" : DEFAULT_PLACEHOLDER);
     sizeInput();
     updateTabs();
   }
