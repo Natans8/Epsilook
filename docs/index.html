@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit or animkit. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260715a">
+  <link rel="stylesheet" href="css/app.css?v=20260715b">
 </head>
 <body>
 
@@ -38,26 +38,65 @@
     <nav id="tabs" aria-label="Field tags"></nav>
     <div id="status" role="status"></div>
 
-    <div id="help" hidden>
-      <h2>Search syntax</h2>
-      <ul>
-        <li>Words match <b>any part of the text, in any order</b> — <code>impact fireball</code> finds <code>cfx_mage_fireball_impact.m2</code>.</li>
-        <li>Plain words search names, models and sounds at once.</li>
-        <li>Type a field prefix (<code>name:</code> <code>model:</code> <code>sound:</code> <code>soundkit:</code> <code>animkit:</code> <code>anim:</code> <code>effect:</code> <code>id:</code>)
-          or click a field button to start a <b>tag</b>. Everything you type then belongs to the tag — spaces included —
-          until you press <b>Enter</b> or <b>Tab</b>.</li>
-        <li>Every tag must be satisfied (AND). Words <em>inside</em> one tag must match the <em>same</em> file or name;
-          two tags of the same field mean two separate matches — <code>model: 6dr</code> + <code>model: crystal</code>
-          finds spells using a 6dr model <em>and</em> a crystal model.</li>
-        <li>Prefix a tag with <b>-</b> to <b>exclude</b> its matches — <code>-effect:school_damage</code> hides every
-          spell with that effect. Click a tag's field label to flip include/exclude, or use a field button's <b>−</b> half.</li>
-        <li>Click a tag's <b>×</b> to remove it, or its text to edit it. Plain words stay plain text — click them to
-          put them back in the input. Backspace or <b>←</b> on an empty bar reopens the previous tag; <b>→</b>/Tab/Enter closes the tag you're typing.</li>
-        <li>Click any tag in the results to search for it. On a tag, <b>⧉</b> copies the ID; <b>.lo</b> / <b>/</b> / <b>.mod</b> copy the in-game command (<code>.lookup object</code>, <code>/script PlaySound</code>, <code>.modify animkit</code>).</li>
-        <li><b>Shift-click</b> any copy button to wrap the copied text in <code>`backticks`</code> (for chat macros).</li>
-        <li>Hiding a column (toolbar) also excludes it from plain-word search and from exports.</li>
-      </ul>
-    </div>
+    <dialog id="help">
+      <div class="help-top">
+        <h2>Help</h2>
+        <button id="help-close" title="Close">×</button>
+      </div>
+      <div class="help-grid">
+        <section>
+          <h3>Searching</h3>
+          <ul>
+            <li>Plain words search <b>names, models and sounds</b> at once; a plain number also matches a spell ID.</li>
+            <li>Words match <b>any part of the text, in any order</b> — <code>impact fireball</code> finds
+              <code>cfx_mage_fireball_impact.m2</code>.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Field tags</h3>
+          <ul>
+            <li>Type a prefix like <code>model:</code> (or click a field button) to search one field only.
+              Everything you type then belongs to the tag — spaces included — until you press <kbd>Enter</kbd> or <kbd>Tab</kbd>.</li>
+            <li>Fields: <code>name:</code> <code>model:</code> <code>sound:</code> <code>soundkit:</code>
+              <code>animkit:</code> <code>anim:</code> <code>effect:</code> <code>id:</code></li>
+            <li>Every tag must match (AND), and words <em>inside</em> one tag must match the <em>same</em> file or name —
+              <code>model:6dr</code> + <code>model:crystal</code> means a 6dr model <em>and</em> a crystal model.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Excluding</h3>
+          <ul>
+            <li>A <b>-</b> prefix hides matches instead — <code>-effect:school_damage</code> hides every spell with that effect.</li>
+            <li>Three ways: type <code>-model:</code>, click the <b>−</b> half of a field button,
+              or click an existing tag's field label to flip it.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Editing the search bar</h3>
+          <ul>
+            <li><kbd>Enter</kbd>, <kbd>Tab</kbd> or <kbd>→</kbd> close the tag you're typing;
+              <kbd>Backspace</kbd> or <kbd>←</kbd> on an empty input reopen the previous one.</li>
+            <li>Click a tag's text to edit it, its <b>×</b> to remove it. Plain words are edited like normal text.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>In the results</h3>
+          <ul>
+            <li>Click any tag to find all spells that use it.</li>
+            <li><b>⧉</b> copies an ID; <b>.lo</b>, <b>/</b>, <b>.mod</b> and the Commands buttons copy ready-to-paste
+              Epsilon commands — hover to preview. <b>Shift-click</b> wraps the copy in <code>`backticks`</code>.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Columns, filters, sharing</h3>
+          <ul>
+            <li>Hiding a column (toolbar) also excludes it from plain-word search and exports.</li>
+            <li>"Only spells with" narrows the current results; sorting cycles ▲, ▼, back to relevance.</li>
+            <li>The URL always holds your search — copy it to share.</li>
+          </ul>
+        </section>
+      </div>
+    </dialog>
   </section>
 
   <section id="listing">
@@ -147,9 +186,9 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260715a"></script>
-<script src="js/data.js?v=20260715a"></script>
-<script src="js/search.js?v=20260715a"></script>
-<script src="js/app.js?v=20260715a"></script>
+<script src="js/config.js?v=20260715b"></script>
+<script src="js/data.js?v=20260715b"></script>
+<script src="js/search.js?v=20260715b"></script>
+<script src="js/app.js?v=20260715b"></script>
 </body>
 </html>
