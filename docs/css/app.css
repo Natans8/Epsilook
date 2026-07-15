@@ -544,6 +544,11 @@ td.expanded .kit-group.overflow { display: flex; }
 .kit-files .tag-play:first-child { padding-left: 0.45rem; }
 .kit-files .tag-copy:last-child { padding-right: 0.5rem; }
 
+/* flex-centering leaves the buttons' smaller text ~1.5px above the label's
+   baseline; nudge it down to sit on it. (align-items: baseline can't do
+   this: the label's overflow:hidden makes flexbox use its box bottom.) */
+.tag-copy, .tag-play { position: relative; top: 0.1rem; }
+
 .tag.hit { border-color: var(--gold-dim); background: rgba(240, 195, 76, 0.10); }
 
 .tag.overflow { display: none; }
