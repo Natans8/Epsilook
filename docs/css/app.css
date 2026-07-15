@@ -147,14 +147,19 @@ main { padding: 0 1.6rem 2rem; }
 #editwrap.editing.not { border-color: rgba(224, 112, 112, 0.65); background: rgba(224, 112, 112, 0.08); }
 #editwrap.not #editlabel { color: var(--danger); }
 
-/* the field label doubles as the include/exclude toggle */
-.qchip-field, #editlabel { cursor: pointer; }
-.qchip-field:hover, #editlabel:hover { text-decoration: underline; }
+/* the field label doubles as the include/exclude toggle — a slightly
+ * larger, clearly-hoverable target since it's a small chip sub-region */
+.qchip-field, #editlabel { cursor: pointer; border-radius: 999px; }
+.qchip-field:hover, #editlabel:hover {
+  text-decoration: underline;
+  background: rgba(255, 255, 255, 0.08);
+}
 
 .qchip-field {
   font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 0.88em;
-  margin-right: 0.3rem;
+  margin: -0.12rem 0.3rem -0.12rem -0.15rem;
+  padding: 0.12rem 0.3rem 0.12rem 0.4rem;
 }
 .qchip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 24rem; }
 .qchip-x {
@@ -341,6 +346,7 @@ main { padding: 0 1.6rem 2rem; }
   color: var(--gold);
   box-shadow: 0 0 10px rgba(240, 195, 76, 0.15);
 }
+.export-sep { width: 1px; align-self: stretch; background: var(--border); }
 
 /* ----------------------------------------------------------------- table */
 

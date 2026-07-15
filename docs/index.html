@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit or animkit. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260715b">
+  <link rel="stylesheet" href="css/app.css?v=20260715c">
 </head>
 <body>
 
@@ -67,15 +67,18 @@
           <h3>Excluding</h3>
           <ul>
             <li>A <b>-</b> prefix hides matches instead — <code>-effect:school_damage</code> hides every spell with that effect.</li>
-            <li>Three ways: type <code>-model:</code>, click the <b>−</b> half of a field button,
-              or click an existing tag's field label to flip it.</li>
+            <li>Four ways: type <code>-model:</code>, click the <b>−</b> half of a field button,
+              click an existing tag's field label to flip it, or type <b>-</b> at the very start
+              of a tag you're editing.</li>
           </ul>
         </section>
         <section>
           <h3>Editing the search bar</h3>
           <ul>
-            <li><kbd>Enter</kbd>, <kbd>Tab</kbd> or <kbd>→</kbd> close the tag you're typing;
-              <kbd>Backspace</kbd> or <kbd>←</kbd> on an empty input reopen the previous one.</li>
+            <li><kbd>Enter</kbd>, <kbd>Tab</kbd> or <kbd>→</kbd> close the tag you're typing.</li>
+            <li>On an empty input, <kbd>←</kbd>/<kbd>→</kbd> step the gap between tags — even before
+              the first one or after the last — so you can insert text or a new tag right there;
+              <kbd>Backspace</kbd> reopens the tag just before your cursor for editing.</li>
             <li>Click a tag's text to edit it, its <b>×</b> to remove it. Plain words are edited like normal text.</li>
           </ul>
         </section>
@@ -92,7 +95,7 @@
           <ul>
             <li>Hiding a column (toolbar) also excludes it from plain-word search and exports.</li>
             <li>"Only spells with" narrows the current results; sorting cycles ▲, ▼, back to relevance.</li>
-            <li>The URL always holds your search — copy it to share.</li>
+            <li>The URL always holds your search — click <b>🔗 Share</b> (next to Export) to copy it, or copy it directly.</li>
           </ul>
         </section>
       </div>
@@ -116,6 +119,8 @@
         <label><input type="checkbox" data-col="commands" checked> Commands</label>
       </div>
       <div id="export">
+        <button id="share-link" title="Copy a link to this exact search — the URL always holds your current query">🔗 Share</button>
+        <span class="export-sep"></span>
         <span>Export:</span>
         <button id="export-csv" title="Download the current results as CSV">CSV</button>
         <button id="export-json" title="Download the current results as JSON">JSON</button>
@@ -186,9 +191,9 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260715b"></script>
-<script src="js/data.js?v=20260715b"></script>
-<script src="js/search.js?v=20260715b"></script>
-<script src="js/app.js?v=20260715b"></script>
+<script src="js/config.js?v=20260715c"></script>
+<script src="js/data.js?v=20260715c"></script>
+<script src="js/search.js?v=20260715c"></script>
+<script src="js/app.js?v=20260715c"></script>
 </body>
 </html>
