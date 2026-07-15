@@ -19,7 +19,8 @@
     chips: [],          // [{field, text, not}]
     activeField: null,  // field of the chip currently being typed, or null
     activeNot: false,   // the chip being typed is an exclusion
-    editIndex: null,    // original position of a chip reopened for editing
+    pos: 0,             // insertion gap: index in chips[] where the bar's
+                         // input sits, and where new content is inserted
 
     groups: [],         // groups of the last search (one per chip; for hit checks)
     tokens: [],         // flat tokens of the last search (for highlighting)
@@ -74,14 +75,24 @@
     toastTimer = setTimeout(() => t.classList.remove("show"), 1400);
   }
 
-  function copyText(text, wrapTicks = false) {
+  function copyText(text, wrapTicks = false, message) {
     if (wrapTicks) text = "`" + text + "`";
-    const done = () => toast(`Copied:  ${text}`);
+    const done = () => toast(message || `Copied:  ${text}`);
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
     } else {
       fallbackCopy(text, done);
     }
+  }
+
+  // Copy a link to the exact current search. The URL hash is only updated
+  // after the search debounce settles, so flush it first — otherwise a
+  // share click right after typing could copy a stale query.
+  function shareLink() {
+    clearTimeout(searchDebounce);
+    state.lastQuery = serializeQuery();
+    stateToHash(false);
+    copyText(location.href, false, "Link copied — paste it to share this search");
   }
 
   function fallbackCopy(text, done) {
@@ -103,17 +114,20 @@
     return f && f !== "all" && Search.FIELDS[f];
   }
 
-  // canonical string form: model:"fel reaver" -effect:knockback free words
+  // canonical string form: model:"fel reaver" -effect:knockback free words.
+  // The live input's contribution is spliced in at state.pos, so a query
+  // typed before or between chips serializes (and round-trips) in place.
   function serializeQuery() {
     const tag = (field, text, not) =>
       `${not ? "-" : ""}${field}:${/\s/.test(text) ? `"${text}"` : text}`;
     const parts = state.chips.map((c) =>
       c.field === "all" ? c.text : tag(c.field, c.text, c.not));
+    const at = Math.min(state.pos, state.chips.length);
     const inputText = $("#q").value.trim();
     if (inputText) {
-      parts.push(state.activeField ? tag(state.activeField, inputText, state.activeNot) : inputText);
+      parts.splice(at, 0, state.activeField ? tag(state.activeField, inputText, state.activeNot) : inputText);
     } else if (state.activeField) {
-      parts.push(`${state.activeNot ? "-" : ""}${state.activeField}:`);
+      parts.splice(at, 0, `${state.activeNot ? "-" : ""}${state.activeField}:`);
     }
     return parts.join(" ");
   }
@@ -123,7 +137,6 @@
     state.chips = [];
     state.activeField = null;
     state.activeNot = false;
-    state.editIndex = null;
     const free = [];
     for (const m of (str || "").matchAll(/(?:(-)?([a-z]+):)?(?:"([^"]*)"|(\S+))/gi)) {
       const not = !!m[1];
@@ -139,21 +152,23 @@
       }
     }
     $("#q").value = free.join(" ");
+    state.pos = state.chips.length;
     renderBar();
   }
 
-  // group list for the engine: one group per chip + one for free text.
-  // Words in a group must match the same entity; groups AND together
-  // (not: true groups exclude instead).
+  // group list for the engine: one group per chip + one for the live input,
+  // spliced in at state.pos so mid-bar typing groups correctly. Words in a
+  // group must match the same entity; groups AND together (not: true groups
+  // exclude instead).
   function currentGroups() {
-    const groups = [];
-    const add = (field, text, not) => {
+    const toGroup = (field, text, not) => {
       const tokens = text.toLowerCase().split(/\s+/).filter(Boolean).map((w) => ({ text: w }));
-      if (tokens.length) groups.push({ field, tokens, not: !!not });
+      return tokens.length ? { field, tokens, not: !!not } : null;
     };
-    for (const c of state.chips) add(c.field, c.text, c.not);
-    add(state.activeField || "all", $("#q").value, state.activeField ? state.activeNot : false);
-    return groups;
+    const groups = state.chips.map((c) => toGroup(c.field, c.text, c.not));
+    const live = toGroup(state.activeField || "all", $("#q").value, state.activeField ? state.activeNot : false);
+    if (live) groups.splice(Math.min(state.pos, groups.length), 0, live);
+    return groups.filter(Boolean);
   }
 
   /* ------------------------------------------------------- search bar */
@@ -163,8 +178,9 @@
     for (const chip of bar.querySelectorAll(".qchip")) chip.remove();
     const editwrap = $("#editwrap");
 
-    // a reopened chip is edited at its own position, not at the end
-    const editPos = state.activeField ? (state.editIndex ?? state.chips.length) : state.chips.length;
+    // the input sits at state.pos: at the end by default, or wherever the
+    // user navigated / reopened a chip
+    const editPos = Math.min(state.pos, state.chips.length);
     state.chips.forEach((c, idx) => {
       // free text renders as plain words (click to edit), not a boxed chip
       const isFree = c.field === "all";
@@ -215,35 +231,85 @@
     }
   }
 
-  function activateField(field, { keepInput = false, not = false } = {}) {
-    commitActiveChip();
+  function activateField(field, { not = false } = {}) {
+    commitActiveChip();     // finish any field chip currently being typed
+    insertFreeChipHere();   // and any free words sitting in the gap
     ensureFieldVisible(field);
-    const input = $("#q");
-    if (!keepInput && input.value.trim()) {
-      state.chips.push({ field: "all", text: input.value.trim() });
-      input.value = "";
-    }
     state.activeField = field;
     state.activeNot = not;
     hideSuggest();
     renderBar();
-    input.focus();
+    $("#q").focus();
     scheduleSearch();
   }
 
+  // Commits the field chip currently being typed (if any) into state.chips
+  // at state.pos, and advances state.pos to just past it. Returns the
+  // insertion index, or -1 if there was nothing (or no field) to commit.
   function commitActiveChip() {
-    if (!state.activeField) { state.editIndex = null; return; }
+    if (!state.activeField) return -1;
     const input = $("#q");
     const text = input.value.trim();
+    let at = -1;
     if (text) {
-      const at = Math.min(state.editIndex ?? state.chips.length, state.chips.length);
+      at = Math.min(state.pos, state.chips.length);
       state.chips.splice(at, 0, { field: state.activeField, text, not: state.activeNot });
+      state.pos = at + 1;
     }
     state.activeField = null;
     state.activeNot = false;
-    state.editIndex = null;
     input.value = "";
     renderBar();
+    return at;
+  }
+
+  // Same, but for free (non-field) words sitting in the gap — used when
+  // navigating away from a gap where the user was typing a plain phrase.
+  function insertFreeChipHere() {
+    const input = $("#q");
+    const text = input.value.trim();
+    if (!text) return -1;
+    const at = Math.min(state.pos, state.chips.length);
+    state.chips.splice(at, 0, { field: "all", text });
+    state.pos = at + 1;
+    input.value = "";
+    return at;
+  }
+
+  // Commits whatever's pending at the gap (field chip or free words).
+  function flushPending() {
+    return state.activeField ? commitActiveChip() : insertFreeChipHere();
+  }
+
+  // Move the gap left/right by one chip. Any pending text is committed
+  // first (a left step then lands just before what was just committed, so
+  // repeated presses keep walking left through the earlier chips).
+  function stepGap(delta) {
+    const at = flushPending();
+    if (at === -1) {
+      state.pos = Math.max(0, Math.min(state.pos + delta, state.chips.length));
+    } else if (delta < 0) {
+      state.pos = at;
+    }
+    renderBar();
+    $("#q").focus();
+    if (at !== -1) scheduleSearch();
+  }
+
+  // Pop a committed chip back into the editor at its own position (it
+  // recommits there, not at the end).
+  function editChipAt(index) {
+    const [edited] = state.chips.splice(index, 1);
+    state.pos = index;
+    const input = $("#q");
+    input.value = edited.text;
+    state.activeField = edited.field === "all" ? null : edited.field;
+    state.activeNot = edited.field === "all" ? false : !!edited.not;
+    renderBar();
+    input.focus();
+    const caret = input.value.length;
+    input.setSelectionRange(caret, caret);
+    scheduleSearch();
   }
 
   /* ------------------------------------------------------ autocomplete */
@@ -952,31 +1018,6 @@
       scheduleSearch();
     });
 
-    // pop a committed chip back into the editor (it recommits in place)
-    function editChipAt(index) {
-      const [edited] = state.chips.splice(index, 1);
-      let caret;
-      if (edited.field === "all") {
-        // free text merges with whatever is already being typed
-        const rest = input.value.trim();
-        input.value = edited.text + (rest ? " " + rest : "");
-        caret = edited.text.length;
-      } else {
-        // free text still being typed survives as free words
-        const rest = input.value.trim();
-        if (rest) state.chips.push({ field: "all", text: rest });
-        state.activeField = edited.field;
-        state.activeNot = !!edited.not;
-        state.editIndex = index;
-        input.value = edited.text;
-        caret = input.value.length;
-      }
-      renderBar();
-      input.focus();
-      input.setSelectionRange(caret, caret);
-      scheduleSearch();
-    }
-
     input.addEventListener("keydown", (e) => {
       const box = $("#suggest");
       if (!box.hidden) {
@@ -999,6 +1040,15 @@
       const caretAtEnd = input.selectionStart === input.value.length
         && input.selectionEnd === input.value.length;
 
+      // typing "-" at the very start of a tag flips it to an exclusion,
+      // instead of typing "-model:..." from scratch
+      if (e.key === "-" && state.activeField && caretAtStart) {
+        e.preventDefault();
+        state.activeNot = !state.activeNot;
+        renderBar();
+        return;
+      }
+
       if (e.key === "Enter") {
         commitActiveChip();
         runSearch({ push: true });
@@ -1007,28 +1057,25 @@
         e.preventDefault();
         commitActiveChip();
         scheduleSearch();
-      } else if (e.key === "ArrowLeft" && caretAtStart) {
-        // step back into the previous chip (the current edit, if any,
-        // commits in place first)
-        const wasEditing = !!state.activeField;
-        commitActiveChip();
-        const target = state.chips.length - (wasEditing ? 2 : 1);
-        if (target >= 0) {
-          e.preventDefault();
-          editChipAt(target);
-        }
+      } else if (e.key === "ArrowLeft" && input.value === "") {
+        // move the gap left, without opening the chip for edit — repeated
+        // presses walk all the way to before the first chip
+        e.preventDefault();
+        stepGap(-1);
+      } else if (e.key === "ArrowRight" && input.value === "" && !state.activeField) {
+        e.preventDefault();
+        stepGap(1);
       } else if (e.key === "Backspace" && input.value === "") {
         e.preventDefault();
         if (state.activeField) {
           state.activeField = null;
           state.activeNot = false;
           renderBar();
-        } else if (state.chips.length) {
-          editChipAt(state.chips.length - 1);
-          return;
+          input.focus();
+          scheduleSearch();
+        } else if (state.pos > 0) {
+          editChipAt(state.pos - 1);
         }
-        input.focus();
-        scheduleSearch();
       }
     });
 
@@ -1036,7 +1083,9 @@
     $("#qbar").addEventListener("click", (e) => {
       const x = e.target.closest("[data-chip-remove]");
       if (x) {
-        state.chips.splice(Number(x.dataset.chipRemove), 1);
+        const idx = Number(x.dataset.chipRemove);
+        state.chips.splice(idx, 1);
+        if (idx < state.pos) state.pos -= 1;
         renderBar();
         input.focus();
         scheduleSearch();
@@ -1060,8 +1109,12 @@
       }
       const chip = e.target.closest("[data-chip-edit]");
       if (chip) {
-        commitActiveChip();
-        editChipAt(Number(chip.dataset.chipEdit));
+        // flush anything pending elsewhere first, correcting the target
+        // index if that insertion landed before it
+        let idx = Number(chip.dataset.chipEdit);
+        const insertedAt = flushPending();
+        if (insertedAt !== -1 && insertedAt <= idx) idx += 1;
+        editChipAt(idx);
         return;
       }
       input.focus();
@@ -1100,7 +1153,8 @@
       if (b) crossSearch(b.dataset.search);
     });
 
-    // export
+    // share + export
+    $("#share-link").addEventListener("click", shareLink);
     $("#export-csv").addEventListener("click", exportCsv);
     $("#export-json").addEventListener("click", exportJson);
     $("#export-discord").addEventListener("click", exportDiscord);
