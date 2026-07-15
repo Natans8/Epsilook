@@ -17,8 +17,10 @@
     // + the input's text). Chips with field "all" are free-text chips.
     chips: [],          // [{field, text}]
     activeField: null,  // field of the chip currently being typed, or null
+    editIndex: null,    // original position of a chip reopened for editing
 
-    tokens: [],         // tokens of the last search (for tag highlighting)
+    groups: [],         // groups of the last search (one per chip; for hit checks)
+    tokens: [],         // flat tokens of the last search (for highlighting)
     lastQuery: "",      // serialized form of the last search (hash/export)
     results: [],        // spell ids matching the query
     display: [],        // results after filters + sort
@@ -70,7 +72,8 @@
     toastTimer = setTimeout(() => t.classList.remove("show"), 1400);
   }
 
-  function copyText(text) {
+  function copyText(text, wrapTicks = false) {
+    if (wrapTicks) text = "`" + text + "`";
     const done = () => toast(`Copied:  ${text}`);
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
@@ -118,6 +121,7 @@
   function loadQueryString(str) {
     state.chips = [];
     state.activeField = null;
+    state.editIndex = null;
     const free = [];
     for (const m of (str || "").matchAll(/(?:([a-z]+):)?(?:"([^"]*)"|(\S+))/gi)) {
       const field = (m[1] || "").toLowerCase();
@@ -135,17 +139,17 @@
     renderBar();
   }
 
-  // token list for the engine: chip words + free input words
-  function currentTokens() {
-    const tokens = [];
+  // group list for the engine: one group per chip + one for free text.
+  // Words in a group must match the same entity; groups AND together.
+  function currentGroups() {
+    const groups = [];
     const add = (field, text) => {
-      for (const w of text.toLowerCase().split(/\s+/)) {
-        if (w) tokens.push({ field, text: w });
-      }
+      const tokens = text.toLowerCase().split(/\s+/).filter(Boolean).map((w) => ({ text: w }));
+      if (tokens.length) groups.push({ field, tokens });
     };
     for (const c of state.chips) add(c.field, c.text);
     add(state.activeField || "all", $("#q").value);
-    return tokens;
+    return groups;
   }
 
   /* ------------------------------------------------------- search bar */
@@ -176,7 +180,20 @@
     $("#q").placeholder = state.activeField
       ? Search.FIELDS[state.activeField].hint
       : (state.chips.length ? "" : "Search names, models and sounds — or type model: for a field tag");
+    sizeInput();
     updateTabs();
+  }
+
+  // while a chip is being typed, the input hugs its content instead of
+  // stretching to the end of the line
+  function sizeInput() {
+    const input = $("#q");
+    if (state.activeField) {
+      const len = Math.max(input.value.length, input.placeholder.length / 2, 4);
+      input.style.width = (len + 2) + "ch";
+    } else {
+      input.style.width = "";
+    }
   }
 
   function activateField(field, { keepInput = false } = {}) {
@@ -195,11 +212,15 @@
   }
 
   function commitActiveChip() {
-    if (!state.activeField) return;
+    if (!state.activeField) { state.editIndex = null; return; }
     const input = $("#q");
     const text = input.value.trim();
-    if (text) state.chips.push({ field: state.activeField, text });
+    if (text) {
+      const at = Math.min(state.editIndex ?? state.chips.length, state.chips.length);
+      state.chips.splice(at, 0, { field: state.activeField, text });
+    }
     state.activeField = null;
+    state.editIndex = null;
     input.value = "";
     renderBar();
   }
@@ -216,7 +237,7 @@
     if (word.length < 2) return hideSuggest();
     const matches = Object.entries(Search.FIELDS).filter(([key, f]) =>
       f.tab && !disabledFields().has(key) &&
-      (key.startsWith(word) || f.label.toLowerCase().startsWith(word)) && key !== word);
+      (key.startsWith(word) || f.label.toLowerCase().startsWith(word)));
     if (!matches.length) return hideSuggest();
 
     box.textContent = "";
@@ -260,6 +281,7 @@
 
     if (raw.replace(/[a-z]+:|"/gi, "").trim().length < CFG.minQueryLength) {
       state.results = [];
+      state.groups = [];
       state.tokens = [];
       state.searchMs = 0;
       applyFiltersAndSort();
@@ -268,10 +290,11 @@
       return;
     }
 
-    const tokens = currentTokens();
-    const res = Search.searchTokens(tokens, data, disabledFields());
+    const groups = currentGroups();
+    const res = Search.searchGroups(groups, data, disabledFields());
     state.results = res.spellIds;
-    state.tokens = tokens;
+    state.groups = groups;
+    state.tokens = groups.flatMap((g) => g.tokens.map((t) => ({ field: g.field, text: t.text })));
     state.searchMs = res.ms;
     applyFiltersAndSort();
     stateToHash(push);
@@ -339,10 +362,38 @@
     const tbody = $("#results tbody");
     const end = Math.min(state.rendered + CFG.scrollBatch, state.display.length);
     const frag = document.createDocumentFragment();
-    for (let i = state.rendered; i < end; i++) frag.appendChild(buildRow(state.display[i]));
+    const newRows = [];
+    for (let i = state.rendered; i < end; i++) {
+      const row = buildRow(state.display[i]);
+      frag.appendChild(row);
+      newRows.push(row);
+    }
     tbody.appendChild(frag);
     state.rendered = end;
     $("#sentinel").hidden = state.rendered >= state.display.length;
+    requestAnimationFrame(() => autoExpandCommands(newRows));
+  }
+
+  /* If another column already stretched a row, the hidden extra commands
+   * fit for free — show them and drop the "+N" button. */
+  function autoExpandCommands(rows) {
+    const candidates = rows
+      .map((tr) => ({ tr, td: tr.querySelector(".c-cmds"), more: tr.querySelector(".c-cmds .more") }))
+      .filter((c) => c.td && c.more);
+    if (!candidates.length) return;
+    for (const c of candidates) c.before = c.tr.clientHeight;       // measure
+    for (const c of candidates) {                                    // expand all
+      c.td.classList.add("expanded");
+      c.more.hidden = true;
+    }
+    for (const c of candidates) {                                    // keep only free fits
+      if (c.tr.clientHeight > c.before) {
+        c.td.classList.remove("expanded");
+        c.more.hidden = false;
+      } else {
+        c.more.remove();
+      }
+    }
   }
 
   function buildRow(spellId) {
@@ -353,7 +404,7 @@
     // ID
     const tdId = el("td", "c-id");
     const idBtn = el("button", "id-copy", String(spellId));
-    idBtn.title = "Copy spell ID";
+    idBtn.title = "Copy spell ID\nShift-click: copy wrapped in `backticks`";
     idBtn.dataset.copy = String(spellId);
     tdId.appendChild(idBtn);
     tr.appendChild(tdId);
@@ -383,26 +434,30 @@
     // Animations — AnimKits grouped with the animations they play
     tr.appendChild(animationsCell(d.spellAnimKits.get(spellId) || []));
 
-    // Effects
-    const effectIds = (d.spellEffects.get(spellId) || []).slice().sort((a, b) => a - b);
+    // Effects — matched effects first
+    const effectIds = hitsFirst(
+      (d.spellEffects.get(spellId) || []).slice().sort((a, b) => a - b),
+      (e) => effectIsHit(e));
     tr.appendChild(tagCell("c-effects", effectIds.map((e) => effectTag(e))));
 
-    // Commands — extra ones hide behind "+N more"
+    // Commands — primary ones + wowhead first, extras behind "+N"
+    // (renderMore auto-expands them when the row has the room anyway)
     const tdCmd = el("td", "c-cmds");
-    let extraCount = 0;
+    const extras = [];
     for (const cmd of CFG.spellCommands) {
       const b = el("button", "cmd", cmd.label);
-      b.title = `${cmd.hint} — ${fillTemplate(cmd.template, { id: spellId })}`;
+      b.title = `${cmd.hint} — ${fillTemplate(cmd.template, { id: spellId })}\nShift-click: copy wrapped in \`backticks\``;
       b.dataset.copy = fillTemplate(cmd.template, { id: spellId });
-      if (cmd.extra) { b.classList.add("overflow"); extraCount++; }
-      tdCmd.appendChild(b);
+      if (cmd.extra) { b.classList.add("overflow"); extras.push(b); }
+      else tdCmd.appendChild(b);
     }
     tdCmd.appendChild(wowheadLink(fillTemplate(CFG.wowheadSpellUrl, { id: spellId }), "Open on Wowhead"));
-    if (extraCount > 0) {
-      const more = el("button", "more", `+${extraCount}`);
+    if (extras.length > 0) {
+      const more = el("button", "more", `+${extras.length}`);
       more.title = "Show more commands";
       more.dataset.expand = "1";
       tdCmd.appendChild(more);
+      for (const b of extras) tdCmd.appendChild(b);
     }
     tr.appendChild(tdCmd);
 
@@ -559,6 +614,8 @@
 
       const itemsDiv = el("div", "kit-files");
       const items = opts.itemsOf(kitId);
+      // a kit with a single item shares its line instead of stacking
+      if (items.length === 1) group.classList.add("inline");
       const limit = items.length <= opts.itemLimit + COLLAPSE_SLACK ? items.length : opts.itemLimit;
       items.forEach((item, fi) => {
         const tag = opts.itemTag(item);
@@ -587,36 +644,35 @@
     return state.tokens.filter((t) => t.field === field || t.field === "all");
   }
 
+  function groupsFor(field) {
+    return state.groups.filter((g) => g.field === field || g.field === "all");
+  }
+
+  // hit = the entity fully satisfies at least one chip of its field
   function fileIsHit(file, field) {
     if (!file) return false;
-    const tokens = tokensFor(field);
-    if (!tokens.length) return false;
-    return tokens.every((t) => file.searchL.includes(t.text));
+    return groupsFor(field).some((g) => g.tokens.every((t) => file.searchL.includes(t.text)));
   }
 
   function kitIsHit(kitId, field) {
-    return tokensFor(field).some((t) => Number(t.text) === kitId);
+    return groupsFor(field).some((g) => g.tokens.some((t) => Number(t.text) === kitId));
   }
 
   function animIsHit(animId) {
-    const tokens = tokensFor("anim");
-    if (!tokens.length) return false;
     const nameL = state.data.animNamesL[animId];
-    return tokens.every((t) => nameL.includes(t.text));
+    return groupsFor("anim").some((g) => g.tokens.every((t) => nameL.includes(t.text)));
   }
 
   function effectIsHit(effectId) {
-    const tokens = tokensFor("effect");
-    if (!tokens.length) return false;
     const nameL = state.data.effectNamesL.get(effectId) || "";
-    return tokens.every((t) => nameL.includes(t.text));
+    return groupsFor("effect").some((g) => g.tokens.every((t) => nameL.includes(t.text)));
   }
 
   // small helper: a copy button inside a tag. "⧉" copies an ID; command
   // buttons are labeled after what they copy (".lo", "/", ".mod").
   function tagButton(glyph, title, copyValue) {
     const b = el("button", "tag-copy", glyph);
-    b.title = title;
+    b.title = `${title}\nShift-click: copy wrapped in \`backticks\``;
     b.dataset.copy = copyValue;
     return b;
   }
@@ -891,8 +947,25 @@
         }
         updateSuggest();
       }
+      sizeInput();
       scheduleSearch();
     });
+
+    // pop a committed chip back into the editor (it recommits in place)
+    function editChipAt(index) {
+      const [edited] = state.chips.splice(index, 1);
+      if (edited.field === "all") {
+        input.value = edited.text;
+      } else {
+        state.activeField = edited.field;
+        state.editIndex = index;
+        input.value = edited.text;
+      }
+      renderBar();
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+      scheduleSearch();
+    }
 
     input.addEventListener("keydown", (e) => {
       const box = $("#suggest");
@@ -904,38 +977,44 @@
           items.forEach((it, i) => it.classList.toggle("selected", i === suggestIndex));
           return;
         }
-        if ((e.key === "Enter" || e.key === "Tab") && suggestIndex >= 0) {
+        if (e.key === "Tab" || (e.key === "Enter" && suggestIndex >= 0)) {
           e.preventDefault();
-          selectSuggestion(items[suggestIndex].dataset.field);
+          selectSuggestion(items[Math.max(suggestIndex, 0)].dataset.field);
           return;
         }
         if (e.key === "Escape") { hideSuggest(); return; }
       }
 
+      const caretAtStart = input.selectionStart === 0 && input.selectionEnd === 0;
+      const caretAtEnd = input.selectionStart === input.value.length
+        && input.selectionEnd === input.value.length;
+
       if (e.key === "Enter") {
         commitActiveChip();
         runSearch({ push: true });
-      } else if (e.key === "Tab" && state.activeField) {
+      } else if ((e.key === "Tab" || e.key === "Escape" || (e.key === "ArrowRight" && caretAtEnd))
+                 && state.activeField) {
         e.preventDefault();
         commitActiveChip();
         scheduleSearch();
-      } else if (e.key === "Escape" && state.activeField) {
+      } else if (e.key === "ArrowLeft" && caretAtStart) {
+        // step back into the previous chip (the current edit, if any,
+        // commits in place first)
+        const wasEditing = !!state.activeField;
         commitActiveChip();
-        scheduleSearch();
+        const target = state.chips.length - (wasEditing ? 2 : 1);
+        if (target >= 0) {
+          e.preventDefault();
+          editChipAt(target);
+        }
       } else if (e.key === "Backspace" && input.value === "") {
         e.preventDefault();
         if (state.activeField) {
           state.activeField = null;
           renderBar();
         } else if (state.chips.length) {
-          const chip = state.chips.pop();
-          if (chip.field === "all") {
-            input.value = chip.text;
-          } else {
-            state.activeField = chip.field;
-            input.value = chip.text;
-          }
-          renderBar();
+          editChipAt(state.chips.length - 1);
+          return;
         }
         input.focus();
         scheduleSearch();
@@ -955,12 +1034,7 @@
       const chip = e.target.closest("[data-chip-edit]");
       if (chip) {
         commitActiveChip();
-        const [edited] = state.chips.splice(Number(chip.dataset.chipEdit), 1);
-        if (edited.field === "all") input.value = edited.text;
-        else { state.activeField = edited.field; input.value = edited.text; }
-        renderBar();
-        input.focus();
-        scheduleSearch();
+        editChipAt(Number(chip.dataset.chipEdit));
         return;
       }
       input.focus();
@@ -985,7 +1059,7 @@
     $("#results").addEventListener("click", (e) => {
       const t = e.target.closest("button");
       if (!t) return;
-      if (t.dataset.copy) copyText(t.dataset.copy);
+      if (t.dataset.copy) copyText(t.dataset.copy, e.shiftKey);
       else if (t.dataset.search) crossSearch(t.dataset.search);
       else if (t.dataset.expand) {
         t.closest("td").classList.add("expanded");
