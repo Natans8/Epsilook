@@ -110,6 +110,16 @@
     };
   }
 
+  // A shared link may use a search mode whose column is hidden here —
+  // honor the link by un-hiding that column for this session.
+  function ensureModeVisible(mode) {
+    if (!Search.FIELDS[mode] || !disabledFields().has(mode)) return;
+    for (const [col, fields] of Object.entries(COL_FIELDS)) {
+      if (fields.includes(mode)) state.hiddenCols[col] = false;
+    }
+    applyHiddenCols();
+  }
+
   // accepts both full build ids and short "9.2.7" forms
   function findVersion(v) {
     if (!v) return undefined;
@@ -878,6 +888,7 @@
 
   function applyHash({ push }) {
     const h = hashToState();
+    ensureModeVisible(h.m);
     state.mode = Search.FIELDS[h.m] && !disabledFields().has(h.m) ? h.m : "all";
     state.query = h.q;
     $("#q").value = h.q;
@@ -920,6 +931,7 @@
 
     const h = hashToState();
     const entry = findVersion(h.v) || state.versions[state.versions.length - 1];
+    ensureModeVisible(h.m);
     state.mode = Search.FIELDS[h.m] && !disabledFields().has(h.m) ? h.m : "all";
     state.query = h.q;
     $("#q").value = h.q;
