@@ -60,6 +60,14 @@ window.EpsilookData = (() => {
         : sp.names[i].toLowerCase();
     }
 
+    // spell icon names ("" = none); older packs have no icon data
+    const iconNames = pack.iconNames || [];
+    const icons = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const idx = sp.icons ? sp.icons[i] : 0;
+      icons[i] = idx ? iconNames[idx - 1] : "";
+    }
+
     // files: fid -> {path, base, searchL}
     const files = new Map();
     const fp = pack.files;
@@ -159,7 +167,7 @@ window.EpsilookData = (() => {
     console.info(`Epsilook: indexes built in ${(performance.now() - t0).toFixed(0)} ms`);
     return {
       meta: pack.meta,
-      ids: sp.ids, names: sp.names, subtexts: sp.subtexts,
+      ids: sp.ids, names: sp.names, subtexts: sp.subtexts, icons,
       namesL, spellIndex, files,
       spellModels, modelSpells, modelFids,
       spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles,

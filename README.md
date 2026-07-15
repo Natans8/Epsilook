@@ -5,8 +5,8 @@ Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
 **Live at [natans8.github.io/Epsilook](https://natans8.github.io/Epsilook/).**
 
 Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
-AnimKit or animation — with clickable cross-references, spell effect info, and one-click
-copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
+AnimKit or animation — with spell icons, clickable cross-references, spell effect info,
+and one-click copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
 `.lookup object <model>`, `.lookup emote <anim>`, `.modify animkit <id>`, and more).
 
 The app is a fully static site: all data is baked into one compressed pack per game
@@ -78,3 +78,7 @@ Edit `docs/js/config.js` — `spellCommands` for per-spell buttons,
 
 - Game tables: [wago.tools](https://wago.tools) CSV export, build 9.2.7.45745
 - File names: [community listfile](https://github.com/wowdev/wow-listfile)
+- Spell icon images: hotlinked from [Wowhead](https://www.wowhead.com)'s CDN
+  (`wow.zamimg.com`), lazy-loaded per visible row; the icon *names* are baked into
+  the data pack (SpellMisc table + listfile). `spellIconUrl` in `docs/js/config.js`
+  sets the size or disables icons.
