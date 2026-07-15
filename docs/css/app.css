@@ -397,7 +397,9 @@ th.c-idx { text-align: right; }
 .c-id { width: 5.5rem; }
 .c-name { min-width: 13rem; max-width: 20rem; }
 .c-cmds { width: 1%; }
-.c-models { min-width: 14rem; }
+/* matches .kit-files' line-height below, so a bare model pill (no kit
+   wrapper of its own) comes out exactly as tall as a sound/animation one */
+.c-models { min-width: 14rem; line-height: 1.15; }
 .c-sounds { min-width: 16rem; }
 .c-animkits { min-width: 12rem; }
 .c-effects { min-width: 10rem; }
@@ -461,7 +463,9 @@ td.empty { text-align: center; vertical-align: middle; }
 }
 .kit-group:first-of-type { margin-top: 0.05rem; }
 .kit-group:last-of-type { margin-bottom: 0.05rem; }
-.kit-head { display: flex; align-items: center; flex: none; }
+/* stretch so the header tag (and its full-height hover buttons) fill the
+   whole strip, even when kit-files wraps to multiple lines and grows taller */
+.kit-head { display: flex; align-items: stretch; flex: none; }
 .c-sounds .kit-head { background: rgba(95, 175, 143, 0.10); }
 .c-animkits .kit-head { background: rgba(201, 154, 224, 0.09); }
 .kit-head .tag, .kit-head .tag.hit { border: none; background: none; margin: 0; border-radius: 0; }
@@ -477,9 +481,12 @@ td.empty { text-align: center; vertical-align: middle; }
   border-left: 1px solid var(--border);
   line-height: 1.15;
 }
-.kit-files .tag { margin: 0; font-size: 0.78em; }
-.kit-files .tag-label { padding: 0.06rem 0.4rem; }
-.kit-files .tag-copy { padding: 0.26rem 0.35rem 0.06rem 0.3rem; } /* +0.2rem top = the baseline nudge */
+.kit-files .tag { margin: 0; }
+/* models aren't grouped under a kit, but should still come out the same
+   height as sound files and animations (both always seen at this size) */
+.kit-files .tag, .c-models .tag { font-size: 0.78em; }
+.kit-files .tag-label, .c-models .tag-label { padding: 0.06rem 0.4rem; }
+.kit-files .tag-copy, .c-models .tag-copy { padding: 0.26rem 0.35rem 0.06rem 0.3rem; } /* +0.2rem top = the baseline nudge */
 .kit-files .tag-play { padding: 0.06rem 0.32rem; }
 .kit-group.overflow { display: none; }
 td.expanded .kit-group.overflow { display: flex; }
