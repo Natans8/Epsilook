@@ -72,7 +72,7 @@
     t.textContent = msg;
     t.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove("show"), 1400);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 2000);
   }
 
   function copyText(text, wrapTicks = false, message) {
@@ -921,15 +921,28 @@
   function exportDiscord() {
     if (nothingToExport()) return;
     const rows = exportRows();
-    const limit = CFG.discordExportRows;
-    const shown = rows.slice(0, limit);
-    const idWidth = Math.max(...shown.map((r) => String(r.id).length), 2);
-    const lines = shown.map((r) =>
-      `${String(r.id).padEnd(idWidth)}  ${r.name}${r.subtext ? ` (${r.subtext})` : ""}`);
-    let text = `**Epsilook** — ${rows.length.toLocaleString()} ${rows.length === 1 ? "spell" : "spells"} for \`${state.lastQuery}\`\n`;
-    text += `<${location.href}>\n\`\`\`\n${lines.join("\n")}\n\`\`\``;
-    if (rows.length > limit) text += `\n…and ${(rows.length - limit).toLocaleString()} more (full list: link above)`;
-    copyText(text);
+    const idWidth = Math.max(...rows.map((r) => String(r.id).length), 2);
+    const header = `**Epsilook** — ${rows.length.toLocaleString()} ${rows.length === 1 ? "spell" : "spells"} for \`${state.lastQuery}\`\n<${location.href}>\n\`\`\`\n`;
+    const closer = "\n```";
+    const footer = (remaining) => `\n…and ${remaining.toLocaleString()} more (full list: link above)`;
+    const reserve = closer.length + footer(rows.length).length; // worst-case footer length
+
+    let body = "";
+    let shown = 0;
+    for (const r of rows) {
+      const line = `${String(r.id).padEnd(idWidth)}  ${r.name}${r.subtext ? ` (${r.subtext})` : ""}`;
+      const candidate = body + (shown ? "\n" : "") + line;
+      if (shown > 0 && header.length + candidate.length + reserve > CFG.discordCharLimit) break;
+      body = candidate;
+      shown++;
+    }
+
+    let text = header + body + closer;
+    if (shown < rows.length) text += footer(rows.length - shown);
+    const summary = shown < rows.length
+      ? `Copied ${shown.toLocaleString()} of ${rows.length.toLocaleString()} spells to clipboard`
+      : `Copied ${shown.toLocaleString()} ${shown === 1 ? "spell" : "spells"} to clipboard`;
+    copyText(text, false, summary);
   }
 
   function updateSortHeaders() {

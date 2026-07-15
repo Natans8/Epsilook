@@ -28,8 +28,10 @@ window.EpsilookConfig = {
   wowheadSpellUrl: "https://www.wowhead.com/spell={id}",
   wowheadSoundUrl: "https://www.wowhead.com/sound={id}",
 
-  // "Copy for Discord" export: at most this many rows (Discord caps messages).
-  discordExportRows: 40,
+  // "Copy as Text" export: character budget for the pasted block, sized off
+  // Discord's 2000-char message cap with room left for the header and a
+  // possible "...and N more" footer line.
+  discordCharLimit: 1800,
 
   // How many rows to render per infinite-scroll batch.
   scrollBatch: 60,
