@@ -159,6 +159,8 @@
     for (const chip of bar.querySelectorAll(".qchip")) chip.remove();
     const editwrap = $("#editwrap");
 
+    // a reopened chip is edited at its own position, not at the end
+    const editPos = state.activeField ? (state.editIndex ?? state.chips.length) : state.chips.length;
     state.chips.forEach((c, idx) => {
       const chip = el("span", `qchip f-${c.field}`);
       const label = el("span", "qchip-field", c.field === "all" ? "" : `${c.field}:`);
@@ -169,7 +171,8 @@
       x.dataset.chipRemove = String(idx);
       chip.appendChild(x);
       chip.dataset.chipEdit = String(idx);
-      bar.insertBefore(chip, editwrap);
+      if (idx < editPos) bar.insertBefore(chip, editwrap);
+      else bar.appendChild(chip);
     });
 
     editwrap.classList.toggle("editing", !!state.activeField);
@@ -362,44 +365,19 @@
     const tbody = $("#results tbody");
     const end = Math.min(state.rendered + CFG.scrollBatch, state.display.length);
     const frag = document.createDocumentFragment();
-    const newRows = [];
-    for (let i = state.rendered; i < end; i++) {
-      const row = buildRow(state.display[i]);
-      frag.appendChild(row);
-      newRows.push(row);
-    }
+    for (let i = state.rendered; i < end; i++) frag.appendChild(buildRow(state.display[i], i));
     tbody.appendChild(frag);
     state.rendered = end;
     $("#sentinel").hidden = state.rendered >= state.display.length;
-    requestAnimationFrame(() => autoExpandCommands(newRows));
   }
 
-  /* If another column already stretched a row, the hidden extra commands
-   * fit for free — show them and drop the "+N" button. */
-  function autoExpandCommands(rows) {
-    const candidates = rows
-      .map((tr) => ({ tr, td: tr.querySelector(".c-cmds"), more: tr.querySelector(".c-cmds .more") }))
-      .filter((c) => c.td && c.more);
-    if (!candidates.length) return;
-    for (const c of candidates) c.before = c.tr.clientHeight;       // measure
-    for (const c of candidates) {                                    // expand all
-      c.td.classList.add("expanded");
-      c.more.hidden = true;
-    }
-    for (const c of candidates) {                                    // keep only free fits
-      if (c.tr.clientHeight > c.before) {
-        c.td.classList.remove("expanded");
-        c.more.hidden = false;
-      } else {
-        c.more.remove();
-      }
-    }
-  }
-
-  function buildRow(spellId) {
+  function buildRow(spellId, displayIndex) {
     const d = state.data;
     const i = d.spellIndex.get(spellId);
     const tr = el("tr");
+
+    // result index
+    tr.appendChild(el("td", "c-idx", String(displayIndex + 1)));
 
     // ID
     const tdId = el("td", "c-id");
@@ -440,25 +418,18 @@
       (e) => effectIsHit(e));
     tr.appendChild(tagCell("c-effects", effectIds.map((e) => effectTag(e))));
 
-    // Commands — primary ones + wowhead first, extras behind "+N"
-    // (renderMore auto-expands them when the row has the room anyway)
+    // Commands — all of them, on one static line that never stretches the row
     const tdCmd = el("td", "c-cmds");
-    const extras = [];
     for (const cmd of CFG.spellCommands) {
       const b = el("button", "cmd", cmd.label);
       b.title = `${cmd.hint} — ${fillTemplate(cmd.template, { id: spellId })}\nShift-click: copy wrapped in \`backticks\``;
       b.dataset.copy = fillTemplate(cmd.template, { id: spellId });
-      if (cmd.extra) { b.classList.add("overflow"); extras.push(b); }
-      else tdCmd.appendChild(b);
+      tdCmd.appendChild(b);
     }
-    tdCmd.appendChild(wowheadLink(fillTemplate(CFG.wowheadSpellUrl, { id: spellId }), "Open on Wowhead"));
-    if (extras.length > 0) {
-      const more = el("button", "more", `+${extras.length}`);
-      more.title = "Show more commands";
-      more.dataset.expand = "1";
-      tdCmd.appendChild(more);
-      for (const b of extras) tdCmd.appendChild(b);
-    }
+    const wh = wowheadLink(fillTemplate(CFG.wowheadSpellUrl, { id: spellId }), "Open on Wowhead");
+    wh.classList.add("wh-cmd");
+    wh.appendChild(el("span", "", "wowhead"));
+    tdCmd.appendChild(wh);
     tr.appendChild(tdCmd);
 
     return tr;
@@ -686,7 +657,7 @@
 
     const txt = el("button", "tag-label", file.base ? stripExt(file.base) : `file #${fid}`);
     txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this model`;
-    txt.dataset.search = file.path ? `model:"${file.path}"` : "";
+    txt.dataset.search = file.base ? `model:"${file.base}"` : "";
     tag.appendChild(txt);
 
     const cmd = fillTemplate(CFG.modelCopyTemplate,
@@ -705,7 +676,7 @@
     // sound extensions stay visible (.ogg/.mp3 differ, unlike models)
     const txt = el("button", "tag-label", file.base || `file #${fid}`);
     txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this sound`;
-    txt.dataset.search = file.path ? `sound:"${file.path}"` : "";
+    txt.dataset.search = file.base ? `sound:"${file.base}"` : "";
     tag.appendChild(txt);
 
     tag.appendChild(tagButton("⧉", `Copy FileDataID ${fid}`, String(fid)));
