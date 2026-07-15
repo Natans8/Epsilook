@@ -48,7 +48,10 @@
         <li>Every tag must be satisfied (AND). Words <em>inside</em> one tag must match the <em>same</em> file or name;
           two tags of the same field mean two separate matches — <code>model: 6dr</code> + <code>model: crystal</code>
           finds spells using a 6dr model <em>and</em> a crystal model.</li>
-        <li>Click a tag's <b>×</b> to remove it, or its text to edit it. Backspace or <b>←</b> on an empty bar reopens the previous tag; <b>→</b>/Tab/Enter closes the tag you're typing.</li>
+        <li>Prefix a tag with <b>-</b> to <b>exclude</b> its matches — <code>-effect:school_damage</code> hides every
+          spell with that effect. Click a tag's field label (or shift-click a field button) to flip include/exclude.</li>
+        <li>Click a tag's <b>×</b> to remove it, or its text to edit it. Plain words stay plain text — click them to
+          put them back in the input. Backspace or <b>←</b> on an empty bar reopens the previous tag; <b>→</b>/Tab/Enter closes the tag you're typing.</li>
         <li>Click any tag in the results to search for it. On a tag, <b>⧉</b> copies the ID; <b>.lo</b> / <b>/</b> / <b>.mod</b> copy the in-game command (<code>.lookup object</code>, <code>/script PlaySound</code>, <code>.modify animkit</code>).</li>
         <li><b>Shift-click</b> any copy button to wrap the copied text in <code>`backticks`</code> (for chat macros).</li>
         <li>Hiding a column (toolbar) also excludes it from plain-word search and from exports.</li>
@@ -112,6 +115,7 @@
         <button data-search="sound:felreaver">sound:felreaver</button>
         <button data-search="anim:ArtLoop">anim:ArtLoop</button>
         <button data-search="effect:leap">effect:leap</button>
+        <button data-search='name:nova -effect:school_damage'>name:nova -effect:school_damage</button>
       </div>
       <p class="es-hint">Words match any part of a name in any order — <code>impact fireball</code> finds
          <code>cfx_mage_fireball_impact.m2</code>. Click the <b>?</b> next to the search bar for the full syntax.</p>

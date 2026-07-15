@@ -130,6 +130,26 @@ main { padding: 0 1.6rem 2rem; max-width: 1600px; margin: 0 auto; }
   font-size: 0.98rem;
   cursor: pointer;
 }
+/* free text is not boxed — it reads as plain typed words (click to edit) */
+.qchip.qfree {
+  border: none;
+  background: none;
+  padding: 0.12rem 0.15rem;
+  border-radius: 6px;
+  font-size: 1.1rem;
+}
+.qchip.qfree:hover { background: rgba(255, 255, 255, 0.06); }
+.qchip.qfree .qchip-text { max-width: 36rem; }
+
+/* exclusion chips */
+.qchip.not { border-color: rgba(224, 112, 112, 0.5); background: rgba(224, 112, 112, 0.08); }
+#editwrap.editing.not { border-color: rgba(224, 112, 112, 0.65); background: rgba(224, 112, 112, 0.08); }
+#editwrap.not #editlabel { color: var(--danger); }
+
+/* the field label doubles as the include/exclude toggle */
+.qchip-field, #editlabel { cursor: pointer; }
+.qchip-field:hover, #editlabel:hover { text-decoration: underline; }
+
 .qchip-field {
   font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 0.88em;

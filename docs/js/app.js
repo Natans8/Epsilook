@@ -14,9 +14,11 @@
     data: null,         // indexes for the active version
 
     // the search bar: committed chips + the chip being typed (activeField
-    // + the input's text). Chips with field "all" are free-text chips.
-    chips: [],          // [{field, text}]
+    // + the input's text). Chips with field "all" are free text (rendered
+    // as plain words, not boxed). not: true excludes matches instead.
+    chips: [],          // [{field, text, not}]
     activeField: null,  // field of the chip currently being typed, or null
+    activeNot: false,   // the chip being typed is an exclusion
     editIndex: null,    // original position of a chip reopened for editing
 
     groups: [],         // groups of the last search (one per chip; for hit checks)
@@ -101,18 +103,17 @@
     return f && f !== "all" && Search.FIELDS[f];
   }
 
-  // canonical string form: model:"fel reaver" free words ...
+  // canonical string form: model:"fel reaver" -effect:knockback free words
   function serializeQuery() {
+    const tag = (field, text, not) =>
+      `${not ? "-" : ""}${field}:${/\s/.test(text) ? `"${text}"` : text}`;
     const parts = state.chips.map((c) =>
-      c.field === "all" ? c.text
-        : `${c.field}:${/\s/.test(c.text) ? `"${c.text}"` : c.text}`);
+      c.field === "all" ? c.text : tag(c.field, c.text, c.not));
     const inputText = $("#q").value.trim();
     if (inputText) {
-      parts.push(state.activeField
-        ? `${state.activeField}:${/\s/.test(inputText) ? `"${inputText}"` : inputText}`
-        : inputText);
+      parts.push(state.activeField ? tag(state.activeField, inputText, state.activeNot) : inputText);
     } else if (state.activeField) {
-      parts.push(`${state.activeField}:`);
+      parts.push(`${state.activeNot ? "-" : ""}${state.activeField}:`);
     }
     return parts.join(" ");
   }
@@ -121,16 +122,18 @@
   function loadQueryString(str) {
     state.chips = [];
     state.activeField = null;
+    state.activeNot = false;
     state.editIndex = null;
     const free = [];
-    for (const m of (str || "").matchAll(/(?:([a-z]+):)?(?:"([^"]*)"|(\S+))/gi)) {
-      const field = (m[1] || "").toLowerCase();
-      const text = (m[2] !== undefined ? m[2] : m[3] || "").trim();
+    for (const m of (str || "").matchAll(/(?:(-)?([a-z]+):)?(?:"([^"]*)"|(\S+))/gi)) {
+      const not = !!m[1];
+      const field = (m[2] || "").toLowerCase();
+      const text = (m[3] !== undefined ? m[3] : m[4] || "").trim();
       if (isChipField(field)) {
-        if (text) state.chips.push({ field, text });
+        if (text) state.chips.push({ field, text, not });
         ensureFieldVisible(field);
-      } else if (m[1]) {
-        free.push(`${m[1]}:${text}`); // unknown prefix stays literal
+      } else if (m[2]) {
+        free.push(`${not ? "-" : ""}${m[2]}:${text}`); // unknown prefix stays literal
       } else if (text) {
         free.push(text);
       }
@@ -140,15 +143,16 @@
   }
 
   // group list for the engine: one group per chip + one for free text.
-  // Words in a group must match the same entity; groups AND together.
+  // Words in a group must match the same entity; groups AND together
+  // (not: true groups exclude instead).
   function currentGroups() {
     const groups = [];
-    const add = (field, text) => {
+    const add = (field, text, not) => {
       const tokens = text.toLowerCase().split(/\s+/).filter(Boolean).map((w) => ({ text: w }));
-      if (tokens.length) groups.push({ field, tokens });
+      if (tokens.length) groups.push({ field, tokens, not: !!not });
     };
-    for (const c of state.chips) add(c.field, c.text);
-    add(state.activeField || "all", $("#q").value);
+    for (const c of state.chips) add(c.field, c.text, c.not);
+    add(state.activeField || "all", $("#q").value, state.activeField ? state.activeNot : false);
     return groups;
   }
 
@@ -162,26 +166,38 @@
     // a reopened chip is edited at its own position, not at the end
     const editPos = state.activeField ? (state.editIndex ?? state.chips.length) : state.chips.length;
     state.chips.forEach((c, idx) => {
-      const chip = el("span", `qchip f-${c.field}`);
-      const label = el("span", "qchip-field", c.field === "all" ? "" : `${c.field}:`);
-      if (c.field !== "all") chip.appendChild(label);
+      // free text renders as plain words (click to edit), not a boxed chip
+      const isFree = c.field === "all";
+      const chip = el("span", isFree ? "qchip qfree" : `qchip f-${c.field}${c.not ? " not" : ""}`);
+      if (!isFree) {
+        const label = el("span", "qchip-field", `${c.not ? "−" : ""}${c.field}:`);
+        label.title = c.not ? `Excluding — click to include ${c.field} matches` : `Click to exclude ${c.field} matches instead`;
+        label.dataset.chipNot = String(idx);
+        chip.appendChild(label);
+      }
       chip.appendChild(el("span", "qchip-text", c.text));
-      const x = el("button", "qchip-x", "×");
-      x.title = "Remove";
-      x.dataset.chipRemove = String(idx);
-      chip.appendChild(x);
+      if (!isFree) {
+        const x = el("button", "qchip-x", "×");
+        x.title = "Remove";
+        x.dataset.chipRemove = String(idx);
+        chip.appendChild(x);
+      }
       chip.dataset.chipEdit = String(idx);
       if (idx < editPos) bar.insertBefore(chip, editwrap);
       else bar.appendChild(chip);
     });
 
     editwrap.classList.toggle("editing", !!state.activeField);
+    editwrap.classList.toggle("not", !!state.activeField && state.activeNot);
     if (state.activeField) editwrap.dataset.field = state.activeField;
     else delete editwrap.dataset.field;
-    $("#editlabel").textContent = state.activeField ? `${state.activeField}:` : "";
-    $("#editlabel").hidden = !state.activeField;
+    const editlabel = $("#editlabel");
+    editlabel.textContent = state.activeField
+      ? `${state.activeNot ? "−" : ""}${state.activeField}:` : "";
+    editlabel.title = state.activeNot ? "Excluding — click to include" : "Click to exclude instead";
+    editlabel.hidden = !state.activeField;
     $("#q").placeholder = state.activeField
-      ? Search.FIELDS[state.activeField].hint
+      ? (state.activeNot ? "exclude — " : "") + Search.FIELDS[state.activeField].hint
       : (state.chips.length ? "" : "Search names, models and sounds — or type model: for a field tag");
     sizeInput();
     updateTabs();
@@ -199,7 +215,7 @@
     }
   }
 
-  function activateField(field, { keepInput = false } = {}) {
+  function activateField(field, { keepInput = false, not = false } = {}) {
     commitActiveChip();
     ensureFieldVisible(field);
     const input = $("#q");
@@ -208,6 +224,7 @@
       input.value = "";
     }
     state.activeField = field;
+    state.activeNot = not;
     hideSuggest();
     renderBar();
     input.focus();
@@ -220,9 +237,10 @@
     const text = input.value.trim();
     if (text) {
       const at = Math.min(state.editIndex ?? state.chips.length, state.chips.length);
-      state.chips.splice(at, 0, { field: state.activeField, text });
+      state.chips.splice(at, 0, { field: state.activeField, text, not: state.activeNot });
     }
     state.activeField = null;
+    state.activeNot = false;
     state.editIndex = null;
     input.value = "";
     renderBar();
@@ -236,7 +254,8 @@
     const input = $("#q");
     const box = $("#suggest");
     if (state.activeField) return hideSuggest();
-    const word = input.value.split(/\s+/).pop().toLowerCase();
+    let word = input.value.split(/\s+/).pop().toLowerCase();
+    if (word.startsWith("-")) word = word.slice(1); // "-eff" suggests effect: as an exclusion
     if (word.length < 2) return hideSuggest();
     const matches = Object.entries(Search.FIELDS).filter(([key, f]) =>
       f.tab && !disabledFields().has(key) &&
@@ -262,8 +281,9 @@
 
   function selectSuggestion(field) {
     const input = $("#q");
+    const not = /(^|\s)-\S*$/.test(input.value);
     input.value = input.value.replace(/\S+$/, "").trimEnd();
-    activateField(field);
+    activateField(field, { not });
   }
 
   /* ------------------------------------------------------------ search */
@@ -282,7 +302,7 @@
     const raw = serializeQuery();
     state.lastQuery = raw;
 
-    if (raw.replace(/[a-z]+:|"/gi, "").trim().length < CFG.minQueryLength) {
+    if (raw.replace(/-?[a-z]+:|"/gi, "").trim().length < CFG.minQueryLength) {
       state.results = [];
       state.groups = [];
       state.tokens = [];
@@ -297,7 +317,9 @@
     const res = Search.searchGroups(groups, data, disabledFields());
     state.results = res.spellIds;
     state.groups = groups;
-    state.tokens = groups.flatMap((g) => g.tokens.map((t) => ({ field: g.field, text: t.text })));
+    // excluded terms never appear in the results: no highlighting for them
+    state.tokens = groups.filter((g) => !g.not)
+      .flatMap((g) => g.tokens.map((t) => ({ field: g.field, text: t.text })));
     state.searchMs = res.ms;
     applyFiltersAndSort();
     stateToHash(push);
@@ -350,7 +372,8 @@
 
     const total = state.results.length;
     const shown = state.display.length;
-    const hasQuery = state.tokens.length > 0;
+    // a purely negative query has no highlight tokens but is still a query
+    const hasQuery = state.groups.length > 0;
     if (hasQuery) {
       const filtered = shown < total ? ` (${shown.toLocaleString()} after filters)` : "";
       setStatus(`${total.toLocaleString()} ${total === 1 ? "spell" : "spells"}${filtered} · ${state.searchMs.toFixed(0)} ms`);
@@ -617,7 +640,7 @@
   }
 
   function groupsFor(field) {
-    return state.groups.filter((g) => g.field === field || g.field === "all");
+    return state.groups.filter((g) => !g.not && (g.field === field || g.field === "all"));
   }
 
   // hit = the entity fully satisfies at least one chip of its field
@@ -910,11 +933,11 @@
 
     input.addEventListener("input", () => {
       if (!state.activeField) {
-        const m = input.value.match(/(^|\s)([a-z]+):$/i);
-        if (m && isChipField(m[2].toLowerCase())) {
-          const field = m[2].toLowerCase();
+        const m = input.value.match(/(^|\s)(-?)([a-z]+):$/i);
+        if (m && isChipField(m[3].toLowerCase())) {
+          const field = m[3].toLowerCase();
           input.value = input.value.slice(0, m.index + m[1].length);
-          activateField(field);
+          activateField(field, { not: m[2] === "-" });
           return;
         }
         updateSuggest();
@@ -926,16 +949,25 @@
     // pop a committed chip back into the editor (it recommits in place)
     function editChipAt(index) {
       const [edited] = state.chips.splice(index, 1);
+      let caret;
       if (edited.field === "all") {
-        input.value = edited.text;
+        // free text merges with whatever is already being typed
+        const rest = input.value.trim();
+        input.value = edited.text + (rest ? " " + rest : "");
+        caret = edited.text.length;
       } else {
+        // free text still being typed survives as free words
+        const rest = input.value.trim();
+        if (rest) state.chips.push({ field: "all", text: rest });
         state.activeField = edited.field;
+        state.activeNot = !!edited.not;
         state.editIndex = index;
         input.value = edited.text;
+        caret = input.value.length;
       }
       renderBar();
       input.focus();
-      input.setSelectionRange(input.value.length, input.value.length);
+      input.setSelectionRange(caret, caret);
       scheduleSearch();
     }
 
@@ -983,6 +1015,7 @@
         e.preventDefault();
         if (state.activeField) {
           state.activeField = null;
+          state.activeNot = false;
           renderBar();
         } else if (state.chips.length) {
           editChipAt(state.chips.length - 1);
@@ -993,11 +1026,27 @@
       }
     });
 
-    // chip clicks: × removes, body edits
+    // chip clicks: × removes, field label flips include/exclude, body edits
     $("#qbar").addEventListener("click", (e) => {
       const x = e.target.closest("[data-chip-remove]");
       if (x) {
         state.chips.splice(Number(x.dataset.chipRemove), 1);
+        renderBar();
+        input.focus();
+        scheduleSearch();
+        return;
+      }
+      const label = e.target.closest("[data-chip-not]");
+      if (label) {
+        const chip = state.chips[Number(label.dataset.chipNot)];
+        chip.not = !chip.not;
+        renderBar();
+        input.focus();
+        scheduleSearch();
+        return;
+      }
+      if (e.target.closest("#editlabel")) {
+        state.activeNot = !state.activeNot;
         renderBar();
         input.focus();
         scheduleSearch();
@@ -1021,10 +1070,10 @@
       if (!e.target.closest("#qbar") && !e.target.closest("#suggest")) hideSuggest();
     });
 
-    // field buttons: start a field tag in the search bar
+    // field buttons: start a field tag in the search bar (shift = exclude)
     $("#tabs").addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-field]");
-      if (btn) activateField(btn.dataset.field);
+      if (btn) activateField(btn.dataset.field, { not: e.shiftKey });
     });
 
     // results: copy buttons / cross-search / expanders (event delegation)
@@ -1143,7 +1192,7 @@
       if (!field.tab) continue;
       const b = el("button", "", `${field.label}`);
       b.dataset.field = id;
-      b.title = `Add a ${id}: tag — ${field.hint}`;
+      b.title = `Add a ${id}: tag — ${field.hint}\nShift-click: exclude matches (-${id}:)`;
       tabs.appendChild(b);
     }
   }
