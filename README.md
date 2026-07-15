@@ -16,7 +16,7 @@ version and every search runs in the browser. No server, no database, no depende
 
 Open the page, type into the search bar. Full syntax is in the `?` dialog:
 
-- Plain words search names, models and sounds at once and match **any part of a name,
+- Plain words search names, models, sounds and animations at once and match **any part of a name,
   in any order** — `6dr statue` finds `6dr_draenei_statue_male01.m2`.
 - Field tags narrow a term to one field: `name:` `model:` `sound:` `soundkit:`
   `animkit:` `anim:` `effect:` `id:` — type the prefix or click a field button.
