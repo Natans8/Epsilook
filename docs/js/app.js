@@ -205,6 +205,10 @@
 
     editwrap.classList.toggle("editing", !!state.activeField);
     editwrap.classList.toggle("not", !!state.activeField && state.activeNot);
+    // only the true trailing gap fills the rest of the line — a gap before
+    // or between chips hugs its content instead, so the chips after it
+    // don't get shoved to the far end of the bar
+    editwrap.classList.toggle("fill", !state.activeField && editPos >= state.chips.length);
     if (state.activeField) editwrap.dataset.field = state.activeField;
     else delete editwrap.dataset.field;
     const editlabel = $("#editlabel");
@@ -213,21 +217,23 @@
     editlabel.title = state.activeNot ? "Excluding — click to include" : "Click to exclude instead";
     editlabel.hidden = !state.activeField;
     $("#q").placeholder = state.activeField
-      ? (state.activeNot ? "exclude — " : "") + Search.FIELDS[state.activeField].hint
+      ? (state.activeNot ? "exclude: " : "") + Search.FIELDS[state.activeField].short
       : (state.chips.length ? "" : "Search names, models and sounds — or type model: for a field tag");
     sizeInput();
     updateTabs();
   }
 
-  // while a chip is being typed, the input hugs its content instead of
-  // stretching to the end of the line
+  // The input hugs its content instead of stretching, except at the true
+  // trailing gap (nothing after it), which fills the rest of the line.
   function sizeInput() {
     const input = $("#q");
     if (state.activeField) {
-      const len = Math.max(input.value.length, input.placeholder.length / 2, 4);
+      const len = Math.max(input.value.length, input.placeholder.length, 4);
       input.style.width = (len + 2) + "ch";
-    } else {
+    } else if ($("#editwrap").classList.contains("fill")) {
       input.style.width = "";
+    } else {
+      input.style.width = Math.max(input.value.length, 1) + "ch";
     }
   }
 
@@ -281,24 +287,11 @@
     return state.activeField ? commitActiveChip() : insertFreeChipHere();
   }
 
-  // Move the gap left/right by one chip. Any pending text is committed
-  // first (a left step then lands just before what was just committed, so
-  // repeated presses keep walking left through the earlier chips).
-  function stepGap(delta) {
-    const at = flushPending();
-    if (at === -1) {
-      state.pos = Math.max(0, Math.min(state.pos + delta, state.chips.length));
-    } else if (delta < 0) {
-      state.pos = at;
-    }
-    renderBar();
-    $("#q").focus();
-    if (at !== -1) scheduleSearch();
-  }
-
   // Pop a committed chip back into the editor at its own position (it
-  // recommits there, not at the end).
-  function editChipAt(index) {
+  // recommits there, not at the end). caretAt places the cursor at the
+  // "start" or "end" of its text, so arrow keys can walk in one end and
+  // back out the other.
+  function editChipAt(index, caretAt = "end") {
     const [edited] = state.chips.splice(index, 1);
     state.pos = index;
     const input = $("#q");
@@ -307,7 +300,7 @@
     state.activeNot = edited.field === "all" ? false : !!edited.not;
     renderBar();
     input.focus();
-    const caret = input.value.length;
+    const caret = caretAt === "start" ? 0 : input.value.length;
     input.setSelectionRange(caret, caret);
     scheduleSearch();
   }
@@ -752,7 +745,7 @@
     if (fileIsHit(file, "model")) tag.classList.add("hit");
 
     const txt = el("button", "tag-label", file.base ? stripExt(file.base) : `file #${fid}`);
-    txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this model`;
+    txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this model\nShift-click: exclude them instead`;
     txt.dataset.search = file.base ? `model:"${file.base}"` : "";
     tag.appendChild(txt);
 
@@ -771,7 +764,7 @@
 
     // sound extensions stay visible (.ogg/.mp3 differ, unlike models)
     const txt = el("button", "tag-label", file.base || `file #${fid}`);
-    txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this sound`;
+    txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this sound\nShift-click: exclude them instead`;
     txt.dataset.search = file.base ? `sound:"${file.base}"` : "";
     tag.appendChild(txt);
 
@@ -785,8 +778,8 @@
 
     const txt = el("button", "tag-label", String(kitId));
     txt.title = field === "soundkit"
-      ? `SoundKit ${kitId}\nClick: find spells using this soundkit`
-      : `AnimKit ${kitId}\nClick: find spells using this animkit`;
+      ? `SoundKit ${kitId}\nClick: find spells using this soundkit\nShift-click: exclude them instead`
+      : `AnimKit ${kitId}\nClick: find spells using this animkit\nShift-click: exclude them instead`;
     txt.dataset.search = `${field}:${kitId}`;
     tag.appendChild(txt);
 
@@ -810,7 +803,7 @@
     if (animIsHit(animId)) tag.classList.add("hit");
 
     const txt = el("button", "tag-label", name);
-    txt.title = `Animation ${animId}: ${name}\nClick: find spells playing this animation`;
+    txt.title = `Animation ${animId}: ${name}\nClick: find spells playing this animation\nShift-click: exclude them instead`;
     txt.dataset.search = `anim:"${name}"`;
     tag.appendChild(txt);
 
@@ -825,7 +818,7 @@
     const tag = el("span", "tag effect");
     if (effectIsHit(effectId)) tag.classList.add("hit");
     const label = el("button", "tag-label", name);
-    label.title = `Spell effect ${effectId}: SPELL_EFFECT_${name}\nClick: find spells with this effect`;
+    label.title = `Spell effect ${effectId}: SPELL_EFFECT_${name}\nClick: find spells with this effect\nShift-click: exclude them instead`;
     label.dataset.search = `effect:"${name}"`;
     tag.appendChild(label);
     return tag;
@@ -1054,17 +1047,25 @@
         runSearch({ push: true });
       } else if ((e.key === "Tab" || e.key === "Escape" || (e.key === "ArrowRight" && caretAtEnd))
                  && state.activeField) {
+        // close the tag being typed — lands in the gap right after it
         e.preventDefault();
         commitActiveChip();
         scheduleSearch();
-      } else if (e.key === "ArrowLeft" && input.value === "") {
-        // move the gap left, without opening the chip for edit — repeated
-        // presses walk all the way to before the first chip
+      } else if (e.key === "ArrowLeft" && state.activeField && caretAtStart) {
+        // close the tag being typed — lands in the gap right before it
         e.preventDefault();
-        stepGap(-1);
-      } else if (e.key === "ArrowRight" && input.value === "" && !state.activeField) {
+        const at = commitActiveChip();
+        if (at !== -1) state.pos = at;
+        renderBar();
+        scheduleSearch();
+      } else if (e.key === "ArrowLeft" && !state.activeField && input.value === "" && state.pos > 0) {
+        // sitting in a gap: dive into editing the chip to the left
         e.preventDefault();
-        stepGap(1);
+        editChipAt(state.pos - 1, "end");
+      } else if (e.key === "ArrowRight" && !state.activeField && input.value === "" && state.pos < state.chips.length) {
+        // sitting in a gap: dive into editing the chip to the right
+        e.preventDefault();
+        editChipAt(state.pos, "start");
       } else if (e.key === "Backspace" && input.value === "") {
         e.preventDefault();
         if (state.activeField) {
@@ -1074,7 +1075,7 @@
           input.focus();
           scheduleSearch();
         } else if (state.pos > 0) {
-          editChipAt(state.pos - 1);
+          editChipAt(state.pos - 1, "end");
         }
       }
     });
@@ -1140,7 +1141,7 @@
       const t = e.target.closest("button");
       if (!t) return;
       if (t.dataset.copy) copyText(t.dataset.copy, e.shiftKey);
-      else if (t.dataset.search) crossSearch(t.dataset.search);
+      else if (t.dataset.search) crossSearch((e.shiftKey ? "-" : "") + t.dataset.search);
       else if (t.dataset.expand) {
         t.closest("td").classList.add("expanded");
         t.remove();

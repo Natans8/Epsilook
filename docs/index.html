@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit or animkit. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260715c">
+  <link rel="stylesheet" href="css/app.css?v=20260715d">
 </head>
 <body>
 
@@ -75,19 +75,21 @@
         <section>
           <h3>Editing the search bar</h3>
           <ul>
-            <li><kbd>Enter</kbd>, <kbd>Tab</kbd> or <kbd>→</kbd> close the tag you're typing.</li>
-            <li>On an empty input, <kbd>←</kbd>/<kbd>→</kbd> step the gap between tags — even before
-              the first one or after the last — so you can insert text or a new tag right there;
-              <kbd>Backspace</kbd> reopens the tag just before your cursor for editing.</li>
+            <li><kbd>Enter</kbd>, <kbd>Tab</kbd> or <kbd>→</kbd> close the tag you're typing, landing in the
+              gap right after it; <kbd>←</kbd> at the start of a tag closes it into the gap right before it instead.</li>
+            <li>Sitting in a gap (nothing being typed) with an empty input: <kbd>←</kbd>/<kbd>→</kbd> dive into
+              editing the neighboring tag — even before the first one or after the last — so <kbd>←</kbd>
+              then typing inserts text or a new tag right there. <kbd>Backspace</kbd> does the same for the tag
+              just before your cursor.</li>
             <li>Click a tag's text to edit it, its <b>×</b> to remove it. Plain words are edited like normal text.</li>
           </ul>
         </section>
         <section>
           <h3>In the results</h3>
           <ul>
-            <li>Click any tag to find all spells that use it.</li>
+            <li>Click any tag to find all spells that use it; <b>Shift-click</b> excludes them instead.</li>
             <li><b>⧉</b> copies an ID; <b>.lo</b>, <b>/</b>, <b>.mod</b> and the Commands buttons copy ready-to-paste
-              Epsilon commands — hover to preview. <b>Shift-click</b> wraps the copy in <code>`backticks`</code>.</li>
+              Epsilon commands — hover to preview. <b>Shift-click</b> on those wraps the copy in <code>`backticks`</code>.</li>
           </ul>
         </section>
         <section>
@@ -191,9 +193,9 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260715c"></script>
-<script src="js/data.js?v=20260715c"></script>
-<script src="js/search.js?v=20260715c"></script>
-<script src="js/app.js?v=20260715c"></script>
+<script src="js/config.js?v=20260715d"></script>
+<script src="js/data.js?v=20260715d"></script>
+<script src="js/search.js?v=20260715d"></script>
+<script src="js/app.js?v=20260715d"></script>
 </body>
 </html>

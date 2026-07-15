@@ -86,7 +86,11 @@ main { padding: 0 1.6rem 2rem; }
 }
 #qbar:focus-within { border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(240, 195, 76, 0.12); }
 
-#editwrap { display: inline-flex; align-items: center; flex: 1; min-width: 10rem; }
+/* only the true trailing gap (nothing after it) fills the rest of the
+ * line; a gap before or between chips hugs its content instead, so it
+ * doesn't shove the chips after it away */
+#editwrap { display: inline-flex; align-items: center; }
+#editwrap.fill { flex: 1; min-width: 10rem; }
 
 #q {
   flex: 1;
@@ -99,6 +103,7 @@ main { padding: 0 1.6rem 2rem; }
   outline: none;
 }
 #q::placeholder { color: var(--text-dim); }
+#editwrap:not(.fill):not(.editing) #q { min-width: 1ch; }
 
 /* the chip being typed hugs its content instead of filling the line */
 #editwrap.editing {

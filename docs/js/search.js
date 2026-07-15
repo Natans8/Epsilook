@@ -87,32 +87,32 @@ window.EpsilookSearch = (() => {
     },
     name: {
       label: "Name", tab: true,
-      hint: "spell name, e.g. fire bolt",
+      hint: "spell name, e.g. fire bolt", short: "spell name",
       run: (tokens, data) => spellsByName(tokens, data),
     },
     model: {
       label: "Model", tab: true,
-      hint: "model file, e.g. 6dr statue",
+      hint: "model file, e.g. 6dr statue", short: "model file",
       run: (tokens, data) => spellsByFile(tokens, data, data.modelFids, data.modelSpells),
     },
     sound: {
       label: "Sound", tab: true,
-      hint: "sound file, e.g. felreaver",
+      hint: "sound file, e.g. felreaver", short: "sound file",
       run: (tokens, data) => spellsByFile(tokens, data, data.soundFids, data.soundSpells),
     },
     soundkit: {
       label: "SoundKit", tab: true,
-      hint: "SoundKit ID, e.g. 86835",
+      hint: "SoundKit ID, e.g. 86835", short: "SoundKit ID",
       run: (tokens, data) => spellsByKitId(tokens, data.soundKitSpells),
     },
     animkit: {
       label: "AnimKit", tab: true,
-      hint: "AnimKit ID, e.g. 13839",
+      hint: "AnimKit ID, e.g. 13839", short: "AnimKit ID",
       run: (tokens, data) => spellsByKitId(tokens, data.animKitSpells),
     },
     anim: {
       label: "Animation", tab: true,
-      hint: "animation name, e.g. kneel",
+      hint: "animation name, e.g. kneel", short: "animation",
       run(tokens, data) {
         const out = new Set();
         for (let a = 0; a < data.animNamesL.length; a++) {
@@ -126,7 +126,7 @@ window.EpsilookSearch = (() => {
     },
     effect: {
       label: "Effect", tab: true,
-      hint: "spell effect, e.g. resurrect",
+      hint: "spell effect, e.g. resurrect", short: "effect",
       run(tokens, data) {
         const out = new Set();
         for (const [effectId, nameL] of data.effectNamesL) {
@@ -138,7 +138,7 @@ window.EpsilookSearch = (() => {
     },
     id: {
       label: "Spell ID", tab: true,
-      hint: "exact spell ID, e.g. 133",
+      hint: "exact spell ID, e.g. 133", short: "spell ID",
       run(tokens, data) {
         const out = new Set();
         for (const t of tokens) {
