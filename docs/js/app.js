@@ -162,16 +162,15 @@
     return parts;
   }
 
-  // load a canonical string into the bar: everything becomes committed
-  // chips except a trailing free run, which stays editable in the input
+  // load a canonical string into the bar: field tags become committed
+  // chips; syncBar pulls the trailing free run into the input
   function loadQueryString(str) {
     state.chips = parseQueryParts(str);
     state.activeField = null;
     state.activeNot = false;
-    const last = state.chips[state.chips.length - 1];
-    $("#q").value = last && last.field === "all" ? state.chips.pop().text : "";
+    $("#q").value = "";
     state.pos = state.chips.length;
-    renderBar();
+    syncBar();
   }
 
   // group list for the engine: one group per chip + one for the live input,
@@ -191,11 +190,19 @@
 
   /* ------------------------------------------------------- search bar */
 
-  // Neighbouring free-text chips read as one run of plain words, so they
-  // should act as one: merge them wherever they touch. The pair straddling
-  // the editing gap (state.pos) is left alone — the user may be about to
-  // type between them.
-  function normalizeChips() {
+  // The one entry point after any chips/pos/activeField mutation. Enforces
+  // two invariants, then repaints:
+  //  1. neighbouring free-text chips read as one run of plain words, so
+  //     they act as one: merge them wherever they touch. The pair
+  //     straddling the editing gap (state.pos) is left alone — the gap's
+  //     own content sits between them.
+  //  2. free text touching the gap lives in the input, never as committed
+  //     chips — so the caret can walk through the whole run and clicks
+  //     place it natively. (Skipped while a field tag is being typed: the
+  //     input's text belongs to the tag, not to the free run around it.)
+  function syncBar() {
+    const input = $("#q");
+    state.pos = Math.min(state.pos, state.chips.length);
     for (let i = state.chips.length - 1; i > 0; i--) {
       if (i === state.pos) continue;
       const a = state.chips[i - 1], b = state.chips[i];
@@ -205,10 +212,27 @@
         if (state.pos > i) state.pos -= 1;
       }
     }
+    if (!state.activeField) {
+      let caret = input.selectionStart ?? input.value.length;
+      let absorbed = false;
+      while (state.pos > 0 && state.chips[state.pos - 1].field === "all") {
+        const t = state.chips.splice(--state.pos, 1)[0].text;
+        const sep = input.value ? " " : "";
+        input.value = t + sep + input.value;
+        caret += t.length + sep.length;
+        absorbed = true;
+      }
+      while (state.pos < state.chips.length && state.chips[state.pos].field === "all") {
+        const t = state.chips.splice(state.pos, 1)[0].text;
+        input.value += (input.value ? " " : "") + t;
+        absorbed = true;
+      }
+      if (absorbed) input.setSelectionRange(caret, caret);
+    }
+    renderBar();
   }
 
   function renderBar() {
-    normalizeChips();
     const bar = $("#qbar");
     for (const chip of bar.querySelectorAll(".qchip")) chip.remove();
     const editwrap = $("#editwrap");
@@ -286,7 +310,7 @@
         state.activeField = field;
         state.activeNot = not;
         hideSuggest();
-        renderBar();
+        syncBar();
         input.focus();
         input.setSelectionRange(prevStart, prevEnd);
         scheduleSearch();
@@ -310,26 +334,29 @@
     state.activeNot = not;
     input.value = seed;
     hideSuggest();
-    renderBar();
+    syncBar();
     input.focus();
     input.setSelectionRange(seed.length, seed.length);
     scheduleSearch();
   }
 
   // Cancels the chip currently being typed without committing it — its
-  // text (if any) is left in the input as plain, untagged words.
+  // text (if any) joins the plain-text run around the gap (syncBar merges
+  // it with any neighbouring free words).
   function cancelActiveField() {
     state.activeField = null;
     state.activeNot = false;
-    renderBar();
+    syncBar();
     $("#q").focus();
     scheduleSearch();
   }
 
   // Commits the field chip currently being typed (if any) into state.chips
-  // at state.pos, and advances state.pos to just past it. Returns the
-  // insertion index, or -1 if there was nothing (or no field) to commit.
-  function commitActiveChip() {
+  // at state.pos. landing places the gap just past the new chip ("after",
+  // default) or just before it ("before"). Returns the insertion index,
+  // or -1 if there was nothing (or no field) to commit. Pure state
+  // mutation — the calling flow ends with its own syncBar().
+  function commitActiveChip(landing = "after") {
     if (!state.activeField) return -1;
     const input = $("#q");
     const text = input.value.trim();
@@ -337,12 +364,11 @@
     if (text) {
       at = Math.min(state.pos, state.chips.length);
       state.chips.splice(at, 0, { field: state.activeField, text, not: state.activeNot });
-      state.pos = at + 1;
+      state.pos = landing === "before" ? at : at + 1;
     }
     state.activeField = null;
     state.activeNot = false;
     input.value = "";
-    renderBar();
     return at;
   }
 
@@ -375,10 +401,11 @@
     input.value = edited.text;
     state.activeField = edited.field === "all" ? null : edited.field;
     state.activeNot = edited.field === "all" ? false : !!edited.not;
-    renderBar();
     input.focus();
+    // caret set before syncBar: absorption shifts it along with the text
     const caret = caretAt === "start" ? 0 : input.value.length;
     input.setSelectionRange(caret, caret);
+    syncBar();
     scheduleSearch();
   }
 
@@ -1177,8 +1204,8 @@
             state.chips.splice(at, 0, ...parts);
             state.pos = at + parts.length;
             input.value = trailing;
-            renderBar();
             input.setSelectionRange(input.value.length, input.value.length);
+            syncBar();
             scheduleSearch();
             return;
           }
@@ -1240,44 +1267,43 @@
 
       if (e.key === "Enter") {
         commitActiveChip();
+        syncBar();
         runSearch({ push: true });
       } else if ((e.key === "Tab" || e.key === "Escape" || (e.key === "ArrowRight" && caretAtEnd))
                  && state.activeField) {
         // close the tag being typed — lands in the gap right after it
         e.preventDefault();
         commitActiveChip();
+        syncBar();
         scheduleSearch();
       } else if (e.key === "ArrowLeft" && state.activeField && caretAtStart) {
         // close the tag being typed — lands in the gap right before it
         e.preventDefault();
-        const at = commitActiveChip();
-        if (at !== -1) state.pos = at;
-        renderBar();
+        commitActiveChip("before");
+        syncBar();
         scheduleSearch();
-      } else if (e.key === "ArrowLeft" && !state.activeField && input.value === "" && state.pos > 0) {
-        // sitting in a gap: dive into editing the chip to the left
+      } else if (e.key === "ArrowLeft" && !state.activeField && caretAtStart && state.pos > 0) {
+        // walk left out of the plain-text run (or empty gap) into the
+        // chip before it — any text is committed as a free run first
         e.preventDefault();
-        editChipAt(state.pos - 1, "end");
-      } else if (e.key === "ArrowRight" && !state.activeField && input.value === "" && state.pos < state.chips.length) {
-        // sitting in a gap: dive into editing the chip to the right
+        const at = insertFreeChipHere();
+        editChipAt(at === -1 ? state.pos - 1 : at - 1, "end");
+      } else if (e.key === "ArrowRight" && !state.activeField && caretAtEnd && state.pos < state.chips.length) {
+        // walk right out of the plain-text run into the chip after it
         e.preventDefault();
-        editChipAt(state.pos, "start");
-      } else if (e.key === "Backspace" && state.activeField && caretAtStart && input.value !== "") {
-        // cursor at the start of a tag's contents: strip the tag instead of
-        // doing nothing, leaving the contents behind as plain text
+        const at = insertFreeChipHere();
+        editChipAt(at === -1 ? state.pos : at + 1, "start");
+      } else if (e.key === "Backspace" && state.activeField && caretAtStart) {
+        // cursor at the start of a tag's contents (or tag empty): strip the
+        // tag, leaving the contents behind as plain text
         e.preventDefault();
         cancelActiveField();
-      } else if (e.key === "Backspace" && input.value === "") {
+      } else if (e.key === "Backspace" && !state.activeField && caretAtStart && state.pos > 0) {
+        // backspacing past the start of the plain-text run: dive into
+        // editing the chip to the left, caret at its end
         e.preventDefault();
-        if (state.activeField) {
-          state.activeField = null;
-          state.activeNot = false;
-          renderBar();
-          input.focus();
-          scheduleSearch();
-        } else if (state.pos > 0) {
-          editChipAt(state.pos - 1, "end");
-        }
+        const at = insertFreeChipHere();
+        editChipAt(at === -1 ? state.pos - 1 : at - 1, "end");
       }
     });
 
@@ -1288,7 +1314,7 @@
         const idx = Number(x.dataset.chipRemove);
         state.chips.splice(idx, 1);
         if (idx < state.pos) state.pos -= 1;
-        renderBar();
+        syncBar();
         input.focus();
         scheduleSearch();
         return;
@@ -1335,7 +1361,7 @@
       const insertedAt = flushPending();
       if (insertedAt !== -1 && (insertedAt < gap || (insertedAt === gap && afterPending))) gap += 1;
       state.pos = Math.min(gap, state.chips.length);
-      renderBar();
+      syncBar();
       input.focus();
       scheduleSearch();
     });
