@@ -243,18 +243,36 @@
 
   function activateField(field, { not = false } = {}) {
     const input = $("#q");
+
+    if (state.activeField) {
+      // already editing a chip: its own button cancels it (contents fall
+      // back to plain text); a different button switches its type in place
+      if (field === state.activeField) {
+        cancelActiveField();
+      } else {
+        const prevStart = input.selectionStart, prevEnd = input.selectionEnd;
+        ensureFieldVisible(field);
+        state.activeField = field;
+        state.activeNot = not;
+        hideSuggest();
+        renderBar();
+        input.focus();
+        input.setSelectionRange(prevStart, prevEnd);
+        scheduleSearch();
+      }
+      return;
+    }
+
     // plain text selected in the input becomes the new chip's text; the
     // words around the selection stay behind as free text
-    const seed = state.activeField ? ""
-      : input.value.slice(input.selectionStart, input.selectionEnd).trim();
+    const seed = input.value.slice(input.selectionStart, input.selectionEnd).trim();
     if (seed) {
       const after = input.value.slice(input.selectionEnd).trim();
       input.value = input.value.slice(0, input.selectionStart);
       insertFreeChipHere();
       if (after) state.chips.splice(Math.min(state.pos, state.chips.length), 0, { field: "all", text: after });
     } else {
-      commitActiveChip();   // finish any field chip currently being typed
-      insertFreeChipHere(); // and any free words sitting in the gap
+      insertFreeChipHere(); // any free words sitting in the gap
     }
     ensureFieldVisible(field);
     state.activeField = field;
@@ -264,6 +282,16 @@
     renderBar();
     input.focus();
     input.setSelectionRange(seed.length, seed.length);
+    scheduleSearch();
+  }
+
+  // Cancels the chip currently being typed without committing it — its
+  // text (if any) is left in the input as plain, untagged words.
+  function cancelActiveField() {
+    state.activeField = null;
+    state.activeNot = false;
+    renderBar();
+    $("#q").focus();
     scheduleSearch();
   }
 
@@ -1171,6 +1199,11 @@
         // sitting in a gap: dive into editing the chip to the right
         e.preventDefault();
         editChipAt(state.pos, "start");
+      } else if (e.key === "Backspace" && state.activeField && caretAtStart && input.value !== "") {
+        // cursor at the start of a tag's contents: strip the tag instead of
+        // doing nothing, leaving the contents behind as plain text
+        e.preventDefault();
+        cancelActiveField();
       } else if (e.key === "Backspace" && input.value === "") {
         e.preventDefault();
         if (state.activeField) {
