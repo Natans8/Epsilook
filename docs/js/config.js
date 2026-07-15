@@ -28,6 +28,11 @@ window.EpsilookConfig = {
   wowheadSpellUrl: "https://www.wowhead.com/spell={id}",
   wowheadSoundUrl: "https://www.wowhead.com/sound={id}",
 
+  // Spell icon shown next to the name, hotlinked from Wowhead's CDN
+  // ({icon} = icon name; sizes: tiny/small/medium/large). Set to "" to
+  // disable icons entirely.
+  spellIconUrl: "https://wow.zamimg.com/images/wow/icons/medium/{icon}.jpg",
+
   // "Copy as Text" export: character budget for the pasted block, sized off
   // Discord's 2000-char message cap with room left for the header and a
   // possible "...and N more" footer line.

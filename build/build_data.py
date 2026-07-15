@@ -46,6 +46,7 @@ TABLES = [
     "AnimKitSegment",
     "SoundKitEntry",
     "SpellEffect",
+    "SpellMisc",
 ]
 
 # Animation names indexed by AnimID (Stand=0, ...), maintained by wow.tools
@@ -229,6 +230,15 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
         if s in spell_names and e:
             spell_effects[s].add(e)
 
+    # spell -> icon file id (SpellMisc; prefer the base-difficulty row)
+    spell_icon_fid: dict[int, int] = {}
+    for spell_id, diff, icon_fid in read_table(
+        table_dir, "SpellMisc", ["SpellID", "DifficultyID", "SpellIconFileDataID"]
+    ):
+        s, d, f = to_int(spell_id), to_int(diff), to_int(icon_fid)
+        if s in spell_names and f and (s not in spell_icon_fid or d == 0):
+            spell_icon_fid[s] = f
+
     # --- walk the chains per spell ------------------------------------------
     log("Walking spell -> model/sound/animkit chains ...")
     spell_models: dict[int, set[int]] = defaultdict(set)          # spell -> model fids
@@ -255,7 +265,12 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
     for pairs in spell_sounds.values():
         referenced_fids.update(f for _, f in pairs)
 
-    log(f"Resolving {len(referenced_fids):,} referenced file ids against the listfile ...")
+    # icon fids resolve through the same listfile pass but stay out of the
+    # pack's files table (they become iconNames instead)
+    icon_fids = set(spell_icon_fid.values())
+    lookup_fids = referenced_fids | icon_fids
+
+    log(f"Resolving {len(lookup_fids):,} referenced file ids against the listfile ...")
     fid_path: dict[int, str] = {}
     with open(listfile_path, newline="", encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -266,17 +281,42 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
                 fid = int(fid_str)
             except ValueError:
                 continue
-            if fid in referenced_fids:
+            if fid in lookup_fids:
                 fid_path[fid] = path.strip()
-    unnamed = len(referenced_fids) - len(fid_path)
+    unnamed = sum(1 for f in referenced_fids if f not in fid_path)
 
     # --- assemble the pack ---------------------------------------------------
     log("Assembling pack ...")
     spell_ids = sorted(spell_names)
+
+    # icon names: "interface/icons/xxx.blp" -> "xxx", the key Wowhead's CDN
+    # (wow.zamimg.com/images/wow/icons/<size>/<xxx>.jpg) serves icons under.
+    # spells.icons holds 1-based indexes into iconNames; 0 = no icon.
+    def icon_name(fid: int) -> str:
+        path = fid_path.get(fid, "")
+        if not path.lower().startswith("interface/icons/"):
+            return ""
+        return path.rsplit("/", 1)[-1].rsplit(".", 1)[0].lower()
+
+    icon_names: list[str] = []
+    icon_index: dict[str, int] = {}
+    spell_icons: list[int] = []
+    for s in spell_ids:
+        name = icon_name(spell_icon_fid.get(s, 0))
+        if not name:
+            spell_icons.append(0)
+            continue
+        i = icon_index.get(name)
+        if i is None:
+            i = icon_index[name] = len(icon_names)
+            icon_names.append(name)
+        spell_icons.append(i + 1)
+
     spells = {
         "ids": spell_ids,
         "names": [spell_names[s] for s in spell_ids],
         "subtexts": [subtexts.get(s, "") for s in spell_ids],
+        "icons": spell_icons,
     }
 
     file_ids = sorted(referenced_fids)
@@ -315,9 +355,11 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
                 "spellAnimKits": len(anim_rows),
                 "animKitAnims": len(kit_anim_rows),
                 "spellEffects": len(effect_rows),
+                "icons": len(icon_names),
             },
         },
         "spells": spells,
+        "iconNames": icon_names,
         "files": files,
         "spellModels": {
             "spellIds": [r[0] for r in model_rows],
@@ -347,7 +389,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
     log(
         f"  spells={len(spell_ids):,}  files={len(file_ids):,} ({unnamed:,} unnamed)  "
         f"models={len(model_rows):,}  sounds={len(sound_rows):,}  animkits={len(anim_rows):,}  "
-        f"kitAnims={len(kit_anim_rows):,}  effects={len(effect_rows):,}  "
+        f"kitAnims={len(kit_anim_rows):,}  effects={len(effect_rows):,}  icons={len(icon_names):,}  "
         f"orphan visual spells={orphan_spells:,}  [{time.time() - t0:.1f}s]"
     )
     return pack

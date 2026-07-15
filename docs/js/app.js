@@ -481,6 +481,14 @@
     nameLink.href = fillTemplate(CFG.wowheadSpellUrl, { id: spellId });
     nameLink.target = "_blank";
     nameLink.rel = "noopener";
+    if (CFG.spellIconUrl && d.icons[i]) {
+      const icon = el("img", "spell-icon");
+      icon.src = fillTemplate(CFG.spellIconUrl, { icon: d.icons[i] });
+      icon.alt = "";
+      icon.loading = "lazy";
+      icon.addEventListener("error", () => icon.remove(), { once: true });
+      nameLink.appendChild(icon);
+    }
     nameLink.appendChild(highlightMatches(d.names[i] || "(unnamed)"));
     nameDiv.appendChild(nameLink);
     tdName.appendChild(nameDiv);
