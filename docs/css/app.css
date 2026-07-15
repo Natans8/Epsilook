@@ -480,6 +480,7 @@ td.empty { text-align: center; vertical-align: middle; }
 .kit-files .tag { margin: 0; font-size: 0.78em; }
 .kit-files .tag-label { padding: 0.06rem 0.4rem; }
 .kit-files .tag-copy { padding: 0.06rem 0.35rem 0.06rem 0.3rem; }
+.kit-files .tag-play { padding: 0.06rem 0.32rem; }
 .kit-group.overflow { display: none; }
 td.expanded .kit-group.overflow { display: flex; }
 
@@ -522,6 +523,19 @@ td.expanded .kit-group.overflow { display: flex; }
   white-space: nowrap;
 }
 .tag-copy:hover { color: var(--gold); background: rgba(240, 195, 76, 0.1); }
+
+/* ▶ on sound file tags — streams the sound from Wowhead's CDN */
+.tag-play {
+  padding: 0.12rem 0.4rem;
+  color: var(--text-dim);
+  border-right: 1px solid var(--border);
+  font-size: 0.7em;
+  white-space: nowrap;
+}
+.tag-play:hover { color: var(--gold); background: rgba(240, 195, 76, 0.1); }
+.tag-play.playing { color: var(--gold); }
+.tag-play.loading { animation: play-pulse 0.9s ease-in-out infinite; }
+@keyframes play-pulse { 50% { opacity: 0.35; } }
 
 .tag.hit { border-color: var(--gold-dim); background: rgba(240, 195, 76, 0.10); }
 

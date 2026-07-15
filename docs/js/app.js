@@ -774,6 +774,17 @@
     tag.title = file.path || "(name unknown)";
     if (fileIsHit(file, "sound")) tag.classList.add("hit");
 
+    if (CFG.soundPlayUrl) {
+      const play = el("button", "tag-play", "▶");
+      play.title = `Play ${file.base || `file #${fid}`} (streamed from Wowhead)`;
+      play.dataset.play = fillTemplate(CFG.soundPlayUrl, {
+        fid,
+        bucket: fid % 256,
+        base: encodeURIComponent(stripExt(file.base) || String(fid)),
+      });
+      tag.appendChild(play);
+    }
+
     // sound extensions stay visible (.ogg/.mp3 differ, unlike models)
     const txt = el("button", "tag-label", file.base || `file #${fid}`);
     txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this sound\nShift-click: exclude them instead`;
@@ -782,6 +793,50 @@
 
     tag.appendChild(tagButton("⧉", `Copy FileDataID ${fid}`, String(fid)));
     return tag;
+  }
+
+  /* ------------------------------------------------- sound playback (▶) */
+
+  // One shared player — starting a sound stops the previous one. Audio is
+  // streamed from Wowhead's CDN only on click, never preloaded (same house
+  // rule as the hotlinked icons).
+  let nowPlaying = null; // { audio, btn }
+
+  function stopSound() {
+    if (!nowPlaying) return;
+    nowPlaying.audio.pause();
+    nowPlaying.audio.src = "";
+    setPlayGlyph(nowPlaying.btn, "▶");
+    nowPlaying = null;
+  }
+
+  function setPlayGlyph(btn, glyph) {
+    btn.textContent = glyph;
+    btn.classList.toggle("playing", glyph === "■");
+    btn.classList.toggle("loading", glyph === "◌");
+  }
+
+  function toggleSound(btn) {
+    const wasThis = nowPlaying && nowPlaying.btn === btn;
+    stopSound();
+    if (wasThis) return;
+
+    const audio = new Audio(btn.dataset.play);
+    audio.volume = Math.min(1, Math.max(0, CFG.soundVolume ?? 0.5));
+    nowPlaying = { audio, btn };
+    setPlayGlyph(btn, "◌");
+
+    const isCurrent = () => nowPlaying && nowPlaying.audio === audio;
+    audio.addEventListener("playing", () => { if (isCurrent()) setPlayGlyph(btn, "■"); });
+    audio.addEventListener("ended", () => { if (isCurrent()) stopSound(); });
+    audio.addEventListener("error", () => {
+      if (!isCurrent()) return;
+      nowPlaying = null;
+      setPlayGlyph(btn, "✕");
+      btn.title = "This sound is unavailable on Wowhead's CDN";
+      setTimeout(() => { if (btn.textContent === "✕") setPlayGlyph(btn, "▶"); }, 1500);
+    });
+    audio.play().catch(() => {}); // failures surface via the error listener
   }
 
   function kitTag(kitId, field) {
@@ -1177,6 +1232,7 @@
       const t = e.target.closest("button");
       if (!t) return;
       if (t.dataset.copy) copyText(t.dataset.copy, e.shiftKey);
+      else if (t.dataset.play) toggleSound(t);
       else if (t.dataset.search) crossSearch((e.shiftKey ? "-" : "") + t.dataset.search);
       else if (t.dataset.expand) {
         t.closest("td").classList.add("expanded");

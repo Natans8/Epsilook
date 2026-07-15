@@ -25,6 +25,7 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
 - A `-` prefix excludes instead: `name:nova -effect:school_damage`.
 - Click any tag in the results to search for it (Shift-click to exclude it). The
   current search always lives in the URL — the 🔗 Share button copies it.
+- The ▶ on a sound file plays it in the browser (click again to stop).
 
 ## Development
 
@@ -82,3 +83,8 @@ Edit `docs/js/config.js` — `spellCommands` for per-spell buttons,
   (`wow.zamimg.com`), lazy-loaded per visible row; the icon *names* are baked into
   the data pack (SpellMisc table + listfile). `spellIconUrl` in `docs/js/config.js`
   sets the size or disables icons.
+- Sound playback: the ▶ on a sound file streams it from the same CDN by
+  FileDataID, fetched only when clicked — nothing is preloaded. The CDN serves
+  the current retail build, so the rare file removed from the game since the
+  pack's version won't play. `soundPlayUrl` / `soundVolume` in
+  `docs/js/config.js` tune or disable it.
