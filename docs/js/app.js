@@ -28,7 +28,7 @@
 
     groups: [],         // groups of the last search (one per chip; for hit checks)
     tokens: [],         // flat tokens of the last search (for highlighting)
-    lastQuery: "",      // serialized form of the last search (hash/export)
+    lastQuery: "",      // serialized form of the last search (URL/export)
     results: [],        // spell ids matching the query
     display: [],        // results after filters + sort
     searchMs: 0,
@@ -89,13 +89,13 @@
     }
   }
 
-  // Copy a link to the exact current search. The URL hash is only updated
+  // Copy a link to the exact current search. The URL is only updated
   // after the search debounce settles, so flush it first — otherwise a
   // share click right after typing could copy a stale query.
   function shareLink() {
     clearTimeout(searchDebounce);
     state.lastQuery = serializeQuery();
-    stateToHash(false);
+    stateToUrl(false);
     copyText(location.href, false, "Link copied — paste it to share this search");
   }
 
@@ -136,26 +136,40 @@
     return parts.join(" ");
   }
 
-  // parse a canonical string back into chips + free input text
-  function loadQueryString(str) {
-    state.chips = [];
-    state.activeField = null;
-    state.activeNot = false;
-    const free = [];
+  // parse a canonical string into an ordered chip list — field tags become
+  // field chips, runs of free words between them coalesce into single
+  // field:"all" chips, so the original word order survives the round-trip
+  function parseQueryParts(str) {
+    const parts = [];
+    const pushFree = (word) => {
+      const last = parts[parts.length - 1];
+      if (last && last.field === "all") last.text += " " + word;
+      else parts.push({ field: "all", text: word });
+    };
     for (const m of (str || "").matchAll(/(?:(-)?([a-z]+):)?(?:"([^"]*)"|(\S+))/gi)) {
       const not = !!m[1];
       const field = (m[2] || "").toLowerCase();
       const text = (m[3] !== undefined ? m[3] : m[4] || "").trim();
       if (isChipField(field)) {
-        if (text) state.chips.push({ field, text, not });
+        if (text) parts.push({ field, text, not });
         ensureFieldVisible(field);
       } else if (m[2]) {
-        free.push(`${not ? "-" : ""}${m[2]}:${text}`); // unknown prefix stays literal
+        pushFree(`${not ? "-" : ""}${m[2]}:${text}`); // unknown prefix stays literal
       } else if (text) {
-        free.push(text);
+        pushFree(text);
       }
     }
-    $("#q").value = free.join(" ");
+    return parts;
+  }
+
+  // load a canonical string into the bar: everything becomes committed
+  // chips except a trailing free run, which stays editable in the input
+  function loadQueryString(str) {
+    state.chips = parseQueryParts(str);
+    state.activeField = null;
+    state.activeNot = false;
+    const last = state.chips[state.chips.length - 1];
+    $("#q").value = last && last.field === "all" ? state.chips.pop().text : "";
     state.pos = state.chips.length;
     renderBar();
   }
@@ -177,7 +191,24 @@
 
   /* ------------------------------------------------------- search bar */
 
+  // Neighbouring free-text chips read as one run of plain words, so they
+  // should act as one: merge them wherever they touch. The pair straddling
+  // the editing gap (state.pos) is left alone — the user may be about to
+  // type between them.
+  function normalizeChips() {
+    for (let i = state.chips.length - 1; i > 0; i--) {
+      if (i === state.pos) continue;
+      const a = state.chips[i - 1], b = state.chips[i];
+      if (a.field === "all" && b.field === "all") {
+        a.text += " " + b.text;
+        state.chips.splice(i, 1);
+        if (state.pos > i) state.pos -= 1;
+      }
+    }
+  }
+
   function renderBar() {
+    normalizeChips();
     const bar = $("#qbar");
     for (const chip of bar.querySelectorAll(".qchip")) chip.remove();
     const editwrap = $("#editwrap");
@@ -414,7 +445,7 @@
       state.searchMs = 0;
       applyFiltersAndSort();
       setStatus(raw ? `Type at least ${CFG.minQueryLength} characters` : "");
-      stateToHash(push);
+      stateToUrl(push);
       return;
     }
 
@@ -427,7 +458,7 @@
       .flatMap((g) => g.tokens.map((t) => ({ field: g.field, text: t.text })));
     state.searchMs = res.ms;
     applyFiltersAndSort();
-    stateToHash(push);
+    stateToUrl(push);
   }
 
   function applyFiltersAndSort() {
@@ -1062,32 +1093,46 @@
     }
   }
 
-  /* ---------------------------------------------------------- URL hash */
+  /* ----------------------------------------------------------- the URL */
 
-  let suppressHashChange = false;
-
-  function stateToHash(push) {
-    const params = new URLSearchParams();
-    if (state.version) params.set("v", shortVersion(state.version.id));
-    if (state.lastQuery) params.set("q", state.lastQuery);
-    const hash = "#" + params.toString();
-    if (hash === location.hash) return;
-    suppressHashChange = true;
-    if (push) location.hash = hash;
-    else history.replaceState(null, "", hash);
-    // hashchange only fires for location.hash assignment
-    if (!push) suppressHashChange = false;
+  // the default (newest) version stays out of the URL — links only carry
+  // v= when the user deliberately switched to an older pack
+  function defaultVersion() {
+    return state.versions[state.versions.length - 1];
   }
 
-  function hashToState() {
-    const params = new URLSearchParams(location.hash.slice(1));
-    let q = params.get("q") || "";
-    // legacy links carried a mode: fold it into the query as a field tag
-    const legacyMode = params.get("m");
+  // keep ":", "+" for space, and quotes readable — encodeURIComponent's
+  // %3A soup is exactly the mess a shareable URL shouldn't be
+  const encodeQueryValue = (s) =>
+    encodeURIComponent(s).replace(/%3A/gi, ":").replace(/%20/g, "+").replace(/%22/g, '"');
+
+  function stateToUrl(push) {
+    const params = [];
+    const dv = defaultVersion();
+    if (state.version && dv && state.version.id !== dv.id) {
+      params.push("v=" + encodeQueryValue(shortVersion(state.version.id)));
+    }
+    if (state.lastQuery) params.push("q=" + encodeQueryValue(state.lastQuery));
+    const url = location.pathname + (params.length ? "?" + params.join("&") : "");
+    if (url === location.pathname + location.search && !location.hash) return;
+    // pushState (unlike the old location.hash assignment) fires no event,
+    // so no suppression dance is needed
+    if (push) history.pushState(null, "", url);
+    else history.replaceState(null, "", url);
+  }
+
+  function urlToState() {
+    const params = new URLSearchParams(location.search);
+    // legacy share links carried the state in the hash (#q=…&v=…)
+    const legacy = new URLSearchParams(location.hash.slice(1));
+    const get = (k) => params.get(k) ?? legacy.get(k);
+    let q = get("q") || "";
+    // even older links carried a mode: fold it into the query as a field tag
+    const legacyMode = get("m");
     if (legacyMode && isChipField(legacyMode) && q && !/[a-z]+:/i.test(q)) {
       q = `${legacyMode}:${/\s/.test(q) ? `"${q}"` : q}`;
     }
-    return { v: params.get("v"), q };
+    return { v: get("v"), q };
   }
 
   // A shared link may search a field whose column is hidden here —
@@ -1118,8 +1163,26 @@
   function wireEvents() {
     const input = $("#q");
 
-    input.addEventListener("input", () => {
+    input.addEventListener("input", (e) => {
       if (!state.activeField) {
+        // pasted text arrives whole, so a "model:fire" inside it never
+        // passes the caret check below — parse the full value into chips
+        // instead. Only for pastes: while typing, tags chip at the ":"
+        if (e.inputType === "insertFromPaste" && /(^|\s)-?[a-z]+:\S/i.test(input.value)) {
+          const parts = parseQueryParts(input.value);
+          if (parts.some((p) => p.field !== "all")) {
+            const last = parts[parts.length - 1];
+            const trailing = last && last.field === "all" ? parts.pop().text : "";
+            const at = Math.min(state.pos, state.chips.length);
+            state.chips.splice(at, 0, ...parts);
+            state.pos = at + parts.length;
+            input.value = trailing;
+            renderBar();
+            input.setSelectionRange(input.value.length, input.value.length);
+            scheduleSearch();
+            return;
+          }
+        }
         // a "field:" tag just typed — anywhere, not only at the end: text
         // before it stays free words, text after the caret becomes the
         // tag's content (e.g. "model:|statue" -> model: chip with "statue")
@@ -1359,11 +1422,8 @@
       if (entries[0].isIntersecting) renderMore();
     }, { rootMargin: "600px" }).observe($("#sentinel"));
 
-    // back/forward
-    window.addEventListener("hashchange", () => {
-      if (suppressHashChange) { suppressHashChange = false; return; }
-      applyHash({ push: false });
-    });
+    // back/forward (pushState entries and legacy #q= entries both land here)
+    window.addEventListener("popstate", () => applyUrl({ push: false }));
 
     // version switch
     $("#version").addEventListener("change", async (e) => {
@@ -1458,10 +1518,12 @@
     }
   }
 
-  function applyHash({ push }) {
-    const h = hashToState();
+  function applyUrl({ push }) {
+    const h = urlToState();
     loadQueryString(h.q);
-    const wanted = findVersion(h.v);
+    // no v= in the URL means the default version, not "keep the current
+    // one" — back/forward must return from an explicitly-chosen pack
+    const wanted = findVersion(h.v) || defaultVersion();
     if (wanted && (!state.version || wanted.id !== state.version.id)) {
       activateVersion(wanted, { push });
     } else {
@@ -1496,8 +1558,8 @@
     }
     $("#version-wrap").hidden = state.versions.length < 2;
 
-    const h = hashToState();
-    const entry = findVersion(h.v) || state.versions[state.versions.length - 1];
+    const h = urlToState();
+    const entry = findVersion(h.v) || defaultVersion();
     loadQueryString(h.q);
     await activateVersion(entry);
     $("#q").focus();
