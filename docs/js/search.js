@@ -134,6 +134,22 @@ window.EpsilookSearch = (() => {
       placeholder: "AnimKit ID — e.g. 13839",
       run: (tokens, data) => spellsByKitId(tokens, data.animKitSpells),
     },
+    anim: {
+      label: "Animation", tab: true,
+      placeholder: "Animation name — e.g. SpellCastDirected or fly mount",
+      run(tokens, data) {
+        const out = new Set();
+        for (let a = 0; a < data.animNamesL.length; a++) {
+          const nameL = data.animNamesL[a];
+          const ok = tokens.every((t) => (t.exact ? nameL === t.text : nameL.includes(t.text)));
+          if (!ok) continue;
+          for (const kit of data.animAnimKits.get(a) || []) {
+            for (const s of data.animKitSpells.get(kit) || []) out.add(s);
+          }
+        }
+        return out;
+      },
+    },
     id: {
       label: "Spell ID", tab: true,
       placeholder: "Exact spell ID — e.g. 133",

@@ -21,12 +21,13 @@
     rendered: 0,        // rows currently in the table
     filters: { models: false, sounds: false, animkits: false },
     sort: { key: "auto", dir: 1 },
-    // hidden columns (also excluded from All-mode search and from exports)
-    hiddenCols: { models: false, sounds: false, animkits: false, commands: false },
+    // hidden columns (also excluded from All-mode search and from exports);
+    // Animations and Effects start hidden
+    hiddenCols: { models: false, sounds: false, animkits: true, effects: true, commands: false },
   };
 
   // column -> search fields it contributes
-  const COL_FIELDS = { models: ["model"], sounds: ["sound", "soundkit"], animkits: ["animkit"] };
+  const COL_FIELDS = { models: ["model"], sounds: ["sound", "soundkit"], animkits: ["animkit", "anim"] };
 
   function disabledFields() {
     const out = new Set();
@@ -190,12 +191,14 @@
 
     const total = state.results.length;
     const shown = state.display.length;
-    if (state.query.trim().length >= CFG.minQueryLength) {
+    const hasQuery = state.query.trim().length >= CFG.minQueryLength;
+    if (hasQuery) {
       const filtered = shown < total ? ` (${shown.toLocaleString()} after filters)` : "";
       setStatus(`${total.toLocaleString()} ${total === 1 ? "spell" : "spells"}${filtered} · ${state.searchMs.toFixed(0)} ms`);
     }
     $("#results").classList.toggle("empty", shown === 0);
-    $("#empty-note").hidden = !(shown === 0 && state.query.trim().length >= CFG.minQueryLength);
+    $("#empty-note").hidden = !(shown === 0 && hasQuery);
+    $("#empty-state").hidden = hasQuery;
     updateSortHeaders();
   }
 
@@ -222,19 +225,16 @@
     tdId.appendChild(idBtn);
     tr.appendChild(tdId);
 
-    // Name — wowhead link (their widget adds a hover tooltip); our own
-    // description tooltip shows too when the spell has one
+    // Name — wowhead link (their widget adds the hover tooltip); the parts
+    // matched by a name search are highlighted
     const tdName = el("td", "c-name");
     const nameDiv = el("div", "spell-name");
-    const nameLink = el("a", "spell-name-link", d.names[i] || "(unnamed)");
+    const nameLink = el("a", "spell-name-link");
     nameLink.href = fillTemplate(CFG.wowheadSpellUrl, { id: spellId });
     nameLink.target = "_blank";
     nameLink.rel = "noopener";
+    nameLink.appendChild(highlightMatches(d.names[i] || "(unnamed)"));
     nameDiv.appendChild(nameLink);
-    if (d.descriptions[i]) {
-      nameDiv.classList.add("has-desc");
-      nameDiv.dataset.desc = d.descriptions[i];
-    }
     tdName.appendChild(nameDiv);
     if (d.subtexts[i]) tdName.appendChild(el("div", "spell-sub", d.subtexts[i]));
     tr.appendChild(tdName);
@@ -248,24 +248,67 @@
     // kits containing a match come first
     tr.appendChild(soundsCell(d.spellSounds.get(spellId) || []));
 
-    // AnimKits — matched kits first
-    const animIds = hitsFirst(
-      (d.spellAnimKits.get(spellId) || []).slice().sort((a, b) => a - b),
-      (k) => kitIsHit(k, "animkit"));
-    tr.appendChild(tagCell("c-animkits", animIds.map((k) => kitTag(k, "animkit"))));
+    // Animations — AnimKits grouped with the animations they play
+    tr.appendChild(animationsCell(d.spellAnimKits.get(spellId) || []));
 
-    // Commands
+    // Effects
+    const effectIds = (d.spellEffects.get(spellId) || []).slice().sort((a, b) => a - b);
+    tr.appendChild(tagCell("c-effects", effectIds.map((e) => effectTag(e))));
+
+    // Commands — extra ones hide behind "+N more"
     const tdCmd = el("td", "c-cmds");
+    let extraCount = 0;
     for (const cmd of CFG.spellCommands) {
       const b = el("button", "cmd", cmd.label);
       b.title = `${cmd.hint} — ${fillTemplate(cmd.template, { id: spellId })}`;
       b.dataset.copy = fillTemplate(cmd.template, { id: spellId });
+      if (cmd.extra) { b.classList.add("overflow"); extraCount++; }
       tdCmd.appendChild(b);
     }
     tdCmd.appendChild(wowheadLink(fillTemplate(CFG.wowheadSpellUrl, { id: spellId }), "Open on Wowhead"));
+    if (extraCount > 0) {
+      const more = el("button", "more", `+${extraCount}`);
+      more.title = "Show more commands";
+      more.dataset.expand = "1";
+      tdCmd.appendChild(more);
+    }
     tr.appendChild(tdCmd);
 
     return tr;
+  }
+
+  /* Highlight the query-matched parts of a spell name; returns a fragment. */
+  function highlightMatches(name) {
+    const frag = document.createDocumentFragment();
+    const tokens = tokensFor("name").map((t) => t.text);
+    if (!tokens.length) {
+      frag.appendChild(document.createTextNode(name));
+      return frag;
+    }
+    const lower = name.toLowerCase();
+    const ranges = [];
+    for (const t of tokens) {
+      let idx = 0;
+      while (t && (idx = lower.indexOf(t, idx)) !== -1) {
+        ranges.push([idx, idx + t.length]);
+        idx += 1;
+      }
+    }
+    ranges.sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    for (const r of ranges) {
+      const last = merged[merged.length - 1];
+      if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+      else merged.push([...r]);
+    }
+    let pos = 0;
+    for (const [s, e] of merged) {
+      if (s > pos) frag.appendChild(document.createTextNode(name.slice(pos, s)));
+      frag.appendChild(el("mark", "hl", name.slice(s, e)));
+      pos = e;
+    }
+    if (pos < name.length) frag.appendChild(document.createTextNode(name.slice(pos)));
+    return frag;
   }
 
   // stable partition: elements matching isHit come first, original order kept
@@ -290,6 +333,10 @@
     return a;
   }
 
+  // Collapsing 1-2 items would cost as much space as showing them, so a
+  // cell only collapses when at least 3 items are hidden.
+  const COLLAPSE_SLACK = 2;
+
   function tagCell(className, tags) {
     const td = el("td", className);
     if (tags.length === 0) {
@@ -297,7 +344,8 @@
       td.appendChild(el("span", "none", "—"));
       return td;
     }
-    const limit = CFG.tagsCollapsedLimit;
+    const limit = tags.length <= CFG.tagsCollapsedLimit + COLLAPSE_SLACK
+      ? tags.length : CFG.tagsCollapsedLimit;
     tags.forEach((tag, idx) => {
       if (idx >= limit) tag.classList.add("overflow");
       td.appendChild(tag);
@@ -331,39 +379,76 @@
       byKit.get(kitId).some((fid) => fileIsHit(d.files.get(fid), "sound"));
     const kitIds = hitsFirst([...byKit.keys()].sort((a, b) => a - b), kitHasHit);
 
-    const groupLimit = Math.max(1, Math.ceil(CFG.tagsCollapsedLimit / 2));
+    buildKitGroups(td, kitIds, {
+      headerTag: (kitId) => kitTag(kitId, "soundkit"),
+      itemsOf: (kitId) => hitsFirst(byKit.get(kitId), (fid) => fileIsHit(d.files.get(fid), "sound")),
+      itemTag: (fid) => soundTag(fid),
+      itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
+      groupNoun: "kit",
+    });
+    return td;
+  }
+
+  /* Animations cell: AnimKits grouped with the animations they play. */
+  function animationsCell(animKitIds) {
+    const td = el("td", "c-animkits");
+    if (animKitIds.length === 0) {
+      td.classList.add("empty");
+      td.appendChild(el("span", "none", "—"));
+      return td;
+    }
+    const d = state.data;
+    const kitHasHit = (kitId) =>
+      kitIsHit(kitId, "animkit") ||
+      (d.animKitAnims.get(kitId) || []).some((a) => animIsHit(a));
+    const kitIds = hitsFirst(animKitIds.slice().sort((a, b) => a - b), kitHasHit);
+
+    buildKitGroups(td, kitIds, {
+      headerTag: (kitId) => kitTag(kitId, "animkit"),
+      itemsOf: (kitId) => hitsFirst((d.animKitAnims.get(kitId) || []).slice().sort((a, b) => a - b),
+        (a) => animIsHit(a)),
+      itemTag: (animId) => animTag(animId),
+      itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
+      groupNoun: "kit",
+    });
+    return td;
+  }
+
+  /* Shared group renderer: header tag + nested item tags per group,
+   * collapsing only when it actually saves space. */
+  function buildKitGroups(td, kitIds, opts) {
+    const groupLimit = kitIds.length <= 2 + 1 ? kitIds.length : 2;
     let hiddenCount = 0;
 
     kitIds.forEach((kitId, gi) => {
       const group = el("div", "kit-group");
-      if (gi >= groupLimit) { group.classList.add("overflow"); }
-      group.appendChild(kitTag(kitId, "soundkit"));
+      if (gi >= groupLimit) group.classList.add("overflow");
+      group.appendChild(opts.headerTag(kitId));
 
-      const filesDiv = el("div", "kit-files");
-      const fileLimit = CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit;
-      const fids = hitsFirst(byKit.get(kitId), (fid) => fileIsHit(d.files.get(fid), "sound"));
-      fids.forEach((fid, fi) => {
-        const tag = soundTag(fid);
-        if (gi >= groupLimit || fi >= fileLimit) {
+      const itemsDiv = el("div", "kit-files");
+      const items = opts.itemsOf(kitId);
+      const limit = items.length <= opts.itemLimit + COLLAPSE_SLACK ? items.length : opts.itemLimit;
+      items.forEach((item, fi) => {
+        const tag = opts.itemTag(item);
+        if (gi >= groupLimit || fi >= limit) {
           tag.classList.add("overflow");
           hiddenCount++;
         }
-        filesDiv.appendChild(tag);
+        itemsDiv.appendChild(tag);
       });
-      group.appendChild(filesDiv);
+      group.appendChild(itemsDiv);
       td.appendChild(group);
     });
 
     const hiddenGroups = Math.max(0, kitIds.length - groupLimit);
     if (hiddenGroups > 0 || hiddenCount > 0) {
       const label = hiddenGroups > 0
-        ? `+${hiddenGroups} more ${hiddenGroups === 1 ? "kit" : "kits"}`
+        ? `+${hiddenGroups} more ${hiddenGroups === 1 ? opts.groupNoun : opts.groupNoun + "s"}`
         : `+${hiddenCount} more`;
       const more = el("button", "more", label);
       more.dataset.expand = "1";
       td.appendChild(more);
     }
-    return td;
   }
 
   function tokensFor(field) {
@@ -383,6 +468,39 @@
     return tokensFor(field).some((t) => Number(t.text) === kitId);
   }
 
+  function animIsHit(animId) {
+    const tokens = tokensFor("anim");
+    if (!tokens.length) return false;
+    const nameL = state.data.animNamesL[animId];
+    return tokens.every((t) => (t.exact ? nameL === t.text : nameL.includes(t.text)));
+  }
+
+  function animTag(animId) {
+    const d = state.data;
+    const name = d.animNames[animId];
+    const tag = el("span", "tag anim");
+    if (animIsHit(animId)) tag.classList.add("hit");
+
+    const txt = el("button", "tag-label", name);
+    txt.title = `Animation ${animId}: ${name}\nClick: find spells playing this animation`;
+    txt.dataset.search = `anim:"${name}"`;
+    tag.appendChild(txt);
+
+    const cmd = fillTemplate(CFG.animCopyTemplate, { name, id: animId });
+    tag.appendChild(tagButton(".lo", `Copy:  ${cmd}`, cmd));
+    return tag;
+  }
+
+  function effectTag(effectId) {
+    const d = state.data;
+    const name = d.effectNames.get(effectId) || `EFFECT_${effectId}`;
+    const tag = el("span", "tag effect");
+    const label = el("span", "tag-label", name);
+    label.title = `Spell effect ${effectId}: SPELL_EFFECT_${name}`;
+    tag.appendChild(label);
+    return tag;
+  }
+
   // small helper: a copy button inside a tag. "⧉" copies an ID; command
   // buttons are labeled after what they copy (".lo", "/", ".mod").
   function tagButton(glyph, title, copyValue) {
@@ -396,6 +514,7 @@
     const d = state.data;
     const file = d.files.get(fid) || { fid, path: "", base: "", searchL: "" };
     const tag = el("span", "tag model");
+    tag.title = file.path || "(name unknown)";
     if (fileIsHit(file, "model")) tag.classList.add("hit");
 
     const txt = el("button", "tag-label", file.base ? stripExt(file.base) : `file #${fid}`);
@@ -449,25 +568,6 @@
     return tag;
   }
 
-  /* ----------------------------------------------------------- tooltip */
-
-  function showTooltip(anchor) {
-    const tip = $("#tooltip");
-    tip.textContent = anchor.dataset.desc;
-    tip.hidden = false;
-    const r = anchor.getBoundingClientRect();
-    tip.style.left = Math.min(r.left, window.innerWidth - tip.offsetWidth - 12) + "px";
-    if (r.bottom + tip.offsetHeight + 10 < window.innerHeight) {
-      tip.style.top = r.bottom + 6 + "px";
-    } else {
-      tip.style.top = Math.max(6, r.top - tip.offsetHeight - 6) + "px";
-    }
-  }
-
-  function hideTooltip() {
-    $("#tooltip").hidden = true;
-  }
-
   /* ------------------------------------------------------------ export */
 
   // Hidden columns are excluded from exports.
@@ -488,7 +588,14 @@
         row.soundKits = [...byKit.keys()].sort((a, b) => a - b)
           .map((k) => ({ id: k, files: byKit.get(k) }));
       }
-      if (!hc.animkits) row.animKits = (d.spellAnimKits.get(id) || []).slice().sort((a, b) => a - b);
+      if (!hc.animkits) {
+        row.animKits = (d.spellAnimKits.get(id) || []).slice().sort((a, b) => a - b)
+          .map((k) => ({ id: k, anims: (d.animKitAnims.get(k) || []).map((a) => d.animNames[a]) }));
+      }
+      if (!hc.effects) {
+        row.effects = (d.spellEffects.get(id) || []).slice().sort((a, b) => a - b)
+          .map((e) => d.effectNames.get(e) || `EFFECT_${e}`);
+      }
       return row;
     });
   }
@@ -522,7 +629,8 @@
     const header = ["ID", "Name", "Subtext"];
     if (!hc.models) header.push("Models");
     if (!hc.sounds) header.push("SoundKits", "Sounds");
-    if (!hc.animkits) header.push("AnimKits");
+    if (!hc.animkits) header.push("AnimKits", "Animations");
+    if (!hc.effects) header.push("Effects");
     const lines = [header.join(",")];
     for (const r of exportRows()) {
       const cols = [r.id, esc(r.name), esc(r.subtext)];
@@ -531,7 +639,11 @@
         cols.push(esc(r.soundKits.map((k) => k.id).join("; ")));
         cols.push(esc(r.soundKits.map((k) => `${k.id}: ${k.files.join(" | ")}`).join("; ")));
       }
-      if (!hc.animkits) cols.push(esc(r.animKits.join("; ")));
+      if (!hc.animkits) {
+        cols.push(esc(r.animKits.map((k) => k.id).join("; ")));
+        cols.push(esc(r.animKits.map((k) => `${k.id}: ${k.anims.join(" | ")}`).join("; ")));
+      }
+      if (!hc.effects) cols.push(esc(r.effects.join("; ")));
       lines.push(cols.join(","));
     }
     downloadFile(exportFilename("csv"), "text/csv", lines.join("\r\n"));
@@ -622,15 +734,11 @@
       }
     });
 
-    // spell description tooltip
-    $("#results").addEventListener("mouseover", (e) => {
-      const n = e.target.closest(".spell-name.has-desc");
-      if (n) showTooltip(n);
+    // example searches on the empty-state panel
+    $("#empty-state").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-search]");
+      if (b) crossSearch(b.dataset.search);
     });
-    $("#results").addEventListener("mouseout", (e) => {
-      if (e.target.closest(".spell-name.has-desc")) hideTooltip();
-    });
-    document.addEventListener("scroll", hideTooltip, { passive: true });
 
     // export
     $("#export-csv").addEventListener("click", exportCsv);
@@ -649,7 +757,7 @@
     for (const box of document.querySelectorAll("#columns input[type=checkbox]")) {
       box.addEventListener("change", () => {
         state.hiddenCols[box.dataset.col] = !box.checked;
-        try { localStorage.setItem("epsilook.hiddenCols", JSON.stringify(state.hiddenCols)); } catch (e) {}
+        try { localStorage.setItem("epsilook.hiddenCols.v2", JSON.stringify(state.hiddenCols)); } catch (e) {}
         if (disabledFields().has(state.mode)) state.mode = "all";
         applyHiddenCols();
         updateTabs();
@@ -699,7 +807,8 @@
     $("#q").placeholder = Search.FIELDS[state.mode].placeholder;
   }
 
-  /* Hide table columns, their search tabs, and sync the checkboxes. */
+  /* Hide table columns, their search tabs, their "Only spells with"
+   * filters, and sync the checkboxes. */
   function applyHiddenCols() {
     const table = $("#results");
     const disabled = disabledFields();
@@ -711,6 +820,16 @@
     }
     for (const box of document.querySelectorAll("#columns input[type=checkbox]")) {
       box.checked = !state.hiddenCols[box.dataset.col];
+    }
+    // a hidden column's filter makes no sense — hide it and switch it off
+    for (const box of document.querySelectorAll("#filters input[type=checkbox]")) {
+      const col = box.dataset.filter;
+      const hidden = !!state.hiddenCols[col];
+      box.closest("label").hidden = hidden;
+      if (hidden && state.filters[col]) {
+        state.filters[col] = false;
+        box.checked = false;
+      }
     }
   }
 
@@ -746,6 +865,7 @@
       $("#meta-info").textContent =
         `${entry.label} (${entry.id}) · Listfile ${state.data.meta.listfileTag} · Built ${state.data.meta.built} · ` +
         `${state.data.meta.counts.spells.toLocaleString()} spells`;
+      $("#es-count").textContent = state.data.meta.counts.spells.toLocaleString();
       overlay.hidden = true;
       runSearch({ push });
     } catch (err) {
@@ -772,7 +892,7 @@
 
   async function boot() {
     try {
-      Object.assign(state.hiddenCols, JSON.parse(localStorage.getItem("epsilook.hiddenCols") || "{}"));
+      Object.assign(state.hiddenCols, JSON.parse(localStorage.getItem("epsilook.hiddenCols.v2") || "{}"));
     } catch (e) { /* corrupted storage — defaults apply */ }
     buildTabs();
     wireEvents();
