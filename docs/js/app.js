@@ -1070,10 +1070,10 @@
       if (!e.target.closest("#qbar") && !e.target.closest("#suggest")) hideSuggest();
     });
 
-    // field buttons: start a field tag in the search bar (shift = exclude)
+    // field buttons: "+ Label" includes, "−" (or shift-click) excludes
     $("#tabs").addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-field]");
-      if (btn) activateField(btn.dataset.field, { not: e.shiftKey });
+      if (btn) activateField(btn.dataset.field, { not: btn.dataset.not === "1" || e.shiftKey });
     });
 
     // results: copy buttons / cross-search / expanders (event delegation)
@@ -1153,8 +1153,10 @@
   }
 
   function updateTabs() {
-    for (const btn of document.querySelectorAll("#tabs button")) {
-      btn.classList.toggle("active", btn.dataset.field === state.activeField);
+    for (const tab of document.querySelectorAll("#tabs .tab")) {
+      const isField = tab.dataset.field === state.activeField;
+      tab.classList.toggle("active", isField && !state.activeNot);
+      tab.classList.toggle("active-not", isField && state.activeNot);
     }
   }
 
@@ -1166,8 +1168,8 @@
     for (const [col, hidden] of Object.entries(state.hiddenCols)) {
       table.classList.toggle(`hide-${col}`, hidden);
     }
-    for (const btn of document.querySelectorAll("#tabs button")) {
-      btn.hidden = disabled.has(btn.dataset.field);
+    for (const tab of document.querySelectorAll("#tabs .tab")) {
+      tab.hidden = disabled.has(tab.dataset.field);
     }
     for (const box of document.querySelectorAll("#columns input[type=checkbox]")) {
       box.checked = !state.hiddenCols[box.dataset.col];
@@ -1190,10 +1192,18 @@
     const tabs = $("#tabs");
     for (const [id, field] of Object.entries(Search.FIELDS)) {
       if (!field.tab) continue;
-      const b = el("button", "", `${field.label}`);
-      b.dataset.field = id;
-      b.title = `Add a ${id}: tag — ${field.hint}\nShift-click: exclude matches (-${id}:)`;
-      tabs.appendChild(b);
+      // split pill: "+ Label" includes, the "−" half excludes
+      const wrap = el("span", "tab");
+      wrap.dataset.field = id;
+      const inc = el("button", "tab-inc", `${field.label}`);
+      inc.dataset.field = id;
+      inc.title = `Add a ${id}: tag — ${field.hint}`;
+      const exc = el("button", "tab-exc", "−");
+      exc.dataset.field = id;
+      exc.dataset.not = "1";
+      exc.title = `Exclude ${id}: matches (-${id}:)`;
+      wrap.append(inc, exc);
+      tabs.appendChild(wrap);
     }
   }
 
