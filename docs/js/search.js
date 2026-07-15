@@ -1,9 +1,12 @@
-/* Search engine: the field registry and token evaluation.
+/* Search engine: the field registry and group evaluation.
  *
- * A search is a list of tokens {field, text}. Tokens of the same field
- * AND together against one entity (all words must appear in the same
- * file/name), and fields AND together across the result sets. Free text
- * (field "all") matches spell names, model files and sound files.
+ * A search is a list of groups {field, tokens: [{text}, ...]} — one group
+ * per search-bar chip (plus one for the free text). Within a group, every
+ * word must match the SAME entity (the same file name / spell name /
+ * effect name). Groups AND together across the result sets, so two
+ * model: chips mean "the spell uses a model matching chip 1 AND a model
+ * matching chip 2" — not both words in one file. Free text (field "all")
+ * matches spell names, model files and sound files.
  *
  * Each field entry implements run(tokens, data, disabled) -> Set of
  * spell IDs. Adding a new searchable relation = adding one entry to
@@ -148,22 +151,18 @@ window.EpsilookSearch = (() => {
 
   /* -------------------------------------------------------------- search */
 
-  // tokens: [{field, text}] with text already lowercased single words.
-  // Returns {spellIds, ms}. `disabledFields` (hidden columns) are skipped
-  // inside the "all" field; explicit fields always run.
-  function searchTokens(tokens, data, disabledFields = new Set()) {
+  // groups: [{field, tokens: [{text}, ...]}] with text lowercased single
+  // words. One result set per group, intersected. `disabledFields`
+  // (hidden columns) are skipped inside the "all" field; explicit fields
+  // always run.
+  function searchGroups(groups, data, disabledFields = new Set()) {
     const t0 = performance.now();
 
-    const byField = new Map();
-    for (const t of tokens) {
-      const field = FIELDS[t.field] ? t.field : "all";
-      if (!byField.has(field)) byField.set(field, []);
-      byField.get(field).push(t);
-    }
-
     let result = null;
-    for (const [field, fieldTokens] of byField) {
-      const set = FIELDS[field].run(fieldTokens, data, disabledFields);
+    for (const g of groups) {
+      if (!g.tokens.length) continue;
+      const field = FIELDS[g.field] ? g.field : "all";
+      const set = FIELDS[field].run(g.tokens, data, disabledFields);
       result = result === null ? set : intersect(result, set);
       if (result.size === 0) break;
     }
@@ -185,5 +184,5 @@ window.EpsilookSearch = (() => {
     return spellIds.sort((a, b) => (rank(a) - rank(b)) || (a - b));
   }
 
-  return { searchTokens, sortByRelevance, FIELDS };
+  return { searchGroups, sortByRelevance, FIELDS };
 })();

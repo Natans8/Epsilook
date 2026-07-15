@@ -99,14 +99,17 @@ main { padding: 0 1.6rem 2rem; max-width: 1600px; margin: 0 auto; }
 }
 #q::placeholder { color: var(--text-dim); }
 
-/* the chip being typed */
+/* the chip being typed hugs its content instead of filling the line */
 #editwrap.editing {
-  flex: 1;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
   padding: 0.1rem 0.55rem;
   border: 1px solid var(--gold-dim);
   border-radius: 999px;
   background: rgba(240, 195, 76, 0.07);
 }
+#editwrap.editing #q { flex: 0 0 auto; min-width: 4ch; }
 #editlabel {
   margin-right: 0.35rem;
   font-family: Consolas, "Cascadia Mono", monospace;
@@ -357,6 +360,12 @@ td.expanded .cmd.overflow { display: inline-block; }
 .kit-files .tag-copy { padding: 0.06rem 0.35rem 0.06rem 0.3rem; }
 .kit-group.overflow { display: none; }
 td.expanded .kit-group.overflow { display: block; }
+
+/* a kit with a single item shares its line */
+.kit-group.inline { display: flex; align-items: center; flex-wrap: wrap; gap: 0 0.15rem; }
+.kit-group.inline.overflow { display: none; }
+td.expanded .kit-group.inline.overflow { display: flex; }
+.kit-group.inline .kit-files { display: inline; padding-left: 0.15rem; }
 
 /* tags */
 
