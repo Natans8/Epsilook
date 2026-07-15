@@ -37,7 +37,7 @@
         <li>Words match <b>any part of the text, in any order</b> — <code>6dr statue</code> finds <code>6dr_draenei_statue_male01.m2</code>.</li>
         <li>The tabs choose what your words match. <b>All</b> searches names, models and sounds at once.</li>
         <li>Prefix a word to target a field regardless of the active tab:
-          <code>name:</code> <code>model:</code> <code>sound:</code> <code>soundkit:</code> <code>animkit:</code> <code>id:</code></li>
+          <code>name:</code> <code>model:</code> <code>sound:</code> <code>soundkit:</code> <code>animkit:</code> <code>anim:</code> <code>id:</code></li>
         <li>Prefixes combine — <code>model:missile name:fire</code> finds fire-named spells using a missile model.</li>
         <li>Quotes mean an exact file — <code>model:"spells/cfx_mage_fireball_impact.m2"</code> (clicking a tag does this for you).</li>
         <li>Click any tag in the results to search for it. On a tag, <b>⧉</b> copies the ID; <b>.lo</b> / <b>/</b> / <b>.mod</b> copy the in-game command (<code>.lookup object</code>, <code>/script PlaySound</code>, <code>.modify animkit</code>).</li>
@@ -58,7 +58,8 @@
         <span>Columns:</span>
         <label><input type="checkbox" data-col="models" checked> Models</label>
         <label><input type="checkbox" data-col="sounds" checked> Sounds</label>
-        <label><input type="checkbox" data-col="animkits" checked> AnimKits</label>
+        <label><input type="checkbox" data-col="animkits"> Animations</label>
+        <label><input type="checkbox" data-col="effects"> Effects</label>
         <label><input type="checkbox" data-col="commands" checked> Commands</label>
       </div>
       <div id="export">
@@ -76,8 +77,9 @@
             <th data-sort="id" class="c-id">ID <span class="arrow"></span></th>
             <th data-sort="name" class="c-name">Name <span class="arrow"></span></th>
             <th class="c-models">Models</th>
-            <th class="c-sounds">SoundKits &amp; Sounds</th>
-            <th class="c-animkits">AnimKits</th>
+            <th class="c-sounds">Sounds</th>
+            <th class="c-animkits">Animations</th>
+            <th class="c-effects">Effects</th>
             <th class="c-cmds">Commands</th>
           </tr>
         </thead>
@@ -85,6 +87,23 @@
       </table>
       <p id="empty-note" hidden>No spells match this search.</p>
       <div id="sentinel" hidden></div>
+    </div>
+
+    <div id="empty-state">
+      <h2>Search <span id="es-count">…</span> spells from WoW 9.2.7</h2>
+      <p>Find spells by name, by the model files their visuals attach, by the sounds and
+         soundkits they play, by animation, or by ID — then copy Epsilon commands with one click.</p>
+      <p class="es-try">Try one of these:</p>
+      <div class="es-examples">
+        <button data-search="fireball">fireball</button>
+        <button data-search="model:missile name:fire">model:missile name:fire</button>
+        <button data-search="sound:wolf">sound:wolf</button>
+        <button data-search="soundkit:86835">soundkit:86835</button>
+        <button data-search="anim:kneel">anim:kneel</button>
+        <button data-search="model:arthas">model:arthas</button>
+      </div>
+      <p class="es-hint">Words match any part of a name in any order — <code>6dr statue</code> finds
+         <code>6dr_draenei_statue_male01.m2</code>. Click the <b>?</b> next to the search bar for the full syntax.</p>
     </div>
   </section>
 </main>
@@ -94,8 +113,6 @@
   <span>Made with AI — mistakes are possible</span>
   <span>Data: <a href="https://wago.tools" target="_blank" rel="noopener">wago.tools</a> + <a href="https://github.com/wowdev/wow-listfile" target="_blank" rel="noopener">Community Listfile</a></span>
 </footer>
-
-<div id="tooltip" hidden></div>
 
 <div id="loading">
   <div class="load-card">

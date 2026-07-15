@@ -124,6 +124,30 @@ window.EpsilookData = (() => {
       }
     }
 
+    // animations contained in animkits (names indexed by AnimID)
+    const animNames = pack.animNames;
+    const animNamesL = animNames.map((n) => n.toLowerCase());
+    const animKitAnims = new Map(); // animKitId -> [animId]
+    const animAnimKits = new Map(); // animId -> [animKitId]
+    {
+      const { animKitIds, animIds } = pack.animKitAnims;
+      for (let i = 0; i < animKitIds.length; i++) {
+        pushTo(animKitAnims, animKitIds[i], animIds[i]);
+        pushTo(animAnimKits, animIds[i], animKitIds[i]);
+      }
+    }
+
+    // spell effects (enum id -> name without the SPELL_EFFECT_ prefix)
+    const spellEffects = new Map(); // spell id -> [effect enum id]
+    {
+      const { spellIds, effects } = pack.spellEffects;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellEffects, spellIds[i], effects[i]);
+      }
+    }
+    const effectNames = new Map(
+      Object.entries(pack.effectNames).map(([k, v]) => [Number(k), v]));
+
     // fids referenced as models / as sounds (search scopes)
     const modelFids = [...modelSpells.keys()];
     const soundFids = [...soundSpells.keys()];
@@ -131,11 +155,13 @@ window.EpsilookData = (() => {
     console.info(`Epsilook: indexes built in ${(performance.now() - t0).toFixed(0)} ms`);
     return {
       meta: pack.meta,
-      ids: sp.ids, names: sp.names, subtexts: sp.subtexts, descriptions: sp.descriptions,
+      ids: sp.ids, names: sp.names, subtexts: sp.subtexts,
       namesL, spellIndex, files,
       spellModels, modelSpells, modelFids,
       spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles,
       spellAnimKits, animKitSpells,
+      animNames, animNamesL, animKitAnims, animAnimKits,
+      spellEffects, effectNames,
     };
   }
 

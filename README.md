@@ -2,9 +2,10 @@
 
 Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
 
-Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit or
-AnimKit — with clickable cross-references and one-click copying of Epsilon commands
-(`.cast`, `.aura`, `.lookup spell id`, `.lookup object <model>`).
+Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
+AnimKit or animation — with clickable cross-references, spell effect info, and one-click
+copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
+`.lookup object <model>`, `.lookup emote <anim>`, `.modify animkit <id>`, and more).
 
 The app is a fully static site: all data is baked into one compressed pack per game
 version and every search runs in the browser. No server, no database, no dependencies.

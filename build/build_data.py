@@ -43,8 +43,18 @@ TABLES = [
     "SpellVisualKitModelAttach",
     "SpellVisualEffectName",
     "SpellVisualAnim",
+    "AnimKitSegment",
     "SoundKitEntry",
+    "SpellEffect",
 ]
+
+# Animation names indexed by AnimID (Stand=0, ...), maintained by wow.tools
+ANIMS_JS_URL = "https://raw.githubusercontent.com/Marlamin/wow.tools.local/main/wwwroot/js/anims.js"
+
+# Spell effect enum names (id -> NAME without the SPELL_EFFECT_ prefix),
+# checked into the repo (extracted from TrinityCore SharedDefines.h /
+# wowdev.wiki Spell.dbc/Effect)
+EFFECT_NAMES_FILE = BUILD_DIR / "effect_names.json"
 
 # SpellVisualKitEffect.EffectType values (what the kit effect points at)
 EFFECT_TYPE_SOUND = 5     # Effect = SoundKitID
@@ -80,6 +90,9 @@ def fetch_sources(version: str, refresh: bool) -> tuple[Path, Path]:
     log(f"Tables (wago.tools, build {version}):")
     for table in TABLES:
         download(WAGO_CSV_URL.format(table=table, version=version), table_dir / f"{table}.csv", refresh)
+
+    log("Animation names (wow.tools):")
+    download(ANIMS_JS_URL, CACHE_DIR / "anims.js", refresh)
 
     listfile_dir = CACHE_DIR / "listfile"
     listfile = listfile_dir / "community-listfile.csv"
@@ -117,6 +130,16 @@ def to_int(s: str) -> int:
     return int(s) if s else 0
 
 
+def read_anim_names() -> list[str]:
+    """Parse the animationNames JS array (index = AnimID)."""
+    import re
+    src = (CACHE_DIR / "anims.js").read_text(encoding="utf-8")
+    names = re.findall(r'"([^"]*)"', src)
+    if len(names) < 1000 or names[0] != "Stand":
+        sys.exit("error: anims.js did not parse as expected")
+    return names
+
+
 # ----------------------------------------------------------------- pipeline
 
 def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -> dict:
@@ -129,15 +152,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
         spell_names[to_int(sid)] = name
 
     subtexts: dict[int, str] = {}
-    descriptions: dict[int, str] = {}
-    for sid, sub, desc in read_table(table_dir, "Spell", ["ID", "NameSubtext_lang", "Description_lang"]):
+    for sid, sub in read_table(table_dir, "Spell", ["ID", "NameSubtext_lang"]):
         i = to_int(sid)
-        if i not in spell_names:
-            continue
-        if sub:
+        if i in spell_names and sub:
             subtexts[i] = sub
-        if desc:
-            descriptions[i] = desc
 
     # --- visual chain lookups ---------------------------------------------
     log("Reading spell visual chain tables ...")
@@ -196,6 +214,21 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
         if sk and f:
             soundkit_files[sk].add(f)
 
+    # animkit -> animation ids (AnimKitSegment); names come from anims.js
+    anim_names = read_anim_names()
+    animkit_anims: dict[int, set[int]] = defaultdict(set)
+    for parent_kit, anim_id in read_table(table_dir, "AnimKitSegment", ["ParentAnimKitID", "AnimID"]):
+        k, a = to_int(parent_kit), to_int(anim_id)
+        if k and 0 <= a < len(anim_names):
+            animkit_anims[k].add(a)
+
+    # spell -> effect enum ids
+    spell_effects: dict[int, set[int]] = defaultdict(set)
+    for spell_id, effect in read_table(table_dir, "SpellEffect", ["SpellID", "Effect"]):
+        s, e = to_int(spell_id), to_int(effect)
+        if s in spell_names and e:
+            spell_effects[s].add(e)
+
     # --- walk the chains per spell ------------------------------------------
     log("Walking spell -> model/sound/animkit chains ...")
     spell_models: dict[int, set[int]] = defaultdict(set)          # spell -> model fids
@@ -244,7 +277,6 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
         "ids": spell_ids,
         "names": [spell_names[s] for s in spell_ids],
         "subtexts": [subtexts.get(s, "") for s in spell_ids],
-        "descriptions": [descriptions.get(s, "") for s in spell_ids],
     }
 
     file_ids = sorted(referenced_fids)
@@ -257,9 +289,16 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
     sound_rows = sorted((s, sk, f) for s, pairs in spell_sounds.items() for sk, f in pairs)
     anim_rows = sorted((s, a) for s, aks in spell_animkits.items() for a in aks)
 
+    # only animkits that spells actually use
+    used_animkits = {a for aks in spell_animkits.values() for a in aks}
+    kit_anim_rows = sorted(
+        (k, a) for k, anims in animkit_anims.items() if k in used_animkits for a in anims)
+    effect_rows = sorted((s, e) for s, effs in spell_effects.items() for e in effs)
+    effect_names = json.loads(EFFECT_NAMES_FILE.read_text(encoding="utf-8"))
+
     pack = {
         "meta": {
-            "format": 1,
+            "format": 2,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
@@ -271,6 +310,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
                 "spellModels": len(model_rows),
                 "spellSounds": len(sound_rows),
                 "spellAnimKits": len(anim_rows),
+                "animKitAnims": len(kit_anim_rows),
+                "spellEffects": len(effect_rows),
             },
         },
         "spells": spells,
@@ -288,11 +329,22 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
             "spellIds": [r[0] for r in anim_rows],
             "animKitIds": [r[1] for r in anim_rows],
         },
+        "animKitAnims": {
+            "animKitIds": [r[0] for r in kit_anim_rows],
+            "animIds": [r[1] for r in kit_anim_rows],
+        },
+        "animNames": anim_names,
+        "spellEffects": {
+            "spellIds": [r[0] for r in effect_rows],
+            "effects": [r[1] for r in effect_rows],
+        },
+        "effectNames": effect_names,
     }
 
     log(
         f"  spells={len(spell_ids):,}  files={len(file_ids):,} ({unnamed:,} unnamed)  "
         f"models={len(model_rows):,}  sounds={len(sound_rows):,}  animkits={len(anim_rows):,}  "
+        f"kitAnims={len(kit_anim_rows):,}  effects={len(effect_rows):,}  "
         f"orphan visual spells={orphan_spells:,}  [{time.time() - t0:.1f}s]"
     )
     return pack
