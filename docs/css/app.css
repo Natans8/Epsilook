@@ -88,13 +88,18 @@ main { padding: 0 1.6rem 2rem; }
 /* only the true trailing gap (nothing after it) fills the rest of the
  * line; a gap before or between chips hugs its content instead, so it
  * doesn't shove the chips after it away */
-#editwrap { display: inline-flex; align-items: center; }
+#editwrap { display: inline-flex; align-items: baseline; }
 #editwrap.fill { flex: 1; min-width: 10rem; }
 
+/* font-family/line-height don't inherit into form controls — set them so the
+ * text being typed is metrically identical to the free-text chip it becomes
+ * on commit (see .qchip.qfree), with no font swap or vertical jump */
 #q {
   flex: 1;
   min-width: 6rem;
+  font-family: inherit;
   font-size: 1.1rem;
+  line-height: 1.2;
   padding: 0.15rem 0;
   color: var(--text);
   background: none;
@@ -104,12 +109,15 @@ main { padding: 0 1.6rem 2rem; }
 #q::placeholder { color: var(--text-dim); }
 #editwrap:not(.fill):not(.editing) #q { min-width: 1ch; }
 
-/* the chip being typed hugs its content instead of filling the line */
+/* the chip being typed hugs its content instead of filling the line.
+ * the label's descent now sets the pill's bottom edge (see #editwrap's
+ * baseline alignment), so the block padding is trimmed to keep this pill the
+ * same height as the committed chips beside it */
 #editwrap.editing {
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
-  padding: 0.1rem 0.55rem;
+  padding: 0.05rem 0.55rem;
   border: 1px solid var(--gold-dim);
   border-radius: 999px;
   background: rgba(240, 195, 76, 0.07);
@@ -123,10 +131,13 @@ main { padding: 0 1.6rem 2rem; }
   white-space: nowrap;
 }
 
-/* committed chips */
+/* committed chips.
+ * baseline, not center: the field label is monospace and the value isn't, and
+ * the two fonts sit at different heights within an equally-tall line box — so
+ * centering the boxes visibly lifts the label above the text it labels */
 .qchip {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   max-width: 100%;
   padding: 0.12rem 0.3rem 0.12rem 0.6rem;
   border: 1px solid var(--border);
@@ -135,15 +146,19 @@ main { padding: 0 1.6rem 2rem; }
   font-size: 0.98rem;
   cursor: pointer;
 }
-/* free text is not boxed — it reads as plain typed words (click to edit) */
+/* Free text is a chip only in the model — on screen it must be indis-
+ * tinguishable from words still in the input: same metrics and padding as #q,
+ * no box, no hover tint, and the bar's own I-beam rather than a pointer.
+ * It stays click-to-edit; the click target just isn't advertised. */
 .qchip.qfree {
   border: none;
   background: none;
-  padding: 0.12rem 0.15rem;
+  padding: 0.15rem 0;
   border-radius: 6px;
   font-size: 1.1rem;
+  line-height: 1.2;
+  cursor: text;
 }
-.qchip.qfree:hover { background: rgba(255, 255, 255, 0.06); }
 .qchip.qfree .qchip-text { max-width: 36rem; }
 
 /* exclusion chips */
@@ -166,7 +181,9 @@ main { padding: 0 1.6rem 2rem; }
   padding: 0.12rem 0.3rem 0.12rem 0.4rem;
 }
 .qchip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 24rem; }
+/* a glyph, not text — centre it rather than sitting it on the chip's baseline */
 .qchip-x {
+  align-self: center;
   margin-left: 0.3rem;
   padding: 0 0.35rem;
   color: var(--text-dim);
