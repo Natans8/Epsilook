@@ -51,10 +51,10 @@ TABLES = [
 # Animation names indexed by AnimID (Stand=0, ...), maintained by wow.tools
 ANIMS_JS_URL = "https://raw.githubusercontent.com/Marlamin/wow.tools.local/main/wwwroot/js/anims.js"
 
-# Spell effect enum names (id -> NAME without the SPELL_EFFECT_ prefix),
+# Spell effect enum names (ID,Name CSV without the SPELL_EFFECT_ prefix),
 # checked into the repo (extracted from TrinityCore SharedDefines.h /
 # wowdev.wiki Spell.dbc/Effect)
-EFFECT_NAMES_FILE = BUILD_DIR / "effect_names.json"
+EFFECT_NAMES_FILE = BUILD_DIR / "effect_names.csv"
 
 # SpellVisualKitEffect.EffectType values (what the kit effect points at)
 EFFECT_TYPE_SOUND = 5     # Effect = SoundKitID
@@ -294,7 +294,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
     kit_anim_rows = sorted(
         (k, a) for k, anims in animkit_anims.items() if k in used_animkits for a in anims)
     effect_rows = sorted((s, e) for s, effs in spell_effects.items() for e in effs)
-    effect_names = json.loads(EFFECT_NAMES_FILE.read_text(encoding="utf-8"))
+    with open(EFFECT_NAMES_FILE, newline="", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        next(reader)  # header
+        effect_names = {row[0]: row[1] for row in reader}
 
     pack = {
         "meta": {

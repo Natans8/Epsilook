@@ -24,24 +24,31 @@
 <main>
   <section id="searchbox">
     <div class="bar">
-      <input id="q" type="search" autocomplete="off" spellcheck="false"
-             placeholder="Search spell names, model files and sound files…">
+      <div id="qbar">
+        <span id="editwrap">
+          <span id="editlabel" hidden></span>
+          <input id="q" type="text" autocomplete="off" spellcheck="false"
+                 placeholder="Search names, models and sounds — or type model: for a field tag">
+        </span>
+      </div>
       <button id="help-btn" title="Search syntax">?</button>
     </div>
-    <nav id="tabs" aria-label="Search mode"></nav>
+    <div id="suggest" hidden></div>
+    <nav id="tabs" aria-label="Field tags"></nav>
     <div id="status" role="status"></div>
 
     <div id="help" hidden>
       <h2>Search syntax</h2>
       <ul>
         <li>Words match <b>any part of the text, in any order</b> — <code>6dr statue</code> finds <code>6dr_draenei_statue_male01.m2</code>.</li>
-        <li>The tabs choose what your words match. <b>All</b> searches names, models and sounds at once.</li>
-        <li>Prefix a word to target a field regardless of the active tab:
-          <code>name:</code> <code>model:</code> <code>sound:</code> <code>soundkit:</code> <code>animkit:</code> <code>anim:</code> <code>id:</code></li>
-        <li>Prefixes combine — <code>model:missile name:fire</code> finds fire-named spells using a missile model.</li>
-        <li>Quotes mean an exact file — <code>model:"spells/cfx_mage_fireball_impact.m2"</code> (clicking a tag does this for you).</li>
+        <li>Plain words search names, models and sounds at once.</li>
+        <li>Type a field prefix (<code>name:</code> <code>model:</code> <code>sound:</code> <code>soundkit:</code> <code>animkit:</code> <code>anim:</code> <code>effect:</code> <code>id:</code>)
+          or click a field button to start a <b>tag</b>. Everything you type then belongs to the tag — spaces included —
+          until you press <b>Enter</b> or <b>Tab</b>.</li>
+        <li>Tags combine — <code>model: missile</code> + <code>name: fire</code> finds fire-named spells using a missile model.</li>
+        <li>Click a tag's <b>×</b> to remove it, or its text to edit it. Backspace on an empty bar reopens the last tag.</li>
         <li>Click any tag in the results to search for it. On a tag, <b>⧉</b> copies the ID; <b>.lo</b> / <b>/</b> / <b>.mod</b> copy the in-game command (<code>.lookup object</code>, <code>/script PlaySound</code>, <code>.modify animkit</code>).</li>
-        <li>Hiding a column (toolbar) also excludes it from All-mode search and from exports.</li>
+        <li>Hiding a column (toolbar) also excludes it from plain-word search and from exports.</li>
       </ul>
     </div>
   </section>
@@ -52,13 +59,13 @@
         <span>Only spells with:</span>
         <label><input type="checkbox" data-filter="models"> Models</label>
         <label><input type="checkbox" data-filter="sounds"> Sounds</label>
-        <label><input type="checkbox" data-filter="animkits"> AnimKits</label>
+        <label><input type="checkbox" data-filter="animkits"> Animations</label>
       </div>
       <div id="columns" title="Hidden columns are also excluded from All-mode search and from exports">
         <span>Columns:</span>
         <label><input type="checkbox" data-col="models" checked> Models</label>
         <label><input type="checkbox" data-col="sounds" checked> Sounds</label>
-        <label><input type="checkbox" data-col="animkits"> Animations</label>
+        <label><input type="checkbox" data-col="animkits" checked> Animations</label>
         <label><input type="checkbox" data-col="effects"> Effects</label>
         <label><input type="checkbox" data-col="commands" checked> Commands</label>
       </div>
@@ -97,10 +104,10 @@
       <div class="es-examples">
         <button data-search="fireball">fireball</button>
         <button data-search="model:missile name:fire">model:missile name:fire</button>
-        <button data-search="sound:wolf">sound:wolf</button>
-        <button data-search="soundkit:86835">soundkit:86835</button>
+        <button data-search="model:book">model:book</button>
+        <button data-search="sound:felreaver">sound:felreaver</button>
         <button data-search="anim:kneel">anim:kneel</button>
-        <button data-search="model:arthas">model:arthas</button>
+        <button data-search="effect:resurrect">effect:resurrect</button>
       </div>
       <p class="es-hint">Words match any part of a name in any order — <code>6dr statue</code> finds
          <code>6dr_draenei_statue_male01.m2</code>. Click the <b>?</b> next to the search bar for the full syntax.</p>

@@ -1,4 +1,4 @@
-/* Epsilook UI: search bar, results table, tags, clipboard, infinite scroll. */
+/* Epsilook UI: chip search bar, results table, tags, clipboard, scrolling. */
 "use strict";
 
 (() => {
@@ -12,22 +12,31 @@
     versions: [],       // manifest entries
     version: null,      // active manifest entry
     data: null,         // indexes for the active version
-    mode: "all",
-    query: "",
+
+    // the search bar: committed chips + the chip being typed (activeField
+    // + the input's text). Chips with field "all" are free-text chips.
+    chips: [],          // [{field, text}]
+    activeField: null,  // field of the chip currently being typed, or null
+
+    tokens: [],         // tokens of the last search (for tag highlighting)
+    lastQuery: "",      // serialized form of the last search (hash/export)
     results: [],        // spell ids matching the query
     display: [],        // results after filters + sort
-    tokens: [],         // parsed tokens of the last search (for tag highlighting)
     searchMs: 0,
     rendered: 0,        // rows currently in the table
     filters: { models: false, sounds: false, animkits: false },
     sort: { key: "auto", dir: 1 },
-    // hidden columns (also excluded from All-mode search and from exports);
-    // Animations and Effects start hidden
-    hiddenCols: { models: false, sounds: false, animkits: true, effects: true, commands: false },
+    // hidden columns (also excluded from All-mode search and from exports)
+    hiddenCols: { models: false, sounds: false, animkits: false, effects: true, commands: false },
   };
 
   // column -> search fields it contributes
-  const COL_FIELDS = { models: ["model"], sounds: ["sound", "soundkit"], animkits: ["animkit", "anim"] };
+  const COL_FIELDS = {
+    models: ["model"],
+    sounds: ["sound", "soundkit"],
+    animkits: ["animkit", "anim"],
+    effects: ["effect"],
+  };
 
   function disabledFields() {
     const out = new Set();
@@ -83,70 +92,186 @@
 
   const fillTemplate = (tpl, vars) => tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
 
-  /* ---------------------------------------------------------- URL hash */
+  /* ------------------------------------------------- query <-> chips */
 
-  let suppressHashChange = false;
-
-  function stateToHash(push) {
-    const params = new URLSearchParams();
-    if (state.version) params.set("v", shortVersion(state.version.id));
-    if (state.mode !== "all") params.set("m", state.mode);
-    if (state.query) params.set("q", state.query);
-    const hash = "#" + params.toString();
-    if (hash === location.hash) return;
-    suppressHashChange = true;
-    if (push) location.hash = hash;
-    else history.replaceState(null, "", hash);
-    // hashchange only fires for location.hash assignment
-    if (!push) suppressHashChange = false;
+  function isChipField(f) {
+    return f && f !== "all" && Search.FIELDS[f];
   }
 
-  function hashToState() {
-    const params = new URLSearchParams(location.hash.slice(1));
-    return {
-      v: params.get("v"),
-      m: params.get("m") || "all",
-      q: params.get("q") || "",
-    };
-  }
-
-  // A shared link may use a search mode whose column is hidden here —
-  // honor the link by un-hiding that column for this session.
-  function ensureModeVisible(mode) {
-    if (!Search.FIELDS[mode] || !disabledFields().has(mode)) return;
-    for (const [col, fields] of Object.entries(COL_FIELDS)) {
-      if (fields.includes(mode)) state.hiddenCols[col] = false;
+  // canonical string form: model:"fel reaver" free words ...
+  function serializeQuery() {
+    const parts = state.chips.map((c) =>
+      c.field === "all" ? c.text
+        : `${c.field}:${/\s/.test(c.text) ? `"${c.text}"` : c.text}`);
+    const inputText = $("#q").value.trim();
+    if (inputText) {
+      parts.push(state.activeField
+        ? `${state.activeField}:${/\s/.test(inputText) ? `"${inputText}"` : inputText}`
+        : inputText);
+    } else if (state.activeField) {
+      parts.push(`${state.activeField}:`);
     }
-    applyHiddenCols();
+    return parts.join(" ");
   }
 
-  // accepts both full build ids and short "9.2.7" forms
-  function findVersion(v) {
-    if (!v) return undefined;
-    return state.versions.find((e) => e.id === v) ||
-           state.versions.findLast((e) => shortVersion(e.id) === v);
+  // parse a canonical string back into chips + free input text
+  function loadQueryString(str) {
+    state.chips = [];
+    state.activeField = null;
+    const free = [];
+    for (const m of (str || "").matchAll(/(?:([a-z]+):)?(?:"([^"]*)"|(\S+))/gi)) {
+      const field = (m[1] || "").toLowerCase();
+      const text = (m[2] !== undefined ? m[2] : m[3] || "").trim();
+      if (isChipField(field)) {
+        if (text) state.chips.push({ field, text });
+        ensureFieldVisible(field);
+      } else if (m[1]) {
+        free.push(`${m[1]}:${text}`); // unknown prefix stays literal
+      } else if (text) {
+        free.push(text);
+      }
+    }
+    $("#q").value = free.join(" ");
+    renderBar();
+  }
+
+  // token list for the engine: chip words + free input words
+  function currentTokens() {
+    const tokens = [];
+    const add = (field, text) => {
+      for (const w of text.toLowerCase().split(/\s+/)) {
+        if (w) tokens.push({ field, text: w });
+      }
+    };
+    for (const c of state.chips) add(c.field, c.text);
+    add(state.activeField || "all", $("#q").value);
+    return tokens;
+  }
+
+  /* ------------------------------------------------------- search bar */
+
+  function renderBar() {
+    const bar = $("#qbar");
+    for (const chip of bar.querySelectorAll(".qchip")) chip.remove();
+    const editwrap = $("#editwrap");
+
+    state.chips.forEach((c, idx) => {
+      const chip = el("span", `qchip f-${c.field}`);
+      const label = el("span", "qchip-field", c.field === "all" ? "" : `${c.field}:`);
+      if (c.field !== "all") chip.appendChild(label);
+      chip.appendChild(el("span", "qchip-text", c.text));
+      const x = el("button", "qchip-x", "×");
+      x.title = "Remove";
+      x.dataset.chipRemove = String(idx);
+      chip.appendChild(x);
+      chip.dataset.chipEdit = String(idx);
+      bar.insertBefore(chip, editwrap);
+    });
+
+    editwrap.classList.toggle("editing", !!state.activeField);
+    if (state.activeField) editwrap.dataset.field = state.activeField;
+    else delete editwrap.dataset.field;
+    $("#editlabel").textContent = state.activeField ? `${state.activeField}:` : "";
+    $("#editlabel").hidden = !state.activeField;
+    $("#q").placeholder = state.activeField
+      ? Search.FIELDS[state.activeField].hint
+      : (state.chips.length ? "" : "Search names, models and sounds — or type model: for a field tag");
+    updateTabs();
+  }
+
+  function activateField(field, { keepInput = false } = {}) {
+    commitActiveChip();
+    ensureFieldVisible(field);
+    const input = $("#q");
+    if (!keepInput && input.value.trim()) {
+      state.chips.push({ field: "all", text: input.value.trim() });
+      input.value = "";
+    }
+    state.activeField = field;
+    hideSuggest();
+    renderBar();
+    input.focus();
+    scheduleSearch();
+  }
+
+  function commitActiveChip() {
+    if (!state.activeField) return;
+    const input = $("#q");
+    const text = input.value.trim();
+    if (text) state.chips.push({ field: state.activeField, text });
+    state.activeField = null;
+    input.value = "";
+    renderBar();
+  }
+
+  /* ------------------------------------------------------ autocomplete */
+
+  let suggestIndex = -1;
+
+  function updateSuggest() {
+    const input = $("#q");
+    const box = $("#suggest");
+    if (state.activeField) return hideSuggest();
+    const word = input.value.split(/\s+/).pop().toLowerCase();
+    if (word.length < 2) return hideSuggest();
+    const matches = Object.entries(Search.FIELDS).filter(([key, f]) =>
+      f.tab && !disabledFields().has(key) &&
+      (key.startsWith(word) || f.label.toLowerCase().startsWith(word)) && key !== word);
+    if (!matches.length) return hideSuggest();
+
+    box.textContent = "";
+    matches.forEach(([key, f]) => {
+      const b = el("button", "suggest-item");
+      b.appendChild(el("span", `suggest-field f-${key}`, `${key}:`));
+      b.appendChild(el("span", "suggest-hint", f.hint));
+      b.dataset.field = key;
+      box.appendChild(b);
+    });
+    suggestIndex = -1;
+    box.hidden = false;
+  }
+
+  function hideSuggest() {
+    $("#suggest").hidden = true;
+    suggestIndex = -1;
+  }
+
+  function selectSuggestion(field) {
+    const input = $("#q");
+    input.value = input.value.replace(/\S+$/, "").trimEnd();
+    activateField(field);
   }
 
   /* ------------------------------------------------------------ search */
 
+  let searchDebounce = null;
+  function scheduleSearch() {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => runSearch(), CFG.searchDebounceMs);
+  }
+
   function runSearch({ push = false } = {}) {
     const data = state.data;
     if (!data) return;
-    const raw = state.query.trim();
+    clearTimeout(searchDebounce);
 
-    if (raw.length < CFG.minQueryLength) {
+    const raw = serializeQuery();
+    state.lastQuery = raw;
+
+    if (raw.replace(/[a-z]+:|"/gi, "").trim().length < CFG.minQueryLength) {
       state.results = [];
       state.tokens = [];
       state.searchMs = 0;
       applyFiltersAndSort();
-      setStatus(raw.length ? `Type at least ${CFG.minQueryLength} characters` : "");
+      setStatus(raw ? `Type at least ${CFG.minQueryLength} characters` : "");
       stateToHash(push);
       return;
     }
 
-    const res = Search.search(raw, state.mode, data, disabledFields());
+    const tokens = currentTokens();
+    const res = Search.searchTokens(tokens, data, disabledFields());
     state.results = res.spellIds;
-    state.tokens = res.tokens;
+    state.tokens = tokens;
     state.searchMs = res.ms;
     applyFiltersAndSort();
     stateToHash(push);
@@ -173,18 +298,16 @@
       list.sort((a, b) =>
         d.names[d.spellIndex.get(a)].localeCompare(d.names[d.spellIndex.get(b)]) * dir || a - b);
     } else { // auto
-      const nameTokens = state.tokens.some((t) => t.field === "name" || t.field === "all");
-      if (nameTokens && state.query) Search.sortByRelevance(list, stripPrefixes(state.query), state.data);
-      else list.sort((a, b) => a - b);
+      const nameTokens = state.tokens.filter((t) => t.field === "name" || t.field === "all");
+      if (nameTokens.length) {
+        Search.sortByRelevance(list, nameTokens.map((t) => t.text).join(" "), d);
+      } else {
+        list.sort((a, b) => a - b);
+      }
     }
 
     state.display = list;
     renderResults();
-  }
-
-  // for relevance ranking, compare names against the unprefixed/name part of the query
-  function stripPrefixes(raw) {
-    return raw.replace(/\b[a-z]+:/gi, "").replace(/"/g, "").trim();
   }
 
   function setStatus(text) {
@@ -201,7 +324,7 @@
 
     const total = state.results.length;
     const shown = state.display.length;
-    const hasQuery = state.query.trim().length >= CFG.minQueryLength;
+    const hasQuery = state.tokens.length > 0;
     if (hasQuery) {
       const filtered = shown < total ? ` (${shown.toLocaleString()} after filters)` : "";
       setStatus(`${total.toLocaleString()} ${total === 1 ? "spell" : "spells"}${filtered} · ${state.searchMs.toFixed(0)} ms`);
@@ -254,8 +377,7 @@
       (fid) => fileIsHit(d.files.get(fid), "model"));
     tr.appendChild(tagCell("c-models", modelFids.map((fid) => modelTag(fid))));
 
-    // Sounds — grouped by SoundKit (a kit contains its sound files);
-    // kits containing a match come first
+    // Sounds — grouped by SoundKit; kits containing a match come first
     tr.appendChild(soundsCell(d.spellSounds.get(spellId) || []));
 
     // Animations — AnimKits grouped with the animations they play
@@ -469,9 +591,7 @@
     if (!file) return false;
     const tokens = tokensFor(field);
     if (!tokens.length) return false;
-    return tokens.every((t) =>
-      t.exact ? (file.searchL === t.text || file.base.toLowerCase() === t.text)
-              : file.searchL.includes(t.text));
+    return tokens.every((t) => file.searchL.includes(t.text));
   }
 
   function kitIsHit(kitId, field) {
@@ -482,33 +602,14 @@
     const tokens = tokensFor("anim");
     if (!tokens.length) return false;
     const nameL = state.data.animNamesL[animId];
-    return tokens.every((t) => (t.exact ? nameL === t.text : nameL.includes(t.text)));
+    return tokens.every((t) => nameL.includes(t.text));
   }
 
-  function animTag(animId) {
-    const d = state.data;
-    const name = d.animNames[animId];
-    const tag = el("span", "tag anim");
-    if (animIsHit(animId)) tag.classList.add("hit");
-
-    const txt = el("button", "tag-label", name);
-    txt.title = `Animation ${animId}: ${name}\nClick: find spells playing this animation`;
-    txt.dataset.search = `anim:"${name}"`;
-    tag.appendChild(txt);
-
-    const cmd = fillTemplate(CFG.animCopyTemplate, { name, id: animId });
-    tag.appendChild(tagButton(".lo", `Copy:  ${cmd}`, cmd));
-    return tag;
-  }
-
-  function effectTag(effectId) {
-    const d = state.data;
-    const name = d.effectNames.get(effectId) || `EFFECT_${effectId}`;
-    const tag = el("span", "tag effect");
-    const label = el("span", "tag-label", name);
-    label.title = `Spell effect ${effectId}: SPELL_EFFECT_${name}`;
-    tag.appendChild(label);
-    return tag;
+  function effectIsHit(effectId) {
+    const tokens = tokensFor("effect");
+    if (!tokens.length) return false;
+    const nameL = state.data.effectNamesL.get(effectId) || "";
+    return tokens.every((t) => nameL.includes(t.text));
   }
 
   // small helper: a copy button inside a tag. "⧉" copies an ID; command
@@ -542,6 +643,7 @@
     const d = state.data;
     const file = d.files.get(fid) || { fid, path: "", base: "", searchL: "" };
     const tag = el("span", "tag sound");
+    tag.title = file.path || "(name unknown)";
     if (fileIsHit(file, "sound")) tag.classList.add("hit");
 
     // sound extensions stay visible (.ogg/.mp3 differ, unlike models)
@@ -578,6 +680,34 @@
     return tag;
   }
 
+  function animTag(animId) {
+    const d = state.data;
+    const name = d.animNames[animId];
+    const tag = el("span", "tag anim");
+    if (animIsHit(animId)) tag.classList.add("hit");
+
+    const txt = el("button", "tag-label", name);
+    txt.title = `Animation ${animId}: ${name}\nClick: find spells playing this animation`;
+    txt.dataset.search = `anim:"${name}"`;
+    tag.appendChild(txt);
+
+    const cmd = fillTemplate(CFG.animCopyTemplate, { name, id: animId });
+    tag.appendChild(tagButton(".lo", `Copy:  ${cmd}`, cmd));
+    return tag;
+  }
+
+  function effectTag(effectId) {
+    const d = state.data;
+    const name = d.effectNames.get(effectId) || `EFFECT_${effectId}`;
+    const tag = el("span", "tag effect");
+    if (effectIsHit(effectId)) tag.classList.add("hit");
+    const label = el("button", "tag-label", name);
+    label.title = `Spell effect ${effectId}: SPELL_EFFECT_${name}\nClick: find spells with this effect`;
+    label.dataset.search = `effect:"${name}"`;
+    tag.appendChild(label);
+    return tag;
+  }
+
   /* ------------------------------------------------------------ export */
 
   // Hidden columns are excluded from exports.
@@ -611,7 +741,7 @@
   }
 
   function exportFilename(ext) {
-    const q = state.query.trim().replace(/[^\w-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "results";
+    const q = state.lastQuery.replace(/[^\w-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "results";
     return `epsilook-${q}.${ext}`;
   }
 
@@ -665,8 +795,7 @@
       app: "Epsilook",
       url: location.href,
       gameVersion: state.version.id,
-      query: state.query.trim(),
-      mode: state.mode,
+      query: state.lastQuery,
       count: state.display.length,
       spells: exportRows(),
     };
@@ -681,7 +810,7 @@
     const idWidth = Math.max(...shown.map((r) => String(r.id).length), 2);
     const lines = shown.map((r) =>
       `${String(r.id).padEnd(idWidth)}  ${r.name}${r.subtext ? ` (${r.subtext})` : ""}`);
-    let text = `**Epsilook** — ${rows.length.toLocaleString()} ${rows.length === 1 ? "spell" : "spells"} for \`${state.query.trim()}\`\n`;
+    let text = `**Epsilook** — ${rows.length.toLocaleString()} ${rows.length === 1 ? "spell" : "spells"} for \`${state.lastQuery}\`\n`;
     text += `<${location.href}>\n\`\`\`\n${lines.join("\n")}\n\`\`\``;
     if (rows.length > limit) text += `\n…and ${(rows.length - limit).toLocaleString()} more (full list: link above)`;
     copyText(text);
@@ -695,41 +824,161 @@
     }
   }
 
+  /* ---------------------------------------------------------- URL hash */
+
+  let suppressHashChange = false;
+
+  function stateToHash(push) {
+    const params = new URLSearchParams();
+    if (state.version) params.set("v", shortVersion(state.version.id));
+    if (state.lastQuery) params.set("q", state.lastQuery);
+    const hash = "#" + params.toString();
+    if (hash === location.hash) return;
+    suppressHashChange = true;
+    if (push) location.hash = hash;
+    else history.replaceState(null, "", hash);
+    // hashchange only fires for location.hash assignment
+    if (!push) suppressHashChange = false;
+  }
+
+  function hashToState() {
+    const params = new URLSearchParams(location.hash.slice(1));
+    let q = params.get("q") || "";
+    // legacy links carried a mode: fold it into the query as a field tag
+    const legacyMode = params.get("m");
+    if (legacyMode && isChipField(legacyMode) && q && !/[a-z]+:/i.test(q)) {
+      q = `${legacyMode}:${/\s/.test(q) ? `"${q}"` : q}`;
+    }
+    return { v: params.get("v"), q };
+  }
+
+  // A shared link may search a field whose column is hidden here —
+  // honor the link by un-hiding that column for this session.
+  function ensureFieldVisible(field) {
+    if (!Search.FIELDS[field] || !disabledFields().has(field)) return;
+    for (const [col, fields] of Object.entries(COL_FIELDS)) {
+      if (fields.includes(field)) state.hiddenCols[col] = false;
+    }
+    applyHiddenCols();
+  }
+
+  // accepts both full build ids and short "9.2.7" forms
+  function findVersion(v) {
+    if (!v) return undefined;
+    return state.versions.find((e) => e.id === v) ||
+           state.versions.findLast((e) => shortVersion(e.id) === v);
+  }
+
   /* ------------------------------------------------------------ events */
 
   function crossSearch(query) {
-    state.query = query;
-    state.mode = "all";
-    $("#q").value = query;
-    updateTabs();
+    loadQueryString(query);
     runSearch({ push: true });
     window.scrollTo({ top: 0 });
   }
 
   function wireEvents() {
     const input = $("#q");
-    let debounce = null;
+
     input.addEventListener("input", () => {
-      state.query = input.value;
-      clearTimeout(debounce);
-      debounce = setTimeout(() => runSearch(), CFG.searchDebounceMs);
+      if (!state.activeField) {
+        const m = input.value.match(/(^|\s)([a-z]+):$/i);
+        if (m && isChipField(m[2].toLowerCase())) {
+          const field = m[2].toLowerCase();
+          input.value = input.value.slice(0, m.index + m[1].length);
+          activateField(field);
+          return;
+        }
+        updateSuggest();
+      }
+      scheduleSearch();
     });
+
     input.addEventListener("keydown", (e) => {
+      const box = $("#suggest");
+      if (!box.hidden) {
+        const items = [...box.querySelectorAll(".suggest-item")];
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          suggestIndex = (suggestIndex + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+          items.forEach((it, i) => it.classList.toggle("selected", i === suggestIndex));
+          return;
+        }
+        if ((e.key === "Enter" || e.key === "Tab") && suggestIndex >= 0) {
+          e.preventDefault();
+          selectSuggestion(items[suggestIndex].dataset.field);
+          return;
+        }
+        if (e.key === "Escape") { hideSuggest(); return; }
+      }
+
       if (e.key === "Enter") {
-        clearTimeout(debounce);
-        state.query = input.value;
+        commitActiveChip();
         runSearch({ push: true });
+      } else if (e.key === "Tab" && state.activeField) {
+        e.preventDefault();
+        commitActiveChip();
+        scheduleSearch();
+      } else if (e.key === "Escape" && state.activeField) {
+        commitActiveChip();
+        scheduleSearch();
+      } else if (e.key === "Backspace" && input.value === "") {
+        e.preventDefault();
+        if (state.activeField) {
+          state.activeField = null;
+          renderBar();
+        } else if (state.chips.length) {
+          const chip = state.chips.pop();
+          if (chip.field === "all") {
+            input.value = chip.text;
+          } else {
+            state.activeField = chip.field;
+            input.value = chip.text;
+          }
+          renderBar();
+        }
+        input.focus();
+        scheduleSearch();
       }
     });
 
-    // mode tabs
-    $("#tabs").addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-mode]");
-      if (!btn) return;
-      state.mode = btn.dataset.mode;
-      updateTabs();
-      runSearch({ push: true });
+    // chip clicks: × removes, body edits
+    $("#qbar").addEventListener("click", (e) => {
+      const x = e.target.closest("[data-chip-remove]");
+      if (x) {
+        state.chips.splice(Number(x.dataset.chipRemove), 1);
+        renderBar();
+        input.focus();
+        scheduleSearch();
+        return;
+      }
+      const chip = e.target.closest("[data-chip-edit]");
+      if (chip) {
+        commitActiveChip();
+        const [edited] = state.chips.splice(Number(chip.dataset.chipEdit), 1);
+        if (edited.field === "all") input.value = edited.text;
+        else { state.activeField = edited.field; input.value = edited.text; }
+        renderBar();
+        input.focus();
+        scheduleSearch();
+        return;
+      }
       input.focus();
+    });
+
+    // suggestions
+    $("#suggest").addEventListener("mousedown", (e) => {
+      const item = e.target.closest(".suggest-item");
+      if (item) { e.preventDefault(); selectSuggestion(item.dataset.field); }
+    });
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest("#qbar") && !e.target.closest("#suggest")) hideSuggest();
+    });
+
+    // field buttons: start a field tag in the search bar
+    $("#tabs").addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-field]");
+      if (btn) activateField(btn.dataset.field);
     });
 
     // results: copy buttons / cross-search / expanders (event delegation)
@@ -767,10 +1016,8 @@
     for (const box of document.querySelectorAll("#columns input[type=checkbox]")) {
       box.addEventListener("change", () => {
         state.hiddenCols[box.dataset.col] = !box.checked;
-        try { localStorage.setItem("epsilook.hiddenCols.v2", JSON.stringify(state.hiddenCols)); } catch (e) {}
-        if (disabledFields().has(state.mode)) state.mode = "all";
+        try { localStorage.setItem("epsilook.hiddenCols.v3", JSON.stringify(state.hiddenCols)); } catch (e) {}
         applyHiddenCols();
-        updateTabs();
         runSearch();
       });
     }
@@ -812,12 +1059,11 @@
 
   function updateTabs() {
     for (const btn of document.querySelectorAll("#tabs button")) {
-      btn.classList.toggle("active", btn.dataset.mode === state.mode);
+      btn.classList.toggle("active", btn.dataset.field === state.activeField);
     }
-    $("#q").placeholder = Search.FIELDS[state.mode].placeholder;
   }
 
-  /* Hide table columns, their search tabs, their "Only spells with"
+  /* Hide table columns, their field buttons, their "Only spells with"
    * filters, and sync the checkboxes. */
   function applyHiddenCols() {
     const table = $("#results");
@@ -826,7 +1072,7 @@
       table.classList.toggle(`hide-${col}`, hidden);
     }
     for (const btn of document.querySelectorAll("#tabs button")) {
-      btn.hidden = disabled.has(btn.dataset.mode);
+      btn.hidden = disabled.has(btn.dataset.field);
     }
     for (const box of document.querySelectorAll("#columns input[type=checkbox]")) {
       box.checked = !state.hiddenCols[box.dataset.col];
@@ -849,8 +1095,9 @@
     const tabs = $("#tabs");
     for (const [id, field] of Object.entries(Search.FIELDS)) {
       if (!field.tab) continue;
-      const b = el("button", id === state.mode ? "active" : "", field.label);
-      b.dataset.mode = id;
+      const b = el("button", "", `${field.label}`);
+      b.dataset.field = id;
+      b.title = `Add a ${id}: tag — ${field.hint}`;
       tabs.appendChild(b);
     }
   }
@@ -888,11 +1135,7 @@
 
   function applyHash({ push }) {
     const h = hashToState();
-    ensureModeVisible(h.m);
-    state.mode = Search.FIELDS[h.m] && !disabledFields().has(h.m) ? h.m : "all";
-    state.query = h.q;
-    $("#q").value = h.q;
-    updateTabs();
+    loadQueryString(h.q);
     const wanted = findVersion(h.v);
     if (wanted && (!state.version || wanted.id !== state.version.id)) {
       activateVersion(wanted, { push });
@@ -903,12 +1146,11 @@
 
   async function boot() {
     try {
-      Object.assign(state.hiddenCols, JSON.parse(localStorage.getItem("epsilook.hiddenCols.v2") || "{}"));
+      Object.assign(state.hiddenCols, JSON.parse(localStorage.getItem("epsilook.hiddenCols.v3") || "{}"));
     } catch (e) { /* corrupted storage — defaults apply */ }
     buildTabs();
     wireEvents();
     applyHiddenCols();
-    if (disabledFields().has(state.mode)) state.mode = "all";
     try {
       state.versions = await Data.loadVersions();
     } catch (err) {
@@ -931,11 +1173,7 @@
 
     const h = hashToState();
     const entry = findVersion(h.v) || state.versions[state.versions.length - 1];
-    ensureModeVisible(h.m);
-    state.mode = Search.FIELDS[h.m] && !disabledFields().has(h.m) ? h.m : "all";
-    state.query = h.q;
-    $("#q").value = h.q;
-    updateTabs();
+    loadQueryString(h.q);
     await activateVersion(entry);
     $("#q").focus();
   }
