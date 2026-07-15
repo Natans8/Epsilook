@@ -418,21 +418,19 @@
       (e) => effectIsHit(e));
     tr.appendChild(tagCell("c-effects", effectIds.map((e) => effectTag(e))));
 
-    // Commands — a fixed 3x2 grid of uniform buttons with a full-height
-    // wowhead button on the right; compact and static, never the reason
-    // a row stretches
+    // Commands — one compact line that fits even single-line rows
     const tdCmd = el("td", "c-cmds");
-    const grid = el("div", "cmd-grid");
-    const wh = wowheadLink(fillTemplate(CFG.wowheadSpellUrl, { id: spellId }), "Open on Wowhead");
-    wh.classList.add("wh-cmd");
-    grid.appendChild(wh);
+    const row = el("div", "cmd-row");
     for (const cmd of CFG.spellCommands) {
       const b = el("button", "cmd", cmd.label);
       b.title = `${cmd.hint} — ${fillTemplate(cmd.template, { id: spellId })}\nShift-click: copy wrapped in \`backticks\``;
       b.dataset.copy = fillTemplate(cmd.template, { id: spellId });
-      grid.appendChild(b);
+      row.appendChild(b);
     }
-    tdCmd.appendChild(grid);
+    const wh = wowheadLink(fillTemplate(CFG.wowheadSpellUrl, { id: spellId }), "Open on Wowhead");
+    wh.classList.add("wh-cmd");
+    row.appendChild(wh);
+    tdCmd.appendChild(row);
     tr.appendChild(tdCmd);
 
     return tr;

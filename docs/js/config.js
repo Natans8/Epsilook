@@ -4,14 +4,11 @@
 window.EpsilookConfig = {
   // Copy-command buttons shown on every spell row (the spell ID itself is
   // copied by clicking it). {id} is replaced with the spell ID.
-  // `extra: true` commands hide behind the "+N more" expander.
   spellCommands: [
-    { label: ".cast",    template: ".cast {id}",            hint: "Copy .cast command" },
-    { label: ".aura",    template: ".aura {id}",            hint: "Copy .aura command" },
-    { label: ".lookup",  template: ".lookup spell id {id}", hint: "Copy .lookup command" },
-    { label: ".learn",   template: ".learn {id}",           hint: "Copy .learn command",   extra: true },
-    { label: ".unaura",  template: ".unaura {id}",          hint: "Copy .unaura command",  extra: true },
-    { label: ".unlearn", template: ".unlearn {id}",         hint: "Copy .unlearn command", extra: true },
+    { label: ".cast",   template: ".cast {id}",            hint: "Copy .cast command" },
+    { label: ".aura",   template: ".aura {id}",            hint: "Copy .aura command" },
+    { label: ".lookup", template: ".lookup spell id {id}", hint: "Copy .lookup command" },
+    { label: ".learn",  template: ".learn {id}",           hint: "Copy .learn command" },
   ],
 
   // Copy command on each model tag.

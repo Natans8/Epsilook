@@ -313,7 +313,7 @@ tbody tr:hover { background: #1a212c; box-shadow: inset 3px 0 0 var(--gold-dim);
 th.c-idx { text-align: right; }
 .c-id { width: 5.5rem; }
 .c-name { min-width: 13rem; max-width: 20rem; }
-.c-cmds { width: 17rem; }
+.c-cmds { width: 1%; }
 .c-models { min-width: 14rem; }
 .c-sounds { min-width: 16rem; }
 .c-animkits { min-width: 12rem; }
@@ -344,18 +344,16 @@ td.empty { text-align: center; vertical-align: middle; }
 #results.hide-effects  .c-effects  { display: none; }
 #results.hide-commands .c-cmds     { display: none; }
 
-/* the wowhead button fills the grid's right column across both rows */
-.cmd-grid .wh-cmd {
-  grid-column: 4;
-  grid-row: 1 / span 2;
-  width: 2.4rem;
+/* the wowhead button matches the command buttons' height */
+.cmd-row .wh-cmd {
+  width: 2rem;
   height: auto;
   margin: 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.cmd-grid .wh-cmd img { width: 1.25rem; height: 1.25rem; }
+.cmd-row .wh-cmd img { width: 1rem; height: 1rem; }
 
 /* soundkit groups: a kit and the sound files it contains (kept compact) */
 .kit-group {
@@ -426,14 +424,14 @@ td.expanded .tag.overflow { display: inline-flex; }
 .more { color: var(--text-dim); font-size: 0.82em; padding: 0.1rem 0.3rem; }
 .more:hover { color: var(--gold); }
 
-/* command buttons: fixed 3x2 grid + full-height wowhead column */
+/* command buttons: one compact line, never taller than a text row */
 
-.cmd-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+.cmd-row {
+  display: flex;
   gap: 0.25rem;
   align-items: stretch;
-  width: 15.5rem;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .cmd {
