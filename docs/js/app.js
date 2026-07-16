@@ -25,6 +25,9 @@
     activeNot: false,   // the chip being typed is an exclusion
     pos: 0,             // insertion gap: index in chips[] where the bar's
                          // input sits, and where new content is inserted
+    barSel: null,       // bar-wide selection {anchor, focus}: gap positions in
+                         // atom coordinates (each chip = one atom, the input =
+                         // one atom), or null when nothing is selected
 
     groups: [],         // groups of the last search (one per chip; for hit checks)
     tokens: [],         // flat tokens of the last search (for highlighting)
@@ -100,6 +103,7 @@
   }
 
   function fallbackCopy(text, done) {
+    const prev = document.activeElement; // ta.select() steals focus — put it back
     const ta = el("textarea");
     ta.value = text;
     ta.style.position = "fixed";
@@ -108,6 +112,7 @@
     ta.select();
     try { document.execCommand("copy"); done(); } catch (e) { toast("Copy failed"); }
     ta.remove();
+    if (prev && prev !== document.body) prev.focus({ preventScroll: true });
   }
 
   const fillTemplate = (tpl, vars) => tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
@@ -121,15 +126,22 @@
   // canonical string form: model:"fel reaver" -effect:knockback free words.
   // The live input's contribution is spliced in at state.pos, so a query
   // typed before or between chips serializes (and round-trips) in place.
+  // one chip as query text: single words as-is, multi-word values wrapped in
+  // "quotes" (grouping — words match the same entity in any order), values
+  // that themselves contain "phrase quotes" wrapped in (parens) instead so
+  // the two kinds of quotes don't collide
+  const tagStr = (field, text, not) => {
+    const t = text.includes('"') ? `(${text})` : /\s/.test(text) ? `"${text}"` : text;
+    return `${not ? "-" : ""}${field}:${t}`;
+  };
+
   function serializeQuery() {
-    const tag = (field, text, not) =>
-      `${not ? "-" : ""}${field}:${/\s/.test(text) ? `"${text}"` : text}`;
     const parts = state.chips.map((c) =>
-      c.field === "all" ? c.text : tag(c.field, c.text, c.not));
+      c.field === "all" ? c.text : tagStr(c.field, c.text, c.not));
     const at = Math.min(state.pos, state.chips.length);
     const inputText = $("#q").value.trim();
     if (inputText) {
-      parts.splice(at, 0, state.activeField ? tag(state.activeField, inputText, state.activeNot) : inputText);
+      parts.splice(at, 0, state.activeField ? tagStr(state.activeField, inputText, state.activeNot) : inputText);
     } else if (state.activeField) {
       parts.splice(at, 0, `${state.activeNot ? "-" : ""}${state.activeField}:`);
     }
@@ -138,7 +150,11 @@
 
   // parse a canonical string into an ordered chip list — field tags become
   // field chips, runs of free words between them coalesce into single
-  // field:"all" chips, so the original word order survives the round-trip
+  // field:"all" chips, so the original word order survives the round-trip.
+  // A tag's value is one word, a "quoted group" (quotes stripped) or a
+  // (paren group) kept verbatim — the paren form carries values that contain
+  // phrase quotes. Everything else (bare "phrases" included, quotes kept so
+  // their exact-match meaning survives) is free text.
   function parseQueryParts(str) {
     const parts = [];
     const pushFree = (word) => {
@@ -146,17 +162,16 @@
       if (last && last.field === "all") last.text += " " + word;
       else parts.push({ field: "all", text: word });
     };
-    for (const m of (str || "").matchAll(/(?:(-)?([a-z]+):)?(?:"([^"]*)"|(\S+))/gi)) {
+    for (const m of (str || "").matchAll(/(?:(-)?([a-z]+):)?(?:\(([^)]*)\)|"([^"]*)"|([^\s"]+))/gi)) {
       const not = !!m[1];
       const field = (m[2] || "").toLowerCase();
-      const text = (m[3] !== undefined ? m[3] : m[4] || "").trim();
       if (isChipField(field)) {
+        const text = (m[3] ?? m[4] ?? m[5] ?? "").trim();
         if (text) parts.push({ field, text, not });
         ensureFieldVisible(field);
-      } else if (m[2]) {
-        pushFree(`${not ? "-" : ""}${m[2]}:${text}`); // unknown prefix stays literal
-      } else if (text) {
-        pushFree(text);
+      } else {
+        const t = m[0].trim(); // unknown prefixes and quotes stay literal
+        if (t && t !== '""') pushFree(t);
       }
     }
     return parts;
@@ -173,13 +188,26 @@
     syncBar();
   }
 
+  // chip text -> search tokens: words split on whitespace, except "quoted
+  // spans" which stay whole — an exact phrase, spaces and word order
+  // preserved. An unclosed quote runs to the end of the text (so a phrase
+  // matches live while it's still being typed).
+  function tokenizeQuery(text) {
+    const tokens = [];
+    for (const m of text.toLowerCase().matchAll(/"([^"]*)(?:"|$)|([^\s"]+)/g)) {
+      const t = (m[1] !== undefined ? m[1] : m[2]).replace(/\s+/g, " ").trim();
+      if (t) tokens.push({ text: t });
+    }
+    return tokens;
+  }
+
   // group list for the engine: one group per chip + one for the live input,
   // spliced in at state.pos so mid-bar typing groups correctly. Words in a
   // group must match the same entity; groups AND together (not: true groups
   // exclude instead).
   function currentGroups() {
     const toGroup = (field, text, not) => {
-      const tokens = text.toLowerCase().split(/\s+/).filter(Boolean).map((w) => ({ text: w }));
+      const tokens = tokenizeQuery(text);
       return tokens.length ? { field, tokens, not: !!not } : null;
     };
     const groups = state.chips.map((c) => toGroup(c.field, c.text, c.not));
@@ -202,6 +230,7 @@
   //     input's text belongs to the tag, not to the free run around it.)
   function syncBar() {
     const input = $("#q");
+    state.barSel = null; // any structural change invalidates a bar selection
     state.pos = Math.min(state.pos, state.chips.length);
     for (let i = state.chips.length - 1; i > 0; i--) {
       if (i === state.pos) continue;
@@ -280,6 +309,7 @@
       : (state.chips.length ? "" : DEFAULT_PLACEHOLDER);
     sizeInput();
     updateTabs();
+    paintBarSel();
   }
 
   // The input hugs its content instead of stretching, except at the true
@@ -407,6 +437,127 @@
     input.setSelectionRange(caret, caret);
     syncBar();
     scheduleSearch();
+  }
+
+  /* ---------------------------------------------------- bar selection
+   *
+   * The bar reads as one selectable line: each committed chip is one atom,
+   * the input is one atom, and state.barSel = {anchor, focus} holds two gap
+   * positions in that atom sequence. Chips inside the range paint
+   * .selected; the input's own (native) selection carries the free-text
+   * part, so a partial word + neighbouring chips select together. Copy/cut
+   * serialize the range back to canonical query text ("model:book note"),
+   * and Backspace/typing/paste replace it. */
+
+  const inputAtom = () => Math.min(state.pos, state.chips.length);
+  const atomCount = () => state.chips.length + 1;
+
+  function selRange() {
+    if (!state.barSel) return null;
+    const { anchor, focus } = state.barSel;
+    return [Math.min(anchor, focus), Math.max(anchor, focus)];
+  }
+
+  // chip indices (chip coordinates) inside the selection, ascending
+  function selectedChipIndices() {
+    const r = selRange();
+    if (!r) return [];
+    const I = inputAtom();
+    const out = [];
+    for (let a = r[0]; a < r[1]; a++) if (a !== I) out.push(a < I ? a : a - 1);
+    return out;
+  }
+
+  function paintBarSel() {
+    const sel = new Set(selectedChipIndices());
+    for (const chip of $("#qbar").querySelectorAll(".qchip")) {
+      chip.classList.toggle("selected", sel.has(Number(chip.dataset.chipEdit)));
+    }
+  }
+
+  function clearBarSel() {
+    if (!state.barSel) return;
+    state.barSel = null;
+    paintBarSel();
+  }
+
+  // the selected range as canonical query text — chips serialize like
+  // serializeQuery does; the input contributes its natively-selected
+  // substring (tag form only when the whole value of an open tag is taken)
+  function serializeBarSel() {
+    const r = selRange();
+    if (!r) return "";
+    const input = $("#q");
+    const I = inputAtom();
+    const parts = [];
+    for (let a = r[0]; a < r[1]; a++) {
+      if (a === I) {
+        const t = input.value.slice(input.selectionStart, input.selectionEnd).trim();
+        if (!t) continue;
+        const whole = input.selectionStart === 0 && input.selectionEnd === input.value.length;
+        parts.push(state.activeField && whole ? tagStr(state.activeField, t, state.activeNot) : t);
+      } else {
+        const c = state.chips[a < I ? a : a - 1];
+        parts.push(c.field === "all" ? c.text : tagStr(c.field, c.text, c.not));
+      }
+    }
+    return parts.join(" ");
+  }
+
+  // remove everything the selection covers: selected chips, plus the
+  // input's selected substring (a fully-selected open tag is cancelled
+  // whole). Ends with syncBar, which also drops barSel.
+  function deleteBarSel() {
+    const r = selRange();
+    if (!r) return;
+    const input = $("#q");
+    const I = inputAtom();
+    const chipIdxs = selectedChipIndices();
+    if (r[0] <= I && I < r[1]) {
+      const s = input.selectionStart, e = input.selectionEnd;
+      if (s === 0 && e === input.value.length && state.activeField) {
+        state.activeField = null;
+        state.activeNot = false;
+      }
+      input.value = input.value.slice(0, s) + input.value.slice(e);
+      // caret set before syncBar: absorption shifts it along with the text
+      input.setSelectionRange(s, s);
+    }
+    const before = chipIdxs.filter((i) => i < state.pos).length;
+    for (let k = chipIdxs.length - 1; k >= 0; k--) state.chips.splice(chipIdxs[k], 1);
+    state.pos -= before;
+    state.barSel = null;
+    syncBar();
+    scheduleSearch();
+  }
+
+  // keyboard extension (Shift+arrows): moves the focus gap, keeping the
+  // input's own partial selection untouched
+  function applyKbSel(anchor, focus) {
+    const input = $("#q");
+    const I = inputAtom();
+    state.barSel = anchor === focus ? null : { anchor, focus };
+    if (state.barSel && !selectedChipIndices().length) state.barSel = null;
+    const r = selRange();
+    if (r && !(r[0] <= I && I < r[1])) {
+      // the input fell out of the range: park its caret on the selection side
+      const at = r[0] > I ? input.value.length : 0;
+      input.setSelectionRange(at, at);
+    }
+    paintBarSel();
+  }
+
+  // which atom gap (0..atomCount) a point maps to — the same reading-order
+  // midpoint walk as click-to-place-gap, but counting the input as an atom
+  function atomGapAtPoint(x, y) {
+    let gap = 0, idx = 0;
+    for (const item of $("#qbar").children) {
+      if (!item.classList.contains("qchip") && item.id !== "editwrap") continue;
+      const r = item.getBoundingClientRect();
+      if (y > r.bottom || (y >= r.top && x > (r.left + r.right) / 2)) gap = idx + 1;
+      idx++;
+    }
+    return gap;
   }
 
   /* ------------------------------------------------------ autocomplete */
@@ -1214,10 +1365,14 @@
         }
         // a "field:" tag just typed — anywhere, not only at the end: text
         // before it stays free words, text after the caret becomes the
-        // tag's content (e.g. "model:|statue" -> model: chip with "statue")
+        // tag's content (e.g. "model:|statue" -> model: chip with "statue").
+        // Inside an open "quote the prefix stays literal — quoting is how
+        // you search for the text model: itself.
         const caret = input.selectionStart;
-        const m = input.value.slice(0, caret).match(/(^|\s)(-?)([a-z]+):$/i);
-        if (m && isChipField(m[3].toLowerCase())) {
+        const before = input.value.slice(0, caret);
+        const inQuote = ((before.match(/"/g) || []).length % 2) === 1;
+        const m = before.match(/(^|\s)(-?)([a-z]+):$/i);
+        if (m && !inQuote && isChipField(m[3].toLowerCase())) {
           const field = m[3].toLowerCase();
           const rest = input.value.slice(caret);
           input.value = input.value.slice(0, m.index + m[1].length);
@@ -1252,6 +1407,58 @@
           return;
         }
         if (e.key === "Escape") { hideSuggest(); return; }
+      }
+
+      // ---- bar-wide selection (chips + input as one line) ----
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && !e.altKey && e.key.toLowerCase() === "a"
+          && (state.chips.length || state.activeField || input.value)) {
+        e.preventDefault();
+        input.select();
+        state.barSel = { anchor: 0, focus: atomCount() };
+        paintBarSel();
+        return;
+      }
+      if (state.barSel) {
+        if (mod && (e.key.toLowerCase() === "c" || e.key.toLowerCase() === "x")) {
+          e.preventDefault();
+          const text = serializeBarSel();
+          if (text) copyText(text);
+          if (e.key.toLowerCase() === "x") deleteBarSel();
+          return;
+        }
+        if (e.key === "Backspace" || e.key === "Delete") {
+          e.preventDefault();
+          deleteBarSel();
+          return;
+        }
+        if (e.key === "Escape") { clearBarSel(); return; }
+        if (!e.shiftKey && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) {
+          clearBarSel();
+          return; // the input's own selection collapses natively
+        }
+        // typing/pasting over the selection is handled in beforeinput —
+        // it fires for every way text can enter the input, keydown doesn't
+      }
+      if (e.shiftKey && !mod && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        const I = inputAtom(), N = atomCount();
+        if (state.barSel) {
+          e.preventDefault();
+          const focus = state.barSel.focus + (e.key === "ArrowLeft" ? -1 : 1);
+          applyKbSel(state.barSel.anchor, Math.max(0, Math.min(N, focus)));
+          return;
+        }
+        // spill out of the input into the chips beside it
+        if (e.key === "ArrowLeft" && input.selectionStart === 0 && I > 0) {
+          e.preventDefault();
+          applyKbSel(I + 1, I - 1);
+          return;
+        }
+        if (e.key === "ArrowRight" && input.selectionEnd === input.value.length && I < N - 1) {
+          e.preventDefault();
+          applyKbSel(I, I + 2);
+          return;
+        }
       }
 
       const caretAtStart = input.selectionStart === 0 && input.selectionEnd === 0;
@@ -1309,8 +1516,87 @@
       }
     });
 
+    // context-menu copy/cut on the input honor a bar selection too
+    input.addEventListener("copy", (e) => {
+      if (!state.barSel) return;
+      e.preventDefault();
+      e.clipboardData.setData("text/plain", serializeBarSel());
+    });
+    input.addEventListener("cut", (e) => {
+      if (!state.barSel) return;
+      e.preventDefault();
+      e.clipboardData.setData("text/plain", serializeBarSel());
+      deleteBarSel();
+    });
+    // any text entering the input (typed, pasted, IME-composed) replaces a
+    // bar selection first — beforeinput fires before the mutation lands, so
+    // the new text arrives at the collapsed caret the deletion leaves
+    input.addEventListener("beforeinput", () => { if (state.barSel) deleteBarSel(); });
+    input.addEventListener("paste", () => { if (state.barSel) deleteBarSel(); });
+    document.addEventListener("mousedown", (e) => {
+      if (state.barSel && !e.target.closest("#qbar")) clearBarSel();
+    });
+
+    // mouse-drag selection across the bar. A drag within the input stays
+    // native; once the pointer leaves the editor (or the drag started on a
+    // chip), whole atoms select between the anchor gap and the pointer.
+    let dragSel = null;        // { anchor, x0, y0, fromInput, engaged }
+    let suppressBarClick = false;
+
+    function onBarDragMove(e) {
+      if (!dragSel) return;
+      if (!dragSel.engaged) {
+        if (Math.abs(e.clientX - dragSel.x0) < 4 && Math.abs(e.clientY - dragSel.y0) < 4) return;
+        if (dragSel.fromInput) {
+          const r = $("#editwrap").getBoundingClientRect();
+          if (e.clientX >= r.left && e.clientX <= r.right
+              && e.clientY >= r.top && e.clientY <= r.bottom) return;
+          // leaving the editor: anchor at the input's far edge so the
+          // whole free-text run rides along with the selection
+          const I = inputAtom();
+          dragSel.anchor = atomGapAtPoint(e.clientX, e.clientY) <= I ? I + 1 : I;
+        }
+        dragSel.engaged = true;
+      }
+      e.preventDefault(); // stop native text selection fighting the overlay
+      const focus = atomGapAtPoint(e.clientX, e.clientY);
+      if (focus === dragSel.anchor) { clearBarSel(); return; }
+      state.barSel = { anchor: dragSel.anchor, focus };
+      const [s, en] = selRange();
+      const I = inputAtom();
+      if (s <= I && I < en) input.select();
+      else input.setSelectionRange(input.value.length, input.value.length);
+      paintBarSel();
+    }
+
+    function onBarDragEnd(e) {
+      onBarDragMove(e); // a fast drag's last mousemove lags the release point
+      document.removeEventListener("mousemove", onBarDragMove);
+      document.removeEventListener("mouseup", onBarDragEnd);
+      if (dragSel && dragSel.engaged) {
+        suppressBarClick = true; // the release click must not move the gap
+        input.focus({ preventScroll: true });
+      }
+      dragSel = null;
+    }
+
+    $("#qbar").addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      clearBarSel();
+      const fromInput = !!e.target.closest("#editwrap");
+      // keep focus (and suppress native chip-text selection); clicks still fire
+      if (!fromInput) e.preventDefault();
+      dragSel = {
+        anchor: atomGapAtPoint(e.clientX, e.clientY),
+        x0: e.clientX, y0: e.clientY, fromInput, engaged: false,
+      };
+      document.addEventListener("mousemove", onBarDragMove);
+      document.addEventListener("mouseup", onBarDragEnd);
+    });
+
     // chip clicks: × removes, field label flips include/exclude, body edits
     $("#qbar").addEventListener("click", (e) => {
+      if (suppressBarClick) { suppressBarClick = false; return; }
       const x = e.target.closest("[data-chip-remove]");
       if (x) {
         const idx = Number(x.dataset.chipRemove);
