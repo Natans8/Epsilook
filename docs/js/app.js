@@ -547,6 +547,102 @@
     paintBarSel();
   }
 
+  /* ---------------------------------------------------------- bar undo
+   *
+   * Native input undo can't see chip mutations (and programmatic value
+   * writes wreck its stack), so the bar keeps its own history: full
+   * snapshots of {chips, open tag, input text, caret}, recorded centrally
+   * in scheduleSearch/runSearch — the one point every mutation flow
+   * already ends at. Typing bursts coalesce into one step; caret-only
+   * moves never create steps. stack[at] always equals the current state. */
+
+  const barHistory = { stack: [], at: -1, lastTyping: false, lastTime: 0 };
+  const UNDO_CAP = 200;
+  const TYPE_COALESCE_MS = 800;
+
+  function barSnapshot() {
+    const input = $("#q");
+    return {
+      chips: state.chips.map((c) => ({ ...c })),
+      activeField: state.activeField,
+      activeNot: state.activeNot,
+      pos: state.pos,
+      value: input.value,
+      caret: input.selectionStart ?? input.value.length,
+    };
+  }
+
+  const snapKey = (s) => JSON.stringify([s.chips, s.activeField, s.activeNot, s.value]);
+
+  // Deferred by a tick so one user gesture records one step: replacing a
+  // selection is a delete + an insert (two scheduleSearch calls in the same
+  // task), and undo must step over the transient in-between state.
+  let recordTimer = null;
+  function recordBar() {
+    if (recordTimer !== null) return;
+    recordTimer = setTimeout(recordBarNow, 0);
+  }
+
+  function recordBarNow() {
+    clearTimeout(recordTimer);
+    recordTimer = null;
+    const snap = barSnapshot();
+    const cur = barHistory.stack[barHistory.at];
+    if (cur && snapKey(cur) === snapKey(snap)) {
+      // caret/gap moved but content didn't: refresh in place, no new step
+      barHistory.stack[barHistory.at] = snap;
+      barHistory.lastTyping = false;
+      return;
+    }
+    const typing = cur
+      && JSON.stringify(cur.chips) === JSON.stringify(snap.chips)
+      && cur.activeField === snap.activeField && cur.activeNot === snap.activeNot
+      && cur.value !== snap.value;
+    const now = Date.now();
+    if (typing && barHistory.lastTyping && now - barHistory.lastTime < TYPE_COALESCE_MS
+        && barHistory.at === barHistory.stack.length - 1) {
+      barHistory.stack[barHistory.at] = snap; // same burst: absorb into the top step
+    } else {
+      barHistory.stack.length = barHistory.at + 1; // truncate any redo tail
+      barHistory.stack.push(snap);
+      barHistory.at++;
+      if (barHistory.stack.length > UNDO_CAP) {
+        barHistory.stack.shift();
+        barHistory.at--;
+      }
+    }
+    barHistory.lastTyping = !!typing;
+    barHistory.lastTime = now;
+  }
+
+  function restoreBar(snap) {
+    const input = $("#q");
+    state.chips = snap.chips.map((c) => ({ ...c }));
+    state.activeField = snap.activeField;
+    state.activeNot = snap.activeNot;
+    state.pos = snap.pos;
+    state.barSel = null;
+    input.value = snap.value;
+    hideSuggest();
+    renderBar(); // verbatim restore — the snapshot already satisfies syncBar's invariants
+    input.focus();
+    input.setSelectionRange(snap.caret, snap.caret);
+    barHistory.lastTyping = false;
+    scheduleSearch(); // recordBar dedupes against the restored snapshot
+  }
+
+  function undoBar() {
+    recordBarNow(); // flush a pending record so the current state is on the stack
+    if (barHistory.at <= 0) return;
+    restoreBar(barHistory.stack[--barHistory.at]);
+  }
+
+  function redoBar() {
+    recordBarNow();
+    if (barHistory.at >= barHistory.stack.length - 1) return;
+    restoreBar(barHistory.stack[++barHistory.at]);
+  }
+
   // which atom gap (0..atomCount) a point maps to — the same reading-order
   // midpoint walk as click-to-place-gap, but counting the input as an atom
   function atomGapAtPoint(x, y) {
@@ -604,11 +700,13 @@
 
   let searchDebounce = null;
   function scheduleSearch() {
+    recordBar();
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(() => runSearch(), CFG.searchDebounceMs);
   }
 
   function runSearch({ push = false } = {}) {
+    recordBar();
     const data = state.data;
     if (!data) return;
     clearTimeout(searchDebounce);
@@ -1409,8 +1507,20 @@
         if (e.key === "Escape") { hideSuggest(); return; }
       }
 
-      // ---- bar-wide selection (chips + input as one line) ----
+      // ---- bar undo/redo (the bar keeps its own history — see barHistory) ----
       const mod = e.ctrlKey || e.metaKey;
+      if (mod && !e.altKey && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redoBar(); else undoBar();
+        return;
+      }
+      if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redoBar();
+        return;
+      }
+
+      // ---- bar-wide selection (chips + input as one line) ----
       if (mod && !e.altKey && e.key.toLowerCase() === "a"
           && (state.chips.length || state.activeField || input.value)) {
         e.preventDefault();
@@ -1530,8 +1640,17 @@
     });
     // any text entering the input (typed, pasted, IME-composed) replaces a
     // bar selection first — beforeinput fires before the mutation lands, so
-    // the new text arrives at the collapsed caret the deletion leaves
-    input.addEventListener("beforeinput", () => { if (state.barSel) deleteBarSel(); });
+    // the new text arrives at the collapsed caret the deletion leaves.
+    // Context-menu Undo/Redo reroute to the bar's own history: the native
+    // stack only knows the input's text, not the chips around it.
+    input.addEventListener("beforeinput", (e) => {
+      if (e.inputType === "historyUndo" || e.inputType === "historyRedo") {
+        e.preventDefault();
+        if (e.inputType === "historyUndo") undoBar(); else redoBar();
+        return;
+      }
+      if (state.barSel) deleteBarSel();
+    });
     input.addEventListener("paste", () => { if (state.barSel) deleteBarSel(); });
     document.addEventListener("mousedown", (e) => {
       if (state.barSel && !e.target.closest("#qbar")) clearBarSel();
