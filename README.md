@@ -18,11 +18,15 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
 
 - Plain words search names, models, sounds and animations at once and match **any part of a name,
   in any order** — `6dr statue` finds `6dr_draenei_statue_male01.m2`.
+- Quotes make an **exact phrase**: `"fire bolt"` matches those words together, in that order.
 - Field tags narrow a term to one field: `name:` `model:` `sound:` `soundkit:`
   `animkit:` `anim:` `effect:` `id:` — type the prefix or click a field button.
   Tags combine with AND: `model:missile name:fire` finds fire-named spells that use
   a missile model.
 - A `-` prefix excludes instead: `name:nova -effect:school_damage`.
+- The whole bar selects like plain text — mouse, Ctrl+A, or Shift+arrows — and
+  Ctrl+C copies the selection as query text (`model:book note anim:read`), ready
+  to paste back into any Epsilook search bar.
 - Click any tag in the results to search for it (Shift-click to exclude it). The
   current search always lives in the URL — the 🔗 Share button copies it.
 - The ▶ on a sound file plays it in the browser (click again to stop).

@@ -161,8 +161,15 @@ main { padding: 0 1.6rem 2rem; }
 }
 .qchip.qfree .qchip-text { max-width: 36rem; }
 
+/* bar-wide selection: chips picked up by Ctrl+A / drag / Shift+arrows read
+ * as one highlighted run together with the input's own selected text */
+#q::selection { background: rgba(72, 130, 220, 0.45); }
+.qchip.selected { background: rgba(72, 130, 220, 0.35); border-color: rgba(120, 170, 240, 0.7); }
+.qchip.qfree.selected { background: rgba(72, 130, 220, 0.45); border-radius: 4px; }
+
 /* exclusion chips */
 .qchip.not { border-color: rgba(224, 112, 112, 0.5); background: rgba(224, 112, 112, 0.08); }
+.qchip.not.selected { background: rgba(72, 130, 220, 0.35); }
 #editwrap.editing.not { border-color: rgba(224, 112, 112, 0.65); background: rgba(224, 112, 112, 0.08); }
 #editwrap.not #editlabel { color: var(--danger); }
 
