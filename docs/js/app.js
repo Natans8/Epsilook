@@ -2489,9 +2489,15 @@
     $("#version-wrap").hidden = state.versions.length < 2;
 
     const h = urlToState();
+    // ?export=json|csv downloads the query's results as soon as they're
+    // ready. Read it before activateVersion — the first search rewrites the
+    // URL (stateToUrl keeps only v/q), so refresh/back won't re-download.
+    const autoExport = (new URLSearchParams(location.search).get("export") || "").toLowerCase();
     const entry = findVersion(h.v) || defaultVersion();
     loadQueryString(h.q);
     await activateVersion(entry);
+    if (autoExport === "json") exportJson();
+    else if (autoExport === "csv") exportCsv();
     $("#q").focus();
   }
 
