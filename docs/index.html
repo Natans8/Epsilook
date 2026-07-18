@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit, animkit or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260718a">
+  <link rel="stylesheet" href="css/app.css?v=20260718b">
 </head>
 <body>
 
@@ -60,7 +60,7 @@
             <li>Type a prefix like <code>model:</code> (or click a field button) to search one field only.
               Everything you type then belongs to the tag — spaces included — until you press <kbd>Enter</kbd> or <kbd>Tab</kbd>.</li>
             <li>Fields: <code>name:</code> <code>model:</code> <code>sound:</code> <code>soundkit:</code>
-              <code>animkit:</code> <code>anim:</code> <code>fx:</code> <code>mechanic:</code> <code>id:</code></li>
+              <code>animkit:</code> <code>anim:</code> <code>fx:</code> <code>mech:</code> <code>id:</code></li>
             <li><code>fx:</code> searches visual effects (beams): the category word (<code>fx:beam</code>),
               texture names (<code>fx:shadowlaser</code>) and tint colors (<code>fx:beam red</code>).</li>
             <li>Every tag must match (AND), and words <em>inside</em> one tag must match the <em>same</em> file or name —
@@ -70,7 +70,7 @@
         <section>
           <h3>Excluding</h3>
           <ul>
-            <li>A <b>-</b> prefix hides matches instead — <code>-mechanic:school_damage</code> hides every spell with that mechanic.</li>
+            <li>A <b>-</b> prefix hides matches instead — <code>-mech:school_damage</code> hides every spell with that mechanic.</li>
             <li>Four ways: type <code>-model:</code>, click the <b>−</b> half of a field button,
               click an existing tag's field label to flip it, or type <b>-</b> at the very start
               of a tag you're editing.</li>
@@ -177,8 +177,8 @@
         <button data-search="sound:felreaver">sound:felreaver</button>
         <button data-search="anim:ArtLoop">anim:ArtLoop</button>
         <button data-search="fx:beam red">fx:beam red</button>
-        <button data-search="mechanic:leap">mechanic:leap</button>
-        <button data-search='name:nova -mechanic:school_damage'>name:nova -mechanic:school_damage</button>
+        <button data-search="mech:leap">mech:leap</button>
+        <button data-search='name:nova -mech:school_damage'>name:nova -mech:school_damage</button>
       </div>
       <p class="es-hint">Words match any part of a name in any order — <code>impact fireball</code> finds
          <code>cfx_mage_fireball_impact.m2</code>. Click the <b>?</b> next to the search bar for the full syntax.</p>
@@ -209,9 +209,9 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260718a"></script>
-<script src="js/data.js?v=20260718a"></script>
-<script src="js/search.js?v=20260718a"></script>
-<script src="js/app.js?v=20260718a"></script>
+<script src="js/config.js?v=20260718b"></script>
+<script src="js/data.js?v=20260718b"></script>
+<script src="js/search.js?v=20260718b"></script>
+<script src="js/app.js?v=20260718b"></script>
 </body>
 </html>

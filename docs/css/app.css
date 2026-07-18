@@ -14,7 +14,7 @@
   --sound: #8fd48f;
   --soundkit: #5faf8f;
   --animkit: #c99ae0;
-  --fx: #d98fa0;
+  --fx: #7fc9d0;
   --hit: #f0c34c;
   --danger: #e07070;
   font-size: 15px;
@@ -206,7 +206,8 @@ main { padding: 0 1.6rem 2rem; }
 .f-soundkit .qchip-field, .suggest-field.f-soundkit { color: var(--soundkit); }
 .f-animkit .qchip-field, .suggest-field.f-animkit { color: var(--animkit); }
 .f-anim .qchip-field, .suggest-field.f-anim { color: #d8b4e8; }
-.f-effect .qchip-field, .suggest-field.f-effect { color: #e0a878; }
+.f-fx .qchip-field, .suggest-field.f-fx { color: var(--fx); }
+.f-mech .qchip-field, .suggest-field.f-mech { color: #e0a878; }
 .f-name .qchip-field, .suggest-field.f-name { color: var(--gold); }
 .f-id .qchip-field, .suggest-field.f-id { color: var(--gold); }
 
@@ -495,7 +496,9 @@ td.empty { text-align: center; vertical-align: middle; }
 .kit-head { display: flex; align-items: stretch; flex: none; }
 .c-sounds .kit-head { background: rgba(95, 175, 143, 0.10); }
 .c-animkits .kit-head { background: rgba(201, 154, 224, 0.09); }
-.c-fx .kit-head { background: rgba(217, 143, 160, 0.09); }
+.c-fx .kit-head { background: rgba(127, 201, 208, 0.08); }
+/* the fx head is a category label, not a control — no hover affordance */
+.tag.fx-head .tag-label:hover { text-decoration: none; }
 .kit-head .tag, .kit-head .tag.hit { border: none; background: none; margin: 0; border-radius: 0; }
 .kit-group.hit { border-color: var(--gold-dim); }
 .kit-group.hit .kit-head { background: rgba(240, 195, 76, 0.13); }

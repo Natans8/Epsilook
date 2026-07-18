@@ -48,7 +48,7 @@
     sounds: ["sound", "soundkit"],
     animkits: ["animkit", "anim"],
     fx: ["fx"],
-    mechanics: ["mechanic"],
+    mechanics: ["mech"],
   };
 
   function disabledFields() {
@@ -668,9 +668,10 @@
     let word = input.value.split(/\s+/).pop().toLowerCase();
     if (word.startsWith("-")) word = word.slice(1); // "-mec" suggests mechanic: as an exclusion
     if (word.length < 2) return hideSuggest();
+    // hidden columns don't suppress suggestions — an explicit field search
+    // un-hides its column anyway (ensureFieldVisible)
     const matches = Object.entries(Search.FIELDS).filter(([key, f]) =>
-      f.tab && !disabledFields().has(key) &&
-      (key.startsWith(word) || f.label.toLowerCase().startsWith(word)));
+      f.tab && (key.startsWith(word) || f.label.toLowerCase().startsWith(word)));
     if (!matches.length) return hideSuggest();
 
     box.textContent = "";
@@ -1140,7 +1141,7 @@
 
   function effectIsHit(effectId) {
     const nameL = state.data.effectNamesL.get(effectId) || "";
-    return groupsFor("mechanic").some((g) => g.tokens.every((t) => nameL.includes(t.text)));
+    return groupsFor("mech").some((g) => g.tokens.every((t) => nameL.includes(t.text)));
   }
 
   function fxChainIsHit(chainId) {
@@ -1294,19 +1295,19 @@
     if (effectIsHit(effectId)) tag.classList.add("hit");
     const label = el("button", "tag-label", name);
     label.title = `Spell effect ${effectId}: SPELL_EFFECT_${name}\nClick: find spells with this mechanic\nShift-click: exclude them instead`;
-    label.dataset.search = `mechanic:"${name}"`;
+    label.dataset.search = `mech:"${name}"`;
     tag.appendChild(label);
     return tag;
   }
 
   /* Visual FX tags: the category head ("beam") and one pill per texture,
-   * with a dot showing the chain's tint (hidden when untinted). */
+   * with a dot showing the chain's tint (hidden when untinted). The head
+   * is a plain label — clicking it would just search the whole category. */
   function fxHeadTag(category, hit) {
     const tag = el("span", "tag fx-head");
     if (hit) tag.classList.add("hit");
-    const label = el("button", "tag-label", category);
-    label.title = `Beam / chain effect (SpellChainEffects)\nClick: find all spells with a beam\nShift-click: exclude them instead`;
-    label.dataset.search = `fx:${category}`;
+    const label = el("span", "tag-label", category);
+    label.title = "Beam / chain effect (SpellChainEffects)";
     tag.appendChild(label);
     return tag;
   }
@@ -1329,10 +1330,12 @@
     const base = file.base ? stripExt(file.base) : "";
     const txt = el("button", "tag-label", base || "(untextured)");
     txt.title = `${file.path || "(no texture)"}\nClick: find spells with this beam texture\nShift-click: exclude them instead`;
-    txt.dataset.search = file.base ? `fx:"${file.base}"` : `fx:${info.hue || "beam"}`;
+    // category word + texture: the query stays scoped to beams once more
+    // fx categories exist ("fx:beam lightning" style)
+    txt.dataset.search = file.base ? `fx:"beam ${file.base}"` : "";
     tag.appendChild(txt);
 
-    if (file.path) tag.appendChild(tagButton("⧉", `Copy texture path\n${file.path}`, file.path));
+    if (base) tag.appendChild(tagButton("⧉", `Copy texture name: ${base}`, base));
     return tag;
   }
 
@@ -1984,16 +1987,13 @@
     }
   }
 
-  /* Hide table columns, their field buttons, their "Only spells with"
-   * filters, and sync the checkboxes. */
+  /* Hide table columns and their "Only spells with" filters, and sync the
+   * checkboxes. Field buttons stay visible — clicking one un-hides its
+   * column via ensureFieldVisible. */
   function applyHiddenCols() {
     const table = $("#results");
-    const disabled = disabledFields();
     for (const [col, hidden] of Object.entries(state.hiddenCols)) {
       table.classList.toggle(`hide-${col}`, hidden);
-    }
-    for (const tab of document.querySelectorAll("#tabs .tab")) {
-      tab.hidden = disabled.has(tab.dataset.field);
     }
     for (const box of document.querySelectorAll("#columns input[type=checkbox]")) {
       box.checked = !state.hiddenCols[box.dataset.col];

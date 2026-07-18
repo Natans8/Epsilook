@@ -21,13 +21,13 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   match **any part of a name, in any order** — `6dr statue` finds `6dr_draenei_statue_male01.m2`.
 - Quotes make an **exact phrase**: `"fire bolt"` matches those words together, in that order.
 - Field tags narrow a term to one field: `name:` `model:` `sound:` `soundkit:`
-  `animkit:` `anim:` `fx:` `mechanic:` `id:` — type the prefix or click a field button.
+  `animkit:` `anim:` `fx:` `mech:` `id:` — type the prefix or click a field button.
   Tags combine with AND: `model:missile name:fire` finds fire-named spells that use
   a missile model.
 - `fx:` searches the Effects column — beam/chain effects, by category word
   (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`).
   The dot on a beam tag shows the chain's RGB tint.
-- A `-` prefix excludes instead: `name:nova -mechanic:school_damage`.
+- A `-` prefix excludes instead: `name:nova -mech:school_damage`.
 - The whole bar selects like plain text — mouse, Ctrl+A, or Shift+arrows — and
   Ctrl+C copies the selection as query text (`model:book note anim:read`), ready
   to paste back into any Epsilook search bar.
