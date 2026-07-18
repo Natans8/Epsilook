@@ -43,6 +43,16 @@ window.EpsilookConfig = {
   // Playback volume, 0–1 (raw game sounds can be loud).
   soundVolume: 0.5,
 
+  // Texture hover preview on beam/dissolve pills: the raw game .blp is
+  // fetched from wago.tools' CASC API and decoded in the browser
+  // ({fid} = FileDataID, {version} = the active pack's full build).
+  // Fetched only on hover, cached per session. Set to "" to disable.
+  texturePreviewUrl: "https://wago.tools/api/casc/{fid}?version={version}",
+
+  // Longest edge of the preview image, in CSS pixels (larger textures are
+  // scaled down, small ones stay at native size).
+  texturePreviewMax: 256,
+
   // Spell icon shown next to the name, hotlinked from Wowhead's CDN
   // ({icon} = icon name; sizes: tiny/small/medium/large). Set to "" to
   // disable icons entirely.

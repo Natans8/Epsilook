@@ -1408,6 +1408,7 @@
     const base = file.base ? stripExt(file.base) : "";
     const txt = el("button", "tag-label", base || "(untextured)");
     txt.title = `${file.path || "(no texture)"}\nClick: find spells with this beam texture\nShift-click: exclude them instead`;
+    if (entry.fid) txt.dataset.texFid = entry.fid;
     // category word + texture: the query stays scoped to beams once more
     // fx categories exist ("fx:beam lightning" style)
     txt.dataset.search = file.base ? `fx:"beam ${file.base}"` : "";
@@ -1431,6 +1432,7 @@
     txt.title = `${file.path || "(no texture)"}`
       + (duration ? `\nDuration ${duration}s` : "")
       + `\nClick: find spells with this dissolve texture\nShift-click: exclude them instead`;
+    if (entry.fid) txt.dataset.texFid = entry.fid;
     txt.dataset.search = file.base ? `fx:"dissolve ${file.base}"` : "";
     tag.appendChild(txt);
 
@@ -1472,6 +1474,102 @@
       tag.appendChild(tagButton(".lo", `Copy:  ${lookup}`, lookup));
     }
     return tag;
+  }
+
+  /* --------------------------------------------- texture hover preview */
+
+  // Pills with data-tex-fid show the texture on hover: the raw .blp comes
+  // from wago.tools (version-pinned), decoded onto a canvas by the vendored
+  // js-blp + bufo libs (the same decoder wago.tools' own file viewer uses).
+  // Fetched only after a short hover-intent delay, cached per session
+  // (a failed fid caches as null and stays silent).
+  const texCache = new Map(); // fid -> Promise<canvas|null>
+  let texHoverFid = 0;
+  let texHoverTimer = 0;
+
+  function textureCanvas(fid) {
+    let p = texCache.get(fid);
+    if (!p) {
+      const url = fillTemplate(CFG.texturePreviewUrl, { fid, version: state.version.id });
+      p = fetch(url)
+        .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.arrayBuffer(); })
+        .then((buf) => {
+          // encrypted CASC files come back as all-zero bytes — no preview
+          if (!new Uint8Array(buf).some((b) => b !== 0)) return null;
+          const blp = new BLPFile(buf);
+          const cv = document.createElement("canvas");
+          cv.width = blp.width;
+          cv.height = blp.height;
+          blp.getPixels(0, cv); // decodes mip 0 straight into the canvas
+          return cv;
+        })
+        .catch(() => null);
+      texCache.set(fid, p);
+    }
+    return p;
+  }
+
+  function texPanel() {
+    let panel = $("#texpreview");
+    if (!panel) {
+      panel = el("div", "");
+      panel.id = "texpreview";
+      panel.append(el("div", "tex-img"), el("div", "tex-dims"));
+      document.body.appendChild(panel);
+    }
+    return panel;
+  }
+
+  function hideTexPreview() {
+    texHoverFid = 0;
+    clearTimeout(texHoverTimer);
+    const panel = $("#texpreview");
+    if (panel) panel.style.display = "none";
+  }
+
+  function showTexPreview(label, canvas) {
+    const max = CFG.texturePreviewMax || 256;
+    const scale = Math.min(1, max / canvas.width, max / canvas.height);
+    canvas.style.width = Math.round(canvas.width * scale) + "px";
+    canvas.style.height = Math.round(canvas.height * scale) + "px";
+
+    const panel = texPanel();
+    panel.firstChild.replaceChildren(canvas);
+    panel.lastChild.textContent = `${canvas.width}×${canvas.height}`;
+    // place above the pill (native title tooltips pop below the cursor),
+    // measured invisibly first; fall back to below at the viewport top
+    panel.style.visibility = "hidden";
+    panel.style.display = "block";
+    const r = label.getBoundingClientRect();
+    const pr = panel.getBoundingClientRect();
+    const x = Math.max(8, Math.min(r.left, window.innerWidth - pr.width - 8));
+    let y = r.top - pr.height - 6;
+    if (y < 8) y = r.bottom + 6;
+    panel.style.left = x + "px";
+    panel.style.top = y + "px";
+    panel.style.visibility = "";
+  }
+
+  function initTexPreview() {
+    if (!CFG.texturePreviewUrl || !window.matchMedia("(hover: hover)").matches) return;
+    const results = $("#results");
+    results.addEventListener("mouseover", (e) => {
+      const label = e.target.closest("[data-tex-fid]");
+      if (!label) return;
+      const fid = Number(label.dataset.texFid);
+      if (fid === texHoverFid) return;
+      hideTexPreview();
+      texHoverFid = fid;
+      texHoverTimer = setTimeout(async () => {
+        const canvas = await textureCanvas(fid);
+        if (canvas && texHoverFid === fid && label.isConnected) showTexPreview(label, canvas);
+      }, 150);
+    });
+    results.addEventListener("mouseout", (e) => {
+      const label = e.target.closest("[data-tex-fid]");
+      if (label && !label.contains(e.relatedTarget)) hideTexPreview();
+    });
+    window.addEventListener("scroll", hideTexPreview, { passive: true });
   }
 
   /* ------------------------------------------------------------ export */
@@ -2233,6 +2331,7 @@
     } catch (e) { /* corrupted storage — defaults apply */ }
     buildTabs();
     wireEvents();
+    initTexPreview();
     applyHiddenCols();
     try {
       state.versions = await Data.loadVersions();
