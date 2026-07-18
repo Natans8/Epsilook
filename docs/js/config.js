@@ -29,10 +29,15 @@ window.EpsilookConfig = {
   morphCopyTemplate: ".morph {id}",
   morphLookupTemplate: ".lookup display creature {file}",
 
-  // External links ({id} = spell / soundkit / creature display ID).
+  // Copy commands on each summon tag ({id} = creature ID, {name} = NPC name).
+  summonLookupTemplate: ".lookup creature {name}",
+  summonSpawnTemplate: ".npc spawn {id}",
+
+  // External links ({id} = spell / soundkit / creature display / NPC ID).
   wowheadSpellUrl: "https://www.wowhead.com/spell={id}",
   wowheadSoundUrl: "https://www.wowhead.com/sound={id}",
   wowheadMorphUrl: "https://www.wowhead.com/#modelviewer:1:{id}:0",
+  wowheadNpcUrl: "https://www.wowhead.com/npc={id}",
 
   // 3D preview: the "3d" link on each model tag opens the model in the
   // community WoW.tools mirror's model viewer ({fid} = FileDataID). The

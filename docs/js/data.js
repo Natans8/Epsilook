@@ -302,6 +302,31 @@ window.EpsilookData = (() => {
       }
     }
 
+    // summons (SUMMON spell effects): the spell summons a CREATURE (NPC);
+    // control (guardian/pet/...) is per spell-effect row, from its
+    // SummonProperties. Corpus per creature: "summon" + creature id + NPC
+    // name — fx:"summon argi" and fx:"summon 88807" both work.
+    const spellSummons = new Map();   // spell id -> [{creatureId, control}]
+    const summonSpells = new Map();   // creatureId -> [spell id]
+    const summonNames = new Map();    // creatureId -> NPC name ("" = unknown)
+    const summonSearchL = new Map();  // creatureId -> search corpus
+    const summonControlNames = pack.summonControlNames || {}; // control id -> word
+    {
+      const { spellIds, creatureIds, controls } = pack.spellSummons;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellSummons, spellIds[i], { creatureId: creatureIds[i], control: controls[i] });
+        pushTo(summonSpells, creatureIds[i], spellIds[i]);
+      }
+      // a spell repeats per (creature, control) pair — dedupe the reverse map
+      for (const [c, arr] of summonSpells) summonSpells.set(c, [...new Set(arr)]);
+      const su = pack.summons;
+      for (let i = 0; i < su.creatureIds.length; i++) {
+        summonNames.set(su.creatureIds[i], su.names[i]);
+        summonSearchL.set(su.creatureIds[i],
+          ("summon " + su.creatureIds[i] + " " + su.names[i].toLowerCase()).trim());
+      }
+    }
+
     // aura mechanics (SpellEffectAura enum id -> name without SPELL_AURA_)
     const spellAuras = new Map();  // spell id -> [aura enum id]
     const auraSpells = new Map();  // aura enum id -> [spell id]
@@ -335,6 +360,7 @@ window.EpsilookData = (() => {
       spellGlows, glowSpells, glowColors, glowSearchL,
       spellShadowies, shadowySpells, shadowyColors, shadowySearchL,
       spellMorphs, morphSpells, morphNames, morphDisplays, morphSearchL,
+      spellSummons, summonSpells, summonNames, summonSearchL, summonControlNames,
       spellEffects, effectSpells, effectNames, effectNamesL,
       spellAuras, auraSpells, auraNames, auraNamesL,
     };

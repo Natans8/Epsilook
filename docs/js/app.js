@@ -752,7 +752,7 @@
         (!f.sounds || d.spellSounds.has(id)) &&
         (!f.animkits || d.spellAnimKits.has(id)) &&
         (!f.fx || d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellGlows.has(id)
-          || d.spellShadowies.has(id) || d.spellMorphs.has(id)));
+          || d.spellShadowies.has(id) || d.spellMorphs.has(id) || d.spellSummons.has(id)));
     } else {
       list = list.slice();
     }
@@ -861,7 +861,7 @@
     // Animations — AnimKits grouped with the animations they play
     tr.appendChild(animationsCell(d.spellAnimKits.get(spellId) || []));
 
-    // Effects — visual FX (beams, morphs), grouped by category
+    // Effects — visual FX (beams, morphs, summons), grouped by category
     tr.appendChild(fxCell(spellId));
 
     // Mechanics — spell effects, then aura mechanics; matched ones first
@@ -1085,8 +1085,9 @@
 
   /* Effects cell: visual FX grouped by category — "beam" (chain effects),
    * "dissolve" (dissolve effects), "edge glow" / "shadowy" (color-only
-   * effects) and "morph" (transform auras); future categories (tints, …)
-   * become more groups here. Beam pills carry a tint dot per texture. */
+   * effects), "morph" (transform auras) and "summon" (summon effects);
+   * future categories (tints, …) become more groups here. Beam pills carry
+   * a tint dot per texture. */
   function fxCell(spellId) {
     const d = state.data;
     const chainIds = d.spellFx.get(spellId) || [];
@@ -1094,9 +1095,10 @@
     const glowIds = d.spellGlows.get(spellId) || [];
     const shadowyIds = d.spellShadowies.get(spellId) || [];
     const morphIds = d.spellMorphs.get(spellId) || [];
+    const summonEntries = d.spellSummons.get(spellId) || [];
     const td = el("td", "c-fx");
     if (chainIds.length === 0 && dissolveIds.length === 0 && glowIds.length === 0
-        && shadowyIds.length === 0 && morphIds.length === 0) {
+        && shadowyIds.length === 0 && morphIds.length === 0 && summonEntries.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
       return td;
@@ -1189,6 +1191,17 @@
         items: entries.map((e) => () => morphTag(e)),
       });
     }
+    if (summonEntries.length) {
+      // one pill per (creature, control) pair
+      const entries = hitsFirst(
+        summonEntries.slice().sort((a, b) => (a.creatureId - b.creatureId) || (a.control - b.control)),
+        (e) => summonIsHit(e.creatureId));
+      cats.push({
+        name: "summon",
+        hit: summonEntries.some((e) => summonIsHit(e.creatureId)),
+        items: entries.map((e) => () => summonTag(e)),
+      });
+    }
 
     buildKitGroups(td, cats, {
       headerTag: (cat) => fxHeadTag(cat.name, cat.hit),
@@ -1256,6 +1269,11 @@
 
   function morphIsHit(displayId) {
     const corpus = state.data.morphSearchL.get(displayId) || "";
+    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+  }
+
+  function summonIsHit(creatureId) {
+    const corpus = state.data.summonSearchL.get(creatureId) || "";
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
@@ -1447,6 +1465,7 @@
     "edge glow": "Edge glow / rim-light effect (EdgeGlowEffect)",
     shadowy: "Shadowy overlay effect (ShadowyEffect)",
     morph: "Morph / transform aura (CreatureDisplayInfo)",
+    summon: "Summoned creature (SpellEffect SUMMON)",
   };
 
   function fxHeadTag(category, hit) {
@@ -1573,6 +1592,43 @@
       const lookup = fillTemplate(CFG.morphLookupTemplate, { id: displayId, file: file.base });
       tag.appendChild(tagButton(".lo", `Copy:  ${lookup}`, lookup));
     }
+    return tag;
+  }
+
+  /* Summon pill: one per (creature, control). Label = the NPC name with the
+   * SummonProperties control word dimmed beside it (uncontrolled summons
+   * show no word); ⧉ copies the creature ID, .lo / .npc the ready-to-paste
+   * commands; the Wowhead icon on the left opens the NPC's Wowhead page.
+   * Creatures missing from TDB show an inert "creature #id" pill. */
+  function summonTag(entry) {
+    const d = state.data;
+    const { creatureId, control } = entry;
+    const name = d.summonNames.get(creatureId) || "";
+    const ctrl = d.summonControlNames[control] || "";
+    const tag = el("span", "tag fx");
+    if (summonIsHit(creatureId)) tag.classList.add("hit");
+
+    if (CFG.wowheadNpcUrl) {
+      tag.appendChild(wowheadLink(fillTemplate(CFG.wowheadNpcUrl, { id: creatureId }),
+        `Open NPC ${creatureId} on Wowhead`));
+    }
+
+    const txt = el("button", "tag-label");
+    txt.appendChild(document.createTextNode(name || `creature #${creatureId}`));
+    if (ctrl) txt.appendChild(el("span", "tag-ctrl", ctrl));
+    txt.title = `${name || "(unknown creature)"} — creature ${creatureId}`
+      + (ctrl ? `\nControl: ${ctrl}` : "")
+      + `\nClick: find spells summoning this creature\nShift-click: exclude them instead`;
+    txt.dataset.search = `fx:"summon ${name || creatureId}"`;
+    tag.appendChild(txt);
+
+    tag.appendChild(tagButton("⧉", `Copy creature ID: ${creatureId}`, String(creatureId)));
+    if (name) {
+      const lookup = fillTemplate(CFG.summonLookupTemplate, { name, id: creatureId });
+      tag.appendChild(tagButton(".lo", `Copy:  ${lookup}`, lookup));
+    }
+    const spawn = fillTemplate(CFG.summonSpawnTemplate, { id: creatureId, name });
+    tag.appendChild(tagButton(".npc", `Copy:  ${spawn}`, spawn));
     return tag;
   }
 
@@ -1746,7 +1802,14 @@
             displayId: e.displayId,
             model: e.fid ? pathOf(e.fid) : null,
           })),
-        })));
+        }))).concat((d.spellSummons.get(id) || []).slice()
+          .sort((a, b) => (a.creatureId - b.creatureId) || (a.control - b.control))
+          .map((e) => ({
+            type: "summon",
+            creatureId: e.creatureId,
+            creature: d.summonNames.get(e.creatureId) || null,
+            control: d.summonControlNames[e.control] || null,
+          })));
       }
       if (!hc.mechanics) {
         row.mechanics = (d.spellEffects.get(id) || []).slice().sort((a, b) => a - b)
@@ -1807,6 +1870,10 @@
           if (e.type === "morph") {
             return `morph: ${e.creature || "?"} (creature ${e.creatureId}): `
               + (e.displays.map((disp) => `${disp.displayId}=${disp.model || "?"}`).join(" | ") || "?");
+          }
+          if (e.type === "summon") {
+            return `summon: ${e.creature || "?"} (creature ${e.creatureId})`
+              + (e.control ? ` [${e.control}]` : "");
           }
           if (e.color || e.colors) // color-only fx (edge glow / shadowy)
             return `${e.type}: ${e.color || e.colors.join(" | ")}`;

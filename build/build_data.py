@@ -56,6 +56,7 @@ TABLES = [
     "AnimKitSegment",
     "SoundKitEntry",
     "SpellEffect",
+    "SummonProperties",
     "SpellMisc",
     "SpellChainEffects",
     "SpellProceduralEffect",
@@ -98,7 +99,8 @@ TDB_TABLES = {
         "spell_visual_missile": ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID",
                                  "SoundEntriesID", "AnimKitID"],
         "spell_visual_effect_name": ["ID", "ModelFileDataID"],
-        "spell_effect": ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1"],
+        "spell_effect": ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1",
+                         "EffectMiscValue2"],
         "spell_misc": ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"],
         "creature_display_info": ["ID", "ModelID"],
         "creature_model_data": ["ID", "FileDataID"],
@@ -137,6 +139,19 @@ PROC_TYPE_CHAIN = 26
 
 # SpellEffectAura value whose EffectMiscValue_0 is a CreatureDisplayID
 AURA_TRANSFORM = 56
+
+# SpellEffect.Effect value that summons a creature: EffectMiscValue_0 is the
+# creature id (server-side NPC entry, same space as morphs), EffectMiscValue_1
+# the SummonProperties row governing how the summon behaves
+EFFECT_SUMMON = 28
+
+# SummonProperties.Control values (meta/enums/SummonPropertiesControl.dbde —
+# too few and too free-form for read_enum_names). 0 = uncontrolled; shown as
+# no word, like untinted beams.
+SUMMON_CONTROL_NAMES = {
+    0: "", 1: "guardian", 2: "pet", 3: "possessed",
+    4: "possessed vehicle", 5: "vehicle",
+}
 
 csv.field_size_limit(10_000_000)
 
@@ -665,24 +680,32 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     # spell -> effect enum ids, plus aura enum ids (EffectAura — meaningful
     # mostly on APPLY_AURA-family effects; any nonzero value is kept). For
-    # transform auras (56) the misc value is a CREATURE id (server-side NPC
-    # entry, per SpellAuraNames::SpecialMiscValue), NOT a display id.
-    se_rows: dict[int, tuple[int, int, int, int]] = {}
-    for rid, spell_id, effect, aura, misc0 in read_table(
-        table_dir, "SpellEffect", ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue_0"]
-    ):
+    # transform auras (56) misc0 is a CREATURE id (server-side NPC entry,
+    # per SpellAuraNames::SpecialMiscValue), NOT a display id; for summon
+    # effects (28) misc0 is likewise a creature id and misc1 the
+    # SummonProperties row.
+    se_cols = ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue_0", "EffectMiscValue_1"]
+    se_hotfix_cols = ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1", "EffectMiscValue2"]
+    se_rows: dict[int, tuple[int, int, int, int, int]] = {}
+    for rid, spell_id, effect, aura, misc0, misc1 in read_table(table_dir, "SpellEffect", se_cols):
         se_rows[to_int(rid)] = (to_int(spell_id), to_int(effect), to_int(aura),
-                                int(float(misc0)) if misc0 else 0)
-    for rid, spell_id, effect, aura, misc0 in hotfix_rows(
-        tdb_dir, "spell_effect", ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1"]
-    ):
+                                int(float(misc0)) if misc0 else 0,
+                                int(float(misc1)) if misc1 else 0)
+    for rid, spell_id, effect, aura, misc0, misc1 in hotfix_rows(tdb_dir, "spell_effect", se_hotfix_cols):
         se_rows[to_int(rid)] = (to_int(spell_id), to_int(effect), to_int(aura),
-                                int(float(misc0)) if misc0 else 0)
+                                int(float(misc0)) if misc0 else 0,
+                                int(float(misc1)) if misc1 else 0)
+
+    # SummonProperties: only Control matters (guardian/pet/possessed/...)
+    summon_control: dict[int, int] = {}
+    for pid, ctrl in read_table(table_dir, "SummonProperties", ["ID", "Control"]):
+        summon_control[to_int(pid)] = to_int(ctrl)
 
     spell_effects: dict[int, set[int]] = defaultdict(set)
     spell_auras: dict[int, set[int]] = defaultdict(set)
     spell_morphs: dict[int, set[int]] = defaultdict(set)  # spell -> creature ids
-    for s, e, a, misc0 in se_rows.values():
+    spell_summons: dict[int, set[tuple[int, int]]] = defaultdict(set)  # spell -> (creature, control)
+    for s, e, a, misc0, misc1 in se_rows.values():
         if s not in spell_names:
             continue
         if e:
@@ -691,6 +714,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             spell_auras[s].add(a)
         if a == AURA_TRANSFORM and misc0 > 0:
             spell_morphs[s].add(misc0)
+        if e == EFFECT_SUMMON and misc0 > 0:
+            spell_summons[s].add((misc0, summon_control.get(misc1, 0)))
     del se_rows
 
     # creature -> name + display ids (TDB world tables — server-side data
@@ -916,12 +941,14 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     aura_rows = sorted((s, a) for s, auras in spell_auras.items() for a in auras)
     morph_rows = sorted((s, c) for s, cs in spell_morphs.items() for c in cs)
     morph_creature_ids = sorted(used_creatures)
+    summon_rows = sorted((s, c, ctrl) for s, cs in spell_summons.items() for c, ctrl in cs)
+    summon_creature_ids = sorted({c for cs in spell_summons.values() for c, _ in cs})
     effect_names = read_enum_names("SpellEffect", version)
     aura_names = read_enum_names("SpellEffectAura", version)
 
     pack = {
         "meta": {
-            "format": 11,
+            "format": 12,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
@@ -941,6 +968,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellMorphs": len(morph_rows),
                 "morphs": len(morph_creature_ids),
                 "morphDisplays": len(morph_display_rows),
+                "spellSummons": len(summon_rows),
+                "summons": len(summon_creature_ids),
                 "fxChains": len(fx_chain_ids),
                 "spellDissolves": len(dissolve_row_pairs),
                 "dissolves": len(dissolve_ids),
@@ -1054,6 +1083,19 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "displayIds": [r[1] for r in morph_display_rows],
             "fids": [r[2] for r in morph_display_rows],
         },
+        # summons (SpellEffect SUMMON): the spell summons a CREATURE (NPC
+        # entry, names via TDB creature_template like morphs); control is
+        # per spell-effect row, from its SummonProperties
+        "spellSummons": {
+            "spellIds": [r[0] for r in summon_rows],
+            "creatureIds": [r[1] for r in summon_rows],
+            "controls": [r[2] for r in summon_rows],
+        },
+        "summons": {
+            "creatureIds": summon_creature_ids,
+            "names": [creature_names.get(c, "") for c in summon_creature_ids],
+        },
+        "summonControlNames": SUMMON_CONTROL_NAMES,
     }
 
     log(
@@ -1064,7 +1106,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         f"({len(dissolve_ids):,} rows)  glows={len(glow_row_pairs):,} "
         f"({len(glow_ids):,} rows)  shadowies={len(shadowy_row_pairs):,} "
         f"({len(shadowy_ids):,} rows)  morphs={len(morph_rows):,} "
-        f"({len(morph_display_rows):,} displays)  icons={len(icon_names):,}  "
+        f"({len(morph_display_rows):,} displays)  summons={len(summon_rows):,} "
+        f"({len(summon_creature_ids):,} creatures)  icons={len(icon_names):,}  "
         f"orphan visual spells={orphan_spells:,}  [{time.time() - t0:.1f}s]"
     )
     return pack
