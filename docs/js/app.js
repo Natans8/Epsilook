@@ -1195,10 +1195,10 @@
       // one pill per (creature, control) pair
       const entries = hitsFirst(
         summonEntries.slice().sort((a, b) => (a.creatureId - b.creatureId) || (a.control - b.control)),
-        (e) => summonIsHit(e.creatureId));
+        (e) => summonIsHit(e.creatureId, e.control));
       cats.push({
         name: "summon",
-        hit: summonEntries.some((e) => summonIsHit(e.creatureId)),
+        hit: summonEntries.some((e) => summonIsHit(e.creatureId, e.control)),
         items: entries.map((e) => () => summonTag(e)),
       });
     }
@@ -1272,8 +1272,8 @@
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
-  function summonIsHit(creatureId) {
-    const corpus = state.data.summonSearchL.get(creatureId) || "";
+  function summonIsHit(creatureId, control) {
+    const corpus = state.data.summonPairSearchL.get(creatureId + ":" + control) || "";
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
@@ -1606,7 +1606,7 @@
     const name = d.summonNames.get(creatureId) || "";
     const ctrl = d.summonControlNames[control] || "";
     const tag = el("span", "tag fx");
-    if (summonIsHit(creatureId)) tag.classList.add("hit");
+    if (summonIsHit(creatureId, control)) tag.classList.add("hit");
 
     if (CFG.wowheadNpcUrl) {
       tag.appendChild(wowheadLink(fillTemplate(CFG.wowheadNpcUrl, { id: creatureId }),

@@ -63,7 +63,7 @@ window.EpsilookSearch = (() => {
   // textures), dissolves (category word + textures), edge glows and
   // shadowy effects (category word + hue + color hexes), morphs
   // (category word + creature id/name + display ids + model paths) and
-  // summons (category word + creature id/name).
+  // summons (category word + creature id/name + control word).
   function spellsByFx(tokens, data) {
     const out = new Set();
     const scan = (searchLMap, spellsMap) => {
@@ -77,18 +77,18 @@ window.EpsilookSearch = (() => {
     scan(data.glowSearchL, data.glowSpells);
     scan(data.shadowySearchL, data.shadowySpells);
     scan(data.morphSearchL, data.morphSpells);
-    scan(data.summonSearchL, data.summonSpells);
+    scan(data.summonPairSearchL, data.summonPairSpells);
     return out;
   }
 
-  // Exact numeric lookup against a Map of id -> [spell ids].
+  // Exact numeric lookup against a Map of id -> [spell ids]. Multiple ids
+  // union (OR) — see the orGroups note on searchGroups.
   function spellsByKitId(tokens, map) {
-    let result = null;
+    const out = new Set();
     for (const t of tokens) {
-      const spells = new Set(map.get(Number(t.text)) || []);
-      result = result === null ? spells : intersect(result, spells);
+      for (const s of map.get(Number(t.text)) || []) out.add(s);
     }
-    return result ?? new Set();
+    return out;
   }
 
   function intersect(a, b) {
@@ -141,12 +141,12 @@ window.EpsilookSearch = (() => {
       run: (tokens, data) => spellsByFile(tokens, data, data.soundFids, data.soundSpells),
     },
     soundkit: {
-      label: "SoundKit", tab: true,
+      label: "SoundKit", tab: true, orGroups: true,
       hint: "SoundKit ID, e.g. 86835", short: "SoundKit ID",
       run: (tokens, data) => spellsByKitId(tokens, data.soundKitSpells),
     },
     animkit: {
-      label: "AnimKit", tab: true,
+      label: "AnimKit", tab: true, orGroups: true,
       hint: "AnimKit ID, e.g. 13839", short: "AnimKit ID",
       run: (tokens, data) => spellsByKitId(tokens, data.animKitSpells),
     },
@@ -177,7 +177,7 @@ window.EpsilookSearch = (() => {
       },
     },
     id: {
-      label: "Spell ID", tab: true,
+      label: "Spell ID", tab: true, orGroups: true,
       hint: "exact spell ID, e.g. 133", short: "spell ID",
       run(tokens, data) {
         const out = new Set();
@@ -194,21 +194,34 @@ window.EpsilookSearch = (() => {
 
   // groups: [{field, tokens: [{text}, ...], not}] with text lowercased
   // single words. One result set per group; positive groups intersect,
-  // negative groups (not: true) subtract from the result. A query of only
-  // negative groups starts from all spells. `disabledFields` (hidden
-  // columns) are skipped inside the "all" field; explicit fields always run.
+  // negative groups (not: true) subtract from the result. Exception:
+  // groups of the same exact-ID field (orGroups — id: soundkit: animkit:)
+  // union together first, then that union intersects like one group — a
+  // spell has only one ID, so ANDing two of them could never match.
+  // A query of only negative groups starts from all spells.
+  // `disabledFields` (hidden columns) are skipped inside the "all" field;
+  // explicit fields always run.
   function searchGroups(groups, data, disabledFields = new Set()) {
     const t0 = performance.now();
 
     let result = null;
     const negatives = [];
+    const orUnions = new Map(); // field -> union of that field's group results
     for (const g of groups) {
       if (!g.tokens.length) continue;
       if (g.not) { negatives.push(g); continue; }
       const field = FIELDS[g.field] ? g.field : "all";
       const set = FIELDS[field].run(g.tokens, data, disabledFields);
+      if (FIELDS[field].orGroups) {
+        const u = orUnions.get(field);
+        if (u) { for (const v of set) u.add(v); } else orUnions.set(field, set);
+        continue;
+      }
       result = result === null ? set : intersect(result, set);
       if (result.size === 0) break;
+    }
+    for (const set of orUnions.values()) {
+      result = result === null ? set : intersect(result, set);
     }
     if (result === null) result = negatives.length ? new Set(data.ids) : new Set();
 
