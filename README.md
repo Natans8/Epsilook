@@ -6,9 +6,9 @@ Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
 
 Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
 AnimKit, animation or visual effect (beams searchable by texture and tint color,
-dissolves by texture, glows and shadowy effects by color, morphs by NPC
-name, model name, creature ID or display ID, summons by NPC name or creature
-ID) —
+dissolves by texture, glows, shadowy effects and model tints by color, morphs
+by NPC name, model name, creature ID or display ID, summons by NPC name or
+creature ID) —
 with spell icons, clickable cross-references, spell mechanic info, and one-click
 copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
 `.lookup object <model>`, `.lookup emote <anim>`, `.modify animkit <id>`, and more).
@@ -33,9 +33,9 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`,
   or by hex: `fx:#00b4ff`; the dot on a beam tag shows the chain's RGB
   tint), dissolve/materialize effects by texture (`fx:"dissolve arcane"`),
-  glow and shadowy overlay effects by color word or hex (`fx:"glow red"`,
-  `fx:shadowy` — color-only effects shown as a swatch + hex
-  code), and morphs (transform
+  glow and shadowy overlay effects and model tints by color word or hex
+  (`fx:"glow red"`, `fx:"tint green"`, `fx:shadowy` — color-only effects
+  shown as a swatch + hex code), and morphs (transform
   auras) by NPC name, model name, creature ID or display ID
   (`fx:"morph sheep"`). Morph tags show the model name
   and copy the display ID, a ready `.morph <displayID>` command, and a
@@ -43,7 +43,8 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   the morph in Wowhead's 3D model viewer. Summoned creatures search by NPC
   name, creature ID or control type (`fx:"summon argi"`, `fx:"summon 88807"`,
   `fx:"summon guardian"`); summon tags show the NPC name with how the summon
-  is controlled (guardian/pet/vehicle/…) and copy the creature ID, a ready
+  is controlled (guardian/pet/vehicle/… — click the control word to find all
+  summons of that type) and copy the creature ID, a ready
   `.lookup creature <name>` and a `.npc spawn <creatureID>` command; the
   Wowhead icon opens the NPC's Wowhead page.
 - `mech:` searches the Mechanics column — what a spell *does*: spell effect

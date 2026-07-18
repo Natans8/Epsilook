@@ -60,8 +60,8 @@ window.EpsilookSearch = (() => {
   }
 
   // Search visual FX corpora: beams (category word + hue + tint hex +
-  // textures), dissolves (category word + textures), glows and
-  // shadowy effects (category word + hue + color hexes), morphs
+  // textures), dissolves (category word + textures), glows, shadowy
+  // effects and model tints (category word + hue + color hexes), morphs
   // (category word + creature id/name + display ids + model paths) and
   // summons (category word + creature id/name + control word).
   function spellsByFx(tokens, data) {
@@ -76,6 +76,7 @@ window.EpsilookSearch = (() => {
     scan(data.dissolveSearchL, data.dissolveSpells);
     scan(data.glowSearchL, data.glowSpells);
     scan(data.shadowySearchL, data.shadowySpells);
+    scan(data.tintSearchL, data.tintSpells);
     scan(data.morphSearchL, data.morphSpells);
     scan(data.summonPairSearchL, data.summonPairSpells);
     return out;
