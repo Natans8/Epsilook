@@ -30,7 +30,7 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   the dot on a beam tag shows the chain's RGB tint), dissolve/materialize
   effects by texture (`fx:"dissolve arcane"`), and morphs (transform
   auras) by NPC name, model name, creature ID or display ID
-  (`fx:"morph sheep"`). Morph tags show the display ID with the model name
+  (`fx:"morph sheep"`). Morph tags show the model name
   and copy the display ID, a ready `.morph <displayID>` command, and a
   `.lookup display creature <model file>` command; the Wowhead icon opens
   the morph in Wowhead's 3D model viewer.

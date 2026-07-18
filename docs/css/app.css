@@ -556,9 +556,6 @@ td.expanded .kit-group.overflow { display: flex; }
 .tag.mechanic.aura .tag-label { color: #d9c584; }
 .tag.fx .tag-label, .tag.fx-head .tag-label { color: var(--fx); }
 
-/* dimmed numeric ID leading a pill label (morph display IDs) */
-.tag-id { color: var(--text-dim); font-size: 0.85em; margin-right: 0.35em; }
-
 /* tint dot on beam texture pills — the chain's own RGB */
 .fx-swatch {
   flex: none;
