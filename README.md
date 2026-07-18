@@ -26,7 +26,9 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
 - Field tags narrow a term to one field: `name:` `model:` `sound:` `soundkit:`
   `animkit:` `anim:` `fx:` `mech:` `id:` — type the prefix or click a field button.
   Tags combine with AND: `model:missile name:fire` finds fire-named spells that use
-  a missile model.
+  a missile model. Exception: several tags of the same exact-ID field (`id:`,
+  `soundkit:`, `animkit:`) combine with OR — two `id:` tags could never both
+  match one spell.
 - `fx:` searches the Effects column — beam/chain effects by category word
   (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`,
   or by hex: `fx:#00b4ff`; the dot on a beam tag shows the chain's RGB
@@ -39,9 +41,9 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   and copy the display ID, a ready `.morph <displayID>` command, and a
   `.lookup display creature <model file>` command; the Wowhead icon opens
   the morph in Wowhead's 3D model viewer. Summoned creatures search by NPC
-  name or creature ID (`fx:"summon argi"`, `fx:"summon 88807"`); summon
-  tags show the NPC name with how the summon is controlled
-  (guardian/pet/vehicle/…) and copy the creature ID, a ready
+  name, creature ID or control type (`fx:"summon argi"`, `fx:"summon 88807"`,
+  `fx:"summon guardian"`); summon tags show the NPC name with how the summon
+  is controlled (guardian/pet/vehicle/…) and copy the creature ID, a ready
   `.lookup creature <name>` and a `.npc spawn <creatureID>` command; the
   Wowhead icon opens the NPC's Wowhead page.
 - `mech:` searches the Mechanics column — what a spell *does*: spell effect
