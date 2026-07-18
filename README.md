@@ -44,7 +44,9 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   current search always lives in the URL — the 🔗 Share button copies it.
 - The ▶ on a sound file plays it in the browser (click again to stop).
 - Hovering a beam or dissolve texture tag shows the texture itself in a
-  floating preview (fetched on demand, nothing is preloaded).
+  floating preview (fetched on demand, nothing is preloaded). Beam previews
+  are shown with the chain's tint applied — the color the beam actually has
+  in game.
 
 ## Development
 

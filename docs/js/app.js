@@ -1408,7 +1408,12 @@
     const base = file.base ? stripExt(file.base) : "";
     const txt = el("button", "tag-label", base || "(untextured)");
     txt.title = `${file.path || "(no texture)"}\nClick: find spells with this beam texture\nShift-click: exclude them instead`;
-    if (entry.fid) txt.dataset.texFid = entry.fid;
+    if (entry.fid) {
+      txt.dataset.texFid = entry.fid;
+      // the hover preview multiplies the texture by the chain's tint
+      if (entry.color !== 0xffffff)
+        txt.dataset.texTint = "#" + entry.color.toString(16).padStart(6, "0");
+    }
     // category word + texture: the query stays scoped to beams once more
     // fx categories exist ("fx:beam lightning" style)
     txt.dataset.search = file.base ? `fx:"beam ${file.base}"` : "";
@@ -1483,8 +1488,8 @@
   // js-blp + bufo libs (the same decoder wago.tools' own file viewer uses).
   // Fetched only after a short hover-intent delay, cached per session
   // (a failed fid caches as null and stays silent).
-  const texCache = new Map(); // fid -> Promise<canvas|null>
-  let texHoverFid = 0;
+  const texCache = new Map(); // fid -> Promise<canvas|null> (untinted base)
+  let texHoverKey = "";       // fid|tint of the pill being hovered
   let texHoverTimer = 0;
 
   function textureCanvas(fid) {
@@ -1521,13 +1526,31 @@
   }
 
   function hideTexPreview() {
-    texHoverFid = 0;
+    texHoverKey = "";
     clearTimeout(texHoverTimer);
     const panel = $("#texpreview");
     if (panel) panel.style.display = "none";
   }
 
-  function showTexPreview(label, canvas) {
+  // beam tint: texture.rgb × tint.rgb (how the game colors chain textures),
+  // keeping the texture's own alpha
+  function tintedCanvas(base, tint) {
+    const cv = document.createElement("canvas");
+    cv.width = base.width;
+    cv.height = base.height;
+    const ctx = cv.getContext("2d");
+    ctx.drawImage(base, 0, 0);
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = tint;
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.globalCompositeOperation = "destination-in";
+    ctx.drawImage(base, 0, 0); // multiply fills alpha — restore the base's
+    return cv;
+  }
+
+  function showTexPreview(label, baseCanvas) {
+    const tint = label.dataset.texTint || "";
+    const canvas = tint ? tintedCanvas(baseCanvas, tint) : baseCanvas;
     const max = CFG.texturePreviewMax || 256;
     const scale = Math.min(1, max / canvas.width, max / canvas.height);
     canvas.style.width = Math.round(canvas.width * scale) + "px";
@@ -1535,7 +1558,8 @@
 
     const panel = texPanel();
     panel.firstChild.replaceChildren(canvas);
-    panel.lastChild.textContent = `${canvas.width}×${canvas.height}`;
+    panel.lastChild.textContent = `${canvas.width}×${canvas.height}`
+      + (tint ? ` · tint ${tint}` : "");
     // place above the pill (native title tooltips pop below the cursor),
     // measured invisibly first; fall back to below at the viewport top
     panel.style.visibility = "hidden";
@@ -1557,12 +1581,13 @@
       const label = e.target.closest("[data-tex-fid]");
       if (!label) return;
       const fid = Number(label.dataset.texFid);
-      if (fid === texHoverFid) return;
+      const key = fid + "|" + (label.dataset.texTint || "");
+      if (key === texHoverKey) return;
       hideTexPreview();
-      texHoverFid = fid;
+      texHoverKey = key;
       texHoverTimer = setTimeout(async () => {
         const canvas = await textureCanvas(fid);
-        if (canvas && texHoverFid === fid && label.isConnected) showTexPreview(label, canvas);
+        if (canvas && texHoverKey === key && label.isConnected) showTexPreview(label, canvas);
       }, 150);
     });
     results.addEventListener("mouseout", (e) => {
