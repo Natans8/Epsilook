@@ -62,6 +62,8 @@ TABLES = [
     "BeamEffect",
     "DissolveEffect",
     "TextureBlendSet",
+    "EdgeGlowEffect",
+    "ShadowyEffect",
     "CreatureDisplayInfo",
     "CreatureModelData",
 ]
@@ -115,7 +117,9 @@ ENUM_FILES = ["SpellEffect", "SpellEffectAura"]
 EFFECT_TYPE_PROC = 1      # Effect = SpellProceduralEffect.ID
 EFFECT_TYPE_SOUND = 5     # Effect = SoundKitID
 EFFECT_TYPE_ANIM = 6      # Effect = SpellVisualAnim.ID
+EFFECT_TYPE_SHADOWY = 7   # Effect = ShadowyEffect.ID
 EFFECT_TYPE_DISSOLVE = 11 # Effect = DissolveEffect.ID
+EFFECT_TYPE_EDGE_GLOW = 12 # Effect = EdgeGlowEffect.ID
 EFFECT_TYPE_BEAM = 13     # Effect = BeamEffect.ID
 
 # SpellProceduralEffect.Type whose Value_0 is a SpellChainEffects ID
@@ -528,6 +532,29 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             blendset_tex.get(to_int(tbs_id), ()),
         )
 
+    # edge glows: EffectType 12 -> EdgeGlowEffect. The color is float RGB
+    # 0..1 (alpha/multiplier/fade columns skipped — renderer tuning); the
+    # color is the whole visible payload, packed like the chain tints.
+    def float_channel(v: str) -> int:
+        return max(0, min(255, round(float(v or 0) * 255)))
+
+    glow_rows: dict[int, int] = {}  # EdgeGlowEffect.ID -> packed RGB
+    for gid, r, g, b in read_table(
+        table_dir, "EdgeGlowEffect", ["ID", "GlowRed", "GlowGreen", "GlowBlue"]
+    ):
+        glow_rows[to_int(gid)] = (
+            (float_channel(r) << 16) | (float_channel(g) << 8) | float_channel(b)
+        )
+
+    # shadowy effects: EffectType 7 -> ShadowyEffect, two packed colors
+    # stored as signed int32 ARGB — the alpha byte is masked off
+    shadowy_rows: dict[int, tuple[int, int]] = {}  # ID -> (primary, secondary)
+    for eid, primary, secondary in read_table(
+        table_dir, "ShadowyEffect", ["ID", "PrimaryColor", "SecondaryColor"]
+    ):
+        shadowy_rows[to_int(eid)] = (to_int(primary) & 0xFFFFFF,
+                                     to_int(secondary) & 0xFFFFFF)
+
     chain_cols = (
         ["ID", "Red", "Green", "Blue", "SoundKitID"]
         + [f"TextureFileDataID_{i}" for i in range(3)]
@@ -554,6 +581,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     kit_animkits: dict[int, set[int]] = defaultdict(set)
     kit_chains: dict[int, set[int]] = defaultdict(set)
     kit_dissolves: dict[int, set[int]] = defaultdict(set)
+    kit_glows: dict[int, set[int]] = defaultdict(set)
+    kit_shadowies: dict[int, set[int]] = defaultdict(set)
     for kit_id, effect_type, effect in read_table(
         table_dir, "SpellVisualKitEffect", ["ParentSpellVisualKitID", "EffectType", "Effect"]
     ):
@@ -573,6 +602,12 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         elif et == EFFECT_TYPE_DISSOLVE:
             if e in dissolve_rows:  # a missing row carries nothing to show
                 kit_dissolves[k].add(e)
+        elif et == EFFECT_TYPE_EDGE_GLOW:
+            if e in glow_rows:
+                kit_glows[k].add(e)
+        elif et == EFFECT_TYPE_SHADOWY:
+            if e in shadowy_rows:
+                kit_shadowies[k].add(e)
 
     # soundkit -> sound file ids
     soundkit_files: dict[int, set[int]] = defaultdict(set)
@@ -676,6 +711,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     spell_animkits: dict[int, set[int]] = defaultdict(set)        # spell -> animkit ids
     spell_chains: dict[int, set[int]] = defaultdict(set)          # spell -> chain effect ids
     spell_dissolves: dict[int, set[int]] = defaultdict(set)       # spell -> dissolve effect ids
+    spell_glows: dict[int, set[int]] = defaultdict(set)           # spell -> edge glow ids
+    spell_shadowies: dict[int, set[int]] = defaultdict(set)       # spell -> shadowy effect ids
     orphan_spells = 0  # SpellXSpellVisual rows whose SpellID has no SpellName entry
 
     for spell_id, visuals in spell_visuals.items():
@@ -694,6 +731,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 spell_animkits[spell_id].update(kit_animkits.get(k, ()))
                 spell_chains[spell_id].update(kit_chains.get(k, ()))
                 spell_dissolves[spell_id].update(kit_dissolves.get(k, ()))
+                spell_glows[spell_id].update(kit_glows.get(k, ()))
+                spell_shadowies[spell_id].update(kit_shadowies.get(k, ()))
                 for sk in kit_soundkits.get(k, ()):
                     for f in soundkit_files.get(sk, ()):
                         spell_sounds[spell_id].add((sk, f))
@@ -813,6 +852,23 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     dissolve_ids = sorted(used_dissolves)
     dissolve_tex_rows = sorted((e, f) for e in used_dissolves for f in dissolve_rows[e][1])
 
+    # edge glows / shadowy effects: color-only rows — same packed RGB + hue
+    # word treatment as the chain tints (hex search happens app-side)
+    def unpack_rgb(c: int) -> tuple[int, int, int]:
+        return (c >> 16) & 255, (c >> 8) & 255, c & 255
+
+    glow_row_pairs = sorted((s, g) for s, gs in spell_glows.items() for g in gs)
+    glow_ids = sorted({g for gs in spell_glows.values() for g in gs})
+    glow_hues = [hue_word(*unpack_rgb(glow_rows[g])) for g in glow_ids]
+
+    shadowy_row_pairs = sorted((s, e) for s, es in spell_shadowies.items() for e in es)
+    shadowy_ids = sorted({e for es in spell_shadowies.values() for e in es})
+    shadowy_hues = []
+    for e in shadowy_ids:
+        p, sc = shadowy_rows[e]
+        hues = dict.fromkeys(h for h in (hue_word(*unpack_rgb(p)), hue_word(*unpack_rgb(sc))) if h)
+        shadowy_hues.append(" ".join(hues))
+
     # only animkits that spells actually use
     used_animkits = {a for aks in spell_animkits.values() for a in aks}
     kit_anim_rows = sorted(
@@ -826,7 +882,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     pack = {
         "meta": {
-            "format": 9,
+            "format": 10,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
@@ -849,6 +905,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "fxChains": len(fx_chain_ids),
                 "spellDissolves": len(dissolve_row_pairs),
                 "dissolves": len(dissolve_ids),
+                "spellGlows": len(glow_row_pairs),
+                "glows": len(glow_ids),
+                "spellShadowies": len(shadowy_row_pairs),
+                "shadowies": len(shadowy_ids),
                 "icons": len(icon_names),
             },
         },
@@ -916,6 +976,29 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "dissolveIds": [r[0] for r in dissolve_tex_rows],
             "fids": [r[1] for r in dissolve_tex_rows],
         },
+        # edge glows (EdgeGlowEffect via kit EffectType 12): color-only —
+        # no texture or model, the packed RGB is the whole payload
+        "spellGlows": {
+            "spellIds": [r[0] for r in glow_row_pairs],
+            "glowIds": [r[1] for r in glow_row_pairs],
+        },
+        "glows": {
+            "ids": glow_ids,
+            "colors": [glow_rows[g] for g in glow_ids],
+            "hues": glow_hues,
+        },
+        # shadowy effects (ShadowyEffect via kit EffectType 7): two packed
+        # colors per row; hues joins both colors' hue words
+        "spellShadowies": {
+            "spellIds": [r[0] for r in shadowy_row_pairs],
+            "shadowyIds": [r[1] for r in shadowy_row_pairs],
+        },
+        "shadowies": {
+            "ids": shadowy_ids,
+            "primaryColors": [shadowy_rows[e][0] for e in shadowy_ids],
+            "secondaryColors": [shadowy_rows[e][1] for e in shadowy_ids],
+            "hues": shadowy_hues,
+        },
         # morphs: transform auras reference a CREATURE (NPC entry); its
         # display ids come from TDB's creature_template_model, each display
         # resolving to a creature model file (fid 0 = unknown model)
@@ -939,7 +1022,9 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         f"models={len(model_rows):,}  sounds={len(sound_rows):,}  animkits={len(anim_rows):,}  "
         f"kitAnims={len(kit_anim_rows):,}  effects={len(effect_rows):,}  auras={len(aura_rows):,}  fx={len(fx_rows):,}  "
         f"fxChains={len(fx_chain_ids):,}  dissolves={len(dissolve_row_pairs):,} "
-        f"({len(dissolve_ids):,} rows)  morphs={len(morph_rows):,} "
+        f"({len(dissolve_ids):,} rows)  glows={len(glow_row_pairs):,} "
+        f"({len(glow_ids):,} rows)  shadowies={len(shadowy_row_pairs):,} "
+        f"({len(shadowy_ids):,} rows)  morphs={len(morph_rows):,} "
         f"({len(morph_display_rows):,} displays)  icons={len(icon_names):,}  "
         f"orphan visual spells={orphan_spells:,}  [{time.time() - t0:.1f}s]"
     )

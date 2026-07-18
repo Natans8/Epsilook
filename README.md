@@ -6,7 +6,8 @@ Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
 
 Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
 AnimKit, animation or visual effect (beams searchable by texture and tint color,
-dissolves by texture, morphs by NPC name, model name, creature ID or display ID) —
+dissolves by texture, edge glows and shadowy effects by color, morphs by NPC
+name, model name, creature ID or display ID) —
 with spell icons, clickable cross-references, spell mechanic info, and one-click
 copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
 `.lookup object <model>`, `.lookup emote <anim>`, `.modify animkit <id>`, and more).
@@ -26,9 +27,12 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   Tags combine with AND: `model:missile name:fire` finds fire-named spells that use
   a missile model.
 - `fx:` searches the Effects column — beam/chain effects by category word
-  (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`;
-  the dot on a beam tag shows the chain's RGB tint), dissolve/materialize
-  effects by texture (`fx:"dissolve arcane"`), and morphs (transform
+  (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`,
+  or by hex: `fx:#00b4ff`; the dot on a beam tag shows the chain's RGB
+  tint), dissolve/materialize effects by texture (`fx:"dissolve arcane"`),
+  edge glow and shadowy overlay effects by color word or hex (`fx:"edge
+  glow red"`, `fx:shadowy` — color-only effects shown as a swatch + hex
+  code), and morphs (transform
   auras) by NPC name, model name, creature ID or display ID
   (`fx:"morph sheep"`). Morph tags show the model name
   and copy the display ID, a ready `.morph <displayID>` command, and a
