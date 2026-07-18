@@ -213,8 +213,8 @@ window.EpsilookData = (() => {
       }
     }
 
-    // edge glows (EdgeGlowEffect rows): color-only, no texture or model.
-    // Corpus: "edge glow" + hue + hex — fx:"edge glow red" / fx:#ff5800.
+    // glows (EdgeGlowEffect rows): color-only, no texture or model.
+    // Corpus: "glow" + hue + hex — fx:"glow red" / fx:#ff5800.
     const spellGlows = new Map();   // spell id -> [glowId]
     const glowSpells = new Map();   // glowId -> [spell id]
     const glowColors = new Map();   // glowId -> packed RGB
@@ -229,7 +229,7 @@ window.EpsilookData = (() => {
       for (let i = 0; i < g.ids.length; i++) {
         glowColors.set(g.ids[i], g.colors[i]);
         glowSearchL.set(g.ids[i],
-          ("edge glow " + g.hues[i] + " " + hexColor(g.colors[i])).trim());
+          ("glow " + g.hues[i] + " " + hexColor(g.colors[i])).trim());
       }
     }
 

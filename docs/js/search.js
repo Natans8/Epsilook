@@ -60,7 +60,7 @@ window.EpsilookSearch = (() => {
   }
 
   // Search visual FX corpora: beams (category word + hue + tint hex +
-  // textures), dissolves (category word + textures), edge glows and
+  // textures), dissolves (category word + textures), glows and
   // shadowy effects (category word + hue + color hexes), morphs
   // (category word + creature id/name + display ids + model paths) and
   // summons (category word + creature id/name + control word).

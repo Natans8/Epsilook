@@ -6,7 +6,7 @@ Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
 
 Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
 AnimKit, animation or visual effect (beams searchable by texture and tint color,
-dissolves by texture, edge glows and shadowy effects by color, morphs by NPC
+dissolves by texture, glows and shadowy effects by color, morphs by NPC
 name, model name, creature ID or display ID, summons by NPC name or creature
 ID) —
 with spell icons, clickable cross-references, spell mechanic info, and one-click
@@ -33,8 +33,8 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`,
   or by hex: `fx:#00b4ff`; the dot on a beam tag shows the chain's RGB
   tint), dissolve/materialize effects by texture (`fx:"dissolve arcane"`),
-  edge glow and shadowy overlay effects by color word or hex (`fx:"edge
-  glow red"`, `fx:shadowy` — color-only effects shown as a swatch + hex
+  glow and shadowy overlay effects by color word or hex (`fx:"glow red"`,
+  `fx:shadowy` — color-only effects shown as a swatch + hex
   code), and morphs (transform
   auras) by NPC name, model name, creature ID or display ID
   (`fx:"morph sheep"`). Morph tags show the model name
@@ -53,8 +53,10 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
 - The whole bar selects like plain text — mouse, Ctrl+A, or Shift+arrows — and
   Ctrl+C copies the selection as query text (`model:book note anim:read`), ready
   to paste back into any Epsilook search bar.
-- Click any tag in the results to search for it (Shift-click to exclude it). The
-  current search always lives in the URL — the 🔗 Share button copies it.
+- Click any tag in the results to search for it (Shift-click to exclude it) —
+  including an Effects category label ("beam", "glow", …), which finds every
+  spell with that kind of effect. The current search — "Only spells with"
+  filters included — always lives in the URL; the 🔗 Share button copies it.
 - Appending `&export=json` or `&export=csv` to a shared URL downloads the
   query's results directly on page load (same content as the Export buttons;
   hidden columns are excluded either way).

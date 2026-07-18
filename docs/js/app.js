@@ -717,9 +717,12 @@
     state.lastQuery = raw;
 
     // too little typed to search — counted on the searched tokens, so field
-    // prefixes don't count but an unknown "word:" (literal text) does
+    // prefixes don't count but an unknown "word:" (literal text) does.
+    // Exact-ID tags (id: soundkit: animkit:) always count as enough: IDs
+    // below 10 are a single keystroke and the lookup is exact and cheap
     const groups = currentGroups();
-    const typed = groups.reduce((n, g) => n + g.tokens.reduce((m, t) => m + t.text.length, 0), 0);
+    const typed = groups.reduce((n, g) => n + g.tokens.reduce((m, t) =>
+      m + ((Search.FIELDS[g.field] || {}).orGroups ? CFG.minQueryLength : t.text.length), 0), 0);
     if (typed < CFG.minQueryLength) {
       state.results = [];
       state.groups = [];
@@ -1084,7 +1087,7 @@
   }
 
   /* Effects cell: visual FX grouped by category — "beam" (chain effects),
-   * "dissolve" (dissolve effects), "edge glow" / "shadowy" (color-only
+   * "dissolve" (dissolve effects), "glow" / "shadowy" (color-only
    * effects), "morph" (transform auras) and "summon" (summon effects);
    * future categories (tints, …) become more groups here. Beam pills carry
    * a tint dot per texture. */
@@ -1153,10 +1156,10 @@
         entries.push({ glowId: id, color });
       }
       cats.push({
-        name: "edge glow",
+        name: "glow",
         hit: glowIds.some((id) => glowIsHit(id)),
         items: hitsFirst(entries, (e) => glowIsHit(e.glowId))
-          .map((e) => () => colorFxTag("edge glow", e.color, glowIsHit(e.glowId))),
+          .map((e) => () => colorFxTag("glow", e.color, glowIsHit(e.glowId))),
       });
     }
     if (shadowyIds.length) {
@@ -1457,12 +1460,12 @@
   }
 
   /* Visual FX tags: the category head ("beam") and one pill per texture,
-   * with a dot showing the chain's tint (hidden when untinted). The head
-   * is a plain label — clicking it would just search the whole category. */
+   * with a dot showing the chain's tint (hidden when untinted). Clicking
+   * the head searches the whole category (fx:beam). */
   const FX_HEAD_TITLES = {
     beam: "Beam / chain effect (SpellChainEffects)",
     dissolve: "Dissolve / materialize effect (DissolveEffect)",
-    "edge glow": "Edge glow / rim-light effect (EdgeGlowEffect)",
+    glow: "Edge glow / rim-light effect (EdgeGlowEffect)",
     shadowy: "Shadowy overlay effect (ShadowyEffect)",
     morph: "Morph / transform aura (CreatureDisplayInfo)",
     summon: "Summoned creature (SpellEffect SUMMON)",
@@ -1471,8 +1474,10 @@
   function fxHeadTag(category, hit) {
     const tag = el("span", "tag fx-head");
     if (hit) tag.classList.add("hit");
-    const label = el("span", "tag-label", category);
-    label.title = FX_HEAD_TITLES[category] || "";
+    const label = el("button", "tag-label", category);
+    label.title = `${FX_HEAD_TITLES[category] || ""}`
+      + `\nClick: find all spells with a ${category} effect\nShift-click: exclude them instead`;
+    label.dataset.search = /\s/.test(category) ? `fx:"${category}"` : `fx:${category}`;
     tag.appendChild(label);
     return tag;
   }
@@ -1510,7 +1515,7 @@
     return tag;
   }
 
-  /* Color-only fx pill (edge glow / shadowy): swatch + hex label — these
+  /* Color-only fx pill (glow / shadowy): swatch + hex label — these
    * effects have no texture or model, the color is the whole payload.
    * Clicking searches the category + hex; ⧉ copies the hex. */
   function colorFxTag(category, color, hit) {
@@ -1785,7 +1790,7 @@
           textures: (d.dissolveTextures.get(c) || []).map(pathOf),
           duration: d.dissolveDurations.get(c) || null,
         }))).concat((d.spellGlows.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
-          type: "edge glow",
+          type: "glow",
           color: "#" + (d.glowColors.get(c) ?? 0).toString(16).padStart(6, "0"),
         }))).concat((d.spellShadowies.get(id) || []).slice().sort((a, b) => a - b).map((c) => {
           const sh = d.shadowyColors.get(c) || { primary: 0, secondary: 0 };
@@ -1875,7 +1880,7 @@
             return `summon: ${e.creature || "?"} (creature ${e.creatureId})`
               + (e.control ? ` [${e.control}]` : "");
           }
-          if (e.color || e.colors) // color-only fx (edge glow / shadowy)
+          if (e.color || e.colors) // color-only fx (glow / shadowy)
             return `${e.type}: ${e.color || e.colors.join(" | ")}`;
           return `${e.type}: ${e.textures.join(" | ") || "(untextured)"}`
             + (e.tint ? ` (${e.tint})` : "") + (e.duration ? ` (${e.duration}s)` : "");
@@ -1955,6 +1960,10 @@
       params.push("v=" + encodeQueryValue(shortVersion(state.version.id)));
     }
     if (state.lastQuery) params.push("q=" + encodeQueryValue(state.lastQuery));
+    // the "Only spells with" filters shape the shared result list just like
+    // the query does, so they ride in the URL too
+    const only = Object.keys(state.filters).filter((k) => state.filters[k]);
+    if (only.length) params.push("only=" + only.join(","));
     const url = location.pathname + (params.length ? "?" + params.join("&") : "");
     if (url === location.pathname + location.search && !location.hash) return;
     // pushState (unlike the old location.hash assignment) fires no event,
@@ -1974,7 +1983,17 @@
     if (legacyMode && isChipField(legacyMode) && q && !/[a-z]+:/i.test(q)) {
       q = `${legacyMode}:${/\s/.test(q) ? `"${q}"` : q}`;
     }
-    return { v: get("v"), q };
+    return { v: get("v"), q, only: get("only") };
+  }
+
+  // set the "Only spells with" filters from the URL's only= list (absent
+  // = all off) and sync the checkboxes
+  function filtersFromUrl(str) {
+    const wanted = new Set((str || "").split(","));
+    for (const k of Object.keys(state.filters)) state.filters[k] = wanted.has(k);
+    for (const box of document.querySelectorAll("#filters input[type=checkbox]")) {
+      box.checked = state.filters[box.dataset.filter];
+    }
   }
 
   // A shared link may search a field whose column is hidden here —
@@ -2379,11 +2398,13 @@
     $("#export-json").addEventListener("click", exportJson);
     $("#export-discord").addEventListener("click", exportDiscord);
 
-    // filters
+    // filters — part of the shareable state, so the URL follows (a push:
+    // Back undoes the toggle like it undoes a search)
     for (const box of document.querySelectorAll("#filters input[type=checkbox]")) {
       box.addEventListener("change", () => {
         state.filters[box.dataset.filter] = box.checked;
         applyFiltersAndSort();
+        stateToUrl(true);
       });
     }
 
@@ -2439,9 +2460,10 @@
     }
   }
 
-  /* Hide table columns and their "Only spells with" filters, and sync the
-   * checkboxes. Field buttons stay visible — clicking one un-hides its
-   * column via ensureFieldVisible. */
+  /* Hide table columns and sync the checkboxes. Field buttons stay
+   * visible — clicking one un-hides its column via ensureFieldVisible.
+   * The "Only spells with" filters are independent of column visibility:
+   * they narrow the result list whether or not the column is shown. */
   function applyHiddenCols() {
     const table = $("#results");
     for (const [col, hidden] of Object.entries(state.hiddenCols)) {
@@ -2449,16 +2471,6 @@
     }
     for (const box of document.querySelectorAll("#columns input[type=checkbox]")) {
       box.checked = !state.hiddenCols[box.dataset.col];
-    }
-    // a hidden column's filter makes no sense — hide it and switch it off
-    for (const box of document.querySelectorAll("#filters input[type=checkbox]")) {
-      const col = box.dataset.filter;
-      const hidden = !!state.hiddenCols[col];
-      box.closest("label").hidden = hidden;
-      if (hidden && state.filters[col]) {
-        state.filters[col] = false;
-        box.checked = false;
-      }
     }
   }
 
@@ -2517,6 +2529,7 @@
   function applyUrl({ push }) {
     const h = urlToState();
     loadQueryString(h.q);
+    filtersFromUrl(h.only);
     // no v= in the URL means the default version, not "keep the current
     // one" — back/forward must return from an explicitly-chosen pack
     const wanted = findVersion(h.v) || defaultVersion();
@@ -2562,6 +2575,7 @@
     const autoExport = (new URLSearchParams(location.search).get("export") || "").toLowerCase();
     const entry = findVersion(h.v) || defaultVersion();
     loadQueryString(h.q);
+    filtersFromUrl(h.only);
     await activateVersion(entry);
     if (autoExport === "json") exportJson();
     else if (autoExport === "csv") exportCsv();
