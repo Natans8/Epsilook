@@ -50,6 +50,8 @@ TABLES = [
     "SpellChainEffects",
     "SpellProceduralEffect",
     "BeamEffect",
+    "CreatureDisplayInfo",
+    "CreatureModelData",
 ]
 
 # Animation names indexed by AnimID (Stand=0, ...), maintained by wow.tools
@@ -71,6 +73,9 @@ EFFECT_TYPE_BEAM = 13     # Effect = BeamEffect.ID
 
 # SpellProceduralEffect.Type whose Value_0 is a SpellChainEffects ID
 PROC_TYPE_CHAIN = 26
+
+# SpellEffectAura value whose EffectMiscValue_0 is a CreatureDisplayID
+AURA_TRANSFORM = 56
 
 csv.field_size_limit(10_000_000)
 
@@ -311,11 +316,13 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
             animkit_anims[k].add(a)
 
     # spell -> effect enum ids, plus aura enum ids (EffectAura — meaningful
-    # mostly on APPLY_AURA-family effects; any nonzero value is kept)
+    # mostly on APPLY_AURA-family effects; any nonzero value is kept). For
+    # transform auras the misc value is the CreatureDisplayID to morph into.
     spell_effects: dict[int, set[int]] = defaultdict(set)
     spell_auras: dict[int, set[int]] = defaultdict(set)
-    for spell_id, effect, aura in read_table(
-        table_dir, "SpellEffect", ["SpellID", "Effect", "EffectAura"]
+    spell_morphs: dict[int, set[int]] = defaultdict(set)  # spell -> display ids
+    for spell_id, effect, aura, misc0 in read_table(
+        table_dir, "SpellEffect", ["SpellID", "Effect", "EffectAura", "EffectMiscValue_0"]
     ):
         s, e, a = to_int(spell_id), to_int(effect), to_int(aura)
         if s not in spell_names:
@@ -324,6 +331,23 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
             spell_effects[s].add(e)
         if a:
             spell_auras[s].add(a)
+        if a == AURA_TRANSFORM:
+            display_id = int(float(misc0)) if misc0 else 0
+            if display_id > 0:
+                spell_morphs[s].add(display_id)
+
+    # display id -> model file id (CreatureDisplayInfo -> CreatureModelData);
+    # old spells reference display ids long since removed from the client —
+    # those keep fid 0 and show as a bare "#id" pill
+    model_fid: dict[int, int] = {}
+    for mid, fid in read_table(table_dir, "CreatureModelData", ["ID", "FileDataID"]):
+        model_fid[to_int(mid)] = to_int(fid)
+    morph_fid: dict[int, int] = {}
+    used_morphs = {m for morphs in spell_morphs.values() for m in morphs}
+    for did, mid in read_table(table_dir, "CreatureDisplayInfo", ["ID", "ModelID"]):
+        d = to_int(did)
+        if d in used_morphs:
+            morph_fid[d] = model_fid.get(to_int(mid), 0)
 
     # spell -> icon file id (SpellMisc; prefer the base-difficulty row)
     spell_icon_fid: dict[int, int] = {}
@@ -372,6 +396,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
         referenced_fids.update(f for _, f in pairs)
     for c in used_chains:
         referenced_fids.update(chain_rows[c][4])
+    referenced_fids.update(f for f in morph_fid.values() if f)
 
     # icon fids resolve through the same listfile pass but stay out of the
     # pack's files table (they become iconNames instead)
@@ -468,12 +493,14 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
         (k, a) for k, anims in animkit_anims.items() if k in used_animkits for a in anims)
     effect_rows = sorted((s, e) for s, effs in spell_effects.items() for e in effs)
     aura_rows = sorted((s, a) for s, auras in spell_auras.items() for a in auras)
+    morph_rows = sorted((s, m) for s, morphs in spell_morphs.items() for m in morphs)
+    morph_display_ids = sorted(used_morphs)
     effect_names = read_enum_names("SpellEffect", version)
     aura_names = read_enum_names("SpellEffectAura", version)
 
     pack = {
         "meta": {
-            "format": 4,
+            "format": 5,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
@@ -489,6 +516,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
                 "spellEffects": len(effect_rows),
                 "spellAuras": len(aura_rows),
                 "spellFx": len(fx_rows),
+                "spellMorphs": len(morph_rows),
+                "morphs": len(morph_display_ids),
                 "fxChains": len(fx_chain_ids),
                 "icons": len(icon_names),
             },
@@ -541,13 +570,23 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
             "chainIds": [r[0] for r in fx_tex_rows],
             "fids": [r[1] for r in fx_tex_rows],
         },
+        # morphs: transform auras' CreatureDisplayIDs; each resolves to a
+        # creature model file (fid 0 = display removed from this build)
+        "spellMorphs": {
+            "spellIds": [r[0] for r in morph_rows],
+            "displayIds": [r[1] for r in morph_rows],
+        },
+        "morphs": {
+            "displayIds": morph_display_ids,
+            "fids": [morph_fid.get(m, 0) for m in morph_display_ids],
+        },
     }
 
     log(
         f"  spells={len(spell_ids):,}  files={len(file_ids):,} ({unnamed:,} unnamed)  "
         f"models={len(model_rows):,}  sounds={len(sound_rows):,}  animkits={len(anim_rows):,}  "
         f"kitAnims={len(kit_anim_rows):,}  effects={len(effect_rows):,}  auras={len(aura_rows):,}  fx={len(fx_rows):,}  "
-        f"fxChains={len(fx_chain_ids):,}  icons={len(icon_names):,}  "
+        f"fxChains={len(fx_chain_ids):,}  morphs={len(morph_rows):,}  icons={len(icon_names):,}  "
         f"orphan visual spells={orphan_spells:,}  [{time.time() - t0:.1f}s]"
     )
     return pack

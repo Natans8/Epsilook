@@ -551,6 +551,8 @@ td.expanded .kit-group.overflow { display: flex; }
 .tag.animkit .tag-label { color: var(--animkit); }
 .tag.anim .tag-label { color: #d8b4e8; }
 .tag.mechanic .tag-label { color: #e0a878; }
+/* aura mechanics: same family as spell effects, one shade apart */
+.tag.mechanic.aura .tag-label { color: #d9c584; }
 .tag.fx .tag-label, .tag.fx-head .tag-label { color: var(--fx); }
 
 /* tint dot on beam texture pills — the chain's own RGB */

@@ -5,7 +5,8 @@ Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
 **Live at [natans8.github.io/Epsilook](https://natans8.github.io/Epsilook/).**
 
 Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
-AnimKit, animation or visual effect (beams, searchable by texture and tint color) —
+AnimKit, animation or visual effect (beams searchable by texture and tint color,
+morphs by creature model name or display ID) —
 with spell icons, clickable cross-references, spell mechanic info, and one-click
 copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
 `.lookup object <model>`, `.lookup emote <anim>`, `.modify animkit <id>`, and more).
@@ -24,9 +25,11 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   `animkit:` `anim:` `fx:` `mech:` `id:` — type the prefix or click a field button.
   Tags combine with AND: `model:missile name:fire` finds fire-named spells that use
   a missile model.
-- `fx:` searches the Effects column — beam/chain effects, by category word
-  (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`).
-  The dot on a beam tag shows the chain's RGB tint.
+- `fx:` searches the Effects column — beam/chain effects by category word
+  (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`;
+  the dot on a beam tag shows the chain's RGB tint), and morphs (transform
+  auras) by creature model name or display ID (`fx:"morph wolf"`). Morph tags
+  copy the display ID and a ready `.morph <displayID>` command.
 - `mech:` searches the Mechanics column — what a spell *does*: spell effect
   names (`mech:resurrect`, `mech:school_damage`) and aura names for
   aura-applying spells (`mech:mod_stun`, `mech:periodic_damage`).
