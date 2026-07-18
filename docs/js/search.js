@@ -61,8 +61,9 @@ window.EpsilookSearch = (() => {
 
   // Search visual FX corpora: beams (category word + hue + tint hex +
   // textures), dissolves (category word + textures), edge glows and
-  // shadowy effects (category word + hue + color hexes) and morphs
-  // (category word + creature id/name + display ids + model paths).
+  // shadowy effects (category word + hue + color hexes), morphs
+  // (category word + creature id/name + display ids + model paths) and
+  // summons (category word + creature id/name).
   function spellsByFx(tokens, data) {
     const out = new Set();
     const scan = (searchLMap, spellsMap) => {
@@ -76,6 +77,7 @@ window.EpsilookSearch = (() => {
     scan(data.glowSearchL, data.glowSpells);
     scan(data.shadowySearchL, data.shadowySpells);
     scan(data.morphSearchL, data.morphSpells);
+    scan(data.summonSearchL, data.summonSpells);
     return out;
   }
 

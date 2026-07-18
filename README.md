@@ -7,7 +7,8 @@ Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
 Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
 AnimKit, animation or visual effect (beams searchable by texture and tint color,
 dissolves by texture, edge glows and shadowy effects by color, morphs by NPC
-name, model name, creature ID or display ID) —
+name, model name, creature ID or display ID, summons by NPC name or creature
+ID) —
 with spell icons, clickable cross-references, spell mechanic info, and one-click
 copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
 `.lookup object <model>`, `.lookup emote <anim>`, `.modify animkit <id>`, and more).
@@ -37,7 +38,12 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   (`fx:"morph sheep"`). Morph tags show the model name
   and copy the display ID, a ready `.morph <displayID>` command, and a
   `.lookup display creature <model file>` command; the Wowhead icon opens
-  the morph in Wowhead's 3D model viewer.
+  the morph in Wowhead's 3D model viewer. Summoned creatures search by NPC
+  name or creature ID (`fx:"summon argi"`, `fx:"summon 88807"`); summon
+  tags show the NPC name with how the summon is controlled
+  (guardian/pet/vehicle/…) and copy the creature ID, a ready
+  `.lookup creature <name>` and a `.npc spawn <creatureID>` command; the
+  Wowhead icon opens the NPC's Wowhead page.
 - `mech:` searches the Mechanics column — what a spell *does*: spell effect
   names (`mech:resurrect`, `mech:school_damage`) and aura names for
   aura-applying spells (`mech:mod_stun`, `mech:periodic_damage`).
@@ -88,7 +94,7 @@ The script downloads the raw game tables from [wago.tools](https://wago.tools) (
 export), the community listfile from
 [wowdev/wow-listfile](https://github.com/wowdev/wow-listfile), and the
 [TrinityCore TDB](https://github.com/TrinityCore/TrinityCore/releases) matching
-the build (server-side creature data for morphs, plus Blizzard's post-ship
+the build (server-side creature data for morphs and summons, plus Blizzard's post-ship
 hotfix rows, which override the wago rows). It walks the
 spell → visual → model/sound/animkit/chain-effect chains, resolves effect and
 aura enum names from [WoWDBDefs](https://github.com/wowdev/WoWDBDefs)
@@ -99,7 +105,7 @@ wago/listfile sources. Extracting the TDB archive (a one-time step per version)
 needs [7-Zip](https://www.7-zip.org/) on the PATH or in Program Files.
 
 **Adding another game version** is the same command with a different `--version`
-(any build listed on wago.tools). For morphs and hotfixes to resolve, also map
+(any build listed on wago.tools). For morph/summon names and hotfixes to resolve, also map
 the version to its TDB release in `TDB_RELEASES` at the top of `build_data.py`
 (without it the build still succeeds, minus that data). The version dropdown
 appears automatically once more than one pack exists.
@@ -120,7 +126,7 @@ Edit `docs/js/config.js` — `spellCommands` for per-spell buttons,
 ## Data sources
 
 - Game tables: [wago.tools](https://wago.tools) CSV export, build 9.2.7.45745
-- Server-side data (creature names/displays for morphs) and post-ship hotfix
+- Server-side data (creature names/displays for morphs and summons) and post-ship hotfix
   rows: [TrinityCore TDB](https://github.com/TrinityCore/TrinityCore/releases)
   for the same build
 - File names: [community listfile](https://github.com/wowdev/wow-listfile)
