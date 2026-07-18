@@ -43,6 +43,8 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
 - Click any tag in the results to search for it (Shift-click to exclude it). The
   current search always lives in the URL — the 🔗 Share button copies it.
 - The ▶ on a sound file plays it in the browser (click again to stop).
+- Hovering a beam or dissolve texture tag shows the texture itself in a
+  floating preview (fetched on demand, nothing is preloaded).
 
 ## Development
 
@@ -52,6 +54,8 @@ docs/                  the site (GitHub Pages serves this folder)
   js/search.js         query parser + search field registry
   js/data.js           pack loading + in-memory index building
   js/app.js            UI wiring
+  js/bufo.js           vendored: byte-buffer reader (Kruithne/node-bufo, MIT)
+  js/js-blp.js         vendored: BLP texture decoder (Kruithne/js-blp, MIT)
   data/<version>/      one data pack per game version + versions.json manifest
 build/build_data.py    regenerates the data packs (Python 3, stdlib only)
 ```
@@ -118,3 +122,10 @@ Edit `docs/js/config.js` — `spellCommands` for per-spell buttons,
   the current retail build, so the rare file removed from the game since the
   pack's version won't play. `soundPlayUrl` / `soundVolume` in
   `docs/js/config.js` tune or disable it.
+- Texture hover previews: hovering a beam/dissolve texture tag fetches the raw
+  `.blp` from [wago.tools](https://wago.tools)' CASC API (pinned to the pack's
+  build via `?version=`) and decodes it in the browser with the vendored
+  [js-blp](https://github.com/Kruithne/js-blp) library — the same decoder
+  wago.tools' own file viewer uses. Fetched only on hover, cached for the
+  session. `texturePreviewUrl` / `texturePreviewMax` in `docs/js/config.js`
+  tune or disable it.

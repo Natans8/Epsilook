@@ -832,3 +832,32 @@ footer a { color: var(--text-dim); }
   header, main, footer { padding-left: 0.8rem; padding-right: 0.8rem; }
   .c-cmds { width: auto; }
 }
+
+/* ------------------------------------------- texture hover preview */
+
+#texpreview {
+  position: fixed;
+  z-index: 30;
+  display: none;
+  padding: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  pointer-events: none; /* never traps the mouse away from the pill */
+}
+/* checkerboard behind the canvas so alpha reads as alpha */
+#texpreview .tex-img {
+  line-height: 0;
+  background: repeating-conic-gradient(#1c232e 0% 25%, #10141b 0% 50%) 0 0 / 16px 16px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+#texpreview canvas { display: block; }
+#texpreview .tex-dims {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-align: right;
+  line-height: 1;
+}
