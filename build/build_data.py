@@ -60,6 +60,9 @@ TABLES = [
     "SpellChainEffects",
     "SpellProceduralEffect",
     "BeamEffect",
+    "SpellEffectEmission",
+    "SpellVisualKitAreaModel",
+    "BarrageEffect",
     "DissolveEffect",
     "TextureBlendSet",
     "EdgeGlowEffect",
@@ -118,9 +121,16 @@ EFFECT_TYPE_PROC = 1      # Effect = SpellProceduralEffect.ID
 EFFECT_TYPE_SOUND = 5     # Effect = SoundKitID
 EFFECT_TYPE_ANIM = 6      # Effect = SpellVisualAnim.ID
 EFFECT_TYPE_SHADOWY = 7   # Effect = ShadowyEffect.ID
+EFFECT_TYPE_EMISSION = 8  # Effect = SpellEffectEmission.ID (area-model emitter)
 EFFECT_TYPE_DISSOLVE = 11 # Effect = DissolveEffect.ID
 EFFECT_TYPE_EDGE_GLOW = 12 # Effect = EdgeGlowEffect.ID
 EFFECT_TYPE_BEAM = 13     # Effect = BeamEffect.ID
+EFFECT_TYPE_BARRAGE = 17  # Effect = BarrageEffect.ID (multi-model volley)
+# Of the remaining SpellVisualKitEffectType values (survey 2026-07-18):
+# 2 (SpellVisualKitModelAttach) is 100% redundant with the
+# ParentSpellVisualKitID walk; 10 (UnitSoundType) plays the TARGET unit's
+# own sound — no concrete file; 19 (ScreenEffect) has zero sound-bearing
+# rows in 9.2.7; 15/20 are absent; the rest carry no model/sound columns.
 
 # SpellProceduralEffect.Type whose Value_0 is a SpellChainEffects ID
 PROC_TYPE_CHAIN = 26
@@ -445,6 +455,27 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         if k and fid:
             kit_models[k].add(fid)
 
+    # kit EffectType 8 -> SpellEffectEmission (particle-style emitter that
+    # spawns copies of an area model) -> SpellVisualKitAreaModel, which
+    # carries the model fid directly (no SpellVisualEffectName hop)
+    area_model_fid: dict[int, int] = {}
+    for am_id, model_fid_s in read_table(
+        table_dir, "SpellVisualKitAreaModel", ["ID", "ModelFileDataID"]
+    ):
+        area_model_fid[to_int(am_id)] = to_int(model_fid_s)
+
+    emission_fid: dict[int, int] = {}  # SpellEffectEmission.ID -> model fid
+    for em_id, am_id in read_table(table_dir, "SpellEffectEmission", ["ID", "AreaModelID"]):
+        emission_fid[to_int(em_id)] = area_model_fid.get(to_int(am_id), 0)
+
+    # kit EffectType 17 -> BarrageEffect (volley of N models) -> model via
+    # the usual SpellVisualEffectName hop (count/cone columns skipped)
+    barrage_fid: dict[int, int] = {}  # BarrageEffect.ID -> model fid
+    for b_id, en_id in read_table(
+        table_dir, "BarrageEffect", ["ID", "SpellVisualEffectNameID"]
+    ):
+        barrage_fid[to_int(b_id)] = effect_name_model.get(to_int(en_id), 0)
+
     # visual -> missile payload (SpellVisual.SpellVisualMissileSetID /
     # RaidSpellVisualMissileSetID -> SpellVisualMissile rows sharing that set).
     # Each missile carries a model (via SpellVisualEffectName), and sometimes
@@ -608,6 +639,14 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         elif et == EFFECT_TYPE_SHADOWY:
             if e in shadowy_rows:
                 kit_shadowies[k].add(e)
+        elif et == EFFECT_TYPE_EMISSION:
+            fid = emission_fid.get(e, 0)
+            if fid:
+                kit_models[k].add(fid)
+        elif et == EFFECT_TYPE_BARRAGE:
+            fid = barrage_fid.get(e, 0)
+            if fid:
+                kit_models[k].add(fid)
 
     # soundkit -> sound file ids
     soundkit_files: dict[int, set[int]] = defaultdict(set)
@@ -882,7 +921,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     pack = {
         "meta": {
-            "format": 10,
+            "format": 11,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
