@@ -189,6 +189,21 @@ window.EpsilookData = (() => {
     const effectNamesL = new Map(
       [...effectNames].map(([k, v]) => [k, v.toLowerCase()]));
 
+    // aura mechanics (SpellEffectAura enum id -> name without SPELL_AURA_)
+    const spellAuras = new Map();  // spell id -> [aura enum id]
+    const auraSpells = new Map();  // aura enum id -> [spell id]
+    {
+      const { spellIds, auras } = pack.spellAuras;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellAuras, spellIds[i], auras[i]);
+        pushTo(auraSpells, auras[i], spellIds[i]);
+      }
+    }
+    const auraNames = new Map(
+      Object.entries(pack.auraNames).map(([k, v]) => [Number(k), v]));
+    const auraNamesL = new Map(
+      [...auraNames].map(([k, v]) => [k, v.toLowerCase()]));
+
     // fids referenced as models / as sounds (search scopes)
     const modelFids = [...modelSpells.keys()];
     const soundFids = [...soundSpells.keys()];
@@ -204,6 +219,7 @@ window.EpsilookData = (() => {
       animNames, animNamesL, animKitAnims, animAnimKits,
       spellFx, fxSpells, fxChains, fxTextures, fxSearchL,
       spellEffects, effectSpells, effectNames, effectNamesL,
+      spellAuras, auraSpells, auraNames, auraNamesL,
     };
   }
 

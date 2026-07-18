@@ -157,6 +157,10 @@ window.EpsilookSearch = (() => {
           if (!textMatches(nameL, tokens)) continue;
           for (const s of data.effectSpells.get(effectId) || []) out.add(s);
         }
+        for (const [auraId, nameL] of data.auraNamesL) {
+          if (!textMatches(nameL, tokens)) continue;
+          for (const s of data.auraSpells.get(auraId) || []) out.add(s);
+        }
         return out;
       },
     },
