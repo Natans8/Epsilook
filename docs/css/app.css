@@ -518,7 +518,7 @@ td.empty { text-align: center; vertical-align: middle; }
 .kit-files .tag, .c-models .tag { font-size: 0.78em; }
 .kit-files .tag-label, .c-models .tag-label { padding: 0.06rem 0.4rem; }
 .kit-files .tag-copy, .c-models .tag-copy { padding: 0.26rem 0.35rem 0.06rem 0.3rem; } /* +0.2rem top = the baseline nudge */
-.c-models .tag-view { padding: 0.26rem 0.3rem 0.06rem 0.45rem; }
+.c-models .tag-view { padding: 0.06rem 0.3rem 0.06rem 0.45rem; }
 .kit-files .tag-play { padding: 0.06rem 0.32rem; }
 .kit-group.overflow { display: none; }
 td.expanded .kit-group.overflow { display: flex; }
@@ -617,18 +617,16 @@ td.expanded .kit-group.overflow { display: flex; }
 .tag-play.loading { animation: play-pulse 0.9s ease-in-out infinite; }
 @keyframes play-pulse { 50% { opacity: 0.35; } }
 
-/* 3d on model tags — links out to the WoW.tools model viewer. Baseline
-   text like .tag-copy (same asymmetric-padding sink), but on the pill's
-   left edge like ▶. */
+/* cube icon on model tags — links out to the WoW.tools model viewer. An
+   SVG glyph like ▶ (flex-centered, symmetric padding), on the pill's
+   left edge. */
 .tag-view {
-  padding: 0.32rem 0.4rem 0.12rem 0.5rem;
+  padding: 0.12rem 0.4rem 0.12rem 0.5rem;
   color: var(--text-dim);
   border-right: 1px solid var(--border);
-  font-family: Consolas, "Cascadia Mono", monospace;
-  font-size: 0.82em;
-  white-space: nowrap;
   text-decoration: none;
 }
+.tag-view svg { width: 0.95em; height: 0.95em; display: block; }
 .tag-view:hover { color: var(--gold); background: rgba(240, 195, 76, 0.1); text-decoration: none; }
 
 /* the pill's corners curve inward — edge buttons need extra outer padding
