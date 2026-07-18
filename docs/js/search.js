@@ -60,7 +60,7 @@ window.EpsilookSearch = (() => {
   }
 
   // Search visual FX corpora: beams (category word + hue + textures) and
-  // morphs (category word + display id + creature model path).
+  // morphs (category word + creature id/name + display ids + model paths).
   function spellsByFx(tokens, data) {
     const out = new Set();
     for (const [chainId, searchL] of data.fxSearchL) {
