@@ -751,7 +751,8 @@
         (!f.models || d.spellModels.has(id)) &&
         (!f.sounds || d.spellSounds.has(id)) &&
         (!f.animkits || d.spellAnimKits.has(id)) &&
-        (!f.fx || d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellMorphs.has(id)));
+        (!f.fx || d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellGlows.has(id)
+          || d.spellShadowies.has(id) || d.spellMorphs.has(id)));
     } else {
       list = list.slice();
     }
@@ -1083,16 +1084,19 @@
   }
 
   /* Effects cell: visual FX grouped by category — "beam" (chain effects),
-   * "dissolve" (dissolve effects) and "morph" (transform auras); future
-   * categories (tints, …) become more groups here. Beam pills carry a
-   * tint dot per texture. */
+   * "dissolve" (dissolve effects), "edge glow" / "shadowy" (color-only
+   * effects) and "morph" (transform auras); future categories (tints, …)
+   * become more groups here. Beam pills carry a tint dot per texture. */
   function fxCell(spellId) {
     const d = state.data;
     const chainIds = d.spellFx.get(spellId) || [];
     const dissolveIds = d.spellDissolves.get(spellId) || [];
+    const glowIds = d.spellGlows.get(spellId) || [];
+    const shadowyIds = d.spellShadowies.get(spellId) || [];
     const morphIds = d.spellMorphs.get(spellId) || [];
     const td = el("td", "c-fx");
-    if (chainIds.length === 0 && dissolveIds.length === 0 && morphIds.length === 0) {
+    if (chainIds.length === 0 && dissolveIds.length === 0 && glowIds.length === 0
+        && shadowyIds.length === 0 && morphIds.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
       return td;
@@ -1134,6 +1138,42 @@
         name: "dissolve",
         hit: dissolveIds.some((id) => dissolveIsHit(id)),
         items: hitsFirst(entries, (e) => dissolveIsHit(e.dissolveId)).map((e) => () => dissolveTag(e)),
+      });
+    }
+    if (glowIds.length) {
+      // one pill per distinct color (no texture — the color is the payload)
+      const entries = [];
+      const seen = new Set();
+      for (const id of glowIds.slice().sort((a, b) => a - b)) {
+        const color = d.glowColors.get(id) ?? 0;
+        if (seen.has(color)) continue;
+        seen.add(color);
+        entries.push({ glowId: id, color });
+      }
+      cats.push({
+        name: "edge glow",
+        hit: glowIds.some((id) => glowIsHit(id)),
+        items: hitsFirst(entries, (e) => glowIsHit(e.glowId))
+          .map((e) => () => colorFxTag("edge glow", e.color, glowIsHit(e.glowId))),
+      });
+    }
+    if (shadowyIds.length) {
+      // one pill per distinct color across each row's primary + secondary
+      const entries = [];
+      const seen = new Set();
+      for (const id of shadowyIds.slice().sort((a, b) => a - b)) {
+        const c = d.shadowyColors.get(id) || { primary: 0, secondary: 0 };
+        for (const color of [c.primary, c.secondary]) {
+          if (seen.has(color)) continue;
+          seen.add(color);
+          entries.push({ shadowyId: id, color });
+        }
+      }
+      cats.push({
+        name: "shadowy",
+        hit: shadowyIds.some((id) => shadowyIsHit(id)),
+        items: hitsFirst(entries, (e) => shadowyIsHit(e.shadowyId))
+          .map((e) => () => colorFxTag("shadowy", e.color, shadowyIsHit(e.shadowyId))),
       });
     }
     if (morphIds.length) {
@@ -1201,6 +1241,16 @@
 
   function dissolveIsHit(dissolveId) {
     const corpus = state.data.dissolveSearchL.get(dissolveId) || "";
+    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+  }
+
+  function glowIsHit(glowId) {
+    const corpus = state.data.glowSearchL.get(glowId) || "";
+    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+  }
+
+  function shadowyIsHit(shadowyId) {
+    const corpus = state.data.shadowySearchL.get(shadowyId) || "";
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
@@ -1394,6 +1444,8 @@
   const FX_HEAD_TITLES = {
     beam: "Beam / chain effect (SpellChainEffects)",
     dissolve: "Dissolve / materialize effect (DissolveEffect)",
+    "edge glow": "Edge glow / rim-light effect (EdgeGlowEffect)",
+    shadowy: "Shadowy overlay effect (ShadowyEffect)",
     morph: "Morph / transform aura (CreatureDisplayInfo)",
   };
 
@@ -1436,6 +1488,28 @@
     tag.appendChild(txt);
 
     if (base) tag.appendChild(tagButton("⧉", `Copy texture name: ${base}`, base));
+    return tag;
+  }
+
+  /* Color-only fx pill (edge glow / shadowy): swatch + hex label — these
+   * effects have no texture or model, the color is the whole payload.
+   * Clicking searches the category + hex; ⧉ copies the hex. */
+  function colorFxTag(category, color, hit) {
+    const hex = "#" + color.toString(16).padStart(6, "0");
+    const tag = el("span", "tag fx");
+    if (hit) tag.classList.add("hit");
+
+    const dot = el("span", "fx-swatch");
+    dot.style.background = hex;
+    tag.appendChild(dot);
+
+    const txt = el("button", "tag-label", hex);
+    txt.title = `${FX_HEAD_TITLES[category]}\nColor ${hex}`
+      + `\nClick: find spells with this ${category} color\nShift-click: exclude them instead`;
+    txt.dataset.search = `fx:"${category} ${hex}"`;
+    tag.appendChild(txt);
+
+    tag.appendChild(tagButton("⧉", `Copy color: ${hex}`, hex));
     return tag;
   }
 
@@ -1654,7 +1728,17 @@
           type: "dissolve",
           textures: (d.dissolveTextures.get(c) || []).map(pathOf),
           duration: d.dissolveDurations.get(c) || null,
-        }))).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+        }))).concat((d.spellGlows.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+          type: "edge glow",
+          color: "#" + (d.glowColors.get(c) ?? 0).toString(16).padStart(6, "0"),
+        }))).concat((d.spellShadowies.get(id) || []).slice().sort((a, b) => a - b).map((c) => {
+          const sh = d.shadowyColors.get(c) || { primary: 0, secondary: 0 };
+          return {
+            type: "shadowy",
+            colors: [sh.primary, sh.secondary].map(
+              (v) => "#" + v.toString(16).padStart(6, "0")),
+          };
+        })).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
           type: "morph",
           creatureId: c,
           creature: d.morphNames.get(c) || null,
@@ -1719,11 +1803,16 @@
         cols.push(esc(r.animKits.map((k) => `${k.id}: ${k.anims.join(" | ")}`).join("; ")));
       }
       if (!hc.fx) {
-        cols.push(esc(r.fx.map((e) => e.type === "morph"
-          ? `morph: ${e.creature || "?"} (creature ${e.creatureId}): `
-            + (e.displays.map((disp) => `${disp.displayId}=${disp.model || "?"}`).join(" | ") || "?")
-          : `${e.type}: ${e.textures.join(" | ") || "(untextured)"}`
-            + (e.tint ? ` (${e.tint})` : "") + (e.duration ? ` (${e.duration}s)` : "")).join("; ")));
+        cols.push(esc(r.fx.map((e) => {
+          if (e.type === "morph") {
+            return `morph: ${e.creature || "?"} (creature ${e.creatureId}): `
+              + (e.displays.map((disp) => `${disp.displayId}=${disp.model || "?"}`).join(" | ") || "?");
+          }
+          if (e.color || e.colors) // color-only fx (edge glow / shadowy)
+            return `${e.type}: ${e.color || e.colors.join(" | ")}`;
+          return `${e.type}: ${e.textures.join(" | ") || "(untextured)"}`
+            + (e.tint ? ` (${e.tint})` : "") + (e.duration ? ` (${e.duration}s)` : "");
+        }).join("; ")));
       }
       if (!hc.mechanics) cols.push(esc(r.mechanics.join("; ")));
       lines.push(cols.join(","));

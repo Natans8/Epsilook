@@ -150,9 +150,13 @@ window.EpsilookData = (() => {
       }
     }
 
+    // packed RGB -> "#rrggbb" (the form fx corpora carry, so hex queries
+    // like fx:#ff5800 — or just a hex prefix — match by substring)
+    const hexColor = (c) => "#" + c.toString(16).padStart(6, "0");
+
     // visual FX: chain/beam effects. Each chain has a tint (0xFFFFFF =
     // untinted), a hue word, textures (fids into `files`), and a lowercase
-    // search corpus: "beam" + hue + texture paths.
+    // search corpus: "beam" + hue + tint hex + texture paths.
     const spellFx = new Map();     // spell id -> [chainId]
     const fxSpells = new Map();    // chainId -> [spell id]
     const fxChains = new Map();    // chainId -> {color, hue}
@@ -175,7 +179,9 @@ window.EpsilookData = (() => {
       for (const [c, info] of fxChains) {
         const tex = (fxTextures.get(c) || [])
           .map((fid) => (files.get(fid) || { searchL: "" }).searchL).join(" ");
-        fxSearchL.set(c, ("beam " + info.hue + " " + tex).trim());
+        // 0xFFFFFF = untinted ("the texture's own color"), not white — no hex
+        const hex = info.color === 0xffffff ? "" : hexColor(info.color);
+        fxSearchL.set(c, ("beam " + info.hue + " " + hex + " " + tex).trim());
       }
     }
 
@@ -204,6 +210,47 @@ window.EpsilookData = (() => {
         const tex = (dissolveTextures.get(id) || [])
           .map((fid) => (files.get(fid) || { searchL: "" }).searchL).join(" ");
         dissolveSearchL.set(id, ("dissolve " + tex).trim());
+      }
+    }
+
+    // edge glows (EdgeGlowEffect rows): color-only, no texture or model.
+    // Corpus: "edge glow" + hue + hex — fx:"edge glow red" / fx:#ff5800.
+    const spellGlows = new Map();   // spell id -> [glowId]
+    const glowSpells = new Map();   // glowId -> [spell id]
+    const glowColors = new Map();   // glowId -> packed RGB
+    const glowSearchL = new Map();  // glowId -> search corpus
+    {
+      const { spellIds, glowIds } = pack.spellGlows;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellGlows, spellIds[i], glowIds[i]);
+        pushTo(glowSpells, glowIds[i], spellIds[i]);
+      }
+      const g = pack.glows;
+      for (let i = 0; i < g.ids.length; i++) {
+        glowColors.set(g.ids[i], g.colors[i]);
+        glowSearchL.set(g.ids[i],
+          ("edge glow " + g.hues[i] + " " + hexColor(g.colors[i])).trim());
+      }
+    }
+
+    // shadowy effects (ShadowyEffect rows): two colors per row, no texture.
+    // Corpus: "shadowy" + hue words + both hexes.
+    const spellShadowies = new Map();  // spell id -> [shadowyId]
+    const shadowySpells = new Map();   // shadowyId -> [spell id]
+    const shadowyColors = new Map();   // shadowyId -> {primary, secondary}
+    const shadowySearchL = new Map();  // shadowyId -> search corpus
+    {
+      const { spellIds, shadowyIds } = pack.spellShadowies;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellShadowies, spellIds[i], shadowyIds[i]);
+        pushTo(shadowySpells, shadowyIds[i], spellIds[i]);
+      }
+      const sh = pack.shadowies;
+      for (let i = 0; i < sh.ids.length; i++) {
+        const primary = sh.primaryColors[i], secondary = sh.secondaryColors[i];
+        shadowyColors.set(sh.ids[i], { primary, secondary });
+        shadowySearchL.set(sh.ids[i],
+          ("shadowy " + sh.hues[i] + " " + hexColor(primary) + " " + hexColor(secondary)).trim());
       }
     }
 
@@ -285,6 +332,8 @@ window.EpsilookData = (() => {
       animNames, animNamesL, animKitAnims, animAnimKits,
       spellFx, fxSpells, fxChains, fxTextures, fxSearchL,
       spellDissolves, dissolveSpells, dissolveDurations, dissolveTextures, dissolveSearchL,
+      spellGlows, glowSpells, glowColors, glowSearchL,
+      spellShadowies, shadowySpells, shadowyColors, shadowySearchL,
       spellMorphs, morphSpells, morphNames, morphDisplays, morphSearchL,
       spellEffects, effectSpells, effectNames, effectNamesL,
       spellAuras, auraSpells, auraNames, auraNamesL,

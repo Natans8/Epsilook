@@ -59,23 +59,23 @@ window.EpsilookSearch = (() => {
     return out;
   }
 
-  // Search visual FX corpora: beams (category word + hue + textures),
-  // dissolves (category word + textures) and morphs (category word +
-  // creature id/name + display ids + model paths).
+  // Search visual FX corpora: beams (category word + hue + tint hex +
+  // textures), dissolves (category word + textures), edge glows and
+  // shadowy effects (category word + hue + color hexes) and morphs
+  // (category word + creature id/name + display ids + model paths).
   function spellsByFx(tokens, data) {
     const out = new Set();
-    for (const [chainId, searchL] of data.fxSearchL) {
-      if (!textMatches(searchL, tokens)) continue;
-      for (const s of data.fxSpells.get(chainId) || []) out.add(s);
-    }
-    for (const [dissolveId, searchL] of data.dissolveSearchL) {
-      if (!textMatches(searchL, tokens)) continue;
-      for (const s of data.dissolveSpells.get(dissolveId) || []) out.add(s);
-    }
-    for (const [displayId, searchL] of data.morphSearchL) {
-      if (!textMatches(searchL, tokens)) continue;
-      for (const s of data.morphSpells.get(displayId) || []) out.add(s);
-    }
+    const scan = (searchLMap, spellsMap) => {
+      for (const [id, searchL] of searchLMap) {
+        if (!textMatches(searchL, tokens)) continue;
+        for (const s of spellsMap.get(id) || []) out.add(s);
+      }
+    };
+    scan(data.fxSearchL, data.fxSpells);
+    scan(data.dissolveSearchL, data.dissolveSpells);
+    scan(data.glowSearchL, data.glowSpells);
+    scan(data.shadowySearchL, data.shadowySpells);
+    scan(data.morphSearchL, data.morphSpells);
     return out;
   }
 
