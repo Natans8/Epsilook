@@ -497,8 +497,6 @@ td.empty { text-align: center; vertical-align: middle; }
 .c-sounds .kit-head { background: rgba(95, 175, 143, 0.10); }
 .c-animkits .kit-head { background: rgba(201, 154, 224, 0.09); }
 .c-fx .kit-head { background: rgba(127, 201, 208, 0.08); }
-/* the fx head is a category label, not a control — no hover affordance */
-.tag.fx-head .tag-label:hover { text-decoration: none; }
 .kit-head .tag, .kit-head .tag.hit { border: none; background: none; margin: 0; border-radius: 0; }
 .kit-group.hit { border-color: var(--gold-dim); }
 .kit-group.hit .kit-head { background: rgba(240, 195, 76, 0.13); }
