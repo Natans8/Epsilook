@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
 """Build the Epsilook data pack for one WoW game version.
 
-Downloads raw game tables (CSV export from wago.tools) and the community
-listfile (github.com/wowdev/wow-listfile), walks the spell -> visual ->
-model/sound/animkit relationship chains in plain Python, and emits a compact
-gzipped column-oriented JSON pack consumed by the web app.
+Data sources (hybrid, in priority order):
+  1. TrinityCore TDB (github.com/TrinityCore/TrinityCore releases) — the
+     server-side world database for this exact game build. Two roles:
+     a) world tables (creature_template, creature_template_model) are the
+        ONLY source for creature -> display id mapping (server-side data
+        the client never ships), used for morphs;
+     b) hotfixes tables carry the rows Blizzard hotfixed over the wire
+        after the client shipped — they override wago rows by row ID.
+  2. wago.tools CSV exports — the client db2 tables (visual/sound/anim
+     chains exist nowhere else).
+  3. The community listfile (github.com/wowdev/wow-listfile) for file names.
 
-Stdlib only. Downloads are cached under build/cache/ ; pass --refresh to
-force re-download.
+Stdlib only, plus 7-Zip (7z on PATH or in Program Files) to extract the TDB
+archive once. Downloads are cached under build/cache/ ; pass --refresh to
+force re-download of the wago/listfile sources.
 
 Usage:
     python build_data.py --version 9.2.7.45745 --label "Shadowlands 9.2.7"
@@ -53,6 +61,37 @@ TABLES = [
     "CreatureDisplayInfo",
     "CreatureModelData",
 ]
+
+# TrinityCore TDB release per game version (server-side world DB + hotfixes).
+TDB_RELEASES = {
+    "9.2.7.45745": {
+        "tag": "TDB927.22111",
+        "asset": "TDB_full_927.22111_2022_11_20.7z",
+        "world": "TDB_full_world_927.22111_2022_11_20.sql",
+        "hotfixes": "TDB_full_hotfixes_927.22111_2022_11_20.sql",
+    },
+}
+TDB_ASSET_URL = "https://github.com/TrinityCore/TrinityCore/releases/download/{tag}/{asset}"
+
+# Tables distilled out of the TDB SQL dumps into cached CSVs, with the
+# columns we keep. world tables are complete (server-only data); hotfixes
+# tables hold ONLY the rows Blizzard hotfixed post-ship — applied on top of
+# the wago rows by row ID (TDB is preferred wherever it has data).
+TDB_TABLES = {
+    "world": {
+        "creature_template": ["entry", "name"],
+        "creature_template_model": ["CreatureID", "Idx", "CreatureDisplayID", "Probability"],
+    },
+    "hotfixes": {
+        "spell_name": ["ID", "Name"],
+        "spell_x_spell_visual": ["ID", "SpellID", "SpellVisualID"],
+        "spell_visual_effect_name": ["ID", "ModelFileDataID"],
+        "spell_effect": ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1"],
+        "spell_misc": ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"],
+        "creature_display_info": ["ID", "ModelID"],
+        "creature_model_data": ["ID", "FileDataID"],
+    },
+}
 
 # Animation names indexed by AnimID (Stand=0, ...), maintained by wow.tools
 ANIMS_JS_URL = "https://raw.githubusercontent.com/Marlamin/wow.tools.local/main/wwwroot/js/anims.js"
@@ -101,7 +140,136 @@ def download(url: str, dest: Path, refresh: bool, headers: dict | None = None) -
     log(f"  saved    {dest.name} ({dest.stat().st_size:,} bytes)")
 
 
-def fetch_sources(version: str, refresh: bool) -> tuple[Path, Path]:
+def find_7z() -> str:
+    import shutil
+    for cand in (shutil.which("7z"), r"C:\Program Files\7-Zip\7z.exe", "/usr/bin/7z"):
+        if cand and Path(cand).exists():
+            return cand
+    sys.exit("error: 7-Zip (7z) is required to extract the TDB archive — install it "
+             "or place the extracted .sql files in the cache tdb dir yourself")
+
+
+def iter_insert_rows(line: str):
+    """Yield value tuples (lists of raw strings) from one INSERT ... VALUES line."""
+    i = line.find("VALUES")
+    if i < 0:
+        return
+    i += len("VALUES")
+    n = len(line)
+    while i < n:
+        while i < n and line[i] != "(":
+            i += 1
+        if i >= n:
+            return
+        i += 1
+        row, val, in_str = [], [], False
+        while i < n:
+            c = line[i]
+            if in_str:
+                if c == "\\":
+                    val.append(line[i + 1]); i += 2; continue
+                if c == "'":
+                    if i + 1 < n and line[i + 1] == "'":
+                        val.append("'"); i += 2; continue
+                    in_str = False; i += 1; continue
+                val.append(c); i += 1; continue
+            if c == "'":
+                in_str = True; i += 1; continue
+            if c == ",":
+                row.append("".join(val).strip()); val = []; i += 1; continue
+            if c == ")":
+                row.append("".join(val).strip()); i += 1
+                yield row
+                break
+            val.append(c); i += 1
+
+
+def distill_tdb_dump(sql_path: Path, want: dict[str, list[str]], out_dir: Path) -> None:
+    """Extract the wanted tables/columns from a TDB SQL dump into CSVs.
+
+    A table may legitimately have no INSERT (hotfixes only carry hotfixed
+    rows) — it still gets a header-only CSV so readers can stream it.
+    """
+    schemas: dict[str, list[str]] = {}
+    writers: dict[str, tuple] = {}
+    handles = []
+    with open(sql_path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if line.startswith("CREATE TABLE `"):
+                table = line.split("`")[1]
+                if table not in want:
+                    continue
+                cols = []
+                for defline in f:
+                    defline = defline.strip()
+                    if defline.startswith("`"):
+                        cols.append(defline.split("`")[1])
+                    else:
+                        break
+                schemas[table] = cols
+            elif line.startswith("INSERT INTO `"):
+                table = line.split("`")[1]
+                if table not in want:
+                    continue
+                if table not in writers:
+                    keep = want[table]
+                    idx = [schemas[table].index(c) for c in keep]
+                    fh = open(out_dir / f"{table}.csv", "w", newline="", encoding="utf-8")
+                    handles.append(fh)
+                    w = csv.writer(fh)
+                    w.writerow(keep)
+                    writers[table] = (w, idx, len(schemas[table]))
+                w, idx, ncols = writers[table]
+                for row in iter_insert_rows(line):
+                    if len(row) != ncols:
+                        sys.exit(f"error: {table} row has {len(row)} values, schema has {ncols}")
+                    w.writerow([row[i] for i in idx])
+    for fh in handles:
+        fh.close()
+    for table, keep in want.items():
+        if table not in schemas:
+            sys.exit(f"error: table {table} not found in {sql_path.name}")
+        if table not in writers:  # zero hotfixed rows — emit header only
+            with open(out_dir / f"{table}.csv", "w", newline="", encoding="utf-8") as fh:
+                csv.writer(fh).writerow(keep)
+
+
+def fetch_tdb(version: str) -> Path | None:
+    """Ensure the TDB tables for this version are distilled; return their dir.
+
+    The 117 MB archive is downloaded and the 700 MB SQL dumps parsed exactly
+    once — afterwards only the small distilled CSVs (and the archive) stay
+    in the cache. Returns None when no TDB release maps to this version.
+    """
+    rel = TDB_RELEASES.get(version)
+    if rel is None:
+        log(f"TDB: no release mapped for {version} — morphs will not resolve, "
+            f"hotfixes will not apply")
+        return None
+    tdb_dir = CACHE_DIR / f"tdb-{rel['tag']}"
+    wanted_csvs = [t for want in TDB_TABLES.values() for t in want]
+    if all((tdb_dir / f"{t}.csv").exists() for t in wanted_csvs):
+        log(f"TDB ({rel['tag']}): cached ({len(wanted_csvs)} distilled tables)")
+        return tdb_dir
+    tdb_dir.mkdir(parents=True, exist_ok=True)
+    archive = tdb_dir / rel["asset"]
+    download(TDB_ASSET_URL.format(**rel), archive, refresh=False)
+    dumps = {kind: tdb_dir / rel[kind] for kind in ("world", "hotfixes")}
+    if not all(p.exists() for p in dumps.values()):
+        log(f"  extracting {archive.name} ...")
+        import subprocess
+        r = subprocess.run([find_7z(), "x", "-y", f"-o{tdb_dir}", str(archive)],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            sys.exit(f"error: 7z extraction failed: {r.stderr[-500:]}")
+    for kind, sql_path in dumps.items():
+        log(f"  distilling {sql_path.name} ...")
+        distill_tdb_dump(sql_path, TDB_TABLES[kind], tdb_dir)
+        sql_path.unlink()  # the archive stays; the 460 MB text does not
+    return tdb_dir
+
+
+def fetch_sources(version: str, refresh: bool) -> tuple[Path, Path, Path | None]:
     """Ensure all table CSVs and the listfile are cached; return their dirs."""
     table_dir = CACHE_DIR / version
     log(f"Tables (wago.tools, build {version}):")
@@ -128,7 +296,9 @@ def fetch_sources(version: str, refresh: bool) -> tuple[Path, Path]:
         asset = next(a for a in release["assets"] if a["name"] == "community-listfile.csv")
         download(asset["browser_download_url"], listfile, refresh=True)
         (listfile_dir / "release-tag.txt").write_text(release["tag_name"])
-    return table_dir, listfile
+
+    tdb_dir = fetch_tdb(version)
+    return table_dir, listfile, tdb_dir
 
 
 # ------------------------------------------------------------------ parsing
@@ -194,13 +364,27 @@ def read_enum_names(name: str, version: str) -> dict[int, str]:
 
 # ----------------------------------------------------------------- pipeline
 
-def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -> dict:
+def hotfix_rows(tdb_dir: Path | None, table: str, columns: list[str]):
+    """Yield TDB hotfix rows for a db2 table (nothing when TDB is absent).
+
+    Hotfixes are the rows Blizzard changed server-side after the client
+    shipped — each replaces the wago row with the same row ID.
+    """
+    if tdb_dir is None:
+        return
+    yield from read_table(tdb_dir, table, columns)
+
+
+def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
+               tdb_dir: Path | None) -> dict:
     t0 = time.time()
 
     # --- spells -----------------------------------------------------------
     log("Reading SpellName / Spell ...")
     spell_names: dict[int, str] = {}
     for sid, name in read_table(table_dir, "SpellName", ["ID", "Name_lang"]):
+        spell_names[to_int(sid)] = name
+    for sid, name in hotfix_rows(tdb_dir, "spell_name", ["ID", "Name"]):
         spell_names[to_int(sid)] = name
 
     subtexts: dict[int, str] = {}
@@ -211,10 +395,18 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
 
     # --- visual chain lookups ---------------------------------------------
     log("Reading spell visual chain tables ...")
-    # spell -> visuals
+    # spell -> visuals (rows keyed by row ID so hotfixes can override)
+    sxv_rows: dict[int, tuple[int, int]] = {}
+    for rid, spell_id, visual_id in read_table(
+        table_dir, "SpellXSpellVisual", ["ID", "SpellID", "SpellVisualID"]
+    ):
+        sxv_rows[to_int(rid)] = (to_int(spell_id), to_int(visual_id))
+    for rid, spell_id, visual_id in hotfix_rows(
+        tdb_dir, "spell_x_spell_visual", ["ID", "SpellID", "SpellVisualID"]
+    ):
+        sxv_rows[to_int(rid)] = (to_int(spell_id), to_int(visual_id))
     spell_visuals: dict[int, set[int]] = defaultdict(set)
-    for spell_id, visual_id in read_table(table_dir, "SpellXSpellVisual", ["SpellID", "SpellVisualID"]):
-        s, v = to_int(spell_id), to_int(visual_id)
+    for s, v in sxv_rows.values():
         if s and v:
             spell_visuals[s].add(v)
 
@@ -228,6 +420,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
     # kit -> model file ids (via SpellVisualKitModelAttach -> SpellVisualEffectName)
     effect_name_model: dict[int, int] = {}
     for en_id, model_fid in read_table(table_dir, "SpellVisualEffectName", ["ID", "ModelFileDataID"]):
+        effect_name_model[to_int(en_id)] = to_int(model_fid)
+    for en_id, model_fid in hotfix_rows(tdb_dir, "spell_visual_effect_name", ["ID", "ModelFileDataID"]):
         effect_name_model[to_int(en_id)] = to_int(model_fid)
 
     kit_models: dict[int, set[int]] = defaultdict(set)
@@ -317,46 +511,83 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
 
     # spell -> effect enum ids, plus aura enum ids (EffectAura — meaningful
     # mostly on APPLY_AURA-family effects; any nonzero value is kept). For
-    # transform auras the misc value is the CreatureDisplayID to morph into.
+    # transform auras (56) the misc value is a CREATURE id (server-side NPC
+    # entry, per SpellAuraNames::SpecialMiscValue), NOT a display id.
+    se_rows: dict[int, tuple[int, int, int, int]] = {}
+    for rid, spell_id, effect, aura, misc0 in read_table(
+        table_dir, "SpellEffect", ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue_0"]
+    ):
+        se_rows[to_int(rid)] = (to_int(spell_id), to_int(effect), to_int(aura),
+                                int(float(misc0)) if misc0 else 0)
+    for rid, spell_id, effect, aura, misc0 in hotfix_rows(
+        tdb_dir, "spell_effect", ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1"]
+    ):
+        se_rows[to_int(rid)] = (to_int(spell_id), to_int(effect), to_int(aura),
+                                int(float(misc0)) if misc0 else 0)
+
     spell_effects: dict[int, set[int]] = defaultdict(set)
     spell_auras: dict[int, set[int]] = defaultdict(set)
-    spell_morphs: dict[int, set[int]] = defaultdict(set)  # spell -> display ids
-    for spell_id, effect, aura, misc0 in read_table(
-        table_dir, "SpellEffect", ["SpellID", "Effect", "EffectAura", "EffectMiscValue_0"]
-    ):
-        s, e, a = to_int(spell_id), to_int(effect), to_int(aura)
+    spell_morphs: dict[int, set[int]] = defaultdict(set)  # spell -> creature ids
+    for s, e, a, misc0 in se_rows.values():
         if s not in spell_names:
             continue
         if e:
             spell_effects[s].add(e)
         if a:
             spell_auras[s].add(a)
-        if a == AURA_TRANSFORM:
-            display_id = int(float(misc0)) if misc0 else 0
-            if display_id > 0:
-                spell_morphs[s].add(display_id)
+        if a == AURA_TRANSFORM and misc0 > 0:
+            spell_morphs[s].add(misc0)
+    del se_rows
 
-    # display id -> model file id (CreatureDisplayInfo -> CreatureModelData);
-    # old spells reference display ids long since removed from the client —
-    # those keep fid 0 and show as a bare "#id" pill
+    # creature -> name + display ids (TDB world tables — server-side data
+    # the client never ships; without TDB morph creatures stay unresolved)
+    creature_names: dict[int, str] = {}
+    creature_displays: dict[int, list[tuple[int, int]]] = defaultdict(list)
+    if tdb_dir is not None:
+        for entry, name in read_table(tdb_dir, "creature_template", ["entry", "name"]):
+            creature_names[to_int(entry)] = name
+        for cid, idx, did, _prob in read_table(
+            tdb_dir, "creature_template_model", ["CreatureID", "Idx", "CreatureDisplayID", "Probability"]
+        ):
+            creature_displays[to_int(cid)].append((to_int(idx), to_int(did)))
+        for displays in creature_displays.values():
+            displays.sort()
+
+    # display id -> model file id (CreatureDisplayInfo -> CreatureModelData)
+    display_model: dict[int, int] = {}
+    for did, mid in read_table(table_dir, "CreatureDisplayInfo", ["ID", "ModelID"]):
+        display_model[to_int(did)] = to_int(mid)
+    for did, mid in hotfix_rows(tdb_dir, "creature_display_info", ["ID", "ModelID"]):
+        display_model[to_int(did)] = to_int(mid)
     model_fid: dict[int, int] = {}
     for mid, fid in read_table(table_dir, "CreatureModelData", ["ID", "FileDataID"]):
         model_fid[to_int(mid)] = to_int(fid)
-    morph_fid: dict[int, int] = {}
-    used_morphs = {m for morphs in spell_morphs.values() for m in morphs}
-    for did, mid in read_table(table_dir, "CreatureDisplayInfo", ["ID", "ModelID"]):
-        d = to_int(did)
-        if d in used_morphs:
-            morph_fid[d] = model_fid.get(to_int(mid), 0)
+    for mid, fid in hotfix_rows(tdb_dir, "creature_model_data", ["ID", "FileDataID"]):
+        model_fid[to_int(mid)] = to_int(fid)
+
+    # flatten morph creatures to (creature, display, model fid) rows
+    used_creatures = {c for cs in spell_morphs.values() for c in cs}
+    morph_display_rows: list[tuple[int, int, int]] = []
+    for c in sorted(used_creatures):
+        for _idx, did in creature_displays.get(c, ()):
+            fid = model_fid.get(display_model.get(did, 0), 0)
+            morph_display_rows.append((c, did, fid))
 
     # spell -> icon file id (SpellMisc; prefer the base-difficulty row)
-    spell_icon_fid: dict[int, int] = {}
-    for spell_id, diff, icon_fid in read_table(
-        table_dir, "SpellMisc", ["SpellID", "DifficultyID", "SpellIconFileDataID"]
+    sm_rows: dict[int, tuple[int, int, int]] = {}
+    for rid, spell_id, diff, icon_fid in read_table(
+        table_dir, "SpellMisc", ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"]
     ):
-        s, d, f = to_int(spell_id), to_int(diff), to_int(icon_fid)
+        sm_rows[to_int(rid)] = (to_int(spell_id), to_int(diff), to_int(icon_fid))
+    for rid, spell_id, diff, icon_fid in hotfix_rows(
+        tdb_dir, "spell_misc", ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"]
+    ):
+        sm_rows[to_int(rid)] = (to_int(spell_id), to_int(diff), to_int(icon_fid))
+    spell_icon_fid: dict[int, int] = {}
+    for s, d, f in sm_rows.values():
         if s in spell_names and f and (s not in spell_icon_fid or d == 0):
             spell_icon_fid[s] = f
+    del sm_rows
 
     # --- walk the chains per spell ------------------------------------------
     log("Walking spell -> model/sound/animkit/chain chains ...")
@@ -396,7 +627,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
         referenced_fids.update(f for _, f in pairs)
     for c in used_chains:
         referenced_fids.update(chain_rows[c][4])
-    referenced_fids.update(f for f in morph_fid.values() if f)
+    referenced_fids.update(f for _, _, f in morph_display_rows if f)
 
     # icon fids resolve through the same listfile pass but stay out of the
     # pack's files table (they become iconNames instead)
@@ -493,19 +724,20 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
         (k, a) for k, anims in animkit_anims.items() if k in used_animkits for a in anims)
     effect_rows = sorted((s, e) for s, effs in spell_effects.items() for e in effs)
     aura_rows = sorted((s, a) for s, auras in spell_auras.items() for a in auras)
-    morph_rows = sorted((s, m) for s, morphs in spell_morphs.items() for m in morphs)
-    morph_display_ids = sorted(used_morphs)
+    morph_rows = sorted((s, c) for s, cs in spell_morphs.items() for c in cs)
+    morph_creature_ids = sorted(used_creatures)
     effect_names = read_enum_names("SpellEffect", version)
     aura_names = read_enum_names("SpellEffectAura", version)
 
     pack = {
         "meta": {
-            "format": 5,
+            "format": 6,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
             "listfileTag": (CACHE_DIR / "listfile" / "release-tag.txt").read_text().strip()
             if (CACHE_DIR / "listfile" / "release-tag.txt").exists() else "",
+            "tdbTag": TDB_RELEASES.get(version, {}).get("tag", "") if tdb_dir else "",
             "counts": {
                 "spells": len(spell_ids),
                 "files": len(file_ids),
@@ -517,7 +749,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
                 "spellAuras": len(aura_rows),
                 "spellFx": len(fx_rows),
                 "spellMorphs": len(morph_rows),
-                "morphs": len(morph_display_ids),
+                "morphs": len(morph_creature_ids),
+                "morphDisplays": len(morph_display_rows),
                 "fxChains": len(fx_chain_ids),
                 "icons": len(icon_names),
             },
@@ -570,15 +803,21 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
             "chainIds": [r[0] for r in fx_tex_rows],
             "fids": [r[1] for r in fx_tex_rows],
         },
-        # morphs: transform auras' CreatureDisplayIDs; each resolves to a
-        # creature model file (fid 0 = display removed from this build)
+        # morphs: transform auras reference a CREATURE (NPC entry); its
+        # display ids come from TDB's creature_template_model, each display
+        # resolving to a creature model file (fid 0 = unknown model)
         "spellMorphs": {
             "spellIds": [r[0] for r in morph_rows],
-            "displayIds": [r[1] for r in morph_rows],
+            "creatureIds": [r[1] for r in morph_rows],
         },
         "morphs": {
-            "displayIds": morph_display_ids,
-            "fids": [morph_fid.get(m, 0) for m in morph_display_ids],
+            "creatureIds": morph_creature_ids,
+            "names": [creature_names.get(c, "") for c in morph_creature_ids],
+        },
+        "morphDisplays": {
+            "creatureIds": [r[0] for r in morph_display_rows],
+            "displayIds": [r[1] for r in morph_display_rows],
+            "fids": [r[2] for r in morph_display_rows],
         },
     }
 
@@ -586,7 +825,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
         f"  spells={len(spell_ids):,}  files={len(file_ids):,} ({unnamed:,} unnamed)  "
         f"models={len(model_rows):,}  sounds={len(sound_rows):,}  animkits={len(anim_rows):,}  "
         f"kitAnims={len(kit_anim_rows):,}  effects={len(effect_rows):,}  auras={len(aura_rows):,}  fx={len(fx_rows):,}  "
-        f"fxChains={len(fx_chain_ids):,}  morphs={len(morph_rows):,}  icons={len(icon_names):,}  "
+        f"fxChains={len(fx_chain_ids):,}  morphs={len(morph_rows):,} "
+        f"({len(morph_display_rows):,} displays)  icons={len(icon_names):,}  "
         f"orphan visual spells={orphan_spells:,}  [{time.time() - t0:.1f}s]"
     )
     return pack
@@ -628,8 +868,8 @@ def main() -> None:
     args = ap.parse_args()
 
     label = args.label or args.version
-    table_dir, listfile = fetch_sources(args.version, args.refresh)
-    pack = build_pack(args.version, label, table_dir, listfile)
+    table_dir, listfile, tdb_dir = fetch_sources(args.version, args.refresh)
+    pack = build_pack(args.version, label, table_dir, listfile, tdb_dir)
     write_pack(pack, args.version, label)
 
 

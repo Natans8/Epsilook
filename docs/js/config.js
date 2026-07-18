@@ -24,8 +24,10 @@ window.EpsilookConfig = {
   // Copy command on each AnimKit tag ({id} = AnimKit ID).
   animKitCopyTemplate: ".modify animkit {id}",
 
-  // Copy command on each morph tag ({id} = CreatureDisplayID).
+  // Copy commands on each morph tag ({id} = CreatureDisplayID,
+  // {file} = model file name).
   morphCopyTemplate: ".morph {id}",
+  morphLookupTemplate: ".lookup display creature {file}",
 
   // External links ({id} = spell / soundkit ID).
   wowheadSpellUrl: "https://www.wowhead.com/spell={id}",

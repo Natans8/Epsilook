@@ -1118,11 +1118,16 @@
       });
     }
     if (morphIds.length) {
-      const ids = morphIds.slice().sort((a, b) => a - b);
+      // one pill per (creature, display); creatures without TDB displays
+      // still get a single fallback pill
+      const ids = hitsFirst(morphIds.slice().sort((a, b) => a - b), (c) => morphIsHit(c));
+      const entries = ids.flatMap((c) =>
+        (d.morphDisplays.get(c) || [{ displayId: 0, fid: 0 }])
+          .map((e) => ({ creatureId: c, displayId: e.displayId, fid: e.fid })));
       cats.push({
         name: "morph",
-        hit: morphIds.some((m) => morphIsHit(m)),
-        items: hitsFirst(ids, (m) => morphIsHit(m)).map((m) => () => morphTag(m)),
+        hit: morphIds.some((c) => morphIsHit(c)),
+        items: entries.map((e) => () => morphTag(e)),
       });
     }
 
@@ -1387,25 +1392,39 @@
     return tag;
   }
 
-  /* Morph pill: creature model name (or "#displayId" when the display no
-   * longer exists in this build), ⧉ copies the display ID, .morph the
-   * ready-to-paste command. */
-  function morphTag(displayId) {
+  /* Morph pill: one per (creature, display). Label = dimmed display ID +
+   * the creature model's file name; tooltip names the NPC the spell morphs
+   * into; ⧉ copies the display ID, .morph / .lo the ready-to-paste
+   * commands. Creatures without TDB data get an inert "creature #id" pill. */
+  function morphTag(entry) {
     const d = state.data;
-    const fid = d.morphFids.get(displayId) || 0;
+    const { creatureId, displayId, fid } = entry;
+    const name = d.morphNames.get(creatureId) || "";
     const file = fid ? (d.files.get(fid) || { path: "", base: "" }) : { path: "", base: "" };
     const tag = el("span", "tag fx");
-    if (morphIsHit(displayId)) tag.classList.add("hit");
+    if (morphIsHit(creatureId)) tag.classList.add("hit");
 
     const base = file.base ? stripExt(file.base) : "";
-    const txt = el("button", "tag-label", base || `#${displayId}`);
-    txt.title = `${file.path || "(model unknown — display id not in this build)"}\nCreatureDisplayID ${displayId}\nClick: find spells with this morph\nShift-click: exclude them instead`;
-    txt.dataset.search = `fx:"morph ${base || displayId}"`;
+    const txt = el("button", "tag-label");
+    if (base && displayId) txt.appendChild(el("span", "tag-id", String(displayId)));
+    txt.appendChild(document.createTextNode(
+      base || (displayId ? `#${displayId}` : `creature #${creatureId}`)));
+    txt.title = `${name || "(unknown creature)"} — creature ${creatureId}`
+      + (displayId ? `\nDisplayID ${displayId}` : "\n(no display known — creature not in TDB)")
+      + `\n${file.path || "(model unknown)"}`
+      + `\nClick: find spells with this morph\nShift-click: exclude them instead`;
+    txt.dataset.search = `fx:"morph ${base || creatureId}"`;
     tag.appendChild(txt);
 
-    tag.appendChild(tagButton("⧉", `Copy display ID: ${displayId}`, String(displayId)));
-    const cmd = fillTemplate(CFG.morphCopyTemplate, { id: displayId });
-    tag.appendChild(tagButton(".morph", `Copy:  ${cmd}`, cmd));
+    if (displayId) {
+      tag.appendChild(tagButton("⧉", `Copy display ID: ${displayId}`, String(displayId)));
+      const cmd = fillTemplate(CFG.morphCopyTemplate, { id: displayId });
+      tag.appendChild(tagButton(".morph", `Copy:  ${cmd}`, cmd));
+    }
+    if (file.base) {
+      const lookup = fillTemplate(CFG.morphLookupTemplate, { id: displayId, file: file.base });
+      tag.appendChild(tagButton(".lo", `Copy:  ${lookup}`, lookup));
+    }
     return tag;
   }
 
@@ -1441,10 +1460,14 @@
             textures: (d.fxTextures.get(c) || []).map(pathOf),
             tint: info.color === 0xffffff ? null : "#" + info.color.toString(16).padStart(6, "0"),
           };
-        }).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((m) => ({
+        }).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
           type: "morph",
-          displayId: m,
-          model: d.morphFids.get(m) ? pathOf(d.morphFids.get(m)) : null,
+          creatureId: c,
+          creature: d.morphNames.get(c) || null,
+          displays: (d.morphDisplays.get(c) || []).map((e) => ({
+            displayId: e.displayId,
+            model: e.fid ? pathOf(e.fid) : null,
+          })),
         })));
       }
       if (!hc.mechanics) {
@@ -1503,7 +1526,8 @@
       }
       if (!hc.fx) {
         cols.push(esc(r.fx.map((e) => e.type === "morph"
-          ? `morph: ${e.model || "?"} (display ${e.displayId})`
+          ? `morph: ${e.creature || "?"} (creature ${e.creatureId}): `
+            + (e.displays.map((disp) => `${disp.displayId}=${disp.model || "?"}`).join(" | ") || "?")
           : `${e.type}: ${e.textures.join(" | ") || "(untextured)"}${e.tint ? ` (${e.tint})` : ""}`).join("; ")));
       }
       if (!hc.mechanics) cols.push(esc(r.mechanics.join("; ")));

@@ -189,25 +189,36 @@ window.EpsilookData = (() => {
     const effectNamesL = new Map(
       [...effectNames].map(([k, v]) => [k, v.toLowerCase()]));
 
-    // morphs (transform auras): CreatureDisplayID -> creature model file.
-    // Corpus: "morph" + display id + model path, so fx:morph, fx:"morph
-    // wolf" and fx:"morph 2428" all work. fid 0 = display not in this build.
-    const spellMorphs = new Map();   // spell id -> [displayId]
-    const morphSpells = new Map();   // displayId -> [spell id]
-    const morphFids = new Map();     // displayId -> model fid (0 = unknown)
-    const morphSearchL = new Map();  // displayId -> search corpus
+    // morphs (transform auras): the spell references a CREATURE (NPC), the
+    // creature has display ids (TDB creature_template_model), each display
+    // resolves to a model file. Corpus per creature: "morph" + creature id
+    // + NPC name + display ids + model paths — fx:"morph sheep", fx:"morph
+    // 856" and fx:"morph 16372" all work.
+    const spellMorphs = new Map();    // spell id -> [creatureId]
+    const morphSpells = new Map();    // creatureId -> [spell id]
+    const morphNames = new Map();     // creatureId -> NPC name ("" = unknown)
+    const morphDisplays = new Map();  // creatureId -> [{displayId, fid}]
+    const morphSearchL = new Map();   // creatureId -> search corpus
     {
-      const { spellIds, displayIds } = pack.spellMorphs;
+      const { spellIds, creatureIds } = pack.spellMorphs;
       for (let i = 0; i < spellIds.length; i++) {
-        pushTo(spellMorphs, spellIds[i], displayIds[i]);
-        pushTo(morphSpells, displayIds[i], spellIds[i]);
+        pushTo(spellMorphs, spellIds[i], creatureIds[i]);
+        pushTo(morphSpells, creatureIds[i], spellIds[i]);
       }
       const m = pack.morphs;
-      for (let i = 0; i < m.displayIds.length; i++) {
-        morphFids.set(m.displayIds[i], m.fids[i]);
-        const file = m.fids[i] ? files.get(m.fids[i]) : null;
-        morphSearchL.set(m.displayIds[i],
-          ("morph " + m.displayIds[i] + " " + (file ? file.searchL : "")).trim());
+      for (let i = 0; i < m.creatureIds.length; i++) {
+        morphNames.set(m.creatureIds[i], m.names[i]);
+      }
+      const md = pack.morphDisplays;
+      for (let i = 0; i < md.creatureIds.length; i++) {
+        pushTo(morphDisplays, md.creatureIds[i],
+          { displayId: md.displayIds[i], fid: md.fids[i] });
+      }
+      for (const [c, name] of morphNames) {
+        const parts = (morphDisplays.get(c) || []).map((e) =>
+          e.displayId + " " + ((files.get(e.fid) || { searchL: "" }).searchL));
+        morphSearchL.set(c,
+          ("morph " + c + " " + name.toLowerCase() + " " + parts.join(" ")).trim());
       }
     }
 
@@ -240,7 +251,7 @@ window.EpsilookData = (() => {
       spellAnimKits, animKitSpells,
       animNames, animNamesL, animKitAnims, animAnimKits,
       spellFx, fxSpells, fxChains, fxTextures, fxSearchL,
-      spellMorphs, morphSpells, morphFids, morphSearchL,
+      spellMorphs, morphSpells, morphNames, morphDisplays, morphSearchL,
       spellEffects, effectSpells, effectNames, effectNamesL,
       spellAuras, auraSpells, auraNames, auraNamesL,
     };

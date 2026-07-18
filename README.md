@@ -6,7 +6,7 @@ Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
 
 Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
 AnimKit, animation or visual effect (beams searchable by texture and tint color,
-morphs by creature model name or display ID) —
+morphs by NPC name, model name, creature ID or display ID) —
 with spell icons, clickable cross-references, spell mechanic info, and one-click
 copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
 `.lookup object <model>`, `.lookup emote <anim>`, `.modify animkit <id>`, and more).
@@ -28,8 +28,10 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
 - `fx:` searches the Effects column — beam/chain effects by category word
   (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`;
   the dot on a beam tag shows the chain's RGB tint), and morphs (transform
-  auras) by creature model name or display ID (`fx:"morph wolf"`). Morph tags
-  copy the display ID and a ready `.morph <displayID>` command.
+  auras) by NPC name, model name, creature ID or display ID
+  (`fx:"morph sheep"`). Morph tags show the display ID with the model name
+  and copy the display ID, a ready `.morph <displayID>` command, and a
+  `.lookup display creature <model file>` command.
 - `mech:` searches the Mechanics column — what a spell *does*: spell effect
   names (`mech:resurrect`, `mech:school_damage`) and aura names for
   aura-applying spells (`mech:mod_stun`, `mech:periodic_damage`).
@@ -66,17 +68,24 @@ python build/build_data.py --version 9.2.7.45745 --label "Shadowlands 9.2.7"
 ```
 
 The script downloads the raw game tables from [wago.tools](https://wago.tools) (CSV
-export) and the community listfile from
-[wowdev/wow-listfile](https://github.com/wowdev/wow-listfile), walks the
+export), the community listfile from
+[wowdev/wow-listfile](https://github.com/wowdev/wow-listfile), and the
+[TrinityCore TDB](https://github.com/TrinityCore/TrinityCore/releases) matching
+the build (server-side creature data for morphs, plus Blizzard's post-ship
+hotfix rows, which override the wago rows). It walks the
 spell → visual → model/sound/animkit/chain-effect chains, resolves effect and
 aura enum names from [WoWDBDefs](https://github.com/wowdev/WoWDBDefs)
 `meta/enums`, and writes
 `docs/data/<version>/spelldata.json.gz` plus the `versions.json` manifest.
-Downloads are cached under `build/cache/`; pass `--refresh` to re-download.
+Downloads are cached under `build/cache/`; pass `--refresh` to re-download the
+wago/listfile sources. Extracting the TDB archive (a one-time step per version)
+needs [7-Zip](https://www.7-zip.org/) on the PATH or in Program Files.
 
 **Adding another game version** is the same command with a different `--version`
-(any build listed on wago.tools). The version dropdown appears automatically once
-more than one pack exists.
+(any build listed on wago.tools). For morphs and hotfixes to resolve, also map
+the version to its TDB release in `TDB_RELEASES` at the top of `build_data.py`
+(without it the build still succeeds, minus that data). The version dropdown
+appears automatically once more than one pack exists.
 
 ### Adding a search field
 
@@ -94,6 +103,9 @@ Edit `docs/js/config.js` — `spellCommands` for per-spell buttons,
 ## Data sources
 
 - Game tables: [wago.tools](https://wago.tools) CSV export, build 9.2.7.45745
+- Server-side data (creature names/displays for morphs) and post-ship hotfix
+  rows: [TrinityCore TDB](https://github.com/TrinityCore/TrinityCore/releases)
+  for the same build
 - File names: [community listfile](https://github.com/wowdev/wow-listfile)
 - Enum value names (spell effects, auras): [WoWDBDefs](https://github.com/wowdev/WoWDBDefs) `meta/enums`
 - Spell icon images: hotlinked from [Wowhead](https://www.wowhead.com)'s CDN
