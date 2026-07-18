@@ -1225,6 +1225,15 @@
     tag.title = file.path || "(name unknown)";
     if (fileIsHit(file, "model")) tag.classList.add("hit");
 
+    if (CFG.modelViewerUrl) {
+      const view = el("a", "tag-view", "3d");
+      view.href = fillTemplate(CFG.modelViewerUrl, { fid });
+      view.target = "_blank";
+      view.rel = "noopener";
+      view.title = `Preview ${file.base || `file #${fid}`} in the WoW.tools model viewer (new tab)`;
+      tag.appendChild(view);
+    }
+
     const txt = el("button", "tag-label", file.base ? stripExt(file.base) : `file #${fid}`);
     txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this model\nShift-click: exclude them instead`;
     txt.dataset.search = file.base ? `model:"${file.base}"` : "";
