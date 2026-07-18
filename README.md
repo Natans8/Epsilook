@@ -47,6 +47,9 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   to paste back into any Epsilook search bar.
 - Click any tag in the results to search for it (Shift-click to exclude it). The
   current search always lives in the URL — the 🔗 Share button copies it.
+- Appending `&export=json` or `&export=csv` to a shared URL downloads the
+  query's results directly on page load (same content as the Export buttons;
+  hidden columns are excluded either way).
 - The ▶ on a sound file plays it in the browser (click again to stop).
 - The `3d` on a model tag opens the model in the community
   [WoW.tools model viewer](https://wowtools.work/mv/) in a new tab.

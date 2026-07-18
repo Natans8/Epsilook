@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit, animkit or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260718p">
+  <link rel="stylesheet" href="css/app.css?v=20260718q">
 </head>
 <body>
 
@@ -115,6 +115,8 @@
             <li>Hiding a column (toolbar) also excludes it from plain-word search and exports.</li>
             <li>"Only spells with" narrows the current results; sorting cycles ▲, ▼, back to relevance.</li>
             <li>The URL always holds your search — click <b>🔗 Share</b> (next to Export) to copy it, or copy it directly.</li>
+            <li>Add <code>&amp;export=json</code> or <code>&amp;export=csv</code> to any shared URL and opening it
+              downloads the results directly.</li>
           </ul>
         </section>
       </div>
@@ -143,8 +145,8 @@
         <button id="share-link" title="Copy a link to this exact search — the URL always holds your current query">🔗 Share</button>
         <span class="export-sep"></span>
         <span>Export:</span>
-        <button id="export-csv" title="Download the current results as CSV">CSV</button>
-        <button id="export-json" title="Download the current results as JSON">JSON</button>
+        <button id="export-csv" title="Download the current results as CSV (or add &export=csv to a shared URL)">CSV</button>
+        <button id="export-json" title="Download the current results as JSON (or add &export=json to a shared URL)">JSON</button>
         <button id="export-discord" title="Copy a pasteable text list (works great in Discord and chat)">Copy as Text</button>
       </div>
     </div>
@@ -215,13 +217,13 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260718p"></script>
-<script src="js/data.js?v=20260718p"></script>
+<script src="js/config.js?v=20260718q"></script>
+<script src="js/data.js?v=20260718q"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260718p"></script>
-<script src="js/js-blp.js?v=20260718p"></script>
-<script src="js/search.js?v=20260718p"></script>
-<script src="js/app.js?v=20260718p"></script>
+<script src="js/bufo.js?v=20260718q"></script>
+<script src="js/js-blp.js?v=20260718q"></script>
+<script src="js/search.js?v=20260718q"></script>
+<script src="js/app.js?v=20260718q"></script>
 </body>
 </html>
