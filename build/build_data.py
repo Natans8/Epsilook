@@ -90,7 +90,8 @@ TDB_TABLES = {
         "spell_name": ["ID", "Name"],
         "spell_x_spell_visual": ["ID", "SpellID", "SpellVisualID"],
         "spell_visual": ["ID", "SpellVisualMissileSetID", "RaidSpellVisualMissileSetID"],
-        "spell_visual_missile": ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID"],
+        "spell_visual_missile": ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID",
+                                 "SoundEntriesID", "AnimKitID"],
         "spell_visual_effect_name": ["ID", "ModelFileDataID"],
         "spell_effect": ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1"],
         "spell_misc": ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"],
@@ -440,11 +441,12 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         if k and fid:
             kit_models[k].add(fid)
 
-    # visual -> missile model fids (SpellVisual.SpellVisualMissileSetID /
-    # RaidSpellVisualMissileSetID -> SpellVisualMissile rows sharing that set
-    # -> SpellVisualEffectName). Projectile models — e.g. Arcane Missiles'
-    # cfx_mage_arcanemissiles_missile.m2 — are reachable only through this
-    # path, never via SpellVisualKitModelAttach.
+    # visual -> missile payload (SpellVisual.SpellVisualMissileSetID /
+    # RaidSpellVisualMissileSetID -> SpellVisualMissile rows sharing that set).
+    # Each missile carries a model (via SpellVisualEffectName), and sometimes
+    # a SoundKit (flight/launch sound) and an AnimKit. Projectile models —
+    # e.g. Arcane Missiles' cfx_mage_arcanemissiles_missile.m2 — are
+    # reachable only through this path, never via SpellVisualKitModelAttach.
     sv_rows: dict[int, tuple[int, int]] = {}  # visual ID -> (set, raid set)
     for rid, ms, rms in read_table(
         table_dir, "SpellVisual", ["ID", "SpellVisualMissileSetID", "RaidSpellVisualMissileSetID"]
@@ -455,29 +457,39 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     ):
         sv_rows[to_int(rid)] = (to_int(ms), to_int(rms))
 
-    svm_rows: dict[int, tuple[int, int]] = {}  # missile ID -> (set, effect name)
-    for rid, set_id, en_id in read_table(
-        table_dir, "SpellVisualMissile", ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID"]
-    ):
-        svm_rows[to_int(rid)] = (to_int(set_id), to_int(en_id))
-    for rid, set_id, en_id in hotfix_rows(
-        tdb_dir, "spell_visual_missile", ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID"]
-    ):
-        svm_rows[to_int(rid)] = (to_int(set_id), to_int(en_id))
+    svm_cols = ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID",
+                "SoundEntriesID", "AnimKitID"]
+    svm_rows: dict[int, tuple[int, int, int, int]] = {}  # missile ID -> (set, en, soundkit, animkit)
+    for rid, *vals in read_table(table_dir, "SpellVisualMissile", svm_cols):
+        svm_rows[to_int(rid)] = tuple(to_int(v) for v in vals)
+    for rid, *vals in hotfix_rows(tdb_dir, "spell_visual_missile", svm_cols):
+        svm_rows[to_int(rid)] = tuple(to_int(v) for v in vals)
 
     missile_set_models: dict[int, set[int]] = defaultdict(set)
-    for set_id, en_id in svm_rows.values():
+    missile_set_soundkits: dict[int, set[int]] = defaultdict(set)
+    missile_set_animkits: dict[int, set[int]] = defaultdict(set)
+    for set_id, en_id, sk, ak in svm_rows.values():
+        if not set_id:
+            continue
         fid = effect_name_model.get(en_id, 0)
-        if set_id and fid:
+        if fid:
             missile_set_models[set_id].add(fid)
+        if sk:
+            missile_set_soundkits[set_id].add(sk)
+        if ak:
+            missile_set_animkits[set_id].add(ak)
     del svm_rows
 
-    visual_missiles: dict[int, set[int]] = {}  # visual ID -> missile model fids
+    EMPTY: tuple = (frozenset(), frozenset(), frozenset())
+    visual_missiles: dict[int, tuple] = {}  # visual ID -> (model fids, soundkits, animkits)
     for v, (ms, rms) in sv_rows.items():
-        fids = missile_set_models.get(ms, set()) | missile_set_models.get(rms, set())
-        if fids:
-            visual_missiles[v] = fids
-    del sv_rows, missile_set_models
+        parts = tuple(
+            d.get(ms, set()) | d.get(rms, set())
+            for d in (missile_set_models, missile_set_soundkits, missile_set_animkits)
+        )
+        if any(parts):
+            visual_missiles[v] = parts
+    del sv_rows, missile_set_models, missile_set_soundkits, missile_set_animkits
 
     # kit -> soundkits / animkits (via SpellVisualKitEffect)
     anim_kit_of: dict[int, int] = {}  # SpellVisualAnim.ID -> AnimKitID
@@ -671,7 +683,12 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             orphan_spells += 1
             continue
         for v in visuals:
-            spell_models[spell_id].update(visual_missiles.get(v, ()))
+            m_fids, m_sks, m_aks = visual_missiles.get(v, EMPTY)
+            spell_models[spell_id].update(m_fids)
+            spell_animkits[spell_id].update(m_aks)
+            for sk in m_sks:
+                for f in soundkit_files.get(sk, ()):
+                    spell_sounds[spell_id].add((sk, f))
             for k in visual_kits.get(v, ()):
                 spell_models[spell_id].update(kit_models.get(k, ()))
                 spell_animkits[spell_id].update(kit_animkits.get(k, ()))
@@ -809,7 +826,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     pack = {
         "meta": {
-            "format": 8,
+            "format": 9,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
