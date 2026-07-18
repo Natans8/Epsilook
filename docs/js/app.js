@@ -1226,7 +1226,14 @@
     if (fileIsHit(file, "model")) tag.classList.add("hit");
 
     if (CFG.modelViewerUrl) {
-      const view = el("a", "tag-view", "3d");
+      const view = el("a", "tag-view");
+      // wireframe cube (the universal 3D-preview glyph); stroke inherits
+      // currentColor so the gold hover tint applies
+      view.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+        'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">' +
+        '<path d="M12 2.5 21 7.5v9l-9 5-9-5v-9z"/>' +
+        '<path d="M12 12.2 21 7.5M12 12.2v9.3M12 12.2 3 7.5"/></svg>';
       view.href = fillTemplate(CFG.modelViewerUrl, { fid });
       view.target = "_blank";
       view.rel = "noopener";
