@@ -577,17 +577,24 @@ td.expanded .kit-group.overflow { display: flex; }
 }
 .fx-swatch + .tag-label { padding-left: 0.35rem; }
 
-/* "+N" expander riding in a group's head bar (visual FX groups) */
+/* "+N" expander riding in a group's head bar (visual FX groups) — carries
+   the column's fx tint so it reads as a control, not background chrome */
 .more.head-more {
   align-self: center;
   margin: 0 0.4rem 0 0.05rem;
-  padding: 0 0.4rem;
-  border: 1px solid var(--border);
+  padding: 0 0.45rem;
+  color: var(--fx);
+  background: rgba(127, 201, 208, 0.14);
+  border: 1px solid rgba(127, 201, 208, 0.45);
   border-radius: 999px;
-  font-size: 0.72em;
-  line-height: 1.35;
+  font-size: 0.78em;
+  line-height: 1.45;
 }
-.more.head-more:hover { border-color: var(--gold-dim); }
+.more.head-more:hover {
+  color: var(--gold);
+  background: rgba(240, 195, 76, 0.12);
+  border-color: var(--gold-dim);
+}
 
 /* the buttons stretch to the pill's full height so their hover highlight
    (and separator border) fills the whole section; the glyph re-centers via
