@@ -33,6 +33,12 @@ window.EpsilookConfig = {
   wowheadSpellUrl: "https://www.wowhead.com/spell={id}",
   wowheadSoundUrl: "https://www.wowhead.com/sound={id}",
 
+  // 3D preview: the "3d" link on each model tag opens the model in the
+  // community WoW.tools mirror's model viewer ({fid} = FileDataID). The
+  // mirror serves a fixed ~10.0 game build, so models removed from the game
+  // after that may fail to load there. Set to "" to disable the link.
+  modelViewerUrl: "https://wowtools.work/mv/?filedataid={fid}&type=m2",
+
   // Sound playback: the ▶ on each sound file streams it from Wowhead's CDN,
   // fetched only when clicked ({fid} = FileDataID, {bucket} = fid % 256,
   // {base} = file name, cosmetic — the CDN goes by FileDataID alone).

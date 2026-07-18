@@ -43,6 +43,8 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
 - Click any tag in the results to search for it (Shift-click to exclude it). The
   current search always lives in the URL — the 🔗 Share button copies it.
 - The ▶ on a sound file plays it in the browser (click again to stop).
+- The `3d` on a model tag opens the model in the community
+  [WoW.tools model viewer](https://wowtools.work/mv/) in a new tab.
 - Hovering a beam or dissolve texture tag shows the texture itself in a
   floating preview (fetched on demand, nothing is preloaded). Beam previews
   are shown with the chain's tint applied — the color the beam actually has
