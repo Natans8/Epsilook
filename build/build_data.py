@@ -134,6 +134,8 @@ EFFECT_TYPE_BARRAGE = 17  # Effect = BarrageEffect.ID (multi-model volley)
 # own sound — no concrete file; 19 (ScreenEffect) has zero sound-bearing
 # rows in 9.2.7; 15/20 are absent; the rest carry no model/sound columns.
 
+# SpellProceduralEffect.Type whose Value_0 is a packed-RGB model tint
+PROC_TYPE_TINT = 1
 # SpellProceduralEffect.Type whose Value_0 is a SpellChainEffects ID
 PROC_TYPE_CHAIN = 26
 
@@ -548,13 +550,19 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     # chain effects (beams): two paths lead from a kit to SpellChainEffects —
     # EffectType 1 -> SpellProceduralEffect (Type 26, Value_0 = chain ID) and
-    # EffectType 13 -> BeamEffect (BeamID = chain ID)
+    # EffectType 13 -> BeamEffect (BeamID = chain ID). The same table's
+    # Type 1 rows are model tints: Value_0 is the packed RGB, the color is
+    # the whole payload (like edge glows / shadowy effects).
     proc_chain: dict[int, int] = {}  # SpellProceduralEffect.ID -> chain ID
+    tint_rows: dict[int, int] = {}   # SpellProceduralEffect.ID -> packed RGB
     for pid, ptype, v0 in read_table(
         table_dir, "SpellProceduralEffect", ["ID", "Type", "Value_0"]
     ):
-        if to_int(ptype) == PROC_TYPE_CHAIN:
+        pt = to_int(ptype)
+        if pt == PROC_TYPE_CHAIN:
             proc_chain[to_int(pid)] = int(float(v0)) if v0 else 0
+        elif pt == PROC_TYPE_TINT:
+            tint_rows[to_int(pid)] = (int(float(v0)) if v0 else 0) & 0xFFFFFF
 
     beam_chain: dict[int, int] = {}  # BeamEffect.ID -> chain ID
     for bid, chain_id in read_table(table_dir, "BeamEffect", ["ID", "BeamID"]):
@@ -629,6 +637,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     kit_dissolves: dict[int, set[int]] = defaultdict(set)
     kit_glows: dict[int, set[int]] = defaultdict(set)
     kit_shadowies: dict[int, set[int]] = defaultdict(set)
+    kit_tints: dict[int, set[int]] = defaultdict(set)
     for kit_id, effect_type, effect in read_table(
         table_dir, "SpellVisualKitEffect", ["ParentSpellVisualKitID", "EffectType", "Effect"]
     ):
@@ -643,6 +652,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 kit_animkits[k].add(ak)
         elif et == EFFECT_TYPE_PROC:
             expand_chain(proc_chain.get(e, 0), kit_chains[k])
+            if e in tint_rows:
+                kit_tints[k].add(e)
         elif et == EFFECT_TYPE_BEAM:
             expand_chain(beam_chain.get(e, 0), kit_chains[k])
         elif et == EFFECT_TYPE_DISSOLVE:
@@ -777,6 +788,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     spell_dissolves: dict[int, set[int]] = defaultdict(set)       # spell -> dissolve effect ids
     spell_glows: dict[int, set[int]] = defaultdict(set)           # spell -> edge glow ids
     spell_shadowies: dict[int, set[int]] = defaultdict(set)       # spell -> shadowy effect ids
+    spell_tints: dict[int, set[int]] = defaultdict(set)           # spell -> tint proc ids
     orphan_spells = 0  # SpellXSpellVisual rows whose SpellID has no SpellName entry
 
     for spell_id, visuals in spell_visuals.items():
@@ -797,6 +809,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 spell_dissolves[spell_id].update(kit_dissolves.get(k, ()))
                 spell_glows[spell_id].update(kit_glows.get(k, ()))
                 spell_shadowies[spell_id].update(kit_shadowies.get(k, ()))
+                spell_tints[spell_id].update(kit_tints.get(k, ()))
                 for sk in kit_soundkits.get(k, ()):
                     for f in soundkit_files.get(sk, ()):
                         spell_sounds[spell_id].add((sk, f))
@@ -925,6 +938,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     glow_ids = sorted({g for gs in spell_glows.values() for g in gs})
     glow_hues = [hue_word(*unpack_rgb(glow_rows[g])) for g in glow_ids]
 
+    tint_row_pairs = sorted((s, t) for s, ts in spell_tints.items() for t in ts)
+    tint_ids = sorted({t for ts in spell_tints.values() for t in ts})
+    tint_hues = [hue_word(*unpack_rgb(tint_rows[t])) for t in tint_ids]
+
     shadowy_row_pairs = sorted((s, e) for s, es in spell_shadowies.items() for e in es)
     shadowy_ids = sorted({e for es in spell_shadowies.values() for e in es})
     shadowy_hues = []
@@ -948,7 +965,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     pack = {
         "meta": {
-            "format": 12,
+            "format": 13,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
@@ -977,6 +994,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "glows": len(glow_ids),
                 "spellShadowies": len(shadowy_row_pairs),
                 "shadowies": len(shadowy_ids),
+                "spellTints": len(tint_row_pairs),
+                "tints": len(tint_ids),
                 "icons": len(icon_names),
             },
         },
@@ -1067,6 +1086,17 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "secondaryColors": [shadowy_rows[e][1] for e in shadowy_ids],
             "hues": shadowy_hues,
         },
+        # model tints (SpellProceduralEffect Type 1 via kit EffectType 1):
+        # color-only like glows — the packed RGB is the whole payload
+        "spellTints": {
+            "spellIds": [r[0] for r in tint_row_pairs],
+            "tintIds": [r[1] for r in tint_row_pairs],
+        },
+        "tints": {
+            "ids": tint_ids,
+            "colors": [tint_rows[t] for t in tint_ids],
+            "hues": tint_hues,
+        },
         # morphs: transform auras reference a CREATURE (NPC entry); its
         # display ids come from TDB's creature_template_model, each display
         # resolving to a creature model file (fid 0 = unknown model)
@@ -1105,7 +1135,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         f"fxChains={len(fx_chain_ids):,}  dissolves={len(dissolve_row_pairs):,} "
         f"({len(dissolve_ids):,} rows)  glows={len(glow_row_pairs):,} "
         f"({len(glow_ids):,} rows)  shadowies={len(shadowy_row_pairs):,} "
-        f"({len(shadowy_ids):,} rows)  morphs={len(morph_rows):,} "
+        f"({len(shadowy_ids):,} rows)  tints={len(tint_row_pairs):,} "
+        f"({len(tint_ids):,} rows)  morphs={len(morph_rows):,} "
         f"({len(morph_display_rows):,} displays)  summons={len(summon_rows):,} "
         f"({len(summon_creature_ids):,} creatures)  icons={len(icon_names):,}  "
         f"orphan visual spells={orphan_spells:,}  [{time.time() - t0:.1f}s]"

@@ -254,6 +254,26 @@ window.EpsilookData = (() => {
       }
     }
 
+    // model tints (SpellProceduralEffect Type 1 rows): color-only like
+    // glows. Corpus: "tint" + hue + hex — fx:"tint red" / fx:#ff5800.
+    const spellTints = new Map();   // spell id -> [tintId]
+    const tintSpells = new Map();   // tintId -> [spell id]
+    const tintColors = new Map();   // tintId -> packed RGB
+    const tintSearchL = new Map();  // tintId -> search corpus
+    if (pack.spellTints) {
+      const { spellIds, tintIds } = pack.spellTints;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellTints, spellIds[i], tintIds[i]);
+        pushTo(tintSpells, tintIds[i], spellIds[i]);
+      }
+      const t = pack.tints;
+      for (let i = 0; i < t.ids.length; i++) {
+        tintColors.set(t.ids[i], t.colors[i]);
+        tintSearchL.set(t.ids[i],
+          ("tint " + t.hues[i] + " " + hexColor(t.colors[i])).trim());
+      }
+    }
+
     // spell effects (enum id -> name without the SPELL_EFFECT_ prefix)
     const spellEffects = new Map();  // spell id -> [effect enum id]
     const effectSpells = new Map();  // effect enum id -> [spell id]
@@ -365,6 +385,7 @@ window.EpsilookData = (() => {
       spellDissolves, dissolveSpells, dissolveDurations, dissolveTextures, dissolveSearchL,
       spellGlows, glowSpells, glowColors, glowSearchL,
       spellShadowies, shadowySpells, shadowyColors, shadowySearchL,
+      spellTints, tintSpells, tintColors, tintSearchL,
       spellMorphs, morphSpells, morphNames, morphDisplays, morphSearchL,
       spellSummons, summonNames, summonPairSpells, summonPairSearchL, summonControlNames,
       spellEffects, effectSpells, effectNames, effectNamesL,

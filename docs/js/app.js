@@ -120,6 +120,11 @@
 
   /* ------------------------------------------------- query <-> chips */
 
+  // legacy prefixes silently convert to their current field — effect: was
+  // the fx: column's name before the effect:->mech: split
+  const FIELD_ALIASES = { effect: "fx" };
+  const canonField = (f) => FIELD_ALIASES[f] || f;
+
   function isChipField(f) {
     return f && f !== "all" && Search.FIELDS[f];
   }
@@ -165,7 +170,7 @@
     };
     for (const m of (str || "").matchAll(/(?:(-)?([a-z]+):)?(?:\(([^)]*)\)|"([^"]*)"|([^\s"]+))/gi)) {
       const not = !!m[1];
-      const field = (m[2] || "").toLowerCase();
+      const field = canonField((m[2] || "").toLowerCase());
       if (isChipField(field)) {
         const text = (m[3] ?? m[4] ?? m[5] ?? "").trim();
         if (text) parts.push({ field, text, not });
@@ -755,7 +760,8 @@
         (!f.sounds || d.spellSounds.has(id)) &&
         (!f.animkits || d.spellAnimKits.has(id)) &&
         (!f.fx || d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellGlows.has(id)
-          || d.spellShadowies.has(id) || d.spellMorphs.has(id) || d.spellSummons.has(id)));
+          || d.spellShadowies.has(id) || d.spellTints.has(id)
+          || d.spellMorphs.has(id) || d.spellSummons.has(id)));
     } else {
       list = list.slice();
     }
@@ -1087,21 +1093,22 @@
   }
 
   /* Effects cell: visual FX grouped by category — "beam" (chain effects),
-   * "dissolve" (dissolve effects), "glow" / "shadowy" (color-only
-   * effects), "morph" (transform auras) and "summon" (summon effects);
-   * future categories (tints, …) become more groups here. Beam pills carry
-   * a tint dot per texture. */
+   * "dissolve" (dissolve effects), "glow" / "shadowy" / "tint" (color-only
+   * effects), "morph" (transform auras) and "summon" (summon effects).
+   * Beam pills carry a tint dot per texture. */
   function fxCell(spellId) {
     const d = state.data;
     const chainIds = d.spellFx.get(spellId) || [];
     const dissolveIds = d.spellDissolves.get(spellId) || [];
     const glowIds = d.spellGlows.get(spellId) || [];
     const shadowyIds = d.spellShadowies.get(spellId) || [];
+    const tintIds = d.spellTints.get(spellId) || [];
     const morphIds = d.spellMorphs.get(spellId) || [];
     const summonEntries = d.spellSummons.get(spellId) || [];
     const td = el("td", "c-fx");
     if (chainIds.length === 0 && dissolveIds.length === 0 && glowIds.length === 0
-        && shadowyIds.length === 0 && morphIds.length === 0 && summonEntries.length === 0) {
+        && shadowyIds.length === 0 && tintIds.length === 0
+        && morphIds.length === 0 && summonEntries.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
       return td;
@@ -1179,6 +1186,23 @@
         hit: shadowyIds.some((id) => shadowyIsHit(id)),
         items: hitsFirst(entries, (e) => shadowyIsHit(e.shadowyId))
           .map((e) => () => colorFxTag("shadowy", e.color, shadowyIsHit(e.shadowyId))),
+      });
+    }
+    if (tintIds.length) {
+      // one pill per distinct color (no texture — the color is the payload)
+      const entries = [];
+      const seen = new Set();
+      for (const id of tintIds.slice().sort((a, b) => a - b)) {
+        const color = d.tintColors.get(id) ?? 0;
+        if (seen.has(color)) continue;
+        seen.add(color);
+        entries.push({ tintId: id, color });
+      }
+      cats.push({
+        name: "tint",
+        hit: tintIds.some((id) => tintIsHit(id)),
+        items: hitsFirst(entries, (e) => tintIsHit(e.tintId))
+          .map((e) => () => colorFxTag("tint", e.color, tintIsHit(e.tintId))),
       });
     }
     if (morphIds.length) {
@@ -1267,6 +1291,11 @@
 
   function shadowyIsHit(shadowyId) {
     const corpus = state.data.shadowySearchL.get(shadowyId) || "";
+    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+  }
+
+  function tintIsHit(tintId) {
+    const corpus = state.data.tintSearchL.get(tintId) || "";
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
@@ -1467,6 +1496,7 @@
     dissolve: "Dissolve / materialize effect (DissolveEffect)",
     glow: "Edge glow / rim-light effect (EdgeGlowEffect)",
     shadowy: "Shadowy overlay effect (ShadowyEffect)",
+    tint: "Model tint (SpellProceduralEffect)",
     morph: "Morph / transform aura (CreatureDisplayInfo)",
     summon: "Summoned creature (SpellEffect SUMMON)",
   };
@@ -1515,7 +1545,7 @@
     return tag;
   }
 
-  /* Color-only fx pill (glow / shadowy): swatch + hex label — these
+  /* Color-only fx pill (glow / shadowy / tint): swatch + hex label — these
    * effects have no texture or model, the color is the whole payload.
    * Clicking searches the category + hex; ⧉ copies the hex. */
   function colorFxTag(category, color, hit) {
@@ -1602,9 +1632,11 @@
 
   /* Summon pill: one per (creature, control). Label = the NPC name with the
    * SummonProperties control word dimmed beside it (uncontrolled summons
-   * show no word); ⧉ copies the creature ID, .lo / .npc the ready-to-paste
-   * commands; the Wowhead icon on the left opens the NPC's Wowhead page.
-   * Creatures missing from TDB show an inert "creature #id" pill. */
+   * show no word) — the control word is its own button searching all
+   * summons of that control type; ⧉ copies the creature ID, .lo / .npc the
+   * ready-to-paste commands; the Wowhead icon on the left opens the NPC's
+   * Wowhead page. Creatures missing from TDB show an inert "creature #id"
+   * pill. */
   function summonTag(entry) {
     const d = state.data;
     const { creatureId, control } = entry;
@@ -1620,12 +1652,18 @@
 
     const txt = el("button", "tag-label");
     txt.appendChild(document.createTextNode(name || `creature #${creatureId}`));
-    if (ctrl) txt.appendChild(el("span", "tag-ctrl", ctrl));
     txt.title = `${name || "(unknown creature)"} — creature ${creatureId}`
       + (ctrl ? `\nControl: ${ctrl}` : "")
       + `\nClick: find spells summoning this creature\nShift-click: exclude them instead`;
     txt.dataset.search = `fx:"summon ${name || creatureId}"`;
     tag.appendChild(txt);
+    if (ctrl) {
+      const cb = el("button", "tag-ctrl", ctrl);
+      cb.title = `Control: ${ctrl}`
+        + `\nClick: find all ${ctrl} summons\nShift-click: exclude them instead`;
+      cb.dataset.search = `fx:"summon ${ctrl}"`;
+      tag.appendChild(cb);
+    }
 
     tag.appendChild(tagButton("⧉", `Copy creature ID: ${creatureId}`, String(creatureId)));
     if (name) {
@@ -1799,7 +1837,10 @@
             colors: [sh.primary, sh.secondary].map(
               (v) => "#" + v.toString(16).padStart(6, "0")),
           };
-        })).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+        })).concat((d.spellTints.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+          type: "tint",
+          color: "#" + (d.tintColors.get(c) ?? 0).toString(16).padStart(6, "0"),
+        }))).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
           type: "morph",
           creatureId: c,
           creature: d.morphNames.get(c) || null,
@@ -1880,7 +1921,7 @@
             return `summon: ${e.creature || "?"} (creature ${e.creatureId})`
               + (e.control ? ` [${e.control}]` : "");
           }
-          if (e.color || e.colors) // color-only fx (glow / shadowy)
+          if (e.color || e.colors) // color-only fx (glow / shadowy / tint)
             return `${e.type}: ${e.color || e.colors.join(" | ")}`;
           return `${e.type}: ${e.textures.join(" | ") || "(untextured)"}`
             + (e.tint ? ` (${e.tint})` : "") + (e.duration ? ` (${e.duration}s)` : "");
@@ -2053,8 +2094,8 @@
         const before = input.value.slice(0, caret);
         const inQuote = ((before.match(/"/g) || []).length % 2) === 1;
         const m = before.match(/(^|\s)(-?)([a-z]+):$/i);
-        if (m && !inQuote && isChipField(m[3].toLowerCase())) {
-          const field = m[3].toLowerCase();
+        if (m && !inQuote && isChipField(canonField(m[3].toLowerCase()))) {
+          const field = canonField(m[3].toLowerCase());
           const rest = input.value.slice(caret);
           input.value = input.value.slice(0, m.index + m[1].length);
           activateField(field, { not: m[2] === "-" });
