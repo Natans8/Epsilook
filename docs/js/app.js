@@ -1461,8 +1461,8 @@
     return tag;
   }
 
-  /* Morph pill: one per (creature, display). Label = dimmed display ID +
-   * the creature model's file name; tooltip names the NPC the spell morphs
+  /* Morph pill: one per (creature, display). Label = the creature model's
+   * file name; tooltip names the NPC the spell morphs
    * into; ⧉ copies the display ID, .morph / .lo the ready-to-paste
    * commands; the Wowhead icon on the left opens their model viewer on the
    * display. Creatures without TDB data get an inert "creature #id" pill. */
@@ -1481,7 +1481,6 @@
 
     const base = file.base ? stripExt(file.base) : "";
     const txt = el("button", "tag-label");
-    if (base && displayId) txt.appendChild(el("span", "tag-id", String(displayId)));
     txt.appendChild(document.createTextNode(
       base || (displayId ? `#${displayId}` : `creature #${creatureId}`)));
     txt.title = `${name || "(unknown creature)"} — creature ${creatureId}`
