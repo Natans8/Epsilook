@@ -27,6 +27,9 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
 - `fx:` searches the Effects column — beam/chain effects, by category word
   (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`).
   The dot on a beam tag shows the chain's RGB tint.
+- `mech:` searches the Mechanics column — what a spell *does*: spell effect
+  names (`mech:resurrect`, `mech:school_damage`) and aura names for
+  aura-applying spells (`mech:mod_stun`, `mech:periodic_damage`).
 - A `-` prefix excludes instead: `name:nova -mech:school_damage`.
 - The whole bar selects like plain text — mouse, Ctrl+A, or Shift+arrows — and
   Ctrl+C copies the selection as query text (`model:book note anim:read`), ready
@@ -62,7 +65,9 @@ python build/build_data.py --version 9.2.7.45745 --label "Shadowlands 9.2.7"
 The script downloads the raw game tables from [wago.tools](https://wago.tools) (CSV
 export) and the community listfile from
 [wowdev/wow-listfile](https://github.com/wowdev/wow-listfile), walks the
-spell → visual → model/sound/animkit/chain-effect chains, and writes
+spell → visual → model/sound/animkit/chain-effect chains, resolves effect and
+aura enum names from [WoWDBDefs](https://github.com/wowdev/WoWDBDefs)
+`meta/enums`, and writes
 `docs/data/<version>/spelldata.json.gz` plus the `versions.json` manifest.
 Downloads are cached under `build/cache/`; pass `--refresh` to re-download.
 
@@ -87,6 +92,7 @@ Edit `docs/js/config.js` — `spellCommands` for per-spell buttons,
 
 - Game tables: [wago.tools](https://wago.tools) CSV export, build 9.2.7.45745
 - File names: [community listfile](https://github.com/wowdev/wow-listfile)
+- Enum value names (spell effects, auras): [WoWDBDefs](https://github.com/wowdev/WoWDBDefs) `meta/enums`
 - Spell icon images: hotlinked from [Wowhead](https://www.wowhead.com)'s CDN
   (`wow.zamimg.com`), lazy-loaded per visible row; the icon *names* are baked into
   the data pack (SpellMisc table + listfile). `spellIconUrl` in `docs/js/config.js`

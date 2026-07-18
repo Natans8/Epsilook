@@ -55,10 +55,12 @@ TABLES = [
 # Animation names indexed by AnimID (Stand=0, ...), maintained by wow.tools
 ANIMS_JS_URL = "https://raw.githubusercontent.com/Marlamin/wow.tools.local/main/wwwroot/js/anims.js"
 
-# Spell effect enum names (ID,Name CSV without the SPELL_EFFECT_ prefix),
-# checked into the repo (extracted from TrinityCore SharedDefines.h /
-# wowdev.wiki Spell.dbc/Effect)
-EFFECT_NAMES_FILE = BUILD_DIR / "effect_names.csv"
+# Enum value names from WoWDBDefs meta/enums — the authority on what db2
+# enum values mean ("ID NAME" lines; see read_enum_names for the format).
+# SpellEffect = names for SpellEffect.Effect (SPELL_EFFECT_* without the
+# prefix), SpellEffectAura = names for SpellEffect.EffectAura (SPELL_AURA_*).
+WOWDBDEFS_ENUM_URL = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/meta/enums/{name}.dbde"
+ENUM_FILES = ["SpellEffect", "SpellEffectAura"]
 
 # SpellVisualKitEffect.EffectType values (what the kit effect points at) —
 # the full enum is documented in WoWDBDefs definitions/SpellVisualKitEffect.dbd
@@ -104,6 +106,10 @@ def fetch_sources(version: str, refresh: bool) -> tuple[Path, Path]:
     log("Animation names (wow.tools):")
     download(ANIMS_JS_URL, CACHE_DIR / "anims.js", refresh)
 
+    log("Enum names (wowdev/WoWDBDefs):")
+    for name in ENUM_FILES:
+        download(WOWDBDEFS_ENUM_URL.format(name=name), CACHE_DIR / "enums" / f"{name}.dbde", refresh)
+
     listfile_dir = CACHE_DIR / "listfile"
     listfile = listfile_dir / "community-listfile.csv"
     log("Listfile (wowdev/wow-listfile):")
@@ -147,6 +153,37 @@ def read_anim_names() -> list[str]:
     names = re.findall(r'"([^"]*)"', src)
     if len(names) < 1000 or names[0] != "Stand":
         sys.exit("error: anims.js did not parse as expected")
+    return names
+
+
+def read_enum_names(name: str, version: str) -> dict[int, str]:
+    """Parse a WoWDBDefs meta/enums .dbde file into {value: NAME}.
+
+    Format: one "ID NAME" per line, optionally "// comment" suffixed. Some
+    lines carry a "(BUILD a-b, c-d)" guard restricting which game builds the
+    name applies to. Lines with no name (or junk like "==") are skipped —
+    the app falls back to showing the raw id.
+    """
+    import re
+    ver = tuple(int(p) for p in version.split("."))
+    names: dict[int, str] = {}
+    for line in (CACHE_DIR / "enums" / f"{name}.dbde").read_text(encoding="utf-8").splitlines():
+        line = line.split("//", 1)[0].strip()
+        if line.startswith("(BUILD "):
+            guard, _, line = line[len("(BUILD "):].partition(")")
+            line = line.strip()
+            def in_range(rng: str) -> bool:
+                lo, _, hi = rng.strip().partition("-")
+                lo_t = tuple(int(p) for p in lo.split("."))
+                hi_t = tuple(int(p) for p in hi.split(".")) if hi else lo_t
+                return lo_t <= ver <= hi_t
+            if not any(in_range(r) for r in guard.split(",")):
+                continue
+        m = re.fullmatch(r"(\d+) ([A-Z][A-Z0-9_]*)", line)
+        if m:
+            names[int(m.group(1))] = m.group(2)
+    if len(names) < 100:
+        sys.exit(f"error: enums/{name}.dbde did not parse as expected ({len(names)} names)")
     return names
 
 
@@ -273,12 +310,20 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
         if k and 0 <= a < len(anim_names):
             animkit_anims[k].add(a)
 
-    # spell -> effect enum ids
+    # spell -> effect enum ids, plus aura enum ids (EffectAura — meaningful
+    # mostly on APPLY_AURA-family effects; any nonzero value is kept)
     spell_effects: dict[int, set[int]] = defaultdict(set)
-    for spell_id, effect in read_table(table_dir, "SpellEffect", ["SpellID", "Effect"]):
-        s, e = to_int(spell_id), to_int(effect)
-        if s in spell_names and e:
+    spell_auras: dict[int, set[int]] = defaultdict(set)
+    for spell_id, effect, aura in read_table(
+        table_dir, "SpellEffect", ["SpellID", "Effect", "EffectAura"]
+    ):
+        s, e, a = to_int(spell_id), to_int(effect), to_int(aura)
+        if s not in spell_names:
+            continue
+        if e:
             spell_effects[s].add(e)
+        if a:
+            spell_auras[s].add(a)
 
     # spell -> icon file id (SpellMisc; prefer the base-difficulty row)
     spell_icon_fid: dict[int, int] = {}
@@ -422,14 +467,13 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
     kit_anim_rows = sorted(
         (k, a) for k, anims in animkit_anims.items() if k in used_animkits for a in anims)
     effect_rows = sorted((s, e) for s, effs in spell_effects.items() for e in effs)
-    with open(EFFECT_NAMES_FILE, newline="", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        next(reader)  # header
-        effect_names = {row[0]: row[1] for row in reader}
+    aura_rows = sorted((s, a) for s, auras in spell_auras.items() for a in auras)
+    effect_names = read_enum_names("SpellEffect", version)
+    aura_names = read_enum_names("SpellEffectAura", version)
 
     pack = {
         "meta": {
-            "format": 3,
+            "format": 4,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
@@ -443,6 +487,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
                 "spellAnimKits": len(anim_rows),
                 "animKitAnims": len(kit_anim_rows),
                 "spellEffects": len(effect_rows),
+                "spellAuras": len(aura_rows),
                 "spellFx": len(fx_rows),
                 "fxChains": len(fx_chain_ids),
                 "icons": len(icon_names),
@@ -474,6 +519,12 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
             "effects": [r[1] for r in effect_rows],
         },
         "effectNames": effect_names,
+        # aura mechanics: SpellEffect.EffectAura values (SPELL_AURA_* names)
+        "spellAuras": {
+            "spellIds": [r[0] for r in aura_rows],
+            "auras": [r[1] for r in aura_rows],
+        },
+        "auraNames": aura_names,
         # visual FX: chain/beam effects (SpellChainEffects). spellFx links
         # spells to chains; fxChains carries each chain's tint + hue word;
         # fxTextures its texture fids (paths resolve via "files")
@@ -495,7 +546,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
     log(
         f"  spells={len(spell_ids):,}  files={len(file_ids):,} ({unnamed:,} unnamed)  "
         f"models={len(model_rows):,}  sounds={len(sound_rows):,}  animkits={len(anim_rows):,}  "
-        f"kitAnims={len(kit_anim_rows):,}  effects={len(effect_rows):,}  fx={len(fx_rows):,}  "
+        f"kitAnims={len(kit_anim_rows):,}  effects={len(effect_rows):,}  auras={len(aura_rows):,}  fx={len(fx_rows):,}  "
         f"fxChains={len(fx_chain_ids):,}  icons={len(icon_names):,}  "
         f"orphan visual spells={orphan_spells:,}  [{time.time() - t0:.1f}s]"
     )

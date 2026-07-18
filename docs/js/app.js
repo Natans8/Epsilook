@@ -863,11 +863,15 @@
     // Effects — visual FX (beams), grouped by category
     tr.appendChild(fxCell(d.spellFx.get(spellId) || []));
 
-    // Mechanics — matched spell effects first
-    const effectIds = hitsFirst(
-      (d.spellEffects.get(spellId) || []).slice().sort((a, b) => a - b),
-      (e) => effectIsHit(e));
-    tr.appendChild(tagCell("c-mechanics", effectIds.map((e) => effectTag(e))));
+    // Mechanics — spell effects, then aura mechanics; matched ones first
+    const mechs = hitsFirst(
+      (d.spellEffects.get(spellId) || []).slice().sort((a, b) => a - b)
+        .map((e) => ({ effect: e }))
+        .concat((d.spellAuras.get(spellId) || []).slice().sort((a, b) => a - b)
+          .map((a) => ({ aura: a }))),
+      (m) => m.effect !== undefined ? effectIsHit(m.effect) : auraIsHit(m.aura));
+    tr.appendChild(tagCell("c-mechanics",
+      mechs.map((m) => m.effect !== undefined ? effectTag(m.effect) : auraTag(m.aura))));
 
     // Commands — one compact line that fits even single-line rows
     const tdCmd = el("td", "c-cmds");
@@ -1144,6 +1148,11 @@
     return groupsFor("mech").some((g) => g.tokens.every((t) => nameL.includes(t.text)));
   }
 
+  function auraIsHit(auraId) {
+    const nameL = state.data.auraNamesL.get(auraId) || "";
+    return groupsFor("mech").some((g) => g.tokens.every((t) => nameL.includes(t.text)));
+  }
+
   function fxChainIsHit(chainId) {
     const corpus = state.data.fxSearchL.get(chainId) || "";
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
@@ -1300,6 +1309,18 @@
     return tag;
   }
 
+  function auraTag(auraId) {
+    const d = state.data;
+    const name = d.auraNames.get(auraId) || `AURA_${auraId}`;
+    const tag = el("span", "tag mechanic");
+    if (auraIsHit(auraId)) tag.classList.add("hit");
+    const label = el("button", "tag-label", name);
+    label.title = `Aura ${auraId}: SPELL_AURA_${name}\nClick: find spells with this mechanic\nShift-click: exclude them instead`;
+    label.dataset.search = `mech:"${name}"`;
+    tag.appendChild(label);
+    return tag;
+  }
+
   /* Visual FX tags: the category head ("beam") and one pill per texture,
    * with a dot showing the chain's tint (hidden when untinted). The head
    * is a plain label — clicking it would just search the whole category. */
@@ -1375,7 +1396,9 @@
       }
       if (!hc.mechanics) {
         row.mechanics = (d.spellEffects.get(id) || []).slice().sort((a, b) => a - b)
-          .map((e) => d.effectNames.get(e) || `EFFECT_${e}`);
+          .map((e) => d.effectNames.get(e) || `EFFECT_${e}`)
+          .concat((d.spellAuras.get(id) || []).slice().sort((a, b) => a - b)
+            .map((a) => d.auraNames.get(a) || `AURA_${a}`));
       }
       return row;
     });
