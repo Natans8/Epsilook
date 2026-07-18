@@ -6,7 +6,7 @@ Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
 
 Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
 AnimKit, animation or visual effect (beams searchable by texture and tint color,
-morphs by NPC name, model name, creature ID or display ID) —
+dissolves by texture, morphs by NPC name, model name, creature ID or display ID) —
 with spell icons, clickable cross-references, spell mechanic info, and one-click
 copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
 `.lookup object <model>`, `.lookup emote <anim>`, `.modify animkit <id>`, and more).
@@ -27,7 +27,8 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   a missile model.
 - `fx:` searches the Effects column — beam/chain effects by category word
   (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`;
-  the dot on a beam tag shows the chain's RGB tint), and morphs (transform
+  the dot on a beam tag shows the chain's RGB tint), dissolve/materialize
+  effects by texture (`fx:"dissolve arcane"`), and morphs (transform
   auras) by NPC name, model name, creature ID or display ID
   (`fx:"morph sheep"`). Morph tags show the display ID with the model name
   and copy the display ID, a ready `.morph <displayID>` command, and a

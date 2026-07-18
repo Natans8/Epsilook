@@ -174,6 +174,34 @@ window.EpsilookData = (() => {
       }
     }
 
+    // dissolves (DissolveEffect rows): duration + TextureBlendSet textures;
+    // corpus: "dissolve" + texture paths — fx:"dissolve arcane_wisps" style.
+    const spellDissolves = new Map();    // spell id -> [dissolveId]
+    const dissolveSpells = new Map();    // dissolveId -> [spell id]
+    const dissolveDurations = new Map(); // dissolveId -> seconds (0 = unspecified)
+    const dissolveTextures = new Map();  // dissolveId -> [fid]
+    const dissolveSearchL = new Map();   // dissolveId -> search corpus
+    {
+      const { spellIds, dissolveIds } = pack.spellDissolves;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellDissolves, spellIds[i], dissolveIds[i]);
+        pushTo(dissolveSpells, dissolveIds[i], spellIds[i]);
+      }
+      const ds = pack.dissolves;
+      for (let i = 0; i < ds.ids.length; i++) {
+        dissolveDurations.set(ds.ids[i], ds.durations[i]);
+      }
+      const dt = pack.dissolveTextures;
+      for (let i = 0; i < dt.dissolveIds.length; i++) {
+        pushTo(dissolveTextures, dt.dissolveIds[i], dt.fids[i]);
+      }
+      for (const id of dissolveDurations.keys()) {
+        const tex = (dissolveTextures.get(id) || [])
+          .map((fid) => (files.get(fid) || { searchL: "" }).searchL).join(" ");
+        dissolveSearchL.set(id, ("dissolve " + tex).trim());
+      }
+    }
+
     // spell effects (enum id -> name without the SPELL_EFFECT_ prefix)
     const spellEffects = new Map();  // spell id -> [effect enum id]
     const effectSpells = new Map();  // effect enum id -> [spell id]
@@ -251,6 +279,7 @@ window.EpsilookData = (() => {
       spellAnimKits, animKitSpells,
       animNames, animNamesL, animKitAnims, animAnimKits,
       spellFx, fxSpells, fxChains, fxTextures, fxSearchL,
+      spellDissolves, dissolveSpells, dissolveDurations, dissolveTextures, dissolveSearchL,
       spellMorphs, morphSpells, morphNames, morphDisplays, morphSearchL,
       spellEffects, effectSpells, effectNames, effectNamesL,
       spellAuras, auraSpells, auraNames, auraNamesL,

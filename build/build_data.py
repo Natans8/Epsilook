@@ -58,6 +58,8 @@ TABLES = [
     "SpellChainEffects",
     "SpellProceduralEffect",
     "BeamEffect",
+    "DissolveEffect",
+    "TextureBlendSet",
     "CreatureDisplayInfo",
     "CreatureModelData",
 ]
@@ -108,6 +110,7 @@ ENUM_FILES = ["SpellEffect", "SpellEffectAura"]
 EFFECT_TYPE_PROC = 1      # Effect = SpellProceduralEffect.ID
 EFFECT_TYPE_SOUND = 5     # Effect = SoundKitID
 EFFECT_TYPE_ANIM = 6      # Effect = SpellVisualAnim.ID
+EFFECT_TYPE_DISSOLVE = 11 # Effect = DissolveEffect.ID
 EFFECT_TYPE_BEAM = 13     # Effect = BeamEffect.ID
 
 # SpellProceduralEffect.Type whose Value_0 is a SpellChainEffects ID
@@ -452,6 +455,24 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     for bid, chain_id in read_table(table_dir, "BeamEffect", ["ID", "BeamID"]):
         beam_chain[to_int(bid)] = to_int(chain_id)
 
+    # dissolves: EffectType 11 -> DissolveEffect, whose TextureBlendSet
+    # carries up to 3 texture fids (mask + material; names via the listfile)
+    blendset_tex: dict[int, tuple[int, ...]] = {}  # TextureBlendSet.ID -> tex fids
+    for row in read_table(
+        table_dir, "TextureBlendSet", ["ID"] + [f"TextureFileDataID_{i}" for i in range(3)]
+    ):
+        fids = tuple(dict.fromkeys(f for f in (to_int(v) for v in row[1:4]) if f))
+        blendset_tex[to_int(row[0])] = fids
+
+    dissolve_rows: dict[int, tuple[float, tuple[int, ...]]] = {}  # ID -> (duration, tex fids)
+    for did, tbs_id, duration in read_table(
+        table_dir, "DissolveEffect", ["ID", "TextureBlendSetID", "Duration"]
+    ):
+        dissolve_rows[to_int(did)] = (
+            round(float(duration), 2) if duration else 0,
+            blendset_tex.get(to_int(tbs_id), ()),
+        )
+
     chain_cols = (
         ["ID", "Red", "Green", "Blue", "SoundKitID"]
         + [f"TextureFileDataID_{i}" for i in range(3)]
@@ -477,6 +498,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     kit_soundkits: dict[int, set[int]] = defaultdict(set)
     kit_animkits: dict[int, set[int]] = defaultdict(set)
     kit_chains: dict[int, set[int]] = defaultdict(set)
+    kit_dissolves: dict[int, set[int]] = defaultdict(set)
     for kit_id, effect_type, effect in read_table(
         table_dir, "SpellVisualKitEffect", ["ParentSpellVisualKitID", "EffectType", "Effect"]
     ):
@@ -493,6 +515,9 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             expand_chain(proc_chain.get(e, 0), kit_chains[k])
         elif et == EFFECT_TYPE_BEAM:
             expand_chain(beam_chain.get(e, 0), kit_chains[k])
+        elif et == EFFECT_TYPE_DISSOLVE:
+            if e in dissolve_rows:  # a missing row carries nothing to show
+                kit_dissolves[k].add(e)
 
     # soundkit -> sound file ids
     soundkit_files: dict[int, set[int]] = defaultdict(set)
@@ -595,6 +620,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     spell_sounds: dict[int, set[tuple[int, int]]] = defaultdict(set)  # spell -> (soundkit, fid)
     spell_animkits: dict[int, set[int]] = defaultdict(set)        # spell -> animkit ids
     spell_chains: dict[int, set[int]] = defaultdict(set)          # spell -> chain effect ids
+    spell_dissolves: dict[int, set[int]] = defaultdict(set)       # spell -> dissolve effect ids
     orphan_spells = 0  # SpellXSpellVisual rows whose SpellID has no SpellName entry
 
     for spell_id, visuals in spell_visuals.items():
@@ -606,6 +632,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 spell_models[spell_id].update(kit_models.get(k, ()))
                 spell_animkits[spell_id].update(kit_animkits.get(k, ()))
                 spell_chains[spell_id].update(kit_chains.get(k, ()))
+                spell_dissolves[spell_id].update(kit_dissolves.get(k, ()))
                 for sk in kit_soundkits.get(k, ()):
                     for f in soundkit_files.get(sk, ()):
                         spell_sounds[spell_id].add((sk, f))
@@ -619,6 +646,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     # --- file names from the listfile ---------------------------------------
     used_chains = {c for chains in spell_chains.values() for c in chains}
+    used_dissolves = {e for effs in spell_dissolves.values() for e in effs}
 
     referenced_fids = set()
     for fids in spell_models.values():
@@ -627,6 +655,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         referenced_fids.update(f for _, f in pairs)
     for c in used_chains:
         referenced_fids.update(chain_rows[c][4])
+    for e in used_dissolves:
+        referenced_fids.update(dissolve_rows[e][1])
     referenced_fids.update(f for _, _, f in morph_display_rows if f)
 
     # icon fids resolve through the same listfile pass but stay out of the
@@ -718,6 +748,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         fx_hues.append(hue_word(r, g, b))
     fx_tex_rows = sorted((c, f) for c in used_chains for f in chain_rows[c][4])
 
+    dissolve_row_pairs = sorted((s, e) for s, effs in spell_dissolves.items() for e in effs)
+    dissolve_ids = sorted(used_dissolves)
+    dissolve_tex_rows = sorted((e, f) for e in used_dissolves for f in dissolve_rows[e][1])
+
     # only animkits that spells actually use
     used_animkits = {a for aks in spell_animkits.values() for a in aks}
     kit_anim_rows = sorted(
@@ -731,7 +765,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     pack = {
         "meta": {
-            "format": 6,
+            "format": 7,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
@@ -752,6 +786,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "morphs": len(morph_creature_ids),
                 "morphDisplays": len(morph_display_rows),
                 "fxChains": len(fx_chain_ids),
+                "spellDissolves": len(dissolve_row_pairs),
+                "dissolves": len(dissolve_ids),
                 "icons": len(icon_names),
             },
         },
@@ -803,6 +839,22 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "chainIds": [r[0] for r in fx_tex_rows],
             "fids": [r[1] for r in fx_tex_rows],
         },
+        # dissolves (DissolveEffect via kit EffectType 11): spellDissolves
+        # links spells to dissolve rows; dissolves carries each row's
+        # duration (seconds, 0 = unspecified); dissolveTextures its
+        # TextureBlendSet texture fids (paths resolve via "files")
+        "spellDissolves": {
+            "spellIds": [r[0] for r in dissolve_row_pairs],
+            "dissolveIds": [r[1] for r in dissolve_row_pairs],
+        },
+        "dissolves": {
+            "ids": dissolve_ids,
+            "durations": [dissolve_rows[e][0] for e in dissolve_ids],
+        },
+        "dissolveTextures": {
+            "dissolveIds": [r[0] for r in dissolve_tex_rows],
+            "fids": [r[1] for r in dissolve_tex_rows],
+        },
         # morphs: transform auras reference a CREATURE (NPC entry); its
         # display ids come from TDB's creature_template_model, each display
         # resolving to a creature model file (fid 0 = unknown model)
@@ -825,7 +877,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         f"  spells={len(spell_ids):,}  files={len(file_ids):,} ({unnamed:,} unnamed)  "
         f"models={len(model_rows):,}  sounds={len(sound_rows):,}  animkits={len(anim_rows):,}  "
         f"kitAnims={len(kit_anim_rows):,}  effects={len(effect_rows):,}  auras={len(aura_rows):,}  fx={len(fx_rows):,}  "
-        f"fxChains={len(fx_chain_ids):,}  morphs={len(morph_rows):,} "
+        f"fxChains={len(fx_chain_ids):,}  dissolves={len(dissolve_row_pairs):,} "
+        f"({len(dissolve_ids):,} rows)  morphs={len(morph_rows):,} "
         f"({len(morph_display_rows):,} displays)  icons={len(icon_names):,}  "
         f"orphan visual spells={orphan_spells:,}  [{time.time() - t0:.1f}s]"
     )

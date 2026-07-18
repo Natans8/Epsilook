@@ -751,7 +751,7 @@
         (!f.models || d.spellModels.has(id)) &&
         (!f.sounds || d.spellSounds.has(id)) &&
         (!f.animkits || d.spellAnimKits.has(id)) &&
-        (!f.fx || d.spellFx.has(id) || d.spellMorphs.has(id)));
+        (!f.fx || d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellMorphs.has(id)));
     } else {
       list = list.slice();
     }
@@ -1082,15 +1082,17 @@
     }
   }
 
-  /* Effects cell: visual FX grouped by category — "beam" (chain effects)
-   * and "morph" (transform auras); future categories (dissolve, tints, …)
-   * become more groups here. Beam pills carry a tint dot per texture. */
+  /* Effects cell: visual FX grouped by category — "beam" (chain effects),
+   * "dissolve" (dissolve effects) and "morph" (transform auras); future
+   * categories (tints, …) become more groups here. Beam pills carry a
+   * tint dot per texture. */
   function fxCell(spellId) {
     const d = state.data;
     const chainIds = d.spellFx.get(spellId) || [];
+    const dissolveIds = d.spellDissolves.get(spellId) || [];
     const morphIds = d.spellMorphs.get(spellId) || [];
     const td = el("td", "c-fx");
-    if (chainIds.length === 0 && morphIds.length === 0) {
+    if (chainIds.length === 0 && dissolveIds.length === 0 && morphIds.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
       return td;
@@ -1115,6 +1117,23 @@
         name: "beam",
         hit: chainIds.some((c) => fxChainIsHit(c)),
         items: hitsFirst(entries, (e) => fxChainIsHit(e.chainId)).map((e) => () => fxTag(e)),
+      });
+    }
+    if (dissolveIds.length) {
+      // one pill per distinct texture; textureless rows still show
+      const entries = [];
+      const seen = new Set();
+      for (const id of dissolveIds.slice().sort((a, b) => a - b)) {
+        for (const fid of d.dissolveTextures.get(id) || [0]) {
+          if (seen.has(fid)) continue;
+          seen.add(fid);
+          entries.push({ dissolveId: id, fid });
+        }
+      }
+      cats.push({
+        name: "dissolve",
+        hit: dissolveIds.some((id) => dissolveIsHit(id)),
+        items: hitsFirst(entries, (e) => dissolveIsHit(e.dissolveId)).map((e) => () => dissolveTag(e)),
       });
     }
     if (morphIds.length) {
@@ -1177,6 +1196,11 @@
 
   function fxChainIsHit(chainId) {
     const corpus = state.data.fxSearchL.get(chainId) || "";
+    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+  }
+
+  function dissolveIsHit(dissolveId) {
+    const corpus = state.data.dissolveSearchL.get(dissolveId) || "";
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
@@ -1353,6 +1377,7 @@
    * is a plain label — clicking it would just search the whole category. */
   const FX_HEAD_TITLES = {
     beam: "Beam / chain effect (SpellChainEffects)",
+    dissolve: "Dissolve / materialize effect (DissolveEffect)",
     morph: "Morph / transform aura (CreatureDisplayInfo)",
   };
 
@@ -1386,6 +1411,27 @@
     // category word + texture: the query stays scoped to beams once more
     // fx categories exist ("fx:beam lightning" style)
     txt.dataset.search = file.base ? `fx:"beam ${file.base}"` : "";
+    tag.appendChild(txt);
+
+    if (base) tag.appendChild(tagButton("⧉", `Copy texture name: ${base}`, base));
+    return tag;
+  }
+
+  /* Dissolve pill: one per texture of the row's TextureBlendSet (mask +
+   * material textures); tooltip carries the dissolve duration. */
+  function dissolveTag(entry) {
+    const d = state.data;
+    const file = entry.fid ? (d.files.get(entry.fid) || { path: "", base: "" }) : { path: "", base: "" };
+    const duration = d.dissolveDurations.get(entry.dissolveId) || 0;
+    const tag = el("span", "tag fx");
+    if (dissolveIsHit(entry.dissolveId)) tag.classList.add("hit");
+
+    const base = file.base ? stripExt(file.base) : "";
+    const txt = el("button", "tag-label", base || "(untextured)");
+    txt.title = `${file.path || "(no texture)"}`
+      + (duration ? `\nDuration ${duration}s` : "")
+      + `\nClick: find spells with this dissolve texture\nShift-click: exclude them instead`;
+    txt.dataset.search = file.base ? `fx:"dissolve ${file.base}"` : "";
     tag.appendChild(txt);
 
     if (base) tag.appendChild(tagButton("⧉", `Copy texture name: ${base}`, base));
@@ -1460,7 +1506,11 @@
             textures: (d.fxTextures.get(c) || []).map(pathOf),
             tint: info.color === 0xffffff ? null : "#" + info.color.toString(16).padStart(6, "0"),
           };
-        }).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+        }).concat((d.spellDissolves.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+          type: "dissolve",
+          textures: (d.dissolveTextures.get(c) || []).map(pathOf),
+          duration: d.dissolveDurations.get(c) || null,
+        }))).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
           type: "morph",
           creatureId: c,
           creature: d.morphNames.get(c) || null,
@@ -1528,7 +1578,8 @@
         cols.push(esc(r.fx.map((e) => e.type === "morph"
           ? `morph: ${e.creature || "?"} (creature ${e.creatureId}): `
             + (e.displays.map((disp) => `${disp.displayId}=${disp.model || "?"}`).join(" | ") || "?")
-          : `${e.type}: ${e.textures.join(" | ") || "(untextured)"}${e.tint ? ` (${e.tint})` : ""}`).join("; ")));
+          : `${e.type}: ${e.textures.join(" | ") || "(untextured)"}`
+            + (e.tint ? ` (${e.tint})` : "") + (e.duration ? ` (${e.duration}s)` : "")).join("; ")));
       }
       if (!hc.mechanics) cols.push(esc(r.mechanics.join("; ")));
       lines.push(cols.join(","));
