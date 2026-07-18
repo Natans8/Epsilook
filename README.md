@@ -5,8 +5,9 @@ Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
 **Live at [natans8.github.io/Epsilook](https://natans8.github.io/Epsilook/).**
 
 Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
-AnimKit or animation — with spell icons, clickable cross-references, spell effect info,
-and one-click copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
+AnimKit, animation or visual effect (beams, searchable by texture and tint color) —
+with spell icons, clickable cross-references, spell mechanic info, and one-click
+copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
 `.lookup object <model>`, `.lookup emote <anim>`, `.modify animkit <id>`, and more).
 
 The app is a fully static site: all data is baked into one compressed pack per game
@@ -16,14 +17,17 @@ version and every search runs in the browser. No server, no database, no depende
 
 Open the page, type into the search bar. Full syntax is in the `?` dialog:
 
-- Plain words search names, models, sounds and animations at once and match **any part of a name,
-  in any order** — `6dr statue` finds `6dr_draenei_statue_male01.m2`.
+- Plain words search names, models, sounds, animations and visual effects at once and
+  match **any part of a name, in any order** — `6dr statue` finds `6dr_draenei_statue_male01.m2`.
 - Quotes make an **exact phrase**: `"fire bolt"` matches those words together, in that order.
 - Field tags narrow a term to one field: `name:` `model:` `sound:` `soundkit:`
-  `animkit:` `anim:` `effect:` `id:` — type the prefix or click a field button.
+  `animkit:` `anim:` `fx:` `mechanic:` `id:` — type the prefix or click a field button.
   Tags combine with AND: `model:missile name:fire` finds fire-named spells that use
   a missile model.
-- A `-` prefix excludes instead: `name:nova -effect:school_damage`.
+- `fx:` searches the Effects column — beam/chain effects, by category word
+  (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`).
+  The dot on a beam tag shows the chain's RGB tint.
+- A `-` prefix excludes instead: `name:nova -mechanic:school_damage`.
 - The whole bar selects like plain text — mouse, Ctrl+A, or Shift+arrows — and
   Ctrl+C copies the selection as query text (`model:book note anim:read`), ready
   to paste back into any Epsilook search bar.
@@ -58,7 +62,7 @@ python build/build_data.py --version 9.2.7.45745 --label "Shadowlands 9.2.7"
 The script downloads the raw game tables from [wago.tools](https://wago.tools) (CSV
 export) and the community listfile from
 [wowdev/wow-listfile](https://github.com/wowdev/wow-listfile), walks the
-spell → visual → model/sound/animkit chains, and writes
+spell → visual → model/sound/animkit/chain-effect chains, and writes
 `docs/data/<version>/spelldata.json.gz` plus the `versions.json` manifest.
 Downloads are cached under `build/cache/`; pass `--refresh` to re-download.
 

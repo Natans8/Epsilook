@@ -36,10 +36,10 @@
     display: [],        // results after filters + sort
     searchMs: 0,
     rendered: 0,        // rows currently in the table
-    filters: { models: false, sounds: false, animkits: false },
+    filters: { models: false, sounds: false, animkits: false, fx: false },
     sort: { key: "auto", dir: 1 },
     // hidden columns (also excluded from All-mode search and from exports)
-    hiddenCols: { models: false, sounds: false, animkits: false, effects: true, commands: false },
+    hiddenCols: { models: false, sounds: false, animkits: false, fx: false, mechanics: true, commands: false },
   };
 
   // column -> search fields it contributes
@@ -47,7 +47,8 @@
     models: ["model"],
     sounds: ["sound", "soundkit"],
     animkits: ["animkit", "anim"],
-    effects: ["effect"],
+    fx: ["fx"],
+    mechanics: ["mechanic"],
   };
 
   function disabledFields() {
@@ -123,7 +124,7 @@
     return f && f !== "all" && Search.FIELDS[f];
   }
 
-  // canonical string form: model:"fel reaver" -effect:knockback free words.
+  // canonical string form: model:"fel reaver" -mechanic:knockback free words.
   // The live input's contribution is spliced in at state.pos, so a query
   // typed before or between chips serializes (and round-trips) in place.
   // one chip as query text: single words as-is, multi-word values wrapped in
@@ -665,7 +666,7 @@
     const box = $("#suggest");
     if (state.activeField) return hideSuggest();
     let word = input.value.split(/\s+/).pop().toLowerCase();
-    if (word.startsWith("-")) word = word.slice(1); // "-eff" suggests effect: as an exclusion
+    if (word.startsWith("-")) word = word.slice(1); // "-mec" suggests mechanic: as an exclusion
     if (word.length < 2) return hideSuggest();
     const matches = Object.entries(Search.FIELDS).filter(([key, f]) =>
       f.tab && !disabledFields().has(key) &&
@@ -744,11 +745,12 @@
     let list = state.results;
 
     const f = state.filters;
-    if (f.models || f.sounds || f.animkits) {
+    if (f.models || f.sounds || f.animkits || f.fx) {
       list = list.filter((id) =>
         (!f.models || d.spellModels.has(id)) &&
         (!f.sounds || d.spellSounds.has(id)) &&
-        (!f.animkits || d.spellAnimKits.has(id)));
+        (!f.animkits || d.spellAnimKits.has(id)) &&
+        (!f.fx || d.spellFx.has(id)));
     } else {
       list = list.slice();
     }
@@ -857,11 +859,14 @@
     // Animations — AnimKits grouped with the animations they play
     tr.appendChild(animationsCell(d.spellAnimKits.get(spellId) || []));
 
-    // Effects — matched effects first
+    // Effects — visual FX (beams), grouped by category
+    tr.appendChild(fxCell(d.spellFx.get(spellId) || []));
+
+    // Mechanics — matched spell effects first
     const effectIds = hitsFirst(
       (d.spellEffects.get(spellId) || []).slice().sort((a, b) => a - b),
       (e) => effectIsHit(e));
-    tr.appendChild(tagCell("c-effects", effectIds.map((e) => effectTag(e))));
+    tr.appendChild(tagCell("c-mechanics", effectIds.map((e) => effectTag(e))));
 
     // Commands — one compact line that fits even single-line rows
     const tdCmd = el("td", "c-cmds");
@@ -1020,7 +1025,9 @@
 
   /* Shared group renderer: each kit is a small box — the kit tag as a
    * tinted head segment, its items flowing (and wrapping) beside it —
-   * collapsing only when it actually saves space. */
+   * collapsing only when it actually saves space. With opts.moreInHead a
+   * group's own "+N" expander sits in its head bar (spare horizontal space)
+   * instead of the td-level "+N more" strip. */
   function buildKitGroups(td, kitIds, opts) {
     const groupLimit = kitIds.length <= 2 + 1 ? kitIds.length : 2;
     let hiddenCount = 0;
@@ -1048,6 +1055,13 @@
           itemsDiv.appendChild(tag);
         });
         group.appendChild(itemsDiv);
+        if (opts.moreInHead && gi < groupLimit && items.length > limit) {
+          const more = el("button", "more head-more", `+${items.length - limit}`);
+          more.title = `Show all ${items.length}`;
+          more.dataset.expand = "1";
+          head.appendChild(more);
+          hiddenCount -= items.length - limit; // this expander's job, not the td strip's
+        }
       }
       td.appendChild(group);
     });
@@ -1061,6 +1075,44 @@
       more.dataset.expand = "1";
       td.appendChild(more);
     }
+  }
+
+  /* Effects cell: visual FX grouped by category — today only "beam"
+   * (chain effects); future categories (dissolve, tints, …) become more
+   * groups here. One pill per texture; its dot shows the chain's tint. */
+  function fxCell(chainIds) {
+    const td = el("td", "c-fx");
+    if (chainIds.length === 0) {
+      td.classList.add("empty");
+      td.appendChild(el("span", "none", "—"));
+      return td;
+    }
+    const d = state.data;
+
+    // one entry per distinct (texture, tint); untextured chains still show
+    const entries = [];
+    const seen = new Set();
+    for (const c of chainIds.slice().sort((a, b) => a - b)) {
+      const color = (d.fxChains.get(c) || {}).color ?? 0xffffff;
+      const fids = d.fxTextures.get(c) || [0];
+      for (const fid of fids) {
+        const key = fid + ":" + color;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        entries.push({ chainId: c, fid, color });
+      }
+    }
+    const anyHit = chainIds.some((c) => fxChainIsHit(c));
+
+    buildKitGroups(td, ["beam"], {
+      headerTag: () => fxHeadTag("beam", anyHit),
+      itemsOf: () => hitsFirst(entries, (e) => fxChainIsHit(e.chainId)),
+      itemTag: (e) => fxTag(e),
+      itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
+      groupNoun: "category",
+      moreInHead: true,
+    });
+    return td;
   }
 
   function tokensFor(field) {
@@ -1088,7 +1140,12 @@
 
   function effectIsHit(effectId) {
     const nameL = state.data.effectNamesL.get(effectId) || "";
-    return groupsFor("effect").some((g) => g.tokens.every((t) => nameL.includes(t.text)));
+    return groupsFor("mechanic").some((g) => g.tokens.every((t) => nameL.includes(t.text)));
+  }
+
+  function fxChainIsHit(chainId) {
+    const corpus = state.data.fxSearchL.get(chainId) || "";
+    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
   // small helper: a copy button inside a tag. "⧉" copies an ID; command
@@ -1233,12 +1290,49 @@
   function effectTag(effectId) {
     const d = state.data;
     const name = d.effectNames.get(effectId) || `EFFECT_${effectId}`;
-    const tag = el("span", "tag effect");
+    const tag = el("span", "tag mechanic");
     if (effectIsHit(effectId)) tag.classList.add("hit");
     const label = el("button", "tag-label", name);
-    label.title = `Spell effect ${effectId}: SPELL_EFFECT_${name}\nClick: find spells with this effect\nShift-click: exclude them instead`;
-    label.dataset.search = `effect:"${name}"`;
+    label.title = `Spell effect ${effectId}: SPELL_EFFECT_${name}\nClick: find spells with this mechanic\nShift-click: exclude them instead`;
+    label.dataset.search = `mechanic:"${name}"`;
     tag.appendChild(label);
+    return tag;
+  }
+
+  /* Visual FX tags: the category head ("beam") and one pill per texture,
+   * with a dot showing the chain's tint (hidden when untinted). */
+  function fxHeadTag(category, hit) {
+    const tag = el("span", "tag fx-head");
+    if (hit) tag.classList.add("hit");
+    const label = el("button", "tag-label", category);
+    label.title = `Beam / chain effect (SpellChainEffects)\nClick: find all spells with a beam\nShift-click: exclude them instead`;
+    label.dataset.search = `fx:${category}`;
+    tag.appendChild(label);
+    return tag;
+  }
+
+  function fxTag(entry) {
+    const d = state.data;
+    const file = entry.fid ? (d.files.get(entry.fid) || { path: "", base: "" }) : { path: "", base: "" };
+    const info = d.fxChains.get(entry.chainId) || { color: 0xffffff, hue: "" };
+    const tag = el("span", "tag fx");
+    if (fxChainIsHit(entry.chainId)) tag.classList.add("hit");
+
+    if (entry.color !== 0xffffff) {
+      const hex = "#" + entry.color.toString(16).padStart(6, "0");
+      const dot = el("span", "fx-swatch");
+      dot.style.background = hex;
+      dot.title = `Tint ${hex}` + (info.hue ? ` (${info.hue})` : "");
+      tag.appendChild(dot);
+    }
+
+    const base = file.base ? stripExt(file.base) : "";
+    const txt = el("button", "tag-label", base || "(untextured)");
+    txt.title = `${file.path || "(no texture)"}\nClick: find spells with this beam texture\nShift-click: exclude them instead`;
+    txt.dataset.search = file.base ? `fx:"${file.base}"` : `fx:${info.hue || "beam"}`;
+    tag.appendChild(txt);
+
+    if (file.path) tag.appendChild(tagButton("⧉", `Copy texture path\n${file.path}`, file.path));
     return tag;
   }
 
@@ -1266,8 +1360,18 @@
         row.animKits = (d.spellAnimKits.get(id) || []).slice().sort((a, b) => a - b)
           .map((k) => ({ id: k, anims: (d.animKitAnims.get(k) || []).map((a) => d.animNames[a]) }));
       }
-      if (!hc.effects) {
-        row.effects = (d.spellEffects.get(id) || []).slice().sort((a, b) => a - b)
+      if (!hc.fx) {
+        row.fx = (d.spellFx.get(id) || []).slice().sort((a, b) => a - b).map((c) => {
+          const info = d.fxChains.get(c) || { color: 0xffffff, hue: "" };
+          return {
+            type: "beam",
+            textures: (d.fxTextures.get(c) || []).map(pathOf),
+            tint: info.color === 0xffffff ? null : "#" + info.color.toString(16).padStart(6, "0"),
+          };
+        });
+      }
+      if (!hc.mechanics) {
+        row.mechanics = (d.spellEffects.get(id) || []).slice().sort((a, b) => a - b)
           .map((e) => d.effectNames.get(e) || `EFFECT_${e}`);
       }
       return row;
@@ -1304,7 +1408,8 @@
     if (!hc.models) header.push("Models");
     if (!hc.sounds) header.push("SoundKits", "Sounds");
     if (!hc.animkits) header.push("AnimKits", "Animations");
-    if (!hc.effects) header.push("Effects");
+    if (!hc.fx) header.push("Effects");
+    if (!hc.mechanics) header.push("Mechanics");
     const lines = [header.join(",")];
     for (const r of exportRows()) {
       const cols = [r.id, esc(r.name), esc(r.subtext)];
@@ -1317,7 +1422,11 @@
         cols.push(esc(r.animKits.map((k) => k.id).join("; ")));
         cols.push(esc(r.animKits.map((k) => `${k.id}: ${k.anims.join(" | ")}`).join("; ")));
       }
-      if (!hc.effects) cols.push(esc(r.effects.join("; ")));
+      if (!hc.fx) {
+        cols.push(esc(r.fx.map((e) =>
+          `${e.type}: ${e.textures.join(" | ") || "(untextured)"}${e.tint ? ` (${e.tint})` : ""}`).join("; ")));
+      }
+      if (!hc.mechanics) cols.push(esc(r.mechanics.join("; ")));
       lines.push(cols.join(","));
     }
     downloadFile(exportFilename("csv"), "text/csv", lines.join("\r\n"));
@@ -1796,8 +1905,10 @@
       else if (t.dataset.play) toggleSound(t);
       else if (t.dataset.search) crossSearch((e.shiftKey ? "-" : "") + t.dataset.search);
       else if (t.dataset.expand) {
-        t.closest("td").classList.add("expanded");
-        t.remove();
+        const td = t.closest("td");
+        td.classList.add("expanded");
+        // expansion is cell-wide: every "+N" expander in the cell is spent
+        for (const m of td.querySelectorAll(".more")) m.remove();
       }
     });
 
@@ -1825,7 +1936,7 @@
     for (const box of document.querySelectorAll("#columns input[type=checkbox]")) {
       box.addEventListener("change", () => {
         state.hiddenCols[box.dataset.col] = !box.checked;
-        try { localStorage.setItem("epsilook.hiddenCols.v3", JSON.stringify(state.hiddenCols)); } catch (e) {}
+        try { localStorage.setItem("epsilook.hiddenCols.v4", JSON.stringify(state.hiddenCols)); } catch (e) {}
         applyHiddenCols();
         runSearch();
       });
@@ -1966,7 +2077,7 @@
 
   async function boot() {
     try {
-      Object.assign(state.hiddenCols, JSON.parse(localStorage.getItem("epsilook.hiddenCols.v3") || "{}"));
+      Object.assign(state.hiddenCols, JSON.parse(localStorage.getItem("epsilook.hiddenCols.v4") || "{}"));
     } catch (e) { /* corrupted storage — defaults apply */ }
     buildTabs();
     wireEvents();

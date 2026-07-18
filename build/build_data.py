@@ -47,6 +47,9 @@ TABLES = [
     "SoundKitEntry",
     "SpellEffect",
     "SpellMisc",
+    "SpellChainEffects",
+    "SpellProceduralEffect",
+    "BeamEffect",
 ]
 
 # Animation names indexed by AnimID (Stand=0, ...), maintained by wow.tools
@@ -57,9 +60,15 @@ ANIMS_JS_URL = "https://raw.githubusercontent.com/Marlamin/wow.tools.local/main/
 # wowdev.wiki Spell.dbc/Effect)
 EFFECT_NAMES_FILE = BUILD_DIR / "effect_names.csv"
 
-# SpellVisualKitEffect.EffectType values (what the kit effect points at)
+# SpellVisualKitEffect.EffectType values (what the kit effect points at) —
+# the full enum is documented in WoWDBDefs definitions/SpellVisualKitEffect.dbd
+EFFECT_TYPE_PROC = 1      # Effect = SpellProceduralEffect.ID
 EFFECT_TYPE_SOUND = 5     # Effect = SoundKitID
 EFFECT_TYPE_ANIM = 6      # Effect = SpellVisualAnim.ID
+EFFECT_TYPE_BEAM = 13     # Effect = BeamEffect.ID
+
+# SpellProceduralEffect.Type whose Value_0 is a SpellChainEffects ID
+PROC_TYPE_CHAIN = 26
 
 csv.field_size_limit(10_000_000)
 
@@ -193,8 +202,45 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
     for sva_id, animkit_id in read_table(table_dir, "SpellVisualAnim", ["ID", "AnimKitID"]):
         anim_kit_of[to_int(sva_id)] = to_int(animkit_id)
 
+    # chain effects (beams): two paths lead from a kit to SpellChainEffects —
+    # EffectType 1 -> SpellProceduralEffect (Type 26, Value_0 = chain ID) and
+    # EffectType 13 -> BeamEffect (BeamID = chain ID)
+    proc_chain: dict[int, int] = {}  # SpellProceduralEffect.ID -> chain ID
+    for pid, ptype, v0 in read_table(
+        table_dir, "SpellProceduralEffect", ["ID", "Type", "Value_0"]
+    ):
+        if to_int(ptype) == PROC_TYPE_CHAIN:
+            proc_chain[to_int(pid)] = int(float(v0)) if v0 else 0
+
+    beam_chain: dict[int, int] = {}  # BeamEffect.ID -> chain ID
+    for bid, chain_id in read_table(table_dir, "BeamEffect", ["ID", "BeamID"]):
+        beam_chain[to_int(bid)] = to_int(chain_id)
+
+    chain_cols = (
+        ["ID", "Red", "Green", "Blue", "SoundKitID"]
+        + [f"TextureFileDataID_{i}" for i in range(3)]
+        + [f"SpellChainEffectID_{i}" for i in range(11)]
+    )
+    chain_rows: dict[int, tuple] = {}  # chain ID -> (r, g, b, soundkit, texfids, subchains)
+    for row in read_table(table_dir, "SpellChainEffects", chain_cols):
+        cid = to_int(row[0])
+        r, g, b, sk = (to_int(v) for v in row[1:5])
+        # dict.fromkeys: dedupe (a chain may repeat a fid) but keep slot order
+        texfids = tuple(dict.fromkeys(f for f in (to_int(v) for v in row[5:8]) if f))
+        subs = tuple(c for c in (to_int(v) for v in row[8:19]) if c)
+        chain_rows[cid] = (r, g, b, sk, texfids, subs)
+
+    def expand_chain(cid: int, out: set[int]) -> None:
+        """Composite chains nest via SpellChainEffectID_0..10 — flatten."""
+        if cid in out or cid not in chain_rows:
+            return
+        out.add(cid)
+        for sub in chain_rows[cid][5]:
+            expand_chain(sub, out)
+
     kit_soundkits: dict[int, set[int]] = defaultdict(set)
     kit_animkits: dict[int, set[int]] = defaultdict(set)
+    kit_chains: dict[int, set[int]] = defaultdict(set)
     for kit_id, effect_type, effect in read_table(
         table_dir, "SpellVisualKitEffect", ["ParentSpellVisualKitID", "EffectType", "Effect"]
     ):
@@ -207,6 +253,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
             ak = anim_kit_of.get(e, 0)
             if ak:
                 kit_animkits[k].add(ak)
+        elif et == EFFECT_TYPE_PROC:
+            expand_chain(proc_chain.get(e, 0), kit_chains[k])
+        elif et == EFFECT_TYPE_BEAM:
+            expand_chain(beam_chain.get(e, 0), kit_chains[k])
 
     # soundkit -> sound file ids
     soundkit_files: dict[int, set[int]] = defaultdict(set)
@@ -240,10 +290,11 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
             spell_icon_fid[s] = f
 
     # --- walk the chains per spell ------------------------------------------
-    log("Walking spell -> model/sound/animkit chains ...")
+    log("Walking spell -> model/sound/animkit/chain chains ...")
     spell_models: dict[int, set[int]] = defaultdict(set)          # spell -> model fids
     spell_sounds: dict[int, set[tuple[int, int]]] = defaultdict(set)  # spell -> (soundkit, fid)
     spell_animkits: dict[int, set[int]] = defaultdict(set)        # spell -> animkit ids
+    spell_chains: dict[int, set[int]] = defaultdict(set)          # spell -> chain effect ids
     orphan_spells = 0  # SpellXSpellVisual rows whose SpellID has no SpellName entry
 
     for spell_id, visuals in spell_visuals.items():
@@ -254,16 +305,28 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
             for k in visual_kits.get(v, ()):
                 spell_models[spell_id].update(kit_models.get(k, ()))
                 spell_animkits[spell_id].update(kit_animkits.get(k, ()))
+                spell_chains[spell_id].update(kit_chains.get(k, ()))
                 for sk in kit_soundkits.get(k, ()):
                     for f in soundkit_files.get(sk, ()):
                         spell_sounds[spell_id].add((sk, f))
 
+    # a chain effect's own SoundKit folds into the spell's Sounds column
+    for spell_id, chains in spell_chains.items():
+        for c in chains:
+            sk = chain_rows[c][3]
+            for f in soundkit_files.get(sk, ()):
+                spell_sounds[spell_id].add((sk, f))
+
     # --- file names from the listfile ---------------------------------------
+    used_chains = {c for chains in spell_chains.values() for c in chains}
+
     referenced_fids = set()
     for fids in spell_models.values():
         referenced_fids.update(fids)
     for pairs in spell_sounds.values():
         referenced_fids.update(f for _, f in pairs)
+    for c in used_chains:
+        referenced_fids.update(chain_rows[c][4])
 
     # icon fids resolve through the same listfile pass but stay out of the
     # pack's files table (they become iconNames instead)
@@ -328,6 +391,31 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
     model_rows = sorted((s, f) for s, fids in spell_models.items() for f in fids)
     sound_rows = sorted((s, sk, f) for s, pairs in spell_sounds.items() for sk, f in pairs)
     anim_rows = sorted((s, a) for s, aks in spell_animkits.items() for a in aks)
+    fx_rows = sorted((s, c) for s, chains in spell_chains.items() for c in chains)
+
+    # per used chain: packed RGB tint (0xFFFFFF = untinted — "the texture's
+    # own color") and a coarse hue word for the search corpus, so a query
+    # like "beam red" finds a red-tinted greyscale texture
+    def hue_word(r: int, g: int, b: int) -> str:
+        import colorsys
+        h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+        if s < 0.15 or v < 0.08:
+            return ""  # white / grey / near-black tints carry no hue
+        deg = h * 360
+        for limit, name in ((15, "red"), (45, "orange"), (70, "yellow"), (160, "green"),
+                            (200, "cyan"), (255, "blue"), (290, "purple"), (330, "pink"),
+                            (361, "red")):
+            if deg < limit:
+                return name
+        return ""
+
+    fx_chain_ids = sorted(used_chains)
+    fx_colors, fx_hues = [], []
+    for c in fx_chain_ids:
+        r, g, b = chain_rows[c][:3]
+        fx_colors.append((r << 16) | (g << 8) | b)
+        fx_hues.append(hue_word(r, g, b))
+    fx_tex_rows = sorted((c, f) for c in used_chains for f in chain_rows[c][4])
 
     # only animkits that spells actually use
     used_animkits = {a for aks in spell_animkits.values() for a in aks}
@@ -341,7 +429,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
 
     pack = {
         "meta": {
-            "format": 2,
+            "format": 3,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
@@ -355,6 +443,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
                 "spellAnimKits": len(anim_rows),
                 "animKitAnims": len(kit_anim_rows),
                 "spellEffects": len(effect_rows),
+                "spellFx": len(fx_rows),
+                "fxChains": len(fx_chain_ids),
                 "icons": len(icon_names),
             },
         },
@@ -384,12 +474,29 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path) -
             "effects": [r[1] for r in effect_rows],
         },
         "effectNames": effect_names,
+        # visual FX: chain/beam effects (SpellChainEffects). spellFx links
+        # spells to chains; fxChains carries each chain's tint + hue word;
+        # fxTextures its texture fids (paths resolve via "files")
+        "spellFx": {
+            "spellIds": [r[0] for r in fx_rows],
+            "chainIds": [r[1] for r in fx_rows],
+        },
+        "fxChains": {
+            "ids": fx_chain_ids,
+            "colors": fx_colors,
+            "hues": fx_hues,
+        },
+        "fxTextures": {
+            "chainIds": [r[0] for r in fx_tex_rows],
+            "fids": [r[1] for r in fx_tex_rows],
+        },
     }
 
     log(
         f"  spells={len(spell_ids):,}  files={len(file_ids):,} ({unnamed:,} unnamed)  "
         f"models={len(model_rows):,}  sounds={len(sound_rows):,}  animkits={len(anim_rows):,}  "
-        f"kitAnims={len(kit_anim_rows):,}  effects={len(effect_rows):,}  icons={len(icon_names):,}  "
+        f"kitAnims={len(kit_anim_rows):,}  effects={len(effect_rows):,}  fx={len(fx_rows):,}  "
+        f"fxChains={len(fx_chain_ids):,}  icons={len(icon_names):,}  "
         f"orphan visual spells={orphan_spells:,}  [{time.time() - t0:.1f}s]"
     )
     return pack
