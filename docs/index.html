@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Epsilook — WoW Spell Visual Search</title>
-  <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit or animkit. A companion tool for Epsilon WoW.">
+  <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit, animkit or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260716l">
+  <link rel="stylesheet" href="css/app.css?v=20260718a">
 </head>
 <body>
 
@@ -47,7 +47,7 @@
         <section>
           <h3>Searching</h3>
           <ul>
-            <li>Plain words search <b>names, models, sounds and animations</b> at once; a plain number also matches a spell ID.</li>
+            <li>Plain words search <b>names, models, sounds, animations and visual effects</b> at once; a plain number also matches a spell ID.</li>
             <li>Words match <b>any part of the text, in any order</b> — <code>impact fireball</code> finds
               <code>cfx_mage_fireball_impact.m2</code>.</li>
             <li>Quotes make an <b>exact phrase</b>: <code>"fire bolt"</code> matches those words together,
@@ -60,7 +60,9 @@
             <li>Type a prefix like <code>model:</code> (or click a field button) to search one field only.
               Everything you type then belongs to the tag — spaces included — until you press <kbd>Enter</kbd> or <kbd>Tab</kbd>.</li>
             <li>Fields: <code>name:</code> <code>model:</code> <code>sound:</code> <code>soundkit:</code>
-              <code>animkit:</code> <code>anim:</code> <code>effect:</code> <code>id:</code></li>
+              <code>animkit:</code> <code>anim:</code> <code>fx:</code> <code>mechanic:</code> <code>id:</code></li>
+            <li><code>fx:</code> searches visual effects (beams): the category word (<code>fx:beam</code>),
+              texture names (<code>fx:shadowlaser</code>) and tint colors (<code>fx:beam red</code>).</li>
             <li>Every tag must match (AND), and words <em>inside</em> one tag must match the <em>same</em> file or name —
               <code>model:6dr</code> + <code>model:crystal</code> means a 6dr model <em>and</em> a crystal model.</li>
           </ul>
@@ -68,7 +70,7 @@
         <section>
           <h3>Excluding</h3>
           <ul>
-            <li>A <b>-</b> prefix hides matches instead — <code>-effect:school_damage</code> hides every spell with that effect.</li>
+            <li>A <b>-</b> prefix hides matches instead — <code>-mechanic:school_damage</code> hides every spell with that mechanic.</li>
             <li>Four ways: type <code>-model:</code>, click the <b>−</b> half of a field button,
               click an existing tag's field label to flip it, or type <b>-</b> at the very start
               of a tag you're editing.</li>
@@ -120,13 +122,15 @@
         <label><input type="checkbox" data-filter="models"> Models</label>
         <label><input type="checkbox" data-filter="sounds"> Sounds</label>
         <label><input type="checkbox" data-filter="animkits"> Animations</label>
+        <label><input type="checkbox" data-filter="fx"> Effects</label>
       </div>
       <div id="columns" title="Hidden columns are also excluded from All-mode search and from exports">
         <span>Columns:</span>
         <label><input type="checkbox" data-col="models" checked> Models</label>
         <label><input type="checkbox" data-col="sounds" checked> Sounds</label>
         <label><input type="checkbox" data-col="animkits" checked> Animations</label>
-        <label><input type="checkbox" data-col="effects"> Effects</label>
+        <label><input type="checkbox" data-col="fx" checked> Effects</label>
+        <label><input type="checkbox" data-col="mechanics"> Mechanics</label>
         <label><input type="checkbox" data-col="commands" checked> Commands</label>
       </div>
       <div id="export">
@@ -149,7 +153,8 @@
             <th class="c-models">Models</th>
             <th class="c-sounds">Sounds</th>
             <th class="c-animkits">Animations</th>
-            <th class="c-effects">Effects</th>
+            <th class="c-fx" title="Visual effects not tied to a model — beams and chain effects">Effects</th>
+            <th class="c-mechanics" title="What the spell does mechanically (SpellEffect enums)">Mechanics</th>
             <th class="c-cmds">Commands</th>
           </tr>
         </thead>
@@ -162,7 +167,8 @@
     <div id="empty-state">
       <h2>Search <span id="es-count">…</span> spells from WoW 9.2.7</h2>
       <p>Find spells by name, by the model files their visuals attach, by the sounds and
-         soundkits they play, by animation, or by ID — then copy Epsilon commands with one click.</p>
+         soundkits they play, by animation, by visual effect (beams, tinted by color), or by ID —
+         then copy Epsilon commands with one click.</p>
       <p class="es-try">Try one of these:</p>
       <div class="es-examples">
         <button data-search="fireball">fireball</button>
@@ -170,8 +176,9 @@
         <button data-search="model:book">model:book</button>
         <button data-search="sound:felreaver">sound:felreaver</button>
         <button data-search="anim:ArtLoop">anim:ArtLoop</button>
-        <button data-search="effect:leap">effect:leap</button>
-        <button data-search='name:nova -effect:school_damage'>name:nova -effect:school_damage</button>
+        <button data-search="fx:beam red">fx:beam red</button>
+        <button data-search="mechanic:leap">mechanic:leap</button>
+        <button data-search='name:nova -mechanic:school_damage'>name:nova -mechanic:school_damage</button>
       </div>
       <p class="es-hint">Words match any part of a name in any order — <code>impact fireball</code> finds
          <code>cfx_mage_fireball_impact.m2</code>. Click the <b>?</b> next to the search bar for the full syntax.</p>
@@ -202,9 +209,9 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260716l"></script>
-<script src="js/data.js?v=20260716l"></script>
-<script src="js/search.js?v=20260716l"></script>
-<script src="js/app.js?v=20260716l"></script>
+<script src="js/config.js?v=20260718a"></script>
+<script src="js/data.js?v=20260718a"></script>
+<script src="js/search.js?v=20260718a"></script>
+<script src="js/app.js?v=20260718a"></script>
 </body>
 </html>

@@ -7,7 +7,7 @@
  * model: chips mean "the spell uses a model matching chip 1 AND a model
  * matching chip 2" — not both words in one file. A group with not: true
  * excludes its matches instead. Free text (field "all") matches spell
- * names, model files, sound files and animation names.
+ * names, model files, sound files, animation names and visual FX.
  *
  * Each field entry implements run(tokens, data, disabled) -> Set of
  * spell IDs. Adding a new searchable relation = adding one entry to
@@ -59,6 +59,16 @@ window.EpsilookSearch = (() => {
     return out;
   }
 
+  // Search visual FX (chain/beam) corpora: category word + hue + textures.
+  function spellsByFx(tokens, data) {
+    const out = new Set();
+    for (const [chainId, searchL] of data.fxSearchL) {
+      if (!textMatches(searchL, tokens)) continue;
+      for (const s of data.fxSpells.get(chainId) || []) out.add(s);
+    }
+    return out;
+  }
+
   // Exact numeric lookup against a Map of id -> [spell ids].
   function spellsByKitId(tokens, map) {
     let result = null;
@@ -91,6 +101,9 @@ window.EpsilookSearch = (() => {
         }
         if (!disabled.has("anim")) {
           for (const s of spellsByAnim(tokens, data)) out.add(s);
+        }
+        if (!disabled.has("fx")) {
+          for (const s of spellsByFx(tokens, data)) out.add(s);
         }
         // a pure number also hits the exact spell ID
         if (tokens.length === 1 && /^\d+$/.test(tokens[0].text)
@@ -130,9 +143,14 @@ window.EpsilookSearch = (() => {
       hint: "animation name, e.g. kneel", short: "animation",
       run: (tokens, data) => spellsByAnim(tokens, data),
     },
-    effect: {
+    fx: {
       label: "Effect", tab: true,
-      hint: "spell effect, e.g. resurrect", short: "effect",
+      hint: "visual effect, e.g. beam red", short: "visual effect",
+      run: (tokens, data) => spellsByFx(tokens, data),
+    },
+    mechanic: {
+      label: "Mechanic", tab: true,
+      hint: "spell mechanic, e.g. resurrect", short: "mechanic",
       run(tokens, data) {
         const out = new Set();
         for (const [effectId, nameL] of data.effectNamesL) {

@@ -145,6 +145,35 @@ window.EpsilookData = (() => {
       }
     }
 
+    // visual FX: chain/beam effects. Each chain has a tint (0xFFFFFF =
+    // untinted), a hue word, textures (fids into `files`), and a lowercase
+    // search corpus: "beam" + hue + texture paths.
+    const spellFx = new Map();     // spell id -> [chainId]
+    const fxSpells = new Map();    // chainId -> [spell id]
+    const fxChains = new Map();    // chainId -> {color, hue}
+    const fxTextures = new Map();  // chainId -> [fid]
+    const fxSearchL = new Map();   // chainId -> search corpus
+    {
+      const { spellIds, chainIds } = pack.spellFx;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellFx, spellIds[i], chainIds[i]);
+        pushTo(fxSpells, chainIds[i], spellIds[i]);
+      }
+      const fc = pack.fxChains;
+      for (let i = 0; i < fc.ids.length; i++) {
+        fxChains.set(fc.ids[i], { color: fc.colors[i], hue: fc.hues[i] });
+      }
+      const ft = pack.fxTextures;
+      for (let i = 0; i < ft.chainIds.length; i++) {
+        pushTo(fxTextures, ft.chainIds[i], ft.fids[i]);
+      }
+      for (const [c, info] of fxChains) {
+        const tex = (fxTextures.get(c) || [])
+          .map((fid) => (files.get(fid) || { searchL: "" }).searchL).join(" ");
+        fxSearchL.set(c, ("beam " + info.hue + " " + tex).trim());
+      }
+    }
+
     // spell effects (enum id -> name without the SPELL_EFFECT_ prefix)
     const spellEffects = new Map();  // spell id -> [effect enum id]
     const effectSpells = new Map();  // effect enum id -> [spell id]
@@ -173,6 +202,7 @@ window.EpsilookData = (() => {
       spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles,
       spellAnimKits, animKitSpells,
       animNames, animNamesL, animKitAnims, animAnimKits,
+      spellFx, fxSpells, fxChains, fxTextures, fxSearchL,
       spellEffects, effectSpells, effectNames, effectNamesL,
     };
   }
