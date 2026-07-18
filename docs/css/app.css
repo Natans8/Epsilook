@@ -707,6 +707,14 @@ td.expanded .tag.overflow { display: inline-flex; }
 .tag .wowhead:hover { background: rgba(192, 64, 0, 0.18); box-shadow: none; }
 .tag .wowhead img { width: 0.85rem; height: 0.85rem; }
 
+/* wowhead link on a pill's LEFT edge (morph pills): divider flips sides,
+   extra outer padding clears the rounded corner */
+.tag .wowhead:first-child {
+  border-left: none;
+  border-right: 1px solid var(--border);
+  padding: 0.12rem 0.4rem 0.12rem 0.5rem;
+}
+
 #empty-note { color: var(--text-dim); padding: 1.6rem 0.5rem; }
 
 #sentinel { height: 1px; }

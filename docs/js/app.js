@@ -1464,7 +1464,8 @@
   /* Morph pill: one per (creature, display). Label = dimmed display ID +
    * the creature model's file name; tooltip names the NPC the spell morphs
    * into; ⧉ copies the display ID, .morph / .lo the ready-to-paste
-   * commands. Creatures without TDB data get an inert "creature #id" pill. */
+   * commands; the Wowhead icon on the left opens their model viewer on the
+   * display. Creatures without TDB data get an inert "creature #id" pill. */
   function morphTag(entry) {
     const d = state.data;
     const { creatureId, displayId, fid } = entry;
@@ -1472,6 +1473,11 @@
     const file = fid ? (d.files.get(fid) || { path: "", base: "" }) : { path: "", base: "" };
     const tag = el("span", "tag fx");
     if (morphIsHit(creatureId)) tag.classList.add("hit");
+
+    if (displayId && CFG.wowheadMorphUrl) {
+      tag.appendChild(wowheadLink(fillTemplate(CFG.wowheadMorphUrl, { id: displayId }),
+        `View DisplayID ${displayId} in Wowhead's model viewer`));
+    }
 
     const base = file.base ? stripExt(file.base) : "";
     const txt = el("button", "tag-label");

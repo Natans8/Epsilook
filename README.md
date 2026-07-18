@@ -32,7 +32,8 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   auras) by NPC name, model name, creature ID or display ID
   (`fx:"morph sheep"`). Morph tags show the display ID with the model name
   and copy the display ID, a ready `.morph <displayID>` command, and a
-  `.lookup display creature <model file>` command.
+  `.lookup display creature <model file>` command; the Wowhead icon opens
+  the morph in Wowhead's 3D model viewer.
 - `mech:` searches the Mechanics column — what a spell *does*: spell effect
   names (`mech:resurrect`, `mech:school_damage`) and aura names for
   aura-applying spells (`mech:mod_stun`, `mech:periodic_damage`).

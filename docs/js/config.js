@@ -29,9 +29,10 @@ window.EpsilookConfig = {
   morphCopyTemplate: ".morph {id}",
   morphLookupTemplate: ".lookup display creature {file}",
 
-  // External links ({id} = spell / soundkit ID).
+  // External links ({id} = spell / soundkit / creature display ID).
   wowheadSpellUrl: "https://www.wowhead.com/spell={id}",
   wowheadSoundUrl: "https://www.wowhead.com/sound={id}",
+  wowheadMorphUrl: "https://www.wowhead.com/#modelviewer:1:{id}:0",
 
   // 3D preview: the "3d" link on each model tag opens the model in the
   // community WoW.tools mirror's model viewer ({fid} = FileDataID). The
