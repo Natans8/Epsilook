@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit, animkit or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260718c">
+  <link rel="stylesheet" href="css/app.css?v=20260718d">
 </head>
 <body>
 
@@ -61,8 +61,9 @@
               Everything you type then belongs to the tag — spaces included — until you press <kbd>Enter</kbd> or <kbd>Tab</kbd>.</li>
             <li>Fields: <code>name:</code> <code>model:</code> <code>sound:</code> <code>soundkit:</code>
               <code>animkit:</code> <code>anim:</code> <code>fx:</code> <code>mech:</code> <code>id:</code></li>
-            <li><code>fx:</code> searches visual effects (beams): the category word (<code>fx:beam</code>),
-              texture names (<code>fx:shadowlaser</code>) and tint colors (<code>fx:beam red</code>).</li>
+            <li><code>fx:</code> searches visual effects: beams by category word (<code>fx:beam</code>),
+              texture name (<code>fx:shadowlaser</code>) or tint color (<code>fx:beam red</code>);
+              morphs by creature model name or display ID (<code>fx:"morph wolf"</code>).</li>
             <li><code>mech:</code> searches mechanics: spell effect names (<code>mech:resurrect</code>)
               and aura names on aura-applying spells (<code>mech:mod_stun</code>).</li>
             <li>Every tag must match (AND), and words <em>inside</em> one tag must match the <em>same</em> file or name —
@@ -155,7 +156,7 @@
             <th class="c-models">Models</th>
             <th class="c-sounds">Sounds</th>
             <th class="c-animkits">Animations</th>
-            <th class="c-fx" title="Visual effects not tied to a model — beams and chain effects">Effects</th>
+            <th class="c-fx" title="Visual effects not tied to a model — beams/chain effects and morphs (transform auras)">Effects</th>
             <th class="c-mechanics" title="What the spell does mechanically (SpellEffect + SpellEffectAura enums)">Mechanics</th>
             <th class="c-cmds">Commands</th>
           </tr>
@@ -211,9 +212,9 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260718c"></script>
-<script src="js/data.js?v=20260718c"></script>
-<script src="js/search.js?v=20260718c"></script>
-<script src="js/app.js?v=20260718c"></script>
+<script src="js/config.js?v=20260718d"></script>
+<script src="js/data.js?v=20260718d"></script>
+<script src="js/search.js?v=20260718d"></script>
+<script src="js/app.js?v=20260718d"></script>
 </body>
 </html>

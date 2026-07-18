@@ -189,6 +189,28 @@ window.EpsilookData = (() => {
     const effectNamesL = new Map(
       [...effectNames].map(([k, v]) => [k, v.toLowerCase()]));
 
+    // morphs (transform auras): CreatureDisplayID -> creature model file.
+    // Corpus: "morph" + display id + model path, so fx:morph, fx:"morph
+    // wolf" and fx:"morph 2428" all work. fid 0 = display not in this build.
+    const spellMorphs = new Map();   // spell id -> [displayId]
+    const morphSpells = new Map();   // displayId -> [spell id]
+    const morphFids = new Map();     // displayId -> model fid (0 = unknown)
+    const morphSearchL = new Map();  // displayId -> search corpus
+    {
+      const { spellIds, displayIds } = pack.spellMorphs;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellMorphs, spellIds[i], displayIds[i]);
+        pushTo(morphSpells, displayIds[i], spellIds[i]);
+      }
+      const m = pack.morphs;
+      for (let i = 0; i < m.displayIds.length; i++) {
+        morphFids.set(m.displayIds[i], m.fids[i]);
+        const file = m.fids[i] ? files.get(m.fids[i]) : null;
+        morphSearchL.set(m.displayIds[i],
+          ("morph " + m.displayIds[i] + " " + (file ? file.searchL : "")).trim());
+      }
+    }
+
     // aura mechanics (SpellEffectAura enum id -> name without SPELL_AURA_)
     const spellAuras = new Map();  // spell id -> [aura enum id]
     const auraSpells = new Map();  // aura enum id -> [spell id]
@@ -218,6 +240,7 @@ window.EpsilookData = (() => {
       spellAnimKits, animKitSpells,
       animNames, animNamesL, animKitAnims, animAnimKits,
       spellFx, fxSpells, fxChains, fxTextures, fxSearchL,
+      spellMorphs, morphSpells, morphFids, morphSearchL,
       spellEffects, effectSpells, effectNames, effectNamesL,
       spellAuras, auraSpells, auraNames, auraNamesL,
     };

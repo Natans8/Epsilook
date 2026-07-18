@@ -751,7 +751,7 @@
         (!f.models || d.spellModels.has(id)) &&
         (!f.sounds || d.spellSounds.has(id)) &&
         (!f.animkits || d.spellAnimKits.has(id)) &&
-        (!f.fx || d.spellFx.has(id)));
+        (!f.fx || d.spellFx.has(id) || d.spellMorphs.has(id)));
     } else {
       list = list.slice();
     }
@@ -860,8 +860,8 @@
     // Animations — AnimKits grouped with the animations they play
     tr.appendChild(animationsCell(d.spellAnimKits.get(spellId) || []));
 
-    // Effects — visual FX (beams), grouped by category
-    tr.appendChild(fxCell(d.spellFx.get(spellId) || []));
+    // Effects — visual FX (beams, morphs), grouped by category
+    tr.appendChild(fxCell(spellId));
 
     // Mechanics — spell effects, then aura mechanics; matched ones first
     const mechs = hitsFirst(
@@ -1082,37 +1082,54 @@
     }
   }
 
-  /* Effects cell: visual FX grouped by category — today only "beam"
-   * (chain effects); future categories (dissolve, tints, …) become more
-   * groups here. One pill per texture; its dot shows the chain's tint. */
-  function fxCell(chainIds) {
+  /* Effects cell: visual FX grouped by category — "beam" (chain effects)
+   * and "morph" (transform auras); future categories (dissolve, tints, …)
+   * become more groups here. Beam pills carry a tint dot per texture. */
+  function fxCell(spellId) {
+    const d = state.data;
+    const chainIds = d.spellFx.get(spellId) || [];
+    const morphIds = d.spellMorphs.get(spellId) || [];
     const td = el("td", "c-fx");
-    if (chainIds.length === 0) {
+    if (chainIds.length === 0 && morphIds.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
       return td;
     }
-    const d = state.data;
 
-    // one entry per distinct (texture, tint); untextured chains still show
-    const entries = [];
-    const seen = new Set();
-    for (const c of chainIds.slice().sort((a, b) => a - b)) {
-      const color = (d.fxChains.get(c) || {}).color ?? 0xffffff;
-      const fids = d.fxTextures.get(c) || [0];
-      for (const fid of fids) {
-        const key = fid + ":" + color;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        entries.push({ chainId: c, fid, color });
+    const cats = [];
+    if (chainIds.length) {
+      // one entry per distinct (texture, tint); untextured chains still show
+      const entries = [];
+      const seen = new Set();
+      for (const c of chainIds.slice().sort((a, b) => a - b)) {
+        const color = (d.fxChains.get(c) || {}).color ?? 0xffffff;
+        const fids = d.fxTextures.get(c) || [0];
+        for (const fid of fids) {
+          const key = fid + ":" + color;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          entries.push({ chainId: c, fid, color });
+        }
       }
+      cats.push({
+        name: "beam",
+        hit: chainIds.some((c) => fxChainIsHit(c)),
+        items: hitsFirst(entries, (e) => fxChainIsHit(e.chainId)).map((e) => () => fxTag(e)),
+      });
     }
-    const anyHit = chainIds.some((c) => fxChainIsHit(c));
+    if (morphIds.length) {
+      const ids = morphIds.slice().sort((a, b) => a - b);
+      cats.push({
+        name: "morph",
+        hit: morphIds.some((m) => morphIsHit(m)),
+        items: hitsFirst(ids, (m) => morphIsHit(m)).map((m) => () => morphTag(m)),
+      });
+    }
 
-    buildKitGroups(td, ["beam"], {
-      headerTag: () => fxHeadTag("beam", anyHit),
-      itemsOf: () => hitsFirst(entries, (e) => fxChainIsHit(e.chainId)),
-      itemTag: (e) => fxTag(e),
+    buildKitGroups(td, cats, {
+      headerTag: (cat) => fxHeadTag(cat.name, cat.hit),
+      itemsOf: (cat) => cat.items,
+      itemTag: (make) => make(),
       itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
       groupNoun: "category",
       moreInHead: true,
@@ -1155,6 +1172,11 @@
 
   function fxChainIsHit(chainId) {
     const corpus = state.data.fxSearchL.get(chainId) || "";
+    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+  }
+
+  function morphIsHit(displayId) {
+    const corpus = state.data.morphSearchL.get(displayId) || "";
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
@@ -1312,7 +1334,7 @@
   function auraTag(auraId) {
     const d = state.data;
     const name = d.auraNames.get(auraId) || `AURA_${auraId}`;
-    const tag = el("span", "tag mechanic");
+    const tag = el("span", "tag mechanic aura");
     if (auraIsHit(auraId)) tag.classList.add("hit");
     const label = el("button", "tag-label", name);
     label.title = `Aura ${auraId}: SPELL_AURA_${name}\nClick: find spells with this mechanic\nShift-click: exclude them instead`;
@@ -1324,11 +1346,16 @@
   /* Visual FX tags: the category head ("beam") and one pill per texture,
    * with a dot showing the chain's tint (hidden when untinted). The head
    * is a plain label — clicking it would just search the whole category. */
+  const FX_HEAD_TITLES = {
+    beam: "Beam / chain effect (SpellChainEffects)",
+    morph: "Morph / transform aura (CreatureDisplayInfo)",
+  };
+
   function fxHeadTag(category, hit) {
     const tag = el("span", "tag fx-head");
     if (hit) tag.classList.add("hit");
     const label = el("span", "tag-label", category);
-    label.title = "Beam / chain effect (SpellChainEffects)";
+    label.title = FX_HEAD_TITLES[category] || "";
     tag.appendChild(label);
     return tag;
   }
@@ -1357,6 +1384,28 @@
     tag.appendChild(txt);
 
     if (base) tag.appendChild(tagButton("⧉", `Copy texture name: ${base}`, base));
+    return tag;
+  }
+
+  /* Morph pill: creature model name (or "#displayId" when the display no
+   * longer exists in this build), ⧉ copies the display ID, .morph the
+   * ready-to-paste command. */
+  function morphTag(displayId) {
+    const d = state.data;
+    const fid = d.morphFids.get(displayId) || 0;
+    const file = fid ? (d.files.get(fid) || { path: "", base: "" }) : { path: "", base: "" };
+    const tag = el("span", "tag fx");
+    if (morphIsHit(displayId)) tag.classList.add("hit");
+
+    const base = file.base ? stripExt(file.base) : "";
+    const txt = el("button", "tag-label", base || `#${displayId}`);
+    txt.title = `${file.path || "(model unknown — display id not in this build)"}\nCreatureDisplayID ${displayId}\nClick: find spells with this morph\nShift-click: exclude them instead`;
+    txt.dataset.search = `fx:"morph ${base || displayId}"`;
+    tag.appendChild(txt);
+
+    tag.appendChild(tagButton("⧉", `Copy display ID: ${displayId}`, String(displayId)));
+    const cmd = fillTemplate(CFG.morphCopyTemplate, { id: displayId });
+    tag.appendChild(tagButton(".morph", `Copy:  ${cmd}`, cmd));
     return tag;
   }
 
@@ -1392,7 +1441,11 @@
             textures: (d.fxTextures.get(c) || []).map(pathOf),
             tint: info.color === 0xffffff ? null : "#" + info.color.toString(16).padStart(6, "0"),
           };
-        });
+        }).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((m) => ({
+          type: "morph",
+          displayId: m,
+          model: d.morphFids.get(m) ? pathOf(d.morphFids.get(m)) : null,
+        })));
       }
       if (!hc.mechanics) {
         row.mechanics = (d.spellEffects.get(id) || []).slice().sort((a, b) => a - b)
@@ -1449,8 +1502,9 @@
         cols.push(esc(r.animKits.map((k) => `${k.id}: ${k.anims.join(" | ")}`).join("; ")));
       }
       if (!hc.fx) {
-        cols.push(esc(r.fx.map((e) =>
-          `${e.type}: ${e.textures.join(" | ") || "(untextured)"}${e.tint ? ` (${e.tint})` : ""}`).join("; ")));
+        cols.push(esc(r.fx.map((e) => e.type === "morph"
+          ? `morph: ${e.model || "?"} (display ${e.displayId})`
+          : `${e.type}: ${e.textures.join(" | ") || "(untextured)"}${e.tint ? ` (${e.tint})` : ""}`).join("; ")));
       }
       if (!hc.mechanics) cols.push(esc(r.mechanics.join("; ")));
       lines.push(cols.join(","));
