@@ -6,14 +6,19 @@
 window.EpsilookData = (() => {
 
   async function loadVersions() {
-    const resp = await fetch("data/versions.json");
+    // no-cache = always revalidate (tiny file, 304 when unchanged), so a
+    // fresh deploy is picked up immediately instead of after cache expiry
+    const resp = await fetch("data/versions.json", { cache: "no-cache" });
     if (!resp.ok) throw new Error(`versions.json: HTTP ${resp.status}`);
     return resp.json();
   }
 
   /* Fetch + gunzip + parse one version's pack, reporting download progress. */
   async function loadPack(versionEntry, onProgress) {
-    const resp = await fetch(versionEntry.file);
+    // the manifest's content hash busts the browser cache exactly when the
+    // pack data changed; an unchanged hash keeps serving the cached 6+ MB
+    const url = versionEntry.file + (versionEntry.hash ? "?v=" + versionEntry.hash : "");
+    const resp = await fetch(url);
     if (!resp.ok) throw new Error(`${versionEntry.file}: HTTP ${resp.status}`);
 
     const total = Number(resp.headers.get("Content-Length")) || 0;

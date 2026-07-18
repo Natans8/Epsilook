@@ -959,6 +959,11 @@ def write_pack(pack: dict, version: str, label: str) -> None:
     out_path.write_bytes(buf.getvalue())
     log(f"Wrote {out_path}  ({len(raw):,} raw -> {out_path.stat().st_size:,} gzipped)")
 
+    # content hash for cache busting: the app appends it to the pack URL
+    # (?v=<hash>), so browsers refetch exactly when the data changed
+    import hashlib
+    pack_hash = hashlib.sha256(buf.getvalue()).hexdigest()[:10]
+
     # update the version manifest
     manifest_path = DATA_DIR / "versions.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else []
@@ -967,6 +972,7 @@ def write_pack(pack: dict, version: str, label: str) -> None:
         "label": label,
         "file": f"data/{version}/spelldata.json.gz",
         "built": pack["meta"]["built"],
+        "hash": pack_hash,
     }
     manifest = [e for e in manifest if e["id"] != version] + [entry]
     manifest.sort(key=lambda e: e["id"])
