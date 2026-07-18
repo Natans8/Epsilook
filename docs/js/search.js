@@ -148,7 +148,7 @@ window.EpsilookSearch = (() => {
       hint: "visual effect, e.g. beam red", short: "visual effect",
       run: (tokens, data) => spellsByFx(tokens, data),
     },
-    mechanic: {
+    mech: {
       label: "Mechanic", tab: true,
       hint: "spell mechanic, e.g. resurrect", short: "mechanic",
       run(tokens, data) {
