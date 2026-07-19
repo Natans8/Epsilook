@@ -487,6 +487,21 @@ window.EpsilookData = (() => {
       }
     }
 
+    // animations a spell's visual kits play directly (SpellVisualAnim
+    // initial/loop anims, kit EffectType 6) — the largest animation source;
+    // rendered as loose pills in the Animations column
+    /** @type {Map<number, number[]>} spell id -> [animId] */
+    const spellVisualAnims = new Map();
+    /** @type {Map<number, number[]>} animId -> [spell id] */
+    const visualAnimSpells = new Map();
+    if (pack.spellVisualAnims) {
+      const { spellIds, animIds } = pack.spellVisualAnims;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellVisualAnims, spellIds[i], animIds[i]);
+        pushTo(visualAnimSpells, animIds[i], spellIds[i]);
+      }
+    }
+
     // model tints (SpellProceduralEffect Type 1 rows): color-only like
     // glows. Corpus: "tint" + hue + hex — fx:"tint red" / fx:#ff5800.
     /** @type {Map<number, number[]>} spell id -> [tintId] */
@@ -684,6 +699,7 @@ window.EpsilookData = (() => {
       spellFreezes, spellCamos,
       spellScreens, screenSpells, screenNames, screenColors, screenTextures, screenSearchL,
       spellAnims, animDirectSpells,
+      spellVisualAnims, visualAnimSpells,
       spellMorphs, morphSpells, morphNames, morphDisplays, morphSearchL,
       spellShapeshifts, shapeshiftSpells, shapeshiftNames, shapeshiftDisplays,
       shapeshiftSearchL,

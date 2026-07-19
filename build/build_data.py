@@ -359,7 +359,7 @@ TEX_OVERLAY, TEX_MASK = 0, 1
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 20  # 20: meta.absentTables (tables the build predates)
+PACK_FORMAT = 21  # 21: spellVisualAnims (kit ET 6 initial/loop animations)
 
 csv.field_size_limit(10_000_000)
 
@@ -1222,6 +1222,7 @@ class KitEffects:
     soundkits: dict[int, set[int]]
     animkits: dict[int, set[int]]
     anims: dict[int, set[int]]        # direct AnimationData ids (proc Type 7)
+    visual_anims: dict[int, set[int]]  # AnimationData ids (SpellVisualAnim, ET 6)
     chains: dict[int, set[int]]
     dissolves: dict[int, set[int]]
     glows: dict[int, set[int]]
@@ -1248,15 +1249,20 @@ def read_kit_effects(
     kits = KitEffects(
         models=defaultdict(set, {k: set(v) for k, v in models.attach_models.items()}),
         soundkits=defaultdict(set), animkits=defaultdict(set), anims=defaultdict(set),
+        visual_anims=defaultdict(set),
         chains=defaultdict(set), dissolves=defaultdict(set), glows=defaultdict(set),
         shadowies=defaultdict(set), ghost_mats=defaultdict(set), tints=defaultdict(set),
         desats=defaultdict(set), transps=defaultdict(set), screens=defaultdict(set),
     )
 
-    # kit EffectType 6 points at SpellVisualAnim, which names the AnimKit
-    anim_kit_of: dict[int, int] = {}
-    for sva_id, animkit_id in read_table(table_dir, "SpellVisualAnim", ["ID", "AnimKitID"]):
-        anim_kit_of[to_int(sva_id)] = to_int(animkit_id)
+    # kit EffectType 6 points at SpellVisualAnim: its AnimKitID feeds the
+    # AnimKits group, and its Initial/LoopAnimID are AnimationData ids the kit
+    # plays directly on the unit (-1 and 0 both mean unset — 0 would be Stand)
+    sva_rows: dict[int, tuple[int, int, int]] = {}
+    for sva_id, initial_id, loop_id, animkit_id in read_table(
+        table_dir, "SpellVisualAnim", ["ID", "InitialAnimID", "LoopAnimID", "AnimKitID"]
+    ):
+        sva_rows[to_int(sva_id)] = (to_int(initial_id), to_int(loop_id), to_int(animkit_id))
 
     for kit_id, effect_type, effect in read_table(
         table_dir, "SpellVisualKitEffect", ["ParentSpellVisualKitID", "EffectType", "Effect"]
@@ -1267,9 +1273,12 @@ def read_kit_effects(
         if et == EFFECT_TYPE_SOUND:
             kits.soundkits[k].add(e)
         elif et == EFFECT_TYPE_ANIM:
-            ak = anim_kit_of.get(e, 0)
+            initial_anim, loop_anim, ak = sva_rows.get(e, (0, 0, 0))
             if ak:
                 kits.animkits[k].add(ak)
+            for a in (initial_anim, loop_anim):
+                if a > 0:
+                    kits.visual_anims[k].add(a)
         elif et == EFFECT_TYPE_PROC:
             # one proc reference — dispatch by which type-bucket it landed in
             expand_chain(fx.chains, procs.chain.get(e, 0), kits.chains[k])
@@ -1535,7 +1544,8 @@ class SpellVisuals:
     models: dict[int, set[tuple[int, int]]]   # (model fid, category)
     sounds: dict[int, set[tuple[int, int]]]   # (soundkit, sound fid)
     animkits: dict[int, set[int]]
-    anims: dict[int, set[int]]                # direct AnimationData ids
+    anims: dict[int, set[int]]                # direct AnimationData ids (stance)
+    visual_anims: dict[int, set[int]]         # AnimationData ids (SpellVisualAnim)
     chains: dict[int, set[int]]
     dissolves: dict[int, set[int]]
     glows: dict[int, set[int]]
@@ -1567,7 +1577,8 @@ def walk_spells(
     """
     vis = SpellVisuals(
         models=defaultdict(set), sounds=defaultdict(set), animkits=defaultdict(set),
-        anims=defaultdict(set), chains=defaultdict(set), dissolves=defaultdict(set),
+        anims=defaultdict(set), visual_anims=defaultdict(set),
+        chains=defaultdict(set), dissolves=defaultdict(set),
         glows=defaultdict(set), shadowies=defaultdict(set), ghost_mats=defaultdict(set),
         tints=defaultdict(set), desats=defaultdict(set), transps=defaultdict(set),
         freezes=set(), camos=set(), orphans=0,
@@ -1588,6 +1599,7 @@ def walk_spells(
                 vis.models[spell_id].update(kits.models.get(k, ()))
                 vis.animkits[spell_id].update(kits.animkits.get(k, ()))
                 vis.anims[spell_id].update(kits.anims.get(k, ()))
+                vis.visual_anims[spell_id].update(kits.visual_anims.get(k, ()))
                 vis.chains[spell_id].update(kits.chains.get(k, ()))
                 vis.dissolves[spell_id].update(kits.dissolves.get(k, ()))
                 vis.glows[spell_id].update(kits.glows.get(k, ()))
@@ -1841,6 +1853,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # animKitAnims; guard against ids past the anim-name table
     anim_direct_rows = sorted(
         {(s, a) for s, aset in vis.anims.items() for a in aset if a < len(anim_names)})
+    # animations the visual kits play directly (SpellVisualAnim initial/loop,
+    # kit EffectType 6) — the largest animation source, same id space
+    visual_anim_rows = sorted(
+        {(s, a) for s, aset in vis.visual_anims.items() for a in aset if a < len(anim_names)})
     effect_rows = sorted((s, e) for s, effs in se.effects.items() for e in effs)
     aura_rows = sorted((s, a) for s, auras in se.auras.items() for a in auras)
     morph_rows = sorted((s, c) for s, cs in se.morphs.items() for c in cs)
@@ -1897,6 +1913,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellFreezes": len(freeze_ids),
                 "spellCamos": len(camo_ids),
                 "spellAnims": len(anim_direct_rows),
+                "spellVisualAnims": len(visual_anim_rows),
                 "spellScreens": len(screen_pairs),
                 "screens": len(screen_ids),
                 "icons": len(icon_names),
@@ -1931,6 +1948,13 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "spellAnims": {
             "spellIds": [r[0] for r in anim_direct_rows],
             "animIds": [r[1] for r in anim_direct_rows],
+        },
+        # animations a spell's kits play directly (SpellVisualAnim initial/loop
+        # anims, kit EffectType 6) — the third and largest animation source;
+        # no kit to group under, so these render as loose pills
+        "spellVisualAnims": {
+            "spellIds": [r[0] for r in visual_anim_rows],
+            "animIds": [r[1] for r in visual_anim_rows],
         },
         "animNames": anim_names,
         "spellEffects": {
@@ -2114,7 +2138,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     log(
         f"  spells={len(spell_ids):,}  files={len(file_ids):,} ({unnamed:,} unnamed)  "
         f"models={len(model_rows):,}  sounds={len(sound_rows):,}  animkits={len(anim_rows):,}  "
-        f"kitAnims={len(kit_anim_rows):,}  effects={len(effect_rows):,}  auras={len(aura_rows):,}  fx={len(fx_rows):,}  "
+        f"kitAnims={len(kit_anim_rows):,}  visualAnims={len(visual_anim_rows):,}  "
+        f"effects={len(effect_rows):,}  auras={len(aura_rows):,}  fx={len(fx_rows):,}  "
         f"fxChains={len(fx_chain_ids):,}  dissolves={len(dissolve_row_pairs):,} "
         f"({len(dissolve_ids):,} rows)  glows={len(glow_row_pairs):,} "
         f"({len(glow_ids):,} rows)  shadowies={len(shadowy_row_pairs):,} "
