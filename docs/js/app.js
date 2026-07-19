@@ -1943,9 +1943,23 @@
     txt.title = `${name || "(unnamed)"} — ScreenEffect ${screenId}`
       + (texPaths.length ? `\n${texPaths.join("\n")}` : "")
       + `\nClick: find spells with this screen effect\nShift-click: exclude them instead`;
-    // the preview composites ALL of this screen's textures with its grade and
-    // vignette, so it is keyed by the screen rather than by a single fid
-    if (texFids.length) txt.dataset.screenId = screenId;
+    // Preview the overlay texture with the effect's color multiplied in —
+    // the same treatment chain pills get. Overlays sort first, so [0] is the
+    // finished art when the row has any. The color matters: 9.0 Arcane's
+    // overlay is a cyan texture that reads magenta in game, because
+    // ColorMultiply (#ff00f7) tints it.
+    //
+    // Compositing the full effect (grade + blend-set masks + radial Mask*
+    // vignette) was tried and abandoned — see the batch 5/6 notes in
+    // CLAUDE.md. None of the candidate models matched in game closely enough
+    // to be worth the complexity, so this shows the art and its color, and
+    // claims nothing more.
+    if (texFids.length) {
+      txt.dataset.texFid = texFids[0].fid;
+      if (colors.mul >= 0) {
+        txt.dataset.texTint = "#" + colors.mul.toString(16).padStart(6, "0");
+      }
+    }
     // quotes inside a name would break the tag value; substring match
     // doesn't need them
     txt.dataset.search = `fx:"screen ${(name || String(screenId)).replace(/"/g, "")}"`;
@@ -2143,108 +2157,6 @@
     panel.style.visibility = "";
   }
 
-  /* Screen-effect preview.
-   *
-   * A screen effect is not a picture — it is a post-process over the whole
-   * frame, so previewing one of its textures flat was always going to look
-   * wrong. Three things make the in-game look, and all three are needed:
-   *
-   *   1. the GRADE — world × ColorMultiply + ColorAddition;
-   *   2. the COVERAGE — where the grade applies. Area-denial effects are a
-   *      coloured rim around a clear centre, and that shape comes from the
-   *      blend-set textures' alpha combined with the Mask* radial vignette;
-   *   3. the OVERLAY — finished art (lava sheets, caustics, even a title
-   *      card) laid on top.
-   *
-   * Rendered against a neutral world at 16:9, since that is the thing being
-   * graded. This is an approximation: the real shader also scrolls and tiles
-   * each blend layer per frame (TextureScrollRate/Scale), which a still
-   * preview cannot show, and blur/gamma/saturation are ignored.
-   */
-  const SCREEN_PREVIEW_W = 256, SCREEN_PREVIEW_H = 144, SCREEN_WORLD = 200;
-
-  function screenCompositeCanvas(colors, textures) {
-    const W = SCREEN_PREVIEW_W, H = SCREEN_PREVIEW_H;
-    const hexRgb = (v) => v >= 0
-      ? [(v >> 16) & 255, (v >> 8) & 255, v & 255] : null;
-    const mul = hexRgb(colors.mul) || [255, 255, 255];
-    const add = hexRgb(colors.add) || [0, 0, 0];
-    // an identity grade means there is nothing to grade: the overlay IS the
-    // effect (the title-card rows), so it goes on at full strength instead of
-    // being masked away by a vignette that is not really doing anything
-    const identity = mul.every((v) => v === 255) && add.every((v) => v === 0);
-    const graded = [0, 1, 2].map(
-      (c) => Math.min(255, SCREEN_WORLD * mul[c] / 255 + add[c]));
-
-    const flatten = (tex) => {
-      const t = document.createElement("canvas");
-      t.width = W; t.height = H;
-      t.getContext("2d").drawImage(tex, 0, 0, W, H);
-      return t.getContext("2d").getImageData(0, 0, W, H).data;
-    };
-    const masks = textures.filter((t) => t.mask).map((t) => flatten(t.canvas));
-    const overlay = textures.find((t) => !t.mask);
-    const ov = overlay ? flatten(overlay.canvas) : null;
-
-    // the radial vignette: 0 at the (Y-shifted) centre, 1 out at the corners
-    const offY = colors.maskOffsetY || 0;
-    const exponent = Math.max(0.25,
-      (colors.maskPower || 1) * Math.abs(colors.maskSize || 1));
-    const SQRT2 = Math.SQRT2;
-
-    const cv = document.createElement("canvas");
-    cv.width = W; cv.height = H;
-    const ctx = cv.getContext("2d");
-    const img = ctx.createImageData(W, H);
-    for (let p = 0; p < W * H; p++) {
-      const i = p * 4;
-      const x = (p % W) / W * 2 - 1;
-      const y = Math.floor(p / W) / H * 2 - 1;
-      const d = Math.hypot(x, y - offY) / SQRT2;
-      const radial = Math.min(1, Math.pow(Math.max(0, d), exponent));
-      // blend layers multiply together, then join the vignette as a union —
-      // either one covering a pixel means the effect reaches it
-      let cover = radial;
-      if (masks.length) {
-        let a = 1;
-        for (const m of masks) a *= m[i + 3] / 255;
-        cover = 1 - (1 - a) * (1 - radial);
-      }
-      const k = identity ? 0 : Math.max(0, Math.min(1, cover));
-      let r = SCREEN_WORLD * (1 - k) + graded[0] * k;
-      let g = SCREEN_WORLD * (1 - k) + graded[1] * k;
-      let b = SCREEN_WORLD * (1 - k) + graded[2] * k;
-      if (ov) {
-        const oa = (ov[i + 3] / 255) * (identity ? 1 : k);
-        r = r * (1 - oa) + ov[i] * oa;
-        g = g * (1 - oa) + ov[i + 1] * oa;
-        b = b * (1 - oa) + ov[i + 2] * oa;
-      }
-      img.data[i] = Math.round(r);
-      img.data[i + 1] = Math.round(g);
-      img.data[i + 2] = Math.round(b);
-      img.data[i + 3] = 255;
-    }
-    ctx.putImageData(img, 0, 0);
-    return cv;
-  }
-
-  // fetch every texture a screen effect uses (on hover only, like any other
-  // preview) and composite them
-  async function screenPreviewCanvas(screenId) {
-    const d = state.data;
-    const colors = d.screenColors.get(screenId);
-    if (!colors) return null;
-    const entries = d.screenTextures.get(screenId) || [];
-    const textures = [];
-    for (const t of entries) {
-      const canvas = await textureCanvas(t.fid);
-      if (canvas) textures.push({ canvas, mask: t.mask });
-    }
-    if (!textures.length) return null;
-    return screenCompositeCanvas(colors, textures);
-  }
-
   function showTexPreview(label, baseCanvas) {
     const tint = label.dataset.texTint || "";
     const canvas = tint ? tintedCanvas(baseCanvas, tint) : baseCanvas;
@@ -2257,19 +2169,6 @@
     const panel = texPanel();
     panel.firstChild.replaceChildren(canvas);
     panel.lastChild.textContent = `${canvas.width}×${canvas.height}` + note;
-    placeTexPanel(panel, label);
-  }
-
-  // the screen composite is already frame-shaped and frame-sized; its caption
-  // names the grade rather than a texture size
-  function showScreenPreview(label, canvas) {
-    const c = state.data.screenColors.get(Number(label.dataset.screenId)) || {};
-    const hx = (v) => "#" + v.toString(16).padStart(6, "0");
-    const panel = texPanel();
-    panel.firstChild.replaceChildren(canvas);
-    panel.lastChild.textContent = "approximate · world"
-      + (c.mul >= 0 ? ` ×${hx(c.mul)}` : "")
-      + (c.add >= 0 ? ` +${hx(c.add)}` : "");
     placeTexPanel(panel, label);
   }
 
@@ -2337,21 +2236,6 @@
         return;
       }
       if (!CFG.texturePreviewUrl) return;
-      // screen effects composite several textures with their grade — keyed by
-      // the screen, not by any one fid
-      const screen = e.target.closest("[data-screen-id]");
-      if (screen) {
-        const key = "screen|" + screen.dataset.screenId;
-        if (key === texHoverKey) return;
-        hideTexPreview();
-        texHoverKey = key;
-        texHoverTimer = setTimeout(async () => {
-          const canvas = await screenPreviewCanvas(Number(screen.dataset.screenId));
-          if (canvas && texHoverKey === key && screen.isConnected)
-            showScreenPreview(screen, canvas);
-        }, 150);
-        return;
-      }
       const label = e.target.closest("[data-tex-fid]");
       if (!label) return;
       const fid = Number(label.dataset.texFid);
@@ -2367,7 +2251,7 @@
       }, 150);
     });
     results.addEventListener("mouseout", (e) => {
-      const label = e.target.closest("[data-tex-fid], [data-color], [data-screen-id]");
+      const label = e.target.closest("[data-tex-fid], [data-color]");
       if (label && !label.contains(e.relatedTarget)) hideTexPreview();
     });
     window.addEventListener("scroll", hideTexPreview, { passive: true });
