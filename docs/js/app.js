@@ -1359,13 +1359,13 @@
         const color = d.glowColors.get(id) ?? 0;
         if (seen.has(color)) continue;
         seen.add(color);
-        entries.push({ glowId: id, color });
+        entries.push({ glowId: id, color, alpha: d.glowAlphas.get(id) });
       }
       cats.push({
         name: "glow",
         hit: glowIds.some((id) => glowIsHit(id)),
         items: hitsFirst(entries, (e) => glowIsHit(e.glowId))
-          .map((e) => () => colorFxTag("glow", e.color, glowIsHit(e.glowId))),
+          .map((e) => () => colorFxTag("glow", e.color, glowIsHit(e.glowId), e.alpha)),
       });
     }
     if (shadowyIds.length || ghostMatIds.length) {
@@ -1858,7 +1858,7 @@
   /* Color-only fx pill (glow / ghost / tint): swatch + hex label — these
    * effects have no texture or model, the color is the whole payload.
    * Clicking searches the category + hex; ⧉ copies the hex. */
-  function colorFxTag(category, color, hit) {
+  function colorFxTag(category, color, hit, alpha) {
     const hex = "#" + color.toString(16).padStart(6, "0");
     const tag = el("span", "tag fx");
     if (hit) tag.classList.add("hit");
@@ -1867,12 +1867,17 @@
     dot.style.background = hex;
     dot.dataset.color = hex;
     dot.dataset.colorInfo = category;
+    if (alpha >= 0) dot.dataset.alpha = alpha;
     tag.appendChild(dot);
 
     const txt = el("button", "tag-label", hex);
     txt.title = `${FX_HEAD_TITLES[category]}\nColor ${hex}`
       + `\nClick: find spells with this ${category} color\nShift-click: exclude them instead`;
     txt.dataset.search = `fx:"${category} ${hex}"`;
+    // the hex text is the color too — hovering it shows the same big patch
+    txt.dataset.color = hex;
+    txt.dataset.colorInfo = category;
+    if (alpha >= 0) txt.dataset.alpha = alpha;
     tag.appendChild(txt);
 
     tag.appendChild(tagButton("⧉", `Copy color: ${hex}`, hex));
@@ -1917,9 +1922,10 @@
     const tag = el("span", "tag fx");
     if (screenIsHit(screenId)) tag.classList.add("hit");
 
-    for (const [what, c] of [["fog tint", colors.fog],
-                             ["multiply", colors.mul],
-                             ["addition", colors.add]]) {
+    // only the fog color has an opacity byte; mul/add are pure grade factors
+    for (const [what, c, a] of [["fog tint", colors.fog, colors.fogAlpha],
+                                ["multiply", colors.mul, -1],
+                                ["addition", colors.add, -1]]) {
       if (c < 0) continue;
       const hex = "#" + c.toString(16).padStart(6, "0");
       const dot = el("span", "fx-swatch");
@@ -1927,21 +1933,32 @@
       dot.title = `Screen ${what} ${hex}`;
       dot.dataset.color = hex;
       dot.dataset.colorInfo = `screen ${what}`;
+      if (a >= 0) dot.dataset.alpha = a;
       tag.appendChild(dot);
     }
 
-    const texPaths = texFids.map((f) => (d.files.get(f) || {}).path || `#${f}`);
+    const texPaths = texFids.map((t) => ((d.files.get(t.fid) || {}).path || `#${t.fid}`)
+      + (t.mask ? " (mask)" : ""));
     const txt = el("button", "tag-label", name || `screen #${screenId}`);
     txt.title = `${name || "(unnamed)"} — ScreenEffect ${screenId}`
       + (texPaths.length ? `\n${texPaths.join("\n")}` : "")
       + `\nClick: find spells with this screen effect\nShift-click: exclude them instead`;
-    if (texFids.length) txt.dataset.texFid = texFids[0];
+    if (texFids.length) {
+      // preview the first texture — overlays sort first, so a screen with
+      // both shows its finished art. The mul/add colors grade the WORLD
+      // behind an overlay, but they PAINT a mask (the blend-set textures are
+      // flat grey/white and carry no color of their own), so the composite
+      // differs by role.
+      txt.dataset.texFid = texFids[0].fid;
+      if (texFids[0].mask) txt.dataset.screenMask = "1";
+      const hx = (v) => "#" + v.toString(16).padStart(6, "0");
+      if (colors.mul >= 0) txt.dataset.screenMul = hx(colors.mul);
+      if (colors.add >= 0) txt.dataset.screenAdd = hx(colors.add);
+    }
     // quotes inside a name would break the tag value; substring match
     // doesn't need them
     txt.dataset.search = `fx:"screen ${(name || String(screenId)).replace(/"/g, "")}"`;
     tag.appendChild(txt);
-
-    tag.appendChild(tagButton("⧉", `Copy ScreenEffect ID ${screenId}`, String(screenId)));
     return tag;
   }
 
@@ -2135,9 +2152,66 @@
     panel.style.visibility = "";
   }
 
+  const screenRgb = (hex, dflt) => hex
+    ? [0, 1, 2].map((i) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16))
+    : dflt;
+
+  // The world the screen effect grades: a neutral mid-grey put through
+  // world × mul + add, so the preview's background shows what the player's
+  // screen turns into.
+  function gradedWorld(mulHex, addHex) {
+    const mul = screenRgb(mulHex, [255, 255, 255]);
+    const add = screenRgb(addHex, [0, 0, 0]);
+    return [0, 1, 2].map((i) => Math.min(255, Math.round(128 * mul[i] / 255 + add[i])));
+  }
+
+  // Screen-effect preview. Two composites, because the two texture columns
+  // play different parts: an OVERLAY is finished art drawn over the graded
+  // world in its own colors, while a MASK is a flat blend-set texture
+  // (mask_fullscreen_01, white_64, tileset/generic/grey …) that the mul/add
+  // colors paint — drawn untinted it would be a meaningless grey smear.
+  function gradedScreenCanvas(tex, mulHex, addHex, isMask) {
+    const bg = gradedWorld(mulHex, addHex);
+    const cv = document.createElement("canvas");
+    cv.width = tex.width;
+    cv.height = tex.height;
+    const ctx = cv.getContext("2d");
+    if (isMask) {
+      // A mask says HOW STRONGLY the grade applies per pixel, so read its
+      // luminance (× its own alpha) as that strength and blend between the
+      // plain world and the graded one. Black mask = untouched world, white =
+      // fully graded — painting the mask's black areas black instead would
+      // just be a dark smear.
+      const world = 128;
+      ctx.drawImage(tex, 0, 0);
+      const img = ctx.getImageData(0, 0, cv.width, cv.height);
+      const px = img.data;
+      for (let i = 0; i < px.length; i += 4) {
+        const lum = (0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]) / 255;
+        const k = lum * (px[i + 3] / 255);
+        for (let c = 0; c < 3; c++) px[i + c] = Math.round(world * (1 - k) + bg[c] * k);
+        px[i + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+      return cv;
+    }
+    ctx.fillStyle = `rgb(${bg[0]}, ${bg[1]}, ${bg[2]})`;
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(tex, 0, 0);
+    return cv;
+  }
+
   function showTexPreview(label, baseCanvas) {
     const tint = label.dataset.texTint || "";
-    const canvas = tint ? tintedCanvas(baseCanvas, tint) : baseCanvas;
+    let canvas = tint ? tintedCanvas(baseCanvas, tint) : baseCanvas;
+    let note = tint ? ` · tint ${tint}` : "";
+    const mul = label.dataset.screenMul, add = label.dataset.screenAdd;
+    if (mul || add) {
+      const isMask = label.dataset.screenMask === "1";
+      canvas = gradedScreenCanvas(canvas, mul, add, isMask);
+      note = (isMask ? " · mask painted ×" : " · world ×") + (mul || "#ffffff")
+        + " +" + (add || "#000000");
+    }
     const max = CFG.texturePreviewMax || 256;
     const scale = Math.min(1, max / canvas.width, max / canvas.height);
     canvas.style.width = Math.round(canvas.width * scale) + "px";
@@ -2145,21 +2219,32 @@
 
     const panel = texPanel();
     panel.firstChild.replaceChildren(canvas);
-    panel.lastChild.textContent = `${canvas.width}×${canvas.height}`
-      + (tint ? ` · tint ${tint}` : "");
+    panel.lastChild.textContent = `${canvas.width}×${canvas.height}` + note;
     placeTexPanel(panel, label);
   }
 
-  // same panel for color swatches: a large patch of the color, captioned
-  // with the hex + hue word + which effect it belongs to (data-color-info)
+  // same panel for color swatches: a large patch of the color, captioned with
+  // the hex, the channel values, the hue word and which effect it belongs to
+  // (data-color-info). Alpha only where the source actually carries one
+  // (data-alpha): screen fog opacity and EdgeGlowEffect.GlowAlpha.
   function showColorPreview(swatch) {
     const hex = swatch.dataset.color;
+    const alpha = swatch.dataset.alpha;
     const patch = el("div", "tex-color");
-    patch.style.background = hex;
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    // a translucent color shows the panel's checkerboard through it
+    patch.style.background = alpha === undefined
+      ? hex : `rgba(${r}, ${g}, ${b}, ${(alpha / 255).toFixed(3)})`;
     const panel = texPanel();
     panel.firstChild.replaceChildren(patch);
     const hue = hueWordOf(hex);
-    panel.lastChild.textContent = hex + (hue ? ` · ${hue}` : "")
+    const rgb = alpha === undefined
+      ? `rgb(${r}, ${g}, ${b})`
+      // show alpha both as the raw byte and the 0..1 the tables store
+      : `rgba(${r}, ${g}, ${b}, ${(alpha / 255).toFixed(2)})`;
+    panel.lastChild.textContent = `${hex} · ${rgb}`
+      + (alpha === undefined ? "" : ` · alpha ${alpha}/255`)
+      + (hue ? ` · ${hue}` : "")
       + (swatch.dataset.colorInfo ? ` · ${swatch.dataset.colorInfo}` : "");
     placeTexPanel(panel, swatch);
   }
@@ -2191,7 +2276,8 @@
       // color swatches first — no fetch involved, same intent delay
       const swatch = e.target.closest("[data-color]");
       if (swatch) {
-        const key = "color|" + swatch.dataset.color + "|" + (swatch.dataset.colorInfo || "");
+        const key = "color|" + swatch.dataset.color + "|" + (swatch.dataset.colorInfo || "")
+          + "|" + (swatch.dataset.alpha || "");
         if (key === texHoverKey) return;
         hideTexPreview();
         texHoverKey = key;
@@ -2204,7 +2290,10 @@
       const label = e.target.closest("[data-tex-fid]");
       if (!label) return;
       const fid = Number(label.dataset.texFid);
-      const key = fid + "|" + (label.dataset.texTint || "");
+      // grade colors join the key for the same reason the tint does: two pills
+      // can share a texture but composite differently
+      const key = fid + "|" + (label.dataset.texTint || "")
+        + "|" + (label.dataset.screenMul || "") + "|" + (label.dataset.screenAdd || "");
       if (key === texHoverKey) return;
       hideTexPreview();
       texHoverKey = key;
@@ -2303,9 +2392,14 @@
             screenId: sc,
             name: d.screenNames.get(sc) || null,
             fogTint: hx(c.fog),
+            fogAlpha: c.fogAlpha >= 0 ? c.fogAlpha : null,
             colorMultiply: hx(c.mul),
             colorAddition: hx(c.add),
-            textures: (d.screenTextures.get(sc) || []).map(pathOf),
+            // overlays are finished art; masks are painted by the colors
+            overlays: (d.screenTextures.get(sc) || [])
+              .filter((t) => !t.mask).map((t) => pathOf(t.fid)),
+            masks: (d.screenTextures.get(sc) || [])
+              .filter((t) => t.mask).map((t) => pathOf(t.fid)),
           };
         })).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
           type: "morph",
@@ -2396,10 +2490,12 @@
             return `${e.type}: ${e.percent}%`;
           if (e.type === "freeze" || e.type === "camo") // valueless fx
             return e.type;
-          if (e.type === "screen") // named + optional colors/textures
+          if (e.type === "screen") { // named + optional colors/textures
+            const tex = e.overlays.concat(e.masks);
             return `screen: ${e.name || e.screenId}`
               + (e.fogTint ? ` (${e.fogTint})` : "")
-              + (e.textures.length ? `: ${e.textures.join(" | ")}` : "");
+              + (tex.length ? `: ${tex.join(" | ")}` : "");
+          }
           if (e.color || e.colors) // color-only fx (glow / ghost / tint)
             return `${e.type}: ${e.color || e.colors.join(" | ")}`;
           return `${e.type}: ${e.textures.join(" | ") || "(untextured)"}`

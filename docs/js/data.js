@@ -235,6 +235,7 @@ window.EpsilookData = (() => {
     const spellGlows = new Map();   // spell id -> [glowId]
     const glowSpells = new Map();   // glowId -> [spell id]
     const glowColors = new Map();   // glowId -> packed RGB
+    const glowAlphas = new Map();   // glowId -> alpha 0..255 (pack format 17+)
     const glowSearchL = new Map();  // glowId -> search corpus
     {
       const { spellIds, glowIds } = pack.spellGlows;
@@ -245,6 +246,7 @@ window.EpsilookData = (() => {
       const g = pack.glows;
       for (let i = 0; i < g.ids.length; i++) {
         glowColors.set(g.ids[i], g.colors[i]);
+        if (g.alphas) glowAlphas.set(g.ids[i], g.alphas[i]);
         glowSearchL.set(g.ids[i],
           ("glow " + g.hues[i] + " " + hexColor(g.colors[i])).trim());
       }
@@ -333,8 +335,10 @@ window.EpsilookData = (() => {
     const spellScreens = new Map();    // spell id -> [screenId]
     const screenSpells = new Map();    // screenId -> [spell id]
     const screenNames = new Map();     // screenId -> internal name
-    const screenColors = new Map();    // screenId -> {fog, mul, add}
-    const screenTextures = new Map();  // screenId -> [fid]
+    const screenColors = new Map();    // screenId -> {fog, fogAlpha, mul, add}
+    // screenId -> [{fid, mask}] — mask textures are flat blend-set art the
+    // mul/add colors paint; overlays (mask false) carry their own colors
+    const screenTextures = new Map();
     const screenSearchL = new Map();   // screenId -> search corpus
     if (pack.spellScreens) {
       const { spellIds, screenIds } = pack.spellScreens;
@@ -344,17 +348,25 @@ window.EpsilookData = (() => {
       }
       const st = pack.screenTextures;
       for (let i = 0; i < st.screenIds.length; i++) {
-        pushTo(screenTextures, st.screenIds[i], st.fids[i]);
+        // roles arrived in pack format 17; a stale cached pack has none, and
+        // its fids were overlay-first anyway — treat them all as overlays
+        pushTo(screenTextures, st.screenIds[i],
+          { fid: st.fids[i], mask: st.roles ? st.roles[i] === 1 : false });
       }
       const sc = pack.screens;
       for (let i = 0; i < sc.ids.length; i++) {
         const id = sc.ids[i];
         screenNames.set(id, sc.names[i]);
-        screenColors.set(id, { fog: sc.fogColors[i], mul: sc.mulColors[i], add: sc.addColors[i] });
+        screenColors.set(id, {
+          fog: sc.fogColors[i],
+          fogAlpha: sc.fogAlphas ? sc.fogAlphas[i] : -1,
+          mul: sc.mulColors[i],
+          add: sc.addColors[i],
+        });
         const hexes = [sc.fogColors[i], sc.mulColors[i], sc.addColors[i]]
           .filter((c) => c >= 0).map(hexColor).join(" ");
         const tex = (screenTextures.get(id) || [])
-          .map((fid) => (files.get(fid) || { searchL: "" }).searchL).join(" ");
+          .map((t) => (files.get(t.fid) || { searchL: "" }).searchL).join(" ");
         screenSearchL.set(id, ("screen " + sc.names[i].toLowerCase() + " "
           + sc.hues[i] + " " + hexes + " " + tex).trim());
       }
@@ -502,7 +514,7 @@ window.EpsilookData = (() => {
       animNames, animNamesL, animKitAnims, animAnimKits,
       spellFx, fxSpells, fxChains, fxTextures, fxSearchL,
       spellDissolves, dissolveSpells, dissolveDurations, dissolveTextures, dissolveSearchL,
-      spellGlows, glowSpells, glowColors, glowSearchL,
+      spellGlows, glowSpells, glowColors, glowAlphas, glowSearchL,
       spellShadowies, shadowySpells, shadowyColors, shadowySearchL,
       spellGhostMats, ghostMatSpells, ghostMatColors, ghostMatSearchL,
       spellTints, tintSpells, tintColors, tintSearchL,

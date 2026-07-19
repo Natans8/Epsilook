@@ -1,9 +1,9 @@
 [
   {
     "id": "9.2.7.45745",
-    "label": "Shadowlands 9.2.7",
+    "label": "9.2.7.45745",
     "file": "data/9.2.7.45745/spelldata.json.gz",
     "built": "2026-07-19",
-    "hash": "2fa45052bb"
+    "hash": "2267480ff0"
   }
 ]

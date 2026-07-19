@@ -966,10 +966,14 @@ footer a { color: var(--text-dim); }
   border-radius: 3px;
   overflow: hidden;
 }
-#texpreview canvas { display: block; }
-/* color-swatch hover: a large patch of the color in the same panel */
+/* a caption wider than the image would otherwise strand it against the left
+   edge with bare checkerboard beside it */
+#texpreview canvas { display: block; margin: 0 auto; }
+/* color-swatch hover: a large patch of the color in the same panel — 100%
+   width so a long caption never leaves checkerboard beside the patch */
 #texpreview .tex-color {
-  width: 140px;
+  width: 100%;
+  min-width: 140px;
   height: 90px;
   border-radius: 3px;
 }
