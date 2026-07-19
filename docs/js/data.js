@@ -88,14 +88,30 @@ window.EpsilookData = (() => {
       if (arr) arr.push(value); else map.set(key, [value]);
     };
 
-    // models
-    const spellModels = new Map();   // spell id -> [fid]
-    const modelSpells = new Map();   // fid -> [spell id]
+    // models — each (spell, fid) row carries a usage category
+    // (attach/missile/area/trail/barrage) since pack format 15; a stale
+    // cached pack has no cats and renders the old flat list
+    const spellModels = new Map();     // spell id -> [fid] (deduped)
+    const modelSpells = new Map();     // fid -> [spell id]
+    const spellModelCats = new Map();  // spell id -> [{fid, cat}]
+    const modelCatSpells = new Map();  // cat id -> Set(spell id)
+    const modelCatNames = pack.modelCatNames || {};
     {
-      const { spellIds, fids } = pack.spellModels;
+      const { spellIds, fids, cats } = pack.spellModels;
       for (let i = 0; i < spellIds.length; i++) {
-        pushTo(spellModels, spellIds[i], fids[i]);
         pushTo(modelSpells, fids[i], spellIds[i]);
+        if (!cats) { pushTo(spellModels, spellIds[i], fids[i]); continue; }
+        pushTo(spellModelCats, spellIds[i], { fid: fids[i], cat: cats[i] });
+        let set = modelCatSpells.get(cats[i]);
+        if (!set) modelCatSpells.set(cats[i], set = new Set());
+        set.add(spellIds[i]);
+      }
+      if (cats) {
+        // spellModels stays fid-only (deduped across categories) for the
+        // filters / export / search paths that don't care about usage
+        for (const [s, entries] of spellModelCats)
+          spellModels.set(s, [...new Set(entries.map((e) => e.fid))]);
+        for (const [f, arr] of modelSpells) modelSpells.set(f, [...new Set(arr)]);
       }
     }
 
@@ -249,8 +265,75 @@ window.EpsilookData = (() => {
       for (let i = 0; i < sh.ids.length; i++) {
         const primary = sh.primaryColors[i], secondary = sh.secondaryColors[i];
         shadowyColors.set(sh.ids[i], { primary, secondary });
+        // category is "ghost" now, but keep "shadowy" searchable for the
+        // ShadowyEffect rows so old fx:shadowy queries still resolve
         shadowySearchL.set(sh.ids[i],
-          ("shadowy " + sh.hues[i] + " " + hexColor(primary) + " " + hexColor(secondary)).trim());
+          ("ghost shadowy " + sh.hues[i] + " " + hexColor(primary) + " " + hexColor(secondary)).trim());
+      }
+    }
+
+    // ghost materials (SpellProceduralEffect Type 22): single-color material
+    // recolors that share the "ghost" category with the ShadowyEffect rows.
+    // Corpus: "ghost" + hue + hex.
+    const spellGhostMats = new Map();   // spell id -> [ghostMatId]
+    const ghostMatSpells = new Map();   // ghostMatId -> [spell id]
+    const ghostMatColors = new Map();   // ghostMatId -> packed RGB
+    const ghostMatSearchL = new Map();  // ghostMatId -> search corpus
+    if (pack.spellGhostMats) {
+      const { spellIds, ghostIds } = pack.spellGhostMats;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellGhostMats, spellIds[i], ghostIds[i]);
+        pushTo(ghostMatSpells, ghostIds[i], spellIds[i]);
+      }
+      const gm = pack.ghostMats;
+      for (let i = 0; i < gm.ids.length; i++) {
+        ghostMatColors.set(gm.ids[i], gm.colors[i]);
+        ghostMatSearchL.set(gm.ids[i],
+          ("ghost " + gm.hues[i] + " " + hexColor(gm.colors[i])).trim());
+      }
+    }
+
+    // desaturate (Type 21) / transparency (Type 14): percent-only pills. The
+    // pill "id" IS the percent (0..100); corpus per percent so fx:desaturate,
+    // fx:"desaturate 70" and fx:transparency all match.
+    const spellDesaturates = new Map();  // spell id -> [percent]
+    const desatSpells = new Map();       // percent -> [spell id]
+    const desatSearchL = new Map();      // percent -> corpus
+    if (pack.spellDesaturates) {
+      const { spellIds, percents } = pack.spellDesaturates;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellDesaturates, spellIds[i], percents[i]);
+        pushTo(desatSpells, percents[i], spellIds[i]);
+        if (!desatSearchL.has(percents[i]))
+          desatSearchL.set(percents[i], "desaturate " + percents[i] + "%");
+      }
+    }
+    const spellTransps = new Map();   // spell id -> [percent]
+    const transpSpells = new Map();   // percent -> [spell id]
+    const transpSearchL = new Map();  // percent -> corpus
+    if (pack.spellTransparencies) {
+      const { spellIds, percents } = pack.spellTransparencies;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellTransps, spellIds[i], percents[i]);
+        pushTo(transpSpells, percents[i], spellIds[i]);
+        if (!transpSearchL.has(percents[i]))
+          transpSearchL.set(percents[i], "transparency " + percents[i] + "%");
+      }
+    }
+
+    // freeze (Type 11) / camo (Type 18): valueless standalone pills
+    const spellFreezes = new Set(pack.spellFreezes ? pack.spellFreezes.spellIds : []);
+    const spellCamos = new Set(pack.spellCamos ? pack.spellCamos.spellIds : []);
+
+    // direct stand/walk anim ids (Type 7) — a second source for the
+    // Animations column; matched via the anim field like animkit anims
+    const spellAnims = new Map();       // spell id -> [animId]
+    const animDirectSpells = new Map(); // animId -> [spell id]
+    if (pack.spellAnims) {
+      const { spellIds, animIds } = pack.spellAnims;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellAnims, spellIds[i], animIds[i]);
+        pushTo(animDirectSpells, animIds[i], spellIds[i]);
       }
     }
 
@@ -378,6 +461,7 @@ window.EpsilookData = (() => {
       ids: sp.ids, names: sp.names, subtexts: sp.subtexts, icons,
       namesL, spellIndex, files,
       spellModels, modelSpells, modelFids,
+      spellModelCats, modelCatSpells, modelCatNames,
       spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles,
       spellAnimKits, animKitSpells,
       animNames, animNamesL, animKitAnims, animAnimKits,
@@ -385,7 +469,12 @@ window.EpsilookData = (() => {
       spellDissolves, dissolveSpells, dissolveDurations, dissolveTextures, dissolveSearchL,
       spellGlows, glowSpells, glowColors, glowSearchL,
       spellShadowies, shadowySpells, shadowyColors, shadowySearchL,
+      spellGhostMats, ghostMatSpells, ghostMatColors, ghostMatSearchL,
       spellTints, tintSpells, tintColors, tintSearchL,
+      spellDesaturates, desatSpells, desatSearchL,
+      spellTransps, transpSpells, transpSearchL,
+      spellFreezes, spellCamos,
+      spellAnims, animDirectSpells,
       spellMorphs, morphSpells, morphNames, morphDisplays, morphSearchL,
       spellSummons, summonNames, summonPairSpells, summonPairSearchL, summonControlNames,
       spellEffects, effectSpells, effectNames, effectNamesL,

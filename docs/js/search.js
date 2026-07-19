@@ -47,7 +47,8 @@ window.EpsilookSearch = (() => {
     return out;
   }
 
-  // Search animation names; return spells whose AnimKits use the matches.
+  // Search animation names; return spells whose AnimKits use the matches,
+  // plus spells with a matching direct stand/walk anim (proc Type 7).
   function spellsByAnim(tokens, data) {
     const out = new Set();
     for (let a = 0; a < data.animNamesL.length; a++) {
@@ -55,13 +56,16 @@ window.EpsilookSearch = (() => {
       for (const kit of data.animAnimKits.get(a) || []) {
         for (const s of data.animKitSpells.get(kit) || []) out.add(s);
       }
+      for (const s of data.animDirectSpells.get(a) || []) out.add(s);
     }
     return out;
   }
 
   // Search visual FX corpora: beams (category word + hue + tint hex +
-  // textures), dissolves (category word + textures), glows, shadowy
-  // effects and model tints (category word + hue + color hexes), morphs
+  // textures), dissolves (category word + textures), color-only effects —
+  // glows, ghosts (ShadowyEffect + material recolors) and model tints
+  // (category word + hue + color hexes) — desaturates / transparencies
+  // (category word + percent), freezes / camos (bare category word), morphs
   // (category word + creature id/name + display ids + model paths) and
   // summons (category word + creature id/name + control word).
   function spellsByFx(tokens, data) {
@@ -76,7 +80,12 @@ window.EpsilookSearch = (() => {
     scan(data.dissolveSearchL, data.dissolveSpells);
     scan(data.glowSearchL, data.glowSpells);
     scan(data.shadowySearchL, data.shadowySpells);
+    scan(data.ghostMatSearchL, data.ghostMatSpells);
     scan(data.tintSearchL, data.tintSpells);
+    scan(data.desatSearchL, data.desatSpells);
+    scan(data.transpSearchL, data.transpSpells);
+    if (textMatches("freeze", tokens)) for (const s of data.spellFreezes) out.add(s);
+    if (textMatches("camo", tokens)) for (const s of data.spellCamos) out.add(s);
     scan(data.morphSearchL, data.morphSpells);
     scan(data.summonPairSearchL, data.summonPairSpells);
     return out;
@@ -134,7 +143,16 @@ window.EpsilookSearch = (() => {
     model: {
       label: "Model", tab: true,
       hint: "model file, e.g. 6dr statue", short: "model file",
-      run: (tokens, data) => spellsByFile(tokens, data, data.modelFids, data.modelSpells),
+      // matches file names, plus the usage-category words (model:missile =
+      // every spell with a projectile model, like fx:beam in the fx field)
+      run: (tokens, data) => {
+        const out = spellsByFile(tokens, data, data.modelFids, data.modelSpells);
+        for (const [cat, spells] of data.modelCatSpells) {
+          if (!textMatches(data.modelCatNames[cat] || "", tokens)) continue;
+          for (const s of spells) out.add(s);
+        }
+        return out;
+      },
     },
     sound: {
       label: "Sound", tab: true,
