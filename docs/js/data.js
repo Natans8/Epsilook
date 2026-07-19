@@ -97,6 +97,7 @@ window.EpsilookData = (() => {
     const modelSpells = new Map();     // fid -> [spell id]
     const spellModelCats = new Map();  // spell id -> [{fid, cat}]
     const modelCatSpells = new Map();  // cat id -> Set(spell id)
+    const modelCatFidSpells = new Map(); // cat id -> Map(fid -> [spell id])
     const modelCatNames = pack.modelCatNames || {};
     {
       const { spellIds, fids, cats } = pack.spellModels;
@@ -107,6 +108,9 @@ window.EpsilookData = (() => {
         let set = modelCatSpells.get(cats[i]);
         if (!set) modelCatSpells.set(cats[i], set = new Set());
         set.add(spellIds[i]);
+        let byFid = modelCatFidSpells.get(cats[i]);
+        if (!byFid) modelCatFidSpells.set(cats[i], byFid = new Map());
+        pushTo(byFid, fids[i], spellIds[i]);
       }
       if (cats) {
         // spellModels stays fid-only (deduped across categories) for the
@@ -543,7 +547,7 @@ window.EpsilookData = (() => {
       ids: sp.ids, names: sp.names, subtexts: sp.subtexts, icons,
       namesL, spellIndex, files,
       spellModels, modelSpells, modelFids,
-      spellModelCats, modelCatSpells, modelCatNames,
+      spellModelCats, modelCatSpells, modelCatFidSpells, modelCatNames,
       spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles,
       spellAnimKits, animKitSpells,
       animNames, animNamesL, animKitAnims, animAnimKits,

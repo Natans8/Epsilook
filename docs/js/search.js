@@ -38,6 +38,30 @@ window.EpsilookSearch = (() => {
     return out;
   }
 
+  // Search model file names — with usage categories in the corpus: each
+  // (category, file) pair matches like the fx corpora, so a token may hit
+  // the category word instead of the path. model:missile alone = every
+  // spell with a projectile model; model:"attached backpack01" = spells
+  // with that file attached (one chip, fx:"chain shadowlaser"-style).
+  // A stale cached pack has no categories: plain file-name search.
+  function spellsByModel(tokens, data) {
+    if (!data.modelCatFidSpells.size) {
+      return spellsByFile(tokens, data, data.modelFids, data.modelSpells);
+    }
+    const out = new Set();
+    for (const [cat, fidSpells] of data.modelCatFidSpells) {
+      const catL = data.modelCatNames[cat] || "";
+      for (const [fid, spells] of fidSpells) {
+        const file = data.files.get(fid);
+        const searchL = file ? file.searchL : "";
+        if (tokens.every((t) => catL.includes(t.text) || searchL.includes(t.text))) {
+          for (const s of spells) out.add(s);
+        }
+      }
+    }
+    return out;
+  }
+
   function spellsByName(tokens, data) {
     const out = new Set();
     const { ids, namesL } = data;
@@ -118,7 +142,7 @@ window.EpsilookSearch = (() => {
       run(tokens, data, disabled) {
         const out = spellsByName(tokens, data);
         if (!disabled.has("model")) {
-          for (const s of spellsByFile(tokens, data, data.modelFids, data.modelSpells)) out.add(s);
+          for (const s of spellsByModel(tokens, data)) out.add(s);
         }
         if (!disabled.has("sound")) {
           for (const s of spellsByFile(tokens, data, data.soundFids, data.soundSpells)) out.add(s);
@@ -145,16 +169,7 @@ window.EpsilookSearch = (() => {
     model: {
       label: "Model", tab: true,
       hint: "model file, e.g. 6dr statue", short: "model file",
-      // matches file names, plus the usage-category words (model:missile =
-      // every spell with a projectile model, like fx:chain in the fx field)
-      run: (tokens, data) => {
-        const out = spellsByFile(tokens, data, data.modelFids, data.modelSpells);
-        for (const [cat, spells] of data.modelCatSpells) {
-          if (!textMatches(data.modelCatNames[cat] || "", tokens)) continue;
-          for (const s of spells) out.add(s);
-        }
-        return out;
-      },
+      run: (tokens, data) => spellsByModel(tokens, data),
     },
     sound: {
       label: "Sound", tab: true,

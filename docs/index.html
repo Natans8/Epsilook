@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit, animkit or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260719i">
+  <link rel="stylesheet" href="css/app.css?v=20260719j">
 </head>
 <body>
 
@@ -81,9 +81,15 @@
             <li><code>model:</code> also matches the usage-category words shown in the Models column —
               <code>model:missile</code> finds every spell with a projectile model
               (<code>attached</code>, <code>missile</code>, <code>area</code>, <code>trail</code>,
-              <code>barrage</code>). Category words autocomplete while typing inside an
+              <code>barrage</code>) — and a category word combines with file words in one tag:
+              <code>model:"missile arrow"</code> finds spells whose <em>projectile</em> is an arrow model.
+              Category words autocomplete while typing inside an
               <code>fx:</code>/<code>model:</code> tag, and a tag naming a category exactly floats
               that category's spells to the top of the results.</li>
+            <li>Epsilon commands paste straight in: <code>.cast 12345</code> or <code>.aura 12345</code>
+              (also <code>.cas</code>/<code>.ca</code>/<code>.c</code>/<code>.aur</code>/<code>.au</code>)
+              becomes an <code>id:12345</code> search — typed or pasted, the space after the command
+              works like a tag's <code>:</code>.</li>
             <li><code>mech:</code> searches mechanics: spell effect names (<code>mech:resurrect</code>)
               and aura names on aura-applying spells (<code>mech:mod_stun</code>).</li>
             <li>Every tag must match (AND), and words <em>inside</em> one tag must match the <em>same</em> file or name —
@@ -241,13 +247,13 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260719i"></script>
-<script src="js/data.js?v=20260719i"></script>
+<script src="js/config.js?v=20260719j"></script>
+<script src="js/data.js?v=20260719j"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260719i"></script>
-<script src="js/js-blp.js?v=20260719i"></script>
-<script src="js/search.js?v=20260719i"></script>
-<script src="js/app.js?v=20260719i"></script>
+<script src="js/bufo.js?v=20260719j"></script>
+<script src="js/js-blp.js?v=20260719j"></script>
+<script src="js/search.js?v=20260719j"></script>
+<script src="js/app.js?v=20260719j"></script>
 </body>
 </html>
