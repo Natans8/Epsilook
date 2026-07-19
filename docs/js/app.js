@@ -1018,6 +1018,7 @@
       itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
       groupNoun: "category",
       moreInHead: true,
+      compact: true,
     });
     return td;
   }
@@ -1100,35 +1101,47 @@
    * tinted head segment, its items flowing (and wrapping) beside it —
    * collapsing only when it actually saves space. With opts.moreInHead a
    * group's own "+N" expander sits in its head bar (spare horizontal space)
-   * instead of the td-level "+N more" strip. */
+   * instead of the td-level "+N more" strip. With opts.compact, groups that
+   * render ≤1 item for THIS row become inline pills (head + lone item fused)
+   * sharing a line instead of a full-width strip; they don't count toward
+   * the group limit and are never overflow-hidden. */
   function buildKitGroups(td, kitIds, opts) {
-    const groupLimit = kitIds.length <= 2 + 1 ? kitIds.length : 2;
+    const entries = kitIds.map((kitId) => {
+      const items = opts.itemsOf(kitId);
+      return { kitId, items, compact: !!opts.compact && items.length <= 1 };
+    });
+    const bigCount = entries.reduce((n, e) => n + !e.compact, 0);
+    const groupLimit = bigCount <= 2 + 1 ? bigCount : 2;
     let hiddenCount = 0;
+    let bigIndex = 0;
 
-    kitIds.forEach((kitId, gi) => {
+    entries.forEach((e) => {
+      const gi = e.compact ? -1 : bigIndex++;
+      const hideGroup = !e.compact && gi >= groupLimit;
       const group = el("div", "kit-group");
-      if (gi >= groupLimit) group.classList.add("overflow");
+      if (e.compact) group.classList.add("compact");
+      if (hideGroup) group.classList.add("overflow");
 
       const head = el("div", "kit-head");
-      const headTag = opts.headerTag(kitId);
+      const headTag = opts.headerTag(e.kitId);
       if (headTag.classList.contains("hit")) group.classList.add("hit");
       head.appendChild(headTag);
       group.appendChild(head);
 
-      const items = opts.itemsOf(kitId);
+      const items = e.items;
       if (items.length) {
         const itemsDiv = el("div", "kit-files");
         const limit = items.length <= opts.itemLimit + COLLAPSE_SLACK ? items.length : opts.itemLimit;
         items.forEach((item, fi) => {
           const tag = opts.itemTag(item);
-          if (gi >= groupLimit || fi >= limit) {
+          if (hideGroup || fi >= limit) {
             tag.classList.add("overflow");
             hiddenCount++;
           }
           itemsDiv.appendChild(tag);
         });
         group.appendChild(itemsDiv);
-        if (opts.moreInHead && gi < groupLimit && items.length > limit) {
+        if (opts.moreInHead && !hideGroup && items.length > limit) {
           const more = el("button", "more head-more", `+${items.length - limit}`);
           more.title = `Show all ${items.length}`;
           more.dataset.expand = "1";
@@ -1139,7 +1152,7 @@
       td.appendChild(group);
     });
 
-    const hiddenGroups = Math.max(0, kitIds.length - groupLimit);
+    const hiddenGroups = Math.max(0, bigCount - groupLimit);
     if (hiddenGroups > 0 || hiddenCount > 0) {
       const label = hiddenGroups > 0
         ? `+${hiddenGroups} more ${hiddenGroups === 1 ? opts.groupNoun : opts.groupNoun + "s"}`
@@ -1339,6 +1352,7 @@
       itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
       groupNoun: "category",
       moreInHead: true,
+      compact: true,
     });
     return td;
   }
