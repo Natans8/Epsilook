@@ -608,12 +608,14 @@ td.expanded .kit-group.overflow { display: flex; }
 /* dotted underline = mouseover shows a texture preview (hover pointers only —
    the preview never initializes on touch, so no affordance there either) */
 @media (hover: hover) {
-  .tag-label[data-tex-fid] {
+  .tag-label[data-tex-fid],
+  .tag-label[data-screen-id] {
     text-decoration: underline dotted;
     text-decoration-color: rgba(255, 255, 255, 0.4);
     text-underline-offset: 2px;
   }
-  .tag-label[data-tex-fid]:hover { text-decoration-color: currentColor; }
+  .tag-label[data-tex-fid]:hover,
+  .tag-label[data-screen-id]:hover { text-decoration-color: currentColor; }
 }
 
 .tag.model .tag-label, .tag.model-head .tag-label { color: var(--model); }
