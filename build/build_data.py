@@ -69,6 +69,9 @@ TABLES = [
     "TextureBlendSet",
     "EdgeGlowEffect",
     "ShadowyEffect",
+    "SpellVisualScreenEffect",
+    "ScreenEffect",
+    "FullScreenEffect",
     "CreatureDisplayInfo",
     "CreatureModelData",
 ]
@@ -129,11 +132,18 @@ EFFECT_TYPE_DISSOLVE = 11 # Effect = DissolveEffect.ID
 EFFECT_TYPE_EDGE_GLOW = 12 # Effect = EdgeGlowEffect.ID
 EFFECT_TYPE_BEAM = 13     # Effect = BeamEffect.ID
 EFFECT_TYPE_BARRAGE = 17  # Effect = BarrageEffect.ID (multi-model volley)
+EFFECT_TYPE_SCREEN = 19   # Effect = SpellVisualScreenEffect.ID (verified:
+                          # all 18 ET-19 rows in 9.2.7 resolve there)
 # Of the remaining SpellVisualKitEffectType values (survey 2026-07-18):
 # 2 (SpellVisualKitModelAttach) is 100% redundant with the
 # ParentSpellVisualKitID walk; 10 (UnitSoundType) plays the TARGET unit's
-# own sound — no concrete file; 19 (ScreenEffect) has zero sound-bearing
-# rows in 9.2.7; 15/20 are absent; the rest carry no model/sound columns.
+# own sound — no concrete file; 15/20 are absent; the rest carry no
+# model/sound columns.
+
+# SpellEffect.EffectAura value whose EffectMiscValue_0 is a ScreenEffect ID —
+# the main road to screen effects (~2.3k spells; the kit route via
+# SpellVisualScreenEffect adds only 18 rows in 9.2.7)
+AURA_SCREEN_EFFECT = 260
 
 # SpellProceduralEffect.Type values. Type IS the client character-procedure
 # index (m_characterProcedure) — see the "Proc type decode" section in
@@ -158,7 +168,7 @@ MODEL_CAT_AREA = 2     # SpellVisualKitAreaModel (ground/area model: emission ET
 MODEL_CAT_TRAIL = 3    # WeaponTrail (proc Type 27)
 MODEL_CAT_BARRAGE = 4  # BarrageEffect (volley of models, ET 17)
 MODEL_CAT_NAMES = {
-    MODEL_CAT_ATTACH: "attach",
+    MODEL_CAT_ATTACH: "attached",  # renamed from "attach" 2026-07-19 ("attach" read like a button)
     MODEL_CAT_MISSILE: "missile",
     MODEL_CAT_AREA: "area",
     MODEL_CAT_TRAIL: "trail",
@@ -667,6 +677,48 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             blendset_tex.get(to_int(tbs_id), ()),
         )
 
+    # screen effects: ScreenEffect rows tint/grade the whole screen while an
+    # aura holds. Payload kept: the row's internal Name (readable, e.g.
+    # "Shaman - Hex"), a fog tint color for Effect=3 (swirling fog — Param_0
+    # low 24 bits are rrggbb; the top byte looks like opacity, NOT the
+    # wiki's "rrggbbxx" claim — verified against jungle-green/twilight-purple
+    # rows), and the FullScreenEffect payload where referenced (all Effect=8
+    # rows): ColorMultiply/ColorAddition screen colors (floats 0..1) plus
+    # overlay + TextureBlendSet textures. Gamma/saturation/blur/fades and
+    # LightParams/SoundAmbience/ZoneMusic: skipped for now (revisit).
+    SCREEN_EFFECT_FOG = 3
+    fse_rows: dict[int, tuple[int, int, tuple[int, ...]]] = {}  # ID -> (mul, add, tex fids)
+    for fid_, flds in (
+        (to_int(r[0]), r[1:]) for r in read_table(
+            table_dir, "FullScreenEffect",
+            ["ID", "ColorMultiplyRed", "ColorMultiplyGreen", "ColorMultiplyBlue",
+             "ColorAdditionRed", "ColorAdditionGreen", "ColorAdditionBlue",
+             "OverlayTextureFileDataID", "TextureBlendSetID"])
+    ):
+        def fpack(r: str, g: str, b: str) -> int:
+            f = lambda v: max(0, min(255, round(float(v or 0) * 255)))
+            return (f(r) << 16) | (f(g) << 8) | f(b)
+        overlay = to_int(flds[6])
+        tex = tuple(dict.fromkeys(
+            ([overlay] if overlay else []) + list(blendset_tex.get(to_int(flds[7]), ()))))
+        fse_rows[fid_] = (fpack(*flds[0:3]), fpack(*flds[3:6]), tex)
+
+    screen_rows: dict[int, tuple[str, int, int, int, tuple[int, ...]]] = {}
+    # ScreenEffect.ID -> (name, fog color | -1, mul | -1, add | -1, tex fids)
+    for sid, name, p0, eff, fse_id in read_table(
+        table_dir, "ScreenEffect", ["ID", "Name", "Param_0", "Effect", "FullScreenEffectID"]
+    ):
+        fog = (to_int(p0) & 0xFFFFFF) if to_int(eff) == SCREEN_EFFECT_FOG else -1
+        mul, add, tex = fse_rows.get(to_int(fse_id), (-1, -1, ()))
+        screen_rows[to_int(sid)] = (name, fog, mul, add, tex)
+
+    # kit route: EffectType 19 -> SpellVisualScreenEffect -> ScreenEffectID
+    svse_screen: dict[int, int] = {}  # SpellVisualScreenEffect.ID -> ScreenEffect.ID
+    for rid, se_id, _type_id in read_table(
+        table_dir, "SpellVisualScreenEffect", ["ID", "ScreenEffectID", "ScreenEffectTypeID"]
+    ):
+        svse_screen[to_int(rid)] = to_int(se_id)
+
     # edge glows: EffectType 12 -> EdgeGlowEffect. The color is float RGB
     # 0..1 (alpha/multiplier/fade columns skipped — renderer tuning); the
     # color is the whole visible payload, packed like the chain tints.
@@ -725,6 +777,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     kit_transps: dict[int, set[int]] = defaultdict(set)  # proc IDs (Type 14)
     kit_freezes: set[int] = set()  # kit IDs with a freeze proc (Type 11)
     kit_camos: set[int] = set()    # kit IDs with a camo proc (Type 18)
+    kit_screens: dict[int, set[int]] = defaultdict(set)  # kit -> ScreenEffect ids (ET 19)
     for kit_id, effect_type, effect in read_table(
         table_dir, "SpellVisualKitEffect", ["ParentSpellVisualKitID", "EffectType", "Effect"]
     ):
@@ -775,6 +828,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             fid = barrage_fid.get(e, 0)
             if fid:
                 kit_models[k].add((fid, MODEL_CAT_BARRAGE))
+        elif et == EFFECT_TYPE_SCREEN:
+            se_id = svse_screen.get(e, 0)
+            if se_id in screen_rows:
+                kit_screens[k].add(se_id)
 
     # soundkit -> sound file ids
     soundkit_files: dict[int, set[int]] = defaultdict(set)
@@ -818,6 +875,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     spell_auras: dict[int, set[int]] = defaultdict(set)
     spell_morphs: dict[int, set[int]] = defaultdict(set)  # spell -> creature ids
     spell_summons: dict[int, set[tuple[int, int]]] = defaultdict(set)  # spell -> (creature, control)
+    spell_screens: dict[int, set[int]] = defaultdict(set)  # spell -> ScreenEffect ids
     for s, e, a, misc0, misc1 in se_rows.values():
         if s not in spell_names:
             continue
@@ -829,6 +887,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             spell_morphs[s].add(misc0)
         if e == EFFECT_SUMMON and misc0 > 0:
             spell_summons[s].add((misc0, summon_control.get(misc1, 0)))
+        # SCREEN_EFFECT auras carry the ScreenEffect ID in misc0 — the main
+        # route (the kit route below adds only a handful of rows)
+        if a == AURA_SCREEN_EFFECT and misc0 > 0 and misc0 in screen_rows:
+            spell_screens[s].add(misc0)
     del se_rows
 
     # creature -> name + display ids (TDB world tables — server-side data
@@ -926,6 +988,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                     spell_freezes.add(spell_id)
                 if k in kit_camos:
                     spell_camos.add(spell_id)
+                spell_screens[spell_id].update(kit_screens.get(k, ()))
                 for sk in kit_soundkits.get(k, ()):
                     for f in soundkit_files.get(sk, ()):
                         spell_sounds[spell_id].add((sk, f))
@@ -940,6 +1003,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # --- file names from the listfile ---------------------------------------
     used_chains = {c for chains in spell_chains.values() for c in chains}
     used_dissolves = {e for effs in spell_dissolves.values() for e in effs}
+    used_screens = {sc for scs in spell_screens.values() for sc in scs}
 
     referenced_fids = set()
     for pairs in spell_models.values():
@@ -950,6 +1014,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         referenced_fids.update(chain_rows[c][4])
     for e in used_dissolves:
         referenced_fids.update(dissolve_rows[e][1])
+    for sc in used_screens:
+        referenced_fids.update(screen_rows[sc][4])
     referenced_fids.update(f for _, _, f in morph_display_rows if f)
 
     # icon fids resolve through the same listfile pass but stay out of the
@@ -1073,6 +1139,19 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     ghost_mat_ids = sorted({g for gs in spell_ghost_mats.values() for g in gs})
     ghost_mat_hues = [hue_word(*unpack_rgb(ghost_mat_rows[g])) for g in ghost_mat_ids]
 
+    # screen effects: one row per used ScreenEffect — internal name, fog tint
+    # (Effect=3 rows; -1 = none, 0 IS a legit black fog), FullScreenEffect
+    # multiply/addition screen colors (-1 = no FSE) and texture fids
+    screen_pairs = sorted((s, sc) for s, scs in spell_screens.items() for sc in scs)
+    screen_ids = sorted(used_screens)
+    screen_hues = []
+    for sc in screen_ids:
+        _, fog, mul, add, _tex = screen_rows[sc]
+        hues = dict.fromkeys(
+            h for c in (fog, mul, add) if c >= 0 for h in (hue_word(*unpack_rgb(c)),) if h)
+        screen_hues.append(" ".join(hues))
+    screen_tex_rows = sorted((sc, f) for sc in used_screens for f in screen_rows[sc][4])
+
     # desaturate (proc Type 21) / transparency (proc Type 14): percent-only
     # pills — the percent is the whole payload (no color, no id table). Dedupe
     # equal percents on the same spell.
@@ -1101,7 +1180,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     pack = {
         "meta": {
-            "format": 15,
+            "format": 16,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
@@ -1139,6 +1218,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellFreezes": len(freeze_ids),
                 "spellCamos": len(camo_ids),
                 "spellAnims": len(anim_direct_rows),
+                "spellScreens": len(screen_pairs),
+                "screens": len(screen_ids),
                 "icons": len(icon_names),
             },
         },
@@ -1276,6 +1357,26 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         # freeze (Type 11) / camo (Type 18): valueless standalone pills
         "spellFreezes": {"spellIds": freeze_ids},
         "spellCamos": {"spellIds": camo_ids},
+        # screen effects (ScreenEffect via SCREEN_EFFECT auras + kit ET 19):
+        # per row an internal name, a fog tint (-1 = none), FullScreenEffect
+        # multiply/addition screen colors (-1 = none) and texture fids
+        # (overlay + TextureBlendSet; paths resolve via "files")
+        "spellScreens": {
+            "spellIds": [r[0] for r in screen_pairs],
+            "screenIds": [r[1] for r in screen_pairs],
+        },
+        "screens": {
+            "ids": screen_ids,
+            "names": [screen_rows[sc][0] for sc in screen_ids],
+            "fogColors": [screen_rows[sc][1] for sc in screen_ids],
+            "mulColors": [screen_rows[sc][2] for sc in screen_ids],
+            "addColors": [screen_rows[sc][3] for sc in screen_ids],
+            "hues": screen_hues,
+        },
+        "screenTextures": {
+            "screenIds": [r[0] for r in screen_tex_rows],
+            "fids": [r[1] for r in screen_tex_rows],
+        },
         # morphs: transform auras reference a CREATURE (NPC entry); its
         # display ids come from TDB's creature_template_model, each display
         # resolving to a creature model file (fid 0 = unknown model)
@@ -1315,7 +1416,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         f"({len(dissolve_ids):,} rows)  glows={len(glow_row_pairs):,} "
         f"({len(glow_ids):,} rows)  shadowies={len(shadowy_row_pairs):,} "
         f"({len(shadowy_ids):,} rows)  tints={len(tint_row_pairs):,} "
-        f"({len(tint_ids):,} rows)  morphs={len(morph_rows):,} "
+        f"({len(tint_ids):,} rows)  screens={len(screen_pairs):,} "
+        f"({len(screen_ids):,} rows)  morphs={len(morph_rows):,} "
         f"({len(morph_display_rows):,} displays)  summons={len(summon_rows):,} "
         f"({len(summon_creature_ids):,} creatures)  icons={len(icon_names):,}  "
         f"orphan visual spells={orphan_spells:,}  [{time.time() - t0:.1f}s]"

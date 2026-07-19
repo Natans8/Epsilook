@@ -5,9 +5,10 @@ Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
 **Live at [natans8.github.io/Epsilook](https://natans8.github.io/Epsilook/).**
 
 Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
-AnimKit, animation or visual effect (beams searchable by texture and tint color,
-dissolves by texture, glows, ghost effects and model tints by color,
-desaturation and transparency by percent, freezes and camouflage by word, morphs
+AnimKit, animation or visual effect (chain/beam effects searchable by texture and
+tint color, dissolves by texture, glows, ghost effects and model tints by color,
+desaturation and transparency by percent, freezes and camouflage by word,
+full-screen effects by name or color, morphs
 by NPC name, model name, creature ID or display ID, summons by NPC name or
 creature ID) —
 with spell icons, clickable cross-references, spell mechanic info, and one-click
@@ -24,21 +25,25 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
 - Plain words search names, models, sounds, animations and visual effects at once and
   match **any part of a name, in any order** — `6dr statue` finds `6dr_draenei_statue_male01.m2`.
 - Quotes make an **exact phrase**: `"fire bolt"` matches those words together, in that order.
-- Field tags narrow a term to one field: `name:` `model:` `sound:` `soundkit:`
-  `animkit:` `anim:` `fx:` `mech:` `id:` — type the prefix or click a field button.
-  Tags combine with AND: `model:missile name:fire` finds fire-named spells that use
-  a missile model. Exception: several tags of the same exact-ID field (`id:`,
-  `soundkit:`, `animkit:`) combine with OR — two `id:` tags could never both
-  match one spell.
-- `fx:` searches the Effects column — beam/chain effects by category word
-  (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`,
-  or by hex: `fx:#00b4ff`; the dot on a beam tag shows the chain's RGB
+- Field tags narrow a term to one field: `name:` `model:` `sound:` `anim:`
+  `fx:` `mech:` `id:` — type the prefix or click a field button.
+  `sound:` and `anim:` also take an exact SoundKit / AnimKit ID
+  (`sound:86835`, `anim:13839`; the old `soundkit:`/`animkit:` prefixes
+  still work as aliases). Tags combine with AND: `model:missile name:fire`
+  finds fire-named spells that use a missile model. Exception: several
+  `id:` tags combine with OR — two `id:` tags could never both match one
+  spell (several kit IDs inside *one* `sound:`/`anim:` tag also OR).
+- `fx:` searches the Effects column — chain/beam effects by category word
+  (`fx:chain`), texture name (`fx:shadowlaser`) or tint color (`fx:chain red`,
+  or by hex: `fx:#00b4ff`; the dot on a chain tag shows the chain's RGB
   tint), dissolve/materialize effects by texture (`fx:"dissolve arcane"`),
   glow and ghost effects and model tints by color word or hex
   (`fx:"glow red"`, `fx:"tint green"`, `fx:ghost` — color-only effects
   shown as a swatch + hex code), model desaturation and transparency by
   percent (`fx:"transparency 50%"`), freeze and camouflage effects by word
-  (`fx:freeze`, `fx:camo`), and morphs (transform
+  (`fx:freeze`, `fx:camo`), full-screen effects (the screen tinting or
+  overlaying while an aura holds) by internal name, color word or hex
+  (`fx:"screen hex"`, `fx:"screen green"`), and morphs (transform
   auras) by NPC name, model name, creature ID or display ID
   (`fx:"morph sheep"`). Morph tags show the model name
   and copy the display ID, a ready `.morph <displayID>` command, and a
@@ -53,29 +58,36 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
 - `mech:` searches the Mechanics column — what a spell *does*: spell effect
   names (`mech:resurrect`, `mech:school_damage`) and aura names for
   aura-applying spells (`mech:mod_stun`, `mech:periodic_damage`).
-- The Models column groups each model by how the spell uses it — `attach`
-  (attached to the caster/target), `missile` (projectile), `area` (ground
+- The Models column groups each model by how the spell uses it — `attached`
+  (to the caster/target), `missile` (projectile), `area` (ground
   model), `trail` (weapon trail), `barrage` (volley) — and `model:` matches
   those words too: `model:missile` finds every spell with a projectile model
-  (category heads are clickable, like the Effects ones).
+  (category heads are clickable, like the Effects ones). Category words
+  autocomplete while typing inside an `fx:`/`model:` tag, and a tag naming
+  a category exactly floats that category's spells to the top of the results.
 - A `-` prefix excludes instead: `name:nova -mech:school_damage`.
 - The whole bar selects like plain text — mouse, Ctrl+A, or Shift+arrows — and
   Ctrl+C copies the selection as query text (`model:book note anim:read`), ready
   to paste back into any Epsilook search bar.
 - Click any tag in the results to search for it (Shift-click to exclude it) —
-  including an Effects category label ("beam", "glow", …), which finds every
+  including an Effects category label ("chain", "glow", …), which finds every
   spell with that kind of effect. The current search — "Only spells with"
   filters included — always lives in the URL; the 🔗 Share button copies it.
+- The multi-value columns (Models, Sounds, Animations, Effects, Mechanics)
+  sort by how many entries a spell has — click the header; the first click
+  puts the most extreme spells on top.
 - Appending `&export=json` or `&export=csv` to a shared URL downloads the
   query's results directly on page load (same content as the Export buttons;
   hidden columns are excluded either way).
 - The ▶ on a sound file plays it in the browser (click again to stop).
 - The `3d` on a model tag opens the model in the community
   [WoW.tools model viewer](https://wowtools.work/mv/) in a new tab.
-- Hovering a beam or dissolve texture tag shows the texture itself in a
-  floating preview (fetched on demand, nothing is preloaded). Beam previews
-  are shown with the chain's tint applied — the color the beam actually has
-  in game.
+- Hovering a chain, dissolve or screen texture tag shows the texture itself
+  in a floating preview (fetched on demand, nothing is preloaded). Chain
+  previews are shown with the chain's tint applied — the color the beam
+  actually has in game; screen overlays stay untinted (in game their colors
+  grade the world, not the overlay image). Hovering any color swatch shows
+  a large patch of the color with its hex and hue word.
 
 ## Development
 

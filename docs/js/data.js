@@ -170,9 +170,10 @@ window.EpsilookData = (() => {
     // like fx:#ff5800 — or just a hex prefix — match by substring)
     const hexColor = (c) => "#" + c.toString(16).padStart(6, "0");
 
-    // visual FX: chain/beam effects. Each chain has a tint (0xFFFFFF =
-    // untinted), a hue word, textures (fids into `files`), and a lowercase
-    // search corpus: "beam" + hue + tint hex + texture paths.
+    // visual FX: chain/beam effects (category word "chain" since
+    // 2026-07-19). Each chain has a tint (0xFFFFFF = untinted), a hue word,
+    // textures (fids into `files`), and a lowercase search corpus:
+    // "chain" + hue + tint hex + texture paths.
     const spellFx = new Map();     // spell id -> [chainId]
     const fxSpells = new Map();    // chainId -> [spell id]
     const fxChains = new Map();    // chainId -> {color, hue}
@@ -197,7 +198,7 @@ window.EpsilookData = (() => {
           .map((fid) => (files.get(fid) || { searchL: "" }).searchL).join(" ");
         // 0xFFFFFF = untinted ("the texture's own color"), not white — no hex
         const hex = info.color === 0xffffff ? "" : hexColor(info.color);
-        fxSearchL.set(c, ("beam " + info.hue + " " + hex + " " + tex).trim());
+        fxSearchL.set(c, ("chain " + info.hue + " " + hex + " " + tex).trim());
       }
     }
 
@@ -324,6 +325,40 @@ window.EpsilookData = (() => {
     // freeze (Type 11) / camo (Type 18): valueless standalone pills
     const spellFreezes = new Set(pack.spellFreezes ? pack.spellFreezes.spellIds : []);
     const spellCamos = new Set(pack.spellCamos ? pack.spellCamos.spellIds : []);
+
+    // screen effects (ScreenEffect rows): the whole screen tints/overlays
+    // while the aura holds. Each row: internal name, optional fog tint and
+    // FullScreenEffect multiply/addition colors (-1 = none — 0 is a real
+    // black), texture fids. Corpus: "screen" + name + hues + hexes + paths.
+    const spellScreens = new Map();    // spell id -> [screenId]
+    const screenSpells = new Map();    // screenId -> [spell id]
+    const screenNames = new Map();     // screenId -> internal name
+    const screenColors = new Map();    // screenId -> {fog, mul, add}
+    const screenTextures = new Map();  // screenId -> [fid]
+    const screenSearchL = new Map();   // screenId -> search corpus
+    if (pack.spellScreens) {
+      const { spellIds, screenIds } = pack.spellScreens;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellScreens, spellIds[i], screenIds[i]);
+        pushTo(screenSpells, screenIds[i], spellIds[i]);
+      }
+      const st = pack.screenTextures;
+      for (let i = 0; i < st.screenIds.length; i++) {
+        pushTo(screenTextures, st.screenIds[i], st.fids[i]);
+      }
+      const sc = pack.screens;
+      for (let i = 0; i < sc.ids.length; i++) {
+        const id = sc.ids[i];
+        screenNames.set(id, sc.names[i]);
+        screenColors.set(id, { fog: sc.fogColors[i], mul: sc.mulColors[i], add: sc.addColors[i] });
+        const hexes = [sc.fogColors[i], sc.mulColors[i], sc.addColors[i]]
+          .filter((c) => c >= 0).map(hexColor).join(" ");
+        const tex = (screenTextures.get(id) || [])
+          .map((fid) => (files.get(fid) || { searchL: "" }).searchL).join(" ");
+        screenSearchL.set(id, ("screen " + sc.names[i].toLowerCase() + " "
+          + sc.hues[i] + " " + hexes + " " + tex).trim());
+      }
+    }
 
     // direct stand/walk anim ids (Type 7) — a second source for the
     // Animations column; matched via the anim field like animkit anims
@@ -474,6 +509,7 @@ window.EpsilookData = (() => {
       spellDesaturates, desatSpells, desatSearchL,
       spellTransps, transpSpells, transpSearchL,
       spellFreezes, spellCamos,
+      spellScreens, screenSpells, screenNames, screenColors, screenTextures, screenSearchL,
       spellAnims, animDirectSpells,
       spellMorphs, morphSpells, morphNames, morphDisplays, morphSearchL,
       spellSummons, summonNames, summonPairSpells, summonPairSearchL, summonControlNames,
