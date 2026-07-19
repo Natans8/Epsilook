@@ -976,7 +976,8 @@
       case "models": return (id) =>
         d.spellModelCats.size ? len(d.spellModelCats, id) : len(d.spellModels, id);
       case "sounds": return (id) => len(d.spellSounds, id);
-      case "animkits": return (id) => len(d.spellAnimKits, id) + len(d.spellAnims, id);
+      case "animkits": return (id) =>
+        len(d.spellAnimKits, id) + len(d.spellAnims, id) + len(d.spellVisualAnims, id);
       case "mechanics": return (id) => len(d.spellEffects, id) + len(d.spellAuras, id);
       case "fx": return (id) =>
         len(d.spellFx, id) + len(d.spellDissolves, id) + len(d.spellGlows, id)
@@ -1034,7 +1035,8 @@
       list = list.filter((id) =>
         (!f.models || d.spellModels.has(id)) &&
         (!f.sounds || d.spellSounds.has(id)) &&
-        (!f.animkits || d.spellAnimKits.has(id)) &&
+        (!f.animkits || d.spellAnimKits.has(id) || d.spellAnims.has(id)
+          || d.spellVisualAnims.has(id)) &&
         (!f.fx || d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellGlows.has(id)
           || d.spellShadowies.has(id) || d.spellGhostMats.has(id) || d.spellTints.has(id)
           || d.spellDesaturates.has(id) || d.spellTransps.has(id)
@@ -1152,10 +1154,11 @@
     // Sounds — grouped by SoundKit; kits containing a match come first
     tr.appendChild(soundsCell(d.spellSounds.get(spellId) || []));
 
-    // Animations — AnimKits grouped with the animations they play, plus
-    // direct stand/walk anims (the "stance" group)
+    // Animations — loose kit-played anims first, then AnimKits grouped with
+    // the animations they play, then direct stand/walk anims ("stance")
     tr.appendChild(animationsCell(d.spellAnimKits.get(spellId) || [],
-      d.spellAnims.get(spellId) || []));
+      d.spellAnims.get(spellId) || [],
+      d.spellVisualAnims.get(spellId) || []));
 
     // Effects — visual FX (beams, morphs, summons), grouped by category
     tr.appendChild(fxCell(spellId));
@@ -1343,28 +1346,36 @@
     return td;
   }
 
-  /* Animations cell: AnimKits grouped with the animations they play, plus a
-   * "stance" group for direct stand/walk anim overrides (SpellProceduralEffect
-   * Type 7) — same anim pills, but no kit id to head the group with. */
+  /* Animations cell, three sources in render order: loose pills for the
+   * animations the spell's visual kits play directly (SpellVisualAnim —
+   * nothing to group them under), AnimKits grouped with the animations they
+   * play, and a "stance" group for direct stand/walk anim overrides
+   * (SpellProceduralEffect Type 7) — same anim pills, no kit id to head the
+   * group with. Loose pills never collapse (99%+ of spells have ≤3). */
   const STANCE_GROUP = -1; // sentinel kit id for the direct-anim group
 
-  function animationsCell(animKitIds, directAnimIds) {
+  function animationsCell(animKitIds, stanceAnimIds, looseAnimIds) {
     const td = el("td", "c-animkits");
-    if (animKitIds.length === 0 && directAnimIds.length === 0) {
+    if (animKitIds.length === 0 && stanceAnimIds.length === 0
+        && looseAnimIds.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
       return td;
     }
     const d = state.data;
+    for (const a of hitsFirst(looseAnimIds.slice().sort((x, y) => x - y),
+      (x) => animIsHit(x))) {
+      td.appendChild(animTag(a));
+    }
     const animsOf = (kitId) =>
-      kitId === STANCE_GROUP ? directAnimIds : (d.animKitAnims.get(kitId) || []);
+      kitId === STANCE_GROUP ? stanceAnimIds : (d.animKitAnims.get(kitId) || []);
     // the stance group's anims match through its category word too
     const wordOf = (kitId) => (kitId === STANCE_GROUP ? "stance" : "");
     const kitHasHit = (kitId) =>
       (kitId !== STANCE_GROUP && kitIsHit(kitId, "animkit")) ||
       animsOf(kitId).some((a) => animIsHit(a, wordOf(kitId)));
     const groups = animKitIds.slice().sort((a, b) => a - b);
-    if (directAnimIds.length) groups.push(STANCE_GROUP);
+    if (stanceAnimIds.length) groups.push(STANCE_GROUP);
     const kitIds = hitsFirst(groups, kitHasHit);
 
     buildKitGroups(td, kitIds, {
@@ -2581,6 +2592,8 @@
           .map((k) => ({ id: k, files: byKit.get(k) }));
       }
       if (!hc.animkits) {
+        const loose = (d.spellVisualAnims.get(id) || []).slice().sort((a, b) => a - b);
+        if (loose.length) row.anims = loose.map((a) => d.animNames[a]);
         row.animKits = (d.spellAnimKits.get(id) || []).slice().sort((a, b) => a - b)
           .map((k) => ({ id: k, anims: (d.animKitAnims.get(k) || []).map((a) => d.animNames[a]) }));
         const stance = (d.spellAnims.get(id) || []).slice().sort((a, b) => a - b);
@@ -2722,7 +2735,8 @@
       }
       if (!hc.animkits) {
         cols.push(esc(r.animKits.map((k) => k.id).join("; ")));
-        cols.push(esc(r.animKits.map((k) => `${k.id}: ${k.anims.join(" | ")}`)
+        cols.push(esc((r.anims || [])
+          .concat(r.animKits.map((k) => `${k.id}: ${k.anims.join(" | ")}`))
           .concat(r.stanceAnims ? [`stance: ${r.stanceAnims.join(" | ")}`] : []).join("; ")));
       }
       if (!hc.fx) {

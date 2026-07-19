@@ -117,6 +117,8 @@ interface SpellPack {
   animKitAnims: { animKitIds: number[]; animIds: number[] };
   /** Direct stand/walk anim overrides, proc Type 7 (format 14+). */
   spellAnims?: { spellIds: number[]; animIds: number[] };
+  /** Animations the kits play directly, SpellVisualAnim ET 6 (format 21+). */
+  spellVisualAnims?: { spellIds: number[]; animIds: number[] };
 
   /* --- visual fx sections (the Effects column) --- */
 
@@ -270,6 +272,9 @@ interface SpellData {
   /** Direct stand/walk anim overrides (the "stance" group). */
   spellAnims: Map<number, number[]>;
   animDirectSpells: Map<number, number[]>;
+  /** Animations the kits play directly (SpellVisualAnim) — loose pills. */
+  spellVisualAnims: Map<number, number[]>;
+  visualAnimSpells: Map<number, number[]>;
 
   spellFx: Map<number, number[]>;
   fxSpells: Map<number, number[]>;

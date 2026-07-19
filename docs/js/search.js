@@ -101,11 +101,12 @@ window.EpsilookSearch = (() => {
 
   /**
    * Search animation names; return spells whose AnimKits use the matches,
-   * plus spells with a matching direct stand/walk anim (proc Type 7).
-   * Direct anims render under a "stance" group head, and that word joins
-   * their corpus — a token may hit "stance" instead of the anim name
-   * (fx-corpus semantics), so anim:stance alone finds every override and
-   * anim:"stance walk" scopes to walk overrides.
+   * spells whose visual kits play a matching animation directly
+   * (SpellVisualAnim — the loose pills), plus spells with a matching direct
+   * stand/walk anim (proc Type 7). Stance anims render under a "stance"
+   * group head, and that word joins their corpus — a token may hit "stance"
+   * instead of the anim name (fx-corpus semantics), so anim:stance alone
+   * finds every override and anim:"stance walk" scopes to walk overrides.
    * @param {QueryToken[]} tokens
    * @param {SpellData} data
    * @returns {Set<number>}
@@ -118,6 +119,7 @@ window.EpsilookSearch = (() => {
         for (const kit of data.animAnimKits.get(a) || []) {
           for (const s of data.animKitSpells.get(kit) || []) out.add(s);
         }
+        for (const s of data.visualAnimSpells.get(a) || []) out.add(s);
       }
       if (tokens.every((t) => "stance".includes(t.text) || nameL.includes(t.text))) {
         for (const s of data.animDirectSpells.get(a) || []) out.add(s);
