@@ -1154,8 +1154,10 @@
 
     const hiddenGroups = Math.max(0, bigCount - groupLimit);
     if (hiddenGroups > 0 || hiddenCount > 0) {
+      const plural = opts.groupNoun.endsWith("y")
+        ? opts.groupNoun.slice(0, -1) + "ies" : opts.groupNoun + "s";
       const label = hiddenGroups > 0
-        ? `+${hiddenGroups} more ${hiddenGroups === 1 ? opts.groupNoun : opts.groupNoun + "s"}`
+        ? `+${hiddenGroups} more ${hiddenGroups === 1 ? opts.groupNoun : plural}`
         : `+${hiddenCount} more`;
       const more = el("button", "more", label);
       more.dataset.expand = "1";
