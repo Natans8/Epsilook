@@ -49,6 +49,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from collections import defaultdict
 from collections.abc import Callable, Iterator
@@ -99,13 +100,103 @@ TABLES = [
     "SpellOverrideName",
 ]
 
+# ------------------------------------------------------- per-build source map
+#
+# Building an OLDER game version is mostly a story of things that do not exist
+# yet: db2 tables get introduced, split and renamed as the game evolves, so a
+# reader written against 9.2.7 asks for columns Legion never had and tables
+# WotLK never had. Rather than branch per version inside the readers, the three
+# kinds of difference are DECLARED here:
+#
+#   OPTIONAL_TABLES   the table postdates the build. It 404s on wago, its
+#                     reader yields nothing, its pack section comes out empty
+#                     and the feature it powers quietly switches off (the
+#                     frontend already guards every section).
+#   OPTIONAL_COLUMNS  the table exists but one column postdates the build —
+#                     a default value stands in.
+#   SPELL_NAME_SOURCES  the data exists but MOVED between tables.
+#
+# Anything not declared here is still a hard error: an unexpected schema change
+# must fail the build loudly rather than silently losing data. To add a game
+# version, run the build and let it tell you what is missing — then decide,
+# per item, whether it belongs here or is a genuine bug.
+
+# table -> the user-facing feature that switches off when the build predates it
+OPTIONAL_TABLES = {
+    "SpellName":               "spell names (pre-BfA they live on Spell itself)",
+    "BeamEffect":              "the BeamEffect route into chain/beam fx",
+    "SpellEffectEmission":     "area-emitter models",
+    "SpellVisualKitAreaModel": "area models",
+    "WeaponTrail":             "weapon-trail models",
+    "BarrageEffect":           "barrage models",
+    "DissolveEffect":          "the dissolve fx category",
+    "TextureBlendSet":         "dissolve materials + screen mask textures",
+    "EdgeGlowEffect":          "the glow fx category",
+    "ShadowyEffect":           "the ghost/shadowy fx category",
+    "SpellVisualScreenEffect": "the kit route into screen fx",
+    "ScreenEffect":            "the screen fx category",
+    "FullScreenEffect":        "screen fx colour grading + overlay textures",
+    "SpellShapeshiftForm":     "the shapeshift fx category",
+    "SpellOverrideName":       "override names in the search corpus",
+    "SummonProperties":        "summon control words (guardian/pet/...)",
+}
+
+# (table, column) -> the value to use on builds that lack the column
+OPTIONAL_COLUMNS = {
+    # the raid missile-set variant arrived after Legion; 0 = "no raid set",
+    # which is exactly how a present-but-unset row already reads
+    ("SpellVisual", "RaidSpellVisualMissileSetID"): "0",
+    # Legion's FullScreenEffect has the colour grade but no overlay art yet
+    ("FullScreenEffect", "OverlayTextureFileDataID"): "0",
+}
+
+# Spell names moved: SpellName.db2 was split out of Spell.db2 in BfA, so Legion
+# and earlier carry the name on Spell itself. First candidate whose table this
+# build actually has wins. (Both spellings are "ID" + a localised name column,
+# so the reader downstream is identical.)
+SPELL_NAME_SOURCES = [
+    ("SpellName", ["ID", "Name_lang"]),
+    ("Spell", ["ID", "Name_lang"]),
+]
+
 # TrinityCore TDB release per game version (server-side world DB + hotfixes).
+# "hotfixes" is optional — the 3.3.5 branch ships a world-only dump, and
+# hotfixes are a modern-client concept anyway.
 TDB_RELEASES = {
     "9.2.7.45745": {
         "tag": "TDB927.22111",
         "asset": "TDB_full_927.22111_2022_11_20.7z",
         "world": "TDB_full_world_927.22111_2022_11_20.sql",
         "hotfixes": "TDB_full_hotfixes_927.22111_2022_11_20.sql",
+    },
+    "10.2.7.55664": {
+        "tag": "TDB1027.24051",
+        "asset": "TDB_full_1027.24051_2024_05_11.7z",
+        "world": "TDB_full_world_1027.24051_2024_05_11.sql",
+        "hotfixes": "TDB_full_hotfixes_1027.24051_2024_05_11.sql",
+    },
+    "11.2.7.65299": {
+        "tag": "TDB1127.26011",
+        "asset": "TDB_full_1127.26011_2026_01_14.7z",
+        "world": "TDB_full_world_1127.26011_2026_01_14.sql",
+        "hotfixes": "TDB_full_hotfixes_1127.26011_2026_01_14.sql",
+    },
+    # Legion: the 2018 archive nests both dumps in a folder and drops the
+    # "full_" infix from the inner file names.
+    "7.3.5.26972": {
+        "tag": "TDB735.00",
+        "asset": "TDB_full_735.00_2018_02_19.7z",
+        "world": "TDB_full_735.00_2018_02_19/TDB_world_735.00_2018_02_19.sql",
+        "hotfixes": "TDB_full_735.00_2018_02_19/TDB_hotfixes_735.00_2018_02_19.sql",
+    },
+    # WotLK Classic: TrinityCore's 3.3.5 branch ships a WORLD-ONLY dump (no
+    # hotfixes key). It targets original 3.3.5a rather than the 3.4.x Classic
+    # client, but it is the only source of creature name/display data for the
+    # era and the creature entries are overwhelmingly shared.
+    "3.4.3.58936": {
+        "tag": "TDB335.25101",
+        "asset": "TDB_full_world_335.25101_2025_10_21.7z",
+        "world": "TDB_full_world_335.25101_2025_10_21.sql",
     },
 }
 TDB_ASSET_URL = "https://github.com/TrinityCore/TrinityCore/releases/download/{tag}/{asset}"
@@ -119,7 +210,8 @@ TDB_ASSET_URL = "https://github.com/TrinityCore/TrinityCore/releases/download/{t
 # cache check is existence-only) — delete build/cache/tdb-*/ to re-distill.
 TDB_TABLES = {
     "world": {
-        "creature_template": ["entry", "name"],
+        "creature_template": ["entry", "name",
+                              "modelid1", "modelid2", "modelid3", "modelid4"],
         "creature_template_model": ["CreatureID", "Idx", "CreatureDisplayID", "Probability"],
     },
     "hotfixes": {
@@ -136,6 +228,30 @@ TDB_TABLES = {
         "creature_model_data": ["ID", "FileDataID"],
     },
 }
+
+# The same three kinds of drift exist on the TrinityCore side, since a TDB
+# release tracks the server schema of its era. Declared separately from the
+# wago-side maps above because the table names live in a different namespace.
+TDB_OPTIONAL_TABLES = {
+    # split out of creature_template's modelid1..4 columns after the Legion era
+    "creature_template_model": "creature displays (legacy dumps keep them on creature_template)",
+}
+TDB_OPTIONAL_COLUMNS = {
+    # the legacy spelling: present on Legion-era dumps, gone once the
+    # creature_template_model table took over
+    ("creature_template", "modelid1"): "0",
+    ("creature_template", "modelid2"): "0",
+    ("creature_template", "modelid3"): "0",
+    ("creature_template", "modelid4"): "0",
+}
+
+# Creature -> display id moved on the TrinityCore side too: Legion-era world
+# dumps keep up to four display ids as modelid1..4 ON creature_template, later
+# releases split them into their own table. Whichever the release has wins.
+CREATURE_DISPLAY_SOURCES = [
+    ("creature_template_model", ["CreatureID", "Idx", "CreatureDisplayID"]),
+    ("creature_template", ["entry", "modelid1", "modelid2", "modelid3", "modelid4"]),
+]
 
 # Animation names indexed by AnimID (Stand=0, ...), maintained by wow.tools
 ANIMS_JS_URL = "https://raw.githubusercontent.com/Marlamin/wow.tools.local/main/wwwroot/js/anims.js"
@@ -243,7 +359,7 @@ TEX_OVERLAY, TEX_MASK = 0, 1
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 19
+PACK_FORMAT = 20  # 20: meta.absentTables (tables the build predates)
 
 csv.field_size_limit(10_000_000)
 
@@ -255,20 +371,35 @@ def log(msg: str) -> None:
 
 # ---------------------------------------------------------------- downloads
 
-def download(url: str, dest: Path, refresh: bool, headers: dict | None = None) -> None:
-    """Download url to dest unless it is already cached (or refresh is set)."""
+def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
+             optional: bool = False) -> bool:
+    """Download url to dest unless it is already cached (or refresh is set).
+
+    Returns False when an `optional` source is absent (HTTP 404) — that is how
+    a build that predates a db2 table reports it, and the caller treats the
+    corresponding feature as switched off. Any other error still raises.
+    """
     if dest.exists() and dest.stat().st_size > 0 and not refresh:
         log(f"  cached   {dest.name} ({dest.stat().st_size:,} bytes)")
-        return
+        return True
     log(f"  fetching {url}")
     req = urllib.request.Request(url, headers={"User-Agent": "epsilook-build", **(headers or {})})
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
-    with urllib.request.urlopen(req, timeout=600) as resp, open(tmp, "wb") as out:
-        while chunk := resp.read(1 << 20):
-            out.write(chunk)
+    try:
+        with urllib.request.urlopen(req, timeout=600) as resp, open(tmp, "wb") as out:
+            while chunk := resp.read(1 << 20):
+                out.write(chunk)
+    except urllib.error.HTTPError as e:
+        tmp.unlink(missing_ok=True)
+        if optional and e.code == 404:
+            dest.unlink(missing_ok=True)  # a stale pack's table must not linger
+            log(f"  absent   {dest.name} (this build predates the table)")
+            return False
+        raise
     tmp.replace(dest)
     log(f"  saved    {dest.name} ({dest.stat().st_size:,} bytes)")
+    return True
 
 
 def find_7z() -> str:
@@ -315,11 +446,28 @@ def iter_insert_rows(line: str) -> Iterator[list[str]]:
             val.append(c); i += 1
 
 
-def distill_tdb_dump(sql_path: Path, want: dict[str, list[str]], out_dir: Path) -> None:
+def tdb_column_index(table: str, column: str, schema: list[str]) -> int | None:
+    """Position of a column in a TDB table, or None if it is a legacy spelling.
+
+    None means "declared in TDB_OPTIONAL_COLUMNS and not in this release" —
+    the distiller writes the declared default instead.
+    """
+    if column in schema:
+        return schema.index(column)
+    if (table, column) in TDB_OPTIONAL_COLUMNS:
+        return None
+    sys.exit(f"error: TDB table {table} has no column {column!r} and it is not "
+             f"declared in TDB_OPTIONAL_COLUMNS; schema = {schema}")
+
+
+def distill_tdb_dump(sql_path: Path, want: dict[str, list[str]], out_dir: Path,
+                     required: bool = True) -> None:
     """Extract the wanted tables/columns from a TDB SQL dump into CSVs.
 
     A table may legitimately have no INSERT (hotfixes only carry hotfixed
-    rows) — it still gets a header-only CSV so readers can stream it.
+    rows) — it still gets a header-only CSV so readers can stream it. With
+    `required` false a table missing from the dump entirely is tolerated too:
+    older hotfix dumps predate some of the tables we overlay.
     """
     schemas: dict[str, list[str]] = {}
     writers: dict[str, tuple] = {}
@@ -344,7 +492,7 @@ def distill_tdb_dump(sql_path: Path, want: dict[str, list[str]], out_dir: Path) 
                     continue
                 if table not in writers:
                     keep = want[table]
-                    idx = [schemas[table].index(c) for c in keep]
+                    idx = [tdb_column_index(table, c, schemas[table]) for c in keep]
                     fh = open(out_dir / f"{table}.csv", "w", newline="", encoding="utf-8")
                     handles.append(fh)
                     w = csv.writer(fh)
@@ -354,12 +502,18 @@ def distill_tdb_dump(sql_path: Path, want: dict[str, list[str]], out_dir: Path) 
                 for row in iter_insert_rows(line):
                     if len(row) != ncols:
                         sys.exit(f"error: {table} row has {len(row)} values, schema has {ncols}")
-                    w.writerow([row[i] for i in idx])
+                    w.writerow([row[i] if i is not None
+                                else TDB_OPTIONAL_COLUMNS[(table, c)]
+                                for i, c in zip(idx, want[table])])
     for fh in handles:
         fh.close()
     for table, keep in want.items():
         if table not in schemas:
-            sys.exit(f"error: table {table} not found in {sql_path.name}")
+            if required and table not in TDB_OPTIONAL_TABLES:
+                sys.exit(f"error: table {table} not found in {sql_path.name}")
+            why = TDB_OPTIONAL_TABLES.get(table, "no overrides")
+            log(f"    {table}: absent from this dump — {why}")
+            continue
         if table not in writers:  # zero hotfixed rows — emit header only
             with open(out_dir / f"{table}.csv", "w", newline="", encoding="utf-8") as fh:
                 csv.writer(fh).writerow(keep)
@@ -378,14 +532,19 @@ def fetch_tdb(version: str) -> Path | None:
             f"hotfixes will not apply")
         return None
     tdb_dir = CACHE_DIR / f"tdb-{rel['tag']}"
-    wanted_csvs = [t for want in TDB_TABLES.values() for t in want]
+    # a release may ship world only (the 3.3.5 branch does), so only the kinds
+    # this release actually has count towards "already distilled"
+    kinds = [k for k in ("world", "hotfixes") if k in rel]
+    wanted_csvs = [t for k in kinds for t in TDB_TABLES[k]]
     if all((tdb_dir / f"{t}.csv").exists() for t in wanted_csvs):
         log(f"TDB ({rel['tag']}): cached ({len(wanted_csvs)} distilled tables)")
         return tdb_dir
+    if "hotfixes" not in rel:
+        log(f"TDB ({rel['tag']}): world-only release — no hotfix overrides for this build")
     tdb_dir.mkdir(parents=True, exist_ok=True)
     archive = tdb_dir / rel["asset"]
     download(TDB_ASSET_URL.format(**rel), archive, refresh=False)
-    dumps = {kind: tdb_dir / rel[kind] for kind in ("world", "hotfixes")}
+    dumps = {kind: tdb_dir / rel[kind] for kind in kinds}
     if not all(p.exists() for p in dumps.values()):
         log(f"  extracting {archive.name} ...")
         r = subprocess.run([find_7z(), "x", "-y", f"-o{tdb_dir}", str(archive)],
@@ -394,7 +553,10 @@ def fetch_tdb(version: str) -> Path | None:
             sys.exit(f"error: 7z extraction failed: {r.stderr[-500:]}")
     for kind, sql_path in dumps.items():
         log(f"  distilling {sql_path.name} ...")
-        distill_tdb_dump(sql_path, TDB_TABLES[kind], tdb_dir)
+        # world tables are the only source of creature names/displays, so a
+        # missing one is fatal; hotfixes are an overlay, and older dumps
+        # legitimately predate some of the tables we look for
+        distill_tdb_dump(sql_path, TDB_TABLES[kind], tdb_dir, required=(kind == "world"))
         sql_path.unlink()  # the archive stays; the 460 MB text does not
     return tdb_dir
 
@@ -404,7 +566,9 @@ def fetch_sources(version: str, refresh: bool) -> tuple[Path, Path, Path | None]
     table_dir = CACHE_DIR / version
     log(f"Tables (wago.tools, build {version}):")
     for table in TABLES:
-        download(WAGO_CSV_URL.format(table=table, version=version), table_dir / f"{table}.csv", refresh)
+        download(WAGO_CSV_URL.format(table=table, version=version),
+                 table_dir / f"{table}.csv", refresh,
+                 optional=table in OPTIONAL_TABLES)
 
     log("Animation names (wow.tools):")
     download(ANIMS_JS_URL, CACHE_DIR / "anims.js", refresh)
@@ -433,27 +597,77 @@ def fetch_sources(version: str, refresh: bool) -> tuple[Path, Path, Path | None]
 
 # ------------------------------------------------------------------ parsing
 
+def table_available(table_dir: Path, table: str) -> bool:
+    """Whether this build actually has the table (see OPTIONAL_TABLES)."""
+    return (table_dir / f"{table}.csv").exists()
+
+
 def read_table(table_dir: Path, table: str, columns: list[str]) -> Iterator[tuple[str, ...]]:
-    """Yield tuples of the requested columns for each row of a cached CSV."""
+    """Yield tuples of the requested columns for each row of a cached CSV.
+
+    Absent OPTIONAL_TABLES yield nothing and absent OPTIONAL_COLUMNS fall back
+    to their declared default, so one reader serves every game version. A
+    column that is missing without being declared optional is a hard error —
+    silently dropping data is the one outcome worth crashing over.
+    """
     path = table_dir / f"{table}.csv"
+    if not path.exists() and table in OPTIONAL_TABLES:
+        return  # this build predates the table; its feature switches off
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.reader(f)
         header = next(reader)
-        try:
-            idx = [header.index(c) for c in columns]
-        except ValueError as e:
-            sys.exit(f"error: {table}.csv is missing an expected column ({e}); header = {header}")
+        idx: list[int | None] = []
+        for c in columns:
+            if c in header:
+                idx.append(header.index(c))
+            elif (table, c) in OPTIONAL_COLUMNS:
+                idx.append(None)
+            else:
+                sys.exit(f"error: {table}.csv is missing column {c!r} and it is not "
+                         f"declared in OPTIONAL_COLUMNS; header = {header}")
+        defaults = [OPTIONAL_COLUMNS.get((table, c), "") for c in columns]
         for row in reader:
-            yield tuple(row[i] for i in idx)
+            yield tuple(row[i] if i is not None else d for i, d in zip(idx, defaults))
+
+
+def table_header(table_dir: Path, table: str) -> list[str]:
+    """The column names of a cached CSV."""
+    with open(table_dir / f"{table}.csv", newline="", encoding="utf-8") as f:
+        return next(csv.reader(f), [])
+
+
+def array_columns(table_dir: Path, table: str, base: str, count: int) -> list[str]:
+    """Column names for a db2 array field, tolerating an array->scalar collapse.
+
+    wago exports an array field `X[n]` as `X_0 .. X_{n-1}`, but Blizzard
+    sometimes narrows an array to a plain scalar between builds, and then the
+    export is a bare `X`. This returns whichever spelling the build at hand
+    actually uses, so one reader serves both.
+
+    Worked example (the reason this exists): SpellShapeshiftForm's
+    CreatureDisplayID is `[4]` through 10.1.x — 9.2.7 included — and a scalar
+    from 10.2.0 on (WoWDBDefs definitions/SpellShapeshiftForm.dbd). Nothing is
+    lost: in 9.2.7 slots 1..3 are empty in all 64 rows.
+    """
+    header = set(table_header(table_dir, table))
+    indexed = [f"{base}_{i}" for i in range(count)]
+    if indexed[0] in header:
+        return [c for c in indexed if c in header]
+    if base in header:
+        return [base]
+    sys.exit(f"error: {table}.csv has neither {indexed[0]} nor a scalar {base}; "
+             f"header = {sorted(header)}")
 
 
 def hotfix_rows(tdb_dir: Path | None, table: str, columns: list[str]) -> Iterator[tuple[str, ...]]:
     """Yield TDB hotfix rows for a db2 table (nothing when TDB is absent).
 
     Hotfixes are the rows Blizzard changed server-side after the client
-    shipped — each replaces the wago row with the same row ID.
+    shipped — each replaces the wago row with the same row ID. A TDB release
+    may ship no hotfixes dump at all (the 3.3.5 branch is world-only), and an
+    older dump may predate a table; both simply mean "no overrides".
     """
-    if tdb_dir is None:
+    if tdb_dir is None or not (tdb_dir / f"{table}.csv").exists():
         return
     yield from read_table(tdb_dir, table, columns)
 
@@ -574,11 +788,19 @@ def read_enum_names(name: str, version: str) -> dict[int, str]:
 def read_spell_names(table_dir: Path, tdb_dir: Path | None) -> tuple[dict[int, str], dict[int, str]]:
     """Read spell id -> name, and (where present) subtext.
 
-    SpellName is the spell list: a spell exists for us only if it has a name
-    row, and everything downstream filters against it.
+    The name table is the spell list: a spell exists for us only if it has a
+    name row, and everything downstream filters against it. Which table that
+    is depends on the build — see SPELL_NAME_SOURCES.
     """
+    source = next(((t, cols) for t, cols in SPELL_NAME_SOURCES
+                   if table_available(table_dir, t)), None)
+    if source is None:
+        sys.exit("error: no spell-name source for this build; tried "
+                 + ", ".join(t for t, _ in SPELL_NAME_SOURCES))
+    name_table, name_cols = source
+    log(f"  spell names from {name_table}.{name_cols[1]}")
     spell_names: dict[int, str] = {}
-    for sid, name in read_table(table_dir, "SpellName", ["ID", "Name_lang"]):
+    for sid, name in read_table(table_dir, name_table, name_cols):
         spell_names[to_int(sid)] = name
     for sid, name in hotfix_rows(tdb_dir, "spell_name", ["ID", "Name"]):
         spell_names[to_int(sid)] = name
@@ -1210,10 +1432,22 @@ def read_creature_models(table_dir: Path, tdb_dir: Path | None) -> CreatureModel
     if tdb_dir is not None:
         for entry, name in read_table(tdb_dir, "creature_template", ["entry", "name"]):
             names[to_int(entry)] = name
-        for cid, idx, did, _prob in read_table(
-            tdb_dir, "creature_template_model", ["CreatureID", "Idx", "CreatureDisplayID", "Probability"]
-        ):
-            displays[to_int(cid)].append((to_int(idx), to_int(did)))
+        # whichever shape this TDB release stores displays in — see
+        # CREATURE_DISPLAY_SOURCES for why there are two
+        source = next(((t, cols) for t, cols in CREATURE_DISPLAY_SOURCES
+                       if (tdb_dir / f"{t}.csv").exists()), None)
+        if source is None:
+            log("  TDB: no creature-display source in this release — morphs stay unresolved")
+        elif source[0] == "creature_template_model":
+            for cid, idx, did in read_table(tdb_dir, *source):
+                displays[to_int(cid)].append((to_int(idx), to_int(did)))
+        else:
+            # legacy: up to four display ids in columns on creature_template,
+            # their position standing in for the Idx the modern table carries
+            for creature, *legacy_ids in read_table(tdb_dir, *source):
+                for slot, display in enumerate(to_int(x) for x in legacy_ids):
+                    if display:
+                        displays[to_int(creature)].append((slot, display))
         for rows in displays.values():
             rows.sort()
 
@@ -1232,16 +1466,19 @@ def read_creature_models(table_dir: Path, tdb_dir: Path | None) -> CreatureModel
 
 
 def read_shapeshift_forms(table_dir: Path) -> tuple[dict[int, str], dict[int, list[int]]]:
-    """Read SpellShapeshiftForm -> its name and up to four creature displays.
+    """Read SpellShapeshiftForm -> its name and its creature display(s).
 
     Plenty of forms (Battle Stance, Shadowform, Stealth, Moonkin) have no
     display at all — they keep their name and render as a name-only pill.
+
+    The display field is an array of 4 up to 10.1.x and a scalar from 10.2.0
+    on; array_columns hides the difference.
     """
     form_names: dict[int, str] = {}
     form_displays: dict[int, list[int]] = {}
     for fid_, name, *disp in read_table(
         table_dir, "SpellShapeshiftForm",
-        ["ID", "Name_lang"] + [f"CreatureDisplayID_{i}" for i in range(4)]
+        ["ID", "Name_lang"] + array_columns(table_dir, "SpellShapeshiftForm", "CreatureDisplayID", 4)
     ):
         form_names[to_int(fid_)] = name
         form_displays[to_int(fid_)] = [d for d in (to_int(x) for x in disp) if d > 0]
@@ -1437,8 +1674,16 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     """
     t0 = time.time()
 
+    # what this build simply does not have — reported up front so a thin pack
+    # reads as "the game had no such table yet" rather than "the build broke"
+    absent = sorted(t for t in OPTIONAL_TABLES if not table_available(table_dir, t))
+    if absent:
+        log(f"Absent in {version} ({len(absent)} tables) — these features switch off:")
+        for t in absent:
+            log(f"  - {t}: {OPTIONAL_TABLES[t]}")
+
     # --- read the sources -------------------------------------------------
-    log("Reading SpellName / Spell ...")
+    log("Reading spell names ...")
     spell_names, subtexts = read_spell_names(table_dir, tdb_dir)
 
     log("Reading spell visual chain tables ...")
@@ -1616,6 +1861,9 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "listfileTag": (CACHE_DIR / "listfile" / "release-tag.txt").read_text().strip()
             if (CACHE_DIR / "listfile" / "release-tag.txt").exists() else "",
             "tdbTag": TDB_RELEASES.get(version, {}).get("tag", "") if tdb_dir else "",
+            # db2 tables this build predates; their pack sections are empty and
+            # the features they power are unavailable for this version
+            "absentTables": absent,
             "counts": {
                 "spells": len(spell_ids),
                 "files": len(file_ids),
@@ -1883,8 +2131,28 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     return pack
 
 
-def write_pack(pack: dict, version: str, label: str) -> None:
-    """Write the gzipped pack and refresh the versions.json manifest."""
+def version_key(version: str) -> tuple[int, ...]:
+    """Sort key for a build id — numeric per part, so 10.2.7 follows 9.2.7.
+
+    Sorting the ids as plain strings puts "10.x" *before* "9.x", which would
+    silently hand the app the wrong newest-version default.
+    """
+    return tuple(int(p) if p.isdigit() else 0 for p in version.split("."))
+
+
+def write_pack(pack: dict, version: str, label: str, hidden: bool = False,
+               is_default: bool = False) -> None:
+    """Write the gzipped pack and refresh the versions.json manifest.
+
+    `hidden` marks the entry as reachable only by an explicit ?v= URL: the app
+    keeps it out of the version dropdown and never treats it as the default,
+    so nobody downloads the pack unless they asked for it by name.
+
+    `is_default` marks the pack the app loads when the URL names no version.
+    Without it the app falls back to the newest visible pack — which is why
+    the flag exists: the newest build is not necessarily the one to serve
+    first. Marking one entry clears the flag on all the others.
+    """
     out_dir = DATA_DIR / version
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "spelldata.json.gz"
@@ -1910,8 +2178,15 @@ def write_pack(pack: dict, version: str, label: str) -> None:
         "built": pack["meta"]["built"],
         "hash": pack_hash,
     }
-    manifest = [e for e in manifest if e["id"] != version] + [entry]
-    manifest.sort(key=lambda e: e["id"])
+    if hidden:
+        entry["hidden"] = True
+    manifest = [e for e in manifest if e["id"] != version]
+    if is_default:
+        entry["default"] = True
+        for e in manifest:  # exactly one entry may carry the flag
+            e.pop("default", None)
+    manifest = manifest + [entry]
+    manifest.sort(key=lambda e: version_key(e["id"]))
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     log(f"Updated {manifest_path}")
 
@@ -1922,12 +2197,18 @@ def main() -> None:
     ap.add_argument("--version", required=True, help="game build, e.g. 9.2.7.45745")
     ap.add_argument("--label", help='display label, e.g. "Shadowlands 9.2.7" (default: the version)')
     ap.add_argument("--refresh", action="store_true", help="re-download sources even if cached")
+    ap.add_argument("--hidden", action="store_true",
+                    help="reachable only via ?v= in the URL: kept out of the version "
+                         "dropdown and never used as the default")
+    ap.add_argument("--default", action="store_true", dest="is_default",
+                    help="serve this pack when the URL names no version (clears the "
+                         "flag on every other entry; otherwise the newest visible wins)")
     args = ap.parse_args()
 
     label = args.label or args.version
     table_dir, listfile, tdb_dir = fetch_sources(args.version, args.refresh)
     pack = build_pack(args.version, label, table_dir, listfile, tdb_dir)
-    write_pack(pack, args.version, label)
+    write_pack(pack, args.version, label, hidden=args.hidden, is_default=args.is_default)
 
 
 if __name__ == "__main__":

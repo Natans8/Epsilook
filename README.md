@@ -71,15 +71,52 @@ Downloads (and caches under `build/cache/`) the game tables from
 [TrinityCore TDB](https://github.com/TrinityCore/TrinityCore/releases) for the
 same build; writes `docs/data/<version>/spelldata.json.gz` and updates
 `versions.json`. Takes ~15 s once the sources are cached, and is
-**deterministic** — an unchanged rebuild is byte-identical, which makes
-"rebuild and diff" the regression test for any change to the script. Pass
-`--refresh` to re-download. Extracting the TDB archive (once per version)
-needs [7-Zip](https://www.7-zip.org/) on the PATH.
+**deterministic** — apart from the build date in `meta.built`, an unchanged
+rebuild is byte-identical, which makes "rebuild and diff" the regression test
+for any change to the script. Pass `--refresh` to re-download. Extracting the
+TDB archive (once per version) needs [7-Zip](https://www.7-zip.org/) on the
+PATH.
 
 **Adding a game version** is the same command with a different `--version`
 (any build wago.tools lists), plus an entry in `TDB_RELEASES` at the top of
-`build_data.py` so morph/summon names and hotfixes resolve. The version
-dropdown appears by itself once a second pack exists.
+`build_data.py` so morph/summon names and hotfixes resolve. Shipped packs:
+WotLK Classic 3.4.3, Legion 7.3.5, Shadowlands 9.2.7 (default), Dragonflight
+10.2.7 and The War Within 11.2.7.
+
+Two flags control how a pack is presented:
+
+- `--hidden` — reachable **only** through an explicit `?v=` in the URL: left
+  out of the dropdown and never the default, so nobody downloads it unless
+  they ask for it by name. Useful for staging a build before publishing it.
+- `--default` — the pack served when the URL names no version (marking one
+  entry clears the flag on the others). Without it the newest visible pack
+  wins, which is not always what you want: Epsilook ships **Shadowlands 9.2.7**
+  as the default even though newer packs exist.
+
+Both live in `versions.json`, so changing them means rebuilding that version
+with the flag — e.g. `--version 9.2.7.45745 --label "Shadowlands 9.2.7"
+--default`. The version dropdown appears once two or more visible packs exist,
+with the active expansion's logo beside it (`expansionLogos` in `config.js`,
+decoded from the game's own `.blp`).
+
+**Older versions** work too, and mostly differ by what does not exist yet: db2
+tables get introduced, split and renamed as the game evolves. Rather than
+branch per version, the differences are declared in one block near the top of
+`build_data.py`:
+
+| declaration | meaning |
+| --- | --- |
+| `OPTIONAL_TABLES` | the table postdates the build — its pack section comes out empty and the feature switches off |
+| `OPTIONAL_COLUMNS` | the column postdates the build — a declared default stands in |
+| `SPELL_NAME_SOURCES` | the data moved between tables (spell names live on `Spell` before BfA) |
+| `TDB_OPTIONAL_TABLES` / `TDB_OPTIONAL_COLUMNS` / `CREATURE_DISPLAY_SOURCES` | the same three kinds of drift on the TrinityCore side |
+| `array_columns()` | an `X_0..X_n` array field exported as a bare `X` in a later build |
+
+Anything *not* declared there is still a hard error — an unexpected schema
+change must fail the build rather than silently lose data. So adding a version
+is: run it, read what it says is missing, and decide per item whether it
+belongs in the table above or is a real bug. The build logs the absent tables
+and the feature each one costs, and bakes the list into `meta.absentTables`.
 
 ### Extending it
 

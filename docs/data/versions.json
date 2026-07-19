@@ -1,9 +1,38 @@
 [
   {
+    "id": "3.4.3.58936",
+    "label": "WotLK Classic 3.4.3",
+    "file": "data/3.4.3.58936/spelldata.json.gz",
+    "built": "2026-07-20",
+    "hash": "d1a79cd5b5"
+  },
+  {
+    "id": "7.3.5.26972",
+    "label": "Legion 7.3.5",
+    "file": "data/7.3.5.26972/spelldata.json.gz",
+    "built": "2026-07-20",
+    "hash": "e66fbe6661"
+  },
+  {
     "id": "9.2.7.45745",
-    "label": "9.2.7.45745",
+    "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/spelldata.json.gz",
     "built": "2026-07-19",
-    "hash": "31640bca87"
+    "hash": "31640bca87",
+    "default": true
+  },
+  {
+    "id": "10.2.7.55664",
+    "label": "Dragonflight 10.2.7",
+    "file": "data/10.2.7.55664/spelldata.json.gz",
+    "built": "2026-07-20",
+    "hash": "b554b5c58e"
+  },
+  {
+    "id": "11.2.7.65299",
+    "label": "The War Within 11.2.7",
+    "file": "data/11.2.7.65299/spelldata.json.gz",
+    "built": "2026-07-20",
+    "hash": "500ecd2f5f"
   }
 ]
