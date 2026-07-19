@@ -1,1 +1,8 @@
-*.gz filter=lfs diff=lfs merge=lfs -text
+# The data packs are served straight off GitHub Pages, and Pages does NOT
+# resolve Git LFS pointers — it would serve the ~130-byte pointer text where
+# data.js expects gzip, breaking every version. So the packs stay ordinary
+# blobs in the repo; do not put *.gz back under LFS while Pages hosts them.
+#
+# "binary" (= -diff -merge -text) still matters: core.autocrlf is true in this
+# repo, and it keeps the packs from ever being line-ending mangled.
+*.gz binary
