@@ -6,7 +6,8 @@ Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
 
 Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
 AnimKit, animation or visual effect (beams searchable by texture and tint color,
-dissolves by texture, glows, shadowy effects and model tints by color, morphs
+dissolves by texture, glows, ghost effects and model tints by color,
+desaturation and transparency by percent, freezes and camouflage by word, morphs
 by NPC name, model name, creature ID or display ID, summons by NPC name or
 creature ID) —
 with spell icons, clickable cross-references, spell mechanic info, and one-click
@@ -33,9 +34,11 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   (`fx:beam`), texture name (`fx:shadowlaser`) or tint color (`fx:beam red`,
   or by hex: `fx:#00b4ff`; the dot on a beam tag shows the chain's RGB
   tint), dissolve/materialize effects by texture (`fx:"dissolve arcane"`),
-  glow and shadowy overlay effects and model tints by color word or hex
-  (`fx:"glow red"`, `fx:"tint green"`, `fx:shadowy` — color-only effects
-  shown as a swatch + hex code), and morphs (transform
+  glow and ghost effects and model tints by color word or hex
+  (`fx:"glow red"`, `fx:"tint green"`, `fx:ghost` — color-only effects
+  shown as a swatch + hex code), model desaturation and transparency by
+  percent (`fx:"transparency 50%"`), freeze and camouflage effects by word
+  (`fx:freeze`, `fx:camo`), and morphs (transform
   auras) by NPC name, model name, creature ID or display ID
   (`fx:"morph sheep"`). Morph tags show the model name
   and copy the display ID, a ready `.morph <displayID>` command, and a
@@ -50,6 +53,11 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
 - `mech:` searches the Mechanics column — what a spell *does*: spell effect
   names (`mech:resurrect`, `mech:school_damage`) and aura names for
   aura-applying spells (`mech:mod_stun`, `mech:periodic_damage`).
+- The Models column groups each model by how the spell uses it — `attach`
+  (attached to the caster/target), `missile` (projectile), `area` (ground
+  model), `trail` (weapon trail), `barrage` (volley) — and `model:` matches
+  those words too: `model:missile` finds every spell with a projectile model
+  (category heads are clickable, like the Effects ones).
 - A `-` prefix excludes instead: `name:nova -mech:school_damage`.
 - The whole bar selects like plain text — mouse, Ctrl+A, or Shift+arrows — and
   Ctrl+C copies the selection as query text (`model:book note anim:read`), ready

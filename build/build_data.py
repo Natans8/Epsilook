@@ -63,6 +63,7 @@ TABLES = [
     "BeamEffect",
     "SpellEffectEmission",
     "SpellVisualKitAreaModel",
+    "WeaponTrail",
     "BarrageEffect",
     "DissolveEffect",
     "TextureBlendSet",
@@ -134,10 +135,35 @@ EFFECT_TYPE_BARRAGE = 17  # Effect = BarrageEffect.ID (multi-model volley)
 # own sound — no concrete file; 19 (ScreenEffect) has zero sound-bearing
 # rows in 9.2.7; 15/20 are absent; the rest carry no model/sound columns.
 
-# SpellProceduralEffect.Type whose Value_0 is a packed-RGB model tint
-PROC_TYPE_TINT = 1
-# SpellProceduralEffect.Type whose Value_0 is a SpellChainEffects ID
-PROC_TYPE_CHAIN = 26
+# SpellProceduralEffect.Type values. Type IS the client character-procedure
+# index (m_characterProcedure) — see the "Proc type decode" section in
+# CLAUDE.md. Which value column carries the payload differs per type.
+PROC_TYPE_TINT = 1          # Value_0 = packed-RGB model tint (multiply)
+PROC_TYPES_CHAIN = {0, 12, 26}  # Value_0 = SpellChainEffects ID (beams)
+PROC_TYPE_STANDWALK = 7     # Value_0..3 = AnimationData IDs (stand/walk anim)
+PROC_TYPE_AREAMODEL = 9     # Value_0 = SpellVisualKitAreaModel ID (model)
+PROC_TYPE_FREEZE = 11       # valueless freeze/petrify state
+PROC_TYPE_TRANSPARENCY = 14 # Value_0 = alpha 0..1 (SetAlphaMod)
+PROC_TYPE_CAMO = 18         # valueless camouflage/cloak state
+PROC_TYPE_DESATURATE = 21   # Value_2 = desaturation strength 0..1 (no color)
+PROC_TYPE_GHOST_MAT = 22    # Value_3 = packed-RGB material recolor -> ghost
+PROC_TYPE_TINT_MAT = 23     # Value_3 = packed-RGB material recolor -> tint
+PROC_TYPE_WEAPONTRAIL = 27  # Value_0 = WeaponTrail.db2 ID (trail model)
+
+# model categories: every (spell, model) row is tagged with how the model is
+# used — the Models column groups by these short user-facing words
+MODEL_CAT_ATTACH = 0   # SpellVisualKitModelAttach (model attached to the caster/target)
+MODEL_CAT_MISSILE = 1  # SpellVisualMissile (projectile in flight)
+MODEL_CAT_AREA = 2     # SpellVisualKitAreaModel (ground/area model: emission ET 8, proc Type 9)
+MODEL_CAT_TRAIL = 3    # WeaponTrail (proc Type 27)
+MODEL_CAT_BARRAGE = 4  # BarrageEffect (volley of models, ET 17)
+MODEL_CAT_NAMES = {
+    MODEL_CAT_ATTACH: "attach",
+    MODEL_CAT_MISSILE: "missile",
+    MODEL_CAT_AREA: "area",
+    MODEL_CAT_TRAIL: "trail",
+    MODEL_CAT_BARRAGE: "barrage",
+}
 
 # SpellEffectAura value whose EffectMiscValue_0 is a CreatureDisplayID
 AURA_TRANSFORM = 56
@@ -463,14 +489,15 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     for en_id, model_fid in hotfix_rows(tdb_dir, "spell_visual_effect_name", ["ID", "ModelFileDataID"]):
         effect_name_model[to_int(en_id)] = to_int(model_fid)
 
-    kit_models: dict[int, set[int]] = defaultdict(set)
+    # kit -> {(model fid, category)} — the category tags how the model is used
+    kit_models: dict[int, set[tuple[int, int]]] = defaultdict(set)
     for kit_id, en_id in read_table(
         table_dir, "SpellVisualKitModelAttach", ["ParentSpellVisualKitID", "SpellVisualEffectNameID"]
     ):
         fid = effect_name_model.get(to_int(en_id), 0)
         k = to_int(kit_id)
         if k and fid:
-            kit_models[k].add(fid)
+            kit_models[k].add((fid, MODEL_CAT_ATTACH))
 
     # kit EffectType 8 -> SpellEffectEmission (particle-style emitter that
     # spawns copies of an area model) -> SpellVisualKitAreaModel, which
@@ -492,6 +519,12 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         table_dir, "BarrageEffect", ["ID", "SpellVisualEffectNameID"]
     ):
         barrage_fid[to_int(b_id)] = effect_name_model.get(to_int(en_id), 0)
+
+    # WeaponTrail.db2 rows carry a trail model directly in FileDataID —
+    # referenced by SpellProceduralEffect Type 27 (Value_0 = WeaponTrail.ID).
+    weapontrail_fid: dict[int, int] = {}  # WeaponTrail.ID -> model fid
+    for wt_id, fid in read_table(table_dir, "WeaponTrail", ["ID", "FileDataID"]):
+        weapontrail_fid[to_int(wt_id)] = to_int(fid)
 
     # visual -> missile payload (SpellVisual.SpellVisualMissileSetID /
     # RaidSpellVisualMissileSetID -> SpellVisualMissile rows sharing that set).
@@ -553,16 +586,64 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # EffectType 13 -> BeamEffect (BeamID = chain ID). The same table's
     # Type 1 rows are model tints: Value_0 is the packed RGB, the color is
     # the whole payload (like edge glows / shadowy effects).
-    proc_chain: dict[int, int] = {}  # SpellProceduralEffect.ID -> chain ID
-    tint_rows: dict[int, int] = {}   # SpellProceduralEffect.ID -> packed RGB
-    for pid, ptype, v0 in read_table(
-        table_dir, "SpellProceduralEffect", ["ID", "Type", "Value_0"]
-    ):
-        pt = to_int(ptype)
-        if pt == PROC_TYPE_CHAIN:
-            proc_chain[to_int(pid)] = int(float(v0)) if v0 else 0
+    # SpellProceduralEffect: one row per proc, keyed by ID; Type selects the
+    # handler and thus which Value column is the payload. We bucket each proc
+    # ID into the structure its type feeds (chain/tint/ghost material/desat/...)
+    # so the kit walk below can dispatch a kit's proc references by ID.
+    proc_chain: dict[int, int] = {}      # proc ID -> SpellChainEffects ID (beam)
+    tint_rows: dict[int, int] = {}       # proc ID -> packed RGB (tint; Types 1 & 23)
+    ghost_mat_rows: dict[int, int] = {}  # proc ID -> packed RGB (Type 22 -> ghost)
+    desat_rows: dict[int, int] = {}      # proc ID -> desaturation percent (Type 21)
+    transp_rows: dict[int, int] = {}     # proc ID -> transparency percent (Type 14)
+    freeze_procs: set[int] = set()       # proc IDs of freeze (Type 11)
+    camo_procs: set[int] = set()         # proc IDs of camo (Type 18)
+    proc_model: dict[int, tuple[int, int]] = {}  # proc ID -> (model fid, category) (Types 9, 27)
+    proc_anims: dict[int, tuple[int, ...]] = {}  # proc ID -> anim IDs (Type 7)
+
+    def as_int(v: str) -> int:
+        return int(float(v)) if v else 0
+
+    proc_cols = ["ID", "Type", "Value_0", "Value_1", "Value_2", "Value_3"]
+    for pid, ptype, v0, v1, v2, v3 in read_table(table_dir, "SpellProceduralEffect", proc_cols):
+        p, pt = to_int(pid), to_int(ptype)
+        if pt in PROC_TYPES_CHAIN:
+            proc_chain[p] = as_int(v0)
         elif pt == PROC_TYPE_TINT:
-            tint_rows[to_int(pid)] = (int(float(v0)) if v0 else 0) & 0xFFFFFF
+            tint_rows[p] = as_int(v0) & 0xFFFFFF
+        elif pt == PROC_TYPE_TINT_MAT:
+            # material recolor -> tint; colorless (Value_3=0) folds in as black
+            tint_rows[p] = as_int(v3) & 0xFFFFFF
+        elif pt == PROC_TYPE_GHOST_MAT:
+            c = as_int(v3) & 0xFFFFFF
+            if as_int(v3):  # drop the colorless rows (nothing to show)
+                ghost_mat_rows[p] = c
+        elif pt == PROC_TYPE_DESATURATE:
+            pct = round(float(v2 or 0) * 100)
+            if pct > 0:  # 0% = no desaturation, nothing to show
+                desat_rows[p] = pct
+        elif pt == PROC_TYPE_TRANSPARENCY:
+            pct = round(float(v0 or 0) * 100)
+            if pct > 0:
+                transp_rows[p] = pct
+        elif pt == PROC_TYPE_FREEZE:
+            freeze_procs.add(p)
+        elif pt == PROC_TYPE_CAMO:
+            camo_procs.add(p)
+        elif pt == PROC_TYPE_AREAMODEL:
+            fid = area_model_fid.get(as_int(v0), 0)
+            if fid:
+                proc_model[p] = (fid, MODEL_CAT_AREA)
+        elif pt == PROC_TYPE_WEAPONTRAIL:
+            fid = weapontrail_fid.get(as_int(v0), 0)
+            if fid:
+                proc_model[p] = (fid, MODEL_CAT_TRAIL)
+        elif pt == PROC_TYPE_STANDWALK:
+            # Value_0..3 are direct AnimationData IDs (stand/walk/run/...);
+            # keep the meaningful ones (>0 skips the ubiquitous Stand=0 default)
+            anims = tuple(dict.fromkeys(
+                a for a in (as_int(v0), as_int(v1), as_int(v2), as_int(v3)) if a > 0))
+            if anims:
+                proc_anims[p] = anims
 
     beam_chain: dict[int, int] = {}  # BeamEffect.ID -> chain ID
     for bid, chain_id in read_table(table_dir, "BeamEffect", ["ID", "BeamID"]):
@@ -633,11 +714,17 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     kit_soundkits: dict[int, set[int]] = defaultdict(set)
     kit_animkits: dict[int, set[int]] = defaultdict(set)
+    kit_anims: dict[int, set[int]] = defaultdict(set)  # direct anim IDs (proc Type 7)
     kit_chains: dict[int, set[int]] = defaultdict(set)
     kit_dissolves: dict[int, set[int]] = defaultdict(set)
     kit_glows: dict[int, set[int]] = defaultdict(set)
     kit_shadowies: dict[int, set[int]] = defaultdict(set)
+    kit_ghost_mats: dict[int, set[int]] = defaultdict(set)  # proc Type 22 material recolors
     kit_tints: dict[int, set[int]] = defaultdict(set)
+    kit_desats: dict[int, set[int]] = defaultdict(set)   # proc IDs (Type 21)
+    kit_transps: dict[int, set[int]] = defaultdict(set)  # proc IDs (Type 14)
+    kit_freezes: set[int] = set()  # kit IDs with a freeze proc (Type 11)
+    kit_camos: set[int] = set()    # kit IDs with a camo proc (Type 18)
     for kit_id, effect_type, effect in read_table(
         table_dir, "SpellVisualKitEffect", ["ParentSpellVisualKitID", "EffectType", "Effect"]
     ):
@@ -651,9 +738,24 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             if ak:
                 kit_animkits[k].add(ak)
         elif et == EFFECT_TYPE_PROC:
+            # one proc reference — dispatch by which type-bucket it landed in
             expand_chain(proc_chain.get(e, 0), kit_chains[k])
             if e in tint_rows:
                 kit_tints[k].add(e)
+            if e in ghost_mat_rows:
+                kit_ghost_mats[k].add(e)
+            if e in desat_rows:
+                kit_desats[k].add(e)
+            if e in transp_rows:
+                kit_transps[k].add(e)
+            if e in freeze_procs:
+                kit_freezes.add(k)
+            if e in camo_procs:
+                kit_camos.add(k)
+            if e in proc_model:
+                kit_models[k].add(proc_model[e])
+            if e in proc_anims:
+                kit_anims[k].update(proc_anims[e])
         elif et == EFFECT_TYPE_BEAM:
             expand_chain(beam_chain.get(e, 0), kit_chains[k])
         elif et == EFFECT_TYPE_DISSOLVE:
@@ -668,11 +770,11 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         elif et == EFFECT_TYPE_EMISSION:
             fid = emission_fid.get(e, 0)
             if fid:
-                kit_models[k].add(fid)
+                kit_models[k].add((fid, MODEL_CAT_AREA))
         elif et == EFFECT_TYPE_BARRAGE:
             fid = barrage_fid.get(e, 0)
             if fid:
-                kit_models[k].add(fid)
+                kit_models[k].add((fid, MODEL_CAT_BARRAGE))
 
     # soundkit -> sound file ids
     soundkit_files: dict[int, set[int]] = defaultdict(set)
@@ -781,14 +883,20 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     # --- walk the chains per spell ------------------------------------------
     log("Walking spell -> model/sound/animkit/chain chains ...")
-    spell_models: dict[int, set[int]] = defaultdict(set)          # spell -> model fids
+    spell_models: dict[int, set[tuple[int, int]]] = defaultdict(set)  # spell -> (model fid, category)
     spell_sounds: dict[int, set[tuple[int, int]]] = defaultdict(set)  # spell -> (soundkit, fid)
     spell_animkits: dict[int, set[int]] = defaultdict(set)        # spell -> animkit ids
     spell_chains: dict[int, set[int]] = defaultdict(set)          # spell -> chain effect ids
     spell_dissolves: dict[int, set[int]] = defaultdict(set)       # spell -> dissolve effect ids
     spell_glows: dict[int, set[int]] = defaultdict(set)           # spell -> edge glow ids
     spell_shadowies: dict[int, set[int]] = defaultdict(set)       # spell -> shadowy effect ids
+    spell_ghost_mats: dict[int, set[int]] = defaultdict(set)      # spell -> Type-22 proc ids
     spell_tints: dict[int, set[int]] = defaultdict(set)           # spell -> tint proc ids
+    spell_desats: dict[int, set[int]] = defaultdict(set)          # spell -> Type-21 proc ids
+    spell_transps: dict[int, set[int]] = defaultdict(set)         # spell -> Type-14 proc ids
+    spell_anims: dict[int, set[int]] = defaultdict(set)           # spell -> direct anim ids (Type 7)
+    spell_freezes: set[int] = set()                               # spells with a freeze proc
+    spell_camos: set[int] = set()                                 # spells with a camo proc
     orphan_spells = 0  # SpellXSpellVisual rows whose SpellID has no SpellName entry
 
     for spell_id, visuals in spell_visuals.items():
@@ -797,7 +905,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             continue
         for v in visuals:
             m_fids, m_sks, m_aks = visual_missiles.get(v, EMPTY)
-            spell_models[spell_id].update(m_fids)
+            spell_models[spell_id].update((f, MODEL_CAT_MISSILE) for f in m_fids)
             spell_animkits[spell_id].update(m_aks)
             for sk in m_sks:
                 for f in soundkit_files.get(sk, ()):
@@ -805,11 +913,19 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             for k in visual_kits.get(v, ()):
                 spell_models[spell_id].update(kit_models.get(k, ()))
                 spell_animkits[spell_id].update(kit_animkits.get(k, ()))
+                spell_anims[spell_id].update(kit_anims.get(k, ()))
                 spell_chains[spell_id].update(kit_chains.get(k, ()))
                 spell_dissolves[spell_id].update(kit_dissolves.get(k, ()))
                 spell_glows[spell_id].update(kit_glows.get(k, ()))
                 spell_shadowies[spell_id].update(kit_shadowies.get(k, ()))
+                spell_ghost_mats[spell_id].update(kit_ghost_mats.get(k, ()))
                 spell_tints[spell_id].update(kit_tints.get(k, ()))
+                spell_desats[spell_id].update(kit_desats.get(k, ()))
+                spell_transps[spell_id].update(kit_transps.get(k, ()))
+                if k in kit_freezes:
+                    spell_freezes.add(spell_id)
+                if k in kit_camos:
+                    spell_camos.add(spell_id)
                 for sk in kit_soundkits.get(k, ()):
                     for f in soundkit_files.get(sk, ()):
                         spell_sounds[spell_id].add((sk, f))
@@ -826,8 +942,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     used_dissolves = {e for effs in spell_dissolves.values() for e in effs}
 
     referenced_fids = set()
-    for fids in spell_models.values():
-        referenced_fids.update(fids)
+    for pairs in spell_models.values():
+        referenced_fids.update(f for f, _ in pairs)
     for pairs in spell_sounds.values():
         referenced_fids.update(f for _, f in pairs)
     for c in used_chains:
@@ -896,7 +1012,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "paths": [fid_path.get(f, "") for f in file_ids],
     }
 
-    model_rows = sorted((s, f) for s, fids in spell_models.items() for f in fids)
+    model_rows = sorted((s, f, c) for s, pairs in spell_models.items() for f, c in pairs)
     sound_rows = sorted((s, sk, f) for s, pairs in spell_sounds.items() for sk, f in pairs)
     anim_rows = sorted((s, a) for s, aks in spell_animkits.items() for a in aks)
     fx_rows = sorted((s, c) for s, chains in spell_chains.items() for c in chains)
@@ -950,10 +1066,30 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         hues = dict.fromkeys(h for h in (hue_word(*unpack_rgb(p)), hue_word(*unpack_rgb(sc))) if h)
         shadowy_hues.append(" ".join(hues))
 
+    # ghost materials (proc Type 22): single-color recolors that join the
+    # ShadowyEffect rows under the "ghost" category — same color-only shape
+    # as tints/glows
+    ghost_mat_pairs = sorted((s, g) for s, gs in spell_ghost_mats.items() for g in gs)
+    ghost_mat_ids = sorted({g for gs in spell_ghost_mats.values() for g in gs})
+    ghost_mat_hues = [hue_word(*unpack_rgb(ghost_mat_rows[g])) for g in ghost_mat_ids]
+
+    # desaturate (proc Type 21) / transparency (proc Type 14): percent-only
+    # pills — the percent is the whole payload (no color, no id table). Dedupe
+    # equal percents on the same spell.
+    desat_pairs = sorted({(s, desat_rows[d]) for s, ds in spell_desats.items() for d in ds})
+    transp_pairs = sorted({(s, transp_rows[t]) for s, ts in spell_transps.items() for t in ts})
+    # freeze (11) / camo (18): valueless — just the spell id set
+    freeze_ids = sorted(spell_freezes)
+    camo_ids = sorted(spell_camos)
+
     # only animkits that spells actually use
     used_animkits = {a for aks in spell_animkits.values() for a in aks}
     kit_anim_rows = sorted(
         (k, a) for k, anims in animkit_anims.items() if k in used_animkits for a in anims)
+    # direct stand/walk anim ids (proc Type 7) — index into animNames, like
+    # animKitAnims; guard against ids past the anim-name table
+    anim_direct_rows = sorted(
+        {(s, a) for s, aset in spell_anims.items() for a in aset if a < len(anim_names)})
     effect_rows = sorted((s, e) for s, effs in spell_effects.items() for e in effs)
     aura_rows = sorted((s, a) for s, auras in spell_auras.items() for a in auras)
     morph_rows = sorted((s, c) for s, cs in spell_morphs.items() for c in cs)
@@ -965,7 +1101,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     pack = {
         "meta": {
-            "format": 13,
+            "format": 15,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
@@ -994,18 +1130,29 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "glows": len(glow_ids),
                 "spellShadowies": len(shadowy_row_pairs),
                 "shadowies": len(shadowy_ids),
+                "spellGhostMats": len(ghost_mat_pairs),
+                "ghostMats": len(ghost_mat_ids),
                 "spellTints": len(tint_row_pairs),
                 "tints": len(tint_ids),
+                "spellDesaturates": len(desat_pairs),
+                "spellTransparencies": len(transp_pairs),
+                "spellFreezes": len(freeze_ids),
+                "spellCamos": len(camo_ids),
+                "spellAnims": len(anim_direct_rows),
                 "icons": len(icon_names),
             },
         },
         "spells": spells,
         "iconNames": icon_names,
         "files": files,
+        # cats tag how each model is used (attach/missile/area/trail/barrage);
+        # the same (spell, fid) can appear once per category it serves
         "spellModels": {
             "spellIds": [r[0] for r in model_rows],
             "fids": [r[1] for r in model_rows],
+            "cats": [r[2] for r in model_rows],
         },
+        "modelCatNames": MODEL_CAT_NAMES,
         "spellSounds": {
             "spellIds": [r[0] for r in sound_rows],
             "soundKitIds": [r[1] for r in sound_rows],
@@ -1018,6 +1165,12 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "animKitAnims": {
             "animKitIds": [r[0] for r in kit_anim_rows],
             "animIds": [r[1] for r in kit_anim_rows],
+        },
+        # direct stand/walk animation ids (SpellProceduralEffect Type 7) — a
+        # second source for the Animations column; animIds index into animNames
+        "spellAnims": {
+            "spellIds": [r[0] for r in anim_direct_rows],
+            "animIds": [r[1] for r in anim_direct_rows],
         },
         "animNames": anim_names,
         "spellEffects": {
@@ -1086,8 +1239,21 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "secondaryColors": [shadowy_rows[e][1] for e in shadowy_ids],
             "hues": shadowy_hues,
         },
-        # model tints (SpellProceduralEffect Type 1 via kit EffectType 1):
-        # color-only like glows — the packed RGB is the whole payload
+        # ghost materials (SpellProceduralEffect Type 22): single-color
+        # material recolors that render under the same "ghost" category as the
+        # ShadowyEffect rows — color-only, one packed RGB each
+        "spellGhostMats": {
+            "spellIds": [r[0] for r in ghost_mat_pairs],
+            "ghostIds": [r[1] for r in ghost_mat_pairs],
+        },
+        "ghostMats": {
+            "ids": ghost_mat_ids,
+            "colors": [ghost_mat_rows[g] for g in ghost_mat_ids],
+            "hues": ghost_mat_hues,
+        },
+        # model tints (SpellProceduralEffect Type 1 & 23 via kit EffectType 1):
+        # color-only like glows — the packed RGB is the whole payload. Type 1
+        # multiply-tints; Type 23 material-recolors (colorless folds in as black)
         "spellTints": {
             "spellIds": [r[0] for r in tint_row_pairs],
             "tintIds": [r[1] for r in tint_row_pairs],
@@ -1097,6 +1263,19 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "colors": [tint_rows[t] for t in tint_ids],
             "hues": tint_hues,
         },
+        # desaturate (Type 21) / transparency (Type 14): percent-only pills —
+        # spellIds parallel to percents (0..100), no color, no id table
+        "spellDesaturates": {
+            "spellIds": [r[0] for r in desat_pairs],
+            "percents": [r[1] for r in desat_pairs],
+        },
+        "spellTransparencies": {
+            "spellIds": [r[0] for r in transp_pairs],
+            "percents": [r[1] for r in transp_pairs],
+        },
+        # freeze (Type 11) / camo (Type 18): valueless standalone pills
+        "spellFreezes": {"spellIds": freeze_ids},
+        "spellCamos": {"spellIds": camo_ids},
         # morphs: transform auras reference a CREATURE (NPC entry); its
         # display ids come from TDB's creature_template_model, each display
         # resolving to a creature model file (fid 0 = unknown model)

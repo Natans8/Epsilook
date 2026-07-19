@@ -760,7 +760,9 @@
         (!f.sounds || d.spellSounds.has(id)) &&
         (!f.animkits || d.spellAnimKits.has(id)) &&
         (!f.fx || d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellGlows.has(id)
-          || d.spellShadowies.has(id) || d.spellTints.has(id)
+          || d.spellShadowies.has(id) || d.spellGhostMats.has(id) || d.spellTints.has(id)
+          || d.spellDesaturates.has(id) || d.spellTransps.has(id)
+          || d.spellFreezes.has(id) || d.spellCamos.has(id)
           || d.spellMorphs.has(id) || d.spellSummons.has(id)));
     } else {
       list = list.slice();
@@ -859,16 +861,16 @@
     if (d.subtexts[i]) tdName.appendChild(el("div", "spell-sub", d.subtexts[i]));
     tr.appendChild(tdName);
 
-    // Models — matched files first
-    const modelFids = hitsFirst(d.spellModels.get(spellId) || [],
-      (fid) => fileIsHit(d.files.get(fid), "model"));
-    tr.appendChild(tagCell("c-models", modelFids.map((fid) => modelTag(fid))));
+    // Models — grouped by how each model is used (attach/missile/area/...)
+    tr.appendChild(modelsCell(spellId));
 
     // Sounds — grouped by SoundKit; kits containing a match come first
     tr.appendChild(soundsCell(d.spellSounds.get(spellId) || []));
 
-    // Animations — AnimKits grouped with the animations they play
-    tr.appendChild(animationsCell(d.spellAnimKits.get(spellId) || []));
+    // Animations — AnimKits grouped with the animations they play, plus
+    // direct stand/walk anims (the "stance" group)
+    tr.appendChild(animationsCell(d.spellAnimKits.get(spellId) || [],
+      d.spellAnims.get(spellId) || []));
 
     // Effects — visual FX (beams, morphs, summons), grouped by category
     tr.appendChild(fxCell(spellId));
@@ -982,6 +984,44 @@
     return td;
   }
 
+  /* Models cell: grouped by how each model is used — "attach" (attached to
+   * the caster/target), "missile" (projectile), "area" (ground/area model),
+   * "trail" (weapon trail), "barrage" (volley) — fx-cell conventions:
+   * clickable heads searching model:<category>, pills inside. A stale
+   * cached pack carries no categories: flat-list fallback. */
+  function modelsCell(spellId) {
+    const d = state.data;
+    const entries = d.spellModelCats.get(spellId);
+    if (!entries) {
+      const modelFids = hitsFirst(d.spellModels.get(spellId) || [],
+        (fid) => fileIsHit(d.files.get(fid), "model"));
+      return tagCell("c-models", modelFids.map((fid) => modelTag(fid)));
+    }
+    const td = el("td", "c-models");
+    const byCat = new Map(); // cat id -> [fid]
+    for (const e of entries) {
+      const arr = byCat.get(e.cat);
+      if (arr) arr.push(e.fid); else byCat.set(e.cat, [e.fid]);
+    }
+    const cats = [...byCat.keys()].sort((a, b) => a - b).map((c) => {
+      const name = d.modelCatNames[c] || `cat ${c}`;
+      const fids = byCat.get(c);
+      return {
+        name, fids,
+        hit: modelCatIsHit(name) || fids.some((fid) => fileIsHit(d.files.get(fid), "model")),
+      };
+    });
+    buildKitGroups(td, hitsFirst(cats, (c) => c.hit), {
+      headerTag: (c) => modelCatHeadTag(c.name, c.hit),
+      itemsOf: (c) => hitsFirst(c.fids, (fid) => fileIsHit(d.files.get(fid), "model")),
+      itemTag: (fid) => modelTag(fid),
+      itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
+      groupNoun: "category",
+      moreInHead: true,
+    });
+    return td;
+  }
+
   /* One cell showing each SoundKit with the sound files it contains. */
   function soundsCell(soundEntries) {
     const td = el("td", "c-sounds");
@@ -1013,29 +1053,47 @@
     return td;
   }
 
-  /* Animations cell: AnimKits grouped with the animations they play. */
-  function animationsCell(animKitIds) {
+  /* Animations cell: AnimKits grouped with the animations they play, plus a
+   * "stance" group for direct stand/walk anim overrides (SpellProceduralEffect
+   * Type 7) — same anim pills, but no kit id to head the group with. */
+  const STANCE_GROUP = -1; // sentinel kit id for the direct-anim group
+
+  function animationsCell(animKitIds, directAnimIds) {
     const td = el("td", "c-animkits");
-    if (animKitIds.length === 0) {
+    if (animKitIds.length === 0 && directAnimIds.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
       return td;
     }
     const d = state.data;
+    const animsOf = (kitId) =>
+      kitId === STANCE_GROUP ? directAnimIds : (d.animKitAnims.get(kitId) || []);
     const kitHasHit = (kitId) =>
-      kitIsHit(kitId, "animkit") ||
-      (d.animKitAnims.get(kitId) || []).some((a) => animIsHit(a));
-    const kitIds = hitsFirst(animKitIds.slice().sort((a, b) => a - b), kitHasHit);
+      (kitId !== STANCE_GROUP && kitIsHit(kitId, "animkit")) ||
+      animsOf(kitId).some((a) => animIsHit(a));
+    const groups = animKitIds.slice().sort((a, b) => a - b);
+    if (directAnimIds.length) groups.push(STANCE_GROUP);
+    const kitIds = hitsFirst(groups, kitHasHit);
 
     buildKitGroups(td, kitIds, {
-      headerTag: (kitId) => kitTag(kitId, "animkit"),
-      itemsOf: (kitId) => hitsFirst((d.animKitAnims.get(kitId) || []).slice().sort((a, b) => a - b),
+      headerTag: (kitId) => kitId === STANCE_GROUP ? stanceHeadTag() : kitTag(kitId, "animkit"),
+      itemsOf: (kitId) => hitsFirst(animsOf(kitId).slice().sort((a, b) => a - b),
         (a) => animIsHit(a)),
       itemTag: (animId) => animTag(animId),
       itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
       groupNoun: "kit",
     });
     return td;
+  }
+
+  // head label of the stance group — an inert word, there is no kit id
+  function stanceHeadTag() {
+    const tag = el("span", "tag animkit");
+    const label = el("span", "tag-label inert", "stance");
+    label.title = "Stand/walk animation override (SpellProceduralEffect) — "
+      + "the caster plays these as its idle/move animations while the visual is active";
+    tag.appendChild(label);
+    return tag;
   }
 
   /* Shared group renderer: each kit is a small box — the kit tag as a
@@ -1093,21 +1151,28 @@
   }
 
   /* Effects cell: visual FX grouped by category — "beam" (chain effects),
-   * "dissolve" (dissolve effects), "glow" / "shadowy" / "tint" (color-only
-   * effects), "morph" (transform auras) and "summon" (summon effects).
-   * Beam pills carry a tint dot per texture. */
+   * "dissolve" (dissolve effects), "glow" / "ghost" / "tint" (color-only
+   * effects), "desaturate" / "transparency" (percent-only), "freeze" /
+   * "camo" (valueless), "morph" (transform auras) and "summon" (summon
+   * effects). Beam pills carry a tint dot per texture. */
   function fxCell(spellId) {
     const d = state.data;
     const chainIds = d.spellFx.get(spellId) || [];
     const dissolveIds = d.spellDissolves.get(spellId) || [];
     const glowIds = d.spellGlows.get(spellId) || [];
     const shadowyIds = d.spellShadowies.get(spellId) || [];
+    const ghostMatIds = d.spellGhostMats.get(spellId) || [];
     const tintIds = d.spellTints.get(spellId) || [];
+    const desatPcts = d.spellDesaturates.get(spellId) || [];
+    const transpPcts = d.spellTransps.get(spellId) || [];
+    const hasFreeze = d.spellFreezes.has(spellId);
+    const hasCamo = d.spellCamos.has(spellId);
     const morphIds = d.spellMorphs.get(spellId) || [];
     const summonEntries = d.spellSummons.get(spellId) || [];
     const td = el("td", "c-fx");
     if (chainIds.length === 0 && dissolveIds.length === 0 && glowIds.length === 0
-        && shadowyIds.length === 0 && tintIds.length === 0
+        && shadowyIds.length === 0 && ghostMatIds.length === 0 && tintIds.length === 0
+        && desatPcts.length === 0 && transpPcts.length === 0 && !hasFreeze && !hasCamo
         && morphIds.length === 0 && summonEntries.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
@@ -1169,8 +1234,10 @@
           .map((e) => () => colorFxTag("glow", e.color, glowIsHit(e.glowId))),
       });
     }
-    if (shadowyIds.length) {
-      // one pill per distinct color across each row's primary + secondary
+    if (shadowyIds.length || ghostMatIds.length) {
+      // "ghost" merges ShadowyEffect rows (two colors each) and Type-22
+      // material recolors (one color each). One pill per distinct color; each
+      // pill carries which isHit to use so the category can mix both sources.
       const entries = [];
       const seen = new Set();
       for (const id of shadowyIds.slice().sort((a, b) => a - b)) {
@@ -1178,14 +1245,22 @@
         for (const color of [c.primary, c.secondary]) {
           if (seen.has(color)) continue;
           seen.add(color);
-          entries.push({ shadowyId: id, color });
+          entries.push({ color, hit: () => shadowyIsHit(id) });
         }
       }
+      for (const id of ghostMatIds.slice().sort((a, b) => a - b)) {
+        const color = d.ghostMatColors.get(id) ?? 0;
+        if (seen.has(color)) continue;
+        seen.add(color);
+        entries.push({ color, hit: () => ghostMatIsHit(id) });
+      }
+      const catHit = shadowyIds.some((id) => shadowyIsHit(id))
+        || ghostMatIds.some((id) => ghostMatIsHit(id));
       cats.push({
-        name: "shadowy",
-        hit: shadowyIds.some((id) => shadowyIsHit(id)),
-        items: hitsFirst(entries, (e) => shadowyIsHit(e.shadowyId))
-          .map((e) => () => colorFxTag("shadowy", e.color, shadowyIsHit(e.shadowyId))),
+        name: "ghost",
+        hit: catHit,
+        items: hitsFirst(entries, (e) => e.hit())
+          .map((e) => () => colorFxTag("ghost", e.color, e.hit())),
       });
     }
     if (tintIds.length) {
@@ -1204,6 +1279,33 @@
         items: hitsFirst(entries, (e) => tintIsHit(e.tintId))
           .map((e) => () => colorFxTag("tint", e.color, tintIsHit(e.tintId))),
       });
+    }
+    if (desatPcts.length) {
+      // one pill per distinct percent — the desaturation strength is the
+      // whole payload (no color; a computed grey swatch keys off strength)
+      const pcts = [...new Set(desatPcts)].sort((a, b) => a - b);
+      cats.push({
+        name: "desaturate",
+        hit: pcts.some((p) => desatIsHit(p)),
+        items: hitsFirst(pcts, (p) => desatIsHit(p))
+          .map((p) => () => percentFxTag("desaturate", p, desatIsHit(p))),
+      });
+    }
+    if (transpPcts.length) {
+      const pcts = [...new Set(transpPcts)].sort((a, b) => a - b);
+      cats.push({
+        name: "transparency",
+        hit: pcts.some((p) => transpIsHit(p)),
+        items: hitsFirst(pcts, (p) => transpIsHit(p))
+          .map((p) => () => percentFxTag("transparency", p, transpIsHit(p))),
+      });
+    }
+    if (hasFreeze) {
+      // valueless: the clickable category head IS the whole pill
+      cats.push({ name: "freeze", hit: freezeIsHit(), items: [] });
+    }
+    if (hasCamo) {
+      cats.push({ name: "camo", hit: camoIsHit(), items: [] });
     }
     if (morphIds.length) {
       // one pill per (creature, display); creatures without TDB displays
@@ -1299,6 +1401,29 @@
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
+  function ghostMatIsHit(ghostMatId) {
+    const corpus = state.data.ghostMatSearchL.get(ghostMatId) || "";
+    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+  }
+
+  function desatIsHit(percent) {
+    const corpus = state.data.desatSearchL.get(percent) || "";
+    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+  }
+
+  function transpIsHit(percent) {
+    const corpus = state.data.transpSearchL.get(percent) || "";
+    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+  }
+
+  function freezeIsHit() {
+    return groupsFor("fx").some((g) => g.tokens.every((t) => "freeze".includes(t.text)));
+  }
+
+  function camoIsHit() {
+    return groupsFor("fx").some((g) => g.tokens.every((t) => "camo".includes(t.text)));
+  }
+
   function morphIsHit(displayId) {
     const corpus = state.data.morphSearchL.get(displayId) || "";
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
@@ -1316,6 +1441,31 @@
     b.title = `${title}\nShift-click: copy wrapped in \`backticks\``;
     b.dataset.copy = copyValue;
     return b;
+  }
+
+  /* Model-category head ("attach", "missile", ...) — the fx-head pattern:
+   * clicking searches the whole category via the model field. */
+  const MODEL_CAT_TITLES = {
+    attach: "Model attached to the caster/target (SpellVisualKitModelAttach)",
+    missile: "Projectile model in flight (SpellVisualMissile)",
+    area: "Ground / area model (SpellVisualKitAreaModel)",
+    trail: "Weapon trail model (WeaponTrail)",
+    barrage: "Volley of models (BarrageEffect)",
+  };
+
+  function modelCatHeadTag(category, hit) {
+    const tag = el("span", "tag model-head");
+    if (hit) tag.classList.add("hit");
+    const label = el("button", "tag-label", category);
+    label.title = `${MODEL_CAT_TITLES[category] || ""}`
+      + `\nClick: find all spells with a ${category} model\nShift-click: exclude them instead`;
+    label.dataset.search = `model:${category}`;
+    tag.appendChild(label);
+    return tag;
+  }
+
+  function modelCatIsHit(name) {
+    return groupsFor("model").some((g) => g.tokens.every((t) => name.includes(t.text)));
   }
 
   function modelTag(fid) {
@@ -1495,8 +1645,12 @@
     beam: "Beam / chain effect (SpellChainEffects)",
     dissolve: "Dissolve / materialize effect (DissolveEffect)",
     glow: "Edge glow / rim-light effect (EdgeGlowEffect)",
-    shadowy: "Shadowy overlay effect (ShadowyEffect)",
+    ghost: "Ghostly recolor (ShadowyEffect / ghost material)",
     tint: "Model tint (SpellProceduralEffect)",
+    desaturate: "Model desaturation (SpellProceduralEffect)",
+    transparency: "Model transparency (SpellProceduralEffect)",
+    freeze: "Freeze / petrify in place (SpellProceduralEffect)",
+    camo: "Camouflage / cloaking effect (SpellProceduralEffect)",
     morph: "Morph / transform aura (CreatureDisplayInfo)",
     summon: "Summoned creature (SpellEffect SUMMON)",
   };
@@ -1545,7 +1699,7 @@
     return tag;
   }
 
-  /* Color-only fx pill (glow / shadowy / tint): swatch + hex label — these
+  /* Color-only fx pill (glow / ghost / tint): swatch + hex label — these
    * effects have no texture or model, the color is the whole payload.
    * Clicking searches the category + hex; ⧉ copies the hex. */
   function colorFxTag(category, color, hit) {
@@ -1564,6 +1718,28 @@
     tag.appendChild(txt);
 
     tag.appendChild(tagButton("⧉", `Copy color: ${hex}`, hex));
+    return tag;
+  }
+
+  /* Percent-only fx pill (desaturate / transparency): the strength is the
+   * whole payload. Desaturate gets a decorative grey swatch keyed to the
+   * strength; transparency has no swatch. Clicking searches category + %. */
+  function percentFxTag(category, percent, hit) {
+    const tag = el("span", "tag fx");
+    if (hit) tag.classList.add("hit");
+
+    if (category === "desaturate") {
+      const v = Math.round(255 * (1 - percent / 200)); // 100% -> mid grey
+      const dot = el("span", "fx-swatch");
+      dot.style.background = `rgb(${v}, ${v}, ${v})`;
+      tag.appendChild(dot);
+    }
+
+    const txt = el("button", "tag-label", `${percent}%`);
+    txt.title = `${FX_HEAD_TITLES[category]}\n${percent}%`
+      + `\nClick: find spells with this ${category} strength\nShift-click: exclude them instead`;
+    txt.dataset.search = `fx:"${category} ${percent}%"`;
+    tag.appendChild(txt);
     return tag;
   }
 
@@ -1801,7 +1977,22 @@
     return state.display.map((id) => {
       const i = d.spellIndex.get(id);
       const row = { id, name: d.names[i], subtext: d.subtexts[i] };
-      if (!hc.models) row.models = (d.spellModels.get(id) || []).map(pathOf);
+      if (!hc.models) {
+        // grouped by usage category (soundKits-style shape); a stale pack
+        // without categories exports the old flat path list
+        const cats = d.spellModelCats.get(id);
+        if (cats) {
+          const byCat = new Map();
+          for (const e of cats) {
+            if (!byCat.has(e.cat)) byCat.set(e.cat, []);
+            byCat.get(e.cat).push(pathOf(e.fid));
+          }
+          row.models = [...byCat.keys()].sort((a, b) => a - b)
+            .map((c) => ({ category: d.modelCatNames[c] || `cat ${c}`, files: byCat.get(c) }));
+        } else {
+          row.models = (d.spellModels.get(id) || []).map(pathOf);
+        }
+      }
       if (!hc.sounds) {
         const byKit = new Map();
         for (const e of d.spellSounds.get(id) || []) {
@@ -1814,6 +2005,8 @@
       if (!hc.animkits) {
         row.animKits = (d.spellAnimKits.get(id) || []).slice().sort((a, b) => a - b)
           .map((k) => ({ id: k, anims: (d.animKitAnims.get(k) || []).map((a) => d.animNames[a]) }));
+        const stance = (d.spellAnims.get(id) || []).slice().sort((a, b) => a - b);
+        if (stance.length) row.stanceAnims = stance.map((a) => d.animNames[a]);
       }
       if (!hc.fx) {
         row.fx = (d.spellFx.get(id) || []).slice().sort((a, b) => a - b).map((c) => {
@@ -1833,14 +2026,23 @@
         }))).concat((d.spellShadowies.get(id) || []).slice().sort((a, b) => a - b).map((c) => {
           const sh = d.shadowyColors.get(c) || { primary: 0, secondary: 0 };
           return {
-            type: "shadowy",
+            type: "ghost",
             colors: [sh.primary, sh.secondary].map(
               (v) => "#" + v.toString(16).padStart(6, "0")),
           };
-        })).concat((d.spellTints.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+        })).concat((d.spellGhostMats.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+          type: "ghost",
+          color: "#" + (d.ghostMatColors.get(c) ?? 0).toString(16).padStart(6, "0"),
+        }))).concat((d.spellTints.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
           type: "tint",
           color: "#" + (d.tintColors.get(c) ?? 0).toString(16).padStart(6, "0"),
-        }))).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+        }))).concat([...new Set(d.spellDesaturates.get(id) || [])].sort((a, b) => a - b)
+          .map((p) => ({ type: "desaturate", percent: p }))
+        ).concat([...new Set(d.spellTransps.get(id) || [])].sort((a, b) => a - b)
+          .map((p) => ({ type: "transparency", percent: p }))
+        ).concat(d.spellFreezes.has(id) ? [{ type: "freeze" }] : []
+        ).concat(d.spellCamos.has(id) ? [{ type: "camo" }] : []
+        ).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
           type: "morph",
           creatureId: c,
           creature: d.morphNames.get(c) || null,
@@ -1902,14 +2104,18 @@
     const lines = [header.join(",")];
     for (const r of exportRows()) {
       const cols = [r.id, esc(r.name), esc(r.subtext)];
-      if (!hc.models) cols.push(esc(r.models.join("; ")));
+      if (!hc.models) {
+        cols.push(esc(r.models.map(
+          (m) => m.files ? `${m.category}: ${m.files.join(" | ")}` : m).join("; ")));
+      }
       if (!hc.sounds) {
         cols.push(esc(r.soundKits.map((k) => k.id).join("; ")));
         cols.push(esc(r.soundKits.map((k) => `${k.id}: ${k.files.join(" | ")}`).join("; ")));
       }
       if (!hc.animkits) {
         cols.push(esc(r.animKits.map((k) => k.id).join("; ")));
-        cols.push(esc(r.animKits.map((k) => `${k.id}: ${k.anims.join(" | ")}`).join("; ")));
+        cols.push(esc(r.animKits.map((k) => `${k.id}: ${k.anims.join(" | ")}`)
+          .concat(r.stanceAnims ? [`stance: ${r.stanceAnims.join(" | ")}`] : []).join("; ")));
       }
       if (!hc.fx) {
         cols.push(esc(r.fx.map((e) => {
@@ -1921,7 +2127,11 @@
             return `summon: ${e.creature || "?"} (creature ${e.creatureId})`
               + (e.control ? ` [${e.control}]` : "");
           }
-          if (e.color || e.colors) // color-only fx (glow / shadowy / tint)
+          if (e.percent !== undefined) // percent-only fx (desaturate / transparency)
+            return `${e.type}: ${e.percent}%`;
+          if (e.type === "freeze" || e.type === "camo") // valueless fx
+            return e.type;
+          if (e.color || e.colors) // color-only fx (glow / ghost / tint)
             return `${e.type}: ${e.color || e.colors.join(" | ")}`;
           return `${e.type}: ${e.textures.join(" | ") || "(untextured)"}`
             + (e.tint ? ` (${e.tint})` : "") + (e.duration ? ` (${e.duration}s)` : "");
