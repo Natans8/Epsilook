@@ -51,7 +51,7 @@ import sys
 import time
 import urllib.request
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -507,6 +507,21 @@ def hue_words(colors: tuple[int, ...]) -> str:
     """Join the distinct hue words of several packed colors (order kept)."""
     words = dict.fromkeys(w for c in colors if c >= 0 for w in (hue_word(*unpack_rgb(c)),) if w)
     return " ".join(words)
+
+
+def color_rows(
+    spell_map: dict[int, set[int]], colors_of: Callable[[int], tuple[int, ...]]
+) -> tuple[list[tuple[int, int]], list[int], list[str]]:
+    """Flatten one color-only fx source into the three columns its pack sections need.
+
+    Every color-only category (glow, tint, shadowy, ghost material) bakes the
+    same shape: the spell->row pairs, the sorted distinct row ids, and one hue
+    word string per id. `colors_of` maps a row id to its packed colors, since
+    each source stores them differently (shadowy rows carry two).
+    """
+    pairs = sorted((s, r) for s, rs in spell_map.items() for r in rs)
+    ids = sorted({r for rs in spell_map.values() for r in rs})
+    return pairs, ids, [hue_words(colors_of(r)) for r in ids]
 
 
 def read_anim_names() -> list[str]:
@@ -1541,23 +1556,16 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     dissolve_tex_rows = sorted((e, f) for e in used_dissolves for f in fx.dissolves[e][1])
 
     # edge glows / tints / ghost materials: color-only rows — same packed RGB
-    # plus hue word treatment as the chain tints (hex search happens app-side)
-    glow_row_pairs = sorted((s, g) for s, gs in vis.glows.items() for g in gs)
-    glow_ids = sorted({g for gs in vis.glows.values() for g in gs})
-    glow_hues = [hue_words((fx.glows[g],)) for g in glow_ids]
-
-    tint_row_pairs = sorted((s, t) for s, ts in vis.tints.items() for t in ts)
-    tint_ids = sorted({t for ts in vis.tints.values() for t in ts})
-    tint_hues = [hue_words((procs.tints[t],)) for t in tint_ids]
-
-    # shadowy effects carry two colors, so their corpus word list joins both
-    shadowy_row_pairs = sorted((s, e) for s, es in vis.shadowies.items() for e in es)
-    shadowy_ids = sorted({e for es in vis.shadowies.values() for e in es})
-    shadowy_hues = [hue_words(fx.shadowies[e]) for e in shadowy_ids]
-
-    ghost_mat_pairs = sorted((s, g) for s, gs in vis.ghost_mats.items() for g in gs)
-    ghost_mat_ids = sorted({g for gs in vis.ghost_mats.values() for g in gs})
-    ghost_mat_hues = [hue_words((procs.ghost_mats[g],)) for g in ghost_mat_ids]
+    # plus hue word treatment as the chain tints (hex search happens app-side).
+    # Shadowy rows carry two colors, so their corpus word list joins both.
+    glow_row_pairs, glow_ids, glow_hues = color_rows(
+        vis.glows, lambda gid: (fx.glows[gid],))
+    tint_row_pairs, tint_ids, tint_hues = color_rows(
+        vis.tints, lambda tid: (procs.tints[tid],))
+    shadowy_row_pairs, shadowy_ids, shadowy_hues = color_rows(
+        vis.shadowies, lambda sid: fx.shadowies[sid])
+    ghost_mat_pairs, ghost_mat_ids, ghost_mat_hues = color_rows(
+        vis.ghost_mats, lambda mid: (procs.ghost_mats[mid],))
 
     # screen effects: one row per used ScreenEffect — its hue words come from
     # whichever of the three colors the row actually has
