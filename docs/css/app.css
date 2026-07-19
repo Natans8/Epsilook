@@ -604,7 +604,6 @@ td.expanded .kit-group.overflow { display: flex; }
   max-width: 24rem;
 }
 .tag-label:hover { text-decoration: underline; }
-.tag-label.inert:hover { text-decoration: none; cursor: default; }
 /* dotted underline = mouseover shows a texture preview (hover pointers only —
    the preview never initializes on touch, so no affordance there either) */
 @media (hover: hover) {
