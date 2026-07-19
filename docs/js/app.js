@@ -681,14 +681,31 @@
 
   let suggestIndex = -1;
 
+  // The category words a field's column shows as group heads, with the
+  // tooltip text explaining each — one registry drives the chip
+  // autocomplete; the columns' own cell/search code keeps the same words
+  // searchable and their heads clickable. Null = the field has none.
+  function fieldCategories(field) {
+    const d = state.data;
+    switch (field) {
+      case "fx": return { words: Object.keys(FX_HEAD_TITLES), titles: FX_HEAD_TITLES };
+      case "model": return {
+        words: Object.values((d && d.modelCatNames) || {}),
+        titles: MODEL_CAT_TITLES,
+      };
+      case "anim": return { words: Object.keys(ANIM_CAT_TITLES), titles: ANIM_CAT_TITLES };
+      default: return null;
+    }
+  }
+
   function updateSuggest() {
     const input = $("#q");
     const box = $("#suggest");
-    // inside an fx:/model: chip the category words autocomplete instead
-    // of field prefixes ("des" -> desaturate)
-    if (state.activeField === "fx" || state.activeField === "model")
-      return updateCategorySuggest();
-    if (state.activeField) return hideSuggest();
+    // inside a chip whose column has category words, those autocomplete
+    // instead of field prefixes ("des" -> desaturate, "sta" -> stance)
+    if (state.activeField) {
+      return fieldCategories(state.activeField) ? updateCategorySuggest() : hideSuggest();
+    }
     let word = input.value.split(/\s+/).pop().toLowerCase();
     if (word.startsWith("-")) word = word.slice(1); // "-mec" suggests mechanic: as an exclusion
     if (word.length < 2) return hideSuggest();
@@ -717,10 +734,7 @@
     const box = $("#suggest");
     const word = input.value.split(/\s+/).pop().toLowerCase();
     if (!word) return hideSuggest();
-    const titles = state.activeField === "fx" ? FX_HEAD_TITLES : MODEL_CAT_TITLES;
-    const words = state.activeField === "fx"
-      ? Object.keys(FX_HEAD_TITLES)
-      : Object.values((state.data && state.data.modelCatNames) || {});
+    const { words, titles } = fieldCategories(state.activeField);
     const matches = words.filter((w) => w.startsWith(word) && w !== word);
     if (!matches.length) return hideSuggest();
 
@@ -867,6 +881,8 @@
           for (const [cat, spells] of d.modelCatSpells) {
             if ((d.modelCatNames[cat] || "") === t.text) tests.push((id) => spells.has(id));
           }
+        } else if (g.field === "anim" && t.text === "stance") {
+          tests.push((id) => d.spellAnims.has(id));
         }
       }
     }
@@ -1203,30 +1219,41 @@
     const d = state.data;
     const animsOf = (kitId) =>
       kitId === STANCE_GROUP ? directAnimIds : (d.animKitAnims.get(kitId) || []);
+    // the stance group's anims match through its category word too
+    const wordOf = (kitId) => (kitId === STANCE_GROUP ? "stance" : "");
     const kitHasHit = (kitId) =>
       (kitId !== STANCE_GROUP && kitIsHit(kitId, "animkit")) ||
-      animsOf(kitId).some((a) => animIsHit(a));
+      animsOf(kitId).some((a) => animIsHit(a, wordOf(kitId)));
     const groups = animKitIds.slice().sort((a, b) => a - b);
     if (directAnimIds.length) groups.push(STANCE_GROUP);
     const kitIds = hitsFirst(groups, kitHasHit);
 
     buildKitGroups(td, kitIds, {
-      headerTag: (kitId) => kitId === STANCE_GROUP ? stanceHeadTag() : kitTag(kitId, "animkit"),
+      headerTag: (kitId) => kitId === STANCE_GROUP
+        ? stanceHeadTag(kitHasHit(kitId)) : kitTag(kitId, "animkit"),
       itemsOf: (kitId) => hitsFirst(animsOf(kitId).slice().sort((a, b) => a - b),
-        (a) => animIsHit(a)),
-      itemTag: (animId) => animTag(animId),
+        (a) => animIsHit(a, wordOf(kitId))),
+      itemTag: (animId, kitId) => animTag(animId, wordOf(kitId)),
       itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
       groupNoun: "kit",
     });
     return td;
   }
 
-  // head label of the stance group — an inert word, there is no kit id
-  function stanceHeadTag() {
+  /* Head of the stance group — a category word like the model/fx heads:
+   * clicking searches the whole group via anim:stance. */
+  const ANIM_CAT_TITLES = {
+    stance: "Stand/walk animation override (SpellProceduralEffect) — "
+      + "the caster plays these as its idle/move animations while the visual is active",
+  };
+
+  function stanceHeadTag(hit) {
     const tag = el("span", "tag animkit");
-    const label = el("span", "tag-label inert", "stance");
-    label.title = "Stand/walk animation override (SpellProceduralEffect) — "
-      + "the caster plays these as its idle/move animations while the visual is active";
+    if (hit) tag.classList.add("hit");
+    const label = el("button", "tag-label", "stance");
+    label.title = `${ANIM_CAT_TITLES.stance}`
+      + "\nClick: find all spells with a stance override\nShift-click: exclude them instead";
+    label.dataset.search = "anim:stance";
     tag.appendChild(label);
     return tag;
   }
@@ -1540,9 +1567,13 @@
     return groupsFor(searchField).some((g) => g.tokens.some((t) => Number(t.text) === kitId));
   }
 
-  function animIsHit(animId) {
+  // anim pills can be hit through their group's category word too — today
+  // only the stance group carries one ("stance"); kit groups pass "".
+  // Mirrors spellsByAnim's token test.
+  function animIsHit(animId, groupWord = "") {
     const nameL = state.data.animNamesL[animId];
-    return groupsFor("anim").some((g) => g.tokens.every((t) => nameL.includes(t.text)));
+    return groupsFor("anim").some((g) =>
+      g.tokens.every((t) => groupWord.includes(t.text) || nameL.includes(t.text)));
   }
 
   function effectIsHit(effectId) {
@@ -1795,11 +1826,11 @@
     return tag;
   }
 
-  function animTag(animId) {
+  function animTag(animId, groupWord = "") {
     const d = state.data;
     const name = d.animNames[animId];
     const tag = el("span", "tag anim");
-    if (animIsHit(animId)) tag.classList.add("hit");
+    if (animIsHit(animId, groupWord)) tag.classList.add("hit");
 
     const txt = el("button", "tag-label", name);
     txt.title = `Animation ${animId}: ${name}\nClick: find spells playing this animation\nShift-click: exclude them instead`;

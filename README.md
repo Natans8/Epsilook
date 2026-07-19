@@ -69,9 +69,13 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   those words too: `model:missile` finds every spell with a projectile model
   (category heads are clickable, like the Effects ones). A category word
   combines with file words in one tag — `model:"missile arrow"` finds
-  spells whose *projectile* is an arrow model. Category words
-  autocomplete while typing inside an `fx:`/`model:` tag, and a tag naming
-  a category exactly floats that category's spells to the top of the results.
+  spells whose *projectile* is an arrow model. The Animations column's
+  `stance` group (stand/walk animation overrides) works the same way:
+  `anim:stance` finds every spell with one, `anim:"stance walk"` scopes to
+  walk overrides, and the group head is clickable. Category words
+  autocomplete while typing inside an `fx:`/`model:`/`anim:` tag, and a tag
+  naming a category exactly floats that category's spells to the top of the
+  results.
 - Epsilon commands paste straight in: `.cast 12345` / `.aura 12345` (and
   their truncations `.cas` `.ca` `.c` `.aur` `.au`) become an `id:12345`
   search — typed or pasted, the space after the command works like a tag's
