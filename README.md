@@ -1,136 +1,64 @@
 # Epsilook
 
-Spell · model · sound search for [Epsilon WoW](https://epsilonwow.net/).
+Search World of Warcraft spells by **how they look and sound** — then copy the
+[Epsilon WoW](https://epsilonwow.net/) command that casts one.
 
-**Live at [natans8.github.io/Epsilook](https://natans8.github.io/Epsilook/).**
+**→ [natans8.github.io/Epsilook](https://natans8.github.io/Epsilook/)**
 
-Search World of Warcraft spells by name, spell ID, model file, sound file, SoundKit,
-AnimKit, animation or visual effect (chain/beam effects searchable by texture and
-tint color, dissolves by texture, glows, ghost effects and model tints by color,
-desaturation and transparency by percent, freezes and camouflage by word,
-full-screen effects by name or color, shapeshift forms by form name,
-morphs by NPC name, model name, creature ID or display ID, summons by NPC name or
-creature ID) —
-with spell icons, clickable cross-references, spell mechanic info, and one-click
-copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
-`.lookup object <model>`, `.lookup emote <anim>`, `.modify animkit <id>`, and more).
+Wowhead tells you what a spell *does*. Epsilook tells you which model files it
+attaches, which sounds it plays, which animation it triggers and which visual
+effect it draws — and lets you search by any of those. Type `model:missile
+arrow`, `sound:felreaver`, `anim:ArtLoop` or `fx:"chain red"` and get every
+spell that matches, with one-click `.cast` / `.aura` / `.lookup` commands.
 
-The app is a fully static site: all data is baked into one compressed pack per game
-version and every search runs in the browser. No server, no database, no dependencies.
+The whole thing is a static site: one compressed data pack per game version,
+every search running in the browser. No server, no database, no build step, no
+runtime dependencies. Currently shipping WoW **9.2.7.45745**, ~276k spells.
 
 ## Using it
 
-Open the page, type into the search bar. Full syntax is in the `?` dialog:
+Full syntax lives behind the **?** button in the app. The short version:
 
-- Plain words search names, models, sounds, animations and visual effects at once and
-  match **any part of a name, in any order** — `6dr statue` finds `6dr_draenei_statue_male01.m2`.
-- Quotes make an **exact phrase**: `"fire bolt"` matches those words together, in that order.
-- Field tags narrow a term to one field: `name:` `model:` `sound:` `anim:`
-  `fx:` `mech:` `id:` — type the prefix or click a field button.
-  `sound:` and `anim:` also take an exact SoundKit / AnimKit ID
-  (`sound:86835`, `anim:13839`; the old `soundkit:`/`animkit:` prefixes
-  still work as aliases). Tags combine with AND: `model:missile name:fire`
-  finds fire-named spells that use a missile model. Exception: several
-  `id:` tags combine with OR — two `id:` tags could never both match one
-  spell (several kit IDs inside *one* `sound:`/`anim:` tag also OR).
-- `fx:` searches the Effects column — chain/beam effects by category word
-  (`fx:chain`), texture name (`fx:shadowlaser`) or tint color (`fx:chain red`,
-  or by hex: `fx:#00b4ff`; the dot on a chain tag shows the chain's RGB
-  tint), dissolve/materialize effects by texture (`fx:"dissolve arcane"`),
-  glow and ghost effects and model tints by color word or hex
-  (`fx:"glow red"`, `fx:"tint green"`, `fx:ghost` — color-only effects
-  shown as a swatch + hex code), model desaturation and transparency by
-  percent (`fx:"transparency 50%"`), freeze and camouflage effects by word
-  (`fx:freeze`, `fx:camo`), full-screen effects (the screen tinting or
-  overlaying while an aura holds) by internal name, color word or hex
-  (`fx:"screen hex"`, `fx:"screen green"`), shapeshift forms
-  (`SpellShapeshiftForm`, via MOD_SHAPESHIFT auras) by form name or model
-  (`fx:"shapeshift cat form"`) — forms with a creature display show the
-  model and carry the same `.morph`/`.lookup` buttons morphs do, while
-  display-less forms (Battle Stance, Shadowform, Stealth) render as a
-  name-only pill — and morphs (transform
-  auras) by NPC name, model name, creature ID or display ID
-  (`fx:"morph sheep"`). Morph tags show the model name
-  and copy the display ID, a ready `.morph <displayID>` command, and a
-  `.lookup display creature <model file>` command; the Wowhead icon opens
-  the morph in Wowhead's 3D model viewer. Summoned creatures search by NPC
-  name, creature ID or control type (`fx:"summon argi"`, `fx:"summon 88807"`,
-  `fx:"summon guardian"`); summon tags show the NPC name with how the summon
-  is controlled (guardian/pet/vehicle/… — click the control word to find all
-  summons of that type) and copy the creature ID, a ready
-  `.lookup creature <name>` and a `.npc spawn <creatureID>` command; the
-  Wowhead icon opens the NPC's Wowhead page.
-- `mech:` searches the Mechanics column — what a spell *does*: spell effect
-  names (`mech:resurrect`, `mech:school_damage`) and aura names for
-  aura-applying spells (`mech:mod_stun`, `mech:periodic_damage`).
-- The Models column groups each model by how the spell uses it — `attached`
-  (to the caster/target), `missile` (projectile), `area` (ground
-  model), `trail` (weapon trail), `barrage` (volley) — and `model:` matches
-  those words too: `model:missile` finds every spell with a projectile model
-  (category heads are clickable, like the Effects ones). A category word
-  combines with file words in one tag — `model:"missile arrow"` finds
-  spells whose *projectile* is an arrow model. The Animations column's
-  `stance` group (stand/walk animation overrides) works the same way:
-  `anim:stance` finds every spell with one, `anim:"stance walk"` scopes to
-  walk overrides, and the group head is clickable. Category words
-  autocomplete while typing inside an `fx:`/`model:`/`anim:` tag, and a tag
-  naming a category exactly floats that category's spells to the top of the
-  results.
-- Epsilon commands paste straight in: `.cast 12345` / `.aura 12345` (and
-  their truncations `.cas` `.ca` `.c` `.aur` `.au`) become an `id:12345`
-  search — typed or pasted, the space after the command works like a tag's
-  `:`.
-- Name search also matches a spell's **override names**
-  (`SpellOverrideName` — the name a spell renames its target or pet to), even
-  though the results keep showing the spell's real name. Searching
-  `"congealed loss"` finds *Steward Name Override [DNT]*.
-- A `-` prefix excludes instead: `name:nova -mech:school_damage`.
-- The whole bar selects like plain text — mouse, Ctrl+A, or Shift+arrows — and
-  Ctrl+C copies the selection as query text (`model:book note anim:read`), ready
-  to paste back into any Epsilook search bar.
-- Click any tag in the results to search for it (Shift-click to exclude it) —
-  including an Effects category label ("chain", "glow", …), which finds every
-  spell with that kind of effect. The current search — "Only spells with"
-  filters included — always lives in the URL; the 🔗 Share button copies it.
-- The multi-value columns (Models, Sounds, Animations, Effects, Mechanics)
-  sort by how many entries a spell has — click the header; the first click
-  puts the most extreme spells on top.
-- Appending `&export=json` or `&export=csv` to a shared URL downloads the
-  query's results directly on page load (same content as the Export buttons;
-  hidden columns are excluded either way).
-- The ▶ on a sound file plays it in the browser (click again to stop).
-- The `3d` on a model tag opens the model in the community
-  [WoW.tools model viewer](https://wowtools.work/mv/) in a new tab.
-- Hovering a chain, dissolve or screen texture tag shows the texture itself
-  in a floating preview (fetched on demand, nothing is preloaded). Chain
-  previews are shown with the chain's tint applied — the color the beam
-  actually has in game. Screen effects get the same treatment: the preview is
-  the effect's overlay texture with its ColorMultiply applied, which is the
-  color it reads as in game (9.0 Arcane's overlay is a cyan texture that comes
-  out magenta). It is the artwork and its color, not a simulation of the
-  full-screen effect. Hovering any color swatch shows a large patch of the
-  color with its hex, RGB channel values, hue word — plus its alpha where the
-  source has one (screen fog opacity, edge-glow alpha).
+- Plain words search names, models, sounds, animations and effects at once,
+  matching **any part of a name in any order** — `6dr statue` finds
+  `6dr_draenei_statue_male01.m2`. `"quoted words"` are an exact phrase.
+- **Field tags** narrow a term to one column: `name:` `model:` `sound:`
+  `anim:` `fx:` `mech:` `id:`. Tags AND together; a `-` prefix excludes.
+- **Click any tag in the results** to search for it (shift-click to exclude).
+- The search — filters included — always lives in the URL, so any result set
+  is a shareable link. Append `&export=json` or `&export=csv` to download it.
+- Pasting an Epsilon command works: `.cast 12345` becomes an `id:` search.
 
-## Development
+## How it works
 
 ```
-docs/                  the site (GitHub Pages serves this folder)
-  js/config.js         copy-command templates and UI tunables
-  js/search.js         query parser + search field registry
-  js/data.js           pack loading + in-memory index building
-  js/app.js            UI wiring
-  js/bufo.js           vendored: byte-buffer reader (Kruithne/node-bufo, MIT)
-  js/js-blp.js         vendored: BLP texture decoder (Kruithne/js-blp, MIT)
-  data/<version>/      one data pack per game version + versions.json manifest
-build/build_data.py    regenerates the data packs (Python 3, stdlib only)
+docs/                    the site — GitHub Pages serves this folder as-is
+  index.html             markup + the in-app help dialog
+  js/config.js           copy-command templates and UI tunables
+  js/data.js             pack loading + in-memory index building
+  js/search.js           query parser + the FIELDS registry (one per prefix)
+  js/app.js              all UI wiring
+  js/types.d.ts          shared type declarations (dev-time only, never served)
+  js/{bufo,js-blp}.js    vendored BLP texture decoder (Kruithne, MIT)
+  data/<version>/        one gzipped data pack per game version
+build/build_data.py      regenerates the packs (Python 3, stdlib only)
 ```
 
-Serve `docs/` with any static file server, e.g.:
+`build_data.py` walks the game's own tables — spell → visual → kit →
+model/sound/animkit/effect — and bakes the result into one column-oriented
+JSON pack per version. The browser fetches that pack once, builds its search
+indexes in `data.js`, and every query after that is pure in-memory set
+intersection. Joins and search logic live in the app, not in SQL.
+
+Serve `docs/` with any static file server:
 
 ```
 cd docs && python -m http.server 8377
 ```
+
+Pushing to `main` deploys. Any CSS/JS change needs the `?v=` cache-buster in
+`index.html` bumped (7 spots); data packs bust themselves via a content hash
+in `versions.json`.
 
 ### Rebuilding the data
 
@@ -138,60 +66,54 @@ cd docs && python -m http.server 8377
 python build/build_data.py --version 9.2.7.45745 --label "Shadowlands 9.2.7"
 ```
 
-The script downloads the raw game tables from [wago.tools](https://wago.tools) (CSV
-export), the community listfile from
-[wowdev/wow-listfile](https://github.com/wowdev/wow-listfile), and the
-[TrinityCore TDB](https://github.com/TrinityCore/TrinityCore/releases) matching
-the build (server-side creature data for morphs and summons, plus Blizzard's post-ship
-hotfix rows, which override the wago rows). It walks the
-spell → visual → model/sound/animkit/chain-effect chains, resolves effect and
-aura enum names from [WoWDBDefs](https://github.com/wowdev/WoWDBDefs)
-`meta/enums`, and writes
-`docs/data/<version>/spelldata.json.gz` plus the `versions.json` manifest.
-Downloads are cached under `build/cache/`; pass `--refresh` to re-download the
-wago/listfile sources. Extracting the TDB archive (a one-time step per version)
-needs [7-Zip](https://www.7-zip.org/) on the PATH or in Program Files.
+Downloads (and caches under `build/cache/`) the game tables from
+[wago.tools](https://wago.tools), the community listfile, and the
+[TrinityCore TDB](https://github.com/TrinityCore/TrinityCore/releases) for the
+same build; writes `docs/data/<version>/spelldata.json.gz` and updates
+`versions.json`. Takes ~15 s once the sources are cached, and is
+**deterministic** — an unchanged rebuild is byte-identical, which makes
+"rebuild and diff" the regression test for any change to the script. Pass
+`--refresh` to re-download. Extracting the TDB archive (once per version)
+needs [7-Zip](https://www.7-zip.org/) on the PATH.
 
-**Adding another game version** is the same command with a different `--version`
-(any build listed on wago.tools). For morph/summon names and hotfixes to resolve, also map
-the version to its TDB release in `TDB_RELEASES` at the top of `build_data.py`
-(without it the build still succeeds, minus that data). The version dropdown
-appears automatically once more than one pack exists.
+**Adding a game version** is the same command with a different `--version`
+(any build wago.tools lists), plus an entry in `TDB_RELEASES` at the top of
+`build_data.py` so morph/summon names and hotfixes resolve. The version
+dropdown appears by itself once a second pack exists.
 
-### Adding a search field
+### Extending it
 
-1. If the field needs new data, extend `build_data.py` to emit it and `data.js` to
-   index it.
-2. Add one entry to `FIELDS` in `docs/js/search.js` (`label`, `placeholder`,
-   `run(tokens, data) → Set<spellId>`). It becomes a tab and a query prefix
-   automatically.
+- **A new search field**: emit the data in `build_data.py`, index it in
+  `data.js`, then add one entry to `FIELDS` in `search.js` — it becomes a
+  query prefix and a field button automatically.
+- **A new copy command**: `spellCommands` in `config.js` for per-spell
+  buttons; the `*CopyTemplate` entries for the ones on tags.
 
-### Adding a copy command
+### Checking your changes
 
-Edit `docs/js/config.js` — `spellCommands` for per-spell buttons,
-`modelCopyTemplate` for the command copied from model tags.
+Neither check is required to run the app — both are dev-time only:
+
+```
+npx -p typescript tsc -p docs/jsconfig.json    # JS: every file is // @ts-check'd
+python -m mypy build/build_data.py             # Python: fully annotated
+```
 
 ## Data sources
 
-- Game tables: [wago.tools](https://wago.tools) CSV export, build 9.2.7.45745
-- Server-side data (creature names/displays for morphs and summons) and post-ship hotfix
-  rows: [TrinityCore TDB](https://github.com/TrinityCore/TrinityCore/releases)
-  for the same build
-- File names: [community listfile](https://github.com/wowdev/wow-listfile)
-- Enum value names (spell effects, auras): [WoWDBDefs](https://github.com/wowdev/WoWDBDefs) `meta/enums`
-- Spell icon images: hotlinked from [Wowhead](https://www.wowhead.com)'s CDN
-  (`wow.zamimg.com`), lazy-loaded per visible row; the icon *names* are baked into
-  the data pack (SpellMisc table + listfile). `spellIconUrl` in `docs/js/config.js`
-  sets the size or disables icons.
-- Sound playback: the ▶ on a sound file streams it from the same CDN by
-  FileDataID, fetched only when clicked — nothing is preloaded. The CDN serves
-  the current retail build, so the rare file removed from the game since the
-  pack's version won't play. `soundPlayUrl` / `soundVolume` in
-  `docs/js/config.js` tune or disable it.
-- Texture hover previews: hovering a beam/dissolve texture tag fetches the raw
-  `.blp` from [wago.tools](https://wago.tools)' CASC API (pinned to the pack's
-  build via `?version=`) and decodes it in the browser with the vendored
-  [js-blp](https://github.com/Kruithne/js-blp) library — the same decoder
-  wago.tools' own file viewer uses. Fetched only on hover, cached for the
-  session. `texturePreviewUrl` / `texturePreviewMax` in `docs/js/config.js`
-  tune or disable it.
+| What | Where from |
+| --- | --- |
+| Client db2 tables | [wago.tools](https://wago.tools) CSV export, pinned to the pack's build |
+| Creature names/displays, post-ship hotfixes | [TrinityCore TDB](https://github.com/TrinityCore/TrinityCore/releases) for the same build |
+| File names | [community listfile](https://github.com/wowdev/wow-listfile) |
+| Enum value names | [WoWDBDefs](https://github.com/wowdev/WoWDBDefs) `meta/enums` |
+| Table semantics | [wowdev.wiki](https://wowdev.wiki) |
+
+Three things are fetched live by the browser, always on explicit user action
+(a hover or a click) and never preloaded or bulk-downloaded: spell **icons**
+and **sound files** hotlink from Wowhead's CDN, and **texture previews** pull
+the raw `.blp` from wago.tools' CASC API and decode it in-page with the
+vendored [js-blp](https://github.com/Kruithne/js-blp). Each can be tuned or
+disabled in `docs/js/config.js`.
+
+Epsilook is a fan tool, not affiliated with Blizzard, Wowhead or Epsilon.
+World of Warcraft and its data are property of Blizzard Entertainment.

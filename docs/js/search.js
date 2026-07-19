@@ -1,3 +1,4 @@
+// @ts-check
 /* Search engine: the field registry and group evaluation.
  *
  * A search is a list of groups {field, tokens: [{text}, ...]} — one group
@@ -12,6 +13,9 @@
  * Each field entry implements run(tokens, data, disabled) -> Set of
  * spell IDs. Adding a new searchable relation = adding one entry to
  * FIELDS (and, if it needs new data, extending build_data.py + data.js).
+ *
+ * Types (QueryToken, QueryGroup, SearchFieldSpec, SpellData) are declared
+ * in types.d.ts.
  */
 "use strict";
 
@@ -19,6 +23,12 @@ window.EpsilookSearch = (() => {
 
   /* ------------------------------------------------------------ helpers */
 
+  /**
+   * Every token must appear in the (lowercased) haystack — substring match.
+   * @param {string} haystackL
+   * @param {QueryToken[]} tokens
+   * @returns {boolean}
+   */
   function textMatches(haystackL, tokens) {
     for (const t of tokens) {
       if (!haystackL.includes(t.text)) return false;
@@ -26,7 +36,14 @@ window.EpsilookSearch = (() => {
     return true;
   }
 
-  // Search file names within a scope of fids; return spells using the matches.
+  /**
+   * Search file names within a scope of fids; return spells using the matches.
+   * @param {QueryToken[]} tokens
+   * @param {SpellData} data
+   * @param {number[]} fids - the fids to scan (data.modelFids / data.soundFids)
+   * @param {Map<number, number[]>} fileSpells - fid -> spell ids using it
+   * @returns {Set<number>}
+   */
   function spellsByFile(tokens, data, fids, fileSpells) {
     const out = new Set();
     for (const fid of fids) {
@@ -38,12 +55,17 @@ window.EpsilookSearch = (() => {
     return out;
   }
 
-  // Search model file names — with usage categories in the corpus: each
-  // (category, file) pair matches like the fx corpora, so a token may hit
-  // the category word instead of the path. model:missile alone = every
-  // spell with a projectile model; model:"attached backpack01" = spells
-  // with that file attached (one chip, fx:"chain shadowlaser"-style).
-  // A stale cached pack has no categories: plain file-name search.
+  /**
+   * Search model file names — with usage categories in the corpus: each
+   * (category, file) pair matches like the fx corpora, so a token may hit
+   * the category word instead of the path. model:missile alone = every
+   * spell with a projectile model; model:"attached backpack01" = spells
+   * with that file attached (one chip, fx:"chain shadowlaser"-style).
+   * A stale cached pack has no categories: plain file-name search.
+   * @param {QueryToken[]} tokens
+   * @param {SpellData} data
+   * @returns {Set<number>}
+   */
   function spellsByModel(tokens, data) {
     if (!data.modelCatFidSpells.size) {
       return spellsByFile(tokens, data, data.modelFids, data.modelSpells);
@@ -62,6 +84,12 @@ window.EpsilookSearch = (() => {
     return out;
   }
 
+  /**
+   * Search spell names (incl. subtexts and hidden override names).
+   * @param {QueryToken[]} tokens
+   * @param {SpellData} data
+   * @returns {Set<number>}
+   */
   function spellsByName(tokens, data) {
     const out = new Set();
     const { ids, namesL } = data;
@@ -71,12 +99,17 @@ window.EpsilookSearch = (() => {
     return out;
   }
 
-  // Search animation names; return spells whose AnimKits use the matches,
-  // plus spells with a matching direct stand/walk anim (proc Type 7).
-  // Direct anims render under a "stance" group head, and that word joins
-  // their corpus — a token may hit "stance" instead of the anim name
-  // (fx-corpus semantics), so anim:stance alone finds every override and
-  // anim:"stance walk" scopes to walk overrides.
+  /**
+   * Search animation names; return spells whose AnimKits use the matches,
+   * plus spells with a matching direct stand/walk anim (proc Type 7).
+   * Direct anims render under a "stance" group head, and that word joins
+   * their corpus — a token may hit "stance" instead of the anim name
+   * (fx-corpus semantics), so anim:stance alone finds every override and
+   * anim:"stance walk" scopes to walk overrides.
+   * @param {QueryToken[]} tokens
+   * @param {SpellData} data
+   * @returns {Set<number>}
+   */
   function spellsByAnim(tokens, data) {
     const out = new Set();
     for (let a = 0; a < data.animNamesL.length; a++) {
@@ -100,8 +133,17 @@ window.EpsilookSearch = (() => {
   // (category word + percent), freezes / camos (bare category word), morphs
   // (category word + creature id/name + display ids + model paths) and
   // summons (category word + creature id/name + control word).
+  /**
+   * @param {QueryToken[]} tokens
+   * @param {SpellData} data
+   * @returns {Set<number>}
+   */
   function spellsByFx(tokens, data) {
     const out = new Set();
+    /**
+     * @param {Map<number | string, string>} searchLMap - fx id -> corpus
+     * @param {Map<number | string, number[]>} spellsMap - fx id -> spell ids
+     */
     const scan = (searchLMap, spellsMap) => {
       for (const [id, searchL] of searchLMap) {
         if (!textMatches(searchL, tokens)) continue;
@@ -125,8 +167,13 @@ window.EpsilookSearch = (() => {
     return out;
   }
 
-  // Exact numeric lookup against a Map of id -> [spell ids]. Multiple ids
-  // union (OR) — used by id: chips and by kit-ID chips in sound:/anim:.
+  /**
+   * Exact numeric lookup against a Map of id -> [spell ids]. Multiple ids
+   * union (OR) — used by id: chips and by kit-ID chips in sound:/anim:.
+   * @param {QueryToken[]} tokens
+   * @param {Map<number, number[]>} map
+   * @returns {Set<number>}
+   */
   function spellsByKitId(tokens, map) {
     const out = new Set();
     for (const t of tokens) {
@@ -135,6 +182,12 @@ window.EpsilookSearch = (() => {
     return out;
   }
 
+  /**
+   * Set intersection (iterates the smaller set).
+   * @param {Set<number>} a
+   * @param {Set<number>} b
+   * @returns {Set<number>}
+   */
   function intersect(a, b) {
     if (a.size > b.size) [a, b] = [b, a];
     const out = new Set();
@@ -144,6 +197,7 @@ window.EpsilookSearch = (() => {
 
   /* ------------------------------------------------------ field registry */
 
+  /** @type {Record<string, SearchFieldSpec>} */
   const FIELDS = {
     all: {
       label: "All", tab: false,
@@ -254,12 +308,21 @@ window.EpsilookSearch = (() => {
   // A query of only negative groups starts from all spells.
   // `disabledFields` (hidden columns) are skipped inside the "all" field;
   // explicit fields always run.
+  /**
+   * @param {QueryGroup[]} groups
+   * @param {SpellData} data
+   * @param {Set<string>} [disabledFields]
+   * @returns {{spellIds: number[], ms: number}} matches + evaluation time
+   */
   function searchGroups(groups, data, disabledFields = new Set()) {
     const t0 = performance.now();
 
+    /** @type {Set<number> | null} */
     let result = null;
+    /** @type {QueryGroup[]} */
     const negatives = [];
-    const orUnions = new Map(); // field -> union of that field's group results
+    /** @type {Map<string, Set<number>>} field -> union of that field's group results */
+    const orUnions = new Map();
     for (const g of groups) {
       if (!g.tokens.length) continue;
       if (g.not) { negatives.push(g); continue; }
@@ -287,7 +350,14 @@ window.EpsilookSearch = (() => {
     return { spellIds: [...result], ms: performance.now() - t0 };
   }
 
-  /* Relevance sort for name searches: exact > starts-with > substring, then by ID. */
+  /**
+   * Relevance sort (in place) for name searches: exact > starts-with >
+   * substring, then by ID.
+   * @param {number[]} spellIds
+   * @param {string} rawQuery
+   * @param {SpellData} data
+   * @returns {number[]} the same array, sorted
+   */
   function sortByRelevance(spellIds, rawQuery, data) {
     const q = rawQuery.toLowerCase().trim();
     const rank = (id) => {

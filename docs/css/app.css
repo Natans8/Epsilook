@@ -907,7 +907,7 @@ footer a { color: var(--text-dim); }
 }
 #load-bar {
   height: 100%;
-  width: 0%;
+  width: 0;
   background: linear-gradient(90deg, var(--gold-dim), var(--gold));
   transition: width 0.15s;
 }

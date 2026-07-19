@@ -1,4 +1,6 @@
-/* Epsilook configuration — the file to edit for quick customization. */
+// @ts-check
+/* Epsilook configuration — the file to edit for quick customization.
+ * The full shape is documented in types.d.ts (EpsilookConfig). */
 "use strict";
 
 window.EpsilookConfig = {

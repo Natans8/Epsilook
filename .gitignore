@@ -7,3 +7,5 @@ build/cache/
 
 # local tooling
 .claude/
+__pycache__/
+.mypy_cache/
