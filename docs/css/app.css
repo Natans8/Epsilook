@@ -428,7 +428,7 @@ th.c-idx { text-align: right; }
 .c-models { min-width: 14rem; line-height: 1.15; }
 .c-sounds { min-width: 16rem; }
 .c-animkits { min-width: 12rem; }
-.c-fx { min-width: 12rem; }
+.c-fx { min-width: 13rem; }
 .c-mechanics { min-width: 10rem; }
 
 .id-copy { color: var(--gold); font-variant-numeric: tabular-nums; }
@@ -521,6 +521,39 @@ td.empty { text-align: center; vertical-align: middle; }
 .kit-files .tag-play { padding: 0.06rem 0.32rem; }
 .kit-group.overflow { display: none; }
 td.expanded .kit-group.overflow { display: flex; }
+/* single-item (or head-only, e.g. freeze/camo) groups render compact: ONE
+   tag-shaped pill instead of a box — the category word is a dimmed leading
+   section (like the control word on summon pills), the lone item's tag
+   melts into the pill (chrome stripped, the .kit-files border-left is the
+   section divider). Head-only pills (freeze/camo) keep full brightness —
+   there the word isn't a prefix, it's the whole pill. */
+.kit-group.compact {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  max-width: 100%;
+  vertical-align: top;
+  margin: 0.1rem 0.25rem 0.1rem 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.78em;
+}
+.kit-group.compact .kit-head { background: none; }
+.kit-group.compact.hit { background: rgba(240, 195, 76, 0.10); }
+.kit-group.compact .kit-head:not(:last-child) .tag-label {
+  font-size: 0.92em;
+  opacity: 0.65;
+}
+.kit-group.compact .kit-head:not(:last-child) .tag-label:hover { opacity: 1; }
+.kit-group.compact .kit-files { flex: none; padding: 0; }
+.kit-group.compact .kit-files .tag,
+.kit-group.compact .kit-files .tag.hit {
+  border: none;
+  background: none;
+  margin: 0;
+  border-radius: 0;
+  font-size: 1em;
+}
 
 /* tags */
 
