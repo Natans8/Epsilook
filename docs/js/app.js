@@ -820,7 +820,8 @@
         + len(d.spellShadowies, id) + len(d.spellGhostMats, id) + len(d.spellTints, id)
         + len(d.spellDesaturates, id) + len(d.spellTransps, id)
         + (d.spellFreezes.has(id) ? 1 : 0) + (d.spellCamos.has(id) ? 1 : 0)
-        + len(d.spellScreens, id) + len(d.spellMorphs, id) + len(d.spellSummons, id);
+        + len(d.spellScreens, id) + len(d.spellMorphs, id)
+        + len(d.spellShapeshifts, id) + len(d.spellSummons, id);
     }
   }
 
@@ -834,7 +835,8 @@
       chain: d.spellFx, dissolve: d.spellDissolves, glow: d.spellGlows,
       tint: d.spellTints, desaturate: d.spellDesaturates,
       transparency: d.spellTransps, freeze: d.spellFreezes, camo: d.spellCamos,
-      screen: d.spellScreens, morph: d.spellMorphs, summon: d.spellSummons,
+      screen: d.spellScreens, shapeshift: d.spellShapeshifts,
+      morph: d.spellMorphs, summon: d.spellSummons,
     };
     const tests = [];
     for (const g of state.groups) {
@@ -872,7 +874,8 @@
           || d.spellShadowies.has(id) || d.spellGhostMats.has(id) || d.spellTints.has(id)
           || d.spellDesaturates.has(id) || d.spellTransps.has(id)
           || d.spellFreezes.has(id) || d.spellCamos.has(id) || d.spellScreens.has(id)
-          || d.spellMorphs.has(id) || d.spellSummons.has(id)));
+          || d.spellMorphs.has(id) || d.spellShapeshifts.has(id)
+          || d.spellSummons.has(id)));
     } else {
       list = list.slice();
     }
@@ -1302,12 +1305,14 @@
     const hasCamo = d.spellCamos.has(spellId);
     const screenIds = d.spellScreens.get(spellId) || [];
     const morphIds = d.spellMorphs.get(spellId) || [];
+    const formIds = d.spellShapeshifts.get(spellId) || [];
     const summonEntries = d.spellSummons.get(spellId) || [];
     const td = el("td", "c-fx");
     if (chainIds.length === 0 && dissolveIds.length === 0 && glowIds.length === 0
         && shadowyIds.length === 0 && ghostMatIds.length === 0 && tintIds.length === 0
         && desatPcts.length === 0 && transpPcts.length === 0 && !hasFreeze && !hasCamo
-        && screenIds.length === 0 && morphIds.length === 0 && summonEntries.length === 0) {
+        && screenIds.length === 0 && morphIds.length === 0 && formIds.length === 0
+        && summonEntries.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
       return td;
@@ -1450,6 +1455,19 @@
         items: ids.map((id) => () => screenTag(id)),
       });
     }
+    if (formIds.length) {
+      // one pill per (form, display); a form with no display (Battle Stance,
+      // Shadowform, Stealth — 11 of the 29 used forms) gets one name-only pill
+      const ids = hitsFirst(formIds.slice().sort((a, b) => a - b), (f) => shapeshiftIsHit(f));
+      const entries = ids.flatMap((f) =>
+        (d.shapeshiftDisplays.get(f) || [{ displayId: 0, fid: 0 }])
+          .map((e) => ({ formId: f, displayId: e.displayId, fid: e.fid })));
+      cats.push({
+        name: "shapeshift",
+        hit: formIds.some((f) => shapeshiftIsHit(f)),
+        items: entries.map((e) => () => shapeshiftTag(e)),
+      });
+    }
     if (morphIds.length) {
       // one pill per (creature, display); creatures without TDB displays
       // still get a single fallback pill
@@ -1578,6 +1596,11 @@
 
   function morphIsHit(displayId) {
     const corpus = state.data.morphSearchL.get(displayId) || "";
+    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+  }
+
+  function shapeshiftIsHit(formId) {
+    const corpus = state.data.shapeshiftSearchL.get(formId) || "";
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
@@ -1805,6 +1828,7 @@
     freeze: "Freeze / petrify in place (SpellProceduralEffect)",
     camo: "Camouflage / cloaking effect (SpellProceduralEffect)",
     screen: "Full-screen tint / overlay while the aura holds (ScreenEffect)",
+    shapeshift: "Shapeshift form (SpellShapeshiftForm)",
     morph: "Morph / transform aura (CreatureDisplayInfo)",
     summon: "Summoned creature (SpellEffect SUMMON)",
   };
@@ -1994,6 +2018,46 @@
    * into; ⧉ copies the display ID, .morph / .lo the ready-to-paste
    * commands; the Wowhead icon on the left opens their model viewer on the
    * display. Creatures without TDB data get an inert "creature #id" pill. */
+  /* Shapeshift pill: one per (form, display). Label is the model basename
+   * where the form has a display, otherwise the form name itself — Battle
+   * Stance and Shadowform are real forms with no model at all, and a
+   * name-only pill is the honest rendering. */
+  function shapeshiftTag(entry) {
+    const d = state.data;
+    const { formId, displayId, fid } = entry;
+    const name = d.shapeshiftNames.get(formId) || "";
+    const file = fid ? (d.files.get(fid) || { path: "", base: "" }) : { path: "", base: "" };
+    const tag = el("span", "tag fx");
+    if (shapeshiftIsHit(formId)) tag.classList.add("hit");
+
+    if (displayId && CFG.wowheadMorphUrl) {
+      tag.appendChild(wowheadLink(fillTemplate(CFG.wowheadMorphUrl, { id: displayId }),
+        `View DisplayID ${displayId} in Wowhead's model viewer`));
+    }
+
+    const base = file.base ? stripExt(file.base) : "";
+    const label = base || name || `form #${formId}`;
+    const txt = el("button", "tag-label", label);
+    txt.title = `${name || "(unnamed form)"} — SpellShapeshiftForm ${formId}`
+      + (displayId ? `\nDisplayID ${displayId}` : "\n(this form has no creature display)")
+      + (file.path ? `\n${file.path}` : "")
+      + `\nClick: find spells with this form\nShift-click: exclude them instead`;
+    // search by the form NAME, which is stable and readable, unlike the model
+    txt.dataset.search = `fx:"shapeshift ${(name || String(formId)).replace(/"/g, "")}"`;
+    tag.appendChild(txt);
+
+    if (displayId) {
+      tag.appendChild(tagButton("⧉", `Copy display ID: ${displayId}`, String(displayId)));
+      const cmd = fillTemplate(CFG.morphCopyTemplate, { id: displayId });
+      tag.appendChild(tagButton(".morph", `Copy:  ${cmd}`, cmd));
+    }
+    if (file.base) {
+      const lookup = fillTemplate(CFG.morphLookupTemplate, { id: displayId, file: file.base });
+      tag.appendChild(tagButton(".lo", `Copy:  ${lookup}`, lookup));
+    }
+    return tag;
+  }
+
   function morphTag(entry) {
     const d = state.data;
     const { creatureId, displayId, fid } = entry;
@@ -2349,7 +2413,16 @@
             masks: (d.screenTextures.get(sc) || [])
               .filter((t) => t.mask).map((t) => pathOf(t.fid)),
           };
-        })).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+        })).concat((d.spellShapeshifts.get(id) || []).slice().sort((a, b) => a - b)
+          .map((f) => ({
+            type: "shapeshift",
+            formId: f,
+            form: d.shapeshiftNames.get(f) || null,
+            displays: (d.shapeshiftDisplays.get(f) || []).map((e) => ({
+              displayId: e.displayId,
+              model: e.fid ? pathOf(e.fid) : null,
+            })),
+          }))).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
           type: "morph",
           creatureId: c,
           creature: d.morphNames.get(c) || null,
@@ -2429,6 +2502,13 @@
           if (e.type === "morph") {
             return `morph: ${e.creature || "?"} (creature ${e.creatureId}): `
               + (e.displays.map((disp) => `${disp.displayId}=${disp.model || "?"}`).join(" | ") || "?");
+          }
+          // a form with no display is name-only — no ": …" tail
+          if (e.type === "shapeshift") {
+            const disp = e.displays
+              .map((x) => `${x.displayId}=${x.model || "?"}`).join(" | ");
+            return `shapeshift: ${e.form || `form ${e.formId}`}`
+              + (disp ? `: ${disp}` : "");
           }
           if (e.type === "summon") {
             return `summon: ${e.creature || "?"} (creature ${e.creatureId})`

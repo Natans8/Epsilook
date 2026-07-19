@@ -87,6 +87,7 @@ window.EpsilookSearch = (() => {
     if (textMatches("freeze", tokens)) for (const s of data.spellFreezes) out.add(s);
     if (textMatches("camo", tokens)) for (const s of data.spellCamos) out.add(s);
     scan(data.screenSearchL, data.screenSpells);
+    scan(data.shapeshiftSearchL, data.shapeshiftSpells);
     scan(data.morphSearchL, data.morphSpells);
     scan(data.summonPairSearchL, data.summonPairSpells);
     return out;

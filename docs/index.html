@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit, animkit or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260719h">
+  <link rel="stylesheet" href="css/app.css?v=20260719i">
 </head>
 <body>
 
@@ -74,6 +74,7 @@
               freezes and camouflage by word (<code>fx:freeze</code>, <code>fx:camo</code>);
               full-screen effects by internal name, color word or hex
               (<code>fx:"screen hex"</code>, <code>fx:"screen green"</code>);
+              shapeshift forms by form name or model (<code>fx:"shapeshift cat form"</code>);
               morphs by NPC name, model name, creature ID or display ID (<code>fx:"morph sheep"</code>);
               summons by NPC name, creature ID or control type (<code>fx:"summon argi"</code>,
               <code>fx:"summon guardian"</code>).</li>
@@ -184,7 +185,7 @@
             <th data-sort="models" class="c-models" title="Click to sort by number of models">Models <span class="arrow"></span></th>
             <th data-sort="sounds" class="c-sounds" title="Click to sort by number of sounds">Sounds <span class="arrow"></span></th>
             <th data-sort="animkits" class="c-animkits" title="Click to sort by number of animations">Animations <span class="arrow"></span></th>
-            <th data-sort="fx" class="c-fx" title="Visual effects not tied to a model — chain/beam effects, dissolves, glows, ghost effects, model tints, desaturation, transparency, freezes, camouflage, morphs (transform auras) and summoned creatures. Click to sort by number of effects">Effects <span class="arrow"></span></th>
+            <th data-sort="fx" class="c-fx" title="Visual effects not tied to a model — chain/beam effects, dissolves, glows, ghost effects, model tints, desaturation, transparency, freezes, camouflage, shapeshift forms, morphs (transform auras) and summoned creatures. Click to sort by number of effects">Effects <span class="arrow"></span></th>
             <th data-sort="mechanics" class="c-mechanics" title="What the spell does mechanically (SpellEffect + SpellEffectAura enums). Click to sort by number of mechanics">Mechanics <span class="arrow"></span></th>
             <th class="c-cmds">Commands</th>
           </tr>
@@ -240,13 +241,13 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260719h"></script>
-<script src="js/data.js?v=20260719h"></script>
+<script src="js/config.js?v=20260719i"></script>
+<script src="js/data.js?v=20260719i"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260719h"></script>
-<script src="js/js-blp.js?v=20260719h"></script>
-<script src="js/search.js?v=20260719h"></script>
-<script src="js/app.js?v=20260719h"></script>
+<script src="js/bufo.js?v=20260719i"></script>
+<script src="js/js-blp.js?v=20260719i"></script>
+<script src="js/search.js?v=20260719i"></script>
+<script src="js/app.js?v=20260719i"></script>
 </body>
 </html>

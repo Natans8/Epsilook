@@ -74,6 +74,8 @@ TABLES = [
     "FullScreenEffect",
     "CreatureDisplayInfo",
     "CreatureModelData",
+    "SpellShapeshiftForm",
+    "SpellOverrideName",
 ]
 
 # TrinityCore TDB release per game version (server-side world DB + hotfixes).
@@ -177,6 +179,17 @@ MODEL_CAT_NAMES = {
 
 # SpellEffectAura value whose EffectMiscValue_0 is a CreatureDisplayID
 AURA_TRANSFORM = 56
+
+# SpellEffectAura value whose EffectMiscValue_0 is a SpellShapeshiftForm ID.
+# The form carries a name and up to four CreatureDisplayIDs; plenty of forms
+# (Battle Stance, Shadowform, Stealth, Moonkin) have no display at all and
+# are a name only.
+AURA_SHAPESHIFT = 36
+# SpellEffectAura whose EffectMiscValue_0 is a SpellOverrideName ID — the
+# name the spell renames its target/pet to. "GROUP" in the enum name is
+# because one spell may carry several rows and pick among them (spell 323463
+# "Infused" -> Bola / Apa / Deka). Search corpus only, never displayed.
+AURA_OVERRIDE_NAME = 370
 
 # SpellEffect.Effect value that summons a creature: EffectMiscValue_0 is the
 # creature id (server-side NPC entry, same space as morphs), EffectMiscValue_1
@@ -920,6 +933,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     spell_morphs: dict[int, set[int]] = defaultdict(set)  # spell -> creature ids
     spell_summons: dict[int, set[tuple[int, int]]] = defaultdict(set)  # spell -> (creature, control)
     spell_screens: dict[int, set[int]] = defaultdict(set)  # spell -> ScreenEffect ids
+    spell_forms: dict[int, set[int]] = defaultdict(set)    # spell -> shapeshift form ids
+    spell_altnames: dict[int, set[int]] = defaultdict(set)  # spell -> override name ids
     for s, e, a, misc0, misc1 in se_rows.values():
         if s not in spell_names:
             continue
@@ -935,6 +950,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         # route (the kit route below adds only a handful of rows)
         if a == AURA_SCREEN_EFFECT and misc0 > 0 and misc0 in screen_rows:
             spell_screens[s].add(misc0)
+        if a == AURA_SHAPESHIFT and misc0 > 0:
+            spell_forms[s].add(misc0)
+        if a == AURA_OVERRIDE_NAME and misc0 > 0:
+            spell_altnames[s].add(misc0)
     del se_rows
 
     # creature -> name + display ids (TDB world tables — server-side data
@@ -970,6 +989,44 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         for _idx, did in creature_displays.get(c, ()):
             fid = model_fid.get(display_model.get(did, 0), 0)
             morph_display_rows.append((c, did, fid))
+
+    # shapeshift forms: name + up to four CreatureDisplayIDs, each resolving to
+    # a model file through the same display -> model chain morphs use. Forms
+    # referenced by a spell but missing from the table are dropped (same as
+    # dissolves/screens); display-less forms keep their name and render as a
+    # name-only pill.
+    form_names: dict[int, str] = {}
+    form_displays: dict[int, list[int]] = {}
+    for fid_, name, *disp in read_table(
+        table_dir, "SpellShapeshiftForm",
+        ["ID", "Name_lang"] + [f"CreatureDisplayID_{i}" for i in range(4)]
+    ):
+        form_names[to_int(fid_)] = name
+        form_displays[to_int(fid_)] = [d for d in (to_int(x) for x in disp) if d > 0]
+    for s in list(spell_forms):
+        spell_forms[s] = {f for f in spell_forms[s] if f in form_names}
+        if not spell_forms[s]:
+            del spell_forms[s]
+
+    used_forms = {f for fs in spell_forms.values() for f in fs}
+    # (form, display, model fid) — fid 0 = display resolves to no model
+    form_display_rows: list[tuple[int, int, int]] = []
+    for f in sorted(used_forms):
+        for did in form_displays.get(f, ()):
+            form_display_rows.append(
+                (f, did, model_fid.get(display_model.get(did, 0), 0)))
+
+    # override names — search corpus only, so all that is kept is the text
+    override_names: dict[int, str] = {}
+    for oid, name, *_ in read_table(
+        table_dir, "SpellOverrideName", ["ID", "OverrideName_lang"]
+    ):
+        override_names[to_int(oid)] = name
+    spell_altname_text: dict[int, str] = {}
+    for s, ids in spell_altnames.items():
+        words = [override_names[i] for i in sorted(ids) if i in override_names]
+        if words:
+            spell_altname_text[s] = " ".join(words)
 
     # spell -> icon file id (SpellMisc; prefer the base-difficulty row)
     sm_rows: dict[int, tuple[int, int, int]] = {}
@@ -1061,6 +1118,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     for sc in used_screens:
         referenced_fids.update(f for f, _role in screen_rows[sc][6])
     referenced_fids.update(f for _, _, f in morph_display_rows if f)
+    referenced_fids.update(f for _, _, f in form_display_rows if f)
 
     # icon fids resolve through the same listfile pass but stay out of the
     # pack's files table (they become iconNames instead)
@@ -1113,6 +1171,9 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "ids": spell_ids,
         "names": [spell_names[s] for s in spell_ids],
         "subtexts": [subtexts.get(s, "") for s in spell_ids],
+        # SpellOverrideName text, folded into the name search corpus only —
+        # never rendered (the row keeps showing its real name)
+        "altNames": [spell_altname_text.get(s, "") for s in spell_ids],
         "icons": spell_icons,
     }
 
@@ -1219,6 +1280,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     effect_rows = sorted((s, e) for s, effs in spell_effects.items() for e in effs)
     aura_rows = sorted((s, a) for s, auras in spell_auras.items() for a in auras)
     morph_rows = sorted((s, c) for s, cs in spell_morphs.items() for c in cs)
+    shapeshift_rows = sorted((s, f) for s, fs in spell_forms.items() for f in fs)
+    shapeshift_form_ids = sorted(used_forms)
     morph_creature_ids = sorted(used_creatures)
     summon_rows = sorted((s, c, ctrl) for s, cs in spell_summons.items() for c, ctrl in cs)
     summon_creature_ids = sorted({c for cs in spell_summons.values() for c, _ in cs})
@@ -1227,7 +1290,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     pack = {
         "meta": {
-            "format": 18,
+            "format": 19,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
@@ -1247,6 +1310,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellMorphs": len(morph_rows),
                 "morphs": len(morph_creature_ids),
                 "morphDisplays": len(morph_display_rows),
+                "spellShapeshifts": len(shapeshift_rows),
+                "shapeshiftDisplays": len(form_display_rows),
                 "spellSummons": len(summon_rows),
                 "summons": len(summon_creature_ids),
                 "fxChains": len(fx_chain_ids),
@@ -1449,6 +1514,21 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "displayIds": [r[1] for r in morph_display_rows],
             "fids": [r[2] for r in morph_display_rows],
         },
+        # shapeshift forms (MOD_SHAPESHIFT auras): a form name plus up to four
+        # creature displays; forms with no display are a name-only pill
+        "spellShapeshifts": {
+            "spellIds": [r[0] for r in shapeshift_rows],
+            "formIds": [r[1] for r in shapeshift_rows],
+        },
+        "shapeshifts": {
+            "ids": shapeshift_form_ids,
+            "names": [form_names.get(f, "") for f in shapeshift_form_ids],
+        },
+        "shapeshiftDisplays": {
+            "formIds": [r[0] for r in form_display_rows],
+            "displayIds": [r[1] for r in form_display_rows],
+            "fids": [r[2] for r in form_display_rows],
+        },
         # summons (SpellEffect SUMMON): the spell summons a CREATURE (NPC
         # entry, names via TDB creature_template like morphs); control is
         # per spell-effect row, from its SummonProperties
@@ -1474,7 +1554,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         f"({len(shadowy_ids):,} rows)  tints={len(tint_row_pairs):,} "
         f"({len(tint_ids):,} rows)  screens={len(screen_pairs):,} "
         f"({len(screen_ids):,} rows)  morphs={len(morph_rows):,} "
-        f"({len(morph_display_rows):,} displays)  summons={len(summon_rows):,} "
+        f"({len(morph_display_rows):,} displays)  "
+        f"shapeshifts={len(shapeshift_rows):,} "
+        f"({len(shapeshift_form_ids):,} forms, {len(form_display_rows):,} displays)  "
+        f"altNames={len(spell_altname_text):,}  summons={len(summon_rows):,} "
         f"({len(summon_creature_ids):,} creatures)  icons={len(icon_names):,}  "
         f"orphan visual spells={orphan_spells:,}  [{time.time() - t0:.1f}s]"
     )
