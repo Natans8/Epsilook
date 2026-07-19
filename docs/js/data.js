@@ -1,10 +1,18 @@
+// @ts-check
 /* Data loading: fetch the gzipped JSON pack for a game version and build
  * the in-memory indexes every search runs against. No query engine —
- * plain arrays and Maps. */
+ * plain arrays and Maps.
+ *
+ * The pack layout (SpellPack) and the index shapes (SpellData) are
+ * documented in types.d.ts. */
 "use strict";
 
 window.EpsilookData = (() => {
 
+  /**
+   * Fetch the version manifest (always revalidated).
+   * @returns {Promise<VersionEntry[]>}
+   */
   async function loadVersions() {
     // no-cache = always revalidate (tiny file, 304 when unchanged), so a
     // fresh deploy is picked up immediately instead of after cache expiry
@@ -13,7 +21,13 @@ window.EpsilookData = (() => {
     return resp.json();
   }
 
-  /* Fetch + gunzip + parse one version's pack, reporting download progress. */
+  /**
+   * Fetch + gunzip + parse one version's pack, reporting download progress.
+   * @param {VersionEntry} versionEntry
+   * @param {(received: number, total: number) => void} [onProgress] - total
+   *   is 0 when the server sends no Content-Length
+   * @returns {Promise<SpellPack>}
+   */
   async function loadPack(versionEntry, onProgress) {
     // the manifest's content hash busts the browser cache exactly when the
     // pack data changed; an unchanged hash keeps serving the cached 6+ MB
@@ -45,18 +59,29 @@ window.EpsilookData = (() => {
     return JSON.parse(text);
   }
 
+  /**
+   * The part of a listfile path after the last "/".
+   * @param {string} path
+   * @returns {string}
+   */
   function basename(path) {
     const i = path.lastIndexOf("/");
     return i >= 0 ? path.slice(i + 1) : path;
   }
 
-  /* Turn the column-oriented pack into fast lookup structures. */
+  /**
+   * Turn the column-oriented pack into fast lookup structures.
+   * @param {SpellPack} pack
+   * @returns {SpellData}
+   */
   function buildIndexes(pack) {
     const t0 = performance.now();
     const sp = pack.spells;
     const n = sp.ids.length;
 
-    const spellIndex = new Map(); // spell id -> array index
+    /** @type {Map<number, number>} spell id -> array index */
+    const spellIndex = new Map();
+    /** @type {string[]} */
     const namesL = new Array(n);
     for (let i = 0; i < n; i++) {
       spellIndex.set(sp.ids[i], i);
@@ -69,13 +94,14 @@ window.EpsilookData = (() => {
 
     // spell icon names ("" = none); older packs have no icon data
     const iconNames = pack.iconNames || [];
+    /** @type {string[]} */
     const icons = new Array(n);
     for (let i = 0; i < n; i++) {
       const idx = sp.icons ? sp.icons[i] : 0;
       icons[i] = idx ? iconNames[idx - 1] : "";
     }
 
-    // files: fid -> {path, base, searchL}
+    /** @type {Map<number, FileEntry>} fid -> {path, base, searchL} */
     const files = new Map();
     const fp = pack.files;
     for (let i = 0; i < fp.fids.length; i++) {
@@ -85,6 +111,13 @@ window.EpsilookData = (() => {
       files.set(fid, { fid, path, base, searchL: path.toLowerCase() });
     }
 
+    /**
+     * Append value to the array at map[key], creating the array on first use.
+     * @template K, V
+     * @param {Map<K, V[]>} map
+     * @param {K} key
+     * @param {V} value
+     */
     const pushTo = (map, key, value) => {
       const arr = map.get(key);
       if (arr) arr.push(value); else map.set(key, [value]);
@@ -93,11 +126,17 @@ window.EpsilookData = (() => {
     // models — each (spell, fid) row carries a usage category
     // (attach/missile/area/trail/barrage) since pack format 15; a stale
     // cached pack has no cats and renders the old flat list
-    const spellModels = new Map();     // spell id -> [fid] (deduped)
-    const modelSpells = new Map();     // fid -> [spell id]
-    const spellModelCats = new Map();  // spell id -> [{fid, cat}]
-    const modelCatSpells = new Map();  // cat id -> Set(spell id)
-    const modelCatFidSpells = new Map(); // cat id -> Map(fid -> [spell id])
+    /** @type {Map<number, number[]>} spell id -> [fid] (deduped) */
+    const spellModels = new Map();
+    /** @type {Map<number, number[]>} fid -> [spell id] */
+    const modelSpells = new Map();
+    /** @type {Map<number, {fid: number, cat: number}[]>} spell id -> [{fid, cat}] */
+    const spellModelCats = new Map();
+    /** @type {Map<number, Set<number>>} cat id -> Set(spell id) */
+    const modelCatSpells = new Map();
+    /** @type {Map<number, Map<number, number[]>>} cat id -> Map(fid -> [spell id]) */
+    const modelCatFidSpells = new Map();
+    /** @type {Record<number, string>} */
     const modelCatNames = pack.modelCatNames || {};
     {
       const { spellIds, fids, cats } = pack.spellModels;
@@ -122,10 +161,14 @@ window.EpsilookData = (() => {
     }
 
     // sounds
-    const spellSounds = new Map();     // spell id -> [{soundKitId, fid}]
-    const soundSpells = new Map();     // fid -> [spell id]
-    const soundKitSpells = new Map();  // soundKitId -> [spell id]
-    const soundKitFiles = new Map();   // soundKitId -> Set(fid)
+    /** @type {Map<number, {soundKitId: number, fid: number}[]>} spell id -> [{soundKitId, fid}] */
+    const spellSounds = new Map();
+    /** @type {Map<number, number[]>} fid -> [spell id] */
+    const soundSpells = new Map();
+    /** @type {Map<number, number[]>} soundKitId -> [spell id] */
+    const soundKitSpells = new Map();
+    /** @type {Map<number, Set<number>>} soundKitId -> Set(fid) */
+    const soundKitFiles = new Map();
     {
       const { spellIds, soundKitIds, fids } = pack.spellSounds;
       for (let i = 0; i < spellIds.length; i++) {
@@ -141,16 +184,20 @@ window.EpsilookData = (() => {
       for (const [k, arr] of soundKitSpells) soundKitSpells.set(k, [...new Set(arr)]);
       for (const [s, arr] of spellSounds) {
         const seen = new Set();
-        spellSounds.set(s, arr.filter(e => {
+        spellSounds.set(s, arr.filter((e) => {
           const key = e.soundKitId + ":" + e.fid;
-          return seen.has(key) ? false : (seen.add(key), true);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
         }));
       }
     }
 
     // animkits
-    const spellAnimKits = new Map(); // spell id -> [animKitId]
-    const animKitSpells = new Map(); // animKitId -> [spell id]
+    /** @type {Map<number, number[]>} spell id -> [animKitId] */
+    const spellAnimKits = new Map();
+    /** @type {Map<number, number[]>} animKitId -> [spell id] */
+    const animKitSpells = new Map();
     {
       const { spellIds, animKitIds } = pack.spellAnimKits;
       for (let i = 0; i < spellIds.length; i++) {
@@ -161,9 +208,12 @@ window.EpsilookData = (() => {
 
     // animations contained in animkits (names indexed by AnimID)
     const animNames = pack.animNames;
+    /** @type {string[]} */
     const animNamesL = animNames.map((n) => n.toLowerCase());
-    const animKitAnims = new Map(); // animKitId -> [animId]
-    const animAnimKits = new Map(); // animId -> [animKitId]
+    /** @type {Map<number, number[]>} animKitId -> [animId] */
+    const animKitAnims = new Map();
+    /** @type {Map<number, number[]>} animId -> [animKitId] */
+    const animAnimKits = new Map();
     {
       const { animKitIds, animIds } = pack.animKitAnims;
       for (let i = 0; i < animKitIds.length; i++) {
@@ -172,19 +222,28 @@ window.EpsilookData = (() => {
       }
     }
 
-    // packed RGB -> "#rrggbb" (the form fx corpora carry, so hex queries
-    // like fx:#ff5800 — or just a hex prefix — match by substring)
+    /**
+     * Packed RGB -> "#rrggbb" (the form fx corpora carry, so hex queries
+     * like fx:#ff5800 — or just a hex prefix — match by substring).
+     * @param {number} c
+     * @returns {string}
+     */
     const hexColor = (c) => "#" + c.toString(16).padStart(6, "0");
 
     // visual FX: chain/beam effects (category word "chain" since
     // 2026-07-19). Each chain has a tint (0xFFFFFF = untinted), a hue word,
     // textures (fids into `files`), and a lowercase search corpus:
     // "chain" + hue + tint hex + texture paths.
-    const spellFx = new Map();     // spell id -> [chainId]
-    const fxSpells = new Map();    // chainId -> [spell id]
-    const fxChains = new Map();    // chainId -> {color, hue}
-    const fxTextures = new Map();  // chainId -> [fid]
-    const fxSearchL = new Map();   // chainId -> search corpus
+    /** @type {Map<number, number[]>} spell id -> [chainId] */
+    const spellFx = new Map();
+    /** @type {Map<number, number[]>} chainId -> [spell id] */
+    const fxSpells = new Map();
+    /** @type {Map<number, {color: number, hue: string}>} chainId -> {color, hue} */
+    const fxChains = new Map();
+    /** @type {Map<number, number[]>} chainId -> [fid] */
+    const fxTextures = new Map();
+    /** @type {Map<number, string>} chainId -> search corpus */
+    const fxSearchL = new Map();
     {
       const { spellIds, chainIds } = pack.spellFx;
       for (let i = 0; i < spellIds.length; i++) {
@@ -210,11 +269,16 @@ window.EpsilookData = (() => {
 
     // dissolves (DissolveEffect rows): duration + TextureBlendSet textures;
     // corpus: "dissolve" + texture paths — fx:"dissolve arcane_wisps" style.
-    const spellDissolves = new Map();    // spell id -> [dissolveId]
-    const dissolveSpells = new Map();    // dissolveId -> [spell id]
-    const dissolveDurations = new Map(); // dissolveId -> seconds (0 = unspecified)
-    const dissolveTextures = new Map();  // dissolveId -> [fid]
-    const dissolveSearchL = new Map();   // dissolveId -> search corpus
+    /** @type {Map<number, number[]>} spell id -> [dissolveId] */
+    const spellDissolves = new Map();
+    /** @type {Map<number, number[]>} dissolveId -> [spell id] */
+    const dissolveSpells = new Map();
+    /** @type {Map<number, number>} dissolveId -> seconds (0 = unspecified) */
+    const dissolveDurations = new Map();
+    /** @type {Map<number, number[]>} dissolveId -> [fid] */
+    const dissolveTextures = new Map();
+    /** @type {Map<number, string>} dissolveId -> search corpus */
+    const dissolveSearchL = new Map();
     {
       const { spellIds, dissolveIds } = pack.spellDissolves;
       for (let i = 0; i < spellIds.length; i++) {
@@ -238,11 +302,16 @@ window.EpsilookData = (() => {
 
     // glows (EdgeGlowEffect rows): color-only, no texture or model.
     // Corpus: "glow" + hue + hex — fx:"glow red" / fx:#ff5800.
-    const spellGlows = new Map();   // spell id -> [glowId]
-    const glowSpells = new Map();   // glowId -> [spell id]
-    const glowColors = new Map();   // glowId -> packed RGB
-    const glowAlphas = new Map();   // glowId -> alpha 0..255 (pack format 17+)
-    const glowSearchL = new Map();  // glowId -> search corpus
+    /** @type {Map<number, number[]>} spell id -> [glowId] */
+    const spellGlows = new Map();
+    /** @type {Map<number, number[]>} glowId -> [spell id] */
+    const glowSpells = new Map();
+    /** @type {Map<number, number>} glowId -> packed RGB */
+    const glowColors = new Map();
+    /** @type {Map<number, number>} glowId -> alpha 0..255 (pack format 17+) */
+    const glowAlphas = new Map();
+    /** @type {Map<number, string>} glowId -> search corpus */
+    const glowSearchL = new Map();
     {
       const { spellIds, glowIds } = pack.spellGlows;
       for (let i = 0; i < spellIds.length; i++) {
@@ -260,10 +329,14 @@ window.EpsilookData = (() => {
 
     // shadowy effects (ShadowyEffect rows): two colors per row, no texture.
     // Corpus: "shadowy" + hue words + both hexes.
-    const spellShadowies = new Map();  // spell id -> [shadowyId]
-    const shadowySpells = new Map();   // shadowyId -> [spell id]
-    const shadowyColors = new Map();   // shadowyId -> {primary, secondary}
-    const shadowySearchL = new Map();  // shadowyId -> search corpus
+    /** @type {Map<number, number[]>} spell id -> [shadowyId] */
+    const spellShadowies = new Map();
+    /** @type {Map<number, number[]>} shadowyId -> [spell id] */
+    const shadowySpells = new Map();
+    /** @type {Map<number, {primary: number, secondary: number}>} shadowyId -> {primary, secondary} */
+    const shadowyColors = new Map();
+    /** @type {Map<number, string>} shadowyId -> search corpus */
+    const shadowySearchL = new Map();
     {
       const { spellIds, shadowyIds } = pack.spellShadowies;
       for (let i = 0; i < spellIds.length; i++) {
@@ -284,10 +357,14 @@ window.EpsilookData = (() => {
     // ghost materials (SpellProceduralEffect Type 22): single-color material
     // recolors that share the "ghost" category with the ShadowyEffect rows.
     // Corpus: "ghost" + hue + hex.
-    const spellGhostMats = new Map();   // spell id -> [ghostMatId]
-    const ghostMatSpells = new Map();   // ghostMatId -> [spell id]
-    const ghostMatColors = new Map();   // ghostMatId -> packed RGB
-    const ghostMatSearchL = new Map();  // ghostMatId -> search corpus
+    /** @type {Map<number, number[]>} spell id -> [ghostMatId] */
+    const spellGhostMats = new Map();
+    /** @type {Map<number, number[]>} ghostMatId -> [spell id] */
+    const ghostMatSpells = new Map();
+    /** @type {Map<number, number>} ghostMatId -> packed RGB */
+    const ghostMatColors = new Map();
+    /** @type {Map<number, string>} ghostMatId -> search corpus */
+    const ghostMatSearchL = new Map();
     if (pack.spellGhostMats) {
       const { spellIds, ghostIds } = pack.spellGhostMats;
       for (let i = 0; i < spellIds.length; i++) {
@@ -305,9 +382,12 @@ window.EpsilookData = (() => {
     // desaturate (Type 21) / transparency (Type 14): percent-only pills. The
     // pill "id" IS the percent (0..100); corpus per percent so fx:desaturate,
     // fx:"desaturate 70" and fx:transparency all match.
-    const spellDesaturates = new Map();  // spell id -> [percent]
-    const desatSpells = new Map();       // percent -> [spell id]
-    const desatSearchL = new Map();      // percent -> corpus
+    /** @type {Map<number, number[]>} spell id -> [percent] */
+    const spellDesaturates = new Map();
+    /** @type {Map<number, number[]>} percent -> [spell id] */
+    const desatSpells = new Map();
+    /** @type {Map<number, string>} percent -> corpus */
+    const desatSearchL = new Map();
     if (pack.spellDesaturates) {
       const { spellIds, percents } = pack.spellDesaturates;
       for (let i = 0; i < spellIds.length; i++) {
@@ -317,9 +397,12 @@ window.EpsilookData = (() => {
           desatSearchL.set(percents[i], "desaturate " + percents[i] + "%");
       }
     }
-    const spellTransps = new Map();   // spell id -> [percent]
-    const transpSpells = new Map();   // percent -> [spell id]
-    const transpSearchL = new Map();  // percent -> corpus
+    /** @type {Map<number, number[]>} spell id -> [percent] */
+    const spellTransps = new Map();
+    /** @type {Map<number, number[]>} percent -> [spell id] */
+    const transpSpells = new Map();
+    /** @type {Map<number, string>} percent -> corpus */
+    const transpSearchL = new Map();
     if (pack.spellTransparencies) {
       const { spellIds, percents } = pack.spellTransparencies;
       for (let i = 0; i < spellIds.length; i++) {
@@ -338,14 +421,22 @@ window.EpsilookData = (() => {
     // while the aura holds. Each row: internal name, optional fog tint and
     // FullScreenEffect multiply/addition colors (-1 = none — 0 is a real
     // black), texture fids. Corpus: "screen" + name + hues + hexes + paths.
-    const spellScreens = new Map();    // spell id -> [screenId]
-    const screenSpells = new Map();    // screenId -> [spell id]
-    const screenNames = new Map();     // screenId -> internal name
-    const screenColors = new Map();    // screenId -> {fog, fogAlpha, mul, add}
-    // screenId -> [{fid, mask}] — mask textures are flat blend-set art the
-    // mul/add colors paint; overlays (mask false) carry their own colors
+    /** @type {Map<number, number[]>} spell id -> [screenId] */
+    const spellScreens = new Map();
+    /** @type {Map<number, number[]>} screenId -> [spell id] */
+    const screenSpells = new Map();
+    /** @type {Map<number, string>} screenId -> internal name */
+    const screenNames = new Map();
+    /** @type {Map<number, ScreenColors>} screenId -> {fog, fogAlpha, mul, add, mask*} */
+    const screenColors = new Map();
+    /**
+     * screenId -> [{fid, mask}] — mask textures are flat blend-set art the
+     * mul/add colors paint; overlays (mask false) carry their own colors.
+     * @type {Map<number, {fid: number, mask: boolean}[]>}
+     */
     const screenTextures = new Map();
-    const screenSearchL = new Map();   // screenId -> search corpus
+    /** @type {Map<number, string>} screenId -> search corpus */
+    const screenSearchL = new Map();
     if (pack.spellScreens) {
       const { spellIds, screenIds } = pack.spellScreens;
       for (let i = 0; i < spellIds.length; i++) {
@@ -384,8 +475,10 @@ window.EpsilookData = (() => {
 
     // direct stand/walk anim ids (Type 7) — a second source for the
     // Animations column; matched via the anim field like animkit anims
-    const spellAnims = new Map();       // spell id -> [animId]
-    const animDirectSpells = new Map(); // animId -> [spell id]
+    /** @type {Map<number, number[]>} spell id -> [animId] */
+    const spellAnims = new Map();
+    /** @type {Map<number, number[]>} animId -> [spell id] */
+    const animDirectSpells = new Map();
     if (pack.spellAnims) {
       const { spellIds, animIds } = pack.spellAnims;
       for (let i = 0; i < spellIds.length; i++) {
@@ -396,10 +489,14 @@ window.EpsilookData = (() => {
 
     // model tints (SpellProceduralEffect Type 1 rows): color-only like
     // glows. Corpus: "tint" + hue + hex — fx:"tint red" / fx:#ff5800.
-    const spellTints = new Map();   // spell id -> [tintId]
-    const tintSpells = new Map();   // tintId -> [spell id]
-    const tintColors = new Map();   // tintId -> packed RGB
-    const tintSearchL = new Map();  // tintId -> search corpus
+    /** @type {Map<number, number[]>} spell id -> [tintId] */
+    const spellTints = new Map();
+    /** @type {Map<number, number[]>} tintId -> [spell id] */
+    const tintSpells = new Map();
+    /** @type {Map<number, number>} tintId -> packed RGB */
+    const tintColors = new Map();
+    /** @type {Map<number, string>} tintId -> search corpus */
+    const tintSearchL = new Map();
     if (pack.spellTints) {
       const { spellIds, tintIds } = pack.spellTints;
       for (let i = 0; i < spellIds.length; i++) {
@@ -415,8 +512,10 @@ window.EpsilookData = (() => {
     }
 
     // spell effects (enum id -> name without the SPELL_EFFECT_ prefix)
-    const spellEffects = new Map();  // spell id -> [effect enum id]
-    const effectSpells = new Map();  // effect enum id -> [spell id]
+    /** @type {Map<number, number[]>} spell id -> [effect enum id] */
+    const spellEffects = new Map();
+    /** @type {Map<number, number[]>} effect enum id -> [spell id] */
+    const effectSpells = new Map();
     {
       const { spellIds, effects } = pack.spellEffects;
       for (let i = 0; i < spellIds.length; i++) {
@@ -424,8 +523,10 @@ window.EpsilookData = (() => {
         pushTo(effectSpells, effects[i], spellIds[i]);
       }
     }
+    /** @type {Map<number, string>} */
     const effectNames = new Map(
       Object.entries(pack.effectNames).map(([k, v]) => [Number(k), v]));
+    /** @type {Map<number, string>} */
     const effectNamesL = new Map(
       [...effectNames].map(([k, v]) => [k, v.toLowerCase()]));
 
@@ -434,11 +535,16 @@ window.EpsilookData = (() => {
     // resolves to a model file. Corpus per creature: "morph" + creature id
     // + NPC name + display ids + model paths — fx:"morph sheep", fx:"morph
     // 856" and fx:"morph 16372" all work.
-    const spellMorphs = new Map();    // spell id -> [creatureId]
-    const morphSpells = new Map();    // creatureId -> [spell id]
-    const morphNames = new Map();     // creatureId -> NPC name ("" = unknown)
-    const morphDisplays = new Map();  // creatureId -> [{displayId, fid}]
-    const morphSearchL = new Map();   // creatureId -> search corpus
+    /** @type {Map<number, number[]>} spell id -> [creatureId] */
+    const spellMorphs = new Map();
+    /** @type {Map<number, number[]>} creatureId -> [spell id] */
+    const morphSpells = new Map();
+    /** @type {Map<number, string>} creatureId -> NPC name ("" = unknown) */
+    const morphNames = new Map();
+    /** @type {Map<number, DisplayRef[]>} creatureId -> [{displayId, fid}] */
+    const morphDisplays = new Map();
+    /** @type {Map<number, string>} creatureId -> search corpus */
+    const morphSearchL = new Map();
     {
       const { spellIds, creatureIds } = pack.spellMorphs;
       for (let i = 0; i < spellIds.length; i++) {
@@ -465,11 +571,16 @@ window.EpsilookData = (() => {
     // shapeshift forms (MOD_SHAPESHIFT auras): a form name plus up to four
     // creature displays. Many forms (Battle Stance, Shadowform, Stealth) have
     // no display at all and are searchable/renderable by name alone.
-    const spellShapeshifts = new Map();    // spell id -> [formId]
-    const shapeshiftSpells = new Map();    // formId -> [spell id]
-    const shapeshiftNames = new Map();     // formId -> form name
-    const shapeshiftDisplays = new Map();  // formId -> [{displayId, fid}]
-    const shapeshiftSearchL = new Map();   // formId -> search corpus
+    /** @type {Map<number, number[]>} spell id -> [formId] */
+    const spellShapeshifts = new Map();
+    /** @type {Map<number, number[]>} formId -> [spell id] */
+    const shapeshiftSpells = new Map();
+    /** @type {Map<number, string>} formId -> form name */
+    const shapeshiftNames = new Map();
+    /** @type {Map<number, DisplayRef[]>} formId -> [{displayId, fid}] */
+    const shapeshiftDisplays = new Map();
+    /** @type {Map<number, string>} formId -> search corpus */
+    const shapeshiftSearchL = new Map();
     if (pack.spellShapeshifts) {
       const { spellIds, formIds } = pack.spellShapeshifts;
       for (let i = 0; i < spellIds.length; i++) {
@@ -496,11 +607,16 @@ window.EpsilookData = (() => {
     // SummonProperties — so the corpus lives per (creature, control) pair:
     // "summon" + creature id + NPC name + control word. fx:"summon argi",
     // fx:"summon 88807" and fx:"summon guardian" all work.
-    const spellSummons = new Map();       // spell id -> [{creatureId, control}]
-    const summonNames = new Map();        // creatureId -> NPC name ("" = unknown)
-    const summonPairSpells = new Map();   // "creature:control" -> [spell id]
-    const summonPairSearchL = new Map();  // "creature:control" -> search corpus
-    const summonControlNames = pack.summonControlNames || {}; // control id -> word
+    /** @type {Map<number, {creatureId: number, control: number}[]>} spell id -> [{creatureId, control}] */
+    const spellSummons = new Map();
+    /** @type {Map<number, string>} creatureId -> NPC name ("" = unknown) */
+    const summonNames = new Map();
+    /** @type {Map<string, number[]>} "creature:control" -> [spell id] */
+    const summonPairSpells = new Map();
+    /** @type {Map<string, string>} "creature:control" -> search corpus */
+    const summonPairSearchL = new Map();
+    /** @type {Record<number, string>} control id -> word */
+    const summonControlNames = pack.summonControlNames || {};
     {
       const su = pack.summons;
       for (let i = 0; i < su.creatureIds.length; i++) {
@@ -523,8 +639,10 @@ window.EpsilookData = (() => {
     }
 
     // aura mechanics (SpellEffectAura enum id -> name without SPELL_AURA_)
-    const spellAuras = new Map();  // spell id -> [aura enum id]
-    const auraSpells = new Map();  // aura enum id -> [spell id]
+    /** @type {Map<number, number[]>} spell id -> [aura enum id] */
+    const spellAuras = new Map();
+    /** @type {Map<number, number[]>} aura enum id -> [spell id] */
+    const auraSpells = new Map();
     {
       const { spellIds, auras } = pack.spellAuras;
       for (let i = 0; i < spellIds.length; i++) {
@@ -532,13 +650,17 @@ window.EpsilookData = (() => {
         pushTo(auraSpells, auras[i], spellIds[i]);
       }
     }
+    /** @type {Map<number, string>} */
     const auraNames = new Map(
       Object.entries(pack.auraNames).map(([k, v]) => [Number(k), v]));
+    /** @type {Map<number, string>} */
     const auraNamesL = new Map(
       [...auraNames].map(([k, v]) => [k, v.toLowerCase()]));
 
     // fids referenced as models / as sounds (search scopes)
+    /** @type {number[]} */
     const modelFids = [...modelSpells.keys()];
+    /** @type {number[]} */
     const soundFids = [...soundSpells.keys()];
 
     console.info(`Epsilook: indexes built in ${(performance.now() - t0).toFixed(0)} ms`);
@@ -571,5 +693,5 @@ window.EpsilookData = (() => {
     };
   }
 
-  return { loadVersions, loadPack, buildIndexes, basename };
+  return { loadVersions, loadPack, buildIndexes };
 })();

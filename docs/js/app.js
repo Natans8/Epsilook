@@ -1,4 +1,7 @@
-/* Epsilook UI: chip search bar, results table, tags, clipboard, scrolling. */
+// @ts-check
+/* Epsilook UI: chip search bar, results table, tags, clipboard, scrolling.
+ * Shared shapes (SpellData, QueryGroup, the pack, the window globals) are
+ * declared in types.d.ts; UI-local shapes are the typedefs below. */
 "use strict";
 
 (() => {
@@ -6,21 +9,71 @@
   const Data = window.EpsilookData;
   const Search = window.EpsilookSearch;
 
-  // the empty-bar placeholder lives in index.html; grab it before render()
-  // starts swapping the property around
-  const DEFAULT_PLACEHOLDER = document.getElementById("q").placeholder;
+  /* ---------------------------------------------------------- typedefs */
+
+  /**
+   * One committed search-bar chip. field "all" = free text (rendered as
+   * plain words, not boxed); not: true excludes matches instead.
+   * @typedef {{field: string, text: string, not?: boolean}} Chip
+   */
+
+  /**
+   * One highlight token of the last search: a positive group's word plus
+   * the field it searched (hit checks match it against their own field).
+   * @typedef {{field: string, text: string}} HitToken
+   */
+
+  /**
+   * A full search-bar snapshot for the undo history — chips, the open tag,
+   * the input's text and caret. stack[at] always equals the current state.
+   * @typedef {Object} BarSnapshot
+   * @property {Chip[]} chips
+   * @property {string | null} activeField
+   * @property {boolean} activeNot
+   * @property {number} pos
+   * @property {string} value
+   * @property {number} caret
+   */
+
+  // the search input (the bar's single editing gap) — grabbed once (the
+  // element is never replaced), along with the empty-bar placeholder from
+  // index.html, before render() starts swapping the property around
+  const qInput = /** @type {HTMLInputElement} */ (document.getElementById("q"));
+  const DEFAULT_PLACEHOLDER = qInput.placeholder;
 
   /* ------------------------------------------------------------- state */
 
+  /**
+   * All mutable UI state. The bar is: committed `chips` + the chip being
+   * typed (`activeField` + the input's text), with the input sitting at
+   * gap `pos`.
+   * @type {{
+   *   versions: VersionEntry[],
+   *   version: VersionEntry | null,
+   *   data: SpellData | null,
+   *   chips: Chip[],
+   *   activeField: string | null,
+   *   activeNot: boolean,
+   *   pos: number,
+   *   barSel: {anchor: number, focus: number} | null,
+   *   groups: QueryGroup[],
+   *   tokens: HitToken[],
+   *   lastQuery: string,
+   *   results: number[],
+   *   display: number[],
+   *   searchMs: number,
+   *   rendered: number,
+   *   filters: Record<string, boolean>,
+   *   sort: {key: string, dir: number},
+   *   hiddenCols: Record<string, boolean>,
+   * }}
+   */
   const state = {
     versions: [],       // manifest entries
     version: null,      // active manifest entry
     data: null,         // indexes for the active version
 
-    // the search bar: committed chips + the chip being typed (activeField
-    // + the input's text). Chips with field "all" are free text (rendered
-    // as plain words, not boxed). not: true excludes matches instead.
-    chips: [],          // [{field, text, not}]
+    chips: [],
     activeField: null,  // field of the chip currently being typed, or null
     activeNot: false,   // the chip being typed is an exclusion
     pos: 0,             // insertion gap: index in chips[] where the bar's
@@ -59,18 +112,78 @@
     return out;
   }
 
-  // "9.2.7.45745" -> "9.2.7" (used for clean URLs)
+  /**
+   * "9.2.7.45745" -> "9.2.7" (used for clean URLs).
+   * @param {string} id
+   */
   const shortVersion = (id) => id.split(".").slice(0, 3).join(".");
 
+  /**
+   * File name without its extension.
+   * @param {string} name
+   */
   const stripExt = (name) => name.replace(/\.[^.]+$/, "");
 
-  const $ = (sel) => document.querySelector(sel);
+  /**
+   * A packed 0xRRGGBB color as a CSS hex string. Every color in the pack —
+   * chain tints, glows, ghosts, screen grades — is stored packed, so this is
+   * the one place that formatting lives.
+   * @param {number} packed
+   * @returns {string}
+   */
+  const hexColor = (packed) => "#" + packed.toString(16).padStart(6, "0");
+
+  /**
+   * querySelector shorthand — for elements that provably exist in
+   * index.html (hence the non-null HTMLElement return).
+   * @param {string} sel
+   * @returns {HTMLElement}
+   */
+  const $ = (sel) => /** @type {HTMLElement} */ (document.querySelector(sel));
+
+  /**
+   * querySelectorAll shorthand, typed for HTML elements.
+   * @param {string} sel
+   * @param {ParentNode} [root]
+   * @returns {NodeListOf<HTMLElement>}
+   */
+  const $$ = (sel, root = document) =>
+    /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll(sel));
+
+  /**
+   * querySelectorAll for form controls — the checkbox rows read .checked and
+   * .value, which plain Element / HTMLElement don't carry.
+   * @param {string} sel
+   * @param {ParentNode} [root]
+   * @returns {NodeListOf<HTMLInputElement>}
+   */
+  const $$inputs = (sel, root = document) =>
+    /** @type {NodeListOf<HTMLInputElement>} */ (root.querySelectorAll(sel));
+
+  /**
+   * Create an element, optionally with a class and text content.
+   * @template {keyof HTMLElementTagNameMap} K
+   * @param {K} tag
+   * @param {string} [className]
+   * @param {string} [text]
+   * @returns {HTMLElementTagNameMap[K]}
+   */
   const el = (tag, className, text) => {
     const node = document.createElement(tag);
     if (className) node.className = className;
     if (text !== undefined) node.textContent = text;
     return node;
   };
+
+  /**
+   * The closest ancestor of an event's target matching sel, or null —
+   * the typed form of `e.target.closest(sel)`.
+   * @param {Event} e
+   * @param {string} sel
+   * @returns {HTMLElement | null}
+   */
+  const targetClosest = (e, sel) => e.target instanceof Element
+    ? /** @type {HTMLElement | null} */ (e.target.closest(sel)) : null;
 
   /* --------------------------------------------------------- clipboard */
 
@@ -103,8 +216,15 @@
     copyText(location.href, false, "Link copied — paste it to share this search");
   }
 
+  /**
+   * execCommand-based clipboard fallback (the deprecated API is the only
+   * option when navigator.clipboard is unavailable, e.g. plain-http hosts).
+   * @param {string} text
+   * @param {() => void} done - called only when the copy succeeded
+   */
   function fallbackCopy(text, done) {
-    const prev = document.activeElement; // ta.select() steals focus — put it back
+    // ta.select() steals focus — put it back afterwards
+    const prev = /** @type {HTMLElement | null} */ (document.activeElement);
     const ta = el("textarea");
     ta.value = text;
     ta.style.position = "fixed";
@@ -116,7 +236,7 @@
     if (prev && prev !== document.body) prev.focus({ preventScroll: true });
   }
 
-  const fillTemplate = (tpl, vars) => tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
+  const fillTemplate = (tpl, vars) => tpl.replace(/\{(\w+)}/g, (_, k) => vars[k] ?? "");
 
   /* ------------------------------------------------- query <-> chips */
 
@@ -156,7 +276,7 @@
     const parts = state.chips.map((c) =>
       c.field === "all" ? c.text : tagStr(c.field, c.text, c.not));
     const at = Math.min(state.pos, state.chips.length);
-    const inputText = $("#q").value.trim();
+    const inputText = qInput.value.trim();
     if (inputText) {
       parts.splice(at, 0, state.activeField ? tagStr(state.activeField, inputText, state.activeNot) : inputText);
     } else if (state.activeField) {
@@ -204,7 +324,7 @@
     state.chips = parseQueryParts(str);
     state.activeField = null;
     state.activeNot = false;
-    $("#q").value = "";
+    qInput.value = "";
     state.pos = state.chips.length;
     syncBar();
   }
@@ -232,7 +352,7 @@
       return tokens.length ? { field, tokens, not: !!not } : null;
     };
     const groups = state.chips.map((c) => toGroup(c.field, c.text, c.not));
-    const live = toGroup(state.activeField || "all", $("#q").value, state.activeField ? state.activeNot : false);
+    const live = toGroup(state.activeField || "all", qInput.value, state.activeField ? state.activeNot : false);
     if (live) groups.splice(Math.min(state.pos, groups.length), 0, live);
     return groups.filter(Boolean);
   }
@@ -250,7 +370,7 @@
   //     place it natively. (Skipped while a field tag is being typed: the
   //     input's text belongs to the tag, not to the free run around it.)
   function syncBar() {
-    const input = $("#q");
+    const input = qInput;
     state.barSel = null; // any structural change invalidates a bar selection
     state.pos = Math.min(state.pos, state.chips.length);
     for (let i = state.chips.length - 1; i > 0; i--) {
@@ -325,7 +445,7 @@
       ? `${state.activeNot ? "−" : ""}${state.activeField}:` : "";
     editlabel.title = state.activeNot ? "Excluding — click to include" : "Click to exclude instead";
     editlabel.hidden = !state.activeField;
-    $("#q").placeholder = state.activeField
+    qInput.placeholder = state.activeField
       ? (state.activeNot ? "exclude: " : "") + Search.FIELDS[state.activeField].short
       : (state.chips.length ? "" : DEFAULT_PLACEHOLDER);
     sizeInput();
@@ -336,7 +456,7 @@
   // The input hugs its content instead of stretching, except at the true
   // trailing gap (nothing after it), which fills the rest of the line.
   function sizeInput() {
-    const input = $("#q");
+    const input = qInput;
     if (state.activeField) {
       const len = Math.max(input.value.length, input.placeholder.length, 4);
       input.style.width = (len + 2) + "ch";
@@ -348,7 +468,7 @@
   }
 
   function activateField(field, { not = false } = {}) {
-    const input = $("#q");
+    const input = qInput;
 
     if (state.activeField) {
       // already editing a chip: its own button cancels it (contents fall
@@ -398,7 +518,7 @@
     state.activeField = null;
     state.activeNot = false;
     syncBar();
-    $("#q").focus();
+    qInput.focus();
     scheduleSearch();
   }
 
@@ -409,7 +529,7 @@
   // mutation — the calling flow ends with its own syncBar().
   function commitActiveChip(landing = "after") {
     if (!state.activeField) return -1;
-    const input = $("#q");
+    const input = qInput;
     const text = input.value.trim();
     let at = -1;
     if (text) {
@@ -426,7 +546,7 @@
   // Same, but for free (non-field) words sitting in the gap — used when
   // navigating away from a gap where the user was typing a plain phrase.
   function insertFreeChipHere() {
-    const input = $("#q");
+    const input = qInput;
     const text = input.value.trim();
     if (!text) return -1;
     const at = Math.min(state.pos, state.chips.length);
@@ -448,7 +568,7 @@
   function editChipAt(index, caretAt = "end") {
     const [edited] = state.chips.splice(index, 1);
     state.pos = index;
-    const input = $("#q");
+    const input = qInput;
     input.value = edited.text;
     state.activeField = edited.field === "all" ? null : edited.field;
     state.activeNot = edited.field === "all" ? false : !!edited.not;
@@ -489,9 +609,10 @@
     return out;
   }
 
+  /** Repaint which chips show as selected (from state.barSel). */
   function paintBarSel() {
     const sel = new Set(selectedChipIndices());
-    for (const chip of $("#qbar").querySelectorAll(".qchip")) {
+    for (const chip of $$(".qchip", $("#qbar"))) {
       chip.classList.toggle("selected", sel.has(Number(chip.dataset.chipEdit)));
     }
   }
@@ -508,7 +629,7 @@
   function serializeBarSel() {
     const r = selRange();
     if (!r) return "";
-    const input = $("#q");
+    const input = qInput;
     const I = inputAtom();
     const parts = [];
     for (let a = r[0]; a < r[1]; a++) {
@@ -531,7 +652,7 @@
   function deleteBarSel() {
     const r = selRange();
     if (!r) return;
-    const input = $("#q");
+    const input = qInput;
     const I = inputAtom();
     const chipIdxs = selectedChipIndices();
     if (r[0] <= I && I < r[1]) {
@@ -555,7 +676,7 @@
   // keyboard extension (Shift+arrows): moves the focus gap, keeping the
   // input's own partial selection untouched
   function applyKbSel(anchor, focus) {
-    const input = $("#q");
+    const input = qInput;
     const I = inputAtom();
     state.barSel = anchor === focus ? null : { anchor, focus };
     if (state.barSel && !selectedChipIndices().length) state.barSel = null;
@@ -582,7 +703,7 @@
   const TYPE_COALESCE_MS = 800;
 
   function barSnapshot() {
-    const input = $("#q");
+    const input = qInput;
     return {
       chips: state.chips.map((c) => ({ ...c })),
       activeField: state.activeField,
@@ -637,7 +758,7 @@
   }
 
   function restoreBar(snap) {
-    const input = $("#q");
+    const input = qInput;
     state.chips = snap.chips.map((c) => ({ ...c }));
     state.activeField = snap.activeField;
     state.activeNot = snap.activeNot;
@@ -681,10 +802,15 @@
 
   let suggestIndex = -1;
 
-  // The category words a field's column shows as group heads, with the
-  // tooltip text explaining each — one registry drives the chip
-  // autocomplete; the columns' own cell/search code keeps the same words
-  // searchable and their heads clickable. Null = the field has none.
+  /**
+   * The category words a field's column shows as group heads, with the
+   * tooltip text explaining each — one registry drives the chip
+   * autocomplete; the columns' own cell/search code keeps the same words
+   * searchable and their heads clickable. Add a new column's words here.
+   * @param {string | null} field
+   * @returns {{words: string[], titles: Record<string, string>} | null}
+   *   Null = the field has no category words.
+   */
   function fieldCategories(field) {
     const d = state.data;
     switch (field) {
@@ -699,7 +825,7 @@
   }
 
   function updateSuggest() {
-    const input = $("#q");
+    const input = qInput;
     const box = $("#suggest");
     // inside a chip whose column has category words, those autocomplete
     // instead of field prefixes ("des" -> desaturate, "sta" -> stance)
@@ -730,7 +856,7 @@
   // suggest the column's category words while typing in its chip; picking
   // one completes the word in place (it stays part of the chip's text)
   function updateCategorySuggest() {
-    const input = $("#q");
+    const input = qInput;
     const box = $("#suggest");
     const word = input.value.split(/\s+/).pop().toLowerCase();
     if (!word) return hideSuggest();
@@ -753,7 +879,7 @@
 
   // complete the partial last word of the chip's text to the category word
   function applyCategoryWord(word) {
-    const input = $("#q");
+    const input = qInput;
     input.value = input.value.replace(/\S*$/, word);
     hideSuggest();
     input.focus();
@@ -774,7 +900,7 @@
   }
 
   function selectSuggestion(field) {
-    const input = $("#q");
+    const input = qInput;
     const not = /(^|\s)-\S*$/.test(input.value);
     input.value = input.value.replace(/\S+$/, "").trimEnd();
     activateField(field, { not });
@@ -1028,7 +1154,7 @@
     // Mechanics — spell effects, then aura mechanics; matched ones first
     const mechs = hitsFirst(
       (d.spellEffects.get(spellId) || []).slice().sort((a, b) => a - b)
-        .map((e) => ({ effect: e }))
+        .map((e) => /** @type {{effect?: number, aura?: number}} */ ({ effect: e }))
         .concat((d.spellAuras.get(spellId) || []).slice().sort((a, b) => a - b)
           .map((a) => ({ aura: a }))),
       (m) => m.effect !== undefined ? effectIsHit(m.effect) : auraIsHit(m.aura));
@@ -1053,7 +1179,11 @@
     return tr;
   }
 
-  /* Highlight the query-matched parts of a spell name; returns a fragment. */
+  /**
+   * Highlight the query-matched parts of a spell name.
+   * @param {string} name
+   * @returns {DocumentFragment}
+   */
   function highlightMatches(name) {
     const frag = document.createDocumentFragment();
     const tokens = tokensFor("name").map((t) => t.text);
@@ -1546,10 +1676,22 @@
     return td;
   }
 
+  /**
+   * The query tokens that can highlight in a given field's column — the
+   * field's own plus the unscoped free text.
+   * @param {string} field
+   * @returns {HitToken[]}
+   */
   function tokensFor(field) {
     return state.tokens.filter((t) => t.field === field || t.field === "all");
   }
 
+  /**
+   * As tokensFor, but whole (positive) groups — a hit must satisfy every
+   * token of at least one of them.
+   * @param {string} field
+   * @returns {QueryGroup[]}
+   */
   function groupsFor(field) {
     return state.groups.filter((g) => !g.not && (g.field === field || g.field === "all"));
   }
@@ -1896,6 +2038,11 @@
     return tag;
   }
 
+  /**
+   * One chain (beam) pill: optional tint swatch + texture name.
+   * @param {{chainId: number, fid: number, color: number}} entry
+   * @returns {HTMLElement}
+   */
   function fxTag(entry) {
     const d = state.data;
     const file = entry.fid ? (d.files.get(entry.fid) || { path: "", base: "" }) : { path: "", base: "" };
@@ -1904,7 +2051,7 @@
     if (fxChainIsHit(entry.chainId)) tag.classList.add("hit");
 
     if (entry.color !== 0xffffff) {
-      const hex = "#" + entry.color.toString(16).padStart(6, "0");
+      const hex = hexColor(entry.color);
       const dot = el("span", "fx-swatch");
       dot.style.background = hex;
       dot.title = `Tint ${hex}` + (info.hue ? ` (${info.hue})` : "");
@@ -1917,10 +2064,10 @@
     const txt = el("button", "tag-label", base || "(untextured)");
     txt.title = `${file.path || "(no texture)"}\nClick: find spells with this chain texture\nShift-click: exclude them instead`;
     if (entry.fid) {
-      txt.dataset.texFid = entry.fid;
+      txt.dataset.texFid = String(entry.fid);
       // the hover preview multiplies the texture by the chain's tint
       if (entry.color !== 0xffffff)
-        txt.dataset.texTint = "#" + entry.color.toString(16).padStart(6, "0");
+        txt.dataset.texTint = hexColor(entry.color);
     }
     // category word + texture: the query stays scoped to chains once more
     // fx categories exist ("fx:chain lightning" style)
@@ -1931,11 +2078,17 @@
     return tag;
   }
 
-  /* Color-only fx pill (glow / ghost / tint): swatch + hex label — these
+  /** Color-only fx pill (glow / ghost / tint): swatch + hex label — these
    * effects have no texture or model, the color is the whole payload.
-   * Clicking searches the category + hex; ⧉ copies the hex. */
+   * Clicking searches the category + hex; ⧉ copies the hex.
+   * @param {string} category
+   * @param {number} color Packed 0xRRGGBB.
+   * @param {boolean} hit Whether the current query matches this pill.
+   * @param {number} [alpha] Source alpha 0..255, where the source has a real one.
+   * @returns {HTMLElement}
+   */
   function colorFxTag(category, color, hit, alpha) {
-    const hex = "#" + color.toString(16).padStart(6, "0");
+    const hex = hexColor(color);
     const tag = el("span", "tag fx");
     if (hit) tag.classList.add("hit");
 
@@ -1943,7 +2096,7 @@
     dot.style.background = hex;
     dot.dataset.color = hex;
     dot.dataset.colorInfo = category;
-    if (alpha >= 0) dot.dataset.alpha = alpha;
+    if (alpha >= 0) dot.dataset.alpha = String(alpha);
     tag.appendChild(dot);
 
     const txt = el("button", "tag-label", hex);
@@ -1953,7 +2106,7 @@
     // the hex text is the color too — hovering it shows the same big patch
     txt.dataset.color = hex;
     txt.dataset.colorInfo = category;
-    if (alpha >= 0) txt.dataset.alpha = alpha;
+    if (alpha >= 0) txt.dataset.alpha = String(alpha);
     tag.appendChild(txt);
 
     tag.appendChild(tagButton("⧉", `Copy color: ${hex}`, hex));
@@ -1984,6 +2137,14 @@
     return tag;
   }
 
+  /** Stand-in for a ScreenEffect row with no color payload at all (-1 = the
+   *  row has no such color; maskSize 0 = no FullScreenEffect row).
+   *  @type {ScreenColors} */
+  const NO_SCREEN_COLORS = {
+    fog: -1, fogAlpha: -1, mul: -1, add: -1,
+    maskOffsetY: 0, maskSize: 0, maskPower: 0,
+  };
+
   /* Screen-effect pill: the whole screen tints/overlays while the aura
    * holds. Label = the ScreenEffect row's internal name; swatch dots show
    * the fog tint and the FullScreenEffect multiply/addition screen colors
@@ -1993,23 +2154,24 @@
   function screenTag(screenId) {
     const d = state.data;
     const name = d.screenNames.get(screenId) || "";
-    const colors = d.screenColors.get(screenId) || { fog: -1, mul: -1, add: -1 };
+    const colors = d.screenColors.get(screenId) || NO_SCREEN_COLORS;
     const texFids = d.screenTextures.get(screenId) || [];
     const tag = el("span", "tag fx");
     if (screenIsHit(screenId)) tag.classList.add("hit");
 
     // only the fog color has an opacity byte; mul/add are pure grade factors
-    for (const [what, c, a] of [["fog tint", colors.fog, colors.fogAlpha],
-                                ["multiply", colors.mul, -1],
-                                ["addition", colors.add, -1]]) {
+    for (const [what, c, a] of /** @type {[string, number, number][]} */ (
+        [["fog tint", colors.fog, colors.fogAlpha],
+         ["multiply", colors.mul, -1],
+         ["addition", colors.add, -1]])) {
       if (c < 0) continue;
-      const hex = "#" + c.toString(16).padStart(6, "0");
+      const hex = hexColor(c);
       const dot = el("span", "fx-swatch");
       dot.style.background = hex;
       dot.title = `Screen ${what} ${hex}`;
       dot.dataset.color = hex;
       dot.dataset.colorInfo = `screen ${what}`;
-      if (a >= 0) dot.dataset.alpha = a;
+      if (a >= 0) dot.dataset.alpha = String(a);
       tag.appendChild(dot);
     }
 
@@ -2031,9 +2193,9 @@
     // to be worth the complexity, so this shows the art and its color, and
     // claims nothing more.
     if (texFids.length) {
-      txt.dataset.texFid = texFids[0].fid;
+      txt.dataset.texFid = String(texFids[0].fid);
       if (colors.mul >= 0) {
-        txt.dataset.texTint = "#" + colors.mul.toString(16).padStart(6, "0");
+        txt.dataset.texTint = hexColor(colors.mul);
       }
     }
     // quotes inside a name would break the tag value; substring match
@@ -2057,7 +2219,7 @@
     txt.title = `${file.path || "(no texture)"}`
       + (duration ? `\nDuration ${duration}s` : "")
       + `\nClick: find spells with this dissolve texture\nShift-click: exclude them instead`;
-    if (entry.fid) txt.dataset.texFid = entry.fid;
+    if (entry.fid) txt.dataset.texFid = String(entry.fid);
     txt.dataset.search = file.base ? `fx:"dissolve ${file.base}"` : "";
     tag.appendChild(txt);
 
@@ -2283,7 +2445,7 @@
     canvas.style.height = Math.round(canvas.height * scale) + "px";
 
     const panel = texPanel();
-    panel.firstChild.replaceChildren(canvas);
+    panel.firstElementChild.replaceChildren(canvas);
     panel.lastChild.textContent = `${canvas.width}×${canvas.height}` + note;
     placeTexPanel(panel, label);
   }
@@ -2301,7 +2463,7 @@
     patch.style.background = alpha === undefined
       ? hex : `rgba(${r}, ${g}, ${b}, ${(alpha / 255).toFixed(3)})`;
     const panel = texPanel();
-    panel.firstChild.replaceChildren(patch);
+    panel.firstElementChild.replaceChildren(patch);
     const hue = hueWordOf(hex);
     const rgb = alpha === undefined
       ? `rgb(${r}, ${g}, ${b})`
@@ -2326,9 +2488,10 @@
     let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
     let deg = h * 60;
     if (deg < 0) deg += 360;
-    for (const [limit, name] of [[15, "red"], [45, "orange"], [70, "yellow"],
-        [160, "green"], [200, "cyan"], [255, "blue"], [290, "purple"],
-        [330, "pink"], [361, "red"]]) {
+    for (const [limit, name] of /** @type {[number, string][]} */ ([
+        [15, "red"], [45, "orange"], [70, "yellow"], [160, "green"],
+        [200, "cyan"], [255, "blue"], [290, "purple"], [330, "pink"],
+        [361, "red"]])) {
       if (deg < limit) return name;
     }
     return "";
@@ -2339,7 +2502,7 @@
     const results = $("#results");
     results.addEventListener("mouseover", (e) => {
       // color swatches first — no fetch involved, same intent delay
-      const swatch = e.target.closest("[data-color]");
+      const swatch = targetClosest(e, "[data-color]");
       if (swatch) {
         const key = "color|" + swatch.dataset.color + "|" + (swatch.dataset.colorInfo || "")
           + "|" + (swatch.dataset.alpha || "");
@@ -2352,7 +2515,7 @@
         return;
       }
       if (!CFG.texturePreviewUrl) return;
-      const label = e.target.closest("[data-tex-fid]");
+      const label = targetClosest(e, "[data-tex-fid]");
       if (!label) return;
       const fid = Number(label.dataset.texFid);
       // the tint joins the key: two pills can share a texture but tint it
@@ -2367,8 +2530,8 @@
       }, 150);
     });
     results.addEventListener("mouseout", (e) => {
-      const label = e.target.closest("[data-tex-fid], [data-color]");
-      if (label && !label.contains(e.relatedTarget)) hideTexPreview();
+      const label = targetClosest(e, "[data-tex-fid], [data-color]");
+      if (label && !label.contains(/** @type {Node} */ (e.relatedTarget))) hideTexPreview();
     });
     window.addEventListener("scroll", hideTexPreview, { passive: true });
   }
@@ -2415,33 +2578,36 @@
         if (stance.length) row.stanceAnims = stance.map((a) => d.animNames[a]);
       }
       if (!hc.fx) {
-        row.fx = (d.spellFx.get(id) || []).slice().sort((a, b) => a - b).map((c) => {
+        // one entry per pill, in the cell's category order; the shapes differ
+        // per category, hence the shared loose ExportFxEntry
+        /** @type {ExportFxEntry[]} */
+        const chains = (d.spellFx.get(id) || []).slice().sort((a, b) => a - b).map((c) => {
           const info = d.fxChains.get(c) || { color: 0xffffff, hue: "" };
           return {
             type: "chain",
             textures: (d.fxTextures.get(c) || []).map(pathOf),
-            tint: info.color === 0xffffff ? null : "#" + info.color.toString(16).padStart(6, "0"),
+            tint: info.color === 0xffffff ? null : hexColor(info.color),
           };
-        }).concat((d.spellDissolves.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+        });
+        row.fx = chains.concat((d.spellDissolves.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
           type: "dissolve",
           textures: (d.dissolveTextures.get(c) || []).map(pathOf),
           duration: d.dissolveDurations.get(c) || null,
         }))).concat((d.spellGlows.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
           type: "glow",
-          color: "#" + (d.glowColors.get(c) ?? 0).toString(16).padStart(6, "0"),
+          color: hexColor(d.glowColors.get(c) ?? 0),
         }))).concat((d.spellShadowies.get(id) || []).slice().sort((a, b) => a - b).map((c) => {
           const sh = d.shadowyColors.get(c) || { primary: 0, secondary: 0 };
           return {
             type: "ghost",
-            colors: [sh.primary, sh.secondary].map(
-              (v) => "#" + v.toString(16).padStart(6, "0")),
+            colors: [sh.primary, sh.secondary].map(hexColor),
           };
         })).concat((d.spellGhostMats.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
           type: "ghost",
-          color: "#" + (d.ghostMatColors.get(c) ?? 0).toString(16).padStart(6, "0"),
+          color: hexColor(d.ghostMatColors.get(c) ?? 0),
         }))).concat((d.spellTints.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
           type: "tint",
-          color: "#" + (d.tintColors.get(c) ?? 0).toString(16).padStart(6, "0"),
+          color: hexColor(d.tintColors.get(c) ?? 0),
         }))).concat([...new Set(d.spellDesaturates.get(id) || [])].sort((a, b) => a - b)
           .map((p) => ({ type: "desaturate", percent: p }))
         ).concat([...new Set(d.spellTransps.get(id) || [])].sort((a, b) => a - b)
@@ -2449,8 +2615,9 @@
         ).concat(d.spellFreezes.has(id) ? [{ type: "freeze" }] : []
         ).concat(d.spellCamos.has(id) ? [{ type: "camo" }] : []
         ).concat((d.spellScreens.get(id) || []).slice().sort((a, b) => a - b).map((sc) => {
-          const c = d.screenColors.get(sc) || { fog: -1, mul: -1, add: -1 };
-          const hx = (v) => v >= 0 ? "#" + v.toString(16).padStart(6, "0") : null;
+          const c = d.screenColors.get(sc) || NO_SCREEN_COLORS;
+          /** @param {number} v -1 = the row has no such color. */
+          const hx = (v) => v >= 0 ? hexColor(v) : null;
           return {
             type: "screen",
             screenId: sc,
@@ -2629,7 +2796,7 @@
   }
 
   function updateSortHeaders() {
-    for (const th of document.querySelectorAll("th[data-sort]")) {
+    for (const th of $$("th[data-sort]")) {
       const active = state.sort.key === th.dataset.sort;
       th.classList.toggle("sorted", active);
       th.querySelector(".arrow").textContent = active ? (state.sort.dir === 1 ? "▲" : "▼") : "";
@@ -2687,7 +2854,7 @@
   function filtersFromUrl(str) {
     const wanted = new Set((str || "").split(","));
     for (const k of Object.keys(state.filters)) state.filters[k] = wanted.has(k);
-    for (const box of document.querySelectorAll("#filters input[type=checkbox]")) {
+    for (const box of $$inputs("#filters input[type=checkbox]")) {
       box.checked = state.filters[box.dataset.filter];
     }
   }
@@ -2718,7 +2885,11 @@
   }
 
   function wireEvents() {
-    const input = $("#q");
+    const input = qInput;
+    // the three bar elements every handler below reaches for
+    const bar = $("#qbar");
+    const editwrap = $("#editwrap");
+    const suggestBox = $("#suggest");
 
     input.addEventListener("input", (e) => {
       if (!state.activeField) {
@@ -2786,7 +2957,7 @@
     });
 
     input.addEventListener("keydown", (e) => {
-      const box = $("#suggest");
+      const box = suggestBox;
       if (!box.hidden) {
         const items = [...box.querySelectorAll(".suggest-item")];
         if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -2949,7 +3120,7 @@
     });
     input.addEventListener("paste", () => { if (state.barSel) deleteBarSel(); });
     document.addEventListener("mousedown", (e) => {
-      if (state.barSel && !e.target.closest("#qbar")) clearBarSel();
+      if (state.barSel && !targetClosest(e, "#qbar")) clearBarSel();
     });
 
     // mouse-drag selection across the bar. A drag within the input stays
@@ -2963,7 +3134,7 @@
       if (!dragSel.engaged) {
         if (Math.abs(e.clientX - dragSel.x0) < 4 && Math.abs(e.clientY - dragSel.y0) < 4) return;
         if (dragSel.fromInput) {
-          const r = $("#editwrap").getBoundingClientRect();
+          const r = editwrap.getBoundingClientRect();
           if (e.clientX >= r.left && e.clientX <= r.right
               && e.clientY >= r.top && e.clientY <= r.bottom) return;
           // leaving the editor: anchor at the input's far edge so the
@@ -2995,10 +3166,10 @@
       dragSel = null;
     }
 
-    $("#qbar").addEventListener("mousedown", (e) => {
+    bar.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
       clearBarSel();
-      const fromInput = !!e.target.closest("#editwrap");
+      const fromInput = !!targetClosest(e, "#editwrap");
       // keep focus (and suppress native chip-text selection); clicks still fire
       if (!fromInput) e.preventDefault();
       dragSel = {
@@ -3010,9 +3181,9 @@
     });
 
     // chip clicks: × removes, field label flips include/exclude, body edits
-    $("#qbar").addEventListener("click", (e) => {
+    bar.addEventListener("click", (e) => {
       if (suppressBarClick) { suppressBarClick = false; return; }
-      const x = e.target.closest("[data-chip-remove]");
+      const x = targetClosest(e, "[data-chip-remove]");
       if (x) {
         const idx = Number(x.dataset.chipRemove);
         state.chips.splice(idx, 1);
@@ -3022,7 +3193,7 @@
         scheduleSearch();
         return;
       }
-      const label = e.target.closest("[data-chip-not]");
+      const label = targetClosest(e, "[data-chip-not]");
       if (label) {
         const chip = state.chips[Number(label.dataset.chipNot)];
         chip.not = !chip.not;
@@ -3031,14 +3202,14 @@
         scheduleSearch();
         return;
       }
-      if (e.target.closest("#editlabel")) {
+      if (targetClosest(e, "#editlabel")) {
         state.activeNot = !state.activeNot;
         renderBar();
         input.focus();
         scheduleSearch();
         return;
       }
-      const chip = e.target.closest("[data-chip-edit]");
+      const chip = targetClosest(e, "[data-chip-edit]");
       if (chip) {
         // flush anything pending elsewhere first, correcting the target
         // index if that insertion landed before it
@@ -3048,7 +3219,7 @@
         editChipAt(idx);
         return;
       }
-      if (e.target.closest("#editwrap")) return; // clicks in the editor place the caret natively
+      if (targetClosest(e, "#editwrap")) return; // clicks in the editor place the caret natively
 
       // bar background: commit whatever's pending and move the gap (and
       // cursor) to where the click landed
@@ -3057,10 +3228,10 @@
         return e.clientY > r.bottom || (e.clientY >= r.top && e.clientX > (r.left + r.right) / 2);
       };
       let gap = 0;
-      for (const c of $("#qbar").querySelectorAll(".qchip")) {
+      for (const c of $$(".qchip", bar)) {
         if (past(c)) gap = Number(c.dataset.chipEdit) + 1;
       }
-      const afterPending = past($("#editwrap"));
+      const afterPending = past(editwrap);
       const insertedAt = flushPending();
       if (insertedAt !== -1 && (insertedAt < gap || (insertedAt === gap && afterPending))) gap += 1;
       state.pos = Math.min(gap, state.chips.length);
@@ -3070,23 +3241,23 @@
     });
 
     // suggestions
-    $("#suggest").addEventListener("mousedown", (e) => {
-      const item = e.target.closest(".suggest-item");
+    suggestBox.addEventListener("mousedown", (e) => {
+      const item = targetClosest(e, ".suggest-item");
       if (item) { e.preventDefault(); pickSuggestItem(item); }
     });
     document.addEventListener("click", (e) => {
-      if (!e.target.closest("#qbar") && !e.target.closest("#suggest")) hideSuggest();
+      if (!targetClosest(e, "#qbar") && !targetClosest(e, "#suggest")) hideSuggest();
     });
 
     // field buttons: "+ Label" includes, "−" (or shift-click) excludes
     $("#tabs").addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-field]");
+      const btn = targetClosest(e, "button[data-field]");
       if (btn) activateField(btn.dataset.field, { not: btn.dataset.not === "1" || e.shiftKey });
     });
 
     // results: copy buttons / cross-search / expanders (event delegation)
     $("#results").addEventListener("click", (e) => {
-      const t = e.target.closest("button");
+      const t = targetClosest(e, "button");
       if (!t) return;
       if (t.dataset.copy) copyText(t.dataset.copy, e.shiftKey);
       else if (t.dataset.play) toggleSound(t);
@@ -3101,7 +3272,7 @@
 
     // example searches on the empty-state panel
     $("#empty-state").addEventListener("click", (e) => {
-      const b = e.target.closest("button[data-search]");
+      const b = targetClosest(e, "button[data-search]");
       if (b) crossSearch(b.dataset.search);
     });
 
@@ -3113,7 +3284,7 @@
 
     // filters — part of the shareable state, so the URL follows (a push:
     // Back undoes the toggle like it undoes a search)
-    for (const box of document.querySelectorAll("#filters input[type=checkbox]")) {
+    for (const box of $$inputs("#filters input[type=checkbox]")) {
       box.addEventListener("change", () => {
         state.filters[box.dataset.filter] = box.checked;
         applyFiltersAndSort();
@@ -3122,7 +3293,7 @@
     }
 
     // column visibility
-    for (const box of document.querySelectorAll("#columns input[type=checkbox]")) {
+    for (const box of $$inputs("#columns input[type=checkbox]")) {
       box.addEventListener("change", () => {
         state.hiddenCols[box.dataset.col] = !box.checked;
         try { localStorage.setItem("epsilook.hiddenCols.v4", JSON.stringify(state.hiddenCols)); } catch (e) {}
@@ -3133,7 +3304,7 @@
 
     // sorting: click cycles ascending -> descending -> back to automatic
     // order; entry-count columns start descending (extreme spells first)
-    for (const th of document.querySelectorAll("th[data-sort]")) {
+    for (const th of $$("th[data-sort]")) {
       th.addEventListener("click", () => {
         const key = th.dataset.sort;
         const first = COUNT_SORTS.has(key) ? -1 : 1;
@@ -3145,7 +3316,7 @@
     }
 
     // help dialog (native <dialog>: Esc closes it for free)
-    const help = $("#help");
+    const help = /** @type {HTMLDialogElement} */ ($("#help"));
     $("#help-btn").addEventListener("click", () => help.showModal());
     $("#help-close").addEventListener("click", () => help.close());
     help.addEventListener("click", (e) => {
@@ -3161,14 +3332,15 @@
     window.addEventListener("popstate", () => applyUrl({ push: false }));
 
     // version switch
-    $("#version").addEventListener("change", async (e) => {
-      const entry = state.versions.find((v) => v.id === e.target.value);
+    const versionSel = /** @type {HTMLSelectElement} */ ($("#version"));
+    versionSel.addEventListener("change", async () => {
+      const entry = state.versions.find((v) => v.id === versionSel.value);
       if (entry) await activateVersion(entry, { push: true });
     });
   }
 
   function updateTabs() {
-    for (const tab of document.querySelectorAll("#tabs .tab")) {
+    for (const tab of $$("#tabs .tab")) {
       const isField = tab.dataset.field === state.activeField;
       tab.classList.toggle("active", isField && !state.activeNot);
       tab.classList.toggle("active-not", isField && state.activeNot);
@@ -3184,7 +3356,7 @@
     for (const [col, hidden] of Object.entries(state.hiddenCols)) {
       table.classList.toggle(`hide-${col}`, hidden);
     }
-    for (const box of document.querySelectorAll("#columns input[type=checkbox]")) {
+    for (const box of $$inputs("#columns input[type=checkbox]")) {
       box.checked = !state.hiddenCols[box.dataset.col];
     }
   }
@@ -3212,21 +3384,23 @@
 
   async function activateVersion(entry, { push = false } = {}) {
     const overlay = $("#loading");
+    const loadText = $("#load-text");
+    const loadError = $("#load-error");
     overlay.hidden = false;
-    $("#load-error").hidden = true;
+    loadError.hidden = true;
     try {
       const pack = await Data.loadPack(entry, (got, total) => {
         const pct = total ? Math.round((got / total) * 100) : 0;
         $("#load-bar").style.width = pct + "%";
-        $("#load-text").textContent = total
+        loadText.textContent = total
           ? `Downloading spell data… ${(got / 1048576).toFixed(1)} / ${(total / 1048576).toFixed(1)} MB`
           : `Downloading spell data… ${(got / 1048576).toFixed(1)} MB`;
       });
-      $("#load-text").textContent = "Building search indexes…";
+      loadText.textContent = "Building search indexes…";
       await new Promise((r) => setTimeout(r)); // let the text paint
       state.data = Data.buildIndexes(pack);
       state.version = entry;
-      $("#version").value = entry.id;
+      /** @type {HTMLSelectElement} */ ($("#version")).value = entry.id;
       $("#meta-info").textContent =
         `${entry.label} (${entry.id}) · Listfile ${state.data.meta.listfileTag} · Built ${state.data.meta.built} · ` +
         `${state.data.meta.counts.spells.toLocaleString()} spells`;
@@ -3235,9 +3409,9 @@
       runSearch({ push });
     } catch (err) {
       console.error(err);
-      $("#load-text").textContent = "";
-      $("#load-error").textContent = `Failed to load spell data: ${err.message}`;
-      $("#load-error").hidden = false;
+      loadText.textContent = "";
+      loadError.textContent = `Failed to load spell data: ${err.message}`;
+      loadError.hidden = false;
     }
   }
 
@@ -3249,7 +3423,8 @@
     // one" — back/forward must return from an explicitly-chosen pack
     const wanted = findVersion(h.v) || defaultVersion();
     if (wanted && (!state.version || wanted.id !== state.version.id)) {
-      activateVersion(wanted, { push });
+      // fire-and-forget: activateVersion reports its own load failures
+      void activateVersion(wanted, { push });
     } else {
       runSearch({ push });
     }
@@ -3266,12 +3441,13 @@
     try {
       state.versions = await Data.loadVersions();
     } catch (err) {
+      const loadError = $("#load-error");
       $("#load-text").textContent = "";
-      $("#load-error").textContent =
+      loadError.textContent =
         `Failed to load data/versions.json: ${err.message}. ` +
         `If you opened index.html directly from disk, serve the folder over HTTP instead ` +
         `(e.g. "python -m http.server" in the docs folder).`;
-      $("#load-error").hidden = false;
+      loadError.hidden = false;
       return;
     }
 
@@ -3294,8 +3470,8 @@
     await activateVersion(entry);
     if (autoExport === "json") exportJson();
     else if (autoExport === "csv") exportCsv();
-    $("#q").focus();
+    qInput.focus();
   }
 
-  boot();
+  void boot(); // nothing to await it — boot renders its own load errors
 })();
