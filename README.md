@@ -67,9 +67,15 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   (to the caster/target), `missile` (projectile), `area` (ground
   model), `trail` (weapon trail), `barrage` (volley) — and `model:` matches
   those words too: `model:missile` finds every spell with a projectile model
-  (category heads are clickable, like the Effects ones). Category words
+  (category heads are clickable, like the Effects ones). A category word
+  combines with file words in one tag — `model:"missile arrow"` finds
+  spells whose *projectile* is an arrow model. Category words
   autocomplete while typing inside an `fx:`/`model:` tag, and a tag naming
   a category exactly floats that category's spells to the top of the results.
+- Epsilon commands paste straight in: `.cast 12345` / `.aura 12345` (and
+  their truncations `.cas` `.ca` `.c` `.aur` `.au`) become an `id:12345`
+  search — typed or pasted, the space after the command works like a tag's
+  `:`.
 - Name search also matches a spell's **override names**
   (`SpellOverrideName` — the name a spell renames its target or pet to), even
   though the results keep showing the spell's real name. Searching

@@ -126,6 +126,16 @@
   const FIELD_ALIASES = { effect: "fx", soundkit: "sound", animkit: "anim" };
   const canonField = (f) => FIELD_ALIASES[f] || f;
 
+  // Epsilon commands go straight into the bar: ".cast 12345" / ".aura 12345"
+  // (and truncations down to .c / .au — .a stays plain text) mean id:, the
+  // space after the command acting as the tag's ":". One alternation,
+  // three uses: rewriting parsed strings (quoted spans stay literal),
+  // sniffing pastes, and live typing (the \s just typed ends the match).
+  const ID_CMDS = "cast|cas|ca|c|aura|aur|au";
+  const ID_CMD_REWRITE = new RegExp(`"[^"]*"|(^|\\s)\\.(?:${ID_CMDS})\\s+(?=\\S)`, "gi");
+  const ID_CMD_PASTE = new RegExp(`(^|\\s)\\.(?:${ID_CMDS})\\s+\\S`, "i");
+  const ID_CMD_TYPED = new RegExp(`(^|\\s)\\.(?:${ID_CMDS})\\s$`, "i");
+
   function isChipField(f) {
     return f && f !== "all" && Search.FIELDS[f];
   }
@@ -163,6 +173,10 @@
   // phrase quotes. Everything else (bare "phrases" included, quotes kept so
   // their exact-match meaning survives) is free text.
   function parseQueryParts(str) {
+    // Epsilon commands become id: tags (".cast 12345" -> id:12345);
+    // inside "quoted phrases" the text stays literal
+    str = (str || "").replace(ID_CMD_REWRITE,
+      (m, pre) => pre === undefined ? m : pre + "id:");
     const parts = [];
     const pushFree = (word) => {
       const last = parts[parts.length - 1];
@@ -1128,13 +1142,13 @@
       const fids = byCat.get(c);
       return {
         name, fids,
-        hit: modelCatIsHit(name) || fids.some((fid) => fileIsHit(d.files.get(fid), "model")),
+        hit: fids.some((fid) => modelFileIsHit(d.files.get(fid), name)),
       };
     });
     buildKitGroups(td, hitsFirst(cats, (c) => c.hit), {
       headerTag: (c) => modelCatHeadTag(c.name, c.hit),
-      itemsOf: (c) => hitsFirst(c.fids, (fid) => fileIsHit(d.files.get(fid), "model")),
-      itemTag: (fid) => modelTag(fid),
+      itemsOf: (c) => hitsFirst(c.fids, (fid) => modelFileIsHit(d.files.get(fid), c.name)),
+      itemTag: (fid, c) => modelTag(fid, c.name),
       itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
       groupNoun: "category",
       moreInHead: true,
@@ -1253,7 +1267,7 @@
         const itemsDiv = el("div", "kit-files");
         const limit = items.length <= opts.itemLimit + COLLAPSE_SLACK ? items.length : opts.itemLimit;
         items.forEach((item, fi) => {
-          const tag = opts.itemTag(item);
+          const tag = opts.itemTag(item, e.kitId);
           if (hideGroup || fi >= limit) {
             tag.classList.add("overflow");
             hiddenCount++;
@@ -1640,16 +1654,23 @@
     return tag;
   }
 
-  function modelCatIsHit(name) {
-    return groupsFor("model").some((g) => g.tokens.every((t) => name.includes(t.text)));
+  // model pills can be hit through their usage-category word too —
+  // model:"attached backpack01" lights that attached pill (and its group
+  // head, via the group hit). Mirrors spellsByModel's token test.
+  function modelFileIsHit(file, catName) {
+    const searchL = file ? file.searchL : "";
+    return groupsFor("model").some((g) =>
+      g.tokens.every((t) => catName.includes(t.text) || searchL.includes(t.text)));
   }
 
-  function modelTag(fid) {
+  function modelTag(fid, catName) {
     const d = state.data;
     const file = d.files.get(fid) || { fid, path: "", base: "", searchL: "" };
     const tag = el("span", "tag model");
     tag.title = file.path || "(name unknown)";
-    if (fileIsHit(file, "model")) tag.classList.add("hit");
+    // with "" for the category (the stale-pack flat list) this reduces to
+    // the plain fileIsHit test
+    if (modelFileIsHit(file, catName || "")) tag.classList.add("hit");
 
     if (CFG.modelViewerUrl) {
       const view = el("a", "tag-view");
@@ -2673,7 +2694,8 @@
         // pasted text arrives whole, so a "model:fire" inside it never
         // passes the caret check below — parse the full value into chips
         // instead. Only for pastes: while typing, tags chip at the ":"
-        if (e.inputType === "insertFromPaste" && /(^|\s)-?[a-z]+:\S/i.test(input.value)) {
+        if (e.inputType === "insertFromPaste"
+            && (/(^|\s)-?[a-z]+:\S/i.test(input.value) || ID_CMD_PASTE.test(input.value))) {
           const parts = parseQueryParts(input.value);
           if (parts.some((p) => p.field !== "all")) {
             const last = parts[parts.length - 1];
@@ -2702,6 +2724,22 @@
           const rest = input.value.slice(caret);
           input.value = input.value.slice(0, m.index + m[1].length);
           activateField(field, { not: m[2] === "-" });
+          if (rest) {
+            input.value = rest;
+            input.setSelectionRange(0, 0);
+            sizeInput();
+            scheduleSearch();
+          }
+          return;
+        }
+        // an Epsilon command just finished with a space — ".cast " (or
+        // .cas/.ca/.c/.aura/.aur/.au) opens an id: chip, the space acting
+        // as the tag's ":"
+        const cm = before.match(ID_CMD_TYPED);
+        if (cm && !inQuote) {
+          const rest = input.value.slice(caret);
+          input.value = input.value.slice(0, cm.index + cm[1].length);
+          activateField("id");
           if (rest) {
             input.value = rest;
             input.setSelectionRange(0, 0);
