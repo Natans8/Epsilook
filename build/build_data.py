@@ -692,17 +692,27 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # (mask_fullscreen_01, white_64, black64, tileset/generic/grey,
     # alphamask_*, flare_invert, *_desat_* — flat grey/white, meaningless
     # untinted) that the mul/add colors paint; OverlayTextureFileDataID is
-    # finished art (fullscreeneffect_*.blp, 10fx_explosion01, …) drawn on top
-    # in its own colors. Roles ride alongside the fids: TEX_OVERLAY/TEX_MASK.
+    # finished art (fullscreeneffect_*.blp, the lava/caustic sheets, even a
+    # "Tailoring Emporium" title card) drawn on top in its own colors. Roles
+    # ride alongside the fids: TEX_OVERLAY/TEX_MASK.
+    #
+    # The Mask* triplet is the other half of the look, and skipping it as
+    # "renderer tuning" is what made previews wrong: it is a RADIAL VIGNETTE
+    # (MaskOffsetY shifts its centre, MaskSizeMultiplier/MaskPower shape the
+    # falloff). Area-denial effects are a coloured rim with a clear centre —
+    # without the vignette the preview is a full-frame smear of the texture.
     TEX_OVERLAY, TEX_MASK = 0, 1
-    # ID -> (mul, add, ((fid, role), ...))
-    fse_rows: dict[int, tuple[int, int, tuple[tuple[int, int], ...]]] = {}
+    # ID -> (mul, add, maskOffsetY, maskSize, maskPower, ((fid, role), ...))
+    fse_rows: dict[
+        int, tuple[int, int, float, float, float, tuple[tuple[int, int], ...]]
+    ] = {}
     for fid_, flds in (
         (to_int(r[0]), r[1:]) for r in read_table(
             table_dir, "FullScreenEffect",
             ["ID", "ColorMultiplyRed", "ColorMultiplyGreen", "ColorMultiplyBlue",
              "ColorAdditionRed", "ColorAdditionGreen", "ColorAdditionBlue",
-             "OverlayTextureFileDataID", "TextureBlendSetID"])
+             "OverlayTextureFileDataID", "TextureBlendSetID",
+             "MaskOffsetY", "MaskSizeMultiplier", "MaskPower"])
     ):
         def fpack(r: str, g: str, b: str) -> int:
             f = lambda v: max(0, min(255, round(float(v or 0) * 255)))
@@ -715,11 +725,17 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             roles[overlay] = TEX_OVERLAY
         for f in blendset_tex.get(to_int(flds[7]), ()):
             roles.setdefault(f, TEX_MASK)
-        fse_rows[fid_] = (fpack(*flds[0:3]), fpack(*flds[3:6]), tuple(roles.items()))
+        to_f = lambda v: round(float(v or 0), 3)
+        fse_rows[fid_] = (fpack(*flds[0:3]), fpack(*flds[3:6]),
+                          to_f(flds[8]), to_f(flds[9]), to_f(flds[10]),
+                          tuple(roles.items()))
 
-    screen_rows: dict[int, tuple[str, int, int, int, int, tuple[tuple[int, int], ...]]] = {}
+    screen_rows: dict[
+        int, tuple[str, int, int, int, int, tuple[float, float, float],
+                   tuple[tuple[int, int], ...]]
+    ] = {}
     # ScreenEffect.ID -> (name, fog | -1, fog alpha | -1, mul | -1, add | -1,
-    #                     ((fid, role), ...))
+    #                     (maskOffsetY, maskSize, maskPower), ((fid, role), ...))
     for sid, name, p0, eff, fse_id in read_table(
         table_dir, "ScreenEffect", ["ID", "Name", "Param_0", "Effect", "FullScreenEffectID"]
     ):
@@ -729,8 +745,11 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         # "rrggbbxx" claim, verified against the Hex/jungle-green rows)
         fog = (to_int(p0) & 0xFFFFFF) if is_fog else -1
         fog_a = ((to_int(p0) & 0xFFFFFFFF) >> 24) & 0xFF if is_fog else -1
-        mul, add, tex = fse_rows.get(to_int(fse_id), (-1, -1, ()))
-        screen_rows[to_int(sid)] = (name, fog, fog_a, mul, add, tex)
+        # maskSize 0 = "no FullScreenEffect row", so no vignette to apply
+        mul, add, m_off, m_size, m_pow, tex = fse_rows.get(
+            to_int(fse_id), (-1, -1, 0.0, 0.0, 0.0, ()))
+        screen_rows[to_int(sid)] = (name, fog, fog_a, mul, add,
+                                    (m_off, m_size, m_pow), tex)
 
     # kit route: EffectType 19 -> SpellVisualScreenEffect -> ScreenEffectID
     svse_screen: dict[int, int] = {}  # SpellVisualScreenEffect.ID -> ScreenEffect.ID
@@ -1040,7 +1059,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     for e in used_dissolves:
         referenced_fids.update(dissolve_rows[e][1])
     for sc in used_screens:
-        referenced_fids.update(f for f, _role in screen_rows[sc][5])
+        referenced_fids.update(f for f, _role in screen_rows[sc][6])
     referenced_fids.update(f for _, _, f in morph_display_rows if f)
 
     # icon fids resolve through the same listfile pass but stay out of the
@@ -1171,14 +1190,14 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     screen_ids = sorted(used_screens)
     screen_hues = []
     for sc in screen_ids:
-        _, fog, _fog_a, mul, add, _tex = screen_rows[sc]
+        _, fog, _fog_a, mul, add, _mask, _tex = screen_rows[sc]
         hues = dict.fromkeys(
             h for c in (fog, mul, add) if c >= 0 for h in (hue_word(*unpack_rgb(c)),) if h)
         screen_hues.append(" ".join(hues))
     # overlays sort before masks per screen, so the pill previews the finished
     # art when a screen has both
     screen_tex_rows = sorted(
-        (sc, role, f) for sc in used_screens for f, role in screen_rows[sc][5])
+        (sc, role, f) for sc in used_screens for f, role in screen_rows[sc][6])
 
     # desaturate (proc Type 21) / transparency (proc Type 14): percent-only
     # pills — the percent is the whole payload (no color, no id table). Dedupe
@@ -1208,7 +1227,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     pack = {
         "meta": {
-            "format": 17,
+            "format": 18,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
@@ -1401,6 +1420,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "fogAlphas": [screen_rows[sc][2] for sc in screen_ids],
             "mulColors": [screen_rows[sc][3] for sc in screen_ids],
             "addColors": [screen_rows[sc][4] for sc in screen_ids],
+            # radial vignette shaping the coverage (size 0 = no FSE row)
+            "maskOffsetY": [screen_rows[sc][5][0] for sc in screen_ids],
+            "maskSize": [screen_rows[sc][5][1] for sc in screen_ids],
+            "maskPower": [screen_rows[sc][5][2] for sc in screen_ids],
             "hues": screen_hues,
         },
         # roles: 0 = overlay (finished art, drawn in its own colors), 1 = mask

@@ -85,13 +85,16 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
 - Hovering a chain, dissolve or screen texture tag shows the texture itself
   in a floating preview (fetched on demand, nothing is preloaded). Chain
   previews are shown with the chain's tint applied — the color the beam
-  actually has in game. Screen effects carry two kinds of texture and the
-  preview treats them differently: an *overlay* is finished art, shown in its
-  own colors over the graded world, while a *mask* is a flat blend-set texture
-  whose brightness decides how strongly the effect's colors grade each pixel,
-  so it is shown painted with them. Hovering any color swatch shows a large
-  patch of the color with its hex, RGB channel values, hue word — plus its
-  alpha where the source has one (screen fog opacity, edge-glow alpha).
+  actually has in game. A screen effect is a post-process over the whole
+  frame rather than a picture, so its preview is an approximate 16:9
+  *composite* instead of a texture: a neutral world graded by the effect's
+  multiply/addition colors, covered by the shape its blend-set masks and
+  radial vignette define (area-denial effects are a colored rim around a
+  clear centre), with the overlay art laid on top. The real shader also
+  scrolls and tiles each layer per frame, which a still preview can't show.
+  Hovering any color swatch shows a large patch of the color with its hex,
+  RGB channel values, hue word — plus its alpha where the source has one
+  (screen fog opacity, edge-glow alpha).
 
 ## Development
 

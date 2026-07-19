@@ -362,6 +362,10 @@ window.EpsilookData = (() => {
           fogAlpha: sc.fogAlphas ? sc.fogAlphas[i] : -1,
           mul: sc.mulColors[i],
           add: sc.addColors[i],
+          // radial vignette (pack format 18+); size 0 = none
+          maskOffsetY: sc.maskOffsetY ? sc.maskOffsetY[i] : 0,
+          maskSize: sc.maskSize ? sc.maskSize[i] : 0,
+          maskPower: sc.maskPower ? sc.maskPower[i] : 0,
         });
         const hexes = [sc.fogColors[i], sc.mulColors[i], sc.addColors[i]]
           .filter((c) => c >= 0).map(hexColor).join(" ");
