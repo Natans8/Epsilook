@@ -8,8 +8,8 @@ Search World of Warcraft spells by name, spell ID, model file, sound file, Sound
 AnimKit, animation or visual effect (chain/beam effects searchable by texture and
 tint color, dissolves by texture, glows, ghost effects and model tints by color,
 desaturation and transparency by percent, freezes and camouflage by word,
-full-screen effects by name or color, morphs
-by NPC name, model name, creature ID or display ID, summons by NPC name or
+full-screen effects by name or color, shapeshift forms by form name,
+morphs by NPC name, model name, creature ID or display ID, summons by NPC name or
 creature ID) —
 with spell icons, clickable cross-references, spell mechanic info, and one-click
 copying of Epsilon commands (`.cast`, `.aura`, `.learn`, `.lookup spell id`,
@@ -43,7 +43,12 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   percent (`fx:"transparency 50%"`), freeze and camouflage effects by word
   (`fx:freeze`, `fx:camo`), full-screen effects (the screen tinting or
   overlaying while an aura holds) by internal name, color word or hex
-  (`fx:"screen hex"`, `fx:"screen green"`), and morphs (transform
+  (`fx:"screen hex"`, `fx:"screen green"`), shapeshift forms
+  (`SpellShapeshiftForm`, via MOD_SHAPESHIFT auras) by form name or model
+  (`fx:"shapeshift cat form"`) — forms with a creature display show the
+  model and carry the same `.morph`/`.lookup` buttons morphs do, while
+  display-less forms (Battle Stance, Shadowform, Stealth) render as a
+  name-only pill — and morphs (transform
   auras) by NPC name, model name, creature ID or display ID
   (`fx:"morph sheep"`). Morph tags show the model name
   and copy the display ID, a ready `.morph <displayID>` command, and a
@@ -65,6 +70,10 @@ Open the page, type into the search bar. Full syntax is in the `?` dialog:
   (category heads are clickable, like the Effects ones). Category words
   autocomplete while typing inside an `fx:`/`model:` tag, and a tag naming
   a category exactly floats that category's spells to the top of the results.
+- Name search also matches a spell's **override names**
+  (`SpellOverrideName` — the name a spell renames its target or pet to), even
+  though the results keep showing the spell's real name. Searching
+  `"congealed loss"` finds *Steward Name Override [DNT]*.
 - A `-` prefix excludes instead: `name:nova -mech:school_damage`.
 - The whole bar selects like plain text — mouse, Ctrl+A, or Shift+arrows — and
   Ctrl+C copies the selection as query text (`model:book note anim:read`), ready

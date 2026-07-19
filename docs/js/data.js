@@ -60,9 +60,11 @@ window.EpsilookData = (() => {
     const namesL = new Array(n);
     for (let i = 0; i < n; i++) {
       spellIndex.set(sp.ids[i], i);
-      namesL[i] = sp.subtexts[i]
-        ? (sp.names[i] + " " + sp.subtexts[i]).toLowerCase()
-        : sp.names[i].toLowerCase();
+      // altNames (SpellOverrideName, pack format 19+) join the search corpus
+      // but are never displayed — the row keeps showing its real name
+      const alt = sp.altNames ? sp.altNames[i] : "";
+      namesL[i] = [sp.names[i], sp.subtexts[i], alt]
+        .filter(Boolean).join(" ").toLowerCase();
     }
 
     // spell icon names ("" = none); older packs have no icon data
@@ -456,6 +458,35 @@ window.EpsilookData = (() => {
       }
     }
 
+    // shapeshift forms (MOD_SHAPESHIFT auras): a form name plus up to four
+    // creature displays. Many forms (Battle Stance, Shadowform, Stealth) have
+    // no display at all and are searchable/renderable by name alone.
+    const spellShapeshifts = new Map();    // spell id -> [formId]
+    const shapeshiftSpells = new Map();    // formId -> [spell id]
+    const shapeshiftNames = new Map();     // formId -> form name
+    const shapeshiftDisplays = new Map();  // formId -> [{displayId, fid}]
+    const shapeshiftSearchL = new Map();   // formId -> search corpus
+    if (pack.spellShapeshifts) {
+      const { spellIds, formIds } = pack.spellShapeshifts;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellShapeshifts, spellIds[i], formIds[i]);
+        pushTo(shapeshiftSpells, formIds[i], spellIds[i]);
+      }
+      const f = pack.shapeshifts;
+      for (let i = 0; i < f.ids.length; i++) shapeshiftNames.set(f.ids[i], f.names[i]);
+      const sd = pack.shapeshiftDisplays;
+      for (let i = 0; i < sd.formIds.length; i++) {
+        pushTo(shapeshiftDisplays, sd.formIds[i],
+          { displayId: sd.displayIds[i], fid: sd.fids[i] });
+      }
+      for (const [id, name] of shapeshiftNames) {
+        const parts = (shapeshiftDisplays.get(id) || []).map((e) =>
+          e.displayId + " " + ((files.get(e.fid) || { searchL: "" }).searchL));
+        shapeshiftSearchL.set(id,
+          ("shapeshift " + id + " " + name.toLowerCase() + " " + parts.join(" ")).trim());
+      }
+    }
+
     // summons (SUMMON spell effects): the spell summons a CREATURE (NPC);
     // control (guardian/pet/...) is per spell-effect row, from its
     // SummonProperties — so the corpus lives per (creature, control) pair:
@@ -528,6 +559,8 @@ window.EpsilookData = (() => {
       spellScreens, screenSpells, screenNames, screenColors, screenTextures, screenSearchL,
       spellAnims, animDirectSpells,
       spellMorphs, morphSpells, morphNames, morphDisplays, morphSearchL,
+      spellShapeshifts, shapeshiftSpells, shapeshiftNames, shapeshiftDisplays,
+      shapeshiftSearchL,
       spellSummons, summonNames, summonPairSpells, summonPairSearchL, summonControlNames,
       spellEffects, effectSpells, effectNames, effectNamesL,
       spellAuras, auraSpells, auraNames, auraNamesL,
