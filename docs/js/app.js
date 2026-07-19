@@ -45,8 +45,8 @@
   // column -> search fields it contributes
   const COL_FIELDS = {
     models: ["model"],
-    sounds: ["sound", "soundkit"],
-    animkits: ["animkit", "anim"],
+    sounds: ["sound"],
+    animkits: ["anim"],
     fx: ["fx"],
     mechanics: ["mech"],
   };
@@ -121,8 +121,9 @@
   /* ------------------------------------------------- query <-> chips */
 
   // legacy prefixes silently convert to their current field — effect: was
-  // the fx: column's name before the effect:->mech: split
-  const FIELD_ALIASES = { effect: "fx" };
+  // the fx: column's name before the effect:->mech: split; soundkit: and
+  // animkit: folded into sound:/anim: 2026-07-19 (numeric chips match kit IDs)
+  const FIELD_ALIASES = { effect: "fx", soundkit: "sound", animkit: "anim" };
   const canonField = (f) => FIELD_ALIASES[f] || f;
 
   function isChipField(f) {
@@ -669,6 +670,10 @@
   function updateSuggest() {
     const input = $("#q");
     const box = $("#suggest");
+    // inside an fx:/model: chip the category words autocomplete instead
+    // of field prefixes ("des" -> desaturate)
+    if (state.activeField === "fx" || state.activeField === "model")
+      return updateCategorySuggest();
     if (state.activeField) return hideSuggest();
     let word = input.value.split(/\s+/).pop().toLowerCase();
     if (word.startsWith("-")) word = word.slice(1); // "-mec" suggests mechanic: as an exclusion
@@ -689,6 +694,50 @@
     });
     suggestIndex = -1;
     box.hidden = false;
+  }
+
+  // suggest the column's category words while typing in its chip; picking
+  // one completes the word in place (it stays part of the chip's text)
+  function updateCategorySuggest() {
+    const input = $("#q");
+    const box = $("#suggest");
+    const word = input.value.split(/\s+/).pop().toLowerCase();
+    if (!word) return hideSuggest();
+    const titles = state.activeField === "fx" ? FX_HEAD_TITLES : MODEL_CAT_TITLES;
+    const words = state.activeField === "fx"
+      ? Object.keys(FX_HEAD_TITLES)
+      : Object.values((state.data && state.data.modelCatNames) || {});
+    const matches = words.filter((w) => w.startsWith(word) && w !== word);
+    if (!matches.length) return hideSuggest();
+
+    box.textContent = "";
+    matches.forEach((w) => {
+      const b = el("button", "suggest-item");
+      b.appendChild(el("span", `suggest-field f-${state.activeField}`, w));
+      // the parenthesized table name is build trivia — the plain half explains
+      b.appendChild(el("span", "suggest-hint", (titles[w] || "").split(" (")[0]));
+      b.dataset.word = w;
+      box.appendChild(b);
+    });
+    suggestIndex = -1;
+    box.hidden = false;
+  }
+
+  // complete the partial last word of the chip's text to the category word
+  function applyCategoryWord(word) {
+    const input = $("#q");
+    input.value = input.value.replace(/\S*$/, word);
+    hideSuggest();
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+    sizeInput();
+    scheduleSearch();
+  }
+
+  // a suggestion item is either a field prefix or a category word
+  function pickSuggestItem(item) {
+    if (item.dataset.word) applyCategoryWord(item.dataset.word);
+    else selectSuggestion(item.dataset.field);
   }
 
   function hideSuggest() {
@@ -723,11 +772,14 @@
 
     // too little typed to search — counted on the searched tokens, so field
     // prefixes don't count but an unknown "word:" (literal text) does.
-    // Exact-ID tags (id: soundkit: animkit:) always count as enough: IDs
-    // below 10 are a single keystroke and the lookup is exact and cheap
+    // Exact-ID tags (id:, and numeric kit IDs in sound:/anim:) always count
+    // as enough: IDs below 10 are a single keystroke and the lookup is
+    // exact and cheap
     const groups = currentGroups();
+    const isExactId = (g, t) => (Search.FIELDS[g.field] || {}).orGroups
+      || ((g.field === "sound" || g.field === "anim") && /^\d+$/.test(t.text));
     const typed = groups.reduce((n, g) => n + g.tokens.reduce((m, t) =>
-      m + ((Search.FIELDS[g.field] || {}).orGroups ? CFG.minQueryLength : t.text.length), 0), 0);
+      m + (isExactId(g, t) ? CFG.minQueryLength : t.text.length), 0), 0);
     if (typed < CFG.minQueryLength) {
       state.results = [];
       state.groups = [];
@@ -749,6 +801,63 @@
     stateToUrl(push);
   }
 
+  // multi-value columns sort by how many entries a row shows there — the
+  // count keys mirror the column names; clicking those headers starts at
+  // "most entries first" (the extreme spells are the interesting ones)
+  const COUNT_SORTS = new Set(["models", "sounds", "animkits", "fx", "mechanics"]);
+
+  function entryCountFn(key) {
+    const d = state.data;
+    const len = (m, id) => (m.get(id) || []).length;
+    switch (key) {
+      case "models": return (id) =>
+        d.spellModelCats.size ? len(d.spellModelCats, id) : len(d.spellModels, id);
+      case "sounds": return (id) => len(d.spellSounds, id);
+      case "animkits": return (id) => len(d.spellAnimKits, id) + len(d.spellAnims, id);
+      case "mechanics": return (id) => len(d.spellEffects, id) + len(d.spellAuras, id);
+      case "fx": return (id) =>
+        len(d.spellFx, id) + len(d.spellDissolves, id) + len(d.spellGlows, id)
+        + len(d.spellShadowies, id) + len(d.spellGhostMats, id) + len(d.spellTints, id)
+        + len(d.spellDesaturates, id) + len(d.spellTransps, id)
+        + (d.spellFreezes.has(id) ? 1 : 0) + (d.spellCamos.has(id) ? 1 : 0)
+        + len(d.spellScreens, id) + len(d.spellMorphs, id) + len(d.spellSummons, id);
+    }
+  }
+
+  // Spells that actually carry a category a chip names rank above spells
+  // matched only through a file/texture name containing the same word —
+  // fx:desaturate must not drown under "desaturated" chain textures.
+  // Returns null when no chip names a category, else (id) -> hit count.
+  function categoryRanker() {
+    const d = state.data;
+    const FX_SETS = {
+      chain: d.spellFx, dissolve: d.spellDissolves, glow: d.spellGlows,
+      tint: d.spellTints, desaturate: d.spellDesaturates,
+      transparency: d.spellTransps, freeze: d.spellFreezes, camo: d.spellCamos,
+      screen: d.spellScreens, morph: d.spellMorphs, summon: d.spellSummons,
+    };
+    const tests = [];
+    for (const g of state.groups) {
+      if (g.not) continue;
+      for (const t of g.tokens) {
+        if (g.field === "fx") {
+          if (t.text === "ghost" || t.text === "shadowy") {
+            tests.push((id) => d.spellShadowies.has(id) || d.spellGhostMats.has(id));
+          } else if (FX_SETS[t.text]) {
+            const s = FX_SETS[t.text];
+            tests.push((id) => s.has(id));
+          }
+        } else if (g.field === "model") {
+          for (const [cat, spells] of d.modelCatSpells) {
+            if ((d.modelCatNames[cat] || "") === t.text) tests.push((id) => spells.has(id));
+          }
+        }
+      }
+    }
+    if (!tests.length) return null;
+    return (id) => tests.reduce((n, f) => n + (f(id) ? 1 : 0), 0);
+  }
+
   function applyFiltersAndSort() {
     const d = state.data;
     let list = state.results;
@@ -762,7 +871,7 @@
         (!f.fx || d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellGlows.has(id)
           || d.spellShadowies.has(id) || d.spellGhostMats.has(id) || d.spellTints.has(id)
           || d.spellDesaturates.has(id) || d.spellTransps.has(id)
-          || d.spellFreezes.has(id) || d.spellCamos.has(id)
+          || d.spellFreezes.has(id) || d.spellCamos.has(id) || d.spellScreens.has(id)
           || d.spellMorphs.has(id) || d.spellSummons.has(id)));
     } else {
       list = list.slice();
@@ -774,6 +883,10 @@
     } else if (key === "name") {
       list.sort((a, b) =>
         d.names[d.spellIndex.get(a)].localeCompare(d.names[d.spellIndex.get(b)]) * dir || a - b);
+    } else if (COUNT_SORTS.has(key)) {
+      const count = entryCountFn(key);
+      const c = new Map(list.map((id) => [id, count(id)]));
+      list.sort((a, b) => (c.get(a) - c.get(b)) * dir || a - b);
     } else { // auto
       const nameTokens = state.tokens.filter((t) => t.field === "name" || t.field === "all");
       if (nameTokens.length) {
@@ -781,6 +894,10 @@
       } else {
         list.sort((a, b) => a - b);
       }
+      // exact category-word chips float their category's spells on top
+      // (stable sort: the relevance/id order above survives within ranks)
+      const rank = categoryRanker();
+      if (rank) list.sort((a, b) => rank(b) - rank(a));
     }
 
     state.display = list;
@@ -984,8 +1101,8 @@
     return td;
   }
 
-  /* Models cell: grouped by how each model is used — "attach" (attached to
-   * the caster/target), "missile" (projectile), "area" (ground/area model),
+  /* Models cell: grouped by how each model is used — "attached" (to the
+   * caster/target), "missile" (projectile), "area" (ground/area model),
    * "trail" (weapon trail), "barrage" (volley) — fx-cell conventions:
    * clickable heads searching model:<category>, pills inside. A stale
    * cached pack carries no categories: flat-list fallback. */
@@ -1165,11 +1282,12 @@
     }
   }
 
-  /* Effects cell: visual FX grouped by category — "beam" (chain effects),
+  /* Effects cell: visual FX grouped by category — "chain" (beam/chain effects),
    * "dissolve" (dissolve effects), "glow" / "ghost" / "tint" (color-only
    * effects), "desaturate" / "transparency" (percent-only), "freeze" /
-   * "camo" (valueless), "morph" (transform auras) and "summon" (summon
-   * effects). Beam pills carry a tint dot per texture. */
+   * "camo" (valueless), "screen" (full-screen effects), "morph" (transform
+   * auras) and "summon" (summon effects). Chain pills carry a tint dot per
+   * texture. */
   function fxCell(spellId) {
     const d = state.data;
     const chainIds = d.spellFx.get(spellId) || [];
@@ -1182,13 +1300,14 @@
     const transpPcts = d.spellTransps.get(spellId) || [];
     const hasFreeze = d.spellFreezes.has(spellId);
     const hasCamo = d.spellCamos.has(spellId);
+    const screenIds = d.spellScreens.get(spellId) || [];
     const morphIds = d.spellMorphs.get(spellId) || [];
     const summonEntries = d.spellSummons.get(spellId) || [];
     const td = el("td", "c-fx");
     if (chainIds.length === 0 && dissolveIds.length === 0 && glowIds.length === 0
         && shadowyIds.length === 0 && ghostMatIds.length === 0 && tintIds.length === 0
         && desatPcts.length === 0 && transpPcts.length === 0 && !hasFreeze && !hasCamo
-        && morphIds.length === 0 && summonEntries.length === 0) {
+        && screenIds.length === 0 && morphIds.length === 0 && summonEntries.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
       return td;
@@ -1210,7 +1329,7 @@
         }
       }
       cats.push({
-        name: "beam",
+        name: "chain",
         hit: chainIds.some((c) => fxChainIsHit(c)),
         items: hitsFirst(entries, (e) => fxChainIsHit(e.chainId)).map((e) => () => fxTag(e)),
       });
@@ -1322,6 +1441,15 @@
     if (hasCamo) {
       cats.push({ name: "camo", hit: camoIsHit(), items: [] });
     }
+    if (screenIds.length) {
+      // one pill per ScreenEffect row, labeled with its internal name
+      const ids = hitsFirst(screenIds.slice().sort((a, b) => a - b), (id) => screenIsHit(id));
+      cats.push({
+        name: "screen",
+        hit: screenIds.some((id) => screenIsHit(id)),
+        items: ids.map((id) => () => screenTag(id)),
+      });
+    }
     if (morphIds.length) {
       // one pill per (creature, display); creatures without TDB displays
       // still get a single fallback pill
@@ -1373,8 +1501,11 @@
     return groupsFor(field).some((g) => g.tokens.every((t) => file.searchL.includes(t.text)));
   }
 
+  // kit ids live in the sound:/anim: fields since the soundkit:/animkit:
+  // merge — a chip's numeric tokens hit the kit whose id they equal
   function kitIsHit(kitId, field) {
-    return groupsFor(field).some((g) => g.tokens.some((t) => Number(t.text) === kitId));
+    const searchField = field === "soundkit" ? "sound" : "anim";
+    return groupsFor(searchField).some((g) => g.tokens.some((t) => Number(t.text) === kitId));
   }
 
   function animIsHit(animId) {
@@ -1432,6 +1563,11 @@
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
+  function screenIsHit(screenId) {
+    const corpus = state.data.screenSearchL.get(screenId) || "";
+    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+  }
+
   function freezeIsHit() {
     return groupsFor("fx").some((g) => g.tokens.every((t) => "freeze".includes(t.text)));
   }
@@ -1462,7 +1598,8 @@
   /* Model-category head ("attach", "missile", ...) — the fx-head pattern:
    * clicking searches the whole category via the model field. */
   const MODEL_CAT_TITLES = {
-    attach: "Model attached to the caster/target (SpellVisualKitModelAttach)",
+    attached: "Model attached to the caster/target (SpellVisualKitModelAttach)",
+    attach: "Model attached to the caster/target (SpellVisualKitModelAttach)", // stale-pack word
     missile: "Projectile model in flight (SpellVisualMissile)",
     area: "Ground / area model (SpellVisualKitAreaModel)",
     trail: "Weapon trail model (WeaponTrail)",
@@ -1598,7 +1735,7 @@
     txt.title = field === "soundkit"
       ? `SoundKit ${kitId}\nClick: find spells using this soundkit\nShift-click: exclude them instead`
       : `AnimKit ${kitId}\nClick: find spells using this animkit\nShift-click: exclude them instead`;
-    txt.dataset.search = `${field}:${kitId}`;
+    txt.dataset.search = `${field === "soundkit" ? "sound" : "anim"}:${kitId}`;
     tag.appendChild(txt);
 
     const kind = field === "soundkit" ? "SoundKit" : "AnimKit";
@@ -1654,11 +1791,11 @@
     return tag;
   }
 
-  /* Visual FX tags: the category head ("beam") and one pill per texture,
+  /* Visual FX tags: the category head ("chain") and one pill per texture,
    * with a dot showing the chain's tint (hidden when untinted). Clicking
-   * the head searches the whole category (fx:beam). */
+   * the head searches the whole category (fx:chain). */
   const FX_HEAD_TITLES = {
-    beam: "Beam / chain effect (SpellChainEffects)",
+    chain: "Chain / beam effect (SpellChainEffects)",
     dissolve: "Dissolve / materialize effect (DissolveEffect)",
     glow: "Edge glow / rim-light effect (EdgeGlowEffect)",
     ghost: "Ghostly recolor (ShadowyEffect / ghost material)",
@@ -1667,6 +1804,7 @@
     transparency: "Model transparency (SpellProceduralEffect)",
     freeze: "Freeze / petrify in place (SpellProceduralEffect)",
     camo: "Camouflage / cloaking effect (SpellProceduralEffect)",
+    screen: "Full-screen tint / overlay while the aura holds (ScreenEffect)",
     morph: "Morph / transform aura (CreatureDisplayInfo)",
     summon: "Summoned creature (SpellEffect SUMMON)",
   };
@@ -1694,21 +1832,23 @@
       const dot = el("span", "fx-swatch");
       dot.style.background = hex;
       dot.title = `Tint ${hex}` + (info.hue ? ` (${info.hue})` : "");
+      dot.dataset.color = hex;
+      dot.dataset.colorInfo = "chain tint";
       tag.appendChild(dot);
     }
 
     const base = file.base ? stripExt(file.base) : "";
     const txt = el("button", "tag-label", base || "(untextured)");
-    txt.title = `${file.path || "(no texture)"}\nClick: find spells with this beam texture\nShift-click: exclude them instead`;
+    txt.title = `${file.path || "(no texture)"}\nClick: find spells with this chain texture\nShift-click: exclude them instead`;
     if (entry.fid) {
       txt.dataset.texFid = entry.fid;
       // the hover preview multiplies the texture by the chain's tint
       if (entry.color !== 0xffffff)
         txt.dataset.texTint = "#" + entry.color.toString(16).padStart(6, "0");
     }
-    // category word + texture: the query stays scoped to beams once more
-    // fx categories exist ("fx:beam lightning" style)
-    txt.dataset.search = file.base ? `fx:"beam ${file.base}"` : "";
+    // category word + texture: the query stays scoped to chains once more
+    // fx categories exist ("fx:chain lightning" style)
+    txt.dataset.search = file.base ? `fx:"chain ${file.base}"` : "";
     tag.appendChild(txt);
 
     if (base) tag.appendChild(tagButton("⧉", `Copy texture name: ${base}`, base));
@@ -1725,6 +1865,8 @@
 
     const dot = el("span", "fx-swatch");
     dot.style.background = hex;
+    dot.dataset.color = hex;
+    dot.dataset.colorInfo = category;
     tag.appendChild(dot);
 
     const txt = el("button", "tag-label", hex);
@@ -1741,7 +1883,9 @@
    * whole payload. Desaturate gets a decorative grey swatch keyed to the
    * strength; transparency has no swatch. Clicking searches category + %. */
   function percentFxTag(category, percent, hit) {
-    const tag = el("span", "tag fx");
+    // .pct: as a compact pill this renders (label | value) — a flat divider
+    // instead of the rounded value capsule other compact groups get
+    const tag = el("span", "tag fx pct");
     if (hit) tag.classList.add("hit");
 
     if (category === "desaturate") {
@@ -1756,6 +1900,48 @@
       + `\nClick: find spells with this ${category} strength\nShift-click: exclude them instead`;
     txt.dataset.search = `fx:"${category} ${percent}%"`;
     tag.appendChild(txt);
+    return tag;
+  }
+
+  /* Screen-effect pill: the whole screen tints/overlays while the aura
+   * holds. Label = the ScreenEffect row's internal name; swatch dots show
+   * the fog tint and the FullScreenEffect multiply/addition screen colors
+   * when present; rows with textures get the hover preview on the first one
+   * (shown untinted — in game the colors grade the world, they're not baked
+   * into the overlay image). ⧉ copies the ScreenEffect ID. */
+  function screenTag(screenId) {
+    const d = state.data;
+    const name = d.screenNames.get(screenId) || "";
+    const colors = d.screenColors.get(screenId) || { fog: -1, mul: -1, add: -1 };
+    const texFids = d.screenTextures.get(screenId) || [];
+    const tag = el("span", "tag fx");
+    if (screenIsHit(screenId)) tag.classList.add("hit");
+
+    for (const [what, c] of [["fog tint", colors.fog],
+                             ["multiply", colors.mul],
+                             ["addition", colors.add]]) {
+      if (c < 0) continue;
+      const hex = "#" + c.toString(16).padStart(6, "0");
+      const dot = el("span", "fx-swatch");
+      dot.style.background = hex;
+      dot.title = `Screen ${what} ${hex}`;
+      dot.dataset.color = hex;
+      dot.dataset.colorInfo = `screen ${what}`;
+      tag.appendChild(dot);
+    }
+
+    const texPaths = texFids.map((f) => (d.files.get(f) || {}).path || `#${f}`);
+    const txt = el("button", "tag-label", name || `screen #${screenId}`);
+    txt.title = `${name || "(unnamed)"} — ScreenEffect ${screenId}`
+      + (texPaths.length ? `\n${texPaths.join("\n")}` : "")
+      + `\nClick: find spells with this screen effect\nShift-click: exclude them instead`;
+    if (texFids.length) txt.dataset.texFid = texFids[0];
+    // quotes inside a name would break the tag value; substring match
+    // doesn't need them
+    txt.dataset.search = `fx:"screen ${(name || String(screenId)).replace(/"/g, "")}"`;
+    tag.appendChild(txt);
+
+    tag.appendChild(tagButton("⧉", `Copy ScreenEffect ID ${screenId}`, String(screenId)));
     return tag;
   }
 
@@ -1934,6 +2120,21 @@
     return cv;
   }
 
+  // place the panel above its anchor (native title tooltips pop below the
+  // cursor), measured invisibly first; fall back to below at the viewport top
+  function placeTexPanel(panel, anchor) {
+    panel.style.visibility = "hidden";
+    panel.style.display = "block";
+    const r = anchor.getBoundingClientRect();
+    const pr = panel.getBoundingClientRect();
+    const x = Math.max(8, Math.min(r.left, window.innerWidth - pr.width - 8));
+    let y = r.top - pr.height - 6;
+    if (y < 8) y = r.bottom + 6;
+    panel.style.left = x + "px";
+    panel.style.top = y + "px";
+    panel.style.visibility = "";
+  }
+
   function showTexPreview(label, baseCanvas) {
     const tint = label.dataset.texTint || "";
     const canvas = tint ? tintedCanvas(baseCanvas, tint) : baseCanvas;
@@ -1946,24 +2147,60 @@
     panel.firstChild.replaceChildren(canvas);
     panel.lastChild.textContent = `${canvas.width}×${canvas.height}`
       + (tint ? ` · tint ${tint}` : "");
-    // place above the pill (native title tooltips pop below the cursor),
-    // measured invisibly first; fall back to below at the viewport top
-    panel.style.visibility = "hidden";
-    panel.style.display = "block";
-    const r = label.getBoundingClientRect();
-    const pr = panel.getBoundingClientRect();
-    const x = Math.max(8, Math.min(r.left, window.innerWidth - pr.width - 8));
-    let y = r.top - pr.height - 6;
-    if (y < 8) y = r.bottom + 6;
-    panel.style.left = x + "px";
-    panel.style.top = y + "px";
-    panel.style.visibility = "";
+    placeTexPanel(panel, label);
+  }
+
+  // same panel for color swatches: a large patch of the color, captioned
+  // with the hex + hue word + which effect it belongs to (data-color-info)
+  function showColorPreview(swatch) {
+    const hex = swatch.dataset.color;
+    const patch = el("div", "tex-color");
+    patch.style.background = hex;
+    const panel = texPanel();
+    panel.firstChild.replaceChildren(patch);
+    const hue = hueWordOf(hex);
+    panel.lastChild.textContent = hex + (hue ? ` · ${hue}` : "")
+      + (swatch.dataset.colorInfo ? ` · ${swatch.dataset.colorInfo}` : "");
+    placeTexPanel(panel, swatch);
+  }
+
+  // coarse hue word for the caption — the same buckets build_data.py bakes
+  // into the search corpora, so the word shown is the word that searches
+  function hueWordOf(hex) {
+    const c = parseInt(hex.slice(1), 16);
+    const r = ((c >> 16) & 255) / 255, g = ((c >> 8) & 255) / 255, b = (c & 255) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const sat = max ? (max - min) / max : 0;
+    if (sat < 0.15 || max < 0.08) return ""; // white / grey / near-black
+    const d = max - min;
+    let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    let deg = h * 60;
+    if (deg < 0) deg += 360;
+    for (const [limit, name] of [[15, "red"], [45, "orange"], [70, "yellow"],
+        [160, "green"], [200, "cyan"], [255, "blue"], [290, "purple"],
+        [330, "pink"], [361, "red"]]) {
+      if (deg < limit) return name;
+    }
+    return "";
   }
 
   function initTexPreview() {
-    if (!CFG.texturePreviewUrl || !window.matchMedia("(hover: hover)").matches) return;
+    if (!window.matchMedia("(hover: hover)").matches) return;
     const results = $("#results");
     results.addEventListener("mouseover", (e) => {
+      // color swatches first — no fetch involved, same intent delay
+      const swatch = e.target.closest("[data-color]");
+      if (swatch) {
+        const key = "color|" + swatch.dataset.color + "|" + (swatch.dataset.colorInfo || "");
+        if (key === texHoverKey) return;
+        hideTexPreview();
+        texHoverKey = key;
+        texHoverTimer = setTimeout(() => {
+          if (texHoverKey === key && swatch.isConnected) showColorPreview(swatch);
+        }, 150);
+        return;
+      }
+      if (!CFG.texturePreviewUrl) return;
       const label = e.target.closest("[data-tex-fid]");
       if (!label) return;
       const fid = Number(label.dataset.texFid);
@@ -1977,7 +2214,7 @@
       }, 150);
     });
     results.addEventListener("mouseout", (e) => {
-      const label = e.target.closest("[data-tex-fid]");
+      const label = e.target.closest("[data-tex-fid], [data-color]");
       if (label && !label.contains(e.relatedTarget)) hideTexPreview();
     });
     window.addEventListener("scroll", hideTexPreview, { passive: true });
@@ -2028,7 +2265,7 @@
         row.fx = (d.spellFx.get(id) || []).slice().sort((a, b) => a - b).map((c) => {
           const info = d.fxChains.get(c) || { color: 0xffffff, hue: "" };
           return {
-            type: "beam",
+            type: "chain",
             textures: (d.fxTextures.get(c) || []).map(pathOf),
             tint: info.color === 0xffffff ? null : "#" + info.color.toString(16).padStart(6, "0"),
           };
@@ -2058,7 +2295,19 @@
           .map((p) => ({ type: "transparency", percent: p }))
         ).concat(d.spellFreezes.has(id) ? [{ type: "freeze" }] : []
         ).concat(d.spellCamos.has(id) ? [{ type: "camo" }] : []
-        ).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+        ).concat((d.spellScreens.get(id) || []).slice().sort((a, b) => a - b).map((sc) => {
+          const c = d.screenColors.get(sc) || { fog: -1, mul: -1, add: -1 };
+          const hx = (v) => v >= 0 ? "#" + v.toString(16).padStart(6, "0") : null;
+          return {
+            type: "screen",
+            screenId: sc,
+            name: d.screenNames.get(sc) || null,
+            fogTint: hx(c.fog),
+            colorMultiply: hx(c.mul),
+            colorAddition: hx(c.add),
+            textures: (d.screenTextures.get(sc) || []).map(pathOf),
+          };
+        })).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
           type: "morph",
           creatureId: c,
           creature: d.morphNames.get(c) || null,
@@ -2147,6 +2396,10 @@
             return `${e.type}: ${e.percent}%`;
           if (e.type === "freeze" || e.type === "camo") // valueless fx
             return e.type;
+          if (e.type === "screen") // named + optional colors/textures
+            return `screen: ${e.name || e.screenId}`
+              + (e.fogTint ? ` (${e.fogTint})` : "")
+              + (e.textures.length ? `: ${e.textures.join(" | ")}` : "");
           if (e.color || e.colors) // color-only fx (glow / ghost / tint)
             return `${e.type}: ${e.color || e.colors.join(" | ")}`;
           return `${e.type}: ${e.textures.join(" | ") || "(untextured)"}`
@@ -2246,7 +2499,7 @@
     const get = (k) => params.get(k) ?? legacy.get(k);
     let q = get("q") || "";
     // even older links carried a mode: fold it into the query as a field tag
-    const legacyMode = get("m");
+    const legacyMode = canonField(get("m") || "");
     if (legacyMode && isChipField(legacyMode) && q && !/[a-z]+:/i.test(q)) {
       q = `${legacyMode}:${/\s/.test(q) ? `"${q}"` : q}`;
     }
@@ -2333,8 +2586,8 @@
           }
           return;
         }
-        updateSuggest();
       }
+      updateSuggest(); // field prefixes, or category words inside fx:/model:
       sizeInput();
       scheduleSearch();
     });
@@ -2351,7 +2604,7 @@
         }
         if (e.key === "Tab" || (e.key === "Enter" && suggestIndex >= 0)) {
           e.preventDefault();
-          selectSuggestion(items[Math.max(suggestIndex, 0)].dataset.field);
+          pickSuggestItem(items[Math.max(suggestIndex, 0)]);
           return;
         }
         if (e.key === "Escape") { hideSuggest(); return; }
@@ -2626,7 +2879,7 @@
     // suggestions
     $("#suggest").addEventListener("mousedown", (e) => {
       const item = e.target.closest(".suggest-item");
-      if (item) { e.preventDefault(); selectSuggestion(item.dataset.field); }
+      if (item) { e.preventDefault(); pickSuggestItem(item); }
     });
     document.addEventListener("click", (e) => {
       if (!e.target.closest("#qbar") && !e.target.closest("#suggest")) hideSuggest();
@@ -2685,12 +2938,14 @@
       });
     }
 
-    // sorting: click cycles ascending -> descending -> back to automatic order
+    // sorting: click cycles ascending -> descending -> back to automatic
+    // order; entry-count columns start descending (extreme spells first)
     for (const th of document.querySelectorAll("th[data-sort]")) {
       th.addEventListener("click", () => {
         const key = th.dataset.sort;
-        if (state.sort.key !== key) state.sort = { key, dir: 1 };
-        else if (state.sort.dir === 1) state.sort.dir = -1;
+        const first = COUNT_SORTS.has(key) ? -1 : 1;
+        if (state.sort.key !== key) state.sort = { key, dir: first };
+        else if (state.sort.dir === first) state.sort.dir = -first;
         else state.sort = { key: "auto", dir: 1 };
         applyFiltersAndSort();
       });

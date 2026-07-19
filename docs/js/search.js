@@ -61,7 +61,7 @@ window.EpsilookSearch = (() => {
     return out;
   }
 
-  // Search visual FX corpora: beams (category word + hue + tint hex +
+  // Search visual FX corpora: chains (category word + hue + tint hex +
   // textures), dissolves (category word + textures), color-only effects —
   // glows, ghosts (ShadowyEffect + material recolors) and model tints
   // (category word + hue + color hexes) — desaturates / transparencies
@@ -86,13 +86,14 @@ window.EpsilookSearch = (() => {
     scan(data.transpSearchL, data.transpSpells);
     if (textMatches("freeze", tokens)) for (const s of data.spellFreezes) out.add(s);
     if (textMatches("camo", tokens)) for (const s of data.spellCamos) out.add(s);
+    scan(data.screenSearchL, data.screenSpells);
     scan(data.morphSearchL, data.morphSpells);
     scan(data.summonPairSearchL, data.summonPairSpells);
     return out;
   }
 
   // Exact numeric lookup against a Map of id -> [spell ids]. Multiple ids
-  // union (OR) — see the orGroups note on searchGroups.
+  // union (OR) — used by id: chips and by kit-ID chips in sound:/anim:.
   function spellsByKitId(tokens, map) {
     const out = new Set();
     for (const t of tokens) {
@@ -144,7 +145,7 @@ window.EpsilookSearch = (() => {
       label: "Model", tab: true,
       hint: "model file, e.g. 6dr statue", short: "model file",
       // matches file names, plus the usage-category words (model:missile =
-      // every spell with a projectile model, like fx:beam in the fx field)
+      // every spell with a projectile model, like fx:chain in the fx field)
       run: (tokens, data) => {
         const out = spellsByFile(tokens, data, data.modelFids, data.modelSpells);
         for (const [cat, spells] of data.modelCatSpells) {
@@ -156,27 +157,34 @@ window.EpsilookSearch = (() => {
     },
     sound: {
       label: "Sound", tab: true,
-      hint: "sound file, e.g. felreaver", short: "sound file",
-      run: (tokens, data) => spellsByFile(tokens, data, data.soundFids, data.soundSpells),
-    },
-    soundkit: {
-      label: "SoundKit", tab: true, orGroups: true,
-      hint: "SoundKit ID, e.g. 86835", short: "SoundKit ID",
-      run: (tokens, data) => spellsByKitId(tokens, data.soundKitSpells),
-    },
-    animkit: {
-      label: "AnimKit", tab: true, orGroups: true,
-      hint: "AnimKit ID, e.g. 13839", short: "AnimKit ID",
-      run: (tokens, data) => spellsByKitId(tokens, data.animKitSpells),
+      hint: "sound file or SoundKit ID, e.g. felreaver or 86835", short: "sound file / kit ID",
+      // matches file names; an all-numbers chip is also an exact SoundKit ID
+      // lookup (the old soundkit: field, folded in 2026-07-19) — several ids
+      // in one chip union, like the old orGroups behavior
+      run: (tokens, data) => {
+        const out = spellsByFile(tokens, data, data.soundFids, data.soundSpells);
+        if (tokens.every((t) => /^\d+$/.test(t.text))) {
+          for (const s of spellsByKitId(tokens, data.soundKitSpells)) out.add(s);
+        }
+        return out;
+      },
     },
     anim: {
       label: "Animation", tab: true,
-      hint: "animation name, e.g. kneel", short: "animation",
-      run: (tokens, data) => spellsByAnim(tokens, data),
+      hint: "animation name or AnimKit ID, e.g. kneel or 13839", short: "animation / kit ID",
+      // matches animation names; an all-numbers chip is also an exact
+      // AnimKit ID lookup (the old animkit: field, folded in 2026-07-19)
+      run: (tokens, data) => {
+        const out = spellsByAnim(tokens, data);
+        if (tokens.every((t) => /^\d+$/.test(t.text))) {
+          for (const s of spellsByKitId(tokens, data.animKitSpells)) out.add(s);
+        }
+        return out;
+      },
     },
     fx: {
       label: "Effect", tab: true,
-      hint: "visual effect, e.g. beam red", short: "visual effect",
+      hint: "visual effect, e.g. chain red", short: "visual effect",
       run: (tokens, data) => spellsByFx(tokens, data),
     },
     mech: {
@@ -214,9 +222,11 @@ window.EpsilookSearch = (() => {
   // groups: [{field, tokens: [{text}, ...], not}] with text lowercased
   // single words. One result set per group; positive groups intersect,
   // negative groups (not: true) subtract from the result. Exception:
-  // groups of the same exact-ID field (orGroups — id: soundkit: animkit:)
+  // groups of the same exact-ID field (orGroups — today only id:)
   // union together first, then that union intersects like one group — a
   // spell has only one ID, so ANDing two of them could never match.
+  // (Kit IDs typed into sound:/anim: chips AND across chips like any
+  // text field — a spell can carry two kits; ids inside ONE chip union.)
   // A query of only negative groups starts from all spells.
   // `disabledFields` (hidden columns) are skipped inside the "all" field;
   // explicit fields always run.

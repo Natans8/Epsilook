@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit, animkit or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260719d">
+  <link rel="stylesheet" href="css/app.css?v=20260719e">
 </head>
 <body>
 
@@ -59,30 +59,37 @@
           <ul>
             <li>Type a prefix like <code>model:</code> (or click a field button) to search one field only.
               Everything you type then belongs to the tag — spaces included — until you press <kbd>Enter</kbd> or <kbd>Tab</kbd>.</li>
-            <li>Fields: <code>name:</code> <code>model:</code> <code>sound:</code> <code>soundkit:</code>
-              <code>animkit:</code> <code>anim:</code> <code>fx:</code> <code>mech:</code> <code>id:</code></li>
-            <li><code>fx:</code> searches visual effects: beams by category word (<code>fx:beam</code>),
+            <li>Fields: <code>name:</code> <code>model:</code> <code>sound:</code>
+              <code>anim:</code> <code>fx:</code> <code>mech:</code> <code>id:</code> —
+              <code>sound:</code> and <code>anim:</code> also take an exact SoundKit / AnimKit ID
+              (<code>sound:86835</code>, <code>anim:13839</code>; the old <code>soundkit:</code> and
+              <code>animkit:</code> prefixes still work as aliases).</li>
+            <li><code>fx:</code> searches visual effects: chains/beams by category word (<code>fx:chain</code>),
               texture name (<code>fx:shadowlaser</code>) or tint color — a color word
-              (<code>fx:beam red</code>) or a hex code (<code>fx:#00b4ff</code>);
+              (<code>fx:chain red</code>) or a hex code (<code>fx:#00b4ff</code>);
               dissolves by texture (<code>fx:"dissolve arcane"</code>);
               glows, ghost effects and model tints by color word or hex
               (<code>fx:"glow red"</code>, <code>fx:"tint green"</code>);
               desaturation and transparency by percent (<code>fx:"transparency 50%"</code>);
               freezes and camouflage by word (<code>fx:freeze</code>, <code>fx:camo</code>);
+              full-screen effects by internal name, color word or hex
+              (<code>fx:"screen hex"</code>, <code>fx:"screen green"</code>);
               morphs by NPC name, model name, creature ID or display ID (<code>fx:"morph sheep"</code>);
               summons by NPC name, creature ID or control type (<code>fx:"summon argi"</code>,
               <code>fx:"summon guardian"</code>).</li>
             <li><code>model:</code> also matches the usage-category words shown in the Models column —
               <code>model:missile</code> finds every spell with a projectile model
-              (<code>attach</code>, <code>missile</code>, <code>area</code>, <code>trail</code>,
-              <code>barrage</code>).</li>
+              (<code>attached</code>, <code>missile</code>, <code>area</code>, <code>trail</code>,
+              <code>barrage</code>). Category words autocomplete while typing inside an
+              <code>fx:</code>/<code>model:</code> tag, and a tag naming a category exactly floats
+              that category's spells to the top of the results.</li>
             <li><code>mech:</code> searches mechanics: spell effect names (<code>mech:resurrect</code>)
               and aura names on aura-applying spells (<code>mech:mod_stun</code>).</li>
             <li>Every tag must match (AND), and words <em>inside</em> one tag must match the <em>same</em> file or name —
               <code>model:6dr</code> + <code>model:crystal</code> means a 6dr model <em>and</em> a crystal model.
-              Exception: several tags of the same exact-ID field (<code>id:</code> <code>soundkit:</code>
-              <code>animkit:</code>) match <em>any</em> of them (OR) — two <code>id:</code> tags could never
-              both match one spell.</li>
+              Exception: several <code>id:</code> tags match <em>any</em> of them (OR) — two <code>id:</code>
+              tags could never both match one spell. Several kit IDs inside <em>one</em>
+              <code>sound:</code>/<code>anim:</code> tag also match any of them.</li>
           </ul>
         </section>
         <section>
@@ -119,13 +126,17 @@
             <li><b>⧉</b> copies an ID; <b>.lo</b>, <b>/</b>, <b>.mod</b> and the Commands buttons copy ready-to-paste
               Epsilon commands — hover to preview. <b>Shift-click</b> on those wraps the copy in <code>`backticks`</code>.</li>
             <li><b>▶</b> on a sound file plays it (streamed from Wowhead); click again to stop.</li>
+            <li>Hovering a texture tag shows the texture; hovering a color swatch shows
+              a large patch of the color with its hex and hue word.</li>
           </ul>
         </section>
         <section>
           <h3>Columns, filters, sharing</h3>
           <ul>
             <li>Hiding a column (toolbar) also excludes it from plain-word search and exports.</li>
-            <li>"Only spells with" narrows the current results (and travels with shared URLs); sorting cycles ▲, ▼, back to relevance.</li>
+            <li>"Only spells with" narrows the current results (and travels with shared URLs); sorting cycles ▲, ▼, back to relevance.
+              The multi-value columns (Models, Sounds, Animations, Effects, Mechanics) sort by
+              <em>number of entries</em> — the first click puts the most extreme spells on top.</li>
             <li>The URL always holds your search — click <b>🔗 Share</b> (next to Export) to copy it, or copy it directly.</li>
             <li>Add <code>&amp;export=json</code> or <code>&amp;export=csv</code> to any shared URL and opening it
               downloads the results directly.</li>
@@ -170,11 +181,11 @@
             <th class="c-idx">#</th>
             <th data-sort="id" class="c-id">ID <span class="arrow"></span></th>
             <th data-sort="name" class="c-name">Name <span class="arrow"></span></th>
-            <th class="c-models">Models</th>
-            <th class="c-sounds">Sounds</th>
-            <th class="c-animkits">Animations</th>
-            <th class="c-fx" title="Visual effects not tied to a model — beams/chain effects, dissolves, glows, ghost effects, model tints, desaturation, transparency, freezes, camouflage, morphs (transform auras) and summoned creatures">Effects</th>
-            <th class="c-mechanics" title="What the spell does mechanically (SpellEffect + SpellEffectAura enums)">Mechanics</th>
+            <th data-sort="models" class="c-models" title="Click to sort by number of models">Models <span class="arrow"></span></th>
+            <th data-sort="sounds" class="c-sounds" title="Click to sort by number of sounds">Sounds <span class="arrow"></span></th>
+            <th data-sort="animkits" class="c-animkits" title="Click to sort by number of animations">Animations <span class="arrow"></span></th>
+            <th data-sort="fx" class="c-fx" title="Visual effects not tied to a model — chain/beam effects, dissolves, glows, ghost effects, model tints, desaturation, transparency, freezes, camouflage, morphs (transform auras) and summoned creatures. Click to sort by number of effects">Effects <span class="arrow"></span></th>
+            <th data-sort="mechanics" class="c-mechanics" title="What the spell does mechanically (SpellEffect + SpellEffectAura enums). Click to sort by number of mechanics">Mechanics <span class="arrow"></span></th>
             <th class="c-cmds">Commands</th>
           </tr>
         </thead>
@@ -187,7 +198,7 @@
     <div id="empty-state">
       <h2>Search <span id="es-count">…</span> spells from WoW 9.2.7</h2>
       <p>Find spells by name, by the model files their visuals attach, by the sounds and
-         soundkits they play, by animation, by visual effect (beams, tinted by color), or by ID —
+         soundkits they play, by animation, by visual effect (chains and beams, tinted by color), or by ID —
          then copy Epsilon commands with one click.</p>
       <p class="es-try">Try one of these:</p>
       <div class="es-examples">
@@ -196,7 +207,7 @@
         <button data-search="model:book">model:book</button>
         <button data-search="sound:felreaver">sound:felreaver</button>
         <button data-search="anim:ArtLoop">anim:ArtLoop</button>
-        <button data-search="fx:beam red">fx:beam red</button>
+        <button data-search="fx:chain red">fx:chain red</button>
         <button data-search="mech:leap">mech:leap</button>
         <button data-search='name:nova -mech:school_damage'>name:nova -mech:school_damage</button>
       </div>
@@ -229,13 +240,13 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260719d"></script>
-<script src="js/data.js?v=20260719d"></script>
+<script src="js/config.js?v=20260719e"></script>
+<script src="js/data.js?v=20260719e"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260719d"></script>
-<script src="js/js-blp.js?v=20260719d"></script>
-<script src="js/search.js?v=20260719d"></script>
-<script src="js/app.js?v=20260719d"></script>
+<script src="js/bufo.js?v=20260719e"></script>
+<script src="js/js-blp.js?v=20260719e"></script>
+<script src="js/search.js?v=20260719e"></script>
+<script src="js/app.js?v=20260719e"></script>
 </body>
 </html>

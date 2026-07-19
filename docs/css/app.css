@@ -568,6 +568,19 @@ td.expanded .kit-group.overflow { display: flex; }
   border-radius: 0;
   font-size: 1em;
 }
+/* percent pills (desaturate/transparency): the value is a bare number, not
+   an entity — no capsule, just (label | value) split by a flat divider */
+.kit-group.compact .kit-files:has(> .tag.pct) {
+  margin: 0;
+  padding: 0 0.1rem;
+  border: none;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  align-self: stretch;
+  align-items: center;
+}
+.kit-group.compact .kit-files:has(> .tag.pct.hit) { border-left-color: var(--gold-dim); }
 
 /* tags */
 
@@ -635,6 +648,12 @@ td.expanded .kit-group.overflow { display: flex; }
   border: 1px solid rgba(255, 255, 255, 0.35);
 }
 .fx-swatch + .tag-label { padding-left: 0.35rem; }
+/* screen pills can carry several dots (fog + multiply + addition) */
+.fx-swatch + .fx-swatch { margin-left: 0.18rem; }
+/* swatches with a hover panel hint at it like texture labels do */
+@media (hover: hover) {
+  .fx-swatch[data-color]:hover { border-color: rgba(255, 255, 255, 0.8); }
+}
 
 /* "+N" expander riding in a group's head bar (visual FX groups) — carries
    the column's fx tint so it reads as a control, not background chrome */
@@ -948,6 +967,12 @@ footer a { color: var(--text-dim); }
   overflow: hidden;
 }
 #texpreview canvas { display: block; }
+/* color-swatch hover: a large patch of the color in the same panel */
+#texpreview .tex-color {
+  width: 140px;
+  height: 90px;
+  border-radius: 3px;
+}
 #texpreview .tex-dims {
   margin-top: 4px;
   font-size: 0.76rem;
