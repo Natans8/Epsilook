@@ -67,6 +67,34 @@ window.EpsilookConfig = {
   // scaled down, small ones stay at native size).
   texturePreviewMax: 256,
 
+  // Expansion logo shown beside the version selector. The .blp comes from the
+  // same version-pinned wago CASC API as the texture previews and is decoded
+  // in-browser by the vendored js-blp — one small image per version switch,
+  // and a failure just hides the logo.
+  //
+  // Keyed by the build's MAJOR version, which is what identifies the
+  // expansion (9.2.7 -> 9 -> Shadowlands). To add one, find its
+  // interface/glues/common/glues-wow-*logo.blp id in the community listfile.
+  // Verified against a real build for 3/7/9/10/11; the rest are read off the
+  // listfile by name and will simply not render if an id is wrong.
+  expansionLogos: {
+    1:  { name: "Classic",                   fid: 538639 },
+    2:  { name: "The Burning Crusade",       fid: 131194 },
+    3:  { name: "Wrath of the Lich King",    fid: 235510 },
+    4:  { name: "Cataclysm",                 fid: 321206 },
+    5:  { name: "Mists of Pandaria",         fid: 571576 },
+    6:  { name: "Warlords of Draenor",       fid: 937277 },
+    7:  { name: "Legion",                    fid: 1725879 },
+    8:  { name: "Battle for Azeroth",        fid: 1847992 },
+    9:  { name: "Shadowlands",               fid: 3522861 },
+    10: { name: "Dragonflight",              fid: 4547767 },
+    11: { name: "The War Within",            fid: 5705453 },
+    12: { name: "Midnight",                  fid: 7242277 },
+  },
+
+  // Rendered height of that logo, in CSS pixels (the art is 512x256).
+  expansionLogoHeight: 38,
+
   // Spell icon shown next to the name, hotlinked from Wowhead's CDN
   // ({icon} = icon name; sizes: tiny/small/medium/large). Set to "" to
   // disable icons entirely.

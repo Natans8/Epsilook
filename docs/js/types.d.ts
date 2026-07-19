@@ -37,6 +37,10 @@ interface EpsilookConfig {
   soundVolume: number;
   texturePreviewUrl: string;
   texturePreviewMax: number;
+  /** Expansion logo per build MAJOR version, e.g. 9 -> Shadowlands. */
+  expansionLogos: Record<number, { name: string; fid: number }>;
+  /** Rendered height of that logo, in CSS pixels. */
+  expansionLogoHeight: number;
   spellIconUrl: string;
   discordCharLimit: number;
   scrollBatch: number;
@@ -58,6 +62,17 @@ interface VersionEntry {
   file: string;
   /** Content hash appended as ?v= to bust the browser cache on data change. */
   hash?: string;
+  /**
+   * Reachable only through an explicit ?v= in the URL: kept out of the version
+   * dropdown and never chosen as the default, so the pack is downloaded only
+   * by someone who asked for it by name.
+   */
+  hidden?: boolean;
+  /**
+   * The pack to load when the URL names no version. At most one entry carries
+   * it; without any, the newest visible pack wins.
+   */
+  default?: boolean;
 }
 
 /**

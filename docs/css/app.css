@@ -53,7 +53,20 @@ h1 {
 
 .tagline { display: inline; margin: 0 0 0 0.7rem; color: var(--text-dim); font-size: 0.9rem; }
 
-#version-wrap label { color: var(--text-dim); font-size: 0.85rem; margin-right: 0.4rem; }
+#version-wrap { display: flex; align-items: center; gap: 0.4rem; }
+#version-wrap label { color: var(--text-dim); font-size: 0.85rem; }
+
+/* the expansion logo: game art with its own transparent background, so it
+   needs no chrome — it sits flush beside the selector and collapses to
+   nothing when the build has no mapped logo.
+   It is decorative (aria-hidden), so it shrinks rather than widening the
+   header, and steps aside entirely once the header gets tight. */
+#version-logo { display: flex; align-items: center; line-height: 0; min-width: 0; }
+#version-logo canvas { display: block; max-width: 100%; object-fit: contain; }
+
+@media (max-width: 900px) {
+  #version-logo { display: none; }
+}
 
 select {
   background: var(--bg-panel);

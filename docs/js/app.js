@@ -119,6 +119,15 @@
   const shortVersion = (id) => id.split(".").slice(0, 3).join(".");
 
   /**
+   * Display name for a version entry, without the build number — the label
+   * from versions.json ("Shadowlands 9.2.7"), or the short patch when a pack
+   * was built without --label (label then defaults to the full build id).
+   * @param {VersionEntry} entry
+   */
+  const versionLabel = (entry) =>
+    entry.label && entry.label !== entry.id ? entry.label : shortVersion(entry.id);
+
+  /**
    * File name without its extension.
    * @param {string} name
    */
@@ -2805,10 +2814,17 @@
 
   /* ----------------------------------------------------------- the URL */
 
-  // the default (newest) version stays out of the URL — links only carry
-  // v= when the user deliberately switched to an older pack
+  // the default version stays out of the URL — links only carry v= when the
+  // user deliberately switched to another pack.
+  //
+  // An entry flagged `default` in versions.json wins; otherwise it is the
+  // newest visible pack. The flag exists because the newest build is not
+  // necessarily the one to serve first. Hidden packs never qualify either
+  // way: they exist only for whoever asks for one by name with ?v=, so
+  // nobody else ever downloads them.
   function defaultVersion() {
-    return state.versions[state.versions.length - 1];
+    const visible = state.versions.filter((e) => !e.hidden);
+    return visible.find((e) => e.default) || visible.at(-1);
   }
 
   // keep ":", "+" for space, and quotes readable — encodeURIComponent's
@@ -3382,6 +3398,55 @@
     }
   }
 
+  /**
+   * Point the version dropdown at the active pack.
+   *
+   * A hidden pack has no option until it is activated — whoever passed its
+   * ?v= has asked for it by name, and a select left showing a blank value
+   * would just be lying about what is loaded.
+   * @param {VersionEntry} entry
+   */
+  function showVersionOption(entry) {
+    const sel = /** @type {HTMLSelectElement} */ ($("#version"));
+    if (![...sel.options].some((o) => o.value === entry.id)) {
+      const opt = el("option", "", versionLabel(entry));
+      opt.value = entry.id;
+      sel.appendChild(opt);
+    }
+    sel.value = entry.id;
+    $("#version-wrap").hidden = sel.options.length < 2;
+  }
+
+  /**
+   * Show the active version's expansion logo beside the selector.
+   *
+   * The art is a game texture, so it comes from the same version-pinned CASC
+   * API (and the same in-browser BLP decoder) the texture previews use — one
+   * small image per version switch. Anything unknown or unfetchable just
+   * leaves the slot empty rather than showing a broken image.
+   * @param {VersionEntry} entry
+   */
+  async function showVersionLogo(entry) {
+    const slot = $("#version-logo");
+    if (!slot) return;
+    const major = Number(entry.id.split(".")[0]);
+    const logo = CFG.expansionLogos && CFG.expansionLogos[major];
+    slot.replaceChildren();
+    slot.title = "";
+    if (!logo) return;
+    const canvas = await textureCanvas(logo.fid);
+    // a slow fetch can land after the user has switched again
+    if (!canvas || state.version !== entry) return;
+    canvas.style.height = CFG.expansionLogoHeight + "px";
+    canvas.style.width = "auto";
+    slot.title = logo.name;
+    slot.replaceChildren(canvas);
+  }
+
+  /**
+   * @param {VersionEntry} entry
+   * @param {{push?: boolean}} [opts]
+   */
   async function activateVersion(entry, { push = false } = {}) {
     const overlay = $("#loading");
     const loadText = $("#load-text");
@@ -3400,7 +3465,8 @@
       await new Promise((r) => setTimeout(r)); // let the text paint
       state.data = Data.buildIndexes(pack);
       state.version = entry;
-      /** @type {HTMLSelectElement} */ ($("#version")).value = entry.id;
+      showVersionOption(entry);
+      void showVersionLogo(entry);  // fire-and-forget: failure just hides it
       $("#meta-info").textContent =
         `${entry.label} (${entry.id}) · Listfile ${state.data.meta.listfileTag} · Built ${state.data.meta.built} · ` +
         `${state.data.meta.counts.spells.toLocaleString()} spells`;
@@ -3451,13 +3517,14 @@
       return;
     }
 
-    const sel = $("#version");
+    const sel = /** @type {HTMLSelectElement} */ ($("#version"));
     for (const v of state.versions) {
-      const opt = el("option", "", `${v.label} (${v.id})`);
+      if (v.hidden) continue;  // URL-only pack: activateVersion adds it if asked for
+      const opt = el("option", "", versionLabel(v));
       opt.value = v.id;
       sel.appendChild(opt);
     }
-    $("#version-wrap").hidden = state.versions.length < 2;
+    $("#version-wrap").hidden = sel.options.length < 2;
 
     const h = urlToState();
     // ?export=json|csv downloads the query's results as soon as they're
