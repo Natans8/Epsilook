@@ -687,7 +687,16 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # overlay + TextureBlendSet textures. Gamma/saturation/blur/fades and
     # LightParams/SoundAmbience/ZoneMusic: skipped for now (revisit).
     SCREEN_EFFECT_FOG = 3
-    fse_rows: dict[int, tuple[int, int, tuple[int, ...]]] = {}  # ID -> (mul, add, tex fids)
+    # the two texture columns are NOT interchangeable, and the difference is
+    # what the preview has to honour: TextureBlendSet textures are MASKS
+    # (mask_fullscreen_01, white_64, black64, tileset/generic/grey,
+    # alphamask_*, flare_invert, *_desat_* — flat grey/white, meaningless
+    # untinted) that the mul/add colors paint; OverlayTextureFileDataID is
+    # finished art (fullscreeneffect_*.blp, 10fx_explosion01, …) drawn on top
+    # in its own colors. Roles ride alongside the fids: TEX_OVERLAY/TEX_MASK.
+    TEX_OVERLAY, TEX_MASK = 0, 1
+    # ID -> (mul, add, ((fid, role), ...))
+    fse_rows: dict[int, tuple[int, int, tuple[tuple[int, int], ...]]] = {}
     for fid_, flds in (
         (to_int(r[0]), r[1:]) for r in read_table(
             table_dir, "FullScreenEffect",
@@ -699,18 +708,29 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             f = lambda v: max(0, min(255, round(float(v or 0) * 255)))
             return (f(r) << 16) | (f(g) << 8) | f(b)
         overlay = to_int(flds[6])
-        tex = tuple(dict.fromkeys(
-            ([overlay] if overlay else []) + list(blendset_tex.get(to_int(flds[7]), ()))))
-        fse_rows[fid_] = (fpack(*flds[0:3]), fpack(*flds[3:6]), tex)
+        # a fid carrying both roles in one row keeps the overlay role (it is
+        # the finished art either way)
+        roles: dict[int, int] = {}
+        if overlay:
+            roles[overlay] = TEX_OVERLAY
+        for f in blendset_tex.get(to_int(flds[7]), ()):
+            roles.setdefault(f, TEX_MASK)
+        fse_rows[fid_] = (fpack(*flds[0:3]), fpack(*flds[3:6]), tuple(roles.items()))
 
-    screen_rows: dict[int, tuple[str, int, int, int, tuple[int, ...]]] = {}
-    # ScreenEffect.ID -> (name, fog color | -1, mul | -1, add | -1, tex fids)
+    screen_rows: dict[int, tuple[str, int, int, int, int, tuple[tuple[int, int], ...]]] = {}
+    # ScreenEffect.ID -> (name, fog | -1, fog alpha | -1, mul | -1, add | -1,
+    #                     ((fid, role), ...))
     for sid, name, p0, eff, fse_id in read_table(
         table_dir, "ScreenEffect", ["ID", "Name", "Param_0", "Effect", "FullScreenEffectID"]
     ):
-        fog = (to_int(p0) & 0xFFFFFF) if to_int(eff) == SCREEN_EFFECT_FOG else -1
+        is_fog = to_int(eff) == SCREEN_EFFECT_FOG
+        # Param_0 is aarrggbb: the low 24 bits are the fog color and the top
+        # byte is its opacity (spread across 0..255 in 9.2.7 — NOT the wiki's
+        # "rrggbbxx" claim, verified against the Hex/jungle-green rows)
+        fog = (to_int(p0) & 0xFFFFFF) if is_fog else -1
+        fog_a = ((to_int(p0) & 0xFFFFFFFF) >> 24) & 0xFF if is_fog else -1
         mul, add, tex = fse_rows.get(to_int(fse_id), (-1, -1, ()))
-        screen_rows[to_int(sid)] = (name, fog, mul, add, tex)
+        screen_rows[to_int(sid)] = (name, fog, fog_a, mul, add, tex)
 
     # kit route: EffectType 19 -> SpellVisualScreenEffect -> ScreenEffectID
     svse_screen: dict[int, int] = {}  # SpellVisualScreenEffect.ID -> ScreenEffect.ID
@@ -725,13 +745,18 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     def float_channel(v: str) -> int:
         return max(0, min(255, round(float(v or 0) * 255)))
 
-    glow_rows: dict[int, int] = {}  # EdgeGlowEffect.ID -> packed RGB
-    for gid, r, g, b in read_table(
-        table_dir, "EdgeGlowEffect", ["ID", "GlowRed", "GlowGreen", "GlowBlue"]
+    glow_rows: dict[int, int] = {}    # EdgeGlowEffect.ID -> packed RGB
+    glow_alphas: dict[int, int] = {}  # EdgeGlowEffect.ID -> alpha 0..255
+    for gid, r, g, b, a in read_table(
+        table_dir, "EdgeGlowEffect",
+        ["ID", "GlowRed", "GlowGreen", "GlowBlue", "GlowAlpha"]
     ):
         glow_rows[to_int(gid)] = (
             (float_channel(r) << 16) | (float_channel(g) << 8) | float_channel(b)
         )
+        # GlowAlpha is a real 0..1 spread (not a 0/1 unset flag like the
+        # ShadowyEffect ARGB alpha byte), so it is worth showing
+        glow_alphas[to_int(gid)] = float_channel(a)
 
     # shadowy effects: EffectType 7 -> ShadowyEffect, two packed colors
     # stored as signed int32 ARGB — the alpha byte is masked off
@@ -1015,7 +1040,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     for e in used_dissolves:
         referenced_fids.update(dissolve_rows[e][1])
     for sc in used_screens:
-        referenced_fids.update(screen_rows[sc][4])
+        referenced_fids.update(f for f, _role in screen_rows[sc][5])
     referenced_fids.update(f for _, _, f in morph_display_rows if f)
 
     # icon fids resolve through the same listfile pass but stay out of the
@@ -1146,11 +1171,14 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     screen_ids = sorted(used_screens)
     screen_hues = []
     for sc in screen_ids:
-        _, fog, mul, add, _tex = screen_rows[sc]
+        _, fog, _fog_a, mul, add, _tex = screen_rows[sc]
         hues = dict.fromkeys(
             h for c in (fog, mul, add) if c >= 0 for h in (hue_word(*unpack_rgb(c)),) if h)
         screen_hues.append(" ".join(hues))
-    screen_tex_rows = sorted((sc, f) for sc in used_screens for f in screen_rows[sc][4])
+    # overlays sort before masks per screen, so the pill previews the finished
+    # art when a screen has both
+    screen_tex_rows = sorted(
+        (sc, role, f) for sc in used_screens for f, role in screen_rows[sc][5])
 
     # desaturate (proc Type 21) / transparency (proc Type 14): percent-only
     # pills — the percent is the whole payload (no color, no id table). Dedupe
@@ -1180,7 +1208,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     pack = {
         "meta": {
-            "format": 16,
+            "format": 17,
             "version": version,
             "label": label,
             "built": time.strftime("%Y-%m-%d"),
@@ -1306,6 +1334,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "glows": {
             "ids": glow_ids,
             "colors": [glow_rows[g] for g in glow_ids],
+            "alphas": [glow_alphas[g] for g in glow_ids],
             "hues": glow_hues,
         },
         # shadowy effects (ShadowyEffect via kit EffectType 7): two packed
@@ -1369,13 +1398,17 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "ids": screen_ids,
             "names": [screen_rows[sc][0] for sc in screen_ids],
             "fogColors": [screen_rows[sc][1] for sc in screen_ids],
-            "mulColors": [screen_rows[sc][2] for sc in screen_ids],
-            "addColors": [screen_rows[sc][3] for sc in screen_ids],
+            "fogAlphas": [screen_rows[sc][2] for sc in screen_ids],
+            "mulColors": [screen_rows[sc][3] for sc in screen_ids],
+            "addColors": [screen_rows[sc][4] for sc in screen_ids],
             "hues": screen_hues,
         },
+        # roles: 0 = overlay (finished art, drawn in its own colors), 1 = mask
+        # (flat blend-set texture the mul/add colors paint)
         "screenTextures": {
             "screenIds": [r[0] for r in screen_tex_rows],
-            "fids": [r[1] for r in screen_tex_rows],
+            "roles": [r[1] for r in screen_tex_rows],
+            "fids": [r[2] for r in screen_tex_rows],
         },
         # morphs: transform auras reference a CREATURE (NPC entry); its
         # display ids come from TDB's creature_template_model, each display
