@@ -184,6 +184,12 @@ TDB_RELEASES = {
         "world": "TDB_full_world_1127.26011_2026_01_14.sql",
         "hotfixes": "TDB_full_hotfixes_1127.26011_2026_01_14.sql",
     },
+    "8.3.7.35662": {
+        "tag": "TDB837.20101",
+        "asset": "TDB_full_837.20101_2020_10_20.7z",
+        "world": "TDB_full_world_837.20101_2020_10_20.sql",
+        "hotfixes": "TDB_full_hotfixes_837.20101_2020_10_20.sql",
+    },
     # Legion: the 2018 archive nests both dumps in a folder and drops the
     # "full_" infix from the inner file names.
     "7.3.5.26972": {
