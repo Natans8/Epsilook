@@ -85,8 +85,14 @@ main { padding: 0 1.6rem 2rem; }
 .bar { display: flex; gap: 0.5rem; align-items: center; }
 
 /* the chip search bar: committed tags + the text input */
+/* min-width:0 defeats the flex `min-width:auto` default: without it the bar
+ * refuses to shrink below the widest thing inside it, and a long chip being
+ * typed (sizeInput sets an explicit ch width) drags it off the screen edge
+ * instead of wrapping. Every step from here down to #q needs the same escape
+ * hatch, hence the min-width/max-width pairs below. */
 #qbar {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -102,15 +108,19 @@ main { padding: 0 1.6rem 2rem; }
 /* only the true trailing gap (nothing after it) fills the rest of the
  * line; a gap before or between chips hugs its content instead, so it
  * doesn't shove the chips after it away */
-#editwrap { display: inline-flex; align-items: baseline; }
+#editwrap { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; }
 #editwrap.fill { flex: 1; min-width: 10rem; }
 
 /* font-family/line-height don't inherit into form controls — set them so the
  * text being typed is metrically identical to the free-text chip it becomes
  * on commit (see .qchip.qfree), with no font swap or vertical jump */
+/* max-width caps sizeInput's explicit ch width at the bar's own width, so a
+ * long value scrolls inside the input (native caret tracking) rather than
+ * widening the pill past the screen edge */
 #q {
   flex: 1;
   min-width: 6rem;
+  max-width: 100%;
   font-family: inherit;
   font-size: 1.1rem;
   line-height: 1.2;
@@ -136,7 +146,11 @@ main { padding: 0 1.6rem 2rem; }
   border-radius: 999px;
   background: rgba(240, 195, 76, 0.07);
 }
-#editwrap.editing #q { flex: 0 0 auto; min-width: 4ch; }
+/* shrink-to-fit, not flex:0 0 auto: sizeInput gives the input an explicit ch
+ * width, and the field label shares this row, so a percentage max-width can't
+ * express "the pill minus the label" — only flex-shrink can. Without the 1 the
+ * text spills out past the pill's right edge once the value gets long. */
+#editwrap.editing #q { flex: 0 1 auto; min-width: 4ch; }
 #editlabel {
   margin-right: 0.35rem;
   font-family: Consolas, "Cascadia Mono", monospace;
@@ -345,6 +359,49 @@ main { padding: 0 1.6rem 2rem; }
   padding: 0 0.35rem;
   font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 0.85em;
+}
+
+/* A section's short lead-in above its worked examples — the prose that used to
+ * carry the whole explanation now only has to set up the list below it. */
+.help-note {
+  margin: 0 0 0.45rem;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+
+/* Worked examples: a runnable query followed by what it finds. Bulletless and
+ * hanging-indented so the queries line up as a scannable column. */
+#help ul.help-ex {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+}
+#help ul.help-ex li {
+  margin: 0.25rem 0;
+  padding-left: 1rem;
+  text-indent: -1rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+#help ul.help-ex button {
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 0.88em;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  margin-right: 0.3rem;
+  cursor: pointer;
+  text-indent: 0;
+}
+#help ul.help-ex button:hover,
+#help ul.help-ex button:focus-visible {
+  color: var(--gold);
+  border-color: var(--gold-dim);
+  background: rgba(240, 195, 76, 0.08);
 }
 
 /* --------------------------------------------------------------- toolbar */
