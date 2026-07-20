@@ -299,6 +299,20 @@ flowchart LR
 `CONTROL_VEHICLE` (aura 236) is the far larger population — 1,581 rows vs 247
 on 9.2.7 — but its `EffectMiscValue_0` is a seat/flag value, not a
 `Vehicle.db2` id, so it needs its own route and is deliberately not wired up.
+`Vehicle.MissileTargetingID` (the sole referencer of `MissileTargeting`, an
+impact model + arc/impact textures) is the vehicle weapon's targeting arc, but
+only 4 of the 218 aura-296 vehicles carry one on 9.2.7 — the arcs live on the
+`CONTROL_VEHICLE` combat vehicles, so surfacing them waits on that route too.
+
+**These effect-driven fx carry a target mask of their own** (pack format 25),
+and it does *not* come from the visual graph — it is the producing
+`SpellEffect` row's `ImplicitTarget_0`/`_1` (the `Target` enum, mapped to the
+same caster/target/area bits as §2's `TargetType`, by `implicit_target_bit`).
+It answers *who the effect lands on*: a polymorph's morph is on the **target**,
+a self-transform on the **caster**, a summon on the **area** where it lands.
+These rows never pass through `SpellVisualEvent`, so `TargetType` says nothing
+about them — the implicit target is the only source. Alt-names (aura 370) are
+search-corpus-only and carry no mask.
 
 **misc0 on a transform aura is a creature id, not a display id** — a
 long-standing trap. Both morphs and shapeshift forms then walk the same
@@ -443,7 +457,12 @@ flowchart LR
 
 Sections carrying a parallel `targets` array (the target-icon feature):
 `spellModels`, `spellSounds`, `spellAnimKits`, `spellVisualAnims`, `spellFx`,
-`spellDissolves`, `spellGlows`, `spellShadowies`, `spellGhostMats`.
+`spellDissolves`, `spellGlows`, `spellShadowies`, `spellGhostMats` (these from
+`SpellVisualEvent.TargetType`, §2), plus — from `SpellEffect.ImplicitTarget`
+(§3f, pack format 25) — `spellMorphs`, `spellSummons`, `spellVehicles`,
+`spellShapeshifts`, `spellScreens`. Both feed the same `maskIndex` in `data.js`
+and the same icon renderer, so the two mask sources are indistinguishable
+downstream.
 
 `data.js` builds a **forward and a reverse index** for each — spell→items for
 rendering, item→spells for searching. Every section read is guarded
@@ -464,23 +483,25 @@ mostly "the table does not exist yet." The five Classic re-release clients
 |---|---|---:|---:|---|---:|
 | 1.15.8.67156 | Vanilla Classic | 31,248 | 0.7 MB | — | 6 |
 | 2.5.6.68775 | TBC Classic | 28,650 | 0.7 MB | — | 11 |
-| 3.4.3.58936 | WotLK Classic | 49,394 | 1.2 MB | TDB335.25101 | 10 |
-| 4.4.2.60895 | Cataclysm Classic | 71,227 | 1.8 MB | — | 10 |
-| 5.5.4.68716 | Mists of Pandaria Classic | 98,129 | 2.5 MB | — | 6 |
-| 7.3.5.26972 | Legion | 179,382 | 4.7 MB | TDB735.00 | 4 |
-| 8.3.7.35662 | Battle for Azeroth | 227,237 | 6.1 MB | TDB837.20101 | 1 |
-| 9.2.7.45745 | Shadowlands *(default)* | 276,332 | 7.4 MB | TDB927.22111 | 0 |
-| 10.2.7.55664 | Dragonflight | 327,092 | 8.9 MB | TDB1027.24051 | 0 |
-| 11.2.7.65299 | The War Within | 375,895 | 10.4 MB | TDB1127.26011 | 0 |
+| 3.4.3.58936 | WotLK Classic | 49,394 | 1.3 MB | TDB335.25101 | 10 |
+| 4.4.2.60895 | Cataclysm Classic | 71,227 | 1.9 MB | — | 10 |
+| 5.5.4.68716 | Mists of Pandaria Classic | 98,129 | 2.6 MB | — | 6 |
+| 7.3.5.26972 | Legion | 179,382 | 4.9 MB | TDB735.00 | 4 |
+| 8.3.7.35662 | Battle for Azeroth | 227,237 | 6.4 MB | TDB837.20101 | 1 |
+| 9.2.7.45745 | Shadowlands *(default)* | 276,332 | 7.8 MB | TDB927.22111 | 0 |
+| 10.2.7.55664 | Dragonflight | 327,092 | 9.4 MB | TDB1027.24051 | 0 |
+| 11.2.7.65299 | The War Within | 375,895 | 11.0 MB | TDB1127.26011 | 0 |
 
-**Eight are at pack format 24** (WotLK 3.4.3 and everything after it); Vanilla
-1.15.8 and TBC 2.5.6 stay at format 22, deliberately not rebuilt for the
-vehicle work since vehicles are a WotLK-era feature. Sizes grew ~11% at format
-22 — the target masks' cost. Format 23 (vehicles) cost essentially nothing.
-Format 24 (attachment points) is the visible one: it grew model rows ~18%,
-because the attachment is part of the row key and the same model at two points
-is now two rows. Neither format added any new absent-table drift — `Vehicle`,
-`VehicleSeat` and every attachment column exist on all eight rebuilt versions.
+**All ten are at pack format 25** (effect-driven fx carry a target mask from
+`SpellEffect.ImplicitTarget` — §3f). Format 25 is version-agnostic: morphs,
+summons and screens exist as far back as Vanilla, so Vanilla 1.15.8 and TBC
+2.5.6 were rebuilt for it too (they had sat at format 22) — which also brought
+them the format-23/24 vehicle and attachment features their data supports
+(vehicles degrade to nothing on both; attachment points populate). The earlier
+format costs still hold: format 22 target masks ~+11% size, format 23 vehicles
+essentially free, format 24 attachment points ~+18% model rows (the attachment
+is part of the row key). Format 25 adds one small `targets` array to each of
+the five effect-fx link sections. No new absent-table drift.
 
 ### Attachment coverage by version
 

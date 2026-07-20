@@ -238,6 +238,14 @@ window.EpsilookData = (() => {
     const glowTargets = maskIndex(pack.spellGlows, "glowIds");
     const shadowyTargets = maskIndex(pack.spellShadowies, "shadowyIds");
     const ghostMatTargets = maskIndex(pack.spellGhostMats, "ghostIds");
+    // effect-driven fx (pack format 25): masks from SpellEffect.ImplicitTarget
+    // rather than the visual-event graph — who a morph/summon/vehicle/screen/
+    // shapeshift lands on (a polymorph's morph is on the target, not the caster)
+    const morphTargets = maskIndex(pack.spellMorphs, "creatureIds");
+    const summonTargets = maskIndex(pack.spellSummons, "creatureIds");
+    const vehicleTargets = maskIndex(pack.spellVehicles, "vehicleIds");
+    const shapeshiftTargets = maskIndex(pack.spellShapeshifts, "formIds");
+    const screenTargets = maskIndex(pack.spellScreens, "screenIds");
     /** @type {Record<number, string>} mask bit -> search word */
     const targetNames = pack.targetNames || {};
 
@@ -834,6 +842,7 @@ window.EpsilookData = (() => {
       spellVisualAnims, visualAnimSpells,
       targetNames, animKitTargets, visualAnimTargets, fxTargets,
       dissolveTargets, glowTargets, shadowyTargets, ghostMatTargets,
+      morphTargets, summonTargets, vehicleTargets, shapeshiftTargets, screenTargets,
       spellMorphs, morphSpells, morphNames, morphDisplays, morphSearchL,
       spellShapeshifts, shapeshiftSpells, shapeshiftNames, shapeshiftDisplays,
       shapeshiftSearchL,

@@ -724,6 +724,7 @@ td.expanded .kit-group.overflow { display: flex; }
   max-width: 14rem;
 }
 .tag-attach:hover { text-decoration: underline; color: inherit; }
+.tag-attach.hit { color: var(--gold); }
 
 .tag-label {
   padding: 0.12rem 0.55rem;

@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit, animkit or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260720k">
+  <link rel="stylesheet" href="css/app.css?v=20260720l">
 </head>
 <body>
 
@@ -110,15 +110,15 @@
         </section>
         <section>
           <h3>Attachment points</h3>
-          <p class="help-note">Where <em>on the model</em> something plays. Missiles and beams travel
-            between two, shown as <code>SpellRightHand → Chest</code>. The same model at two
-            different points shows as two pills. They autocomplete inside
-            <code>model:</code> and <code>fx:</code>, and a partial word finds them all.</p>
+          <p class="help-note">Where <em>on the model</em> something plays. Match them with the
+            <code>anchor:</code> keyword inside <code>model:</code> and <code>fx:</code> — a partial
+            name finds them all. Missiles and beams travel between two, shown as
+            <code>SpellRightHand → Chest</code>; the same model at two points shows as two pills.</p>
           <ul class="help-ex">
-            <li><button data-search="model:hand">model:hand</button> either hand, and the spell-hand slots</li>
-            <li><button data-search="model:Chest">model:Chest</button> also <code>Base</code>, <code>Head</code>, <code>Breath</code></li>
-            <li><button data-search='fx:"chain chest"'>fx:"chain chest"</button> beams touching the chest</li>
-            <li><button data-search='model:"missile Head"'>model:"missile Head"</button> projectiles that fly to the head</li>
+            <li><button data-search="model:anchor:hand">model:anchor:hand</button> either hand, and the spell-hand slots</li>
+            <li><button data-search="model:anchor:chest">model:anchor:chest</button> also <code>anchor:base</code>, <code>anchor:head</code></li>
+            <li><button data-search='fx:"chain anchor:chest"'>fx:"chain anchor:chest"</button> beams touching the chest</li>
+            <li><button data-search='model:"missile anchor:head"'>model:"missile anchor:head"</button> projectiles that fly to the head</li>
           </ul>
         </section>
         <section>
@@ -304,13 +304,13 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260720k"></script>
-<script src="js/data.js?v=20260720k"></script>
+<script src="js/config.js?v=20260720l"></script>
+<script src="js/data.js?v=20260720l"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260720k"></script>
-<script src="js/js-blp.js?v=20260720k"></script>
-<script src="js/search.js?v=20260720k"></script>
-<script src="js/app.js?v=20260720k"></script>
+<script src="js/bufo.js?v=20260720l"></script>
+<script src="js/js-blp.js?v=20260720l"></script>
+<script src="js/search.js?v=20260720l"></script>
+<script src="js/app.js?v=20260720l"></script>
 </body>
 </html>
