@@ -838,11 +838,11 @@
 
   /* The attachment-point keyword. It is the ONE attachment meta-word that
    * autocompletes: the point NAMES are data values, deliberately kept out of
-   * the suggestions (the user types them after the colon). Offered only in
-   * the two columns that render attachment segments, and only when the pack
-   * actually carries attachment data. */
-  const ANCHOR_WORD = "anchor:";
-  const ANCHOR_TITLE = "Attachment point, e.g. anchor:chest or anchor:spelllefthand";
+   * the suggestions (the user types the point after it, `attach chest`).
+   * Offered only in the two columns that render attachment segments, and only
+   * when the pack actually carries attachment data. */
+  const ATTACH_WORD = "attach";
+  const ATTACH_TITLE = "Attachment point follows, e.g. attach chest or attach spelllefthand";
 
   function fieldCategories(field) {
     const d = state.data;
@@ -851,15 +851,15 @@
       words: [...words, ...Search.TARGET_WORDS],
       titles: { ...titles, ...TARGET_WORD_TITLES },
     });
-    /** ...plus the anchor: keyword, for the columns that show attach points. */
-    const hasAnchors = d && d.attachmentNames && Object.keys(d.attachmentNames).length > 0;
-    const withAnchor = (base) => hasAnchors ? {
-      words: [...base.words, ANCHOR_WORD],
-      titles: { ...base.titles, [ANCHOR_WORD]: ANCHOR_TITLE },
+    /** ...plus the attach keyword, for the columns that show attach points. */
+    const hasAttach = d && d.attachmentNames && Object.keys(d.attachmentNames).length > 0;
+    const withAttach = (base) => hasAttach ? {
+      words: [...base.words, ATTACH_WORD],
+      titles: { ...base.titles, [ATTACH_WORD]: ATTACH_TITLE },
     } : base;
     switch (field) {
-      case "fx": return withAnchor(withTargets(Object.keys(FX_HEAD_TITLES), FX_HEAD_TITLES));
-      case "model": return withAnchor(withTargets(
+      case "fx": return withAttach(withTargets(Object.keys(FX_HEAD_TITLES), FX_HEAD_TITLES));
+      case "model": return withAttach(withTargets(
         // "" is the attach category: loose pills, no word to search by
         Object.values((d && d.modelCatNames) || {}).filter(Boolean),
         MODEL_CAT_TITLES));
@@ -931,10 +931,12 @@
     box.hidden = false;
   }
 
-  // complete the partial last word of the chip's text to the category word
+  // complete the partial last word of the chip's text to the category word.
+  // the attach keyword takes a point name after it, so leave a trailing space
+  // ready for it (attach chest) rather than butting the caret against it
   function applyCategoryWord(word) {
     const input = qInput;
-    input.value = input.value.replace(/\S*$/, word);
+    input.value = input.value.replace(/\S*$/, word) + (word === ATTACH_WORD ? " " : "");
     hideSuggest();
     input.focus();
     input.setSelectionRange(input.value.length, input.value.length);
@@ -2216,24 +2218,29 @@
     if (attachIsHit(field, words)) seg.classList.add("hit");
     seg.title = `${why} — an M2 attachment slot, not a description`
       + `\nClick: find spells using ${words.length > 1 ? "these points" : "this point"} · Shift-click: exclude`;
-    // each point becomes an anchor: token; multi-point wraps in the grouping
-    // quotes so the two tokens stay in one chip
-    const q = words.map((w) => `anchor:${w}`).join(" ");
-    seg.dataset.search = `${field}:${/\s/.test(q) ? `"${q}"` : q}`;
+    // each point is an `attach <point>` pair; always quoted (the space)
+    const q = words.map((w) => `attach ${w}`).join(" ");
+    seg.dataset.search = `${field}:"${q}"`;
     return seg;
   }
 
-  // an attachment segment lights when a positive anchor: query in its field
+  /** The attachment points named by a group's `attach <point>` pairs. */
+  function attachValues(tokens) {
+    const out = [];
+    for (let i = 0; i < tokens.length; i++) {
+      if (tokens[i].text === "attach" && tokens[i + 1]) { out.push(tokens[i + 1].text); i++; }
+    }
+    return out;
+  }
+
+  // an attachment segment lights when a positive attach query in its field
   // (or free text) names points this row carries — the same substring test
-  // the search uses (ANCHOR_PREFIX in search.js)
+  // the search uses (ATTACH_WORD in search.js)
   function attachIsHit(field, names) {
     const attachL = names.join(" ").toLowerCase();
     return groupsFor(field).some((g) => {
-      const anchors = g.tokens
-        .filter((t) => t.text.startsWith("anchor:"))
-        .map((t) => t.text.slice("anchor:".length))
-        .filter(Boolean);
-      return anchors.length && anchors.every((a) => attachL.includes(a));
+      const attaches = attachValues(g.tokens);
+      return attaches.length && attaches.every((a) => attachL.includes(a));
     });
   }
 

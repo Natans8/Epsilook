@@ -299,10 +299,6 @@ flowchart LR
 `CONTROL_VEHICLE` (aura 236) is the far larger population — 1,581 rows vs 247
 on 9.2.7 — but its `EffectMiscValue_0` is a seat/flag value, not a
 `Vehicle.db2` id, so it needs its own route and is deliberately not wired up.
-`Vehicle.MissileTargetingID` (the sole referencer of `MissileTargeting`, an
-impact model + arc/impact textures) is the vehicle weapon's targeting arc, but
-only 4 of the 218 aura-296 vehicles carry one on 9.2.7 — the arcs live on the
-`CONTROL_VEHICLE` combat vehicles, so surfacing them waits on that route too.
 
 **These effect-driven fx carry a target mask of their own** (pack format 25),
 and it does *not* come from the visual graph — it is the producing
