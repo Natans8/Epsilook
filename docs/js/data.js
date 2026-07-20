@@ -779,6 +779,32 @@ window.EpsilookData = (() => {
       }
     }
 
+    // invisibility / detection channels (pack format 26). Grouped by
+    // invisibility TYPE, which is the pairing key: an invis spell links to the
+    // detect spells sharing its type and vice versa. Per spell we keep the
+    // (type, target mask) pills to render; per type we keep both membership
+    // lists — their lengths are the counterpart counts shown on the pills, and
+    // they back fx:invis / fx:detect searches. Only channels with an invis side
+    // exist in the pack, so a detect pill's counterpart count is always ≥1.
+    /** @type {Map<number, {type: number, mask: number}[]>} spell -> invis pills */
+    const spellInvisTypes = new Map();
+    /** @type {Map<number, {type: number, mask: number}[]>} spell -> detect pills */
+    const spellDetectTypes = new Map();
+    /** @type {Map<number, number[]>} invisibility type -> [invis spell id] */
+    const invisTypeSpells = new Map();
+    /** @type {Map<number, number[]>} invisibility type -> [detect spell id] */
+    const detectTypeSpells = new Map();
+    const loadChannels = (section, spellPills, typeSpells) => {
+      if (!section) return;
+      const {spellIds, types, targets} = section;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellPills, spellIds[i], {type: types[i], mask: targets[i]});
+        pushTo(typeSpells, types[i], spellIds[i]);
+      }
+    };
+    loadChannels(pack.spellInvis, spellInvisTypes, invisTypeSpells);
+    loadChannels(pack.spellDetects, spellDetectTypes, detectTypeSpells);
+
     // the rider's own animations while entering/seated/exiting — their own
     // "passenger" group in the Animations column
     /** @type {Map<number, number[]>} spell id -> [animId] */
@@ -848,6 +874,7 @@ window.EpsilookData = (() => {
       shapeshiftSearchL,
       spellSummons, summonNames, summonPairSpells, summonPairSearchL, summonControlNames,
       spellVehicles, vehicleSpells, vehicleSeats, vehicleSearchL,
+      spellInvisTypes, spellDetectTypes, invisTypeSpells, detectTypeSpells,
       spellPassengerAnims, passengerAnimSpells,
       spellEffects, effectSpells, effectNames, effectNamesL,
       spellAuras, auraSpells, auraNames, auraNamesL,

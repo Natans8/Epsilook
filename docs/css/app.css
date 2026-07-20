@@ -907,6 +907,19 @@ td.expanded .kit-group.overflow { display: flex; }
 
 .tag.hit { border-color: var(--gold-dim); background: rgba(240, 195, 76, 0.10); }
 
+/* an invisibility nothing detects — the priceless case. A distinct cool accent
+   (not gold, so it never reads as a search hit) and non-interactive; a search
+   hit still overrides it in gold. */
+.tag.fx.priceless:not(.hit) {
+  border-color: #6f7bd6;
+  background: rgba(123, 138, 214, 0.12);
+}
+
+.tag.fx.priceless .tag-label {
+  color: #aab4ee;
+  cursor: default;
+}
+
 .tag.overflow { display: none; }
 td.expanded .tag.overflow { display: inline-flex; }
 

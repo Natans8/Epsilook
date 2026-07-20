@@ -1640,12 +1640,15 @@
     const formIds = d.spellShapeshifts.get(spellId) || [];
     const summonEntries = d.spellSummons.get(spellId) || [];
     const vehicleIds = d.spellVehicles.get(spellId) || [];
+    const invisPills = (d.spellInvisTypes.get(spellId) || []).slice().sort((a, b) => a.type - b.type);
+    const detectPills = (d.spellDetectTypes.get(spellId) || []).slice().sort((a, b) => a.type - b.type);
     const td = el("td", "c-fx");
     if (chainIds.length === 0 && dissolveIds.length === 0 && glowIds.length === 0
         && shadowyIds.length === 0 && ghostMatIds.length === 0 && tintIds.length === 0
         && desatPcts.length === 0 && transpPcts.length === 0 && !hasFreeze && !hasCamo
         && screenIds.length === 0 && morphIds.length === 0 && formIds.length === 0
-        && summonEntries.length === 0 && vehicleIds.length === 0) {
+        && summonEntries.length === 0 && vehicleIds.length === 0
+        && invisPills.length === 0 && detectPills.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
       return td;
@@ -1898,6 +1901,22 @@
           .map((p) => () => vehicleTag(p, seatCount, grp.uniform ? 0 : union)),
       });
     }
+    // invisibility / detection channels. Counterpart count = the other side of
+    // the same type; it drives the pill label AND the numeric hit test.
+    for (const [side, pills, countMap] of /** @type {const} */ ([
+      ["invis", invisPills, d.detectTypeSpells],
+      ["detect", detectPills, d.invisTypeSpells]])) {
+      if (!pills.length) continue;
+      const countOf = (type) => (countMap.get(type) || []).length;
+      const grp = targetGroup(pills.map((e) => e.mask));
+      cats.push({
+        name: side,
+        hit: pills.some((e) => channelIsHit(side, e.type, countOf(e.type))),
+        mask: grp.uniform ? grp.mask : 0,
+        items: hitsFirst(pills, (e) => channelIsHit(side, e.type, countOf(e.type)))
+            .map((e) => () => channelTag(side, e.type, countOf(e.type), grp.uniform ? 0 : e.mask)),
+      });
+    }
 
     buildKitGroups(td, cats, {
       // the icon rides the category head, unioned over this spell's rows in
@@ -2041,6 +2060,17 @@
     return groupsFor("fx").some((g) => g.tokens.every((t) =>
       "seat".includes(t.text) || nameL.includes(t.text)
       || Search.matchNumeric(t.text, seats)));
+  }
+
+  // an invis/detect pill lights up under the same query spellsByFx uses to
+  // select it: the category word, its invisibility TYPE (a bare number), or an
+  // operator-prefixed comparison against its counterpart count. Kept in lockstep
+  // with the invisMatch closure in search.js.
+  function channelIsHit(word, type, count) {
+    return groupsFor("fx").some((g) => g.tokens.every((t) =>
+        word.includes(t.text)
+        || (!Search.hasOperator(t.text) && String(type) === t.text)
+        || (Search.hasOperator(t.text) && Search.matchNumeric(t.text, count))));
   }
 
   // small helper: a copy button inside a tag. "⧉" copies an ID; command
@@ -2479,6 +2509,8 @@
     morph: "Morph / transform aura (CreatureDisplayInfo)",
     summon: "Summoned creature (SpellEffect SUMMON)",
     seat: "Seat of a rideable vehicle the caster becomes (SpellEffect SET_VEHICLE_ID)",
+    invis: "Invisibility channel — hides in an invisibility type (MOD_INVISIBILITY)",
+    detect: "Sees an invisibility channel (MOD_INVISIBILITY_DETECT)",
   };
 
   function fxHeadTag(category, hit) {
@@ -2615,6 +2647,38 @@
       + `\n(an M2 attachment slot, not a description of the seat)`
       + `\nClick: find spells with a seat there · Shift-click: exclude`;
     txt.dataset.search = `fx:"seat ${label}"`;
+    tag.appendChild(txt);
+    addTargetIcons(tag, mask);
+    return tag;
+  }
+
+  /* Invisibility-channel pill (MOD_INVISIBILITY[_DETECT]). One per invisibility
+   * TYPE the spell touches; the type is the pairing key, so the pill navigates
+   * to the OTHER side of that channel — an invis pill searches fx:detect <type>
+   * (the spells that reveal it), a detect pill searches fx:invis <type> (the
+   * ones it reveals). The counterpart count rides the label. An invisibility
+   * nothing detects (count 0) is the priceless case: it still shows — that is
+   * the whole point — but it is highlighted and non-clickable, since there is
+   * nothing to navigate to. Detect pills never reach 0 (channels without an
+   * invis side are not built). */
+  function channelTag(side, type, count, mask = 0) {
+    const invis = side === "invis";
+    const priceless = invis && count === 0;
+    const tag = el("span", "tag fx" + (priceless ? " priceless" : ""));
+    if (channelIsHit(side, type, count)) tag.classList.add("hit");
+    const verb = invis ? (priceless ? "unseen" : `seen by ${count}`) : `reveals ${count}`;
+    const other = invis ? "detect" : "invis";
+    const plural = count === 1 ? "" : "s";
+    const txt = el(priceless ? "span" : "button", "tag-label", `${type} · ${verb}`);
+    txt.title = `${invis ? "Invisibility" : "Detection"} channel ${type}\n`
+        + (invis
+            ? (priceless ? "Nothing detects this — nothing can reveal it (priceless)"
+                : `Detected by ${count} spell${plural}`)
+            : `Reveals ${count} invisibility spell${plural}`)
+        + (priceless ? ""
+            : `\nClick: show the ${count} counterpart${plural} (fx:${other} ${type})`
+            + ` · Shift-click: exclude`);
+    if (!priceless) txt.dataset.search = `fx:"${other} ${type}"`;
     tag.appendChild(txt);
     addTargetIcons(tag, mask);
     return tag;

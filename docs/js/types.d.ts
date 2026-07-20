@@ -213,6 +213,11 @@ interface SpellPack {
   /** One row per seat in SeatID_0..7 order: which vehicle it belongs to and
    *  the M2 attachment point it sits at ("" when unset/unknown). */
   vehicleSeats?: { vehicleIds: number[]; attachments: string[] };
+  /** Invisibility / detection channels (pack format 26). `types` is the
+   *  invisibility TYPE — the pairing key. Only channels with an invis side are
+   *  built, so every detect row here has ≥1 invis counterpart. */
+  spellInvis?: { spellIds: number[]; types: number[]; targets: number[] };
+  spellDetects?: { spellIds: number[]; types: number[]; targets: number[] };
   /** The rider's animations while entering/seated/exiting (a vehicle seat's
    *  passenger AnimationData). animIds index animNames. */
   spellPassengerAnims?: { spellIds: number[]; animIds: number[] };
@@ -411,6 +416,15 @@ interface SpellData {
    *  Seat COUNT is matched numerically instead, so it is not in here. */
   vehicleSearchL: Map<number, string>;
 
+  /** Invisibility / detection channels, grouped by invisibility TYPE (the
+   *  pairing key). Per spell: its (type, target mask) pills to render. Per
+   *  type: both membership lists — a list's length is the counterpart count
+   *  shown on the opposite side's pills, and the lists back fx:invis/fx:detect. */
+  spellInvisTypes: Map<number, { type: number; mask: number }[]>;
+  spellDetectTypes: Map<number, { type: number; mask: number }[]>;
+  invisTypeSpells: Map<number, number[]>;
+  detectTypeSpells: Map<number, number[]>;
+
   /** spell id -> [animId] the rider plays; the "passenger" anim group. */
   spellPassengerAnims: Map<number, number[]>;
   passengerAnimSpells: Map<number, number[]>;
@@ -534,6 +548,10 @@ interface EpsilookSearchApi {
   /** True when `text` is a numeric-comparison token ("4", ">2", "<=3")
    *  satisfied by `n`. Shared by the fx column's numeric categories. */
   matchNumeric(text: string, n: number): boolean;
+
+  /** True when a token is operator-prefixed (<, >, <=, >=, =) — i.e. it asks
+   *  for a numeric comparison rather than a literal value match. */
+  hasOperator(text: string): boolean;
 }
 
 /* ------------------------------------------------------------ globals */
