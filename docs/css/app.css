@@ -609,6 +609,29 @@ td.expanded .kit-group.overflow { display: flex; }
   overflow: hidden;
 }
 
+/* target-type icons (who the content plays on) — a run of small glyphs on
+   the pill's left edge, before the label. Not buttons: they carry a title
+   and nothing else, so they must not eat clicks meant for the pill. */
+.ticons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1em;
+  padding: 0 0.1rem 0 0.45rem;
+  flex: none;
+}
+.ticon { display: block; cursor: help; }
+.ticon svg { width: 0.82em; height: 0.82em; display: block; }
+.t-caster { color: var(--text-dim); }
+.t-target { color: #e0a878; }
+.t-notcaster { color: var(--danger, #e07070); }
+.t-area { color: var(--fx, #7fc9d0); }
+/* a label straight after the icons doesn't need its own left padding */
+.ticons + .tag-label { padding-left: 0.3rem; }
+
+/* the same glyphs inline in the help dialog's legend */
+.legend-icon { display: inline-block; vertical-align: -0.15em; }
+.legend-icon svg { width: 1em; height: 1em; display: block; }
+
 .tag-label {
   padding: 0.12rem 0.55rem;
   overflow: hidden;

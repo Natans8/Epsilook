@@ -52,9 +52,12 @@ import time
 import urllib.error
 import urllib.request
 from collections import defaultdict
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TypeVar
+
+T = TypeVar("T")
 
 BUILD_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BUILD_DIR.parent
@@ -310,9 +313,19 @@ MODEL_CAT_AREA = 2     # SpellVisualKitAreaModel (ground/area model: emission ET
 MODEL_CAT_TRAIL = 3    # WeaponTrail (proc Type 27)
 MODEL_CAT_BARRAGE = 4  # BarrageEffect (volley of models, ET 17)
 MODEL_CAT_NAMES = {
-    MODEL_CAT_ATTACH: "attached",  # renamed from "attach" 2026-07-19 ("attach" read like a button)
+    # Attach models have no category word: they are the plain "this model plays
+    # on a unit" case, and which unit is now said by the target icon instead
+    # (a group head reading "attached" told the user nothing the icon doesn't).
+    # An empty name is the frontend's signal to render the category as loose
+    # pills with no head — see modelsCell in app.js.
+    MODEL_CAT_ATTACH: "",
     MODEL_CAT_MISSILE: "missile",
-    MODEL_CAT_AREA: "area",
+    # "ground", not "area": the target words added in format 22 include
+    # "area", and the two mean different things — only 42% of this category's
+    # rows carry an area TARGET bit, and only 2.6% of the rows that DO carry
+    # one are in this category (the rest are ordinary attach models playing at
+    # a location). Sharing the word made model:area silently mean the target.
+    MODEL_CAT_AREA: "ground",
     MODEL_CAT_TRAIL: "trail",
     MODEL_CAT_BARRAGE: "barrage",
 }
@@ -357,9 +370,27 @@ SCREEN_EFFECT_FOG = 3
 # Emporium" title card) drawn on top in its own colors.
 TEX_OVERLAY, TEX_MASK = 0, 1
 
+# SpellVisualEvent.TargetType -> the bit it contributes to a row's target mask
+# (meta/enums/SpellVisualEventTargetType.dbde). The mask answers "who does this
+# content play on", unioned over every kit a spell reaches it through, so a
+# row that plays on caster AND target carries both bits — that is genuine data,
+# not a build artifact: impact kits carry duplicate event rows differing only
+# in TargetType. Value 0 (None) is not in the map: it is effectively unused
+# (one row in 207,241 on 9.2.7) and contributes no bit, same as content that
+# arrives from outside the event graph (missile sets carry no event row).
+TARGET_BITS = {1: 1, 2: 2, 3: 4, 4: 8, 5: 16}  # caster, target, area, not-caster, missile-dest
+NO_TARGET = 0
+
+# The search word each mask bit answers to. Two pairs of bits deliberately
+# share a word: "target, never caster" is still a target (it keeps its own bit,
+# and its own icon color, but nobody would search for it by another name), and
+# a missile's destination is an area on the ground like any other. The app
+# derives "both" from bits 1|2 rather than it being a bit of its own.
+TARGET_NAMES = {1: "caster", 2: "target", 4: "area", 8: "target", 16: "area"}
+
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 21  # 21: spellVisualAnims (kit ET 6 initial/loop animations)
+PACK_FORMAT = 22  # 22: per-row target masks (SpellVisualEvent.TargetType)
 
 csv.field_size_limit(10_000_000)
 
@@ -723,17 +754,29 @@ def hue_words(colors: tuple[int, ...]) -> str:
     return " ".join(words)
 
 
+def merge_masked(dst: dict[T, int], items: Iterable[T], mask: int) -> None:
+    """Union `items` into `dst`, OR-ing `mask` into each one's target mask.
+
+    The single primitive behind the whole graph walk: every payload bucket is
+    a {content item -> target mask} map, so adding a kit's contribution is the
+    same operation whatever the payload is.
+    """
+    for item in items:
+        dst[item] = dst.get(item, NO_TARGET) | mask
+
+
 def color_rows(
-    spell_map: dict[int, set[int]], colors_of: Callable[[int], tuple[int, ...]]
-) -> tuple[list[tuple[int, int]], list[int], list[str]]:
+    spell_map: dict[int, dict[int, int]], colors_of: Callable[[int], tuple[int, ...]]
+) -> tuple[list[tuple[int, int, int]], list[int], list[str]]:
     """Flatten one color-only fx source into the three columns its pack sections need.
 
     Every color-only category (glow, tint, shadowy, ghost material) bakes the
-    same shape: the spell->row pairs, the sorted distinct row ids, and one hue
-    word string per id. `colors_of` maps a row id to its packed colors, since
-    each source stores them differently (shadowy rows carry two).
+    same shape: the spell->row pairs (each with its target mask), the sorted
+    distinct row ids, and one hue word string per id. `colors_of` maps a row id
+    to its packed colors, since each source stores them differently (shadowy
+    rows carry two).
     """
-    pairs = sorted((s, r) for s, rs in spell_map.items() for r in rs)
+    pairs = sorted((s, r, m) for s, rs in spell_map.items() for r, m in rs.items())
     ids = sorted({r for rs in spell_map.values() for r in rs})
     return pairs, ids, [hue_words(colors_of(r)) for r in ids]
 
@@ -815,12 +858,17 @@ def read_spell_names(table_dir: Path, tdb_dir: Path | None) -> tuple[dict[int, s
 
 def read_visual_graph(
     table_dir: Path, tdb_dir: Path | None
-) -> tuple[dict[int, set[int]], dict[int, set[int]]]:
+) -> tuple[dict[int, set[int]], dict[int, dict[int, int]]]:
     """Read the spell -> visual -> kit edges of the visual graph.
 
     Both hops are many-to-many. SpellXSpellVisual rows are keyed by row ID
     first so a hotfixed row replaces its wago original before the edges are
     derived (a hotfix can re-point a spell at a different visual).
+
+    The visual -> kit edge carries the event's TargetType as a bit mask (see
+    TARGET_BITS): one visual can reach the same kit through several event
+    rows, so the mask is unioned per edge. Everything the kit contributes
+    inherits that mask during the walk.
     """
     sxv_rows: dict[int, tuple[int, int]] = {}
     for rid, spell_id, visual_id in read_table(
@@ -836,11 +884,14 @@ def read_visual_graph(
         if s and v:
             spell_visuals[s].add(v)
 
-    visual_kits: dict[int, set[int]] = defaultdict(set)
-    for visual_id, kit_id in read_table(table_dir, "SpellVisualEvent", ["SpellVisualID", "SpellVisualKitID"]):
+    visual_kits: dict[int, dict[int, int]] = defaultdict(dict)
+    for visual_id, kit_id, target_type in read_table(
+        table_dir, "SpellVisualEvent", ["SpellVisualID", "SpellVisualKitID", "TargetType"]
+    ):
         v, k = to_int(visual_id), to_int(kit_id)
         if v and k:
-            visual_kits[v].add(k)
+            bit = TARGET_BITS.get(to_int(target_type), NO_TARGET)
+            visual_kits[v][k] = visual_kits[v].get(k, NO_TARGET) | bit
     return spell_visuals, visual_kits
 
 
@@ -1539,21 +1590,28 @@ class SpellVisuals:
 
     Same buckets as KitEffects (a spell's payloads are the union over every
     kit it reaches, plus its missiles), which is what makes the walk a dozen
-    identical set unions rather than a dozen special cases.
+    identical merges rather than a dozen special cases.
+
+    Each bucket maps spell id -> {content item -> target mask}: the union of
+    the TargetType bits of every kit that spell reached the item through (see
+    TARGET_BITS). Content that arrives from outside the event graph — missile
+    sets, which have no event row — carries NO_TARGET. Every bucket carries a
+    mask even where the pack does not currently emit one, so giving a category
+    an icon later is a pack-section change, not a walk change.
     """
-    models: dict[int, set[tuple[int, int]]]   # (model fid, category)
-    sounds: dict[int, set[tuple[int, int]]]   # (soundkit, sound fid)
-    animkits: dict[int, set[int]]
-    anims: dict[int, set[int]]                # direct AnimationData ids (stance)
-    visual_anims: dict[int, set[int]]         # AnimationData ids (SpellVisualAnim)
-    chains: dict[int, set[int]]
-    dissolves: dict[int, set[int]]
-    glows: dict[int, set[int]]
-    shadowies: dict[int, set[int]]
-    ghost_mats: dict[int, set[int]]
-    tints: dict[int, set[int]]
-    desats: dict[int, set[int]]
-    transps: dict[int, set[int]]
+    models: dict[int, dict[tuple[int, int], int]]   # (model fid, category)
+    sounds: dict[int, dict[tuple[int, int], int]]   # (soundkit, sound fid)
+    animkits: dict[int, dict[int, int]]
+    anims: dict[int, dict[int, int]]                # direct AnimationData ids (stance)
+    visual_anims: dict[int, dict[int, int]]         # AnimationData ids (SpellVisualAnim)
+    chains: dict[int, dict[int, int]]
+    dissolves: dict[int, dict[int, int]]
+    glows: dict[int, dict[int, int]]
+    shadowies: dict[int, dict[int, int]]
+    ghost_mats: dict[int, dict[int, int]]
+    tints: dict[int, dict[int, int]]
+    desats: dict[int, dict[int, int]]
+    transps: dict[int, dict[int, int]]
     freezes: set[int]
     camos: set[int]
     orphans: int   # SpellXSpellVisual rows whose SpellID has no SpellName
@@ -1562,7 +1620,7 @@ class SpellVisuals:
 def walk_spells(
     spell_names: dict[int, str],
     spell_visuals: dict[int, set[int]],
-    visual_kits: dict[int, set[int]],
+    visual_kits: dict[int, dict[int, int]],
     visual_missiles: dict[int, tuple],
     kits: KitEffects,
     soundkit_files: dict[int, set[int]],
@@ -1576,11 +1634,11 @@ def walk_spells(
     and this extends it with the kit route.
     """
     vis = SpellVisuals(
-        models=defaultdict(set), sounds=defaultdict(set), animkits=defaultdict(set),
-        anims=defaultdict(set), visual_anims=defaultdict(set),
-        chains=defaultdict(set), dissolves=defaultdict(set),
-        glows=defaultdict(set), shadowies=defaultdict(set), ghost_mats=defaultdict(set),
-        tints=defaultdict(set), desats=defaultdict(set), transps=defaultdict(set),
+        models=defaultdict(dict), sounds=defaultdict(dict), animkits=defaultdict(dict),
+        anims=defaultdict(dict), visual_anims=defaultdict(dict),
+        chains=defaultdict(dict), dissolves=defaultdict(dict),
+        glows=defaultdict(dict), shadowies=defaultdict(dict), ghost_mats=defaultdict(dict),
+        tints=defaultdict(dict), desats=defaultdict(dict), transps=defaultdict(dict),
         freezes=set(), camos=set(), orphans=0,
     )
 
@@ -1589,40 +1647,43 @@ def walk_spells(
             vis.orphans += 1
             continue
         for v in visuals:
+            # missile-set content has no SpellVisualEvent row, so no target type
             m_fids, m_sks, m_aks = visual_missiles.get(v, NO_MISSILES)
-            vis.models[spell_id].update((f, MODEL_CAT_MISSILE) for f in m_fids)
-            vis.animkits[spell_id].update(m_aks)
+            merge_masked(vis.models[spell_id],
+                         ((f, MODEL_CAT_MISSILE) for f in m_fids), NO_TARGET)
+            merge_masked(vis.animkits[spell_id], m_aks, NO_TARGET)
             for sk in m_sks:
-                for f in soundkit_files.get(sk, ()):
-                    vis.sounds[spell_id].add((sk, f))
-            for k in visual_kits.get(v, ()):
-                vis.models[spell_id].update(kits.models.get(k, ()))
-                vis.animkits[spell_id].update(kits.animkits.get(k, ()))
-                vis.anims[spell_id].update(kits.anims.get(k, ()))
-                vis.visual_anims[spell_id].update(kits.visual_anims.get(k, ()))
-                vis.chains[spell_id].update(kits.chains.get(k, ()))
-                vis.dissolves[spell_id].update(kits.dissolves.get(k, ()))
-                vis.glows[spell_id].update(kits.glows.get(k, ()))
-                vis.shadowies[spell_id].update(kits.shadowies.get(k, ()))
-                vis.ghost_mats[spell_id].update(kits.ghost_mats.get(k, ()))
-                vis.tints[spell_id].update(kits.tints.get(k, ()))
-                vis.desats[spell_id].update(kits.desats.get(k, ()))
-                vis.transps[spell_id].update(kits.transps.get(k, ()))
+                merge_masked(vis.sounds[spell_id],
+                             ((sk, f) for f in soundkit_files.get(sk, ())), NO_TARGET)
+            for k, mask in visual_kits.get(v, {}).items():
+                merge_masked(vis.models[spell_id], kits.models.get(k, ()), mask)
+                merge_masked(vis.animkits[spell_id], kits.animkits.get(k, ()), mask)
+                merge_masked(vis.anims[spell_id], kits.anims.get(k, ()), mask)
+                merge_masked(vis.visual_anims[spell_id], kits.visual_anims.get(k, ()), mask)
+                merge_masked(vis.chains[spell_id], kits.chains.get(k, ()), mask)
+                merge_masked(vis.dissolves[spell_id], kits.dissolves.get(k, ()), mask)
+                merge_masked(vis.glows[spell_id], kits.glows.get(k, ()), mask)
+                merge_masked(vis.shadowies[spell_id], kits.shadowies.get(k, ()), mask)
+                merge_masked(vis.ghost_mats[spell_id], kits.ghost_mats.get(k, ()), mask)
+                merge_masked(vis.tints[spell_id], kits.tints.get(k, ()), mask)
+                merge_masked(vis.desats[spell_id], kits.desats.get(k, ()), mask)
+                merge_masked(vis.transps[spell_id], kits.transps.get(k, ()), mask)
                 if k in kits.freezes:
                     vis.freezes.add(spell_id)
                 if k in kits.camos:
                     vis.camos.add(spell_id)
                 spell_screens[spell_id].update(kits.screens.get(k, ()))
                 for sk in kits.soundkits.get(k, ()):
-                    for f in soundkit_files.get(sk, ()):
-                        vis.sounds[spell_id].add((sk, f))
+                    merge_masked(vis.sounds[spell_id],
+                                 ((sk, f) for f in soundkit_files.get(sk, ())), mask)
 
-    # a chain effect's own SoundKit folds into the spell's Sounds column
+    # a chain effect's own SoundKit folds into the spell's Sounds column, and
+    # inherits the mask the chain itself carries
     for spell_id, chains in vis.chains.items():
-        for c in chains:
+        for c, mask in chains.items():
             sk = fx.chains[c][3]
-            for f in soundkit_files.get(sk, ()):
-                vis.sounds[spell_id].add((sk, f))
+            merge_masked(vis.sounds[spell_id],
+                         ((sk, f) for f in soundkit_files.get(sk, ())), mask)
     return vis
 
 
@@ -1793,10 +1854,16 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "paths": [fid_path.get(f, "") for f in file_ids],
     }
 
-    model_rows = sorted((s, f, c) for s, pairs in vis.models.items() for f, c in pairs)
-    sound_rows = sorted((s, sk, f) for s, pairs in vis.sounds.items() for sk, f in pairs)
-    anim_rows = sorted((s, a) for s, aks in vis.animkits.items() for a in aks)
-    fx_rows = sorted((s, c) for s, chains in vis.chains.items() for c in chains)
+    # every kit-derived row carries its target mask as the last element (see
+    # TARGET_BITS); the pack emits it as a parallel "targets" array
+    model_rows = sorted(
+        (s, f, c, m) for s, pairs in vis.models.items() for (f, c), m in pairs.items())
+    sound_rows = sorted(
+        (s, sk, f, m) for s, pairs in vis.sounds.items() for (sk, f), m in pairs.items())
+    anim_rows = sorted(
+        (s, a, m) for s, aks in vis.animkits.items() for a, m in aks.items())
+    fx_rows = sorted(
+        (s, c, m) for s, chains in vis.chains.items() for c, m in chains.items())
 
     # per used chain: packed RGB tint (0xFFFFFF = untinted — "the texture's
     # own color") plus the hue word its corpus searches by
@@ -1808,7 +1875,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         fx_hues.append(hue_word(r, g, b))
     fx_tex_rows = sorted((c, f) for c in used_chains for f in fx.chains[c][4])
 
-    dissolve_row_pairs = sorted((s, e) for s, effs in vis.dissolves.items() for e in effs)
+    dissolve_row_pairs = sorted(
+        (s, e, m) for s, effs in vis.dissolves.items() for e, m in effs.items())
     dissolve_ids = sorted(used_dissolves)
     dissolve_tex_rows = sorted((e, f) for e in used_dissolves for f in fx.dissolves[e][1])
 
@@ -1856,7 +1924,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # animations the visual kits play directly (SpellVisualAnim initial/loop,
     # kit EffectType 6) — the largest animation source, same id space
     visual_anim_rows = sorted(
-        {(s, a) for s, aset in vis.visual_anims.items() for a in aset if a < len(anim_names)})
+        (s, a, m) for s, aset in vis.visual_anims.items()
+        for a, m in aset.items() if a < len(anim_names))
     effect_rows = sorted((s, e) for s, effs in se.effects.items() for e in effs)
     aura_rows = sorted((s, a) for s, auras in se.auras.items() for a in auras)
     morph_rows = sorted((s, c) for s, cs in se.morphs.items() for c in cs)
@@ -1928,16 +1997,20 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "spellIds": [r[0] for r in model_rows],
             "fids": [r[1] for r in model_rows],
             "cats": [r[2] for r in model_rows],
+            "targets": [r[3] for r in model_rows],
         },
         "modelCatNames": MODEL_CAT_NAMES,
+        "targetNames": TARGET_NAMES,
         "spellSounds": {
             "spellIds": [r[0] for r in sound_rows],
             "soundKitIds": [r[1] for r in sound_rows],
             "fids": [r[2] for r in sound_rows],
+            "targets": [r[3] for r in sound_rows],
         },
         "spellAnimKits": {
             "spellIds": [r[0] for r in anim_rows],
             "animKitIds": [r[1] for r in anim_rows],
+            "targets": [r[2] for r in anim_rows],
         },
         "animKitAnims": {
             "animKitIds": [r[0] for r in kit_anim_rows],
@@ -1955,6 +2028,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "spellVisualAnims": {
             "spellIds": [r[0] for r in visual_anim_rows],
             "animIds": [r[1] for r in visual_anim_rows],
+            "targets": [r[2] for r in visual_anim_rows],
         },
         "animNames": anim_names,
         "spellEffects": {
@@ -1974,6 +2048,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "spellFx": {
             "spellIds": [r[0] for r in fx_rows],
             "chainIds": [r[1] for r in fx_rows],
+            "targets": [r[2] for r in fx_rows],
         },
         "fxChains": {
             "ids": fx_chain_ids,
@@ -1991,6 +2066,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "spellDissolves": {
             "spellIds": [r[0] for r in dissolve_row_pairs],
             "dissolveIds": [r[1] for r in dissolve_row_pairs],
+            "targets": [r[2] for r in dissolve_row_pairs],
         },
         "dissolves": {
             "ids": dissolve_ids,
@@ -2005,6 +2081,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "spellGlows": {
             "spellIds": [r[0] for r in glow_row_pairs],
             "glowIds": [r[1] for r in glow_row_pairs],
+            "targets": [r[2] for r in glow_row_pairs],
         },
         "glows": {
             "ids": glow_ids,
@@ -2017,6 +2094,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "spellShadowies": {
             "spellIds": [r[0] for r in shadowy_row_pairs],
             "shadowyIds": [r[1] for r in shadowy_row_pairs],
+            "targets": [r[2] for r in shadowy_row_pairs],
         },
         "shadowies": {
             "ids": shadowy_ids,
@@ -2030,6 +2108,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "spellGhostMats": {
             "spellIds": [r[0] for r in ghost_mat_pairs],
             "ghostIds": [r[1] for r in ghost_mat_pairs],
+            "targets": [r[2] for r in ghost_mat_pairs],
         },
         "ghostMats": {
             "ids": ghost_mat_ids,
