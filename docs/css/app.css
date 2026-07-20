@@ -365,8 +365,28 @@ main { padding: 0 1.6rem 2rem; }
   color: var(--text-dim);
   font-size: 0.9rem;
 }
-#filters label, #columns label { cursor: pointer; user-select: none; }
-#filters input, #columns input { accent-color: var(--gold); vertical-align: -2px; }
+#filters { gap: 0.4rem; }
+#columns label { cursor: pointer; user-select: none; }
+#columns input { accent-color: var(--gold); vertical-align: -2px; }
+
+/* tri-state filter buttons: any -> only-with (gold ✓) -> only-without (red ✕) */
+#filters .tri {
+  cursor: pointer;
+  user-select: none;
+  font: inherit;
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.08rem 0.6rem 0.08rem 0.5rem;
+  line-height: 1.5;
+}
+#filters .tri::before { content: "•"; margin-right: 0.35rem; opacity: 0.45; }
+#filters .tri:hover { border-color: var(--border); }
+#filters .tri[data-state="with"] { color: var(--gold); border-color: var(--gold-dim); }
+#filters .tri[data-state="with"]::before { content: "✓"; opacity: 1; }
+#filters .tri[data-state="without"] { color: var(--danger); border-color: var(--danger); }
+#filters .tri[data-state="without"]::before { content: "✕"; opacity: 1; }
 
 #export {
   display: flex;

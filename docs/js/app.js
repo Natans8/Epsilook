@@ -63,7 +63,7 @@
    *   display: number[],
    *   searchMs: number,
    *   rendered: number,
-   *   filters: Record<string, boolean>,
+   *   filters: Record<string, ("" | "with" | "without")>,
    *   sort: {key: string, dir: number},
    *   hiddenCols: Record<string, boolean>,
    * }}
@@ -89,7 +89,9 @@
     display: [],        // results after filters + sort
     searchMs: 0,
     rendered: 0,        // rows currently in the table
-    filters: { models: false, sounds: false, animkits: false, fx: false },
+    // tri-state per category: "" = any, "with" = must have, "without" = must
+    // not have. See HAS_CATEGORY / applyFiltersAndSort.
+    filters: { models: "", sounds: "", animkits: "", fx: "" },
     sort: { key: "auto", dir: 1 },
     // hidden columns (also excluded from All-mode search and from exports)
     hiddenCols: { models: false, sounds: false, animkits: false, fx: false, mechanics: true, commands: false },
@@ -1049,23 +1051,38 @@
     return (id) => tests.reduce((n, f) => n + (f(id) ? 1 : 0), 0);
   }
 
+  // presence test per filter category — the union of every pack section that
+  // feeds that column. Both the "Only spells with / without" filter row and
+  // the URL (only= / without=) read these; giving a future column a filter is
+  // a one-line addition here plus its button in index.html.
+  /** @type {Record<string, (d: any, id: number) => boolean>} */
+  const HAS_CATEGORY = {
+    models: (d, id) => d.spellModels.has(id),
+    sounds: (d, id) => d.spellSounds.has(id),
+    animkits: (d, id) =>
+      d.spellAnimKits.has(id) || d.spellAnims.has(id) || d.spellVisualAnims.has(id),
+    fx: (d, id) =>
+      d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellGlows.has(id) ||
+      d.spellShadowies.has(id) || d.spellGhostMats.has(id) || d.spellTints.has(id) ||
+      d.spellDesaturates.has(id) || d.spellTransps.has(id) ||
+      d.spellFreezes.has(id) || d.spellCamos.has(id) || d.spellScreens.has(id) ||
+      d.spellMorphs.has(id) || d.spellShapeshifts.has(id) || d.spellSummons.has(id),
+  };
+
   function applyFiltersAndSort() {
     const d = state.data;
     let list = state.results;
 
     const f = state.filters;
-    if (f.models || f.sounds || f.animkits || f.fx) {
+    const active = Object.keys(f).filter((k) => f[k]);
+    if (active.length) {
+      // each active category is "with" (keep spells that HAVE it) or "without"
+      // (keep spells that LACK it); several AND together
       list = list.filter((id) =>
-        (!f.models || d.spellModels.has(id)) &&
-        (!f.sounds || d.spellSounds.has(id)) &&
-        (!f.animkits || d.spellAnimKits.has(id) || d.spellAnims.has(id)
-          || d.spellVisualAnims.has(id)) &&
-        (!f.fx || d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellGlows.has(id)
-          || d.spellShadowies.has(id) || d.spellGhostMats.has(id) || d.spellTints.has(id)
-          || d.spellDesaturates.has(id) || d.spellTransps.has(id)
-          || d.spellFreezes.has(id) || d.spellCamos.has(id) || d.spellScreens.has(id)
-          || d.spellMorphs.has(id) || d.spellShapeshifts.has(id)
-          || d.spellSummons.has(id)));
+        active.every((k) => {
+          const has = HAS_CATEGORY[k](d, id);
+          return f[k] === "without" ? !has : has;
+        }));
     } else {
       list = list.slice();
     }
@@ -3078,10 +3095,13 @@
       params.push("v=" + encodeQueryValue(shortVersion(state.version.id)));
     }
     if (state.lastQuery) params.push("q=" + encodeQueryValue(state.lastQuery));
-    // the "Only spells with" filters shape the shared result list just like
-    // the query does, so they ride in the URL too
-    const only = Object.keys(state.filters).filter((k) => state.filters[k]);
+    // the "Only spells with / without" filters shape the shared result list
+    // just like the query does, so they ride in the URL too: only= lists the
+    // "with" categories (unchanged for back-compat), without= the "without" ones
+    const only = Object.keys(state.filters).filter((k) => state.filters[k] === "with");
     if (only.length) params.push("only=" + only.join(","));
+    const without = Object.keys(state.filters).filter((k) => state.filters[k] === "without");
+    if (without.length) params.push("without=" + without.join(","));
     // sort order shapes the shared list — and the row order of ?export= —
     // so it rides in the URL too: one link must always yield one result set
     if (state.sort.key !== "auto") {
@@ -3106,16 +3126,19 @@
     if (legacyMode && isChipField(legacyMode) && q && !/[a-z]+:/i.test(q)) {
       q = `${legacyMode}:${/\s/.test(q) ? `"${q}"` : q}`;
     }
-    return { v: get("v"), q, only: get("only"), sort: get("sort") };
+    return { v: get("v"), q, only: get("only"), without: get("without"), sort: get("sort") };
   }
 
-  // set the "Only spells with" filters from the URL's only= list (absent
-  // = all off) and sync the checkboxes
-  function filtersFromUrl(str) {
-    const wanted = new Set((str || "").split(","));
-    for (const k of Object.keys(state.filters)) state.filters[k] = wanted.has(k);
-    for (const box of $$inputs("#filters input[type=checkbox]")) {
-      box.checked = state.filters[box.dataset.filter];
+  // set the "Only spells with / without" filters from the URL's only= (with)
+  // and without= lists (a category in neither = any) and sync the buttons
+  function filtersFromUrl(onlyStr, withoutStr) {
+    const withSet = new Set((onlyStr || "").split(",").filter(Boolean));
+    const withoutSet = new Set((withoutStr || "").split(",").filter(Boolean));
+    for (const k of Object.keys(state.filters)) {
+      state.filters[k] = withSet.has(k) ? "with" : withoutSet.has(k) ? "without" : "";
+    }
+    for (const btn of $$("#filters button.tri")) {
+      btn.dataset.state = state.filters[btn.dataset.filter];
     }
   }
 
@@ -3553,11 +3576,17 @@
     $("#export-json").addEventListener("click", exportJson);
     $("#export-discord").addEventListener("click", exportDiscord);
 
-    // filters — part of the shareable state, so the URL follows (a push:
-    // Back undoes the toggle like it undoes a search)
-    for (const box of $$inputs("#filters input[type=checkbox]")) {
-      box.addEventListener("change", () => {
-        state.filters[box.dataset.filter] = box.checked;
+    // filters — tri-state, each click cycles any -> only with -> only without.
+    // Part of the shareable state, so the URL follows (a push: Back undoes the
+    // toggle like it undoes a search)
+    /** @type {("" | "with" | "without")[]} */
+    const TRI_STATES = ["", "with", "without"];
+    for (const btn of $$("#filters button.tri")) {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.filter;
+        const next = TRI_STATES[(TRI_STATES.indexOf(state.filters[key]) + 1) % TRI_STATES.length];
+        state.filters[key] = next;
+        btn.dataset.state = next;
         applyFiltersAndSort();
         stateToUrl(true);
       });
@@ -3740,7 +3769,7 @@
   function applyUrl({ push }) {
     const h = urlToState();
     loadQueryString(h.q);
-    filtersFromUrl(h.only);
+    filtersFromUrl(h.only, h.without);
     sortFromUrl(h.sort);
     // no v= in the URL means the default version, not "keep the current
     // one" — back/forward must return from an explicitly-chosen pack
@@ -3790,7 +3819,7 @@
     const autoExport = (new URLSearchParams(location.search).get("export") || "").toLowerCase();
     const entry = findVersion(h.v) || defaultVersion();
     loadQueryString(h.q);
-    filtersFromUrl(h.only);
+    filtersFromUrl(h.only, h.without);
     sortFromUrl(h.sort);
     await activateVersion(entry);
     if (autoExport === "json") exportJson();
