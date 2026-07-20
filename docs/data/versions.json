@@ -4,56 +4,56 @@
     "label": "Vanilla Classic 1.15.8",
     "file": "data/1.15.8.67156/spelldata.json.gz",
     "built": "2026-07-20",
-    "hash": "565c9a8d9d"
+    "hash": "06ffa93a8f"
   },
   {
     "id": "2.5.6.68775",
     "label": "TBC Classic 2.5.6",
     "file": "data/2.5.6.68775/spelldata.json.gz",
     "built": "2026-07-20",
-    "hash": "bdb4f6e1b1"
+    "hash": "599a5469bb"
   },
   {
     "id": "3.4.3.58936",
     "label": "WotLK Classic 3.4.3",
     "file": "data/3.4.3.58936/spelldata.json.gz",
     "built": "2026-07-20",
-    "hash": "fe8677ccf9"
+    "hash": "0d7689599c"
   },
   {
     "id": "4.4.2.60895",
     "label": "Cataclysm Classic 4.4.2",
     "file": "data/4.4.2.60895/spelldata.json.gz",
     "built": "2026-07-20",
-    "hash": "a5f0f41431"
+    "hash": "32e269b6b9"
   },
   {
     "id": "5.5.4.68716",
     "label": "MoP Classic 5.5.4",
     "file": "data/5.5.4.68716/spelldata.json.gz",
     "built": "2026-07-20",
-    "hash": "562d4085f4"
+    "hash": "e904cca929"
   },
   {
     "id": "7.3.5.26972",
     "label": "Legion 7.3.5",
     "file": "data/7.3.5.26972/spelldata.json.gz",
     "built": "2026-07-20",
-    "hash": "e208adf1a9"
+    "hash": "5e59be8975"
   },
   {
     "id": "8.3.7.35662",
     "label": "Battle for Azeroth 8.3.7",
     "file": "data/8.3.7.35662/spelldata.json.gz",
     "built": "2026-07-20",
-    "hash": "6b1c6a1dd6"
+    "hash": "c6d7db36b3"
   },
   {
     "id": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/spelldata.json.gz",
     "built": "2026-07-20",
-    "hash": "f7ccfa22d0",
+    "hash": "a28d164af3",
     "default": true
   },
   {
@@ -61,13 +61,13 @@
     "label": "Dragonflight 10.2.7",
     "file": "data/10.2.7.55664/spelldata.json.gz",
     "built": "2026-07-20",
-    "hash": "0b69854603"
+    "hash": "5a0010864f"
   },
   {
     "id": "11.2.7.65299",
     "label": "The War Within 11.2.7",
     "file": "data/11.2.7.65299/spelldata.json.gz",
     "built": "2026-07-20",
-    "hash": "3fbb345c48"
+    "hash": "1a0e75dc68"
   }
 ]

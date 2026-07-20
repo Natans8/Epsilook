@@ -110,12 +110,14 @@ flowchart LR
   MS["SpellVisualMissile<br/>(missile set)"]
 
   S --> SXSV --> SV
+  SV -->|"Caster/HostileSpellVisualID<br/>(redirect, + target bit)"| SV
   SV -->|"SpellVisualEvent rows"| SVE -->|"+ TargetType"| K
   SV -->|"SpellVisualMissileSetID<br/>+ RaidSpellVisualMissileSetID"| MS
+  SV -->|"AnimEventSoundID"| AES["SoundKitEntry → sound fids"]
   K --> SVKE
 ```
 
-Two things to hold onto:
+Three things to hold onto:
 
 **The kit edge carries a target mask.** `SpellVisualEvent.TargetType` says *who
 the kit plays on*, and it rides along with everything that kit contributes.
@@ -135,6 +137,30 @@ that is why a row can be caster *and* target.
 **The missile path bypasses events entirely**, so missile content carries *no*
 mask — that is exactly the ~4% of unmasked rows in every pack, and the row count
 matching the missile row count is a good build oracle.
+
+**A `SpellVisual` can redirect to another `SpellVisual`.** Four columns on the
+row name a substitute visual the client swaps in (`VISUAL_REDIRECTS` in
+`build_data.py`); the build follows them so the spell also reaches everything
+the substitute carries. This matters because the redirected-to visual is
+usually reachable no other way — on 9.2.7 only 37 of 228 caster targets and 30
+of 257 hostile targets also appear in `SpellXSpellVisual` — so following the
+redirect is what makes that content visible at all, not a re-labelling of rows
+already shown (263 spells gain a caster/target model bit this way).
+
+| Column | extra bit | meaning |
+|---|---|---|
+| `CasterSpellVisualID` | `caster` (1) | what the caster themself sees |
+| `HostileSpellVisualID` | `target` (2) | what a hostile target sees |
+| `LowViolenceSpellVisualID` | — | client-setting variant, no target semantic |
+| `ReducedUnexpectedCameraMovementSpellVisualID` | — | client-setting variant, no target semantic |
+
+The bit rides along with everything reached through that redirect, exactly like
+a `TargetType` mask, and unions with it. Two traps the build handles and any
+future edit must keep: **the redirect graph has cycles** (a self-reference and a
+two-cycle on 9.2.7, chains up to 3 hops), so expansion is a mask-fixpoint
+worklist, not recursion; and **a hotfix row replaces the wago `SpellVisual` row
+wholesale**, so the redirect columns (and `AnimEventSoundID`) join the TDB
+hotfix overlay or a hotfixed visual silently loses them.
 
 ---
 
@@ -234,18 +260,26 @@ flowchart LR
 `area` and the two mean different things (only 42% of this category's rows carry
 an area target bit).
 
-### 3d. The three-and-a-half sound routes
+### 3d. The four-and-a-half sound routes
 
 ```mermaid
 flowchart LR
   K5["kit EffectType 5"] --> SKID["SoundKitID"]
   MSND["SpellVisualMissile.SoundEntriesID"] --> SKID
   CSND["SpellChainEffects.SoundKitID"] --> SKID
+  AESND["SpellVisual.AnimEventSoundID"] --> SKID
   SKID --> SKE["SoundKitEntry"] --> FID["sound FileDataIDs"]
 ```
 
 The chain route is the "half": a beam's own sound folds into the spell's Sounds
 column and inherits the chain's target mask.
+
+`AnimEventSoundID` hangs off the `SpellVisual` row itself (not a kit or a
+missile), and its value is a `SoundKit::ID` — the same type the missile route
+already eats — so it drops straight into the existing sound plumbing. It is the
+**widest-reaching of these** — 1,999 spells on 9.2.7 (vs a few hundred each for
+the caster/hostile redirects), populated on every pack including Vanilla — and
+it inherits the redirect target bit of whatever edge reached the visual.
 
 ### 3e. The three animation routes
 
@@ -665,7 +699,7 @@ code edit:
 | Declaration | Handles |
 |---|---|
 | `OPTIONAL_TABLES` | Table postdates the build → 404 tolerated, section empty, feature switches off. |
-| `OPTIONAL_COLUMNS` | Table exists, one column doesn't → default stands in (2 so far). |
+| `OPTIONAL_COLUMNS` | Table exists, one column doesn't → default stands in (3 so far: two missile-set variants, plus `ReducedUnexpectedCameraMovementSpellVisualID` absent on Legion 7.3.5 and BfA 8.3.7). |
 | `SPELL_NAME_SOURCES` | Data moved tables — first candidate that exists wins. |
 | `TDB_OPTIONAL_TABLES` / `TDB_OPTIONAL_COLUMNS` / `CREATURE_DISPLAY_SOURCES` | The same three kinds of drift on the TrinityCore side, in its own namespace. |
 | `array_columns()` | A column that changed shape — `CreatureDisplayID_0..3` became a scalar in 10.2.0. |
@@ -719,8 +753,9 @@ footing, not an affirmative license.
 | Column | Routes feeding it |
 |---|---|
 | **Models** | attach (kit→ModelAttach→EffectName), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect); every row also carries its M2 attachment point (§3h) |
-| **Sounds** | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID` — all → SoundKitEntry |
+| **Sounds** | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID`, `SpellVisual.AnimEventSoundID` — all → SoundKitEntry |
 | **Animations** | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), proc Type 7 (stance), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped) |
 | **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, seat — see §3a–3i |
 | **Mechanics** | `SpellEffect.Effect` + `.EffectAura` enums, names from WoWDBDefs |
 | **Name search** | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names |
+| **Target bits** | `SpellVisualEvent.TargetType` on the kit edge (§2), plus `Caster`/`HostileSpellVisualID` redirects that mark whatever they reach caster/target |

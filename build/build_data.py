@@ -153,6 +153,9 @@ OPTIONAL_COLUMNS = {
     # the raid missile-set variant arrived after Legion; 0 = "no raid set",
     # which is exactly how a present-but-unset row already reads
     ("SpellVisual", "RaidSpellVisualMissileSetID"): "0",
+    # the reduced-camera-movement variant is missing on Legion and BfA only
+    # (present either side of them); 0 = "no variant", same as an unset row
+    ("SpellVisual", "ReducedUnexpectedCameraMovementSpellVisualID"): "0",
     # Legion's FullScreenEffect has the colour grade but no overlay art yet
     ("FullScreenEffect", "OverlayTextureFileDataID"): "0",
 }
@@ -214,6 +217,31 @@ TDB_RELEASES = {
 }
 TDB_ASSET_URL = "https://github.com/TrinityCore/TrinityCore/releases/download/{tag}/{asset}"
 
+# The bits a target mask can carry. Named up here because VISUAL_REDIRECTS
+# (below) needs them before TARGET_BITS — which maps SpellVisualEvent.TargetType
+# onto these same bits, and is where the scheme is explained in full.
+NO_TARGET = 0
+TARGET_CASTER, TARGET_TARGET, TARGET_AREA = 1, 2, 4
+TARGET_NOT_CASTER, TARGET_MISSILE_DEST = 8, 16
+
+# SpellVisual columns that point at ANOTHER SpellVisual the client swaps in for
+# this one -> the extra target bit everything reached through that redirect
+# carries. The redirected-to visual is usually reachable no other way (on 9.2.7
+# only 37 of 228 caster targets and 30 of 257 hostile targets also appear in
+# SpellXSpellVisual), so following these is what makes that content visible at
+# all — it is not a re-labelling of rows we already show.
+#
+# Only the first two carry a "who sees this" meaning. Low-violence and
+# reduced-camera-movement are CLIENT SETTING variants — nobody casts them at
+# anyone — so they declare NO_TARGET rather than being forced into a bit.
+# Adding a future redirect column is one line here and nothing else.
+VISUAL_REDIRECTS = {
+    "CasterSpellVisualID": TARGET_CASTER,    # what the caster themself sees
+    "HostileSpellVisualID": TARGET_TARGET,   # what a hostile target sees
+    "LowViolenceSpellVisualID": NO_TARGET,
+    "ReducedUnexpectedCameraMovementSpellVisualID": NO_TARGET,
+}
+
 # Tables distilled out of the TDB SQL dumps into cached CSVs, with the
 # columns we keep. world tables are complete (server-only data); hotfixes
 # tables hold ONLY the rows Blizzard hotfixed post-ship — applied on top of
@@ -232,9 +260,12 @@ TDB_TABLES = {
         "spell_x_spell_visual": ["ID", "SpellID", "SpellVisualID"],
         # MissileAttachment/MissileDestinationAttachment must be overlaid too:
         # a hotfixed row replaces the wago row wholesale, so omitting them
-        # would silently blank the launch/impact attachments on those visuals
+        # would silently blank the launch/impact attachments on those visuals.
+        # The redirect columns (VISUAL_REDIRECTS) and AnimEventSoundID are here
+        # for exactly the same reason.
         "spell_visual": ["ID", "SpellVisualMissileSetID", "RaidSpellVisualMissileSetID",
-                         "MissileAttachment", "MissileDestinationAttachment"],
+                         "MissileAttachment", "MissileDestinationAttachment",
+                         "AnimEventSoundID", *VISUAL_REDIRECTS],
         "spell_visual_missile": ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID",
                                  "SoundEntriesID", "AnimKitID"],
         "spell_visual_effect_name": ["ID", "ModelFileDataID"],
@@ -474,8 +505,9 @@ TEX_OVERLAY, TEX_MASK = 0, 1
 # in TargetType. Value 0 (None) is not in the map: it is effectively unused
 # (one row in 207,241 on 9.2.7) and contributes no bit, same as content that
 # arrives from outside the event graph (missile sets carry no event row).
-TARGET_BITS = {1: 1, 2: 2, 3: 4, 4: 8, 5: 16}  # caster, target, area, not-caster, missile-dest
-NO_TARGET = 0
+# (the bits themselves are named above TDB_TABLES, where VISUAL_REDIRECTS needs them)
+TARGET_BITS = {1: TARGET_CASTER, 2: TARGET_TARGET, 3: TARGET_AREA,
+               4: TARGET_NOT_CASTER, 5: TARGET_MISSILE_DEST}
 
 # The search word each mask bit answers to. Two pairs of bits deliberately
 # share a word: "target, never caster" is still a target (it keeps its own bit,
@@ -1001,9 +1033,43 @@ def read_spell_names(table_dir: Path, tdb_dir: Path | None) -> tuple[dict[int, s
     return spell_names, subtexts
 
 
+def expand_redirects(
+    seeds: set[int], redirects: dict[int, list[tuple[int, int]]]
+) -> dict[int, int]:
+    """Expand a spell's visuals to include the ones its visuals redirect to.
+
+    Returns {visual -> extra target mask}: the seeds themselves carry
+    NO_TARGET (their rows are already masked by their own event TargetType),
+    and anything reached through a redirect carries the bits of the columns
+    it was reached through (VISUAL_REDIRECTS).
+
+    **The redirect graph contains cycles** — on 9.2.7 one visual names itself
+    and one pair names each other — so this is a worklist keyed on the mask
+    already recorded, not a recursion. A visual is re-queued only while its
+    mask still grows; masks are a 5-bit union and only ever gain bits, so that
+    is a fixpoint and it terminates regardless of how the data is shaped.
+    Chains longer than one hop are real (3 targets redirect again), which is
+    why this cannot be flattened into a single lookup.
+    """
+    out: dict[int, int] = {}
+    queue = [(v, NO_TARGET) for v in seeds]
+    while queue:
+        v, mask = queue.pop()
+        prev = out.get(v)
+        merged = mask if prev is None else prev | mask
+        if prev is not None and merged == prev:
+            continue  # nothing new to say about this visual — and the cycle stop
+        out[v] = merged
+        for target, bit in redirects.get(v, ()):
+            # the bit of the hop is added to the mask of the path taken to get
+            # here, so a redirect reached through a redirect carries both
+            queue.append((target, mask | bit))
+    return out
+
+
 def read_visual_graph(
     table_dir: Path, tdb_dir: Path | None
-) -> tuple[dict[int, set[int]], dict[int, dict[int, int]]]:
+) -> tuple[dict[int, dict[int, int]], dict[int, dict[int, int]], dict[int, int]]:
     """Read the spell -> visual -> kit edges of the visual graph.
 
     Both hops are many-to-many. SpellXSpellVisual rows are keyed by row ID
@@ -1014,6 +1080,13 @@ def read_visual_graph(
     TARGET_BITS): one visual can reach the same kit through several event
     rows, so the mask is unioned per edge. Everything the kit contributes
     inherits that mask during the walk.
+
+    Returns (spell -> {visual -> extra mask}, visual -> {kit -> mask},
+    visual -> AnimEventSoundID). The spell->visual edge carries a mask of its
+    own because a visual can be reached through a REDIRECT column
+    (VISUAL_REDIRECTS) rather than from SpellXSpellVisual, and which column it
+    came through is what says whether that content is the caster's view or a
+    hostile target's.
     """
     sxv_rows: dict[int, tuple[int, int]] = {}
     for rid, spell_id, visual_id in read_table(
@@ -1024,10 +1097,36 @@ def read_visual_graph(
         tdb_dir, "spell_x_spell_visual", ["ID", "SpellID", "SpellVisualID"]
     ):
         sxv_rows[to_int(rid)] = (to_int(spell_id), to_int(visual_id))
-    spell_visuals: dict[int, set[int]] = defaultdict(set)
+    direct: dict[int, set[int]] = defaultdict(set)
     for s, v in sxv_rows.values():
         if s and v:
-            spell_visuals[s].add(v)
+            direct[s].add(v)
+
+    # SpellVisual's own row: the redirect columns and the anim-event sound. Read
+    # by row ID first so a hotfix replaces the wago row wholesale, exactly as
+    # the missile columns are (see TDB_TABLES["hotfixes"]["spell_visual"]).
+    sv_cols = ["ID", "AnimEventSoundID", *VISUAL_REDIRECTS]
+    sv_rows: dict[int, tuple[int, ...]] = {}
+    for rid, *vals in read_table(table_dir, "SpellVisual", sv_cols):
+        sv_rows[to_int(rid)] = tuple(to_int(v) for v in vals)
+    for rid, *vals in hotfix_rows(tdb_dir, "spell_visual", sv_cols):
+        sv_rows[to_int(rid)] = tuple(to_int(v) for v in vals)
+
+    bits = list(VISUAL_REDIRECTS.values())
+    redirects: dict[int, list[tuple[int, int]]] = {}
+    visual_sounds: dict[int, int] = {}
+    for vid, (sound, *targets) in sv_rows.items():
+        if sound:
+            visual_sounds[vid] = sound
+        # a visual naming ITSELF is dropped here rather than in the expansion:
+        # it is a no-op redirect, and one exists on 9.2.7
+        hops = [(t, b) for t, b in zip(targets, bits) if t and t != vid]
+        if hops:
+            redirects[vid] = hops
+
+    spell_visuals: dict[int, dict[int, int]] = {
+        s: expand_redirects(vs, redirects) for s, vs in direct.items()
+    }
 
     visual_kits: dict[int, dict[int, int]] = defaultdict(dict)
     for visual_id, kit_id, target_type in read_table(
@@ -1037,7 +1136,7 @@ def read_visual_graph(
         if v and k:
             bit = TARGET_BITS.get(to_int(target_type), NO_TARGET)
             visual_kits[v][k] = visual_kits[v].get(k, NO_TARGET) | bit
-    return spell_visuals, visual_kits
+    return spell_visuals, visual_kits, visual_sounds
 
 
 @dataclass
@@ -1912,19 +2011,25 @@ class SpellVisuals:
 
 def walk_spells(
     spell_names: dict[int, str],
-    spell_visuals: dict[int, set[int]],
+    spell_visuals: dict[int, dict[int, int]],
     visual_kits: dict[int, dict[int, int]],
     visual_missiles: dict[int, tuple],
     kits: KitEffects,
     soundkit_files: dict[int, set[int]],
     fx: FxPayloads,
     spell_screens: dict[int, set[int]],
+    visual_sounds: dict[int, int],
 ) -> SpellVisuals:
     """Walk spell -> visual -> kit once, unioning every payload per spell.
 
     Screen effects are the one payload that also arrives from outside the
     graph (SCREEN_EFFECT auras), so spell_screens comes in already populated
     and this extends it with the kit route.
+
+    Each spell->visual edge carries an extra target mask (see
+    expand_redirects): everything a spell reaches through that visual is
+    OR-ed with it, which is how a redirect-only visual's content ends up
+    marked as the caster's or a hostile target's view.
     """
     vis = SpellVisuals(
         models=defaultdict(dict), sounds=defaultdict(dict), animkits=defaultdict(dict),
@@ -1939,16 +2044,27 @@ def walk_spells(
         if spell_id not in spell_names:
             vis.orphans += 1
             continue
-        for v in visuals:
+        for v, extra in visuals.items():
+            # `extra` is NO_TARGET for a visual the spell names directly, and the
+            # caster/target bit for one it only reaches through a redirect column
+            # (VISUAL_REDIRECTS) — so redirect-only content says whose view it is
+            # even though it never passed through a SpellVisualEvent row.
             # missile-set content has no SpellVisualEvent row, so no target type
             m_fids, m_sks, m_aks, (m_src, m_dst) = visual_missiles.get(v, NO_MISSILES)
             merge_masked(vis.models[spell_id],
-                         ((f, MODEL_CAT_MISSILE, m_src, m_dst) for f in m_fids), NO_TARGET)
-            merge_masked(vis.animkits[spell_id], m_aks, NO_TARGET)
+                         ((f, MODEL_CAT_MISSILE, m_src, m_dst) for f in m_fids), extra)
+            merge_masked(vis.animkits[spell_id], m_aks, extra)
             for sk in m_sks:
                 merge_masked(vis.sounds[spell_id],
-                             ((sk, f) for f in soundkit_files.get(sk, ())), NO_TARGET)
+                             ((sk, f) for f in soundkit_files.get(sk, ())), extra)
+            # the visual's own anim-event sound: a SoundKit like any other, but
+            # hanging off SpellVisual rather than off a kit or a missile
+            ae_sk = visual_sounds.get(v, 0)
+            if ae_sk:
+                merge_masked(vis.sounds[spell_id],
+                             ((ae_sk, f) for f in soundkit_files.get(ae_sk, ())), extra)
             for k, mask in visual_kits.get(v, {}).items():
+                mask |= extra
                 merge_masked(vis.models[spell_id], kits.models.get(k, ()), mask)
                 merge_masked(vis.animkits[spell_id], kits.animkits.get(k, ()), mask)
                 merge_masked(vis.anims[spell_id], kits.anims.get(k, ()), mask)
@@ -2053,7 +2169,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     spell_names, subtexts = read_spell_names(table_dir, tdb_dir)
 
     log("Reading spell visual chain tables ...")
-    spell_visuals, visual_kits = read_visual_graph(table_dir, tdb_dir)
+    spell_visuals, visual_kits, visual_sounds = read_visual_graph(table_dir, tdb_dir)
     models = read_model_sources(table_dir, tdb_dir)
     visual_missiles = read_missiles(table_dir, tdb_dir, models.effect_name_fid)
     procs = read_proc_effects(table_dir, models)
@@ -2097,7 +2213,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # --- walk the chains per spell ----------------------------------------
     log("Walking spell -> model/sound/animkit/chain chains ...")
     vis = walk_spells(spell_names, spell_visuals, visual_kits, visual_missiles,
-                      kits, soundkit_files, fx, se.screens)
+                      kits, soundkit_files, fx, se.screens, visual_sounds)
 
     # --- file names from the listfile -------------------------------------
     used_chains = {c[0] for chains in vis.chains.values() for c in chains}
