@@ -82,9 +82,12 @@ TDB archive (once per version) needs [7-Zip](https://www.7-zip.org/) on the
 PATH.
 
 **Adding a game version** is the same command with a different `--version`
-(any build wago.tools lists), plus an entry in `TDB_RELEASES` at the top of
-`build_data.py` so morph/summon names and hotfixes resolve. Shipped packs:
-WotLK Classic 3.4.3, Legion 7.3.5, Shadowlands 9.2.7 (default), Dragonflight
+(any build wago.tools lists). Add an entry in `TDB_RELEASES` at the top of
+`build_data.py` if TrinityCore publishes a matching world DB, so morph/summon
+names and hotfixes resolve — it is optional (no TDB exists for the Classic
+re-release clients, and those sections simply fall back to raw ids). Shipped
+packs: Vanilla Classic 1.15.8, TBC Classic 2.5.6, WotLK Classic 3.4.3, Legion
+7.3.5, Battle for Azeroth 8.3.7, Shadowlands 9.2.7 (default), Dragonflight
 10.2.7 and The War Within 11.2.7.
 
 Two flags control how a pack is presented:
