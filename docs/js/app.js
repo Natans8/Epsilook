@@ -3082,6 +3082,11 @@
     // the query does, so they ride in the URL too
     const only = Object.keys(state.filters).filter((k) => state.filters[k]);
     if (only.length) params.push("only=" + only.join(","));
+    // sort order shapes the shared list — and the row order of ?export= —
+    // so it rides in the URL too: one link must always yield one result set
+    if (state.sort.key !== "auto") {
+      params.push("sort=" + (state.sort.dir < 0 ? "-" : "") + state.sort.key);
+    }
     const url = location.pathname + (params.length ? "?" + params.join("&") : "");
     if (url === location.pathname + location.search && !location.hash) return;
     // pushState (unlike the old location.hash assignment) fires no event,
@@ -3101,7 +3106,7 @@
     if (legacyMode && isChipField(legacyMode) && q && !/[a-z]+:/i.test(q)) {
       q = `${legacyMode}:${/\s/.test(q) ? `"${q}"` : q}`;
     }
-    return { v: get("v"), q, only: get("only") };
+    return { v: get("v"), q, only: get("only"), sort: get("sort") };
   }
 
   // set the "Only spells with" filters from the URL's only= list (absent
@@ -3112,6 +3117,17 @@
     for (const box of $$inputs("#filters input[type=checkbox]")) {
       box.checked = state.filters[box.dataset.filter];
     }
+  }
+
+  // set the sort from the URL's sort= value ("name" ascending, "-name"
+  // descending; absent or unknown = the automatic relevance order). Unknown
+  // keys fall back rather than sorting by nothing — a stale link from before
+  // a column was renamed still shows results.
+  function sortFromUrl(str) {
+    const s = str || "";
+    const key = s.replace(/^-/, "");
+    const known = key === "id" || key === "name" || COUNT_SORTS.has(key);
+    state.sort = known ? { key, dir: s.startsWith("-") ? -1 : 1 } : { key: "auto", dir: 1 };
   }
 
   // A shared link may search a field whose column is hidden here —
@@ -3567,6 +3583,7 @@
         else if (state.sort.dir === first) state.sort.dir = -first;
         else state.sort = { key: "auto", dir: 1 };
         applyFiltersAndSort();
+        stateToUrl(true); // shareable + Back undoes the sort, like the filters
       });
     }
 
@@ -3724,6 +3741,7 @@
     const h = urlToState();
     loadQueryString(h.q);
     filtersFromUrl(h.only);
+    sortFromUrl(h.sort);
     // no v= in the URL means the default version, not "keep the current
     // one" — back/forward must return from an explicitly-chosen pack
     const wanted = findVersion(h.v) || defaultVersion();
@@ -3773,6 +3791,7 @@
     const entry = findVersion(h.v) || defaultVersion();
     loadQueryString(h.q);
     filtersFromUrl(h.only);
+    sortFromUrl(h.sort);
     await activateVersion(entry);
     if (autoExport === "json") exportJson();
     else if (autoExport === "csv") exportCsv();
