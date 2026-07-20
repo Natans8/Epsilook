@@ -813,6 +813,10 @@
 
   let suggestIndex = -1;
 
+  /* Attachment names pushed the word list past 60 entries, so the dropdown
+   * needs a ceiling — a one-letter prefix would otherwise cover the results. */
+  const SUGGEST_LIMIT = 12;
+
   /**
    * The category words a field's column shows as group heads, with the
    * tooltip text explaining each — one registry drives the chip
@@ -828,9 +832,21 @@
   const TARGET_WORD_TITLES = {
     caster: "Plays on the caster",
     target: "Plays on the target",
-    area: "Plays in the spell's area of effect (or where a missile lands)",
-    both: "Plays on both the caster and the target",
+    area: "Plays where the spell lands",
+    both: "Plays on the caster and the target",
   };
+
+  /* The attachment-point names of the loaded pack, as suggestable words.
+   * They come from the pack (attachmentNames), not a hardcoded list, so a
+   * widened M2 enum reaches the autocomplete without a code change. Only the
+   * two columns that actually render attachment segments offer them. */
+  function attachmentWords() {
+    const names = (state.data && state.data.attachmentNames) || {};
+    const words = [...new Set(Object.values(names))].filter(Boolean).sort();
+    const titles = {};
+    for (const w of words) titles[w] = "Attachment point on the model";
+    return { words, titles };
+  }
 
   function fieldCategories(field) {
     const d = state.data;
@@ -839,12 +855,18 @@
       words: [...words, ...Search.TARGET_WORDS],
       titles: { ...titles, ...TARGET_WORD_TITLES },
     });
+    /** ...plus the attachment names, for the columns that show them. */
+    const withAttachments = (base) => {
+      const a = attachmentWords();
+      return { words: [...base.words, ...a.words], titles: { ...base.titles, ...a.titles } };
+    };
     switch (field) {
-      case "fx": return withTargets(Object.keys(FX_HEAD_TITLES), FX_HEAD_TITLES);
-      case "model": return withTargets(
+      case "fx": return withAttachments(
+        withTargets(Object.keys(FX_HEAD_TITLES), FX_HEAD_TITLES));
+      case "model": return withAttachments(withTargets(
         // "" is the attach category: loose pills, no word to search by
         Object.values((d && d.modelCatNames) || {}).filter(Boolean),
-        MODEL_CAT_TITLES);
+        MODEL_CAT_TITLES));
       case "anim": return withTargets(Object.keys(ANIM_CAT_TITLES), ANIM_CAT_TITLES);
       case "sound": return withTargets([], {});
       default: return null;
@@ -888,7 +910,16 @@
     const word = input.value.split(/\s+/).pop().toLowerCase();
     if (!word) return hideSuggest();
     const { words, titles } = fieldCategories(state.activeField);
-    const matches = words.filter((w) => w.startsWith(word) && w !== word);
+    /* Prefix hits first, then words that merely *contain* what was typed —
+     * that is what lets "hand" reach SpellLeftHand / HandRight / SpellHandOmni
+     * and "seat" reach VehicleSeat1..8, which is how attachment points are
+     * actually half-remembered. Matching is case-insensitive because the
+     * attachment names are CamelCase while the category words are lower. */
+    const lc = (w) => w.toLowerCase();
+    const usable = words.filter((w) => lc(w) !== word);
+    const prefix = usable.filter((w) => lc(w).startsWith(word));
+    const inner = usable.filter((w) => !lc(w).startsWith(word) && lc(w).includes(word));
+    const matches = [...prefix, ...inner].slice(0, SUGGEST_LIMIT);
     if (!matches.length) return hideSuggest();
 
     box.textContent = "";
@@ -1469,10 +1500,8 @@
   /* Head of the stance group — a category word like the model/fx heads:
    * clicking searches the whole group via anim:stance. */
   const ANIM_CAT_TITLES = {
-    stance: "Stand/walk animation override (SpellProceduralEffect) — "
-      + "the caster plays these as its idle/move animations while the visual is active",
-    passenger: "Passenger animation (VehicleSeat) — what the rider plays "
-      + "entering, sitting in and leaving the vehicle's seats",
+    stance: "Stand/walk override the caster plays while the visual is up",
+    passenger: "What a rider plays entering, sitting in and leaving a seat",
   };
 
   function animCatHeadTag(word, hit) {
@@ -1480,8 +1509,7 @@
     if (hit) tag.classList.add("hit");
     const label = el("button", "tag-label", word);
     label.title = `${ANIM_CAT_TITLES[word] || ""}`
-      + `\nClick: find all spells with a ${word} animation`
-      + "\nShift-click: exclude them instead";
+      + `\nClick: find all spells with a ${word} animation · Shift-click: exclude`;
     label.dataset.search = `anim:${word}`;
     tag.appendChild(label);
     return tag;
@@ -2103,7 +2131,7 @@
     if (hit) tag.classList.add("hit");
     const label = el("button", "tag-label", category);
     label.title = `${MODEL_CAT_TITLES[category] || ""}`
-      + `\nClick: find all spells with a ${category} model\nShift-click: exclude them instead`;
+      + `\nClick: find all spells with a ${category} model · Shift-click: exclude`;
     label.dataset.search = `model:${category}`;
     tag.appendChild(label);
     return tag;
@@ -2167,9 +2195,8 @@
     }
     const seg = el("button", "tag-attach", label);
     const words = [s, t].filter(Boolean);
-    seg.title = `${why}\n(an M2 attachment slot on the model, not a description)`
-      + `\nClick: find spells using ${words.length > 1 ? "these points" : "this point"}`
-      + "\nShift-click: exclude them instead";
+    seg.title = `${why} — an M2 attachment slot, not a description`
+      + `\nClick: find spells using ${words.length > 1 ? "these points" : "this point"} · Shift-click: exclude`;
     seg.dataset.search = `${field}:"${words.join(" ")}"`;
     return seg;
   }
@@ -2200,7 +2227,7 @@
     }
 
     const txt = el("button", "tag-label", file.base ? stripExt(file.base) : `file #${fid}`);
-    txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this model\nShift-click: exclude them instead`;
+    txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this model · Shift-click: exclude`;
     txt.dataset.search = file.base ? `model:"${file.base}"` : "";
     tag.appendChild(txt);
     addTargetIcons(tag, mask);
@@ -2233,7 +2260,7 @@
 
     // sound extensions stay visible (.ogg/.mp3 differ, unlike models)
     const txt = el("button", "tag-label", file.base || `file #${fid}`);
-    txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this sound\nShift-click: exclude them instead`;
+    txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this sound · Shift-click: exclude`;
     txt.dataset.search = file.base ? `sound:"${file.base}"` : "";
     tag.appendChild(txt);
 
@@ -2291,8 +2318,8 @@
 
     const txt = el("button", "tag-label", String(kitId));
     txt.title = field === "soundkit"
-      ? `SoundKit ${kitId}\nClick: find spells using this soundkit\nShift-click: exclude them instead`
-      : `AnimKit ${kitId}\nClick: find spells using this animkit\nShift-click: exclude them instead`;
+      ? `SoundKit ${kitId}\nClick: find spells using this soundkit · Shift-click: exclude`
+      : `AnimKit ${kitId}\nClick: find spells using this animkit · Shift-click: exclude`;
     txt.dataset.search = `${field === "soundkit" ? "sound" : "anim"}:${kitId}`;
     tag.appendChild(txt);
 
@@ -2316,7 +2343,7 @@
     if (animIsHit(animId, groupWord)) tag.classList.add("hit");
 
     const txt = el("button", "tag-label", name);
-    txt.title = `Animation ${animId}: ${name}\nClick: find spells playing this animation\nShift-click: exclude them instead`;
+    txt.title = `Animation ${animId}: ${name}\nClick: find spells playing this animation · Shift-click: exclude`;
     txt.dataset.search = `anim:"${name}"`;
     tag.appendChild(txt);
     addTargetIcons(tag, mask);
@@ -2332,7 +2359,7 @@
     const tag = el("span", "tag mechanic");
     if (effectIsHit(effectId)) tag.classList.add("hit");
     const label = el("button", "tag-label", name);
-    label.title = `Spell effect ${effectId}: SPELL_EFFECT_${name}\nClick: find spells with this mechanic\nShift-click: exclude them instead`;
+    label.title = `Spell effect ${effectId}: SPELL_EFFECT_${name}\nClick: find spells with this mechanic · Shift-click: exclude`;
     label.dataset.search = `mech:"${name}"`;
     tag.appendChild(label);
     return tag;
@@ -2344,7 +2371,7 @@
     const tag = el("span", "tag mechanic aura");
     if (auraIsHit(auraId)) tag.classList.add("hit");
     const label = el("button", "tag-label", name);
-    label.title = `Aura ${auraId}: SPELL_AURA_${name}\nClick: find spells with this mechanic\nShift-click: exclude them instead`;
+    label.title = `Aura ${auraId}: SPELL_AURA_${name}\nClick: find spells with this mechanic · Shift-click: exclude`;
     label.dataset.search = `mech:"${name}"`;
     tag.appendChild(label);
     return tag;
@@ -2375,7 +2402,7 @@
     if (hit) tag.classList.add("hit");
     const label = el("button", "tag-label", category);
     label.title = `${FX_HEAD_TITLES[category] || ""}`
-      + `\nClick: find all spells with a ${category} effect\nShift-click: exclude them instead`;
+      + `\nClick: find all spells with a ${category} effect · Shift-click: exclude`;
     label.dataset.search = /\s/.test(category) ? `fx:"${category}"` : `fx:${category}`;
     tag.appendChild(label);
     return tag;
@@ -2405,7 +2432,7 @@
 
     const base = file.base ? stripExt(file.base) : "";
     const txt = el("button", "tag-label", base || "(untextured)");
-    txt.title = `${file.path || "(no texture)"}\nClick: find spells with this chain texture\nShift-click: exclude them instead`;
+    txt.title = `${file.path || "(no texture)"}\nClick: find spells with this chain texture · Shift-click: exclude`;
     if (entry.fid) {
       txt.dataset.texFid = String(entry.fid);
       // the hover preview multiplies the texture by the chain's tint
@@ -2450,7 +2477,7 @@
 
     const txt = el("button", "tag-label", hex);
     txt.title = `${FX_HEAD_TITLES[category]}\nColor ${hex}`
-      + `\nClick: find spells with this ${category} color\nShift-click: exclude them instead`;
+      + `\nClick: find spells with this ${category} color · Shift-click: exclude`;
     txt.dataset.search = `fx:"${category} ${hex}"`;
     // the hex text is the color too — hovering it shows the same big patch
     txt.dataset.color = hex;
@@ -2481,7 +2508,7 @@
 
     const txt = el("button", "tag-label", `${percent}%`);
     txt.title = `${FX_HEAD_TITLES[category]}\n${percent}%`
-      + `\nClick: find spells with this ${category} strength\nShift-click: exclude them instead`;
+      + `\nClick: find spells with this ${category} strength · Shift-click: exclude`;
     txt.dataset.search = `fx:"${category} ${percent}%"`;
     tag.appendChild(txt);
     return tag;
@@ -2502,7 +2529,7 @@
     txt.title = `${FX_HEAD_TITLES.seat}\n`
       + `Seat at the ${label} attachment point`
       + `\n(an M2 attachment slot, not a description of the seat)`
-      + `\nClick: find spells with a seat there\nShift-click: exclude them instead`;
+      + `\nClick: find spells with a seat there · Shift-click: exclude`;
     txt.dataset.search = `fx:"seat ${label}"`;
     tag.appendChild(txt);
     return tag;
@@ -2551,7 +2578,7 @@
     const txt = el("button", "tag-label", name || `screen #${screenId}`);
     txt.title = `${name || "(unnamed)"} — ScreenEffect ${screenId}`
       + (texPaths.length ? `\n${texPaths.join("\n")}` : "")
-      + `\nClick: find spells with this screen effect\nShift-click: exclude them instead`;
+      + `\nClick: find spells with this screen effect · Shift-click: exclude`;
     // Preview the overlay texture with the effect's color multiplied in —
     // the same treatment chain pills get. Overlays sort first, so [0] is the
     // finished art when the row has any. The color matters: 9.0 Arcane's
@@ -2589,7 +2616,7 @@
     const txt = el("button", "tag-label", base || "(untextured)");
     txt.title = `${file.path || "(no texture)"}`
       + (duration ? `\nDuration ${duration}s` : "")
-      + `\nClick: find spells with this dissolve texture\nShift-click: exclude them instead`;
+      + `\nClick: find spells with this dissolve texture · Shift-click: exclude`;
     if (entry.fid) txt.dataset.texFid = String(entry.fid);
     txt.dataset.search = file.base ? `fx:"dissolve ${file.base}"` : "";
     tag.appendChild(txt);
@@ -2627,7 +2654,7 @@
     txt.title = `${name || "(unnamed form)"} — SpellShapeshiftForm ${formId}`
       + (displayId ? `\nDisplayID ${displayId}` : "\n(this form has no creature display)")
       + (file.path ? `\n${file.path}` : "")
-      + `\nClick: find spells with this form\nShift-click: exclude them instead`;
+      + `\nClick: find spells with this form · Shift-click: exclude`;
     // search by the form NAME, which is stable and readable, unlike the model
     txt.dataset.search = `fx:"shapeshift ${(name || String(formId)).replace(/"/g, "")}"`;
     tag.appendChild(txt);
@@ -2664,7 +2691,7 @@
     txt.title = `${name || "(unknown creature)"} — creature ${creatureId}`
       + (displayId ? `\nDisplayID ${displayId}` : "\n(no display known — creature not in TDB)")
       + `\n${file.path || "(model unknown)"}`
-      + `\nClick: find spells with this morph\nShift-click: exclude them instead`;
+      + `\nClick: find spells with this morph · Shift-click: exclude`;
     txt.dataset.search = `fx:"morph ${base || creatureId}"`;
     tag.appendChild(txt);
 
@@ -2704,13 +2731,13 @@
     txt.appendChild(document.createTextNode(name || `creature #${creatureId}`));
     txt.title = `${name || "(unknown creature)"} — creature ${creatureId}`
       + (ctrl ? `\nControl: ${ctrl}` : "")
-      + `\nClick: find spells summoning this creature\nShift-click: exclude them instead`;
+      + `\nClick: find spells summoning this creature · Shift-click: exclude`;
     txt.dataset.search = `fx:"summon ${name || creatureId}"`;
     tag.appendChild(txt);
     if (ctrl) {
       const cb = el("button", "tag-ctrl", ctrl);
       cb.title = `Control: ${ctrl}`
-        + `\nClick: find all ${ctrl} summons\nShift-click: exclude them instead`;
+        + `\nClick: find all ${ctrl} summons · Shift-click: exclude`;
       cb.dataset.search = `fx:"summon ${ctrl}"`;
       tag.appendChild(cb);
     }
@@ -3756,7 +3783,14 @@
     $("#help-btn").addEventListener("click", () => help.showModal());
     $("#help-close").addEventListener("click", () => help.close());
     help.addEventListener("click", (e) => {
-      if (e.target === help) help.close(); // backdrop click
+      if (e.target === help) return help.close(); // backdrop click
+      // the worked examples are live: running one closes the dialog so the
+      // results it just produced are actually visible
+      const ex = targetClosest(e, ".help-ex button[data-search]");
+      if (ex) {
+        help.close();
+        crossSearch(ex.dataset.search);
+      }
     });
 
     // infinite scroll

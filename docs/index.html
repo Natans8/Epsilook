@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit, animkit or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260720j">
+  <link rel="stylesheet" href="css/app.css?v=20260720k">
 </head>
 <body>
 
@@ -64,58 +64,79 @@
             <li>Type a prefix like <code>model:</code> (or click a field button) to search one field only.
               Everything you type then belongs to the tag — spaces included — until you press <kbd>Enter</kbd> or <kbd>Tab</kbd>.</li>
             <li>Fields: <code>name:</code> <code>model:</code> <code>sound:</code>
-              <code>anim:</code> <code>fx:</code> <code>mech:</code> <code>id:</code> —
-              <code>sound:</code> and <code>anim:</code> also take an exact SoundKit / AnimKit ID
-              (<code>sound:86835</code>, <code>anim:13839</code>; the old <code>soundkit:</code> and
-              <code>animkit:</code> prefixes still work as aliases).</li>
-            <li><code>fx:</code> searches visual effects: chains/beams by category word (<code>fx:chain</code>),
-              texture name (<code>fx:shadowlaser</code>) or tint color — a color word
-              (<code>fx:chain red</code>) or a hex code (<code>fx:#00b4ff</code>);
-              dissolves by texture (<code>fx:"dissolve arcane"</code>);
-              glows, ghost effects and model tints by color word or hex
-              (<code>fx:"glow red"</code>, <code>fx:"tint green"</code>);
-              desaturation and transparency by percent (<code>fx:"transparency 50%"</code>);
-              freezes and camouflage by word (<code>fx:freeze</code>, <code>fx:camo</code>);
-              full-screen effects by internal name, color word or hex
-              (<code>fx:"screen hex"</code>, <code>fx:"screen green"</code>);
-              shapeshift forms by form name or model (<code>fx:"shapeshift cat form"</code>);
-              morphs by NPC name, model name, creature ID or display ID (<code>fx:"morph sheep"</code>);
-              summons by NPC name, creature ID or control type (<code>fx:"summon argi"</code>,
-              <code>fx:"summon guardian"</code>);
-              vehicle seats by attachment point or seat count — <code>fx:seat</code> finds
-              every spell that turns the caster into a rideable vehicle,
-              <code>fx:"seat base"</code> scopes to a seat at that attachment point, and
-              <code>fx:"seat &gt;2"</code> to vehicles with more than two seats
-              (<code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code> and a
-              bare number all work).</li>
-            <li><code>model:</code> also matches the usage-category words shown in the Models column —
-              <code>model:missile</code> finds every spell with a projectile model
-              (<code>missile</code>, <code>ground</code>, <code>trail</code>,
-              <code>barrage</code>) — and a category word combines with file words in one tag:
-              <code>model:"missile arrow"</code> finds spells whose <em>projectile</em> is an arrow model.
-              The Animations column's grouped categories work the same way:
-              <code>stance</code> (stand/walk animation overrides) and
-              <code>passenger</code> (what a rider plays entering, sitting in and leaving a
-              vehicle's seats) — <code>anim:stance</code> finds every spell with an override,
-              <code>anim:"stance walk"</code> scopes to walk overrides, and
-              <code>anim:passenger</code> finds every spell with vehicle seat animations.
-              Category words autocomplete while typing inside an
-              <code>fx:</code>/<code>model:</code>/<code>anim:</code> tag, and a tag naming a
-              category exactly floats that category's spells to the top of the results.</li>
-            <li><strong>Attachment points</strong> say <em>where on the model</em> something plays —
-              <code>Chest</code>, <code>SpellRightHand</code>, <code>Base</code>. Missiles and beams
-              travel between two, shown as <code>SpellRightHand → Chest</code>. Search them as
-              words inside <code>model:</code> or <code>fx:</code> —
-              <code>model:base</code>, <code>fx:"chain chest"</code> — and note the same model at
-              two different points is shown as two pills.</li>
-            <li><strong>Counting</strong>: a field tag holding only a comparison counts that
-              column's entries — <code>model:&gt;4</code> finds spells with more than four models,
-              <code>anim:=3</code> exactly three animations, <code>sound:&gt;=2</code> two or more
-              sounds. The operator is required: a bare <code>model:2</code> still searches file
-              names for "2".</li>
-            <li><strong>Target-type icons</strong> say <em>who</em> a model, sound, animation or
-              effect plays on. Every marked row shows one icon per type, so a row that plays on
-              two shows two icons:
+              <code>anim:</code> <code>fx:</code> <code>mech:</code> <code>id:</code>.
+              <code>sound:</code> and <code>anim:</code> also take an exact SoundKit / AnimKit ID.</li>
+            <li>Every tag must match (AND), and words <em>inside</em> one tag must match the
+              <em>same</em> file or name. Several <code>id:</code> tags are the exception — they
+              match any of them.</li>
+          </ul>
+          <ul class="help-ex">
+            <li><button data-search="name:fireball">name:fireball</button> by spell name</li>
+            <li><button data-search="mech:resurrect">mech:resurrect</button> by what it does</li>
+            <li><button data-search="sound:86835">sound:86835</button> an exact SoundKit ID</li>
+            <li><button data-search=".cast 133">.cast 133</button> Epsilon commands paste straight in</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Effects — <code>fx:</code></h3>
+          <p class="help-note">Visuals not tied to a model file. Each kind is searchable by its
+            own word, plus a texture, color word, hex code or percentage.</p>
+          <ul class="help-ex">
+            <li><button data-search="fx:chain red">fx:chain red</button> red beams and chains</li>
+            <li><button data-search="fx:#00b4ff">fx:#00b4ff</button> that exact tint, any effect</li>
+            <li><button data-search='fx:"dissolve arcane"'>fx:"dissolve arcane"</button> arcane materialize</li>
+            <li><button data-search='fx:"glow red"'>fx:"glow red"</button> red rim-light</li>
+            <li><button data-search='fx:"transparency 50%"'>fx:"transparency 50%"</button> half-faded</li>
+            <li><button data-search="fx:freeze">fx:freeze</button> also <code>camo</code>, <code>ghost</code>, <code>tint</code>, <code>desaturate</code></li>
+            <li><button data-search='fx:"screen green"'>fx:"screen green"</button> full-screen tints</li>
+            <li><button data-search='fx:"shapeshift cat form"'>fx:"shapeshift cat form"</button> forms</li>
+            <li><button data-search='fx:"morph sheep"'>fx:"morph sheep"</button> transform auras</li>
+            <li><button data-search='fx:"summon guardian"'>fx:"summon guardian"</button> summons</li>
+            <li><button data-search="fx:seat">fx:seat</button> spells that make you a rideable vehicle</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Category words</h3>
+          <p class="help-note">The grouped words shown as headings in the Models and Animations
+            columns. They autocomplete inside a tag, and combine with file words in the same tag.</p>
+          <ul class="help-ex">
+            <li><button data-search="model:missile">model:missile</button> has a projectile model</li>
+            <li><button data-search='model:"missile arrow"'>model:"missile arrow"</button> whose projectile is an arrow</li>
+            <li><button data-search="model:ground">model:ground</button> also <code>trail</code>, <code>barrage</code></li>
+            <li><button data-search="anim:stance">anim:stance</button> stand/walk overrides</li>
+            <li><button data-search='anim:"stance walk"'>anim:"stance walk"</button> just the walk ones</li>
+            <li><button data-search="anim:passenger">anim:passenger</button> vehicle seat animations</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Attachment points</h3>
+          <p class="help-note">Where <em>on the model</em> something plays. Missiles and beams travel
+            between two, shown as <code>SpellRightHand → Chest</code>. The same model at two
+            different points shows as two pills. They autocomplete inside
+            <code>model:</code> and <code>fx:</code>, and a partial word finds them all.</p>
+          <ul class="help-ex">
+            <li><button data-search="model:hand">model:hand</button> either hand, and the spell-hand slots</li>
+            <li><button data-search="model:Chest">model:Chest</button> also <code>Base</code>, <code>Head</code>, <code>Breath</code></li>
+            <li><button data-search='fx:"chain chest"'>fx:"chain chest"</button> beams touching the chest</li>
+            <li><button data-search='model:"missile Head"'>model:"missile Head"</button> projectiles that fly to the head</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Counting</h3>
+          <p class="help-note">A tag holding only a comparison counts that column's entries. The
+            operator is required — a bare <code>model:2</code> still searches file names for "2".</p>
+          <ul class="help-ex">
+            <li><button data-search="model:&gt;4">model:&gt;4</button> more than four models</li>
+            <li><button data-search="anim:=3">anim:=3</button> exactly three animations</li>
+            <li><button data-search="sound:&gt;=2">sound:&gt;=2</button> two or more sounds</li>
+            <li><button data-search='fx:"seat &gt;2"'>fx:"seat &gt;2"</button> vehicles with 3+ seats</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Target-type icons</h3>
+          <ul>
+            <li>Who a model, sound, animation or effect plays on. A row that plays on
+              two types shows two icons:
               <span class="legend-icon t-caster"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1.8-3.8 4.3-5.5 7.5-5.5s5.7 1.7 7.5 5.5"/></svg></span>
               the caster,
               <span class="legend-icon t-target"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><line x1="12" y1="1.5" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22.5" y2="12"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></span>
@@ -123,34 +144,16 @@
               <span class="legend-icon t-notcaster"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><line x1="12" y1="1.5" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22.5" y2="12"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></span>
               the target but never the caster,
               <span class="legend-icon t-area"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="18" rx="9" ry="3.4"/><line x1="12" y1="3" x2="12" y2="14.5"/><path d="M8.5 11 12 15l3.5-4"/></svg></span>
-              the spell's area of effect — wherever that lands, which may be a
-              chosen spot, the caster, or an impact point — or where a missile
-              lands. Note the
-              <code>area</code> target word is <em>not</em> the <code>ground</code>
-              model category — most rows that play at a location are ordinary
-              attached models, not <code>SpellVisualKitAreaModel</code> ones.
-              They search like category words in <code>model:</code>, <code>sound:</code>,
-              <code>anim:</code> and <code>fx:</code> — <code>caster</code>, <code>target</code>,
-              <code>area</code> and <code>both</code> (caster <em>and</em> target), combining with
-              other words in the same tag: <code>model:"caster fire"</code> finds spells whose
-              <em>caster</em> model is a fire model.
-              Unmarked rows have no target type in the game data — projectile models and their
-              sounds come from missile sets, which carry none. Two columns are marked-by-constant
-              rather than per row: <code>stance</code> overrides are effectively always the caster,
-              and the <code>freeze</code>, <code>camo</code>, <code>tint</code>,
-              <code>transparency</code> and <code>desaturate</code> effects are almost always the
-              target — so they show no icon.</li>
-            <li>Epsilon commands paste straight in: <code>.cast 12345</code> or <code>.aura 12345</code>
-              (also <code>.cas</code>/<code>.ca</code>/<code>.c</code>/<code>.aur</code>/<code>.au</code>)
-              becomes an <code>id:12345</code> search — typed or pasted, the space after the command
-              works like a tag's <code>:</code>.</li>
-            <li><code>mech:</code> searches mechanics: spell effect names (<code>mech:resurrect</code>)
-              and aura names on aura-applying spells (<code>mech:mod_stun</code>).</li>
-            <li>Every tag must match (AND), and words <em>inside</em> one tag must match the <em>same</em> file or name —
-              <code>model:6dr</code> + <code>model:crystal</code> means a 6dr model <em>and</em> a crystal model.
-              Exception: several <code>id:</code> tags match <em>any</em> of them (OR) — two <code>id:</code>
-              tags could never both match one spell. Several kit IDs inside <em>one</em>
-              <code>sound:</code>/<code>anim:</code> tag also match any of them.</li>
+              where the spell lands.</li>
+            <li>They search like category words in any marked column, and combine with other
+              words in the same tag.</li>
+            <li>Unmarked rows simply have no target type in the game data — projectile models
+              and their sounds come from missile sets, which carry none.</li>
+          </ul>
+          <ul class="help-ex">
+            <li><button data-search='model:"caster fire"'>model:"caster fire"</button> fire model on the caster</li>
+            <li><button data-search="sound:target">sound:target</button> sounds played on the target</li>
+            <li><button data-search="model:both">model:both</button> plays on caster <em>and</em> target</li>
           </ul>
         </section>
         <section>
@@ -216,7 +219,7 @@
         <button type="button" class="tri" data-filter="animkits" data-state="">Animations</button>
         <button type="button" class="tri" data-filter="fx" data-state="">Effects</button>
       </div>
-      <div id="columns" title="Hidden columns are also excluded from All-mode search and from exports">
+      <div id="columns" title="Hidden columns are also left out of plain-word search and exports">
         <span>Columns:</span>
         <label><input type="checkbox" data-col="models" checked> Models</label>
         <label><input type="checkbox" data-col="sounds" checked> Sounds</label>
@@ -226,12 +229,12 @@
         <label><input type="checkbox" data-col="commands" checked> Commands</label>
       </div>
       <div id="export">
-        <button id="share-link" title="Copy a link to this exact search — the URL always holds your current query">🔗 Share</button>
+        <button id="share-link" title="Copy a link to this exact search">🔗 Share</button>
         <span class="export-sep"></span>
         <span>Export:</span>
-        <button id="export-csv" title="Download the current results as CSV (or add &export=csv to a shared URL)">CSV</button>
-        <button id="export-json" title="Download the current results as JSON (or add &export=json to a shared URL)">JSON</button>
-        <button id="export-discord" title="Copy a pasteable text list (works great in Discord and chat)">Copy as Text</button>
+        <button id="export-csv" title="Download these results as CSV">CSV</button>
+        <button id="export-json" title="Download these results as JSON">JSON</button>
+        <button id="export-discord" title="Copy a pasteable text list — good for Discord">Copy as Text</button>
       </div>
     </div>
 
@@ -242,11 +245,11 @@
             <th class="c-idx">#</th>
             <th data-sort="id" class="c-id">ID <span class="arrow"></span></th>
             <th data-sort="name" class="c-name">Name <span class="arrow"></span></th>
-            <th data-sort="models" class="c-models" title="Click to sort by number of models">Models <span class="arrow"></span></th>
-            <th data-sort="sounds" class="c-sounds" title="Click to sort by number of sounds">Sounds <span class="arrow"></span></th>
-            <th data-sort="animkits" class="c-animkits" title="Click to sort by number of animations">Animations <span class="arrow"></span></th>
-            <th data-sort="fx" class="c-fx" title="Visual effects not tied to a model — chain/beam effects, dissolves, glows, ghost effects, model tints, desaturation, transparency, freezes, camouflage, shapeshift forms, morphs (transform auras) and summoned creatures. Click to sort by number of effects">Effects <span class="arrow"></span></th>
-            <th data-sort="mechanics" class="c-mechanics" title="What the spell does mechanically (SpellEffect + SpellEffectAura enums). Click to sort by number of mechanics">Mechanics <span class="arrow"></span></th>
+            <th data-sort="models" class="c-models" title="Click to sort by count">Models <span class="arrow"></span></th>
+            <th data-sort="sounds" class="c-sounds" title="Click to sort by count">Sounds <span class="arrow"></span></th>
+            <th data-sort="animkits" class="c-animkits" title="Click to sort by count">Animations <span class="arrow"></span></th>
+            <th data-sort="fx" class="c-fx" title="Visual effects not tied to a model — beams, glows, tints, morphs, summons and more. Click to sort by count">Effects <span class="arrow"></span></th>
+            <th data-sort="mechanics" class="c-mechanics" title="What the spell does mechanically. Click to sort by count">Mechanics <span class="arrow"></span></th>
             <th class="c-cmds">Commands</th>
           </tr>
         </thead>
@@ -301,13 +304,13 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260720j"></script>
-<script src="js/data.js?v=20260720j"></script>
+<script src="js/config.js?v=20260720k"></script>
+<script src="js/data.js?v=20260720k"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260720j"></script>
-<script src="js/js-blp.js?v=20260720j"></script>
-<script src="js/search.js?v=20260720j"></script>
-<script src="js/app.js?v=20260720j"></script>
+<script src="js/bufo.js?v=20260720k"></script>
+<script src="js/js-blp.js?v=20260720k"></script>
+<script src="js/search.js?v=20260720k"></script>
+<script src="js/app.js?v=20260720k"></script>
 </body>
 </html>
