@@ -246,6 +246,18 @@ window.EpsilookData = (() => {
         pushTo(animKitSpells, animKitIds[i], spellIds[i]);
       }
     }
+    // AnimKits reached through a vehicle seat are AnimKit::IDs like any
+    // other, so they join the same groups and resolve through animKitAnims;
+    // the build counts them as "used" so their anims ship too.
+    if (pack.spellVehicleAnimKits) {
+      const { spellIds, animKitIds } = pack.spellVehicleAnimKits;
+      for (let i = 0; i < spellIds.length; i++) {
+        const have = spellAnimKits.get(spellIds[i]);
+        if (have && have.includes(animKitIds[i])) continue;
+        pushTo(spellAnimKits, spellIds[i], animKitIds[i]);
+        pushTo(animKitSpells, animKitIds[i], spellIds[i]);
+      }
+    }
 
     // animations contained in animkits (names indexed by AnimID)
     const animNames = pack.animNames;
@@ -542,6 +554,19 @@ window.EpsilookData = (() => {
         pushTo(visualAnimSpells, animIds[i], spellIds[i]);
       }
     }
+    // a vehicle's OWN animations (VehicleEnter/Exit/RideAnimLoop on its
+    // seats) join the loose pills rather than the "passenger" group: they
+    // are the vehicle's behaviour, not the rider's. Same id space, no target
+    // mask (so no icon), and de-duped against anims already present.
+    if (pack.spellVehicleAnims) {
+      const { spellIds, animIds } = pack.spellVehicleAnims;
+      for (let i = 0; i < spellIds.length; i++) {
+        const have = spellVisualAnims.get(spellIds[i]);
+        if (have && have.includes(animIds[i])) continue;
+        pushTo(spellVisualAnims, spellIds[i], animIds[i]);
+        pushTo(visualAnimSpells, animIds[i], spellIds[i]);
+      }
+    }
 
     // model tints (SpellProceduralEffect Type 1 rows): color-only like
     // glows. Corpus: "tint" + hue + hex — fx:"tint red" / fx:#ff5800.
@@ -694,6 +719,53 @@ window.EpsilookData = (() => {
       }
     }
 
+    // vehicles (SET_VEHICLE_ID auras): the aura references a Vehicle.db2 id.
+    // Each vehicle carries a seat count and one attachment name per seat, in
+    // SeatID_0..7 order — where on the vehicle's model that seat sits. 0-seat
+    // vehicles carry no pill (dropped at build). Corpus per vehicle is
+    // "vehicle" + its attachment names, so fx:vehicle finds any and
+    // fx:"vehicle base" finds one seated at Base; the seat COUNT is matched
+    // numerically instead (fx:"vehicle >2"), so it stays out of the corpus.
+    /** @type {Map<number, string[]>} vehicle id -> [attachment name per seat] */
+    const vehicleSeats = new Map();
+    if (pack.vehicleSeats) {
+      const { vehicleIds, attachments } = pack.vehicleSeats;
+      for (let i = 0; i < vehicleIds.length; i++) {
+        pushTo(vehicleSeats, vehicleIds[i], attachments[i]);
+      }
+    }
+    /** @type {Map<number, number[]>} spell id -> [vehicle id] */
+    const spellVehicles = new Map();
+    /** @type {Map<number, number[]>} vehicle id -> [spell id] */
+    const vehicleSpells = new Map();
+    /** @type {Map<number, string>} vehicle id -> lowercased search corpus */
+    const vehicleSearchL = new Map();
+    if (pack.spellVehicles) {
+      const { spellIds, vehicleIds } = pack.spellVehicles;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellVehicles, spellIds[i], vehicleIds[i]);
+        pushTo(vehicleSpells, vehicleIds[i], spellIds[i]);
+      }
+      for (const v of vehicleSpells.keys()) {
+        const seats = vehicleSeats.get(v) || [];
+        vehicleSearchL.set(v, `vehicle ${seats.join(" ")}`.toLowerCase());
+      }
+    }
+
+    // the rider's own animations while entering/seated/exiting — their own
+    // "passenger" group in the Animations column
+    /** @type {Map<number, number[]>} spell id -> [animId] */
+    const spellPassengerAnims = new Map();
+    /** @type {Map<number, number[]>} animId -> [spell id] */
+    const passengerAnimSpells = new Map();
+    if (pack.spellPassengerAnims) {
+      const { spellIds, animIds } = pack.spellPassengerAnims;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellPassengerAnims, spellIds[i], animIds[i]);
+        pushTo(passengerAnimSpells, animIds[i], spellIds[i]);
+      }
+    }
+
     // aura mechanics (SpellEffectAura enum id -> name without SPELL_AURA_)
     /** @type {Map<number, number[]>} spell id -> [aura enum id] */
     const spellAuras = new Map();
@@ -747,6 +819,8 @@ window.EpsilookData = (() => {
       spellShapeshifts, shapeshiftSpells, shapeshiftNames, shapeshiftDisplays,
       shapeshiftSearchL,
       spellSummons, summonNames, summonPairSpells, summonPairSearchL, summonControlNames,
+      spellVehicles, vehicleSpells, vehicleSeats, vehicleSearchL,
+      spellPassengerAnims, passengerAnimSpells,
       spellEffects, effectSpells, effectNames, effectNamesL,
       spellAuras, auraSpells, auraNames, auraNamesL,
     };

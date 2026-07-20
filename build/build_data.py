@@ -101,6 +101,8 @@ TABLES = [
     "CreatureModelData",
     "SpellShapeshiftForm",
     "SpellOverrideName",
+    "Vehicle",
+    "VehicleSeat",
 ]
 
 # ------------------------------------------------------- per-build source map
@@ -142,6 +144,8 @@ OPTIONAL_TABLES = {
     "SpellShapeshiftForm":     "the shapeshift fx category",
     "SpellOverrideName":       "override names in the search corpus",
     "SummonProperties":        "summon control words (guardian/pet/...)",
+    "Vehicle":                 "the vehicle fx category",
+    "VehicleSeat":             "vehicle seat attachments and passenger animations",
 }
 
 # (table, column) -> the value to use on builds that lack the column
@@ -350,6 +354,61 @@ AURA_SHAPESHIFT = 36
 # "Infused" -> Bola / Apa / Deka). Search corpus only, never displayed.
 AURA_OVERRIDE_NAME = 370
 
+# SpellEffectAura (SET_VEHICLE_ID) whose EffectMiscValue_0 is a Vehicle.db2 ID.
+# The vehicle's payload we surface is its seat count (nonzero Vehicle.SeatID_n
+# slots); who can occupy those seats is deferred (needs VehicleSeat flags + the
+# server-side TDB accessory tables — see the handoff note).
+AURA_SET_VEHICLE_ID = 296
+
+# VehicleSeat.AttachmentID is NOT an M2 attachment id: it is an index into a
+# table hardcoded in the client binary (it exists in no db2, so it cannot be
+# derived from data and has to live here). wowdev.wiki/DB/VehicleSeat quotes
+# the array but hedges it with a "?", so it was verified rather than trusted:
+# 138 vehicle M2s were fetched and their attachment arrays read, then each
+# seat was checked against the model of its own vehicle. The decoded id is
+# present on the model 91.2% of the time vs 42.4% for the raw value, and the
+# indices where the two hypotheses disagree most are decisive — index 14
+# decodes to VehicleSeat2, present on 100% of the models that use it, while
+# raw 14 (ShoulderFlapLeft) is present on 0%. The array's own shape agrees:
+# indices 13..20 come out as VehicleSeat1..VehicleSeat8, in order.
+# (Full method and per-index table: CLAUDE.md, VehicleSeat research.)
+#
+# The array is 6.0.1-era and modern data has indices past its end (26, 27) —
+# those stay unmapped on purpose and surface as a raw "idx N" label rather
+# than a guess.
+VEHICLE_GEO_COMPONENT_LINKS = [
+    20, 34, 19, 21, 22, 17, 23, 24, 25, 15, 16, 37, 38,
+    39, 40, 41, 42, 43, 44, 45, 46, 0, 47, 48, 6, 5,
+]
+
+# M2 attachment id -> name (wowdev.wiki/M2 §8.5), for the ids the array above
+# can actually produce. Names are the game's own; they read oddly as seat
+# positions ("Breath", "ChestBloodBack") because artists reuse generic
+# attachment slots as seat anchors — that is the data, not a decode error.
+VEHICLE_ATTACHMENT_NAMES = {
+    0: "MountMain", 5: "ShoulderRight", 6: "ShoulderLeft",
+    15: "ChestBloodFront", 16: "ChestBloodBack", 17: "Breath", 19: "Base",
+    20: "Head", 21: "SpellLeftHand", 22: "SpellRightHand", 23: "Special1",
+    24: "Special2", 25: "Special3", 34: "Chest", 37: "SpellHandOmni",
+    38: "SpellHandDirected", 39: "VehicleSeat1", 40: "VehicleSeat2",
+    41: "VehicleSeat3", 42: "VehicleSeat4", 43: "VehicleSeat5",
+    44: "VehicleSeat6", 45: "VehicleSeat7", 46: "VehicleSeat8",
+    47: "LeftFoot", 48: "RightFoot",
+}
+
+
+def seat_attachment_name(index: int) -> str:
+    """Seat AttachmentID (an index) -> M2 attachment name, or "" when unset.
+
+    Out-of-range indices are labeled "idx N" rather than guessed at: the
+    link table is 6.0.1-era and modern data has grown past it.
+    """
+    if index < 0:
+        return ""
+    if index >= len(VEHICLE_GEO_COMPONENT_LINKS):
+        return f"idx {index}"
+    return VEHICLE_ATTACHMENT_NAMES.get(VEHICLE_GEO_COMPONENT_LINKS[index], "")
+
 # SpellEffect.Effect value that summons a creature: EffectMiscValue_0 is the
 # creature id (server-side NPC entry, same space as morphs), EffectMiscValue_1
 # the SummonProperties row governing how the summon behaves
@@ -396,7 +455,8 @@ TARGET_NAMES = {1: "caster", 2: "target", 4: "area", 8: "target", 16: "area"}
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 22  # 22: per-row target masks (SpellVisualEvent.TargetType)
+PACK_FORMAT = 23  # 23: vehicles (SET_VEHICLE_ID aura -> Vehicle seat count)
+# 22: per-row target masks (SpellVisualEvent.TargetType)
 
 csv.field_size_limit(10_000_000)
 
@@ -1416,6 +1476,7 @@ class SpellEffectRows:
     screens: dict[int, set[int]]                 # spell -> ScreenEffect ids (aura 260)
     forms: dict[int, set[int]]                   # spell -> shapeshift form ids (aura 36)
     altnames: dict[int, set[int]]                # spell -> SpellOverrideName ids (aura 370)
+    vehicles: dict[int, set[int]]                # spell -> Vehicle.db2 ids (aura 296)
 
 
 def read_spell_effect_rows(
@@ -1449,7 +1510,7 @@ def read_spell_effect_rows(
 
     out = SpellEffectRows(defaultdict(set), defaultdict(set), defaultdict(set),
                           defaultdict(set), defaultdict(set), defaultdict(set),
-                          defaultdict(set))
+                          defaultdict(set), defaultdict(set))
     for s, effect_id, aura_id, m0, m1 in se_rows.values():
         if s not in spell_names:
             continue
@@ -1469,6 +1530,99 @@ def read_spell_effect_rows(
             out.forms[s].add(m0)
         if aura_id == AURA_OVERRIDE_NAME and m0 > 0:
             out.altnames[s].add(m0)
+        if aura_id == AURA_SET_VEHICLE_ID and m0 > 0:
+            out.vehicles[s].add(m0)
+    return out
+
+
+# VehicleSeat columns holding AnimationData ids for the PASSENGER — what the
+# rider plays getting in, while seated, and getting out. ~99.8% of seats set
+# at least one.
+SEAT_PASSENGER_ANIM_COLUMNS = [
+    "EnterAnimStart", "EnterAnimLoop",
+    "RideAnimStart", "RideAnimLoop", "RideUpperAnimStart", "RideUpperAnimLoop",
+    "ExitAnimStart", "ExitAnimLoop", "ExitAnimEnd",
+]
+
+# ...and for the VEHICLE itself. Kept apart from the passenger set on the
+# user's call: it is the vehicle's behaviour, not the rider's, so it renders
+# as loose animation pills instead of joining the "passenger" group.
+SEAT_VEHICLE_ANIM_COLUMNS = [
+    "VehicleEnterAnim", "VehicleExitAnim", "VehicleRideAnimLoop",
+]
+
+# AnimKit ids on the seat. These are AnimKit::IDs, so they join the existing
+# animkit group rather than needing any new plumbing.
+SEAT_ANIMKIT_COLUMNS = [
+    "EnterAnimKitID", "RideAnimKitID", "ExitAnimKitID",
+    "VehicleEnterAnimKitID", "VehicleRideAnimKitID", "VehicleExitAnimKitID",
+]
+
+
+@dataclass
+class VehicleSeats:
+    """Vehicle.db2 rows and the VehicleSeat payloads they reach.
+
+    `seats` keeps seat order (SeatID_0..7) because the seat's slot position is
+    meaningful; the rest are unioned per vehicle, since a spell surfaces the
+    vehicle as a whole rather than one seat's animations.
+    """
+    seats: dict[int, list[str]]            # vehicle -> [attachment name per seat]
+    passenger_anims: dict[int, set[int]]   # vehicle -> AnimationData ids (rider)
+    vehicle_anims: dict[int, set[int]]     # vehicle -> AnimationData ids (vehicle)
+    animkits: dict[int, set[int]]          # vehicle -> AnimKit ids
+
+
+def read_vehicle_seats(table_dir: Path) -> VehicleSeats:
+    """Walk Vehicle -> SeatID_0..7 -> VehicleSeat for every payload we surface.
+
+    A vehicle references up to eight VehicleSeat rows; empty slots are
+    dropped, so the seat list length IS the seat count. Both tables postdate
+    the oldest clients (they are OPTIONAL_TABLES), so an absent table yields
+    empty maps and the vehicle category simply never appears.
+    """
+    out = VehicleSeats({}, defaultdict(set), defaultdict(set), defaultdict(set))
+    if not table_available(table_dir, "Vehicle"):
+        return out
+    seat_cols = sorted(
+        (c for c in table_header(table_dir, "Vehicle") if c.startswith("SeatID_")),
+        key=lambda c: int(c.split("_")[1]))
+    slots: dict[int, list[int]] = {}
+    for vid, *ids in read_table(table_dir, "Vehicle", ["ID"] + seat_cols):
+        slots[to_int(vid)] = [s for s in (to_int(i) for i in ids) if s > 0]
+
+    if not table_available(table_dir, "VehicleSeat"):
+        # seat rows unavailable: keep the seat COUNT (slot positions alone
+        # give it) and leave every payload empty
+        out.seats = {v: [""] * len(ss) for v, ss in slots.items()}
+        return out
+
+    have = set(table_header(table_dir, "VehicleSeat"))
+    anim_cols = [c for c in SEAT_PASSENGER_ANIM_COLUMNS if c in have]
+    veh_cols = [c for c in SEAT_VEHICLE_ANIM_COLUMNS if c in have]
+    kit_cols = [c for c in SEAT_ANIMKIT_COLUMNS if c in have]
+    cols = ["ID", "AttachmentID"] + anim_cols + veh_cols + kit_cols
+    n_anim, n_veh = len(anim_cols), len(veh_cols)
+    seat_rows: dict[int, tuple[int, list[int], list[int], list[int]]] = {}
+    for seat_row in read_table(table_dir, "VehicleSeat", cols):
+        vals = [to_int(v) for v in seat_row]
+        rest = vals[2:]
+        seat_rows[vals[0]] = (vals[1], rest[:n_anim],
+                              rest[n_anim:n_anim + n_veh], rest[n_anim + n_veh:])
+
+    for vehicle_id, seat_ids in slots.items():
+        names = []
+        for seat_id in seat_ids:
+            seat = seat_rows.get(seat_id)
+            if seat is None:
+                names.append("")
+                continue
+            attachment, anims, vanims, kits = seat
+            names.append(seat_attachment_name(attachment))
+            out.passenger_anims[vehicle_id].update(a for a in anims if a > 0)
+            out.vehicle_anims[vehicle_id].update(a for a in vanims if a > 0)
+            out.animkits[vehicle_id].update(a for a in kits if a > 0)
+        out.seats[vehicle_id] = names
     return out
 
 
@@ -1919,8 +2073,34 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     freeze_ids = sorted(vis.freezes)
     camo_ids = sorted(vis.camos)
 
-    # only animkits that spells actually use
+    # vehicles (SET_VEHICLE_ID auras): keep only vehicles with at least one
+    # seat — a 0-seat vehicle carries no pill. Computed before the animkit
+    # rows below because a seat's AnimKit ids join the animkit group, so they
+    # have to count as "used" too.
+    vehicle_seats = read_vehicle_seats(table_dir)
+    vehicle_rows = sorted(
+        (s, v) for s, vs in se.vehicles.items() for v in vs
+        if vehicle_seats.seats.get(v))
+    vehicle_ids = sorted({v for _, v in vehicle_rows})
+    # one row per SEAT, in slot order, carrying its attachment name
+    vehicle_seat_rows = [(v, name) for v in vehicle_ids
+                         for name in vehicle_seats.seats[v]]
+    # a spell reaches its vehicle's animations through the vehicle; flatten
+    # to spell -> anim id so the runtime needs no second hop
+    def _spell_rows(per_vehicle: dict[int, set[int]],
+                    limit: int | None = None) -> list[tuple[int, int]]:
+        return sorted({(s, x) for s, v in vehicle_rows
+                       for x in per_vehicle.get(v, ())
+                       if limit is None or x < limit})
+
+    passenger_anim_rows = _spell_rows(vehicle_seats.passenger_anims, len(anim_names))
+    vehicle_anim_rows = _spell_rows(vehicle_seats.vehicle_anims, len(anim_names))
+    vehicle_animkit_rows = _spell_rows(vehicle_seats.animkits)
+
+    # only animkits that spells actually use — via visual kits, or via a
+    # vehicle seat the spell reaches
     used_animkits = {a for aks in vis.animkits.values() for a in aks}
+    used_animkits |= {k for _, k in vehicle_animkit_rows}
     kit_anim_rows = sorted(
         (k, a) for k, anims in animkit_anims.items() if k in used_animkits for a in anims)
     # direct stand/walk anim ids (proc Type 7) — index into animNames, like
@@ -1972,6 +2152,12 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "shapeshiftDisplays": len(form_display_rows),
                 "spellSummons": len(summon_rows),
                 "summons": len(summon_creature_ids),
+                "spellVehicles": len(vehicle_rows),
+                "vehicles": len(vehicle_ids),
+                "vehicleSeats": len(vehicle_seat_rows),
+                "spellPassengerAnims": len(passenger_anim_rows),
+                "spellVehicleAnims": len(vehicle_anim_rows),
+                "spellVehicleAnimKits": len(vehicle_animkit_rows),
                 "fxChains": len(fx_chain_ids),
                 "spellDissolves": len(dissolve_row_pairs),
                 "dissolves": len(dissolve_ids),
@@ -2218,6 +2404,44 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "names": [creatures.names.get(c, "") for c in summon_creature_ids],
         },
         "summonControlNames": SUMMON_CONTROL_NAMES,
+        # vehicles (SET_VEHICLE_ID auras): the aura's misc value is a Vehicle.db2
+        # id; the payload is its seat count. Link section (spell -> vehicle) plus
+        # a vehicle -> seat-count payload, mirroring morphs/summons.
+        "spellVehicles": {
+            "spellIds": [r[0] for r in vehicle_rows],
+            "vehicleIds": [r[1] for r in vehicle_rows],
+        },
+        # one row per seat, in SeatID_0..7 order; `seats` on a vehicle is the
+        # count, and `attachments` names where on the model that seat sits
+        # (decoded via VEHICLE_GEO_COMPONENT_LINKS — see its comment for the
+        # verification). An empty name means the seat row was missing or the
+        # attachment unset.
+        "vehicles": {
+            "vehicleIds": vehicle_ids,
+            "seats": [len(vehicle_seats.seats[v]) for v in vehicle_ids],
+        },
+        "vehicleSeats": {
+            "vehicleIds": [r[0] for r in vehicle_seat_rows],
+            "attachments": [r[1] for r in vehicle_seat_rows],
+        },
+        # the rider's own animations while entering/seated/exiting — their own
+        # "passenger" group in the Animations column. animIds index animNames.
+        "spellPassengerAnims": {
+            "spellIds": [r[0] for r in passenger_anim_rows],
+            "animIds": [r[1] for r in passenger_anim_rows],
+        },
+        # the VEHICLE's animations (not the rider's) — loose animation pills,
+        # deliberately not under "passenger"
+        "spellVehicleAnims": {
+            "spellIds": [r[0] for r in vehicle_anim_rows],
+            "animIds": [r[1] for r in vehicle_anim_rows],
+        },
+        # seat AnimKit ids — they are AnimKit::IDs, so they join the existing
+        # animkit groups and resolve through animKitAnims like any other kit
+        "spellVehicleAnimKits": {
+            "spellIds": [r[0] for r in vehicle_animkit_rows],
+            "animKitIds": [r[1] for r in vehicle_animkit_rows],
+        },
     }
 
     log(
@@ -2235,7 +2459,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         f"shapeshifts={len(shapeshift_rows):,} "
         f"({len(shapeshift_form_ids):,} forms, {len(form_display_rows):,} displays)  "
         f"altNames={len(spell_altname_text):,}  summons={len(summon_rows):,} "
-        f"({len(summon_creature_ids):,} creatures)  icons={len(icon_names):,}  "
+        f"({len(summon_creature_ids):,} creatures)  "
+        f"vehicles={len(vehicle_rows):,} ({len(vehicle_ids):,} distinct, "
+        f"{len(vehicle_seat_rows):,} seats, {len(passenger_anim_rows):,} passenger anims)  "
+        f"icons={len(icon_names):,}  "
         f"orphan visual spells={vis.orphans:,}  [{time.time() - t0:.1f}s]"
     )
     return pack

@@ -1066,7 +1066,8 @@
       d.spellShadowies.has(id) || d.spellGhostMats.has(id) || d.spellTints.has(id) ||
       d.spellDesaturates.has(id) || d.spellTransps.has(id) ||
       d.spellFreezes.has(id) || d.spellCamos.has(id) || d.spellScreens.has(id) ||
-      d.spellMorphs.has(id) || d.spellShapeshifts.has(id) || d.spellSummons.has(id),
+      d.spellMorphs.has(id) || d.spellShapeshifts.has(id) || d.spellSummons.has(id) ||
+      d.spellVehicles.has(id),
   };
 
   function applyFiltersAndSort() {
@@ -1197,7 +1198,6 @@
     // Animations — loose kit-played anims first, then AnimKits grouped with
     // the animations they play, then direct stand/walk anims ("stance")
     tr.appendChild(animationsCell(d.spellAnimKits.get(spellId) || [],
-      d.spellAnims.get(spellId) || [],
       d.spellVisualAnims.get(spellId) || [], spellId));
 
     // Effects — visual FX (beams, morphs, summons), grouped by category
@@ -1400,17 +1400,33 @@
     return td;
   }
 
-  /* Animations cell, three sources in render order: loose pills for the
-   * animations the spell's visual kits play directly (SpellVisualAnim —
-   * nothing to group them under), AnimKits grouped with the animations they
-   * play, and a "stance" group for direct stand/walk anim overrides
-   * (SpellProceduralEffect Type 7) — same anim pills, no kit id to head the
-   * group with. Loose pills never collapse (99%+ of spells have ≤3). */
-  const STANCE_GROUP = -1; // sentinel kit id for the direct-anim group
+  /* Animations cell, in render order: loose pills for the animations the
+   * spell's visual kits play directly (SpellVisualAnim — nothing to group
+   * them under, joined by a vehicle's own anims), AnimKits grouped with the
+   * animations they play, then the headless category groups — "stance" for
+   * direct stand/walk overrides (SpellProceduralEffect Type 7) and
+   * "passenger" for what a rider plays in a vehicle seat (VehicleSeat).
+   * Those use the same anim pills, with a category word where a kit id would
+   * head the group. Loose pills never collapse (99%+ of spells have ≤3). */
+  /* Sentinel "kit ids" for animation groups that have no AnimKit to head
+   * them: they head on a category word instead. Adding another headless
+   * category is one entry here plus one in ANIM_CAT_TITLES — nothing below
+   * branches on which group it is. */
+  const STANCE_GROUP = -1;
+  const PASSENGER_GROUP = -2;
+  const ANIM_GROUPS = [
+    { id: STANCE_GROUP, word: "stance", animsOf: (d, s) => d.spellAnims.get(s) },
+    { id: PASSENGER_GROUP, word: "passenger", animsOf: (d, s) => d.spellPassengerAnims.get(s) },
+  ];
 
-  function animationsCell(animKitIds, stanceAnimIds, looseAnimIds, spellId) {
+  function animationsCell(animKitIds, looseAnimIds, spellId) {
+    const groupAnims = new Map();
+    for (const g of ANIM_GROUPS) {
+      const anims = g.animsOf(state.data, spellId) || [];
+      if (anims.length) groupAnims.set(g.id, anims);
+    }
     const td = el("td", "c-animkits");
-    if (animKitIds.length === 0 && stanceAnimIds.length === 0
+    if (animKitIds.length === 0 && groupAnims.size === 0
         && looseAnimIds.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
@@ -1423,21 +1439,22 @@
       td.appendChild(animTag(a, "", looseMasks ? looseMasks.get(a) || 0 : 0));
     }
     const animsOf = (kitId) =>
-      kitId === STANCE_GROUP ? stanceAnimIds : (d.animKitAnims.get(kitId) || []);
-    // the stance group's anims match through its category word too
-    const wordOf = (kitId) => (kitId === STANCE_GROUP ? "stance" : "");
+      groupAnims.get(kitId) || d.animKitAnims.get(kitId) || [];
+    // a headless group's anims match through its category word too
+    const wordOf = (kitId) =>
+      (ANIM_GROUPS.find((g) => g.id === kitId) || { word: "" }).word;
     const kitHasHit = (kitId) =>
-      (kitId !== STANCE_GROUP && kitIsHit(kitId, "animkit")) ||
+      (!groupAnims.has(kitId) && kitIsHit(kitId, "animkit")) ||
       animsOf(kitId).some((a) => animIsHit(a, wordOf(kitId)));
     const groups = animKitIds.slice().sort((a, b) => a - b);
-    if (stanceAnimIds.length) groups.push(STANCE_GROUP);
+    for (const g of ANIM_GROUPS) if (groupAnims.has(g.id)) groups.push(g.id);
     const kitIds = hitsFirst(groups, kitHasHit);
 
     buildKitGroups(td, kitIds, {
       // stance overrides are ~96% caster — a constant, so no icon there
       // (documented in the help dialog instead); animkits carry theirs
-      headerTag: (kitId) => kitId === STANCE_GROUP
-        ? stanceHeadTag(kitHasHit(kitId))
+      headerTag: (kitId) => groupAnims.has(kitId)
+        ? animCatHeadTag(wordOf(kitId), kitHasHit(kitId))
         : addTargetIcons(kitTag(kitId, "animkit"),
           maskOf(d.animKitTargets, spellId, [kitId])),
       itemsOf: (kitId) => hitsFirst(animsOf(kitId).slice().sort((a, b) => a - b),
@@ -1454,15 +1471,18 @@
   const ANIM_CAT_TITLES = {
     stance: "Stand/walk animation override (SpellProceduralEffect) — "
       + "the caster plays these as its idle/move animations while the visual is active",
+    passenger: "Passenger animation (VehicleSeat) — what the rider plays "
+      + "entering, sitting in and leaving the vehicle's seats",
   };
 
-  function stanceHeadTag(hit) {
+  function animCatHeadTag(word, hit) {
     const tag = el("span", "tag animkit");
     if (hit) tag.classList.add("hit");
-    const label = el("button", "tag-label", "stance");
-    label.title = `${ANIM_CAT_TITLES.stance}`
-      + "\nClick: find all spells with a stance override\nShift-click: exclude them instead";
-    label.dataset.search = "anim:stance";
+    const label = el("button", "tag-label", word);
+    label.title = `${ANIM_CAT_TITLES[word] || ""}`
+      + `\nClick: find all spells with a ${word} animation`
+      + "\nShift-click: exclude them instead";
+    label.dataset.search = `anim:${word}`;
     tag.appendChild(label);
     return tag;
   }
@@ -1557,12 +1577,13 @@
     const morphIds = d.spellMorphs.get(spellId) || [];
     const formIds = d.spellShapeshifts.get(spellId) || [];
     const summonEntries = d.spellSummons.get(spellId) || [];
+    const vehicleIds = d.spellVehicles.get(spellId) || [];
     const td = el("td", "c-fx");
     if (chainIds.length === 0 && dissolveIds.length === 0 && glowIds.length === 0
         && shadowyIds.length === 0 && ghostMatIds.length === 0 && tintIds.length === 0
         && desatPcts.length === 0 && transpPcts.length === 0 && !hasFreeze && !hasCamo
         && screenIds.length === 0 && morphIds.length === 0 && formIds.length === 0
-        && summonEntries.length === 0) {
+        && summonEntries.length === 0 && vehicleIds.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
       return td;
@@ -1771,6 +1792,23 @@
         items: entries.map((e) => () => summonTag(e)),
       });
     }
+    if (vehicleIds.length) {
+      // one pill per SEAT, in SeatID order, labeled with its attachment
+      // point — de-duped, because 38% of multi-seat vehicles put every seat
+      // on the same attachment and would otherwise repeat one pill 8 times.
+      // No mask (a SET_VEHICLE_ID aura has no SpellVisualEvent target type),
+      // so the head takes no icon.
+      const d2 = state.data;
+      const seatCount = vehicleIds.reduce(
+        (n, v) => Math.max(n, (d2.vehicleSeats.get(v) || []).length), 0);
+      const points = [...new Set(vehicleIds.flatMap((v) => d2.vehicleSeats.get(v) || []))];
+      cats.push({
+        name: "vehicle",
+        hit: points.some((p) => vehicleIsHit(p, seatCount)),
+        items: hitsFirst(points, (p) => vehicleIsHit(p, seatCount))
+          .map((p) => () => vehicleTag(p, seatCount)),
+      });
+    }
 
     buildKitGroups(td, cats, {
       // the icon rides the category head, unioned over this spell's rows in
@@ -1905,6 +1943,15 @@
   function summonIsHit(creatureId, control) {
     const corpus = state.data.summonPairSearchL.get(creatureId + ":" + control) || "";
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+  }
+
+  // a vehicle seat pill matches on its attachment name, the category word,
+  // or a numeric comparison against the vehicle's seat count (>2, <=3, 4 ...)
+  function vehicleIsHit(attachment, seats) {
+    const nameL = (attachment || "").toLowerCase();
+    return groupsFor("fx").some((g) => g.tokens.every((t) =>
+      "vehicle".includes(t.text) || nameL.includes(t.text)
+      || Search.matchNumeric(t.text, seats)));
   }
 
   // small helper: a copy button inside a tag. "⧉" copies an ID; command
@@ -2257,6 +2304,7 @@
     shapeshift: "Shapeshift form (SpellShapeshiftForm)",
     morph: "Morph / transform aura (CreatureDisplayInfo)",
     summon: "Summoned creature (SpellEffect SUMMON)",
+    vehicle: "Rideable vehicle the caster becomes (SpellEffect SET_VEHICLE_ID)",
   };
 
   function fxHeadTag(category, hit) {
@@ -2369,6 +2417,27 @@
     txt.title = `${FX_HEAD_TITLES[category]}\n${percent}%`
       + `\nClick: find spells with this ${category} strength\nShift-click: exclude them instead`;
     txt.dataset.search = `fx:"${category} ${percent}%"`;
+    tag.appendChild(txt);
+    return tag;
+  }
+
+  /* Vehicle seat pill: one per seat of the vehicle the aura turns the caster
+   * into, labeled with the M2 attachment point that seat sits at. The names
+   * are the game's own and read oddly as seat positions ("Breath",
+   * "ChestBloodBack") because artists reuse generic attachment slots as seat
+   * anchors — the tooltip says so, since otherwise it reads as a bug. The
+   * Vehicle.db2 id says nothing to a user, so it is neither shown nor
+   * copyable. Clicking finds every spell with a seat at the same point. */
+  function vehicleTag(attachment, seats) {
+    const tag = el("span", "tag fx");
+    if (vehicleIsHit(attachment, seats)) tag.classList.add("hit");
+    const label = attachment || "seat";
+    const txt = el("button", "tag-label", label);
+    txt.title = `${FX_HEAD_TITLES.vehicle}\n`
+      + `Seat at the ${label} attachment point`
+      + `\n(an M2 attachment slot, not a description of the seat)`
+      + `\nClick: find spells with a seat there\nShift-click: exclude them instead`;
+    txt.dataset.search = `fx:"vehicle ${label}"`;
     tag.appendChild(txt);
     return tag;
   }
