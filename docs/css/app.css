@@ -652,6 +652,22 @@ td.expanded .kit-group.overflow { display: flex; }
 .legend-icon { display: inline-block; vertical-align: -0.15em; }
 .legend-icon svg { width: 1em; height: 1em; display: block; }
 
+/* where on the model a row plays (M2 attachment point). A quiet segment
+   between the label and the copy button — it qualifies the model rather than
+   naming it, so it reads dimmer and smaller than the label it follows.
+   Beams and missiles span two points and render "Source → Dest". */
+.tag-attach {
+  padding: 0.12rem 0.45rem;
+  font-size: 0.86em;
+  color: var(--text-dim);
+  border-left: 1px solid var(--tag-sep, rgba(255, 255, 255, 0.12));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 14rem;
+}
+.tag-attach:hover { text-decoration: underline; color: inherit; }
+
 .tag-label {
   padding: 0.12rem 0.55rem;
   overflow: hidden;

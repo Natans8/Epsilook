@@ -1351,12 +1351,12 @@
       });
     }
     for (const e of hitsFirst(loose, (x) => modelFileIsHit(d.files.get(x.fid), ""))) {
-      td.appendChild(modelTag(e.fid, "", e.targets));
+      td.appendChild(modelTag(e.fid, "", e.targets, e.src, e.dst, travels(e.cat)));
     }
     buildKitGroups(td, hitsFirst(cats, (c) => c.hit), {
       headerTag: (c) => modelCatHeadTag(c.name, c.hit),
       itemsOf: (c) => hitsFirst(c.items, (e) => modelFileIsHit(d.files.get(e.fid), c.name)),
-      itemTag: (e, c) => modelTag(e.fid, c.name, e.targets),
+      itemTag: (e, c) => modelTag(e.fid, c.name, e.targets, e.src, e.dst, travels(e.cat)),
       itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
       groupNoun: "category",
       moreInHead: true,
@@ -1606,14 +1606,19 @@
       // Chains collapsing into one pill union their masks onto it.
       const chainMask = (c) => maskOf(d.fxTargets, spellId, [c]);
       const byKey = new Map();
-      for (const c of chainIds.slice().sort((a, b) => a - b)) {
+      // the drawing beam's attach points are part of the key, so one chain
+      // drawn by two beams from different points stays two pills
+      const rows = (d.spellChainRows.get(spellId)
+        || chainIds.map((c) => ({ chain: c, src: -1, dst: -1 })))
+        .slice().sort((a, b) => a.chain - b.chain);
+      for (const { chain: c, src, dst } of rows) {
         const color = (d.fxChains.get(c) || {}).color ?? 0xffffff;
         const fids = d.fxTextures.get(c) || [0];
         for (const fid of fids) {
-          const key = fid + ":" + color;
+          const key = fid + ":" + color + ":" + src + ":" + dst;
           const prev = byKey.get(key);
           if (prev) { prev.mask |= chainMask(c); continue; }
-          byKey.set(key, { chainId: c, fid, color, mask: chainMask(c) });
+          byKey.set(key, { chainId: c, fid, color, src, dst, mask: chainMask(c) });
         }
       }
       const grp = targetGroup(chainIds.map(chainMask));
@@ -1803,7 +1808,7 @@
         (n, v) => Math.max(n, (d2.vehicleSeats.get(v) || []).length), 0);
       const points = [...new Set(vehicleIds.flatMap((v) => d2.vehicleSeats.get(v) || []))];
       cats.push({
-        name: "vehicle",
+        name: "seat",
         hit: points.some((p) => vehicleIsHit(p, seatCount)),
         items: hitsFirst(points, (p) => vehicleIsHit(p, seatCount))
           .map((p) => () => vehicleTag(p, seatCount)),
@@ -1950,7 +1955,7 @@
   function vehicleIsHit(attachment, seats) {
     const nameL = (attachment || "").toLowerCase();
     return groupsFor("fx").some((g) => g.tokens.every((t) =>
-      "vehicle".includes(t.text) || nameL.includes(t.text)
+      "seat".includes(t.text) || nameL.includes(t.text)
       || Search.matchNumeric(t.text, seats)));
   }
 
@@ -2113,7 +2118,63 @@
       g.tokens.every((t) => catName.includes(t.text) || searchL.includes(t.text)));
   }
 
-  function modelTag(fid, catName, mask = 0) {
+  /**
+   * Where on the model a row plays, as a clickable pill segment.
+   *
+   * Two shapes, and they must not be confused. Attached models are a
+   * SINGLE-point route — `dst` is unused by construction — and render the
+   * bare point ("Chest"). Missiles and beams genuinely span two points and
+   * render "Source → Dest"; when only one end is known they say "from X" /
+   * "to Y" rather than leaving an arrow pointing at nothing. `twoPoint` is
+   * what tells them apart, since "src set, dst unset" looks identical in the
+   * data either way.
+   *
+   * These are raw M2 attachment slots, so the names are the game's own and
+   * can read oddly — the tooltip says as much. Returns null when nothing is
+   * set, the common case (34% of model rows on 9.2.7).
+   * @param {number} src
+   * @param {number} dst
+   * @param {string} field the search field to emit ("model" / "fx")
+   * @param {boolean} twoPoint true for routes that travel (missiles, beams)
+   * @returns {HTMLElement|null}
+   */
+  /* Model categories whose rows TRAVEL between two attachment points, rather
+   * than sitting at one. Only missiles do today; if another travelling route
+   * is ever added, naming it here is the whole change. Matched by category
+   * word so it survives the numeric ids shifting. */
+  const TRAVELLING_MODEL_CATS = new Set(["missile"]);
+
+  const travels = (cat) =>
+    TRAVELLING_MODEL_CATS.has((state.data.modelCatNames || {})[cat] || "");
+
+  function attachSegment(src, dst, field, twoPoint) {
+    const d = state.data;
+    const nameOf = (a) => (a >= 0 ? (d.attachmentNames[a] || "") : "");
+    const s = nameOf(src);
+    const t = twoPoint ? nameOf(dst) : "";
+    if (!s && !t) return null;
+    let label, why;
+    if (s && t) {
+      label = `${s} → ${t}`;
+      why = `Travels from the ${s} attachment point to the ${t} one`;
+    } else if (!twoPoint) {
+      label = s;
+      why = `Plays at the ${s} attachment point`;
+    } else {
+      label = s ? `from ${s}` : `to ${t}`;
+      why = s ? `Launches from the ${s} attachment point`
+        : `Lands on the ${t} attachment point`;
+    }
+    const seg = el("button", "tag-attach", label);
+    const words = [s, t].filter(Boolean);
+    seg.title = `${why}\n(an M2 attachment slot on the model, not a description)`
+      + `\nClick: find spells using ${words.length > 1 ? "these points" : "this point"}`
+      + "\nShift-click: exclude them instead";
+    seg.dataset.search = `${field}:"${words.join(" ")}"`;
+    return seg;
+  }
+
+  function modelTag(fid, catName, mask = 0, src = -1, dst = -1, twoPoint = false) {
     const d = state.data;
     const file = d.files.get(fid) || { fid, path: "", base: "", searchL: "" };
     const tag = el("span", "tag model");
@@ -2143,6 +2204,8 @@
     txt.dataset.search = file.base ? `model:"${file.base}"` : "";
     tag.appendChild(txt);
     addTargetIcons(tag, mask);
+    const attach = attachSegment(src, dst, "model", twoPoint);
+    if (attach) tag.appendChild(attach);
 
     const cmd = fillTemplate(CFG.modelCopyTemplate,
       { base: stripExt(file.base), file: file.base, path: file.path, fid });
@@ -2304,7 +2367,7 @@
     shapeshift: "Shapeshift form (SpellShapeshiftForm)",
     morph: "Morph / transform aura (CreatureDisplayInfo)",
     summon: "Summoned creature (SpellEffect SUMMON)",
-    vehicle: "Rideable vehicle the caster becomes (SpellEffect SET_VEHICLE_ID)",
+    seat: "Seat of a rideable vehicle the caster becomes (SpellEffect SET_VEHICLE_ID)",
   };
 
   function fxHeadTag(category, hit) {
@@ -2320,7 +2383,7 @@
 
   /**
    * One chain (beam) pill: optional tint swatch + texture name.
-   * @param {{chainId: number, fid: number, color: number}} entry
+   * @param {{chainId: number, fid: number, color: number, src?: number, dst?: number}} entry
    * @returns {HTMLElement}
    */
   function fxTag(entry, mask = 0) {
@@ -2354,6 +2417,9 @@
     txt.dataset.search = file.base ? `fx:"chain ${file.base}"` : "";
     tag.appendChild(txt);
     addTargetIcons(tag, mask);
+    // a beam attaches at both ends — caster's hand to the target's chest
+    const attach = attachSegment(entry.src ?? -1, entry.dst ?? -1, "fx", true);
+    if (attach) tag.appendChild(attach);
 
     if (base) tag.appendChild(tagButton("⧉", `Copy texture name: ${base}`, base));
     return tag;
@@ -2433,11 +2499,11 @@
     if (vehicleIsHit(attachment, seats)) tag.classList.add("hit");
     const label = attachment || "seat";
     const txt = el("button", "tag-label", label);
-    txt.title = `${FX_HEAD_TITLES.vehicle}\n`
+    txt.title = `${FX_HEAD_TITLES.seat}\n`
       + `Seat at the ${label} attachment point`
       + `\n(an M2 attachment slot, not a description of the seat)`
       + `\nClick: find spells with a seat there\nShift-click: exclude them instead`;
-    txt.dataset.search = `fx:"vehicle ${label}"`;
+    txt.dataset.search = `fx:"seat ${label}"`;
     tag.appendChild(txt);
     return tag;
   }

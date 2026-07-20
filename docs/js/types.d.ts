@@ -104,7 +104,12 @@ interface SpellPack {
   files: { fids: number[]; paths: string[] };
 
   /** Spell -> model file; cats (format 15+) = usage category per row. */
-  spellModels: { spellIds: number[]; fids: number[]; cats?: number[]; targets?: number[] };
+  spellModels: { spellIds: number[]; fids: number[]; cats?: number[]; targets?: number[];
+    /** Raw M2 attachment ids, -1 = unset (pack format 24+). Attached models
+     *  use src only; missiles use both (launch -> impact). */
+    srcAttach?: number[]; dstAttach?: number[] };
+  /** Raw M2 attachment id -> name (pack format 24+). */
+  attachmentNames?: Record<number, string>;
   /** Category id -> word ("attached", "missile", "area", "trail", "barrage"). */
   modelCatNames?: Record<number, string>;
   /** mask bit -> search word ("caster"/"target"/"area"); format 22+ */
@@ -125,7 +130,9 @@ interface SpellPack {
   /* --- visual fx sections (the Effects column) --- */
 
   /** Spell -> SpellChainEffects (chain/beam) rows. */
-  spellFx: { spellIds: number[]; chainIds: number[]; targets?: number[] };
+  spellFx: { spellIds: number[]; chainIds: number[]; targets?: number[];
+    /** The drawing beam's attach points (format 24+), -1 = unset. */
+    srcAttach?: number[]; dstAttach?: number[] };
   /** Chain tint as packed 0xRRGGBB (0xFFFFFF = untinted) + baked hue word. */
   fxChains: { ids: number[]; colors: number[]; hues: string[] };
   fxTextures: { chainIds: number[]; fids: number[] };
@@ -265,11 +272,19 @@ interface SpellData {
   files: Map<number, FileEntry>;
 
   spellModels: Map<number, number[]>;
+  /** Raw M2 attachment id -> name; {} on packs before format 24. */
+  attachmentNames: Record<number, string>;
+  /** spell -> chain rows carrying the drawing beam's attach points. */
+  spellChainRows: Map<number, { chain: number; src: number; dst: number }[]>;
   modelSpells: Map<number, number[]>;
   /** All fids referenced as models (the model-search scope). */
   modelFids: number[];
   /** Per-(fid, category) view; empty Maps on a stale pack without cats. */
-  spellModelCats: Map<number, { fid: number; cat: number; targets: number }[]>;
+  spellModelCats: Map<number, {
+    fid: number; cat: number; targets: number;
+    /** Raw M2 attachment ids, -1 = unset. */
+    src: number; dst: number;
+  }[]>;
   modelCatSpells: Map<number, Set<number>>;
   modelCatFidSpells: Map<number, Map<number, number[]>>;
   /** Category id -> word; "" means the category renders as loose pills. */
