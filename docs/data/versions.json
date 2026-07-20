@@ -21,6 +21,20 @@
     "hash": "7d6f170ffc"
   },
   {
+    "id": "4.4.2.60895",
+    "label": "Cataclysm Classic 4.4.2",
+    "file": "data/4.4.2.60895/spelldata.json.gz",
+    "built": "2026-07-20",
+    "hash": "d1195e3ccf"
+  },
+  {
+    "id": "5.5.4.68716",
+    "label": "Mists of Pandaria Classic 5.5.4",
+    "file": "data/5.5.4.68716/spelldata.json.gz",
+    "built": "2026-07-20",
+    "hash": "4b55a5da20"
+  },
+  {
     "id": "7.3.5.26972",
     "label": "Legion 7.3.5",
     "file": "data/7.3.5.26972/spelldata.json.gz",

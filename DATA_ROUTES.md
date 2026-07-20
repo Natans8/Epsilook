@@ -351,61 +351,70 @@ rendering, item→spells for searching. Every section read is guarded
 
 ## 5. Version differences
 
-Eight builds ship, spanning 2004-era content to current retail. Going *backwards*
+Ten builds ship, spanning 2004-era content to current retail. Going *backwards*
 is a different problem from going forwards: forwards is additive, backwards is
-mostly "the table does not exist yet." The three Classic re-release clients
-(Vanilla / TBC / WotLK) complicate that — see below.
+mostly "the table does not exist yet." The five Classic re-release clients
+(Vanilla / TBC / WotLK / Cataclysm / MoP) complicate that — see below.
 
-### The eight packs
+### The ten packs
 
 | Build | Label | Spells | Pack | TDB release | Absent tables |
 |---|---|---:|---:|---|---:|
 | 1.15.8.67156 | Vanilla Classic | 31,248 | 0.7 MB | — | 6 |
 | 2.5.6.68775 | TBC Classic | 28,650 | 0.7 MB | — | 11 |
 | 3.4.3.58936 | WotLK Classic | 49,394 | 1.2 MB | TDB335.25101 | 10 |
+| 4.4.2.60895 | Cataclysm Classic | 71,227 | 1.8 MB | — | 10 |
+| 5.5.4.68716 | Mists of Pandaria Classic | 98,129 | 2.5 MB | — | 6 |
 | 7.3.5.26972 | Legion | 179,382 | 4.6 MB | TDB735.00 | 4 |
 | 8.3.7.35662 | Battle for Azeroth | 227,237 | 5.9 MB | TDB837.20101 | 1 |
 | 9.2.7.45745 | Shadowlands *(default)* | 276,332 | 7.2 MB | TDB927.22111 | 0 |
 | 10.2.7.55664 | Dragonflight | 327,092 | 8.7 MB | TDB1027.24051 | 0 |
 | 11.2.7.65299 | The War Within | 375,895 | 10.2 MB | TDB1127.26011 | 0 |
 
-All eight are at pack format 22. Sizes grew ~11% at format 22 — that is the target
+All ten are at pack format 22. Sizes grew ~11% at format 22 — that is the target
 masks' cost.
 
-### The three Classic re-release clients don't sit on the timeline
+### The five Classic re-release clients don't sit on the timeline
 
-Vanilla Classic (1.15.8), TBC Classic (2.5.6) and WotLK Classic (3.4.3) are
-*not* points on the retail line — they are current-generation Classic clients
-backporting old content, so a client's db2 set reflects its fork point, not the
-game era. The absent-table counts therefore do **not** nest by era:
+Vanilla Classic (1.15.8), TBC Classic (2.5.6), WotLK Classic (3.4.3),
+Cataclysm Classic (4.4.2) and MoP Classic (5.5.4) are *not* points on the
+retail line — they are current-generation Classic clients backporting old
+content, so a client's db2 set reflects its fork point, not the game era. The
+absent-table counts therefore do **not** nest by era:
 
-- **TBC Classic is the most stripped client of the eight** (11 absent =
+- **TBC Classic is the most stripped client of the ten** (11 absent =
   WotLK's 10 + `TextureBlendSet`).
-- **Vanilla Classic is *richer* than WotLK Classic** (6 absent, not 10): the
-  2026 Classic-Era client keeps `BeamEffect`, `DissolveEffect`,
-  `EdgeGlowEffect` and `FullScreenEffect`, which the older 3.4.3 client lacks.
-- **Neither has a TDB.** TrinityCore publishes no 1.15/2.5 world database, so
-  both build TDB-less: creature morph and summon *names/displays* don't resolve
-  (the pills fall back to raw ids), and no hotfix overlay applies. Summon
-  *control* words (guardian/pet/…) still work — those come from
-  `SummonProperties`, a client table.
+- **Cataclysm Classic is as stripped as WotLK Classic** (10 absent) — the
+  4.4.x client still lacks `BeamEffect`, `DissolveEffect`, `EdgeGlowEffect`,
+  `SpellEffectEmission`, `WeaponTrail` and `FullScreenEffect`.
+- **Vanilla Classic and MoP Classic are the richest of the five** (6 absent
+  each) — but *differently*: Vanilla keeps `BeamEffect`, `DissolveEffect`,
+  `EdgeGlowEffect` and `FullScreenEffect`; MoP keeps those three effect tables
+  plus `SpellEffectEmission` (ground models), and is the only Classic client
+  with the emission route populated, but drops `FullScreenEffect`.
+- **Only WotLK Classic has a TDB** (the 3.3.5 world-only dump). Vanilla, TBC,
+  Cataclysm and MoP all build TDB-less: creature morph and summon
+  *names/displays* don't resolve (the pills fall back to raw ids), and no
+  hotfix overlay applies. Summon *control* words (guardian/pet/…) still work —
+  those come from `SummonProperties`, a client table.
 
-| Feature | Vanilla 1.15.8 | TBC 2.5.6 | Via |
-|---|:--:|:--:|---|
-| chain / beam | ✓ | proc-only | `BeamEffect` present on Vanilla; TBC's 236 chains all arrive via proc Type 0 |
-| dissolve | ✓ (4) | — | `DissolveEffect` |
-| glow | ✓ (1) | — | `EdgeGlowEffect` |
-| screen fx | partial | — | Vanilla keeps `FullScreenEffect`+`ScreenEffect` (36 via the aura route; no kit route — `SpellVisualScreenEffect` absent); TBC has neither populated |
-| ghost (shadowy) | — | — | `ShadowyEffect` absent on both |
-| barrage / trail / emission | — | — | `BarrageEffect` / `WeaponTrail` / `SpellEffectEmission` absent on both |
-| alt-name search | — | — | `SpellOverrideName` absent on both |
-| morph / summon names | — | — | no TDB world DB for these builds |
+| Feature | Vanilla 1.15.8 | TBC 2.5.6 | Cata 4.4.2 | MoP 5.5.4 | Via |
+|---|:--:|:--:|:--:|:--:|---|
+| chain / beam | ✓ | proc-only | proc-only | ✓ | `BeamEffect` present on Vanilla & MoP; TBC/Cata chains all arrive via proc Type 0 |
+| dissolve | ✓ (4) | — | — | ✓ (1) | `DissolveEffect` |
+| glow | ✓ (1) | — | — | ✓ (1) | `EdgeGlowEffect` |
+| ground models (emission) | — | — | — | ✓ | `SpellEffectEmission` — populated only on MoP |
+| screen fx | partial | — | partial | partial | Vanilla keeps `FullScreenEffect`; Cata/MoP have only `ScreenEffect`+aura route; none has the `SpellVisualScreenEffect` kit route; TBC neither populated |
+| ghost (shadowy) | — | — | — | — | `ShadowyEffect` absent on all four |
+| barrage / trail | — | — | — | — | `BarrageEffect` / `WeaponTrail` absent on all four |
+| alt-name search | — | — | — | — | `SpellOverrideName` absent on all four |
+| morph / summon names | — | — | — | — | no TDB world DB for these builds |
 
 Everything else — models, sounds, animations, mechanics, tints, transparency,
-freeze, shapeshifts — works on both. Unlike the original-3.3.5 data, these
-modern Classic clients carry the full proc enum (Vanilla and TBC each have a
-Type-21 desaturate row), so the "proc types stop at 17" cutoff below is a WotLK
-*Classic* client trait, not a general Classic one.
+freeze, shapeshifts — works on all four. Unlike the original-3.3.5 data, these
+modern Classic clients carry the full proc enum (each has a Type-21 desaturate
+row), so the "proc types stop at 17" cutoff below is a WotLK *Classic* client
+trait, not a general Classic one.
 
 ### When each table arrived
 
@@ -445,7 +454,7 @@ picks whichever exists.
 | alt-name search | — | — | ✓ | ✓ | `SpellOverrideName` |
 
 Everything else — models, sounds, animations, mechanics, morphs, summons,
-shapeshifts, tints, transparency, freeze — works on all six.
+shapeshifts, tints, transparency, freeze — works on all ten.
 
 ### Two things that look like bugs and are not
 
