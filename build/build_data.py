@@ -395,6 +395,18 @@ AURA_OVERRIDE_NAME = 370
 # server-side TDB accessory tables — see the handoff note).
 AURA_SET_VEHICLE_ID = 296
 
+# The invisibility-channel aura pair. EffectMiscValue_0 is the invisibility
+# TYPE — a shared channel/slot id, NOT a display or creature. A MOD_INVISIBILITY
+# spell hides its target in channel T; any MOD_INVISIBILITY_DETECT spell on the
+# SAME T reveals it. So the type is the pairing key linking "hide" spells to the
+# "reveal" spells that counter them (verified 29/29 against the "Quest Invis N" /
+# "See Quest Invis N" name families). Pure client SpellEffect — no TDB, present
+# on every build. Type 0 is general invisibility (Vanish etc.); the quest zones
+# spread across the higher types. A single spell may carry both auras (it both
+# hides and detects), so the two are read independently.
+AURA_MOD_INVISIBILITY = 18
+AURA_MOD_INVISIBILITY_DETECT = 19
+
 # VehicleSeat.AttachmentID is NOT an M2 attachment id: it is an index into a
 # table hardcoded in the client binary (it exists in no db2, so it cannot be
 # derived from data and has to live here). wowdev.wiki/DB/VehicleSeat quotes
@@ -564,7 +576,8 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 25  # 25: target masks on effect-driven fx (SpellEffect.ImplicitTarget)
+PACK_FORMAT = 26  # 26: invis/detect channels (MOD_INVISIBILITY[_DETECT] auras)
+# 25: target masks on effect-driven fx (SpellEffect.ImplicitTarget)
 # 24: M2 attachment points on model, missile and beam rows
 # 23: vehicles (SET_VEHICLE_ID aura -> Vehicle seat count)
 # 22: per-row target masks (SpellVisualEvent.TargetType)
@@ -1688,15 +1701,19 @@ class SpellEffectRows:
     forms: dict[int, set[int]]                   # spell -> shapeshift form ids (aura 36)
     altnames: dict[int, set[int]]                # spell -> SpellOverrideName ids (aura 370)
     vehicles: dict[int, set[int]]                # spell -> Vehicle.db2 ids (aura 296)
+    invis: dict[int, set[int]]  # spell -> invisibility types (aura 18)
+    detect: dict[int, set[int]]  # spell -> detect types (aura 19)
     # who each effect-driven fx lands on, from the producing SpellEffect row's
     # ImplicitTarget_0/_1 — keyed (spell, payload) so it rides the pack's
-    # spell->payload link rows (payload = creature / form / screen / vehicle).
-    # OR-accumulated when several rows produce the same pair.
+    # spell->payload link rows (payload = creature / form / screen / vehicle /
+    # invis type). OR-accumulated when several rows produce the same pair.
     morph_targets: dict[tuple[int, int], int]
     summon_targets: dict[tuple[int, int], int]
     screen_targets: dict[tuple[int, int], int]
     form_targets: dict[tuple[int, int], int]
     vehicle_targets: dict[tuple[int, int], int]
+    invis_targets: dict[tuple[int, int], int]
+    detect_targets: dict[tuple[int, int], int]
 
 
 def read_spell_effect_rows(
@@ -1734,8 +1751,10 @@ def read_spell_effect_rows(
 
     out = SpellEffectRows(defaultdict(set), defaultdict(set), defaultdict(set),
                           defaultdict(set), defaultdict(set), defaultdict(set),
-                          defaultdict(set), defaultdict(set),
+                          defaultdict(set), defaultdict(set), defaultdict(set),
+                          defaultdict(set),
                           defaultdict(int), defaultdict(int), defaultdict(int),
+                          defaultdict(int), defaultdict(int),
                           defaultdict(int), defaultdict(int))
     for s, effect_id, aura_id, m0, m1, it0, it1 in se_rows.values():
         if s not in spell_names:
@@ -1764,6 +1783,14 @@ def read_spell_effect_rows(
         if aura_id == AURA_SET_VEHICLE_ID and m0 > 0:
             out.vehicles[s].add(m0)
             out.vehicle_targets[(s, m0)] |= mask
+        # invisibility channels: misc0 is the invisibility TYPE (0 is valid —
+        # general invisibility — so no > 0 guard, unlike the id-bearing auras)
+        if aura_id == AURA_MOD_INVISIBILITY:
+            out.invis[s].add(m0)
+            out.invis_targets[(s, m0)] |= mask
+        if aura_id == AURA_MOD_INVISIBILITY_DETECT:
+            out.detect[s].add(m0)
+            out.detect_targets[(s, m0)] |= mask
     return out
 
 
@@ -2372,6 +2399,17 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     morph_creature_ids = sorted(used_creatures)
     summon_rows = sorted((s, c, ctrl) for s, cs in se.summons.items() for c, ctrl in cs)
     summon_creature_ids = sorted({c for cs in se.summons.values() for c, _ in cs})
+    # invisibility channels. A channel is materialized only when it has an
+    # INVIS side — that single rule implements the asymmetric display rule:
+    #  - an invis spell always shows a pill (its detect count may be 0 — the
+    #    priceless "nothing can reveal it" case), and
+    #  - a detect spell shows a pill only when its type has ≥1 invis spell (a
+    #    detect that reveals nothing is dropped: its type has no invis side, so
+    #    no channel exists and its row is omitted below).
+    invis_types = {t for ts in se.invis.values() for t in ts}
+    invis_rows = sorted((s, t) for s, ts in se.invis.items() for t in ts)
+    detect_rows = sorted((s, t) for s, ts in se.detect.items() for t in ts
+                         if t in invis_types)
     effect_names = read_enum_names("SpellEffect", version)
     aura_names = read_enum_names("SpellEffectAura", version)
 
@@ -2407,6 +2445,9 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellVehicles": len(vehicle_rows),
                 "vehicles": len(vehicle_ids),
                 "vehicleSeats": len(vehicle_seat_rows),
+                "spellInvis": len(invis_rows),
+                "spellDetects": len(detect_rows),
+                "invisChannels": len(invis_types),
                 "spellPassengerAnims": len(passenger_anim_rows),
                 "spellVehicleAnims": len(vehicle_anim_rows),
                 "spellVehicleAnimKits": len(vehicle_animkit_rows),
@@ -2684,6 +2725,23 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "vehicleIds": [r[1] for r in vehicle_rows],
             # SET_VEHICLE_ID makes the caster the vehicle, so this is caster
             "targets": [se.vehicle_targets.get(r, 0) for r in vehicle_rows],
+        },
+        # invisibility / detection channels (MOD_INVISIBILITY[_DETECT] auras).
+        # `types` is the invisibility TYPE — the pairing key: an invis pill
+        # links to the detect spells on the same type and vice versa. The
+        # frontend groups these by type to get counterpart counts and to power
+        # fx:invis / fx:detect searches. Only channels with an invis side are
+        # emitted, so every detect row here has ≥1 counterpart (see above).
+        "spellInvis": {
+            "spellIds": [r[0] for r in invis_rows],
+            "types": [r[1] for r in invis_rows],
+            # who the invisibility is applied to (ImplicitTarget) — usually self
+            "targets": [se.invis_targets.get(r, 0) for r in invis_rows],
+        },
+        "spellDetects": {
+            "spellIds": [r[0] for r in detect_rows],
+            "types": [r[1] for r in detect_rows],
+            "targets": [se.detect_targets.get(r, 0) for r in detect_rows],
         },
         # one row per seat, in SeatID_0..7 order; `seats` on a vehicle is the
         # count, and `attachments` names where on the model that seat sits

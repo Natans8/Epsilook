@@ -74,6 +74,18 @@ window.EpsilookSearch = (() => {
     return p ? p(n) : false;
   }
 
+  /**
+   * True when a token carries a comparison operator (<, >, <=, >=, =) — i.e. it
+   * asks for a numeric match rather than a value/word match. A bare number is
+   * NOT an operator (it keeps its per-field literal meaning), per the search
+   * convention that numeric comparison is opt-in via an operator.
+   * @param {string} text
+   * @returns {boolean}
+   */
+  function hasOperator(text) {
+    return /^[<>=]/.test(text);
+  }
+
   /* ------------------------------------------------------ count queries */
 
   /**
@@ -463,6 +475,25 @@ window.EpsilookSearch = (() => {
     scan(data.shapeshiftSearchL, data.shapeshiftSpells);
     scan(data.morphSearchL, data.morphSpells);
     scan(data.summonPairSearchL, data.summonPairSpells);
+    // invisibility / detection channels. The category word ("invis"/"detect")
+    // is the corpus; the invisibility TYPE is a bare-number value (fx:"invis
+    // 13"); an operator-prefixed token is a numeric comparison against the
+    // COUNTERPART count (fx:"invis =0" = invisibility nothing detects). Bare
+    // numbers are the type, NOT the count — so the count only ever answers to
+    // an operator, per the search convention. Counterpart count = the size of
+    // the OTHER side of the same channel.
+    const invisMatch = (word, type, count) => (t) =>
+        word.includes(t.text)
+        || (!hasOperator(t.text) && String(type) === t.text)
+        || (hasOperator(t.text) && matchNumeric(t.text, count));
+    for (const [type, ids] of data.invisTypeSpells) {
+      const detects = (data.detectTypeSpells.get(type) || []).length;
+      if (tokens.every(invisMatch("invis", type, detects))) for (const s of ids) out.add(s);
+    }
+    for (const [type, ids] of data.detectTypeSpells) {
+      const invises = (data.invisTypeSpells.get(type) || []).length;
+      if (tokens.every(invisMatch("detect", type, invises))) for (const s of ids) out.add(s);
+    }
     return out;
   }
 
@@ -672,5 +703,5 @@ window.EpsilookSearch = (() => {
     return spellIds.sort((a, b) => (rank(a) - rank(b)) || (a - b));
   }
 
-  return { searchGroups, sortByRelevance, FIELDS, TARGET_WORDS, matchNumeric };
+  return {searchGroups, sortByRelevance, FIELDS, TARGET_WORDS, matchNumeric, hasOperator};
 })();
