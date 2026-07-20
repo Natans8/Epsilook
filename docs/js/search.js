@@ -126,7 +126,18 @@ window.EpsilookSearch = (() => {
     return out;
   }
 
-  /* --------------------------------------------------- attachment words */
+  /* ------------------------------------------------ attachment points */
+
+  /**
+   * Attachment points are a META axis, addressed by the `anchor:` keyword —
+   * `model:anchor:chest`, `fx:"anchor:spelllefthand fireball"` — never by
+   * bare name (the point NAMES are data values, deliberately kept out of the
+   * corpus and the autocomplete). The keyword lives INSIDE model:/fx: chips
+   * so an anchor still narrows the SAME row as its file/category words: a
+   * fireball model attached at the chest is one row, not "a fireball
+   * somewhere and a chest attachment somewhere".
+   */
+  const ANCHOR_PREFIX = "anchor:";
 
   /**
    * The lowercased attachment names of one row, as a single haystack.
@@ -142,19 +153,32 @@ window.EpsilookSearch = (() => {
   }
 
   /**
-   * True when `text` could name an attachment point — used to decide whether
-   * a query needs the per-row walk. Checked against the pack's own name table
-   * (~54 entries), so it costs nothing worth caching.
-   * @param {string} text
-   * @param {SpellData} data
+   * Split a group's tokens into the plain ones and the `anchor:<point>`
+   * values (prefix stripped). A bare `anchor:` while still being typed
+   * carries no value and is dropped, so it never constrains the row.
+   * @param {QueryToken[]} tokens
+   * @returns {{text: QueryToken[], anchors: string[]}}
+   */
+  function splitAnchorTokens(tokens) {
+    const text = [], anchors = [];
+    for (const t of tokens) {
+      if (t.text.startsWith(ANCHOR_PREFIX)) {
+        const v = t.text.slice(ANCHOR_PREFIX.length);
+        if (v) anchors.push(v);
+      } else text.push(t);
+    }
+    return { text, anchors };
+  }
+
+  /**
+   * Every anchor value must appear in the row's attachment haystack — the
+   * same substring convention the corpora use (`anchor:chest` hits Chest,
+   * ChestBloodBack and ChestBloodFront).
+   * @param {string[]} anchors
+   * @param {string} attachL
    * @returns {boolean}
    */
-  function isAttachmentWord(text, data) {
-    for (const id in data.attachmentNames) {
-      if (data.attachmentNames[id].toLowerCase().includes(text)) return true;
-    }
-    return false;
-  }
+  const anchorsMatch = (anchors, attachL) => anchors.every((a) => attachL.includes(a));
 
   /* ------------------------------------------------- target-type words */
 
@@ -239,20 +263,20 @@ window.EpsilookSearch = (() => {
       return spellsByFile(tokens, data, data.modelFids, data.modelSpells);
     }
     const out = new Set();
-    const { text, tests } = splitTargetTokens(tokens);
-    // Attachment points live on the ROW, and so does the target mask — the
+    const { text: withTests, tests } = splitTargetTokens(tokens);
+    const { text, anchors } = splitAnchorTokens(withTests);
+    // Attachment points and the target mask both live on the ROW; the
     // (cat, fid) index below has neither, being shared across spells. Either
     // one in the query therefore forces the row walk.
-    if (tests.length || text.some((t) => isAttachmentWord(t.text, data))) {
+    if (tests.length || anchors.length) {
       for (const [s, entries] of data.spellModelCats) {
         for (const e of entries) {
           if (tests.length && !maskMatches(tests, e.targets)) continue;
+          if (anchors.length && !anchorsMatch(anchors, attachmentWords(e.src, e.dst, data))) continue;
           const catL = data.modelCatNames[e.cat] || "";
           const file = data.files.get(e.fid);
           const searchL = file ? file.searchL : "";
-          const attachL = attachmentWords(e.src, e.dst, data);
-          if (text.every((t) => catL.includes(t.text) || searchL.includes(t.text)
-              || attachL.includes(t.text))) {
+          if (text.every((t) => catL.includes(t.text) || searchL.includes(t.text))) {
             out.add(s);
             break;
           }
@@ -399,13 +423,14 @@ window.EpsilookSearch = (() => {
     };
     scan(data.fxSearchL, data.fxSpells);
     // A beam's attach points sit on the (spell, chain) ROW, not on the chain,
-    // so they can't live in fxSearchL — this walks the rows instead, and only
-    // when a token could actually name an attachment point.
-    if (tokens.some((t) => isAttachmentWord(t.text, data))) {
+    // so they can't live in fxSearchL — an `anchor:` token walks the rows
+    // instead, matching its points on the SAME row as any chain corpus words.
+    const { text: fxText, anchors } = splitAnchorTokens(tokens);
+    if (anchors.length) {
       for (const [s, rows] of data.spellChainRows) {
         for (const r of rows) {
-          const corpus = `${data.fxSearchL.get(r.chain) || ""} ${attachmentWords(r.src, r.dst, data)}`;
-          if (textMatches(corpus, tokens)) { out.add(s); break; }
+          if (!anchorsMatch(anchors, attachmentWords(r.src, r.dst, data))) continue;
+          if (textMatches(data.fxSearchL.get(r.chain) || "", fxText)) { out.add(s); break; }
         }
       }
     }

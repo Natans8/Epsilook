@@ -239,7 +239,7 @@ TDB_TABLES = {
                                  "SoundEntriesID", "AnimKitID"],
         "spell_visual_effect_name": ["ID", "ModelFileDataID"],
         "spell_effect": ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1",
-                         "EffectMiscValue2"],
+                         "EffectMiscValue2", "ImplicitTarget1", "ImplicitTarget2"],
         "spell_misc": ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"],
         "creature_display_info": ["ID", "ModelID"],
         "creature_model_data": ["ID", "FileDataID"],
@@ -278,7 +278,7 @@ ANIMS_JS_URL = "https://raw.githubusercontent.com/Marlamin/wow.tools.local/main/
 # SpellEffect = names for SpellEffect.Effect (SPELL_EFFECT_* without the
 # prefix), SpellEffectAura = names for SpellEffect.EffectAura (SPELL_AURA_*).
 WOWDBDEFS_ENUM_URL = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/meta/enums/{name}.dbde"
-ENUM_FILES = ["SpellEffect", "SpellEffectAura"]
+ENUM_FILES = ["SpellEffect", "SpellEffectAura", "Target"]
 
 # SpellVisualKitEffect.EffectType values (what the kit effect points at) —
 # the full enum is documented in WoWDBDefs definitions/SpellVisualKitEffect.dbd
@@ -484,9 +484,56 @@ NO_TARGET = 0
 # derives "both" from bits 1|2 rather than it being a bit of its own.
 TARGET_NAMES = {1: "caster", 2: "target", 4: "area", 8: "target", 16: "area"}
 
+# SpellEffect.ImplicitTarget_0/_1 -> the SAME caster/target/area bits the
+# visual-event mask uses, so effect-driven fx (morphs, summons, vehicles,
+# shapeshifts, screens) can say WHO the effect lands on — content that never
+# passes through the SpellVisualEvent graph and so has no TargetType. The prime
+# case: a polymorph's morph is applied to the TARGET, not the caster.
+#
+# The enum (meta/enums/Target.dbde) has ~150 values; every name starts with
+# "TARGET_", and the token AFTER that prefix names what the effect is anchored
+# to. We classify by that — the result is the rough "who does it hit" the pill
+# icon wants, not the exact targeting rule.
+IMPLICIT_CASTER, IMPLICIT_TARGET, IMPLICIT_AREA = 1, 2, 4
+
+# Substrings tested in order against the name with "TARGET_" stripped. Area
+# beats the rest (a spread/ground/positional destination is a place, whoever it
+# is anchored to); then the SELECTED unit; then the caster's own sphere.
+_IMPLICIT_AREA_HINTS = ("AREA", "CONE", "CLUMP", "RECT", "TRAJ", "DYNOBJ",
+                        "_LINE_", "GROUND", "RANDOM", "RADIUS", "FRONT", "BACK",
+                        "_LEFT", "_RIGHT", "MOVEMENT", "CENTROID")
+_IMPLICIT_TARGET_HINTS = ("TARGET", "NEARBY", "CHANNEL_TARGET", "LASTTARGET",
+                          "CHAINHEAL", "BATTLE_PET")
+_IMPLICIT_CASTER_HINTS = ("CASTER", "SRC", "PET", "MASTER", "SUMMONER",
+                          "VEHICLE", "PASSENGER", "OWN_CRITTER", "MINIPET", "HOME")
+
+
+def implicit_target_bit(name: str) -> int:
+    """Map one SpellImplicitTarget enum NAME to a caster/target/area bit (0 = none)."""
+    n = (name or "").upper()
+    if not n.startswith("TARGET_"):
+        return 0
+    body = n[len("TARGET_"):]
+    if any(h in body for h in _IMPLICIT_AREA_HINTS):
+        return IMPLICIT_AREA
+    if any(h in body for h in _IMPLICIT_TARGET_HINTS):
+        return IMPLICIT_TARGET
+    if any(h in body for h in _IMPLICIT_CASTER_HINTS):
+        return IMPLICIT_CASTER
+    if "DEST" in body:  # a bare destination point (DEST_DEST, DEST_DB) is a place
+        return IMPLICIT_AREA
+    return 0
+
+
+def implicit_target_bits(version: str) -> dict[int, int]:
+    """{SpellImplicitTarget id -> caster/target/area bit} for this build's enum."""
+    return {tid: b for tid, name in read_enum_names("Target", version).items()
+            if (b := implicit_target_bit(name))}
+
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 24  # 24: M2 attachment points on model, missile and beam rows
+PACK_FORMAT = 25  # 25: target masks on effect-driven fx (SpellEffect.ImplicitTarget)
+# 24: M2 attachment points on model, missile and beam rows
 # 23: vehicles (SET_VEHICLE_ID aura -> Vehicle seat count)
 # 22: per-row target masks (SpellVisualEvent.TargetType)
 
@@ -1542,11 +1589,20 @@ class SpellEffectRows:
     forms: dict[int, set[int]]                   # spell -> shapeshift form ids (aura 36)
     altnames: dict[int, set[int]]                # spell -> SpellOverrideName ids (aura 370)
     vehicles: dict[int, set[int]]                # spell -> Vehicle.db2 ids (aura 296)
+    # who each effect-driven fx lands on, from the producing SpellEffect row's
+    # ImplicitTarget_0/_1 — keyed (spell, payload) so it rides the pack's
+    # spell->payload link rows (payload = creature / form / screen / vehicle).
+    # OR-accumulated when several rows produce the same pair.
+    morph_targets: dict[tuple[int, int], int]
+    summon_targets: dict[tuple[int, int], int]
+    screen_targets: dict[tuple[int, int], int]
+    form_targets: dict[tuple[int, int], int]
+    vehicle_targets: dict[tuple[int, int], int]
 
 
 def read_spell_effect_rows(
     table_dir: Path, tdb_dir: Path | None, spell_names: dict[int, str],
-    screens: dict[int, ScreenRow]
+    screens: dict[int, ScreenRow], target_bits: dict[int, int]
 ) -> SpellEffectRows:
     """Read SpellEffect and split it into the per-spell sets we ship.
 
@@ -1558,15 +1614,19 @@ def read_spell_effect_rows(
     Note the hotfix CSV spells its misc columns differently (EffectMiscValue1
     vs EffectMiscValue_0) — same field, different source.
     """
-    se_cols = ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue_0", "EffectMiscValue_1"]
-    se_hotfix_cols = ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1", "EffectMiscValue2"]
-    se_rows: dict[int, tuple[int, int, int, int, int]] = {}
-    for rid, spell_id, effect, aura, misc0, misc1 in read_table(table_dir, "SpellEffect", se_cols):
+    se_cols = ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue_0", "EffectMiscValue_1",
+               "ImplicitTarget_0", "ImplicitTarget_1"]
+    se_hotfix_cols = ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1", "EffectMiscValue2",
+                      "ImplicitTarget1", "ImplicitTarget2"]
+    se_rows: dict[int, tuple[int, int, int, int, int, int, int]] = {}
+    for rid, spell_id, effect, aura, misc0, misc1, t0, t1 in read_table(table_dir, "SpellEffect", se_cols):
         se_rows[to_int(rid)] = (to_int(spell_id), to_int(effect), to_int(aura),
-                                to_int_from_float(misc0), to_int_from_float(misc1))
-    for rid, spell_id, effect, aura, misc0, misc1 in hotfix_rows(tdb_dir, "spell_effect", se_hotfix_cols):
+                                to_int_from_float(misc0), to_int_from_float(misc1),
+                                to_int(t0), to_int(t1))
+    for rid, spell_id, effect, aura, misc0, misc1, t0, t1 in hotfix_rows(tdb_dir, "spell_effect", se_hotfix_cols):
         se_rows[to_int(rid)] = (to_int(spell_id), to_int(effect), to_int(aura),
-                                to_int_from_float(misc0), to_int_from_float(misc1))
+                                to_int_from_float(misc0), to_int_from_float(misc1),
+                                to_int(t0), to_int(t1))
 
     # SummonProperties: only Control matters (guardian/pet/possessed/...)
     summon_control: dict[int, int] = {}
@@ -1575,28 +1635,36 @@ def read_spell_effect_rows(
 
     out = SpellEffectRows(defaultdict(set), defaultdict(set), defaultdict(set),
                           defaultdict(set), defaultdict(set), defaultdict(set),
-                          defaultdict(set), defaultdict(set))
-    for s, effect_id, aura_id, m0, m1 in se_rows.values():
+                          defaultdict(set), defaultdict(set),
+                          defaultdict(int), defaultdict(int), defaultdict(int),
+                          defaultdict(int), defaultdict(int))
+    for s, effect_id, aura_id, m0, m1, it0, it1 in se_rows.values():
         if s not in spell_names:
             continue
+        mask = target_bits.get(it0, 0) | target_bits.get(it1, 0)
         if effect_id:
             out.effects[s].add(effect_id)
         if aura_id:
             out.auras[s].add(aura_id)
         if aura_id == AURA_TRANSFORM and m0 > 0:
             out.morphs[s].add(m0)
+            out.morph_targets[(s, m0)] |= mask
         if effect_id == EFFECT_SUMMON and m0 > 0:
             out.summons[s].add((m0, summon_control.get(m1, 0)))
+            out.summon_targets[(s, m0)] |= mask
         # SCREEN_EFFECT auras carry the ScreenEffect ID in misc0 — the main
         # route (the kit route adds only a handful of rows on top)
         if aura_id == AURA_SCREEN_EFFECT and m0 > 0 and m0 in screens:
             out.screens[s].add(m0)
+            out.screen_targets[(s, m0)] |= mask
         if aura_id == AURA_SHAPESHIFT and m0 > 0:
             out.forms[s].add(m0)
+            out.form_targets[(s, m0)] |= mask
         if aura_id == AURA_OVERRIDE_NAME and m0 > 0:
             out.altnames[s].add(m0)
         if aura_id == AURA_SET_VEHICLE_ID and m0 > 0:
             out.vehicles[s].add(m0)
+            out.vehicle_targets[(s, m0)] |= mask
     return out
 
 
@@ -1995,7 +2063,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     anim_names = read_anim_names()
     animkit_anims = read_animkit_anims(table_dir, anim_names)
 
-    se = read_spell_effect_rows(table_dir, tdb_dir, spell_names, fx.screens)
+    se = read_spell_effect_rows(table_dir, tdb_dir, spell_names, fx.screens,
+                                implicit_target_bits(version))
     creatures = read_creature_models(table_dir, tdb_dir)
     spell_altname_text = read_override_names(table_dir, se.altnames)
     spell_icon_fid = read_spell_icons(table_dir, tdb_dir, spell_names)
@@ -2417,6 +2486,9 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "spellScreens": {
             "spellIds": [r[0] for r in screen_pairs],
             "screenIds": [r[1] for r in screen_pairs],
+            # who the SCREEN_EFFECT aura lands on (ImplicitTarget) — usually the
+            # caster's own view, but kept honest per row
+            "targets": [se.screen_targets.get(r, 0) for r in screen_pairs],
         },
         "screens": {
             "ids": screen_ids,
@@ -2444,6 +2516,9 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "spellMorphs": {
             "spellIds": [r[0] for r in morph_rows],
             "creatureIds": [r[1] for r in morph_rows],
+            # who the transform aura morphs — the target for polymorph, the
+            # caster for self-transforms (ImplicitTarget of the aura's effect)
+            "targets": [se.morph_targets.get(r, 0) for r in morph_rows],
         },
         "morphs": {
             "creatureIds": morph_creature_ids,
@@ -2459,6 +2534,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "spellShapeshifts": {
             "spellIds": [r[0] for r in shapeshift_rows],
             "formIds": [r[1] for r in shapeshift_rows],
+            "targets": [se.form_targets.get(r, 0) for r in shapeshift_rows],
         },
         "shapeshifts": {
             "ids": shapeshift_form_ids,
@@ -2476,6 +2552,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "spellIds": [r[0] for r in summon_rows],
             "creatureIds": [r[1] for r in summon_rows],
             "controls": [r[2] for r in summon_rows],
+            # where the summon lands — mostly a ground point near the caster
+            "targets": [se.summon_targets.get((r[0], r[1]), 0) for r in summon_rows],
         },
         "summons": {
             "creatureIds": summon_creature_ids,
@@ -2488,6 +2566,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "spellVehicles": {
             "spellIds": [r[0] for r in vehicle_rows],
             "vehicleIds": [r[1] for r in vehicle_rows],
+            # SET_VEHICLE_ID makes the caster the vehicle, so this is caster
+            "targets": [se.vehicle_targets.get(r, 0) for r in vehicle_rows],
         },
         # one row per seat, in SeatID_0..7 order; `seats` on a vehicle is the
         # count, and `attachments` names where on the model that seat sits

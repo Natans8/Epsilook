@@ -305,6 +305,11 @@ interface SpellData {
   glowTargets: Map<number, Map<number, number>>;
   shadowyTargets: Map<number, Map<number, number>>;
   ghostMatTargets: Map<number, Map<number, number>>;
+  morphTargets: Map<number, Map<number, number>>;
+  summonTargets: Map<number, Map<number, number>>;
+  vehicleTargets: Map<number, Map<number, number>>;
+  shapeshiftTargets: Map<number, Map<number, number>>;
+  screenTargets: Map<number, Map<number, number>>;
 
   spellSounds: Map<number, { soundKitId: number; fid: number; targets: number }[]>;
   soundSpells: Map<number, number[]>;

@@ -836,17 +836,13 @@
     both: "Plays on the caster and the target",
   };
 
-  /* The attachment-point names of the loaded pack, as suggestable words.
-   * They come from the pack (attachmentNames), not a hardcoded list, so a
-   * widened M2 enum reaches the autocomplete without a code change. Only the
-   * two columns that actually render attachment segments offer them. */
-  function attachmentWords() {
-    const names = (state.data && state.data.attachmentNames) || {};
-    const words = [...new Set(Object.values(names))].filter(Boolean).sort();
-    const titles = {};
-    for (const w of words) titles[w] = "Attachment point on the model";
-    return { words, titles };
-  }
+  /* The attachment-point keyword. It is the ONE attachment meta-word that
+   * autocompletes: the point NAMES are data values, deliberately kept out of
+   * the suggestions (the user types them after the colon). Offered only in
+   * the two columns that render attachment segments, and only when the pack
+   * actually carries attachment data. */
+  const ANCHOR_WORD = "anchor:";
+  const ANCHOR_TITLE = "Attachment point, e.g. anchor:chest or anchor:spelllefthand";
 
   function fieldCategories(field) {
     const d = state.data;
@@ -855,15 +851,15 @@
       words: [...words, ...Search.TARGET_WORDS],
       titles: { ...titles, ...TARGET_WORD_TITLES },
     });
-    /** ...plus the attachment names, for the columns that show them. */
-    const withAttachments = (base) => {
-      const a = attachmentWords();
-      return { words: [...base.words, ...a.words], titles: { ...base.titles, ...a.titles } };
-    };
+    /** ...plus the anchor: keyword, for the columns that show attach points. */
+    const hasAnchors = d && d.attachmentNames && Object.keys(d.attachmentNames).length > 0;
+    const withAnchor = (base) => hasAnchors ? {
+      words: [...base.words, ANCHOR_WORD],
+      titles: { ...base.titles, [ANCHOR_WORD]: ANCHOR_TITLE },
+    } : base;
     switch (field) {
-      case "fx": return withAttachments(
-        withTargets(Object.keys(FX_HEAD_TITLES), FX_HEAD_TITLES));
-      case "model": return withAttachments(withTargets(
+      case "fx": return withAnchor(withTargets(Object.keys(FX_HEAD_TITLES), FX_HEAD_TITLES));
+      case "model": return withAnchor(withTargets(
         // "" is the attach category: loose pills, no word to search by
         Object.values((d && d.modelCatNames) || {}).filter(Boolean),
         MODEL_CAT_TITLES));
@@ -1780,12 +1776,16 @@
       cats.push({ name: "camo", hit: camoIsHit(), items: [] });
     }
     if (screenIds.length) {
-      // one pill per ScreenEffect row, labeled with its internal name
+      // one pill per ScreenEffect row, labeled with its internal name.
+      // ImplicitTarget icon (pack format 25): usually the caster's own view
+      const screenMask = (id) => maskOf(d.screenTargets, spellId, [id]);
       const ids = hitsFirst(screenIds.slice().sort((a, b) => a - b), (id) => screenIsHit(id));
+      const grp = targetGroup(screenIds.map(screenMask));
       cats.push({
         name: "screen",
         hit: screenIds.some((id) => screenIsHit(id)),
-        items: ids.map((id) => () => screenTag(id)),
+        mask: grp.uniform ? grp.mask : 0,
+        items: ids.map((id) => () => screenTag(id, grp.uniform ? 0 : screenMask(id))),
       });
     }
     if (formIds.length) {
@@ -1795,10 +1795,13 @@
       const entries = ids.flatMap((f) =>
         (d.shapeshiftDisplays.get(f) || [{ displayId: 0, fid: 0 }])
           .map((e) => ({ formId: f, displayId: e.displayId, fid: e.fid })));
+      const formMask = (f) => maskOf(d.shapeshiftTargets, spellId, [f]);
+      const grp = targetGroup(formIds.map(formMask));
       cats.push({
         name: "shapeshift",
         hit: formIds.some((f) => shapeshiftIsHit(f)),
-        items: entries.map((e) => () => shapeshiftTag(e)),
+        mask: grp.uniform ? grp.mask : 0,
+        items: entries.map((e) => () => shapeshiftTag(e, grp.uniform ? 0 : formMask(e.formId))),
       });
     }
     if (morphIds.length) {
@@ -1808,38 +1811,53 @@
       const entries = ids.flatMap((c) =>
         (d.morphDisplays.get(c) || [{ displayId: 0, fid: 0 }])
           .map((e) => ({ creatureId: c, displayId: e.displayId, fid: e.fid })));
+      // who the morph lands on — the target for polymorph, the caster for
+      // self-transforms (ImplicitTarget, pack format 25)
+      const morphMask = (c) => maskOf(d.morphTargets, spellId, [c]);
+      const grp = targetGroup(morphIds.map(morphMask));
       cats.push({
         name: "morph",
         hit: morphIds.some((c) => morphIsHit(c)),
-        items: entries.map((e) => () => morphTag(e)),
+        mask: grp.uniform ? grp.mask : 0,
+        items: entries.map((e) => () => morphTag(e, grp.uniform ? 0 : morphMask(e.creatureId))),
       });
     }
     if (summonEntries.length) {
-      // one pill per (creature, control) pair
+      // one pill per (creature, control) pair; ImplicitTarget icon shows where
+      // the summon lands (usually a ground point → area)
+      const summonMask = (e) => maskOf(d.summonTargets, spellId, [e.creatureId]);
       const entries = hitsFirst(
         summonEntries.slice().sort((a, b) => (a.creatureId - b.creatureId) || (a.control - b.control)),
         (e) => summonIsHit(e.creatureId, e.control));
+      const grp = targetGroup(summonEntries.map(summonMask));
       cats.push({
         name: "summon",
         hit: summonEntries.some((e) => summonIsHit(e.creatureId, e.control)),
-        items: entries.map((e) => () => summonTag(e)),
+        mask: grp.uniform ? grp.mask : 0,
+        items: entries.map((e) => () => summonTag(e, grp.uniform ? 0 : summonMask(e))),
       });
     }
     if (vehicleIds.length) {
       // one pill per SEAT, in SeatID order, labeled with its attachment
       // point — de-duped, because 38% of multi-seat vehicles put every seat
       // on the same attachment and would otherwise repeat one pill 8 times.
-      // No mask (a SET_VEHICLE_ID aura has no SpellVisualEvent target type),
-      // so the head takes no icon.
+      // The mask now comes from the SET_VEHICLE_ID aura's ImplicitTarget (pack
+      // format 25) — caster when the caster becomes the vehicle, target when a
+      // unit is turned into one. It is per-vehicle, so every seat shares it and
+      // the head carries the icon; only differing vehicles drop it to the pills.
       const d2 = state.data;
+      const vehMask = (v) => maskOf(d2.vehicleTargets, spellId, [v]);
       const seatCount = vehicleIds.reduce(
         (n, v) => Math.max(n, (d2.vehicleSeats.get(v) || []).length), 0);
       const points = [...new Set(vehicleIds.flatMap((v) => d2.vehicleSeats.get(v) || []))];
+      const grp = targetGroup(vehicleIds.map(vehMask));
+      const union = vehicleIds.reduce((m, v) => m | vehMask(v), 0);
       cats.push({
         name: "seat",
         hit: points.some((p) => vehicleIsHit(p, seatCount)),
+        mask: grp.uniform ? grp.mask : 0,
         items: hitsFirst(points, (p) => vehicleIsHit(p, seatCount))
-          .map((p) => () => vehicleTag(p, seatCount)),
+          .map((p) => () => vehicleTag(p, seatCount, grp.uniform ? 0 : union)),
       });
     }
 
@@ -2195,10 +2213,28 @@
     }
     const seg = el("button", "tag-attach", label);
     const words = [s, t].filter(Boolean);
+    if (attachIsHit(field, words)) seg.classList.add("hit");
     seg.title = `${why} — an M2 attachment slot, not a description`
       + `\nClick: find spells using ${words.length > 1 ? "these points" : "this point"} · Shift-click: exclude`;
-    seg.dataset.search = `${field}:"${words.join(" ")}"`;
+    // each point becomes an anchor: token; multi-point wraps in the grouping
+    // quotes so the two tokens stay in one chip
+    const q = words.map((w) => `anchor:${w}`).join(" ");
+    seg.dataset.search = `${field}:${/\s/.test(q) ? `"${q}"` : q}`;
     return seg;
+  }
+
+  // an attachment segment lights when a positive anchor: query in its field
+  // (or free text) names points this row carries — the same substring test
+  // the search uses (ANCHOR_PREFIX in search.js)
+  function attachIsHit(field, names) {
+    const attachL = names.join(" ").toLowerCase();
+    return groupsFor(field).some((g) => {
+      const anchors = g.tokens
+        .filter((t) => t.text.startsWith("anchor:"))
+        .map((t) => t.text.slice("anchor:".length))
+        .filter(Boolean);
+      return anchors.length && anchors.every((a) => attachL.includes(a));
+    });
   }
 
   function modelTag(fid, catName, mask = 0, src = -1, dst = -1, twoPoint = false) {
@@ -2521,7 +2557,7 @@
    * anchors — the tooltip says so, since otherwise it reads as a bug. The
    * Vehicle.db2 id says nothing to a user, so it is neither shown nor
    * copyable. Clicking finds every spell with a seat at the same point. */
-  function vehicleTag(attachment, seats) {
+  function vehicleTag(attachment, seats, mask = 0) {
     const tag = el("span", "tag fx");
     if (vehicleIsHit(attachment, seats)) tag.classList.add("hit");
     const label = attachment || "seat";
@@ -2532,6 +2568,7 @@
       + `\nClick: find spells with a seat there · Shift-click: exclude`;
     txt.dataset.search = `fx:"seat ${label}"`;
     tag.appendChild(txt);
+    addTargetIcons(tag, mask);
     return tag;
   }
 
@@ -2549,7 +2586,7 @@
    * when present; rows with textures get the hover preview on the first one
    * (shown untinted — in game the colors grade the world, they're not baked
    * into the overlay image). ⧉ copies the ScreenEffect ID. */
-  function screenTag(screenId) {
+  function screenTag(screenId, mask = 0) {
     const d = state.data;
     const name = d.screenNames.get(screenId) || "";
     const colors = d.screenColors.get(screenId) || NO_SCREEN_COLORS;
@@ -2600,6 +2637,7 @@
     // doesn't need them
     txt.dataset.search = `fx:"screen ${(name || String(screenId)).replace(/"/g, "")}"`;
     tag.appendChild(txt);
+    addTargetIcons(tag, mask);
     return tag;
   }
 
@@ -2635,7 +2673,7 @@
    * where the form has a display, otherwise the form name itself — Battle
    * Stance and Shadowform are real forms with no model at all, and a
    * name-only pill is the honest rendering. */
-  function shapeshiftTag(entry) {
+  function shapeshiftTag(entry, mask = 0) {
     const d = state.data;
     const { formId, displayId, fid } = entry;
     const name = d.shapeshiftNames.get(formId) || "";
@@ -2658,6 +2696,7 @@
     // search by the form NAME, which is stable and readable, unlike the model
     txt.dataset.search = `fx:"shapeshift ${(name || String(formId)).replace(/"/g, "")}"`;
     tag.appendChild(txt);
+    addTargetIcons(tag, mask);
 
     if (displayId) {
       tag.appendChild(tagButton("⧉", `Copy display ID: ${displayId}`, String(displayId)));
@@ -2671,7 +2710,7 @@
     return tag;
   }
 
-  function morphTag(entry) {
+  function morphTag(entry, mask = 0) {
     const d = state.data;
     const { creatureId, displayId, fid } = entry;
     const name = d.morphNames.get(creatureId) || "";
@@ -2694,6 +2733,7 @@
       + `\nClick: find spells with this morph · Shift-click: exclude`;
     txt.dataset.search = `fx:"morph ${base || creatureId}"`;
     tag.appendChild(txt);
+    addTargetIcons(tag, mask);
 
     if (displayId) {
       tag.appendChild(tagButton("⧉", `Copy display ID: ${displayId}`, String(displayId)));
@@ -2714,7 +2754,7 @@
    * ready-to-paste commands; the Wowhead icon on the left opens the NPC's
    * Wowhead page. Creatures missing from TDB show an inert "creature #id"
    * pill. */
-  function summonTag(entry) {
+  function summonTag(entry, mask = 0) {
     const d = state.data;
     const { creatureId, control } = entry;
     const name = d.summonNames.get(creatureId) || "";
@@ -2734,6 +2774,7 @@
       + `\nClick: find spells summoning this creature · Shift-click: exclude`;
     txt.dataset.search = `fx:"summon ${name || creatureId}"`;
     tag.appendChild(txt);
+    addTargetIcons(tag, mask);
     if (ctrl) {
       const cb = el("button", "tag-ctrl", ctrl);
       cb.title = `Control: ${ctrl}`
