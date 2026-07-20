@@ -41,6 +41,10 @@
   const qInput = /** @type {HTMLInputElement} */ (document.getElementById("q"));
   const DEFAULT_PLACEHOLDER = qInput.placeholder;
 
+  // spoken state for the tri-state column filters (any / with / without),
+  // kept in the button's aria-label as it cycles
+  const TRI_LABELS = { "": "showing all", with: "only spells with", without: "only spells without" };
+
   /* ------------------------------------------------------------- state */
 
   /**
@@ -426,15 +430,20 @@
       const isFree = c.field === "all";
       const chip = el("span", isFree ? "qchip qfree" : `qchip f-${c.field}${c.not ? " not" : ""}`);
       if (!isFree) {
-        const label = el("span", "qchip-field", `${c.not ? "−" : ""}${c.field}:`);
+        // a real button so the include/exclude toggle is keyboard-operable
+        const label = el("button", "qchip-field", `${c.not ? "−" : ""}${c.field}:`);
+        label.type = "button";
         label.title = c.not ? `Excluding — click to include ${c.field} matches` : `Click to exclude ${c.field} matches instead`;
+        label.setAttribute("aria-label", c.not ? `Include ${c.field} matches` : `Exclude ${c.field} matches`);
         label.dataset.chipNot = String(idx);
         chip.appendChild(label);
       }
       chip.appendChild(el("span", "qchip-text", c.text));
       if (!isFree) {
         const x = el("button", "qchip-x", "×");
+        x.type = "button";
         x.title = "Remove";
+        x.setAttribute("aria-label", `Remove ${c.field} filter`);
         x.dataset.chipRemove = String(idx);
         chip.appendChild(x);
       }
@@ -462,6 +471,13 @@
     sizeInput();
     updateTabs();
     paintBarSel();
+    // mirror the assembled chip query for screen readers — the committed
+    // chips are separate DOM the input's own value can't convey
+    const desc = document.getElementById("q-desc");
+    if (desc) {
+      const q = serializeQuery();
+      desc.textContent = q ? `Current search: ${q}` : "";
+    }
   }
 
   // The input hugs its content instead of stretching, except at the true
@@ -887,8 +903,9 @@
     if (!matches.length) return hideSuggest();
 
     box.textContent = "";
-    matches.forEach(([key, f]) => {
+    matches.forEach(([key, f], i) => {
       const b = el("button", "suggest-item");
+      markSuggestOption(b, i);
       b.appendChild(el("span", `suggest-field f-${key}`, `${key}:`));
       b.appendChild(el("span", "suggest-hint", f.hint));
       b.dataset.field = key;
@@ -896,6 +913,8 @@
     });
     suggestIndex = -1;
     box.hidden = false;
+    qInput.setAttribute("aria-expanded", "true");
+    qInput.removeAttribute("aria-activedescendant");
   }
 
   // suggest the column's category words while typing in its chip; picking
@@ -919,8 +938,9 @@
     if (!matches.length) return hideSuggest();
 
     box.textContent = "";
-    matches.forEach((w) => {
+    matches.forEach((w, i) => {
       const b = el("button", "suggest-item");
+      markSuggestOption(b, i);
       b.appendChild(el("span", `suggest-field f-${state.activeField}`, w));
       // the parenthesized table name is build trivia — the plain half explains
       b.appendChild(el("span", "suggest-hint", (titles[w] || "").split(" (")[0]));
@@ -929,6 +949,8 @@
     });
     suggestIndex = -1;
     box.hidden = false;
+    qInput.setAttribute("aria-expanded", "true");
+    qInput.removeAttribute("aria-activedescendant");
   }
 
   // complete the partial last word of the chip's text to the category word.
@@ -953,6 +975,16 @@
   function hideSuggest() {
     $("#suggest").hidden = true;
     suggestIndex = -1;
+    qInput.setAttribute("aria-expanded", "false");
+    qInput.removeAttribute("aria-activedescendant");
+  }
+
+  // ARIA listbox wiring shared by both suggestion builders: each item is an
+  // option with a stable id so aria-activedescendant can point at it
+  function markSuggestOption(b, i) {
+    b.id = `suggest-opt-${i}`;
+    b.setAttribute("role", "option");
+    b.setAttribute("aria-selected", "false");
   }
 
   function selectSuggestion(field) {
@@ -1191,7 +1223,9 @@
     // ID
     const tdId = el("td", "c-id");
     const idBtn = el("button", "id-copy", String(spellId));
+    idBtn.type = "button";
     idBtn.title = "Copy spell ID\nShift-click: copy wrapped in `backticks`";
+    idBtn.setAttribute("aria-label", `Copy spell ID ${spellId}`);
     idBtn.dataset.copy = String(spellId);
     tdId.appendChild(idBtn);
     tr.appendChild(tdId);
@@ -1247,7 +1281,9 @@
     const row = el("div", "cmd-row");
     for (const cmd of CFG.spellCommands) {
       const b = el("button", "cmd", cmd.label);
+      b.type = "button";
       b.title = `${cmd.hint} — ${fillTemplate(cmd.template, { id: spellId })}\nShift-click: copy wrapped in \`backticks\``;
+      b.setAttribute("aria-label", `${cmd.hint} (${cmd.label})`);
       b.dataset.copy = fillTemplate(cmd.template, { id: spellId });
       row.appendChild(b);
     }
@@ -2011,7 +2047,9 @@
   // buttons are labeled after what they copy (".lo", "/", ".mod").
   function tagButton(glyph, title, copyValue) {
     const b = el("button", "tag-copy", glyph);
+    b.type = "button";
     b.title = `${title}\nShift-click: copy wrapped in \`backticks\``;
+    b.setAttribute("aria-label", title); // glyph alone (".lo", "⧉") isn't spoken usefully
     b.dataset.copy = copyValue;
     return b;
   }
@@ -2266,6 +2304,7 @@
       view.target = "_blank";
       view.rel = "noopener";
       view.title = `Preview ${file.base || `file #${fid}`} in the WoW.tools model viewer (new tab)`;
+      view.setAttribute("aria-label", view.title);
       tag.appendChild(view);
     }
 
@@ -2292,7 +2331,9 @@
 
     if (CFG.soundPlayUrl) {
       const play = el("button", "tag-play", "▶");
+      play.type = "button";
       play.title = `Play ${file.base || `file #${fid}`} (streamed from Wowhead)`;
+      play.setAttribute("aria-label", play.title);
       play.dataset.play = fillTemplate(CFG.soundPlayUrl, {
         fid,
         bucket: fid % 256,
@@ -3274,6 +3315,7 @@
     for (const th of $$("th[data-sort]")) {
       const active = state.sort.key === th.dataset.sort;
       th.classList.toggle("sorted", active);
+      th.setAttribute("aria-sort", active ? (state.sort.dir === 1 ? "ascending" : "descending") : "none");
       th.querySelector(".arrow").textContent = active ? (state.sort.dir === 1 ? "▲" : "▼") : "";
     }
   }
@@ -3348,7 +3390,9 @@
       state.filters[k] = withSet.has(k) ? "with" : withoutSet.has(k) ? "without" : "";
     }
     for (const btn of $$("#filters button.tri")) {
-      btn.dataset.state = state.filters[btn.dataset.filter];
+      const st = state.filters[btn.dataset.filter];
+      btn.dataset.state = st;
+      btn.setAttribute("aria-label", `${btn.textContent.trim()} filter: ${TRI_LABELS[st]}`);
     }
   }
 
@@ -3467,7 +3511,12 @@
         if (e.key === "ArrowDown" || e.key === "ArrowUp") {
           e.preventDefault();
           suggestIndex = (suggestIndex + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
-          items.forEach((it, i) => it.classList.toggle("selected", i === suggestIndex));
+          items.forEach((it, i) => {
+            const on = i === suggestIndex;
+            it.classList.toggle("selected", on);
+            it.setAttribute("aria-selected", String(on));
+          });
+          qInput.setAttribute("aria-activedescendant", items[suggestIndex].id);
           return;
         }
         if (e.key === "Tab" || (e.key === "Enter" && suggestIndex >= 0)) {
@@ -3797,6 +3846,7 @@
         const next = TRI_STATES[(TRI_STATES.indexOf(state.filters[key]) + 1) % TRI_STATES.length];
         state.filters[key] = next;
         btn.dataset.state = next;
+        btn.setAttribute("aria-label", `${btn.textContent.trim()} filter: ${TRI_LABELS[next]}`);
         applyFiltersAndSort();
         stateToUrl(true);
       });

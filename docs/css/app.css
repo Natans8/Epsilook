@@ -6,6 +6,9 @@
   --bg-row: #131820;
   --bg-row-alt: #10141b;
   --border: #262d38;
+  /* stronger edge for interactive controls (search bar, select, buttons) so
+     their boundary clears WCAG 1.4.11's 3:1 — ~3.3:1 on the page bg */
+  --border-ctrl: #626b7a;
   --text: #cfd6e0;
   --text-dim: #7c8694;
   --gold: #f0c34c;
@@ -31,6 +34,39 @@ body {
 }
 
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; }
+
+/* keyboard focus indicator — :focus-visible keeps it off mouse clicks, so the
+   resting look is unchanged; the gold ring only appears during Tab navigation */
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;   /* hugs the control — no bleed into neighbouring text */
+}
+/* the search input already shows focus via #qbar:focus-within */
+#q:focus-visible { outline: none; }
+/* densely-packed controls: ring sits right on the edge so it never reaches a
+   neighbour (export/command buttons, in-pill glyph buttons) */
+#export button:focus-visible,
+.cmd:focus-visible,
+.tag-copy:focus-visible,
+.tag-play:focus-visible,
+.tag-view:focus-visible { outline-offset: 0; }
+/* sticky header cell would clip an outset ring — inset it instead */
+th[data-sort] > button:focus-visible { outline-offset: -2px; }
+
+/* visually hidden but exposed to assistive tech (live query mirror, etc.) */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  border: 0; overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 
 /* ---------------------------------------------------------------- header */
 
@@ -71,7 +107,7 @@ h1 {
 select {
   background: var(--bg-panel);
   color: var(--text);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-ctrl);
   border-radius: 6px;
   padding: 0.3rem 0.5rem;
 }
@@ -99,7 +135,7 @@ main { padding: 0 1.6rem 2rem; }
   gap: 0.35rem;
   padding: 0.5rem 1rem;
   background: var(--bg-panel);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-ctrl);
   border-radius: 10px;
   cursor: text;
 }
@@ -265,7 +301,7 @@ main { padding: 0 1.6rem 2rem; }
 #help-btn {
   width: 2.4rem; height: 2.4rem;
   border-radius: 50%;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-ctrl);
   background: var(--bg-panel);
   color: var(--text-dim);
   font-weight: 600;
@@ -454,7 +490,7 @@ main { padding: 0 1.6rem 2rem; }
 }
 #export button {
   padding: 0.22rem 0.7rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-ctrl);
   border-radius: 6px;
   background: var(--bg-panel);
   color: var(--text);
@@ -493,7 +529,18 @@ th {
   background: var(--bg);
   z-index: 2;
 }
-th[data-sort] { cursor: pointer; }
+/* the sortable header's interactive part is a real <button> (keyboard-
+   operable); it fills the cell so the whole header stays clickable, and
+   inherits the th's uppercase/spacing so it looks identical to a plain th */
+th[data-sort] { padding: 0; }
+th[data-sort] > button {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 th[data-sort]:hover { color: var(--text); }
 th.sorted { color: var(--gold); }
 th .arrow { font-size: 0.7em; }
@@ -546,7 +593,8 @@ mark.hl {
 }
 
 td.empty { text-align: center; vertical-align: middle; }
-.none { color: var(--text-dim); opacity: 0.5; }
+/* "no value" marker — a readable dim (was opacity .5 ≈ 2.3:1, failed 1.4.3) */
+.none { color: #7f8996; }
 
 /* column hiding */
 #results.hide-models   .c-models   { display: none; }
@@ -1112,4 +1160,15 @@ footer a { color: var(--text-dim); }
   color: var(--text-dim);
   text-align: right;
   line-height: 1;
+}
+
+/* ------------------------------------------------- reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
