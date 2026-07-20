@@ -255,18 +255,32 @@ flowchart LR
   MAK["SpellVisualMissile.AnimKitID"] --> AKS
   K6 -->|"Initial/LoopAnimID"| AID2["AnimIDs — loose pills"]
   P7["proc Type 7"] --> AID3["AnimIDs — 'stance' group"]
+  VS["VehicleSeat (via aura 296 → Vehicle)"] -->|"Enter/Ride/RideUpper/Exit anims"| AID4["AnimIDs — 'passenger' group"]
+  VS -->|"VehicleEnter/Exit/RideAnimLoop"| AID2
+  VS -->|"6 × AnimKitID"| AKS
   AID1 --> N["names via anims.js"]
   AID2 --> N
   AID3 --> N
+  AID4 --> N
 ```
 
 `SpellVisualAnim`'s initial/loop anims are **the dominant source** — 119k rows
 vs 32k animkit rows on 9.2.7. `-1` and `0` both mean unset (0 would be Stand).
 Impact kits animate the *target*, so these are not caster-only.
 
+The vehicle-seat route splits by **whose** animation it is: the nine
+passenger columns (`EnterAnimStart/Loop`, `RideAnimStart/Loop`,
+`RideUpperAnimStart/Loop`, `ExitAnimStart/Loop/End`) head a `passenger`
+group, while the vehicle's own three (`VehicleEnterAnim`, `VehicleExitAnim`,
+`VehicleRideAnimLoop`) join the loose pills — the rider's behaviour and the
+vehicle's are different things. The six `*AnimKitID` columns are ordinary
+`AnimKit::ID`s and rejoin the animkit groups, so the build counts them as
+"used" and ships their segments. Population on 9.2.7: 99.8% of seats set at
+least one passenger anim, the vehicle's own are 3–7%, any animkit 12.7%.
+
 ### 3f. Routes that start at `SpellEffect`, not at a visual
 
-Five fx categories skip the visual graph entirely: a particular `Effect` or
+Six fx categories skip the visual graph entirely: a particular `Effect` or
 `EffectAura` enum makes `EffectMiscValue_n` an id into another table.
 
 ```mermaid
@@ -277,8 +291,14 @@ flowchart LR
   SE -->|"EffectAura 260 (SCREEN_EFFECT)<br/>misc0 = ScreenEffect id"| SC["screen"]
   SE -->|"EffectAura 36 (MOD_SHAPESHIFT)<br/>misc0 = SpellShapeshiftForm"| SS["shapeshift"]
   SE -->|"EffectAura 370 (OVERRIDE_NAME)<br/>misc0 = SpellOverrideName"| ON["alt names — search corpus only"]
+  SE -->|"EffectAura 296 (SET_VEHICLE_ID)<br/>misc0 = Vehicle id"| VE["vehicle"]
   SE -->|"Effect / EffectAura enum ids"| ME["Mechanics column"]
 ```
+
+**The vehicle route covers "the caster BECOMES a vehicle", not "boards one".**
+`CONTROL_VEHICLE` (aura 236) is the far larger population — 1,581 rows vs 247
+on 9.2.7 — but its `EffectMiscValue_0` is a seat/flag value, not a
+`Vehicle.db2` id, so it needs its own route and is deliberately not wired up.
 
 **misc0 on a transform aura is a creature id, not a display id** — a
 long-standing trap. Both morphs and shapeshift forms then walk the same
@@ -313,6 +333,46 @@ The pack tags each texture with its role. The wiki's `rrggbbxx` claim for
 `Param_0` is WotLK-era and wrong for modern rows — ours reads `aarrggbb`,
 settled by name semantics.
 
+### 3h. Vehicle seat payload
+
+```mermaid
+flowchart LR
+  V["Vehicle (via aura 296)"] -->|"SeatID_0..7"| VS["VehicleSeat"]
+  VS -->|"AttachmentID = INDEX"| GL["g_vehicleGeoComponentLinks[]"]
+  GL -->|"M2 attachment id"| AN["attachment name — one pill per seat"]
+  VS -->|"passenger anim columns"| PA["'passenger' anim group"]
+  VS -->|"vehicle anim columns"| LP["loose anim pills"]
+  VS -->|"AnimKit columns"| AK["animkit groups"]
+```
+
+A vehicle fills up to eight `SeatID_n` slots; the filled count IS the seat
+count, and 0-seat vehicles are dropped at build.
+
+**`VehicleSeat.AttachmentID` is an INDEX, not an M2 attachment id** — it
+indexes a table hardcoded in the client binary (`g_vehicleGeoComponentLinks`),
+which exists in no db2 and so is transcribed into `build_data.py`. wowdev.wiki
+quotes the array but hedges it with a `?`, so it was verified rather than
+trusted: 138 vehicle M2s were fetched and each seat checked against its own
+vehicle's model. The decoded attachment is present **91.2%** of the time vs
+**42.4%** for the raw value, and where the hypotheses diverge it is decisive —
+index 14 decodes to `VehicleSeat2`, present on 100% of the models using it,
+while raw 14 (`ShoulderFlapLeft`) is present on 0%. Indices 13..20 come out as
+`VehicleSeat1..8` in order, which the array's own shape corroborates.
+
+Two consequences worth knowing:
+
+- The array is 6.0.1-era; modern data has indices past its end (26, 27). Those
+  stay unmapped and render as a raw `idx N` rather than a guess.
+- The decoded names are the game's own and often read oddly as seat positions
+  (`Breath` and `ChestBloodBack` are the 2nd and 4th most common on 9.2.7)
+  because artists reuse generic attachment slots as seat anchors. **That is the
+  data, not a decode error** — the pill tooltip says so explicitly.
+
+**Do not reuse this decode for model attach points.**
+`SpellVisualKitModelAttach.AttachmentID` is a *raw* M2 attachment id — it spans
+-1..57 across 55 distinct values on 9.2.7, the direct-id signature, versus
+`VehicleSeat.AttachmentID`'s dense 0..27.
+
 ---
 
 ## 4. The pack
@@ -324,10 +384,10 @@ links `spellIds[i]` to `fids[i]`. That gzips far better than a list of objects.
 ```mermaid
 flowchart LR
   subgraph LINK["link sections (spell → item, + target mask)"]
-    L1["spellModels · spellSounds · spellAnimKits<br/>spellVisualAnims · spellAnims · spellFx<br/>spellDissolves · spellGlows · spellShadowies<br/>spellGhostMats · spellTints · spellDesaturates<br/>spellTransparencies · spellFreezes · spellCamos<br/>spellScreens · spellMorphs · spellShapeshifts<br/>spellSummons · spellEffects · spellAuras"]
+    L1["spellModels · spellSounds · spellAnimKits<br/>spellVisualAnims · spellAnims · spellFx<br/>spellDissolves · spellGlows · spellShadowies<br/>spellGhostMats · spellTints · spellDesaturates<br/>spellTransparencies · spellFreezes · spellCamos<br/>spellScreens · spellMorphs · spellShapeshifts<br/>spellSummons · spellVehicles · spellPassengerAnims<br/>spellVehicleAnims · spellVehicleAnimKits<br/>spellEffects · spellAuras"]
   end
   subgraph PAY["payload sections (item → what it is)"]
-    P1["fxChains · fxTextures · dissolves · dissolveTextures<br/>glows · shadowies · ghostMats · tints<br/>screens · screenTextures · morphs · morphDisplays<br/>shapeshifts · shapeshiftDisplays · summons"]
+    P1["fxChains · fxTextures · dissolves · dissolveTextures<br/>glows · shadowies · ghostMats · tints<br/>screens · screenTextures · morphs · morphDisplays<br/>shapeshifts · shapeshiftDisplays · summons<br/>vehicles · vehicleSeats"]
   end
   subgraph NAME["name tables"]
     N1["files (fid → path) · animNames · effectNames<br/>auraNames · iconNames · modelCatNames<br/>targetNames · summonControlNames"]
@@ -363,16 +423,21 @@ mostly "the table does not exist yet." The five Classic re-release clients
 | 1.15.8.67156 | Vanilla Classic | 31,248 | 0.7 MB | — | 6 |
 | 2.5.6.68775 | TBC Classic | 28,650 | 0.7 MB | — | 11 |
 | 3.4.3.58936 | WotLK Classic | 49,394 | 1.2 MB | TDB335.25101 | 10 |
-| 4.4.2.60895 | Cataclysm Classic | 71,227 | 1.8 MB | — | 10 |
-| 5.5.4.68716 | Mists of Pandaria Classic | 98,129 | 2.5 MB | — | 6 |
+| 4.4.2.60895 | Cataclysm Classic | 71,227 | 1.7 MB | — | 10 |
+| 5.5.4.68716 | Mists of Pandaria Classic | 98,129 | 2.4 MB | — | 6 |
 | 7.3.5.26972 | Legion | 179,382 | 4.6 MB | TDB735.00 | 4 |
 | 8.3.7.35662 | Battle for Azeroth | 227,237 | 5.9 MB | TDB837.20101 | 1 |
 | 9.2.7.45745 | Shadowlands *(default)* | 276,332 | 7.2 MB | TDB927.22111 | 0 |
 | 10.2.7.55664 | Dragonflight | 327,092 | 8.7 MB | TDB1027.24051 | 0 |
 | 11.2.7.65299 | The War Within | 375,895 | 10.2 MB | TDB1127.26011 | 0 |
 
-All ten are at pack format 22. Sizes grew ~11% at format 22 — that is the target
-masks' cost.
+**Eight are at pack format 23** (WotLK 3.4.3 and everything after it); Vanilla
+1.15.8 and TBC 2.5.6 stay at format 22, deliberately not rebuilt for the
+vehicle work since vehicles are a WotLK-era feature. Sizes grew ~11% at format
+22 — that is the target masks' cost. Format 23 added the vehicle sections at
+essentially no size cost (they are small, and two packs even round down a
+tenth of a MB). `Vehicle` and `VehicleSeat` turned out to be present on every
+rebuilt version, so format 23 added **no** new absent-table drift.
 
 ### The five Classic re-release clients don't sit on the timeline
 
@@ -452,9 +517,37 @@ picks whichever exists.
 | trail models | — | ✓ | ✓ | ✓ | `WeaponTrail` |
 | barrage models | — | — | ✓ | ✓ | `BarrageEffect` |
 | alt-name search | — | — | ✓ | ✓ | `SpellOverrideName` |
+| vehicles / passenger anims | thin | ✓ | ✓ | ✓ | `Vehicle` + `VehicleSeat` present everywhere; WotLK's thinness is *content*, not schema — see below |
 
 Everything else — models, sounds, animations, mechanics, morphs, summons,
 shapeshifts, tints, transparency, freeze — works on all ten.
+
+### Vehicles by version
+
+Counts read from each pack's `meta.counts` after the format-23 rebuild:
+
+| Pack | format | spell→vehicle | seats | passenger anims | seat animkits |
+|---|:--:|--:|--:|--:|--:|
+| Vanilla 1.15.8 | 22 | — | — | — | — |
+| TBC 2.5.6 | 22 | — | — | — | — |
+| WotLK 3.4.3 | 23 | 4 | 6 | 24 | 0 |
+| Cataclysm 4.4.2 | 23 | 59 | 92 | 259 | 2 |
+| MoP 5.5.4 | 23 | 121 | 221 | 596 | 10 |
+| Legion 7.3.5 | 23 | 162 | 292 | 795 | 21 |
+| BfA 8.3.7 | 23 | 185 | 328 | 909 | 22 |
+| Shadowlands 9.2.7 | 23 | 233 | 384 | 1,138 | 44 |
+| Dragonflight 10.2.7 | 23 | 293 | 419 | 1,397 | 49 |
+| TWW 11.2.7 | 23 | 323 | 464 | 1,529 | 57 |
+
+**Vanilla and TBC were deliberately not rebuilt** — vehicles are a WotLK-era
+feature, so those two stay at format 22 and simply carry no vehicle sections.
+The runtime guards every section read, so mixed pack formats are fine.
+
+**WotLK's 4 is real, not a bug.** Aura 296 *is* `SET_VEHICLE_ID` on that build
+(verified via `read_enum_names`, so it is not enum drift) — WotLK Classic just
+has 7 `SET_VEHICLE_ID` rows in the whole of `SpellEffect`. The expansion that
+introduced vehicles overwhelmingly uses `CONTROL_VEHICLE` (aura 236, 213 rows
+there) instead, which is a different route we do not surface.
 
 ### Two things that look like bugs and are not
 
@@ -546,7 +639,7 @@ footing, not an affirmative license.
 |---|---|
 | **Models** | attach (kit→ModelAttach→EffectName), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect) |
 | **Sounds** | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID` — all → SoundKitEntry |
-| **Animations** | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), proc Type 7 (stance) |
-| **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon — see §3a–3g |
+| **Animations** | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), proc Type 7 (stance), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped) |
+| **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, vehicle — see §3a–3h |
 | **Mechanics** | `SpellEffect.Effect` + `.EffectAura` enums, names from WoWDBDefs |
 | **Name search** | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names |

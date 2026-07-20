@@ -199,6 +199,22 @@ interface SpellPack {
   /** Control id -> word (1 guardian, 2 pet, ...; 0 shows no word). */
   summonControlNames?: Record<number, string>;
 
+  /** Vehicles (SET_VEHICLE_ID auras): spell -> Vehicle.db2 id, and each
+   *  vehicle's seat count. 0-seat vehicles are dropped at build. */
+  spellVehicles?: { spellIds: number[]; vehicleIds: number[] };
+  vehicles?: { vehicleIds: number[]; seats: number[] };
+  /** One row per seat in SeatID_0..7 order: which vehicle it belongs to and
+   *  the M2 attachment point it sits at ("" when unset/unknown). */
+  vehicleSeats?: { vehicleIds: number[]; attachments: string[] };
+  /** The rider's animations while entering/seated/exiting (a vehicle seat's
+   *  passenger AnimationData). animIds index animNames. */
+  spellPassengerAnims?: { spellIds: number[]; animIds: number[] };
+  /** The vehicle's own animations — rendered as loose pills, not under
+   *  "passenger". Same id space. */
+  spellVehicleAnims?: { spellIds: number[]; animIds: number[] };
+  /** AnimKit ids reached through a vehicle seat; join the animkit groups. */
+  spellVehicleAnimKits?: { spellIds: number[]; animKitIds: number[] };
+
   /* --- mechanics --- */
 
   spellEffects: { spellIds: number[]; effects: number[] };
@@ -366,6 +382,19 @@ interface SpellData {
   summonPairSearchL: Map<string, string>;
   summonControlNames: Record<number, string>;
 
+  /** spell id -> [vehicle id]; also the fx filter row's presence test. */
+  spellVehicles: Map<number, number[]>;
+  vehicleSpells: Map<number, number[]>;
+  /** vehicle id -> one attachment name per seat, in SeatID_0..7 order. */
+  vehicleSeats: Map<number, string[]>;
+  /** vehicle id -> lowercased corpus ("vehicle" + its attachment names).
+   *  Seat COUNT is matched numerically instead, so it is not in here. */
+  vehicleSearchL: Map<number, string>;
+
+  /** spell id -> [animId] the rider plays; the "passenger" anim group. */
+  spellPassengerAnims: Map<number, number[]>;
+  passengerAnimSpells: Map<number, number[]>;
+
   spellEffects: Map<number, number[]>;
   effectSpells: Map<number, number[]>;
   effectNames: Map<number, string>;
@@ -482,6 +511,9 @@ interface EpsilookSearchApi {
   FIELDS: Record<string, SearchFieldSpec>;
   /** Target-type query words ("caster", "target", "area", "both"). */
   TARGET_WORDS: string[];
+  /** True when `text` is a numeric-comparison token ("4", ">2", "<=3")
+   *  satisfied by `n`. Shared by the fx column's numeric categories. */
+  matchNumeric(text: string, n: number): boolean;
 }
 
 /* ------------------------------------------------------------ globals */

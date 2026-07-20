@@ -36,6 +36,44 @@ window.EpsilookSearch = (() => {
     return true;
   }
 
+  /* --------------------------------------------------- numeric tokens */
+
+  /**
+   * Parse a numeric-comparison token — "4", ">2", "<5", ">=8", "<=3", "=1"
+   * — into a predicate (n) => boolean, or null when the token is not one.
+   *
+   * This is the single home for operator parsing: the fx column's numeric
+   * categories (today just vehicle seat count, the first of what will be
+   * several numeric pills) match through it, and app.js hit-highlighting
+   * calls matchNumeric so a pill lights up under exactly the query that
+   * selects it. A bare number means equality.
+   * @param {string} text
+   * @returns {((n: number) => boolean) | null}
+   */
+  function numericPredicate(text) {
+    const m = /^(<=|>=|<|>|=)?(\d+)$/.exec(text);
+    if (!m) return null;
+    const v = Number(m[2]);
+    switch (m[1]) {
+      case "<": return (n) => n < v;
+      case ">": return (n) => n > v;
+      case "<=": return (n) => n <= v;
+      case ">=": return (n) => n >= v;
+      default: return (n) => n === v; // "=" or a bare number
+    }
+  }
+
+  /**
+   * True when `text` is a numeric-comparison token satisfied by `n`.
+   * @param {string} text
+   * @param {number} n
+   * @returns {boolean}
+   */
+  function matchNumeric(text, n) {
+    const p = numericPredicate(text);
+    return p ? p(n) : false;
+  }
+
   /* ------------------------------------------------- target-type words */
 
   /**
@@ -241,6 +279,11 @@ window.EpsilookSearch = (() => {
       if (tokens.every((t) => "stance".includes(t.text) || nameL.includes(t.text))) {
         for (const s of data.animDirectSpells.get(a) || []) out.add(s);
       }
+      // passenger anims group under a "passenger" head, so that word joins
+      // their corpus the same way "stance" does
+      if (tokens.every((t) => "passenger".includes(t.text) || nameL.includes(t.text))) {
+        for (const s of data.passengerAnimSpells.get(a) || []) out.add(s);
+      }
     }
     return out;
   }
@@ -279,6 +322,17 @@ window.EpsilookSearch = (() => {
     scan(data.transpSearchL, data.transpSpells);
     if (textMatches("freeze", tokens)) for (const s of data.spellFreezes) out.add(s);
     if (textMatches("camo", tokens)) for (const s of data.spellCamos) out.add(s);
+    // vehicles: a text corpus ("vehicle" + the seat attachment names) PLUS a
+    // numeric axis for the seat count, which is a number rather than a word.
+    // Tokens AND, so fx:"vehicle >2" is a vehicle with more than two seats
+    // and fx:"vehicle base" one with a seat at the Base attachment. A token
+    // matching neither the corpus nor the count fails both tests, so an
+    // unrelated fx query (fx:chain) never reaches these spells.
+    for (const [v, corpus] of data.vehicleSearchL) {
+      const seats = (data.vehicleSeats.get(v) || []).length;
+      if (!tokens.every((t) => corpus.includes(t.text) || matchNumeric(t.text, seats))) continue;
+      for (const s of data.vehicleSpells.get(v) || []) out.add(s);
+    }
     scan(data.screenSearchL, data.screenSpells);
     scan(data.shapeshiftSearchL, data.shapeshiftSpells);
     scan(data.morphSearchL, data.morphSpells);
@@ -489,5 +543,5 @@ window.EpsilookSearch = (() => {
     return spellIds.sort((a, b) => (rank(a) - rank(b)) || (a - b));
   }
 
-  return { searchGroups, sortByRelevance, FIELDS, TARGET_WORDS };
+  return { searchGroups, sortByRelevance, FIELDS, TARGET_WORDS, matchNumeric };
 })();
