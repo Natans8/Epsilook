@@ -14,6 +14,13 @@
     "hash": "2cc9781863"
   },
   {
+    "id": "8.3.7.35662",
+    "label": "Battle for Azeroth 8.3.7",
+    "file": "data/8.3.7.35662/spelldata.json.gz",
+    "built": "2026-07-20",
+    "hash": "4d94c7bfa6"
+  },
+  {
     "id": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/spelldata.json.gz",
