@@ -826,7 +826,7 @@
   const TARGET_WORD_TITLES = {
     caster: "Plays on the caster",
     target: "Plays on the target",
-    area: "Plays at the target location (or where a missile lands)",
+    area: "Plays in the spell's area of effect (or where a missile lands)",
     both: "Plays on both the caster and the target",
   };
 
@@ -1945,10 +1945,14 @@
       title: () => "On the target only — never the caster",
     },
     {
+      // TargetType 3 is the spell's own effect area, wherever that lands —
+      // Flamestrike's chosen spot, Frost Nova around the caster, an
+      // explosion's impact point. It is NOT the target's location, so the
+      // wording must not claim one.
       bits: TARGET_AREA | TARGET_MISSILE_DEST, cls: "t-area", svg: T_AREA,
       title: (mask) => (mask & TARGET_AREA
-        ? "On the ground at the target"
-        : "On the ground where the missile lands"),
+        ? "In the spell's area of effect"
+        : "Where the missile lands"),
     },
   ];
 
