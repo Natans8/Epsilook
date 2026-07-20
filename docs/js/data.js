@@ -156,7 +156,7 @@ window.EpsilookData = (() => {
     const spellModels = new Map();
     /** @type {Map<number, number[]>} fid -> [spell id] */
     const modelSpells = new Map();
-    /** @type {Map<number, {fid: number, cat: number, targets: number}[]>} spell id -> [{fid, cat, targets}] */
+    /** @type {Map<number, {fid: number, cat: number, targets: number, src: number, dst: number}[]>} */
     const spellModelCats = new Map();
     /** @type {Map<number, Set<number>>} cat id -> Set(spell id) */
     const modelCatSpells = new Map();
@@ -164,13 +164,20 @@ window.EpsilookData = (() => {
     const modelCatFidSpells = new Map();
     /** @type {Record<number, string>} */
     const modelCatNames = pack.modelCatNames || {};
+    /** @type {Record<number, string>} raw M2 attachment id -> name */
+    const attachmentNames = pack.attachmentNames || {};
     {
-      const { spellIds, fids, cats, targets } = pack.spellModels;
+      const { spellIds, fids, cats, targets, srcAttach, dstAttach } = pack.spellModels;
       for (let i = 0; i < spellIds.length; i++) {
         pushTo(modelSpells, fids[i], spellIds[i]);
         if (!cats) { pushTo(spellModels, spellIds[i], fids[i]); continue; }
-        pushTo(spellModelCats, spellIds[i],
-          { fid: fids[i], cat: cats[i], targets: targets ? targets[i] : 0 });
+        pushTo(spellModelCats, spellIds[i], {
+          fid: fids[i], cat: cats[i], targets: targets ? targets[i] : 0,
+          // attachment points arrived in pack format 24; older packs have
+          // none, which renders as no attachment segment
+          src: srcAttach ? srcAttach[i] : -1,
+          dst: dstAttach ? dstAttach[i] : -1,
+        });
         let set = modelCatSpells.get(cats[i]);
         if (!set) modelCatSpells.set(cats[i], set = new Set());
         set.add(spellIds[i]);
@@ -297,12 +304,24 @@ window.EpsilookData = (() => {
     const fxTextures = new Map();
     /** @type {Map<number, string>} chainId -> search corpus */
     const fxSearchL = new Map();
+    /** @type {Map<number, {chain: number, src: number, dst: number}[]>} spell -> chain rows */
+    const spellChainRows = new Map();
     {
-      const { spellIds, chainIds } = pack.spellFx;
+      const { spellIds, chainIds, srcAttach, dstAttach } = pack.spellFx;
       for (let i = 0; i < spellIds.length; i++) {
-        pushTo(spellFx, spellIds[i], chainIds[i]);
         pushTo(fxSpells, chainIds[i], spellIds[i]);
+        // spellFx stays deduped chain ids for search/filters/export; the row
+        // list keeps the beam's attach pair, so one chain drawn by two beams
+        // with different attachments renders as two pills
+        const have = spellFx.get(spellIds[i]);
+        if (!have || !have.includes(chainIds[i])) pushTo(spellFx, spellIds[i], chainIds[i]);
+        pushTo(spellChainRows, spellIds[i], {
+          chain: chainIds[i],
+          src: srcAttach ? srcAttach[i] : -1,
+          dst: dstAttach ? dstAttach[i] : -1,
+        });
       }
+      for (const [c, arr] of fxSpells) fxSpells.set(c, [...new Set(arr)]);
       const fc = pack.fxChains;
       for (let i = 0; i < fc.ids.length; i++) {
         fxChains.set(fc.ids[i], { color: fc.colors[i], hue: fc.hues[i] });
@@ -748,7 +767,7 @@ window.EpsilookData = (() => {
       }
       for (const v of vehicleSpells.keys()) {
         const seats = vehicleSeats.get(v) || [];
-        vehicleSearchL.set(v, `vehicle ${seats.join(" ")}`.toLowerCase());
+        vehicleSearchL.set(v, `seat ${seats.join(" ")}`.toLowerCase());
       }
     }
 
@@ -796,12 +815,12 @@ window.EpsilookData = (() => {
       meta: pack.meta,
       ids: sp.ids, names: sp.names, subtexts: sp.subtexts, icons,
       namesL, spellIndex, files,
-      spellModels, modelSpells, modelFids,
+      spellModels, modelSpells, modelFids, attachmentNames,
       spellModelCats, modelCatSpells, modelCatFidSpells, modelCatNames,
       spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles,
       spellAnimKits, animKitSpells,
       animNames, animNamesL, animKitAnims, animAnimKits,
-      spellFx, fxSpells, fxChains, fxTextures, fxSearchL,
+      spellFx, spellChainRows, fxSpells, fxChains, fxTextures, fxSearchL,
       spellDissolves, dissolveSpells, dissolveDurations, dissolveTextures, dissolveSearchL,
       spellGlows, glowSpells, glowColors, glowAlphas, glowSearchL,
       spellShadowies, shadowySpells, shadowyColors, shadowySearchL,

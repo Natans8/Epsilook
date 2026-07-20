@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit, animkit or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260720i">
+  <link rel="stylesheet" href="css/app.css?v=20260720j">
 </head>
 <body>
 
@@ -82,10 +82,10 @@
               morphs by NPC name, model name, creature ID or display ID (<code>fx:"morph sheep"</code>);
               summons by NPC name, creature ID or control type (<code>fx:"summon argi"</code>,
               <code>fx:"summon guardian"</code>);
-              vehicles by seat attachment point or seat count — <code>fx:vehicle</code> finds
+              vehicle seats by attachment point or seat count — <code>fx:seat</code> finds
               every spell that turns the caster into a rideable vehicle,
-              <code>fx:"vehicle base"</code> scopes to a seat at that attachment point, and
-              <code>fx:"vehicle &gt;2"</code> to vehicles with more than two seats
+              <code>fx:"seat base"</code> scopes to a seat at that attachment point, and
+              <code>fx:"seat &gt;2"</code> to vehicles with more than two seats
               (<code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code> and a
               bare number all work).</li>
             <li><code>model:</code> also matches the usage-category words shown in the Models column —
@@ -102,6 +102,17 @@
               Category words autocomplete while typing inside an
               <code>fx:</code>/<code>model:</code>/<code>anim:</code> tag, and a tag naming a
               category exactly floats that category's spells to the top of the results.</li>
+            <li><strong>Attachment points</strong> say <em>where on the model</em> something plays —
+              <code>Chest</code>, <code>SpellRightHand</code>, <code>Base</code>. Missiles and beams
+              travel between two, shown as <code>SpellRightHand → Chest</code>. Search them as
+              words inside <code>model:</code> or <code>fx:</code> —
+              <code>model:base</code>, <code>fx:"chain chest"</code> — and note the same model at
+              two different points is shown as two pills.</li>
+            <li><strong>Counting</strong>: a field tag holding only a comparison counts that
+              column's entries — <code>model:&gt;4</code> finds spells with more than four models,
+              <code>anim:=3</code> exactly three animations, <code>sound:&gt;=2</code> two or more
+              sounds. The operator is required: a bare <code>model:2</code> still searches file
+              names for "2".</li>
             <li><strong>Target-type icons</strong> say <em>who</em> a model, sound, animation or
               effect plays on. Every marked row shows one icon per type, so a row that plays on
               two shows two icons:
@@ -290,13 +301,13 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260720i"></script>
-<script src="js/data.js?v=20260720i"></script>
+<script src="js/config.js?v=20260720j"></script>
+<script src="js/data.js?v=20260720j"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260720i"></script>
-<script src="js/js-blp.js?v=20260720i"></script>
-<script src="js/search.js?v=20260720i"></script>
-<script src="js/app.js?v=20260720i"></script>
+<script src="js/bufo.js?v=20260720j"></script>
+<script src="js/js-blp.js?v=20260720j"></script>
+<script src="js/search.js?v=20260720j"></script>
+<script src="js/app.js?v=20260720j"></script>
 </body>
 </html>

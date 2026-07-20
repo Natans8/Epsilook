@@ -333,7 +333,49 @@ The pack tags each texture with its role. The wiki's `rrggbbxx` claim for
 `Param_0` is WotLK-era and wrong for modern rows — ours reads `aarrggbb`,
 settled by name semantics.
 
-### 3h. Vehicle seat payload
+### 3h. Attachment points — where on the model something plays
+
+```mermaid
+flowchart LR
+  MA["SpellVisualKitModelAttach.AttachmentID"] --> AN["M2 attachment name"]
+  SV["SpellVisual.MissileAttachment<br/>+ MissileDestinationAttachment"] --> AN
+  BE["BeamEffect.SourceAttachID<br/>+ DestAttachID"] --> AN
+  AN --> P["pill segment — 'Chest' or 'SpellRightHand → Chest'"]
+```
+
+Three routes carry an attachment, and **all three are RAW M2 attachment ids**
+(the `M2_ATTACHMENT_NAMES` table) — only `VehicleSeat` is indexed, see §3i.
+The id is part of the row key, so the same model at two points stays two rows
+and renders as two pills: on 9.2.7, 44,906 (spell, fid, category) groups split
+this way, and the split is what makes a caster/target difference visible
+instead of silently merged.
+
+**Single-point vs travelling is a real distinction, not a formatting choice.**
+Attached, ground, trail and barrage models sit at ONE point and render the
+bare name; missiles and beams travel and render `Source → Dest`. The two are
+indistinguishable in the data (both look like "src set, dst unset"), so the
+renderer is told explicitly — `TRAVELLING_MODEL_CATS` in app.js. A travelling
+row that knows only one end reads `from X` / `to Y`; it must never render a
+dangling arrow.
+
+Two traps:
+
+- **`SpellVisualKitModelAttach.LowDefModelAttachID` is a FileDataID**, not an
+  attachment — max 430259 on 9.2.7, despite the name.
+- **Missile attachments are taken from `SpellVisual`, not
+  `SpellVisualMissile`.** The missile route is per-visual (a whole set is
+  unioned into one bucket) and that is also where the data lives: 105.6k rows
+  carry a destination there versus 14.9k on the missile table. `spell_visual`
+  in `TDB_TABLES` must overlay both columns — a hotfix row replaces the wago
+  row wholesale, so omitting them would silently blank the attachments.
+
+`SpellChainEffects` itself has **no** attachment column (its `Joint*` fields
+are geometry); beams attach through `BeamEffect`, which is why chains only
+carry attach points on builds that have that table. Dissolve (`AttachID`, 307
+rows), shadowy (`AttachPos`, 161) and barrage (`AttachmentPoint`, 7) also
+carry one and are deliberately not wired up yet.
+
+### 3i. Vehicle seat payload
 
 ```mermaid
 flowchart LR
@@ -368,9 +410,9 @@ Two consequences worth knowing:
   because artists reuse generic attachment slots as seat anchors. **That is the
   data, not a decode error** — the pill tooltip says so explicitly.
 
-**Do not reuse this decode for model attach points.**
-`SpellVisualKitModelAttach.AttachmentID` is a *raw* M2 attachment id — it spans
--1..57 across 55 distinct values on 9.2.7, the direct-id signature, versus
+**Do not reuse this decode for the other attachment columns** (§3h): they are
+*raw* M2 attachment ids. `SpellVisualKitModelAttach.AttachmentID` spans -1..57
+across 55 distinct values on 9.2.7 — the direct-id signature — versus
 `VehicleSeat.AttachmentID`'s dense 0..27.
 
 ---
@@ -423,21 +465,43 @@ mostly "the table does not exist yet." The five Classic re-release clients
 | 1.15.8.67156 | Vanilla Classic | 31,248 | 0.7 MB | — | 6 |
 | 2.5.6.68775 | TBC Classic | 28,650 | 0.7 MB | — | 11 |
 | 3.4.3.58936 | WotLK Classic | 49,394 | 1.2 MB | TDB335.25101 | 10 |
-| 4.4.2.60895 | Cataclysm Classic | 71,227 | 1.7 MB | — | 10 |
-| 5.5.4.68716 | Mists of Pandaria Classic | 98,129 | 2.4 MB | — | 6 |
-| 7.3.5.26972 | Legion | 179,382 | 4.6 MB | TDB735.00 | 4 |
-| 8.3.7.35662 | Battle for Azeroth | 227,237 | 5.9 MB | TDB837.20101 | 1 |
-| 9.2.7.45745 | Shadowlands *(default)* | 276,332 | 7.2 MB | TDB927.22111 | 0 |
-| 10.2.7.55664 | Dragonflight | 327,092 | 8.7 MB | TDB1027.24051 | 0 |
-| 11.2.7.65299 | The War Within | 375,895 | 10.2 MB | TDB1127.26011 | 0 |
+| 4.4.2.60895 | Cataclysm Classic | 71,227 | 1.8 MB | — | 10 |
+| 5.5.4.68716 | Mists of Pandaria Classic | 98,129 | 2.5 MB | — | 6 |
+| 7.3.5.26972 | Legion | 179,382 | 4.7 MB | TDB735.00 | 4 |
+| 8.3.7.35662 | Battle for Azeroth | 227,237 | 6.1 MB | TDB837.20101 | 1 |
+| 9.2.7.45745 | Shadowlands *(default)* | 276,332 | 7.4 MB | TDB927.22111 | 0 |
+| 10.2.7.55664 | Dragonflight | 327,092 | 8.9 MB | TDB1027.24051 | 0 |
+| 11.2.7.65299 | The War Within | 375,895 | 10.4 MB | TDB1127.26011 | 0 |
 
-**Eight are at pack format 23** (WotLK 3.4.3 and everything after it); Vanilla
+**Eight are at pack format 24** (WotLK 3.4.3 and everything after it); Vanilla
 1.15.8 and TBC 2.5.6 stay at format 22, deliberately not rebuilt for the
 vehicle work since vehicles are a WotLK-era feature. Sizes grew ~11% at format
-22 — that is the target masks' cost. Format 23 added the vehicle sections at
-essentially no size cost (they are small, and two packs even round down a
-tenth of a MB). `Vehicle` and `VehicleSeat` turned out to be present on every
-rebuilt version, so format 23 added **no** new absent-table drift.
+22 — the target masks' cost. Format 23 (vehicles) cost essentially nothing.
+Format 24 (attachment points) is the visible one: it grew model rows ~18%,
+because the attachment is part of the row key and the same model at two points
+is now two rows. Neither format added any new absent-table drift — `Vehicle`,
+`VehicleSeat` and every attachment column exist on all eight rebuilt versions.
+
+### Attachment coverage by version
+
+Read from each pack after the format-24 rebuild:
+
+| Pack | model rows | with an attach point | missiles w/ both ends | beams w/ both ends |
+|---|--:|--:|--:|--:|
+| Vanilla 1.15.8 (fmt 22) | 31,651 | — | — | — |
+| TBC 2.5.6 (fmt 22) | 35,006 | — | — | — |
+| WotLK 3.4.3 | 74,693 | 68,565 | 718 | 0 |
+| Cataclysm 4.4.2 | 94,285 | 84,859 | 1,412 | 0 |
+| MoP 5.5.4 | 126,079 | 110,706 | 2,289 | 1 |
+| Legion 7.3.5 | 214,432 | 200,466 | 3,563 | 537 |
+| BfA 8.3.7 | 264,466 | 198,655 | 3,592 | 2,448 |
+| Shadowlands 9.2.7 | 314,064 | 226,810 | 3,753 | 5,273 |
+| Dragonflight 10.2.7 | 368,230 | 252,382 | 3,977 | 7,237 |
+| TWW 11.2.7 | 418,432 | 278,576 | 4,085 | 9,013 |
+
+Beam attach points need `BeamEffect`, which WotLK and Cataclysm lack — hence
+the zeroes, and MoP's single row. Attached-model coverage is high everywhere
+(~85-92% of rows outside BfA).
 
 ### The five Classic re-release clients don't sit on the timeline
 
@@ -637,9 +701,9 @@ footing, not an affirmative license.
 
 | Column | Routes feeding it |
 |---|---|
-| **Models** | attach (kit→ModelAttach→EffectName), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect) |
+| **Models** | attach (kit→ModelAttach→EffectName), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect); every row also carries its M2 attachment point (§3h) |
 | **Sounds** | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID` — all → SoundKitEntry |
 | **Animations** | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), proc Type 7 (stance), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped) |
-| **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, vehicle — see §3a–3h |
+| **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, seat — see §3a–3i |
 | **Mechanics** | `SpellEffect.Effect` + `.EffectAura` enums, names from WoWDBDefs |
 | **Name search** | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names |

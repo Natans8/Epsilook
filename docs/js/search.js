@@ -74,6 +74,88 @@ window.EpsilookSearch = (() => {
     return p ? p(n) : false;
   }
 
+  /* ------------------------------------------------------ count queries */
+
+  /**
+   * How many items a column renders for one spell. Adding a countable column
+   * is one entry here — nothing else branches on the field.
+   * @type {Record<string, (data: SpellData, spellId: number) => number>}
+   */
+  const COUNT_SOURCES = {
+    model: (d, s) => (d.spellModelCats.size
+      ? (d.spellModelCats.get(s) || []).length
+      : (d.spellModels.get(s) || []).length),
+    sound: (d, s) => (d.spellSounds.get(s) || []).length,
+    // every animation pill: the loose ones, those inside each AnimKit, and
+    // the headless "stance" / "passenger" groups
+    anim: (d, s) => (d.spellVisualAnims.get(s) || []).length
+      + (d.spellAnims.get(s) || []).length
+      + (d.spellPassengerAnims.get(s) || []).length
+      + (d.spellAnimKits.get(s) || [])
+        .reduce((n, k) => n + (d.animKitAnims.get(k) || []).length, 0),
+  };
+
+  /**
+   * A count query is a field chip holding exactly ONE token that is a numeric
+   * comparison WITH an operator — `model:>4`, `anim:=3`, `sound:>=2`.
+   *
+   * Both halves of that rule carry weight. The operator is required because a
+   * bare number already means a substring match (`model:2` finds
+   * `cfx_fire_02.m2`) and that must keep working. Being alone in the chip is
+   * required because `fx:"seat >2"` already reads its numeric as a seat
+   * count — a second token means the field's own parser owns it.
+   *
+   * Returns null when the group is not a count query, so the caller falls
+   * through to the normal field search.
+   * @param {QueryToken[]} tokens
+   * @param {string} field
+   * @param {SpellData} data
+   * @returns {Set<number> | null}
+   */
+  function spellsByCount(tokens, field, data) {
+    const counter = COUNT_SOURCES[field];
+    if (!counter || tokens.length !== 1) return null;
+    const text = tokens[0].text;
+    if (!/^(<=|>=|<|>|=)\d+$/.test(text)) return null;
+    const pred = numericPredicate(text);
+    if (!pred) return null;
+    const out = new Set();
+    for (const s of data.ids) {
+      if (pred(counter(data, s))) out.add(s);
+    }
+    return out;
+  }
+
+  /* --------------------------------------------------- attachment words */
+
+  /**
+   * The lowercased attachment names of one row, as a single haystack.
+   * @param {number} src
+   * @param {number} dst
+   * @param {SpellData} data
+   * @returns {string}
+   */
+  function attachmentWords(src, dst, data) {
+    const a = src >= 0 ? (data.attachmentNames[src] || "") : "";
+    const b = dst >= 0 ? (data.attachmentNames[dst] || "") : "";
+    return (a && b ? `${a} ${b}` : a || b).toLowerCase();
+  }
+
+  /**
+   * True when `text` could name an attachment point — used to decide whether
+   * a query needs the per-row walk. Checked against the pack's own name table
+   * (~54 entries), so it costs nothing worth caching.
+   * @param {string} text
+   * @param {SpellData} data
+   * @returns {boolean}
+   */
+  function isAttachmentWord(text, data) {
+    for (const id in data.attachmentNames) {
+      if (data.attachmentNames[id].toLowerCase().includes(text)) return true;
+    }
+    return false;
+  }
+
   /* ------------------------------------------------- target-type words */
 
   /**
@@ -158,16 +240,19 @@ window.EpsilookSearch = (() => {
     }
     const out = new Set();
     const { text, tests } = splitTargetTokens(tokens);
-    if (tests.length) {
-      // a target word makes the query per-row, so walk the rows themselves
-      // (the (cat, fid) index below has no mask — it is shared across spells)
+    // Attachment points live on the ROW, and so does the target mask — the
+    // (cat, fid) index below has neither, being shared across spells. Either
+    // one in the query therefore forces the row walk.
+    if (tests.length || text.some((t) => isAttachmentWord(t.text, data))) {
       for (const [s, entries] of data.spellModelCats) {
         for (const e of entries) {
-          if (!maskMatches(tests, e.targets)) continue;
+          if (tests.length && !maskMatches(tests, e.targets)) continue;
           const catL = data.modelCatNames[e.cat] || "";
           const file = data.files.get(e.fid);
           const searchL = file ? file.searchL : "";
-          if (text.every((t) => catL.includes(t.text) || searchL.includes(t.text))) {
+          const attachL = attachmentWords(e.src, e.dst, data);
+          if (text.every((t) => catL.includes(t.text) || searchL.includes(t.text)
+              || attachL.includes(t.text))) {
             out.add(s);
             break;
           }
@@ -313,6 +398,17 @@ window.EpsilookSearch = (() => {
       }
     };
     scan(data.fxSearchL, data.fxSpells);
+    // A beam's attach points sit on the (spell, chain) ROW, not on the chain,
+    // so they can't live in fxSearchL — this walks the rows instead, and only
+    // when a token could actually name an attachment point.
+    if (tokens.some((t) => isAttachmentWord(t.text, data))) {
+      for (const [s, rows] of data.spellChainRows) {
+        for (const r of rows) {
+          const corpus = `${data.fxSearchL.get(r.chain) || ""} ${attachmentWords(r.src, r.dst, data)}`;
+          if (textMatches(corpus, tokens)) { out.add(s); break; }
+        }
+      }
+    }
     scan(data.dissolveSearchL, data.dissolveSpells);
     scan(data.glowSearchL, data.glowSpells);
     scan(data.shadowySearchL, data.shadowySpells);
@@ -500,7 +596,8 @@ window.EpsilookSearch = (() => {
       if (!g.tokens.length) continue;
       if (g.not) { negatives.push(g); continue; }
       const field = FIELDS[g.field] ? g.field : "all";
-      const set = FIELDS[field].run(g.tokens, data, disabledFields);
+      const set = spellsByCount(g.tokens, field, data)
+        || FIELDS[field].run(g.tokens, data, disabledFields);
       if (FIELDS[field].orGroups) {
         const u = orUnions.get(field);
         if (u) { for (const v of set) u.add(v); } else orUnions.set(field, set);
@@ -517,7 +614,9 @@ window.EpsilookSearch = (() => {
     for (const g of negatives) {
       if (result.size === 0) break;
       const field = FIELDS[g.field] ? g.field : "all";
-      for (const id of FIELDS[field].run(g.tokens, data, disabledFields)) result.delete(id);
+      const set = spellsByCount(g.tokens, field, data)
+        || FIELDS[field].run(g.tokens, data, disabledFields);
+      for (const id of set) result.delete(id);
     }
 
     return { spellIds: [...result], ms: performance.now() - t0 };
