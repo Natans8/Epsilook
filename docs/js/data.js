@@ -123,6 +123,32 @@ window.EpsilookData = (() => {
       if (arr) arr.push(value); else map.set(key, [value]);
     };
 
+    /**
+     * Index one section's per-row target masks as spell -> item -> mask.
+     *
+     * Every kit-derived section carries a parallel "targets" array since pack
+     * format 22 (who the content plays on — see TARGET_BITS in build_data.py).
+     * Sections whose rows are plain ids all index the same way, so adding the
+     * icons to another column is one more call here. A pack without the array
+     * yields an empty map, which reads app-side as "no icons".
+     * @param {any} section pack section with {spellIds, targets} + an id array
+     * @param {string} idKey name of that section's id array
+     * @returns {Map<number, Map<number, number>>}
+     */
+    const maskIndex = (section, idKey) => {
+      /** @type {Map<number, Map<number, number>>} */
+      const out = new Map();
+      if (!section || !section.targets) return out;
+      const { spellIds, targets } = section;
+      const ids = section[idKey];
+      for (let i = 0; i < spellIds.length; i++) {
+        let m = out.get(spellIds[i]);
+        if (!m) out.set(spellIds[i], m = new Map());
+        m.set(ids[i], (m.get(ids[i]) || 0) | targets[i]);
+      }
+      return out;
+    };
+
     // models — each (spell, fid) row carries a usage category
     // (attach/missile/area/trail/barrage) since pack format 15; a stale
     // cached pack has no cats and renders the old flat list
@@ -130,7 +156,7 @@ window.EpsilookData = (() => {
     const spellModels = new Map();
     /** @type {Map<number, number[]>} fid -> [spell id] */
     const modelSpells = new Map();
-    /** @type {Map<number, {fid: number, cat: number}[]>} spell id -> [{fid, cat}] */
+    /** @type {Map<number, {fid: number, cat: number, targets: number}[]>} spell id -> [{fid, cat, targets}] */
     const spellModelCats = new Map();
     /** @type {Map<number, Set<number>>} cat id -> Set(spell id) */
     const modelCatSpells = new Map();
@@ -139,11 +165,12 @@ window.EpsilookData = (() => {
     /** @type {Record<number, string>} */
     const modelCatNames = pack.modelCatNames || {};
     {
-      const { spellIds, fids, cats } = pack.spellModels;
+      const { spellIds, fids, cats, targets } = pack.spellModels;
       for (let i = 0; i < spellIds.length; i++) {
         pushTo(modelSpells, fids[i], spellIds[i]);
         if (!cats) { pushTo(spellModels, spellIds[i], fids[i]); continue; }
-        pushTo(spellModelCats, spellIds[i], { fid: fids[i], cat: cats[i] });
+        pushTo(spellModelCats, spellIds[i],
+          { fid: fids[i], cat: cats[i], targets: targets ? targets[i] : 0 });
         let set = modelCatSpells.get(cats[i]);
         if (!set) modelCatSpells.set(cats[i], set = new Set());
         set.add(spellIds[i]);
@@ -161,7 +188,7 @@ window.EpsilookData = (() => {
     }
 
     // sounds
-    /** @type {Map<number, {soundKitId: number, fid: number}[]>} spell id -> [{soundKitId, fid}] */
+    /** @type {Map<number, {soundKitId: number, fid: number, targets: number}[]>} spell id -> [{soundKitId, fid, targets}] */
     const spellSounds = new Map();
     /** @type {Map<number, number[]>} fid -> [spell id] */
     const soundSpells = new Map();
@@ -170,10 +197,10 @@ window.EpsilookData = (() => {
     /** @type {Map<number, Set<number>>} soundKitId -> Set(fid) */
     const soundKitFiles = new Map();
     {
-      const { spellIds, soundKitIds, fids } = pack.spellSounds;
+      const { spellIds, soundKitIds, fids, targets } = pack.spellSounds;
       for (let i = 0; i < spellIds.length; i++) {
         const s = spellIds[i], k = soundKitIds[i], f = fids[i];
-        pushTo(spellSounds, s, { soundKitId: k, fid: f });
+        pushTo(spellSounds, s, { soundKitId: k, fid: f, targets: targets ? targets[i] : 0 });
         pushTo(soundSpells, f, s);
         pushTo(soundKitSpells, k, s);
         let set = soundKitFiles.get(k);
@@ -182,16 +209,30 @@ window.EpsilookData = (() => {
       }
       // soundKitSpells values contain duplicates (one per kit file) — dedupe
       for (const [k, arr] of soundKitSpells) soundKitSpells.set(k, [...new Set(arr)]);
+      // dedupe (kit, file) per spell, unioning the target masks of the rows
+      // that collapse together rather than keeping only the first one's
       for (const [s, arr] of spellSounds) {
-        const seen = new Set();
-        spellSounds.set(s, arr.filter((e) => {
+        const seen = new Map();
+        for (const e of arr) {
           const key = e.soundKitId + ":" + e.fid;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        }));
+          const kept = seen.get(key);
+          if (kept) kept.targets |= e.targets; else seen.set(key, e);
+        }
+        spellSounds.set(s, [...seen.values()]);
       }
     }
+
+    // target masks for the id-keyed sections — who each row's content plays
+    // on (pack format 22; empty for older packs, which renders as no icons)
+    const animKitTargets = maskIndex(pack.spellAnimKits, "animKitIds");
+    const visualAnimTargets = maskIndex(pack.spellVisualAnims, "animIds");
+    const fxTargets = maskIndex(pack.spellFx, "chainIds");
+    const dissolveTargets = maskIndex(pack.spellDissolves, "dissolveIds");
+    const glowTargets = maskIndex(pack.spellGlows, "glowIds");
+    const shadowyTargets = maskIndex(pack.spellShadowies, "shadowyIds");
+    const ghostMatTargets = maskIndex(pack.spellGhostMats, "ghostIds");
+    /** @type {Record<number, string>} mask bit -> search word */
+    const targetNames = pack.targetNames || {};
 
     // animkits
     /** @type {Map<number, number[]>} spell id -> [animKitId] */
@@ -700,6 +741,8 @@ window.EpsilookData = (() => {
       spellScreens, screenSpells, screenNames, screenColors, screenTextures, screenSearchL,
       spellAnims, animDirectSpells,
       spellVisualAnims, visualAnimSpells,
+      targetNames, animKitTargets, visualAnimTargets, fxTargets,
+      dissolveTargets, glowTargets, shadowyTargets, ghostMatTargets,
       spellMorphs, morphSpells, morphNames, morphDisplays, morphSearchL,
       spellShapeshifts, shapeshiftSpells, shapeshiftNames, shapeshiftDisplays,
       shapeshiftSearchL,

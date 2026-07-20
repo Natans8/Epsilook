@@ -820,15 +820,31 @@
    * @returns {{words: string[], titles: Record<string, string>} | null}
    *   Null = the field has no category words.
    */
+  /* Target-type words autocomplete in every column that shows the icons —
+   * they read as categories to the user even though they are mask bit tests
+   * rather than corpus words (see TARGET_TESTS in search.js). */
+  const TARGET_WORD_TITLES = {
+    caster: "Plays on the caster",
+    target: "Plays on the target",
+    area: "Plays at the target location (or where a missile lands)",
+    both: "Plays on both the caster and the target",
+  };
+
   function fieldCategories(field) {
     const d = state.data;
+    /** Category words plus the target words every marked column shares. */
+    const withTargets = (words, titles) => ({
+      words: [...words, ...Search.TARGET_WORDS],
+      titles: { ...titles, ...TARGET_WORD_TITLES },
+    });
     switch (field) {
-      case "fx": return { words: Object.keys(FX_HEAD_TITLES), titles: FX_HEAD_TITLES };
-      case "model": return {
-        words: Object.values((d && d.modelCatNames) || {}),
-        titles: MODEL_CAT_TITLES,
-      };
-      case "anim": return { words: Object.keys(ANIM_CAT_TITLES), titles: ANIM_CAT_TITLES };
+      case "fx": return withTargets(Object.keys(FX_HEAD_TITLES), FX_HEAD_TITLES);
+      case "model": return withTargets(
+        // "" is the attach category: loose pills, no word to search by
+        Object.values((d && d.modelCatNames) || {}).filter(Boolean),
+        MODEL_CAT_TITLES);
+      case "anim": return withTargets(Object.keys(ANIM_CAT_TITLES), ANIM_CAT_TITLES);
+      case "sound": return withTargets([], {});
       default: return null;
     }
   }
@@ -1020,6 +1036,13 @@
         } else if (g.field === "anim" && t.text === "stance") {
           tests.push((id) => d.spellAnims.has(id));
         }
+        // a target word floats spells that really carry a row of that type
+        // above the ones that merely have it in a file name
+        // (beamtarget_onground). Resolved once via the field's own matcher.
+        if (TARGET_WORD_TITLES[t.text] && Search.FIELDS[g.field]) {
+          const matches = Search.FIELDS[g.field].run([{ text: t.text }], d, new Set());
+          tests.push((id) => matches.has(id));
+        }
       }
     }
     if (!tests.length) return null;
@@ -1158,7 +1181,7 @@
     // the animations they play, then direct stand/walk anims ("stance")
     tr.appendChild(animationsCell(d.spellAnimKits.get(spellId) || [],
       d.spellAnims.get(spellId) || [],
-      d.spellVisualAnims.get(spellId) || []));
+      d.spellVisualAnims.get(spellId) || [], spellId));
 
     // Effects — visual FX (beams, morphs, summons), grouped by category
     tr.appendChild(fxCell(spellId));
@@ -1290,23 +1313,33 @@
       return tagCell("c-models", modelFids.map((fid) => modelTag(fid)));
     }
     const td = el("td", "c-models");
-    const byCat = new Map(); // cat id -> [fid]
+    const byCat = new Map(); // cat id -> [{fid, targets}]
     for (const e of entries) {
       const arr = byCat.get(e.cat);
-      if (arr) arr.push(e.fid); else byCat.set(e.cat, [e.fid]);
+      if (arr) arr.push(e); else byCat.set(e.cat, [e]);
     }
-    const cats = [...byCat.keys()].sort((a, b) => a - b).map((c) => {
-      const name = d.modelCatNames[c] || `cat ${c}`;
-      const fids = byCat.get(c);
-      return {
-        name, fids,
-        hit: fids.some((fid) => modelFileIsHit(d.files.get(fid), name)),
-      };
-    });
+    // a category with no word (attach models) has nothing a group head could
+    // usefully say — which unit the model plays on is the target icon's job
+    // now — so those render as loose pills, like the loose animation pills
+    const loose = [];
+    const cats = [];
+    for (const c of [...byCat.keys()].sort((a, b) => a - b)) {
+      const name = d.modelCatNames[c] || "";
+      const items = byCat.get(c);
+      if (!name) { loose.push(...items); continue; }
+      cats.push({
+        name,
+        items,
+        hit: items.some((e) => modelFileIsHit(d.files.get(e.fid), name)),
+      });
+    }
+    for (const e of hitsFirst(loose, (x) => modelFileIsHit(d.files.get(x.fid), ""))) {
+      td.appendChild(modelTag(e.fid, "", e.targets));
+    }
     buildKitGroups(td, hitsFirst(cats, (c) => c.hit), {
       headerTag: (c) => modelCatHeadTag(c.name, c.hit),
-      itemsOf: (c) => hitsFirst(c.fids, (fid) => modelFileIsHit(d.files.get(fid), c.name)),
-      itemTag: (fid, c) => modelTag(fid, c.name),
+      itemsOf: (c) => hitsFirst(c.items, (e) => modelFileIsHit(d.files.get(e.fid), c.name)),
+      itemTag: (e, c) => modelTag(e.fid, c.name, e.targets),
       itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
       groupNoun: "category",
       moreInHead: true,
@@ -1326,9 +1359,11 @@
     const d = state.data;
 
     const byKit = new Map(); // soundKitId -> [fid]
+    const kitMask = new Map(); // soundKitId -> union of its rows' target masks
     for (const e of soundEntries) {
       const arr = byKit.get(e.soundKitId);
       if (arr) arr.push(e.fid); else byKit.set(e.soundKitId, [e.fid]);
+      kitMask.set(e.soundKitId, (kitMask.get(e.soundKitId) || 0) | (e.targets || 0));
     }
 
     const kitHasHit = (kitId) =>
@@ -1337,7 +1372,9 @@
     const kitIds = hitsFirst([...byKit.keys()].sort((a, b) => a - b), kitHasHit);
 
     buildKitGroups(td, kitIds, {
-      headerTag: (kitId) => kitTag(kitId, "soundkit"),
+      // the icon rides the kit head: every file in a kit plays together, so
+      // the whole kit shares one target type
+      headerTag: (kitId) => addTargetIcons(kitTag(kitId, "soundkit"), kitMask.get(kitId)),
       itemsOf: (kitId) => hitsFirst(byKit.get(kitId), (fid) => fileIsHit(d.files.get(fid), "sound")),
       itemTag: (fid) => soundTag(fid),
       itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
@@ -1354,7 +1391,7 @@
    * group with. Loose pills never collapse (99%+ of spells have ≤3). */
   const STANCE_GROUP = -1; // sentinel kit id for the direct-anim group
 
-  function animationsCell(animKitIds, stanceAnimIds, looseAnimIds) {
+  function animationsCell(animKitIds, stanceAnimIds, looseAnimIds, spellId) {
     const td = el("td", "c-animkits");
     if (animKitIds.length === 0 && stanceAnimIds.length === 0
         && looseAnimIds.length === 0) {
@@ -1363,9 +1400,10 @@
       return td;
     }
     const d = state.data;
+    const looseMasks = d.visualAnimTargets.get(spellId);
     for (const a of hitsFirst(looseAnimIds.slice().sort((x, y) => x - y),
       (x) => animIsHit(x))) {
-      td.appendChild(animTag(a));
+      td.appendChild(animTag(a, "", looseMasks ? looseMasks.get(a) || 0 : 0));
     }
     const animsOf = (kitId) =>
       kitId === STANCE_GROUP ? stanceAnimIds : (d.animKitAnims.get(kitId) || []);
@@ -1379,8 +1417,12 @@
     const kitIds = hitsFirst(groups, kitHasHit);
 
     buildKitGroups(td, kitIds, {
+      // stance overrides are ~96% caster — a constant, so no icon there
+      // (documented in the help dialog instead); animkits carry theirs
       headerTag: (kitId) => kitId === STANCE_GROUP
-        ? stanceHeadTag(kitHasHit(kitId)) : kitTag(kitId, "animkit"),
+        ? stanceHeadTag(kitHasHit(kitId))
+        : addTargetIcons(kitTag(kitId, "animkit"),
+          maskOf(d.animKitTargets, spellId, [kitId])),
       itemsOf: (kitId) => hitsFirst(animsOf(kitId).slice().sort((a, b) => a - b),
         (a) => animIsHit(a, wordOf(kitId))),
       itemTag: (animId, kitId) => animTag(animId, wordOf(kitId)),
@@ -1510,87 +1552,116 @@
     }
 
     const cats = [];
+    /* Where a category's target icons go. One icon on the HEAD when every
+     * row of the category agrees — the common case, and far less noisy than
+     * repeating it on each pill. When they disagree, the head would have to
+     * show a union that no individual row actually has (measured on 9.2.7:
+     * 44 chain spells and 51 glow spells hit exactly that), so the icons
+     * drop to the pills, which are the things that really carry a type. */
+    const targetGroup = (masks) => {
+      const first = masks.length ? masks[0] : 0;
+      return { uniform: masks.every((m) => m === first), mask: first };
+    };
+
     if (chainIds.length) {
-      // one entry per distinct (texture, tint); untextured chains still show
-      const entries = [];
-      const seen = new Set();
+      // one entry per distinct (texture, tint); untextured chains still show.
+      // Chains collapsing into one pill union their masks onto it.
+      const chainMask = (c) => maskOf(d.fxTargets, spellId, [c]);
+      const byKey = new Map();
       for (const c of chainIds.slice().sort((a, b) => a - b)) {
         const color = (d.fxChains.get(c) || {}).color ?? 0xffffff;
         const fids = d.fxTextures.get(c) || [0];
         for (const fid of fids) {
           const key = fid + ":" + color;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          entries.push({ chainId: c, fid, color });
+          const prev = byKey.get(key);
+          if (prev) { prev.mask |= chainMask(c); continue; }
+          byKey.set(key, { chainId: c, fid, color, mask: chainMask(c) });
         }
       }
+      const grp = targetGroup(chainIds.map(chainMask));
       cats.push({
         name: "chain",
         hit: chainIds.some((c) => fxChainIsHit(c)),
-        items: hitsFirst(entries, (e) => fxChainIsHit(e.chainId)).map((e) => () => fxTag(e)),
+        mask: grp.uniform ? grp.mask : 0,
+        items: hitsFirst([...byKey.values()], (e) => fxChainIsHit(e.chainId))
+          .map((e) => () => fxTag(e, grp.uniform ? 0 : e.mask)),
       });
     }
     if (dissolveIds.length) {
       // one pill per distinct texture; textureless rows still show
-      const entries = [];
-      const seen = new Set();
+      const dissolveMask = (id) => maskOf(d.dissolveTargets, spellId, [id]);
+      const byKey = new Map();
       for (const id of dissolveIds.slice().sort((a, b) => a - b)) {
         for (const fid of d.dissolveTextures.get(id) || [0]) {
-          if (seen.has(fid)) continue;
-          seen.add(fid);
-          entries.push({ dissolveId: id, fid });
+          const prev = byKey.get(fid);
+          if (prev) { prev.mask |= dissolveMask(id); continue; }
+          byKey.set(fid, { dissolveId: id, fid, mask: dissolveMask(id) });
         }
       }
+      const grp = targetGroup(dissolveIds.map(dissolveMask));
       cats.push({
         name: "dissolve",
         hit: dissolveIds.some((id) => dissolveIsHit(id)),
-        items: hitsFirst(entries, (e) => dissolveIsHit(e.dissolveId)).map((e) => () => dissolveTag(e)),
+        mask: grp.uniform ? grp.mask : 0,
+        items: hitsFirst([...byKey.values()], (e) => dissolveIsHit(e.dissolveId))
+          .map((e) => () => dissolveTag(e, grp.uniform ? 0 : e.mask)),
       });
     }
     if (glowIds.length) {
       // one pill per distinct color (no texture — the color is the payload)
-      const entries = [];
-      const seen = new Set();
+      const glowMask = (id) => maskOf(d.glowTargets, spellId, [id]);
+      const byKey = new Map();
       for (const id of glowIds.slice().sort((a, b) => a - b)) {
         const color = d.glowColors.get(id) ?? 0;
-        if (seen.has(color)) continue;
-        seen.add(color);
-        entries.push({ glowId: id, color, alpha: d.glowAlphas.get(id) });
+        const prev = byKey.get(color);
+        if (prev) { prev.mask |= glowMask(id); continue; }
+        byKey.set(color, {
+          glowId: id, color, alpha: d.glowAlphas.get(id), mask: glowMask(id),
+        });
       }
+      const grp = targetGroup(glowIds.map(glowMask));
       cats.push({
         name: "glow",
         hit: glowIds.some((id) => glowIsHit(id)),
-        items: hitsFirst(entries, (e) => glowIsHit(e.glowId))
-          .map((e) => () => colorFxTag("glow", e.color, glowIsHit(e.glowId), e.alpha)),
+        mask: grp.uniform ? grp.mask : 0,
+        items: hitsFirst([...byKey.values()], (e) => glowIsHit(e.glowId))
+          .map((e) => () => colorFxTag("glow", e.color, glowIsHit(e.glowId), e.alpha,
+            grp.uniform ? 0 : e.mask)),
       });
     }
     if (shadowyIds.length || ghostMatIds.length) {
       // "ghost" merges ShadowyEffect rows (two colors each) and Type-22
       // material recolors (one color each). One pill per distinct color; each
       // pill carries which isHit to use so the category can mix both sources.
-      const entries = [];
-      const seen = new Set();
+      const shadowyMask = (id) => maskOf(d.shadowyTargets, spellId, [id]);
+      const ghostMatMask = (id) => maskOf(d.ghostMatTargets, spellId, [id]);
+      const byColor = new Map();
       for (const id of shadowyIds.slice().sort((a, b) => a - b)) {
         const c = d.shadowyColors.get(id) || { primary: 0, secondary: 0 };
         for (const color of [c.primary, c.secondary]) {
-          if (seen.has(color)) continue;
-          seen.add(color);
-          entries.push({ color, hit: () => shadowyIsHit(id) });
+          const prev = byColor.get(color);
+          if (prev) { prev.mask |= shadowyMask(id); continue; }
+          byColor.set(color, { color, hit: () => shadowyIsHit(id), mask: shadowyMask(id) });
         }
       }
       for (const id of ghostMatIds.slice().sort((a, b) => a - b)) {
         const color = d.ghostMatColors.get(id) ?? 0;
-        if (seen.has(color)) continue;
-        seen.add(color);
-        entries.push({ color, hit: () => ghostMatIsHit(id) });
+        const prev = byColor.get(color);
+        if (prev) { prev.mask |= ghostMatMask(id); continue; }
+        byColor.set(color, { color, hit: () => ghostMatIsHit(id), mask: ghostMatMask(id) });
       }
       const catHit = shadowyIds.some((id) => shadowyIsHit(id))
         || ghostMatIds.some((id) => ghostMatIsHit(id));
+      // both sources feed one category, so both sets of masks decide the head
+      const grp = targetGroup(shadowyIds.map(shadowyMask)
+        .concat(ghostMatIds.map(ghostMatMask)));
       cats.push({
         name: "ghost",
         hit: catHit,
-        items: hitsFirst(entries, (e) => e.hit())
-          .map((e) => () => colorFxTag("ghost", e.color, e.hit())),
+        mask: grp.uniform ? grp.mask : 0,
+        items: hitsFirst([...byColor.values()], (e) => e.hit())
+          .map((e) => () => colorFxTag("ghost", e.color, e.hit(), undefined,
+            grp.uniform ? 0 : e.mask)),
       });
     }
     if (tintIds.length) {
@@ -1685,7 +1756,10 @@
     }
 
     buildKitGroups(td, cats, {
-      headerTag: (cat) => fxHeadTag(cat.name, cat.hit),
+      // the icon rides the category head, unioned over this spell's rows in
+      // the category — only where the distribution isn't degenerate (a
+      // category that is always the same type says nothing per pill)
+      headerTag: (cat) => addTargetIcons(fxHeadTag(cat.name, cat.hit), cat.mask),
       itemsOf: (cat) => cat.items,
       itemTag: (make) => make(),
       itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
@@ -1825,13 +1899,128 @@
     return b;
   }
 
-  /* Model-category head ("attach", "missile", ...) — the fx-head pattern:
+  /* --- target-type icons ------------------------------------------------
+   *
+   * Who a piece of content plays on, from SpellVisualEvent.TargetType (see
+   * TARGET_BITS in build_data.py). Every type is marked — there is no
+   * unmarked default — and a row whose mask has several bits renders one
+   * icon per bit rather than a fused glyph: the mixes are common (16.5% of
+   * model rows are caster+target on 9.2.7) and the rarer ones (caster+area)
+   * have no sensible single glyph. Masters live in build/icons/*.svg with a
+   * preview page at build/target_icons.html; the markup below is lifted from
+   * them, inlined the same way modelTag's cube glyph is.
+   */
+  const TARGET_CASTER = 1, TARGET_TARGET = 2, TARGET_AREA = 4,
+    TARGET_NOT_CASTER = 8, TARGET_MISSILE_DEST = 16;
+
+  const T_SVG_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    + 'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+  const T_PERSON = T_SVG_OPEN
+    + '<circle cx="12" cy="8" r="4"/>'
+    + '<path d="M4.5 20.5c1.8-3.8 4.3-5.5 7.5-5.5s5.7 1.7 7.5 5.5"/></svg>';
+  const T_CROSSHAIR = T_SVG_OPEN
+    + '<circle cx="12" cy="12" r="7"/><line x1="12" y1="1.5" x2="12" y2="6"/>'
+    + '<line x1="12" y1="18" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="6" y2="12"/>'
+    + '<line x1="18" y1="12" x2="22.5" y2="12"/>'
+    + '<circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg>';
+  const T_AREA = T_SVG_OPEN
+    + '<ellipse cx="12" cy="18" rx="9" ry="3.4"/><line x1="12" y1="3" x2="12" y2="14.5"/>'
+    + '<path d="M8.5 11 12 15l3.5-4"/></svg>';
+
+  /* One entry per icon, in render order. `bits` is every mask bit the icon
+   * stands for, so the two area types share one glyph instead of drawing it
+   * twice; "target" and "target, never caster" stay separate because they
+   * are separate colors. */
+  const TARGET_ICONS = [
+    {
+      bits: TARGET_CASTER, cls: "t-caster", svg: T_PERSON,
+      title: () => "On the caster",
+    },
+    {
+      bits: TARGET_TARGET, cls: "t-target", svg: T_CROSSHAIR,
+      title: () => "On the target",
+    },
+    {
+      bits: TARGET_NOT_CASTER, cls: "t-notcaster", svg: T_CROSSHAIR,
+      title: () => "On the target only — never the caster",
+    },
+    {
+      bits: TARGET_AREA | TARGET_MISSILE_DEST, cls: "t-area", svg: T_AREA,
+      title: (mask) => (mask & TARGET_AREA
+        ? "On the ground at the target"
+        : "On the ground where the missile lands"),
+    },
+  ];
+
+  /**
+   * Render a row's target mask as leading icons.
+   * @param {number} mask union of TARGET_* bits; 0 renders nothing
+   * @returns {HTMLElement|null}
+   */
+  function targetIcons(mask) {
+    if (!mask) return null;
+    const wrap = el("span", "ticons");
+    for (const icon of TARGET_ICONS) {
+      if (!(mask & icon.bits)) continue;
+      const span = el("span", `ticon ${icon.cls}`);
+      span.title = icon.title(mask);
+      span.innerHTML = icon.svg;
+      wrap.appendChild(span);
+    }
+    return wrap.childNodes.length ? wrap : null;
+  }
+
+  /**
+   * A mask's search words, deduped and in bit order — what the exports say
+   * instead of drawing icons. Reads the pack's own bit -> word map, so the
+   * two never drift apart.
+   * @param {number} mask
+   * @returns {string[]}
+   */
+  function targetWordsOf(mask) {
+    const names = state.data.targetNames;
+    const words = [];
+    for (const bit of [TARGET_CASTER, TARGET_TARGET, TARGET_AREA,
+      TARGET_NOT_CASTER, TARGET_MISSILE_DEST]) {
+      const w = names[bit];
+      if ((mask & bit) && w && !words.includes(w)) words.push(w);
+    }
+    return words;
+  }
+
+  /**
+   * Put a mask's icons on a tag, immediately before what it describes.
+   *
+   * The anchor is the pill's colour swatch if it has one, otherwise its
+   * label — whichever comes first. Not the pill's leading edge: that can
+   * already hold action buttons (the 3D-view cube, the Wowhead link), and an
+   * icon stranded left of those reads as another button. But a colour pill's
+   * swatch and hex text are one unit, so the icons belong left of the swatch
+   * rather than wedged between the two.
+   */
+  function addTargetIcons(tag, mask) {
+    const icons = targetIcons(mask);
+    if (icons) tag.insertBefore(icons, tag.querySelector(".fx-swatch, .tag-label"));
+    return tag;
+  }
+
+  /** Union the target masks of a spell's rows for one group of item ids. */
+  function maskOf(index, spellId, itemIds) {
+    const byItem = index.get(spellId);
+    if (!byItem) return 0;
+    let mask = 0;
+    for (const id of itemIds) mask |= byItem.get(id) || 0;
+    return mask;
+  }
+
+  /* Model-category head ("missile", "area", ...) — the fx-head pattern:
    * clicking searches the whole category via the model field. */
   const MODEL_CAT_TITLES = {
-    attached: "Model attached to the caster/target (SpellVisualKitModelAttach)",
+    attached: "Model attached to the caster/target (SpellVisualKitModelAttach)", // stale-pack word
     attach: "Model attached to the caster/target (SpellVisualKitModelAttach)", // stale-pack word
     missile: "Projectile model in flight (SpellVisualMissile)",
-    area: "Ground / area model (SpellVisualKitAreaModel)",
+    ground: "Ground / area model (SpellVisualKitAreaModel)",
+    area: "Ground / area model (SpellVisualKitAreaModel)", // stale-pack word
     trail: "Weapon trail model (WeaponTrail)",
     barrage: "Volley of models (BarrageEffect)",
   };
@@ -1856,7 +2045,7 @@
       g.tokens.every((t) => catName.includes(t.text) || searchL.includes(t.text)));
   }
 
-  function modelTag(fid, catName) {
+  function modelTag(fid, catName, mask = 0) {
     const d = state.data;
     const file = d.files.get(fid) || { fid, path: "", base: "", searchL: "" };
     const tag = el("span", "tag model");
@@ -1885,6 +2074,7 @@
     txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this model\nShift-click: exclude them instead`;
     txt.dataset.search = file.base ? `model:"${file.base}"` : "";
     tag.appendChild(txt);
+    addTargetIcons(tag, mask);
 
     const cmd = fillTemplate(CFG.modelCopyTemplate,
       { base: stripExt(file.base), file: file.base, path: file.path, fid });
@@ -1988,7 +2178,7 @@
     return tag;
   }
 
-  function animTag(animId, groupWord = "") {
+  function animTag(animId, groupWord = "", mask = 0) {
     const d = state.data;
     const name = d.animNames[animId];
     const tag = el("span", "tag anim");
@@ -1998,6 +2188,7 @@
     txt.title = `Animation ${animId}: ${name}\nClick: find spells playing this animation\nShift-click: exclude them instead`;
     txt.dataset.search = `anim:"${name}"`;
     tag.appendChild(txt);
+    addTargetIcons(tag, mask);
 
     const cmd = fillTemplate(CFG.animCopyTemplate, { name, id: animId });
     tag.appendChild(tagButton(".lo", `Copy:  ${cmd}`, cmd));
@@ -2063,7 +2254,7 @@
    * @param {{chainId: number, fid: number, color: number}} entry
    * @returns {HTMLElement}
    */
-  function fxTag(entry) {
+  function fxTag(entry, mask = 0) {
     const d = state.data;
     const file = entry.fid ? (d.files.get(entry.fid) || { path: "", base: "" }) : { path: "", base: "" };
     const info = d.fxChains.get(entry.chainId) || { color: 0xffffff, hue: "" };
@@ -2093,6 +2284,7 @@
     // fx categories exist ("fx:chain lightning" style)
     txt.dataset.search = file.base ? `fx:"chain ${file.base}"` : "";
     tag.appendChild(txt);
+    addTargetIcons(tag, mask);
 
     if (base) tag.appendChild(tagButton("⧉", `Copy texture name: ${base}`, base));
     return tag;
@@ -2105,9 +2297,11 @@
    * @param {number} color Packed 0xRRGGBB.
    * @param {boolean} hit Whether the current query matches this pill.
    * @param {number} [alpha] Source alpha 0..255, where the source has a real one.
+   * @param {number} [mask] Target mask, when the category's rows disagree and
+   *   the icons ride the pills instead of the category head.
    * @returns {HTMLElement}
    */
-  function colorFxTag(category, color, hit, alpha) {
+  function colorFxTag(category, color, hit, alpha, mask = 0) {
     const hex = hexColor(color);
     const tag = el("span", "tag fx");
     if (hit) tag.classList.add("hit");
@@ -2128,6 +2322,7 @@
     txt.dataset.colorInfo = category;
     if (alpha >= 0) txt.dataset.alpha = String(alpha);
     tag.appendChild(txt);
+    addTargetIcons(tag, mask);
 
     tag.appendChild(tagButton("⧉", `Copy color: ${hex}`, hex));
     return tag;
@@ -2227,7 +2422,7 @@
 
   /* Dissolve pill: one per texture of the row's TextureBlendSet (mask +
    * material textures); tooltip carries the dissolve duration. */
-  function dissolveTag(entry) {
+  function dissolveTag(entry, mask = 0) {
     const d = state.data;
     const file = entry.fid ? (d.files.get(entry.fid) || { path: "", base: "" }) : { path: "", base: "" };
     const duration = d.dissolveDurations.get(entry.dissolveId) || 0;
@@ -2242,6 +2437,7 @@
     if (entry.fid) txt.dataset.texFid = String(entry.fid);
     txt.dataset.search = file.base ? `fx:"dissolve ${file.base}"` : "";
     tag.appendChild(txt);
+    addTargetIcons(tag, mask);
 
     if (base) tag.appendChild(tagButton("⧉", `Copy texture name: ${base}`, base));
     return tag;
@@ -2574,28 +2770,46 @@
           const byCat = new Map();
           for (const e of cats) {
             if (!byCat.has(e.cat)) byCat.set(e.cat, []);
-            byCat.get(e.cat).push(pathOf(e.fid));
+            // each file carries who it plays on — the export's form of the icons
+            byCat.get(e.cat).push({ path: pathOf(e.fid), targets: targetWordsOf(e.targets) });
           }
-          row.models = [...byCat.keys()].sort((a, b) => a - b)
-            .map((c) => ({ category: d.modelCatNames[c] || `cat ${c}`, files: byCat.get(c) }));
+          row.models = [...byCat.keys()].sort((a, b) => a - b).map((c) => ({
+            // the wordless attach category renders as loose pills in the UI,
+            // but an export still needs a name for it
+            category: d.modelCatNames[c] || (c === 0 ? "attached" : `cat ${c}`),
+            files: byCat.get(c),
+          }));
         } else {
           row.models = (d.spellModels.get(id) || []).map(pathOf);
         }
       }
       if (!hc.sounds) {
         const byKit = new Map();
+        const kitMask = new Map();
         for (const e of d.spellSounds.get(id) || []) {
           if (!byKit.has(e.soundKitId)) byKit.set(e.soundKitId, []);
           byKit.get(e.soundKitId).push(pathOf(e.fid));
+          kitMask.set(e.soundKitId, (kitMask.get(e.soundKitId) || 0) | (e.targets || 0));
         }
-        row.soundKits = [...byKit.keys()].sort((a, b) => a - b)
-          .map((k) => ({ id: k, files: byKit.get(k) }));
+        row.soundKits = [...byKit.keys()].sort((a, b) => a - b).map((k) => ({
+          id: k, files: byKit.get(k), targets: targetWordsOf(kitMask.get(k) || 0),
+        }));
       }
       if (!hc.animkits) {
         const loose = (d.spellVisualAnims.get(id) || []).slice().sort((a, b) => a - b);
-        if (loose.length) row.anims = loose.map((a) => d.animNames[a]);
+        const looseMasks = d.visualAnimTargets.get(id);
+        if (loose.length) {
+          row.anims = loose.map((a) => ({
+            name: d.animNames[a],
+            targets: targetWordsOf(looseMasks ? looseMasks.get(a) || 0 : 0),
+          }));
+        }
         row.animKits = (d.spellAnimKits.get(id) || []).slice().sort((a, b) => a - b)
-          .map((k) => ({ id: k, anims: (d.animKitAnims.get(k) || []).map((a) => d.animNames[a]) }));
+          .map((k) => ({
+            id: k,
+            anims: (d.animKitAnims.get(k) || []).map((a) => d.animNames[a]),
+            targets: targetWordsOf(maskOf(d.animKitTargets, id, [k])),
+          }));
         const stance = (d.spellAnims.get(id) || []).slice().sort((a, b) => a - b);
         if (stance.length) row.stanceAnims = stance.map((a) => d.animNames[a]);
       }
@@ -2722,21 +2936,28 @@
     if (!hc.animkits) header.push("AnimKits", "Animations");
     if (!hc.fx) header.push("Effects");
     if (!hc.mechanics) header.push("Mechanics");
+    // CSV has no icons, so a row's target types ride its text: "file [caster+target]"
+    const withTargets = (e) =>
+      (e.targets && e.targets.length ? `${e.path} [${e.targets.join("+")}]` : `${e.path}`);
     const lines = [header.join(",")];
     for (const r of exportRows()) {
       const cols = [r.id, esc(r.name), esc(r.subtext)];
       if (!hc.models) {
-        cols.push(esc(r.models.map(
-          (m) => m.files ? `${m.category}: ${m.files.join(" | ")}` : m).join("; ")));
+        cols.push(esc(r.models.map((m) => (m.files
+          ? `${m.category}: ${m.files.map(withTargets).join(" | ")}`
+          : m)).join("; ")));
       }
       if (!hc.sounds) {
         cols.push(esc(r.soundKits.map((k) => k.id).join("; ")));
-        cols.push(esc(r.soundKits.map((k) => `${k.id}: ${k.files.join(" | ")}`).join("; ")));
+        cols.push(esc(r.soundKits.map(
+          (k) => `${withTargets({ path: k.id, targets: k.targets })}: ${k.files.join(" | ")}`)
+          .join("; ")));
       }
       if (!hc.animkits) {
         cols.push(esc(r.animKits.map((k) => k.id).join("; ")));
-        cols.push(esc((r.anims || [])
-          .concat(r.animKits.map((k) => `${k.id}: ${k.anims.join(" | ")}`))
+        cols.push(esc((r.anims || []).map((a) => withTargets({ path: a.name, targets: a.targets }))
+          .concat(r.animKits.map(
+            (k) => `${withTargets({ path: k.id, targets: k.targets })}: ${k.anims.join(" | ")}`))
           .concat(r.stanceAnims ? [`stance: ${r.stanceAnims.join(" | ")}`] : []).join("; ")));
       }
       if (!hc.fx) {

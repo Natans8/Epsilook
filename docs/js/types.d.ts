@@ -104,40 +104,42 @@ interface SpellPack {
   files: { fids: number[]; paths: string[] };
 
   /** Spell -> model file; cats (format 15+) = usage category per row. */
-  spellModels: { spellIds: number[]; fids: number[]; cats?: number[] };
+  spellModels: { spellIds: number[]; fids: number[]; cats?: number[]; targets?: number[] };
   /** Category id -> word ("attached", "missile", "area", "trail", "barrage"). */
   modelCatNames?: Record<number, string>;
+  /** mask bit -> search word ("caster"/"target"/"area"); format 22+ */
+  targetNames?: Record<number, string>;
 
   /** Spell -> (SoundKit, sound file) rows. */
-  spellSounds: { spellIds: number[]; soundKitIds: number[]; fids: number[] };
+  spellSounds: { spellIds: number[]; soundKitIds: number[]; fids: number[]; targets?: number[] };
 
-  spellAnimKits: { spellIds: number[]; animKitIds: number[] };
+  spellAnimKits: { spellIds: number[]; animKitIds: number[]; targets?: number[] };
   /** Animation names indexed by AnimID. */
   animNames: string[];
   animKitAnims: { animKitIds: number[]; animIds: number[] };
   /** Direct stand/walk anim overrides, proc Type 7 (format 14+). */
   spellAnims?: { spellIds: number[]; animIds: number[] };
   /** Animations the kits play directly, SpellVisualAnim ET 6 (format 21+). */
-  spellVisualAnims?: { spellIds: number[]; animIds: number[] };
+  spellVisualAnims?: { spellIds: number[]; animIds: number[]; targets?: number[] };
 
   /* --- visual fx sections (the Effects column) --- */
 
   /** Spell -> SpellChainEffects (chain/beam) rows. */
-  spellFx: { spellIds: number[]; chainIds: number[] };
+  spellFx: { spellIds: number[]; chainIds: number[]; targets?: number[] };
   /** Chain tint as packed 0xRRGGBB (0xFFFFFF = untinted) + baked hue word. */
   fxChains: { ids: number[]; colors: number[]; hues: string[] };
   fxTextures: { chainIds: number[]; fids: number[] };
 
-  spellDissolves: { spellIds: number[]; dissolveIds: number[] };
+  spellDissolves: { spellIds: number[]; dissolveIds: number[]; targets?: number[] };
   /** durations in seconds, 0 = unspecified. */
   dissolves: { ids: number[]; durations: number[] };
   dissolveTextures: { dissolveIds: number[]; fids: number[] };
 
-  spellGlows: { spellIds: number[]; glowIds: number[] };
+  spellGlows: { spellIds: number[]; glowIds: number[]; targets?: number[] };
   /** EdgeGlowEffect colors; alphas (format 17+) = GlowAlpha as 0..255. */
   glows: { ids: number[]; colors: number[]; hues: string[]; alphas?: number[] };
 
-  spellShadowies: { spellIds: number[]; shadowyIds: number[] };
+  spellShadowies: { spellIds: number[]; shadowyIds: number[]; targets?: number[] };
   /** ShadowyEffect primary/secondary packed RGB pairs. */
   shadowies: {
     ids: number[];
@@ -147,7 +149,7 @@ interface SpellPack {
   };
 
   /** Ghost material recolors, proc Type 22 (format 14+). */
-  spellGhostMats?: { spellIds: number[]; ghostIds: number[] };
+  spellGhostMats?: { spellIds: number[]; ghostIds: number[]; targets?: number[] };
   ghostMats?: { ids: number[]; colors: number[]; hues: string[] };
 
   /** Model tints, proc Types 1/23 (format 13+). */
@@ -251,12 +253,29 @@ interface SpellData {
   /** All fids referenced as models (the model-search scope). */
   modelFids: number[];
   /** Per-(fid, category) view; empty Maps on a stale pack without cats. */
-  spellModelCats: Map<number, { fid: number; cat: number }[]>;
+  spellModelCats: Map<number, { fid: number; cat: number; targets: number }[]>;
   modelCatSpells: Map<number, Set<number>>;
   modelCatFidSpells: Map<number, Map<number, number[]>>;
+  /** Category id -> word; "" means the category renders as loose pills. */
   modelCatNames: Record<number, string>;
 
-  spellSounds: Map<number, { soundKitId: number; fid: number }[]>;
+  /**
+   * Who each row's content plays on: a mask of TARGET_BITS (1 caster,
+   * 2 target, 4 area, 8 target-never-caster, 16 missile destination),
+   * unioned over every kit the spell reaches the content through. 0 means
+   * the content came from outside the event graph (missile sets) and has no
+   * target type. Empty Maps on a pack older than format 22.
+   */
+  targetNames: Record<number, string>;
+  animKitTargets: Map<number, Map<number, number>>;
+  visualAnimTargets: Map<number, Map<number, number>>;
+  fxTargets: Map<number, Map<number, number>>;
+  dissolveTargets: Map<number, Map<number, number>>;
+  glowTargets: Map<number, Map<number, number>>;
+  shadowyTargets: Map<number, Map<number, number>>;
+  ghostMatTargets: Map<number, Map<number, number>>;
+
+  spellSounds: Map<number, { soundKitId: number; fid: number; targets: number }[]>;
   soundSpells: Map<number, number[]>;
   /** All fids referenced as sounds (the sound-search scope). */
   soundFids: number[];
@@ -461,6 +480,8 @@ interface EpsilookSearchApi {
   ): { spellIds: number[]; ms: number };
   sortByRelevance(spellIds: number[], rawQuery: string, data: SpellData): number[];
   FIELDS: Record<string, SearchFieldSpec>;
+  /** Target-type query words ("caster", "target", "area", "both"). */
+  TARGET_WORDS: string[];
 }
 
 /* ------------------------------------------------------------ globals */

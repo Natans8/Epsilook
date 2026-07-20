@@ -36,6 +36,54 @@ window.EpsilookSearch = (() => {
     return true;
   }
 
+  /* ------------------------------------------------- target-type words */
+
+  /**
+   * "Who does this play on" as query words, tested against a row's target
+   * mask (TARGET_BITS in build_data.py) rather than matched as text.
+   *
+   * They have to be bit tests, not corpus words, for two reasons: the mask
+   * lives on the ROW, so `model:"caster fireball"` must mean one row that is
+   * both — not a spell that happens to have a caster row and a fireball row
+   * — and "both" is a combination no single bit spells. "target" covers the
+   * never-caster bit too: it keeps its own bit (and its own icon color) but
+   * nobody searches for it by another name.
+   *
+   * Note the normal corpus path still substring-matches file names that
+   * contain these words (beamtarget_onground) — the same accepted overlap as
+   * fx:glow, which categoryRanker sorts out.
+   */
+  const TARGET_TESTS = {
+    caster: (/** @type {number} */ m) => (m & 1) !== 0,
+    target: (/** @type {number} */ m) => (m & (2 | 8)) !== 0,
+    area: (/** @type {number} */ m) => (m & (4 | 16)) !== 0,
+    both: (/** @type {number} */ m) => (m & 1) !== 0 && (m & 2) !== 0,
+  };
+
+  /** The words themselves, for autocomplete and the ranker. */
+  const TARGET_WORDS = Object.keys(TARGET_TESTS);
+
+  /**
+   * Split a group's tokens into text tokens and target-mask tests.
+   * A field with no masks simply never gets tests back.
+   * @param {QueryToken[]} tokens
+   * @returns {{text: QueryToken[], tests: ((mask: number) => boolean)[]}}
+   */
+  function splitTargetTokens(tokens) {
+    const text = [], tests = [];
+    for (const t of tokens) {
+      const test = TARGET_TESTS[t.text];
+      if (test) tests.push(test); else text.push(t);
+    }
+    return { text, tests };
+  }
+
+  /**
+   * @param {((mask: number) => boolean)[]} tests
+   * @param {number} mask
+   */
+  const maskMatches = (tests, mask) => tests.every((fn) => fn(mask));
+
   /**
    * Search file names within a scope of fids; return spells using the matches.
    * @param {QueryToken[]} tokens
@@ -71,6 +119,24 @@ window.EpsilookSearch = (() => {
       return spellsByFile(tokens, data, data.modelFids, data.modelSpells);
     }
     const out = new Set();
+    const { text, tests } = splitTargetTokens(tokens);
+    if (tests.length) {
+      // a target word makes the query per-row, so walk the rows themselves
+      // (the (cat, fid) index below has no mask — it is shared across spells)
+      for (const [s, entries] of data.spellModelCats) {
+        for (const e of entries) {
+          if (!maskMatches(tests, e.targets)) continue;
+          const catL = data.modelCatNames[e.cat] || "";
+          const file = data.files.get(e.fid);
+          const searchL = file ? file.searchL : "";
+          if (text.every((t) => catL.includes(t.text) || searchL.includes(t.text))) {
+            out.add(s);
+            break;
+          }
+        }
+      }
+      return out;
+    }
     for (const [cat, fidSpells] of data.modelCatFidSpells) {
       const catL = data.modelCatNames[cat] || "";
       for (const [fid, spells] of fidSpells) {
@@ -78,6 +144,33 @@ window.EpsilookSearch = (() => {
         const searchL = file ? file.searchL : "";
         if (tokens.every((t) => catL.includes(t.text) || searchL.includes(t.text))) {
           for (const s of spells) out.add(s);
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Search sound file names, honouring target words. The mask lives on the
+   * (spell, kit, file) row, so a target word turns this into a row walk the
+   * way it does for models.
+   * @param {QueryToken[]} tokens
+   * @param {SpellData} data
+   * @returns {Set<number>}
+   */
+  function spellsBySound(tokens, data) {
+    const { text, tests } = splitTargetTokens(tokens);
+    if (!tests.length) {
+      return spellsByFile(tokens, data, data.soundFids, data.soundSpells);
+    }
+    const out = new Set();
+    for (const [s, entries] of data.spellSounds) {
+      for (const e of entries) {
+        if (!maskMatches(tests, e.targets)) continue;
+        const file = data.files.get(e.fid);
+        if (textMatches(file ? file.searchL : "", text)) {
+          out.add(s);
+          break;
         }
       }
     }
@@ -113,6 +206,30 @@ window.EpsilookSearch = (() => {
    */
   function spellsByAnim(tokens, data) {
     const out = new Set();
+    const { text, tests } = splitTargetTokens(tokens);
+    if (tests.length) {
+      // per-row again: loose animations carry their own mask, animkit
+      // animations inherit the kit's. Stance overrides have no mask.
+      for (const [s, byAnim] of data.visualAnimTargets) {
+        for (const [a, mask] of byAnim) {
+          if (maskMatches(tests, mask) && textMatches(data.animNamesL[a] || "", text)) {
+            out.add(s);
+            break;
+          }
+        }
+      }
+      for (const [s, byKit] of data.animKitTargets) {
+        for (const [kit, mask] of byKit) {
+          if (!maskMatches(tests, mask)) continue;
+          const anims = data.animKitAnims.get(kit) || [];
+          if (anims.some((a) => textMatches(data.animNamesL[a] || "", text))) {
+            out.add(s);
+            break;
+          }
+        }
+      }
+      return out;
+    }
     for (let a = 0; a < data.animNamesL.length; a++) {
       const nameL = data.animNamesL[a];
       if (textMatches(nameL, tokens)) {
@@ -209,7 +326,7 @@ window.EpsilookSearch = (() => {
           for (const s of spellsByModel(tokens, data)) out.add(s);
         }
         if (!disabled.has("sound")) {
-          for (const s of spellsByFile(tokens, data, data.soundFids, data.soundSpells)) out.add(s);
+          for (const s of spellsBySound(tokens, data)) out.add(s);
         }
         if (!disabled.has("anim")) {
           for (const s of spellsByAnim(tokens, data)) out.add(s);
@@ -242,7 +359,7 @@ window.EpsilookSearch = (() => {
       // lookup (the old soundkit: field, folded in 2026-07-19) — several ids
       // in one chip union, like the old orGroups behavior
       run: (tokens, data) => {
-        const out = spellsByFile(tokens, data, data.soundFids, data.soundSpells);
+        const out = spellsBySound(tokens, data);
         if (tokens.every((t) => /^\d+$/.test(t.text))) {
           for (const s of spellsByKitId(tokens, data.soundKitSpells)) out.add(s);
         }
@@ -372,5 +489,5 @@ window.EpsilookSearch = (() => {
     return spellIds.sort((a, b) => (rank(a) - rank(b)) || (a - b));
   }
 
-  return { searchGroups, sortByRelevance, FIELDS };
+  return { searchGroups, sortByRelevance, FIELDS, TARGET_WORDS };
 })();
