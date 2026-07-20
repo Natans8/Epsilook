@@ -351,14 +351,17 @@ rendering, item→spells for searching. Every section read is guarded
 
 ## 5. Version differences
 
-Six builds ship, spanning 2008-era content to current retail. Going *backwards*
+Eight builds ship, spanning 2004-era content to current retail. Going *backwards*
 is a different problem from going forwards: forwards is additive, backwards is
-mostly "the table does not exist yet."
+mostly "the table does not exist yet." The three Classic re-release clients
+(Vanilla / TBC / WotLK) complicate that — see below.
 
-### The six packs
+### The eight packs
 
 | Build | Label | Spells | Pack | TDB release | Absent tables |
 |---|---|---:|---:|---|---:|
+| 1.15.8.67156 | Vanilla Classic | 31,248 | 0.7 MB | — | 6 |
+| 2.5.6.68775 | TBC Classic | 28,650 | 0.7 MB | — | 11 |
 | 3.4.3.58936 | WotLK Classic | 49,394 | 1.2 MB | TDB335.25101 | 10 |
 | 7.3.5.26972 | Legion | 179,382 | 4.6 MB | TDB735.00 | 4 |
 | 8.3.7.35662 | Battle for Azeroth | 227,237 | 5.9 MB | TDB837.20101 | 1 |
@@ -366,10 +369,48 @@ mostly "the table does not exist yet."
 | 10.2.7.55664 | Dragonflight | 327,092 | 8.7 MB | TDB1027.24051 | 0 |
 | 11.2.7.65299 | The War Within | 375,895 | 10.2 MB | TDB1127.26011 | 0 |
 
-All six are at pack format 22. Sizes grew ~11% at format 22 — that is the target
+All eight are at pack format 22. Sizes grew ~11% at format 22 — that is the target
 masks' cost.
 
+### The three Classic re-release clients don't sit on the timeline
+
+Vanilla Classic (1.15.8), TBC Classic (2.5.6) and WotLK Classic (3.4.3) are
+*not* points on the retail line — they are current-generation Classic clients
+backporting old content, so a client's db2 set reflects its fork point, not the
+game era. The absent-table counts therefore do **not** nest by era:
+
+- **TBC Classic is the most stripped client of the eight** (11 absent =
+  WotLK's 10 + `TextureBlendSet`).
+- **Vanilla Classic is *richer* than WotLK Classic** (6 absent, not 10): the
+  2026 Classic-Era client keeps `BeamEffect`, `DissolveEffect`,
+  `EdgeGlowEffect` and `FullScreenEffect`, which the older 3.4.3 client lacks.
+- **Neither has a TDB.** TrinityCore publishes no 1.15/2.5 world database, so
+  both build TDB-less: creature morph and summon *names/displays* don't resolve
+  (the pills fall back to raw ids), and no hotfix overlay applies. Summon
+  *control* words (guardian/pet/…) still work — those come from
+  `SummonProperties`, a client table.
+
+| Feature | Vanilla 1.15.8 | TBC 2.5.6 | Via |
+|---|:--:|:--:|---|
+| chain / beam | ✓ | proc-only | `BeamEffect` present on Vanilla; TBC's 236 chains all arrive via proc Type 0 |
+| dissolve | ✓ (4) | — | `DissolveEffect` |
+| glow | ✓ (1) | — | `EdgeGlowEffect` |
+| screen fx | partial | — | Vanilla keeps `FullScreenEffect`+`ScreenEffect` (36 via the aura route; no kit route — `SpellVisualScreenEffect` absent); TBC has neither populated |
+| ghost (shadowy) | — | — | `ShadowyEffect` absent on both |
+| barrage / trail / emission | — | — | `BarrageEffect` / `WeaponTrail` / `SpellEffectEmission` absent on both |
+| alt-name search | — | — | `SpellOverrideName` absent on both |
+| morph / summon names | — | — | no TDB world DB for these builds |
+
+Everything else — models, sounds, animations, mechanics, tints, transparency,
+freeze, shapeshifts — works on both. Unlike the original-3.3.5 data, these
+modern Classic clients carry the full proc enum (Vanilla and TBC each have a
+Type-21 desaturate row), so the "proc types stop at 17" cutoff below is a WotLK
+*Classic* client trait, not a general Classic one.
+
 ### When each table arrived
+
+This is the *retail* client progression; the Classic re-release clients above
+fork off it and are covered in the previous section.
 
 ```mermaid
 flowchart LR
@@ -462,6 +503,11 @@ belongs in a declaration or is a genuine bug.
 - **TDB335 is world-only** (no hotfixes dump), and TDB735 nests its SQLs in a
   subfolder without the `full_` infix. Both shapes are declared in
   `TDB_RELEASES`.
+- **Vanilla Classic (1.15.8) and TBC Classic (2.5.6) have no TDB at all** —
+  TrinityCore ships no 1.15/2.5 world database, so they are absent from
+  `TDB_RELEASES` and `fetch_tdb` returns `None`. Morph/summon names and displays
+  don't resolve for those two builds (raw ids only); every wago-sourced section
+  is unaffected.
 
 ---
 

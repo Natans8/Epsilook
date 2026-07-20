@@ -1,5 +1,19 @@
 [
   {
+    "id": "1.15.8.67156",
+    "label": "Vanilla Classic 1.15.8",
+    "file": "data/1.15.8.67156/spelldata.json.gz",
+    "built": "2026-07-20",
+    "hash": "e78ebe34ab"
+  },
+  {
+    "id": "2.5.6.68775",
+    "label": "TBC Classic 2.5.6",
+    "file": "data/2.5.6.68775/spelldata.json.gz",
+    "built": "2026-07-20",
+    "hash": "f2b3dd855a"
+  },
+  {
     "id": "3.4.3.58936",
     "label": "WotLK Classic 3.4.3",
     "file": "data/3.4.3.58936/spelldata.json.gz",
