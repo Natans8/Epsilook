@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit, animkit or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260720e">
+  <link rel="stylesheet" href="css/app.css?v=20260720f">
 </head>
 <body>
 
@@ -103,7 +103,9 @@
               <span class="legend-icon t-notcaster"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><line x1="12" y1="1.5" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22.5" y2="12"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></span>
               the target but never the caster,
               <span class="legend-icon t-area"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="18" rx="9" ry="3.4"/><line x1="12" y1="3" x2="12" y2="14.5"/><path d="M8.5 11 12 15l3.5-4"/></svg></span>
-              the ground at the target (or where a missile lands). Note the
+              the spell's area of effect — wherever that lands, which may be a
+              chosen spot, the caster, or an impact point — or where a missile
+              lands. Note the
               <code>area</code> target word is <em>not</em> the <code>ground</code>
               model category — most rows that play at a location are ordinary
               attached models, not <code>SpellVisualKitAreaModel</code> ones.
@@ -279,13 +281,13 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260720e"></script>
-<script src="js/data.js?v=20260720e"></script>
+<script src="js/config.js?v=20260720f"></script>
+<script src="js/data.js?v=20260720f"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260720e"></script>
-<script src="js/js-blp.js?v=20260720e"></script>
-<script src="js/search.js?v=20260720e"></script>
-<script src="js/app.js?v=20260720e"></script>
+<script src="js/bufo.js?v=20260720f"></script>
+<script src="js/js-blp.js?v=20260720f"></script>
+<script src="js/search.js?v=20260720f"></script>
+<script src="js/app.js?v=20260720f"></script>
 </body>
 </html>
