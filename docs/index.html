@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit, animkit or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260720m">
+  <link rel="stylesheet" href="css/app.css?v=20260721a">
 </head>
 <body>
 
@@ -32,20 +32,23 @@
         <span id="editwrap">
           <span id="editlabel" hidden></span>
           <input id="q" type="text" autocomplete="off" spellcheck="false"
-                 aria-label="Search spells"
+                 role="combobox" aria-expanded="false" aria-controls="suggest"
+                 aria-autocomplete="list" aria-haspopup="listbox"
+                 aria-label="Search spells" aria-describedby="q-desc"
                  placeholder="Search names, models, sounds and animations — or type model: for a field tag">
         </span>
       </div>
-      <button id="help-btn" title="Search syntax">?</button>
+      <button id="help-btn" type="button" title="Search syntax" aria-label="Search syntax help" aria-haspopup="dialog">?</button>
     </div>
-    <div id="suggest" hidden></div>
+    <span id="q-desc" class="sr-only"></span>
+    <div id="suggest" hidden role="listbox" aria-label="Search suggestions"></div>
     <nav id="tabs" aria-label="Field tags"></nav>
     <div id="status" role="status"></div>
 
     <dialog id="help">
       <div class="help-top">
         <h2>Help</h2>
-        <button id="help-close" title="Close">×</button>
+        <button id="help-close" type="button" title="Close" aria-label="Close help">×</button>
       </div>
       <div class="help-grid">
         <section>
@@ -215,10 +218,10 @@
     <div id="toolbar">
       <div id="filters" title="Click to cycle: any → only spells with → only spells without">
         <span>Filter:</span>
-        <button type="button" class="tri" data-filter="models" data-state="">Models</button>
-        <button type="button" class="tri" data-filter="sounds" data-state="">Sounds</button>
-        <button type="button" class="tri" data-filter="animkits" data-state="">Animations</button>
-        <button type="button" class="tri" data-filter="fx" data-state="">Effects</button>
+        <button type="button" class="tri" data-filter="models" data-state="" aria-label="Models filter: showing all">Models</button>
+        <button type="button" class="tri" data-filter="sounds" data-state="" aria-label="Sounds filter: showing all">Sounds</button>
+        <button type="button" class="tri" data-filter="animkits" data-state="" aria-label="Animations filter: showing all">Animations</button>
+        <button type="button" class="tri" data-filter="fx" data-state="" aria-label="Effects filter: showing all">Effects</button>
       </div>
       <div id="columns" title="Hidden columns are also left out of plain-word search and exports">
         <span>Columns:</span>
@@ -244,13 +247,13 @@
         <thead>
           <tr>
             <th class="c-idx">#</th>
-            <th data-sort="id" class="c-id">ID <span class="arrow"></span></th>
-            <th data-sort="name" class="c-name">Name <span class="arrow"></span></th>
-            <th data-sort="models" class="c-models" title="Click to sort by count">Models <span class="arrow"></span></th>
-            <th data-sort="sounds" class="c-sounds" title="Click to sort by count">Sounds <span class="arrow"></span></th>
-            <th data-sort="animkits" class="c-animkits" title="Click to sort by count">Animations <span class="arrow"></span></th>
-            <th data-sort="fx" class="c-fx" title="Visual effects not tied to a model — beams, glows, tints, morphs, summons and more. Click to sort by count">Effects <span class="arrow"></span></th>
-            <th data-sort="mechanics" class="c-mechanics" title="What the spell does mechanically. Click to sort by count">Mechanics <span class="arrow"></span></th>
+            <th data-sort="id" class="c-id" aria-sort="none"><button type="button">ID <span class="arrow"></span></button></th>
+            <th data-sort="name" class="c-name" aria-sort="none"><button type="button">Name <span class="arrow"></span></button></th>
+            <th data-sort="models" class="c-models" aria-sort="none"><button type="button" title="Click to sort by count">Models <span class="arrow"></span></button></th>
+            <th data-sort="sounds" class="c-sounds" aria-sort="none"><button type="button" title="Click to sort by count">Sounds <span class="arrow"></span></button></th>
+            <th data-sort="animkits" class="c-animkits" aria-sort="none"><button type="button" title="Click to sort by count">Animations <span class="arrow"></span></button></th>
+            <th data-sort="fx" class="c-fx" aria-sort="none"><button type="button" title="Visual effects not tied to a model — beams, glows, tints, morphs, summons and more. Click to sort by count">Effects <span class="arrow"></span></button></th>
+            <th data-sort="mechanics" class="c-mechanics" aria-sort="none"><button type="button" title="What the spell does mechanically. Click to sort by count">Mechanics <span class="arrow"></span></button></th>
             <th class="c-cmds">Commands</th>
           </tr>
         </thead>
@@ -305,13 +308,13 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260720m"></script>
-<script src="js/data.js?v=20260720m"></script>
+<script src="js/config.js?v=20260721a"></script>
+<script src="js/data.js?v=20260721a"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260720m"></script>
-<script src="js/js-blp.js?v=20260720m"></script>
-<script src="js/search.js?v=20260720m"></script>
-<script src="js/app.js?v=20260720m"></script>
+<script src="js/bufo.js?v=20260721a"></script>
+<script src="js/js-blp.js?v=20260721a"></script>
+<script src="js/search.js?v=20260721a"></script>
+<script src="js/app.js?v=20260721a"></script>
 </body>
 </html>
