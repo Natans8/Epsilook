@@ -107,7 +107,9 @@ interface SpellPack {
   spellModels: { spellIds: number[]; fids: number[]; cats?: number[]; targets?: number[];
     /** Raw M2 attachment ids, -1 = unset (pack format 24+). Attached models
      *  use src only; missiles use both (launch -> impact). */
-    srcAttach?: number[]; dstAttach?: number[] };
+    srcAttach?: number[]; dstAttach?: number[];
+    /** CreatureDisplayID on "display"-category rows, 0 elsewhere (format 27+). */
+    displayIds?: number[] };
   /** Raw M2 attachment id -> name (pack format 24+). */
   attachmentNames?: Record<number, string>;
   /** Category id -> word ("attached", "missile", "area", "trail", "barrage"). */
@@ -289,6 +291,8 @@ interface SpellData {
     fid: number; cat: number; targets: number;
     /** Raw M2 attachment ids, -1 = unset. */
     src: number; dst: number;
+    /** CreatureDisplayID on "display"-category rows, 0 elsewhere. */
+    disp: number;
   }[]>;
   modelCatSpells: Map<number, Set<number>>;
   modelCatFidSpells: Map<number, Map<number, number[]>>;

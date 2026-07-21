@@ -357,6 +357,12 @@ MODEL_CAT_MISSILE = 1  # SpellVisualMissile (projectile in flight)
 MODEL_CAT_AREA = 2     # SpellVisualKitAreaModel (ground/area model: emission ET 8, proc Type 9)
 MODEL_CAT_TRAIL = 3    # WeaponTrail (proc Type 27)
 MODEL_CAT_BARRAGE = 4  # BarrageEffect (volley of models, ET 17)
+MODEL_CAT_DISPLAY = 5  # SpellVisualEffectName Type 2 (a CreatureDisplayID's model)
+
+# SpellVisualEffectName.Type: how its GenericID/ModelFileDataID resolves to a
+# model (SpellVisualEffectNameType.dbde). 0 = FileDataID (ModelFileDataID),
+# 1 = Item (GenericID = Item::ID), 2 = CreatureDisplayInfo (GenericID = display).
+EFFECT_NAME_TYPE_DISPLAY = 2
 MODEL_CAT_NAMES = {
     # Attach models have no category word: they are the plain "this model plays
     # on a unit" case, and which unit is now said by the target icon instead
@@ -373,6 +379,12 @@ MODEL_CAT_NAMES = {
     MODEL_CAT_AREA: "ground",
     MODEL_CAT_TRAIL: "trail",
     MODEL_CAT_BARRAGE: "barrage",
+    # "display", not "creature": a creature-display model resolves to a file
+    # under creature/..., so "creature" collides with ~21% of the model-file
+    # corpus by the filename-substring rule (model:creature would drown this
+    # category in filename noise). "display" collides with ~0 and matches how
+    # Epsilon users think of a CreatureDisplayID.
+    MODEL_CAT_DISPLAY: "display",
 }
 
 # SpellEffectAura value whose EffectMiscValue_0 is a CreatureDisplayID
@@ -576,7 +588,8 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 26  # 26: invis/detect channels (MOD_INVISIBILITY[_DETECT] auras)
+PACK_FORMAT = 27  # 27: SpellVisualEffectName Type 2 -> creature-display model pills
+# 26: invis/detect channels (MOD_INVISIBILITY[_DETECT] auras)
 # 25: target masks on effect-driven fx (SpellEffect.ImplicitTarget)
 # 24: M2 attachment points on model, missile and beam rows
 # 23: vehicles (SET_VEHICLE_ID aura -> Vehicle seat count)
@@ -1165,10 +1178,12 @@ class ModelSources:
     emission_fid: dict[int, int]      # SpellEffectEmission.ID -> model fid (ET 8)
     barrage_fid: dict[int, int]       # BarrageEffect.ID -> model fid (ET 17)
     weapontrail_fid: dict[int, int]   # WeaponTrail.ID -> model fid (proc Type 27)
-    # kit -> {(fid, category, source attachment, destination attachment)}.
+    # kit -> {(fid, category, source attachment, destination attachment, display)}.
     # Routes with a single attach point put it in `source` and leave
     # `destination` NO_ATTACHMENT; routes with none use NO_ATTACHMENT for both.
-    attach_models: dict[int, set[tuple[int, int, int, int]]]
+    # `display` is the CreatureDisplayID for MODEL_CAT_DISPLAY rows (0 otherwise)
+    # — the pill needs it for its Wowhead / copy / .morph buttons.
+    attach_models: dict[int, set[tuple[int, int, int, int, int]]]
     # animations carried on the SAME SpellVisualKitModelAttach rows — the
     # attached model's start/loop/end AnimationData ids and its AnimKit. Keyed
     # by kit, they union straight into the existing visual-anim / animkit
@@ -1177,11 +1192,28 @@ class ModelSources:
     attach_animkits: dict[int, set[int]]  # kit -> AnimKit ids
 
 
-def read_model_sources(table_dir: Path, tdb_dir: Path | None) -> ModelSources:
-    """Read the model-bearing tables (see ModelSources for the five routes)."""
+def read_model_sources(
+    table_dir: Path, tdb_dir: Path | None, creatures: "CreatureModels"
+) -> ModelSources:
+    """Read the model-bearing tables (see ModelSources for the routes)."""
+    # SpellVisualEffectName.Type says how to reach the model: 0 = ModelFileDataID
+    # (the plain case, all the routes below), 1 = Item (GenericID = Item::ID —
+    # not read yet), 2 = CreatureDisplayInfo (GenericID = CreatureDisplayID,
+    # resolved here to a model fid). Only the attach route below consults the
+    # Type: a Type-2 row there yields a display pill instead of the file its
+    # ModelFileDataID happens to still name. Missiles/barrage keep resolving
+    # through effect_name_fid unchanged (they carry no CreatureDisplay content).
     effect_name_fid: dict[int, int] = {}
-    for en_id, model_fid in read_table(table_dir, "SpellVisualEffectName", ["ID", "ModelFileDataID"]):
-        effect_name_fid[to_int(en_id)] = to_int(model_fid)
+    effect_name_type: dict[int, int] = {}
+    effect_name_generic: dict[int, int] = {}
+    for en_id, model_fid, etype, generic in read_table(
+        table_dir, "SpellVisualEffectName",
+        ["ID", "ModelFileDataID", "Type", "GenericID"]
+    ):
+        e = to_int(en_id)
+        effect_name_fid[e] = to_int(model_fid)
+        effect_name_type[e] = to_int(etype)
+        effect_name_generic[e] = to_int(generic)
     for en_id, model_fid in hotfix_rows(tdb_dir, "spell_visual_effect_name", ["ID", "ModelFileDataID"]):
         effect_name_fid[to_int(en_id)] = to_int(model_fid)
 
@@ -1190,7 +1222,7 @@ def read_model_sources(table_dir: Path, tdb_dir: Path | None) -> ModelSources:
     # model at two different points stays two rows (and renders as two pills)
     # instead of merging — 10.5% of (kit, effect name) pairs on 9.2.7 carry
     # more than one distinct attachment.
-    attach_models: dict[int, set[tuple[int, int, int, int]]] = defaultdict(set)
+    attach_models: dict[int, set[tuple[int, int, int, int, int]]] = defaultdict(set)
     attach_anims: dict[int, set[int]] = defaultdict(set)
     attach_animkits: dict[int, set[int]] = defaultdict(set)
     for kit_id, en_id, attach, start_a, anim_a, end_a, animkit in read_table(
@@ -1201,9 +1233,20 @@ def read_model_sources(table_dir: Path, tdb_dir: Path | None) -> ModelSources:
         k = to_int(kit_id)
         if not k:
             continue
-        fid = effect_name_fid.get(to_int(en_id), 0)
-        if fid:
-            attach_models[k].add((fid, MODEL_CAT_ATTACH, to_int(attach), NO_ATTACHMENT))
+        e = to_int(en_id)
+        at = to_int(attach)
+        if effect_name_type.get(e, 0) == EFFECT_NAME_TYPE_DISPLAY:
+            # Type 2: the effect-name names a CreatureDisplayID, not a file.
+            # Resolve it to that creature model's fid (pure client data, so it
+            # works on TDB-less packs) and carry the displayId for the pill.
+            disp = effect_name_generic.get(e, 0)
+            fid = creatures.fid_for_display(disp)
+            if fid:
+                attach_models[k].add((fid, MODEL_CAT_DISPLAY, at, NO_ATTACHMENT, disp))
+        else:
+            fid = effect_name_fid.get(e, 0)
+            if fid:
+                attach_models[k].add((fid, MODEL_CAT_ATTACH, at, NO_ATTACHMENT, 0))
         # the start/loop/end anims animate the attached model, but they are
         # AnimationData / AnimKit ids the spell's kit plays — index them even
         # when the model fid is unresolved (a Type 1/2 effect-name). 0 = Stand
@@ -1328,7 +1371,7 @@ class ProcEffects:
     transps: dict[int, int]             # proc ID -> transparency percent (Type 14)
     freezes: set[int]                   # proc IDs of freeze (Type 11)
     camos: set[int]                     # proc IDs of camo (Type 18)
-    models: dict[int, tuple[int, int, int, int]]  # proc ID -> model tuple (Types 9, 27)
+    models: dict[int, tuple[int, int, int, int, int]]  # proc ID -> model tuple (Types 9, 27)
     anims: dict[int, tuple[int, ...]]   # proc ID -> AnimationData IDs (Type 7)
 
 
@@ -1364,11 +1407,11 @@ def read_proc_effects(table_dir: Path, models: ModelSources) -> ProcEffects:
         elif pt == PROC_TYPE_AREAMODEL:
             fid = models.area_model_fid.get(to_int_from_float(v0), 0)
             if fid:
-                procs.models[p] = (fid, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT)
+                procs.models[p] = (fid, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0)
         elif pt == PROC_TYPE_WEAPONTRAIL:
             fid = models.weapontrail_fid.get(to_int_from_float(v0), 0)
             if fid:
-                procs.models[p] = (fid, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT)
+                procs.models[p] = (fid, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0)
         elif pt == PROC_TYPE_STANDWALK:
             # Value_0..3 are direct AnimationData IDs (stand/walk/run/...);
             # keep the meaningful ones (>0 skips the ubiquitous Stand=0 default)
@@ -1577,7 +1620,7 @@ class KitEffects:
     where the SpellVisualKitEffect dispatch lands; the per-spell walk then
     just unions these over the kits a spell reaches.
     """
-    models: dict[int, set[tuple[int, int, int, int]]]  # (fid, category, src, dst)
+    models: dict[int, set[tuple[int, int, int, int, int]]]  # (fid, category, src, dst, display)
     soundkits: dict[int, set[int]]
     animkits: dict[int, set[int]]
     anims: dict[int, set[int]]        # direct AnimationData ids (proc Type 7)
@@ -1677,11 +1720,11 @@ def read_kit_effects(
         elif et == EFFECT_TYPE_EMISSION:
             fid = models.emission_fid.get(e, 0)
             if fid:
-                kits.models[k].add((fid, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT))
+                kits.models[k].add((fid, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0))
         elif et == EFFECT_TYPE_BARRAGE:
             fid = models.barrage_fid.get(e, 0)
             if fid:
-                kits.models[k].add((fid, MODEL_CAT_BARRAGE, NO_ATTACHMENT, NO_ATTACHMENT))
+                kits.models[k].add((fid, MODEL_CAT_BARRAGE, NO_ATTACHMENT, NO_ATTACHMENT, 0))
         elif et == EFFECT_TYPE_SCREEN:
             se_id = fx.svse_screen.get(e, 0)
             if se_id in fx.screens:
@@ -2042,7 +2085,7 @@ class SpellVisuals:
     mask even where the pack does not currently emit one, so giving a category
     an icon later is a pack-section change, not a walk change.
     """
-    models: dict[int, dict[tuple[int, int, int, int], int]]   # (fid, category, src, dst)
+    models: dict[int, dict[tuple[int, int, int, int, int], int]]   # (fid, category, src, dst, display)
     sounds: dict[int, dict[tuple[int, int], int]]   # (soundkit, sound fid)
     animkits: dict[int, dict[int, int]]
     anims: dict[int, dict[int, int]]                # direct AnimationData ids (stance)
@@ -2103,7 +2146,7 @@ def walk_spells(
             # missile-set content has no SpellVisualEvent row, so no target type
             m_fids, m_sks, m_aks, (m_src, m_dst) = visual_missiles.get(v, NO_MISSILES)
             merge_masked(vis.models[spell_id],
-                         ((f, MODEL_CAT_MISSILE, m_src, m_dst) for f in m_fids), extra)
+                         ((f, MODEL_CAT_MISSILE, m_src, m_dst, 0) for f in m_fids), extra)
             merge_masked(vis.animkits[spell_id], m_aks, extra)
             for sk in m_sks:
                 merge_masked(vis.sounds[spell_id],
@@ -2221,7 +2264,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     log("Reading spell visual chain tables ...")
     spell_visuals, visual_kits, visual_sounds = read_visual_graph(table_dir, tdb_dir)
-    models = read_model_sources(table_dir, tdb_dir)
+    # creature-display chain first: read_model_sources needs it to resolve
+    # SpellVisualEffectName Type 2 (GenericID = CreatureDisplayID) to a model fid
+    creatures = read_creature_models(table_dir, tdb_dir)
+    models = read_model_sources(table_dir, tdb_dir, creatures)
     visual_missiles = read_missiles(table_dir, tdb_dir, models.effect_name_fid)
     procs = read_proc_effects(table_dir, models)
     fx = read_fx_payloads(table_dir)
@@ -2232,7 +2278,6 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     se = read_spell_effect_rows(table_dir, tdb_dir, spell_names, fx.screens,
                                 implicit_target_bits(version))
-    creatures = read_creature_models(table_dir, tdb_dir)
     spell_altname_text = read_override_names(table_dir, se.altnames)
     spell_icon_fid = read_spell_icons(table_dir, tdb_dir, spell_names)
 
@@ -2318,8 +2363,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # every kit-derived row carries its target mask as the last element (see
     # TARGET_BITS); the pack emits it as a parallel "targets" array
     model_rows = sorted(
-        (s, f, c, m, src, dst)
-        for s, pairs in vis.models.items() for (f, c, src, dst), m in pairs.items())
+        (s, f, c, m, src, dst, disp)
+        for s, pairs in vis.models.items() for (f, c, src, dst, disp), m in pairs.items())
     sound_rows = sorted(
         (s, sk, f, m) for s, pairs in vis.sounds.items() for (sk, f), m in pairs.items())
     anim_rows = sorted(
@@ -2453,6 +2498,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spells": len(spell_ids),
                 "files": len(file_ids),
                 "spellModels": len(model_rows),
+                "spellDisplayModels": sum(1 for r in model_rows if r[2] == MODEL_CAT_DISPLAY),
                 "spellSounds": len(sound_rows),
                 "spellAnimKits": len(anim_rows),
                 "animKitAnims": len(kit_anim_rows),
@@ -2513,6 +2559,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "targets": [r[3] for r in model_rows],
             "srcAttach": [r[4] for r in model_rows],
             "dstAttach": [r[5] for r in model_rows],
+            # CreatureDisplayID on MODEL_CAT_DISPLAY rows, 0 elsewhere
+            "displayIds": [r[6] for r in model_rows],
         },
         "attachmentNames": M2_ATTACHMENT_NAMES,
         "modelCatNames": MODEL_CAT_NAMES,

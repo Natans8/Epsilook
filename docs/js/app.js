@@ -1421,7 +1421,9 @@
     buildKitGroups(td, hitsFirst(cats, (c) => c.hit), {
       headerTag: (c) => modelCatHeadTag(c.name, c.hit),
       itemsOf: (c) => hitsFirst(c.items, (e) => modelFileIsHit(d.files.get(e.fid), c.name)),
-      itemTag: (e, c) => modelTag(e.fid, c.name, e.targets, e.src, e.dst, travels(e.cat)),
+      itemTag: (e, c) => (isDisplayCat(e.cat)
+        ? displayTag(e)
+        : modelTag(e.fid, c.name, e.targets, e.src, e.dst, travels(e.cat))),
       itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
       groupNoun: "category",
       moreInHead: true,
@@ -2212,6 +2214,7 @@
     area: "Ground / area model (SpellVisualKitAreaModel)", // stale-pack word
     trail: "Weapon trail model (WeaponTrail)",
     barrage: "Volley of models (BarrageEffect)",
+    display: "Creature display model attached to the caster/target (SpellVisualEffectName Type 2)",
   };
 
   function modelCatHeadTag(category, hit) {
@@ -2262,6 +2265,16 @@
 
   const travels = (cat) =>
     TRAVELLING_MODEL_CATS.has((state.data.modelCatNames || {})[cat] || "");
+
+  /* The one model category resolved from a CreatureDisplayID rather than a
+   * FileDataID: its pills carry the displayId and render morph-style (Wowhead
+   * model viewer, copy displayId, .morph, .lo) instead of the plain model
+   * treatment. Matched by category word so it survives the numeric id shifting,
+   * same rule as TRAVELLING_MODEL_CATS. */
+  const MODEL_CAT_DISPLAY_WORD = "display";
+
+  const isDisplayCat = (cat) =>
+    ((state.data.modelCatNames || {})[cat] || "") === MODEL_CAT_DISPLAY_WORD;
 
   function attachSegment(src, dst, field, twoPoint) {
     const d = state.data;
@@ -2349,6 +2362,49 @@
     const cmd = fillTemplate(CFG.modelCopyTemplate,
       { base: stripExt(file.base), file: file.base, path: file.path, fid });
     tag.appendChild(tagButton(".lo", `Copy:  ${cmd}`, cmd));
+    return tag;
+  }
+
+  /* Display pill (MODELS column): a model reached through a CreatureDisplayID
+   * (SpellVisualEffectName Type 2) rather than a raw file. Sits in the Models
+   * column but wears the morph pill's buttons — the Wowhead model viewer opens
+   * the creature skin composited, and .morph / display-id copies are what you
+   * actually want for a creature. It still carries its attachment point like
+   * any other attached model. Label is the model's base filename (no TDB
+   * needed); the displayId drives the buttons. */
+  function displayTag(e) {
+    const d = state.data;
+    const { fid, disp: displayId, targets: mask } = e;
+    const file = fid ? (d.files.get(fid) || { path: "", base: "" }) : { path: "", base: "" };
+    const tag = el("span", "tag model");
+    if (modelFileIsHit(d.files.get(fid), MODEL_CAT_DISPLAY_WORD)) tag.classList.add("hit");
+
+    if (displayId && CFG.wowheadMorphUrl) {
+      tag.appendChild(wowheadLink(fillTemplate(CFG.wowheadMorphUrl, { id: displayId }),
+        `View DisplayID ${displayId} in Wowhead's model viewer`));
+    }
+
+    const base = file.base ? stripExt(file.base) : "";
+    const txt = el("button", "tag-label", base || `display #${displayId}`);
+    txt.title = `${file.path || "(model name unknown)"}`
+      + `\nDisplayID ${displayId}`
+      + `\nClick: find spells using this model · Shift-click: exclude`;
+    txt.dataset.search = base ? `model:"${file.base}"` : "";
+    tag.appendChild(txt);
+    addTargetIcons(tag, mask);
+    // single-point route (dst unused), like an ordinary attached model
+    const attach = attachSegment(e.src, e.dst, "model", false);
+    if (attach) tag.appendChild(attach);
+
+    if (displayId) {
+      tag.appendChild(tagButton("⧉", `Copy display ID: ${displayId}`, String(displayId)));
+      const cmd = fillTemplate(CFG.morphCopyTemplate, { id: displayId });
+      tag.appendChild(tagButton(".morph", `Copy:  ${cmd}`, cmd));
+    }
+    if (file.base) {
+      const lookup = fillTemplate(CFG.morphLookupTemplate, { id: displayId, file: file.base });
+      tag.appendChild(tagButton(".lo", `Copy:  ${lookup}`, lookup));
+    }
     return tag;
   }
 

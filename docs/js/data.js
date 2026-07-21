@@ -156,7 +156,7 @@ window.EpsilookData = (() => {
     const spellModels = new Map();
     /** @type {Map<number, number[]>} fid -> [spell id] */
     const modelSpells = new Map();
-    /** @type {Map<number, {fid: number, cat: number, targets: number, src: number, dst: number}[]>} */
+    /** @type {Map<number, {fid: number, cat: number, targets: number, src: number, dst: number, disp: number}[]>} */
     const spellModelCats = new Map();
     /** @type {Map<number, Set<number>>} cat id -> Set(spell id) */
     const modelCatSpells = new Map();
@@ -167,7 +167,7 @@ window.EpsilookData = (() => {
     /** @type {Record<number, string>} raw M2 attachment id -> name */
     const attachmentNames = pack.attachmentNames || {};
     {
-      const { spellIds, fids, cats, targets, srcAttach, dstAttach } = pack.spellModels;
+      const { spellIds, fids, cats, targets, srcAttach, dstAttach, displayIds } = pack.spellModels;
       for (let i = 0; i < spellIds.length; i++) {
         pushTo(modelSpells, fids[i], spellIds[i]);
         if (!cats) { pushTo(spellModels, spellIds[i], fids[i]); continue; }
@@ -177,6 +177,8 @@ window.EpsilookData = (() => {
           // none, which renders as no attachment segment
           src: srcAttach ? srcAttach[i] : -1,
           dst: dstAttach ? dstAttach[i] : -1,
+          // CreatureDisplayID on display-category rows (format 27); 0 elsewhere
+          disp: displayIds ? displayIds[i] : 0,
         });
         let set = modelCatSpells.get(cats[i]);
         if (!set) modelCatSpells.set(cats[i], set = new Set());
