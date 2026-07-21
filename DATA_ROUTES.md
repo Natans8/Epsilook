@@ -281,13 +281,15 @@ already eats — so it drops straight into the existing sound plumbing. It is th
 the caster/hostile redirects), populated on every pack including Vanilla — and
 it inherits the redirect target bit of whatever edge reached the visual.
 
-### 3e. The three animation routes
+### 3e. The animation routes
 
 ```mermaid
 flowchart LR
   K6["kit ET 6 → SpellVisualAnim"] -->|AnimKitID| AKS["AnimKitSegment"] --> AID1["AnimIDs — grouped under an AnimKit head"]
   MAK["SpellVisualMissile.AnimKitID"] --> AKS
   K6 -->|"Initial/LoopAnimID"| AID2["AnimIDs — loose pills"]
+  MA2["SpellVisualKitModelAttach"] -->|"AnimKitID"| AKS
+  MA2 -->|"Start/Anim/EndAnimID"| AID2
   P7["proc Type 7"] --> AID3["AnimIDs — 'stance' group"]
   VS["VehicleSeat (via aura 296 → Vehicle)"] -->|"Enter/Ride/RideUpper/Exit anims"| AID4["AnimIDs — 'passenger' group"]
   VS -->|"VehicleEnter/Exit/RideAnimLoop"| AID2
@@ -301,6 +303,16 @@ flowchart LR
 `SpellVisualAnim`'s initial/loop anims are **the dominant source** — 119k rows
 vs 32k animkit rows on 9.2.7. `-1` and `0` both mean unset (0 would be Stand).
 Impact kits animate the *target*, so these are not caster-only.
+
+`SpellVisualKitModelAttach` carries animations on the SAME rows that attach a
+model (§3c, attachment point in §3h): its `StartAnimID`/`AnimID`/`EndAnimID` are
+AnimationData ids for the attached model's start/loop/end and join the loose
+pills; its `AnimKitID` rejoins the animkit groups. Keyed by kit, they union into
+the existing buckets (no pack section of their own), and are indexed even when
+the model fid is unresolved (a `SpellVisualEffectName` Type 1/2 row, whose model
+comes from `GenericID` not `ModelFileDataID`), since they are anims the spell's
+kit plays. Same `>0` gate as `SpellVisualAnim`. Adds ~10.5k animkit and ~6.7k
+loose-anim (spell,anim) pairs on 9.2.7.
 
 The vehicle-seat route splits by **whose** animation it is: the nine
 passenger columns (`EnterAnimStart/Loop`, `RideAnimStart/Loop`,
@@ -685,8 +697,8 @@ differently:
 
 | Section | WotLK | 9.2.7 | Reading |
 |---|---:|---:|---|
-| `spellAnimKits` | 41 | 31,834 | AnimKits barely existed in the WotLK era |
-| `spellVisualAnims` | 39,247 | 119,051 | …but `SpellVisualAnim` was already the dominant animation source |
+| `spellAnimKits` | 446 | 42,415 | AnimKits barely existed in the WotLK era (its 446 come mostly from the §3e ModelAttach route) |
+| `spellVisualAnims` | 39,247 | 125,793 | …but `SpellVisualAnim` was already the dominant animation source |
 | `spellSounds` | 71,474 | 674,779 | modern spells carry far denser sound graphs |
 | `spellShapeshifts` | 69 | 120 | forms grew slowly; displays actually *shrank* (20 → 18) |
 
@@ -754,7 +766,7 @@ footing, not an affirmative license.
 |---|---|
 | **Models** | attach (kit→ModelAttach→EffectName), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect); every row also carries its M2 attachment point (§3h) |
 | **Sounds** | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID`, `SpellVisual.AnimEventSoundID` — all → SoundKitEntry |
-| **Animations** | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), proc Type 7 (stance), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped) |
+| **Animations** | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), ModelAttach Start/Anim/End (loose) + its AnimKit (grouped), proc Type 7 (stance), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped) |
 | **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, seat — see §3a–3i |
 | **Mechanics** | `SpellEffect.Effect` + `.EffectAura` enums, names from WoWDBDefs |
 | **Name search** | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names |

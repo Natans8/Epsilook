@@ -1169,6 +1169,12 @@ class ModelSources:
     # Routes with a single attach point put it in `source` and leave
     # `destination` NO_ATTACHMENT; routes with none use NO_ATTACHMENT for both.
     attach_models: dict[int, set[tuple[int, int, int, int]]]
+    # animations carried on the SAME SpellVisualKitModelAttach rows — the
+    # attached model's start/loop/end AnimationData ids and its AnimKit. Keyed
+    # by kit, they union straight into the existing visual-anim / animkit
+    # buckets, so they need no pack section of their own.
+    attach_anims: dict[int, set[int]]     # kit -> AnimationData ids (Start/Anim/End)
+    attach_animkits: dict[int, set[int]]  # kit -> AnimKit ids
 
 
 def read_model_sources(table_dir: Path, tdb_dir: Path | None) -> ModelSources:
@@ -1185,14 +1191,28 @@ def read_model_sources(table_dir: Path, tdb_dir: Path | None) -> ModelSources:
     # instead of merging — 10.5% of (kit, effect name) pairs on 9.2.7 carry
     # more than one distinct attachment.
     attach_models: dict[int, set[tuple[int, int, int, int]]] = defaultdict(set)
-    for kit_id, en_id, attach in read_table(
+    attach_anims: dict[int, set[int]] = defaultdict(set)
+    attach_animkits: dict[int, set[int]] = defaultdict(set)
+    for kit_id, en_id, attach, start_a, anim_a, end_a, animkit in read_table(
         table_dir, "SpellVisualKitModelAttach",
-        ["ParentSpellVisualKitID", "SpellVisualEffectNameID", "AttachmentID"]
+        ["ParentSpellVisualKitID", "SpellVisualEffectNameID", "AttachmentID",
+         "StartAnimID", "AnimID", "EndAnimID", "AnimKitID"]
     ):
-        fid = effect_name_fid.get(to_int(en_id), 0)
         k = to_int(kit_id)
-        if k and fid:
+        if not k:
+            continue
+        fid = effect_name_fid.get(to_int(en_id), 0)
+        if fid:
             attach_models[k].add((fid, MODEL_CAT_ATTACH, to_int(attach), NO_ATTACHMENT))
+        # the start/loop/end anims animate the attached model, but they are
+        # AnimationData / AnimKit ids the spell's kit plays — index them even
+        # when the model fid is unresolved (a Type 1/2 effect-name). 0 = Stand
+        # and -1 = unset are both skipped, matching the SpellVisualAnim rule.
+        for a in (to_int(start_a), to_int(anim_a), to_int(end_a)):
+            if a > 0:
+                attach_anims[k].add(a)
+        if to_int(animkit) > 0:
+            attach_animkits[k].add(to_int(animkit))
 
     # SpellVisualKitAreaModel carries the model fid directly (no
     # SpellVisualEffectName hop) and is reached two ways: kit EffectType 8 ->
@@ -1223,7 +1243,8 @@ def read_model_sources(table_dir: Path, tdb_dir: Path | None) -> ModelSources:
         weapontrail_fid[to_int(wt_id)] = to_int(wt_fid)
 
     return ModelSources(effect_name_fid, area_model_fid, emission_fid,
-                        barrage_fid, weapontrail_fid, attach_models)
+                        barrage_fid, weapontrail_fid, attach_models,
+                        attach_anims, attach_animkits)
 
 
 # what a visual with no missiles contributes: (model fids, soundkits, animkits)
@@ -1586,8 +1607,11 @@ def read_kit_effects(
     """
     kits = KitEffects(
         models=defaultdict(set, {k: set(v) for k, v in models.attach_models.items()}),
-        soundkits=defaultdict(set), animkits=defaultdict(set), anims=defaultdict(set),
-        visual_anims=defaultdict(set),
+        soundkits=defaultdict(set), anims=defaultdict(set),
+        # the attach rows' AnimKit / start-loop-end anims seed the same buckets
+        # the SpellVisualKitEffect walk fills below (it unions, so this is safe)
+        animkits=defaultdict(set, {k: set(v) for k, v in models.attach_animkits.items()}),
+        visual_anims=defaultdict(set, {k: set(v) for k, v in models.attach_anims.items()}),
         chains=defaultdict(set), dissolves=defaultdict(set), glows=defaultdict(set),
         shadowies=defaultdict(set), ghost_mats=defaultdict(set), tints=defaultdict(set),
         desats=defaultdict(set), transps=defaultdict(set), screens=defaultdict(set),
