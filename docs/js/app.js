@@ -2378,13 +2378,19 @@
   function modelTag(fid, catName, mask = 0, src = -1, dst = -1, twoPoint = false) {
     const d = state.data;
     const file = d.files.get(fid) || { fid, path: "", base: "", searchL: "" };
+    // A negative fid is a fileless SENTINEL (WEAPON_FID in build_data): the
+    // caster's own equipped weapon, which has no fixed model in the data. It
+    // renders as a plain marker pill — no 3D/copy buttons — but keeps its
+    // category (attached vs thrown missile), attachment point and target icon.
+    const synthetic = fid < 0;
     const tag = el("span", "tag model");
+    if (synthetic) tag.classList.add("synthetic");
     tag.title = file.path || "(name unknown)";
     // with "" for the category (the stale-pack flat list) this reduces to
     // the plain fileIsHit test
     if (modelFileIsHit(file, catName || "")) tag.classList.add("hit");
 
-    if (CFG.modelViewerUrl) {
+    if (!synthetic && CFG.modelViewerUrl) {
       const view = el("a", "tag-view");
       // wireframe cube (the universal 3D-preview glyph); stroke inherits
       // currentColor so the gold hover tint applies
@@ -2401,17 +2407,27 @@
       tag.appendChild(view);
     }
 
-    const txt = el("button", "tag-label", file.base ? stripExt(file.base) : `file #${fid}`);
-    txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this model · Shift-click: exclude`;
-    txt.dataset.search = file.base ? `model:"${file.base}"` : "";
+    const labelText = file.base ? stripExt(file.base)
+      : (synthetic ? "equipped weapon" : `file #${fid}`);
+    const txt = el("button", "tag-label", labelText);
+    txt.title = synthetic
+      ? "The caster's own equipped weapon (SpellVisualEffectName Type 3–10)"
+        + " — resolved in-game, no fixed model"
+        + "\nClick: find spells that show the equipped weapon · Shift-click: exclude"
+      : `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this model · Shift-click: exclude`;
+    txt.dataset.search = file.base ? `model:"${file.base}"`
+      : (synthetic ? 'model:"equipped weapon"' : "");
     tag.appendChild(txt);
     addTargetIcons(tag, mask);
     const attach = attachSegment(src, dst, "model", twoPoint);
     if (attach) tag.appendChild(attach);
 
-    const cmd = fillTemplate(CFG.modelCopyTemplate,
-      { base: stripExt(file.base), file: file.base, path: file.path, fid });
-    tag.appendChild(tagButton(".lo", `Copy:  ${cmd}`, cmd));
+    // fileless sentinels have no fid to look up / copy — the marker is the pill
+    if (!synthetic) {
+      const cmd = fillTemplate(CFG.modelCopyTemplate,
+        { base: stripExt(file.base), file: file.base, path: file.path, fid });
+      tag.appendChild(tagButton(".lo", `Copy:  ${cmd}`, cmd));
+    }
     return tag;
   }
 
