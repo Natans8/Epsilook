@@ -134,6 +134,43 @@ that is why a row can be caster *and* target.
 | 5 | 16 | `area` | on the ground where the missile lands |
 | 0 | — | — | effectively unused (1 row in 207,241 on 9.2.7); contributes nothing |
 
+**…but `TargetType` is relative to the CAST, not to the visual.** It distinguishes
+"the caster" from "the unit being cast at" — and on a **self-cast spell those are
+the same unit**, where the client still writes `Target`. Taken literally that draws
+a *target* icon on Divine Shield's own bubble, Ice Barrier, Invisibility and every
+other self-buff's aura visual: 32,136 spells and 48,025 model rows on 9.2.7.
+`SpellEffect.ImplicitTarget` is what tells a self-cast from a real one, so the two
+tables must be read together (`resolve_target_mask` in `build_data.py`).
+
+*Which* effect row to believe depends on **when** the visual plays —
+`SpellVisualEvent.StartEvent` (`meta/enums/SpellVisualEventEvent.dbde`: 1/2 precast,
+3 cast, 4/5 travel, 6 impact, **7/8 aura**, 9/10 area trigger, 11/12 channel,
+13 one-shot). So each kit edge keeps its mask split in two halves:
+
+| phase | who to believe | why |
+|---|---|---|
+| **aura** (StartEvent 7/8) | the `APPLY_AURA` effects' implicit target | the visual belongs to the aura, so it plays on whoever *carries* it — which can disagree with the rest of the spell (Vanish, Blink: a self-aura beside effects aimed at others) |
+| every other phase | *all* effects' implicit targets | they share the cast's frame, so "Target" is the caster only when the whole spell is self-cast (Healing Potion, Eye of Kilrogg) |
+
+A `Target` bit becomes `Caster` when its half's test says the spell targets only
+the caster. **Only that bit is rewritten** — `TargetType 4` ("Target, not caster")
+says outright that it is not the caster, so it never flips. The rule is
+monotone: it replaces bit 2 with bit 1 and can never clear a caster bit, which
+makes the transition histogram a build oracle (9.2.7: `2→1` 37,485, `3→1` 10,276,
+`7→5` 153, `10→9` 21, `18→17` 18; plus 22 rows `2→3` where the aura phase flips
+but another phase keeps a genuine target).
+
+The contrast that shows it working: **17 Power Word: Shield** (`TARGET_UNIT_TARGET_ALLY`)
+keeps `holydivineshield_state_base` on *target*, while **642 Divine Shield**
+(`TARGET_UNIT_CASTER`) moves `cfx_paladin_divineshield_statebase` to *caster* —
+the same kind of shield-state visual, correctly told apart. Banish and Polymorph
+are untouched.
+
+Note this reads `StartEvent` **only** far enough to get the icons right; the full
+phase axis (surfacing cast/aura/impact per pill) is deliberately not built. When
+it is: 97.7% of kits appear in just one phase, so phase is nearly a property of
+the kit, and `StartEvent`/`EndEvent` are populated on all ten packs (no drift).
+
 **The missile path bypasses events entirely**, so missile content carries *no*
 mask — that is exactly the ~4% of unmasked rows in every pack, and the row count
 matching the missile row count is a good build oracle.
@@ -869,4 +906,4 @@ footing, not an affirmative license.
 | **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, seat — see §3a–3i |
 | **Mechanics** | `SpellEffect.Effect` + `.EffectAura` enums, names from WoWDBDefs |
 | **Name search** | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names |
-| **Target bits** | `SpellVisualEvent.TargetType` on the kit edge (§2), plus `Caster`/`HostileSpellVisualID` redirects that mark whatever they reach caster/target |
+| **Target bits** | `SpellVisualEvent.TargetType` on the kit edge (§2), resolved against `SpellEffect.ImplicitTarget` per phase (`StartEvent`) so a self-cast spell's "Target" reads as the caster, plus `Caster`/`HostileSpellVisualID` redirects that mark whatever they reach caster/target |

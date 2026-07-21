@@ -530,6 +530,11 @@ def seat_attachment_name(index: int) -> str:
 # the SummonProperties row governing how the summon behaves
 EFFECT_SUMMON = 28
 
+# SpellEffect.Effect value that applies an aura. Its ImplicitTarget says WHO
+# ends up carrying the aura, which is what resolve_target_mask needs to read an
+# aura-phase visual's "Target" correctly (see there).
+EFFECT_APPLY_AURA = 6
+
 # SummonProperties.Control values (meta/enums/SummonPropertiesControl.dbde —
 # too few and too free-form for read_enum_names). 0 = uncontrolled; shown as
 # no word, like untinted beams.
@@ -562,6 +567,51 @@ TEX_OVERLAY, TEX_MASK = 0, 1
 # (the bits themselves are named above TDB_TABLES, where VISUAL_REDIRECTS needs them)
 TARGET_BITS = {1: TARGET_CASTER, 2: TARGET_TARGET, 3: TARGET_AREA,
                4: TARGET_NOT_CASTER, 5: TARGET_MISSILE_DEST}
+
+# `TargetType` is relative to the CAST — "the caster" vs "the unit being cast
+# at" — and NOT a claim about which unit owns the visual. When a spell is cast
+# on the caster themself the two are the SAME unit, and the client still writes
+# `Target`: 29,886 spells on 9.2.7 (Divine Shield's bubble, Ice Barrier,
+# Invisibility, every self-buff's aura visual) would otherwise render a "target"
+# icon for content that plays on you. `SpellEffect.ImplicitTarget` is what tells
+# a self-cast from a real one, so the two tables have to be read together.
+#
+# Which effect row to believe depends on WHEN the visual plays
+# (SpellVisualEvent.StartEvent, meta/enums/SpellVisualEventEvent.dbde:
+# 1/2 precast, 3 cast, 4/5 travel, 6 impact, 7/8 aura, 9/10 area trigger,
+# 11/12 channel, 13 one-shot):
+#
+#   * AURA phase — the visual belongs to the aura, so it plays on whoever
+#     CARRIES the aura: believe the APPLY_AURA effects' implicit target. This is
+#     the only phase that can disagree with the rest of the spell, which is why
+#     it is the one phase split out here. It rescues mixed spells like Vanish
+#     and Blink, whose self-aura rides alongside effects aimed at others.
+#   * every other phase shares the cast's frame, so "Target" only means the
+#     caster when the WHOLE spell is self-cast: believe every effect's implicit
+#     target. This catches self-cast impact visuals (Healing Potion, Eye of
+#     Kilrogg) that the aura test alone would miss.
+#
+# Only the plain TARGET_TARGET bit is rewritten. TARGET_NOT_CASTER stays put —
+# it says "not the caster" outright, so it can never mean the caster. The full
+# phase axis (surfacing cast/aura/impact per pill) is deliberately NOT built
+# here; this reads StartEvent only far enough to get the icons right.
+AURA_PHASE_EVENTS = frozenset({7, 8})   # Aura Start / Aura End
+
+
+def resolve_target_mask(aura_mask: int, other_mask: int,
+                        aura_bits: int, cast_bits: int) -> int:
+    """Fold a kit's aura-phase and other-phase target masks into one.
+
+    `aura_bits` is the OR of the spell's APPLY_AURA implicit-target bits,
+    `cast_bits` the OR over all of its effects. A `TARGET_TARGET` bit becomes
+    `TARGET_CASTER` when the matching test says the spell targets only the
+    caster — i.e. when "the target" IS the caster.
+    """
+    if aura_mask & TARGET_TARGET and aura_bits == TARGET_CASTER:
+        aura_mask = (aura_mask & ~TARGET_TARGET) | TARGET_CASTER
+    if other_mask & TARGET_TARGET and cast_bits == TARGET_CASTER:
+        other_mask = (other_mask & ~TARGET_TARGET) | TARGET_CASTER
+    return aura_mask | other_mask
 
 # The search word each mask bit answers to. Two pairs of bits deliberately
 # share a word: "target, never caster" is still a target (it keeps its own bit,
@@ -1125,7 +1175,9 @@ def expand_redirects(
 
 def read_visual_graph(
     table_dir: Path, tdb_dir: Path | None
-) -> tuple[dict[int, dict[int, int]], dict[int, dict[int, int]], dict[int, int]]:
+) -> tuple[dict[int, dict[int, int]],
+           dict[int, dict[int, tuple[int, int]]],
+           dict[int, int]]:
     """Read the spell -> visual -> kit edges of the visual graph.
 
     Both hops are many-to-many. SpellXSpellVisual rows are keyed by row ID
@@ -1184,14 +1236,24 @@ def read_visual_graph(
         s: expand_redirects(vs, redirects) for s, vs in direct.items()
     }
 
-    visual_kits: dict[int, dict[int, int]] = defaultdict(dict)
-    for visual_id, kit_id, target_type in read_table(
-        table_dir, "SpellVisualEvent", ["SpellVisualID", "SpellVisualKitID", "TargetType"]
+    # Each (visual, kit) edge keeps its target mask split by PHASE — aura-phase
+    # events in one half, everything else in the other — because "Target" means
+    # different units in the two (see resolve_target_mask, which folds them back
+    # into one mask once the spell is known). Within a half the bits still union:
+    # impact kits carry duplicate event rows differing only in TargetType.
+    visual_kits: dict[int, dict[int, tuple[int, int]]] = defaultdict(dict)
+    for visual_id, kit_id, target_type, start_event in read_table(
+        table_dir, "SpellVisualEvent",
+        ["SpellVisualID", "SpellVisualKitID", "TargetType", "StartEvent"]
     ):
         v, k = to_int(visual_id), to_int(kit_id)
         if v and k:
             bit = TARGET_BITS.get(to_int(target_type), NO_TARGET)
-            visual_kits[v][k] = visual_kits[v].get(k, NO_TARGET) | bit
+            aura_mask, other_mask = visual_kits[v].get(k, (NO_TARGET, NO_TARGET))
+            if to_int(start_event) in AURA_PHASE_EVENTS:
+                visual_kits[v][k] = (aura_mask | bit, other_mask)
+            else:
+                visual_kits[v][k] = (aura_mask, other_mask | bit)
     return spell_visuals, visual_kits, visual_sounds
 
 
@@ -1836,6 +1898,12 @@ class SpellEffectRows:
     vehicle_targets: dict[tuple[int, int], int]
     invis_targets: dict[tuple[int, int], int]
     detect_targets: dict[tuple[int, int], int]
+    # Whole-spell implicit-target bits, used by resolve_target_mask to tell a
+    # self-cast from a real one. `aura_target_bits` is OR-ed over the spell's
+    # APPLY_AURA effects only (who ends up carrying the aura); `cast_target_bits`
+    # over every effect it has (is the whole spell aimed at the caster?).
+    aura_target_bits: dict[int, int]
+    cast_target_bits: dict[int, int]
 
 
 def read_spell_effect_rows(
@@ -1877,11 +1945,17 @@ def read_spell_effect_rows(
                           defaultdict(set),
                           defaultdict(int), defaultdict(int), defaultdict(int),
                           defaultdict(int), defaultdict(int),
+                          defaultdict(int), defaultdict(int),
                           defaultdict(int), defaultdict(int))
     for s, effect_id, aura_id, m0, m1, it0, it1 in se_rows.values():
         if s not in spell_names:
             continue
         mask = target_bits.get(it0, 0) | target_bits.get(it1, 0)
+        # accumulate the whole-spell views resolve_target_mask reads: every
+        # effect, and the APPLY_AURA effects on their own
+        out.cast_target_bits[s] |= mask
+        if effect_id == EFFECT_APPLY_AURA:
+            out.aura_target_bits[s] |= mask
         if effect_id:
             out.effects[s].add(effect_id)
         if aura_id:
@@ -2161,13 +2235,15 @@ class SpellVisuals:
 def walk_spells(
     spell_names: dict[int, str],
     spell_visuals: dict[int, dict[int, int]],
-    visual_kits: dict[int, dict[int, int]],
+    visual_kits: dict[int, dict[int, tuple[int, int]]],
     visual_missiles: dict[int, tuple],
     kits: KitEffects,
     soundkit_files: dict[int, set[int]],
     fx: FxPayloads,
     spell_screens: dict[int, set[int]],
     visual_sounds: dict[int, int],
+    aura_target_bits: dict[int, int],
+    cast_target_bits: dict[int, int],
 ) -> SpellVisuals:
     """Walk spell -> visual -> kit once, unioning every payload per spell.
 
@@ -2212,8 +2288,12 @@ def walk_spells(
             if ae_sk:
                 merge_masked(vis.sounds[spell_id],
                              ((ae_sk, f) for f in soundkit_files.get(ae_sk, ())), extra)
-            for k, mask in visual_kits.get(v, {}).items():
-                mask |= extra
+            for k, (aura_mask, other_mask) in visual_kits.get(v, {}).items():
+                # "Target" means the caster on a self-cast spell, and the aura
+                # phase judges that by its own effects — see resolve_target_mask
+                mask = resolve_target_mask(aura_mask, other_mask,
+                                           aura_target_bits.get(spell_id, 0),
+                                           cast_target_bits.get(spell_id, 0)) | extra
                 merge_masked(vis.models[spell_id], kits.models.get(k, ()), mask)
                 merge_masked(vis.animkits[spell_id], kits.animkits.get(k, ()), mask)
                 merge_masked(vis.anims[spell_id], kits.anims.get(k, ()), mask)
@@ -2365,7 +2445,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # --- walk the chains per spell ----------------------------------------
     log("Walking spell -> model/sound/animkit/chain chains ...")
     vis = walk_spells(spell_names, spell_visuals, visual_kits, visual_missiles,
-                      kits, soundkit_files, fx, se.screens, visual_sounds)
+                      kits, soundkit_files, fx, se.screens, visual_sounds,
+                      se.aura_target_bits, se.cast_target_bits)
 
     # --- file names from the listfile -------------------------------------
     used_chains = {c[0] for chains in vis.chains.values() for c in chains}
