@@ -2610,9 +2610,9 @@
    * whole payload. Desaturate gets a decorative grey swatch keyed to the
    * strength; transparency has no swatch. Clicking searches category + %. */
   function percentFxTag(category, percent, hit) {
-    // .pct: as a compact pill this renders (label | value) — a flat divider
+    // .flat: as a compact pill this renders (label | value) — a flat divider
     // instead of the rounded value capsule other compact groups get
-    const tag = el("span", "tag fx pct");
+    const tag = el("span", "tag fx flat");
     if (hit) tag.classList.add("hit");
 
     if (category === "desaturate") {
@@ -2664,13 +2664,15 @@
   function channelTag(side, type, count, mask = 0) {
     const invis = side === "invis";
     const priceless = invis && count === 0;
-    const tag = el("span", "tag fx" + (priceless ? " priceless" : ""));
+    // .flat: one per spell (SpellEffect aura) — render (label | id | count)
+    // with flat dividers, not the rounded group capsule.
+    const tag = el("span", "tag fx flat" + (priceless ? " priceless" : ""));
     if (channelIsHit(side, type, count)) tag.classList.add("hit");
     const verb = invis ? (priceless ? "unseen" : `seen by ${count}`) : `reveals ${count}`;
     const other = invis ? "detect" : "invis";
     const plural = count === 1 ? "" : "s";
-    const txt = el(priceless ? "span" : "button", "tag-label", `${type} · ${verb}`);
-    txt.title = `${invis ? "Invisibility" : "Detection"} channel ${type}\n`
+    const search = priceless ? "" : `fx:"${other} ${type}"`;
+    const title = `${invis ? "Invisibility" : "Detection"} channel ${type}\n`
         + (invis
             ? (priceless ? "Nothing detects this — nothing can reveal it (priceless)"
                 : `Detected by ${count} spell${plural}`)
@@ -2678,8 +2680,15 @@
         + (priceless ? ""
             : `\nClick: show the ${count} counterpart${plural} (fx:${other} ${type})`
             + ` · Shift-click: exclude`);
-    if (!priceless) txt.dataset.search = `fx:"${other} ${type}"`;
-    tag.appendChild(txt);
+    // two divider-separated segments — (id | count), mirroring the model pill's
+    // (name | attach) grammar. Both carry the same navigation.
+    const idSeg = el(priceless ? "span" : "button", "tag-label", String(type));
+    const cntSeg = el(priceless ? "span" : "button", "tag-attach", verb);
+    for (const seg of [idSeg, cntSeg]) {
+      seg.title = title;
+      if (search) seg.dataset.search = search;
+      tag.appendChild(seg);
+    }
     addTargetIcons(tag, mask);
     return tag;
   }
