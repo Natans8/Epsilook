@@ -363,6 +363,36 @@ MODEL_CAT_DISPLAY = 5  # SpellVisualEffectName Type 2 (a CreatureDisplayID's mod
 # model (SpellVisualEffectNameType.dbde). 0 = FileDataID (ModelFileDataID),
 # 1 = Item (GenericID = Item::ID), 2 = CreatureDisplayInfo (GenericID = display).
 EFFECT_NAME_TYPE_DISPLAY = 2
+# SpellVisualEffectName.Type 3-10 are undocumented in the enum, but every one of
+# them carries NO model in the data — ModelFileDataID AND GenericID are both 0 —
+# while attaching to weapon/hand M2 points and being reused as missiles.
+# Investigation (Task D) found they all mean the same thing: "the caster's own
+# equipped weapon", resolved client-side at cast, with the Type picking the
+# weapon slot/class (3/4 = thrown mainhand/offhand, 5/10 = ranged, 8/9 = held
+# mainhand/offhand). There is no file to name, so these rows carry a sentinel
+# fid (WEAPON_FID) and render as one "equipped weapon" marker pill — no
+# 3D/texture/Wowhead — keeping their category (attached vs thrown-as-missile)
+# and attachment point. A rare Type-3/5 row DOES carry a real ModelFileDataID
+# (a hardcoded weapon, e.g. Sylvanas's bow); that wins and renders as a normal
+# model, so only the fileless rows become the marker.
+#
+# ...except that "fileless" is not always spelled 0: the Classic re-release
+# clients backfill these rows with an UNNAMED PLACEHOLDER fid. Cata 4.4.2 points
+# all seven of its weapon rows at fid 1255628, and WotLK one — the very same
+# effect-name IDs (8905-8909, 9007, 50201) that are fid 0 on Vanilla, TBC, MoP,
+# Legion, BfA, SL, DF and TWW. One fid shared across six different weapon slots
+# is not a per-weapon model, and taken literally it renders a junk "file #1255628"
+# pill. So a weapon row's fid is trusted only when the listfile can NAME it,
+# which keeps the genuinely hardcoded weapons (Sylvanas's bow, fid 3597252 on
+# 9.2.7+) as real models while placeholders fall through to the marker. That
+# rule needs no per-version branch and no hardcoded fid list.
+EFFECT_NAME_TYPE_WEAPON = frozenset(range(3, 11))
+WEAPON_FID = -1  # sentinel model fid: the caster's equipped weapon (no real file)
+# Fileless model sentinels get a synthetic files-table entry: it names the pill
+# and makes it searchable (model:weapon / model:equipped) through the normal
+# file-name path, so no search/export route needs to special-case the sentinel.
+# The frontend drops the fid buttons (3D/copy) for a negative fid.
+SYNTHETIC_MODEL_FILES = {WEAPON_FID: "equipped weapon"}
 MODEL_CAT_NAMES = {
     # Attach models have no category word: they are the plain "this model plays
     # on a unit" case, and which unit is now said by the target icon instead
@@ -1174,6 +1204,7 @@ class ModelSources:
     row) references them.
     """
     effect_name_fid: dict[int, int]   # SpellVisualEffectName.ID -> model fid
+    effect_name_type: dict[int, int]  # SpellVisualEffectName.ID -> Type (0 file, 2 display, 3-10 weapon)
     area_model_fid: dict[int, int]    # SpellVisualKitAreaModel.ID -> model fid
     emission_fid: dict[int, int]      # SpellEffectEmission.ID -> model fid (ET 8)
     barrage_fid: dict[int, int]       # BarrageEffect.ID -> model fid (ET 17)
@@ -1193,7 +1224,8 @@ class ModelSources:
 
 
 def read_model_sources(
-    table_dir: Path, tdb_dir: Path | None, creatures: "CreatureModels"
+    table_dir: Path, tdb_dir: Path | None, creatures: "CreatureModels",
+    listfile_path: Path
 ) -> ModelSources:
     """Read the model-bearing tables (see ModelSources for the routes)."""
     # SpellVisualEffectName.Type says how to reach the model: 0 = ModelFileDataID
@@ -1216,6 +1248,20 @@ def read_model_sources(
         effect_name_generic[e] = to_int(generic)
     for en_id, model_fid in hotfix_rows(tdb_dir, "spell_visual_effect_name", ["ID", "ModelFileDataID"]):
         effect_name_fid[to_int(en_id)] = to_int(model_fid)
+
+    # Drop the Classic clients' unnamed placeholder fid off the weapon rows (see
+    # EFFECT_NAME_TYPE_WEAPON). Rewriting it to 0 here — at the one place the
+    # column is read, and after the hotfix overlay so a hotfix cannot reintroduce
+    # it — leaves every downstream route (attach models, missiles) to take the
+    # plain "no file -> sentinel" branch it already has. Only weapon rows are
+    # touched: a Type-0 row naming the same fid keeps its normal model pill.
+    weapon_fids = {f for e, f in effect_name_fid.items()
+                   if f and effect_name_type.get(e, 0) in EFFECT_NAME_TYPE_WEAPON}
+    if weapon_fids:
+        placeholders = weapon_fids - set(resolve_paths(listfile_path, weapon_fids))
+        for e, f in list(effect_name_fid.items()):
+            if f in placeholders and effect_name_type.get(e, 0) in EFFECT_NAME_TYPE_WEAPON:
+                effect_name_fid[e] = 0
 
     # the plain case: a kit attaches a model to the caster/target, at a named
     # M2 attachment point. The attachment is part of the key, so the same
@@ -1247,6 +1293,10 @@ def read_model_sources(
             fid = effect_name_fid.get(e, 0)
             if fid:
                 attach_models[k].add((fid, MODEL_CAT_ATTACH, at, NO_ATTACHMENT, 0))
+            elif effect_name_type.get(e, 0) in EFFECT_NAME_TYPE_WEAPON:
+                # Type 3-10 with no file: the caster's equipped weapon, held at
+                # this attachment point. Sentinel fid -> "equipped weapon" pill.
+                attach_models[k].add((WEAPON_FID, MODEL_CAT_ATTACH, at, NO_ATTACHMENT, 0))
         # the start/loop/end anims animate the attached model, but they are
         # AnimationData / AnimKit ids the spell's kit plays — index them even
         # when the model fid is unresolved (a Type 1/2 effect-name). 0 = Stand
@@ -1285,8 +1335,8 @@ def read_model_sources(
     for wt_id, wt_fid in read_table(table_dir, "WeaponTrail", ["ID", "FileDataID"]):
         weapontrail_fid[to_int(wt_id)] = to_int(wt_fid)
 
-    return ModelSources(effect_name_fid, area_model_fid, emission_fid,
-                        barrage_fid, weapontrail_fid, attach_models,
+    return ModelSources(effect_name_fid, effect_name_type, area_model_fid,
+                        emission_fid, barrage_fid, weapontrail_fid, attach_models,
                         attach_anims, attach_animkits)
 
 
@@ -1296,7 +1346,8 @@ NO_MISSILES: tuple = (frozenset(), frozenset(), frozenset(),
 
 
 def read_missiles(
-    table_dir: Path, tdb_dir: Path | None, effect_name_fid: dict[int, int]
+    table_dir: Path, tdb_dir: Path | None, effect_name_fid: dict[int, int],
+    effect_name_type: dict[int, int]
 ) -> dict[int, tuple]:
     """Read visual -> (missile models, soundkits, animkits).
 
@@ -1336,6 +1387,10 @@ def read_missiles(
         fid = effect_name_fid.get(en_id, 0)
         if fid:
             set_models[set_id].add(fid)
+        elif effect_name_type.get(en_id, 0) in EFFECT_NAME_TYPE_WEAPON:
+            # Type 3-10 with no file: the caster's equipped weapon THROWN as the
+            # projectile. Sentinel fid -> "equipped weapon" missile pill.
+            set_models[set_id].add(WEAPON_FID)
         if sk:
             set_soundkits[set_id].add(sk)
         if ak:
@@ -2267,8 +2322,9 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # creature-display chain first: read_model_sources needs it to resolve
     # SpellVisualEffectName Type 2 (GenericID = CreatureDisplayID) to a model fid
     creatures = read_creature_models(table_dir, tdb_dir)
-    models = read_model_sources(table_dir, tdb_dir, creatures)
-    visual_missiles = read_missiles(table_dir, tdb_dir, models.effect_name_fid)
+    models = read_model_sources(table_dir, tdb_dir, creatures, listfile_path)
+    visual_missiles = read_missiles(table_dir, tdb_dir, models.effect_name_fid,
+                                    models.effect_name_type)
     procs = read_proc_effects(table_dir, models)
     fx = read_fx_payloads(table_dir)
     kits = read_kit_effects(table_dir, models, procs, fx)
@@ -2318,7 +2374,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     referenced_fids: set[int] = set()
     for pairs in vis.models.values():
-        referenced_fids.update(f for f, *_ in pairs)
+        referenced_fids.update(f for f, *_ in pairs if f > 0)  # skip fileless sentinels
     for sound_pairs in vis.sounds.values():
         referenced_fids.update(f for _, f in sound_pairs)
     for c in used_chains:
@@ -2355,9 +2411,17 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     }
 
     file_ids = sorted(referenced_fids)
+    file_paths = [fid_path.get(f, "") for f in file_ids]
+    # name any fileless model sentinel this pack actually uses (see WEAPON_FID) —
+    # a synthetic files entry so the pill has a label and is searchable
+    used_fids = {f for pairs in vis.models.values() for f, *_ in pairs}
+    for fid, name in SYNTHETIC_MODEL_FILES.items():
+        if fid in used_fids:
+            file_ids.append(fid)
+            file_paths.append(name)
     files = {
         "fids": file_ids,
-        "paths": [fid_path.get(f, "") for f in file_ids],
+        "paths": file_paths,
     }
 
     # every kit-derived row carries its target mask as the last element (see
@@ -2499,6 +2563,9 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "files": len(file_ids),
                 "spellModels": len(model_rows),
                 "spellDisplayModels": sum(1 for r in model_rows if r[2] == MODEL_CAT_DISPLAY),
+                # equipped-weapon marker rows (SpellVisualEffectName Type 3-10,
+                # WEAPON_FID sentinel) — attach + thrown-missile, see §3
+                "spellWeaponModels": sum(1 for r in model_rows if r[1] == WEAPON_FID),
                 "spellSounds": len(sound_rows),
                 "spellAnimKits": len(anim_rows),
                 "animKitAnims": len(kit_anim_rows),

@@ -242,6 +242,7 @@ flowchart LR
   EN -->|"Type 0 (.ModelFileDataID)"| LF["listfile → model path"]
   EN -->|"Type 2 (.GenericID = CreatureDisplayID)<br/>attach route only"| CDI["CreatureDisplayInfo.ModelID<br/>→ CreatureModelData.FileDataID"]
   CDI --> LF
+  EN -->|"Type 3-10, no named file"| WPN["WEAPON_FID sentinel<br/>'equipped weapon'"]
 
   E8["kit ET 8 → SpellEffectEmission"] --> AM["SpellVisualKitAreaModel<br/>.ModelFileDataID"]
   P9["proc Type 9"] --> AM
@@ -276,6 +277,45 @@ filename. The category word is **`display`**, not `creature`: a creature model's
 path lives under `creature/…`, so `creature` would collide with ~21% of the
 model-file corpus by the filename-substring rule. Missiles/barrage keep reading
 `ModelFileDataID` for every Type (they carry no CreatureDisplay content).
+
+**Types 3–10 = the caster's own equipped weapon.** They are undefined in
+`SpellVisualEffectNameType.dbde`, but every one of them carries *no* model of its
+own (`ModelFileDataID` **and** `GenericID` both 0) while attaching to weapon/hand
+M2 points and being frequently reused as a missile — i.e. the model is the real
+item the caster is holding, resolved client-side at cast. The `Type` picks the
+weapon **slot/class**, and dual-wield emits a mainhand+offhand pair:
+
+| Type | slot / class | evidence (spell names) |
+|--|--|--|
+| 3 | thrown/melee **mainhand** | Throw Spear, Heroic Throw, Javelin Toss, Impale, Fishing |
+| 4 | **offhand** partner of 3 | Pandaren Spirit (`T3@LargeWeaponRight + T4@LargeWeaponLeft`) |
+| 5 | **ranged** | Arcane Shot, Pistol Barrage, Hold Rifle, Wailing Arrow |
+| 6 / 7 | too few rows to call (2 / 1) | Sha Corruption; missile-only |
+| 8 | held melee **mainhand** | Hold/Sharpen/Throw Sword, Whirling Blade |
+| 9 | **offhand** melee/focus | Thal'kiel skull, Crystalline Swords |
+| 10 | ranged rifle variant | Hold Rifles, Barrage, Death Blossom |
+
+Because there is no file to name, these rows carry the **`WEAPON_FID` sentinel
+(-1)** and render as one flat *equipped weapon* marker pill — no 3D, texture,
+Wowhead or `.lo` button — while keeping their category (`attach` vs thrown-as-
+`missile`), attachment point and target icon. A synthetic `files` entry names the
+sentinel, so `model:"equipped weapon"` / `model:weapon` search through the normal
+filename path with no special case. The rows' `StartAnimID`/`AnimID`/`EndAnimID`/
+`AnimKitID` already reach the Animations column (§3e), so what the spell *plays*
+was searchable before the model was.
+
+**Trap — "fileless" is not always spelled 0.** The Classic re-release clients
+backfill these rows with an **unnamed placeholder fid** instead: Cata 4.4.2 points
+all seven of its weapon rows at fid **1255628**, WotLK 3.4.3 one — the very same
+effect-name IDs (8905–8909, 9007, 50201) that are fid 0 on every other build. One
+fid shared across six weapon slots is not a per-weapon model, and taken literally
+it renders a junk `file #1255628` pill. So a weapon row's fid is trusted **only
+when the listfile can name it**, which keeps genuinely hardcoded weapons (
+Sylvanas's bow, fid 3597252 on 9.2.7+) rendering as the real models they are. The
+check runs once in `read_model_sources`, after the hotfix overlay, and rewrites
+the placeholder to 0 so every downstream route takes its existing "no file →
+sentinel" branch. Only weapon rows are touched — a Type-0 row naming the same fid
+keeps its normal model pill (which is why Cata still reports one unnamed file).
 
 ### 3d. The four-and-a-half sound routes
 
@@ -326,9 +366,9 @@ model (§3c, attachment point in §3h): its `StartAnimID`/`AnimID`/`EndAnimID` a
 AnimationData ids for the attached model's start/loop/end and join the loose
 pills; its `AnimKitID` rejoins the animkit groups. Keyed by kit, they union into
 the existing buckets (no pack section of their own), and are indexed even when
-the model fid is unresolved (a `SpellVisualEffectName` Type 1/2 row, whose model
-comes from `GenericID` not `ModelFileDataID`), since they are anims the spell's
-kit plays. Same `>0` gate as `SpellVisualAnim`. Adds ~10.5k animkit and ~6.7k
+the model fid is unresolved (a `SpellVisualEffectName` Type 1 row, whose model
+comes from `GenericID` not `ModelFileDataID`, or a Type 3–10 equipped-weapon row
+that has no model at all), since they are anims the spell's kit plays. Same `>0` gate as `SpellVisualAnim`. Adds ~10.5k animkit and ~6.7k
 loose-anim (spell,anim) pairs on 9.2.7.
 
 The vehicle-seat route splits by **whose** animation it is: the nine
@@ -602,6 +642,28 @@ column — the Classic re-releases simply carry few Type-2 attach rows.
 WotLK 3.4.3's zero is data-truthful (that Classic client has no Type-2 attach row
 resolving to a display), not a build failure. All rows resolve to a real model
 fid — unresolvable displays are dropped at build time.
+
+### Equipped-weapon markers by version
+
+`WEAPON_FID` sentinel rows (`SpellVisualEffectName` Type 3–10, §3c), read from
+each pack's `meta.counts.spellWeaponModels`. Like the display route, `Type` ships
+on every build, so this degrades by content only.
+
+| Pack | weapon rows | | Pack | weapon rows |
+|---|--:|---|---|--:|
+| Vanilla 1.15.8 | 0 | | BfA 8.3.7 | 676 |
+| TBC 2.5.6 | 46 | | Shadowlands 9.2.7 | 695 |
+| WotLK 3.4.3 | 140 | | Dragonflight 10.2.7 | 729 |
+| Cataclysm 4.4.2 | 248 | | TWW 11.2.7 | 751 |
+| MoP 5.5.4 | 357 | | | |
+| Legion 7.3.5 | 624 | | | |
+
+Vanilla's 0 is data-truthful: its single Type-3 effect-name (8905) is not reached
+by any kit or missile set, so no spell shows the marker. Its pack predates the
+count and omits the key — it was deliberately **not** rebuilt for a zero-valued
+diagnostic field (see "the build is deterministic" in CLAUDE.md). WotLK and Cata
+are the two packs whose numbers depend on the placeholder-fid rule in §3c: before
+it they read 132 and **0**.
 
 ### The five Classic re-release clients don't sit on the timeline
 

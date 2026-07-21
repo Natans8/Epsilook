@@ -906,6 +906,11 @@ td.empty { text-align: center; vertical-align: middle; }
   cursor: default;
 }
 
+/* Fileless marker pill (equipped-weapon sentinel, SpellVisualEffectName Type
+   3–10): no filename, no fid buttons. Italic label reads it as a descriptor
+   rather than a real model name. */
+.tag.model.synthetic .tag-label { font-style: italic; }
+
 /* pills/groups the height clamp hides (layoutRow toggles .overflow directly).
    The `td` prefix lifts specificity above .kit-group.compact / .kit-files .tag
    so an overflow pill or a compact group is always hidden. */
