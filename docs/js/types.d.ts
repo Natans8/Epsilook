@@ -32,6 +32,9 @@ interface EpsilookConfig {
   wowheadSoundUrl: string;
   wowheadMorphUrl: string;
   wowheadNpcUrl: string;
+  /** Wowhead site path prefix keyed by game major version ("classic/" for 1);
+   *  unlisted versions fall back to retail (empty prefix). */
+  wowheadSitePrefix: Record<number, string>;
   modelViewerUrl: string;
   soundPlayUrl: string;
   soundVolume: number;
