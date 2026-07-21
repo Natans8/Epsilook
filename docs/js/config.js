@@ -108,11 +108,12 @@ window.EpsilookConfig = {
   // How many rows to render per infinite-scroll batch.
   scrollBatch: 60,
 
-  // How many tags to show per cell before collapsing behind "+N more".
-  tagsCollapsedLimit: 4,
-
-  // How many sound files to show per SoundKit group before collapsing.
-  kitFilesCollapsedLimit: 2,
+  // Collapsed baseline height (px) for a result row's multi-value cells. Each
+  // cell hides whatever overflows this height behind a single "+N more"; the
+  // tallest cell sets the row height. Expanding one cell grows the row and
+  // lets the others reveal more to fill it. Larger = fewer "+N more" up front
+  // but taller rows.
+  collapsedRowHeight: 130,
 
   // Live search: debounce (ms) and minimum query length.
   searchDebounceMs: 250,

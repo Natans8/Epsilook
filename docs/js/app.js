@@ -95,17 +95,17 @@
     rendered: 0,        // rows currently in the table
     // tri-state per category: "" = any, "with" = must have, "without" = must
     // not have. See HAS_CATEGORY / applyFiltersAndSort.
-    filters: { models: "", sounds: "", animkits: "", fx: "" },
+    filters: { models: "", sounds: "", animations: "", fx: "" },
     sort: { key: "auto", dir: 1 },
     // hidden columns (also excluded from All-mode search and from exports)
-    hiddenCols: { models: false, sounds: false, animkits: false, fx: false, mechanics: true, commands: false },
+    hiddenCols: { models: false, sounds: false, animations: false, fx: false, mechanics: true, commands: false },
   };
 
   // column -> search fields it contributes
   const COL_FIELDS = {
     models: ["model"],
     sounds: ["sound"],
-    animkits: ["anim"],
+    animations: ["anim"],
     fx: ["fx"],
     mechanics: ["mech"],
   };
@@ -1046,7 +1046,7 @@
   // multi-value columns sort by how many entries a row shows there — the
   // count keys mirror the column names; clicking those headers starts at
   // "most entries first" (the extreme spells are the interesting ones)
-  const COUNT_SORTS = new Set(["models", "sounds", "animkits", "fx", "mechanics"]);
+  const COUNT_SORTS = new Set(["models", "sounds", "animations", "fx", "mechanics"]);
 
   function entryCountFn(key) {
     const d = state.data;
@@ -1055,7 +1055,7 @@
       case "models": return (id) =>
         d.spellModelCats.size ? len(d.spellModelCats, id) : len(d.spellModels, id);
       case "sounds": return (id) => len(d.spellSounds, id);
-      case "animkits": return (id) =>
+      case "animations": return (id) =>
         len(d.spellAnimKits, id) + len(d.spellAnims, id) + len(d.spellVisualAnims, id);
       case "mechanics": return (id) => len(d.spellEffects, id) + len(d.spellAuras, id);
       case "fx": return (id) =>
@@ -1120,7 +1120,7 @@
   const HAS_CATEGORY = {
     models: (d, id) => d.spellModels.has(id),
     sounds: (d, id) => d.spellSounds.has(id),
-    animkits: (d, id) =>
+    animations: (d, id) =>
       d.spellAnimKits.has(id) || d.spellAnims.has(id) || d.spellVisualAnims.has(id),
     fx: (d, id) =>
       d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellGlows.has(id) ||
@@ -1204,12 +1204,101 @@
 
   function renderMore() {
     const tbody = $("#results tbody");
+    const start = state.rendered;
     const end = Math.min(state.rendered + CFG.scrollBatch, state.display.length);
     const frag = document.createDocumentFragment();
     for (let i = state.rendered; i < end; i++) frag.appendChild(buildRow(state.display[i], i));
     tbody.appendChild(frag);
     state.rendered = end;
+    // the cells are in the DOM now, so their heights are known — collapse each
+    // new row to the shared height budget (see the row-layout section)
+    for (let i = start; i < end; i++) layoutRow(/** @type {HTMLElement} */ (tbody.children[i]));
     $("#sentinel").hidden = state.rendered >= state.display.length;
+  }
+
+  /* ------------------------------------------------- row layout (collapse)
+   *
+   * Every multi-value cell renders all its pills; here we hide whatever
+   * overflows a shared HEIGHT budget behind one "+N more". The budget belongs
+   * to the ROW: it starts at CFG.collapsedRowHeight and grows to fit any cell
+   * the user has expanded (td.dataset.expanded), so expanding one column lets
+   * the others reveal more to fill the now-taller row — progressively, until
+   * everything shows. Expansion is one-way (until the next search). Because a
+   * cell's content flows top-to-bottom in DOM order (inline pills wrap, kit
+   * groups stack), leaf bottoms are monotonic, so a leading prefix is exactly
+   * "what fits". */
+  const COLLAPSE_COLS = ".c-models, .c-sounds, .c-animations, .c-fx, .c-mechanics";
+
+  /** A cell's content pills in DOM order (group heads are structural). */
+  function cellLeaves(td) {
+    return [...td.querySelectorAll(".tag")].filter((t) => !t.closest(".kit-head"));
+  }
+
+  /** Un-collapse a cell: show every pill/group, drop its "+N more". */
+  function revealCell(td) {
+    for (const o of td.querySelectorAll(".overflow")) o.classList.remove("overflow");
+    const more = td.querySelector(":scope > .more");
+    if (more) more.remove();
+  }
+
+  /** Natural height (px) of a fully-revealed cell's content. */
+  function cellFullHeight(td) {
+    const top = td.getBoundingClientRect().top;
+    let bottom = top;
+    for (const c of td.children) bottom = Math.max(bottom, c.getBoundingClientRect().bottom);
+    return bottom - top;
+  }
+
+  /* Hide the pills that overflow `budget`, add a "+N more". The cell must be
+   * revealed first (layoutRow does that). Always leaves at least one pill. */
+  function clampCell(td, budget) {
+    const leaves = cellLeaves(td);
+    if (!leaves.length) return;
+    const top = td.getBoundingClientRect().top;
+    const extent = (elm) => elm.getBoundingClientRect().bottom - top;
+    // largest leading run of pills whose bottoms fit the budget
+    let shown = 1;
+    for (let i = 0; i < leaves.length; i++) {
+      if (extent(leaves[i]) <= budget) shown = i + 1; else break;
+    }
+    const apply = () => {
+      leaves.forEach((lf, i) => lf.classList.toggle("overflow", i >= shown));
+      // hide a whole group once every pill inside it is hidden (no empty head)
+      for (const g of td.querySelectorAll(".kit-group")) {
+        const gl = [...g.querySelectorAll(".tag")].filter((t) => !t.closest(".kit-head"));
+        g.classList.toggle("overflow",
+          gl.length > 0 && gl.every((x) => x.classList.contains("overflow")));
+      }
+    };
+    apply();
+    const more = el("button", "more");
+    more.dataset.expand = "1";
+    td.appendChild(more);
+    const relabel = () => { more.textContent = `+${leaves.length - shown} more`; };
+    relabel();
+    // if the button itself spilled past the budget, drop pills until it fits —
+    // stops the "+N more" from eating the very space it is supposed to save
+    let guard = leaves.length;
+    while (shown > 1 && extent(more) > budget && guard-- > 0) { shown--; apply(); relabel(); }
+  }
+
+  /* Collapse a row's cells to a shared height budget grown by any expanded
+   * cell. Called on every freshly rendered row, on expand, and on resize. */
+  function layoutRow(tr) {
+    const cells = [...tr.querySelectorAll(COLLAPSE_COLS)];
+    for (const td of cells) revealCell(td);            // one write pass, then reads
+    let budget = CFG.collapsedRowHeight;
+    const full = new Map();
+    for (const td of cells) {
+      const h = cellFullHeight(td);
+      full.set(td, h);
+      if (td.dataset.expanded === "1") budget = Math.max(budget, h);
+    }
+    for (const td of cells) {
+      if (td.dataset.expanded === "1") continue;       // fully shown, no button
+      if (full.get(td) <= budget) continue;            // already fits
+      clampCell(td, budget);
+    }
   }
 
   function buildRow(spellId, displayIndex) {
@@ -1356,10 +1445,6 @@
     return a;
   }
 
-  // Collapsing 1-2 items would cost as much space as showing them, so a
-  // cell only collapses when at least 3 items are hidden.
-  const COLLAPSE_SLACK = 2;
-
   function tagCell(className, tags) {
     const td = el("td", className);
     if (tags.length === 0) {
@@ -1367,17 +1452,9 @@
       td.appendChild(el("span", "none", "—"));
       return td;
     }
-    const limit = tags.length <= CFG.tagsCollapsedLimit + COLLAPSE_SLACK
-      ? tags.length : CFG.tagsCollapsedLimit;
-    tags.forEach((tag, idx) => {
-      if (idx >= limit) tag.classList.add("overflow");
-      td.appendChild(tag);
-    });
-    if (tags.length > limit) {
-      const more = el("button", "more", `+${tags.length - limit} more`);
-      more.dataset.expand = "1";
-      td.appendChild(more);
-    }
+    // render every tag; the height-based collapse happens after layout, in
+    // layoutRow — see the "row layout" section below
+    for (const tag of tags) td.appendChild(tag);
     return td;
   }
 
@@ -1415,6 +1492,9 @@
         hit: items.some((e) => modelFileIsHit(d.files.get(e.fid), name)),
       });
     }
+    // Loose (uncategorized attach) pills flow first — attachment splits can
+    // pile many of them up; the height-based clamp (layoutRow) hides whatever
+    // overflows the row budget behind the cell's single "+N more".
     for (const e of hitsFirst(loose, (x) => modelFileIsHit(d.files.get(x.fid), ""))) {
       td.appendChild(modelTag(e.fid, "", e.targets, e.src, e.dst, travels(e.cat)));
     }
@@ -1424,9 +1504,6 @@
       itemTag: (e, c) => (isDisplayCat(e.cat)
         ? displayTag(e)
         : modelTag(e.fid, c.name, e.targets, e.src, e.dst, travels(e.cat))),
-      itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
-      groupNoun: "category",
-      moreInHead: true,
       compact: true,
     });
     return td;
@@ -1461,8 +1538,6 @@
       headerTag: (kitId) => addTargetIcons(kitTag(kitId, "soundkit"), kitMask.get(kitId)),
       itemsOf: (kitId) => hitsFirst(byKit.get(kitId), (fid) => fileIsHit(d.files.get(fid), "sound")),
       itemTag: (fid) => soundTag(fid),
-      itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
-      groupNoun: "kit",
     });
     return td;
   }
@@ -1492,7 +1567,7 @@
       const anims = g.animsOf(state.data, spellId) || [];
       if (anims.length) groupAnims.set(g.id, anims);
     }
-    const td = el("td", "c-animkits");
+    const td = el("td", "c-animations");
     if (animKitIds.length === 0 && groupAnims.size === 0
         && looseAnimIds.length === 0) {
       td.classList.add("empty");
@@ -1527,8 +1602,6 @@
       itemsOf: (kitId) => hitsFirst(animsOf(kitId).slice().sort((a, b) => a - b),
         (a) => animIsHit(a, wordOf(kitId))),
       itemTag: (animId, kitId) => animTag(animId, wordOf(kitId)),
-      itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
-      groupNoun: "kit",
     });
     return td;
   }
@@ -1552,70 +1625,29 @@
   }
 
   /* Shared group renderer: each kit is a small box — the kit tag as a
-   * tinted head segment, its items flowing (and wrapping) beside it —
-   * collapsing only when it actually saves space. With opts.moreInHead a
-   * group's own "+N" expander sits in its head bar (spare horizontal space)
-   * instead of the td-level "+N more" strip. With opts.compact, groups that
-   * render ≤1 item for THIS row become inline pills (head + lone item fused)
-   * sharing a line instead of a full-width strip; they don't count toward
-   * the group limit and are never overflow-hidden. */
+   * tinted head segment, its items flowing (and wrapping) beside it. Every
+   * group and every item is rendered; the height-based clamp (layoutRow) hides
+   * whatever overflows the row budget behind the cell's single "+N more". With
+   * opts.compact, groups that render ≤1 item for THIS row become inline pills
+   * (head + lone item fused) sharing a line instead of a full-width strip. */
   function buildKitGroups(td, kitIds, opts) {
-    const entries = kitIds.map((kitId) => {
+    for (const kitId of kitIds) {
       const items = opts.itemsOf(kitId);
-      return { kitId, items, compact: !!opts.compact && items.length <= 1 };
-    });
-    const bigCount = entries.reduce((n, e) => n + !e.compact, 0);
-    const groupLimit = bigCount <= 2 + 1 ? bigCount : 2;
-    let hiddenCount = 0;
-    let bigIndex = 0;
-
-    entries.forEach((e) => {
-      const gi = e.compact ? -1 : bigIndex++;
-      const hideGroup = !e.compact && gi >= groupLimit;
       const group = el("div", "kit-group");
-      if (e.compact) group.classList.add("compact");
-      if (hideGroup) group.classList.add("overflow");
+      if (opts.compact && items.length <= 1) group.classList.add("compact");
 
       const head = el("div", "kit-head");
-      const headTag = opts.headerTag(e.kitId);
+      const headTag = opts.headerTag(kitId);
       if (headTag.classList.contains("hit")) group.classList.add("hit");
       head.appendChild(headTag);
       group.appendChild(head);
 
-      const items = e.items;
       if (items.length) {
         const itemsDiv = el("div", "kit-files");
-        const limit = items.length <= opts.itemLimit + COLLAPSE_SLACK ? items.length : opts.itemLimit;
-        items.forEach((item, fi) => {
-          const tag = opts.itemTag(item, e.kitId);
-          if (hideGroup || fi >= limit) {
-            tag.classList.add("overflow");
-            hiddenCount++;
-          }
-          itemsDiv.appendChild(tag);
-        });
+        for (const item of items) itemsDiv.appendChild(opts.itemTag(item, kitId));
         group.appendChild(itemsDiv);
-        if (opts.moreInHead && !hideGroup && items.length > limit) {
-          const more = el("button", "more head-more", `+${items.length - limit}`);
-          more.title = `Show all ${items.length}`;
-          more.dataset.expand = "1";
-          head.appendChild(more);
-          hiddenCount -= items.length - limit; // this expander's job, not the td strip's
-        }
       }
       td.appendChild(group);
-    });
-
-    const hiddenGroups = Math.max(0, bigCount - groupLimit);
-    if (hiddenGroups > 0 || hiddenCount > 0) {
-      const plural = opts.groupNoun.endsWith("y")
-        ? opts.groupNoun.slice(0, -1) + "ies" : opts.groupNoun + "s";
-      const label = hiddenGroups > 0
-        ? `+${hiddenGroups} more ${hiddenGroups === 1 ? opts.groupNoun : plural}`
-        : `+${hiddenCount} more`;
-      const more = el("button", "more", label);
-      more.dataset.expand = "1";
-      td.appendChild(more);
     }
   }
 
@@ -1927,9 +1959,6 @@
       headerTag: (cat) => addTargetIcons(fxHeadTag(cat.name, cat.hit), cat.mask),
       itemsOf: (cat) => cat.items,
       itemTag: (make) => make(),
-      itemLimit: CFG.kitFilesCollapsedLimit ?? CFG.tagsCollapsedLimit,
-      groupNoun: "category",
-      moreInHead: true,
       compact: true,
     });
     return td;
@@ -3196,7 +3225,7 @@
           id: k, files: byKit.get(k), targets: targetWordsOf(kitMask.get(k) || 0),
         }));
       }
-      if (!hc.animkits) {
+      if (!hc.animations) {
         const loose = (d.spellVisualAnims.get(id) || []).slice().sort((a, b) => a - b);
         const looseMasks = d.visualAnimTargets.get(id);
         if (loose.length) {
@@ -3334,7 +3363,7 @@
     const header = ["ID", "Name", "Subtext"];
     if (!hc.models) header.push("Models");
     if (!hc.sounds) header.push("SoundKits", "Sounds");
-    if (!hc.animkits) header.push("AnimKits", "Animations");
+    if (!hc.animations) header.push("AnimKits", "Animations");
     if (!hc.fx) header.push("Effects");
     if (!hc.mechanics) header.push("Mechanics");
     // CSV has no icons, so a row's target types ride its text: "file [caster+target]"
@@ -3354,7 +3383,7 @@
           (k) => `${withTargets({ path: k.id, targets: k.targets })}: ${k.files.join(" | ")}`)
           .join("; ")));
       }
-      if (!hc.animkits) {
+      if (!hc.animations) {
         cols.push(esc(r.animKits.map((k) => k.id).join("; ")));
         cols.push(esc((r.anims || []).map((a) => withTargets({ path: a.name, targets: a.targets }))
           .concat(r.animKits.map(
@@ -3945,10 +3974,11 @@
       else if (t.dataset.play) toggleSound(t);
       else if (t.dataset.search) crossSearch((e.shiftKey ? "-" : "") + t.dataset.search);
       else if (t.dataset.expand) {
+        // reveal this cell fully; the row grows to fit it and its siblings
+        // re-clamp to the taller budget, revealing more of themselves
         const td = t.closest("td");
-        td.classList.add("expanded");
-        // expansion is cell-wide: every "+N" expander in the cell is spent
-        for (const m of td.querySelectorAll(".more")) m.remove();
+        td.dataset.expanded = "1";
+        layoutRow(td.closest("tr"));
       }
     });
 
@@ -4024,6 +4054,16 @@
     new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting) renderMore();
     }, { rootMargin: "600px" }).observe($("#sentinel"));
+
+    // resizing changes how pills wrap, so cell heights change — re-run the
+    // height clamp on every rendered row (debounced). Expanded cells stay open.
+    let resizeTimer = 0;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        for (const tr of $("#results tbody").children) layoutRow(/** @type {HTMLElement} */ (tr));
+      }, 150);
+    });
 
     // back/forward (pushState entries and legacy #q= entries both land here)
     window.addEventListener("popstate", () => applyUrl({ push: false }));
