@@ -911,6 +911,42 @@ td.empty { text-align: center; vertical-align: middle; }
    rather than a real model name. */
 .tag.model.synthetic .tag-label { font-style: italic; }
 
+/* Item pill (SpellVisualEffectName Type 1). The inventory icon sits flush
+   against the label with nothing between them, so the two read as one unit. On
+   a named item the icon is wrapped in a Wowhead link (.item-icon-link) which
+   must not add any box of its own. */
+.tag.model.item .item-icon {
+  width: 1.15em;
+  height: 1.15em;
+  border-radius: 2px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+}
+.tag.model.item .item-icon-link {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+.tag.model.item .item-icon-link:hover .item-icon { outline: 1px solid var(--gold); }
+/* space before the icon (loose from the target glyphs) goes on the pill's
+   DIRECT child — the bare img on a nameless item, or the link wrapper on a
+   named one — so a wrapped img gets no extra inset of its own */
+.tag.model.item > .item-icon,
+.tag.model.item > .item-icon-link { margin-left: 0.3rem; }
+.tag.model.item > .item-icon + .tag-label,
+.tag.model.item > .item-icon-link + .tag-label { padding-left: 0.3rem; }
+/* Named item labels are coloured by item quality (the classic WoW ramp),
+   which overrides the default model blue. Nameless items keep --model. */
+.tag.model.item.q-poor .tag-label { color: #9d9d9d; }
+.tag.model.item.q-common .tag-label { color: #ffffff; }
+.tag.model.item.q-uncommon .tag-label { color: #1eff00; }
+.tag.model.item.q-rare .tag-label { color: #0070dd; }
+.tag.model.item.q-epic .tag-label { color: #a335ee; }
+.tag.model.item.q-legendary .tag-label { color: #ff8000; }
+.tag.model.item.q-artifact .tag-label { color: #e6cc80; }
+.tag.model.item.q-heirloom .tag-label,
+.tag.model.item.q-token .tag-label { color: #00ccff; }
+
 /* pills/groups the height clamp hides (layoutRow toggles .overflow directly).
    The `td` prefix lifts specificity above .kit-group.compact / .kit-files .tag
    so an overflow pill or a compact group is always hidden. */

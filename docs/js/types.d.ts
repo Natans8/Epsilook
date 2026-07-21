@@ -28,10 +28,13 @@ interface EpsilookConfig {
   morphLookupTemplate: string;
   summonLookupTemplate: string;
   summonSpawnTemplate: string;
+  itemLookupTemplate: string;
+  itemAddTemplate: string;
   wowheadSpellUrl: string;
   wowheadSoundUrl: string;
   wowheadMorphUrl: string;
   wowheadNpcUrl: string;
+  wowheadItemUrl: string;
   /** Wowhead site path prefix keyed by game major version ("classic/" for 1);
    *  unlisted versions fall back to retail (empty prefix). */
   wowheadSitePrefix: Record<number, string>;
@@ -110,11 +113,18 @@ interface SpellPack {
     /** Raw M2 attachment ids, -1 = unset (pack format 24+). Attached models
      *  use src only; missiles use both (launch -> impact). */
     srcAttach?: number[]; dstAttach?: number[];
-    /** CreatureDisplayID on "display"-category rows, 0 elsewhere (format 27+). */
-    displayIds?: number[] };
+    /** Ref id: CreatureDisplayID (display cat) or Item::ID (item cat), 0 else
+     *  (format 28+). Format 27 shipped it as displayIds (display rows only). */
+    refIds?: number[]; displayIds?: number[] };
+  /** Items reached by "item"-category rows (format 28+), parallel by item id.
+   *  names[i] is "" for a nameless item; icons[i] is a 1-based index into
+   *  itemIconNames (0 = none); qualities[i] indexes itemQualityNames (-1 = none). */
+  items?: { ids: number[]; names: string[]; qualities: number[]; icons: number[] };
+  itemIconNames?: string[];
+  itemQualityNames?: Record<number, string>;
   /** Raw M2 attachment id -> name (pack format 24+). */
   attachmentNames?: Record<number, string>;
-  /** Category id -> word ("attached", "missile", "area", "trail", "barrage"). */
+  /** Category id -> word ("attached", "missile", "area", "trail", "barrage", "item"). */
   modelCatNames?: Record<number, string>;
   /** mask bit -> search word ("caster"/"target"/"area"); format 22+ */
   targetNames?: Record<number, string>;
@@ -293,9 +303,16 @@ interface SpellData {
     fid: number; cat: number; targets: number;
     /** Raw M2 attachment ids, -1 = unset. */
     src: number; dst: number;
-    /** CreatureDisplayID on "display"-category rows, 0 elsewhere. */
-    disp: number;
+    /** Ref id: CreatureDisplayID (display cat) or Item::ID (item cat); 0 else. */
+    ref: number;
   }[]>;
+  /** Item::ID -> {name, quality, icon} for "item"-category rows (format 28+).
+   *  name "" = a nameless item (renders as a plain model pill). */
+  items: Map<number, { name: string; quality: string; icon: string }>;
+  /** Item::ID -> its search corpus (name / quality / id). */
+  itemSearchL: Map<number, string>;
+  /** Item::ID -> the spells that reach it, for model:"item <name>" search. */
+  itemSpells: Map<number, Set<number>>;
   modelCatSpells: Map<number, Set<number>>;
   modelCatFidSpells: Map<number, Map<number, number[]>>;
   /** Category id -> word; "" means the category renders as loose pills. */

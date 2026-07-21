@@ -265,7 +265,7 @@ surfaced (2–6, 8, 10, 13, 15–17, 19–20, 24–25, 28–34) are renderer or 
 state, or too rare to be worth a pill. The full decode with evidence is in
 CLAUDE.md → *Proc type decode*.
 
-### 3c. The five model routes
+### 3c. The six model routes
 
 Every `(spell, model)` row is tagged with **how** the model is used. Same fid can
 appear once per category.
@@ -277,6 +277,8 @@ flowchart LR
   E17["kit ET 17 → BarrageEffect"] --> EN
 
   EN -->|"Type 0 (.ModelFileDataID)"| LF["listfile → model path"]
+  EN -->|"Type 1 (.GenericID = Item::ID)<br/>attach route only"| ITM["ItemModifiedAppearance → ItemAppearance<br/>→ ItemDisplayInfo → ModelFileData"]
+  ITM --> LF
   EN -->|"Type 2 (.GenericID = CreatureDisplayID)<br/>attach route only"| CDI["CreatureDisplayInfo.ModelID<br/>→ CreatureModelData.FileDataID"]
   CDI --> LF
   EN -->|"Type 3-10, no named file"| WPN["WEAPON_FID sentinel<br/>'equipped weapon'"]
@@ -288,6 +290,7 @@ flowchart LR
   AM --> LF
 
   A1 -.->|"category"| C0["attach — no word, loose pills"]
+  A1 -.->|"category (Type 1)"| C6["item"]
   A1 -.->|"category (Type 2)"| C5["display"]
   M1 -.->|"category"| C1["missile"]
   E17 -.->|"category"| C4["barrage"]
@@ -303,17 +306,52 @@ an area target bit).
 
 **`SpellVisualEffectName.Type`** picks how the effect-name resolves to a model:
 **0 = FileDataID** (`ModelFileDataID`, every route above), **1 = Item**
-(`GenericID` = Item::ID — not read yet), **2 = CreatureDisplayInfo**
-(`GenericID` = a CreatureDisplayID). On the **attach route only**, a Type-2 row
-resolves that display through `CreatureDisplayInfo → CreatureModelData` (pure
-client data — no TDB) into the `display` model category. Its pill sits in the
-Models column but wears the morph pill's buttons (Wowhead model viewer by
-displayId, ⧉ copy displayId, `.morph`, `.lookup display creature`) and keeps its
-attachment point like any other attached model. The label is the model's base
-filename. The category word is **`display`**, not `creature`: a creature model's
-path lives under `creature/…`, so `creature` would collide with ~21% of the
-model-file corpus by the filename-substring rule. Missiles/barrage keep reading
-`ModelFileDataID` for every Type (they carry no CreatureDisplay content).
+(`GenericID` = Item::ID), **2 = CreatureDisplayInfo** (`GenericID` = a
+CreatureDisplayID). On the **attach route only**, a Type-2 row resolves that
+display through `CreatureDisplayInfo → CreatureModelData` (pure client data — no
+TDB) into the `display` model category. Its pill sits in the Models column but
+wears the morph pill's buttons (Wowhead model viewer by displayId, ⧉ copy
+displayId, `.morph`, `.lookup display creature`) and keeps its attachment point
+like any other attached model. The label is the model's base filename. The
+category word is **`display`**, not `creature`: a creature model's path lives
+under `creature/…`, so `creature` would collide with ~21% of the model-file
+corpus by the filename-substring rule. Missiles/barrage keep reading
+`ModelFileDataID` for every Type (they carry no CreatureDisplay/Item content).
+
+**Type 1 = an Item::ID → the `item` model category** (attach route only). The
+item carries its own model through the appearance chain
+`ItemModifiedAppearance → ItemAppearance → ItemDisplayInfo → ModelResourcesID
+→ ModelFileData.FileDataID` (pure client data, so it works on the TDB-less
+Classic packs; 99.8% of reached items resolve on 9.2.7), plus the display name
+and quality from `ItemSearchName` and the inventory icon from
+`ItemAppearance.DefaultIconFileDataID`. `ItemSparse` is deliberately **not**
+downloaded: measured to add zero names over `ItemSearchName` for this
+population, at 6× the size. The pill has two shapes, split on whether the item
+has a name (about two-thirds do; the rest are internal props — unnamed potions,
+dynamite, gizmos — that exist only to be held in a visual):
+
+- **named** → `[Wowhead item page] · {target}{icon}{name} · attach · ⧉ copy
+  item id · .additem · .lookup item {name}`. The name is coloured by the item's
+  quality (the classic poor→artifact ramp; colour only, **not** searchable). Both
+  the leading `[wh]` button *and the icon* are Wowhead item links opening the
+  model view (`item={id}/#modelviewer`) — that `<a href>` anchor is the app's
+  proven tooltip trigger, so hovering the icon raises the item tooltip. The label
+  stays a click-to-search button (with a `data-wowhead` mirror for its own
+  tooltip) rather than a link, so clicking the name searches instead of
+  navigating.
+- **nameless** → `[3D viewer] · {target}{icon}{model base name} · attach ·
+  .lookup item {model base name}`. No Wowhead, no `.additem`, no id copy —
+  none resolve without a name — and `.lookup item` falls back to the model's
+  base filename (no extension; `.lookup item` accepts either a name or a model
+  name). The icon still reads (you can see it is a potion or a bomb).
+
+The category word is **`item`**; it collides with ~4.3% of the model-file corpus
+(the `item/objectcomponents/…` paths) by the filename-substring rule — well under
+the ~21% that ruled out `creature`, and coherent because those files *are* item
+models. `model:"item <name>"` matches on the item name via a dedicated corpus
+(`itemSearchL`); the model file and category word match through the ordinary
+model index. This is the **attach route only** — the 62 missile-route Type-1
+effect-names on 9.2.7 render nothing, matching the "item attachments" scope.
 
 **Types 3–10 = the caster's own equipped weapon.** They are undefined in
 `SpellVisualEffectNameType.dbde`, but every one of them carries *no* model of its
@@ -336,10 +374,12 @@ Because there is no file to name, these rows carry the **`WEAPON_FID` sentinel
 (-1)** and render as one flat *equipped weapon* marker pill — no 3D, texture,
 Wowhead or `.lo` button — while keeping their category (`attach` vs thrown-as-
 `missile`), attachment point and target icon. A synthetic `files` entry names the
-sentinel, so `model:"equipped weapon"` / `model:weapon` search through the normal
-filename path with no special case. The rows' `StartAnimID`/`AnimID`/`EndAnimID`/
-`AnimKitID` already reach the Animations column (§3e), so what the spell *plays*
-was searchable before the model was.
+sentinel `equipped weapon`, so it searches through the normal filename path with no
+special case: clicking the marker (and its autocomplete word) uses the single meta
+token **`model:equipped`** — `equipped` appears in no real model path, so it targets
+only the markers, where `model:weapon` would also catch every `weapon/…` file. The
+rows' `StartAnimID`/`AnimID`/`EndAnimID`/`AnimKitID` already reach the Animations
+column (§3e), so what the spell *plays* was searchable before the model was.
 
 **Trap — "fileless" is not always spelled 0.** The Classic re-release clients
 backfill these rows with an **unnamed placeholder fid** instead: Cata 4.4.2 points
@@ -403,10 +443,10 @@ model (§3c, attachment point in §3h): its `StartAnimID`/`AnimID`/`EndAnimID` a
 AnimationData ids for the attached model's start/loop/end and join the loose
 pills; its `AnimKitID` rejoins the animkit groups. Keyed by kit, they union into
 the existing buckets (no pack section of their own), and are indexed even when
-the model fid is unresolved (a `SpellVisualEffectName` Type 1 row, whose model
-comes from `GenericID` not `ModelFileDataID`, or a Type 3–10 equipped-weapon row
-that has no model at all), since they are anims the spell's kit plays. Same `>0` gate as `SpellVisualAnim`. Adds ~10.5k animkit and ~6.7k
-loose-anim (spell,anim) pairs on 9.2.7.
+the row's `ModelFileDataID` is 0 (a Type 1/2 effect-name, whose model comes from
+`GenericID`, or a Type 3–10 equipped-weapon row that has no model at all), since
+they are anims the spell's kit plays. Same `>0` gate as `SpellVisualAnim`. Adds
+~10.5k animkit and ~6.7k loose-anim (spell,anim) pairs on 9.2.7.
 
 The vehicle-seat route splits by **whose** animation it is: the nine
 passenger columns (`EnterAnimStart/Loop`, `RideAnimStart/Loop`,
@@ -628,16 +668,19 @@ mostly "the table does not exist yet." The five Classic re-release clients
 | 10.2.7.55664 | Dragonflight | 327,092 | 9.5 MB | TDB1027.24051 | 0 |
 | 11.2.7.65299 | The War Within | 375,895 | 11.1 MB | TDB1127.26011 | 0 |
 
-**All ten are at pack format 27** (SpellVisualEffectName Type 2 → creature-display
-model pills — §3c). The two most recent bumps are additive and version-agnostic:
-format 26 added the invis/detect channel pills (`MOD_INVISIBILITY[_DETECT]`
-auras), format 27 the `display` model category. Both carry back to Vanilla
-(SpellVisualEffectName.Type is present on every shipped build — no absent-table
-or optional-column drift). Earlier format costs still hold: format 22 target
-masks ~+11% size, format 23 vehicles essentially free, format 24 attachment
-points ~+18% model rows, format 25 one `targets` array per effect-fx link
-section. Format 27 adds one `displayIds` array to `spellModels` and a modest
-number of `display` rows (below).
+**All ten are at pack format 28** (SpellVisualEffectName Type 1 → item model
+pills — §3c). The recent bumps are additive and version-agnostic: format 26
+added the invis/detect channel pills (`MOD_INVISIBILITY[_DETECT]` auras), format
+27 the `display` model category, format 28 the `item` category. All carry back
+to Vanilla (SpellVisualEffectName.Type is present on every shipped build — no
+absent-table or optional-column drift; the five item tables also ship on every
+build, so the route degrades by *content*, not by a missing table). Earlier
+format costs still hold: format 22 target masks ~+11% size, format 23 vehicles
+essentially free, format 24 attachment points ~+18% model rows, format 25 one
+`targets` array per effect-fx link section. Format 28 renamed `spellModels`'s
+`displayIds` array to `refIds` (it now carries an Item::ID on item rows too) and
+added the `items`/`itemIconNames`/`itemQualityNames` sections; a format-27 pack
+is still read (its `displayIds` array is accepted as `refIds`).
 
 ### Attachment coverage by version
 
@@ -679,6 +722,27 @@ column — the Classic re-releases simply carry few Type-2 attach rows.
 WotLK 3.4.3's zero is data-truthful (that Classic client has no Type-2 attach row
 resolving to a display), not a build failure. All rows resolve to a real model
 fid — unresolvable displays are dropped at build time.
+
+### Item models by version
+
+`item`-category rows (`SpellVisualEffectName` Type 1, §3c), from each pack's
+`meta.counts` — `spellItemModels` (rows), `items` (distinct), `namedItems`
+(with an `ItemSearchName` name). Attach route only.
+
+| Pack | item rows | items | named | | Pack | item rows | items | named |
+|---|--:|--:|--:|---|---|--:|--:|--:|
+| Vanilla 1.15.8 | 36 | 18 | 10 | | BfA 8.3.7 | 935 | 562 | 562 |
+| TBC 2.5.6 | 0 | 0 | 0 | | Shadowlands 9.2.7 | 1,211 | 651 | 433 |
+| WotLK 3.4.3 | 0 | 0 | 0 | | Dragonflight 10.2.7 | 1,431 | 709 | 467 |
+| Cataclysm 4.4.2 | 0 | 0 | 0 | | TWW 11.2.7 | 1,579 | 764 | 497 |
+| MoP 5.5.4 | 0 | 0 | 0 | | | | | |
+| Legion 7.3.5 | 719 | 481 | 481 | | | | | |
+
+TBC through MoP are data-truthful zeroes: those Classic clients carry no Type-1
+attach row (the route first appears in the retail-line Legion data and, oddly,
+in a handful of Vanilla Classic rows). Legion/BfA showing 100% named is also the
+data — the nameless internal-prop items (potions, dynamite) are reached mainly
+on the later builds. The named share is what decides the pill shape per row.
 
 ### Equipped-weapon markers by version
 

@@ -156,7 +156,7 @@ window.EpsilookData = (() => {
     const spellModels = new Map();
     /** @type {Map<number, number[]>} fid -> [spell id] */
     const modelSpells = new Map();
-    /** @type {Map<number, {fid: number, cat: number, targets: number, src: number, dst: number, disp: number}[]>} */
+    /** @type {Map<number, {fid: number, cat: number, targets: number, src: number, dst: number, ref: number}[]>} */
     const spellModelCats = new Map();
     /** @type {Map<number, Set<number>>} cat id -> Set(spell id) */
     const modelCatSpells = new Map();
@@ -167,7 +167,13 @@ window.EpsilookData = (() => {
     /** @type {Record<number, string>} raw M2 attachment id -> name */
     const attachmentNames = pack.attachmentNames || {};
     {
-      const { spellIds, fids, cats, targets, srcAttach, dstAttach, displayIds } = pack.spellModels;
+      const sm = pack.spellModels;
+      const { spellIds, fids, cats, targets, srcAttach, dstAttach } = sm;
+      // ref id per row: the entity the model came from, in the id space its
+      // category names (a CreatureDisplayID on display rows, an Item::ID on
+      // item rows). Renamed refIds in format 28; format 27 packs still ship it
+      // as displayIds (display rows only), so fall back to that.
+      const refIds = sm.refIds || sm.displayIds;
       for (let i = 0; i < spellIds.length; i++) {
         pushTo(modelSpells, fids[i], spellIds[i]);
         if (!cats) { pushTo(spellModels, spellIds[i], fids[i]); continue; }
@@ -177,8 +183,8 @@ window.EpsilookData = (() => {
           // none, which renders as no attachment segment
           src: srcAttach ? srcAttach[i] : -1,
           dst: dstAttach ? dstAttach[i] : -1,
-          // CreatureDisplayID on display-category rows (format 27); 0 elsewhere
-          disp: displayIds ? displayIds[i] : 0,
+          // ref id: CreatureDisplayID (display cat) or Item::ID (item cat); 0 else
+          ref: refIds ? refIds[i] : 0,
         });
         let set = modelCatSpells.get(cats[i]);
         if (!set) modelCatSpells.set(cats[i], set = new Set());
@@ -193,6 +199,50 @@ window.EpsilookData = (() => {
         for (const [s, entries] of spellModelCats)
           spellModels.set(s, [...new Set(entries.map((e) => e.fid))]);
         for (const [f, arr] of modelSpells) modelSpells.set(f, [...new Set(arr)]);
+      }
+    }
+
+    // items (MODEL_CAT_ITEM rows, pack format 28): Item::ID -> its name,
+    // quality word and icon name. A nameless item still has an entry (name "")
+    // — it renders as a plain model pill; the presence of a name is what the
+    // renderer branches on. Quality drives the label COLOUR only. `itemSearchL`
+    // is the per-item search corpus — item id and name, so model:"item sickle
+    // axe" matches on the NAME; quality is deliberately NOT searchable.
+    /** @type {Map<number, {name: string, quality: string, icon: string}>} */
+    const items = new Map();
+    /** @type {Map<number, string>} item id -> search corpus */
+    const itemSearchL = new Map();
+    if (pack.items) {
+      const it = pack.items;
+      const iconNames = pack.itemIconNames || [];
+      const qualityNames = pack.itemQualityNames || {};
+      for (let i = 0; i < it.ids.length; i++) {
+        const id = it.ids[i];
+        const name = it.names[i] || "";
+        const quality = qualityNames[it.qualities[i]] || "";
+        const icon = it.icons[i] ? (iconNames[it.icons[i] - 1] || "") : "";
+        items.set(id, { name, quality, icon });
+        itemSearchL.set(id,
+          ("item " + id + " " + name.toLowerCase()).trim());
+      }
+    }
+    // item id -> the spells that reach it (through a MODEL_CAT_ITEM row), so a
+    // model:"item <name>" query can match on the item corpus. The pill's fid
+    // and category word are already searchable through the ordinary model
+    // index; this is the extra dimension items add — their NAME and quality.
+    /** @type {Map<number, Set<number>>} item id -> Set(spell id) */
+    const itemSpells = new Map();
+    if (items.size) {
+      const itemCat = Number(Object.keys(modelCatNames)
+        .find((c) => modelCatNames[c] === "item"));
+      if (Number.isFinite(itemCat)) {
+        for (const [s, entries] of spellModelCats)
+          for (const e of entries)
+            if (e.cat === itemCat && e.ref) {
+              let set = itemSpells.get(e.ref);
+              if (!set) itemSpells.set(e.ref, set = new Set());
+              set.add(s);
+            }
       }
     }
 
@@ -853,6 +903,7 @@ window.EpsilookData = (() => {
       namesL, spellIndex, files,
       spellModels, modelSpells, modelFids, attachmentNames,
       spellModelCats, modelCatSpells, modelCatFidSpells, modelCatNames,
+      items, itemSearchL, itemSpells,
       spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles,
       spellAnimKits, animKitSpells,
       animNames, animNamesL, animKitAnims, animAnimKits,
