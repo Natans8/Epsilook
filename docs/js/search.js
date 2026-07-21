@@ -285,6 +285,7 @@ window.EpsilookSearch = (() => {
     // Attachment points and the target mask both live on the ROW; the
     // (cat, fid) index below has neither, being shared across spells. Either
     // one in the query therefore forces the row walk.
+    const itemL = (e) => (e.ref ? (data.itemSearchL.get(e.ref) || "") : "");
     if (tests.length || attaches.length) {
       for (const [s, entries] of data.spellModelCats) {
         for (const e of entries) {
@@ -293,7 +294,10 @@ window.EpsilookSearch = (() => {
           const catL = data.modelCatNames[e.cat] || "";
           const file = data.files.get(e.fid);
           const searchL = file ? file.searchL : "";
-          if (text.every((t) => catL.includes(t.text) || searchL.includes(t.text))) {
+          // item rows also match on the item corpus (name / quality / id)
+          const item = itemL(e);
+          if (text.every((t) => catL.includes(t.text) || searchL.includes(t.text)
+                                || (item && item.includes(t.text)))) {
             out.add(s);
             break;
           }
@@ -307,6 +311,17 @@ window.EpsilookSearch = (() => {
         const file = data.files.get(fid);
         const searchL = file ? file.searchL : "";
         if (tokens.every((t) => catL.includes(t.text) || searchL.includes(t.text))) {
+          for (const s of spells) out.add(s);
+        }
+      }
+    }
+    // items add a NAME/quality dimension the (cat, fid) index above can't carry
+    // (the same fid backs many differently-named items), so match the item
+    // corpus directly — model:"item sickle axe" reaches spells by item name
+    if (data.itemSpells && data.itemSpells.size) {
+      for (const [itemId, spells] of data.itemSpells) {
+        const corpus = data.itemSearchL.get(itemId) || "";
+        if (corpus && tokens.every((t) => corpus.includes(t.text))) {
           for (const s of spells) out.add(s);
         }
       }
@@ -456,8 +471,20 @@ window.EpsilookSearch = (() => {
     scan(data.shadowySearchL, data.shadowySpells);
     scan(data.ghostMatSearchL, data.ghostMatSpells);
     scan(data.tintSearchL, data.tintSpells);
-    scan(data.desatSearchL, data.desatSpells);
-    scan(data.transpSearchL, data.transpSpells);
+    // desaturate / transparency carry a PERCENT (the map key). A bare number is
+    // a substring on the "desaturate 70%" corpus (fx:"desaturate 70"); an
+    // operator-prefixed token is a numeric comparison against that percent
+    // (fx:"desaturate >50") — the same operator opt-in the vehicle/invis counts
+    // use, so every numeric pill answers to <, >, <=, >=, = the same way.
+    const scanPercent = (searchLMap, spellsMap) => {
+      for (const [percent, searchL] of searchLMap) {
+        if (!tokens.every((t) => searchL.includes(t.text)
+            || (hasOperator(t.text) && matchNumeric(t.text, percent)))) continue;
+        for (const s of spellsMap.get(percent) || []) out.add(s);
+      }
+    };
+    scanPercent(data.desatSearchL, data.desatSpells);
+    scanPercent(data.transpSearchL, data.transpSpells);
     if (textMatches("freeze", tokens)) for (const s of data.spellFreezes) out.add(s);
     if (textMatches("camo", tokens)) for (const s of data.spellCamos) out.add(s);
     // vehicles: a text corpus ("vehicle" + the seat attachment names) PLUS a

@@ -35,6 +35,14 @@ window.EpsilookConfig = {
   summonLookupTemplate: ".lookup creature {name}",
   summonSpawnTemplate: ".npc spawn {id}",
 
+  // Copy commands on each item tag (SpellVisualEffectName Type 1). {id} = the
+  // Item::ID, {name} = the item's display name for a named item OR its model
+  // base filename (NO extension) for a nameless one — .lookup item accepts
+  // either. .additem is offered on named items only (adding a nameless prop by
+  // id does nothing useful), so it takes {id}.
+  itemLookupTemplate: ".lookup item {name}",
+  itemAddTemplate: ".additem {id}",
+
   // External links ({id} = spell / soundkit / creature display / NPC ID,
   // {wh} = the version-appropriate Wowhead site prefix, see wowheadSitePrefix).
   // The model viewer (morph) has no {wh} — it always stays on retail (best
@@ -43,6 +51,10 @@ window.EpsilookConfig = {
   wowheadSoundUrl: "https://www.wowhead.com/{wh}sound={id}",
   wowheadMorphUrl: "https://www.wowhead.com/#modelviewer:1:{id}:0",
   wowheadNpcUrl: "https://www.wowhead.com/{wh}npc={id}",
+  // Item page, opened straight on its 3D model view. The #modelviewer fragment
+  // makes Wowhead land on the model tab (the item's whole point here), and the
+  // page still carries the tooltip the data-wowhead attribute shows on hover.
+  wowheadItemUrl: "https://www.wowhead.com/{wh}item={id}/#modelviewer",
 
   // Wowhead has separate sections per game era, reached by a path prefix on
   // www.wowhead.com (e.g. /classic/spell=133). Data-page links ({wh} in the

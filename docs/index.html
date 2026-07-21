@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, animation or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260721g">
+  <link rel="stylesheet" href="css/app.css?v=20260722c">
 </head>
 <body>
 
@@ -117,6 +117,7 @@
             <li><button data-search='model:"missile arrow"'>model:"missile arrow"</button> whose projectile is an arrow</li>
             <li><button data-search="model:ground">model:ground</button> also <code>trail</code>, <code>barrage</code></li>
             <li><button data-search="model:display">model:display</button> a creature-display model (copy <code>.morph</code>)</li>
+            <li><button data-search="model:item">model:item</button> holds an in-game item; <button data-search='model:"item fishing pole"'>model:"item fishing pole"</button> by name</li>
             <li><button data-search="anim:stance">anim:stance</button> stand/walk overrides</li>
             <li><button data-search='anim:"stance walk"'>anim:"stance walk"</button> just the walk ones</li>
             <li><button data-search="anim:passenger">anim:passenger</button> vehicle seat animations</li>
@@ -145,6 +146,7 @@
             <li><button data-search="anim:=3">anim:=3</button> exactly three animations</li>
             <li><button data-search="sound:&gt;=2">sound:&gt;=2</button> two or more sounds</li>
             <li><button data-search='fx:"seat &gt;2"'>fx:"seat &gt;2"</button> vehicles with 3+ seats</li>
+            <li><button data-search='fx:"transparency &gt;=50"'>fx:"transparency &gt;=50"</button> the same operators work on any numeric pill — seat, invis, desaturate, transparency</li>
           </ul>
         </section>
         <section>
@@ -319,13 +321,13 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260721g"></script>
-<script src="js/data.js?v=20260721g"></script>
+<script src="js/config.js?v=20260722c"></script>
+<script src="js/data.js?v=20260722c"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260721g"></script>
-<script src="js/js-blp.js?v=20260721g"></script>
-<script src="js/search.js?v=20260721g"></script>
-<script src="js/app.js?v=20260721g"></script>
+<script src="js/bufo.js?v=20260722c"></script>
+<script src="js/js-blp.js?v=20260722c"></script>
+<script src="js/search.js?v=20260722c"></script>
+<script src="js/app.js?v=20260722c"></script>
 </body>
 </html>

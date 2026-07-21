@@ -894,12 +894,18 @@
       words: [...base.words, ATTACH_WORD],
       titles: { ...base.titles, [ATTACH_WORD]: ATTACH_TITLE },
     } : base;
+    /** ...plus the equipped-weapon meta word, when the pack carries a marker. */
+    const hasEquipped = !!(d && d.files && d.files.has(WEAPON_FID));
+    const withEquipped = (base) => hasEquipped ? {
+      words: [...base.words, EQUIPPED_WORD],
+      titles: { ...base.titles, [EQUIPPED_WORD]: EQUIPPED_TITLE },
+    } : base;
     switch (field) {
       case "fx": return withAttach(withTargets(Object.keys(FX_HEAD_TITLES), FX_HEAD_TITLES));
-      case "model": return withAttach(withTargets(
+      case "model": return withEquipped(withAttach(withTargets(
         // "" is the attach category: loose pills, no word to search by
         Object.values((d && d.modelCatNames) || {}).filter(Boolean),
-        MODEL_CAT_TITLES));
+        MODEL_CAT_TITLES)));
       case "anim": return withTargets(Object.keys(ANIM_CAT_TITLES), ANIM_CAT_TITLES);
       case "sound": return withTargets([], {});
       default: return null;
@@ -1522,8 +1528,8 @@
     buildKitGroups(td, hitsFirst(cats, (c) => c.hit), {
       headerTag: (c) => modelCatHeadTag(c.name, c.hit),
       itemsOf: (c) => hitsFirst(c.items, (e) => modelFileIsHit(d.files.get(e.fid), c.name)),
-      itemTag: (e, c) => (isDisplayCat(e.cat)
-        ? displayTag(e)
+      itemTag: (e, c) => (isDisplayCat(e.cat) ? displayTag(e)
+        : isItemCat(e.cat) ? itemTag(e)
         : modelTag(e.fid, c.name, e.targets, e.src, e.dst, travels(e.cat))),
       compact: true,
     });
@@ -2067,14 +2073,22 @@
     return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
+  // a percent pill (desaturate / transparency) lights under the same query
+  // spellsByFx selects it with: the "<category> N%" corpus by substring, or an
+  // operator-prefixed numeric comparison against the percent. Kept in lockstep
+  // with scanPercent in search.js.
+  function percentIsHit(corpus, percent) {
+    return groupsFor("fx").some((g) => g.tokens.every((t) =>
+      corpus.includes(t.text)
+      || (Search.hasOperator(t.text) && Search.matchNumeric(t.text, percent))));
+  }
+
   function desatIsHit(percent) {
-    const corpus = state.data.desatSearchL.get(percent) || "";
-    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+    return percentIsHit(state.data.desatSearchL.get(percent) || "", percent);
   }
 
   function transpIsHit(percent) {
-    const corpus = state.data.transpSearchL.get(percent) || "";
-    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+    return percentIsHit(state.data.transpSearchL.get(percent) || "", percent);
   }
 
   function screenIsHit(screenId) {
@@ -2265,6 +2279,7 @@
     trail: "Weapon trail model (WeaponTrail)",
     barrage: "Volley of models (BarrageEffect)",
     display: "Creature display model attached to the caster/target (SpellVisualEffectName Type 2)",
+    item: "An in-game item's model, held by the caster (SpellVisualEffectName Type 1)",
   };
 
   function modelCatHeadTag(category, hit) {
@@ -2322,9 +2337,24 @@
    * treatment. Matched by category word so it survives the numeric id shifting,
    * same rule as TRAVELLING_MODEL_CATS. */
   const MODEL_CAT_DISPLAY_WORD = "display";
+  // the category resolved from an Item::ID (SpellVisualEffectName Type 1): its
+  // pills render item-style (Wowhead item page, item icon, quality-coloured
+  // name, .add / .lo) instead of the plain model treatment. Same match-by-word
+  // rule as the display category.
+  const MODEL_CAT_ITEM_WORD = "item";
+  // the equipped-weapon marker's meta word (WEAPON_FID sentinel, build_data).
+  // It is not a MODEL_CAT — the marker rides the attach/missile categories with
+  // a sentinel fid — so the word lives only in its synthetic filename; clicking
+  // the marker searches `model:equipped`, and it autocompletes in the model
+  // column when the pack carries a marker (WEAPON_FID present in the files map).
+  const WEAPON_FID = -1;
+  const EQUIPPED_WORD = "equipped";
+  const EQUIPPED_TITLE = "The caster's own equipped weapon — resolved in-game, no fixed model";
 
   const isDisplayCat = (cat) =>
     ((state.data.modelCatNames || {})[cat] || "") === MODEL_CAT_DISPLAY_WORD;
+  const isItemCat = (cat) =>
+    ((state.data.modelCatNames || {})[cat] || "") === MODEL_CAT_ITEM_WORD;
 
   function attachSegment(src, dst, field, twoPoint) {
     const d = state.data;
@@ -2407,16 +2437,21 @@
       tag.appendChild(view);
     }
 
-    const labelText = file.base ? stripExt(file.base)
-      : (synthetic ? "equipped weapon" : `file #${fid}`);
+    // synthetic is tested FIRST: the sentinel's file entry HAS a base
+    // ("equipped weapon"), so a file.base-first test would never reach the
+    // synthetic case. The label keeps the readable two-word name, but the
+    // search is the single meta word `equipped` (EQUIPPED_WORD) — a clean
+    // category-style token only the marker's synthetic filename carries.
+    const labelText = synthetic ? "equipped weapon"
+      : (file.base ? stripExt(file.base) : `file #${fid}`);
     const txt = el("button", "tag-label", labelText);
     txt.title = synthetic
       ? "The caster's own equipped weapon (SpellVisualEffectName Type 3–10)"
         + " — resolved in-game, no fixed model"
         + "\nClick: find spells that show the equipped weapon · Shift-click: exclude"
       : `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this model · Shift-click: exclude`;
-    txt.dataset.search = file.base ? `model:"${file.base}"`
-      : (synthetic ? 'model:"equipped weapon"' : "");
+    txt.dataset.search = synthetic ? `model:${EQUIPPED_WORD}`
+      : (file.base ? `model:"${file.base}"` : "");
     tag.appendChild(txt);
     addTargetIcons(tag, mask);
     const attach = attachSegment(src, dst, "model", twoPoint);
@@ -2440,7 +2475,7 @@
    * needed); the displayId drives the buttons. */
   function displayTag(e) {
     const d = state.data;
-    const { fid, disp: displayId, targets: mask } = e;
+    const { fid, ref: displayId, targets: mask } = e;
     const file = fid ? (d.files.get(fid) || { path: "", base: "" }) : { path: "", base: "" };
     const tag = el("span", "tag model");
     if (modelFileIsHit(d.files.get(fid), MODEL_CAT_DISPLAY_WORD)) tag.classList.add("hit");
@@ -2472,6 +2507,118 @@
       tag.appendChild(tagButton(".lo", `Copy:  ${lookup}`, lookup));
     }
     return tag;
+  }
+
+  /* Item pill (MODELS column): a model reached through an Item::ID
+   * (SpellVisualEffectName Type 1). Two shapes share one renderer, differing
+   * only by whether the item has a NAME:
+   *   named    ( [wh] | {target}{icon}{ItemName} | attach | [copy] | [.add] | [.lo] )
+   *   nameless ( [3d] | {target}{icon}{fileName} | attach | [.lo] )
+   * The item icon always sits directly against the label. A named item's Wowhead
+   * item page (opened on its model view) carries the tooltip, mirrored onto the
+   * icon and the label via data-wowhead so hovering either raises it while the
+   * label keeps its click-to-search. A nameless item has no item page and no
+   * item id worth copying, so it drops [wh], [copy] and [.add] and takes the 3D
+   * cube instead; .lookup item then falls back to the model's base filename. */
+  function itemTag(e) {
+    const d = state.data;
+    const { fid, ref: itemId, targets: mask } = e;
+    const info = d.items.get(itemId) || { name: "", quality: "", icon: "" };
+    const file = fid ? (d.files.get(fid) || { path: "", base: "" }) : { path: "", base: "" };
+    const named = !!info.name;
+    const base = file.base ? stripExt(file.base) : "";
+    // .lookup item accepts the item name OR the model base name (no extension)
+    const lookupName = info.name || base;
+
+    const tag = el("span", "tag model item");
+    if (info.quality) tag.classList.add(`q-${info.quality}`);
+    if (itemIsHit(e)) tag.classList.add("hit");
+
+    // leading action: Wowhead item page for named, 3D model viewer for nameless
+    if (named && CFG.wowheadItemUrl) {
+      tag.appendChild(wowheadLink(wowheadUrl(CFG.wowheadItemUrl, { id: itemId }),
+        `Open ${info.name} on Wowhead`));
+    } else if (!named && CFG.modelViewerUrl && fid) {
+      const view = el("a", "tag-view");
+      view.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+        'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">' +
+        '<path d="M12 2.5 21 7.5v9l-9 5-9-5v-9z"/>' +
+        '<path d="M12 12.2 21 7.5M12 12.2v9.3M12 12.2 3 7.5"/></svg>';
+      view.href = fillTemplate(CFG.modelViewerUrl, { fid });
+      view.target = "_blank";
+      view.rel = "noopener";
+      view.title = `Preview ${base || `file #${fid}`} in the WoW.tools model viewer (new tab)`;
+      view.setAttribute("aria-label", view.title);
+      tag.appendChild(view);
+    }
+
+    addTargetIcons(tag, mask);
+
+    // icon, then label, with nothing between them so they read as one unit.
+    // On a named item the icon is a Wowhead item link, the same mechanism the
+    // name link / [wh] button use — that anchor+href is what the app's tooltips
+    // ride on (data-wowhead alone is unproven here), so hovering the icon raises
+    // the same tooltip and clicking it opens the item. Nameless items have no
+    // item page, so their icon is a plain img.
+    if (info.icon) {
+      const ic = el("img", "item-icon");
+      ic.src = fillTemplate(CFG.spellIconUrl, { icon: info.icon });
+      ic.alt = "";
+      ic.loading = "lazy";
+      if (named && CFG.wowheadItemUrl) {
+        const iconLink = el("a", "item-icon-link");
+        iconLink.href = wowheadUrl(CFG.wowheadItemUrl, { id: itemId });
+        iconLink.target = "_blank";
+        iconLink.rel = "noopener";
+        iconLink.title = `Open ${info.name} on Wowhead`;
+        iconLink.setAttribute("aria-label", iconLink.title);
+        iconLink.setAttribute("data-wowhead", `item=${itemId}`);
+        iconLink.appendChild(ic);
+        tag.appendChild(iconLink);
+      } else {
+        tag.appendChild(ic);
+      }
+    }
+
+    const label = named ? info.name : base || `item #${itemId}`;
+    const txt = el("button", "tag-label", label);
+    txt.title = named
+      ? `${info.name} (item ${itemId})`
+        + `\nClick: find spells using this item · Shift-click: exclude`
+      : `${file.path || "(model name unknown)"}\nItem ${itemId} (no name)`
+        + `\nClick: find spells using this model · Shift-click: exclude`;
+    // named items search the item corpus (name/quality); nameless by filename
+    txt.dataset.search = named ? `model:"item ${info.name}"`
+      : (base ? `model:"${file.base}"` : "");
+    if (named) txt.setAttribute("data-wowhead", `item=${itemId}`); // tooltip on the name too
+    tag.appendChild(txt);
+
+    const attach = attachSegment(e.src, e.dst, "model", false);
+    if (attach) tag.appendChild(attach);
+
+    if (named) {
+      tag.appendChild(tagButton("⧉", `Copy item ID: ${itemId}`, String(itemId)));
+      const add = fillTemplate(CFG.itemAddTemplate, { id: itemId });
+      tag.appendChild(tagButton(".add", `Copy:  ${add}`, add));
+    }
+    if (lookupName) {
+      const lookup = fillTemplate(CFG.itemLookupTemplate, { id: itemId, name: lookupName });
+      tag.appendChild(tagButton(".lo", `Copy:  ${lookup}`, lookup));
+    }
+    return tag;
+  }
+
+  // an item pill lights when a positive model chip is satisfied by the item's
+  // corpus (name / quality / id / the category word "item") OR its model file —
+  // the same shape as modelFileIsHit, with the item corpus folded in so
+  // model:"item sickle axe" matches on the NAME, not just the filename.
+  function itemIsHit(e) {
+    const d = state.data;
+    const searchL = (d.files.get(e.fid) || { searchL: "" }).searchL;
+    const corpus = d.itemSearchL.get(e.ref) || "";
+    return groupsFor("model").some((g) => g.tokens.every((t) =>
+      MODEL_CAT_ITEM_WORD.includes(t.text) || searchL.includes(t.text) || corpus.includes(t.text)));
   }
 
   function soundTag(fid) {

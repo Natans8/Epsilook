@@ -103,6 +103,16 @@ TABLES = [
     "SpellOverrideName",
     "Vehicle",
     "VehicleSeat",
+    # the item route (SpellVisualEffectName Type 1, §3c). ItemSearchName carries
+    # the display name AND OverallQualityID; the appearance chain resolves the
+    # model and the inventory icon. ItemSparse is deliberately NOT here: it is
+    # 36 MB against ItemSearchName's 6 MB and was measured to add exactly zero
+    # names over it for the items this route reaches.
+    "ItemSearchName",
+    "ItemModifiedAppearance",
+    "ItemAppearance",
+    "ItemDisplayInfo",
+    "ModelFileData",
 ]
 
 # ------------------------------------------------------- per-build source map
@@ -358,11 +368,25 @@ MODEL_CAT_AREA = 2     # SpellVisualKitAreaModel (ground/area model: emission ET
 MODEL_CAT_TRAIL = 3    # WeaponTrail (proc Type 27)
 MODEL_CAT_BARRAGE = 4  # BarrageEffect (volley of models, ET 17)
 MODEL_CAT_DISPLAY = 5  # SpellVisualEffectName Type 2 (a CreatureDisplayID's model)
+MODEL_CAT_ITEM = 6     # SpellVisualEffectName Type 1 (an Item::ID's model)
 
 # SpellVisualEffectName.Type: how its GenericID/ModelFileDataID resolves to a
 # model (SpellVisualEffectNameType.dbde). 0 = FileDataID (ModelFileDataID),
 # 1 = Item (GenericID = Item::ID), 2 = CreatureDisplayInfo (GenericID = display).
 EFFECT_NAME_TYPE_DISPLAY = 2
+EFFECT_NAME_TYPE_ITEM = 1
+
+# Item.OverallQualityID -> the quality word its pill label is coloured by
+# (ItemQuality; the classic poor/common/uncommon/rare/epic/legendary ramp). The
+# word rides the pack so the frontend can map it to a colour without hardcoding
+# the enum, and so an unknown future tier degrades to no colour rather than a
+# wrong one. Read from ItemSearchName, which carries it for 100% of the items
+# this route reaches — no Wowhead lookup, and it is the quality for the build
+# being packed rather than for current retail.
+ITEM_QUALITY_NAMES = {
+    0: "poor", 1: "common", 2: "uncommon", 3: "rare", 4: "epic",
+    5: "legendary", 6: "artifact", 7: "heirloom", 8: "token",
+}
 # SpellVisualEffectName.Type 3-10 are undocumented in the enum, but every one of
 # them carries NO model in the data — ModelFileDataID AND GenericID are both 0 —
 # while attaching to weapon/hand M2 points and being reused as missiles.
@@ -415,6 +439,11 @@ MODEL_CAT_NAMES = {
     # category in filename noise). "display" collides with ~0 and matches how
     # Epsilon users think of a CreatureDisplayID.
     MODEL_CAT_DISPLAY: "display",
+    # "item" collides with ~4.3% of the model-file corpus (item/objectcomponents/
+    # ...) by the filename-substring rule — well under the ~21% that ruled out
+    # "creature" for the display category, and coherent rather than confusing:
+    # the files it also matches ARE item models.
+    MODEL_CAT_ITEM: "item",
 }
 
 # SpellEffectAura value whose EffectMiscValue_0 is a CreatureDisplayID
@@ -668,7 +697,9 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 27  # 27: SpellVisualEffectName Type 2 -> creature-display model pills
+PACK_FORMAT = 28  # 28: SpellVisualEffectName Type 1 -> item model pills (items
+                  #     section, itemIconNames, spellModels.displayIds -> refIds)
+# 27: SpellVisualEffectName Type 2 -> creature-display model pills
 # 26: invis/detect channels (MOD_INVISIBILITY[_DETECT] auras)
 # 25: target masks on effect-driven fx (SpellEffect.ImplicitTarget)
 # 24: M2 attachment points on model, missile and beam rows
@@ -1266,16 +1297,19 @@ class ModelSources:
     row) references them.
     """
     effect_name_fid: dict[int, int]   # SpellVisualEffectName.ID -> model fid
-    effect_name_type: dict[int, int]  # SpellVisualEffectName.ID -> Type (0 file, 2 display, 3-10 weapon)
+    effect_name_type: dict[int, int]  # SpellVisualEffectName.ID -> Type (0 file, 1 item, 2 display, 3-10 weapon)
     area_model_fid: dict[int, int]    # SpellVisualKitAreaModel.ID -> model fid
     emission_fid: dict[int, int]      # SpellEffectEmission.ID -> model fid (ET 8)
     barrage_fid: dict[int, int]       # BarrageEffect.ID -> model fid (ET 17)
     weapontrail_fid: dict[int, int]   # WeaponTrail.ID -> model fid (proc Type 27)
-    # kit -> {(fid, category, source attachment, destination attachment, display)}.
+    # kit -> {(fid, category, source attachment, destination attachment, ref)}.
     # Routes with a single attach point put it in `source` and leave
     # `destination` NO_ATTACHMENT; routes with none use NO_ATTACHMENT for both.
-    # `display` is the CreatureDisplayID for MODEL_CAT_DISPLAY rows (0 otherwise)
-    # — the pill needs it for its Wowhead / copy / .morph buttons.
+    # `ref` is the id of the game entity the model came FROM, and the category
+    # says which id space it is in: a CreatureDisplayID on MODEL_CAT_DISPLAY, an
+    # Item::ID on MODEL_CAT_ITEM, 0 everywhere else. A row can only ever come
+    # from one such entity, so the categories share the field rather than each
+    # adding its own — that is the extension point for the next Type-N route.
     attach_models: dict[int, set[tuple[int, int, int, int, int]]]
     # animations carried on the SAME SpellVisualKitModelAttach rows — the
     # attached model's start/loop/end AnimationData ids and its AnimKit. Keyed
@@ -1287,7 +1321,7 @@ class ModelSources:
 
 def read_model_sources(
     table_dir: Path, tdb_dir: Path | None, creatures: "CreatureModels",
-    listfile_path: Path
+    items: "ItemModels", listfile_path: Path
 ) -> ModelSources:
     """Read the model-bearing tables (see ModelSources for the routes)."""
     # SpellVisualEffectName.Type says how to reach the model: 0 = ModelFileDataID
@@ -1343,7 +1377,8 @@ def read_model_sources(
             continue
         e = to_int(en_id)
         at = to_int(attach)
-        if effect_name_type.get(e, 0) == EFFECT_NAME_TYPE_DISPLAY:
+        en_type = effect_name_type.get(e, 0)
+        if en_type == EFFECT_NAME_TYPE_DISPLAY:
             # Type 2: the effect-name names a CreatureDisplayID, not a file.
             # Resolve it to that creature model's fid (pure client data, so it
             # works on TDB-less packs) and carry the displayId for the pill.
@@ -1351,6 +1386,16 @@ def read_model_sources(
             fid = creatures.fid_for_display(disp)
             if fid:
                 attach_models[k].add((fid, MODEL_CAT_DISPLAY, at, NO_ATTACHMENT, disp))
+        elif en_type == EFFECT_NAME_TYPE_ITEM:
+            # Type 1: the effect-name names an Item::ID. The item carries its own
+            # model through the appearance chain, plus the name/quality/icon the
+            # pill is built from. The row keeps the ITEM id as its ref even when
+            # the item has no name — a nameless item still renders, just without
+            # the Wowhead half of the pill (see itemTag in app.js).
+            item = effect_name_generic.get(e, 0)
+            fid = items.model_fid.get(item, 0)
+            if fid:
+                attach_models[k].add((fid, MODEL_CAT_ITEM, at, NO_ATTACHMENT, item))
         else:
             fid = effect_name_fid.get(e, 0)
             if fid:
@@ -2140,6 +2185,91 @@ def read_creature_models(table_dir: Path, tdb_dir: Path | None) -> CreatureModel
     return CreatureModels(names, displays, display_model, model_fid)
 
 
+@dataclass
+class ItemModels:
+    """Item -> its display name, quality, inventory icon and model file.
+
+    Pure client data, so the route works on the TDB-less Classic packs. Only
+    ItemSearchName carries a name, and only about two thirds of the items this
+    route reaches appear there at all — the rest are internal props (unnamed
+    potions, dynamite, gizmos) that exist purely to be held in a spell visual.
+    Those still resolve to a model and an icon, which is why the nameless case
+    is worth rendering rather than dropping.
+    """
+    name: dict[int, str]      # Item::ID -> ItemSearchName.Display_lang
+    quality: dict[int, int]   # Item::ID -> OverallQualityID
+    icon_fid: dict[int, int]  # Item::ID -> inventory icon FileDataID
+    model_fid: dict[int, int] # Item::ID -> model fid (first that resolves)
+
+    def resolved(self, item_id: int) -> bool:
+        return bool(self.model_fid.get(item_id))
+
+
+def read_item_models(table_dir: Path) -> ItemModels:
+    """Read Item -> name/quality/icon/model (SpellVisualEffectName Type 1, §3c).
+
+    The model hop is
+    `ItemModifiedAppearance -> ItemAppearance -> ItemDisplayInfo
+     -> ModelResourcesID -> ModelFileData.FileDataID`,
+    which resolves 99.8% of the items this route reaches on 9.2.7. An item can
+    have several appearances (transmog variants); they are walked in row order
+    and the first that yields a file wins, so the pill shows the item's base
+    look rather than an arbitrary recolour.
+    """
+    name: dict[int, str] = {}
+    quality: dict[int, int] = {}
+    for iid, disp, qual in read_table(
+        table_dir, "ItemSearchName", ["ID", "Display_lang", "OverallQualityID"]
+    ):
+        i = to_int(iid)
+        if disp:
+            name[i] = disp
+            quality[i] = to_int(qual)
+
+    # ModelResourcesID -> a model file. One resources id can name several files
+    # (LODs); the lowest fid is the base model.
+    res_fid: dict[int, int] = {}
+    for fid, res in read_table(table_dir, "ModelFileData", ["FileDataID", "ModelResourcesID"]):
+        r, f = to_int(res), to_int(fid)
+        if r and f and (r not in res_fid or f < res_fid[r]):
+            res_fid[r] = f
+
+    # ItemDisplayInfo.ID -> its model resources (slot 0 is the main model,
+    # slot 1 the off-hand/second component of a paired item)
+    display_res: dict[int, tuple[int, int]] = {}
+    for did, r0, r1 in read_table(
+        table_dir, "ItemDisplayInfo", ["ID", "ModelResourcesID_0", "ModelResourcesID_1"]
+    ):
+        display_res[to_int(did)] = (to_int(r0), to_int(r1))
+
+    # ItemAppearance.ID -> (ItemDisplayInfoID, icon fid)
+    appearance: dict[int, tuple[int, int]] = {}
+    for aid, did, icon in read_table(
+        table_dir, "ItemAppearance", ["ID", "ItemDisplayInfoID", "DefaultIconFileDataID"]
+    ):
+        appearance[to_int(aid)] = (to_int(did), to_int(icon))
+
+    icon_fid: dict[int, int] = {}
+    model_fid: dict[int, int] = {}
+    for iid, aid in read_table(
+        table_dir, "ItemModifiedAppearance", ["ItemID", "ItemAppearanceID"]
+    ):
+        i, a = to_int(iid), to_int(aid)
+        if not i or a not in appearance:
+            continue
+        display_id, icon_file = appearance[a]
+        if icon_file and i not in icon_fid:
+            icon_fid[i] = icon_file
+        if i not in model_fid:
+            for res_id in display_res.get(display_id, (0, 0)):
+                model_file = res_fid.get(res_id, 0)
+                if model_file:
+                    model_fid[i] = model_file
+                    break
+
+    return ItemModels(name, quality, icon_fid, model_fid)
+
+
 def read_shapeshift_forms(table_dir: Path) -> tuple[dict[int, str], dict[int, list[int]]]:
     """Read SpellShapeshiftForm -> its name and its creature display(s).
 
@@ -2402,7 +2532,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # creature-display chain first: read_model_sources needs it to resolve
     # SpellVisualEffectName Type 2 (GenericID = CreatureDisplayID) to a model fid
     creatures = read_creature_models(table_dir, tdb_dir)
-    models = read_model_sources(table_dir, tdb_dir, creatures, listfile_path)
+    # SpellVisualEffectName Type 1 (GenericID = Item::ID) -> the item's model,
+    # name, quality and icon; read ahead of the model sources that consume it
+    items = read_item_models(table_dir)
+    models = read_model_sources(table_dir, tdb_dir, creatures, items, listfile_path)
     visual_missiles = read_missiles(table_dir, tdb_dir, models.effect_name_fid,
                                     models.effect_name_type)
     procs = read_proc_effects(table_dir, models)
@@ -2470,6 +2603,13 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # icon fids resolve through the same listfile pass but stay out of the
     # pack's files table (they become iconNames instead)
     icon_fids = set(spell_icon_fid.values())
+    # item inventory icons resolve the same way (an item pill shows the icon the
+    # game shows in the bag), so they join the one listfile pass
+    icon_fids |= {items.icon_fid.get(ref, 0)
+                  for pairs in vis.models.values()
+                  for (_f, c, _s, _d, ref) in pairs
+                  if c == MODEL_CAT_ITEM and ref}
+    icon_fids.discard(0)
     lookup_fids = referenced_fids | icon_fids
 
     log(f"Resolving {len(lookup_fids):,} referenced file ids against the listfile ...")
@@ -2508,8 +2648,28 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # every kit-derived row carries its target mask as the last element (see
     # TARGET_BITS); the pack emits it as a parallel "targets" array
     model_rows = sorted(
-        (s, f, c, m, src, dst, disp)
-        for s, pairs in vis.models.items() for (f, c, src, dst, disp), m in pairs.items())
+        (s, f, c, m, src, dst, ref)
+        for s, pairs in vis.models.items() for (f, c, src, dst, ref), m in pairs.items())
+
+    # items reached by a MODEL_CAT_ITEM row: ship the name, quality word and
+    # icon each pill needs. An item with no ItemSearchName row still ships (with
+    # an empty name) — it renders as a model pill and its icon still reads.
+    used_items = sorted({r[6] for r in model_rows if r[2] == MODEL_CAT_ITEM and r[6]})
+    item_icon_names: list[str] = []
+    item_icon_index: dict[str, int] = {}
+    item_icons: list[int] = []
+    for i in used_items:
+        path = fid_path.get(items.icon_fid.get(i, 0), "")
+        nm = (path.rsplit("/", 1)[-1].rsplit(".", 1)[0].lower()
+              if path.lower().startswith("interface/icons/") else "")
+        if not nm:
+            item_icons.append(0)
+            continue
+        idx = item_icon_index.get(nm)
+        if idx is None:
+            idx = item_icon_index[nm] = len(item_icon_names)
+            item_icon_names.append(nm)
+        item_icons.append(idx + 1)   # 1-based; 0 = no icon
     sound_rows = sorted(
         (s, sk, f, m) for s, pairs in vis.sounds.items() for (sk, f), m in pairs.items())
     anim_rows = sorted(
@@ -2644,6 +2804,9 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "files": len(file_ids),
                 "spellModels": len(model_rows),
                 "spellDisplayModels": sum(1 for r in model_rows if r[2] == MODEL_CAT_DISPLAY),
+                "spellItemModels": sum(1 for r in model_rows if r[2] == MODEL_CAT_ITEM),
+                "items": len(used_items),
+                "namedItems": sum(1 for i in used_items if items.name.get(i)),
                 # equipped-weapon marker rows (SpellVisualEffectName Type 3-10,
                 # WEAPON_FID sentinel) — attach + thrown-missile, see §3
                 "spellWeaponModels": sum(1 for r in model_rows if r[1] == WEAPON_FID),
@@ -2707,9 +2870,25 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "targets": [r[3] for r in model_rows],
             "srcAttach": [r[4] for r in model_rows],
             "dstAttach": [r[5] for r in model_rows],
-            # CreatureDisplayID on MODEL_CAT_DISPLAY rows, 0 elsewhere
-            "displayIds": [r[6] for r in model_rows],
+            # the id of the entity the model came FROM, in whichever id space
+            # the row's category names: a CreatureDisplayID on MODEL_CAT_DISPLAY,
+            # an Item::ID on MODEL_CAT_ITEM, 0 elsewhere. One field rather than
+            # one per category — a row only ever comes from one such entity.
+            "refIds": [r[6] for r in model_rows],
         },
+        # the items MODEL_CAT_ITEM rows point at (parallel arrays, by item id).
+        # `names` is "" for an item with no ItemSearchName row — about a third of
+        # them, internal props that exist only to be held in a spell visual. Those
+        # render as a plain model pill: no Wowhead, no .add, and .lookup item
+        # falls back to the model's base filename.
+        "items": {
+            "ids": used_items,
+            "names": [items.name.get(i, "") for i in used_items],
+            "qualities": [items.quality.get(i, -1) for i in used_items],
+            "icons": item_icons,          # 1-based index into itemIconNames, 0 = none
+        },
+        "itemIconNames": item_icon_names,
+        "itemQualityNames": ITEM_QUALITY_NAMES,
         "attachmentNames": M2_ATTACHMENT_NAMES,
         "modelCatNames": MODEL_CAT_NAMES,
         "targetNames": TARGET_NAMES,
