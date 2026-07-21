@@ -706,9 +706,11 @@ td.expanded .kit-group.overflow { display: flex; }
   border-radius: 0;
   font-size: 1em;
 }
-/* percent pills (desaturate/transparency): the value is a bare number, not
-   an entity — no capsule, just (label | value) split by a flat divider */
-.kit-group.compact .kit-files:has(> .tag.pct) {
+/* flat pills (desaturate/transparency percents; invis/detect channels): the
+   value is a bare scalar, not an entity, and the category can hold only one
+   per spell — so no rounded capsule, just (label | value…) split by flat
+   dividers. */
+.kit-group.compact .kit-files:has(> .tag.flat) {
   margin: 0;
   padding: 0 0.1rem;
   border: none;
@@ -718,7 +720,7 @@ td.expanded .kit-group.overflow { display: flex; }
   align-self: stretch;
   align-items: center;
 }
-.kit-group.compact .kit-files:has(> .tag.pct.hit) { border-left-color: var(--gold-dim); }
+.kit-group.compact .kit-files:has(> .tag.flat.hit) { border-left-color: var(--gold-dim); }
 
 /* tags */
 
