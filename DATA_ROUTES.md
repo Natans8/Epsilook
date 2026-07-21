@@ -235,19 +235,22 @@ appear once per category.
 
 ```mermaid
 flowchart LR
-  A1["SpellVisualKitModelAttach"] --> EN["SpellVisualEffectName<br/>.ModelFileDataID"]
+  A1["SpellVisualKitModelAttach"] --> EN["SpellVisualEffectName"]
   M1["SpellVisual → SpellVisualMissile"] --> EN
   E17["kit ET 17 → BarrageEffect"] --> EN
+
+  EN -->|"Type 0 (.ModelFileDataID)"| LF["listfile → model path"]
+  EN -->|"Type 2 (.GenericID = CreatureDisplayID)<br/>attach route only"| CDI["CreatureDisplayInfo.ModelID<br/>→ CreatureModelData.FileDataID"]
+  CDI --> LF
 
   E8["kit ET 8 → SpellEffectEmission"] --> AM["SpellVisualKitAreaModel<br/>.ModelFileDataID"]
   P9["proc Type 9"] --> AM
 
   P27["proc Type 27 → WeaponTrail<br/>.FileDataID"] --> LF
-
-  EN --> LF["listfile → model path"]
   AM --> LF
 
   A1 -.->|"category"| C0["attach — no word, loose pills"]
+  A1 -.->|"category (Type 2)"| C5["display"]
   M1 -.->|"category"| C1["missile"]
   E17 -.->|"category"| C4["barrage"]
   E8 -.->|"category"| C2["ground"]
@@ -259,6 +262,20 @@ flowchart LR
 `SpellVisualEffectName` hop. Note `ground`, not `area`: the target words include
 `area` and the two mean different things (only 42% of this category's rows carry
 an area target bit).
+
+**`SpellVisualEffectName.Type`** picks how the effect-name resolves to a model:
+**0 = FileDataID** (`ModelFileDataID`, every route above), **1 = Item**
+(`GenericID` = Item::ID — not read yet), **2 = CreatureDisplayInfo**
+(`GenericID` = a CreatureDisplayID). On the **attach route only**, a Type-2 row
+resolves that display through `CreatureDisplayInfo → CreatureModelData` (pure
+client data — no TDB) into the `display` model category. Its pill sits in the
+Models column but wears the morph pill's buttons (Wowhead model viewer by
+displayId, ⧉ copy displayId, `.morph`, `.lookup display creature`) and keeps its
+attachment point like any other attached model. The label is the model's base
+filename. The category word is **`display`**, not `creature`: a creature model's
+path lives under `creature/…`, so `creature` would collide with ~21% of the
+model-file corpus by the filename-substring rule. Missiles/barrage keep reading
+`ModelFileDataID` for every Type (they carry no CreatureDisplay content).
 
 ### 3d. The four-and-a-half sound routes
 
@@ -524,26 +541,26 @@ mostly "the table does not exist yet." The five Classic re-release clients
 | Build | Label | Spells | Pack | TDB release | Absent tables |
 |---|---|---:|---:|---|---:|
 | 1.15.8.67156 | Vanilla Classic | 31,248 | 0.7 MB | — | 6 |
-| 2.5.6.68775 | TBC Classic | 28,650 | 0.7 MB | — | 11 |
+| 2.5.6.68775 | TBC Classic | 28,650 | 0.7 MB | — | 13 |
 | 3.4.3.58936 | WotLK Classic | 49,394 | 1.3 MB | TDB335.25101 | 10 |
 | 4.4.2.60895 | Cataclysm Classic | 71,227 | 1.9 MB | — | 10 |
-| 5.5.4.68716 | Mists of Pandaria Classic | 98,129 | 2.6 MB | — | 6 |
-| 7.3.5.26972 | Legion | 179,382 | 4.9 MB | TDB735.00 | 4 |
+| 5.5.4.68716 | Mists of Pandaria Classic | 98,129 | 2.7 MB | — | 6 |
+| 7.3.5.26972 | Legion | 179,382 | 5.0 MB | TDB735.00 | 4 |
 | 8.3.7.35662 | Battle for Azeroth | 227,237 | 6.4 MB | TDB837.20101 | 1 |
-| 9.2.7.45745 | Shadowlands *(default)* | 276,332 | 7.8 MB | TDB927.22111 | 0 |
-| 10.2.7.55664 | Dragonflight | 327,092 | 9.4 MB | TDB1027.24051 | 0 |
-| 11.2.7.65299 | The War Within | 375,895 | 11.0 MB | TDB1127.26011 | 0 |
+| 9.2.7.45745 | Shadowlands *(default)* | 276,332 | 7.9 MB | TDB927.22111 | 0 |
+| 10.2.7.55664 | Dragonflight | 327,092 | 9.5 MB | TDB1027.24051 | 0 |
+| 11.2.7.65299 | The War Within | 375,895 | 11.1 MB | TDB1127.26011 | 0 |
 
-**All ten are at pack format 25** (effect-driven fx carry a target mask from
-`SpellEffect.ImplicitTarget` — §3f). Format 25 is version-agnostic: morphs,
-summons and screens exist as far back as Vanilla, so Vanilla 1.15.8 and TBC
-2.5.6 were rebuilt for it too (they had sat at format 22) — which also brought
-them the format-23/24 vehicle and attachment features their data supports
-(vehicles degrade to nothing on both; attachment points populate). The earlier
-format costs still hold: format 22 target masks ~+11% size, format 23 vehicles
-essentially free, format 24 attachment points ~+18% model rows (the attachment
-is part of the row key). Format 25 adds one small `targets` array to each of
-the five effect-fx link sections. No new absent-table drift.
+**All ten are at pack format 27** (SpellVisualEffectName Type 2 → creature-display
+model pills — §3c). The two most recent bumps are additive and version-agnostic:
+format 26 added the invis/detect channel pills (`MOD_INVISIBILITY[_DETECT]`
+auras), format 27 the `display` model category. Both carry back to Vanilla
+(SpellVisualEffectName.Type is present on every shipped build — no absent-table
+or optional-column drift). Earlier format costs still hold: format 22 target
+masks ~+11% size, format 23 vehicles essentially free, format 24 attachment
+points ~+18% model rows, format 25 one `targets` array per effect-fx link
+section. Format 27 adds one `displayIds` array to `spellModels` and a modest
+number of `display` rows (below).
 
 ### Attachment coverage by version
 
@@ -566,6 +583,26 @@ Beam attach points need `BeamEffect`, which WotLK and Cataclysm lack — hence
 the zeroes, and MoP's single row. Attached-model coverage is high everywhere
 (~85-92% of rows outside BfA).
 
+### Creature-display models by version
+
+`display`-category rows (`SpellVisualEffectName` Type 2, §3c), read from each
+pack's `meta.counts.spellDisplayModels`. `SpellVisualEffectName.Type` is present
+on every shipped build, so the route degrades by *content*, not by a missing
+column — the Classic re-releases simply carry few Type-2 attach rows.
+
+| Pack | display rows | | Pack | display rows |
+|---|--:|---|---|--:|
+| Vanilla 1.15.8 | 23 | | BfA 8.3.7 | 721 |
+| TBC 2.5.6 | 1 | | Shadowlands 9.2.7 | 1,087 |
+| WotLK 3.4.3 | 0 | | Dragonflight 10.2.7 | 1,432 |
+| Cataclysm 4.4.2 | 4 | | TWW 11.2.7 | 1,827 |
+| MoP 5.5.4 | 48 | | | |
+| Legion 7.3.5 | 445 | | | |
+
+WotLK 3.4.3's zero is data-truthful (that Classic client has no Type-2 attach row
+resolving to a display), not a build failure. All rows resolve to a real model
+fid — unresolvable displays are dropped at build time.
+
 ### The five Classic re-release clients don't sit on the timeline
 
 Vanilla Classic (1.15.8), TBC Classic (2.5.6), WotLK Classic (3.4.3),
@@ -574,8 +611,8 @@ retail line — they are current-generation Classic clients backporting old
 content, so a client's db2 set reflects its fork point, not the game era. The
 absent-table counts therefore do **not** nest by era:
 
-- **TBC Classic is the most stripped client of the ten** (11 absent =
-  WotLK's 10 + `TextureBlendSet`).
+- **TBC Classic is the most stripped client of the ten** (13 absent =
+  WotLK's 10 + `TextureBlendSet` + `Vehicle` + `VehicleSeat`).
 - **Cataclysm Classic is as stripped as WotLK Classic** (10 absent) — the
   4.4.x client still lacks `BeamEffect`, `DissolveEffect`, `EdgeGlowEffect`,
   `SpellEffectEmission`, `WeaponTrail` and `FullScreenEffect`.
@@ -764,7 +801,7 @@ footing, not an affirmative license.
 
 | Column | Routes feeding it |
 |---|---|
-| **Models** | attach (kit→ModelAttach→EffectName), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect); every row also carries its M2 attachment point (§3h) |
+| **Models** | attach (kit→ModelAttach→EffectName Type 0), display (kit→ModelAttach→EffectName Type 2→CreatureDisplayID→model, morph-style pill), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect); every row also carries its M2 attachment point (§3h) |
 | **Sounds** | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID`, `SpellVisual.AnimEventSoundID` — all → SoundKitEntry |
 | **Animations** | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), ModelAttach Start/Anim/End (loose) + its AnimKit (grouped), proc Type 7 (stance), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped) |
 | **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, seat — see §3a–3i |
