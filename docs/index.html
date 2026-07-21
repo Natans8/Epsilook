@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Epsilook — WoW Spell Visual Search</title>
-  <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, soundkit, animkit or visual effect. A companion tool for Epsilon WoW.">
+  <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, animation or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260721d">
+  <link rel="stylesheet" href="css/app.css?v=20260721e">
 </head>
 <body>
 
@@ -231,14 +231,14 @@
         <span>Filter:</span>
         <button type="button" class="tri" data-filter="models" data-state="" aria-label="Models filter: showing all">Models</button>
         <button type="button" class="tri" data-filter="sounds" data-state="" aria-label="Sounds filter: showing all">Sounds</button>
-        <button type="button" class="tri" data-filter="animkits" data-state="" aria-label="Animations filter: showing all">Animations</button>
+        <button type="button" class="tri" data-filter="animations" data-state="" aria-label="Animations filter: showing all">Animations</button>
         <button type="button" class="tri" data-filter="fx" data-state="" aria-label="Effects filter: showing all">Effects</button>
       </div>
       <div id="columns" title="Hidden columns are also left out of plain-word search and exports">
         <span>Columns:</span>
         <label><input type="checkbox" data-col="models" checked> Models</label>
         <label><input type="checkbox" data-col="sounds" checked> Sounds</label>
-        <label><input type="checkbox" data-col="animkits" checked> Animations</label>
+        <label><input type="checkbox" data-col="animations" checked> Animations</label>
         <label><input type="checkbox" data-col="fx" checked> Effects</label>
         <label><input type="checkbox" data-col="mechanics"> Mechanics</label>
         <label><input type="checkbox" data-col="commands" checked> Commands</label>
@@ -262,7 +262,7 @@
             <th data-sort="name" class="c-name" aria-sort="none"><button type="button">Name <span class="arrow"></span></button></th>
             <th data-sort="models" class="c-models" aria-sort="none"><button type="button" title="Click to sort by count">Models <span class="arrow"></span></button></th>
             <th data-sort="sounds" class="c-sounds" aria-sort="none"><button type="button" title="Click to sort by count">Sounds <span class="arrow"></span></button></th>
-            <th data-sort="animkits" class="c-animkits" aria-sort="none"><button type="button" title="Click to sort by count">Animations <span class="arrow"></span></button></th>
+            <th data-sort="animations" class="c-animations" aria-sort="none"><button type="button" title="Click to sort by count">Animations <span class="arrow"></span></button></th>
             <th data-sort="fx" class="c-fx" aria-sort="none"><button type="button" title="Visual effects not tied to a model — beams, glows, tints, morphs, summons and more. Click to sort by count">Effects <span class="arrow"></span></button></th>
             <th data-sort="mechanics" class="c-mechanics" aria-sort="none"><button type="button" title="What the spell does mechanically. Click to sort by count">Mechanics <span class="arrow"></span></button></th>
             <th class="c-cmds">Commands</th>
@@ -319,13 +319,13 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260721d"></script>
-<script src="js/data.js?v=20260721d"></script>
+<script src="js/config.js?v=20260721e"></script>
+<script src="js/data.js?v=20260721e"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260721d"></script>
-<script src="js/js-blp.js?v=20260721d"></script>
-<script src="js/search.js?v=20260721d"></script>
-<script src="js/app.js?v=20260721d"></script>
+<script src="js/bufo.js?v=20260721e"></script>
+<script src="js/js-blp.js?v=20260721e"></script>
+<script src="js/search.js?v=20260721e"></script>
+<script src="js/app.js?v=20260721e"></script>
 </body>
 </html>

@@ -44,8 +44,7 @@ interface EpsilookConfig {
   spellIconUrl: string;
   discordCharLimit: number;
   scrollBatch: number;
-  tagsCollapsedLimit: number;
-  kitFilesCollapsedLimit: number;
+  collapsedRowHeight: number;
   searchDebounceMs: number;
   minQueryLength: number;
 }

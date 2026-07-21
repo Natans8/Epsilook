@@ -11,6 +11,10 @@
   --border-ctrl: #626b7a;
   --text: #cfd6e0;
   --text-dim: #7c8694;
+  /* action glyphs living inside pills (3D cube, ▶ play, ⧉/.lo/.morph copies).
+     Brighter than --text-dim so the small controls read clearly against the
+     row without competing with the pill's colored label. */
+  --tag-btn: #a9b4c4;
   --gold: #f0c34c;
   --gold-dim: #a8842f;
   --model: #7fb8f0;
@@ -564,7 +568,7 @@ th.c-idx { text-align: right; }
    wrapper of its own) comes out exactly as tall as a sound/animation one */
 .c-models { min-width: 14rem; line-height: 1.15; }
 .c-sounds { min-width: 16rem; }
-.c-animkits { min-width: 12rem; }
+.c-animations { min-width: 12rem; }
 .c-fx { min-width: 13.5rem; }
 .c-mechanics { min-width: 10rem; }
 
@@ -599,7 +603,7 @@ td.empty { text-align: center; vertical-align: middle; }
 /* column hiding */
 #results.hide-models   .c-models   { display: none; }
 #results.hide-sounds   .c-sounds   { display: none; }
-#results.hide-animkits .c-animkits { display: none; }
+#results.hide-animations .c-animations { display: none; }
 #results.hide-fx .c-fx { display: none; }
 #results.hide-mechanics .c-mechanics { display: none; }
 #results.hide-commands .c-cmds     { display: none; }
@@ -634,7 +638,7 @@ td.empty { text-align: center; vertical-align: middle; }
 .kit-head { display: flex; align-items: stretch; flex: none; }
 .c-models .kit-head { background: rgba(127, 184, 240, 0.08); }
 .c-sounds .kit-head { background: rgba(95, 175, 143, 0.10); }
-.c-animkits .kit-head { background: rgba(201, 154, 224, 0.09); }
+.c-animations .kit-head { background: rgba(201, 154, 224, 0.09); }
 .c-fx .kit-head { background: rgba(127, 201, 208, 0.08); }
 .kit-head .tag, .kit-head .tag.hit { border: none; background: none; margin: 0; border-radius: 0; }
 .kit-group.hit { border-color: var(--gold-dim); }
@@ -657,8 +661,6 @@ td.empty { text-align: center; vertical-align: middle; }
 .kit-files .tag-copy, .c-models .tag-copy { padding: 0.26rem 0.35rem 0.06rem 0.3rem; } /* +0.2rem top = the baseline nudge */
 .c-models .tag-view { padding: 0.06rem 0.3rem 0.06rem 0.45rem; }
 .kit-files .tag-play { padding: 0.06rem 0.32rem; }
-.kit-group.overflow { display: none; }
-td.expanded .kit-group.overflow { display: flex; }
 /* single-item (or head-only, e.g. freeze/camo) groups render compact: ONE
    tag-shaped pill instead of a box — the category word is a dimmed leading
    section (like the control word on summon pills), the lone item's tag
@@ -834,24 +836,6 @@ td.expanded .kit-group.overflow { display: flex; }
   .fx-swatch[data-color]:hover { border-color: rgba(255, 255, 255, 0.8); }
 }
 
-/* "+N" expander riding in a group's head bar (visual FX groups) — carries
-   the column's fx tint so it reads as a control, not background chrome */
-.more.head-more {
-  align-self: center;
-  margin: 0 0.4rem 0 0.05rem;
-  padding: 0 0.45rem;
-  color: var(--fx);
-  background: rgba(127, 201, 208, 0.14);
-  border: 1px solid rgba(127, 201, 208, 0.45);
-  border-radius: 999px;
-  font-size: 0.82em;
-  line-height: 1.45;
-}
-.more.head-more:hover {
-  color: var(--gold);
-  background: rgba(240, 195, 76, 0.12);
-  border-color: var(--gold-dim);
-}
 
 /* the buttons stretch to the pill's full height so their hover highlight
    (and separator border) fills the whole section; the glyph re-centers via
@@ -867,10 +851,10 @@ td.expanded .kit-group.overflow { display: flex; }
 }
 .tag-copy {
   padding: 0.32rem 0.45rem 0.12rem 0.35rem;
-  color: var(--text-dim);
+  color: var(--tag-btn);
   border-left: 1px solid var(--border);
   font-family: Consolas, "Cascadia Mono", monospace;
-  font-size: 0.82em;
+  font-size: 0.92em;
   white-space: nowrap;
 }
 .tag-copy:hover { color: var(--gold); background: rgba(240, 195, 76, 0.1); }
@@ -878,9 +862,9 @@ td.expanded .kit-group.overflow { display: flex; }
 /* ▶ on sound file tags — streams the sound from Wowhead's CDN */
 .tag-play {
   padding: 0.12rem 0.4rem;
-  color: var(--text-dim);
+  color: var(--tag-btn);
   border-right: 1px solid var(--border);
-  font-size: 0.75em;
+  font-size: 0.85em;
   white-space: nowrap;
 }
 .tag-play:hover { color: var(--gold); background: rgba(240, 195, 76, 0.1); }
@@ -893,11 +877,11 @@ td.expanded .kit-group.overflow { display: flex; }
    left edge. */
 .tag-view {
   padding: 0.12rem 0.4rem 0.12rem 0.5rem;
-  color: var(--text-dim);
+  color: var(--tag-btn);
   border-right: 1px solid var(--border);
   text-decoration: none;
 }
-.tag-view svg { width: 0.95em; height: 0.95em; display: block; }
+.tag-view svg { width: 1.1em; height: 1.1em; display: block; }
 .tag-view:hover { color: var(--gold); background: rgba(240, 195, 76, 0.1); text-decoration: none; }
 
 /* the pill's corners curve inward — edge buttons need extra outer padding
@@ -922,11 +906,31 @@ td.expanded .kit-group.overflow { display: flex; }
   cursor: default;
 }
 
-.tag.overflow { display: none; }
-td.expanded .tag.overflow { display: inline-flex; }
+/* pills/groups the height clamp hides (layoutRow toggles .overflow directly).
+   The `td` prefix lifts specificity above .kit-group.compact / .kit-files .tag
+   so an overflow pill or a compact group is always hidden. */
+td .tag.overflow, td .kit-group.overflow { display: none; }
 
-.more { color: var(--text-dim); font-size: 0.82em; padding: 0.1rem 0.3rem; }
-.more:hover { color: var(--gold); }
+/* "+N more" expander — one consistent pronounced pill across every column
+   (was two very different looks: a dim text link and a tinted group pill) */
+.more {
+  display: inline-flex;
+  align-items: center;
+  margin: 0.18rem 0.25rem 0.1rem 0;
+  padding: 0.1rem 0.5rem;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-ctrl);
+  border-radius: 999px;
+  font-size: 0.8em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.more:hover {
+  color: var(--gold);
+  background: rgba(240, 195, 76, 0.12);
+  border-color: var(--gold-dim);
+}
 
 /* command buttons: one compact line, never taller than a text row */
 
