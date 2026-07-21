@@ -789,7 +789,7 @@ user-triggered and configured in `docs/js/config.js`.
 | Texture preview | `wago.tools/api/casc/{fid}?version={version}` | Hover, after a 150 ms intent delay. Raw `.blp`, decoded in-browser by the vendored `bufo.js` + `js-blp.js`. Version-pinned to the active pack. |
 | Expansion logo | same CASC API | One image per version switch. |
 | 3D model viewer | `wowtools.work/mv/?filedataid={fid}&type=m2` | Link-out only, nothing fetched. |
-| Wowhead | `wowhead.com/spell=` · `/npc=` · `/sound=` · `#modelviewer:` | Link-out only. |
+| Wowhead | `wowhead.com/{wh}spell=` · `/{wh}npc=` · `/{wh}sound=` · `#modelviewer:` | Link-out only. `{wh}` = per-version site prefix (`config.js` `wowheadSitePrefix`): Vanilla → `classic/`, everything else → retail (empty). Only `/classic/` and retail are permanent Wowhead sections, so the mid-Classic clients point at retail rather than a seasonal section that will rot. The model viewer (morph/display pills) has no `{wh}` — always retail (best skin compositing; display IDs render cross-era). |
 
 House rule, unchanged: **fetch only on explicit user action, never preload,
 never bulk-download.** The icon and sound hotlinks sit on tolerated-hotlinking

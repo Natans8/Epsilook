@@ -35,11 +35,30 @@ window.EpsilookConfig = {
   summonLookupTemplate: ".lookup creature {name}",
   summonSpawnTemplate: ".npc spawn {id}",
 
-  // External links ({id} = spell / soundkit / creature display / NPC ID).
-  wowheadSpellUrl: "https://www.wowhead.com/spell={id}",
-  wowheadSoundUrl: "https://www.wowhead.com/sound={id}",
+  // External links ({id} = spell / soundkit / creature display / NPC ID,
+  // {wh} = the version-appropriate Wowhead site prefix, see wowheadSitePrefix).
+  // The model viewer (morph) has no {wh} — it always stays on retail (best
+  // creature-skin compositing; display IDs render across eras).
+  wowheadSpellUrl: "https://www.wowhead.com/{wh}spell={id}",
+  wowheadSoundUrl: "https://www.wowhead.com/{wh}sound={id}",
   wowheadMorphUrl: "https://www.wowhead.com/#modelviewer:1:{id}:0",
-  wowheadNpcUrl: "https://www.wowhead.com/npc={id}",
+  wowheadNpcUrl: "https://www.wowhead.com/{wh}npc={id}",
+
+  // Wowhead has separate sections per game era, reached by a path prefix on
+  // www.wowhead.com (e.g. /classic/spell=133). Data-page links ({wh} in the
+  // URLs above) use the prefix for the active pack's MAJOR version; anything
+  // unlisted falls back to retail (empty prefix).
+  //
+  // ONLY /classic/ (Vanilla) and retail are permanent. The seasonal Classic
+  // sections (/tbc/, /wotlk/, /cata/, /mop-classic/) exist only while that
+  // Classic season runs and Wowhead redirects them to retail once it ends —
+  // so the mid-Classic clients deliberately point at retail rather than a
+  // section that will rot. To send a version to its own section, add a
+  // `major: "prefix/"` line here; to retire one, delete its line.
+  wowheadSitePrefix: {
+    1: "classic/", // Vanilla (classic.wowhead.com redirects here) — permanent
+    // 2 TBC / 3 WotLK / 4 Cata / 5 MoP / 7+ retail-era -> retail, no prefix
+  },
 
   // 3D preview: the "3d" link on each model tag opens the model in the
   // community WoW.tools mirror's model viewer ({fid} = FileDataID). The

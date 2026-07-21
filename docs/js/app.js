@@ -253,6 +253,27 @@
 
   const fillTemplate = (tpl, vars) => tpl.replace(/\{(\w+)}/g, (_, k) => vars[k] ?? "");
 
+  /**
+   * Wowhead site path prefix for the active pack's game version — "classic/"
+   * for Vanilla, "" (retail) for everything else. Only /classic/ and retail
+   * are permanent Wowhead sections, so any unmapped version falls back to
+   * retail (see CFG.wowheadSitePrefix).
+   * @returns {string}
+   */
+  const wowheadPrefix = () => {
+    const major = state.version ? parseInt(state.version.id, 10) : 0;
+    return (CFG.wowheadSitePrefix && CFG.wowheadSitePrefix[major]) || "";
+  };
+
+  /**
+   * Fill a Wowhead URL template, injecting the version-appropriate site prefix
+   * ({wh}) alongside the given vars. Templates with no {wh} slot (the model
+   * viewer, which always stays on retail) are unaffected.
+   * @param {string} template
+   * @param {Record<string, string|number>} vars
+   */
+  const wowheadUrl = (template, vars) => fillTemplate(template, { wh: wowheadPrefix(), ...vars });
+
   /* ------------------------------------------------- query <-> chips */
 
   // legacy prefixes silently convert to their current field — effect: was
@@ -1324,7 +1345,7 @@
     const tdName = el("td", "c-name");
     const nameDiv = el("div", "spell-name");
     const nameLink = el("a", "spell-name-link");
-    nameLink.href = fillTemplate(CFG.wowheadSpellUrl, { id: spellId });
+    nameLink.href = wowheadUrl(CFG.wowheadSpellUrl, { id: spellId });
     nameLink.target = "_blank";
     nameLink.rel = "noopener";
     if (CFG.spellIconUrl && d.icons[i]) {
@@ -1376,7 +1397,7 @@
       b.dataset.copy = fillTemplate(cmd.template, { id: spellId });
       row.appendChild(b);
     }
-    const wh = wowheadLink(fillTemplate(CFG.wowheadSpellUrl, { id: spellId }), "Open on Wowhead");
+    const wh = wowheadLink(wowheadUrl(CFG.wowheadSpellUrl, { id: spellId }), "Open on Wowhead");
     wh.classList.add("wh-cmd");
     row.appendChild(wh);
     tdCmd.appendChild(row);
@@ -2530,7 +2551,7 @@
     tag.appendChild(tagButton(field === "soundkit" ? "/" : ".mod", `Copy:  ${cmd}`, cmd));
 
     if (field === "soundkit") {
-      tag.appendChild(wowheadLink(fillTemplate(CFG.wowheadSoundUrl, { id: kitId }), `SoundKit ${kitId} on Wowhead`));
+      tag.appendChild(wowheadLink(wowheadUrl(CFG.wowheadSoundUrl, { id: kitId }), `SoundKit ${kitId} on Wowhead`));
     }
     return tag;
   }
@@ -2969,7 +2990,7 @@
     if (summonIsHit(creatureId, control)) tag.classList.add("hit");
 
     if (CFG.wowheadNpcUrl) {
-      tag.appendChild(wowheadLink(fillTemplate(CFG.wowheadNpcUrl, { id: creatureId }),
+      tag.appendChild(wowheadLink(wowheadUrl(CFG.wowheadNpcUrl, { id: creatureId }),
         `Open NPC ${creatureId} on Wowhead`));
     }
 
