@@ -387,13 +387,15 @@ ITEM_QUALITY_NAMES = {
     0: "poor", 1: "common", 2: "uncommon", 3: "rare", 4: "epic",
     5: "legendary", 6: "artifact", 7: "heirloom", 8: "token",
 }
-# SpellVisualEffectName.Type 3-10 are undocumented in the enum, but every one of
-# them carries NO model in the data — ModelFileDataID AND GenericID are both 0 —
-# while attaching to weapon/hand M2 points and being reused as missiles.
+# SpellVisualEffectName.Type 3-10 are absent from WoWDBDefs' enum, but every one
+# of them carries NO model in the data — ModelFileDataID AND GenericID are both 0
+# — while attaching to weapon/hand M2 points and being reused as missiles.
 # Investigation (Task D) found they all mean the same thing: "the caster's own
 # equipped weapon", resolved client-side at cast, with the Type picking the
-# weapon slot/class (3/4 = thrown mainhand/offhand, 5/10 = ranged, 8/9 = held
-# mainhand/offhand). There is no file to name, so these rows carry a sentinel
+# weapon slot/class. wowdev.wiki/EnumeratedString#SpellVisualEffectName::Type
+# later confirmed it and named them: 3/4/5 = Unit-Item main hand / off hand /
+# ranged, 6/7 = Unit-Ammo basic / preferred, 8/9/10 = the same main/off/ranged
+# again but "(ignore disarmed)". There is no file to name, so these rows carry a sentinel
 # fid (WEAPON_FID) and render as one "equipped weapon" marker pill — no
 # 3D/texture/Wowhead — keeping their category (attached vs thrown-as-missile)
 # and attachment point. A rare Type-3/5 row DOES carry a real ModelFileDataID
