@@ -624,6 +624,8 @@ interface ExportFxEntry {
     control?: string;
     /** Morph / shapeshift creature displays. */
     displays?: { displayId: number; model: string }[];
+    /** Movement speed: which movement is scaled, and the signed percent. */
+    movement?: string;
 }
 
 /** window.EpsilookData (docs/js/data.js). */
