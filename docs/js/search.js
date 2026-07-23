@@ -521,6 +521,10 @@ window.EpsilookSearch = (() => {
       const invises = (data.invisTypeSpells.get(type) || []).length;
       if (tokens.every(invisMatch("detect", type, invises))) for (const s of ids) out.add(s);
     }
+    // keybound overrides: plain corpus ("keybind" + the key name + the timing
+    // word + the cast spell's id and name), so fx:"keybind jump" and
+    // fx:"keybind mid-air" both work like any other category word.
+    scan(data.keybindSearchL, data.keybindSpells);
     return out;
   }
 
@@ -624,16 +628,52 @@ window.EpsilookSearch = (() => {
     },
     mech: {
       label: "Mechanic", tab: true,
-      hint: "spell mechanic, e.g. resurrect", short: "mechanic",
+      hint: "spell mechanic or target, e.g. resurrect", short: "mechanic / target",
+      // The column's three name spaces share one field: what the effect does
+      // (SPELL_EFFECT_*), what aura it applies (SPELL_AURA_*) and who it is
+      // aimed at (TARGET_*, prefix stripped).
+      //
+      // Tokens are tested against a ROW, not against one name, so
+      // mech:"school_damage unit_target_enemy" means "one effect that is both"
+      // — the whole reason the targets are paired onto the effect rather than
+      // pooled per spell. Matching that literally would mean building a corpus
+      // string per row (372k of them on 9.2.7), so it is done on ids instead:
+      // resolve each token to the id sets whose NAME contains it (~980 names
+      // to scan), then a row matches when every token is satisfied by one of
+      // the four ids the row carries.
       run(tokens, data) {
         const out = new Set();
-        for (const [effectId, nameL] of data.effectNamesL) {
-          if (!textMatches(nameL, tokens)) continue;
-          for (const s of data.effectSpells.get(effectId) || []) out.add(s);
-        }
-        for (const [auraId, nameL] of data.auraNamesL) {
-          if (!textMatches(nameL, tokens)) continue;
-          for (const s of data.auraSpells.get(auraId) || []) out.add(s);
+        const idsFor = (/** @type {Map<number, string>} */ namesL,
+                        /** @type {QueryToken} */ t) => {
+          const hits = new Set();
+          for (const [id, nameL] of namesL) if (nameL.includes(t.text)) hits.add(id);
+          return hits;
+        };
+        const per = tokens.map((t) => ({
+          effects: idsFor(data.effectNamesL, t),
+          auras: idsFor(data.auraNamesL, t),
+          targets: idsFor(data.implicitTargetNamesL, t),
+        }));
+        // a token matching no name anywhere can never be satisfied
+        if (per.some((p) => !p.effects.size && !p.auras.size && !p.targets.size)) return out;
+        // Sweep the rows as flat parallel arrays rather than the per-spell
+        // Map of row objects — same rows, ~4x faster over 372k of them.
+        // 0 means "no effect" / "no aura" / "target unset" on a row, so it
+        // never counts as a match: SPELL_AURA_NONE really is named NONE, and
+        // without that guard mech:none would return every aura-less row.
+        const { spellIds, effects, auras, targetsA, targetsB } = data.mechanicCols;
+        const nTokens = per.length;
+        for (let i = 0; i < spellIds.length; i++) {
+          const e = effects[i], a = auras[i], tA = targetsA[i], tB = targetsB[i];
+          let ok = true;
+          for (let j = 0; j < nTokens; j++) {
+            const p = per[j];
+            if ((e && p.effects.has(e)) || (a && p.auras.has(a))
+                || (tA && p.targets.has(tA)) || (tB && p.targets.has(tB))) continue;
+            ok = false;
+            break;
+          }
+          if (ok) out.add(spellIds[i]);
         }
         return out;
       },

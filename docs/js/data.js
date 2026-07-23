@@ -677,16 +677,68 @@ window.EpsilookData = (() => {
       }
     }
 
-    // spell effects (enum id -> name without the SPELL_EFFECT_ prefix)
-    /** @type {Map<number, number[]>} spell id -> [effect enum id] */
-    const spellEffects = new Map();
-    /** @type {Map<number, number[]>} effect enum id -> [spell id] */
-    const effectSpells = new Map();
+    /* Mechanics (pack format 29). One row per distinct SpellEffect, carrying
+     * what the effect does (Effect + EffectAura enum ids, 0 = neither) AND who
+     * it is aimed at (ImplicitTarget_0/_1). Keeping the two together is the
+     * whole point of the section: a spell whose effects aim at different
+     * things — 10.4% of them — cannot say which target belongs to which effect
+     * from per-spell sets alone.
+     *
+     * Format <= 28 packs ship flat spellEffects/spellAuras sets instead; they
+     * are read into the same row shape with no targets, so every consumer
+     * below sees one structure and stale packs simply render no target
+     * segment or icons. */
+    /** @type {Map<number, MechanicRow[]>} spell id -> its mechanic rows */
+    const spellMechanics = new Map();
+    /** @type {Map<number, number>} implicit-target enum id -> caster/target/area bits */
+    const implicitTargetBits = new Map(
+      Object.entries(pack.implicitTargetBits || {}).map(([k, v]) => [Number(k), v]));
+    /* The same rows as flat parallel arrays. No reverse (name id -> spells)
+     * index is built for mechanics: mech: matches whole ROWS, so it resolves
+     * its tokens to id sets once per query and sweeps these arrays. A reverse
+     * index could only answer "has this name somewhere", which is exactly the
+     * question the pairing exists to stop asking — and sweeping the flat
+     * arrays is ~10x faster than walking the Map's row objects (measured on
+     * 9.2.7: 372k rows, 170 ms -> 15-25 ms per query), for no extra memory
+     * when the pack ships them, since these are its own arrays by reference.
+     * @type {MechanicColumns} */
+    let mechanicCols = pack.spellMechanics
+      ? { ...pack.spellMechanics }
+      : { spellIds: [], effects: [], auras: [], targetsA: [], targetsB: [] };
     {
-      const { spellIds, effects } = pack.spellEffects;
+      // stale packs (format <= 28): concatenate the two flat sets into the
+      // same column shape, target-less, so both consumers see one structure
+      if (!pack.spellMechanics) {
+        const eff = pack.spellEffects, aur = pack.spellAuras;
+        const n = (eff ? eff.spellIds.length : 0) + (aur ? aur.spellIds.length : 0);
+        const cols = {
+          spellIds: new Array(n), effects: new Array(n), auras: new Array(n),
+          targetsA: new Array(n).fill(0), targetsB: new Array(n).fill(0),
+        };
+        let k = 0;
+        if (eff) {
+          for (let i = 0; i < eff.spellIds.length; i++, k++) {
+            cols.spellIds[k] = eff.spellIds[i];
+            cols.effects[k] = eff.effects[i];
+            cols.auras[k] = 0;
+          }
+        }
+        if (aur) {
+          for (let i = 0; i < aur.spellIds.length; i++, k++) {
+            cols.spellIds[k] = aur.spellIds[i];
+            cols.effects[k] = 0;
+            cols.auras[k] = aur.auras[i];
+          }
+        }
+        mechanicCols = cols;
+      }
+      const { spellIds, effects, auras, targetsA, targetsB } = mechanicCols;
       for (let i = 0; i < spellIds.length; i++) {
-        pushTo(spellEffects, spellIds[i], effects[i]);
-        pushTo(effectSpells, effects[i], spellIds[i]);
+        const tA = targetsA[i] || 0, tB = targetsB[i] || 0;
+        pushTo(spellMechanics, spellIds[i], {
+          effect: effects[i], aura: auras[i], targetA: tA, targetB: tB,
+          mask: (implicitTargetBits.get(tA) || 0) | (implicitTargetBits.get(tB) || 0),
+        });
       }
     }
     /** @type {Map<number, string>} */
@@ -695,6 +747,15 @@ window.EpsilookData = (() => {
     /** @type {Map<number, string>} */
     const effectNamesL = new Map(
       [...effectNames].map(([k, v]) => [k, v.toLowerCase()]));
+    // implicit targets: enum id -> name with "TARGET_" stripped, matching how
+    // effect/aura names drop SPELL_EFFECT_/SPELL_AURA_. Ids the build's enum
+    // has no entry for are absent and fall back to "TARGET_<id>" at render.
+    /** @type {Map<number, string>} */
+    const implicitTargetNames = new Map(
+      Object.entries(pack.implicitTargetNames || {}).map(([k, v]) => [Number(k), v]));
+    /** @type {Map<number, string>} */
+    const implicitTargetNamesL = new Map(
+      [...implicitTargetNames].map(([k, v]) => [k, v.toLowerCase()]));
 
     // morphs (transform auras): the spell references a CREATURE (NPC), the
     // creature has display ids (TDB creature_template_model), each display
@@ -837,6 +898,53 @@ window.EpsilookData = (() => {
       }
     }
 
+    /* Keybound overrides (aura 406, pack format 29). While the aura holds, a
+     * movement/UI key stops doing what it normally does. Each override carries
+     * the key's client binding name, a word for WHEN it applies ("" = the
+     * ordinary press, "mid-air" = the airborne one) and the Spell::ID the
+     * retail client casts in its place.
+     *
+     * That cast spell is deliberately NOT surfaced (user's call, 2026-07-23):
+     * on Epsilon the override only DISABLES the key, it does not cast the
+     * replacement, so showing the spell would promise behaviour Epsilon users
+     * cannot actually get. The pack keeps `spells` for a future pass —
+     * restoring it means adding the id and name back to this corpus and to
+     * keybindTag, nothing more.
+     *
+     * Corpus per override is therefore "keybind" + the key + the timing word:
+     * fx:keybind finds any, fx:"keybind jump" the jump ones, fx:"keybind
+     * mid-air" the airborne ones. */
+    /** @type {Map<number, KeybindRow>} override id -> what it binds */
+    const keybinds = new Map();
+    if (pack.keybinds) {
+      const { ids, functions, whens, spells } = pack.keybinds;
+      for (let i = 0; i < ids.length; i++) {
+        keybinds.set(ids[i], {
+          fn: functions[i], when: whens[i], spell: spells[i],
+        });
+      }
+    }
+    /** @type {Map<number, number[]>} spell id -> [override id] */
+    const spellKeybinds = new Map();
+    /** @type {Map<number, number[]>} override id -> [spell id] */
+    const keybindSpells = new Map();
+    /** @type {Map<number, string>} override id -> lowercased search corpus */
+    const keybindSearchL = new Map();
+    if (pack.spellKeybinds) {
+      const { spellIds, overrideIds } = pack.spellKeybinds;
+      for (let i = 0; i < spellIds.length; i++) {
+        pushTo(spellKeybinds, spellIds[i], overrideIds[i]);
+        pushTo(keybindSpells, overrideIds[i], spellIds[i]);
+      }
+      for (const o of keybindSpells.keys()) {
+        const row = keybinds.get(o);
+        if (!row) continue;
+        keybindSearchL.set(o,
+          `keybind ${row.fn} ${row.when}`.replace(/\s+/g, " ").trim().toLowerCase());
+      }
+    }
+    const keybindTargets = maskIndex(pack.spellKeybinds, "overrideIds");
+
     // invisibility / detection channels (pack format 26). Grouped by
     // invisibility TYPE, which is the pairing key: an invis spell links to the
     // detect spells sharing its type and vice versa. Per spell we keep the
@@ -877,18 +985,9 @@ window.EpsilookData = (() => {
       }
     }
 
-    // aura mechanics (SpellEffectAura enum id -> name without SPELL_AURA_)
-    /** @type {Map<number, number[]>} spell id -> [aura enum id] */
-    const spellAuras = new Map();
-    /** @type {Map<number, number[]>} aura enum id -> [spell id] */
-    const auraSpells = new Map();
-    {
-      const { spellIds, auras } = pack.spellAuras;
-      for (let i = 0; i < spellIds.length; i++) {
-        pushTo(spellAuras, spellIds[i], auras[i]);
-        pushTo(auraSpells, auras[i], spellIds[i]);
-      }
-    }
+    // aura mechanics (SpellEffectAura enum id -> name without SPELL_AURA_).
+    // The spell->aura links live on the mechanic rows above; only the names
+    // are read here.
     /** @type {Map<number, string>} */
     const auraNames = new Map(
       Object.entries(pack.auraNames).map(([k, v]) => [Number(k), v]));
@@ -935,8 +1034,10 @@ window.EpsilookData = (() => {
       spellVehicles, vehicleSpells, vehicleSeats, vehicleSearchL,
       spellInvisTypes, spellDetectTypes, invisTypeSpells, detectTypeSpells,
       spellPassengerAnims, passengerAnimSpells,
-      spellEffects, effectSpells, effectNames, effectNamesL,
-      spellAuras, auraSpells, auraNames, auraNamesL,
+      spellKeybinds, keybindSpells, keybinds, keybindSearchL, keybindTargets,
+      spellMechanics, mechanicCols,
+      effectNames, effectNamesL, auraNames, auraNamesL,
+      implicitTargetNames, implicitTargetNamesL, implicitTargetBits,
     };
   }
 

@@ -55,7 +55,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
@@ -103,6 +103,8 @@ TABLES = [
     "SpellOverrideName",
     "Vehicle",
     "VehicleSeat",
+    # aura 406 (KEYBOUND_OVERRIDE, §3i): which key casts which spell
+    "SpellKeyboundOverride",
     # the item route (SpellVisualEffectName Type 1, §3c). ItemSearchName carries
     # the display name AND OverallQualityID; the appearance chain resolves the
     # model and the inventory icon. ItemSparse is deliberately NOT here: it is
@@ -156,6 +158,8 @@ OPTIONAL_TABLES = {
     "SummonProperties":        "summon control words (guardian/pet/...)",
     "Vehicle":                 "the vehicle fx category",
     "VehicleSeat":             "vehicle seat attachments and passenger animations",
+    # arrives in MoP (5.0.1); 404s on Vanilla/TBC/WotLK/Cata
+    "SpellKeyboundOverride":   "the keybind fx category (aura 406)",
 }
 
 # (table, column) -> the value to use on builds that lack the column
@@ -502,6 +506,51 @@ AURA_SET_VEHICLE_ID = 296
 AURA_MOD_INVISIBILITY = 18
 AURA_MOD_INVISIBILITY_DETECT = 19
 
+# SpellEffectAura (KEYBOUND_OVERRIDE) whose EffectMiscValue_0 is a
+# SpellKeyboundOverride ID: while the aura holds, a movement/UI key stops doing
+# what it normally does. That table's `Data` is a Spell::ID (verified
+# 2026-07-23: 46 of 53 distinct values on 9.2.7 are live spells; the other 7
+# are stale references to spells since deleted from the client DB2) and
+# `Function` is the client's keybinding name (JUMP, MOVEFORWARD, STRAFELEFT,
+# TOGGLEWORLDMAP, ...).
+#
+# The Spell::ID is shipped but NOT displayed by the app (user's call,
+# 2026-07-23): retail casts it in the key's place, but on EPSILON the override
+# only disables the key — it never casts the replacement — so surfacing it
+# would promise behaviour Epsilon users cannot get. Kept in the pack so a
+# future pass can turn it on without a rebuild.
+AURA_KEYBOUND_OVERRIDE = 406
+
+# SpellKeyboundOverride.Type. The enum is documented NOWHERE — the .dbd carries
+# no comment, wowdev.wiki/DB/SpellKeyboundOverride is a 6.0.1 two-field stub and
+# EnumeratedString has no section for it — so it was decoded from the data
+# (2026-07-23) and the evidence is strong enough to name:
+#
+#   * 100% of Type-1 rows are JUMP, on every build that has the table (0 of 13
+#     rows on MoP, 2 Legion, 3 BfA, 7 SL, 23 DF, 25 TWW — 60 rows, no
+#     exceptions), while Type 0 spans all ten functions.
+#   * Every Type-1 spell is a MID-AIR ability: Glide, "[DNT] Pirate Double
+#     Jump", Jump Dash, Lift Off, Empowered Flight, Highland Drake, Gnomish
+#     Gravity Launcher, Defying Gravity, Faerie Wings, Zephyr's Catch, Wild
+#     Winds, Here's a Boost!, Prevent Jump. Every Type-0 spell replaces an
+#     ordinary ground press: Paddle Raft, Dodge Left/Right/Back, Locust Leap,
+#     Saurok Leap, Abandon Vehicle, Switch Seats, Flop, Stormforged Leap.
+#   * Decisive: spell 319125 "Fizzle" appears as BOTH Type 0 (override 173) and
+#     Type 1 (override 177) on the same function. Same payload, two rows — so
+#     Type is a trigger CONDITION, not a kind of payload.
+#
+# Type 0 is the ordinary press and gets no word; only the mid-air case is
+# labelled. An unknown future type falls back to "type N" rather than being
+# guessed at, the same house rule as an out-of-range seat attachment.
+KEYBOUND_TYPE_WORDS = {0: "", 1: "mid-air"}
+
+
+def keybound_type_word(type_id: int) -> str:
+    """Word describing WHEN a keybound override fires ("" = the ordinary press)."""
+    if type_id in KEYBOUND_TYPE_WORDS:
+        return KEYBOUND_TYPE_WORDS[type_id]
+    return f"type {type_id}"
+
 # VehicleSeat.AttachmentID is NOT an M2 attachment id: it is an index into a
 # table hardcoded in the client binary (it exists in no db2, so it cannot be
 # derived from data and has to live here). wowdev.wiki/DB/VehicleSeat quotes
@@ -721,8 +770,11 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 28  # 28: SpellVisualEffectName Type 1 -> item model pills (items
-                  #     section, itemIconNames, spellModels.displayIds -> refIds)
+PACK_FORMAT = 29  # 29: mechanics carry their implicit targets (spellEffects +
+                  #     spellAuras -> spellMechanics, implicitTargetNames) and
+                  #     keybound overrides (spellKeybinds, keybinds)
+# 28: SpellVisualEffectName Type 1 -> item model pills (items section,
+#     itemIconNames, spellModels.displayIds -> refIds)
 # 27: SpellVisualEffectName Type 2 -> creature-display model pills
 # 26: invis/detect channels (MOD_INVISIBILITY[_DETECT] auras)
 # 25: target masks on effect-driven fx (SpellEffect.ImplicitTarget)
@@ -1938,6 +1990,20 @@ def read_animkit_anims(table_dir: Path, anim_names: list[str]) -> dict[int, set[
     return animkit_anims
 
 
+# Field defaults for SpellEffectRows below. Every one of its maps is either
+# "spell (or (spell, payload)) -> a set of ids" or "-> an OR-accumulated target
+# mask", so the two factories cover the whole dataclass and a new route needs
+# no constructor change.
+def _by_spell() -> Any:
+    """A defaultdict(set) field default."""
+    return field(default_factory=lambda: defaultdict(set))
+
+
+def _mask() -> Any:
+    """A defaultdict(int) field default, for OR-accumulated target masks."""
+    return field(default_factory=lambda: defaultdict(int))
+
+
 @dataclass
 class SpellEffectRows:
     """Per-spell data read out of SpellEffect (plus its TDB hotfixes).
@@ -1945,39 +2011,49 @@ class SpellEffectRows:
     SpellEffect is where a spell's gameplay lives, and five of the fx
     categories start here rather than in the visual graph: the misc values of
     particular Effect/EffectAura enums are ids into other tables.
+
+    Every field starts empty, so adding a route here means adding a field and
+    the line that fills it — no call site to keep in step.
     """
-    effects: dict[int, set[int]]                 # spell -> SpellEffect.Effect enum ids
-    auras: dict[int, set[int]]                   # spell -> EffectAura enum ids
-    morphs: dict[int, set[int]]                  # spell -> creature ids (aura 56)
-    summons: dict[int, set[tuple[int, int]]]     # spell -> (creature, control) (effect 28)
-    screens: dict[int, set[int]]                 # spell -> ScreenEffect ids (aura 260)
-    forms: dict[int, set[int]]                   # spell -> shapeshift form ids (aura 36)
-    altnames: dict[int, set[int]]                # spell -> SpellOverrideName ids (aura 370)
-    vehicles: dict[int, set[int]]                # spell -> Vehicle.db2 ids (aura 296)
-    invis: dict[int, set[int]]  # spell -> invisibility types (aura 18)
-    detect: dict[int, set[int]]  # spell -> detect types (aura 19)
+    # payload ids per spell, one field per aura/effect route
+    morphs: dict[int, set[int]] = _by_spell()       # creature ids (aura 56)
+    summons: dict[int, set[tuple[int, int]]] = _by_spell()  # (creature, control) (effect 28)
+    screens: dict[int, set[int]] = _by_spell()      # ScreenEffect ids (aura 260)
+    forms: dict[int, set[int]] = _by_spell()        # shapeshift form ids (aura 36)
+    altnames: dict[int, set[int]] = _by_spell()     # SpellOverrideName ids (aura 370)
+    vehicles: dict[int, set[int]] = _by_spell()     # Vehicle.db2 ids (aura 296)
+    invis: dict[int, set[int]] = _by_spell()        # invisibility types (aura 18)
+    detect: dict[int, set[int]] = _by_spell()       # detect types (aura 19)
+    keybinds: dict[int, set[int]] = _by_spell()     # override ids (aura 406)
     # who each effect-driven fx lands on, from the producing SpellEffect row's
     # ImplicitTarget_0/_1 — keyed (spell, payload) so it rides the pack's
     # spell->payload link rows (payload = creature / form / screen / vehicle /
-    # invis type). OR-accumulated when several rows produce the same pair.
-    morph_targets: dict[tuple[int, int], int]
-    summon_targets: dict[tuple[int, int], int]
-    screen_targets: dict[tuple[int, int], int]
-    form_targets: dict[tuple[int, int], int]
-    vehicle_targets: dict[tuple[int, int], int]
-    invis_targets: dict[tuple[int, int], int]
-    detect_targets: dict[tuple[int, int], int]
+    # invis type / override). OR-accumulated when several rows produce the pair.
+    morph_targets: dict[tuple[int, int], int] = _mask()
+    summon_targets: dict[tuple[int, int], int] = _mask()
+    screen_targets: dict[tuple[int, int], int] = _mask()
+    form_targets: dict[tuple[int, int], int] = _mask()
+    vehicle_targets: dict[tuple[int, int], int] = _mask()
+    invis_targets: dict[tuple[int, int], int] = _mask()
+    detect_targets: dict[tuple[int, int], int] = _mask()
+    keybind_targets: dict[tuple[int, int], int] = _mask()
+    # every (spell, effect, aura, implicit target A, implicit target B) the
+    # spell has — the Mechanics column's rows. Deduped on the tuple, which
+    # collapses the per-DifficultyID copies SpellEffect ships (416,865 rows
+    # become 372,469 on 9.2.7) while keeping genuinely distinct effects apart.
+    mechanics: set[tuple[int, int, int, int, int]] = field(default_factory=set)
     # Whole-spell implicit-target bits, used by resolve_target_mask to tell a
     # self-cast from a real one. `aura_target_bits` is OR-ed over the spell's
     # APPLY_AURA effects only (who ends up carrying the aura); `cast_target_bits`
     # over every effect it has (is the whole spell aimed at the caster?).
-    aura_target_bits: dict[int, int]
-    cast_target_bits: dict[int, int]
+    aura_target_bits: dict[int, int] = _mask()
+    cast_target_bits: dict[int, int] = _mask()
 
 
 def read_spell_effect_rows(
     table_dir: Path, tdb_dir: Path | None, spell_names: dict[int, str],
-    screens: dict[int, ScreenRow], target_bits: dict[int, int]
+    screens: dict[int, ScreenRow], target_bits: dict[int, int],
+    keybounds: dict[int, KeyboundOverride]
 ) -> SpellEffectRows:
     """Read SpellEffect and split it into the per-spell sets we ship.
 
@@ -2008,14 +2084,7 @@ def read_spell_effect_rows(
     for pid, ctrl in read_table(table_dir, "SummonProperties", ["ID", "Control"]):
         summon_control[to_int(pid)] = to_int(ctrl)
 
-    out = SpellEffectRows(defaultdict(set), defaultdict(set), defaultdict(set),
-                          defaultdict(set), defaultdict(set), defaultdict(set),
-                          defaultdict(set), defaultdict(set), defaultdict(set),
-                          defaultdict(set),
-                          defaultdict(int), defaultdict(int), defaultdict(int),
-                          defaultdict(int), defaultdict(int),
-                          defaultdict(int), defaultdict(int),
-                          defaultdict(int), defaultdict(int))
+    out = SpellEffectRows()
     for s, effect_id, aura_id, m0, m1, it0, it1 in se_rows.values():
         if s not in spell_names:
             continue
@@ -2025,10 +2094,14 @@ def read_spell_effect_rows(
         out.cast_target_bits[s] |= mask
         if effect_id == EFFECT_APPLY_AURA:
             out.aura_target_bits[s] |= mask
-        if effect_id:
-            out.effects[s].add(effect_id)
-        if aura_id:
-            out.auras[s].add(aura_id)
+        # the Mechanics row itself: what the effect does AND who it is aimed
+        # at, kept together. The two ImplicitTargets ride the same row rather
+        # than being unioned per spell, because a spell's effects routinely
+        # aim at different things (10.4% of 9.2.7 spells have >1 effect kind
+        # and >1 distinct target) and a flat per-spell set cannot say which
+        # target belongs to which effect.
+        if effect_id or aura_id:
+            out.mechanics.add((s, effect_id, aura_id, it0, it1))
         if aura_id == AURA_TRANSFORM and m0 > 0:
             out.morphs[s].add(m0)
             out.morph_targets[(s, m0)] |= mask
@@ -2056,6 +2129,13 @@ def read_spell_effect_rows(
         if aura_id == AURA_MOD_INVISIBILITY_DETECT:
             out.detect[s].add(m0)
             out.detect_targets[(s, m0)] |= mask
+        # keybound overrides: misc0 is a SpellKeyboundOverride row. Rows whose
+        # override is missing are dropped rather than kept as a bare id — the
+        # table trails the aura on the newest builds (11 such rows on both DF
+        # and TWW), and an override with no key and no spell has nothing to say.
+        if aura_id == AURA_KEYBOUND_OVERRIDE and m0 in keybounds:
+            out.keybinds[s].add(m0)
+            out.keybind_targets[(s, m0)] |= mask
     return out
 
 
@@ -2081,6 +2161,36 @@ SEAT_ANIMKIT_COLUMNS = [
     "EnterAnimKitID", "RideAnimKitID", "ExitAnimKitID",
     "VehicleEnterAnimKitID", "VehicleRideAnimKitID", "VehicleExitAnimKitID",
 ]
+
+
+@dataclass
+class KeyboundOverride:
+    """One SpellKeyboundOverride row: pressing `function` casts `spell`.
+
+    `when` is the decoded Type word ("" for the ordinary press, "mid-air" for
+    the airborne one — see KEYBOUND_TYPE_WORDS). `spell` is a Spell::ID, which
+    may name a spell this build no longer ships (7 of 53 on 9.2.7); it is kept
+    either way, so the pill can still show the id it points at.
+    """
+    function: str
+    when: str
+    spell: int
+
+
+def read_keybound_overrides(table_dir: Path) -> dict[int, KeyboundOverride]:
+    """Read SpellKeyboundOverride -> the key + spell each override binds.
+
+    `Flags` is deliberately NOT read: it is absent from the table on Legion and
+    BfA, all-zero on 9.2.7, and carries only ten nonzero rows (values 1 and 3)
+    on TWW with no recoverable meaning. Reading it would buy a drift
+    declaration and nothing else.
+    """
+    out: dict[int, KeyboundOverride] = {}
+    for oid, function, type_id, data in read_table(
+            table_dir, "SpellKeyboundOverride", ["ID", "Function", "Type", "Data"]):
+        out[to_int(oid)] = KeyboundOverride(
+            (function or "").strip(), keybound_type_word(to_int(type_id)), to_int(data))
+    return out
 
 
 @dataclass
@@ -2569,8 +2679,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     anim_names = read_anim_names()
     animkit_anims = read_animkit_anims(table_dir, anim_names)
 
+    keybounds = read_keybound_overrides(table_dir)
+    implicit_bits = implicit_target_bits(version)
     se = read_spell_effect_rows(table_dir, tdb_dir, spell_names, fx.screens,
-                                implicit_target_bits(version))
+                                implicit_bits, keybounds)
     spell_altname_text = read_override_names(table_dir, se.altnames)
     spell_icon_fid = read_spell_icons(table_dir, tdb_dir, spell_names)
 
@@ -2789,8 +2901,28 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     visual_anim_rows = sorted(
         (s, a, m) for s, aset in vis.visual_anims.items()
         for a, m in aset.items() if a < len(anim_names))
-    effect_rows = sorted((s, e) for s, effs in se.effects.items() for e in effs)
-    aura_rows = sorted((s, a) for s, auras in se.auras.items() for a in auras)
+    # Mechanics rows: (spell, effect, aura, targetA, targetB). One row per
+    # distinct SpellEffect, so the effect's name and the thing it is aimed at
+    # stay attached to each other.
+    mechanic_rows = sorted(se.mechanics)
+    # Only the implicit-target ids this build actually uses need shipping. Ids
+    # the enum has no entry for are left out of `names` and render as
+    # "TARGET_<id>" app-side, the same fallback unknown effect/aura ids get.
+    # `bits` is the per-id caster/target/area mask: a row's icon mask is
+    # bits[targetA] | bits[targetB], so it rides as a ~130-entry map rather
+    # than a fourth 372k-long parallel array (which measured 110 KB gzipped).
+    target_enum_names = read_enum_names("Target", version)
+    used_targets = {t for r in mechanic_rows for t in (r[3], r[4]) if t}
+    implicit_target_names = {
+        str(t): target_enum_names[t].removeprefix("TARGET_")
+        for t in sorted(used_targets) if t in target_enum_names}
+    implicit_target_bit_map = {
+        str(t): implicit_bits[t] for t in sorted(used_targets) if implicit_bits.get(t)}
+
+    # keybound overrides (aura 406): the spell->override links, plus each
+    # referenced override's key, timing word and the spell it casts
+    keybind_rows = sorted((s, o) for s, os in se.keybinds.items() for o in os)
+    used_keybounds = sorted({o for _s, o in keybind_rows})
     morph_rows = sorted((s, c) for s, cs in se.morphs.items() for c in cs)
     shapeshift_rows = sorted((s, f) for s, fs in se.forms.items() for f in fs)
     shapeshift_form_ids = sorted(used_forms)
@@ -2837,8 +2969,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellSounds": len(sound_rows),
                 "spellAnimKits": len(anim_rows),
                 "animKitAnims": len(kit_anim_rows),
-                "spellEffects": len(effect_rows),
-                "spellAuras": len(aura_rows),
+                "spellMechanics": len(mechanic_rows),
+                "implicitTargets": len(implicit_target_names),
+                "spellKeybinds": len(keybind_rows),
+                "keybinds": len(used_keybounds),
                 "spellFx": len(fx_rows),
                 "spellMorphs": len(morph_rows),
                 "morphs": len(morph_creature_ids),
@@ -2946,17 +3080,42 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "targets": [r[2] for r in visual_anim_rows],
         },
         "animNames": anim_names,
-        "spellEffects": {
-            "spellIds": [r[0] for r in effect_rows],
-            "effects": [r[1] for r in effect_rows],
+        # Mechanics: one row per distinct SpellEffect the spell has, carrying
+        # what it does (Effect + EffectAura enum ids, 0 = none) AND who it is
+        # aimed at (the two ImplicitTargets, 0 = unset, plus the resolved
+        # caster/target/area mask the pill's icons read). Replaces the flat
+        # per-spell spellEffects/spellAuras sets of format <= 28: those could
+        # say a spell had both an enemy-aimed and a self-aimed effect but never
+        # which was which.
+        "spellMechanics": {
+            "spellIds": [r[0] for r in mechanic_rows],
+            "effects": [r[1] for r in mechanic_rows],
+            "auras": [r[2] for r in mechanic_rows],
+            "targetsA": [r[3] for r in mechanic_rows],
+            "targetsB": [r[4] for r in mechanic_rows],
         },
         "effectNames": effect_names,
-        # aura mechanics: SpellEffect.EffectAura values (SPELL_AURA_* names)
-        "spellAuras": {
-            "spellIds": [r[0] for r in aura_rows],
-            "auras": [r[1] for r in aura_rows],
-        },
         "auraNames": aura_names,
+        # SpellEffect.ImplicitTarget_0/_1 enum id -> name without "TARGET_",
+        # and -> the caster/target/area bit it contributes to a row's icons
+        "implicitTargetNames": implicit_target_names,
+        "implicitTargetBits": implicit_target_bit_map,
+        # keybound overrides (aura 406): while the aura holds, a key stops
+        # working. `functions` is the client keybinding name, `whens` the
+        # decoded Type ("" = ordinary press, "mid-air" = the airborne one),
+        # `spells` the Spell::ID retail casts in its place — shipped for a
+        # future pass, but not displayed (Epsilon only disables the key).
+        "spellKeybinds": {
+            "spellIds": [r[0] for r in keybind_rows],
+            "overrideIds": [r[1] for r in keybind_rows],
+            "targets": [se.keybind_targets.get((r[0], r[1]), 0) for r in keybind_rows],
+        },
+        "keybinds": {
+            "ids": used_keybounds,
+            "functions": [keybounds[o].function for o in used_keybounds],
+            "whens": [keybounds[o].when for o in used_keybounds],
+            "spells": [keybounds[o].spell for o in used_keybounds],
+        },
         # visual FX: chain/beam effects (SpellChainEffects). spellFx links
         # spells to chains; fxChains carries each chain's tint + hue word;
         # fxTextures its texture fids (paths resolve via "files")
@@ -3203,7 +3362,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         f"  spells={len(spell_ids):,}  files={len(file_ids):,} ({unnamed:,} unnamed)  "
         f"models={len(model_rows):,}  sounds={len(sound_rows):,}  animkits={len(anim_rows):,}  "
         f"kitAnims={len(kit_anim_rows):,}  visualAnims={len(visual_anim_rows):,}  "
-        f"effects={len(effect_rows):,}  auras={len(aura_rows):,}  fx={len(fx_rows):,}  "
+        f"mechanics={len(mechanic_rows):,} ({len(implicit_target_names):,} targets)  "
+        f"fx={len(fx_rows):,}  "
         f"fxChains={len(fx_chain_ids):,}  dissolves={len(dissolve_row_pairs):,} "
         f"({len(dissolve_ids):,} rows)  glows={len(glow_row_pairs):,} "
         f"({len(glow_ids):,} rows)  shadowies={len(shadowy_row_pairs):,} "
@@ -3217,6 +3377,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         f"({len(summon_creature_ids):,} creatures)  "
         f"vehicles={len(vehicle_rows):,} ({len(vehicle_ids):,} distinct, "
         f"{len(vehicle_seat_rows):,} seats, {len(passenger_anim_rows):,} passenger anims)  "
+        f"keybinds={len(keybind_rows):,} ({len(used_keybounds):,} overrides)  "
         f"icons={len(icon_names):,}  "
         f"orphan visual spells={vis.orphans:,}  [{time.time() - t0:.1f}s]"
     )

@@ -243,12 +243,37 @@ interface SpellPack {
 
   /* --- mechanics --- */
 
-  spellEffects: { spellIds: number[]; effects: number[] };
+  /**
+   * One row per distinct SpellEffect: what it does (effect + aura enum ids,
+   * 0 = neither) and who it is aimed at (ImplicitTarget_0/_1, 0 = unset).
+   * Pack format 29+; older packs ship spellEffects/spellAuras instead.
+   */
+  spellMechanics?: {
+    spellIds: number[]; effects: number[]; auras: number[];
+    targetsA: number[]; targetsB: number[];
+  };
+  /** Flat per-spell sets, pack format <= 28 only. */
+  spellEffects?: { spellIds: number[]; effects: number[] };
+  spellAuras?: { spellIds: number[]; auras: number[] };
   /** SpellEffect enum id -> name without the SPELL_EFFECT_ prefix. */
   effectNames: Record<string, string>;
-  spellAuras: { spellIds: number[]; auras: number[] };
   /** SpellEffectAura enum id -> name without the SPELL_AURA_ prefix. */
   auraNames: Record<string, string>;
+  /** ImplicitTarget enum id -> name without the TARGET_ prefix. */
+  implicitTargetNames?: Record<string, string>;
+  /** ImplicitTarget enum id -> the caster/target/area bits it contributes. */
+  implicitTargetBits?: Record<string, number>;
+
+  /* --- keybound overrides (aura 406) --- */
+
+  spellKeybinds?: { spellIds: number[]; overrideIds: number[]; targets: number[] };
+  /**
+   * Per SpellKeyboundOverride row: the client keybinding name, the word for
+   * when it applies ("" = ordinary press, "mid-air" = airborne) and the
+   * Spell::ID the retail client casts in its place (which this build may no
+   * longer ship, and which the app deliberately does not display).
+   */
+  keybinds?: { ids: number[]; functions: string[]; whens: string[]; spells: number[] };
 }
 
 /* ------------------------------------------------- in-memory indexes */
@@ -454,14 +479,76 @@ interface SpellData {
   spellPassengerAnims: Map<number, number[]>;
   passengerAnimSpells: Map<number, number[]>;
 
-  spellEffects: Map<number, number[]>;
-  effectSpells: Map<number, number[]>;
+  /** spell id -> [overrideId] the keybind fx category renders. */
+  spellKeybinds: Map<number, number[]>;
+  keybindSpells: Map<number, number[]>;
+  keybinds: Map<number, KeybindRow>;
+  keybindSearchL: Map<number, string>;
+  keybindTargets: Map<number, Map<number, number>>;
+
+  /**
+   * spell id -> its mechanic rows, in build order. There is no reverse
+   * (name id -> spells) index: mech: matches whole ROWS, so it resolves its
+   * tokens against the three name maps once and walks these.
+   */
+  spellMechanics: Map<number, MechanicRow[]>;
+  /** The same rows as flat parallel arrays, for mech:'s row sweep. */
+  mechanicCols: MechanicColumns;
   effectNames: Map<number, string>;
   effectNamesL: Map<number, string>;
-  spellAuras: Map<number, number[]>;
-  auraSpells: Map<number, number[]>;
   auraNames: Map<number, string>;
   auraNamesL: Map<number, string>;
+  implicitTargetNames: Map<number, string>;
+  implicitTargetNamesL: Map<number, string>;
+  implicitTargetBits: Map<number, number>;
+}
+
+/** The mechanic rows as parallel arrays (row i is one SpellEffect). */
+interface MechanicColumns {
+  spellIds: number[];
+  effects: number[];
+  auras: number[];
+  targetsA: number[];
+  targetsB: number[];
+}
+
+/**
+ * One rendered Mechanics pill: the rows that look alike, merged. `rows` holds
+ * every row behind it — they differ only in implicit target, which the pill
+ * shows as icons, so they feed the tooltip and the hit test instead.
+ */
+interface MechanicPill {
+  effect: number;
+  aura: number;
+  mask: number;
+  rows: MechanicRow[];
+}
+
+/** One row of the Mechanics column: an effect and what it is aimed at. */
+interface MechanicRow {
+  /** SpellEffect.Effect enum id, 0 = none. */
+  effect: number;
+  /** SpellEffect.EffectAura enum id, 0 = none. */
+  aura: number;
+  /** ImplicitTarget_0 / _1 enum ids, 0 = unset. */
+  targetA: number;
+  targetB: number;
+  /** caster/target/area bits the row's target icons read. */
+  mask: number;
+}
+
+/** One SpellKeyboundOverride row. */
+interface KeybindRow {
+  /** Client keybinding name — JUMP, MOVEFORWARD, TOGGLEWORLDMAP, ... */
+  fn: string;
+  /** When it applies: "" = the ordinary press, "mid-air" = the airborne one. */
+  when: string;
+  /**
+   * Spell::ID the retail client casts in the key's place; may not exist in
+   * this build. Carried for a future pass but NOT displayed — Epsilon only
+   * disables the key, it does not cast this.
+   */
+  spell: number;
 }
 
 /** A ScreenEffect row's color payload (-1 = the row has no such color). */

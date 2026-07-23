@@ -1084,14 +1084,19 @@
       case "sounds": return (id) => len(d.spellSounds, id);
       case "animations": return (id) =>
         len(d.spellAnimKits, id) + len(d.spellAnims, id) + len(d.spellVisualAnims, id);
-      case "mechanics": return (id) => len(d.spellEffects, id) + len(d.spellAuras, id);
+      // raw SpellEffect rows, not the rendered pill count — pills merge rows
+      // that differ only in implicit target, and "how many effects does this
+      // spell have" is the more meaningful sort (it is also what the export
+      // lists, one line per row)
+      case "mechanics": return (id) => len(d.spellMechanics, id);
       case "fx": return (id) =>
         len(d.spellFx, id) + len(d.spellDissolves, id) + len(d.spellGlows, id)
         + len(d.spellShadowies, id) + len(d.spellGhostMats, id) + len(d.spellTints, id)
         + len(d.spellDesaturates, id) + len(d.spellTransps, id)
         + (d.spellFreezes.has(id) ? 1 : 0) + (d.spellCamos.has(id) ? 1 : 0)
         + len(d.spellScreens, id) + len(d.spellMorphs, id)
-        + len(d.spellShapeshifts, id) + len(d.spellSummons, id);
+        + len(d.spellShapeshifts, id) + len(d.spellSummons, id)
+        + len(d.spellKeybinds, id);
     }
   }
 
@@ -1155,7 +1160,8 @@
       d.spellDesaturates.has(id) || d.spellTransps.has(id) ||
       d.spellFreezes.has(id) || d.spellCamos.has(id) || d.spellScreens.has(id) ||
       d.spellMorphs.has(id) || d.spellShapeshifts.has(id) || d.spellSummons.has(id) ||
-      d.spellVehicles.has(id),
+      d.spellVehicles.has(id) || d.spellInvisTypes.has(id) ||
+      d.spellDetectTypes.has(id) || d.spellKeybinds.has(id),
   };
 
   function applyFiltersAndSort() {
@@ -1382,15 +1388,11 @@
     // Effects — visual FX (beams, morphs, summons), grouped by category
     tr.appendChild(fxCell(spellId));
 
-    // Mechanics — spell effects, then aura mechanics; matched ones first
-    const mechs = hitsFirst(
-      (d.spellEffects.get(spellId) || []).slice().sort((a, b) => a - b)
-        .map((e) => /** @type {{effect?: number, aura?: number}} */ ({ effect: e }))
-        .concat((d.spellAuras.get(spellId) || []).slice().sort((a, b) => a - b)
-          .map((a) => ({ aura: a }))),
-      (m) => m.effect !== undefined ? effectIsHit(m.effect) : auraIsHit(m.aura));
-    tr.appendChild(tagCell("c-mechanics",
-      mechs.map((m) => m.effect !== undefined ? effectTag(m.effect) : auraTag(m.aura))));
+    // Mechanics — one pill per SpellEffect (what it does + who it targets),
+    // matched ones first
+    const mechs = hitsFirst(mechanicPills(d.spellMechanics.get(spellId) || []),
+      (p) => p.rows.some(mechanicIsHit));
+    tr.appendChild(tagCell("c-mechanics", mechs.map(mechanicTag)));
 
     // Commands — one compact line that fits even single-line rows
     const tdCmd = el("td", "c-cmds");
@@ -1703,13 +1705,15 @@
     const vehicleIds = d.spellVehicles.get(spellId) || [];
     const invisPills = (d.spellInvisTypes.get(spellId) || []).slice().sort((a, b) => a.type - b.type);
     const detectPills = (d.spellDetectTypes.get(spellId) || []).slice().sort((a, b) => a.type - b.type);
+    const keybindIds = d.spellKeybinds.get(spellId) || [];
     const td = el("td", "c-fx");
     if (chainIds.length === 0 && dissolveIds.length === 0 && glowIds.length === 0
         && shadowyIds.length === 0 && ghostMatIds.length === 0 && tintIds.length === 0
         && desatPcts.length === 0 && transpPcts.length === 0 && !hasFreeze && !hasCamo
         && screenIds.length === 0 && morphIds.length === 0 && formIds.length === 0
         && summonEntries.length === 0 && vehicleIds.length === 0
-        && invisPills.length === 0 && detectPills.length === 0) {
+        && invisPills.length === 0 && detectPills.length === 0
+        && keybindIds.length === 0) {
       td.classList.add("empty");
       td.appendChild(el("span", "none", "—"));
       return td;
@@ -1979,6 +1983,35 @@
       });
     }
 
+    // keybound overrides: one pill per KEY the spell's aura overrides. Two
+    // overrides on one spell can name the same key and differ only in the
+    // replacement spell — which is not shown — so they would render as
+    // duplicate pills; pills are keyed on what they actually display and their
+    // masks union, the same de-duping vehicle seat attachments get.
+    if (keybindIds.length) {
+      const kbMask = (o) => maskOf(d.keybindTargets, spellId, [o]);
+      /** @type {Map<string, {label: string, fn: string, ids: number[], mask: number}>} */
+      const byLabel = new Map();
+      for (const o of keybindIds) {
+        const row = d.keybinds.get(o);
+        if (!row) continue;
+        const label = row.when ? `${row.fn} ${row.when}` : row.fn;
+        const prev = byLabel.get(label);
+        if (prev) { prev.ids.push(o); prev.mask |= kbMask(o); continue; }
+        byLabel.set(label, { label, fn: row.fn, ids: [o], mask: kbMask(o) });
+      }
+      const pills = [...byLabel.values()].sort((a, b) => a.label.localeCompare(b.label));
+      const isHit = (p) => p.ids.some(keybindIsHit);
+      const grp = targetGroup(pills.map((p) => p.mask));
+      cats.push({
+        name: "keybind",
+        hit: pills.some(isHit),
+        mask: grp.uniform ? grp.mask : 0,
+        items: hitsFirst(pills, isHit)
+          .map((p) => () => keybindTag(p, grp.uniform ? 0 : p.mask)),
+      });
+    }
+
     buildKitGroups(td, cats, {
       // the icon rides the category head, unioned over this spell's rows in
       // the category — only where the distribution isn't degenerate (a
@@ -2033,14 +2066,22 @@
       g.tokens.every((t) => groupWord.includes(t.text) || nameL.includes(t.text)));
   }
 
-  function effectIsHit(effectId) {
-    const nameL = state.data.effectNamesL.get(effectId) || "";
-    return groupsFor("mech").some((g) => g.tokens.every((t) => nameL.includes(t.text)));
+  /* A mechanic pill matches when any mech: group is satisfied by the names on
+   * that ROW — effect, aura and implicit targets together. Row-level rather
+   * than name-level, so mech:"school_damage unit_target_enemy" lights the one
+   * effect that is both, not every row that has either. */
+  function mechanicIsHit(row) {
+    const d = state.data;
+    const corpus = [
+      d.effectNamesL.get(row.effect), d.auraNamesL.get(row.aura),
+      d.implicitTargetNamesL.get(row.targetA), d.implicitTargetNamesL.get(row.targetB),
+    ].filter(Boolean).join(" ");
+    return groupsFor("mech").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
-  function auraIsHit(auraId) {
-    const nameL = state.data.auraNamesL.get(auraId) || "";
-    return groupsFor("mech").some((g) => g.tokens.every((t) => nameL.includes(t.text)));
+  function keybindIsHit(overrideId) {
+    const corpus = state.data.keybindSearchL.get(overrideId) || "";
+    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
   function fxChainIsHit(chainId) {
@@ -2737,28 +2778,78 @@
     return tag;
   }
 
-  function effectTag(effectId) {
+  /* One Mechanics pill = one SpellEffect. The SPECIFIC thing the effect does
+   * leads the pill; the effect that carries it trails as a qualifier —
+   *
+   *   ( 👤 SCHOOL_DAMAGE )               a plain effect
+   *   ( 👤 PERIODIC_DAMAGE | APPLY_AURA )  an aura-applying effect
+   *
+   * so the aura name — the part that actually says what the spell does — is
+   * the headline, and the near-universal APPLY_AURA reads as the boilerplate
+   * it is. Both segments search their own name.
+   *
+   * WHO it lands on is shown ONLY as the caster/target/area icons every other
+   * column uses (user's call, 2026-07-23): the enum names are long, would
+   * dominate the pill and repeat down the column. The exact implicit targets
+   * stay in the tooltip and stay searchable through mech: — the icons cannot
+   * tell UNIT_TARGET_ENEMY from UNIT_TARGET_ALLY, so the words still earn
+   * their place in the corpus.
+   * @param {MechanicPill} pill
+   */
+  function mechanicTag(pill) {
     const d = state.data;
-    const name = d.effectNames.get(effectId) || `EFFECT_${effectId}`;
-    const tag = el("span", "tag mechanic");
-    if (effectIsHit(effectId)) tag.classList.add("hit");
-    const label = el("button", "tag-label", name);
-    label.title = `Spell effect ${effectId}: SPELL_EFFECT_${name}\nClick: find spells with this mechanic · Shift-click: exclude`;
-    label.dataset.search = `mech:"${name}"`;
-    tag.appendChild(label);
+    const tag = el("span", "tag mechanic" + (pill.aura ? " aura" : ""));
+    if (pill.rows.some(mechanicIsHit)) tag.classList.add("hit");
+
+    const effectName = pill.effect
+      ? (d.effectNames.get(pill.effect) || `EFFECT_${pill.effect}`) : "";
+    const auraName = pill.aura ? (d.auraNames.get(pill.aura) || `AURA_${pill.aura}`) : "";
+    // Each row contributes its own targets, and a row setting both is one
+    // rule with two anchors (SRC_CASTER + UNIT_SRC_AREA_ENEMY = "enemies
+    // around me") — so rows join with "or", the pair inside a row with "+".
+    const aims = pill.rows
+      .map((r) => [r.targetA, r.targetB].filter(Boolean)
+        .map((t) => `TARGET_${d.implicitTargetNames.get(t) || t}`).join(" + "))
+      .filter(Boolean);
+    const aimedAt = aims.length ? `\nAimed at ${[...new Set(aims)].join(" or ")}` : "";
+
+    const seg = (cls, text, title) => {
+      const b = el("button", cls, text);
+      b.title = `${title}${aimedAt}`
+        + `\nClick: find spells with this mechanic · Shift-click: exclude`;
+      b.dataset.search = `mech:"${text}"`;
+      tag.appendChild(b);
+    };
+    // the aura leads when there is one, else the effect does
+    if (auraName) seg("tag-label", auraName, `Aura ${pill.aura}: SPELL_AURA_${auraName}`);
+    if (effectName) {
+      seg(auraName ? "tag-attach" : "tag-label", effectName,
+        `Spell effect ${pill.effect}: SPELL_EFFECT_${effectName}`);
+    }
+    addTargetIcons(tag, pill.mask);
     return tag;
   }
 
-  function auraTag(auraId) {
-    const d = state.data;
-    const name = d.auraNames.get(auraId) || `AURA_${auraId}`;
-    const tag = el("span", "tag mechanic aura");
-    if (auraIsHit(auraId)) tag.classList.add("hit");
-    const label = el("button", "tag-label", name);
-    label.title = `Aura ${auraId}: SPELL_AURA_${name}\nClick: find spells with this mechanic · Shift-click: exclude`;
-    label.dataset.search = `mech:"${name}"`;
-    tag.appendChild(label);
-    return tag;
+  /* Collapse a spell's mechanic rows to what the pills actually render.
+   * Rows differing only in their implicit target now look identical (the
+   * target is icons-only), so Soulstone's two DUMMY effects — one aimed at
+   * CORPSE_TARGET_ALLY, one at UNIT_TARGET_ALLY, both "on the target" — would
+   * come out as two indistinguishable pills. Key on (effect, aura, icon mask)
+   * and keep every merged row: the rows drive the tooltip's target list and
+   * the hit test, so nothing is lost, it just stops repeating itself.
+   * @param {MechanicRow[]} rows
+   * @returns {MechanicPill[]}
+   */
+  function mechanicPills(rows) {
+    /** @type {Map<string, MechanicPill>} */
+    const byLook = new Map();
+    for (const r of rows) {
+      const key = `${r.effect}:${r.aura}:${r.mask}`;
+      const prev = byLook.get(key);
+      if (prev) { prev.rows.push(r); continue; }
+      byLook.set(key, { effect: r.effect, aura: r.aura, mask: r.mask, rows: [r] });
+    }
+    return [...byLook.values()];
   }
 
   /* Visual FX tags: the category head ("chain") and one pill per texture,
@@ -2781,6 +2872,7 @@
     seat: "Seat of a rideable vehicle the caster becomes (SpellEffect SET_VEHICLE_ID)",
     invis: "Invisibility channel — hides in an invisibility type (MOD_INVISIBILITY)",
     detect: "Sees an invisibility channel (MOD_INVISIBILITY_DETECT)",
+    keybind: "A key that casts a spell while the aura holds (SpellKeyboundOverride)",
   };
 
   function fxHeadTag(category, hit) {
@@ -2959,6 +3051,35 @@
       if (search) seg.dataset.search = search;
       tag.appendChild(seg);
     }
+    addTargetIcons(tag, mask);
+    return tag;
+  }
+
+  /* Keybound-override pill (aura 406): while the aura holds, this key stops
+   * working. One segment — the key, plus the timing word when it only applies
+   * airborne:
+   *
+   *   ( JUMP )        ( JUMP mid-air )        ( TOGGLEWORLDMAP )
+   *
+   * The retail client casts a replacement spell (SpellKeyboundOverride.Data),
+   * and the pack carries it — but Epsilon does NOT cast it, it only disables
+   * the key, so naming the spell here would promise something users cannot
+   * get. Deliberate omission, not an oversight (user's call, 2026-07-23).
+   *
+   * The timing word rides the key segment rather than taking its own: it says
+   * WHEN that same key is overridden, so it reads as part of the key, and the
+   * ordinary press stays bare so the common case is uncluttered.
+   * @param {{label: string, fn: string, ids: number[]}} pill
+   */
+  function keybindTag(pill, mask = 0) {
+    const tag = el("span", "tag fx");
+    if (pill.ids.some(keybindIsHit)) tag.classList.add("hit");
+    const key = el("button", "tag-label", pill.label);
+    key.title = `${pill.fn} is overridden while this aura holds`
+      + `\nOn Epsilon the key is simply disabled`
+      + `\nClick: find spells overriding this key · Shift-click: exclude`;
+    key.dataset.search = `fx:"keybind ${pill.fn}"`;
+    tag.appendChild(key);
     addTargetIcons(tag, mask);
     return tag;
   }
@@ -3510,10 +3631,19 @@
           })));
       }
       if (!hc.mechanics) {
-        row.mechanics = (d.spellEffects.get(id) || []).slice().sort((a, b) => a - b)
-          .map((e) => d.effectNames.get(e) || `EFFECT_${e}`)
-          .concat((d.spellAuras.get(id) || []).slice().sort((a, b) => a - b)
-            .map((a) => d.auraNames.get(a) || `AURA_${a}`));
+        // one entry per effect, mirroring the pills — aura first, then the
+        // effect carrying it. An export is read without tooltips or icons, so
+        // unlike the pill it spells the implicit targets out:
+        // "PERIODIC_DAMAGE / APPLY_AURA -> TARGET_UNIT_CASTER"
+        row.mechanics = (d.spellMechanics.get(id) || []).map((m) => {
+          const does = [
+            m.aura ? (d.auraNames.get(m.aura) || `AURA_${m.aura}`) : "",
+            m.effect ? (d.effectNames.get(m.effect) || `EFFECT_${m.effect}`) : "",
+          ].filter(Boolean).join(" / ");
+          const at = [m.targetA, m.targetB].filter(Boolean)
+            .map((t) => `TARGET_${d.implicitTargetNames.get(t) || t}`).join(" + ");
+          return at ? `${does} -> ${at}` : does;
+        });
       }
       return row;
     });
