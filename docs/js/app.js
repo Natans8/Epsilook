@@ -1542,19 +1542,30 @@
                 hit: items.some((e) => modelFileIsHit(d.files.get(e.fid), name)),
             });
         }
-        // Loose (uncategorized attach) pills flow first — attachment splits can
-        // pile many of them up; the height-based clamp (layoutRow) hides whatever
-        // overflows the row budget behind the cell's single "+N more".
-        for (const e of hitsFirst(loose, (x) => modelFileIsHit(d.files.get(x.fid), ""))) {
-            td.appendChild(modelTag(e.fid, "", e.targets, e.src, e.dst, travels(e.cat)));
+        // Loose (uncategorized attach) pills come first, then the category
+        // groups — but renderBlocks floats whichever hold the search hit above
+        // the rest, so a matched category is not stranded below a pile of
+        // non-matching attach splits (nor clamped away behind "+N more").
+        const blocks = [];
+        for (const e of loose) {
+            blocks.push({
+                hit: modelFileIsHit(d.files.get(e.fid), ""),
+                el: modelTag(e.fid, "", e.targets, e.src, e.dst, travels(e.cat)),
+            });
         }
-        buildKitGroups(td, hitsFirst(cats, (c) => c.hit), {
-            headerTag: (c) => modelCatHeadTag(c.name, c.hit),
-            itemsOf: (c) => hitsFirst(c.items, (e) => modelFileIsHit(d.files.get(e.fid), c.name)),
-            itemTag: (e, c) => (isDisplayCat(e.cat) ? displayTag(e)
-                : isItemCat(e.cat) ? itemTag(e)
-                    : modelTag(e.fid, c.name, e.targets, e.src, e.dst, travels(e.cat))),
-        });
+        for (const c of cats) {
+            blocks.push({
+                hit: c.hit,
+                el: P.group({
+                    head: modelCatHeadTag(c.name, c.hit),
+                    items: hitsFirst(c.items, (e) => modelFileIsHit(d.files.get(e.fid), c.name))
+                        .map((e) => (isDisplayCat(e.cat) ? displayTag(e)
+                            : isItemCat(e.cat) ? itemTag(e)
+                                : modelTag(e.fid, c.name, e.targets, e.src, e.dst, travels(e.cat)))),
+                }),
+            });
+        }
+        renderBlocks(td, blocks);
         return td;
     }
 
@@ -1579,15 +1590,18 @@
         const kitHasHit = (kitId) =>
             kitIsHit(kitId, "soundkit") ||
             byKit.get(kitId).some((fid) => fileIsHit(d.files.get(fid), "sound"));
-        const kitIds = hitsFirst([...byKit.keys()].sort((a, b) => a - b), kitHasHit);
 
-        buildKitGroups(td, kitIds, {
-            // the icon rides the kit head: every file in a kit plays together, so
-            // the whole kit shares one target type
-            headerTag: (kitId) => kitTag(kitId, "soundkit", kitMask.get(kitId)),
-            itemsOf: (kitId) => hitsFirst(byKit.get(kitId), (fid) => fileIsHit(d.files.get(fid), "sound")),
-            itemTag: (fid) => soundTag(fid),
-        });
+        // one block per SoundKit (numeric order); renderBlocks floats the hit
+        // kits up. The icon rides the kit head — every file in a kit plays
+        // together, so the whole kit shares one target type.
+        renderBlocks(td, [...byKit.keys()].sort((a, b) => a - b).map((kitId) => ({
+            hit: kitHasHit(kitId),
+            el: P.group({
+                head: kitTag(kitId, "soundkit", kitMask.get(kitId)),
+                items: hitsFirst(byKit.get(kitId), (fid) => fileIsHit(d.files.get(fid), "sound"))
+                    .map((fid) => soundTag(fid)),
+            }),
+        })));
         return td;
     }
 
@@ -1625,10 +1639,6 @@
         }
         const d = state.data;
         const looseMasks = d.visualAnimTargets.get(spellId);
-        for (const a of hitsFirst(looseAnimIds.slice().sort((x, y) => x - y),
-            (x) => animIsHit(x))) {
-            td.appendChild(animTag(a, "", looseMasks ? looseMasks.get(a) || 0 : 0));
-        }
         const animsOf = (kitId) =>
             groupAnims.get(kitId) || d.animKitAnims.get(kitId) || [];
         // a headless group's anims match through its category word too
@@ -1639,18 +1649,32 @@
             animsOf(kitId).some((a) => animIsHit(a, wordOf(kitId)));
         const groups = animKitIds.slice().sort((a, b) => a - b);
         for (const g of ANIM_GROUPS) if (groupAnims.has(g.id)) groups.push(g.id);
-        const kitIds = hitsFirst(groups, kitHasHit);
 
-        buildKitGroups(td, kitIds, {
-            // stance overrides are ~96% caster — a constant, so no icon there
-            // (documented in the help dialog instead); animkits carry theirs
-            headerTag: (kitId) => groupAnims.has(kitId)
-                ? animCatHeadTag(wordOf(kitId), kitHasHit(kitId))
-                : kitTag(kitId, "animkit", maskOf(d.animKitTargets, spellId, [kitId])),
-            itemsOf: (kitId) => hitsFirst(animsOf(kitId).slice().sort((a, b) => a - b),
-                (a) => animIsHit(a, wordOf(kitId))),
-            itemTag: (animId, kitId) => animTag(animId, wordOf(kitId)),
-        });
+        // loose visual-anim pills first, then the kit / stance / passenger
+        // groups; renderBlocks floats whichever hold the hit to the top.
+        const blocks = [];
+        for (const a of looseAnimIds.slice().sort((x, y) => x - y)) {
+            blocks.push({
+                hit: animIsHit(a),
+                el: animTag(a, "", looseMasks ? looseMasks.get(a) || 0 : 0),
+            });
+        }
+        for (const kitId of groups) {
+            blocks.push({
+                hit: kitHasHit(kitId),
+                el: P.group({
+                    // stance overrides are ~96% caster — a constant, so no icon
+                    // there (documented in the help dialog); animkits carry theirs
+                    head: groupAnims.has(kitId)
+                        ? animCatHeadTag(wordOf(kitId), kitHasHit(kitId))
+                        : kitTag(kitId, "animkit", maskOf(d.animKitTargets, spellId, [kitId])),
+                    items: hitsFirst(animsOf(kitId).slice().sort((a, b) => a - b),
+                        (a) => animIsHit(a, wordOf(kitId)))
+                        .map((animId) => animTag(animId, wordOf(kitId))),
+                }),
+            });
+        }
+        renderBlocks(td, blocks);
         return td;
     }
 
@@ -1675,13 +1699,25 @@
    * whatever overflows the row budget behind the cell's single "+N more".
    * Groups rendering ≤1 item for THIS row collapse to an inline pill — see
    * P.group, which decides that for every column alike. */
-    function buildKitGroups(td, kitIds, opts) {
-        for (const kitId of kitIds) {
-            td.appendChild(P.group({
-                head: opts.headerTag(kitId),
-                items: opts.itemsOf(kitId).map((item) => opts.itemTag(item, kitId)),
-            }));
-        }
+    /* Render a cell's BLOCKS with search hits floated to the top.
+   *
+   * A block is one renderable unit of a cell — a loose pill, or a whole group
+   * (a head with its items). Each carries whether it holds a hit and the
+   * element to append. Under an active query the hit blocks come first (stable
+   * partition via hitsFirst, so the deliberate order is otherwise untouched —
+   * e.g. loose model pills still precede their category groups); with no query
+   * nothing moves.
+   *
+   * Floating hits up is also what keeps them on screen: clampCell hides leaves
+   * from the BOTTOM, so the pill you searched for stays visible instead of
+   * disappearing behind "+N more". Every pill-bearing cell renders through here
+   * so that one rule holds for all of them — the models, sounds, animations and
+   * fx cells all build a `blocks` array and hand it over.
+   * @param {HTMLElement} td
+   * @param {{hit: boolean, el: HTMLElement}[]} blocks
+   */
+    function renderBlocks(td, blocks) {
+        for (const b of hitsFirst(blocks, (x) => x.hit)) td.appendChild(b.el);
     }
 
     /* Effects cell: visual FX grouped by category — "chain" (beam/chain effects),
@@ -2071,14 +2107,18 @@
             });
         }
 
-        buildKitGroups(td, cats, {
-            // the icon rides the category head, unioned over this spell's rows in
-            // the category — only where the distribution isn't degenerate (a
-            // category that is always the same type says nothing per pill)
-            headerTag: (cat) => fxHeadTag(cat.name, cat.hit, cat.mask),
-            itemsOf: (cat) => cat.items,
-            itemTag: (make) => make(),
-        });
+        // one block per fx category, in the order pushed above; renderBlocks
+        // floats the matched category to the top. The icon rides the category
+        // head, unioned over this spell's rows in the category — only where the
+        // distribution isn't degenerate (a category that is always the same type
+        // says nothing per pill).
+        renderBlocks(td, cats.map((cat) => ({
+            hit: cat.hit,
+            el: P.group({
+                head: fxHeadTag(cat.name, cat.hit, cat.mask),
+                items: cat.items.map((make) => make()),
+            }),
+        })));
         return td;
     }
 
