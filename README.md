@@ -24,10 +24,13 @@ Full syntax lives behind the **?** button in the app. The short version:
   `6dr_draenei_statue_male01.m2`. `"quoted words"` are an exact phrase.
 - **Field tags** narrow a term to one column: `name:` `model:` `sound:`
   `anim:` `fx:` `mech:` `id:`. Tags AND together; a `-` prefix excludes.
-- **Target-type icons** on models, sounds, animations and effects say who the
-  content plays on — caster, target, or the target location. A row that plays
-  on several shows one icon each. Search them like category words:
+- **Target-type icons** on models, sounds, animations, effects and mechanics
+  say who the content plays on — caster, target, or the target location. A row
+  that plays on several shows one icon each. Search them like category words:
   `model:"caster fire"`, `sound:target`, `anim:both`.
+- `mech:` covers what an effect does *and* what it is aimed at, matched on the
+  same effect: `mech:"school_damage unit_target_enemy"` finds spells with one
+  effect that is both, not spells that happen to have each somewhere.
 - **Click any tag in the results** to search for it (shift-click to exclude).
 - The search — filters included — always lives in the URL, so any result set
   is a shareable link. Append `&export=json` or `&export=csv` to download it.

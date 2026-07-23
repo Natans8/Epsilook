@@ -7,7 +7,7 @@
   <meta name="description" content="Search World of Warcraft spells by name, model file, sound file, animation or visual effect. A companion tool for Epsilon WoW.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
   <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-  <link rel="stylesheet" href="css/app.css?v=20260723a">
+  <link rel="stylesheet" href="css/app.css?v=20260723f">
 </head>
 <body>
 
@@ -106,6 +106,27 @@
               <button data-search='fx:"invis =0"'>fx:"invis =0"</button>
               invisibility nothing can detect
             </li>
+            <li>
+              <button data-search="fx:keybind">fx:keybind</button>
+              disables a key while the aura holds —
+              <button data-search='fx:"keybind jump"'>fx:"keybind jump"</button>
+              just jump,
+              <button data-search='fx:"keybind mid-air"'>fx:"keybind mid-air"</button>
+              only once airborne
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h3>Mechanics — <code>mech:</code></h3>
+          <p class="help-note">What each effect of a spell does, and what it is aimed at. Words in
+            one tag must match the <em>same</em> effect, so you can ask for both at once. Who it
+            lands on shows as the target icons; the exact target name is in the tooltip.</p>
+          <ul class="help-ex">
+            <li><button data-search="mech:resurrect">mech:resurrect</button> by what it does</li>
+            <li><button data-search='mech:"school_damage unit_target_enemy"'>mech:"school_damage unit_target_enemy"</button> damage aimed at an enemy</li>
+            <li><button data-search='mech:"apply_aura unit_caster"'>mech:"apply_aura unit_caster"</button> an aura you put on yourself</li>
+            <li><button data-search="mech:dest_dest">mech:dest_dest</button> aimed at a spot on the ground</li>
+            <li><button data-search="mech:keybound_override">mech:keybound_override</button> the aura behind <code>fx:keybind</code></li>
           </ul>
         </section>
         <section>
@@ -321,13 +342,13 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260723a"></script>
-<script src="js/data.js?v=20260723a"></script>
+<script src="js/config.js?v=20260723f"></script>
+<script src="js/data.js?v=20260723f"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260723a"></script>
-<script src="js/js-blp.js?v=20260723a"></script>
-<script src="js/search.js?v=20260723a"></script>
-<script src="js/app.js?v=20260723a"></script>
+<script src="js/bufo.js?v=20260723f"></script>
+<script src="js/js-blp.js?v=20260723f"></script>
+<script src="js/search.js?v=20260723f"></script>
+<script src="js/app.js?v=20260723f"></script>
 </body>
 </html>

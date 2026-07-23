@@ -468,7 +468,7 @@ least one passenger anim, the vehicle's own are 3–7%, any animkit 12.7%.
 
 ### 3f. Routes that start at `SpellEffect`, not at a visual
 
-Six fx categories skip the visual graph entirely: a particular `Effect` or
+Seven fx categories skip the visual graph entirely: a particular `Effect` or
 `EffectAura` enum makes `EffectMiscValue_n` an id into another table.
 
 ```mermaid
@@ -480,7 +480,8 @@ flowchart LR
   SE -->|"EffectAura 36 (MOD_SHAPESHIFT)<br/>misc0 = SpellShapeshiftForm"| SS["shapeshift"]
   SE -->|"EffectAura 370 (OVERRIDE_NAME)<br/>misc0 = SpellOverrideName"| ON["alt names — search corpus only"]
   SE -->|"EffectAura 296 (SET_VEHICLE_ID)<br/>misc0 = Vehicle id"| VE["vehicle"]
-  SE -->|"Effect / EffectAura enum ids"| ME["Mechanics column"]
+  SE -->|"EffectAura 406 (KEYBOUND_OVERRIDE)<br/>misc0 = SpellKeyboundOverride"| KB["keybind"]
+  SE -->|"Effect + EffectAura + ImplicitTarget"| ME["Mechanics column"]
 ```
 
 **The vehicle route covers "the caster BECOMES a vehicle", not "boards one".**
@@ -613,6 +614,132 @@ Two consequences worth knowing:
 across 55 distinct values on 9.2.7 — the direct-id signature — versus
 `VehicleSeat.AttachmentID`'s dense 0..27.
 
+### 3j. Keybound overrides — which key stops working
+
+```mermaid
+flowchart LR
+  SE["SpellEffect<br/>EffectAura 406 (KEYBOUND_OVERRIDE)"]
+  SE -->|"misc0 = SpellKeyboundOverride::ID"| KO["SpellKeyboundOverride"]
+  KO -->|"Function"| FN["key name — the pill (JUMP, MOVEFORWARD, ...)"]
+  KO -->|"Type"| TY["timing word — '' or 'mid-air'"]
+  KO -->|"Data = Spell::ID"| SP["replacement spell — shipped, NOT displayed"]
+```
+
+While the aura holds, a movement/UI key stops doing what it normally does. The
+join is exact: **105/105 aura rows resolve on 9.2.7**. On the newest builds the
+table trails the aura slightly — 11 rows on both DF and TWW point at an
+override the build does not ship — and those are dropped rather than shown as a
+bare id.
+
+**`Data` is a `Spell::ID`.** 46 of 53 distinct values on 9.2.7 are live spells;
+the other 7 (43574, 52477, 79579, 206768, 284741, 284991, 292038) are stale
+references to spells since deleted from the client DB2.
+
+**The replacement spell is shipped but deliberately not displayed** (user's
+call, 2026-07-23). Retail casts it in the key's place, but on **Epsilon the
+override only disables the key** — it never casts the replacement — so naming
+it would promise behaviour Epsilon users cannot get. It stays in the pack
+(`keybinds.spells`) so a future pass can surface it without a rebuild;
+restoring it means adding the id and name back to `keybindSearchL` in `data.js`
+and to `keybindTag` in `app.js`, nothing more.
+
+#### `Type` is decoded, not documented
+
+Nothing documents this enum: the `.dbd` has no comment on `Type`,
+wowdev.wiki/DB/SpellKeyboundOverride is a 6.0.1 two-field stub, and
+EnumeratedString has no section for it. It was decoded from the data
+(2026-07-23) and the evidence is strong enough to name:
+
+- **100% of Type-1 rows are `JUMP`, on every build that has the table** — 0 of
+  13 rows on MoP, 2 Legion, 3 BfA, 7 SL, 23 DF, 25 TWW. 60 rows, no
+  exceptions. Type 0 spans all ten functions.
+- Every Type-1 spell is a **mid-air** ability: Glide, `[DNT] Pirate Double
+  Jump`, Jump Dash, Lift Off, Empowered Flight, Highland Drake, Gnomish Gravity
+  Launcher, Defying Gravity, Faerie Wings, Zephyr's Catch, Wild Winds, Here's a
+  Boost!, Prevent Jump. Every Type-0 spell replaces an ordinary ground press:
+  Paddle Raft, Dodge Left/Right/Back, Locust Leap, Saurok Leap, Abandon
+  Vehicle, Switch Seats, Flop, Stormforged Leap.
+- **Decisive:** spell 319125 "Fizzle" appears as **both** Type 0 (override 173)
+  and Type 1 (override 177) on the same function. Same payload, two rows — so
+  `Type` is a trigger *condition*, not a kind of payload.
+
+So **Type 0 = the ordinary press, Type 1 = the press while already airborne.**
+Type 0 renders bare and only the mid-air case is labelled; an unknown future
+type falls back to `type N` rather than being guessed at.
+
+**`Flags` is deliberately not read**: absent from the table entirely on Legion
+and BfA, all-zero on 9.2.7, and only ten nonzero rows (values 1 and 3) on TWW
+with no recoverable meaning. Reading it would buy a drift declaration and
+nothing else.
+
+### 3k. The Mechanics column — effects paired with their targets
+
+```mermaid
+flowchart LR
+  SE["SpellEffect row"]
+  SE -->|"Effect enum"| EF["SPELL_EFFECT_* name"]
+  SE -->|"EffectAura enum"| AU["SPELL_AURA_* name"]
+  SE -->|"ImplicitTarget_0 / _1"| IT["TARGET_* names"]
+  IT -->|"implicit_target_bit()"| MK["caster / target / area icons"]
+  EF --> P["one pill"]
+  AU --> P
+  MK --> P
+```
+
+Until pack format 29 this column shipped **two flat per-spell sets** — "this
+spell has `APPLY_AURA` and `TRIGGER_MISSILE` somewhere" and "it has
+`PERIODIC_DAMAGE` somewhere" — with the effect index and the effect↔aura
+pairing discarded at build. Format 29 ships **one row per distinct
+`SpellEffect`** instead, so what an effect does and what it is aimed at stay
+attached to each other.
+
+Why it matters: Lava Burst (51505) is `TRIGGER_MISSILE → UNIT_TARGET_ENEMY`
+plus `ENERGIZE → UNIT_CASTER`. Flat, that is four unordered pills and nothing
+says the missile is the enemy-aimed half. **28,705 of 276,168 spells (10.4%)
+have both more than one kind of effect and more than one distinct target** —
+exactly the population a flat set cannot describe.
+
+Rows are deduped on `(spell, effect, aura, targetA, targetB)`, which collapses
+the per-`DifficultyID` copies `SpellEffect` ships: 416,865 rows become 372,111
+on 9.2.7. That dedupe is why the pairing is **nearly free**: the section costs
+1.21 MB gzipped against the 1.17 MB the two flat sets it replaces cost, so the
+whole 9.2.7 pack grew **+34 KB (+0.4%)** — 7,873,061 → 7,907,511 bytes. TWW
+grew +0.3%; Vanilla, whose spells rarely carry two targets, got 1.7% *smaller*.
+
+**What renders, and what only searches.** The pill shows the specific thing
+first and the carrier second — `PERIODIC_DAMAGE | APPLY_AURA`, not the reverse
+— so the aura name leads and the near-universal `APPLY_AURA` reads as the
+boilerplate it is. **Who it lands on is shown only as the existing
+caster/target/area icons** (user's call, 2026-07-23): the `TARGET_*` names are
+long, would dominate the pill and repeat down the column. They stay in the
+tooltip and stay searchable, because the icons cannot tell
+`UNIT_TARGET_ENEMY` from `UNIT_TARGET_ALLY`.
+
+Two consequences of hiding the names:
+
+- Pills that would render identically are merged, keeping every underlying row
+  for the tooltip and the hit test. Soulstone (20707) has two `DUMMY` effects,
+  one aimed at `CORPSE_TARGET_ALLY` and one at `UNIT_TARGET_ALLY` — both "on
+  the target", so they are one pill whose tooltip names both.
+- The **CSV/JSON export spells the targets out** (`PERIODIC_DAMAGE /
+  APPLY_AURA -> TARGET_UNIT_CASTER`), one line per raw row: an export is read
+  without tooltips or icons.
+
+**`mech:` matches whole rows, not names.** `mech:"school_damage
+unit_target_enemy"` means *one effect that is both* (7,826 spells on 9.2.7) —
+the whole reason for pairing. Matching that literally would mean building a
+corpus string per row, so it is done on ids: each token resolves to the id sets
+whose name contains it (~980 names to scan), then the flat row arrays are swept
+testing membership. That is ~10x faster than walking the per-spell row objects
+(170 ms → 15–25 ms per query on 372k rows). A row's `0` means "no effect" / "no
+aura" / "target unset" and never matches — without that guard `mech:none` would
+return every aura-less row, since `SPELL_AURA_NONE` really is named `NONE`.
+
+**The icon mask is not stored per row.** `implicitTargetBits` ships the
+~130-entry map instead, and a row's mask is `bits[targetA] | bits[targetB]`.
+A fourth 372k-long parallel array measured 110 KB gzipped for data derivable
+from a 1 KB map.
+
 ---
 
 ## 4. The pack
@@ -624,13 +751,13 @@ links `spellIds[i]` to `fids[i]`. That gzips far better than a list of objects.
 ```mermaid
 flowchart LR
   subgraph LINK["link sections (spell → item, + target mask)"]
-    L1["spellModels · spellSounds · spellAnimKits<br/>spellVisualAnims · spellAnims · spellFx<br/>spellDissolves · spellGlows · spellShadowies<br/>spellGhostMats · spellTints · spellDesaturates<br/>spellTransparencies · spellFreezes · spellCamos<br/>spellScreens · spellMorphs · spellShapeshifts<br/>spellSummons · spellVehicles · spellPassengerAnims<br/>spellVehicleAnims · spellVehicleAnimKits<br/>spellEffects · spellAuras"]
+    L1["spellModels · spellSounds · spellAnimKits<br/>spellVisualAnims · spellAnims · spellFx<br/>spellDissolves · spellGlows · spellShadowies<br/>spellGhostMats · spellTints · spellDesaturates<br/>spellTransparencies · spellFreezes · spellCamos<br/>spellScreens · spellMorphs · spellShapeshifts<br/>spellSummons · spellVehicles · spellPassengerAnims<br/>spellVehicleAnims · spellVehicleAnimKits<br/>spellMechanics · spellKeybinds"]
   end
   subgraph PAY["payload sections (item → what it is)"]
     P1["fxChains · fxTextures · dissolves · dissolveTextures<br/>glows · shadowies · ghostMats · tints<br/>screens · screenTextures · morphs · morphDisplays<br/>shapeshifts · shapeshiftDisplays · summons<br/>vehicles · vehicleSeats"]
   end
   subgraph NAME["name tables"]
-    N1["files (fid → path) · animNames · effectNames<br/>auraNames · iconNames · modelCatNames<br/>targetNames · summonControlNames"]
+    N1["files (fid → path) · animNames · effectNames<br/>auraNames · iconNames · modelCatNames<br/>targetNames · summonControlNames<br/>implicitTargetNames · implicitTargetBits · keybinds"]
   end
   LINK --> IDX["data.js<br/>forward + reverse Map per section"]
   PAY --> IDX
@@ -665,24 +792,31 @@ mostly "the table does not exist yet." The five Classic re-release clients
 
 | Build | Label | Spells | Pack | TDB release | Absent tables |
 |---|---|---:|---:|---|---:|
-| 1.15.8.67156 | Vanilla Classic | 31,248 | 0.7 MB | — | 6 |
-| 2.5.6.68775 | TBC Classic | 28,650 | 0.7 MB | — | 13 |
-| 3.4.3.58936 | WotLK Classic | 49,394 | 1.3 MB | TDB335.25101 | 10 |
-| 4.4.2.60895 | Cataclysm Classic | 71,227 | 1.9 MB | — | 10 |
-| 5.5.4.68716 | Mists of Pandaria Classic | 98,129 | 2.7 MB | — | 6 |
+| 1.15.8.67156 | Vanilla Classic | 31,248 | 0.7 MB | — | 7 |
+| 2.5.6.68775 | TBC Classic | 28,650 | 0.7 MB | — | 14 |
+| 3.4.3.58936 | WotLK Classic | 49,394 | 1.3 MB | TDB335.25101 | 11 |
+| 4.4.2.60895 | Cataclysm Classic | 71,227 | 1.9 MB | — | 11 |
+| 5.5.4.68716 | Mists of Pandaria Classic | 98,129 | 2.6 MB | — | 6 |
 | 7.3.5.26972 | Legion | 179,382 | 5.0 MB | TDB735.00 | 4 |
-| 8.3.7.35662 | Battle for Azeroth | 227,237 | 6.4 MB | TDB837.20101 | 1 |
+| 8.3.7.35662 | Battle for Azeroth | 227,237 | 6.5 MB | TDB837.20101 | 1 |
 | 9.2.7.45745 | Shadowlands *(default)* | 276,332 | 7.9 MB | TDB927.22111 | 0 |
 | 10.2.7.55664 | Dragonflight | 327,092 | 9.5 MB | TDB1027.24051 | 0 |
 | 11.2.7.65299 | The War Within | 375,895 | 11.1 MB | TDB1127.26011 | 0 |
 
-**All ten are at pack format 28** (SpellVisualEffectName Type 1 → item model
-pills — §3c). The recent bumps are additive and version-agnostic: format 26
-added the invis/detect channel pills (`MOD_INVISIBILITY[_DETECT]` auras), format
-27 the `display` model category, format 28 the `item` category. All carry back
-to Vanilla (SpellVisualEffectName.Type is present on every shipped build — no
-absent-table or optional-column drift; the five item tables also ship on every
-build, so the route degrades by *content*, not by a missing table). Earlier
+**All ten are at pack format 29** (mechanics paired with their implicit targets
+— §3k — plus the keybound-override route, §3j). The four pre-MoP packs each
+gained one absent table, `SpellKeyboundOverride`; nothing else drifted. Recent
+bumps are additive and version-agnostic: format 26 added the invis/detect
+channel pills (`MOD_INVISIBILITY[_DETECT]` auras), format 27 the `display` model
+category, format 28 the `item` category, format 29 replaced the flat
+`spellEffects`/`spellAuras` sets with `spellMechanics` and added
+`implicitTargetNames`/`implicitTargetBits` + `spellKeybinds`/`keybinds`. A
+format-28 pack is still read: its two flat sets load as target-less mechanic
+rows, so the column renders without target segments or icons rather than
+breaking. Format 26–28 all carry back to Vanilla (SpellVisualEffectName.Type is
+present on every shipped build — no absent-table or optional-column drift; the
+five item tables also ship on every build, so the route degrades by *content*,
+not by a missing table). Earlier
 format costs still hold: format 22 target masks ~+11% size, format 23 vehicles
 essentially free, format 24 attachment points ~+18% model rows, format 25 one
 `targets` array per effect-fx link section. Format 28 renamed `spellModels`'s
@@ -691,7 +825,33 @@ added the `items`/`itemIconNames`/`itemQualityNames` sections; a format-27 pack
 is still read (its `displayIds` array is accepted as `refIds`). Splitting the
 equipped-weapon marker per slot (§3c) needed **no** bump — it only changes which
 sentinel fids appear in the existing `files`/`spellModels` sections, and the
-frontend reads any negative fid as fileless rather than naming one.
+frontend reads any negative fid as fileless rather than naming one. **Format 29
+is close to free**: pairing replaced two flat sections with one (9.2.7 +0.4%,
+TWW +0.3%, Vanilla −1.7%), and the keybind sections are ~1 KB.
+
+### Keybound overrides by version
+
+Rows are `(spell, override)` links; overrides are the distinct
+`SpellKeyboundOverride` rows they reach. The table arrives in **MoP (5.0.1)** —
+the four earlier packs 404 it and the `keybind` category simply never appears.
+
+| Build | Table rows | Aura 406 rows | Shipped links | Overrides | Dropped |
+|---|---:|---:|---:|---:|---:|
+| Vanilla 1.15.8 | *absent* | — | 0 | 0 | — |
+| TBC 2.5.6 | *absent* | — | 0 | 0 | — |
+| WotLK 3.4.3 | *absent* | — | 0 | 0 | — |
+| Cataclysm 4.4.2 | *absent* | — | 0 | 0 | — |
+| MoP 5.5.4 | 13 | 14 | 13 | 10 | 1 |
+| Legion 7.3.5 | 49 | 53 | 53 | 41 | 0 |
+| BfA 8.3.7 | 56 | 72 | 72 | 47 | 0 |
+| Shadowlands 9.2.7 | 77 | 105 | 105 | 64 | 0 |
+| Dragonflight 10.2.7 | 126 | 174 | 163 | 106 | 11 |
+| The War Within 11.2.7 | 147 | 208 | 197 | 121 | 11 |
+
+"Dropped" is aura rows whose `misc0` names an override the build does not ship
+— the table trailing the aura on the newest two builds, and one stale row on
+MoP. Distinct implicit-target names shipped per build (`implicitTargets`) grows
+the same way: 85 on Vanilla, 98 WotLK, 123 MoP, 133 from Shadowlands on.
 
 ### Attachment coverage by version
 
@@ -834,9 +994,9 @@ fork off it and are covered in the previous section.
 
 ```mermaid
 flowchart LR
-  W["WotLK 3.4.3<br/>10 absent"] --> L["Legion 7.3.5<br/>4 absent"] --> B["BfA 8.3.7<br/>1 absent"] --> S["Shadowlands 9.2.7+<br/>complete"]
+  W["WotLK 3.4.3<br/>11 absent"] --> L["Legion 7.3.5<br/>4 absent"] --> B["BfA 8.3.7<br/>1 absent"] --> S["Shadowlands 9.2.7+<br/>complete"]
 
-  W -.->|"gained at Legion"| G1["BeamEffect · DissolveEffect<br/>EdgeGlowEffect · ShadowyEffect<br/>FullScreenEffect · SpellEffectEmission<br/>WeaponTrail"]
+  W -.->|"gained at Legion"| G1["BeamEffect · DissolveEffect<br/>EdgeGlowEffect · ShadowyEffect<br/>FullScreenEffect · SpellEffectEmission<br/>WeaponTrail · SpellKeyboundOverride<br/>(the last arrives at MoP)"]
   L -.->|"gained at BfA"| G2["BarrageEffect<br/>SpellOverrideName<br/>SpellName (split out of Spell)"]
   B -.->|"gained at Shadowlands"| G3["SpellVisualScreenEffect<br/>(the kit route into screen fx)"]
 ```
@@ -864,9 +1024,13 @@ picks whichever exists.
 | barrage models | — | — | ✓ | ✓ | `BarrageEffect` |
 | alt-name search | — | — | ✓ | ✓ | `SpellOverrideName` |
 | vehicles / passenger anims | thin | ✓ | ✓ | ✓ | `Vehicle` + `VehicleSeat` present everywhere; WotLK's thinness is *content*, not schema — see below |
+| keybind overrides | — | ✓ | ✓ | ✓ | `SpellKeyboundOverride` arrives at MoP (5.0.1) |
 
-Everything else — models, sounds, animations, mechanics, morphs, summons,
-shapeshifts, tints, transparency, freeze — works on all ten.
+Everything else — models, sounds, animations, mechanics (including their
+implicit targets), morphs, summons, shapeshifts, tints, transparency, freeze —
+works on all ten. `SpellEffect.ImplicitTarget_0/_1` in particular is present on
+every shipped build, so the §3k pairing needs no drift declaration; only the
+number of distinct target names varies (85 on Vanilla → 133 from Shadowlands).
 
 ### Vehicles by version
 
@@ -987,6 +1151,6 @@ footing, not an affirmative license.
 | **Sounds** | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID`, `SpellVisual.AnimEventSoundID` — all → SoundKitEntry |
 | **Animations** | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), ModelAttach Start/Anim/End (loose) + its AnimKit (grouped), proc Type 7 (stance), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped) |
 | **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, seat — see §3a–3i |
-| **Mechanics** | `SpellEffect.Effect` + `.EffectAura` enums, names from WoWDBDefs |
+| **Mechanics** | one row per `SpellEffect`: `.Effect` + `.EffectAura` enums (names from WoWDBDefs) paired with that row's `.ImplicitTarget_0/_1` — §3k |
 | **Name search** | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names |
 | **Target bits** | `SpellVisualEvent.TargetType` on the kit edge (§2), resolved against `SpellEffect.ImplicitTarget` per phase (`StartEvent`) so a self-cast spell's "Target" reads as the caster, plus `Caster`/`HostileSpellVisualID` redirects that mark whatever they reach caster/target |

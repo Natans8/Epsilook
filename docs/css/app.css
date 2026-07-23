@@ -803,8 +803,10 @@ td.empty { text-align: center; vertical-align: middle; }
 .tag.animkit .tag-label { color: var(--animkit); }
 .tag.anim .tag-label { color: #d8b4e8; }
 .tag.mechanic .tag-label { color: #e0a878; }
-/* aura mechanics: same family as spell effects, one shade apart */
-.tag.mechanic.aura .tag-label { color: #d9c584; }
+/* Aura mechanics: same family as spell effects, one shade apart. The aura is
+   what the spell actually DOES — it leads its pill and carries the weight,
+   while the APPLY_AURA that delivers it trails as a dim .tag-attach. */
+.tag.mechanic.aura .tag-label { color: #f0d68d; font-weight: 600; }
 .tag.fx .tag-label, .tag.fx-head .tag-label { color: var(--fx); }
 
 /* control word on summon pills (guardian/pet/...) — dimmed beside the
