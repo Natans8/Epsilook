@@ -856,15 +856,17 @@
    * needs a ceiling — a one-letter prefix would otherwise cover the results. */
   const SUGGEST_LIMIT = 12;
 
-  /**
-   * The category words a field's column shows as group heads, with the
-   * tooltip text explaining each — one registry drives the chip
-   * autocomplete; the columns' own cell/search code keeps the same words
-   * searchable and their heads clickable. Add a new column's words here.
-   * @param {string | null} field
-   * @returns {{words: string[], titles: Record<string, string>} | null}
-   *   Null = the field has no category words.
-   */
+  /* ------------------------------------------------- keyword autocomplete */
+
+  /* Every word a chip can autocomplete comes from one of two places: the
+   * pill-type registry (docs/js/pilltypes.js), which names the CONTENT types a
+   * column shows, and the META words below, which are axes rather than content
+   * — they qualify whatever else the chip says.
+   *
+   * Data VALUES are deliberately never offered (no attachment-point names, no
+   * file names, no creature names): the suggestion list is a menu of what can
+   * be asked, not of the answers. */
+
   /* Target-type words autocomplete in every column that shows the icons —
    * they read as categories to the user even though they are mask bit tests
    * rather than corpus words (see TARGET_TESTS in search.js). */
@@ -876,42 +878,48 @@
   };
 
   /* The attachment-point keyword. It is the ONE attachment meta-word that
-   * autocompletes: the point NAMES are data values, deliberately kept out of
-   * the suggestions (the user types the point after it, `attach chest`).
-   * Offered only in the two columns that render attachment segments, and only
-   * when the pack actually carries attachment data. */
+   * autocompletes: the point NAMES are data values (the user types the point
+   * after it, `attach chest`). Offered only in the two columns that render
+   * attachment segments, and only when the pack actually carries them. */
   const ATTACH_WORD = "attach";
-  const ATTACH_TITLE = "Attachment point follows, e.g. attach chest or attach spelllefthand";
 
+  /**
+   * One meta word: not a kind of content, but an axis any chip in `fields`
+   * can carry. `when` gates it on the loaded pack, exactly as a pill type's
+   * does — a pack with no attachment data never suggests `attach`.
+   * @type {{word: string, hint: string, fields: string[],
+   *         when?: (d: SpellData) => boolean}[]}
+   */
+  const META_WORDS = [
+    {
+      word: ATTACH_WORD, fields: ["model", "fx"],
+      hint: "Attachment point follows, e.g. attach chest or attach spelllefthand",
+      when: (d) => !!d.attachmentNames && Object.keys(d.attachmentNames).length > 0,
+    },
+  ];
+
+  /**
+   * The words a field offers in autocomplete, with their descriptions: its
+   * registered content types, its meta words, and the target words every
+   * marked column shares.
+   * @param {string | null} field
+   * @returns {{words: string[], titles: Record<string, string>} | null}
+   *   Null = the field has no category words at all.
+   */
   function fieldCategories(field) {
     const d = state.data;
-    /** Category words plus the target words every marked column shares. */
-    const withTargets = (words, titles) => ({
+    if (!d || !["model", "sound", "anim", "fx"].includes(field)) return null;
+    const { words, titles } = P.keywordsFor(field, d);
+    for (const meta of META_WORDS) {
+      if (!meta.fields.includes(field) || (meta.when && !meta.when(d))) continue;
+      words.push(meta.word);
+      titles[meta.word] = meta.hint;
+    }
+    // every column that draws target icons can be filtered by them
+    return {
       words: [...words, ...Search.TARGET_WORDS],
       titles: { ...titles, ...TARGET_WORD_TITLES },
-    });
-    /** ...plus the attach keyword, for the columns that show attach points. */
-    const hasAttach = d && d.attachmentNames && Object.keys(d.attachmentNames).length > 0;
-    const withAttach = (base) => hasAttach ? {
-      words: [...base.words, ATTACH_WORD],
-      titles: { ...base.titles, [ATTACH_WORD]: ATTACH_TITLE },
-    } : base;
-    /** ...plus the equipped-weapon meta word, when the pack carries a marker. */
-    const hasEquipped = !!(d && d.hasSyntheticFiles);
-    const withEquipped = (base) => hasEquipped ? {
-      words: [...base.words, EQUIPPED_WORD],
-      titles: { ...base.titles, [EQUIPPED_WORD]: EQUIPPED_TITLE },
-    } : base;
-    switch (field) {
-      case "fx": return withAttach(withTargets(Object.keys(FX_HEAD_TITLES), FX_HEAD_TITLES));
-      case "model": return withEquipped(withAttach(withTargets(
-        // "" is the attach category: loose pills, no word to search by
-        Object.values((d && d.modelCatNames) || {}).filter(Boolean),
-        MODEL_CAT_TITLES)));
-      case "anim": return withTargets(Object.keys(ANIM_CAT_TITLES), ANIM_CAT_TITLES);
-      case "sound": return withTargets([], {});
-      default: return null;
-    }
+    };
   }
 
   function updateSuggest() {
@@ -1626,15 +1634,11 @@
 
   /* Head of the stance group — a category word like the model/fx heads:
    * clicking searches the whole group via anim:stance. */
-  const ANIM_CAT_TITLES = {
-    stance: "Stand/walk override the caster plays while the visual is up",
-    passenger: "What a rider plays entering, sitting in and leaving a seat",
-  };
 
   function animCatHeadTag(word, hit) {
     return P.pill({ cls: "animkit", hit, segments: [
       P.label(word, {
-        title: ANIM_CAT_TITLES[word] || "",
+        title: P.hintFor("anim", word),
         search: P.query("anim", word),
         finds: `all spells with a ${word} animation`,
       }),
@@ -1953,9 +1957,9 @@
       const grp = targetGroup(pills.map((e) => e.mask));
       cats.push({
         name: side,
-        hit: pills.some((e) => channelIsHit(side, e.type, countOf(e.type))),
+        hit: pills.some((e) => channelIsHit(side, e.type)),
         mask: grp.uniform ? grp.mask : 0,
-        items: hitsFirst(pills, (e) => channelIsHit(side, e.type, countOf(e.type)))
+        items: hitsFirst(pills, (e) => channelIsHit(side, e.type))
             .map((e) => () => channelTag(side, e.type, countOf(e.type), grp.uniform ? 0 : e.mask)),
       });
     }
@@ -2056,105 +2060,56 @@
     return groupsFor("mech").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
   }
 
-  function keybindIsHit(overrideId) {
-    const corpus = state.data.keybindSearchL.get(overrideId) || "";
-    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+  /* Every fx pill lights up through ONE matcher — the pill-type registry's
+   * (docs/js/pilltypes.js), which is the same one spellsByFx selects spells
+   * with. Before, each of these was a hand-written twin of a scan loop in
+   * search.js, with comments asking the next person to keep them in lockstep;
+   * a pill can now only light up under a query that really selected it.
+   *
+   * Each name below is that matcher bound to one type, so the renderers read
+   * as before and a typo'd type key fails loudly at load, not silently at
+   * match time.
+   * @param {string} key
+   * @returns {(id?: any) => boolean}
+   */
+  function isHitOf(key) {
+    const type = P.TYPES.get(key);
+    if (!type) throw new Error(`unknown pill type "${key}"`);
+    return (id) => groupsFor(type.field)
+      .some((g) => P.idMatches(type, state.data, id, g.tokens));
   }
 
-  function fxChainIsHit(chainId) {
-    const corpus = state.data.fxSearchL.get(chainId) || "";
-    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
-  }
+  const fxChainIsHit = isHitOf("fx:chain");
+  const dissolveIsHit = isHitOf("fx:dissolve");
+  const glowIsHit = isHitOf("fx:glow");
+  const shadowyIsHit = isHitOf("fx:shadowy");
+  const ghostMatIsHit = isHitOf("fx:ghostmat");
+  const tintIsHit = isHitOf("fx:tint");
+  const desatIsHit = isHitOf("fx:desaturate");
+  const transpIsHit = isHitOf("fx:transparency");
+  const freezeIsHit = isHitOf("fx:freeze");
+  const camoIsHit = isHitOf("fx:camo");
+  const screenIsHit = isHitOf("fx:screen");
+  const shapeshiftIsHit = isHitOf("fx:shapeshift");
+  const morphIsHit = isHitOf("fx:morph");
+  const keybindIsHit = isHitOf("fx:keybind");
+  /** Summons key on the (creature, control) pair the pill actually shows. */
+  const summonPairIsHit = isHitOf("fx:summon");
+  const summonIsHit = (creatureId, control) => summonPairIsHit(creatureId + ":" + control);
+  /** Both sides of an invisibility channel key on the invisibility TYPE. */
+  const invisIsHit = isHitOf("fx:invis"), detectIsHit = isHitOf("fx:detect");
+  const channelIsHit = (side, type) => (side === "invis" ? invisIsHit : detectIsHit)(type);
 
-  function dissolveIsHit(dissolveId) {
-    const corpus = state.data.dissolveSearchL.get(dissolveId) || "";
-    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
-  }
-
-  function glowIsHit(glowId) {
-    const corpus = state.data.glowSearchL.get(glowId) || "";
-    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
-  }
-
-  function shadowyIsHit(shadowyId) {
-    const corpus = state.data.shadowySearchL.get(shadowyId) || "";
-    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
-  }
-
-  function tintIsHit(tintId) {
-    const corpus = state.data.tintSearchL.get(tintId) || "";
-    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
-  }
-
-  function ghostMatIsHit(ghostMatId) {
-    const corpus = state.data.ghostMatSearchL.get(ghostMatId) || "";
-    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
-  }
-
-  // a percent pill (desaturate / transparency) lights under the same query
-  // spellsByFx selects it with: the "<category> N%" corpus by substring, or an
-  // operator-prefixed numeric comparison against the percent. Kept in lockstep
-  // with scanPercent in search.js.
-  function percentIsHit(corpus, percent) {
-    return groupsFor("fx").some((g) => g.tokens.every((t) =>
-      corpus.includes(t.text)
-      || (Search.hasOperator(t.text) && Search.matchNumeric(t.text, percent))));
-  }
-
-  function desatIsHit(percent) {
-    return percentIsHit(state.data.desatSearchL.get(percent) || "", percent);
-  }
-
-  function transpIsHit(percent) {
-    return percentIsHit(state.data.transpSearchL.get(percent) || "", percent);
-  }
-
-  function screenIsHit(screenId) {
-    const corpus = state.data.screenSearchL.get(screenId) || "";
-    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
-  }
-
-  function freezeIsHit() {
-    return groupsFor("fx").some((g) => g.tokens.every((t) => "freeze".includes(t.text)));
-  }
-
-  function camoIsHit() {
-    return groupsFor("fx").some((g) => g.tokens.every((t) => "camo".includes(t.text)));
-  }
-
-  function morphIsHit(displayId) {
-    const corpus = state.data.morphSearchL.get(displayId) || "";
-    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
-  }
-
-  function shapeshiftIsHit(formId) {
-    const corpus = state.data.shapeshiftSearchL.get(formId) || "";
-    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
-  }
-
-  function summonIsHit(creatureId, control) {
-    const corpus = state.data.summonPairSearchL.get(creatureId + ":" + control) || "";
-    return groupsFor("fx").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
-  }
-
-  // a vehicle seat pill matches on its attachment name, the category word,
-  // or a numeric comparison against the vehicle's seat count (>2, <=3, 4 ...)
+  /* The one fx pill the registry cannot decide alone: a seat pill is ONE
+   * attachment point, while the registry's corpus is per-VEHICLE (every seat
+   * name it has). Matching by vehicle would light every point of a vehicle
+   * when the query names one of them. The seat count still comes from the
+   * registry's numeric axis, so the two halves cannot disagree about it. */
   function vehicleIsHit(attachment, seats) {
     const nameL = (attachment || "").toLowerCase();
     return groupsFor("fx").some((g) => g.tokens.every((t) =>
       "seat".includes(t.text) || nameL.includes(t.text)
       || Search.matchNumeric(t.text, seats)));
-  }
-
-  // an invis/detect pill lights up under the same query spellsByFx uses to
-  // select it: the category word, its invisibility TYPE (a bare number), or an
-  // operator-prefixed comparison against its counterpart count. Kept in lockstep
-  // with the invisMatch closure in search.js.
-  function channelIsHit(word, type, count) {
-    return groupsFor("fx").some((g) => g.tokens.every((t) =>
-        word.includes(t.text)
-        || (!Search.hasOperator(t.text) && String(type) === t.text)
-        || (Search.hasOperator(t.text) && Search.matchNumeric(t.text, count))));
   }
 
   /* --- target-type icons ------------------------------------------------
@@ -2196,22 +2151,11 @@
 
   /* Model-category head ("missile", "area", ...) — the fx-head pattern:
    * clicking searches the whole category via the model field. */
-  const MODEL_CAT_TITLES = {
-    attached: "Model attached to the caster/target (SpellVisualKitModelAttach)", // stale-pack word
-    attach: "Model attached to the caster/target (SpellVisualKitModelAttach)", // stale-pack word
-    missile: "Projectile model in flight (SpellVisualMissile)",
-    ground: "Ground / area model (SpellVisualKitAreaModel)",
-    area: "Ground / area model (SpellVisualKitAreaModel)", // stale-pack word
-    trail: "Weapon trail model (WeaponTrail)",
-    barrage: "Volley of models (BarrageEffect)",
-    display: "Creature display model attached to the caster/target (SpellVisualEffectName Type 2)",
-    item: "An in-game item's model, held by the caster (SpellVisualEffectName Type 1)",
-  };
 
   function modelCatHeadTag(category, hit) {
     return P.pill({ cls: "model-head", hit, segments: [
       P.label(category, {
-        title: MODEL_CAT_TITLES[category] || "",
+        title: P.hintFor("model", category),
         search: P.query("model", category),
         finds: `all spells with a ${category} model`,
       }),
@@ -2267,17 +2211,6 @@
   // name, .add / .lo) instead of the plain model treatment. Same match-by-word
   // rule as the display category.
   const MODEL_CAT_ITEM_WORD = "item";
-  // the equipped-weapon markers' shared meta word (SYNTHETIC_MODEL_FILES in
-  // build_data). It is not a MODEL_CAT — the markers ride the attach/missile
-  // categories with a sentinel fid — so the word lives only in their synthetic
-  // filenames, each of which OPENS with it ("equipped off hand"). One word for
-  // the whole family is all autocomplete gets: the slots are values, and only
-  // meta words are offered there, so a slot is found by typing it like any
-  // other filename (`model:"equipped off hand"`, or just `model:off hand`).
-  const EQUIPPED_WORD = "equipped";
-  // no parentheses: updateCategorySuggest cuts a hint at the first " ("
-  const EQUIPPED_TITLE =
-    "A weapon the caster already has — main hand, off hand, ranged or ammo";
 
   const isDisplayCat = (cat) =>
     ((state.data.modelCatNames || {})[cat] || "") === MODEL_CAT_DISPLAY_WORD;
@@ -2674,31 +2607,12 @@
   /* Visual FX tags: the category head ("chain") and one pill per texture,
    * with a dot showing the chain's tint (hidden when untinted). Clicking
    * the head searches the whole category (fx:chain). */
-  const FX_HEAD_TITLES = {
-    chain: "Chain / beam effect (SpellChainEffects)",
-    dissolve: "Dissolve / materialize effect (DissolveEffect)",
-    glow: "Edge glow / rim-light effect (EdgeGlowEffect)",
-    ghost: "Ghostly recolor (ShadowyEffect / ghost material)",
-    tint: "Model tint (SpellProceduralEffect)",
-    desaturate: "Model desaturation (SpellProceduralEffect)",
-    transparency: "Model transparency (SpellProceduralEffect)",
-    freeze: "Freeze / petrify in place (SpellProceduralEffect)",
-    camo: "Camouflage / cloaking effect (SpellProceduralEffect)",
-    screen: "Full-screen tint / overlay while the aura holds (ScreenEffect)",
-    shapeshift: "Shapeshift form (SpellShapeshiftForm)",
-    morph: "Morph / transform aura (CreatureDisplayInfo)",
-    summon: "Summoned creature (SpellEffect SUMMON)",
-    seat: "Seat of a rideable vehicle the caster becomes (SpellEffect SET_VEHICLE_ID)",
-    invis: "Invisibility channel — hides in an invisibility type (MOD_INVISIBILITY)",
-    detect: "Sees an invisibility channel (MOD_INVISIBILITY_DETECT)",
-    keybind: "A key that casts a spell while the aura holds (SpellKeyboundOverride)",
-  };
 
   function fxHeadTag(category, hit, mask = 0) {
     return P.pill({ cls: "fx-head", hit, segments: [
       P.targets(mask),
       P.label(category, {
-        title: FX_HEAD_TITLES[category] || "",
+        title: P.hintFor("fx", category),
         search: P.query("fx", category),
         finds: `all spells with a ${category} effect`,
       }),
@@ -2767,7 +2681,7 @@
         P.targets(mask),
         P.swatch(hex, { info: category, alpha }),
         P.label(hex, {
-          title: FX_HEAD_TITLES[category],
+          title: P.hintFor("fx", category),
           detail: [`Color ${hex}`],
           search: P.catQuery("fx", category, hex),
           finds: `spells with this ${category} color`,
@@ -2792,7 +2706,7 @@
       segments: [
         category === "desaturate" && P.swatch(`rgb(${grey}, ${grey}, ${grey})`),
         P.label(`${percent}%`, {
-          title: FX_HEAD_TITLES[category],
+          title: P.hintFor("fx", category),
           detail: [`${percent}%`],
           search: P.catQuery("fx", category, `${percent}%`),
           finds: `spells with this ${category} strength`,
@@ -2816,7 +2730,7 @@
       segments: [
         P.targets(mask),
         P.label(label, {
-          title: FX_HEAD_TITLES.seat,
+          title: P.hintFor("fx", "seat"),
           detail: [`Seat at the ${label} attachment point`,
             "(an M2 attachment slot, not a description of the seat)"],
           search: P.catQuery("fx", "seat", label),
@@ -2858,7 +2772,7 @@
     // with flat dividers, not the rounded group capsule.
     return P.pill({
       cls: "fx flat" + (priceless ? " priceless" : ""),
-      hit: channelIsHit(side, type, count),
+      hit: channelIsHit(side, type),
       segments: [
         P.targets(mask),
         P.label(String(type), { detail, ...nav }),

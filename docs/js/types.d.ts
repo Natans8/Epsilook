@@ -705,6 +705,36 @@ interface PillSegmentOpts {
 /** A segment slot: falsy entries are dropped, arrays flatten. */
 type PillSlot = PillSegment | false | null | undefined | "" | 0 | PillSlot[];
 
+/** A number a pill type carries: a count of things, or a measured value. */
+interface PillNumericAxis {
+  kind: "count" | "value";
+  of(data: SpellData, id: any): number;
+  /** Bare numbers keep their text/bare meaning; only <, >, <=, >=, = reach here. */
+  operatorOnly?: boolean;
+}
+
+/**
+ * One kind of content the app shows and searches — the record app.js renders
+ * from and search.js selects with. See docs/js/pilltypes.js.
+ */
+interface PillType {
+  key: string;
+  field: string;
+  /** Its category word; absent = the column matches it through its own index. */
+  word?: string;
+  /** One-line description: autocomplete entry and group-head tooltip. */
+  hint?: string;
+  /** id -> lowercase haystack; absent = matched on `word` alone. */
+  corpus?(data: SpellData): Map<any, string>;
+  /** id -> spell ids, or a plain Set of spells for a valueless type. */
+  spells?(data: SpellData): Map<any, number[]> | Set<number>;
+  numeric?: PillNumericAxis;
+  /** A bare number that IS the id's identity (an invisibility type). */
+  bare?(data: SpellData, id: any): number | string;
+  /** Does the loaded pack carry this content at all? */
+  when?(data: SpellData): boolean;
+}
+
 /** window.EpsilookPills (docs/js/pills.js). */
 interface EpsilookPillsApi {
   pill(spec: { cls?: string; hit?: boolean; title?: string; segments: PillSlot[] }): HTMLElement;
@@ -732,6 +762,22 @@ interface EpsilookPillsApi {
   aside(text: string, opts?: PillSegmentOpts): PillSegment;
   copy(glyph: string, title: string, value: string): PillSegment;
   cmd(glyph: string, template: string, vars: Record<string, any>): PillSegment;
+
+  /* --- pill-type registry --- */
+
+  /** Register a content type; throws on a duplicate key. */
+  defineType(type: PillType): void;
+  /** Every registered type of one field, in declaration order. */
+  typesFor(field: string): PillType[];
+  /** Does one id of this type satisfy every token of a chip? */
+  idMatches(type: PillType, data: SpellData, id: any, tokens: { text: string }[]): boolean;
+  /** Add every spell this type's matching ids reach to `out`. */
+  scanType(type: PillType, data: SpellData, tokens: { text: string }[], out: Set<number>): void;
+  /** A field's autocomplete words and their descriptions, gated by `when`. */
+  keywordsFor(field: string, data: SpellData): { words: string[]; titles: Record<string, string> };
+  /** The description of one category word (a head pill's tooltip). */
+  hintFor(field: string, word: string): string;
+  TYPES: Map<string, PillType>;
 
   tip(lines: (string | false | 0 | null | undefined)[]): string;
   /** `field:value`, quoted only when the value needs it. */
