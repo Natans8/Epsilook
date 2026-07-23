@@ -289,6 +289,8 @@ interface SpellData {
   /** Spell id -> index into the parallel arrays. */
   spellIndex: Map<number, number>;
   files: Map<number, FileEntry>;
+  /** Does `files` hold any fileless sentinel (negative fid, synthetic label)? */
+  hasSyntheticFiles: boolean;
 
   spellModels: Map<number, number[]>;
   /** Raw M2 attachment id -> name; {} on packs before format 24. */

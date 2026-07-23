@@ -104,10 +104,16 @@ window.EpsilookData = (() => {
     /** @type {Map<number, FileEntry>} fid -> {path, base, searchL} */
     const files = new Map();
     const fp = pack.files;
+    // a NEGATIVE fid is a fileless sentinel (SYNTHETIC_MODEL_FILES in
+    // build_data): no real file, its "path" is the label the pill shows and
+    // searches by. Whether the pack has any at all is what gates the
+    // `equipped` autocomplete word — asked here, so no fid list is hardcoded.
+    let hasSyntheticFiles = false;
     for (let i = 0; i < fp.fids.length; i++) {
       const fid = fp.fids[i];
       const path = fp.paths[i];
       const base = path ? basename(path) : "";
+      if (fid < 0) hasSyntheticFiles = true;
       files.set(fid, { fid, path, base, searchL: path.toLowerCase() });
     }
 
@@ -900,7 +906,7 @@ window.EpsilookData = (() => {
     return {
       meta: pack.meta,
       ids: sp.ids, names: sp.names, subtexts: sp.subtexts, icons,
-      namesL, spellIndex, files,
+      namesL, spellIndex, files, hasSyntheticFiles,
       spellModels, modelSpells, modelFids, attachmentNames,
       spellModelCats, modelCatSpells, modelCatFidSpells, modelCatNames,
       items, itemSearchL, itemSpells,

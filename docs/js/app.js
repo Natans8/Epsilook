@@ -895,7 +895,7 @@
       titles: { ...base.titles, [ATTACH_WORD]: ATTACH_TITLE },
     } : base;
     /** ...plus the equipped-weapon meta word, when the pack carries a marker. */
-    const hasEquipped = !!(d && d.files && d.files.has(WEAPON_FID));
+    const hasEquipped = !!(d && d.hasSyntheticFiles);
     const withEquipped = (base) => hasEquipped ? {
       words: [...base.words, EQUIPPED_WORD],
       titles: { ...base.titles, [EQUIPPED_WORD]: EQUIPPED_TITLE },
@@ -2342,14 +2342,17 @@
   // name, .add / .lo) instead of the plain model treatment. Same match-by-word
   // rule as the display category.
   const MODEL_CAT_ITEM_WORD = "item";
-  // the equipped-weapon marker's meta word (WEAPON_FID sentinel, build_data).
-  // It is not a MODEL_CAT — the marker rides the attach/missile categories with
-  // a sentinel fid — so the word lives only in its synthetic filename; clicking
-  // the marker searches `model:equipped`, and it autocompletes in the model
-  // column when the pack carries a marker (WEAPON_FID present in the files map).
-  const WEAPON_FID = -1;
+  // the equipped-weapon markers' shared meta word (SYNTHETIC_MODEL_FILES in
+  // build_data). It is not a MODEL_CAT — the markers ride the attach/missile
+  // categories with a sentinel fid — so the word lives only in their synthetic
+  // filenames, each of which OPENS with it ("equipped off hand"). One word for
+  // the whole family is all autocomplete gets: the slots are values, and only
+  // meta words are offered there, so a slot is found by typing it like any
+  // other filename (`model:"equipped off hand"`, or just `model:off hand`).
   const EQUIPPED_WORD = "equipped";
-  const EQUIPPED_TITLE = "The caster's own equipped weapon — resolved in-game, no fixed model";
+  // no parentheses: updateCategorySuggest cuts a hint at the first " ("
+  const EQUIPPED_TITLE =
+    "A weapon the caster already has — main hand, off hand, ranged or ammo";
 
   const isDisplayCat = (cat) =>
     ((state.data.modelCatNames || {})[cat] || "") === MODEL_CAT_DISPLAY_WORD;
@@ -2408,10 +2411,13 @@
   function modelTag(fid, catName, mask = 0, src = -1, dst = -1, twoPoint = false) {
     const d = state.data;
     const file = d.files.get(fid) || { fid, path: "", base: "", searchL: "" };
-    // A negative fid is a fileless SENTINEL (WEAPON_FID in build_data): the
-    // caster's own equipped weapon, which has no fixed model in the data. It
-    // renders as a plain marker pill — no 3D/copy buttons — but keeps its
-    // category (attached vs thrown missile), attachment point and target icon.
+    // A negative fid is a fileless SENTINEL (SYNTHETIC_MODEL_FILES in
+    // build_data): a weapon the caster already has, which has no fixed model in
+    // the data — the pack ships the slot name ("equipped off hand") as the
+    // file path, so the pill labels and searches itself through the ordinary
+    // filename route. It keeps its category (attached vs thrown missile),
+    // attachment point and target icon, and drops only what needs a real file:
+    // the 3D preview and the .lookup command.
     const synthetic = fid < 0;
     const tag = el("span", "tag model");
     if (synthetic) tag.classList.add("synthetic");
@@ -2437,21 +2443,16 @@
       tag.appendChild(view);
     }
 
-    // synthetic is tested FIRST: the sentinel's file entry HAS a base
-    // ("equipped weapon"), so a file.base-first test would never reach the
-    // synthetic case. The label keeps the readable two-word name, but the
-    // search is the single meta word `equipped` (EQUIPPED_WORD) — a clean
-    // category-style token only the marker's synthetic filename carries.
-    const labelText = synthetic ? "equipped weapon"
-      : (file.base ? stripExt(file.base) : `file #${fid}`);
+    // the sentinel's synthetic path IS its label, so both cases read it the
+    // same way — only the tooltip differs (a slot name has no fid to report)
+    const labelText = file.base ? stripExt(file.base) : `file #${fid}`;
     const txt = el("button", "tag-label", labelText);
-    txt.title = synthetic
-      ? "The caster's own equipped weapon (SpellVisualEffectName Type 3–10)"
-        + " — resolved in-game, no fixed model"
-        + "\nClick: find spells that show the equipped weapon · Shift-click: exclude"
-      : `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this model · Shift-click: exclude`;
-    txt.dataset.search = synthetic ? `model:${EQUIPPED_WORD}`
-      : (file.base ? `model:"${file.base}"` : "");
+    txt.title = (synthetic
+      ? "No fixed model — the game fills this in from the caster's own gear at"
+        + " cast time (SpellVisualEffectName Type 3–10)"
+      : `${file.path || "(name unknown)"}\nFileDataID ${fid}`)
+      + "\nClick: find spells using this model · Shift-click: exclude";
+    txt.dataset.search = file.base ? `model:"${file.base}"` : "";
     tag.appendChild(txt);
     addTargetIcons(tag, mask);
     const attach = attachSegment(src, dst, "model", twoPoint);
