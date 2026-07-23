@@ -21,6 +21,10 @@
 
 window.EpsilookSearch = (() => {
 
+  // the pill-type registry: what each kind of fx content is called and how a
+  // token matches it. Shared with app.js's hit-highlighting.
+  const Pills = window.EpsilookPills;
+
   /* ------------------------------------------------------------ helpers */
 
   /**
@@ -429,34 +433,30 @@ window.EpsilookSearch = (() => {
     return out;
   }
 
-  // Search visual FX corpora: chains (category word + hue + tint hex +
-  // textures), dissolves (category word + textures), color-only effects —
-  // glows, ghosts (ShadowyEffect + material recolors) and model tints
-  // (category word + hue + color hexes) — desaturates / transparencies
-  // (category word + percent), freezes / camos (bare category word), morphs
-  // (category word + creature id/name + display ids + model paths) and
-  // summons (category word + creature id/name + control word).
   /**
+   * Search the visual FX column.
+   *
+   * Every fx type — chains, dissolves, colour effects, percents, morphs,
+   * summons, the invisibility channels, keybinds — is a record in the pill-type
+   * registry (docs/js/pilltypes.js) saying which corpus to read and which
+   * numeric axes it answers to. Scanning them is therefore one loop, and the
+   * app's hit-highlighting runs the SAME matcher on a single id, so a pill can
+   * never light up under a query that did not select its spell.
+   *
+   * The one thing the registry cannot express is below: a chain's attachment
+   * points live on the (spell, chain) ROW rather than on the chain, so they
+   * cannot be baked into a per-id corpus.
    * @param {QueryToken[]} tokens
    * @param {SpellData} data
    * @returns {Set<number>}
    */
   function spellsByFx(tokens, data) {
     const out = new Set();
-    /**
-     * @param {Map<number | string, string>} searchLMap - fx id -> corpus
-     * @param {Map<number | string, number[]>} spellsMap - fx id -> spell ids
-     */
-    const scan = (searchLMap, spellsMap) => {
-      for (const [id, searchL] of searchLMap) {
-        if (!textMatches(searchL, tokens)) continue;
-        for (const s of spellsMap.get(id) || []) out.add(s);
-      }
-    };
-    scan(data.fxSearchL, data.fxSpells);
-    // A beam's attach points sit on the (spell, chain) ROW, not on the chain,
-    // so they can't live in fxSearchL — an `attach <point>` walks the rows
-    // instead, matching its points on the SAME row as any chain corpus words.
+    for (const type of Pills.typesFor("fx")) Pills.scanType(type, data, tokens, out);
+
+    // An `attach <point>` matches its points on the SAME row as any chain
+    // corpus words — "a fireball beam launched from the left hand", not "a
+    // fireball beam somewhere and a left-hand attachment somewhere".
     const { text: fxText, attaches } = splitAttachTokens(tokens);
     if (attaches.length) {
       for (const [s, rows] of data.spellChainRows) {
@@ -466,65 +466,6 @@ window.EpsilookSearch = (() => {
         }
       }
     }
-    scan(data.dissolveSearchL, data.dissolveSpells);
-    scan(data.glowSearchL, data.glowSpells);
-    scan(data.shadowySearchL, data.shadowySpells);
-    scan(data.ghostMatSearchL, data.ghostMatSpells);
-    scan(data.tintSearchL, data.tintSpells);
-    // desaturate / transparency carry a PERCENT (the map key). A bare number is
-    // a substring on the "desaturate 70%" corpus (fx:"desaturate 70"); an
-    // operator-prefixed token is a numeric comparison against that percent
-    // (fx:"desaturate >50") — the same operator opt-in the vehicle/invis counts
-    // use, so every numeric pill answers to <, >, <=, >=, = the same way.
-    const scanPercent = (searchLMap, spellsMap) => {
-      for (const [percent, searchL] of searchLMap) {
-        if (!tokens.every((t) => searchL.includes(t.text)
-            || (hasOperator(t.text) && matchNumeric(t.text, percent)))) continue;
-        for (const s of spellsMap.get(percent) || []) out.add(s);
-      }
-    };
-    scanPercent(data.desatSearchL, data.desatSpells);
-    scanPercent(data.transpSearchL, data.transpSpells);
-    if (textMatches("freeze", tokens)) for (const s of data.spellFreezes) out.add(s);
-    if (textMatches("camo", tokens)) for (const s of data.spellCamos) out.add(s);
-    // vehicles: a text corpus ("vehicle" + the seat attachment names) PLUS a
-    // numeric axis for the seat count, which is a number rather than a word.
-    // Tokens AND, so fx:"vehicle >2" is a vehicle with more than two seats
-    // and fx:"vehicle base" one with a seat at the Base attachment. A token
-    // matching neither the corpus nor the count fails both tests, so an
-    // unrelated fx query (fx:chain) never reaches these spells.
-    for (const [v, corpus] of data.vehicleSearchL) {
-      const seats = (data.vehicleSeats.get(v) || []).length;
-      if (!tokens.every((t) => corpus.includes(t.text) || matchNumeric(t.text, seats))) continue;
-      for (const s of data.vehicleSpells.get(v) || []) out.add(s);
-    }
-    scan(data.screenSearchL, data.screenSpells);
-    scan(data.shapeshiftSearchL, data.shapeshiftSpells);
-    scan(data.morphSearchL, data.morphSpells);
-    scan(data.summonPairSearchL, data.summonPairSpells);
-    // invisibility / detection channels. The category word ("invis"/"detect")
-    // is the corpus; the invisibility TYPE is a bare-number value (fx:"invis
-    // 13"); an operator-prefixed token is a numeric comparison against the
-    // COUNTERPART count (fx:"invis =0" = invisibility nothing detects). Bare
-    // numbers are the type, NOT the count — so the count only ever answers to
-    // an operator, per the search convention. Counterpart count = the size of
-    // the OTHER side of the same channel.
-    const invisMatch = (word, type, count) => (t) =>
-        word.includes(t.text)
-        || (!hasOperator(t.text) && String(type) === t.text)
-        || (hasOperator(t.text) && matchNumeric(t.text, count));
-    for (const [type, ids] of data.invisTypeSpells) {
-      const detects = (data.detectTypeSpells.get(type) || []).length;
-      if (tokens.every(invisMatch("invis", type, detects))) for (const s of ids) out.add(s);
-    }
-    for (const [type, ids] of data.detectTypeSpells) {
-      const invises = (data.invisTypeSpells.get(type) || []).length;
-      if (tokens.every(invisMatch("detect", type, invises))) for (const s of ids) out.add(s);
-    }
-    // keybound overrides: plain corpus ("keybind" + the key name + the timing
-    // word + the cast spell's id and name), so fx:"keybind jump" and
-    // fx:"keybind mid-air" both work like any other category word.
-    scan(data.keybindSearchL, data.keybindSpells);
     return out;
   }
 

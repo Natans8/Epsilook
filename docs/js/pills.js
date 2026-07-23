@@ -495,11 +495,187 @@ window.EpsilookPills = (() => {
     return `Click: ${action} · Shift-click: exclude`;
   }
 
+  /* ==================================================================== */
+  /* PILL-TYPE REGISTRY                                                    */
+  /* ==================================================================== */
+
+  /* One record per kind of content the app can show and search: what it is
+   * called, how it renders, and — crucially — how a query token decides
+   * whether it matches. app.js reads it to light a pill up (`.hit`) and to
+   * offer its word in autocomplete; search.js reads the SAME record to select
+   * spells. Those two used to be hand-written twins in different files, kept
+   * in step by comments saying "keep in lockstep with…" — the drift they
+   * warned about is now structurally impossible.
+   *
+   * MATCHING. Every token must satisfy at least one axis of the type:
+   *
+   *   text     the id's corpus (a lowercase haystack baked by data.js), or,
+   *            for a type with no per-id corpus, the category word itself
+   *   bare     a bare number that IS the id's identity (an invisibility type)
+   *   numeric  a number the id CARRIES — a count of things (a vehicle's seats)
+   *            or a value (a desaturation percent). `operatorOnly` reserves
+   *            bare numbers for the other axes: without an operator the token
+   *            keeps its text/bare meaning, which is what lets fx:"invis 13"
+   *            mean type 13 while fx:"invis =0" means "nothing detects it".
+   *
+   * KEYWORDS. A type with a `word` contributes it to its field's autocomplete,
+   * with `hint` as the description, gated by `when(data)` so a pack that
+   * lacks the content never offers the word. Several types may share one word
+   * (ghost is fed by two unrelated tables); the word is offered once.
+   */
+
+  /**
+   * @typedef {Object} PillNumericAxis
+   * @property {"count"|"value"} kind  what the number means, for the docs
+   * @property {(data: any, id: any) => number} of
+   * @property {boolean} [operatorOnly] bare numbers are NOT this axis
+   */
+
+  /**
+   * @typedef {Object} PillType
+   * @property {string} key      unique id of the type
+   * @property {string} field    the search field / column it belongs to
+   * @property {string} [word]   its category word; absent = no keyword
+   * @property {string} [hint]   one-line description (autocomplete + tooltip)
+   * @property {(data: any) => Map<any, string>} [corpus] id -> lowercase text
+   * @property {(data: any) => Map<any, number[]> | Set<number>} [spells]
+   * @property {PillNumericAxis} [numeric]
+   * @property {(data: any, id: any) => number|string} [bare]
+   * @property {(data: any) => boolean} [when] does this pack carry it?
+   */
+
+  /** @type {Map<string, PillType>} */
+  const TYPES = new Map();
+
+  /**
+   * Register a content type. This plus a renderer is the whole of "add a new
+   * pill type": hit-highlighting, the search scan, the category head, the
+   * autocomplete word and its description all follow from this record.
+   * @param {PillType} type
+   */
+  function defineType(type) {
+    if (TYPES.has(type.key)) throw new Error(`pill type "${type.key}" already defined`);
+    TYPES.set(type.key, type);
+  }
+
+  /** Every registered type of one field, in declaration order. */
+  const typesFor = (field) => [...TYPES.values()].filter((t) => t.field === field);
+
+  /**
+   * The haystack a token is matched against. A type with no per-id corpus
+   * (freeze, the invisibility channels) is matched on its category word —
+   * which is exactly what its corpus would contain if it had one.
+   * @param {PillType} type
+   * @param {any} data
+   * @param {any} id
+   * @returns {string}
+   */
+  function corpusOf(type, data, id) {
+    if (!type.corpus) return type.word || "";
+    return type.corpus(data).get(id) || "";
+  }
+
+  /**
+   * Does one query token match this id of this type? The one place the axes
+   * are combined — every caller, in both files, goes through here.
+   * @param {PillType} type
+   * @param {any} data
+   * @param {any} id
+   * @param {string} corpusL  precomputed corpusOf (hoisted out of the loop)
+   * @param {{text: string}} token
+   * @returns {boolean}
+   */
+  function tokenMatches(type, data, id, corpusL, token) {
+    const text = token.text;
+    if (corpusL.includes(text)) return true;
+    const operator = /^[<>=]/.test(text);
+    if (type.bare && !operator && String(type.bare(data, id)) === text) return true;
+    if (type.numeric && !(type.numeric.operatorOnly && !operator)) {
+      const m = /^(<=|>=|<|>|=)?(\d+)$/.exec(text);
+      if (m) {
+        const n = type.numeric.of(data, id), v = Number(m[2]);
+        switch (m[1]) {
+          case "<": return n < v;
+          case ">": return n > v;
+          case "<=": return n <= v;
+          case ">=": return n >= v;
+          default: return n === v;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Does this id satisfy a whole chip? (Every token must match — the group
+   * semantics the rest of the search uses.)
+   * @param {PillType} type
+   * @param {any} data
+   * @param {any} id
+   * @param {{text: string}[]} tokens
+   * @returns {boolean}
+   */
+  function idMatches(type, data, id, tokens) {
+    const corpusL = corpusOf(type, data, id);
+    for (const t of tokens) {
+      if (!tokenMatches(type, data, id, corpusL, t)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Add every spell reached by a type's matching ids to `out`. This is the
+   * search side; app.js's hit test is idMatches on a single id.
+   * @param {PillType} type
+   * @param {any} data
+   * @param {{text: string}[]} tokens
+   * @param {Set<number>} out
+   */
+  function scanType(type, data, tokens, out) {
+    if (!type.spells) return;
+    const spells = type.spells(data);
+    // a Set is the valueless shape (freeze/camo): no ids, the word is the
+    // whole query, and every spell in the set matches or none does
+    if (spells instanceof Set) {
+      if (idMatches(type, data, null, tokens)) for (const s of spells) out.add(s);
+      return;
+    }
+    for (const [id, ids] of spells) {
+      if (idMatches(type, data, id, tokens)) for (const s of ids) out.add(s);
+    }
+  }
+
+  /**
+   * The category words a field offers in autocomplete, with descriptions.
+   * Deduped by word (ghost has two feeding types) and filtered by `when`, so
+   * a pack without the content never suggests it.
+   * @param {string} field
+   * @param {any} data
+   * @returns {{words: string[], titles: Record<string, string>}}
+   */
+  function keywordsFor(field, data) {
+    const words = [];
+    /** @type {Record<string, string>} */
+    const titles = {};
+    for (const type of typesFor(field)) {
+      if (!type.word || (type.when && !type.when(data))) continue;
+      if (!words.includes(type.word)) words.push(type.word);
+      if (type.hint && !titles[type.word]) titles[type.word] = type.hint;
+    }
+    return { words, titles };
+  }
+
+  /** Description of one category word, for a head pill's tooltip. */
+  const hintFor = (field, word) =>
+    (typesFor(field).find((t) => t.word === word) || {}).hint || "";
+
   return {
     // builders
     pill, group, defineSegment, renderSegment,
     // segment constructors
     link, view, play, targets, swatch, icon, label, note, aside, copy, cmd,
+    // pill-type registry
+    defineType, typesFor, idMatches, scanType, keywordsFor, hintFor, TYPES,
     // composition helpers
     tip, query, quoted, catQuery, fillTemplate, el,
     // target-mask vocabulary
