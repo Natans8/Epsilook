@@ -172,6 +172,16 @@ OPTIONAL_COLUMNS = {
     ("SpellVisual", "ReducedUnexpectedCameraMovementSpellVisualID"): "0",
     # Legion's FullScreenEffect has the colour grade but no overlay art yet
     ("FullScreenEffect", "OverlayTextureFileDataID"): "0",
+    # An effect's amount (the movement-speed percent, among much else) is
+    # exported under two spellings and EVERY build has exactly one of them
+    # populated — so both are declared optional and read in order, int first.
+    # The int column is the real one wherever it exists (through Legion); the
+    # float replaced it in BfA. The overlap builds are the trap: Vanilla, TBC
+    # and MoP export BOTH, and there the float is vestigial — 46 of 40,249 rows
+    # nonzero on Vanilla, and zero on 771 of 783 speed rows — so preferring the
+    # float would silently blank those packs.
+    ("SpellEffect", "EffectBasePoints"): "",
+    ("SpellEffect", "EffectBasePointsF"): "",
 }
 
 # Spell names moved: SpellName.db2 was split out of Spell.db2 in BfA, so Legion
@@ -283,8 +293,13 @@ TDB_TABLES = {
         "spell_visual_missile": ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID",
                                  "SoundEntriesID", "AnimKitID"],
         "spell_visual_effect_name": ["ID", "ModelFileDataID"],
+        # EffectBasePoints joins the overlay for the wholesale-replace reason
+        # above: it is the movement-speed percent. All four dumps that ship
+        # hotfixes at all spell it the int way, even TDB1127 whose client
+        # exports only the float.
         "spell_effect": ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1",
-                         "EffectMiscValue2", "ImplicitTarget1", "ImplicitTarget2"],
+                         "EffectMiscValue2", "ImplicitTarget1", "ImplicitTarget2",
+                         "EffectBasePoints"],
         "spell_misc": ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"],
         "creature_display_info": ["ID", "ModelID"],
         "creature_model_data": ["ID", "FileDataID"],
@@ -505,6 +520,63 @@ AURA_SET_VEHICLE_ID = 296
 # hides and detects), so the two are read independently.
 AURA_MOD_INVISIBILITY = 18
 AURA_MOD_INVISIBILITY_DETECT = 19
+
+# The movement-speed auras, mapped to the movement each one scales. The amount
+# is EffectBasePoints and it is a PERCENT — the pill shows it signed, because
+# the sign is what says faster or slower and the aura NAME does not: 187 rows
+# of "MOD_DECREASE_SPEED" on 9.2.7 carry a positive value and plenty of
+# "MOD_INCREASE_*" rows a negative one.
+#
+# THE MAPPING IS Unit::UpdateSpeed (TrinityCore master, Entities/Unit/Unit.cpp)
+# — one function, one switch, and it is the whole truth about which aura scales
+# which movement:
+#
+#   MOVE_RUN     mounted -> 32 / 130 / 172,  on foot -> 31 / 129 / 171
+#   MOVE_SWIM    58
+#   MOVE_FLIGHT  vehicle -> 206 / 210,  mounted -> 207 / 209,
+#                otherwise -> 208 + 206;  and 211 on top of all three
+#   every type   33, applied last, to run/swim/flight and their _BACK twins
+#
+# The six flight auras collapse to ONE word deliberately. They all scale the
+# same MOVE_FLIGHT speed and which of them applies is a question about the
+# unit's STATE at the time (mounted? in a vehicle? neither?), not about a
+# different kind of movement — and the branches overlap besides: 206 feeds the
+# vehicle case AND the unmounted one, which is why druid Flight Form uses it.
+# Splitting them would invent a distinction the engine does not make. MOVE_WALK
+# takes no modifiers at all (UpdateSpeed returns early), so walking never
+# appears here.
+#
+# VERIFIED AGAINST THE GAME'S OWN TOOLTIPS (2026-07-23). A description writes an
+# effect's value as "$s<N>%", where N is the 1-based EffectIndex — so the text
+# says which effect it is quoting. On 9.2.7, 4,590 such placeholders point at an
+# effect carrying one of these auras and 4,574 (99.7%) resolve to a nonzero
+# value; the 16 zeros are genuinely-zero rows (Stealth's 129, whose amount comes
+# from a talent). That is a per-row check of both the aura set and the column.
+#
+# DELIBERATELY NOT HERE, so the next pass does not "fix" an omission:
+#   * 252 MOD_SPEED_SLOW_ALL — the name lies. TrinityCore handles it with
+#     HandleModCombatSpeedPct, i.e. ApplyCastTimePercentMod +
+#     ApplyAttackTimePercentMod, exactly like 193 MELEE_SLOW; it never touches
+#     movement. The data agrees (Icy Touch -15% is Frost Fever's attack-speed
+#     slow). This is the one trap in the family.
+#   * 191 USE_NORMAL_MOVEMENT_SPEED, 437 MOD_MINIMUM_SPEED_RATE — real movement
+#     auras, but their amount is an absolute speed in yards/sec (UpdateSpeed
+#     divides it by baseMoveSpeed), not a percent. Shipping them would put a
+#     number in the percent slot that is not one.
+#   * 305 MOD_MINIMUM_SPEED, 373 MOD_SPEED_NO_CONTROL, 388 MOD_TAXI_FLIGHT_SPEED
+#     — percents, but of a floor / an uncontrolled dash / a taxi flight rather
+#     than a change to a speed. They need their own word before they can render.
+#   * 513-524, the skyriding physics auras (air friction, lift coefficient,
+#     banking rate) — a different mechanic in different units.
+# Adding any of them is one line here plus, for the last two groups, a word.
+SPEED_AURAS = {
+    31: "run", 129: "run", 171: "run",
+    32: "mounted", 130: "mounted", 172: "mounted",
+    58: "swim",
+    206: "flight", 207: "flight", 208: "flight",
+    209: "flight", 210: "flight", 211: "flight",
+    33: "all",
+}
 
 # SpellEffectAura (KEYBOUND_OVERRIDE) whose EffectMiscValue_0 is a
 # SpellKeyboundOverride ID: while the aura holds, a movement/UI key stops doing
@@ -774,7 +846,8 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 29  # 29: mechanics carry their implicit targets (spellEffects +
+PACK_FORMAT = 30  # 30: movement-speed modifiers (spellSpeeds)
+# 29: mechanics carry their implicit targets (spellEffects +
 #     spellAuras -> spellMechanics, implicitTargetNames) and
 #     keybound overrides (spellKeybinds, keybinds)
 # 28: SpellVisualEffectName Type 1 -> item model pills (items section,
@@ -1120,6 +1193,24 @@ def to_int(s: str) -> int:
 def to_int_from_float(s: str) -> int:
     """Parse a numeric column that may export in float form ("2.0" -> 2)."""
     return int(float(s)) if s else 0
+
+
+def to_amount(*columns: str) -> float:
+    """An effect's amount, from the first of its column spellings that is set.
+
+    SpellEffect exports the value as an int (EffectBasePoints) or a float
+    (EffectBasePointsF) depending on the build, and three builds export both
+    with the float left at zero — so "first nonempty and nonzero" is the rule,
+    and callers pass the int spelling first (see OPTIONAL_COLUMNS).
+
+    Rounded to one decimal, which drops the float32 conversion noise the modern
+    builds carry (14.27999973297 -> 14.3, 100.48166656494 -> 100.5) while
+    keeping the values that really are fractional (47.5).
+    """
+    for c in columns:
+        if c and float(c):
+            return round(float(c), 1)
+    return 0.0
 
 
 def to_channel(v: str) -> int:
@@ -2046,6 +2137,7 @@ class SpellEffectRows:
     invis: dict[int, set[int]] = _by_spell()  # invisibility types (aura 18)
     detect: dict[int, set[int]] = _by_spell()  # detect types (aura 19)
     keybinds: dict[int, set[int]] = _by_spell()  # override ids (aura 406)
+    speeds: dict[int, set[tuple[str, float]]] = _by_spell()  # (movement, %) (SPEED_AURAS)
     # who each effect-driven fx lands on, from the producing SpellEffect row's
     # ImplicitTarget_0/_1 — keyed (spell, payload) so it rides the pack's
     # spell->payload link rows (payload = creature / form / screen / vehicle /
@@ -2058,6 +2150,8 @@ class SpellEffectRows:
     invis_targets: dict[tuple[int, int], int] = _mask()
     detect_targets: dict[tuple[int, int], int] = _mask()
     keybind_targets: dict[tuple[int, int], int] = _mask()
+    # keyed on the whole (movement, percent) pair, which is what a speed pill is
+    speed_targets: dict[tuple[int, str, float], int] = _mask()
     # every (spell, effect, aura, implicit target A, implicit target B) the
     # spell has — the Mechanics column's rows. Deduped on the tuple, which
     # collapses the per-DifficultyID copies SpellEffect ships (416,865 rows
@@ -2087,18 +2181,20 @@ def read_spell_effect_rows(
     vs EffectMiscValue_0) — same field, different source.
     """
     se_cols = ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue_0", "EffectMiscValue_1",
-               "ImplicitTarget_0", "ImplicitTarget_1"]
+               "ImplicitTarget_0", "ImplicitTarget_1", "EffectBasePoints", "EffectBasePointsF"]
     se_hotfix_cols = ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1", "EffectMiscValue2",
-                      "ImplicitTarget1", "ImplicitTarget2"]
-    se_rows: dict[int, tuple[int, int, int, int, int, int, int]] = {}
-    for rid, spell_id, effect, aura, misc0, misc1, t0, t1 in read_table(table_dir, "SpellEffect", se_cols):
+                      "ImplicitTarget1", "ImplicitTarget2", "EffectBasePoints"]
+    se_rows: dict[int, tuple[int, int, int, int, int, int, int, float]] = {}
+    for (rid, spell_id, effect, aura, misc0, misc1, t0, t1,
+         points, points_f) in read_table(table_dir, "SpellEffect", se_cols):
         se_rows[to_int(rid)] = (to_int(spell_id), to_int(effect), to_int(aura),
                                 to_int_from_float(misc0), to_int_from_float(misc1),
-                                to_int(t0), to_int(t1))
-    for rid, spell_id, effect, aura, misc0, misc1, t0, t1 in hotfix_rows(tdb_dir, "spell_effect", se_hotfix_cols):
+                                to_int(t0), to_int(t1), to_amount(points, points_f))
+    for (rid, spell_id, effect, aura, misc0, misc1, t0, t1,
+         points) in hotfix_rows(tdb_dir, "spell_effect", se_hotfix_cols):
         se_rows[to_int(rid)] = (to_int(spell_id), to_int(effect), to_int(aura),
                                 to_int_from_float(misc0), to_int_from_float(misc1),
-                                to_int(t0), to_int(t1))
+                                to_int(t0), to_int(t1), to_amount(points))
 
     # SummonProperties: only Control matters (guardian/pet/possessed/...)
     summon_control: dict[int, int] = {}
@@ -2106,7 +2202,7 @@ def read_spell_effect_rows(
         summon_control[to_int(pid)] = to_int(ctrl)
 
     out = SpellEffectRows()
-    for s, effect_id, aura_id, m0, m1, it0, it1 in se_rows.values():
+    for s, effect_id, aura_id, m0, m1, it0, it1, amount in se_rows.values():
         if s not in spell_names:
             continue
         mask = target_bits.get(it0, 0) | target_bits.get(it1, 0)
@@ -2157,6 +2253,13 @@ def read_spell_effect_rows(
         if aura_id == AURA_KEYBOUND_OVERRIDE and m0 in keybounds:
             out.keybinds[s].add(m0)
             out.keybind_targets[(s, m0)] |= mask
+        # movement speed: the aura says which movement, the amount says by how
+        # much. Zero is KEPT — "this spell has a speed aura that changes
+        # nothing" is a fact about the row (164 of them on 9.2.7, e.g. Stealth,
+        # whose real amount comes from a talent), not a row worth hiding.
+        if (movement := SPEED_AURAS.get(aura_id)) is not None:
+            out.speeds[s].add((movement, amount))
+            out.speed_targets[(s, movement, amount)] |= mask
     return out
 
 
@@ -2962,6 +3065,14 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     invis_rows = sorted((s, t) for s, ts in se.invis.items() for t in ts)
     detect_rows = sorted((s, t) for s, ts in se.detect.items() for t in ts
                          if t in invis_types)
+    # movement-speed modifiers: one row per (spell, movement, percent). Several
+    # auras map to the same movement (three of them do for "run" alone), so a
+    # spell setting two of them to the same percent collapses to one row here
+    # rather than rendering duplicate pills — the set in `se.speeds` has already
+    # done it. Sorted by movement then percent so a cell's pills read in a
+    # stable order.
+    speed_rows = sorted((s, movement, pct)
+                        for s, mods in se.speeds.items() for movement, pct in mods)
     effect_names = read_enum_names("SpellEffect", version)
     aura_names = read_enum_names("SpellEffectAura", version)
 
@@ -3009,6 +3120,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellInvis": len(invis_rows),
                 "spellDetects": len(detect_rows),
                 "invisChannels": len(invis_types),
+                "spellSpeeds": len(speed_rows),
                 "spellPassengerAnims": len(passenger_anim_rows),
                 "spellVehicleAnims": len(vehicle_anim_rows),
                 "spellVehicleAnimKits": len(vehicle_animkit_rows),
@@ -3347,6 +3459,18 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "types": [r[1] for r in detect_rows],
             "targets": [se.detect_targets.get(r, 0) for r in detect_rows],
         },
+        # movement-speed modifiers (SPEED_AURAS). `movements` is the word for
+        # the movement the aura scales and `percents` the signed change, which
+        # is what the pill shows; "all" is aura 33, the one that reaches every
+        # movement type at once.
+        "spellSpeeds": {
+            "spellIds": [r[0] for r in speed_rows],
+            "movements": [r[1] for r in speed_rows],
+            "percents": [r[2] for r in speed_rows],
+            # who the aura lands on (ImplicitTarget) — a snare is on the target,
+            # a sprint on the caster
+            "targets": [se.speed_targets.get(r, 0) for r in speed_rows],
+        },
         # one row per seat, in SeatID_0..7 order; `seats` on a vehicle is the
         # count, and `attachments` names where on the model that seat sits
         # (decoded via VEHICLE_GEO_COMPONENT_LINKS — see its comment for the
@@ -3400,6 +3524,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         f"vehicles={len(vehicle_rows):,} ({len(vehicle_ids):,} distinct, "
         f"{len(vehicle_seat_rows):,} seats, {len(passenger_anim_rows):,} passenger anims)  "
         f"keybinds={len(keybind_rows):,} ({len(used_keybounds):,} overrides)  "
+        f"speeds={len(speed_rows):,} ({len({r[0] for r in speed_rows}):,} spells)  "
         f"icons={len(icon_names):,}  "
         f"orphan visual spells={vis.orphans:,}  [{time.time() - t0:.1f}s]"
     )

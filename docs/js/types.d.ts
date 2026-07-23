@@ -278,6 +278,17 @@ interface SpellPack {
      * longer ship, and which the app deliberately does not display).
      */
     keybinds?: { ids: number[]; functions: string[]; whens: string[]; spells: number[] };
+
+    /* --- movement-speed modifiers (SPEED_AURAS) --- */
+
+    /**
+     * One row per (spell, movement, percent). `movements` is the movement the
+     * aura scales — "run", "mounted", "swim", "flight", or "all" for the one
+     * aura that reaches every type — and `percents` the signed change.
+     */
+    spellSpeeds?: {
+        spellIds: number[]; movements: string[]; percents: number[]; targets: number[];
+    };
 }
 
 /* ------------------------------------------------- in-memory indexes */
@@ -478,6 +489,17 @@ interface SpellData {
     spellDetectTypes: Map<number, { type: number; mask: number }[]>;
     invisTypeSpells: Map<number, number[]>;
     detectTypeSpells: Map<number, number[]>;
+
+    /** Movement-speed modifiers. A pill is a (movement, percent) pair, so that
+     *  pair is the id everything keys on — as the string "run|70" / "all|-50".
+     *  `amount` is the percent already printed the way the pill shows it, so the
+     *  corpus and the label can never drift apart. */
+    spellSpeedMods: Map<number, {
+        move: string; pct: number; amount: string; key: string; mask: number;
+    }[]>;
+    speedSpells: Map<string, number[]>;
+    speedSearchL: Map<string, string>;
+    speedPercents: Map<string, number>;
 
     /** spell id -> [animId] the rider plays; the "passenger" anim group. */
     spellPassengerAnims: Map<number, number[]>;

@@ -149,6 +149,17 @@ number. That is what lets
 `fx:"invis 13"` mean type 13 while `fx:"invis =0"` means the invisibility nothing detects — and why `model:2` still
 matches `cfx_fire_02.m2`.
 
+**A bound may be negative or fractional, because values are.** A movement-speed change is signed, so `fx:"speed <-50"`
+asks for snares worse than half; `numericPredicate` (search.js) and `tokenMatches` (pills.js) parse the same shape and
+must stay in step. A `count` axis is never negative and simply matches nothing against a bound it cannot reach — no
+guard needed.
+
+Where a value could be printed two ways, **ship the one the game stores**. Movement speed is the worked example: the
+pill shows the change (`+70%`) and not the resulting speed (`170%`), because the change is what `EffectBasePoints`
+holds, what the game's own tooltip prints, and the only form that survives the data's full range — 10 rows on 9.2.7 are
+below −100%, which as a resulting speed would be negative. The friendlier reading rides the **tooltip**, where it is
+free to be absent when it says nothing.
+
 A whole-column count (`model:>4`) is a different feature: `COUNT_SOURCES` in
 `search.js`, one entry per countable column.
 
@@ -165,6 +176,15 @@ P.group({head: fxHeadTag(word, hit, mask), items: pills})
 head dimmed, the lone item fused into it. With more, it becomes a full-width strip. That is the whole reason groups are
 an abstraction rather than markup — a group that is usually one-of-a-kind and occasionally many needs one renderer, not
 two, and no caller has to predict which it will be.
+
+**In a collapsed group the head is separated from the item by a rounded capsule, never a flat divider** —
+`( speed ( run | +70% ) )`, not `( speed | run | +70% )`. The capsule is what says "these are two different things, a
+category and a value in it"; a flat divider says "these are parts of one label", which is what the dividers *inside* a
+pill mean. Both marks are load-bearing, so they must not be traded for each other. This is a property of every group,
+drawn by one CSS rule on `.kit-group.compact .kit-files` — there is deliberately no way for a renderer to opt out.
+(There was once: a `flat` class three fx renderers set on themselves. It made percent, channel and speed pills the only
+collapsed groups in the app whose head ran flat into their value, for no reason a user could infer. Removed 2026-07-23 —
+same lesson as the `compact` flag before it.)
 
 This is unconditional on purpose. It was once opt-in, and only the two columns whose author added the flag passed it, so
 a SoundKit with one file and an AnimKit with one animation (56–98% of them, depending on the query) stretched across a

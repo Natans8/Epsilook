@@ -620,7 +620,9 @@ window.EpsilookPills = (() => {
         const operator = /^[<>=]/.test(text);
         if (type.bare && !operator && String(type.bare(data, id)) === text) return true;
         if (type.numeric && !(type.numeric.operatorOnly && !operator)) {
-            const m = /^(<=|>=|<|>|=)?(\d+)$/.exec(text);
+            // the value may be signed (a movement-speed change is negative when
+            // it slows), so a comparison may name a negative bound: "<-50"
+            const m = /^(<=|>=|<|>|=)?(-?\d+(?:\.\d+)?)$/.exec(text);
             if (m) {
                 const n = type.numeric.of(data, id), v = Number(m[2]);
                 switch (m[1]) {

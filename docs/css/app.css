@@ -1170,25 +1170,6 @@ td.empty {
     font-size: 1em;
 }
 
-/* flat pills (desaturate/transparency percents; invis/detect channels): the
-   value is a bare scalar, not an entity, and the category can hold only one
-   per spell — so no rounded capsule, just (label | value…) split by flat
-   dividers. */
-.kit-group.compact .kit-files:has(> .tag.flat) {
-    margin: 0;
-    padding: 0 0.1rem;
-    border: none;
-    border-left: 1px solid var(--border);
-    border-radius: 0;
-    background: none;
-    align-self: stretch;
-    align-items: center;
-}
-
-.kit-group.compact .kit-files:has(> .tag.flat.hit) {
-    border-left-color: var(--gold-dim);
-}
-
 /* tags */
 
 .tag {
