@@ -1,43 +1,52 @@
 /* Epsilook — dark WoW-flavored theme */
 
 :root {
-  --bg: #0e1116;
-  --bg-panel: #161b23;
-  --bg-row: #131820;
-  --bg-row-alt: #10141b;
-  --border: #262d38;
-  /* stronger edge for interactive controls (search bar, select, buttons) so
-     their boundary clears WCAG 1.4.11's 3:1 — ~3.3:1 on the page bg */
-  --border-ctrl: #626b7a;
-  --text: #cfd6e0;
-  --text-dim: #7c8694;
-  /* action glyphs living inside pills (3D cube, ▶ play, ⧉/.lo/.morph copies).
-     Brighter than --text-dim so the small controls read clearly against the
-     row without competing with the pill's colored label. */
-  --tag-btn: #a9b4c4;
-  --gold: #f0c34c;
-  --gold-dim: #a8842f;
-  --model: #7fb8f0;
-  --sound: #8fd48f;
-  --soundkit: #5faf8f;
-  --animkit: #c99ae0;
-  --fx: #7fc9d0;
-  --hit: #f0c34c;
-  --danger: #e07070;
-  font-size: 15px;
+    --bg: #0e1116;
+    --bg-panel: #161b23;
+    --bg-row: #131820;
+    --bg-row-alt: #10141b;
+    --border: #262d38;
+    /* stronger edge for interactive controls (search bar, select, buttons) so
+       their boundary clears WCAG 1.4.11's 3:1 — ~3.3:1 on the page bg */
+    --border-ctrl: #626b7a;
+    --text: #cfd6e0;
+    --text-dim: #7c8694;
+    /* action glyphs living inside pills (3D cube, ▶ play, ⧉/.lo/.morph copies).
+       Brighter than --text-dim so the small controls read clearly against the
+       row without competing with the pill's colored label. */
+    --tag-btn: #a9b4c4;
+    --gold: #f0c34c;
+    --gold-dim: #a8842f;
+    --model: #7fb8f0;
+    --sound: #8fd48f;
+    --soundkit: #5faf8f;
+    --animkit: #c99ae0;
+    --fx: #7fc9d0;
+    --hit: #f0c34c;
+    --danger: #e07070;
+    font-size: 15px;
 }
 
-* { box-sizing: border-box; }
+* {
+    box-sizing: border-box;
+}
 
 body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-  line-height: 1.45;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.45;
 }
 
-button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; }
+button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
 
 /* keyboard focus indicator — :focus-visible keeps it off mouse clicks, so the
    resting look is unchanged; the gold ring only appears during Tab navigation */
@@ -46,83 +55,129 @@ a:focus-visible,
 select:focus-visible,
 input:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;   /* hugs the control — no bleed into neighbouring text */
+    outline: 2px solid var(--gold);
+    outline-offset: 1px; /* hugs the control — no bleed into neighbouring text */
 }
+
 /* the search input already shows focus via #qbar:focus-within */
-#q:focus-visible { outline: none; }
+#q:focus-visible {
+    outline: none;
+}
+
 /* densely-packed controls: ring sits right on the edge so it never reaches a
    neighbour (export/command buttons, in-pill glyph buttons) */
 #export button:focus-visible,
 .cmd:focus-visible,
 .tag-copy:focus-visible,
 .tag-play:focus-visible,
-.tag-view:focus-visible { outline-offset: 0; }
+.tag-view:focus-visible {
+    outline-offset: 0;
+}
+
 /* sticky header cell would clip an outset ring — inset it instead */
-th[data-sort] > button:focus-visible { outline-offset: -2px; }
+th[data-sort] > button:focus-visible {
+    outline-offset: -2px;
+}
 
 /* visually hidden but exposed to assistive tech (live query mirror, etc.) */
 .sr-only {
-  position: absolute;
-  width: 1px; height: 1px;
-  margin: -1px; padding: 0;
-  border: 0; overflow: hidden;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------- header */
 
 header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.1rem 1.6rem 0.4rem;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.1rem 1.6rem 0.4rem;
 }
 
 h1 {
-  margin: 0;
-  font-size: 1.6rem;
-  letter-spacing: 0.06em;
-  color: var(--gold);
-  text-shadow: 0 0 18px rgba(240, 195, 76, 0.25);
-  display: inline;
+    margin: 0;
+    font-size: 1.6rem;
+    letter-spacing: 0.06em;
+    color: var(--gold);
+    text-shadow: 0 0 18px rgba(240, 195, 76, 0.25);
+    display: inline;
 }
 
-.tagline { display: inline; margin: 0 0 0 0.7rem; color: var(--text-dim); font-size: 0.9rem; }
+.tagline {
+    display: inline;
+    margin: 0 0 0 0.7rem;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
 
-#version-wrap { display: flex; align-items: center; gap: 0.4rem; }
-#version-wrap label { color: var(--text-dim); font-size: 0.85rem; }
+#version-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+#version-wrap label {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+}
 
 /* the expansion logo: game art with its own transparent background, so it
    needs no chrome — it sits flush beside the selector and collapses to
    nothing when the build has no mapped logo.
    It is decorative (aria-hidden), so it shrinks rather than widening the
    header, and steps aside entirely once the header gets tight. */
-#version-logo { display: flex; align-items: center; line-height: 0; min-width: 0; }
-#version-logo canvas { display: block; max-width: 100%; object-fit: contain; }
+#version-logo {
+    display: flex;
+    align-items: center;
+    line-height: 0;
+    min-width: 0;
+}
+
+#version-logo canvas {
+    display: block;
+    max-width: 100%;
+    object-fit: contain;
+}
 
 @media (max-width: 900px) {
-  #version-logo { display: none; }
+    #version-logo {
+        display: none;
+    }
 }
 
 select {
-  background: var(--bg-panel);
-  color: var(--text);
-  border: 1px solid var(--border-ctrl);
-  border-radius: 6px;
-  padding: 0.3rem 0.5rem;
+    background: var(--bg-panel);
+    color: var(--text);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 6px;
+    padding: 0.3rem 0.5rem;
 }
 
 /* ------------------------------------------------------------ search bar */
 
-main { padding: 0 1.6rem 2rem; }
+main {
+    padding: 0 1.6rem 2rem;
+}
 
-#searchbox { padding: 0.8rem 0 0.4rem; position: relative; }
+#searchbox {
+    padding: 0.8rem 0 0.4rem;
+    position: relative;
+}
 
-.bar { display: flex; gap: 0.5rem; align-items: center; }
+.bar {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
 
 /* the chip search bar: committed tags + the text input */
 /* min-width:0 defeats the flex `min-width:auto` default: without it the bar
@@ -131,25 +186,38 @@ main { padding: 0 1.6rem 2rem; }
  * instead of wrapping. Every step from here down to #q needs the same escape
  * hatch, hence the min-width/max-width pairs below. */
 #qbar {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.5rem 1rem;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-ctrl);
-  border-radius: 10px;
-  cursor: text;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 10px;
+    cursor: text;
 }
-#qbar:focus-within { border-color: var(--gold-dim); box-shadow: 0 0 0 3px rgba(240, 195, 76, 0.12); }
+
+#qbar:focus-within {
+    border-color: var(--gold-dim);
+    box-shadow: 0 0 0 3px rgba(240, 195, 76, 0.12);
+}
 
 /* only the true trailing gap (nothing after it) fills the rest of the
  * line; a gap before or between chips hugs its content instead, so it
  * doesn't shove the chips after it away */
-#editwrap { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; }
-#editwrap.fill { flex: 1; min-width: 10rem; }
+#editwrap {
+    display: inline-flex;
+    align-items: baseline;
+    max-width: 100%;
+    min-width: 0;
+}
+
+#editwrap.fill {
+    flex: 1;
+    min-width: 10rem;
+}
 
 /* font-family/line-height don't inherit into form controls — set them so the
  * text being typed is metrically identical to the free-text chip it becomes
@@ -158,45 +226,56 @@ main { padding: 0 1.6rem 2rem; }
  * long value scrolls inside the input (native caret tracking) rather than
  * widening the pill past the screen edge */
 #q {
-  flex: 1;
-  min-width: 6rem;
-  max-width: 100%;
-  font-family: inherit;
-  font-size: 1.1rem;
-  line-height: 1.2;
-  padding: 0.15rem 0;
-  color: var(--text);
-  background: none;
-  border: none;
-  outline: none;
+    flex: 1;
+    min-width: 6rem;
+    max-width: 100%;
+    font-family: inherit;
+    font-size: 1.1rem;
+    line-height: 1.2;
+    padding: 0.15rem 0;
+    color: var(--text);
+    background: none;
+    border: none;
+    outline: none;
 }
-#q::placeholder { color: var(--text-dim); }
-#editwrap:not(.fill):not(.editing) #q { min-width: 1ch; }
+
+#q::placeholder {
+    color: var(--text-dim);
+}
+
+#editwrap:not(.fill):not(.editing) #q {
+    min-width: 1ch;
+}
 
 /* the chip being typed hugs its content instead of filling the line.
  * the label's descent now sets the pill's bottom edge (see #editwrap's
  * baseline alignment), so the block padding is trimmed to keep this pill the
  * same height as the committed chips beside it */
 #editwrap.editing {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 100%;
-  padding: 0.05rem 0.55rem;
-  border: 1px solid var(--gold-dim);
-  border-radius: 999px;
-  background: rgba(240, 195, 76, 0.07);
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0.05rem 0.55rem;
+    border: 1px solid var(--gold-dim);
+    border-radius: 999px;
+    background: rgba(240, 195, 76, 0.07);
 }
+
 /* shrink-to-fit, not flex:0 0 auto: sizeInput gives the input an explicit ch
  * width, and the field label shares this row, so a percentage max-width can't
  * express "the pill minus the label" — only flex-shrink can. Without the 1 the
  * text spills out past the pill's right edge once the value gets long. */
-#editwrap.editing #q { flex: 0 1 auto; min-width: 4ch; }
+#editwrap.editing #q {
+    flex: 0 1 auto;
+    min-width: 4ch;
+}
+
 #editlabel {
-  margin-right: 0.35rem;
-  font-family: Consolas, "Cascadia Mono", monospace;
-  font-size: 0.95rem;
-  color: var(--gold);
-  white-space: nowrap;
+    margin-right: 0.35rem;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 0.95rem;
+    color: var(--gold);
+    white-space: nowrap;
 }
 
 /* committed chips.
@@ -204,463 +283,832 @@ main { padding: 0 1.6rem 2rem; }
  * the two fonts sit at different heights within an equally-tall line box — so
  * centering the boxes visibly lifts the label above the text it labels */
 .qchip {
-  display: inline-flex;
-  align-items: baseline;
-  max-width: 100%;
-  padding: 0.12rem 0.3rem 0.12rem 0.6rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  font-size: 0.98rem;
-  cursor: pointer;
+    display: inline-flex;
+    align-items: baseline;
+    max-width: 100%;
+    padding: 0.12rem 0.3rem 0.12rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 0.98rem;
+    cursor: pointer;
 }
+
 /* Free text is a chip only in the model — on screen it must be indis-
  * tinguishable from words still in the input: same metrics and padding as #q,
  * no box, no hover tint, and the bar's own I-beam rather than a pointer.
  * It stays click-to-edit; the click target just isn't advertised. */
 .qchip.qfree {
-  border: none;
-  background: none;
-  padding: 0.15rem 0;
-  border-radius: 6px;
-  font-size: 1.1rem;
-  line-height: 1.2;
-  cursor: text;
+    border: none;
+    background: none;
+    padding: 0.15rem 0;
+    border-radius: 6px;
+    font-size: 1.1rem;
+    line-height: 1.2;
+    cursor: text;
 }
-.qchip.qfree .qchip-text { max-width: 36rem; }
+
+.qchip.qfree .qchip-text {
+    max-width: 36rem;
+}
 
 /* bar-wide selection: chips picked up by Ctrl+A / drag / Shift+arrows read
  * as one highlighted run together with the input's own selected text */
-#q::selection { background: rgba(72, 130, 220, 0.45); }
-.qchip.selected { background: rgba(72, 130, 220, 0.35); border-color: rgba(120, 170, 240, 0.7); }
-.qchip.qfree.selected { background: rgba(72, 130, 220, 0.45); border-radius: 4px; }
+#q::selection {
+    background: rgba(72, 130, 220, 0.45);
+}
+
+.qchip.selected {
+    background: rgba(72, 130, 220, 0.35);
+    border-color: rgba(120, 170, 240, 0.7);
+}
+
+.qchip.qfree.selected {
+    background: rgba(72, 130, 220, 0.45);
+    border-radius: 4px;
+}
 
 /* exclusion chips */
-.qchip.not { border-color: rgba(224, 112, 112, 0.5); background: rgba(224, 112, 112, 0.08); }
-.qchip.not.selected { background: rgba(72, 130, 220, 0.35); }
-#editwrap.editing.not { border-color: rgba(224, 112, 112, 0.65); background: rgba(224, 112, 112, 0.08); }
-#editwrap.not #editlabel { color: var(--danger); }
+.qchip.not {
+    border-color: rgba(224, 112, 112, 0.5);
+    background: rgba(224, 112, 112, 0.08);
+}
+
+.qchip.not.selected {
+    background: rgba(72, 130, 220, 0.35);
+}
+
+#editwrap.editing.not {
+    border-color: rgba(224, 112, 112, 0.65);
+    background: rgba(224, 112, 112, 0.08);
+}
+
+#editwrap.not #editlabel {
+    color: var(--danger);
+}
 
 /* the field label doubles as the include/exclude toggle — a slightly
  * larger, clearly-hoverable target since it's a small chip sub-region */
-.qchip-field, #editlabel { cursor: pointer; border-radius: 999px; }
+.qchip-field, #editlabel {
+    cursor: pointer;
+    border-radius: 999px;
+}
+
 .qchip-field:hover, #editlabel:hover {
-  text-decoration: underline;
-  background: rgba(255, 255, 255, 0.08);
+    text-decoration: underline;
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .qchip-field {
-  font-family: Consolas, "Cascadia Mono", monospace;
-  font-size: 0.88em;
-  margin: -0.12rem 0.3rem -0.12rem -0.15rem;
-  padding: 0.12rem 0.3rem 0.12rem 0.4rem;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 0.88em;
+    margin: -0.12rem 0.3rem -0.12rem -0.15rem;
+    padding: 0.12rem 0.3rem 0.12rem 0.4rem;
 }
-.qchip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 24rem; }
+
+.qchip-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 24rem;
+}
+
 /* a glyph, not text — centre it rather than sitting it on the chip's baseline */
 .qchip-x {
-  align-self: center;
-  margin-left: 0.3rem;
-  padding: 0 0.35rem;
-  color: var(--text-dim);
-  font-size: 1.05em;
-  border-radius: 50%;
+    align-self: center;
+    margin-left: 0.3rem;
+    padding: 0 0.35rem;
+    color: var(--text-dim);
+    font-size: 1.05em;
+    border-radius: 50%;
 }
-.qchip-x:hover { color: var(--danger); background: rgba(224, 112, 112, 0.12); }
+
+.qchip-x:hover {
+    color: var(--danger);
+    background: rgba(224, 112, 112, 0.12);
+}
 
 /* field colors for chips, edit label and suggestions */
-.f-model .qchip-field, .suggest-field.f-model { color: var(--model); }
-.f-sound .qchip-field, .suggest-field.f-sound { color: var(--sound); }
-.f-soundkit .qchip-field, .suggest-field.f-soundkit { color: var(--soundkit); }
-.f-animkit .qchip-field, .suggest-field.f-animkit { color: var(--animkit); }
-.f-anim .qchip-field, .suggest-field.f-anim { color: #d8b4e8; }
-.f-fx .qchip-field, .suggest-field.f-fx { color: var(--fx); }
-.f-mech .qchip-field, .suggest-field.f-mech { color: #e0a878; }
-.f-name .qchip-field, .suggest-field.f-name { color: var(--gold); }
-.f-id .qchip-field, .suggest-field.f-id { color: var(--gold); }
+.f-model .qchip-field, .suggest-field.f-model {
+    color: var(--model);
+}
+
+.f-sound .qchip-field, .suggest-field.f-sound {
+    color: var(--sound);
+}
+
+.f-soundkit .qchip-field, .suggest-field.f-soundkit {
+    color: var(--soundkit);
+}
+
+.f-animkit .qchip-field, .suggest-field.f-animkit {
+    color: var(--animkit);
+}
+
+.f-anim .qchip-field, .suggest-field.f-anim {
+    color: #d8b4e8;
+}
+
+.f-fx .qchip-field, .suggest-field.f-fx {
+    color: var(--fx);
+}
+
+.f-mech .qchip-field, .suggest-field.f-mech {
+    color: #e0a878;
+}
+
+.f-name .qchip-field, .suggest-field.f-name {
+    color: var(--gold);
+}
+
+.f-id .qchip-field, .suggest-field.f-id {
+    color: var(--gold);
+}
 
 /* autocomplete dropdown */
 #suggest {
-  position: absolute;
-  z-index: 5;
-  margin-top: 0.25rem;
-  min-width: 18rem;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
+    position: absolute;
+    z-index: 5;
+    margin-top: 0.25rem;
+    min-width: 18rem;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
 }
+
 .suggest-item {
-  display: flex;
-  gap: 0.6rem;
-  align-items: baseline;
-  width: 100%;
-  text-align: left;
-  padding: 0.45rem 0.9rem;
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+    width: 100%;
+    text-align: left;
+    padding: 0.45rem 0.9rem;
 }
-.suggest-item:hover, .suggest-item.selected { background: rgba(240, 195, 76, 0.08); }
-.suggest-field { font-family: Consolas, "Cascadia Mono", monospace; }
-.suggest-hint { color: var(--text-dim); font-size: 0.85em; }
+
+.suggest-item:hover, .suggest-item.selected {
+    background: rgba(240, 195, 76, 0.08);
+}
+
+.suggest-field {
+    font-family: Consolas, "Cascadia Mono", monospace;
+}
+
+.suggest-hint {
+    color: var(--text-dim);
+    font-size: 0.85em;
+}
 
 #help-btn {
-  width: 2.4rem; height: 2.4rem;
-  border-radius: 50%;
-  border: 1px solid var(--border-ctrl);
-  background: var(--bg-panel);
-  color: var(--text-dim);
-  font-weight: 600;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 50%;
+    border: 1px solid var(--border-ctrl);
+    background: var(--bg-panel);
+    color: var(--text-dim);
+    font-weight: 600;
 }
-#help-btn:hover { color: var(--gold); border-color: var(--gold-dim); }
 
-#tabs { display: flex; gap: 0.25rem; margin-top: 0.6rem; flex-wrap: wrap; }
+#help-btn:hover {
+    color: var(--gold);
+    border-color: var(--gold-dim);
+}
+
+#tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-top: 0.6rem;
+    flex-wrap: wrap;
+}
 
 /* split field pills: "+ Label" includes, the "−" half excludes */
 #tabs .tab {
-  display: inline-flex;
-  align-items: stretch;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  color: var(--text-dim);
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: var(--text-dim);
 }
-#tabs .tab[hidden] { display: none; }
-#tabs .tab:hover { border-color: var(--border); }
-#tabs .tab-inc { padding: 0.32rem 0.5rem 0.32rem 0.9rem; border-radius: 999px 0 0 999px; }
-#tabs .tab-inc::before { content: "+ "; opacity: 0.55; }
-#tabs .tab-inc:hover { color: var(--text); }
-#tabs .tab-exc {
-  padding: 0.32rem 0.7rem 0.32rem 0.5rem;
-  border-left: 1px solid transparent;
-  border-radius: 0 999px 999px 0;
-  opacity: 0.7;
-}
-#tabs .tab:hover .tab-exc { border-left-color: var(--border); }
-#tabs .tab-exc:hover { color: var(--danger); opacity: 1; }
-#tabs .tab.active {
-  color: var(--gold);
-  border-color: var(--gold-dim);
-  background: rgba(240, 195, 76, 0.08);
-}
-#tabs .tab.active-not {
-  color: var(--danger);
-  border-color: rgba(224, 112, 112, 0.5);
-  background: rgba(224, 112, 112, 0.08);
-}
-#tabs .tab.active-not .tab-exc { opacity: 1; }
 
-#status { margin-top: 0.45rem; min-height: 1.3em; color: var(--text-dim); font-size: 0.9rem; }
+#tabs .tab[hidden] {
+    display: none;
+}
+
+#tabs .tab:hover {
+    border-color: var(--border);
+}
+
+#tabs .tab-inc {
+    padding: 0.32rem 0.5rem 0.32rem 0.9rem;
+    border-radius: 999px 0 0 999px;
+}
+
+#tabs .tab-inc::before {
+    content: "+ ";
+    opacity: 0.55;
+}
+
+#tabs .tab-inc:hover {
+    color: var(--text);
+}
+
+#tabs .tab-exc {
+    padding: 0.32rem 0.7rem 0.32rem 0.5rem;
+    border-left: 1px solid transparent;
+    border-radius: 0 999px 999px 0;
+    opacity: 0.7;
+}
+
+#tabs .tab:hover .tab-exc {
+    border-left-color: var(--border);
+}
+
+#tabs .tab-exc:hover {
+    color: var(--danger);
+    opacity: 1;
+}
+
+#tabs .tab.active {
+    color: var(--gold);
+    border-color: var(--gold-dim);
+    background: rgba(240, 195, 76, 0.08);
+}
+
+#tabs .tab.active-not {
+    color: var(--danger);
+    border-color: rgba(224, 112, 112, 0.5);
+    background: rgba(224, 112, 112, 0.08);
+}
+
+#tabs .tab.active-not .tab-exc {
+    opacity: 1;
+}
+
+#status {
+    margin-top: 0.45rem;
+    min-height: 1.3em;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
 
 /* help dialog */
 #help {
-  width: min(74rem, calc(100vw - 3rem));
-  background: var(--bg-panel);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 1.1rem 1.5rem 1.4rem;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+    width: min(74rem, calc(100vw - 3rem));
+    background: var(--bg-panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.1rem 1.5rem 1.4rem;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
 }
-#help::backdrop { background: rgba(5, 7, 11, 0.65); }
+
+#help::backdrop {
+    background: rgba(5, 7, 11, 0.65);
+}
+
 .help-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.9rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.9rem;
 }
-.help-top h2 { margin: 0; font-size: 1.2rem; color: var(--gold); letter-spacing: 0.04em; }
-#help-close { font-size: 1.5rem; line-height: 1; color: var(--text-dim); padding: 0.1rem 0.45rem; border-radius: 6px; }
-#help-close:hover { color: var(--danger); background: rgba(224, 112, 112, 0.12); }
+
+.help-top h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--gold);
+    letter-spacing: 0.04em;
+}
+
+#help-close {
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--text-dim);
+    padding: 0.1rem 0.45rem;
+    border-radius: 6px;
+}
+
+#help-close:hover {
+    color: var(--danger);
+    background: rgba(224, 112, 112, 0.12);
+}
+
 .help-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-  gap: 1.1rem 1.8rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+    gap: 1.1rem 1.8rem;
 }
+
 #help h3 {
-  margin: 0 0 0.4rem;
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--gold);
+    margin: 0 0 0.4rem;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--gold);
 }
-#help ul { margin: 0; padding-left: 1.1rem; font-size: 0.9rem; }
-#help li { margin: 0.3rem 0; }
-#help li::marker { color: var(--text-dim); }
+
+#help ul {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: 0.9rem;
+}
+
+#help li {
+    margin: 0.3rem 0;
+}
+
+#help li::marker {
+    color: var(--text-dim);
+}
+
 #help code {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 0 0.3rem;
-  font-size: 0.88em;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 0.3rem;
+    font-size: 0.88em;
 }
+
 #help kbd {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-bottom-width: 2px;
-  border-radius: 5px;
-  padding: 0 0.35rem;
-  font-family: Consolas, "Cascadia Mono", monospace;
-  font-size: 0.85em;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 0 0.35rem;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 0.85em;
 }
 
 /* A section's short lead-in above its worked examples — the prose that used to
  * carry the whole explanation now only has to set up the list below it. */
 .help-note {
-  margin: 0 0 0.45rem;
-  font-size: 0.85rem;
-  color: var(--text-dim);
-  line-height: 1.45;
+    margin: 0 0 0.45rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    line-height: 1.45;
 }
 
 /* Worked examples: a runnable query followed by what it finds. Bulletless and
  * hanging-indented so the queries line up as a scannable column. */
 #help ul.help-ex {
-  list-style: none;
-  padding-left: 0;
-  margin-top: 0.4rem;
-  font-size: 0.85rem;
+    list-style: none;
+    padding-left: 0;
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
 }
+
 #help ul.help-ex li {
-  margin: 0.25rem 0;
-  padding-left: 1rem;
-  text-indent: -1rem;
-  color: var(--text-dim);
-  line-height: 1.5;
+    margin: 0.25rem 0;
+    padding-left: 1rem;
+    text-indent: -1rem;
+    color: var(--text-dim);
+    line-height: 1.5;
 }
+
 #help ul.help-ex button {
-  font-family: Consolas, "Cascadia Mono", monospace;
-  font-size: 0.88em;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 0.05rem 0.35rem;
-  margin-right: 0.3rem;
-  cursor: pointer;
-  text-indent: 0;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 0.88em;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.05rem 0.35rem;
+    margin-right: 0.3rem;
+    cursor: pointer;
+    text-indent: 0;
 }
+
 #help ul.help-ex button:hover,
 #help ul.help-ex button:focus-visible {
-  color: var(--gold);
-  border-color: var(--gold-dim);
-  background: rgba(240, 195, 76, 0.08);
+    color: var(--gold);
+    border-color: var(--gold-dim);
+    background: rgba(240, 195, 76, 0.08);
 }
 
 /* --------------------------------------------------------------- toolbar */
 
 #toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-  padding: 0.4rem 0 0.6rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0.4rem 0 0.6rem;
 }
 
 #filters, #columns {
-  display: flex;
-  gap: 0.9rem;
-  align-items: center;
-  color: var(--text-dim);
-  font-size: 0.9rem;
+    display: flex;
+    gap: 0.9rem;
+    align-items: center;
+    color: var(--text-dim);
+    font-size: 0.9rem;
 }
-#filters { gap: 0.4rem; }
-#columns label { cursor: pointer; user-select: none; }
-#columns input { accent-color: var(--gold); vertical-align: -2px; }
+
+#filters {
+    gap: 0.4rem;
+}
+
+#columns label {
+    cursor: pointer;
+    user-select: none;
+}
+
+#columns input {
+    accent-color: var(--gold);
+    vertical-align: -2px;
+}
 
 /* tri-state filter buttons: any -> only-with (gold ✓) -> only-without (red ✕) */
 #filters .tri {
-  cursor: pointer;
-  user-select: none;
-  font: inherit;
-  color: var(--text-dim);
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  padding: 0.08rem 0.6rem 0.08rem 0.5rem;
-  line-height: 1.5;
+    cursor: pointer;
+    user-select: none;
+    font: inherit;
+    color: var(--text-dim);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    padding: 0.08rem 0.6rem 0.08rem 0.5rem;
+    line-height: 1.5;
 }
-#filters .tri::before { content: "•"; margin-right: 0.35rem; opacity: 0.45; }
-#filters .tri:hover { border-color: var(--border); }
-#filters .tri[data-state="with"] { color: var(--gold); border-color: var(--gold-dim); }
-#filters .tri[data-state="with"]::before { content: "✓"; opacity: 1; }
-#filters .tri[data-state="without"] { color: var(--danger); border-color: var(--danger); }
-#filters .tri[data-state="without"]::before { content: "✕"; opacity: 1; }
+
+#filters .tri::before {
+    content: "•";
+    margin-right: 0.35rem;
+    opacity: 0.45;
+}
+
+#filters .tri:hover {
+    border-color: var(--border);
+}
+
+#filters .tri[data-state="with"] {
+    color: var(--gold);
+    border-color: var(--gold-dim);
+}
+
+#filters .tri[data-state="with"]::before {
+    content: "✓";
+    opacity: 1;
+}
+
+#filters .tri[data-state="without"] {
+    color: var(--danger);
+    border-color: var(--danger);
+}
+
+#filters .tri[data-state="without"]::before {
+    content: "✕";
+    opacity: 1;
+}
 
 #export {
-  display: flex;
-  gap: 0.4rem;
-  align-items: center;
-  color: var(--text-dim);
-  font-size: 0.9rem;
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    color: var(--text-dim);
+    font-size: 0.9rem;
 }
+
 #export button {
-  padding: 0.22rem 0.7rem;
-  border: 1px solid var(--border-ctrl);
-  border-radius: 6px;
-  background: var(--bg-panel);
-  color: var(--text);
-  font-size: 0.85em;
-  transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
+    padding: 0.22rem 0.7rem;
+    border: 1px solid var(--border-ctrl);
+    border-radius: 6px;
+    background: var(--bg-panel);
+    color: var(--text);
+    font-size: 0.85em;
+    transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
 }
+
 #export button:hover {
-  border-color: var(--gold-dim);
-  color: var(--gold);
-  box-shadow: 0 0 10px rgba(240, 195, 76, 0.15);
+    border-color: var(--gold-dim);
+    color: var(--gold);
+    box-shadow: 0 0 10px rgba(240, 195, 76, 0.15);
 }
-.export-sep { width: 1px; align-self: stretch; background: var(--border); }
+
+.export-sep {
+    width: 1px;
+    align-self: stretch;
+    background: var(--border);
+}
 
 /* ----------------------------------------------------------------- table */
 
-.table-wrap { overflow-x: auto; }
+.table-wrap {
+    overflow-x: auto;
+}
 
 table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.92rem;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
 }
 
 th {
-  text-align: left;
-  color: var(--text-dim);
-  font-weight: 600;
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0.45rem 0.6rem;
-  border-bottom: 2px solid var(--border);
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
-  background: var(--bg);
-  z-index: 2;
+    text-align: left;
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.45rem 0.6rem;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 2;
 }
+
 /* the sortable header's interactive part is a real <button> (keyboard-
    operable); it fills the cell so the whole header stays clickable, and
    inherits the th's uppercase/spacing so it looks identical to a plain th */
-th[data-sort] { padding: 0; }
-th[data-sort] > button {
-  width: 100%;
-  padding: 0.45rem 0.6rem;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
+th[data-sort] {
+    padding: 0;
 }
-th[data-sort]:hover { color: var(--text); }
-th.sorted { color: var(--gold); }
-th .arrow { font-size: 0.7em; }
+
+th[data-sort] > button {
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+th[data-sort]:hover {
+    color: var(--text);
+}
+
+th.sorted {
+    color: var(--gold);
+}
+
+th .arrow {
+    font-size: 0.7em;
+}
 
 td {
-  padding: 0.6rem 0.7rem;
-  border-bottom: 1px solid var(--border);
-  vertical-align: top;
+    padding: 0.6rem 0.7rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
 }
-/* faint column separators keep tall uneven rows readable */
-td:not(:last-child), th:not(:last-child) { border-right: 1px solid rgba(255, 255, 255, 0.045); }
-tbody tr { background: var(--bg-row); }
-tbody tr:hover { background: #1a212c; box-shadow: inset 3px 0 0 var(--gold-dim); }
 
-.c-idx { width: 2.5rem; color: var(--text-dim); font-size: 0.85em; text-align: right; font-variant-numeric: tabular-nums; }
-th.c-idx { text-align: right; }
-.c-id { width: 5.5rem; }
-.c-name { min-width: 13rem; max-width: 20rem; }
-.c-cmds { width: 1%; }
+/* faint column separators keep tall uneven rows readable */
+td:not(:last-child), th:not(:last-child) {
+    border-right: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+tbody tr {
+    background: var(--bg-row);
+}
+
+tbody tr:hover {
+    background: #1a212c;
+    box-shadow: inset 3px 0 0 var(--gold-dim);
+}
+
+.c-idx {
+    width: 2.5rem;
+    color: var(--text-dim);
+    font-size: 0.85em;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+th.c-idx {
+    text-align: right;
+}
+
+.c-id {
+    width: 5.5rem;
+}
+
+.c-name {
+    min-width: 13rem;
+    max-width: 20rem;
+}
+
+.c-cmds {
+    width: 1%;
+}
+
 /* matches .kit-files' line-height below, so a bare model pill (no kit
    wrapper of its own) comes out exactly as tall as a sound/animation one */
-.c-models { min-width: 14rem; line-height: 1.15; }
-.c-sounds { min-width: 16rem; }
-.c-animations { min-width: 12rem; }
-.c-fx { min-width: 13.5rem; }
-.c-mechanics { min-width: 10rem; }
-
-.id-copy { color: var(--gold); font-variant-numeric: tabular-nums; }
-.id-copy:hover { text-decoration: underline; }
-
-.spell-name { color: #e8edf4; font-weight: 600; }
-.spell-name-link { color: inherit; text-decoration: none; }
-.spell-name-link:hover { color: var(--gold); }
-.spell-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 3px;
-  vertical-align: -5px;
-  margin-right: 0.4rem;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.3);
+.c-models {
+    min-width: 14rem;
+    line-height: 1.15;
 }
-.spell-sub { color: var(--text-dim); font-size: 0.85em; }
+
+.c-sounds {
+    min-width: 16rem;
+}
+
+.c-animations {
+    min-width: 12rem;
+}
+
+.c-fx {
+    min-width: 13.5rem;
+}
+
+.c-mechanics {
+    min-width: 10rem;
+}
+
+.id-copy {
+    color: var(--gold);
+    font-variant-numeric: tabular-nums;
+}
+
+.id-copy:hover {
+    text-decoration: underline;
+}
+
+.spell-name {
+    color: #e8edf4;
+    font-weight: 600;
+}
+
+.spell-name-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.spell-name-link:hover {
+    color: var(--gold);
+}
+
+.spell-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    vertical-align: -5px;
+    margin-right: 0.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.spell-sub {
+    color: var(--text-dim);
+    font-size: 0.85em;
+}
 
 mark.hl {
-  background: rgba(240, 195, 76, 0.28);
-  color: inherit;
-  border-radius: 3px;
-  padding: 0 1px;
+    background: rgba(240, 195, 76, 0.28);
+    color: inherit;
+    border-radius: 3px;
+    padding: 0 1px;
 }
 
-td.empty { text-align: center; vertical-align: middle; }
+td.empty {
+    text-align: center;
+    vertical-align: middle;
+}
+
 /* "no value" marker — a readable dim (was opacity .5 ≈ 2.3:1, failed 1.4.3) */
-.none { color: #7f8996; }
+.none {
+    color: #7f8996;
+}
 
 /* column hiding */
-#results.hide-models   .c-models   { display: none; }
-#results.hide-sounds   .c-sounds   { display: none; }
-#results.hide-animations .c-animations { display: none; }
-#results.hide-fx .c-fx { display: none; }
-#results.hide-mechanics .c-mechanics { display: none; }
-#results.hide-commands .c-cmds     { display: none; }
+#results.hide-models .c-models {
+    display: none;
+}
+
+#results.hide-sounds .c-sounds {
+    display: none;
+}
+
+#results.hide-animations .c-animations {
+    display: none;
+}
+
+#results.hide-fx .c-fx {
+    display: none;
+}
+
+#results.hide-mechanics .c-mechanics {
+    display: none;
+}
+
+#results.hide-commands .c-cmds {
+    display: none;
+}
 
 /* the wowhead button matches the command buttons' height */
 .cmd-row .wh-cmd {
-  width: 2rem;
-  height: auto;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+    width: 2rem;
+    height: auto;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
-.cmd-row .wh-cmd img { width: 1rem; height: 1rem; }
+
+.cmd-row .wh-cmd img {
+    width: 1rem;
+    height: 1rem;
+}
 
 /* kit boxes: the kit id as a tinted head segment, its files flowing
  * (and wrapping) beside it — one consistent shape for 1 or 10 files */
 .kit-group {
-  display: flex;
-  align-items: stretch;
-  max-width: 100%;
-  margin: 0.18rem 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
-  overflow: hidden;
+    display: flex;
+    align-items: stretch;
+    max-width: 100%;
+    margin: 0.18rem 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    overflow: hidden;
 }
-.kit-group:first-of-type { margin-top: 0.05rem; }
-.kit-group:last-of-type { margin-bottom: 0.05rem; }
+
+.kit-group:first-of-type {
+    margin-top: 0.05rem;
+}
+
+.kit-group:last-of-type {
+    margin-bottom: 0.05rem;
+}
+
 /* stretch so the header tag (and its full-height hover buttons) fill the
    whole strip, even when kit-files wraps to multiple lines and grows taller */
-.kit-head { display: flex; align-items: stretch; flex: none; }
-.c-models .kit-head { background: rgba(127, 184, 240, 0.08); }
-.c-sounds .kit-head { background: rgba(95, 175, 143, 0.10); }
-.c-animations .kit-head { background: rgba(201, 154, 224, 0.09); }
-.c-fx .kit-head { background: rgba(127, 201, 208, 0.08); }
-.kit-head .tag, .kit-head .tag.hit { border: none; background: none; margin: 0; border-radius: 0; }
-.kit-group.hit { border-color: var(--gold-dim); }
-.kit-group.hit .kit-head { background: rgba(240, 195, 76, 0.13); }
-.kit-files {
-  flex: 1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.12rem 0.25rem;
-  padding: 0.15rem 0.4rem;
-  border-left: 1px solid var(--border);
-  line-height: 1.15;
+.kit-head {
+    display: flex;
+    align-items: stretch;
+    flex: none;
 }
-.kit-files .tag { margin: 0; }
+
+.c-models .kit-head {
+    background: rgba(127, 184, 240, 0.08);
+}
+
+.c-sounds .kit-head {
+    background: rgba(95, 175, 143, 0.10);
+}
+
+.c-animations .kit-head {
+    background: rgba(201, 154, 224, 0.09);
+}
+
+.c-fx .kit-head {
+    background: rgba(127, 201, 208, 0.08);
+}
+
+.kit-head .tag, .kit-head .tag.hit {
+    border: none;
+    background: none;
+    margin: 0;
+    border-radius: 0;
+}
+
+.kit-group.hit {
+    border-color: var(--gold-dim);
+}
+
+.kit-group.hit .kit-head {
+    background: rgba(240, 195, 76, 0.13);
+}
+
+.kit-files {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.12rem 0.25rem;
+    padding: 0.15rem 0.4rem;
+    border-left: 1px solid var(--border);
+    line-height: 1.15;
+}
+
+.kit-files .tag {
+    margin: 0;
+}
+
 /* models aren't grouped under a kit, but should still come out the same
    height as sound files and animations (both always seen at this size) */
-.kit-files .tag, .c-models .tag { font-size: 0.82em; }
-.kit-files .tag-label, .c-models .tag-label { padding: 0.06rem 0.4rem; }
-.kit-files .tag-copy, .c-models .tag-copy { padding: 0.26rem 0.35rem 0.06rem 0.3rem; } /* +0.2rem top = the baseline nudge */
-.c-models .tag-view { padding: 0.06rem 0.3rem 0.06rem 0.45rem; }
-.kit-files .tag-play { padding: 0.06rem 0.32rem; }
+.kit-files .tag, .c-models .tag {
+    font-size: 0.82em;
+}
+
+.kit-files .tag-label, .c-models .tag-label {
+    padding: 0.06rem 0.4rem;
+}
+
+.kit-files .tag-copy, .c-models .tag-copy {
+    padding: 0.26rem 0.35rem 0.06rem 0.3rem;
+}
+
+/* +0.2rem top = the baseline nudge */
+.c-models .tag-view {
+    padding: 0.06rem 0.3rem 0.06rem 0.45rem;
+}
+
+.kit-files .tag-play {
+    padding: 0.06rem 0.32rem;
+}
+
 /* single-item (or head-only, e.g. freeze/camo) groups render compact: ONE
    tag-shaped pill instead of a box — the category word is a dimmed leading
    section (like the control word on summon pills), the lone item's tag
@@ -668,98 +1116,147 @@ td.empty { text-align: center; vertical-align: middle; }
    section divider). Head-only pills (freeze/camo) keep full brightness —
    there the word isn't a prefix, it's the whole pill. */
 .kit-group.compact {
-  display: inline-flex;
-  align-items: center;
-  width: auto;
-  max-width: 100%;
-  vertical-align: top;
-  margin: 0.1rem 0.25rem 0.1rem 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.03);
-  font-size: 0.82em;
+    display: inline-flex;
+    align-items: center;
+    width: auto;
+    max-width: 100%;
+    vertical-align: top;
+    margin: 0.1rem 0.25rem 0.1rem 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 0.82em;
 }
-.kit-group.compact .kit-head { background: none; }
-.kit-group.compact.hit { background: rgba(240, 195, 76, 0.10); }
+
+.kit-group.compact .kit-head {
+    background: none;
+}
+
+.kit-group.compact.hit {
+    background: rgba(240, 195, 76, 0.10);
+}
+
 .kit-group.compact .kit-head:not(:last-child) .tag-label {
-  padding-right: 0.4rem;
-  opacity: 0.8;
+    padding-right: 0.4rem;
+    opacity: 0.8;
 }
-.kit-group.compact .kit-head:not(:last-child) .tag-label:hover { opacity: 1; }
+
+.kit-group.compact .kit-head:not(:last-child) .tag-label:hover {
+    opacity: 1;
+}
+
 /* the lone item sits in its own rounded capsule inside the pill —
    attached yet distinct; head-only pills (freeze/camo) have no capsule */
 .kit-group.compact .kit-files {
-  flex: none;
-  padding: 0;
-  margin: 2px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  overflow: hidden;
+    flex: none;
+    padding: 0;
+    margin: 2px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    overflow: hidden;
 }
+
 .kit-group.compact .kit-files:has(> .tag.hit) {
-  border-color: var(--gold-dim);
-  background: rgba(240, 195, 76, 0.10);
+    border-color: var(--gold-dim);
+    background: rgba(240, 195, 76, 0.10);
 }
+
 .kit-group.compact .kit-files .tag,
 .kit-group.compact .kit-files .tag.hit {
-  border: none;
-  background: none;
-  margin: 0;
-  border-radius: 0;
-  font-size: 1em;
+    border: none;
+    background: none;
+    margin: 0;
+    border-radius: 0;
+    font-size: 1em;
 }
+
 /* flat pills (desaturate/transparency percents; invis/detect channels): the
    value is a bare scalar, not an entity, and the category can hold only one
    per spell — so no rounded capsule, just (label | value…) split by flat
    dividers. */
 .kit-group.compact .kit-files:has(> .tag.flat) {
-  margin: 0;
-  padding: 0 0.1rem;
-  border: none;
-  border-left: 1px solid var(--border);
-  border-radius: 0;
-  background: none;
-  align-self: stretch;
-  align-items: center;
+    margin: 0;
+    padding: 0 0.1rem;
+    border: none;
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    background: none;
+    align-self: stretch;
+    align-items: center;
 }
-.kit-group.compact .kit-files:has(> .tag.flat.hit) { border-left-color: var(--gold-dim); }
+
+.kit-group.compact .kit-files:has(> .tag.flat.hit) {
+    border-left-color: var(--gold-dim);
+}
 
 /* tags */
 
 .tag {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  margin: 0.1rem 0.25rem 0.1rem 0;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.03);
-  font-size: 0.86em;
-  overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    margin: 0.1rem 0.25rem 0.1rem 0;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 0.86em;
+    overflow: hidden;
 }
 
 /* target-type icons (who the content plays on) — a run of small glyphs on
    the pill's left edge, before the label. Not buttons: they carry a title
    and nothing else, so they must not eat clicks meant for the pill. */
 .ticons {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.1em;
-  padding: 0 0.1rem 0 0.45rem;
-  flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1em;
+    padding: 0 0.1rem 0 0.45rem;
+    flex: none;
 }
-.ticon { display: block; cursor: help; }
-.ticon svg { width: 0.82em; height: 0.82em; display: block; }
-.t-caster { color: var(--text-dim); }
-.t-target { color: #e0a878; }
-.t-notcaster { color: var(--danger, #e07070); }
-.t-area { color: var(--fx, #7fc9d0); }
+
+.ticon {
+    display: block;
+    cursor: help;
+}
+
+.ticon svg {
+    width: 0.82em;
+    height: 0.82em;
+    display: block;
+}
+
+.t-caster {
+    color: var(--text-dim);
+}
+
+.t-target {
+    color: #e0a878;
+}
+
+.t-notcaster {
+    color: var(--danger, #e07070);
+}
+
+.t-area {
+    color: var(--fx, #7fc9d0);
+}
+
 /* a label straight after the icons doesn't need its own left padding */
-.ticons + .tag-label { padding-left: 0.3rem; }
+.ticons + .tag-label {
+    padding-left: 0.3rem;
+}
 
 /* the same glyphs inline in the help dialog's legend */
-.legend-icon { display: inline-block; vertical-align: -0.15em; }
-.legend-icon svg { width: 1em; height: 1em; display: block; }
+.legend-icon {
+    display: inline-block;
+    vertical-align: -0.15em;
+}
+
+.legend-icon svg {
+    width: 1em;
+    height: 1em;
+    display: block;
+}
 
 /* Section dividers. Which side of a segment carries one is declared with the
    segment KIND in pills.js (sep: "left" | "right" | "none") and rendered as
@@ -767,44 +1264,69 @@ td.empty { text-align: center; vertical-align: middle; }
    repeating a border rule. The line is quieter between a segment and the text
    it qualifies (role="meta") than around the action buttons at the pill's
    edges, which are separate controls. */
-.tag { --seg-divider: var(--border); }
-.tag [data-role="meta"] { --seg-divider: var(--tag-sep, rgba(255, 255, 255, 0.12)); }
-.tag [data-sep="left"] { border-left: 1px solid var(--seg-divider); }
-.tag [data-sep="right"] { border-right: 1px solid var(--seg-divider); }
+.tag {
+    --seg-divider: var(--border);
+}
+
+.tag [data-role="meta"] {
+    --seg-divider: var(--tag-sep, rgba(255, 255, 255, 0.12));
+}
+
+.tag [data-sep="left"] {
+    border-left: 1px solid var(--seg-divider);
+}
+
+.tag [data-sep="right"] {
+    border-right: 1px solid var(--seg-divider);
+}
 
 /* where on the model a row plays (M2 attachment point). A quiet segment
    between the label and the copy button — it qualifies the model rather than
    naming it, so it reads dimmer and smaller than the label it follows.
    Beams and missiles span two points and render "Source → Dest". */
 .tag-attach {
-  padding: 0.12rem 0.45rem;
-  font-size: 0.86em;
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 14rem;
+    padding: 0.12rem 0.45rem;
+    font-size: 0.86em;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 14rem;
 }
-.tag-attach:hover { text-decoration: underline; color: inherit; }
-.tag-attach.hit { color: var(--gold); }
+
+.tag-attach:hover {
+    text-decoration: underline;
+    color: inherit;
+}
+
+.tag-attach.hit {
+    color: var(--gold);
+}
 
 .tag-label {
-  padding: 0.12rem 0.55rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 24rem;
+    padding: 0.12rem 0.55rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 24rem;
 }
-.tag-label:hover { text-decoration: underline; }
+
+.tag-label:hover {
+    text-decoration: underline;
+}
+
 /* dotted underline = mouseover shows a texture preview (hover pointers only —
    the preview never initializes on touch, so no affordance there either) */
 @media (hover: hover) {
-  .tag-label[data-tex-fid] {
-    text-decoration: underline dotted;
-    text-decoration-color: rgba(255, 255, 255, 0.4);
-    text-underline-offset: 2px;
-  }
-  .tag-label[data-tex-fid]:hover { text-decoration-color: currentColor; }
+    .tag-label[data-tex-fid] {
+        text-decoration: underline dotted;
+        text-decoration-color: rgba(255, 255, 255, 0.4);
+        text-underline-offset: 2px;
+    }
+
+    .tag-label[data-tex-fid]:hover {
+        text-decoration-color: currentColor;
+    }
 }
 
 /* A pill's TONE is the colour family its name reads in. One variable, set
@@ -812,49 +1334,93 @@ td.empty { text-align: center; vertical-align: middle; }
    pill type either reuses a tone (nothing to write here) or adds one line,
    instead of a rule per segment class. Item quality and the priceless accent
    override --tone through the same channel further down. */
-.tag { --tone: var(--text); }
-.tag.model, .tag.model-head { --tone: var(--model); }
-.tag.sound { --tone: var(--sound); }
-.tag.soundkit { --tone: var(--soundkit); }
-.tag.animkit { --tone: var(--animkit); }
-.tag.anim { --tone: #d8b4e8; }
-.tag.mechanic { --tone: #e0a878; }
+.tag {
+    --tone: var(--text);
+}
+
+.tag.model, .tag.model-head {
+    --tone: var(--model);
+}
+
+.tag.sound {
+    --tone: var(--sound);
+}
+
+.tag.soundkit {
+    --tone: var(--soundkit);
+}
+
+.tag.animkit {
+    --tone: var(--animkit);
+}
+
+.tag.anim {
+    --tone: #d8b4e8;
+}
+
+.tag.mechanic {
+    --tone: #e0a878;
+}
+
 /* Aura mechanics: same family as spell effects, one shade apart. The aura is
    what the spell actually DOES — it leads its pill and carries the weight,
    while the APPLY_AURA that delivers it trails as a dim .tag-attach. */
-.tag.mechanic.aura { --tone: #f0d68d; }
-.tag.fx, .tag.fx-head { --tone: var(--fx); }
+.tag.mechanic.aura {
+    --tone: #f0d68d;
+}
 
-.tag .tag-label { color: var(--tone); }
-.tag.mechanic.aura .tag-label { font-weight: 600; }
+.tag.fx, .tag.fx-head {
+    --tone: var(--fx);
+}
+
+.tag .tag-label {
+    color: var(--tone);
+}
+
+.tag.mechanic.aura .tag-label {
+    font-weight: 600;
+}
 
 /* control word on summon pills (guardian/pet/...) — dimmed beside the
    name, a button of its own: clicking searches that control type */
 .tag-ctrl {
-  padding: 0.12rem 0.55rem 0.12rem 0;
-  margin-left: -0.2rem;
-  font-size: 0.92em;
-  opacity: 0.75;
-  color: var(--tone);
-  white-space: nowrap;
+    padding: 0.12rem 0.55rem 0.12rem 0;
+    margin-left: -0.2rem;
+    font-size: 0.92em;
+    opacity: 0.75;
+    color: var(--tone);
+    white-space: nowrap;
 }
-.tag-ctrl:hover { text-decoration: underline; opacity: 1; }
+
+.tag-ctrl:hover {
+    text-decoration: underline;
+    opacity: 1;
+}
 
 /* tint dot on beam texture pills — the chain's own RGB */
 .fx-swatch {
-  flex: none;
-  width: 0.62em;
-  height: 0.62em;
-  margin-left: 0.5rem;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+    flex: none;
+    width: 0.62em;
+    height: 0.62em;
+    margin-left: 0.5rem;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.35);
 }
-.fx-swatch + .tag-label { padding-left: 0.35rem; }
+
+.fx-swatch + .tag-label {
+    padding-left: 0.35rem;
+}
+
 /* screen pills can carry several dots (fog + multiply + addition) */
-.fx-swatch + .fx-swatch { margin-left: 0.18rem; }
+.fx-swatch + .fx-swatch {
+    margin-left: 0.18rem;
+}
+
 /* swatches with a hover panel hint at it like texture labels do */
 @media (hover: hover) {
-  .fx-swatch[data-color]:hover { border-color: rgba(255, 255, 255, 0.8); }
+    .fx-swatch[data-color]:hover {
+        border-color: rgba(255, 255, 255, 0.8);
+    }
 }
 
 
@@ -866,386 +1432,571 @@ td.empty { text-align: center; vertical-align: middle; }
    overflow:hidden makes flexbox use its box bottom). The ▶ is a centered
    geometric glyph, not baseline text — it stays symmetric. */
 .tag-copy, .tag-play, .tag-view {
-  align-self: stretch;
-  display: inline-flex;
-  align-items: center;
+    align-self: stretch;
+    display: inline-flex;
+    align-items: center;
 }
+
 .tag-copy {
-  padding: 0.32rem 0.45rem 0.12rem 0.35rem;
-  color: var(--tag-btn);
-  font-family: Consolas, "Cascadia Mono", monospace;
-  font-size: 0.92em;
-  white-space: nowrap;
+    padding: 0.32rem 0.45rem 0.12rem 0.35rem;
+    color: var(--tag-btn);
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 0.92em;
+    white-space: nowrap;
 }
-.tag-copy:hover { color: var(--gold); background: rgba(240, 195, 76, 0.1); }
+
+.tag-copy:hover {
+    color: var(--gold);
+    background: rgba(240, 195, 76, 0.1);
+}
 
 /* ▶ on sound file tags — streams the sound from Wowhead's CDN */
 .tag-play {
-  padding: 0.12rem 0.4rem;
-  color: var(--tag-btn);
-  font-size: 0.85em;
-  white-space: nowrap;
+    padding: 0.12rem 0.4rem;
+    color: var(--tag-btn);
+    font-size: 0.85em;
+    white-space: nowrap;
 }
-.tag-play:hover { color: var(--gold); background: rgba(240, 195, 76, 0.1); }
-.tag-play.playing { color: var(--gold); }
-.tag-play.loading { animation: play-pulse 0.9s ease-in-out infinite; }
-@keyframes play-pulse { 50% { opacity: 0.35; } }
+
+.tag-play:hover {
+    color: var(--gold);
+    background: rgba(240, 195, 76, 0.1);
+}
+
+.tag-play.playing {
+    color: var(--gold);
+}
+
+.tag-play.loading {
+    animation: play-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes play-pulse {
+    50% {
+        opacity: 0.35;
+    }
+}
 
 /* cube icon on model tags — links out to the WoW.tools model viewer. An
    SVG glyph like ▶ (flex-centered, symmetric padding), on the pill's
    left edge. */
 .tag-view {
-  padding: 0.12rem 0.4rem 0.12rem 0.5rem;
-  color: var(--tag-btn);
-  text-decoration: none;
+    padding: 0.12rem 0.4rem 0.12rem 0.5rem;
+    color: var(--tag-btn);
+    text-decoration: none;
 }
-.tag-view svg { width: 1.1em; height: 1.1em; display: block; }
-.tag-view:hover { color: var(--gold); background: rgba(240, 195, 76, 0.1); text-decoration: none; }
+
+.tag-view svg {
+    width: 1.1em;
+    height: 1.1em;
+    display: block;
+}
+
+.tag-view:hover {
+    color: var(--gold);
+    background: rgba(240, 195, 76, 0.1);
+    text-decoration: none;
+}
 
 /* the pill's corners curve inward — edge buttons need extra outer padding
    so their glyphs don't crowd the rounded border */
-.tag-play:first-child { padding-left: 0.55rem; }
-.tag-copy:last-child { padding-right: 0.6rem; }
-.kit-files .tag-play:first-child { padding-left: 0.45rem; }
-.kit-files .tag-copy:last-child { padding-right: 0.5rem; }
+.tag-play:first-child {
+    padding-left: 0.55rem;
+}
 
-.tag.hit { border-color: var(--gold-dim); background: rgba(240, 195, 76, 0.10); }
+.tag-copy:last-child {
+    padding-right: 0.6rem;
+}
+
+.kit-files .tag-play:first-child {
+    padding-left: 0.45rem;
+}
+
+.kit-files .tag-copy:last-child {
+    padding-right: 0.5rem;
+}
+
+.tag.hit {
+    border-color: var(--gold-dim);
+    background: rgba(240, 195, 76, 0.10);
+}
 
 /* an invisibility nothing detects — the priceless case. A distinct cool accent
    (not gold, so it never reads as a search hit) and non-interactive; a search
    hit still overrides it in gold. */
 .tag.fx.priceless:not(.hit) {
-  border-color: #6f7bd6;
-  background: rgba(123, 138, 214, 0.12);
+    border-color: #6f7bd6;
+    background: rgba(123, 138, 214, 0.12);
 }
 
-.tag.fx.priceless { --tone: #aab4ee; }
-.tag.fx.priceless .tag-label { cursor: default; }
+.tag.fx.priceless {
+    --tone: #aab4ee;
+}
+
+.tag.fx.priceless .tag-label {
+    cursor: default;
+}
 
 /* Fileless marker pill (equipped-weapon sentinel, SpellVisualEffectName Type
    3–10): no filename, no fid buttons. Italic label reads it as a descriptor
    rather than a real model name. */
-.tag.model.synthetic .tag-label { font-style: italic; }
+.tag.model.synthetic .tag-label {
+    font-style: italic;
+}
 
 /* Item pill (SpellVisualEffectName Type 1). The inventory icon sits flush
    against the label with nothing between them, so the two read as one unit. On
    a named item the icon is wrapped in a Wowhead link (.item-icon-link) which
    must not add any box of its own. */
 .tag.model.item .item-icon {
-  width: 1.15em;
-  height: 1.15em;
-  border-radius: 2px;
-  flex: 0 0 auto;
-  border: 1px solid rgba(0, 0, 0, 0.45);
+    width: 1.15em;
+    height: 1.15em;
+    border-radius: 2px;
+    flex: 0 0 auto;
+    border: 1px solid rgba(0, 0, 0, 0.45);
 }
+
 .tag.model.item .item-icon-link {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
 }
-.tag.model.item .item-icon-link:hover .item-icon { outline: 1px solid var(--gold); }
+
+.tag.model.item .item-icon-link:hover .item-icon {
+    outline: 1px solid var(--gold);
+}
+
 /* space before the icon (loose from the target glyphs) goes on the pill's
    DIRECT child — the bare img on a nameless item, or the link wrapper on a
    named one — so a wrapped img gets no extra inset of its own */
 .tag.model.item > .item-icon,
-.tag.model.item > .item-icon-link { margin-left: 0.3rem; }
+.tag.model.item > .item-icon-link {
+    margin-left: 0.3rem;
+}
+
 .tag.model.item > .item-icon + .tag-label,
-.tag.model.item > .item-icon-link + .tag-label { padding-left: 0.3rem; }
+.tag.model.item > .item-icon-link + .tag-label {
+    padding-left: 0.3rem;
+}
+
 /* Named item labels are coloured by item quality (the classic WoW ramp),
    which overrides the default model blue through the pill's tone. Nameless
    items set no quality class and keep --model. */
-.tag.model.item.q-poor { --tone: #9d9d9d; }
-.tag.model.item.q-common { --tone: #ffffff; }
-.tag.model.item.q-uncommon { --tone: #1eff00; }
-.tag.model.item.q-rare { --tone: #0070dd; }
-.tag.model.item.q-epic { --tone: #a335ee; }
-.tag.model.item.q-legendary { --tone: #ff8000; }
-.tag.model.item.q-artifact { --tone: #e6cc80; }
+.tag.model.item.q-poor {
+    --tone: #9d9d9d;
+}
+
+.tag.model.item.q-common {
+    --tone: #ffffff;
+}
+
+.tag.model.item.q-uncommon {
+    --tone: #1eff00;
+}
+
+.tag.model.item.q-rare {
+    --tone: #0070dd;
+}
+
+.tag.model.item.q-epic {
+    --tone: #a335ee;
+}
+
+.tag.model.item.q-legendary {
+    --tone: #ff8000;
+}
+
+.tag.model.item.q-artifact {
+    --tone: #e6cc80;
+}
+
 .tag.model.item.q-heirloom,
-.tag.model.item.q-token { --tone: #00ccff; }
+.tag.model.item.q-token {
+    --tone: #00ccff;
+}
 
 /* pills/groups the height clamp hides (layoutRow toggles .overflow directly).
    The `td` prefix lifts specificity above .kit-group.compact / .kit-files .tag
    so an overflow pill or a compact group is always hidden. */
-td .tag.overflow, td .kit-group.overflow { display: none; }
+td .tag.overflow, td .kit-group.overflow {
+    display: none;
+}
 
 /* "+N more" expander — one consistent pronounced pill across every column
    (was two very different looks: a dim text link and a tinted group pill) */
 .more {
-  display: inline-flex;
-  align-items: center;
-  margin: 0.18rem 0.25rem 0.1rem 0;
-  padding: 0.1rem 0.5rem;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-ctrl);
-  border-radius: 999px;
-  font-size: 0.8em;
-  font-weight: 600;
-  white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    margin: 0.18rem 0.25rem 0.1rem 0;
+    padding: 0.1rem 0.5rem;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 999px;
+    font-size: 0.8em;
+    font-weight: 600;
+    white-space: nowrap;
 }
+
 .more:hover {
-  color: var(--gold);
-  background: rgba(240, 195, 76, 0.12);
-  border-color: var(--gold-dim);
+    color: var(--gold);
+    background: rgba(240, 195, 76, 0.12);
+    border-color: var(--gold-dim);
 }
 
 /* command buttons: one compact line, never taller than a text row */
 
 .cmd-row {
-  display: flex;
-  gap: 0.25rem;
-  align-items: stretch;
-  flex-wrap: nowrap;
-  white-space: nowrap;
+    display: flex;
+    gap: 0.25rem;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    white-space: nowrap;
 }
 
 .cmd {
-  padding: 0.2rem 0.4rem;
-  text-align: center;
-  border: 1px solid #3a4351;
-  border-radius: 7px;
-  background: linear-gradient(180deg, #232b38, #1a212c);
-  color: #dfe6ef;
-  font-size: 0.78rem;
-  font-weight: 600;
-  font-family: Consolas, "Cascadia Mono", monospace;
-  white-space: nowrap;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  transition: border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.06s;
+    padding: 0.2rem 0.4rem;
+    text-align: center;
+    border: 1px solid #3a4351;
+    border-radius: 7px;
+    background: linear-gradient(180deg, #232b38, #1a212c);
+    color: #dfe6ef;
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.06s;
 }
+
 .cmd:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-  box-shadow: 0 0 12px rgba(240, 195, 76, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    border-color: var(--gold);
+    color: var(--gold);
+    box-shadow: 0 0 12px rgba(240, 195, 76, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
-.cmd:active { transform: translateY(1px); box-shadow: 0 0 6px rgba(240, 195, 76, 0.25); }
+
+.cmd:active {
+    transform: translateY(1px);
+    box-shadow: 0 0 6px rgba(240, 195, 76, 0.25);
+}
 
 /* wowhead links */
 
 .wowhead {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  vertical-align: middle;
-  width: 1.5rem;
-  height: 1.5rem;
-  margin: 0.08rem 0.25rem 0.08rem 0;
-  border: 1px solid #4a2e1e;
-  border-radius: 7px;
-  background: linear-gradient(180deg, #2b1c12, #1d130c);
-  transition: border-color 0.12s, box-shadow 0.12s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    width: 1.5rem;
+    height: 1.5rem;
+    margin: 0.08rem 0.25rem 0.08rem 0;
+    border: 1px solid #4a2e1e;
+    border-radius: 7px;
+    background: linear-gradient(180deg, #2b1c12, #1d130c);
+    transition: border-color 0.12s, box-shadow 0.12s;
 }
-.wowhead img { width: 1rem; height: 1rem; }
-.wowhead:hover { border-color: #c04000; box-shadow: 0 0 10px rgba(192, 64, 0, 0.45); }
+
+.wowhead img {
+    width: 1rem;
+    height: 1rem;
+}
+
+.wowhead:hover {
+    border-color: #c04000;
+    box-shadow: 0 0 10px rgba(192, 64, 0, 0.45);
+}
 
 .tag .wowhead {
-  width: auto;
-  height: auto;
-  margin: 0;
-  border: none;
-  border-left: 1px solid var(--border);
-  border-radius: 0;
-  background: none;
-  padding: 0.12rem 0.45rem 0.12rem 0.4rem;
-  align-self: stretch;
+    width: auto;
+    height: auto;
+    margin: 0;
+    border: none;
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    background: none;
+    padding: 0.12rem 0.45rem 0.12rem 0.4rem;
+    align-self: stretch;
 }
-.tag .wowhead:hover { background: rgba(192, 64, 0, 0.18); box-shadow: none; }
-.tag .wowhead img { width: 0.85rem; height: 0.85rem; }
+
+.tag .wowhead:hover {
+    background: rgba(192, 64, 0, 0.18);
+    box-shadow: none;
+}
+
+.tag .wowhead img {
+    width: 0.85rem;
+    height: 0.85rem;
+}
 
 /* wowhead link on a pill's LEFT edge (morph pills): divider flips sides,
    extra outer padding clears the rounded corner */
 .tag .wowhead:first-child {
-  border-left: none;
-  border-right: 1px solid var(--border);
-  padding: 0.12rem 0.4rem 0.12rem 0.5rem;
+    border-left: none;
+    border-right: 1px solid var(--border);
+    padding: 0.12rem 0.4rem 0.12rem 0.5rem;
 }
 
-#empty-note { color: var(--text-dim); padding: 1.6rem 0.5rem; }
+#empty-note {
+    color: var(--text-dim);
+    padding: 1.6rem 0.5rem;
+}
 
-#sentinel { height: 1px; }
+#sentinel {
+    height: 1px;
+}
 
 /* ------------------------------------------------------- empty state */
 
 #empty-state {
-  max-width: 44rem;
-  margin: 2.5rem auto;
-  padding: 1.6rem 2rem;
-  text-align: center;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
+    max-width: 44rem;
+    margin: 2.5rem auto;
+    padding: 1.6rem 2rem;
+    text-align: center;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
 }
-#empty-state[hidden] { display: none; }
-#empty-state h2 { margin: 0 0 0.5rem; color: var(--gold); font-size: 1.25rem; }
-#empty-state p { margin: 0.4rem 0; color: var(--text-dim); }
-#empty-state .es-try { margin-top: 1rem; color: var(--text); }
+
+#empty-state[hidden] {
+    display: none;
+}
+
+#empty-state h2 {
+    margin: 0 0 0.5rem;
+    color: var(--gold);
+    font-size: 1.25rem;
+}
+
+#empty-state p {
+    margin: 0.4rem 0;
+    color: var(--text-dim);
+}
+
+#empty-state .es-try {
+    margin-top: 1rem;
+    color: var(--text);
+}
+
 .es-examples {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  justify-content: center;
-  margin: 0.6rem 0 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    justify-content: center;
+    margin: 0.6rem 0 1rem;
 }
+
 .es-examples button {
-  padding: 0.3rem 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg);
-  color: var(--model);
-  font-family: Consolas, "Cascadia Mono", monospace;
-  font-size: 0.86rem;
-  transition: border-color 0.12s, color 0.12s, box-shadow 0.12s;
+    padding: 0.3rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg);
+    color: var(--model);
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 0.86rem;
+    transition: border-color 0.12s, color 0.12s, box-shadow 0.12s;
 }
+
 .es-examples button:hover {
-  border-color: var(--gold-dim);
-  color: var(--gold);
-  box-shadow: 0 0 10px rgba(240, 195, 76, 0.18);
+    border-color: var(--gold-dim);
+    color: var(--gold);
+    box-shadow: 0 0 10px rgba(240, 195, 76, 0.18);
 }
-.es-hint { font-size: 0.86rem; }
+
+.es-hint {
+    font-size: 0.86rem;
+}
+
 .es-hint code {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 0 0.3rem;
-  font-size: 0.9em;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 0.3rem;
+    font-size: 0.9em;
 }
 
 /* ---------------------------------------------------------------- footer */
 
 footer {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  gap: 1rem;
-  padding: 0.8rem 1.6rem 1.2rem;
-  color: var(--text-dim);
-  font-size: 0.8rem;
-  border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 1rem;
+    padding: 0.8rem 1.6rem 1.2rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
 }
-footer span:nth-child(2) { text-align: center; }
-footer span:last-child { text-align: right; }
-footer a { color: var(--text-dim); }
+
+footer span:nth-child(2) {
+    text-align: center;
+}
+
+footer span:last-child {
+    text-align: right;
+}
+
+footer a {
+    color: var(--text-dim);
+}
+
 @media (max-width: 900px) {
-  footer { grid-template-columns: 1fr; }
-  footer span, footer span:last-child { text-align: center; }
+    footer {
+        grid-template-columns: 1fr;
+    }
+
+    footer span, footer span:last-child {
+        text-align: center;
+    }
 }
 
 /* --------------------------------------------------------------- loading */
 
 #loading {
-  position: fixed;
-  inset: 0;
-  background: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
 }
-#loading[hidden] { display: none; }
 
-.load-card { text-align: center; width: min(26rem, 80vw); }
+#loading[hidden] {
+    display: none;
+}
+
+.load-card {
+    text-align: center;
+    width: min(26rem, 80vw);
+}
 
 .load-logo {
-  font-size: 2rem;
-  letter-spacing: 0.08em;
-  color: var(--gold);
-  text-shadow: 0 0 24px rgba(240, 195, 76, 0.35);
-  margin-bottom: 1.2rem;
+    font-size: 2rem;
+    letter-spacing: 0.08em;
+    color: var(--gold);
+    text-shadow: 0 0 24px rgba(240, 195, 76, 0.35);
+    margin-bottom: 1.2rem;
 }
 
 .load-track {
-  height: 6px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  overflow: hidden;
-}
-#load-bar {
-  height: 100%;
-  width: 0;
-  background: linear-gradient(90deg, var(--gold-dim), var(--gold));
-  transition: width 0.15s;
+    height: 6px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    overflow: hidden;
 }
 
-#load-text { margin-top: 0.7rem; color: var(--text-dim); font-size: 0.9rem; }
-#load-error { margin-top: 0.7rem; color: var(--danger); font-size: 0.9rem; }
+#load-bar {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, var(--gold-dim), var(--gold));
+    transition: width 0.15s;
+}
+
+#load-text {
+    margin-top: 0.7rem;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
+
+#load-error {
+    margin-top: 0.7rem;
+    color: var(--danger);
+    font-size: 0.9rem;
+}
 
 /* ----------------------------------------------------------------- toast */
 
 #toast {
-  position: fixed;
-  left: 50%;
-  bottom: 1.6rem;
-  transform: translateX(-50%) translateY(1rem);
-  background: var(--bg-panel);
-  border: 1px solid var(--gold-dim);
-  color: var(--text);
-  padding: 0.6rem 1.2rem;
-  border-radius: 8px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.18s, transform 0.18s;
-  max-width: min(30rem, 90vw);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: center;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
-  z-index: 20;
+    position: fixed;
+    left: 50%;
+    bottom: 1.6rem;
+    transform: translateX(-50%) translateY(1rem);
+    background: var(--bg-panel);
+    border: 1px solid var(--gold-dim);
+    color: var(--text);
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s, transform 0.18s;
+    max-width: min(30rem, 90vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+    z-index: 20;
 }
-#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+#toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
 
 @media (max-width: 900px) {
-  header, main, footer { padding-left: 0.8rem; padding-right: 0.8rem; }
-  .c-cmds { width: auto; }
+    header, main, footer {
+        padding-left: 0.8rem;
+        padding-right: 0.8rem;
+    }
+
+    .c-cmds {
+        width: auto;
+    }
 }
 
 /* ------------------------------------------- texture hover preview */
 
 #texpreview {
-  position: fixed;
-  z-index: 30;
-  display: none;
-  padding: 6px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
-  pointer-events: none; /* never traps the mouse away from the pill */
+    position: fixed;
+    z-index: 30;
+    display: none;
+    padding: 6px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+    pointer-events: none; /* never traps the mouse away from the pill */
 }
+
 /* checkerboard behind the canvas so alpha reads as alpha */
 #texpreview .tex-img {
-  line-height: 0;
-  background: repeating-conic-gradient(#1c232e 0% 25%, #10141b 0% 50%) 0 0 / 16px 16px;
-  border-radius: 3px;
-  overflow: hidden;
+    line-height: 0;
+    background: repeating-conic-gradient(#1c232e 0% 25%, #10141b 0% 50%) 0 0 / 16px 16px;
+    border-radius: 3px;
+    overflow: hidden;
 }
+
 /* a caption wider than the image would otherwise strand it against the left
    edge with bare checkerboard beside it */
-#texpreview canvas { display: block; margin: 0 auto; }
+#texpreview canvas {
+    display: block;
+    margin: 0 auto;
+}
+
 /* color-swatch hover: a large patch of the color in the same panel — 100%
    width so a long caption never leaves checkerboard beside the patch */
 #texpreview .tex-color {
-  width: 100%;
-  min-width: 140px;
-  height: 90px;
-  border-radius: 3px;
+    width: 100%;
+    min-width: 140px;
+    height: 90px;
+    border-radius: 3px;
 }
+
 #texpreview .tex-dims {
-  margin-top: 4px;
-  font-size: 0.76rem;
-  color: var(--text-dim);
-  text-align: right;
-  line-height: 1;
+    margin-top: 4px;
+    font-size: 0.76rem;
+    color: var(--text-dim);
+    text-align: right;
+    line-height: 1;
 }
 
 /* ------------------------------------------------- reduced motion */
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
 }

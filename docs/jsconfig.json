@@ -5,14 +5,24 @@
   //   npx -p typescript tsc -p docs/jsconfig.json
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "checkJs": false,
     // deliberate: structural/type errors without null-check noise — the DOM
     // code derefs elements that provably exist in index.html
     "strict": false,
     "noEmit": true
   },
-  "include": ["js/*.js", "js/types.d.ts"],
+  "include": [
+    "js/*.js",
+    "js/types.d.ts"
+  ],
   // vendored libs are checked upstream; types.d.ts declares BLPFile for them
-  "exclude": ["js/bufo.js", "js/js-blp.js"]
+  "exclude": [
+    "js/bufo.js",
+    "js/js-blp.js"
+  ]
 }
