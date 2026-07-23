@@ -3499,6 +3499,14 @@
                         creatureId: e.creatureId,
                         creature: d.summonNames.get(e.creatureId) || null,
                         control: d.summonControlNames[e.control] || null,
+                    }))).concat((d.spellSpeedMods.get(id) || []).slice()
+                    .sort((a, b) => a.move.localeCompare(b.move) || a.pct - b.pct)
+                    .map((e) => ({
+                        type: "speed",
+                        movement: e.move,
+                        // signed, as the pill shows it — see speedTag for why the
+                        // change and not the resulting speed
+                        percent: e.pct,
                     })));
             }
             if (!hc.mechanics) {
