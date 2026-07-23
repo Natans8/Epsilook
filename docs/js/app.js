@@ -8,6 +8,8 @@
   const CFG = window.EpsilookConfig;
   const Data = window.EpsilookData;
   const Search = window.EpsilookSearch;
+  // the pill/segment library — every result-cell pill is assembled through it
+  const P = window.EpsilookPills;
 
   /* ---------------------------------------------------------- typedefs */
 
@@ -1405,7 +1407,9 @@
       b.dataset.copy = fillTemplate(cmd.template, { id: spellId });
       row.appendChild(b);
     }
-    const wh = wowheadLink(wowheadUrl(CFG.wowheadSpellUrl, { id: spellId }), "Open on Wowhead");
+    // the same favicon link the pills use, on the row's command strip
+    const wh = P.renderSegment(P.link(
+      wowheadUrl(CFG.wowheadSpellUrl, { id: spellId }), "Open on Wowhead"));
     wh.classList.add("wh-cmd");
     row.appendChild(wh);
     tdCmd.appendChild(row);
@@ -1458,20 +1462,6 @@
     const hits = [], rest = [];
     for (const it of items) (isHit(it) ? hits : rest).push(it);
     return hits.length ? hits.concat(rest) : rest;
-  }
-
-  function wowheadLink(url, title) {
-    const a = el("a", "wowhead");
-    a.href = url;
-    a.target = "_blank";
-    a.rel = "noopener";
-    a.title = title;
-    const img = el("img");
-    img.src = "https://wow.zamimg.com/images/logos/favicon-standard.png";
-    img.alt = "WH";
-    img.loading = "lazy";
-    a.appendChild(img);
-    return a;
   }
 
   function tagCell(className, tags) {
@@ -1564,7 +1554,7 @@
     buildKitGroups(td, kitIds, {
       // the icon rides the kit head: every file in a kit plays together, so
       // the whole kit shares one target type
-      headerTag: (kitId) => addTargetIcons(kitTag(kitId, "soundkit"), kitMask.get(kitId)),
+      headerTag: (kitId) => kitTag(kitId, "soundkit", kitMask.get(kitId)),
       itemsOf: (kitId) => hitsFirst(byKit.get(kitId), (fid) => fileIsHit(d.files.get(fid), "sound")),
       itemTag: (fid) => soundTag(fid),
     });
@@ -1626,8 +1616,7 @@
       // (documented in the help dialog instead); animkits carry theirs
       headerTag: (kitId) => groupAnims.has(kitId)
         ? animCatHeadTag(wordOf(kitId), kitHasHit(kitId))
-        : addTargetIcons(kitTag(kitId, "animkit"),
-          maskOf(d.animKitTargets, spellId, [kitId])),
+        : kitTag(kitId, "animkit", maskOf(d.animKitTargets, spellId, [kitId])),
       itemsOf: (kitId) => hitsFirst(animsOf(kitId).slice().sort((a, b) => a - b),
         (a) => animIsHit(a, wordOf(kitId))),
       itemTag: (animId, kitId) => animTag(animId, wordOf(kitId)),
@@ -1643,14 +1632,13 @@
   };
 
   function animCatHeadTag(word, hit) {
-    const tag = el("span", "tag animkit");
-    if (hit) tag.classList.add("hit");
-    const label = el("button", "tag-label", word);
-    label.title = `${ANIM_CAT_TITLES[word] || ""}`
-      + `\nClick: find all spells with a ${word} animation · Shift-click: exclude`;
-    label.dataset.search = `anim:${word}`;
-    tag.appendChild(label);
-    return tag;
+    return P.pill({ cls: "animkit", hit, segments: [
+      P.label(word, {
+        title: ANIM_CAT_TITLES[word] || "",
+        search: P.query("anim", word),
+        finds: `all spells with a ${word} animation`,
+      }),
+    ] });
   }
 
   /* Shared group renderer: each kit is a small box — the kit tag as a
@@ -1661,22 +1649,11 @@
    * (head + lone item fused) sharing a line instead of a full-width strip. */
   function buildKitGroups(td, kitIds, opts) {
     for (const kitId of kitIds) {
-      const items = opts.itemsOf(kitId);
-      const group = el("div", "kit-group");
-      if (opts.compact && items.length <= 1) group.classList.add("compact");
-
-      const head = el("div", "kit-head");
-      const headTag = opts.headerTag(kitId);
-      if (headTag.classList.contains("hit")) group.classList.add("hit");
-      head.appendChild(headTag);
-      group.appendChild(head);
-
-      if (items.length) {
-        const itemsDiv = el("div", "kit-files");
-        for (const item of items) itemsDiv.appendChild(opts.itemTag(item, kitId));
-        group.appendChild(itemsDiv);
-      }
-      td.appendChild(group);
+      td.appendChild(P.group({
+        head: opts.headerTag(kitId),
+        items: opts.itemsOf(kitId).map((item) => opts.itemTag(item, kitId)),
+        compact: opts.compact,
+      }));
     }
   }
 
@@ -2016,7 +1993,7 @@
       // the icon rides the category head, unioned over this spell's rows in
       // the category — only where the distribution isn't degenerate (a
       // category that is always the same type says nothing per pill)
-      headerTag: (cat) => addTargetIcons(fxHeadTag(cat.name, cat.hit), cat.mask),
+      headerTag: (cat) => fxHeadTag(cat.name, cat.hit, cat.mask),
       itemsOf: (cat) => cat.items,
       itemTag: (make) => make(),
       compact: true,
@@ -2180,91 +2157,15 @@
         || (Search.hasOperator(t.text) && Search.matchNumeric(t.text, count))));
   }
 
-  // small helper: a copy button inside a tag. "⧉" copies an ID; command
-  // buttons are labeled after what they copy (".lo", "/", ".mod").
-  function tagButton(glyph, title, copyValue) {
-    const b = el("button", "tag-copy", glyph);
-    b.type = "button";
-    b.title = `${title}\nShift-click: copy wrapped in \`backticks\``;
-    b.setAttribute("aria-label", title); // glyph alone (".lo", "⧉") isn't spoken usefully
-    b.dataset.copy = copyValue;
-    return b;
-  }
-
   /* --- target-type icons ------------------------------------------------
    *
    * Who a piece of content plays on, from SpellVisualEvent.TargetType (see
-   * TARGET_BITS in build_data.py). Every type is marked — there is no
-   * unmarked default — and a row whose mask has several bits renders one
-   * icon per bit rather than a fused glyph: the mixes are common (16.5% of
-   * model rows are caster+target on 9.2.7) and the rarer ones (caster+area)
-   * have no sensible single glyph. Masters live in build/icons/*.svg with a
-   * preview page at build/target_icons.html; the markup below is lifted from
-   * them, inlined the same way modelTag's cube glyph is.
+   * TARGET_BITS in build_data.py). The bit vocabulary and the glyphs live in
+   * pills.js (P.targets(mask) is the segment); only the two things that need
+   * the loaded pack — the export words and the group-mask union — are here.
    */
-  const TARGET_CASTER = 1, TARGET_TARGET = 2, TARGET_AREA = 4,
-    TARGET_NOT_CASTER = 8, TARGET_MISSILE_DEST = 16;
-
-  const T_SVG_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-    + 'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
-  const T_PERSON = T_SVG_OPEN
-    + '<circle cx="12" cy="8" r="4"/>'
-    + '<path d="M4.5 20.5c1.8-3.8 4.3-5.5 7.5-5.5s5.7 1.7 7.5 5.5"/></svg>';
-  const T_CROSSHAIR = T_SVG_OPEN
-    + '<circle cx="12" cy="12" r="7"/><line x1="12" y1="1.5" x2="12" y2="6"/>'
-    + '<line x1="12" y1="18" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="6" y2="12"/>'
-    + '<line x1="18" y1="12" x2="22.5" y2="12"/>'
-    + '<circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg>';
-  const T_AREA = T_SVG_OPEN
-    + '<ellipse cx="12" cy="18" rx="9" ry="3.4"/><line x1="12" y1="3" x2="12" y2="14.5"/>'
-    + '<path d="M8.5 11 12 15l3.5-4"/></svg>';
-
-  /* One entry per icon, in render order. `bits` is every mask bit the icon
-   * stands for, so the two area types share one glyph instead of drawing it
-   * twice; "target" and "target, never caster" stay separate because they
-   * are separate colors. */
-  const TARGET_ICONS = [
-    {
-      bits: TARGET_CASTER, cls: "t-caster", svg: T_PERSON,
-      title: () => "On the caster",
-    },
-    {
-      bits: TARGET_TARGET, cls: "t-target", svg: T_CROSSHAIR,
-      title: () => "On the target",
-    },
-    {
-      bits: TARGET_NOT_CASTER, cls: "t-notcaster", svg: T_CROSSHAIR,
-      title: () => "On the target only — never the caster",
-    },
-    {
-      // TargetType 3 is the spell's own effect area, wherever that lands —
-      // Flamestrike's chosen spot, Frost Nova around the caster, an
-      // explosion's impact point. It is NOT the target's location, so the
-      // wording must not claim one.
-      bits: TARGET_AREA | TARGET_MISSILE_DEST, cls: "t-area", svg: T_AREA,
-      title: (mask) => (mask & TARGET_AREA
-        ? "In the spell's area of effect"
-        : "Where the missile lands"),
-    },
-  ];
-
-  /**
-   * Render a row's target mask as leading icons.
-   * @param {number} mask union of TARGET_* bits; 0 renders nothing
-   * @returns {HTMLElement|null}
-   */
-  function targetIcons(mask) {
-    if (!mask) return null;
-    const wrap = el("span", "ticons");
-    for (const icon of TARGET_ICONS) {
-      if (!(mask & icon.bits)) continue;
-      const span = el("span", `ticon ${icon.cls}`);
-      span.title = icon.title(mask);
-      span.innerHTML = icon.svg;
-      wrap.appendChild(span);
-    }
-    return wrap.childNodes.length ? wrap : null;
-  }
+  const { TARGET_CASTER, TARGET_TARGET, TARGET_AREA,
+    TARGET_NOT_CASTER, TARGET_MISSILE_DEST } = P;
 
   /**
    * A mask's search words, deduped and in bit order — what the exports say
@@ -2282,22 +2183,6 @@
       if ((mask & bit) && w && !words.includes(w)) words.push(w);
     }
     return words;
-  }
-
-  /**
-   * Put a mask's icons on a tag, immediately before what it describes.
-   *
-   * The anchor is the pill's colour swatch if it has one, otherwise its
-   * label — whichever comes first. Not the pill's leading edge: that can
-   * already hold action buttons (the 3D-view cube, the Wowhead link), and an
-   * icon stranded left of those reads as another button. But a colour pill's
-   * swatch and hex text are one unit, so the icons belong left of the swatch
-   * rather than wedged between the two.
-   */
-  function addTargetIcons(tag, mask) {
-    const icons = targetIcons(mask);
-    if (icons) tag.insertBefore(icons, tag.querySelector(".fx-swatch, .tag-label"));
-    return tag;
   }
 
   /** Union the target masks of a spell's rows for one group of item ids. */
@@ -2324,14 +2209,13 @@
   };
 
   function modelCatHeadTag(category, hit) {
-    const tag = el("span", "tag model-head");
-    if (hit) tag.classList.add("hit");
-    const label = el("button", "tag-label", category);
-    label.title = `${MODEL_CAT_TITLES[category] || ""}`
-      + `\nClick: find all spells with a ${category} model · Shift-click: exclude`;
-    label.dataset.search = `model:${category}`;
-    tag.appendChild(label);
-    return tag;
+    return P.pill({ cls: "model-head", hit, segments: [
+      P.label(category, {
+        title: MODEL_CAT_TITLES[category] || "",
+        search: P.query("model", category),
+        finds: `all spells with a ${category} model`,
+      }),
+    ] });
   }
 
   // model pills can be hit through their usage-category word too —
@@ -2418,15 +2302,14 @@
       why = s ? `Launches from the ${s} attachment point`
         : `Lands on the ${t} attachment point`;
     }
-    const seg = el("button", "tag-attach", label);
     const words = [s, t].filter(Boolean);
-    if (attachIsHit(field, words)) seg.classList.add("hit");
-    seg.title = `${why} — an M2 attachment slot, not a description`
-      + `\nClick: find spells using ${words.length > 1 ? "these points" : "this point"} · Shift-click: exclude`;
     // each point is an `attach <point>` pair; always quoted (the space)
-    const q = words.map((w) => `attach ${w}`).join(" ");
-    seg.dataset.search = `${field}:"${q}"`;
-    return seg;
+    return P.note(label, {
+      hit: attachIsHit(field, words),
+      title: `${why} — an M2 attachment slot, not a description`,
+      search: P.quoted(field, words.map((w) => `attach ${w}`).join(" ")),
+      finds: `spells using ${words.length > 1 ? "these points" : "this point"}`,
+    });
   }
 
   /** The attachment points named by a group's `attach <point>` pairs. */
@@ -2460,52 +2343,35 @@
     // attachment point and target icon, and drops only what needs a real file:
     // the 3D preview and the .lookup command.
     const synthetic = fid < 0;
-    const tag = el("span", "tag model");
-    if (synthetic) tag.classList.add("synthetic");
-    tag.title = file.path || "(name unknown)";
-    // with "" for the category (the stale-pack flat list) this reduces to
-    // the plain fileIsHit test
-    if (modelFileIsHit(file, catName || "")) tag.classList.add("hit");
-
-    if (!synthetic && CFG.modelViewerUrl) {
-      const view = el("a", "tag-view");
-      // wireframe cube (the universal 3D-preview glyph); stroke inherits
-      // currentColor so the gold hover tint applies
-      view.innerHTML =
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-        'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">' +
-        '<path d="M12 2.5 21 7.5v9l-9 5-9-5v-9z"/>' +
-        '<path d="M12 12.2 21 7.5M12 12.2v9.3M12 12.2 3 7.5"/></svg>';
-      view.href = fillTemplate(CFG.modelViewerUrl, { fid });
-      view.target = "_blank";
-      view.rel = "noopener";
-      view.title = `Preview ${file.base || `file #${fid}`} in the WoW.tools model viewer (new tab)`;
-      view.setAttribute("aria-label", view.title);
-      tag.appendChild(view);
-    }
-
     // the sentinel's synthetic path IS its label, so both cases read it the
     // same way — only the tooltip differs (a slot name has no fid to report)
     const labelText = file.base ? stripExt(file.base) : `file #${fid}`;
-    const txt = el("button", "tag-label", labelText);
-    txt.title = (synthetic
-      ? "No fixed model — the game fills this in from the caster's own gear at"
-        + " cast time (SpellVisualEffectName Type 3–10)"
-      : `${file.path || "(name unknown)"}\nFileDataID ${fid}`)
-      + "\nClick: find spells using this model · Shift-click: exclude";
-    txt.dataset.search = file.base ? `model:"${file.base}"` : "";
-    tag.appendChild(txt);
-    addTargetIcons(tag, mask);
-    const attach = attachSegment(src, dst, "model", twoPoint);
-    if (attach) tag.appendChild(attach);
-
-    // fileless sentinels have no fid to look up / copy — the marker is the pill
-    if (!synthetic) {
-      const cmd = fillTemplate(CFG.modelCopyTemplate,
-        { base: stripExt(file.base), file: file.base, path: file.path, fid });
-      tag.appendChild(tagButton(".lo", `Copy:  ${cmd}`, cmd));
-    }
-    return tag;
+    return P.pill({
+      cls: "model" + (synthetic ? " synthetic" : ""),
+      // with "" for the category (the stale-pack flat list) this reduces to
+      // the plain fileIsHit test
+      hit: modelFileIsHit(file, catName || ""),
+      title: file.path || "(name unknown)",
+      segments: [
+        !synthetic && CFG.modelViewerUrl && P.view(
+          fillTemplate(CFG.modelViewerUrl, { fid }),
+          `Preview ${file.base || `file #${fid}`} in the WoW.tools model viewer (new tab)`),
+        P.targets(mask),
+        P.label(labelText, {
+          title: synthetic
+            ? "No fixed model — the game fills this in from the caster's own gear at"
+              + " cast time (SpellVisualEffectName Type 3–10)"
+            : file.path || "(name unknown)",
+          detail: [!synthetic && `FileDataID ${fid}`],
+          search: file.base ? P.quoted("model", file.base) : "",
+          finds: "spells using this model",
+        }),
+        attachSegment(src, dst, "model", twoPoint),
+        // fileless sentinels have no fid to look up / copy — the marker is the pill
+        !synthetic && P.cmd(".lo", CFG.modelCopyTemplate,
+          { base: stripExt(file.base), file: file.base, path: file.path, fid }),
+      ],
+    });
   }
 
   /* Display pill (MODELS column): a model reached through a CreatureDisplayID
@@ -2519,36 +2385,30 @@
     const d = state.data;
     const { fid, ref: displayId, targets: mask } = e;
     const file = fid ? (d.files.get(fid) || { path: "", base: "" }) : { path: "", base: "" };
-    const tag = el("span", "tag model");
-    if (modelFileIsHit(d.files.get(fid), MODEL_CAT_DISPLAY_WORD)) tag.classList.add("hit");
-
-    if (displayId && CFG.wowheadMorphUrl) {
-      tag.appendChild(wowheadLink(fillTemplate(CFG.wowheadMorphUrl, { id: displayId }),
-        `View DisplayID ${displayId} in Wowhead's model viewer`));
-    }
-
     const base = file.base ? stripExt(file.base) : "";
-    const txt = el("button", "tag-label", base || `display #${displayId}`);
-    txt.title = `${file.path || "(model name unknown)"}`
-      + `\nDisplayID ${displayId}`
-      + `\nClick: find spells using this model · Shift-click: exclude`;
-    txt.dataset.search = base ? `model:"${file.base}"` : "";
-    tag.appendChild(txt);
-    addTargetIcons(tag, mask);
-    // single-point route (dst unused), like an ordinary attached model
-    const attach = attachSegment(e.src, e.dst, "model", false);
-    if (attach) tag.appendChild(attach);
-
-    if (displayId) {
-      tag.appendChild(tagButton("⧉", `Copy display ID: ${displayId}`, String(displayId)));
-      const cmd = fillTemplate(CFG.morphCopyTemplate, { id: displayId });
-      tag.appendChild(tagButton(".morph", `Copy:  ${cmd}`, cmd));
-    }
-    if (file.base) {
-      const lookup = fillTemplate(CFG.morphLookupTemplate, { id: displayId, file: file.base });
-      tag.appendChild(tagButton(".lo", `Copy:  ${lookup}`, lookup));
-    }
-    return tag;
+    return P.pill({
+      cls: "model",
+      hit: modelFileIsHit(d.files.get(fid), MODEL_CAT_DISPLAY_WORD),
+      segments: [
+        displayId && CFG.wowheadMorphUrl && P.link(
+          fillTemplate(CFG.wowheadMorphUrl, { id: displayId }),
+          `View DisplayID ${displayId} in Wowhead's model viewer`),
+        P.targets(mask),
+        P.label(base || `display #${displayId}`, {
+          title: file.path || "(model name unknown)",
+          detail: [`DisplayID ${displayId}`],
+          search: base ? P.quoted("model", file.base) : "",
+          finds: "spells using this model",
+        }),
+        // single-point route (dst unused), like an ordinary attached model
+        attachSegment(e.src, e.dst, "model", false),
+        displayId && [
+          P.copy("⧉", `Copy display ID: ${displayId}`, String(displayId)),
+          P.cmd(".morph", CFG.morphCopyTemplate, { id: displayId }),
+        ],
+        file.base && P.cmd(".lo", CFG.morphLookupTemplate, { id: displayId, file: file.base }),
+      ],
+    });
   }
 
   /* Item pill (MODELS column): a model reached through an Item::ID
@@ -2572,83 +2432,47 @@
     // .lookup item accepts the item name OR the model base name (no extension)
     const lookupName = info.name || base;
 
-    const tag = el("span", "tag model item");
-    if (info.quality) tag.classList.add(`q-${info.quality}`);
-    if (itemIsHit(e)) tag.classList.add("hit");
-
-    // leading action: Wowhead item page for named, 3D model viewer for nameless
-    if (named && CFG.wowheadItemUrl) {
-      tag.appendChild(wowheadLink(wowheadUrl(CFG.wowheadItemUrl, { id: itemId }),
-        `Open ${info.name} on Wowhead`));
-    } else if (!named && CFG.modelViewerUrl && fid) {
-      const view = el("a", "tag-view");
-      view.innerHTML =
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-        'stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">' +
-        '<path d="M12 2.5 21 7.5v9l-9 5-9-5v-9z"/>' +
-        '<path d="M12 12.2 21 7.5M12 12.2v9.3M12 12.2 3 7.5"/></svg>';
-      view.href = fillTemplate(CFG.modelViewerUrl, { fid });
-      view.target = "_blank";
-      view.rel = "noopener";
-      view.title = `Preview ${base || `file #${fid}`} in the WoW.tools model viewer (new tab)`;
-      view.setAttribute("aria-label", view.title);
-      tag.appendChild(view);
-    }
-
-    addTargetIcons(tag, mask);
-
-    // icon, then label, with nothing between them so they read as one unit.
-    // On a named item the icon is a Wowhead item link, the same mechanism the
-    // name link / [wh] button use — that anchor+href is what the app's tooltips
-    // ride on (data-wowhead alone is unproven here), so hovering the icon raises
-    // the same tooltip and clicking it opens the item. Nameless items have no
-    // item page, so their icon is a plain img.
-    if (info.icon) {
-      const ic = el("img", "item-icon");
-      ic.src = fillTemplate(CFG.spellIconUrl, { icon: info.icon });
-      ic.alt = "";
-      ic.loading = "lazy";
-      if (named && CFG.wowheadItemUrl) {
-        const iconLink = el("a", "item-icon-link");
-        iconLink.href = wowheadUrl(CFG.wowheadItemUrl, { id: itemId });
-        iconLink.target = "_blank";
-        iconLink.rel = "noopener";
-        iconLink.title = `Open ${info.name} on Wowhead`;
-        iconLink.setAttribute("aria-label", iconLink.title);
-        iconLink.setAttribute("data-wowhead", `item=${itemId}`);
-        iconLink.appendChild(ic);
-        tag.appendChild(iconLink);
-      } else {
-        tag.appendChild(ic);
-      }
-    }
-
-    const label = named ? info.name : base || `item #${itemId}`;
-    const txt = el("button", "tag-label", label);
-    txt.title = named
-      ? `${info.name} (item ${itemId})`
-        + `\nClick: find spells using this item · Shift-click: exclude`
-      : `${file.path || "(model name unknown)"}\nItem ${itemId} (no name)`
-        + `\nClick: find spells using this model · Shift-click: exclude`;
-    // named items search the item corpus (name/quality); nameless by filename
-    txt.dataset.search = named ? `model:"item ${info.name}"`
-      : (base ? `model:"${file.base}"` : "");
-    if (named) txt.setAttribute("data-wowhead", `item=${itemId}`); // tooltip on the name too
-    tag.appendChild(txt);
-
-    const attach = attachSegment(e.src, e.dst, "model", false);
-    if (attach) tag.appendChild(attach);
-
-    if (named) {
-      tag.appendChild(tagButton("⧉", `Copy item ID: ${itemId}`, String(itemId)));
-      const add = fillTemplate(CFG.itemAddTemplate, { id: itemId });
-      tag.appendChild(tagButton(".add", `Copy:  ${add}`, add));
-    }
-    if (lookupName) {
-      const lookup = fillTemplate(CFG.itemLookupTemplate, { id: itemId, name: lookupName });
-      tag.appendChild(tagButton(".lo", `Copy:  ${lookup}`, lookup));
-    }
-    return tag;
+    const itemHref = named && CFG.wowheadItemUrl
+      ? wowheadUrl(CFG.wowheadItemUrl, { id: itemId }) : "";
+    return P.pill({
+      cls: "model item" + (info.quality ? ` q-${info.quality}` : ""),
+      hit: itemIsHit(e),
+      segments: [
+        // leading action: Wowhead item page for named, 3D model viewer for nameless
+        itemHref && P.link(itemHref, `Open ${info.name} on Wowhead`),
+        !named && CFG.modelViewerUrl && fid && P.view(
+          fillTemplate(CFG.modelViewerUrl, { fid }),
+          `Preview ${base || `file #${fid}`} in the WoW.tools model viewer (new tab)`),
+        P.targets(mask),
+        // icon, then label, with nothing between them so they read as one unit.
+        // On a named item the icon is a Wowhead item link, the same mechanism the
+        // name link / [wh] button use — that anchor+href is what the app's tooltips
+        // ride on (data-wowhead alone is unproven here), so hovering the icon raises
+        // the same tooltip and clicking it opens the item. Nameless items have no
+        // item page, so their icon is a plain img.
+        info.icon && P.icon(fillTemplate(CFG.spellIconUrl, { icon: info.icon }), {
+          href: itemHref || undefined,
+          title: itemHref ? `Open ${info.name} on Wowhead` : undefined,
+          data: itemHref ? { wowhead: `item=${itemId}` } : undefined,
+        }),
+        P.label(named ? info.name : base || `item #${itemId}`, {
+          title: named ? `${info.name} (item ${itemId})`
+            : file.path || "(model name unknown)",
+          detail: [!named && `Item ${itemId} (no name)`],
+          // named items search the item corpus (name/quality); nameless by filename
+          search: named ? P.catQuery("model", MODEL_CAT_ITEM_WORD, info.name)
+            : (base ? P.quoted("model", file.base) : ""),
+          finds: named ? "spells using this item" : "spells using this model",
+          data: named ? { wowhead: `item=${itemId}` } : undefined, // tooltip on the name too
+        }),
+        attachSegment(e.src, e.dst, "model", false),
+        named && [
+          P.copy("⧉", `Copy item ID: ${itemId}`, String(itemId)),
+          P.cmd(".add", CFG.itemAddTemplate, { id: itemId }),
+        ],
+        lookupName && P.cmd(".lo", CFG.itemLookupTemplate, { id: itemId, name: lookupName }),
+      ],
+    });
   }
 
   // an item pill lights when a positive model chip is satisfied by the item's
@@ -2666,31 +2490,28 @@
   function soundTag(fid) {
     const d = state.data;
     const file = d.files.get(fid) || { fid, path: "", base: "", searchL: "" };
-    const tag = el("span", "tag sound");
-    tag.title = file.path || "(name unknown)";
-    if (fileIsHit(file, "sound")) tag.classList.add("hit");
-
-    if (CFG.soundPlayUrl) {
-      const play = el("button", "tag-play", "▶");
-      play.type = "button";
-      play.title = `Play ${file.base || `file #${fid}`} (streamed from Wowhead)`;
-      play.setAttribute("aria-label", play.title);
-      play.dataset.play = fillTemplate(CFG.soundPlayUrl, {
-        fid,
-        bucket: fid % 256,
-        base: encodeURIComponent(stripExt(file.base) || String(fid)),
-      });
-      tag.appendChild(play);
-    }
-
-    // sound extensions stay visible (.ogg/.mp3 differ, unlike models)
-    const txt = el("button", "tag-label", file.base || `file #${fid}`);
-    txt.title = `${file.path || "(name unknown)"}\nFileDataID ${fid}\nClick: find spells using this sound · Shift-click: exclude`;
-    txt.dataset.search = file.base ? `sound:"${file.base}"` : "";
-    tag.appendChild(txt);
-
-    tag.appendChild(tagButton("⧉", `Copy FileDataID ${fid}`, String(fid)));
-    return tag;
+    return P.pill({
+      cls: "sound",
+      hit: fileIsHit(file, "sound"),
+      title: file.path || "(name unknown)",
+      segments: [
+        CFG.soundPlayUrl && P.play(
+          fillTemplate(CFG.soundPlayUrl, {
+            fid,
+            bucket: fid % 256,
+            base: encodeURIComponent(stripExt(file.base) || String(fid)),
+          }),
+          `Play ${file.base || `file #${fid}`} (streamed from Wowhead)`),
+        // sound extensions stay visible (.ogg/.mp3 differ, unlike models)
+        P.label(file.base || `file #${fid}`, {
+          title: file.path || "(name unknown)",
+          detail: [`FileDataID ${fid}`],
+          search: file.base ? P.quoted("sound", file.base) : "",
+          finds: "spells using this sound",
+        }),
+        P.copy("⧉", `Copy FileDataID ${fid}`, String(fid)),
+      ],
+    });
   }
 
   /* ------------------------------------------------- sound playback (▶) */
@@ -2737,45 +2558,44 @@
     audio.play().catch(() => {}); // failures surface via the error listener
   }
 
-  function kitTag(kitId, field) {
-    const tag = el("span", `tag ${field}`);
-    if (kitIsHit(kitId, field)) tag.classList.add("hit");
-
-    const txt = el("button", "tag-label", String(kitId));
-    txt.title = field === "soundkit"
-      ? `SoundKit ${kitId}\nClick: find spells using this soundkit · Shift-click: exclude`
-      : `AnimKit ${kitId}\nClick: find spells using this animkit · Shift-click: exclude`;
-    txt.dataset.search = `${field === "soundkit" ? "sound" : "anim"}:${kitId}`;
-    tag.appendChild(txt);
-
-    const kind = field === "soundkit" ? "SoundKit" : "AnimKit";
-    tag.appendChild(tagButton("⧉", `Copy ${kind} ID ${kitId}`, String(kitId)));
-
-    const tpl = field === "soundkit" ? CFG.soundKitCopyTemplate : CFG.animKitCopyTemplate;
-    const cmd = fillTemplate(tpl, { id: kitId });
-    tag.appendChild(tagButton(field === "soundkit" ? "/" : ".mod", `Copy:  ${cmd}`, cmd));
-
-    if (field === "soundkit") {
-      tag.appendChild(wowheadLink(wowheadUrl(CFG.wowheadSoundUrl, { id: kitId }), `SoundKit ${kitId} on Wowhead`));
-    }
-    return tag;
+  function kitTag(kitId, field, mask = 0) {
+    const sound = field === "soundkit";
+    const kind = sound ? "SoundKit" : "AnimKit";
+    return P.pill({
+      cls: field,
+      hit: kitIsHit(kitId, field),
+      segments: [
+        P.targets(mask),
+        P.label(String(kitId), {
+          title: `${kind} ${kitId}`,
+          search: P.query(sound ? "sound" : "anim", kitId),
+          finds: `spells using this ${field}`,
+        }),
+        P.copy("⧉", `Copy ${kind} ID ${kitId}`, String(kitId)),
+        P.cmd(sound ? "/" : ".mod",
+          sound ? CFG.soundKitCopyTemplate : CFG.animKitCopyTemplate, { id: kitId }),
+        sound && P.link(wowheadUrl(CFG.wowheadSoundUrl, { id: kitId }),
+          `SoundKit ${kitId} on Wowhead`),
+      ],
+    });
   }
 
   function animTag(animId, groupWord = "", mask = 0) {
     const d = state.data;
     const name = d.animNames[animId];
-    const tag = el("span", "tag anim");
-    if (animIsHit(animId, groupWord)) tag.classList.add("hit");
-
-    const txt = el("button", "tag-label", name);
-    txt.title = `Animation ${animId}: ${name}\nClick: find spells playing this animation · Shift-click: exclude`;
-    txt.dataset.search = `anim:"${name}"`;
-    tag.appendChild(txt);
-    addTargetIcons(tag, mask);
-
-    const cmd = fillTemplate(CFG.animCopyTemplate, { name, id: animId });
-    tag.appendChild(tagButton(".lo", `Copy:  ${cmd}`, cmd));
-    return tag;
+    return P.pill({
+      cls: "anim",
+      hit: animIsHit(animId, groupWord),
+      segments: [
+        P.targets(mask),
+        P.label(name, {
+          title: `Animation ${animId}: ${name}`,
+          search: P.quoted("anim", name),
+          finds: "spells playing this animation",
+        }),
+        P.cmd(".lo", CFG.animCopyTemplate, { name, id: animId }),
+      ],
+    });
   }
 
   /* One Mechanics pill = one SpellEffect. The SPECIFIC thing the effect does
@@ -2798,9 +2618,6 @@
    */
   function mechanicTag(pill) {
     const d = state.data;
-    const tag = el("span", "tag mechanic" + (pill.aura ? " aura" : ""));
-    if (pill.rows.some(mechanicIsHit)) tag.classList.add("hit");
-
     const effectName = pill.effect
       ? (d.effectNames.get(pill.effect) || `EFFECT_${pill.effect}`) : "";
     const auraName = pill.aura ? (d.auraNames.get(pill.aura) || `AURA_${pill.aura}`) : "";
@@ -2811,23 +2628,25 @@
       .map((r) => [r.targetA, r.targetB].filter(Boolean)
         .map((t) => `TARGET_${d.implicitTargetNames.get(t) || t}`).join(" + "))
       .filter(Boolean);
-    const aimedAt = aims.length ? `\nAimed at ${[...new Set(aims)].join(" or ")}` : "";
+    const aimedAt = aims.length ? `Aimed at ${[...new Set(aims)].join(" or ")}` : "";
 
-    const seg = (cls, text, title) => {
-      const b = el("button", cls, text);
-      b.title = `${title}${aimedAt}`
-        + `\nClick: find spells with this mechanic · Shift-click: exclude`;
-      b.dataset.search = `mech:"${text}"`;
-      tag.appendChild(b);
-    };
-    // the aura leads when there is one, else the effect does
-    if (auraName) seg("tag-label", auraName, `Aura ${pill.aura}: SPELL_AURA_${auraName}`);
-    if (effectName) {
-      seg(auraName ? "tag-attach" : "tag-label", effectName,
-        `Spell effect ${pill.effect}: SPELL_EFFECT_${effectName}`);
-    }
-    addTargetIcons(tag, pill.mask);
-    return tag;
+    /** Both segments carry the same shape; only which kind leads differs. */
+    const seg = (make, text, title) => make(text, {
+      title, detail: [aimedAt],
+      search: P.quoted("mech", text),
+      finds: "spells with this mechanic",
+    });
+    return P.pill({
+      cls: "mechanic" + (pill.aura ? " aura" : ""),
+      hit: pill.rows.some(mechanicIsHit),
+      segments: [
+        P.targets(pill.mask),
+        // the aura leads when there is one, else the effect does
+        auraName && seg(P.label, auraName, `Aura ${pill.aura}: SPELL_AURA_${auraName}`),
+        effectName && seg(auraName ? P.note : P.label, effectName,
+          `Spell effect ${pill.effect}: SPELL_EFFECT_${effectName}`),
+      ],
+    });
   }
 
   /* Collapse a spell's mechanic rows to what the pills actually render.
@@ -2875,15 +2694,15 @@
     keybind: "A key that casts a spell while the aura holds (SpellKeyboundOverride)",
   };
 
-  function fxHeadTag(category, hit) {
-    const tag = el("span", "tag fx-head");
-    if (hit) tag.classList.add("hit");
-    const label = el("button", "tag-label", category);
-    label.title = `${FX_HEAD_TITLES[category] || ""}`
-      + `\nClick: find all spells with a ${category} effect · Shift-click: exclude`;
-    label.dataset.search = /\s/.test(category) ? `fx:"${category}"` : `fx:${category}`;
-    tag.appendChild(label);
-    return tag;
+  function fxHeadTag(category, hit, mask = 0) {
+    return P.pill({ cls: "fx-head", hit, segments: [
+      P.targets(mask),
+      P.label(category, {
+        title: FX_HEAD_TITLES[category] || "",
+        search: P.query("fx", category),
+        finds: `all spells with a ${category} effect`,
+      }),
+    ] });
   }
 
   /**
@@ -2895,39 +2714,34 @@
     const d = state.data;
     const file = entry.fid ? (d.files.get(entry.fid) || { path: "", base: "" }) : { path: "", base: "" };
     const info = d.fxChains.get(entry.chainId) || { color: 0xffffff, hue: "" };
-    const tag = el("span", "tag fx");
-    if (fxChainIsHit(entry.chainId)) tag.classList.add("hit");
-
-    if (entry.color !== 0xffffff) {
-      const hex = hexColor(entry.color);
-      const dot = el("span", "fx-swatch");
-      dot.style.background = hex;
-      dot.title = `Tint ${hex}` + (info.hue ? ` (${info.hue})` : "");
-      dot.dataset.color = hex;
-      dot.dataset.colorInfo = "chain tint";
-      tag.appendChild(dot);
-    }
-
+    const tinted = entry.color !== 0xffffff;
+    const hex = hexColor(entry.color);
     const base = file.base ? stripExt(file.base) : "";
-    const txt = el("button", "tag-label", base || "(untextured)");
-    txt.title = `${file.path || "(no texture)"}\nClick: find spells with this chain texture · Shift-click: exclude`;
-    if (entry.fid) {
-      txt.dataset.texFid = String(entry.fid);
-      // the hover preview multiplies the texture by the chain's tint
-      if (entry.color !== 0xffffff)
-        txt.dataset.texTint = hexColor(entry.color);
-    }
-    // category word + texture: the query stays scoped to chains once more
-    // fx categories exist ("fx:chain lightning" style)
-    txt.dataset.search = file.base ? `fx:"chain ${file.base}"` : "";
-    tag.appendChild(txt);
-    addTargetIcons(tag, mask);
-    // a beam attaches at both ends — caster's hand to the target's chest
-    const attach = attachSegment(entry.src ?? -1, entry.dst ?? -1, "fx", true);
-    if (attach) tag.appendChild(attach);
-
-    if (base) tag.appendChild(tagButton("⧉", `Copy texture name: ${base}`, base));
-    return tag;
+    return P.pill({
+      cls: "fx",
+      hit: fxChainIsHit(entry.chainId),
+      segments: [
+        P.targets(mask),
+        tinted && P.swatch(hex, {
+          title: `Tint ${hex}` + (info.hue ? ` (${info.hue})` : ""),
+          info: "chain tint",
+        }),
+        P.label(base || "(untextured)", {
+          title: file.path || "(no texture)",
+          // category word + texture: the query stays scoped to chains once more
+          // fx categories exist ("fx:chain lightning" style)
+          search: file.base ? P.catQuery("fx", "chain", file.base) : "",
+          finds: "spells with this chain texture",
+          // the hover preview multiplies the texture by the chain's tint
+          data: entry.fid
+            ? { texFid: entry.fid, texTint: tinted ? hex : undefined }
+            : undefined,
+        }),
+        // a beam attaches at both ends — caster's hand to the target's chest
+        attachSegment(entry.src ?? -1, entry.dst ?? -1, "fx", true),
+        base && P.copy("⧉", `Copy texture name: ${base}`, base),
+      ],
+    });
   }
 
   /** Color-only fx pill (glow / ghost / tint): swatch + hex label — these
@@ -2943,53 +2757,48 @@
    */
   function colorFxTag(category, color, hit, alpha, mask = 0) {
     const hex = hexColor(color);
-    const tag = el("span", "tag fx");
-    if (hit) tag.classList.add("hit");
-
-    const dot = el("span", "fx-swatch");
-    dot.style.background = hex;
-    dot.dataset.color = hex;
-    dot.dataset.colorInfo = category;
-    if (alpha >= 0) dot.dataset.alpha = String(alpha);
-    tag.appendChild(dot);
-
-    const txt = el("button", "tag-label", hex);
-    txt.title = `${FX_HEAD_TITLES[category]}\nColor ${hex}`
-      + `\nClick: find spells with this ${category} color · Shift-click: exclude`;
-    txt.dataset.search = `fx:"${category} ${hex}"`;
-    // the hex text is the color too — hovering it shows the same big patch
-    txt.dataset.color = hex;
-    txt.dataset.colorInfo = category;
-    if (alpha >= 0) txt.dataset.alpha = String(alpha);
-    tag.appendChild(txt);
-    addTargetIcons(tag, mask);
-
-    tag.appendChild(tagButton("⧉", `Copy color: ${hex}`, hex));
-    return tag;
+    const colorData = {
+      color: hex, colorInfo: category, alpha: alpha >= 0 ? alpha : undefined,
+    };
+    return P.pill({
+      cls: "fx",
+      hit,
+      segments: [
+        P.targets(mask),
+        P.swatch(hex, { info: category, alpha }),
+        P.label(hex, {
+          title: FX_HEAD_TITLES[category],
+          detail: [`Color ${hex}`],
+          search: P.catQuery("fx", category, hex),
+          finds: `spells with this ${category} color`,
+          // the hex text is the color too — hovering it shows the same big patch
+          data: colorData,
+        }),
+        P.copy("⧉", `Copy color: ${hex}`, hex),
+      ],
+    });
   }
 
   /* Percent-only fx pill (desaturate / transparency): the strength is the
    * whole payload. Desaturate gets a decorative grey swatch keyed to the
    * strength; transparency has no swatch. Clicking searches category + %. */
   function percentFxTag(category, percent, hit) {
+    const grey = Math.round(255 * (1 - percent / 200)); // 100% -> mid grey
     // .flat: as a compact pill this renders (label | value) — a flat divider
     // instead of the rounded value capsule other compact groups get
-    const tag = el("span", "tag fx flat");
-    if (hit) tag.classList.add("hit");
-
-    if (category === "desaturate") {
-      const v = Math.round(255 * (1 - percent / 200)); // 100% -> mid grey
-      const dot = el("span", "fx-swatch");
-      dot.style.background = `rgb(${v}, ${v}, ${v})`;
-      tag.appendChild(dot);
-    }
-
-    const txt = el("button", "tag-label", `${percent}%`);
-    txt.title = `${FX_HEAD_TITLES[category]}\n${percent}%`
-      + `\nClick: find spells with this ${category} strength · Shift-click: exclude`;
-    txt.dataset.search = `fx:"${category} ${percent}%"`;
-    tag.appendChild(txt);
-    return tag;
+    return P.pill({
+      cls: "fx flat",
+      hit,
+      segments: [
+        category === "desaturate" && P.swatch(`rgb(${grey}, ${grey}, ${grey})`),
+        P.label(`${percent}%`, {
+          title: FX_HEAD_TITLES[category],
+          detail: [`${percent}%`],
+          search: P.catQuery("fx", category, `${percent}%`),
+          finds: `spells with this ${category} strength`,
+        }),
+      ],
+    });
   }
 
   /* Vehicle seat pill: one per seat of the vehicle the aura turns the caster
@@ -3000,18 +2809,21 @@
    * Vehicle.db2 id says nothing to a user, so it is neither shown nor
    * copyable. Clicking finds every spell with a seat at the same point. */
   function vehicleTag(attachment, seats, mask = 0) {
-    const tag = el("span", "tag fx");
-    if (vehicleIsHit(attachment, seats)) tag.classList.add("hit");
     const label = attachment || "seat";
-    const txt = el("button", "tag-label", label);
-    txt.title = `${FX_HEAD_TITLES.seat}\n`
-      + `Seat at the ${label} attachment point`
-      + `\n(an M2 attachment slot, not a description of the seat)`
-      + `\nClick: find spells with a seat there · Shift-click: exclude`;
-    txt.dataset.search = `fx:"seat ${label}"`;
-    tag.appendChild(txt);
-    addTargetIcons(tag, mask);
-    return tag;
+    return P.pill({
+      cls: "fx",
+      hit: vehicleIsHit(attachment, seats),
+      segments: [
+        P.targets(mask),
+        P.label(label, {
+          title: FX_HEAD_TITLES.seat,
+          detail: [`Seat at the ${label} attachment point`,
+            "(an M2 attachment slot, not a description of the seat)"],
+          search: P.catQuery("fx", "seat", label),
+          finds: "spells with a seat there",
+        }),
+      ],
+    });
   }
 
   /* Invisibility-channel pill (MOD_INVISIBILITY[_DETECT]). One per invisibility
@@ -3026,33 +2838,33 @@
   function channelTag(side, type, count, mask = 0) {
     const invis = side === "invis";
     const priceless = invis && count === 0;
-    // .flat: one per spell (SpellEffect aura) — render (label | id | count)
-    // with flat dividers, not the rounded group capsule.
-    const tag = el("span", "tag fx flat" + (priceless ? " priceless" : ""));
-    if (channelIsHit(side, type, count)) tag.classList.add("hit");
     const verb = invis ? (priceless ? "unseen" : `seen by ${count}`) : `reveals ${count}`;
     const other = invis ? "detect" : "invis";
     const plural = count === 1 ? "" : "s";
-    const search = priceless ? "" : `fx:"${other} ${type}"`;
-    const title = `${invis ? "Invisibility" : "Detection"} channel ${type}\n`
-        + (invis
-            ? (priceless ? "Nothing detects this — nothing can reveal it (priceless)"
-                : `Detected by ${count} spell${plural}`)
-            : `Reveals ${count} invisibility spell${plural}`)
-        + (priceless ? ""
-            : `\nClick: show the ${count} counterpart${plural} (fx:${other} ${type})`
-            + ` · Shift-click: exclude`);
+    // a priceless channel has no counterpart to navigate to, so it drops the
+    // action entirely — both segments render inert (no search, no click line)
+    const nav = priceless ? {} : {
+      search: P.catQuery("fx", other, type),
+      click: `show the ${count} counterpart${plural} (fx:${other} ${type})`,
+    };
+    const detail = [`${invis ? "Invisibility" : "Detection"} channel ${type}`,
+      invis
+        ? (priceless ? "Nothing detects this — nothing can reveal it (priceless)"
+          : `Detected by ${count} spell${plural}`)
+        : `Reveals ${count} invisibility spell${plural}`];
     // two divider-separated segments — (id | count), mirroring the model pill's
     // (name | attach) grammar. Both carry the same navigation.
-    const idSeg = el(priceless ? "span" : "button", "tag-label", String(type));
-    const cntSeg = el(priceless ? "span" : "button", "tag-attach", verb);
-    for (const seg of [idSeg, cntSeg]) {
-      seg.title = title;
-      if (search) seg.dataset.search = search;
-      tag.appendChild(seg);
-    }
-    addTargetIcons(tag, mask);
-    return tag;
+    // .flat: one per spell (SpellEffect aura) — render (label | id | count)
+    // with flat dividers, not the rounded group capsule.
+    return P.pill({
+      cls: "fx flat" + (priceless ? " priceless" : ""),
+      hit: channelIsHit(side, type, count),
+      segments: [
+        P.targets(mask),
+        P.label(String(type), { detail, ...nav }),
+        P.note(verb, { detail, ...nav }),
+      ],
+    });
   }
 
   /* Keybound-override pill (aura 406): while the aura holds, this key stops
@@ -3072,16 +2884,19 @@
    * @param {{label: string, fn: string, ids: number[]}} pill
    */
   function keybindTag(pill, mask = 0) {
-    const tag = el("span", "tag fx");
-    if (pill.ids.some(keybindIsHit)) tag.classList.add("hit");
-    const key = el("button", "tag-label", pill.label);
-    key.title = `${pill.fn} is overridden while this aura holds`
-      + `\nOn Epsilon the key is simply disabled`
-      + `\nClick: find spells overriding this key · Shift-click: exclude`;
-    key.dataset.search = `fx:"keybind ${pill.fn}"`;
-    tag.appendChild(key);
-    addTargetIcons(tag, mask);
-    return tag;
+    return P.pill({
+      cls: "fx",
+      hit: pill.ids.some(keybindIsHit),
+      segments: [
+        P.targets(mask),
+        P.label(pill.label, {
+          title: `${pill.fn} is overridden while this aura holds`,
+          detail: ["On Epsilon the key is simply disabled"],
+          search: P.catQuery("fx", "keybind", pill.fn),
+          finds: "spells overriding this key",
+        }),
+      ],
+    });
   }
 
   /** Stand-in for a ScreenEffect row with no color payload at all (-1 = the
@@ -3103,31 +2918,19 @@
     const name = d.screenNames.get(screenId) || "";
     const colors = d.screenColors.get(screenId) || NO_SCREEN_COLORS;
     const texFids = d.screenTextures.get(screenId) || [];
-    const tag = el("span", "tag fx");
-    if (screenIsHit(screenId)) tag.classList.add("hit");
 
     // only the fog color has an opacity byte; mul/add are pure grade factors
-    for (const [what, c, a] of /** @type {[string, number, number][]} */ (
+    const swatches = /** @type {[string, number, number][]} */ (
         [["fog tint", colors.fog, colors.fogAlpha],
          ["multiply", colors.mul, -1],
-         ["addition", colors.add, -1]])) {
-      if (c < 0) continue;
-      const hex = hexColor(c);
-      const dot = el("span", "fx-swatch");
-      dot.style.background = hex;
-      dot.title = `Screen ${what} ${hex}`;
-      dot.dataset.color = hex;
-      dot.dataset.colorInfo = `screen ${what}`;
-      if (a >= 0) dot.dataset.alpha = String(a);
-      tag.appendChild(dot);
-    }
+         ["addition", colors.add, -1]])
+      .filter(([, c]) => c >= 0)
+      .map(([what, c, a]) => P.swatch(hexColor(c), {
+        title: `Screen ${what} ${hexColor(c)}`, info: `screen ${what}`, alpha: a,
+      }));
 
     const texPaths = texFids.map((t) => ((d.files.get(t.fid) || {}).path || `#${t.fid}`)
       + (t.mask ? " (mask)" : ""));
-    const txt = el("button", "tag-label", name || `screen #${screenId}`);
-    txt.title = `${name || "(unnamed)"} — ScreenEffect ${screenId}`
-      + (texPaths.length ? `\n${texPaths.join("\n")}` : "")
-      + `\nClick: find spells with this screen effect · Shift-click: exclude`;
     // Preview the overlay texture with the effect's color multiplied in —
     // the same treatment chain pills get. Overlays sort first, so [0] is the
     // finished art when the row has any. The color matters: 9.0 Arcane's
@@ -3139,18 +2942,26 @@
     // CLAUDE.md. None of the candidate models matched in game closely enough
     // to be worth the complexity, so this shows the art and its color, and
     // claims nothing more.
-    if (texFids.length) {
-      txt.dataset.texFid = String(texFids[0].fid);
-      if (colors.mul >= 0) {
-        txt.dataset.texTint = hexColor(colors.mul);
-      }
-    }
-    // quotes inside a name would break the tag value; substring match
-    // doesn't need them
-    txt.dataset.search = `fx:"screen ${(name || String(screenId)).replace(/"/g, "")}"`;
-    tag.appendChild(txt);
-    addTargetIcons(tag, mask);
-    return tag;
+    return P.pill({
+      cls: "fx",
+      hit: screenIsHit(screenId),
+      segments: [
+        P.targets(mask),
+        swatches,
+        P.label(name || `screen #${screenId}`, {
+          title: `${name || "(unnamed)"} — ScreenEffect ${screenId}`,
+          detail: texPaths,
+          // quotes inside a name would break the tag value; substring match
+          // doesn't need them (catQuery strips them)
+          search: P.catQuery("fx", "screen", name || screenId),
+          finds: "spells with this screen effect",
+          data: texFids.length ? {
+            texFid: texFids[0].fid,
+            texTint: colors.mul >= 0 ? hexColor(colors.mul) : undefined,
+          } : undefined,
+        }),
+      ],
+    });
   }
 
   /* Dissolve pill: one per texture of the row's TextureBlendSet (mask +
@@ -3159,21 +2970,22 @@
     const d = state.data;
     const file = entry.fid ? (d.files.get(entry.fid) || { path: "", base: "" }) : { path: "", base: "" };
     const duration = d.dissolveDurations.get(entry.dissolveId) || 0;
-    const tag = el("span", "tag fx");
-    if (dissolveIsHit(entry.dissolveId)) tag.classList.add("hit");
-
     const base = file.base ? stripExt(file.base) : "";
-    const txt = el("button", "tag-label", base || "(untextured)");
-    txt.title = `${file.path || "(no texture)"}`
-      + (duration ? `\nDuration ${duration}s` : "")
-      + `\nClick: find spells with this dissolve texture · Shift-click: exclude`;
-    if (entry.fid) txt.dataset.texFid = String(entry.fid);
-    txt.dataset.search = file.base ? `fx:"dissolve ${file.base}"` : "";
-    tag.appendChild(txt);
-    addTargetIcons(tag, mask);
-
-    if (base) tag.appendChild(tagButton("⧉", `Copy texture name: ${base}`, base));
-    return tag;
+    return P.pill({
+      cls: "fx",
+      hit: dissolveIsHit(entry.dissolveId),
+      segments: [
+        P.targets(mask),
+        P.label(base || "(untextured)", {
+          title: file.path || "(no texture)",
+          detail: [duration && `Duration ${duration}s`],
+          search: file.base ? P.catQuery("fx", "dissolve", file.base) : "",
+          finds: "spells with this dissolve texture",
+          data: entry.fid ? { texFid: entry.fid } : undefined,
+        }),
+        base && P.copy("⧉", `Copy texture name: ${base}`, base),
+      ],
+    });
   }
 
   /* Morph pill: one per (creature, display). Label = the creature model's
@@ -3190,36 +3002,30 @@
     const { formId, displayId, fid } = entry;
     const name = d.shapeshiftNames.get(formId) || "";
     const file = fid ? (d.files.get(fid) || { path: "", base: "" }) : { path: "", base: "" };
-    const tag = el("span", "tag fx");
-    if (shapeshiftIsHit(formId)) tag.classList.add("hit");
-
-    if (displayId && CFG.wowheadMorphUrl) {
-      tag.appendChild(wowheadLink(fillTemplate(CFG.wowheadMorphUrl, { id: displayId }),
-        `View DisplayID ${displayId} in Wowhead's model viewer`));
-    }
-
     const base = file.base ? stripExt(file.base) : "";
-    const label = base || name || `form #${formId}`;
-    const txt = el("button", "tag-label", label);
-    txt.title = `${name || "(unnamed form)"} — SpellShapeshiftForm ${formId}`
-      + (displayId ? `\nDisplayID ${displayId}` : "\n(this form has no creature display)")
-      + (file.path ? `\n${file.path}` : "")
-      + `\nClick: find spells with this form · Shift-click: exclude`;
-    // search by the form NAME, which is stable and readable, unlike the model
-    txt.dataset.search = `fx:"shapeshift ${(name || String(formId)).replace(/"/g, "")}"`;
-    tag.appendChild(txt);
-    addTargetIcons(tag, mask);
-
-    if (displayId) {
-      tag.appendChild(tagButton("⧉", `Copy display ID: ${displayId}`, String(displayId)));
-      const cmd = fillTemplate(CFG.morphCopyTemplate, { id: displayId });
-      tag.appendChild(tagButton(".morph", `Copy:  ${cmd}`, cmd));
-    }
-    if (file.base) {
-      const lookup = fillTemplate(CFG.morphLookupTemplate, { id: displayId, file: file.base });
-      tag.appendChild(tagButton(".lo", `Copy:  ${lookup}`, lookup));
-    }
-    return tag;
+    return P.pill({
+      cls: "fx",
+      hit: shapeshiftIsHit(formId),
+      segments: [
+        displayId && CFG.wowheadMorphUrl && P.link(
+          fillTemplate(CFG.wowheadMorphUrl, { id: displayId }),
+          `View DisplayID ${displayId} in Wowhead's model viewer`),
+        P.targets(mask),
+        P.label(base || name || `form #${formId}`, {
+          title: `${name || "(unnamed form)"} — SpellShapeshiftForm ${formId}`,
+          detail: [displayId ? `DisplayID ${displayId}`
+            : "(this form has no creature display)", file.path],
+          // search by the form NAME, which is stable and readable, unlike the model
+          search: P.catQuery("fx", "shapeshift", name || formId),
+          finds: "spells with this form",
+        }),
+        displayId && [
+          P.copy("⧉", `Copy display ID: ${displayId}`, String(displayId)),
+          P.cmd(".morph", CFG.morphCopyTemplate, { id: displayId }),
+        ],
+        file.base && P.cmd(".lo", CFG.morphLookupTemplate, { id: displayId, file: file.base }),
+      ],
+    });
   }
 
   function morphTag(entry, mask = 0) {
@@ -3227,36 +3033,30 @@
     const { creatureId, displayId, fid } = entry;
     const name = d.morphNames.get(creatureId) || "";
     const file = fid ? (d.files.get(fid) || { path: "", base: "" }) : { path: "", base: "" };
-    const tag = el("span", "tag fx");
-    if (morphIsHit(creatureId)) tag.classList.add("hit");
-
-    if (displayId && CFG.wowheadMorphUrl) {
-      tag.appendChild(wowheadLink(fillTemplate(CFG.wowheadMorphUrl, { id: displayId }),
-        `View DisplayID ${displayId} in Wowhead's model viewer`));
-    }
-
     const base = file.base ? stripExt(file.base) : "";
-    const txt = el("button", "tag-label");
-    txt.appendChild(document.createTextNode(
-      base || (displayId ? `#${displayId}` : `creature #${creatureId}`)));
-    txt.title = `${name || "(unknown creature)"} — creature ${creatureId}`
-      + (displayId ? `\nDisplayID ${displayId}` : "\n(no display known — creature not in TDB)")
-      + `\n${file.path || "(model unknown)"}`
-      + `\nClick: find spells with this morph · Shift-click: exclude`;
-    txt.dataset.search = `fx:"morph ${base || creatureId}"`;
-    tag.appendChild(txt);
-    addTargetIcons(tag, mask);
-
-    if (displayId) {
-      tag.appendChild(tagButton("⧉", `Copy display ID: ${displayId}`, String(displayId)));
-      const cmd = fillTemplate(CFG.morphCopyTemplate, { id: displayId });
-      tag.appendChild(tagButton(".morph", `Copy:  ${cmd}`, cmd));
-    }
-    if (file.base) {
-      const lookup = fillTemplate(CFG.morphLookupTemplate, { id: displayId, file: file.base });
-      tag.appendChild(tagButton(".lo", `Copy:  ${lookup}`, lookup));
-    }
-    return tag;
+    return P.pill({
+      cls: "fx",
+      hit: morphIsHit(creatureId),
+      segments: [
+        displayId && CFG.wowheadMorphUrl && P.link(
+          fillTemplate(CFG.wowheadMorphUrl, { id: displayId }),
+          `View DisplayID ${displayId} in Wowhead's model viewer`),
+        P.targets(mask),
+        P.label(base || (displayId ? `#${displayId}` : `creature #${creatureId}`), {
+          title: `${name || "(unknown creature)"} — creature ${creatureId}`,
+          detail: [displayId ? `DisplayID ${displayId}`
+            : "(no display known — creature not in TDB)",
+            file.path || "(model unknown)"],
+          search: P.catQuery("fx", "morph", base || creatureId),
+          finds: "spells with this morph",
+        }),
+        displayId && [
+          P.copy("⧉", `Copy display ID: ${displayId}`, String(displayId)),
+          P.cmd(".morph", CFG.morphCopyTemplate, { id: displayId }),
+        ],
+        file.base && P.cmd(".lo", CFG.morphLookupTemplate, { id: displayId, file: file.base }),
+      ],
+    });
   }
 
   /* Summon pill: one per (creature, control). Label = the NPC name with the
@@ -3271,38 +3071,29 @@
     const { creatureId, control } = entry;
     const name = d.summonNames.get(creatureId) || "";
     const ctrl = d.summonControlNames[control] || "";
-    const tag = el("span", "tag fx");
-    if (summonIsHit(creatureId, control)) tag.classList.add("hit");
-
-    if (CFG.wowheadNpcUrl) {
-      tag.appendChild(wowheadLink(wowheadUrl(CFG.wowheadNpcUrl, { id: creatureId }),
-        `Open NPC ${creatureId} on Wowhead`));
-    }
-
-    const txt = el("button", "tag-label");
-    txt.appendChild(document.createTextNode(name || `creature #${creatureId}`));
-    txt.title = `${name || "(unknown creature)"} — creature ${creatureId}`
-      + (ctrl ? `\nControl: ${ctrl}` : "")
-      + `\nClick: find spells summoning this creature · Shift-click: exclude`;
-    txt.dataset.search = `fx:"summon ${name || creatureId}"`;
-    tag.appendChild(txt);
-    addTargetIcons(tag, mask);
-    if (ctrl) {
-      const cb = el("button", "tag-ctrl", ctrl);
-      cb.title = `Control: ${ctrl}`
-        + `\nClick: find all ${ctrl} summons · Shift-click: exclude`;
-      cb.dataset.search = `fx:"summon ${ctrl}"`;
-      tag.appendChild(cb);
-    }
-
-    tag.appendChild(tagButton("⧉", `Copy creature ID: ${creatureId}`, String(creatureId)));
-    if (name) {
-      const lookup = fillTemplate(CFG.summonLookupTemplate, { name, id: creatureId });
-      tag.appendChild(tagButton(".lo", `Copy:  ${lookup}`, lookup));
-    }
-    const spawn = fillTemplate(CFG.summonSpawnTemplate, { id: creatureId, name });
-    tag.appendChild(tagButton(".npc", `Copy:  ${spawn}`, spawn));
-    return tag;
+    return P.pill({
+      cls: "fx",
+      hit: summonIsHit(creatureId, control),
+      segments: [
+        CFG.wowheadNpcUrl && P.link(wowheadUrl(CFG.wowheadNpcUrl, { id: creatureId }),
+          `Open NPC ${creatureId} on Wowhead`),
+        P.targets(mask),
+        P.label(name || `creature #${creatureId}`, {
+          title: `${name || "(unknown creature)"} — creature ${creatureId}`,
+          detail: [ctrl && `Control: ${ctrl}`],
+          search: P.catQuery("fx", "summon", name || creatureId),
+          finds: "spells summoning this creature",
+        }),
+        ctrl && P.aside(ctrl, {
+          title: `Control: ${ctrl}`,
+          search: P.catQuery("fx", "summon", ctrl),
+          finds: `all ${ctrl} summons`,
+        }),
+        P.copy("⧉", `Copy creature ID: ${creatureId}`, String(creatureId)),
+        name && P.cmd(".lo", CFG.summonLookupTemplate, { name, id: creatureId }),
+        P.cmd(".npc", CFG.summonSpawnTemplate, { id: creatureId, name }),
+      ],
+    });
   }
 
   /* --------------------------------------------- texture hover preview */

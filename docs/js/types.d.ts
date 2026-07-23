@@ -666,6 +666,96 @@ interface EpsilookSearchApi {
   hasOperator(text: string): boolean;
 }
 
+/* --------------------------------------------------------------- pills */
+
+/**
+ * One segment of a pill, as plain data. Exactly one CONTENT key (text / svg /
+ * img / nodes) and at most one ACTION key (search / copy / href / play); the
+ * rest is optional decoration. See docs/js/pills.js and PILLS.md.
+ */
+interface PillSegment {
+  kind: string;
+  text?: string;
+  svg?: string;
+  img?: { src: string; alt?: string };
+  nodes?: Node[];
+  search?: string;
+  copy?: string;
+  href?: string;
+  play?: string;
+  title?: string;
+  aria?: string;
+  hit?: boolean;
+  cls?: string;
+  bg?: string;
+  data?: Record<string, any>;
+}
+
+/** What every text segment (label / note / aside) accepts. */
+interface PillSegmentOpts {
+  title?: string;
+  detail?: (string | false | 0 | undefined)[];
+  search?: string;
+  finds?: string;
+  click?: string;
+  hit?: boolean;
+  data?: Record<string, any>;
+}
+
+/** A segment slot: falsy entries are dropped, arrays flatten. */
+type PillSlot = PillSegment | false | null | undefined | "" | 0 | PillSlot[];
+
+/** window.EpsilookPills (docs/js/pills.js). */
+interface EpsilookPillsApi {
+  pill(spec: { cls?: string; hit?: boolean; title?: string; segments: PillSlot[] }): HTMLElement;
+  group(spec: { head: HTMLElement; items: HTMLElement[]; compact?: boolean }): HTMLElement;
+  /** Declare a new segment kind — the extension point for new pill parts. */
+  defineSegment(kind: string, spec: {
+    cls: string;
+    role: "action" | "content" | "meta";
+    sep: "none" | "left" | "right";
+    wrapCls?: string;
+    inert?: boolean;
+  }): void;
+  renderSegment(seg: PillSegment): HTMLElement;
+
+  link(href: string, title: string): PillSegment;
+  view(href: string, title: string): PillSegment;
+  play(url: string, title: string): PillSegment;
+  targets(mask: number): PillSegment | null;
+  swatch(hex: string, opts?: { title?: string; info?: string; alpha?: number }): PillSegment;
+  icon(src: string, opts?: {
+    href?: string; title?: string; data?: Record<string, any>;
+  }): PillSegment;
+  label(text: string, opts?: PillSegmentOpts): PillSegment;
+  note(text: string, opts?: PillSegmentOpts): PillSegment;
+  aside(text: string, opts?: PillSegmentOpts): PillSegment;
+  copy(glyph: string, title: string, value: string): PillSegment;
+  cmd(glyph: string, template: string, vars: Record<string, any>): PillSegment;
+
+  tip(lines: (string | false | 0 | null | undefined)[]): string;
+  /** `field:value`, quoted only when the value needs it. */
+  query(field: string, value: string | number): string;
+  /** `field:"value"` — always quoted (values taken from game data). */
+  quoted(field: string, value: string | number): string;
+  /** `field:"word value"` — a value scoped to its category word. */
+  catQuery(field: string, word: string, value?: string | number): string;
+  fillTemplate(tpl: string, vars: Record<string, any>): string;
+  el<K extends keyof HTMLElementTagNameMap>(
+    tag: K, className?: string, text?: string
+  ): HTMLElementTagNameMap[K];
+
+  TARGET_CASTER: number;
+  TARGET_TARGET: number;
+  TARGET_AREA: number;
+  TARGET_NOT_CASTER: number;
+  TARGET_MISSILE_DEST: number;
+  TARGET_ICONS: { bits: number; cls: string; svg: string; title(mask: number): string }[];
+  targetIconNodes(mask: number): HTMLElement[];
+  CUBE_SVG: string;
+  KINDS: Map<string, any>;
+}
+
 /* ------------------------------------------------------------ globals */
 
 /**
@@ -684,4 +774,5 @@ interface Window {
   EpsilookConfig: EpsilookConfig;
   EpsilookData: EpsilookDataApi;
   EpsilookSearch: EpsilookSearchApi;
+  EpsilookPills: EpsilookPillsApi;
 }
