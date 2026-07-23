@@ -203,6 +203,11 @@ window.EpsilookPills = (() => {
     const node = el(tag, wrapped ? kind.wrapCls : kind.cls);
     if (seg.cls) node.className += " " + seg.cls;
     if (seg.hit) node.classList.add("hit");
+    // The divider between sections is a property of the KIND, not of the pill
+    // that happens to use it — so it is declared once (sep/role) and drawn by
+    // two CSS rules, rather than a border repeated on every segment class.
+    if (kind.sep !== "none") node.dataset.sep = kind.sep;
+    node.dataset.role = kind.role;
 
     if (node.tagName === "BUTTON") /** @type {HTMLButtonElement} */ (node).type = "button";
     if (seg.href !== undefined) {
