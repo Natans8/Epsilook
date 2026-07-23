@@ -578,6 +578,37 @@ SPEED_AURAS = {
     33: "all",
 }
 
+# The object-scale auras: how much bigger or smaller the aura makes the unit.
+# Same shape as SPEED_AURAS one axis shorter — there is only one thing to scale,
+# so a pill is the percent alone and no word is needed. EffectBasePoints is
+# again a signed PERCENT: TrinityCore's Unit::RecalculateObjectScale reads it as
+#
+#   scale = GetNativeObjectScale() + CalculatePct(1.0f, <sum of these auras>)
+#
+# so +30 is 1.3x and -50 is half. The result is floored (0.1 for players, 0.01
+# otherwise), which is what the rows below -100% mean in practice; the pill
+# shows the change either way, for the same reasons movement speed does (§3k).
+#
+# ALL THREE IDS ARE THE SAME MECHANIC. TrinityCore gives 61 MOD_SCALE and 239
+# MOD_SCALE_2 one handler (HandleAuraModScale) and sums them into one number,
+# and MOD_SCALE_2's id DRIFTS: it is 239 on WotLK and on every retail build, and
+# 591 on the 2024+ Classic clients (Vanilla, TBC, Cata, MoP). No build carries
+# both, and the same spells appear under each:
+#
+#   16595 Noggenfogger Elixir  -51% @ 239 (WotLK 3.4.3)  -51% @ 591 (TBC 2.5.6)
+#   8212  Enlarge/Giant Growth +29% @ 239 (WotLK 3.4.3)  +30% @ 591 (Cata 4.4.2)
+#
+# which is why both ids are declared rather than one per version: the drift is
+# in the CLIENT's enum, not in what the aura does, and a set covers it without a
+# per-version branch. (Aura 427 SCALE_PLAYER_LEVEL is deliberately absent — its
+# amount is a level, not a percent.)
+#
+# VERIFIED AGAINST THE GAME'S OWN TOOLTIPS, the same oracle SPEED_AURAS uses:
+# on 9.2.7, 150 "$s<N>%" placeholders point at an effect carrying one of these
+# and 149 (99.3%) resolve nonzero, in descriptions that read "Increases the size
+# of the target by $s1%" / "Size increased by $s1%".
+SCALE_AURAS = {61, 239, 591}
+
 # SpellEffectAura (KEYBOUND_OVERRIDE) whose EffectMiscValue_0 is a
 # SpellKeyboundOverride ID: while the aura holds, a movement/UI key stops doing
 # what it normally does. That table's `Data` is a Spell::ID (verified
@@ -846,7 +877,7 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 30  # 30: movement-speed modifiers (spellSpeeds)
+PACK_FORMAT = 31  # 31: object-scale modifiers (spellScales)
 # 29: mechanics carry their implicit targets (spellEffects +
 #     spellAuras -> spellMechanics, implicitTargetNames) and
 #     keybound overrides (spellKeybinds, keybinds)
@@ -2138,6 +2169,7 @@ class SpellEffectRows:
     detect: dict[int, set[int]] = _by_spell()  # detect types (aura 19)
     keybinds: dict[int, set[int]] = _by_spell()  # override ids (aura 406)
     speeds: dict[int, set[tuple[str, float]]] = _by_spell()  # (movement, %) (SPEED_AURAS)
+    scales: dict[int, set[float]] = _by_spell()  # object-scale % (SCALE_AURAS)
     # who each effect-driven fx lands on, from the producing SpellEffect row's
     # ImplicitTarget_0/_1 — keyed (spell, payload) so it rides the pack's
     # spell->payload link rows (payload = creature / form / screen / vehicle /
@@ -2152,6 +2184,8 @@ class SpellEffectRows:
     keybind_targets: dict[tuple[int, int], int] = _mask()
     # keyed on the whole (movement, percent) pair, which is what a speed pill is
     speed_targets: dict[tuple[int, str, float], int] = _mask()
+    # a scale pill is the percent alone, so that is the whole key
+    scale_targets: dict[tuple[int, float], int] = _mask()
     # every (spell, effect, aura, implicit target A, implicit target B) the
     # spell has — the Mechanics column's rows. Deduped on the tuple, which
     # collapses the per-DifficultyID copies SpellEffect ships (416,865 rows
@@ -2254,12 +2288,26 @@ def read_spell_effect_rows(
             out.keybinds[s].add(m0)
             out.keybind_targets[(s, m0)] |= mask
         # movement speed: the aura says which movement, the amount says by how
-        # much. Zero is KEPT — "this spell has a speed aura that changes
-        # nothing" is a fact about the row (164 of them on 9.2.7, e.g. Stealth,
-        # whose real amount comes from a talent), not a row worth hiding.
-        if (movement := SPEED_AURAS.get(aura_id)) is not None:
+        # much. Object scale is the same route one axis shorter — the amount is
+        # the whole payload.
+        #
+        # A ZERO AMOUNT IS DROPPED for both (user's call, 2026-07-23). These
+        # pills are made of nothing but the number, so a "+0%" one promises a
+        # change and delivers none, and it drags the spell into `fx:speed` /
+        # `fx:scale` counts it does not belong in. The amount is genuinely
+        # elsewhere on these rows — a talent (Stealth), the morph the spell
+        # applies (twelve Polymorph ranks), a script — and nothing in the pack
+        # can reach it. What survives is the MECHANICS column, which still
+        # carries MOD_INCREASE_SPEED / MOD_SCALE for the same spell: "has a
+        # speed aura at all" is a question that already has a home, and this is
+        # not it. On 9.2.7 that is 164 of 5,780 speed rows (121 spells lose
+        # their pill outright) and 64 of 3,286 scale rows (59 spells).
+        if (movement := SPEED_AURAS.get(aura_id)) is not None and amount:
             out.speeds[s].add((movement, amount))
             out.speed_targets[(s, movement, amount)] |= mask
+        if aura_id in SCALE_AURAS and amount:
+            out.scales[s].add(amount)
+            out.scale_targets[(s, amount)] |= mask
     return out
 
 
@@ -3073,6 +3121,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # stable order.
     speed_rows = sorted((s, movement, pct)
                         for s, mods in se.speeds.items() for movement, pct in mods)
+    # object-scale modifiers: one row per (spell, percent). The three scale
+    # auras are one mechanic, so a spell setting two of them to the same amount
+    # collapses to a single row the same way — again already done by the set.
+    scale_rows = sorted((s, pct) for s, pcts in se.scales.items() for pct in pcts)
     effect_names = read_enum_names("SpellEffect", version)
     aura_names = read_enum_names("SpellEffectAura", version)
 
@@ -3121,6 +3173,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellDetects": len(detect_rows),
                 "invisChannels": len(invis_types),
                 "spellSpeeds": len(speed_rows),
+                "spellScales": len(scale_rows),
                 "spellPassengerAnims": len(passenger_anim_rows),
                 "spellVehicleAnims": len(vehicle_anim_rows),
                 "spellVehicleAnimKits": len(vehicle_animkit_rows),
@@ -3471,6 +3524,14 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             # a sprint on the caster
             "targets": [se.speed_targets.get(r, 0) for r in speed_rows],
         },
+        # object-scale modifiers (SCALE_AURAS). One percent per row and nothing
+        # else: unlike speed there is only one thing an aura can scale, so the
+        # number is the whole pill.
+        "spellScales": {
+            "spellIds": [r[0] for r in scale_rows],
+            "percents": [r[1] for r in scale_rows],
+            "targets": [se.scale_targets.get(r, 0) for r in scale_rows],
+        },
         # one row per seat, in SeatID_0..7 order; `seats` on a vehicle is the
         # count, and `attachments` names where on the model that seat sits
         # (decoded via VEHICLE_GEO_COMPONENT_LINKS — see its comment for the
@@ -3525,6 +3586,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         f"{len(vehicle_seat_rows):,} seats, {len(passenger_anim_rows):,} passenger anims)  "
         f"keybinds={len(keybind_rows):,} ({len(used_keybounds):,} overrides)  "
         f"speeds={len(speed_rows):,} ({len({r[0] for r in speed_rows}):,} spells)  "
+        f"scales={len(scale_rows):,} ({len({r[0] for r in scale_rows}):,} spells)  "
         f"icons={len(icon_names):,}  "
         f"orphan visual spells={vis.orphans:,}  [{time.time() - t0:.1f}s]"
     )

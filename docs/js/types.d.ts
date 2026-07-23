@@ -289,6 +289,15 @@ interface SpellPack {
     spellSpeeds?: {
         spellIds: number[]; movements: string[]; percents: number[]; targets: number[];
     };
+
+    /* --- object-scale modifiers (SCALE_AURAS) --- */
+
+    /**
+     * One row per (spell, percent). `percents` is the signed change to the
+     * unit's scale — there is only one thing these auras scale, so unlike
+     * spellSpeeds there is no word beside the number.
+     */
+    spellScales?: { spellIds: number[]; percents: number[]; targets: number[] };
 }
 
 /* ------------------------------------------------- in-memory indexes */
@@ -501,6 +510,13 @@ interface SpellData {
     speedSearchL: Map<string, string>;
     speedPercents: Map<string, number>;
 
+    /** Object-scale modifiers. A pill is a percent and nothing else, so the
+     *  percent is the id everything keys on — no separate map is needed for the
+     *  numeric axis, which reads the key itself. */
+    spellScaleMods: Map<number, { pct: number; amount: string; mask: number }[]>;
+    scaleSpells: Map<number, number[]>;
+    scaleSearchL: Map<number, string>;
+
     /** spell id -> [animId] the rider plays; the "passenger" anim group. */
     spellPassengerAnims: Map<number, number[]>;
     passengerAnimSpells: Map<number, number[]>;
@@ -607,7 +623,7 @@ interface ExportFxEntry {
     color?: string;
     /** Ghost/shadowy primary + secondary. */
     colors?: string[];
-    /** desaturate / transparency strength. */
+    /** desaturate / transparency strength; also the signed speed / scale change. */
     percent?: number;
     screenId?: number;
     name?: string;

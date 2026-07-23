@@ -1110,11 +1110,18 @@ td.empty {
 }
 
 /* single-item (or head-only, e.g. freeze/camo) groups render compact: ONE
-   tag-shaped pill instead of a box — the category word is a dimmed leading
-   section (like the control word on summon pills), the lone item's tag
-   melts into the pill (chrome stripped, the .kit-files border-left is the
-   section divider). Head-only pills (freeze/camo) keep full brightness —
-   there the word isn't a prefix, it's the whole pill. */
+   tag-shaped pill instead of a box — the category word leads, the lone item's
+   tag melts into the pill (chrome stripped, its capsule below is the section
+   divider).
+
+   THE HEAD READS AT FULL STRENGTH, exactly as it does on a full-width group.
+   It was dimmed to 0.8 once, on the reasoning that a category word prefixing
+   its value is a qualifier like the control word on a summon pill. It is not:
+   it is the same head, saying the same thing, and only the item count decided
+   which shape it got — so dimming made the identical word two brightnesses
+   depending on how many siblings it happened to have. The capsule around the
+   item is what separates category from value (PILLS.md §4); it does not need
+   a brightness gradient's help. */
 .kit-group.compact {
     display: inline-flex;
     align-items: center;
@@ -1137,11 +1144,6 @@ td.empty {
 
 .kit-group.compact .kit-head:not(:last-child) .tag-label {
     padding-right: 0.4rem;
-    opacity: 0.8;
-}
-
-.kit-group.compact .kit-head:not(:last-child) .tag-label:hover {
-    opacity: 1;
 }
 
 /* the lone item sits in its own rounded capsule inside the pill —

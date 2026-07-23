@@ -4,56 +4,56 @@
     "label": "Vanilla Classic 1.15.8",
     "file": "data/1.15.8.67156/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "c31b1abf50"
+    "hash": "bd876ac38b"
   },
   {
     "id": "2.5.6.68775",
     "label": "TBC Classic 2.5.6",
     "file": "data/2.5.6.68775/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "f99c1cdaf7"
+    "hash": "19b79210cd"
   },
   {
     "id": "3.4.3.58936",
     "label": "WotLK Classic 3.4.3",
     "file": "data/3.4.3.58936/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "72b5f414bf"
+    "hash": "725ea079a6"
   },
   {
     "id": "4.4.2.60895",
     "label": "Cataclysm Classic 4.4.2",
     "file": "data/4.4.2.60895/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "8b40b04b25"
+    "hash": "07d76b0471"
   },
   {
     "id": "5.5.4.68716",
     "label": "MoP Classic 5.5.4",
     "file": "data/5.5.4.68716/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "4c2b79c4ec"
+    "hash": "7a2f359205"
   },
   {
     "id": "7.3.5.26972",
     "label": "Legion 7.3.5",
     "file": "data/7.3.5.26972/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "b2032cfd69"
+    "hash": "94d53126c8"
   },
   {
     "id": "8.3.7.35662",
     "label": "Battle for Azeroth 8.3.7",
     "file": "data/8.3.7.35662/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "bab09919b7"
+    "hash": "5433b939f1"
   },
   {
     "id": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "6884326d71",
+    "hash": "11161b0fed",
     "default": true
   },
   {
@@ -61,13 +61,13 @@
     "label": "Dragonflight 10.2.7",
     "file": "data/10.2.7.55664/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "409b1be422"
+    "hash": "6527025ddd"
   },
   {
     "id": "11.2.7.65299",
     "label": "The War Within 11.2.7",
     "file": "data/11.2.7.65299/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "685146bac4"
+    "hash": "f17816607a"
   }
 ]

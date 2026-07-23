@@ -217,4 +217,14 @@
             of: (d, key) => d.speedPercents.get(key) || 0,
         },
     });
+    /* Object scale — movement speed's shorter twin. There is only one thing
+     * these auras scale, so the percent IS the id and the numeric axis reads it
+     * directly, the way desaturate does. Operator-only for the same reason:
+     * fx:"scale 30" should find +30%, not 30 of something. */
+    T({
+        key: "fx:scale", field: "fx", word: "scale",
+        hint: "Size change — how much bigger or smaller the aura makes its target",
+        corpus: (d) => d.scaleSearchL, spells: (d) => d.scaleSpells,
+        numeric: {kind: "value", of: (d, pct) => pct, operatorOnly: true},
+    });
 })();
