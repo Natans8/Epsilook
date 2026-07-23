@@ -1553,7 +1553,6 @@
             itemTag: (e, c) => (isDisplayCat(e.cat) ? displayTag(e)
                 : isItemCat(e.cat) ? itemTag(e)
                     : modelTag(e.fid, c.name, e.targets, e.src, e.dst, travels(e.cat))),
-            compact: true,
         });
         return td;
     }
@@ -1672,15 +1671,14 @@
     /* Shared group renderer: each kit is a small box — the kit tag as a
    * tinted head segment, its items flowing (and wrapping) beside it. Every
    * group and every item is rendered; the height-based clamp (layoutRow) hides
-   * whatever overflows the row budget behind the cell's single "+N more". With
-   * opts.compact, groups that render ≤1 item for THIS row become inline pills
-   * (head + lone item fused) sharing a line instead of a full-width strip. */
+   * whatever overflows the row budget behind the cell's single "+N more".
+   * Groups rendering ≤1 item for THIS row collapse to an inline pill — see
+   * P.group, which decides that for every column alike. */
     function buildKitGroups(td, kitIds, opts) {
         for (const kitId of kitIds) {
             td.appendChild(P.group({
                 head: opts.headerTag(kitId),
                 items: opts.itemsOf(kitId).map((item) => opts.itemTag(item, kitId)),
-                compact: opts.compact,
             }));
         }
     }
@@ -2049,7 +2047,6 @@
             headerTag: (cat) => fxHeadTag(cat.name, cat.hit, cat.mask),
             itemsOf: (cat) => cat.items,
             itemTag: (make) => make(),
-            compact: true,
         });
         return td;
     }

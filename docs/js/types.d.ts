@@ -756,7 +756,7 @@ interface PillType {
 interface EpsilookPillsApi {
     pill(spec: { cls?: string; hit?: boolean; title?: string; segments: PillSlot[] }): HTMLElement;
 
-    group(spec: { head: HTMLElement; items: HTMLElement[]; compact?: boolean }): HTMLElement;
+    group(spec: { head: HTMLElement; items: HTMLElement[] }): HTMLElement;
 
     /** Declare a new segment kind — the extension point for new pill parts. */
     defineSegment(kind: string, spec: {

@@ -154,15 +154,23 @@ A whole-column count (`model:>4`) is a different feature: `COUNT_SOURCES` in
 
 ## 4. Groups
 
-A group is a pill-shaped container of pills — a SoundKit and its files, an fx category and its effects:
+A group is a pill-shaped container of pills — a SoundKit and its files, an AnimKit and its animations, an fx category
+and its effects:
 
 ```js
-P.group({head: fxHeadTag(word, hit, mask), items: pills, compact: true})
+P.group({head: fxHeadTag(word, hit, mask), items: pills})
 ```
 
-With `compact`, a group holding **one item or none** renders as a single inline pill: the head word dimmed, the lone
-item fused into it. With more, it becomes a full-width strip. That is the whole reason groups are an abstraction rather
-than markup — a category that is usually one-of-a-kind and occasionally many needs one renderer, not two.
+**The item count decides the shape, always.** A group holding **one item or none** renders as a single inline pill: the
+head dimmed, the lone item fused into it. With more, it becomes a full-width strip. That is the whole reason groups are
+an abstraction rather than markup — a group that is usually one-of-a-kind and occasionally many needs one renderer, not
+two, and no caller has to predict which it will be.
+
+This is unconditional on purpose. It was once opt-in, and only the two columns whose author added the flag passed it, so
+a SoundKit with one file and an AnimKit with one animation (56–98% of them, depending on the query) stretched across a
+full strip while an identically-sized fx category sat inline. A rule that describes the shape of a group cannot be
+something each caller remembers separately — if a future group needs a different shape rule, it belongs in `P.group`
+keyed on something the group itself knows, not in a flag at the call site.
 
 ## 5. Adding a segment kind
 
