@@ -342,13 +342,16 @@
   const whTooltips = { colorLinks: false, iconizeLinks: false, renameLinks: false };
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260723f"></script>
-<script src="js/data.js?v=20260723f"></script>
+<script src="js/config.js?v=20260723g"></script>
+<script src="js/data.js?v=20260723g"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260723f"></script>
-<script src="js/js-blp.js?v=20260723f"></script>
-<script src="js/search.js?v=20260723f"></script>
-<script src="js/app.js?v=20260723f"></script>
+<script src="js/bufo.js?v=20260723g"></script>
+<script src="js/js-blp.js?v=20260723g"></script>
+<!-- the pill/segment library: shared by app.js (rendering) and search.js
+     (the pill-type registry), so it loads before both -->
+<script src="js/pills.js?v=20260723g"></script>
+<script src="js/search.js?v=20260723g"></script>
+<script src="js/app.js?v=20260723g"></script>
 </body>
 </html>
