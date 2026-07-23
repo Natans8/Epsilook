@@ -1707,9 +1707,15 @@
      * show a union that no individual row actually has (measured on 9.2.7:
      * 44 chain spells and 51 glow spells hit exactly that), so the icons
      * drop to the pills, which are the things that really carry a type. */
-    const targetGroup = (masks) => {
+    const targetSplit = (masks) => {
       const first = masks.length ? masks[0] : 0;
-      return { uniform: masks.every((m) => m === first), mask: first };
+      const uniform = masks.every((m) => m === first);
+      return {
+        /** the mask the category HEAD carries (0 = the head shows none) */
+        head: uniform ? first : 0,
+        /** a row's own mask, shown only when the head could not speak for it */
+        pill: (mask) => (uniform ? 0 : mask),
+      };
     };
 
     if (chainIds.length) {
@@ -1732,13 +1738,13 @@
           byKey.set(key, { chainId: c, fid, color, src, dst, mask: chainMask(c) });
         }
       }
-      const grp = targetGroup(chainIds.map(chainMask));
+      const t = targetSplit(chainIds.map(chainMask));
       cats.push({
         name: "chain",
         hit: chainIds.some((c) => fxChainIsHit(c)),
-        mask: grp.uniform ? grp.mask : 0,
+        mask: t.head,
         items: hitsFirst([...byKey.values()], (e) => fxChainIsHit(e.chainId))
-          .map((e) => () => fxTag(e, grp.uniform ? 0 : e.mask)),
+          .map((e) => () => fxTag(e, t.pill(e.mask))),
       });
     }
     if (dissolveIds.length) {
@@ -1752,13 +1758,13 @@
           byKey.set(fid, { dissolveId: id, fid, mask: dissolveMask(id) });
         }
       }
-      const grp = targetGroup(dissolveIds.map(dissolveMask));
+      const t = targetSplit(dissolveIds.map(dissolveMask));
       cats.push({
         name: "dissolve",
         hit: dissolveIds.some((id) => dissolveIsHit(id)),
-        mask: grp.uniform ? grp.mask : 0,
+        mask: t.head,
         items: hitsFirst([...byKey.values()], (e) => dissolveIsHit(e.dissolveId))
-          .map((e) => () => dissolveTag(e, grp.uniform ? 0 : e.mask)),
+          .map((e) => () => dissolveTag(e, t.pill(e.mask))),
       });
     }
     if (glowIds.length) {
@@ -1773,14 +1779,14 @@
           glowId: id, color, alpha: d.glowAlphas.get(id), mask: glowMask(id),
         });
       }
-      const grp = targetGroup(glowIds.map(glowMask));
+      const t = targetSplit(glowIds.map(glowMask));
       cats.push({
         name: "glow",
         hit: glowIds.some((id) => glowIsHit(id)),
-        mask: grp.uniform ? grp.mask : 0,
+        mask: t.head,
         items: hitsFirst([...byKey.values()], (e) => glowIsHit(e.glowId))
           .map((e) => () => colorFxTag("glow", e.color, glowIsHit(e.glowId), e.alpha,
-            grp.uniform ? 0 : e.mask)),
+            t.pill(e.mask))),
       });
     }
     if (shadowyIds.length || ghostMatIds.length) {
@@ -1807,15 +1813,15 @@
       const catHit = shadowyIds.some((id) => shadowyIsHit(id))
         || ghostMatIds.some((id) => ghostMatIsHit(id));
       // both sources feed one category, so both sets of masks decide the head
-      const grp = targetGroup(shadowyIds.map(shadowyMask)
+      const t = targetSplit(shadowyIds.map(shadowyMask)
         .concat(ghostMatIds.map(ghostMatMask)));
       cats.push({
         name: "ghost",
         hit: catHit,
-        mask: grp.uniform ? grp.mask : 0,
+        mask: t.head,
         items: hitsFirst([...byColor.values()], (e) => e.hit())
           .map((e) => () => colorFxTag("ghost", e.color, e.hit(), undefined,
-            grp.uniform ? 0 : e.mask)),
+            t.pill(e.mask))),
       });
     }
     if (tintIds.length) {
@@ -1867,12 +1873,12 @@
       // ImplicitTarget icon (pack format 25): usually the caster's own view
       const screenMask = (id) => maskOf(d.screenTargets, spellId, [id]);
       const ids = hitsFirst(screenIds.slice().sort((a, b) => a - b), (id) => screenIsHit(id));
-      const grp = targetGroup(screenIds.map(screenMask));
+      const t = targetSplit(screenIds.map(screenMask));
       cats.push({
         name: "screen",
         hit: screenIds.some((id) => screenIsHit(id)),
-        mask: grp.uniform ? grp.mask : 0,
-        items: ids.map((id) => () => screenTag(id, grp.uniform ? 0 : screenMask(id))),
+        mask: t.head,
+        items: ids.map((id) => () => screenTag(id, t.pill(screenMask(id)))),
       });
     }
     if (formIds.length) {
@@ -1883,12 +1889,12 @@
         (d.shapeshiftDisplays.get(f) || [{ displayId: 0, fid: 0 }])
           .map((e) => ({ formId: f, displayId: e.displayId, fid: e.fid })));
       const formMask = (f) => maskOf(d.shapeshiftTargets, spellId, [f]);
-      const grp = targetGroup(formIds.map(formMask));
+      const t = targetSplit(formIds.map(formMask));
       cats.push({
         name: "shapeshift",
         hit: formIds.some((f) => shapeshiftIsHit(f)),
-        mask: grp.uniform ? grp.mask : 0,
-        items: entries.map((e) => () => shapeshiftTag(e, grp.uniform ? 0 : formMask(e.formId))),
+        mask: t.head,
+        items: entries.map((e) => () => shapeshiftTag(e, t.pill(formMask(e.formId)))),
       });
     }
     if (morphIds.length) {
@@ -1901,12 +1907,12 @@
       // who the morph lands on — the target for polymorph, the caster for
       // self-transforms (ImplicitTarget, pack format 25)
       const morphMask = (c) => maskOf(d.morphTargets, spellId, [c]);
-      const grp = targetGroup(morphIds.map(morphMask));
+      const t = targetSplit(morphIds.map(morphMask));
       cats.push({
         name: "morph",
         hit: morphIds.some((c) => morphIsHit(c)),
-        mask: grp.uniform ? grp.mask : 0,
-        items: entries.map((e) => () => morphTag(e, grp.uniform ? 0 : morphMask(e.creatureId))),
+        mask: t.head,
+        items: entries.map((e) => () => morphTag(e, t.pill(morphMask(e.creatureId)))),
       });
     }
     if (summonEntries.length) {
@@ -1916,12 +1922,12 @@
       const entries = hitsFirst(
         summonEntries.slice().sort((a, b) => (a.creatureId - b.creatureId) || (a.control - b.control)),
         (e) => summonIsHit(e.creatureId, e.control));
-      const grp = targetGroup(summonEntries.map(summonMask));
+      const t = targetSplit(summonEntries.map(summonMask));
       cats.push({
         name: "summon",
         hit: summonEntries.some((e) => summonIsHit(e.creatureId, e.control)),
-        mask: grp.uniform ? grp.mask : 0,
-        items: entries.map((e) => () => summonTag(e, grp.uniform ? 0 : summonMask(e))),
+        mask: t.head,
+        items: entries.map((e) => () => summonTag(e, t.pill(summonMask(e)))),
       });
     }
     if (vehicleIds.length) {
@@ -1937,14 +1943,14 @@
       const seatCount = vehicleIds.reduce(
         (n, v) => Math.max(n, (d2.vehicleSeats.get(v) || []).length), 0);
       const points = [...new Set(vehicleIds.flatMap((v) => d2.vehicleSeats.get(v) || []))];
-      const grp = targetGroup(vehicleIds.map(vehMask));
+      const t = targetSplit(vehicleIds.map(vehMask));
       const union = vehicleIds.reduce((m, v) => m | vehMask(v), 0);
       cats.push({
         name: "seat",
         hit: points.some((p) => vehicleIsHit(p, seatCount)),
-        mask: grp.uniform ? grp.mask : 0,
+        mask: t.head,
         items: hitsFirst(points, (p) => vehicleIsHit(p, seatCount))
-          .map((p) => () => vehicleTag(p, seatCount, grp.uniform ? 0 : union)),
+          .map((p) => () => vehicleTag(p, seatCount, t.pill(union))),
       });
     }
     // invisibility / detection channels. Counterpart count = the other side of
@@ -1954,13 +1960,13 @@
       ["detect", detectPills, d.invisTypeSpells]])) {
       if (!pills.length) continue;
       const countOf = (type) => (countMap.get(type) || []).length;
-      const grp = targetGroup(pills.map((e) => e.mask));
+      const t = targetSplit(pills.map((e) => e.mask));
       cats.push({
         name: side,
         hit: pills.some((e) => channelIsHit(side, e.type)),
-        mask: grp.uniform ? grp.mask : 0,
+        mask: t.head,
         items: hitsFirst(pills, (e) => channelIsHit(side, e.type))
-            .map((e) => () => channelTag(side, e.type, countOf(e.type), grp.uniform ? 0 : e.mask)),
+            .map((e) => () => channelTag(side, e.type, countOf(e.type), t.pill(e.mask))),
       });
     }
 
@@ -1983,13 +1989,13 @@
       }
       const pills = [...byLabel.values()].sort((a, b) => a.label.localeCompare(b.label));
       const isHit = (p) => p.ids.some(keybindIsHit);
-      const grp = targetGroup(pills.map((p) => p.mask));
+      const t = targetSplit(pills.map((p) => p.mask));
       cats.push({
         name: "keybind",
         hit: pills.some(isHit),
-        mask: grp.uniform ? grp.mask : 0,
+        mask: t.head,
         items: hitsFirst(pills, isHit)
-          .map((p) => () => keybindTag(p, grp.uniform ? 0 : p.mask)),
+          .map((p) => () => keybindTag(p, t.pill(p.mask))),
       });
     }
 

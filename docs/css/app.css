@@ -761,6 +761,17 @@ td.empty { text-align: center; vertical-align: middle; }
 .legend-icon { display: inline-block; vertical-align: -0.15em; }
 .legend-icon svg { width: 1em; height: 1em; display: block; }
 
+/* Section dividers. Which side of a segment carries one is declared with the
+   segment KIND in pills.js (sep: "left" | "right" | "none") and rendered as
+   data-sep, so a new kind draws its divider by saying so rather than by
+   repeating a border rule. The line is quieter between a segment and the text
+   it qualifies (role="meta") than around the action buttons at the pill's
+   edges, which are separate controls. */
+.tag { --seg-divider: var(--border); }
+.tag [data-role="meta"] { --seg-divider: var(--tag-sep, rgba(255, 255, 255, 0.12)); }
+.tag [data-sep="left"] { border-left: 1px solid var(--seg-divider); }
+.tag [data-sep="right"] { border-right: 1px solid var(--seg-divider); }
+
 /* where on the model a row plays (M2 attachment point). A quiet segment
    between the label and the copy button — it qualifies the model rather than
    naming it, so it reads dimmer and smaller than the label it follows.
@@ -769,7 +780,6 @@ td.empty { text-align: center; vertical-align: middle; }
   padding: 0.12rem 0.45rem;
   font-size: 0.86em;
   color: var(--text-dim);
-  border-left: 1px solid var(--tag-sep, rgba(255, 255, 255, 0.12));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -797,17 +807,26 @@ td.empty { text-align: center; vertical-align: middle; }
   .tag-label[data-tex-fid]:hover { text-decoration-color: currentColor; }
 }
 
-.tag.model .tag-label, .tag.model-head .tag-label { color: var(--model); }
-.tag.sound .tag-label { color: var(--sound); }
-.tag.soundkit .tag-label { color: var(--soundkit); }
-.tag.animkit .tag-label { color: var(--animkit); }
-.tag.anim .tag-label { color: #d8b4e8; }
-.tag.mechanic .tag-label { color: #e0a878; }
+/* A pill's TONE is the colour family its name reads in. One variable, set
+   once per pill kind and inherited by every segment that wants it — so a new
+   pill type either reuses a tone (nothing to write here) or adds one line,
+   instead of a rule per segment class. Item quality and the priceless accent
+   override --tone through the same channel further down. */
+.tag { --tone: var(--text); }
+.tag.model, .tag.model-head { --tone: var(--model); }
+.tag.sound { --tone: var(--sound); }
+.tag.soundkit { --tone: var(--soundkit); }
+.tag.animkit { --tone: var(--animkit); }
+.tag.anim { --tone: #d8b4e8; }
+.tag.mechanic { --tone: #e0a878; }
 /* Aura mechanics: same family as spell effects, one shade apart. The aura is
    what the spell actually DOES — it leads its pill and carries the weight,
    while the APPLY_AURA that delivers it trails as a dim .tag-attach. */
-.tag.mechanic.aura .tag-label { color: #f0d68d; font-weight: 600; }
-.tag.fx .tag-label, .tag.fx-head .tag-label { color: var(--fx); }
+.tag.mechanic.aura { --tone: #f0d68d; }
+.tag.fx, .tag.fx-head { --tone: var(--fx); }
+
+.tag .tag-label { color: var(--tone); }
+.tag.mechanic.aura .tag-label { font-weight: 600; }
 
 /* control word on summon pills (guardian/pet/...) — dimmed beside the
    name, a button of its own: clicking searches that control type */
@@ -816,7 +835,7 @@ td.empty { text-align: center; vertical-align: middle; }
   margin-left: -0.2rem;
   font-size: 0.92em;
   opacity: 0.75;
-  color: var(--fx);
+  color: var(--tone);
   white-space: nowrap;
 }
 .tag-ctrl:hover { text-decoration: underline; opacity: 1; }
@@ -854,7 +873,6 @@ td.empty { text-align: center; vertical-align: middle; }
 .tag-copy {
   padding: 0.32rem 0.45rem 0.12rem 0.35rem;
   color: var(--tag-btn);
-  border-left: 1px solid var(--border);
   font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 0.92em;
   white-space: nowrap;
@@ -865,7 +883,6 @@ td.empty { text-align: center; vertical-align: middle; }
 .tag-play {
   padding: 0.12rem 0.4rem;
   color: var(--tag-btn);
-  border-right: 1px solid var(--border);
   font-size: 0.85em;
   white-space: nowrap;
 }
@@ -880,7 +897,6 @@ td.empty { text-align: center; vertical-align: middle; }
 .tag-view {
   padding: 0.12rem 0.4rem 0.12rem 0.5rem;
   color: var(--tag-btn);
-  border-right: 1px solid var(--border);
   text-decoration: none;
 }
 .tag-view svg { width: 1.1em; height: 1.1em; display: block; }
@@ -903,10 +919,8 @@ td.empty { text-align: center; vertical-align: middle; }
   background: rgba(123, 138, 214, 0.12);
 }
 
-.tag.fx.priceless .tag-label {
-  color: #aab4ee;
-  cursor: default;
-}
+.tag.fx.priceless { --tone: #aab4ee; }
+.tag.fx.priceless .tag-label { cursor: default; }
 
 /* Fileless marker pill (equipped-weapon sentinel, SpellVisualEffectName Type
    3–10): no filename, no fid buttons. Italic label reads it as a descriptor
@@ -938,16 +952,17 @@ td.empty { text-align: center; vertical-align: middle; }
 .tag.model.item > .item-icon + .tag-label,
 .tag.model.item > .item-icon-link + .tag-label { padding-left: 0.3rem; }
 /* Named item labels are coloured by item quality (the classic WoW ramp),
-   which overrides the default model blue. Nameless items keep --model. */
-.tag.model.item.q-poor .tag-label { color: #9d9d9d; }
-.tag.model.item.q-common .tag-label { color: #ffffff; }
-.tag.model.item.q-uncommon .tag-label { color: #1eff00; }
-.tag.model.item.q-rare .tag-label { color: #0070dd; }
-.tag.model.item.q-epic .tag-label { color: #a335ee; }
-.tag.model.item.q-legendary .tag-label { color: #ff8000; }
-.tag.model.item.q-artifact .tag-label { color: #e6cc80; }
-.tag.model.item.q-heirloom .tag-label,
-.tag.model.item.q-token .tag-label { color: #00ccff; }
+   which overrides the default model blue through the pill's tone. Nameless
+   items set no quality class and keep --model. */
+.tag.model.item.q-poor { --tone: #9d9d9d; }
+.tag.model.item.q-common { --tone: #ffffff; }
+.tag.model.item.q-uncommon { --tone: #1eff00; }
+.tag.model.item.q-rare { --tone: #0070dd; }
+.tag.model.item.q-epic { --tone: #a335ee; }
+.tag.model.item.q-legendary { --tone: #ff8000; }
+.tag.model.item.q-artifact { --tone: #e6cc80; }
+.tag.model.item.q-heirloom,
+.tag.model.item.q-token { --tone: #00ccff; }
 
 /* pills/groups the height clamp hides (layoutRow toggles .overflow directly).
    The `td` prefix lifts specificity above .kit-group.compact / .kit-files .tag
