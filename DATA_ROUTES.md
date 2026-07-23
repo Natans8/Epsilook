@@ -4,6 +4,11 @@ Every path data takes from an upstream source to a pixel in the app. This is the
 map of *where things come from*; `build/build_data.py` is the implementation and
 `CLAUDE.md` holds the decisions and gotchas behind it.
 
+Where a route ends — the pill it becomes, the category word it answers to, how
+a query token matches it — is **[PILLS.md](PILLS.md)**. The two meet at
+`docs/js/pilltypes.js`, which declares one record per kind of content: the
+route's corpus, the spells it reaches, and its keyword.
+
 Read it in five stages:
 
 1. [Sources](#1-sources) — what gets downloaded, from where

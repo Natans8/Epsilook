@@ -43,6 +43,8 @@ docs/                    the site — GitHub Pages serves this folder as-is
   index.html             markup + the in-app help dialog
   js/config.js           copy-command templates and UI tunables
   js/data.js             pack loading + in-memory index building
+  js/pills.js            the segment library results are built from
+  js/pilltypes.js        one record per kind of content shown and searched
   js/search.js           query parser + the FIELDS registry (one per prefix)
   js/app.js              all UI wiring
   js/types.d.ts          shared type declarations (dev-time only, never served)
@@ -64,7 +66,7 @@ cd docs && python -m http.server 8377
 ```
 
 Pushing to `main` deploys. Any CSS/JS change needs the `?v=` cache-buster in
-`index.html` bumped (7 spots); data packs bust themselves via a content hash
+`index.html` bumped (8 spots); data packs bust themselves via a content hash
 in `versions.json`.
 
 ### Rebuilding the data
@@ -134,6 +136,12 @@ and the feature each one costs, and bakes the list into `meta.absentTables`.
 - **A new search field**: emit the data in `build_data.py`, index it in
   `data.js`, then add one entry to `FIELDS` in `search.js` — it becomes a
   query prefix and a field button automatically.
+- **A new kind of pill** (a new sort of thing a results column can show):
+  one record in `pilltypes.js` gives it a category word, that word's
+  autocomplete description, its group head, its search-hit highlighting and
+  the spells a query selects; the renderer is a list of segments. See
+  **[PILLS.md](PILLS.md)** — it also carries the segment-order convention
+  and the rules for choosing a keyword.
 - **A new copy command**: `spellCommands` in `config.js` for per-spell
   buttons; the `*CopyTemplate` entries for the ones on tags.
 
