@@ -140,26 +140,26 @@ TABLES = [
 
 # table -> the user-facing feature that switches off when the build predates it
 OPTIONAL_TABLES = {
-    "SpellName":               "spell names (pre-BfA they live on Spell itself)",
-    "BeamEffect":              "the BeamEffect route into chain/beam fx",
-    "SpellEffectEmission":     "area-emitter models",
+    "SpellName": "spell names (pre-BfA they live on Spell itself)",
+    "BeamEffect": "the BeamEffect route into chain/beam fx",
+    "SpellEffectEmission": "area-emitter models",
     "SpellVisualKitAreaModel": "area models",
-    "WeaponTrail":             "weapon-trail models",
-    "BarrageEffect":           "barrage models",
-    "DissolveEffect":          "the dissolve fx category",
-    "TextureBlendSet":         "dissolve materials + screen mask textures",
-    "EdgeGlowEffect":          "the glow fx category",
-    "ShadowyEffect":           "the ghost/shadowy fx category",
+    "WeaponTrail": "weapon-trail models",
+    "BarrageEffect": "barrage models",
+    "DissolveEffect": "the dissolve fx category",
+    "TextureBlendSet": "dissolve materials + screen mask textures",
+    "EdgeGlowEffect": "the glow fx category",
+    "ShadowyEffect": "the ghost/shadowy fx category",
     "SpellVisualScreenEffect": "the kit route into screen fx",
-    "ScreenEffect":            "the screen fx category",
-    "FullScreenEffect":        "screen fx colour grading + overlay textures",
-    "SpellShapeshiftForm":     "the shapeshift fx category",
-    "SpellOverrideName":       "override names in the search corpus",
-    "SummonProperties":        "summon control words (guardian/pet/...)",
-    "Vehicle":                 "the vehicle fx category",
-    "VehicleSeat":             "vehicle seat attachments and passenger animations",
+    "ScreenEffect": "the screen fx category",
+    "FullScreenEffect": "screen fx colour grading + overlay textures",
+    "SpellShapeshiftForm": "the shapeshift fx category",
+    "SpellOverrideName": "override names in the search corpus",
+    "SummonProperties": "summon control words (guardian/pet/...)",
+    "Vehicle": "the vehicle fx category",
+    "VehicleSeat": "vehicle seat attachments and passenger animations",
     # arrives in MoP (5.0.1); 404s on Vanilla/TBC/WotLK/Cata
-    "SpellKeyboundOverride":   "the keybind fx category (aura 406)",
+    "SpellKeyboundOverride": "the keybind fx category (aura 406)",
 }
 
 # (table, column) -> the value to use on builds that lack the column
@@ -250,8 +250,8 @@ TARGET_NOT_CASTER, TARGET_MISSILE_DEST = 8, 16
 # anyone — so they declare NO_TARGET rather than being forced into a bit.
 # Adding a future redirect column is one line here and nothing else.
 VISUAL_REDIRECTS = {
-    "CasterSpellVisualID": TARGET_CASTER,    # what the caster themself sees
-    "HostileSpellVisualID": TARGET_TARGET,   # what a hostile target sees
+    "CasterSpellVisualID": TARGET_CASTER,  # what the caster themself sees
+    "HostileSpellVisualID": TARGET_TARGET,  # what a hostile target sees
     "LowViolenceSpellVisualID": NO_TARGET,
     "ReducedUnexpectedCameraMovementSpellVisualID": NO_TARGET,
 }
@@ -327,17 +327,17 @@ ENUM_FILES = ["SpellEffect", "SpellEffectAura", "Target"]
 
 # SpellVisualKitEffect.EffectType values (what the kit effect points at) —
 # the full enum is documented in WoWDBDefs definitions/SpellVisualKitEffect.dbd
-EFFECT_TYPE_PROC = 1      # Effect = SpellProceduralEffect.ID
-EFFECT_TYPE_SOUND = 5     # Effect = SoundKitID
-EFFECT_TYPE_ANIM = 6      # Effect = SpellVisualAnim.ID
-EFFECT_TYPE_SHADOWY = 7   # Effect = ShadowyEffect.ID
+EFFECT_TYPE_PROC = 1  # Effect = SpellProceduralEffect.ID
+EFFECT_TYPE_SOUND = 5  # Effect = SoundKitID
+EFFECT_TYPE_ANIM = 6  # Effect = SpellVisualAnim.ID
+EFFECT_TYPE_SHADOWY = 7  # Effect = ShadowyEffect.ID
 EFFECT_TYPE_EMISSION = 8  # Effect = SpellEffectEmission.ID (area-model emitter)
-EFFECT_TYPE_DISSOLVE = 11 # Effect = DissolveEffect.ID
-EFFECT_TYPE_EDGE_GLOW = 12 # Effect = EdgeGlowEffect.ID
-EFFECT_TYPE_BEAM = 13     # Effect = BeamEffect.ID
+EFFECT_TYPE_DISSOLVE = 11  # Effect = DissolveEffect.ID
+EFFECT_TYPE_EDGE_GLOW = 12  # Effect = EdgeGlowEffect.ID
+EFFECT_TYPE_BEAM = 13  # Effect = BeamEffect.ID
 EFFECT_TYPE_BARRAGE = 17  # Effect = BarrageEffect.ID (multi-model volley)
-EFFECT_TYPE_SCREEN = 19   # Effect = SpellVisualScreenEffect.ID (verified:
-                          # all 18 ET-19 rows in 9.2.7 resolve there)
+EFFECT_TYPE_SCREEN = 19  # Effect = SpellVisualScreenEffect.ID (verified:
+# all 18 ET-19 rows in 9.2.7 resolve there)
 # Of the remaining SpellVisualKitEffectType values (survey 2026-07-18):
 # 2 (SpellVisualKitModelAttach) is 100% redundant with the
 # ParentSpellVisualKitID walk; 10 (UnitSoundType) plays the TARGET unit's
@@ -352,27 +352,27 @@ AURA_SCREEN_EFFECT = 260
 # SpellProceduralEffect.Type values. Type IS the client character-procedure
 # index (m_characterProcedure) — see the "Proc type decode" section in
 # CLAUDE.md. Which value column carries the payload differs per type.
-PROC_TYPE_TINT = 1          # Value_0 = packed-RGB model tint (multiply)
+PROC_TYPE_TINT = 1  # Value_0 = packed-RGB model tint (multiply)
 PROC_TYPES_CHAIN = {0, 12, 26}  # Value_0 = SpellChainEffects ID (beams)
-PROC_TYPE_STANDWALK = 7     # Value_0..3 = AnimationData IDs (stand/walk anim)
-PROC_TYPE_AREAMODEL = 9     # Value_0 = SpellVisualKitAreaModel ID (model)
-PROC_TYPE_FREEZE = 11       # valueless freeze/petrify state
-PROC_TYPE_TRANSPARENCY = 14 # Value_0 = alpha 0..1 (SetAlphaMod)
-PROC_TYPE_CAMO = 18         # valueless camouflage/cloak state
-PROC_TYPE_DESATURATE = 21   # Value_2 = desaturation strength 0..1 (no color)
-PROC_TYPE_GHOST_MAT = 22    # Value_3 = packed-RGB material recolor -> ghost
-PROC_TYPE_TINT_MAT = 23     # Value_3 = packed-RGB material recolor -> tint
+PROC_TYPE_STANDWALK = 7  # Value_0..3 = AnimationData IDs (stand/walk anim)
+PROC_TYPE_AREAMODEL = 9  # Value_0 = SpellVisualKitAreaModel ID (model)
+PROC_TYPE_FREEZE = 11  # valueless freeze/petrify state
+PROC_TYPE_TRANSPARENCY = 14  # Value_0 = alpha 0..1 (SetAlphaMod)
+PROC_TYPE_CAMO = 18  # valueless camouflage/cloak state
+PROC_TYPE_DESATURATE = 21  # Value_2 = desaturation strength 0..1 (no color)
+PROC_TYPE_GHOST_MAT = 22  # Value_3 = packed-RGB material recolor -> ghost
+PROC_TYPE_TINT_MAT = 23  # Value_3 = packed-RGB material recolor -> tint
 PROC_TYPE_WEAPONTRAIL = 27  # Value_0 = WeaponTrail.db2 ID (trail model)
 
 # model categories: every (spell, model) row is tagged with how the model is
 # used — the Models column groups by these short user-facing words
-MODEL_CAT_ATTACH = 0   # SpellVisualKitModelAttach (model attached to the caster/target)
+MODEL_CAT_ATTACH = 0  # SpellVisualKitModelAttach (model attached to the caster/target)
 MODEL_CAT_MISSILE = 1  # SpellVisualMissile (projectile in flight)
-MODEL_CAT_AREA = 2     # SpellVisualKitAreaModel (ground/area model: emission ET 8, proc Type 9)
-MODEL_CAT_TRAIL = 3    # WeaponTrail (proc Type 27)
+MODEL_CAT_AREA = 2  # SpellVisualKitAreaModel (ground/area model: emission ET 8, proc Type 9)
+MODEL_CAT_TRAIL = 3  # WeaponTrail (proc Type 27)
 MODEL_CAT_BARRAGE = 4  # BarrageEffect (volley of models, ET 17)
 MODEL_CAT_DISPLAY = 5  # SpellVisualEffectName Type 2 (a CreatureDisplayID's model)
-MODEL_CAT_ITEM = 6     # SpellVisualEffectName Type 1 (an Item::ID's model)
+MODEL_CAT_ITEM = 6  # SpellVisualEffectName Type 1 (an Item::ID's model)
 
 # SpellVisualEffectName.Type: how its GenericID/ModelFileDataID resolves to a
 # model (SpellVisualEffectNameType.dbde). 0 = FileDataID (ModelFileDataID),
@@ -551,6 +551,7 @@ def keybound_type_word(type_id: int) -> str:
         return KEYBOUND_TYPE_WORDS[type_id]
     return f"type {type_id}"
 
+
 # VehicleSeat.AttachmentID is NOT an M2 attachment id: it is an index into a
 # table hardcoded in the client binary (it exists in no db2, so it cannot be
 # derived from data and has to live here). wowdev.wiki/DB/VehicleSeat quotes
@@ -627,6 +628,7 @@ def seat_attachment_name(index: int) -> str:
         return f"idx {index}"
     return attachment_name(VEHICLE_GEO_COMPONENT_LINKS[index])
 
+
 # SpellEffect.Effect value that summons a creature: EffectMiscValue_0 is the
 # creature id (server-side NPC entry, same space as morphs), EffectMiscValue_1
 # the SummonProperties row governing how the summon behaves
@@ -697,7 +699,7 @@ TARGET_BITS = {1: TARGET_CASTER, 2: TARGET_TARGET, 3: TARGET_AREA,
 # it says "not the caster" outright, so it can never mean the caster. The full
 # phase axis (surfacing cast/aura/impact per pill) is deliberately NOT built
 # here; this reads StartEvent only far enough to get the icons right.
-AURA_PHASE_EVENTS = frozenset({7, 8})   # Aura Start / Aura End
+AURA_PHASE_EVENTS = frozenset({7, 8})  # Aura Start / Aura End
 
 
 def resolve_target_mask(aura_mask: int, other_mask: int,
@@ -714,6 +716,7 @@ def resolve_target_mask(aura_mask: int, other_mask: int,
     if other_mask & TARGET_TARGET and cast_bits == TARGET_CASTER:
         other_mask = (other_mask & ~TARGET_TARGET) | TARGET_CASTER
     return aura_mask | other_mask
+
 
 # The search word each mask bit answers to. Two pairs of bits deliberately
 # share a word: "target, never caster" is still a target (it keeps its own bit,
@@ -768,11 +771,12 @@ def implicit_target_bits(version: str) -> dict[int, int]:
     return {tid: b for tid, name in read_enum_names("Target", version).items()
             if (b := implicit_target_bit(name))}
 
+
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
 PACK_FORMAT = 29  # 29: mechanics carry their implicit targets (spellEffects +
-                  #     spellAuras -> spellMechanics, implicitTargetNames) and
-                  #     keybound overrides (spellKeybinds, keybinds)
+#     spellAuras -> spellMechanics, implicitTargetNames) and
+#     keybound overrides (spellKeybinds, keybinds)
 # 28: SpellVisualEffectName Type 1 -> item model pills (items section,
 #     itemIconNames, spellModels.displayIds -> refIds)
 # 27: SpellVisualEffectName Type 2 -> creature-display model pills
@@ -850,21 +854,36 @@ def iter_insert_rows(line: str) -> Iterator[list[str]]:
             c = line[i]
             if in_str:
                 if c == "\\":
-                    val.append(line[i + 1]); i += 2; continue
+                    val.append(line[i + 1]);
+                    i += 2;
+                    continue
                 if c == "'":
                     if i + 1 < n and line[i + 1] == "'":
-                        val.append("'"); i += 2; continue
-                    in_str = False; i += 1; continue
-                val.append(c); i += 1; continue
+                        val.append("'");
+                        i += 2;
+                        continue
+                    in_str = False;
+                    i += 1;
+                    continue
+                val.append(c);
+                i += 1;
+                continue
             if c == "'":
-                in_str = True; i += 1; continue
+                in_str = True;
+                i += 1;
+                continue
             if c == ",":
-                row.append("".join(val).strip()); val = []; i += 1; continue
+                row.append("".join(val).strip());
+                val = [];
+                i += 1;
+                continue
             if c == ")":
-                row.append("".join(val).strip()); i += 1
+                row.append("".join(val).strip());
+                i += 1
                 yield row
                 break
-            val.append(c); i += 1
+            val.append(c);
+            i += 1
 
 
 def tdb_column_index(table: str, column: str, schema: list[str]) -> int | None:
@@ -1005,7 +1024,7 @@ def fetch_sources(version: str, refresh: bool) -> tuple[Path, Path, Path | None]
         log(f"  cached   {listfile.name} ({listfile.stat().st_size:,} bytes)")
     else:
         with urllib.request.urlopen(
-            urllib.request.Request(LISTFILE_RELEASE_API, headers={"User-Agent": "epsilook-build"}), timeout=60
+                urllib.request.Request(LISTFILE_RELEASE_API, headers={"User-Agent": "epsilook-build"}), timeout=60
         ) as resp:
             release = json.load(resp)
         asset = next(a for a in release["assets"] if a["name"] == "community-listfile.csv")
@@ -1156,7 +1175,7 @@ def merge_masked(dst: dict[T, int], items: Iterable[T], mask: int) -> None:
 
 
 def color_rows(
-    spell_map: dict[int, dict[int, int]], colors_of: Callable[[int], tuple[int, ...]]
+        spell_map: dict[int, dict[int, int]], colors_of: Callable[[int], tuple[int, ...]]
 ) -> tuple[list[tuple[int, int, int]], list[int], list[str]]:
     """Flatten one color-only fx source into the three columns its pack sections need.
 
@@ -1195,11 +1214,13 @@ def read_enum_names(name: str, version: str) -> dict[int, str]:
         if line.startswith("(BUILD "):
             guard, _, line = line[len("(BUILD "):].partition(")")
             line = line.strip()
+
             def in_range(rng: str) -> bool:
                 lo, _, hi = rng.strip().partition("-")
                 lo_t = tuple(int(p) for p in lo.split("."))
                 hi_t = tuple(int(p) for p in hi.split(".")) if hi else lo_t
                 return lo_t <= ver <= hi_t
+
             if not any(in_range(r) for r in guard.split(",")):
                 continue
         m = re.fullmatch(r"(\d+) ([A-Z][A-Z0-9_]*)", line)
@@ -1247,7 +1268,7 @@ def read_spell_names(table_dir: Path, tdb_dir: Path | None) -> tuple[dict[int, s
 
 
 def expand_redirects(
-    seeds: set[int], redirects: dict[int, list[tuple[int, int]]]
+        seeds: set[int], redirects: dict[int, list[tuple[int, int]]]
 ) -> dict[int, int]:
     """Expand a spell's visuals to include the ones its visuals redirect to.
 
@@ -1281,10 +1302,10 @@ def expand_redirects(
 
 
 def read_visual_graph(
-    table_dir: Path, tdb_dir: Path | None
+        table_dir: Path, tdb_dir: Path | None
 ) -> tuple[dict[int, dict[int, int]],
-           dict[int, dict[int, tuple[int, int]]],
-           dict[int, int]]:
+dict[int, dict[int, tuple[int, int]]],
+dict[int, int]]:
     """Read the spell -> visual -> kit edges of the visual graph.
 
     Both hops are many-to-many. SpellXSpellVisual rows are keyed by row ID
@@ -1305,11 +1326,11 @@ def read_visual_graph(
     """
     sxv_rows: dict[int, tuple[int, int]] = {}
     for rid, spell_id, visual_id in read_table(
-        table_dir, "SpellXSpellVisual", ["ID", "SpellID", "SpellVisualID"]
+            table_dir, "SpellXSpellVisual", ["ID", "SpellID", "SpellVisualID"]
     ):
         sxv_rows[to_int(rid)] = (to_int(spell_id), to_int(visual_id))
     for rid, spell_id, visual_id in hotfix_rows(
-        tdb_dir, "spell_x_spell_visual", ["ID", "SpellID", "SpellVisualID"]
+            tdb_dir, "spell_x_spell_visual", ["ID", "SpellID", "SpellVisualID"]
     ):
         sxv_rows[to_int(rid)] = (to_int(spell_id), to_int(visual_id))
     direct: dict[int, set[int]] = defaultdict(set)
@@ -1350,8 +1371,8 @@ def read_visual_graph(
     # impact kits carry duplicate event rows differing only in TargetType.
     visual_kits: dict[int, dict[int, tuple[int, int]]] = defaultdict(dict)
     for visual_id, kit_id, target_type, start_event in read_table(
-        table_dir, "SpellVisualEvent",
-        ["SpellVisualID", "SpellVisualKitID", "TargetType", "StartEvent"]
+            table_dir, "SpellVisualEvent",
+            ["SpellVisualID", "SpellVisualKitID", "TargetType", "StartEvent"]
     ):
         v, k = to_int(visual_id), to_int(kit_id)
         if v and k:
@@ -1372,12 +1393,12 @@ class ModelSources:
     resolved per kit here; the rest are resolved when the kit walk (or a proc
     row) references them.
     """
-    effect_name_fid: dict[int, int]   # SpellVisualEffectName.ID -> model fid
+    effect_name_fid: dict[int, int]  # SpellVisualEffectName.ID -> model fid
     effect_name_type: dict[int, int]  # SpellVisualEffectName.ID -> Type (0 file, 1 item, 2 display, 3-10 weapon)
-    area_model_fid: dict[int, int]    # SpellVisualKitAreaModel.ID -> model fid
-    emission_fid: dict[int, int]      # SpellEffectEmission.ID -> model fid (ET 8)
-    barrage_fid: dict[int, int]       # BarrageEffect.ID -> model fid (ET 17)
-    weapontrail_fid: dict[int, int]   # WeaponTrail.ID -> model fid (proc Type 27)
+    area_model_fid: dict[int, int]  # SpellVisualKitAreaModel.ID -> model fid
+    emission_fid: dict[int, int]  # SpellEffectEmission.ID -> model fid (ET 8)
+    barrage_fid: dict[int, int]  # BarrageEffect.ID -> model fid (ET 17)
+    weapontrail_fid: dict[int, int]  # WeaponTrail.ID -> model fid (proc Type 27)
     # kit -> {(fid, category, source attachment, destination attachment, ref)}.
     # Routes with a single attach point put it in `source` and leave
     # `destination` NO_ATTACHMENT; routes with none use NO_ATTACHMENT for both.
@@ -1391,13 +1412,13 @@ class ModelSources:
     # attached model's start/loop/end AnimationData ids and its AnimKit. Keyed
     # by kit, they union straight into the existing visual-anim / animkit
     # buckets, so they need no pack section of their own.
-    attach_anims: dict[int, set[int]]     # kit -> AnimationData ids (Start/Anim/End)
+    attach_anims: dict[int, set[int]]  # kit -> AnimationData ids (Start/Anim/End)
     attach_animkits: dict[int, set[int]]  # kit -> AnimKit ids
 
 
 def read_model_sources(
-    table_dir: Path, tdb_dir: Path | None, creatures: "CreatureModels",
-    items: "ItemModels", listfile_path: Path
+        table_dir: Path, tdb_dir: Path | None, creatures: "CreatureModels",
+        items: "ItemModels", listfile_path: Path
 ) -> ModelSources:
     """Read the model-bearing tables (see ModelSources for the routes)."""
     # SpellVisualEffectName.Type says how to reach the model: 0 = ModelFileDataID
@@ -1411,8 +1432,8 @@ def read_model_sources(
     effect_name_type: dict[int, int] = {}
     effect_name_generic: dict[int, int] = {}
     for en_id, model_fid, etype, generic in read_table(
-        table_dir, "SpellVisualEffectName",
-        ["ID", "ModelFileDataID", "Type", "GenericID"]
+            table_dir, "SpellVisualEffectName",
+            ["ID", "ModelFileDataID", "Type", "GenericID"]
     ):
         e = to_int(en_id)
         effect_name_fid[e] = to_int(model_fid)
@@ -1444,9 +1465,9 @@ def read_model_sources(
     attach_anims: dict[int, set[int]] = defaultdict(set)
     attach_animkits: dict[int, set[int]] = defaultdict(set)
     for kit_id, en_id, attach, start_a, anim_a, end_a, animkit in read_table(
-        table_dir, "SpellVisualKitModelAttach",
-        ["ParentSpellVisualKitID", "SpellVisualEffectNameID", "AttachmentID",
-         "StartAnimID", "AnimID", "EndAnimID", "AnimKitID"]
+            table_dir, "SpellVisualKitModelAttach",
+            ["ParentSpellVisualKitID", "SpellVisualEffectNameID", "AttachmentID",
+             "StartAnimID", "AnimID", "EndAnimID", "AnimKitID"]
     ):
         k = to_int(kit_id)
         if not k:
@@ -1496,7 +1517,7 @@ def read_model_sources(
     # area model) and proc Type 9.
     area_model_fid: dict[int, int] = {}
     for am_id, model_fid_s in read_table(
-        table_dir, "SpellVisualKitAreaModel", ["ID", "ModelFileDataID"]
+            table_dir, "SpellVisualKitAreaModel", ["ID", "ModelFileDataID"]
     ):
         area_model_fid[to_int(am_id)] = to_int(model_fid_s)
 
@@ -1508,7 +1529,7 @@ def read_model_sources(
     # the usual SpellVisualEffectName hop (count/cone columns skipped)
     barrage_fid: dict[int, int] = {}
     for b_id, en_id in read_table(
-        table_dir, "BarrageEffect", ["ID", "SpellVisualEffectNameID"]
+            table_dir, "BarrageEffect", ["ID", "SpellVisualEffectNameID"]
     ):
         barrage_fid[to_int(b_id)] = effect_name_fid.get(to_int(en_id), 0)
 
@@ -1529,8 +1550,8 @@ NO_MISSILES: tuple = (frozenset(), frozenset(), frozenset(),
 
 
 def read_missiles(
-    table_dir: Path, tdb_dir: Path | None, effect_name_fid: dict[int, int],
-    effect_name_type: dict[int, int]
+        table_dir: Path, tdb_dir: Path | None, effect_name_fid: dict[int, int],
+        effect_name_type: dict[int, int]
 ) -> dict[int, tuple]:
     """Read visual -> (missile models, soundkits, animkits).
 
@@ -1602,15 +1623,15 @@ class ProcEffects:
     in the bucket its type feeds, and the kit walk dispatches a kit's proc
     references by looking the id up in each.
     """
-    chain: dict[int, int]               # proc ID -> SpellChainEffects ID (Types 0/12/26)
-    tints: dict[int, int]               # proc ID -> packed RGB (Types 1 and 23)
-    ghost_mats: dict[int, int]          # proc ID -> packed RGB (Type 22)
-    desats: dict[int, int]              # proc ID -> desaturation percent (Type 21)
-    transps: dict[int, int]             # proc ID -> transparency percent (Type 14)
-    freezes: set[int]                   # proc IDs of freeze (Type 11)
-    camos: set[int]                     # proc IDs of camo (Type 18)
+    chain: dict[int, int]  # proc ID -> SpellChainEffects ID (Types 0/12/26)
+    tints: dict[int, int]  # proc ID -> packed RGB (Types 1 and 23)
+    ghost_mats: dict[int, int]  # proc ID -> packed RGB (Type 22)
+    desats: dict[int, int]  # proc ID -> desaturation percent (Type 21)
+    transps: dict[int, int]  # proc ID -> transparency percent (Type 14)
+    freezes: set[int]  # proc IDs of freeze (Type 11)
+    camos: set[int]  # proc IDs of camo (Type 18)
     models: dict[int, tuple[int, int, int, int, int]]  # proc ID -> model tuple (Types 9, 27)
-    anims: dict[int, tuple[int, ...]]   # proc ID -> AnimationData IDs (Type 7)
+    anims: dict[int, tuple[int, ...]]  # proc ID -> AnimationData IDs (Type 7)
 
 
 def read_proc_effects(table_dir: Path, models: ModelSources) -> ProcEffects:
@@ -1674,25 +1695,25 @@ class ScreenRow:
     skipped for now.
     """
     name: str
-    fog: int          # packed RGB, -1 = not a fog row
-    fog_alpha: int    # fog opacity byte 0..255, -1 = none
-    mul: int          # FullScreenEffect ColorMultiply, -1 = no FSE row
-    add: int          # FullScreenEffect ColorAddition, -1 = no FSE row
-    mask: tuple[float, float, float]       # vignette (offsetY, size, power); size 0 = no FSE
+    fog: int  # packed RGB, -1 = not a fog row
+    fog_alpha: int  # fog opacity byte 0..255, -1 = none
+    mul: int  # FullScreenEffect ColorMultiply, -1 = no FSE row
+    add: int  # FullScreenEffect ColorAddition, -1 = no FSE row
+    mask: tuple[float, float, float]  # vignette (offsetY, size, power); size 0 = no FSE
     textures: tuple[tuple[int, int], ...]  # ((fid, TEX_OVERLAY | TEX_MASK), ...)
 
 
 @dataclass
 class FxPayloads:
     """The per-row payload tables behind the Effects column, keyed by row id."""
-    chains: dict[int, tuple]           # chain ID -> (r, g, b, soundkit, texfids, subchains)
+    chains: dict[int, tuple]  # chain ID -> (r, g, b, soundkit, texfids, subchains)
     beam_chain: dict[int, tuple[int, int, int]]  # BeamEffect.ID -> (chain, src, dst)
     dissolves: dict[int, tuple[float, tuple[int, ...]]]  # ID -> (duration, tex fids)
-    glows: dict[int, int]              # EdgeGlowEffect.ID -> packed RGB
-    glow_alphas: dict[int, int]        # EdgeGlowEffect.ID -> alpha 0..255
+    glows: dict[int, int]  # EdgeGlowEffect.ID -> packed RGB
+    glow_alphas: dict[int, int]  # EdgeGlowEffect.ID -> alpha 0..255
     shadowies: dict[int, tuple[int, int]]  # ShadowyEffect.ID -> (primary, secondary)
-    screens: dict[int, ScreenRow]      # ScreenEffect.ID -> payload
-    svse_screen: dict[int, int]        # SpellVisualScreenEffect.ID -> ScreenEffect.ID
+    screens: dict[int, ScreenRow]  # ScreenEffect.ID -> payload
+    svse_screen: dict[int, int]  # SpellVisualScreenEffect.ID -> ScreenEffect.ID
 
 
 def read_fx_payloads(table_dir: Path) -> FxPayloads:
@@ -1701,7 +1722,7 @@ def read_fx_payloads(table_dir: Path) -> FxPayloads:
     # effects' mask layers
     blendset_tex: dict[int, tuple[int, ...]] = {}
     for row in read_table(
-        table_dir, "TextureBlendSet", ["ID"] + [f"TextureFileDataID_{i}" for i in range(3)]
+            table_dir, "TextureBlendSet", ["ID"] + [f"TextureFileDataID_{i}" for i in range(3)]
     ):
         fids = tuple(dict.fromkeys(f for f in (to_int(v) for v in row[1:4]) if f))
         blendset_tex[to_int(row[0])] = fids
@@ -1711,7 +1732,7 @@ def read_fx_payloads(table_dir: Path) -> FxPayloads:
     # The geometry columns (Ramp/Start/End/Fresnel/Curve) are renderer tuning.
     dissolves: dict[int, tuple[float, tuple[int, ...]]] = {}
     for did, tbs_id, duration in read_table(
-        table_dir, "DissolveEffect", ["ID", "TextureBlendSetID", "Duration"]
+            table_dir, "DissolveEffect", ["ID", "TextureBlendSetID", "Duration"]
     ):
         dissolves[to_int(did)] = (
             round(float(duration), 2) if duration else 0,
@@ -1729,11 +1750,11 @@ def read_fx_payloads(table_dir: Path) -> FxPayloads:
         int, tuple[int, int, float, float, float, tuple[tuple[int, int], ...]]
     ] = {}
     for row in read_table(
-        table_dir, "FullScreenEffect",
-        ["ID", "ColorMultiplyRed", "ColorMultiplyGreen", "ColorMultiplyBlue",
-         "ColorAdditionRed", "ColorAdditionGreen", "ColorAdditionBlue",
-         "OverlayTextureFileDataID", "TextureBlendSetID",
-         "MaskOffsetY", "MaskSizeMultiplier", "MaskPower"]
+            table_dir, "FullScreenEffect",
+            ["ID", "ColorMultiplyRed", "ColorMultiplyGreen", "ColorMultiplyBlue",
+             "ColorAdditionRed", "ColorAdditionGreen", "ColorAdditionBlue",
+             "OverlayTextureFileDataID", "TextureBlendSetID",
+             "MaskOffsetY", "MaskSizeMultiplier", "MaskPower"]
     ):
         flds = row[1:]
         overlay = to_int(flds[6])
@@ -1754,7 +1775,7 @@ def read_fx_payloads(table_dir: Path) -> FxPayloads:
 
     screens: dict[int, ScreenRow] = {}
     for sid, name, p0, eff, fse_id in read_table(
-        table_dir, "ScreenEffect", ["ID", "Name", "Param_0", "Effect", "FullScreenEffectID"]
+            table_dir, "ScreenEffect", ["ID", "Name", "Param_0", "Effect", "FullScreenEffectID"]
     ):
         is_fog = to_int(eff) == SCREEN_EFFECT_FOG
         # Param_0 is aarrggbb: the low 24 bits are the fog color and the top
@@ -1771,7 +1792,7 @@ def read_fx_payloads(table_dir: Path) -> FxPayloads:
     # kit route: EffectType 19 -> SpellVisualScreenEffect -> ScreenEffectID
     svse_screen: dict[int, int] = {}
     for rid, se_id, _type_id in read_table(
-        table_dir, "SpellVisualScreenEffect", ["ID", "ScreenEffectID", "ScreenEffectTypeID"]
+            table_dir, "SpellVisualScreenEffect", ["ID", "ScreenEffectID", "ScreenEffectTypeID"]
     ):
         svse_screen[to_int(rid)] = to_int(se_id)
 
@@ -1781,8 +1802,8 @@ def read_fx_payloads(table_dir: Path) -> FxPayloads:
     glows: dict[int, int] = {}
     glow_alphas: dict[int, int] = {}
     for gid, r, g, b, a in read_table(
-        table_dir, "EdgeGlowEffect",
-        ["ID", "GlowRed", "GlowGreen", "GlowBlue", "GlowAlpha"]
+            table_dir, "EdgeGlowEffect",
+            ["ID", "GlowRed", "GlowGreen", "GlowBlue", "GlowAlpha"]
     ):
         glows[to_int(gid)] = pack_rgb(to_channel(r), to_channel(g), to_channel(b))
         # GlowAlpha is a real 0..1 spread (not a 0/1 unset flag like the
@@ -1793,7 +1814,7 @@ def read_fx_payloads(table_dir: Path) -> FxPayloads:
     # stored as signed int32 ARGB — the alpha byte is masked off
     shadowies: dict[int, tuple[int, int]] = {}
     for eid, primary, secondary in read_table(
-        table_dir, "ShadowyEffect", ["ID", "PrimaryColor", "SecondaryColor"]
+            table_dir, "ShadowyEffect", ["ID", "PrimaryColor", "SecondaryColor"]
     ):
         shadowies[to_int(eid)] = (to_int(primary) & 0xFFFFFF,
                                   to_int(secondary) & 0xFFFFFF)
@@ -1803,9 +1824,9 @@ def read_fx_payloads(table_dir: Path) -> FxPayloads:
     # id) and EffectType 13 -> BeamEffect.BeamID. Composite chains nest via
     # SpellChainEffectID_0..10; geometry/flicker/wave columns are skipped.
     chain_cols = (
-        ["ID", "Red", "Green", "Blue", "SoundKitID"]
-        + [f"TextureFileDataID_{i}" for i in range(3)]
-        + [f"SpellChainEffectID_{i}" for i in range(11)]
+            ["ID", "Red", "Green", "Blue", "SoundKitID"]
+            + [f"TextureFileDataID_{i}" for i in range(3)]
+            + [f"SpellChainEffectID_{i}" for i in range(11)]
     )
     chains: dict[int, tuple] = {}
     for row in read_table(table_dir, "SpellChainEffects", chain_cols):
@@ -1820,7 +1841,7 @@ def read_fx_payloads(table_dir: Path) -> FxPayloads:
     # whatever it connects to — so the pair rides with the chain it draws
     beam_chain: dict[int, tuple[int, int, int]] = {}
     for bid, chain_id, src, dst in read_table(
-        table_dir, "BeamEffect", ["ID", "BeamID", "SourceAttachID", "DestAttachID"]
+            table_dir, "BeamEffect", ["ID", "BeamID", "SourceAttachID", "DestAttachID"]
     ):
         beam_chain[to_int(bid)] = (to_int(chain_id), to_int(src), to_int(dst))
 
@@ -1861,23 +1882,23 @@ class KitEffects:
     models: dict[int, set[tuple[int, int, int, int, int]]]  # (fid, category, src, dst, display)
     soundkits: dict[int, set[int]]
     animkits: dict[int, set[int]]
-    anims: dict[int, set[int]]        # direct AnimationData ids (proc Type 7)
+    anims: dict[int, set[int]]  # direct AnimationData ids (proc Type 7)
     visual_anims: dict[int, set[int]]  # AnimationData ids (SpellVisualAnim, ET 6)
     chains: dict[int, set[tuple[int, int, int]]]  # (chain, src attach, dst attach)
     dissolves: dict[int, set[int]]
     glows: dict[int, set[int]]
     shadowies: dict[int, set[int]]
-    ghost_mats: dict[int, set[int]]   # proc Type 22 material recolors
+    ghost_mats: dict[int, set[int]]  # proc Type 22 material recolors
     tints: dict[int, set[int]]
-    desats: dict[int, set[int]]       # proc ids (Type 21)
-    transps: dict[int, set[int]]      # proc ids (Type 14)
-    screens: dict[int, set[int]]      # ScreenEffect ids (ET 19)
+    desats: dict[int, set[int]]  # proc ids (Type 21)
+    transps: dict[int, set[int]]  # proc ids (Type 14)
+    screens: dict[int, set[int]]  # ScreenEffect ids (ET 19)
     freezes: set[int] = field(default_factory=set)  # kit ids with a freeze proc
-    camos: set[int] = field(default_factory=set)    # kit ids with a camo proc
+    camos: set[int] = field(default_factory=set)  # kit ids with a camo proc
 
 
 def read_kit_effects(
-    table_dir: Path, models: ModelSources, procs: ProcEffects, fx: FxPayloads
+        table_dir: Path, models: ModelSources, procs: ProcEffects, fx: FxPayloads
 ) -> KitEffects:
     """Dispatch every SpellVisualKitEffect row into its category bucket.
 
@@ -1903,12 +1924,12 @@ def read_kit_effects(
     # plays directly on the unit (-1 and 0 both mean unset — 0 would be Stand)
     sva_rows: dict[int, tuple[int, int, int]] = {}
     for sva_id, initial_id, loop_id, animkit_id in read_table(
-        table_dir, "SpellVisualAnim", ["ID", "InitialAnimID", "LoopAnimID", "AnimKitID"]
+            table_dir, "SpellVisualAnim", ["ID", "InitialAnimID", "LoopAnimID", "AnimKitID"]
     ):
         sva_rows[to_int(sva_id)] = (to_int(initial_id), to_int(loop_id), to_int(animkit_id))
 
     for kit_id, effect_type, effect in read_table(
-        table_dir, "SpellVisualKitEffect", ["ParentSpellVisualKitID", "EffectType", "Effect"]
+            table_dir, "SpellVisualKitEffect", ["ParentSpellVisualKitID", "EffectType", "Effect"]
     ):
         k, et, e = to_int(kit_id), to_int(effect_type), to_int(effect)
         if not (k and e):
@@ -2016,15 +2037,15 @@ class SpellEffectRows:
     the line that fills it — no call site to keep in step.
     """
     # payload ids per spell, one field per aura/effect route
-    morphs: dict[int, set[int]] = _by_spell()       # creature ids (aura 56)
+    morphs: dict[int, set[int]] = _by_spell()  # creature ids (aura 56)
     summons: dict[int, set[tuple[int, int]]] = _by_spell()  # (creature, control) (effect 28)
-    screens: dict[int, set[int]] = _by_spell()      # ScreenEffect ids (aura 260)
-    forms: dict[int, set[int]] = _by_spell()        # shapeshift form ids (aura 36)
-    altnames: dict[int, set[int]] = _by_spell()     # SpellOverrideName ids (aura 370)
-    vehicles: dict[int, set[int]] = _by_spell()     # Vehicle.db2 ids (aura 296)
-    invis: dict[int, set[int]] = _by_spell()        # invisibility types (aura 18)
-    detect: dict[int, set[int]] = _by_spell()       # detect types (aura 19)
-    keybinds: dict[int, set[int]] = _by_spell()     # override ids (aura 406)
+    screens: dict[int, set[int]] = _by_spell()  # ScreenEffect ids (aura 260)
+    forms: dict[int, set[int]] = _by_spell()  # shapeshift form ids (aura 36)
+    altnames: dict[int, set[int]] = _by_spell()  # SpellOverrideName ids (aura 370)
+    vehicles: dict[int, set[int]] = _by_spell()  # Vehicle.db2 ids (aura 296)
+    invis: dict[int, set[int]] = _by_spell()  # invisibility types (aura 18)
+    detect: dict[int, set[int]] = _by_spell()  # detect types (aura 19)
+    keybinds: dict[int, set[int]] = _by_spell()  # override ids (aura 406)
     # who each effect-driven fx lands on, from the producing SpellEffect row's
     # ImplicitTarget_0/_1 — keyed (spell, payload) so it rides the pack's
     # spell->payload link rows (payload = creature / form / screen / vehicle /
@@ -2051,9 +2072,9 @@ class SpellEffectRows:
 
 
 def read_spell_effect_rows(
-    table_dir: Path, tdb_dir: Path | None, spell_names: dict[int, str],
-    screens: dict[int, ScreenRow], target_bits: dict[int, int],
-    keybounds: dict[int, KeyboundOverride]
+        table_dir: Path, tdb_dir: Path | None, spell_names: dict[int, str],
+        screens: dict[int, ScreenRow], target_bits: dict[int, int],
+        keybounds: dict[int, KeyboundOverride]
 ) -> SpellEffectRows:
     """Read SpellEffect and split it into the per-spell sets we ship.
 
@@ -2201,10 +2222,10 @@ class VehicleSeats:
     meaningful; the rest are unioned per vehicle, since a spell surfaces the
     vehicle as a whole rather than one seat's animations.
     """
-    seats: dict[int, list[str]]            # vehicle -> [attachment name per seat]
-    passenger_anims: dict[int, set[int]]   # vehicle -> AnimationData ids (rider)
-    vehicle_anims: dict[int, set[int]]     # vehicle -> AnimationData ids (vehicle)
-    animkits: dict[int, set[int]]          # vehicle -> AnimKit ids
+    seats: dict[int, list[str]]  # vehicle -> [attachment name per seat]
+    passenger_anims: dict[int, set[int]]  # vehicle -> AnimationData ids (rider)
+    vehicle_anims: dict[int, set[int]]  # vehicle -> AnimationData ids (vehicle)
+    animkits: dict[int, set[int]]  # vehicle -> AnimKit ids
 
 
 def read_vehicle_seats(table_dir: Path) -> VehicleSeats:
@@ -2269,10 +2290,10 @@ class CreatureModels:
     render unresolved. The second half is client data (with hotfixes) and is
     shared by morphs and shapeshift forms.
     """
-    names: dict[int, str]                         # creature entry -> NPC name
-    displays: dict[int, list[tuple[int, int]]]    # creature -> [(idx, display id)]
-    display_model: dict[int, int]                 # CreatureDisplayInfo.ID -> ModelID
-    model_fid: dict[int, int]                     # CreatureModelData.ID -> model fid
+    names: dict[int, str]  # creature entry -> NPC name
+    displays: dict[int, list[tuple[int, int]]]  # creature -> [(idx, display id)]
+    display_model: dict[int, int]  # CreatureDisplayInfo.ID -> ModelID
+    model_fid: dict[int, int]  # CreatureModelData.ID -> model fid
 
     def fid_for_display(self, display_id: int) -> int:
         """Resolve a CreatureDisplayID to its model fid (0 = unknown)."""
@@ -2330,10 +2351,10 @@ class ItemModels:
     Those still resolve to a model and an icon, which is why the nameless case
     is worth rendering rather than dropping.
     """
-    name: dict[int, str]      # Item::ID -> ItemSearchName.Display_lang
-    quality: dict[int, int]   # Item::ID -> OverallQualityID
+    name: dict[int, str]  # Item::ID -> ItemSearchName.Display_lang
+    quality: dict[int, int]  # Item::ID -> OverallQualityID
     icon_fid: dict[int, int]  # Item::ID -> inventory icon FileDataID
-    model_fid: dict[int, int] # Item::ID -> model fid (first that resolves)
+    model_fid: dict[int, int]  # Item::ID -> model fid (first that resolves)
 
     def resolved(self, item_id: int) -> bool:
         return bool(self.model_fid.get(item_id))
@@ -2353,7 +2374,7 @@ def read_item_models(table_dir: Path) -> ItemModels:
     name: dict[int, str] = {}
     quality: dict[int, int] = {}
     for iid, disp, qual in read_table(
-        table_dir, "ItemSearchName", ["ID", "Display_lang", "OverallQualityID"]
+            table_dir, "ItemSearchName", ["ID", "Display_lang", "OverallQualityID"]
     ):
         i = to_int(iid)
         if disp:
@@ -2372,21 +2393,21 @@ def read_item_models(table_dir: Path) -> ItemModels:
     # slot 1 the off-hand/second component of a paired item)
     display_res: dict[int, tuple[int, int]] = {}
     for did, r0, r1 in read_table(
-        table_dir, "ItemDisplayInfo", ["ID", "ModelResourcesID_0", "ModelResourcesID_1"]
+            table_dir, "ItemDisplayInfo", ["ID", "ModelResourcesID_0", "ModelResourcesID_1"]
     ):
         display_res[to_int(did)] = (to_int(r0), to_int(r1))
 
     # ItemAppearance.ID -> (ItemDisplayInfoID, icon fid)
     appearance: dict[int, tuple[int, int]] = {}
     for aid, did, icon in read_table(
-        table_dir, "ItemAppearance", ["ID", "ItemDisplayInfoID", "DefaultIconFileDataID"]
+            table_dir, "ItemAppearance", ["ID", "ItemDisplayInfoID", "DefaultIconFileDataID"]
     ):
         appearance[to_int(aid)] = (to_int(did), to_int(icon))
 
     icon_fid: dict[int, int] = {}
     model_fid: dict[int, int] = {}
     for iid, aid in read_table(
-        table_dir, "ItemModifiedAppearance", ["ItemID", "ItemAppearanceID"]
+            table_dir, "ItemModifiedAppearance", ["ItemID", "ItemAppearanceID"]
     ):
         i, a = to_int(iid), to_int(aid)
         if not i or a not in appearance:
@@ -2416,8 +2437,8 @@ def read_shapeshift_forms(table_dir: Path) -> tuple[dict[int, str], dict[int, li
     form_names: dict[int, str] = {}
     form_displays: dict[int, list[int]] = {}
     for fid_, name, *disp in read_table(
-        table_dir, "SpellShapeshiftForm",
-        ["ID", "Name_lang"] + array_columns(table_dir, "SpellShapeshiftForm", "CreatureDisplayID", 4)
+            table_dir, "SpellShapeshiftForm",
+            ["ID", "Name_lang"] + array_columns(table_dir, "SpellShapeshiftForm", "CreatureDisplayID", 4)
     ):
         form_names[to_int(fid_)] = name
         form_displays[to_int(fid_)] = [d for d in (to_int(x) for x in disp) if d > 0]
@@ -2442,16 +2463,16 @@ def read_override_names(table_dir: Path, spell_altnames: dict[int, set[int]]) ->
 
 
 def read_spell_icons(
-    table_dir: Path, tdb_dir: Path | None, spell_names: dict[int, str]
+        table_dir: Path, tdb_dir: Path | None, spell_names: dict[int, str]
 ) -> dict[int, int]:
     """Read spell -> icon FileDataID from SpellMisc (base difficulty wins)."""
     sm_rows: dict[int, tuple[int, int, int]] = {}
     for rid, spell_id, diff, icon_fid in read_table(
-        table_dir, "SpellMisc", ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"]
+            table_dir, "SpellMisc", ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"]
     ):
         sm_rows[to_int(rid)] = (to_int(spell_id), to_int(diff), to_int(icon_fid))
     for rid, spell_id, diff, icon_fid in hotfix_rows(
-        tdb_dir, "spell_misc", ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"]
+            tdb_dir, "spell_misc", ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"]
     ):
         sm_rows[to_int(rid)] = (to_int(spell_id), to_int(diff), to_int(icon_fid))
     spell_icon_fid: dict[int, int] = {}
@@ -2478,11 +2499,11 @@ class SpellVisuals:
     mask even where the pack does not currently emit one, so giving a category
     an icon later is a pack-section change, not a walk change.
     """
-    models: dict[int, dict[tuple[int, int, int, int, int], int]]   # (fid, category, src, dst, display)
-    sounds: dict[int, dict[tuple[int, int], int]]   # (soundkit, sound fid)
+    models: dict[int, dict[tuple[int, int, int, int, int], int]]  # (fid, category, src, dst, display)
+    sounds: dict[int, dict[tuple[int, int], int]]  # (soundkit, sound fid)
     animkits: dict[int, dict[int, int]]
-    anims: dict[int, dict[int, int]]                # direct AnimationData ids (stance)
-    visual_anims: dict[int, dict[int, int]]         # AnimationData ids (SpellVisualAnim)
+    anims: dict[int, dict[int, int]]  # direct AnimationData ids (stance)
+    visual_anims: dict[int, dict[int, int]]  # AnimationData ids (SpellVisualAnim)
     chains: dict[int, dict[tuple[int, int, int], int]]
     dissolves: dict[int, dict[int, int]]
     glows: dict[int, dict[int, int]]
@@ -2493,21 +2514,21 @@ class SpellVisuals:
     transps: dict[int, dict[int, int]]
     freezes: set[int]
     camos: set[int]
-    orphans: int   # SpellXSpellVisual rows whose SpellID has no SpellName
+    orphans: int  # SpellXSpellVisual rows whose SpellID has no SpellName
 
 
 def walk_spells(
-    spell_names: dict[int, str],
-    spell_visuals: dict[int, dict[int, int]],
-    visual_kits: dict[int, dict[int, tuple[int, int]]],
-    visual_missiles: dict[int, tuple],
-    kits: KitEffects,
-    soundkit_files: dict[int, set[int]],
-    fx: FxPayloads,
-    spell_screens: dict[int, set[int]],
-    visual_sounds: dict[int, int],
-    aura_target_bits: dict[int, int],
-    cast_target_bits: dict[int, int],
+        spell_names: dict[int, str],
+        spell_visuals: dict[int, dict[int, int]],
+        visual_kits: dict[int, dict[int, tuple[int, int]]],
+        visual_missiles: dict[int, tuple],
+        kits: KitEffects,
+        soundkit_files: dict[int, set[int]],
+        fx: FxPayloads,
+        spell_screens: dict[int, set[int]],
+        visual_sounds: dict[int, int],
+        aura_target_bits: dict[int, int],
+        cast_target_bits: dict[int, int],
 ) -> SpellVisuals:
     """Walk spell -> visual -> kit once, unioning every payload per spell.
 
@@ -2611,7 +2632,7 @@ def resolve_paths(listfile_path: Path, wanted: set[int]) -> dict[int, str]:
 
 
 def build_icon_index(
-    spell_ids: list[int], spell_icon_fid: dict[int, int], fid_path: dict[int, str]
+        spell_ids: list[int], spell_icon_fid: dict[int, int], fid_path: dict[int, str]
 ) -> tuple[list[str], list[int]]:
     """Build the deduped icon-name table and each spell's 1-based index into it.
 
@@ -2805,7 +2826,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         if idx is None:
             idx = item_icon_index[nm] = len(item_icon_names)
             item_icon_names.append(nm)
-        item_icons.append(idx + 1)   # 1-based; 0 = no icon
+        item_icons.append(idx + 1)  # 1-based; 0 = no icon
     sound_rows = sorted(
         (s, sk, f, m) for s, pairs in vis.sounds.items() for (sk, f), m in pairs.items())
     anim_rows = sorted(
@@ -2874,6 +2895,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # one row per SEAT, in slot order, carrying its attachment name
     vehicle_seat_rows = [(v, name) for v in vehicle_ids
                          for name in vehicle_seats.seats[v]]
+
     # a spell reaches its vehicle's animations through the vehicle; flatten
     # to spell -> anim id so the runtime needs no second hop
     def _spell_rows(per_vehicle: dict[int, set[int]],
@@ -3043,7 +3065,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "ids": used_items,
             "names": [items.name.get(i, "") for i in used_items],
             "qualities": [items.quality.get(i, -1) for i in used_items],
-            "icons": item_icons,          # 1-based index into itemIconNames, 0 = none
+            "icons": item_icons,  # 1-based index into itemIconNames, 0 = none
         },
         "itemIconNames": item_icon_names,
         "itemQualityNames": ITEM_QUALITY_NAMES,
