@@ -1184,7 +1184,8 @@
             d.spellFreezes.has(id) || d.spellCamos.has(id) || d.spellScreens.has(id) ||
             d.spellMorphs.has(id) || d.spellShapeshifts.has(id) || d.spellSummons.has(id) ||
             d.spellVehicles.has(id) || d.spellInvisTypes.has(id) ||
-            d.spellDetectTypes.has(id) || d.spellKeybinds.has(id),
+            d.spellDetectTypes.has(id) || d.spellKeybinds.has(id) ||
+            d.spellSpeedMods.has(id),
     };
 
     function applyFiltersAndSort() {
@@ -1709,6 +1710,7 @@
         const invisPills = (d.spellInvisTypes.get(spellId) || []).slice().sort((a, b) => a.type - b.type);
         const detectPills = (d.spellDetectTypes.get(spellId) || []).slice().sort((a, b) => a.type - b.type);
         const keybindIds = d.spellKeybinds.get(spellId) || [];
+        const speedMods = d.spellSpeedMods.get(spellId) || [];
         const td = el("td", "c-fx");
         if (chainIds.length === 0 && dissolveIds.length === 0 && glowIds.length === 0
             && shadowyIds.length === 0 && ghostMatIds.length === 0 && tintIds.length === 0
@@ -1716,7 +1718,7 @@
             && screenIds.length === 0 && morphIds.length === 0 && formIds.length === 0
             && summonEntries.length === 0 && vehicleIds.length === 0
             && invisPills.length === 0 && detectPills.length === 0
-            && keybindIds.length === 0) {
+            && keybindIds.length === 0 && speedMods.length === 0) {
             td.classList.add("empty");
             td.appendChild(el("span", "none", "—"));
             return td;
@@ -2040,6 +2042,20 @@
             });
         }
 
+        // movement-speed modifiers: one pill per (movement, percent) the spell
+        // sets. The pack has already collapsed the auras that share a movement,
+        // so two pills here are two genuinely different statements.
+        if (speedMods.length) {
+            const t = targetSplit(speedMods.map((p) => p.mask));
+            cats.push({
+                name: "speed",
+                hit: speedMods.some((p) => speedIsHit(p.key)),
+                mask: t.head,
+                items: hitsFirst(speedMods, (p) => speedIsHit(p.key))
+                    .map((p) => () => speedTag(p, t.pill(p.mask))),
+            });
+        }
+
         buildKitGroups(td, cats, {
             // the icon rides the category head, unioned over this spell's rows in
             // the category — only where the distribution isn't degenerate (a
@@ -2139,6 +2155,8 @@
     const shapeshiftIsHit = isHitOf("fx:shapeshift");
     const morphIsHit = isHitOf("fx:morph");
     const keybindIsHit = isHitOf("fx:keybind");
+    /** A speed pill keys on the (movement, percent) pair it displays. */
+    const speedIsHit = isHitOf("fx:speed");
     /** Summons key on the (creature, control) pair the pill actually shows. */
     const summonPairIsHit = isHitOf("fx:summon");
     const summonIsHit = (creatureId, control) => summonPairIsHit(creatureId + ":" + control);
@@ -2763,10 +2781,8 @@
    * strength; transparency has no swatch. Clicking searches category + %. */
     function percentFxTag(category, percent, hit) {
         const grey = Math.round(255 * (1 - percent / 200)); // 100% -> mid grey
-        // .flat: as a compact pill this renders (label | value) — a flat divider
-        // instead of the rounded value capsule other compact groups get
         return P.pill({
-            cls: "fx flat",
+            cls: "fx",
             hit,
             segments: [
                 category === "desaturate" && P.swatch(`rgb(${grey}, ${grey}, ${grey})`),
@@ -2833,15 +2849,96 @@
                 : `Reveals ${count} invisibility spell${plural}`];
         // two divider-separated segments — (id | count), mirroring the model pill's
         // (name | attach) grammar. Both carry the same navigation.
-        // .flat: one per spell (SpellEffect aura) — render (label | id | count)
-        // with flat dividers, not the rounded group capsule.
         return P.pill({
-            cls: "fx flat" + (priceless ? " priceless" : ""),
+            cls: "fx" + (priceless ? " priceless" : ""),
             hit: channelIsHit(side, type),
             segments: [
                 P.targets(mask),
                 P.label(String(type), {detail, ...nav}),
                 P.note(verb, {detail, ...nav}),
+            ],
+        });
+    }
+
+    /* What each movement word means, for the pill's tooltip. The words come
+   * from the pack (SPEED_AURAS in build_data), so a word with no line here
+   * still renders — it simply says nothing extra.
+   * @type {Record<string, string>} */
+    const SPEED_MOVEMENT_NOTES = {
+        run: "On foot",
+        mounted: "On a ground mount",
+        swim: "Swimming",
+        // six auras share this word: which one applies depends on whether you
+        // are mounted or in a vehicle, not on a different kind of movement
+        flight: "Flying, mounted or otherwise",
+        all: "Running, mounted, swimming and flying alike",
+    };
+
+    /**
+     * The speed a change leaves you at, as a multiple of normal — the reading of
+     * the number that a percentage change does not give you directly.
+     *
+     * The PILL deliberately shows the change rather than this: the change is
+     * what SpellEffect stores (the server applies it with AddPct), what the
+     * game's own tooltip prints ("Increases your movement speed by 70%"), and
+     * the only form that survives the whole range — 10 rows on 9.2.7 are below
+     * -100%, which as a resulting speed would be negative. So the multiplier
+     * rides the tooltip, where it can simply be absent when it says nothing:
+     * below -100% there is no meaningful speed left to name, and -100% itself
+     * reads as the stop it is.
+     * @param {number} pct
+     * @returns {string} "" when the change has no sensible resulting speed
+     */
+    function speedMultiplier(pct) {
+        const mult = 1 + pct / 100;
+        if (mult < 0) return "";
+        if (mult === 0) return "Brings movement to a stop";
+        if (mult === 1) return "";  // a 0% change: the "+0%" already said it
+        return `${mult.toFixed(2)}× normal speed`;
+    }
+
+    /* Movement-speed pill (SPEED_AURAS in build_data): what the aura scales and
+   * by how much —
+   *
+   *   ( run | +70% )      ( all | -50% )      ( swim | +100% )
+   *
+   * The movement is the label because it is the identity of the pill; the
+   * percent qualifies it, the way an attachment point qualifies a model. Both
+   * are clickable and they ask different questions: the movement finds every
+   * spell that changes that movement, the percent narrows it to this exact
+   * amount.
+   *
+   * "all" is the one aura that reaches every movement type at once
+   * (MOD_DECREASE_SPEED — every snare in the game), so it is a value like the
+   * others rather than a collapse the renderer performs: no spell's separate
+   * auras ever add up to full coverage (checked on 9.2.7 — the widest reaches
+   * four of the five and never swim).
+   *
+   * The sign is the whole story of faster-vs-slower and the aura NAME is not:
+   * "MOD_DECREASE_SPEED" carries a positive amount on 187 rows of 9.2.7. So the
+   * pill prints what the data says and never translates it into a verb.
+   * @param {{move: string, pct: number, amount: string, key: string}} pill
+   */
+    function speedTag(pill, mask = 0) {
+        const detail = [`Movement speed ${pill.amount}`, speedMultiplier(pill.pct),
+            SPEED_MOVEMENT_NOTES[pill.move] || ""];
+        return P.pill({
+            cls: "fx",
+            hit: speedIsHit(pill.key),
+            segments: [
+                P.targets(mask),
+                P.label(pill.move, {
+                    title: P.hintFor("fx", "speed"),
+                    detail,
+                    search: P.catQuery("fx", "speed", pill.move),
+                    finds: `spells changing ${pill.move === "all" ? "every movement" : pill.move} speed`,
+                }),
+                P.note(pill.amount, {
+                    title: P.hintFor("fx", "speed"),
+                    detail,
+                    search: P.catQuery("fx", "speed", `${pill.move} ${pill.amount}`),
+                    finds: "spells changing it by exactly this much",
+                }),
             ],
         });
     }

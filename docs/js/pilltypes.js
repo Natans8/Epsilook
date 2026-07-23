@@ -202,4 +202,19 @@
         hint: "A key that casts a spell while the aura holds (SpellKeyboundOverride)",
         corpus: (d) => d.keybindSearchL, spells: (d) => d.keybindSpells,
     });
+    /* Movement speed. The id is the (movement, percent) pair, so the corpus
+     * holds both — fx:"speed swim" and fx:"speed +70%" ask different questions
+     * of the same pills. The percent answers to an operator only, leaving a
+     * bare number its literal meaning (fx:"speed 70" finds +70%, not 70 of
+     * anything); operators reach the signed value, so fx:"speed <-50" is
+     * "slows worse than half". */
+    T({
+        key: "fx:speed", field: "fx", word: "speed",
+        hint: "Movement speed change — run, mounted, swim, flight or all at once",
+        corpus: (d) => d.speedSearchL, spells: (d) => d.speedSpells,
+        numeric: {
+            kind: "value", operatorOnly: true,
+            of: (d, key) => d.speedPercents.get(key) || 0,
+        },
+    });
 })();

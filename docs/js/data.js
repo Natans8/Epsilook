@@ -130,6 +130,19 @@ window.EpsilookData = (() => {
         };
 
         /**
+         * A movement-speed change, printed the way the pill shows it: signed, so
+         * the sign carries faster-or-slower, and no trailing ".0" on the whole
+         * numbers that are almost all of them. Zero keeps no sign — it is
+         * neither, and a "+0%" pill would claim otherwise.
+         *
+         * The pills and the search corpus are both built from this one function,
+         * which is what lets a user type what they read: fx:"speed +70%".
+         * @param {number} pct
+         * @returns {string}
+         */
+        const signedPercent = (pct) => `${pct > 0 ? "+" : ""}${pct}%`;
+
+        /**
          * Index one section's per-row target masks as spell -> item -> mask.
          *
          * Every kit-derived section carries a parallel "targets" array since pack
@@ -974,6 +987,34 @@ window.EpsilookData = (() => {
         loadChannels(pack.spellInvis, spellInvisTypes, invisTypeSpells);
         loadChannels(pack.spellDetects, spellDetectTypes, detectTypeSpells);
 
+        // movement-speed modifiers (pack format 30). A pill is a (movement,
+        // percent) pair, so that pair is the id the search matches on and it
+        // rides as one string key — "run|70", "all|-50". Only the two maps the
+        // registry needs are built here; the pills themselves keep the numbers
+        // apart so the renderer never re-parses the key.
+        /** @type {Map<number, {move: string, pct: number, amount: string, key: string, mask: number}[]>} */
+        const spellSpeedMods = new Map();
+        /** @type {Map<string, number[]>} "move|pct" -> [spell id] */
+        const speedSpells = new Map();
+        /** @type {Map<string, string>} "move|pct" -> lowercase haystack */
+        const speedSearchL = new Map();
+        /** @type {Map<string, number>} "move|pct" -> the percent, for the numeric axis */
+        const speedPercents = new Map();
+        if (pack.spellSpeeds) {
+            const {spellIds, movements, percents, targets} = pack.spellSpeeds;
+            for (let i = 0; i < spellIds.length; i++) {
+                const move = movements[i], pct = percents[i];
+                const key = `${move}|${pct}`;
+                const amount = signedPercent(pct);
+                pushTo(spellSpeedMods, spellIds[i], {move, pct, amount, key, mask: targets[i]});
+                pushTo(speedSpells, key, spellIds[i]);
+                // the corpus carries the percent exactly as the pill prints it,
+                // sign and all, so typing what you see works: fx:"speed +70%"
+                speedSearchL.set(key, `speed ${move} ${amount}`.toLowerCase());
+                speedPercents.set(key, pct);
+            }
+        }
+
         // the rider's own animations while entering/seated/exiting — their own
         // "passenger" group in the Animations column
         /** @type {Map<number, number[]>} spell id -> [animId] */
@@ -1036,6 +1077,7 @@ window.EpsilookData = (() => {
             spellSummons, summonNames, summonPairSpells, summonPairSearchL, summonControlNames,
             spellVehicles, vehicleSpells, vehicleSeats, vehicleSearchL,
             spellInvisTypes, spellDetectTypes, invisTypeSpells, detectTypeSpells,
+            spellSpeedMods, speedSpells, speedSearchL, speedPercents,
             spellPassengerAnims, passengerAnimSpells,
             spellKeybinds, keybindSpells, keybinds, keybindSearchL, keybindTargets,
             spellMechanics, mechanicCols,

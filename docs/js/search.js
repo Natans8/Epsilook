@@ -51,11 +51,16 @@ window.EpsilookSearch = (() => {
      * several numeric pills) match through it, and app.js hit-highlighting
      * calls matchNumeric so a pill lights up under exactly the query that
      * selects it. A bare number means equality.
+     *
+     * The bound may be negative or fractional, because the values are: a
+     * movement-speed change is signed (`fx:"speed <-50"`) and a handful of them
+     * are fractional. Counts never are, and a count simply matches nothing
+     * against a bound it cannot reach.
      * @param {string} text
      * @returns {((n: number) => boolean) | null}
      */
     function numericPredicate(text) {
-        const m = /^(<=|>=|<|>|=)?(\d+)$/.exec(text);
+        const m = /^(<=|>=|<|>|=)?(-?\d+(?:\.\d+)?)$/.exec(text);
         if (!m) return null;
         const v = Number(m[2]);
         switch (m[1]) {

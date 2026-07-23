@@ -4,56 +4,56 @@
     "label": "Vanilla Classic 1.15.8",
     "file": "data/1.15.8.67156/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "472beb7c1b"
+    "hash": "c31b1abf50"
   },
   {
     "id": "2.5.6.68775",
     "label": "TBC Classic 2.5.6",
     "file": "data/2.5.6.68775/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "80fcbf3d46"
+    "hash": "f99c1cdaf7"
   },
   {
     "id": "3.4.3.58936",
     "label": "WotLK Classic 3.4.3",
     "file": "data/3.4.3.58936/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "a3628e5676"
+    "hash": "72b5f414bf"
   },
   {
     "id": "4.4.2.60895",
     "label": "Cataclysm Classic 4.4.2",
     "file": "data/4.4.2.60895/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "84e1216f64"
+    "hash": "8b40b04b25"
   },
   {
     "id": "5.5.4.68716",
     "label": "MoP Classic 5.5.4",
     "file": "data/5.5.4.68716/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "bc39b17d2a"
+    "hash": "4c2b79c4ec"
   },
   {
     "id": "7.3.5.26972",
     "label": "Legion 7.3.5",
     "file": "data/7.3.5.26972/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "15af1ff3da"
+    "hash": "b2032cfd69"
   },
   {
     "id": "8.3.7.35662",
     "label": "Battle for Azeroth 8.3.7",
     "file": "data/8.3.7.35662/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "7892e59a21"
+    "hash": "bab09919b7"
   },
   {
     "id": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "5722e0743a",
+    "hash": "6884326d71",
     "default": true
   },
   {
@@ -61,13 +61,13 @@
     "label": "Dragonflight 10.2.7",
     "file": "data/10.2.7.55664/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "81668165f4"
+    "hash": "409b1be422"
   },
   {
     "id": "11.2.7.65299",
     "label": "The War Within 11.2.7",
     "file": "data/11.2.7.65299/spelldata.json.gz",
     "built": "2026-07-23",
-    "hash": "22de794508"
+    "hash": "685146bac4"
   }
 ]
