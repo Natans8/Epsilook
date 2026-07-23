@@ -130,10 +130,12 @@ window.EpsilookData = (() => {
         };
 
         /**
-         * A movement-speed change, printed the way the pill shows it: signed, so
-         * the sign carries faster-or-slower, and no trailing ".0" on the whole
-         * numbers that are almost all of them. Zero keeps no sign — it is
-         * neither, and a "+0%" pill would claim otherwise.
+         * A percent CHANGE, printed the way the pill shows it: signed, so the
+         * sign carries more-or-less, and no trailing ".0" on the whole numbers
+         * that are almost all of them. Shared by the two routes whose payload is
+         * a signed percent — movement speed and object scale. (Zero never
+         * reaches it: the build drops those rows, since a pill made of nothing
+         * but the number has nothing to say when the number is nothing.)
          *
          * The pills and the search corpus are both built from this one function,
          * which is what lets a user type what they read: fx:"speed +70%".
@@ -1015,6 +1017,26 @@ window.EpsilookData = (() => {
             }
         }
 
+        // object-scale modifiers (pack format 31). One axis shorter than speed:
+        // there is only one thing an aura can scale, so the PERCENT itself is
+        // the id — the same shape desaturate and transparency already use, and
+        // it needs no separate map for the numeric axis.
+        /** @type {Map<number, {pct: number, amount: string, mask: number}[]>} */
+        const spellScaleMods = new Map();
+        /** @type {Map<number, number[]>} percent -> [spell id] */
+        const scaleSpells = new Map();
+        /** @type {Map<number, string>} percent -> lowercase haystack */
+        const scaleSearchL = new Map();
+        if (pack.spellScales) {
+            const {spellIds, percents, targets} = pack.spellScales;
+            for (let i = 0; i < spellIds.length; i++) {
+                const pct = percents[i], amount = signedPercent(pct);
+                pushTo(spellScaleMods, spellIds[i], {pct, amount, mask: targets[i]});
+                pushTo(scaleSpells, pct, spellIds[i]);
+                scaleSearchL.set(pct, `scale ${amount}`.toLowerCase());
+            }
+        }
+
         // the rider's own animations while entering/seated/exiting — their own
         // "passenger" group in the Animations column
         /** @type {Map<number, number[]>} spell id -> [animId] */
@@ -1078,6 +1100,7 @@ window.EpsilookData = (() => {
             spellVehicles, vehicleSpells, vehicleSeats, vehicleSearchL,
             spellInvisTypes, spellDetectTypes, invisTypeSpells, detectTypeSpells,
             spellSpeedMods, speedSpells, speedSearchL, speedPercents,
+            spellScaleMods, scaleSpells, scaleSearchL,
             spellPassengerAnims, passengerAnimSpells,
             spellKeybinds, keybindSpells, keybinds, keybindSearchL, keybindTargets,
             spellMechanics, mechanicCols,

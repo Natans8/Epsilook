@@ -1185,7 +1185,7 @@
             d.spellMorphs.has(id) || d.spellShapeshifts.has(id) || d.spellSummons.has(id) ||
             d.spellVehicles.has(id) || d.spellInvisTypes.has(id) ||
             d.spellDetectTypes.has(id) || d.spellKeybinds.has(id) ||
-            d.spellSpeedMods.has(id),
+            d.spellSpeedMods.has(id) || d.spellScaleMods.has(id),
     };
 
     function applyFiltersAndSort() {
@@ -1711,6 +1711,7 @@
         const detectPills = (d.spellDetectTypes.get(spellId) || []).slice().sort((a, b) => a.type - b.type);
         const keybindIds = d.spellKeybinds.get(spellId) || [];
         const speedMods = d.spellSpeedMods.get(spellId) || [];
+        const scaleMods = d.spellScaleMods.get(spellId) || [];
         const td = el("td", "c-fx");
         if (chainIds.length === 0 && dissolveIds.length === 0 && glowIds.length === 0
             && shadowyIds.length === 0 && ghostMatIds.length === 0 && tintIds.length === 0
@@ -1718,7 +1719,8 @@
             && screenIds.length === 0 && morphIds.length === 0 && formIds.length === 0
             && summonEntries.length === 0 && vehicleIds.length === 0
             && invisPills.length === 0 && detectPills.length === 0
-            && keybindIds.length === 0 && speedMods.length === 0) {
+            && keybindIds.length === 0 && speedMods.length === 0
+            && scaleMods.length === 0) {
             td.classList.add("empty");
             td.appendChild(el("span", "none", "—"));
             return td;
@@ -2056,6 +2058,19 @@
             });
         }
 
+        // object-scale modifiers: one pill per distinct percent, the three scale
+        // auras having already collapsed into it in the pack
+        if (scaleMods.length) {
+            const t = targetSplit(scaleMods.map((p) => p.mask));
+            cats.push({
+                name: "scale",
+                hit: scaleMods.some((p) => scaleIsHit(p.pct)),
+                mask: t.head,
+                items: hitsFirst(scaleMods, (p) => scaleIsHit(p.pct))
+                    .map((p) => () => scaleTag(p, t.pill(p.mask))),
+            });
+        }
+
         buildKitGroups(td, cats, {
             // the icon rides the category head, unioned over this spell's rows in
             // the category — only where the distribution isn't degenerate (a
@@ -2157,6 +2172,8 @@
     const keybindIsHit = isHitOf("fx:keybind");
     /** A speed pill keys on the (movement, percent) pair it displays. */
     const speedIsHit = isHitOf("fx:speed");
+    /** A scale pill keys on the percent, which is all it displays. */
+    const scaleIsHit = isHitOf("fx:scale");
     /** Summons key on the (creature, control) pair the pill actually shows. */
     const summonPairIsHit = isHitOf("fx:summon");
     const summonIsHit = (creatureId, control) => summonPairIsHit(creatureId + ":" + control);
@@ -2875,26 +2892,30 @@
     };
 
     /**
-     * The speed a change leaves you at, as a multiple of normal — the reading of
-     * the number that a percentage change does not give you directly.
+     * What a percent change LEAVES YOU AT, as a multiple of normal — the reading
+     * of the number that a percentage change does not give you directly. Shared
+     * by the two routes whose payload is a signed percent, movement speed and
+     * object scale, because the arithmetic and the reasoning are the same one.
      *
      * The PILL deliberately shows the change rather than this: the change is
      * what SpellEffect stores (the server applies it with AddPct), what the
      * game's own tooltip prints ("Increases your movement speed by 70%"), and
-     * the only form that survives the whole range — 10 rows on 9.2.7 are below
-     * -100%, which as a resulting speed would be negative. So the multiplier
-     * rides the tooltip, where it can simply be absent when it says nothing:
-     * below -100% there is no meaningful speed left to name, and -100% itself
-     * reads as the stop it is.
+     * the only form that survives the whole range — 10 speed rows on 9.2.7 are
+     * below -100%, which as a resulting speed would be negative. So the
+     * multiplier rides the tooltip, where it can simply be absent when it says
+     * nothing: below -100% there is nothing meaningful left to name, and -100%
+     * itself is the floor `bottom` describes.
      * @param {number} pct
-     * @returns {string} "" when the change has no sensible resulting speed
+     * @param {string} noun what is being scaled ("speed", "size")
+     * @param {string} bottom what a -100% change leaves behind
+     * @returns {string} "" when the change has no sensible resulting value
      */
-    function speedMultiplier(pct) {
+    function changeMultiplier(pct, noun, bottom) {
         const mult = 1 + pct / 100;
         if (mult < 0) return "";
-        if (mult === 0) return "Brings movement to a stop";
+        if (mult === 0) return bottom;
         if (mult === 1) return "";  // a 0% change: the "+0%" already said it
-        return `${mult.toFixed(2)}× normal speed`;
+        return `${mult.toFixed(2)}× normal ${noun}`;
     }
 
     /* Movement-speed pill (SPEED_AURAS in build_data): what the aura scales and
@@ -2920,7 +2941,8 @@
    * @param {{move: string, pct: number, amount: string, key: string}} pill
    */
     function speedTag(pill, mask = 0) {
-        const detail = [`Movement speed ${pill.amount}`, speedMultiplier(pill.pct),
+        const detail = [`Movement speed ${pill.amount}`,
+            changeMultiplier(pill.pct, "speed", "Brings movement to a stop"),
             SPEED_MOVEMENT_NOTES[pill.move] || ""];
         return P.pill({
             cls: "fx",
@@ -2938,6 +2960,40 @@
                     detail,
                     search: P.catQuery("fx", "speed", `${pill.move} ${pill.amount}`),
                     finds: "spells changing it by exactly this much",
+                }),
+            ],
+        });
+    }
+
+    /* Object-scale pill (SCALE_AURAS in build_data): how much bigger or smaller
+   * the aura makes its target —
+   *
+   *   ( scale ( +30% ) )      ( scale ( -50% ) )
+   *
+   * Movement speed's twin, one axis shorter. There is only one thing these
+   * auras scale, so there is no word to put beside the number and the percent
+   * is the whole pill — which means the group head ("scale") carries the
+   * identity and this renders as a single label, the shape desaturate and
+   * transparency already have.
+   *
+   * Below -100% the unit does not turn inside out: the server floors the result
+   * (0.1 for players, 0.01 otherwise), which is what the fourteen rows down to
+   * -999% on 9.2.7 really mean. The pill still shows the change, for the same
+   * reason speed does — it is what the game stores and prints.
+   * @param {{pct: number, amount: string}} pill
+   */
+    function scaleTag(pill, mask = 0) {
+        return P.pill({
+            cls: "fx",
+            hit: scaleIsHit(pill.pct),
+            segments: [
+                P.targets(mask),
+                P.label(pill.amount, {
+                    title: P.hintFor("fx", "scale"),
+                    detail: [`Size ${pill.amount}`,
+                        changeMultiplier(pill.pct, "size", "Shrinks it to nothing")],
+                    search: P.catQuery("fx", "scale", pill.amount),
+                    finds: "spells resizing by exactly this much",
                 }),
             ],
         });
@@ -3507,7 +3563,9 @@
                         // signed, as the pill shows it — see speedTag for why the
                         // change and not the resulting speed
                         percent: e.pct,
-                    })));
+                    }))).concat((d.spellScaleMods.get(id) || []).slice()
+                    .sort((a, b) => a.pct - b.pct)
+                    .map((e) => ({type: "scale", percent: e.pct})));
             }
             if (!hc.mechanics) {
                 // one entry per effect, mirroring the pills — aura first, then the
@@ -3603,6 +3661,12 @@
                     if (e.type === "summon") {
                         return `summon: ${e.creature || "?"} (creature ${e.creatureId})`
                             + (e.control ? ` [${e.control}]` : "");
+                    }
+                    // signed percent changes: the sign is half the meaning, and
+                    // for speed the movement word is the other half
+                    if (e.type === "speed" || e.type === "scale") {
+                        return `${e.type}: ${e.movement ? e.movement + " " : ""}`
+                            + `${e.percent > 0 ? "+" : ""}${e.percent}%`;
                     }
                     if (e.percent !== undefined) // percent-only fx (desaturate / transparency)
                         return `${e.type}: ${e.percent}%`;
