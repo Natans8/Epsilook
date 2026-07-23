@@ -395,8 +395,8 @@ ITEM_QUALITY_NAMES = {
 # weapon slot/class. wowdev.wiki/EnumeratedString#SpellVisualEffectName::Type
 # later confirmed it and named them: 3/4/5 = Unit-Item main hand / off hand /
 # ranged, 6/7 = Unit-Ammo basic / preferred, 8/9/10 = the same main/off/ranged
-# again but "(ignore disarmed)". There is no file to name, so these rows carry a sentinel
-# fid (WEAPON_FID) and render as one "equipped weapon" marker pill — no
+# again but "(ignore disarmed)". There is no file to name, so these rows carry a
+# sentinel fid per weapon SLOT and render as a marker pill named for it — no
 # 3D/texture/Wowhead — keeping their category (attached vs thrown-as-missile)
 # and attachment point. A rare Type-3/5 row DOES carry a real ModelFileDataID
 # (a hardcoded weapon, e.g. Sylvanas's bow); that wins and renders as a normal
@@ -412,13 +412,35 @@ ITEM_QUALITY_NAMES = {
 # which keeps the genuinely hardcoded weapons (Sylvanas's bow, fid 3597252 on
 # 9.2.7+) as real models while placeholders fall through to the marker. That
 # rule needs no per-version branch and no hardcoded fid list.
-EFFECT_NAME_TYPE_WEAPON = frozenset(range(3, 11))
-WEAPON_FID = -1  # sentinel model fid: the caster's equipped weapon (no real file)
+# Sentinel model fids: a weapon the caster already owns, so there is no real
+# file. One per SLOT, not per Type — the eight types make only four pills:
+# 8/9/10 are 3/4/5 again with "(ignore disarmed)", which is a visibility rule
+# for a disarmed caster rather than a different weapon, and 6/7 are basic vs
+# preferred ammo (three rows in all of 9.2.7). Both distinctions say which item
+# the client picks, not what the pill can show, so they collapse.
+WEAPON_FID_MAIN = -1
+WEAPON_FID_OFF = -2
+WEAPON_FID_RANGED = -3
+WEAPON_FID_AMMO = -4
+EFFECT_NAME_TYPE_WEAPON = {
+    3: WEAPON_FID_MAIN, 4: WEAPON_FID_OFF, 5: WEAPON_FID_RANGED,
+    6: WEAPON_FID_AMMO, 7: WEAPON_FID_AMMO,
+    8: WEAPON_FID_MAIN, 9: WEAPON_FID_OFF, 10: WEAPON_FID_RANGED,
+}
 # Fileless model sentinels get a synthetic files-table entry: it names the pill
-# and makes it searchable (model:weapon / model:equipped) through the normal
-# file-name path, so no search/export route needs to special-case the sentinel.
+# and makes it searchable through the normal file-name path, so no search or
+# export route special-cases the sentinel. Every label opens with `equipped` — a
+# word no real model path carries — so `model:equipped` still finds the markers
+# as a set and `model:"equipped off hand"` narrows to one slot, all by ordinary
+# filename matching. Deliberately NO per-slot category word: the slots are
+# values, and only meta words belong in autocomplete (the `attach <point>` rule).
 # The frontend drops the fid buttons (3D/copy) for a negative fid.
-SYNTHETIC_MODEL_FILES = {WEAPON_FID: "equipped weapon"}
+SYNTHETIC_MODEL_FILES = {
+    WEAPON_FID_MAIN: "equipped main hand",
+    WEAPON_FID_OFF: "equipped off hand",
+    WEAPON_FID_RANGED: "equipped ranged",
+    WEAPON_FID_AMMO: "equipped ammo",
+}
 MODEL_CAT_NAMES = {
     # Attach models have no category word: they are the plain "this model plays
     # on a unit" case, and which unit is now said by the target icon instead
@@ -1402,10 +1424,10 @@ def read_model_sources(
             fid = effect_name_fid.get(e, 0)
             if fid:
                 attach_models[k].add((fid, MODEL_CAT_ATTACH, at, NO_ATTACHMENT, 0))
-            elif effect_name_type.get(e, 0) in EFFECT_NAME_TYPE_WEAPON:
-                # Type 3-10 with no file: the caster's equipped weapon, held at
-                # this attachment point. Sentinel fid -> "equipped weapon" pill.
-                attach_models[k].add((WEAPON_FID, MODEL_CAT_ATTACH, at, NO_ATTACHMENT, 0))
+            elif weapon_fid := EFFECT_NAME_TYPE_WEAPON.get(en_type, 0):
+                # Type 3-10 with no file: a weapon the caster already has, held
+                # at this attachment point. Sentinel fid -> per-slot marker pill.
+                attach_models[k].add((weapon_fid, MODEL_CAT_ATTACH, at, NO_ATTACHMENT, 0))
         # the start/loop/end anims animate the attached model, but they are
         # AnimationData / AnimKit ids the spell's kit plays — index them even
         # when the model fid is unresolved (a Type 1/2 effect-name). 0 = Stand
@@ -1496,10 +1518,10 @@ def read_missiles(
         fid = effect_name_fid.get(en_id, 0)
         if fid:
             set_models[set_id].add(fid)
-        elif effect_name_type.get(en_id, 0) in EFFECT_NAME_TYPE_WEAPON:
-            # Type 3-10 with no file: the caster's equipped weapon THROWN as the
-            # projectile. Sentinel fid -> "equipped weapon" missile pill.
-            set_models[set_id].add(WEAPON_FID)
+        elif weapon_fid := EFFECT_NAME_TYPE_WEAPON.get(effect_name_type.get(en_id, 0), 0):
+            # Type 3-10 with no file: the caster's own weapon THROWN as the
+            # projectile. Sentinel fid -> per-slot marker missile pill.
+            set_models[set_id].add(weapon_fid)
         if sk:
             set_soundkits[set_id].add(sk)
         if ak:
@@ -2635,7 +2657,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
 
     file_ids = sorted(referenced_fids)
     file_paths = [fid_path.get(f, "") for f in file_ids]
-    # name any fileless model sentinel this pack actually uses (see WEAPON_FID) —
+    # name any fileless model sentinel this pack uses (SYNTHETIC_MODEL_FILES) —
     # a synthetic files entry so the pill has a label and is searchable
     used_fids = {f for pairs in vis.models.values() for f, *_ in pairs}
     for fid, name in SYNTHETIC_MODEL_FILES.items():
@@ -2810,8 +2832,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "items": len(used_items),
                 "namedItems": sum(1 for i in used_items if items.name.get(i)),
                 # equipped-weapon marker rows (SpellVisualEffectName Type 3-10,
-                # WEAPON_FID sentinel) — attach + thrown-missile, see §3
-                "spellWeaponModels": sum(1 for r in model_rows if r[1] == WEAPON_FID),
+                # SYNTHETIC_MODEL_FILES sentinels) — attach + thrown-missile, §3
+                "spellWeaponModels": sum(1 for r in model_rows if r[1] in SYNTHETIC_MODEL_FILES),
                 "spellSounds": len(sound_rows),
                 "spellAnimKits": len(anim_rows),
                 "animKitAnims": len(kit_anim_rows),

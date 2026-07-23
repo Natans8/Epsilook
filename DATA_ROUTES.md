@@ -281,7 +281,7 @@ flowchart LR
   ITM --> LF
   EN -->|"Type 2 (.GenericID = CreatureDisplayID)<br/>attach route only"| CDI["CreatureDisplayInfo.ModelID<br/>→ CreatureModelData.FileDataID"]
   CDI --> LF
-  EN -->|"Type 3-10, no named file"| WPN["WEAPON_FID sentinel<br/>'equipped weapon'"]
+  EN -->|"Type 3-10, no named file"| WPN["sentinel fid per slot<br/>'equipped main hand' / 'off hand'<br/>/ 'ranged' / 'ammo'"]
 
   E8["kit ET 8 → SpellEffectEmission"] --> AM["SpellVisualKitAreaModel<br/>.ModelFileDataID"]
   P9["proc Type 9"] --> AM
@@ -353,33 +353,41 @@ models. `model:"item <name>"` matches on the item name via a dedicated corpus
 model index. This is the **attach route only** — the 62 missile-route Type-1
 effect-names on 9.2.7 render nothing, matching the "item attachments" scope.
 
-**Types 3–10 = the caster's own equipped weapon.** They are undefined in
-`SpellVisualEffectNameType.dbde`, but every one of them carries *no* model of its
+**Types 3–10 = a weapon the caster already has.** They carry *no* model of their
 own (`ModelFileDataID` **and** `GenericID` both 0) while attaching to weapon/hand
 M2 points and being frequently reused as a missile — i.e. the model is the real
 item the caster is holding, resolved client-side at cast. The `Type` picks the
-weapon **slot/class**, and dual-wield emits a mainhand+offhand pair:
+**slot**, and dual-wield emits a mainhand+offhand pair. `SpellVisualEffectNameType.dbde`
+defines only 0–2, but [wowdev.wiki/EnumeratedString](https://wowdev.wiki/EnumeratedString#SpellVisualEffectName::Type)
+carries the client's own enum, and it matches what the data showed:
 
-| Type | slot / class | evidence (spell names) |
-|--|--|--|
-| 3 | thrown/melee **mainhand** | Throw Spear, Heroic Throw, Javelin Toss, Impale, Fishing |
-| 4 | **offhand** partner of 3 | Pandaren Spirit (`T3@LargeWeaponRight + T4@LargeWeaponLeft`) |
-| 5 | **ranged** | Arcane Shot, Pistol Barrage, Hold Rifle, Wailing Arrow |
-| 6 / 7 | too few rows to call (2 / 1) | Sha Corruption; missile-only |
-| 8 | held melee **mainhand** | Hold/Sharpen/Throw Sword, Whirling Blade |
-| 9 | **offhand** melee/focus | Thal'kiel skull, Crystalline Swords |
-| 10 | ranged rifle variant | Hold Rifles, Barrage, Death Blossom |
+| Type | official name | pill | evidence (spell names) |
+|--|--|--|--|
+| 3 | Unit - Item - Main hand | `equipped main hand` | Throw Spear, Heroic Throw, Javelin Toss, Impale, Fishing |
+| 4 | Unit - Item - Off hand | `equipped off hand` | Pandaren Spirit (`T3@LargeWeaponRight + T4@LargeWeaponLeft`) |
+| 5 | Unit - Item - Ranged | `equipped ranged` | Arcane Shot, Pistol Barrage, Hold Rifle, Wailing Arrow |
+| 6 | Unit - Ammo - Basic | `equipped ammo` | Sha Corruption (2 rows) |
+| 7 | Unit - Ammo - Preferred | `equipped ammo` | missile-only (1 row) |
+| 8 | Main hand *(ignore disarmed)* | `equipped main hand` | Hold/Sharpen/Throw Sword, Whirling Blade |
+| 9 | Off hand *(ignore disarmed)* | `equipped off hand` | Thal'kiel skull, Crystalline Swords |
+| 10 | Ranged *(ignore disarmed)* | `equipped ranged` | Hold Rifles, Barrage, Death Blossom |
 
-Because there is no file to name, these rows carry the **`WEAPON_FID` sentinel
-(-1)** and render as one flat *equipped weapon* marker pill — no 3D, texture,
-Wowhead or `.lo` button — while keeping their category (`attach` vs thrown-as-
-`missile`), attachment point and target icon. A synthetic `files` entry names the
-sentinel `equipped weapon`, so it searches through the normal filename path with no
-special case: clicking the marker (and its autocomplete word) uses the single meta
-token **`model:equipped`** — `equipped` appears in no real model path, so it targets
-only the markers, where `model:weapon` would also catch every `weapon/…` file. The
-rows' `StartAnimID`/`AnimID`/`EndAnimID`/`AnimKitID` already reach the Animations
-column (§3e), so what the spell *plays* was searchable before the model was.
+Eight types, **four pills**: "(ignore disarmed)" is a visibility rule for a
+disarmed caster rather than a different weapon, and basic-vs-preferred ammo says
+which arrow the client picks, so both collapse. Because there is no file to name,
+these rows carry a **sentinel fid per slot** (`SYNTHETIC_MODEL_FILES`, −1…−4) and
+render as a flat marker pill — no 3D, texture, Wowhead or `.lo` button — while
+keeping their category (`attach` vs thrown-as-`missile`), attachment point and
+target icon. Each sentinel gets a synthetic `files` entry whose *path is its
+label*, so it renders and searches through the ordinary filename route with no
+special case: a pill click searches `model:"equipped off hand"` exactly as a real
+model pill searches its own filename. Every label opens with **`equipped`** — a
+word no real model path carries — so `model:equipped` still finds the whole family
+(where `model:weapon` would also catch every `weapon/…` file). That one word is
+also the only thing autocomplete offers: the slots are *values*, and only meta
+words belong there (the `attach <point>` rule, §3c). The rows'
+`StartAnimID`/`AnimID`/`EndAnimID`/`AnimKitID` already reach the Animations column
+(§3e), so what the spell *plays* was searchable before the model was.
 
 **Trap — "fileless" is not always spelled 0.** The Classic re-release clients
 backfill these rows with an **unnamed placeholder fid** instead: Cata 4.4.2 points
@@ -680,7 +688,10 @@ essentially free, format 24 attachment points ~+18% model rows, format 25 one
 `targets` array per effect-fx link section. Format 28 renamed `spellModels`'s
 `displayIds` array to `refIds` (it now carries an Item::ID on item rows too) and
 added the `items`/`itemIconNames`/`itemQualityNames` sections; a format-27 pack
-is still read (its `displayIds` array is accepted as `refIds`).
+is still read (its `displayIds` array is accepted as `refIds`). Splitting the
+equipped-weapon marker per slot (§3c) needed **no** bump — it only changes which
+sentinel fids appear in the existing `files`/`spellModels` sections, and the
+frontend reads any negative fid as fileless rather than naming one.
 
 ### Attachment coverage by version
 
@@ -746,25 +757,33 @@ on the later builds. The named share is what decides the pill shape per row.
 
 ### Equipped-weapon markers by version
 
-`WEAPON_FID` sentinel rows (`SpellVisualEffectName` Type 3–10, §3c), read from
-each pack's `meta.counts.spellWeaponModels`. Like the display route, `Type` ships
-on every build, so this degrades by content only.
+Sentinel rows (`SpellVisualEffectName` Type 3–10, §3c), read from each pack's
+`meta.counts.spellWeaponModels` and split by slot from its `spellModels` fids.
+Like the display route, `Type` ships on every build, so this degrades by content
+only.
 
-| Pack | weapon rows | | Pack | weapon rows |
-|---|--:|---|---|--:|
-| Vanilla 1.15.8 | 0 | | BfA 8.3.7 | 676 |
-| TBC 2.5.6 | 46 | | Shadowlands 9.2.7 | 695 |
-| WotLK 3.4.3 | 140 | | Dragonflight 10.2.7 | 729 |
-| Cataclysm 4.4.2 | 248 | | TWW 11.2.7 | 751 |
-| MoP 5.5.4 | 357 | | | |
-| Legion 7.3.5 | 624 | | | |
+| Pack | rows | main hand | off hand | ranged | ammo |
+|---|--:|--:|--:|--:|--:|
+| Vanilla 1.15.8 | 0 | 0 | 0 | 0 | 0 |
+| TBC 2.5.6 | 46 | 22 | 5 | 5 | 14 |
+| WotLK 3.4.3 | 140 | 85 | 10 | 8 | 37 |
+| Cataclysm 4.4.2 | 248 | 115 | 18 | 37 | 78 |
+| MoP 5.5.4 | 357 | 195 | 26 | 48 | 88 |
+| Legion 7.3.5 | 626 | 401 | 46 | 80 | 99 |
+| BfA 8.3.7 | 678 | 427 | 47 | 90 | 114 |
+| Shadowlands 9.2.7 | 698 | 477 | 49 | 93 | 79 |
+| Dragonflight 10.2.7 | 732 | 510 | 48 | 97 | 77 |
+| TWW 11.2.7 | 754 | 526 | 46 | 103 | 79 |
 
 Vanilla's 0 is data-truthful: its single Type-3 effect-name (8905) is not reached
 by any kit or missile set, so no spell shows the marker. Its pack predates the
 count and omits the key — it was deliberately **not** rebuilt for a zero-valued
 diagnostic field (see "the build is deterministic" in CLAUDE.md). WotLK and Cata
 are the two packs whose numbers depend on the placeholder-fid rule in §3c: before
-it they read 132 and **0**.
+it they read 132 and **0**. The per-slot split added 2–3 rows per pack over the
+single-sentinel build: where one spell threw *both* weapons at the same
+attachment point the merged row is now two pills (9.2.7's three are the Demon
+Hunter glaive spells — Fury of the Illidari ×2, Glaive Tempest).
 
 ### The five Classic re-release clients don't sit on the timeline
 
