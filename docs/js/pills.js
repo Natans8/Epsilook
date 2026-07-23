@@ -291,21 +291,28 @@ window.EpsilookPills = (() => {
 
     /**
      * A GROUP is a pill-shaped container of other pills: a SoundKit and its
-     * files, an fx category and its effects. It has one head (itself a pill)
-     * and zero or more items.
+     * files, an AnimKit and its animations, an fx category and its effects. It
+     * has one head (itself a pill) and zero or more items.
      *
-     * The count decides the shape, which is the whole point of the abstraction:
-     * with `compact`, a group holding one item (or none) renders as a single
-     * inline pill — head word dimmed, the lone item fused into it — instead of
-     * a full-width strip. Everything else about it is identical, so a category
-     * that is usually one-of-a-kind and occasionally many does not need two
-     * renderers.
-     * @param {{head: HTMLElement, items: HTMLElement[], compact?: boolean}} spec
+     * THE ITEM COUNT DECIDES THE SHAPE, and that is the whole point of the
+     * abstraction. A group holding one item (or none) renders as a single
+     * inline pill — head dimmed, the lone item fused into it — instead of a
+     * full-width strip. Everything else about it is identical, so a group that
+     * is usually one-of-a-kind and occasionally many needs one renderer, not
+     * two, and no caller has to predict which it will be.
+     *
+     * This is unconditional on purpose. It used to be opt-in, and only the two
+     * columns whose author added it passed the flag — so a SoundKit with one
+     * file and an AnimKit with one animation (56–98% of them, depending on the
+     * query) stretched across a full strip while an identically-sized fx
+     * category sat inline. A rule that describes the shape of a group cannot
+     * be something each caller remembers separately.
+     * @param {{head: HTMLElement, items: HTMLElement[]}} spec
      * @returns {HTMLElement}
      */
     function group(spec) {
         const box = el("div", "kit-group");
-        if (spec.compact && spec.items.length <= 1) box.classList.add("compact");
+        if (spec.items.length <= 1) box.classList.add("compact");
         if (spec.head.classList.contains("hit")) box.classList.add("hit");
 
         const head = el("div", "kit-head");
