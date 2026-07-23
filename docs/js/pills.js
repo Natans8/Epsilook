@@ -173,10 +173,20 @@ window.EpsilookPills = (() => {
    * @property {Record<string, string|number>} [data]  extra data-* attributes
    */
 
+  /** The keys that make a segment interactive, and the ones that fill it. */
+  const ACTION_KEYS = ["search", "copy", "href", "play"];
+  const CONTENT_KEYS = ["text", "svg", "img", "nodes"];
+
   /**
-   * Render one segment. Attributes are applied in a fixed order (class, type,
-   * link attrs, title, aria, data-*) so the markup is predictable to read and
-   * to diff.
+   * Render one segment. Attributes are applied in a fixed order (class,
+   * sep/role, type, link attrs, title, aria, then data-*) so the markup is
+   * predictable to read and to diff.
+   *
+   * The two invariants — one content form, at most one action — are checked
+   * rather than assumed: a segment with two actions has no sensible element,
+   * and one with two contents would silently drop whichever the if-chain
+   * reaches second. Both are mistakes a new pill type can easily make, so
+   * they fail loudly at the call site instead of rendering something odd.
    * @param {Segment} seg
    * @returns {HTMLElement}
    */
@@ -184,9 +194,16 @@ window.EpsilookPills = (() => {
     const kind = KINDS.get(seg.kind);
     if (!kind) throw new Error(`unknown segment kind "${seg.kind}"`);
 
-    const interactive = !kind.inert
-      && (seg.search !== undefined || seg.copy !== undefined
-        || seg.href !== undefined || seg.play !== undefined);
+    const actions = ACTION_KEYS.filter((k) => seg[k] !== undefined);
+    if (actions.length > 1) {
+      throw new Error(`segment "${seg.kind}" has several actions: ${actions.join(", ")}`);
+    }
+    const contents = CONTENT_KEYS.filter((k) => seg[k] !== undefined);
+    if (contents.length > 1) {
+      throw new Error(`segment "${seg.kind}" has several contents: ${contents.join(", ")}`);
+    }
+
+    const interactive = !kind.inert && actions.length > 0;
 
     /* Image content is the one case where the element itself varies: an inert
      * image IS the segment, while a clickable one needs an anchor around it.
