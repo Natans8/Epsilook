@@ -426,8 +426,8 @@ are 3–7%, any animkit 12.7%.
 
 ### 3f. Routes that start at `SpellEffect`, not at a visual
 
-Eight fx categories skip the visual graph entirely: a particular `Effect` or
-`EffectAura` enum makes `EffectMiscValue_n` an id into another table — or, for movement speed, makes
+Nine fx categories skip the visual graph entirely: a particular `Effect` or
+`EffectAura` enum makes `EffectMiscValue_n` an id into another table — or, for movement speed and object scale, makes
 `EffectBasePoints` the payload itself.
 
 ```mermaid
@@ -441,6 +441,7 @@ flowchart LR
   SE -->|" EffectAura 296 (SET_VEHICLE_ID)<br/>misc0 = Vehicle id "| VE["vehicle"]
   SE -->|" EffectAura 406 (KEYBOUND_OVERRIDE)<br/>misc0 = SpellKeyboundOverride "| KB["keybind"]
   SE -->|" EffectAura in SPEED_AURAS (14 of them)<br/>EffectBasePoints = the percent "| SP["speed"]
+  SE -->|" EffectAura in SCALE_AURAS (61 / 239 / 591)<br/>EffectBasePoints = the percent "| SZ["scale"]
   SE -->|" Effect + EffectAura + ImplicitTarget "| ME["Mechanics column"]
 ```
 
@@ -633,8 +634,13 @@ one, which is why druid Flight Form uses it. Splitting them would invent a disti
 **The sign is the whole story, and the aura name is not.** 187 rows of
 `MOD_DECREASE_SPEED` on 9.2.7 carry a *positive* amount and plenty of
 `MOD_INCREASE_*` rows a negative one, so the pill prints the signed number and never translates it into a verb.
-Zero-percent rows are kept (163 on 9.2.7 — Stealth's, whose real amount comes from a talent): "this spell has a speed
-aura that changes nothing" is a fact about the row.
+
+**Zero-percent rows are DROPPED** (user's call, 2026-07-23 — this reverses the earlier "keep them" decision). A speed
+pill is made of nothing but its number, so a `+0%` one promises a change and delivers none, and it inflates the
+`fx:speed` count with spells whose real amount lives somewhere the pack cannot reach — a talent (Stealth's 129), the
+morph the spell also applies, a script. What survives is the **Mechanics** column, which still carries
+`MOD_INCREASE_SPEED` for the same spell: "has a speed aura at all" is a question that already has a home. On 9.2.7 that
+drops 164 of 5,780 rows, 121 spells losing their pill outright.
 
 **A pill is the `(movement, percent)` pair**, and that pair is what the pack ships and the search matches on. Several
 auras map to one movement, so a spell setting two of them to the same percent collapses to a single row rather than
@@ -646,9 +652,9 @@ it only ever comes from aura 33.
 
 A `Description_lang` writes an effect's value as `$s<N>%`, where N is the **1-based `EffectIndex`** — so the text names
 which effect it is quoting. On 9.2.7, **4,590 such placeholders point at an effect carrying one of these auras and 4,574
-(99.7%) resolve to a nonzero value**; the 16 zeros are the genuinely-zero rows above. That is a per-row check of both
-the aura set and the column choice, and it is the cheapest oracle available for this route — rerun it whenever the set
-changes.
+(99.7%) resolve to a nonzero value**; the 16 zeros are the dropped genuinely-zero rows above. That is a per-row check of
+both the aura set and the column choice, and it is the cheapest oracle available for this route — rerun it whenever the
+set changes.
 
 #### `EffectBasePoints` has two spellings and every build has exactly one
 
@@ -677,6 +683,28 @@ So a later pass does not "fix" an omission — the table in `build_data.py` is t
   render. 113 + 36 + 1 spells.
 - **513–524, the skyriding physics auras** (air friction, lift coefficient, banking rate) — a different mechanic in
   different units, TWW only.
+
+### 3k-bis. Object scale — how much bigger or smaller
+
+Movement speed's shorter twin, and it shares nearly all of §3k's machinery. The **aura** marks the effect as a size
+change and `EffectBasePoints` is the signed **percent**, read exactly the same way (int-first, `OPTIONAL_COLUMNS`,
+one-decimal rounding, TDB hotfix overlay). The difference from speed is that there is only **one** thing an aura can
+scale, so there is no movement word — a pill is the percent alone, and the `scale` group head carries the identity.
+
+**Three aura ids, one mechanic.** TrinityCore's `Unit::RecalculateObjectScale` sums 61 `MOD_SCALE` and 239
+`MOD_SCALE_2` through one handler (`HandleAuraModScale`) as `scale = nativeScale + CalculatePct(1.0, Σ)`, so `+30` is
+1.3× and `-50` is half. The catch is that **`MOD_SCALE_2`'s id drifts**: it is **239** on WotLK and every retail build,
+**591** on the 2024+ Classic clients (Vanilla, TBC, Cata, MoP). No build carries both, and the same spells appear under
+each (Noggenfogger Elixir −51% is 239 on WotLK 3.4.3, 591 on TBC 2.5.6). `SCALE_AURAS = {61, 239, 591}` covers the
+drift with a set, no per-version branch — the drift is in the client's enum, not in what the aura does. (Aura 427
+`SCALE_PLAYER_LEVEL` is out: its amount is a level, not a percent.)
+
+**Same rules as speed:** the pill shows the signed **change**, not the resulting size (below −100% the server floors the
+result at 0.1 / 0.01, which is what the fourteen rows down to −999% on 9.2.7 mean); **zero-percent rows are dropped**
+(64 of 3,286 on 9.2.7, 59 spells — the twelve Polymorph ranks among them, whose size comes from the morph they apply);
+one row per `(spell, percent)`, so the three auras collapse into it. The tooltip oracle confirms the set the same way —
+150 `$s<N>%` placeholders point at a scale aura on 9.2.7 and 149 (99.3%) resolve nonzero, in text like "Increases the
+size of the target by $s1%".
 
 ### 3l. The Mechanics column — effects paired with their targets
 
@@ -748,7 +776,7 @@ links `spellIds[i]` to `fids[i]`. That gzips far better than a list of objects.
 ```mermaid
 flowchart LR
   subgraph LINK["link sections (spell → item, + target mask)"]
-    L1["spellModels · spellSounds · spellAnimKits<br/>spellVisualAnims · spellAnims · spellFx<br/>spellDissolves · spellGlows · spellShadowies<br/>spellGhostMats · spellTints · spellDesaturates<br/>spellTransparencies · spellFreezes · spellCamos<br/>spellScreens · spellMorphs · spellShapeshifts<br/>spellSummons · spellVehicles · spellPassengerAnims<br/>spellVehicleAnims · spellVehicleAnimKits<br/>spellMechanics · spellKeybinds · spellSpeeds"]
+    L1["spellModels · spellSounds · spellAnimKits<br/>spellVisualAnims · spellAnims · spellFx<br/>spellDissolves · spellGlows · spellShadowies<br/>spellGhostMats · spellTints · spellDesaturates<br/>spellTransparencies · spellFreezes · spellCamos<br/>spellScreens · spellMorphs · spellShapeshifts<br/>spellSummons · spellVehicles · spellPassengerAnims<br/>spellVehicleAnims · spellVehicleAnimKits<br/>spellMechanics · spellKeybinds · spellSpeeds · spellScales"]
   end
   subgraph PAY["payload sections (item → what it is)"]
     P1["fxChains · fxTextures · dissolves · dissolveTextures<br/>glows · shadowies · ghostMats · tints<br/>screens · screenTextures · morphs · morphDisplays<br/>shapeshifts · shapeshiftDisplays · summons<br/>vehicles · vehicleSeats"]
@@ -768,7 +796,7 @@ Sections carrying a parallel `targets` array (the target-icon feature):
 `spellDissolves`, `spellGlows`, `spellShadowies`, `spellGhostMats` (these from
 `SpellVisualEvent.TargetType`, §2), plus — from `SpellEffect.ImplicitTarget`
 (§3f, pack format 25) — `spellMorphs`, `spellSummons`, `spellVehicles`,
-`spellShapeshifts`, `spellScreens`, `spellSpeeds`. Both feed the same `maskIndex` in `data.js`
+`spellShapeshifts`, `spellScreens`, `spellSpeeds`, `spellScales`. Both feed the same `maskIndex` in `data.js`
 and the same icon renderer, so the two mask sources are indistinguishable downstream.
 
 `data.js` builds a **forward and a reverse index** for each — spell→items for rendering, item→spells for searching.
@@ -797,8 +825,8 @@ The five Classic re-release clients (Vanilla / TBC / WotLK / Cataclysm / MoP) co
 | 10.2.7.55664 | Dragonflight              | 327,092 |  9.5 MB | TDB1027.24051 |             0 |
 | 11.2.7.65299 | The War Within            | 375,895 | 11.1 MB | TDB1127.26011 |             0 |
 
-**All ten are at pack format 30** (movement-speed modifiers, §3k — on top of format 29's mechanics paired with their
-implicit targets, §3l, and the keybound-override route, §3j). The four pre-MoP packs each gained one absent table,
+**All ten are at pack format 31** (object-scale modifiers, §3k-bis — on top of format 30's movement-speed modifiers,
+§3k, and format 29's mechanics paired with their implicit targets, §3l, and the keybound-override route, §3j). The four pre-MoP packs each gained one absent table,
 `SpellKeyboundOverride`; nothing else drifted. Recent
 bumps are additive and version-agnostic: format 26 added the invis/detect channel pills (`MOD_INVISIBILITY[_DETECT]`
 auras), format 27 the `display` model category, format 28 the `item` category, format 29 replaced the flat
@@ -816,31 +844,54 @@ the equipped-weapon marker per slot (§3c) needed **no** bump — it only change
 existing `files`/`spellModels` sections, and the frontend reads any negative fid as fileless rather than naming one.
 **Format 29 is close to free**: pairing replaced two flat sections with one (9.2.7 +0.4%, TWW +0.3%, Vanilla −1.7%), and
 the keybind sections are ~1 KB. **Format 30 is nearly free too** — one link section of 5.7k rows on 9.2.7, under 0.1 MB
-gzipped, and no pack changed size band.
+gzipped, and no pack changed size band. **Format 31 (scale)** is smaller still — 3.2k rows on 9.2.7, one section — and
+dropping the zero-percent speed/scale rows in the same build shaves a little back; no pack changed size band.
 
 ### Movement speed by version
 
 Rows are `(spell, movement, percent)` pills; a spell can hold several. Both columns of the route — the fourteen auras
 and `EffectBasePoints` — exist on **every** shipped build, so there is no drift declaration: the route degrades by
-*content*, and the only era difference it shows is the real one.
+*content*, and the only era difference it shows is the real one. (Counts are post-drop of the zero-percent rows.)
 
 | Pack         |  rows | spells |   run | mounted | swim | flight |   all |
 |--------------|------:|-------:|------:|--------:|-----:|-------:|------:|
-| 1.15.8.67156 |   782 |    768 |   210 |     182 |   20 |  **0** |   367 |
-| 2.5.6.68775  | 1,056 |    964 |   194 |     251 |   25 |     71 |   502 |
-| 3.4.3.58936  | 1,369 |  1,303 |   323 |      70 |   35 |     81 |   839 |
-| 4.4.2.60895  | 1,661 |  1,587 |   453 |      49 |   58 |    103 |   981 |
-| 5.5.4.68716  | 2,231 |  2,131 |   681 |      63 |   77 |    110 | 1,266 |
-| 7.3.5.26972  | 3,782 |  3,581 | 1,172 |     104 |  111 |    148 | 2,171 |
-| 8.3.7.35662  | 4,722 |  4,441 | 1,393 |     142 |  157 |    170 | 2,750 |
-| 9.2.7.45745  | 5,696 |  5,361 | 1,695 |     164 |  171 |    196 | 3,336 |
-| 10.2.7.55664 | 6,803 |  6,415 | 2,061 |     205 |  180 |    242 | 3,962 |
-| 11.2.7.65299 | 7,849 |  7,388 | 2,363 |     232 |  187 |    271 | 4,599 |
+| 1.15.8.67156 |   772 |    759 |   206 |     181 |   20 |  **0** |   365 |
+| 2.5.6.68775  | 1,053 |    961 |   196 |     250 |   25 |     71 |   511 |
+| 3.4.3.58936  | 1,361 |  1,296 |   326 |      67 |   35 |     81 |   852 |
+| 4.4.2.60895  | 1,632 |  1,560 |   443 |      45 |   57 |    102 |   985 |
+| 5.5.4.68716  | 2,188 |  2,094 |   675 |      59 |   76 |    109 | 1,269 |
+| 7.3.5.26972  | 3,691 |  3,502 | 1,142 |      92 |  111 |    147 | 2,199 |
+| 8.3.7.35662  | 4,603 |  4,351 | 1,349 |     128 |  157 |    169 | 2,800 |
+| 9.2.7.45745  | 5,533 |  5,240 | 1,638 |     146 |  171 |    195 | 3,383 |
+| 10.2.7.55664 | 6,586 |  6,247 | 1,981 |     184 |  180 |    240 | 4,001 |
+| 11.2.7.65299 | 7,575 |  7,176 | 2,253 |     200 |  186 |    269 | 4,667 |
 
 **Vanilla has zero flight rows** — flying arrived in TBC, so the six flight auras have nothing to attach to on 1.15.8.
 That is the data telling the truth, not a missing table: the `flight` word simply never renders there.
 
 `all` is the largest group everywhere, which is expected — it is aura 33, i.e. every snare in the game.
+
+### Object scale by version
+
+Rows are `(spell, percent)` pills (zero-percent rows dropped). The route exists on **every** build; only the
+`MOD_SCALE_2` aura id drifts (239 retail/WotLK, 591 on the 2024+ Classic clients — see §3k-bis), which a set absorbs, so
+again no drift declaration. `grow` / `shrink` split the sign.
+
+| Pack         |  rows | spells | grow | shrink |    min |  max |
+|--------------|------:|-------:|-----:|-------:|-------:|-----:|
+| 1.15.8.67156 |   193 |    190 |  166 |     27 |   −100 |  700 |
+| 2.5.6.68775  |   267 |    263 |  220 |     47 | −1,000 |  599 |
+| 3.4.3.58936  |   511 |    502 |  422 |     89 | −1,000 |  599 |
+| 4.4.2.60895  |   768 |    759 |  641 |    127 |   −999 | 1000 |
+| 5.5.4.68716  | 1,137 |  1,121 |  966 |    171 |   −999 | 1000 |
+| 7.3.5.26972  | 1,996 |  1,978 | 1,694 |   302 |   −999 | 1500 |
+| 8.3.7.35662  | 2,533 |  2,508 | 2,177 |   356 |   −999 | 1500 |
+| 9.2.7.45745  | 3,194 |  3,169 | 2,773 |   421 |   −999 | 1500 |
+| 10.2.7.55664 | 3,767 |  3,737 | 3,282 |   485 |   −999 | 1500 |
+| 11.2.7.65299 | 4,426 |  4,392 | 3,867 |   559 | −1,000 | 1500 |
+
+The negative floor (−999 / −1000) is a real value the server clamps, not a sentinel; growth reaches +1500% (16× normal
+size). Grow outnumbers shrink ~6–8:1 every era.
 
 ### Keybound overrides by version
 
@@ -1135,7 +1186,7 @@ hotlinks sit on tolerated-hotlinking footing, not an affirmative license.
 | **Models**       | attach (kit→ModelAttach→EffectName Type 0), display (kit→ModelAttach→EffectName Type 2→CreatureDisplayID→model, morph-style pill), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect); every row also carries its M2 attachment point (§3h) |
 | **Sounds**       | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID`, `SpellVisual.AnimEventSoundID` — all → SoundKitEntry                                                                                                                                                                                                                    |
 | **Animations**   | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), ModelAttach Start/Anim/End (loose) + its AnimKit (grouped), proc Type 7 (stance), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped)                                                                      |
-| **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, seat, invis, detect, keybind, speed — see §3a–3k                                                                                                                                                                                                |
+| **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, seat, invis, detect, keybind, speed, scale — see §3a–3k-bis                                                                                                                                                                                                |
 | **Mechanics**    | one row per `SpellEffect`: `.Effect` + `.EffectAura` enums (names from WoWDBDefs) paired with that row's `.ImplicitTarget_0/_1` — §3l                                                                                                                                                                                           |
 | **Name search**  | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names                                                                                                                                                                                                                                                              |
 | **Target bits**  | `SpellVisualEvent.TargetType` on the kit edge (§2), resolved against `SpellEffect.ImplicitTarget` per phase (`StartEvent`) so a self-cast spell's "Target" reads as the caster, plus `Caster`/`HostileSpellVisualID` redirects that mark whatever they reach caster/target                                                      |
