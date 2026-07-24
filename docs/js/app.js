@@ -1574,7 +1574,7 @@
                 el: P.group({
                     head: modelCatHeadTag(c.name, c.hit),
                     items: hitsFirst(c.items, (e) => modelFileIsHit(d.files.get(e.fid), c.name))
-                        .map((e) => (isDisplayCat(e.cat) ? displayTag(e)
+                        .map((e) => (isDisplayCat(e.cat) ? displayTag(e, spellId)
                             : isItemCat(e.cat) ? itemTag(e)
                                 : modelTag(e.fid, c.name, e.targets, e.src, e.dst, travels(e.cat)))),
                 }),
@@ -1589,7 +1589,7 @@
                 el: P.group({
                     head: modelCatHeadTag("mount", hit),
                     items: hitsFirst(mountIds.slice().sort((a, b) => a - b),
-                        (m) => mountIsHit(m)).map((m) => mountTag(m)),
+                        (m) => mountIsHit(m)).map((m) => mountTag(m, spellId)),
                 }),
             });
         }
@@ -2041,7 +2041,7 @@
                 name: "shapeshift",
                 hit: formIds.some((f) => shapeshiftIsHit(f)),
                 mask: t.head,
-                items: entries.map((e) => () => shapeshiftTag(e, t.pill(formMask(e.formId)))),
+                items: entries.map((e) => () => shapeshiftTag(e, t.pill(formMask(e.formId)), spellId)),
             });
         }
         if (morphIds.length) {
@@ -2059,7 +2059,7 @@
                 name: "morph",
                 hit: morphIds.some((c) => morphIsHit(c)),
                 mask: t.head,
-                items: entries.map((e) => () => morphTag(e, t.pill(morphMask(e.creatureId)))),
+                items: entries.map((e) => () => morphTag(e, t.pill(morphMask(e.creatureId)), spellId)),
             });
         }
         if (summonEntries.length) {
@@ -2583,7 +2583,7 @@
    * actually want for a creature. It still carries its attachment point like
    * any other attached model. Label is the model's base filename (no TDB
    * needed); the displayId drives the buttons. */
-    function displayTag(e) {
+    function displayTag(e, spellId) {
         const d = state.data;
         const {fid, ref: displayId, targets: mask} = e;
         const file = fid ? (d.files.get(fid) || {path: "", base: ""}) : {path: "", base: ""};
@@ -2593,7 +2593,7 @@
             hit: modelFileIsHit(d.files.get(fid), MODEL_CAT_DISPLAY_WORD),
             segments: [
                 displayId && CFG.wowheadMorphUrl && P.link(
-                    fillTemplate(CFG.wowheadMorphUrl, {id: displayId}),
+                    fillTemplate(CFG.wowheadMorphUrl, {id: displayId, spell: spellId}),
                     `View DisplayID ${displayId} in Wowhead's model viewer`),
                 P.targets(mask),
                 P.label(base || `display #${displayId}`, {
@@ -3356,7 +3356,7 @@
    * where the form has a display, otherwise the form name itself — Battle
    * Stance and Shadowform are real forms with no model at all, and a
    * name-only pill is the honest rendering. */
-    function shapeshiftTag(entry, mask = 0) {
+    function shapeshiftTag(entry, mask = 0, spellId) {
         const d = state.data;
         const {formId, displayId, fid} = entry;
         const name = d.shapeshiftNames.get(formId) || "";
@@ -3367,7 +3367,7 @@
             hit: shapeshiftIsHit(formId),
             segments: [
                 displayId && CFG.wowheadMorphUrl && P.link(
-                    fillTemplate(CFG.wowheadMorphUrl, {id: displayId}),
+                    fillTemplate(CFG.wowheadMorphUrl, {id: displayId, spell: spellId}),
                     `View DisplayID ${displayId} in Wowhead's model viewer`),
                 P.targets(mask),
                 P.label(base || name || `form #${formId}`, {
@@ -3387,7 +3387,7 @@
         });
     }
 
-    function morphTag(entry, mask = 0) {
+    function morphTag(entry, mask = 0, spellId) {
         const d = state.data;
         const {creatureId, displayId, fid} = entry;
         const name = d.morphNames.get(creatureId) || "";
@@ -3398,7 +3398,7 @@
             hit: morphIsHit(creatureId),
             segments: [
                 displayId && CFG.wowheadMorphUrl && P.link(
-                    fillTemplate(CFG.wowheadMorphUrl, {id: displayId}),
+                    fillTemplate(CFG.wowheadMorphUrl, {id: displayId, spell: spellId}),
                     `View DisplayID ${displayId} in Wowhead's model viewer`),
                 P.targets(mask),
                 P.label(base || (displayId ? `#${displayId}` : `creature #${creatureId}`), {
@@ -3495,7 +3495,7 @@
      * display falls back to the model base, then to the bare id.
      * @param {number} displayId CreatureDisplayID
      */
-    function mountTag(displayId) {
+    function mountTag(displayId, spellId) {
         const d = state.data;
         const name = d.mountNames.get(displayId) || "";
         const fid = d.mountFids.get(displayId) || 0;
@@ -3506,7 +3506,7 @@
             hit: mountIsHit(displayId),
             segments: [
                 CFG.wowheadMorphUrl && P.link(
-                    fillTemplate(CFG.wowheadMorphUrl, {id: displayId}),
+                    fillTemplate(CFG.wowheadMorphUrl, {id: displayId, spell: spellId}),
                     `View DisplayID ${displayId} in Wowhead's model viewer`),
                 P.label(name || base || `#${displayId}`, {
                     title: `${name || "(unnamed mount)"} — display ${displayId}`,
