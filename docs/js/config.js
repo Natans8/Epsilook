@@ -59,11 +59,14 @@ window.EpsilookConfig = {
 
     // External links ({id} = spell / soundkit / creature display / NPC ID,
     // {wh} = the version-appropriate Wowhead site prefix, see wowheadSitePrefix).
-    // The model viewer (morph) has no {wh} — it always stays on retail (best
-    // creature-skin compositing; display IDs render across eras).
+    // The morph model viewer has no {wh} — it stays on retail (best creature-skin
+    // compositing; display IDs render across eras). It opens the viewer over the
+    // SPELL'S OWN page rather than Wowhead's home page: the #modelviewer fragment
+    // works on any page, so the spell page is the useful place to land.
+    // {spell} = the spell being viewed, {id} = the creature display it shows.
     wowheadSpellUrl: "https://www.wowhead.com/{wh}spell={id}",
     wowheadSoundUrl: "https://www.wowhead.com/{wh}sound={id}",
-    wowheadMorphUrl: "https://www.wowhead.com/#modelviewer:1:{id}:0",
+    wowheadMorphUrl: "https://www.wowhead.com/spell={spell}/#modelviewer:1:{id}:0",
     wowheadNpcUrl: "https://www.wowhead.com/{wh}npc={id}",
     // Item page, opened straight on its 3D model view. The #modelviewer fragment
     // makes Wowhead land on the model tab (the item's whole point here), and the

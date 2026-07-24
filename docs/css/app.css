@@ -1121,7 +1121,14 @@ td.empty {
    which shape it got — so dimming made the identical word two brightnesses
    depending on how many siblings it happened to have. The capsule around the
    item is what separates category from value (PILLS.md §4); it does not need
-   a brightness gradient's help. */
+   a brightness gradient's help.
+
+   SIZE MATCHES A FULL GROUP, for the same reason. The container carries NO
+   font-size: the head sizes via .tag / .c-models .tag and the lone item via
+   .kit-files .tag, the exact rules a full-width group uses — so text and icons
+   come out identical whether the group has one item or ten. A container
+   font-size here (0.82em once) compounded with the inner .tag ems and shrank
+   the head below even a standalone pill. Do not re-add one. */
 .kit-group.compact {
     display: inline-flex;
     align-items: center;
@@ -1131,7 +1138,6 @@ td.empty {
     margin: 0.1rem 0.25rem 0.1rem 0;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.03);
-    font-size: 0.82em;
 }
 
 .kit-group.compact .kit-head {
@@ -1169,7 +1175,6 @@ td.empty {
     background: none;
     margin: 0;
     border-radius: 0;
-    font-size: 1em;
 }
 
 /* tags */
