@@ -28,6 +28,10 @@ Full syntax lives behind the **?** button in the app. The short version:
 - `mech:` covers what an effect does *and* what it is aimed at, matched on the same effect:
   `mech:"school_damage unit_target_enemy"` finds spells with one effect that is both, not spells that happen to have
   each somewhere.
+- Some content has its own category word inside a column — `fx:object` for the GameObject a spell places
+  (`fx:"object campfire"`, with `.gobject spawn` and `.lookup object` on the pill), `model:mount` for the mount it puts
+  you on (`model:"mount stallion"`, with `.modify mount`), and `anim:replace` for animations it swaps out — `Stand → StealthStand`
+  (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue).
 - **Click any tag in the results** to search for it (shift-click to exclude).
 - The search — filters included — always lives in the URL, so any result set is a shareable link. Append `&export=json`
   or `&export=csv` to download it.

@@ -28,6 +28,9 @@ interface EpsilookConfig {
     morphLookupTemplate: string;
     summonLookupTemplate: string;
     summonSpawnTemplate: string;
+    objectLookupTemplate: string;
+    objectSpawnTemplate: string;
+    mountModifyTemplate: string;
     itemLookupTemplate: string;
     itemAddTemplate: string;
     wowheadSpellUrl: string;
@@ -35,6 +38,8 @@ interface EpsilookConfig {
     wowheadMorphUrl: string;
     wowheadNpcUrl: string;
     wowheadItemUrl: string;
+    wowheadObjectUrl: string;
+    wowheadObjectTypes: number[];
     /** Wowhead site path prefix keyed by game major version ("classic/" for 1);
      *  unlisted versions fall back to retail (empty prefix). */
     wowheadSitePrefix: Record<number, string>;
@@ -138,8 +143,9 @@ interface SpellPack {
     /** Animation names indexed by AnimID. */
     animNames: string[];
     animKitAnims: { animKitIds: number[]; animIds: number[] };
-    /** Direct stand/walk anim overrides, proc Type 7 (format 14+). */
-    spellAnims?: { spellIds: number[]; animIds: number[] };
+    /** Animation replacements — proc Type 7 + aura 312 merged (format 32+):
+     *  one row per (base anim -> replacement anim). */
+    spellReplaceAnims?: { spellIds: number[]; srcAnims: number[]; dstAnims: number[] };
     /** Animations the kits play directly, SpellVisualAnim ET 6 (format 21+). */
     spellVisualAnims?: { spellIds: number[]; animIds: number[]; targets?: number[] };
 
@@ -217,6 +223,17 @@ interface SpellPack {
     spellShapeshifts?: { spellIds: number[]; formIds: number[] };
     shapeshifts?: { ids: number[]; names: string[] };
     shapeshiftDisplays?: { formIds: number[]; displayIds: number[]; fids: number[] };
+
+    /** Mounts (format 32+): spell -> CreatureDisplayID, and each display's
+     *  mount name and model fid. Client data, so it needs no TDB. */
+    spellMounts?: { spellIds: number[]; displayIds: number[] };
+    mounts?: { displayIds: number[]; names: string[]; fids: number[] };
+
+    /** GameObject spawners (format 32+): spell -> gameobject_template entry.
+     *  Names/models come from the TDB world dump, so both are "" / 0 without one. */
+    spellObjects?: { spellIds: number[]; objectIds: number[]; targets?: number[] };
+    objects?: { ids: number[]; names: string[]; fids: number[]; types?: number[] };
+
 
     /** Summoned creatures with their SummonProperties control per row. */
     spellSummons: { spellIds: number[]; creatureIds: number[]; controls: number[] };
@@ -386,6 +403,7 @@ interface SpellData {
     ghostMatTargets: Map<number, Map<number, number>>;
     morphTargets: Map<number, Map<number, number>>;
     summonTargets: Map<number, Map<number, number>>;
+    objectTargets: Map<number, Map<number, number>>;
     vehicleTargets: Map<number, Map<number, number>>;
     shapeshiftTargets: Map<number, Map<number, number>>;
     screenTargets: Map<number, Map<number, number>>;
@@ -404,8 +422,10 @@ interface SpellData {
     animKitAnims: Map<number, number[]>;
     animAnimKits: Map<number, number[]>;
     /** Direct stand/walk anim overrides (the "stance" group). */
-    spellAnims: Map<number, number[]>;
-    animDirectSpells: Map<number, number[]>;
+    /** Animation replacements: spell -> [{src,dst}] pairs, and each anim id
+     *  (either side) -> the spells whose swaps touch it. */
+    spellReplaceAnims: Map<number, { src: number; dst: number }[]>;
+    replaceSpells: Map<number, Set<number>>;
     /** Animations the kits play directly (SpellVisualAnim) — loose pills. */
     spellVisualAnims: Map<number, number[]>;
     visualAnimSpells: Map<number, number[]>;
@@ -472,6 +492,22 @@ interface SpellData {
     shapeshiftNames: Map<number, string>;
     shapeshiftDisplays: Map<number, DisplayRef[]>;
     shapeshiftSearchL: Map<number, string>;
+
+    /** Mounts: spell -> [displayId], plus each display's name, model and corpus. */
+    spellMounts: Map<number, number[]>;
+    mountSpells: Map<number, number[]>;
+    mountNames: Map<number, string>;
+    mountFids: Map<number, number>;
+    mountSearchL: Map<number, string>;
+
+    /** GameObject spawners: spell -> [gameobject entry] and each entry's payload. */
+    spellObjects: Map<number, number[]>;
+    objectSpells: Map<number, number[]>;
+    objectNames: Map<number, string>;
+    objectFids: Map<number, number>;
+    objectTypes: Map<number, number>;
+    objectSearchL: Map<number, string>;
+
 
     spellSummons: Map<number, { creatureId: number; control: number }[]>;
     summonNames: Map<number, string>;
@@ -750,6 +786,7 @@ interface PillSegmentOpts {
     click?: string;
     hit?: boolean;
     data?: Record<string, any>;
+    cls?: string;
 }
 
 /** A segment slot: falsy entries are dropped, arrays flatten. */

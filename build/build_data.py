@@ -79,6 +79,9 @@ TABLES = [
     "SpellVisualEffectName",
     "SpellVisualAnim",
     "AnimKitSegment",
+    # anim-replacement sets (aura 312, §3): AnimReplacement holds the
+    # (Src -> Dst AnimationData) swaps, keyed by ParentAnimReplacementSetID
+    "AnimReplacement",
     "SoundKitEntry",
     "SpellEffect",
     "SummonProperties",
@@ -103,6 +106,14 @@ TABLES = [
     "SpellOverrideName",
     "Vehicle",
     "VehicleSeat",
+    # mounts (§3, Models column): Mount.db2 is keyed by the mount-granting spell
+    # (SourceSpellID); MountXDisplay maps the mount to its CreatureDisplayID(s),
+    # which resolve to a model through the same creature chain morphs use.
+    "Mount",
+    "MountXDisplay",
+    # gameobject spawners (§3, Effects column): resolves a gameobject_template
+    # displayId (from the TDB world dump) to a model FileDataID -> listfile name
+    "GameObjectDisplayInfo",
     # aura 406 (KEYBOUND_OVERRIDE, §3i): which key casts which spell
     "SpellKeyboundOverride",
     # the item route (SpellVisualEffectName Type 1, §3c). ItemSearchName carries
@@ -153,11 +164,15 @@ OPTIONAL_TABLES = {
     "SpellVisualScreenEffect": "the kit route into screen fx",
     "ScreenEffect": "the screen fx category",
     "FullScreenEffect": "screen fx colour grading + overlay textures",
+    "AnimReplacement": "anim-replacement sets (aura 312)",
     "SpellShapeshiftForm": "the shapeshift fx category",
     "SpellOverrideName": "override names in the search corpus",
     "SummonProperties": "summon control words (guardian/pet/...)",
     "Vehicle": "the vehicle fx category",
     "VehicleSeat": "vehicle seat attachments and passenger animations",
+    "Mount": "the mount model pills",
+    "MountXDisplay": "mount -> display id resolution",
+    "GameObjectDisplayInfo": "gameobject model files (names still resolve)",
     # arrives in MoP (5.0.1); 404s on Vanilla/TBC/WotLK/Cata
     "SpellKeyboundOverride": "the keybind fx category (aura 406)",
 }
@@ -278,6 +293,14 @@ TDB_TABLES = {
         "creature_template": ["entry", "name",
                               "modelid1", "modelid2", "modelid3", "modelid4"],
         "creature_template_model": ["CreatureID", "Idx", "CreatureDisplayID", "Probability"],
+        # gameobject spawners (§3, Effects column): a spawn effect's misc0 is a
+        # gameobject_template ENTRY. The client GameObjects.db2 is world-placed
+        # doodads keyed differently (0% overlap), so name + displayId only live
+        # here — which is why gameobject names/models resolve on TDB packs and
+        # degrade to id-only on the TDB-less Classic clients, like creatures.
+        # `type` is the GAMEOBJECT_TYPE enum (3 CHEST, 5 GENERIC, 10 GOOBER, ...).
+        # Read to gate the Wowhead object link: Wowhead indexes only some types.
+        "gameobject_template": ["entry", "name", "displayId", "type"],
     },
     "hotfixes": {
         "spell_name": ["ID", "Name"],
@@ -369,7 +392,15 @@ AURA_SCREEN_EFFECT = 260
 # CLAUDE.md. Which value column carries the payload differs per type.
 PROC_TYPE_TINT = 1  # Value_0 = packed-RGB model tint (multiply)
 PROC_TYPES_CHAIN = {0, 12, 26}  # Value_0 = SpellChainEffects ID (beams)
-PROC_TYPE_STANDWALK = 7  # Value_0..3 = AnimationData IDs (stand/walk anim)
+PROC_TYPE_STANDWALK = 7  # Value_0..2 = AnimationData IDs replacing stand/walk/run
+# proc Type 7 is animation replacement expressed through fixed engine slots: its
+# Value_0/1/2 are what the character plays INSTEAD of Stand/Walk/Run. So it is
+# the same mechanic as the aura-312 AnimReplacementSet (§3o), just narrower —
+# and it merges into the same "replace" group by pairing each value with the
+# base anim its slot overrides. AnimIDs: Stand 0, Walk 4, Run 5 (from anims.js).
+# Value_3 is dropped: it has no base slot and the decode notes it is near-always
+# junk (see the proc decode in CLAUDE.md).
+PROC_STANDWALK_SLOTS = (0, 4, 5)  # base AnimID each of Value_0/1/2 replaces
 PROC_TYPE_AREAMODEL = 9  # Value_0 = SpellVisualKitAreaModel ID (model)
 PROC_TYPE_FREEZE = 11  # valueless freeze/petrify state
 PROC_TYPE_TRANSPARENCY = 14  # Value_0 = alpha 0..1 (SetAlphaMod)
@@ -655,6 +686,16 @@ def keybound_type_word(type_id: int) -> str:
     return f"type {type_id}"
 
 
+# SpellEffectAura (ANIM_REPLACEMENT_SET) whose EffectMiscValue_0 is an
+# AnimReplacementSet id (§3, Animations column). The set swaps a character's
+# base animations for others; the pairs live on AnimReplacement, keyed by
+# ParentAnimReplacementSetID, as (SrcAnimID -> DstAnimID) AnimationData ids —
+# the same id space the anim column already names. A replacement only shows
+# in-game while the character is doing the SOURCE anim (Sea Legs swaps swimming,
+# Blowdart swaps holding a bow), which is why it reads as "Stand -> StealthStand".
+AURA_ANIM_REPLACEMENT_SET = 312
+
+
 # VehicleSeat.AttachmentID is NOT an M2 attachment id: it is an index into a
 # table hardcoded in the client binary (it exists in no db2, so it cannot be
 # derived from data and has to live here). wowdev.wiki/DB/VehicleSeat quotes
@@ -741,6 +782,26 @@ EFFECT_SUMMON = 28
 # ends up carrying the aura, which is what resolve_target_mask needs to read an
 # aura-phase visual's "Target" correctly (see there).
 EFFECT_APPLY_AURA = 6
+
+# SpellEffect.Effect values whose EffectMiscValue_0 is a SoundKit the spell
+# plays — a sound with no visual graph behind it. They fold straight into the
+# Sounds column: misc0 is a SoundKitEntry.SoundKitID, the same id the missile
+# and kit sound routes already resolve (measured 9.2.7: 133/134 + 163/164
+# resolve). PLAY_MUSIC is the zone-music variant; both surface identically.
+EFFECT_PLAY_SOUND = 131
+EFFECT_PLAY_MUSIC = 132
+
+# SpellEffect.Effect values that spawn a GameObject — EffectMiscValue_0 is a
+# gameobject_template ENTRY (the id `.gobject spawn` and Wowhead's object= take).
+# Surfaced in the Effects column as an `object` pill, sibling of summon (which
+# conjures a creature). TRANS_DOOR is the general "place an object" effect; the
+# three SUMMON_OBJECT variants differ only in slot/lifetime, not in payload.
+EFFECT_SPAWN_OBJECT = frozenset({
+    50,   # TRANS_DOOR
+    76,   # SUMMON_OBJECT_WILD
+    104,  # SUMMON_OBJECT_SLOT1
+    171,  # SUMMON_PERSONAL_GAMEOBJECT
+})
 
 # SummonProperties.Control values (meta/enums/SummonPropertiesControl.dbde —
 # too few and too free-form for read_enum_names). 0 = uncontrolled; shown as
@@ -877,7 +938,7 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 31  # 31: object-scale modifiers (spellScales)
+PACK_FORMAT = 32  # 32: mounts (spellMounts) + spell schools + gameobject spawners + play-sound/music + anim-replacement sets
 # 29: mechanics carry their implicit targets (spellEffects +
 #     spellAuras -> spellMechanics, implicitTargetNames) and
 #     keybound overrides (spellKeybinds, keybinds)
@@ -1753,7 +1814,7 @@ class ProcEffects:
     freezes: set[int]  # proc IDs of freeze (Type 11)
     camos: set[int]  # proc IDs of camo (Type 18)
     models: dict[int, tuple[int, int, int, int, int]]  # proc ID -> model tuple (Types 9, 27)
-    anims: dict[int, tuple[int, ...]]  # proc ID -> AnimationData IDs (Type 7)
+    anims: dict[int, tuple[tuple[int, int], ...]]  # proc ID -> (base, replacement) pairs (Type 7)
 
 
 def read_proc_effects(table_dir: Path, models: ModelSources) -> ProcEffects:
@@ -1794,13 +1855,16 @@ def read_proc_effects(table_dir: Path, models: ModelSources) -> ProcEffects:
             if fid:
                 procs.models[p] = (fid, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0)
         elif pt == PROC_TYPE_STANDWALK:
-            # Value_0..3 are direct AnimationData IDs (stand/walk/run/...);
-            # keep the meaningful ones (>0 skips the ubiquitous Stand=0 default)
-            anims = tuple(dict.fromkeys(
-                a for a in (to_int_from_float(v0), to_int_from_float(v1),
-                            to_int_from_float(v2), to_int_from_float(v3)) if a > 0))
-            if anims:
-                procs.anims[p] = anims
+            # (base slot -> replacement) pairs, so proc-7 folds into the same
+            # replace group as aura 312. A value of 0 means "slot unchanged" and
+            # is skipped, per-slot; Value_3 is dropped (no base slot, junk).
+            pairs = tuple(
+                (src, dst) for src, dst in zip(
+                    PROC_STANDWALK_SLOTS,
+                    (to_int_from_float(v0), to_int_from_float(v1), to_int_from_float(v2)))
+                if dst > 0)
+            if pairs:
+                procs.anims[p] = pairs
     return procs
 
 
@@ -2004,7 +2068,7 @@ class KitEffects:
     models: dict[int, set[tuple[int, int, int, int, int]]]  # (fid, category, src, dst, display)
     soundkits: dict[int, set[int]]
     animkits: dict[int, set[int]]
-    anims: dict[int, set[int]]  # direct AnimationData ids (proc Type 7)
+    anims: dict[int, set[tuple[int, int]]]  # (base, replacement) pairs (proc Type 7)
     visual_anims: dict[int, set[int]]  # AnimationData ids (SpellVisualAnim, ET 6)
     chains: dict[int, set[tuple[int, int, int]]]  # (chain, src attach, dst attach)
     dissolves: dict[int, set[int]]
@@ -2133,6 +2197,25 @@ def read_animkit_anims(table_dir: Path, anim_names: list[str]) -> dict[int, set[
     return animkit_anims
 
 
+def read_anim_replacements(
+        table_dir: Path, anim_names: list[str]
+) -> dict[int, set[tuple[int, int]]]:
+    """Read AnimReplacementSet id -> the (src, dst) AnimationData swaps it makes.
+
+    Keyed by AnimReplacement.ParentAnimReplacementSetID (the id an aura-312
+    misc0 points at). Both anim ids index into anim_names, so ids past the table
+    are dropped, like the other animation routes. AnimReplacementSet.db2 itself
+    carries nothing worth reading (only ID + ExecOrder), so it is not fetched.
+    """
+    replacements: dict[int, set[tuple[int, int]]] = defaultdict(set)
+    for set_id, src, dst in read_table(
+            table_dir, "AnimReplacement", ["ParentAnimReplacementSetID", "SrcAnimID", "DstAnimID"]):
+        sid, s, d = to_int(set_id), to_int(src), to_int(dst)
+        if sid and 0 <= s < len(anim_names) and 0 <= d < len(anim_names):
+            replacements[sid].add((s, d))
+    return replacements
+
+
 # Field defaults for SpellEffectRows below. Every one of its maps is either
 # "spell (or (spell, payload)) -> a set of ids" or "-> an OR-accumulated target
 # mask", so the two factories cover the whole dataclass and a new route needs
@@ -2161,6 +2244,8 @@ class SpellEffectRows:
     # payload ids per spell, one field per aura/effect route
     morphs: dict[int, set[int]] = _by_spell()  # creature ids (aura 56)
     summons: dict[int, set[tuple[int, int]]] = _by_spell()  # (creature, control) (effect 28)
+    objects: dict[int, set[int]] = _by_spell()  # gameobject entries (EFFECT_SPAWN_OBJECT)
+    anim_sets: dict[int, set[int]] = _by_spell()  # AnimReplacementSet ids (aura 312)
     screens: dict[int, set[int]] = _by_spell()  # ScreenEffect ids (aura 260)
     forms: dict[int, set[int]] = _by_spell()  # shapeshift form ids (aura 36)
     altnames: dict[int, set[int]] = _by_spell()  # SpellOverrideName ids (aura 370)
@@ -2168,6 +2253,11 @@ class SpellEffectRows:
     invis: dict[int, set[int]] = _by_spell()  # invisibility types (aura 18)
     detect: dict[int, set[int]] = _by_spell()  # detect types (aura 19)
     keybinds: dict[int, set[int]] = _by_spell()  # override ids (aura 406)
+    # (spell, SoundKit) -> mask, for PLAY_SOUND/PLAY_MUSIC effects (131/132).
+    # Keyed like the *_targets masks so it folds into the Sounds column masked
+    # like any other sound; merged in the main build where soundkit_files is in
+    # hand. The SoundKit is EffectMiscValue_0, a SoundKitEntry.SoundKitID.
+    sounds: dict[tuple[int, int], int] = _mask()
     speeds: dict[int, set[tuple[str, float]]] = _by_spell()  # (movement, %) (SPEED_AURAS)
     scales: dict[int, set[float]] = _by_spell()  # object-scale % (SCALE_AURAS)
     # who each effect-driven fx lands on, from the producing SpellEffect row's
@@ -2176,6 +2266,7 @@ class SpellEffectRows:
     # invis type / override). OR-accumulated when several rows produce the pair.
     morph_targets: dict[tuple[int, int], int] = _mask()
     summon_targets: dict[tuple[int, int], int] = _mask()
+    object_targets: dict[tuple[int, int], int] = _mask()
     screen_targets: dict[tuple[int, int], int] = _mask()
     form_targets: dict[tuple[int, int], int] = _mask()
     vehicle_targets: dict[tuple[int, int], int] = _mask()
@@ -2259,6 +2350,17 @@ def read_spell_effect_rows(
         if effect_id == EFFECT_SUMMON and m0 > 0:
             out.summons[s].add((m0, summon_control.get(m1, 0)))
             out.summon_targets[(s, m0)] |= mask
+        # gameobject spawners: misc0 is a gameobject_template entry. Sibling of
+        # summon — conjures an object instead of a creature.
+        if effect_id in EFFECT_SPAWN_OBJECT and m0 > 0:
+            out.objects[s].add(m0)
+            out.object_targets[(s, m0)] |= mask
+        # PLAY_SOUND / PLAY_MUSIC: misc0 is a SoundKit the spell plays outright,
+        # with no visual behind it. Folds into the Sounds column (merged in the
+        # main build). The kits table would only surface sounds hanging off a
+        # visual; these hang off the effect.
+        if effect_id in (EFFECT_PLAY_SOUND, EFFECT_PLAY_MUSIC) and m0 > 0:
+            out.sounds[(s, m0)] |= mask
         # SCREEN_EFFECT auras carry the ScreenEffect ID in misc0 — the main
         # route (the kit route adds only a handful of rows on top)
         if aura_id == AURA_SCREEN_EFFECT and m0 > 0 and m0 in screens:
@@ -2267,6 +2369,10 @@ def read_spell_effect_rows(
         if aura_id == AURA_SHAPESHIFT and m0 > 0:
             out.forms[s].add(m0)
             out.form_targets[(s, m0)] |= mask
+        # anim-replacement sets: misc0 is an AnimReplacementSet id. Sets with no
+        # AnimReplacement rows are dropped at pack time (same as missing forms).
+        if aura_id == AURA_ANIM_REPLACEMENT_SET and m0 > 0:
+            out.anim_sets[s].add(m0)
         if aura_id == AURA_OVERRIDE_NAME and m0 > 0:
             out.altnames[s].add(m0)
         if aura_id == AURA_SET_VEHICLE_ID and m0 > 0:
@@ -2492,6 +2598,90 @@ def read_creature_models(table_dir: Path, tdb_dir: Path | None) -> CreatureModel
 
 
 @dataclass
+class MountData:
+    """Mounts a spell grants, resolved to display ids and model files.
+
+    Sourced from Mount.db2 keyed by SourceSpellID (the mount-granting spell) ->
+    MountXDisplay -> CreatureDisplayID(s), each resolved to a model fid through
+    the same creature chain morphs use. A mount can have several displays
+    (faction/gender variants), and a display can carry a name (from Mount.db2);
+    where it doesn't the pill falls back to the model file name.
+    """
+    links: list[tuple[int, int]]  # (spell id, CreatureDisplayID)
+    name: dict[int, str]  # display id -> mount name ("" if none)
+    fid: dict[int, int]  # display id -> model fid (0 = unresolved)
+
+
+def read_mounts(
+        table_dir: Path, spell_names: dict[int, str], creatures: CreatureModels
+) -> MountData:
+    """Read Mount + MountXDisplay -> the display each mount-spell puts you on.
+
+    Reuses creatures.fid_for_display (client data), so the model resolves on
+    every pack; the mount NAME is on Mount.db2 itself (also client data), so it
+    resolves too — unlike morphs, mounts need no TDB. Absent Mount/MountXDisplay
+    (a build predating the Mount.db2 system) yields nothing and the feature
+    switches off, like any other OPTIONAL_TABLE.
+    """
+    mount_displays: dict[int, list[int]] = defaultdict(list)
+    for cdi, mid in read_table(
+            table_dir, "MountXDisplay", ["CreatureDisplayInfoID", "MountID"]):
+        mount_displays[to_int(mid)].append(to_int(cdi))
+
+    links: set[tuple[int, int]] = set()
+    name: dict[int, str] = {}
+    fid: dict[int, int] = {}
+    for mid, nm, src in read_table(table_dir, "Mount", ["ID", "Name_lang", "SourceSpellID"]):
+        s = to_int(src)
+        if s not in spell_names:
+            continue
+        for did in mount_displays.get(to_int(mid), ()):
+            links.add((s, did))
+            name.setdefault(did, (nm or "").strip())
+            fid.setdefault(did, creatures.fid_for_display(did))
+    return MountData(sorted(links), name, fid)
+
+
+@dataclass
+class GameObjectData:
+    """gameobject_template entries -> the object's name and model file.
+
+    The name + displayId live only in the TDB world dump, so both resolve on
+    TDB packs and stay empty on the TDB-less Classic clients — the pill then
+    falls back to the model file name, or to id-only when neither exists.
+    """
+    name: dict[int, str]  # entry -> object name ("" if none / no TDB)
+    fid: dict[int, int]  # entry -> model fid (0 = unresolved)
+    # entry -> GAMEOBJECT_TYPE. Shipped because it decides whether Wowhead has a
+    # page for the object at all — see WOWHEAD_OBJECT_TYPES in config.js.
+    type: dict[int, int]
+
+
+def read_gameobjects(table_dir: Path, tdb_dir: Path | None) -> GameObjectData:
+    """Read gameobject_template (TDB) + GameObjectDisplayInfo -> name and model.
+
+    entry -> name/displayId comes from the world dump; displayId -> FileDataID
+    from the client GameObjectDisplayInfo. Without a TDB both name and model
+    stay empty and the pill degrades to the bare `.gobject spawn` id.
+    """
+    name: dict[int, str] = {}
+    display: dict[int, int] = {}
+    gtype: dict[int, int] = {}
+    if tdb_dir is not None:
+        for entry, nm, did, ty in read_table(
+                tdb_dir, "gameobject_template", ["entry", "name", "displayId", "type"]):
+            e = to_int(entry)
+            name[e] = (nm or "").strip()
+            display[e] = to_int(did)
+            gtype[e] = to_int(ty)
+    godi_fid: dict[int, int] = {}
+    for did, f in read_table(table_dir, "GameObjectDisplayInfo", ["ID", "FileDataID"]):
+        godi_fid[to_int(did)] = to_int(f)
+    fid = {e: godi_fid.get(d, 0) for e, d in display.items()}
+    return GameObjectData(name, fid, gtype)
+
+
+@dataclass
 class ItemModels:
     """Item -> its display name, quality, inventory icon and model file.
 
@@ -2633,6 +2823,25 @@ def read_spell_icons(
     return spell_icon_fid
 
 
+def read_spell_schools(table_dir: Path, spell_names: dict[int, str]) -> dict[int, int]:
+    """Read spell -> SchoolMask from SpellMisc (base difficulty wins).
+
+    A bitmask: 1 Physical, 2 Holy, 4 Fire, 8 Nature, 16 Frost, 32 Shadow,
+    64 Arcane (a spell can span several, e.g. Frostfire = Fire|Frost). Zero is a
+    valid value (schoolless), so this cannot share read_spell_icons' truthy
+    guard. Gathered into the pack but not yet surfaced — a future search axis
+    ("fire spells"); read straight off wago (school is static client data, so no
+    hotfix overlay). SchoolMask ships on every build back to Vanilla.
+    """
+    school: dict[int, int] = {}
+    for _rid, spell_id, diff, mask in read_table(
+            table_dir, "SpellMisc", ["ID", "SpellID", "DifficultyID", "SchoolMask"]):
+        s, d = to_int(spell_id), to_int(diff)
+        if s in spell_names and (s not in school or d == 0):
+            school[s] = to_int(mask)
+    return school
+
+
 # -------------------------------------------------------------- the walk
 
 @dataclass
@@ -2653,7 +2862,7 @@ class SpellVisuals:
     models: dict[int, dict[tuple[int, int, int, int, int], int]]  # (fid, category, src, dst, display)
     sounds: dict[int, dict[tuple[int, int], int]]  # (soundkit, sound fid)
     animkits: dict[int, dict[int, int]]
-    anims: dict[int, dict[int, int]]  # direct AnimationData ids (stance)
+    anims: dict[int, dict[tuple[int, int], int]]  # (base, replacement) pairs (proc Type 7)
     visual_anims: dict[int, dict[int, int]]  # AnimationData ids (SpellVisualAnim)
     chains: dict[int, dict[tuple[int, int, int], int]]
     dissolves: dict[int, dict[int, int]]
@@ -2841,6 +3050,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # SpellVisualEffectName Type 1 (GenericID = Item::ID) -> the item's model,
     # name, quality and icon; read ahead of the model sources that consume it
     items = read_item_models(table_dir)
+    mounts = read_mounts(table_dir, spell_names, creatures)
+    gobjects = read_gameobjects(table_dir, tdb_dir)
     models = read_model_sources(table_dir, tdb_dir, creatures, items, listfile_path)
     visual_missiles = read_missiles(table_dir, tdb_dir, models.effect_name_fid,
                                     models.effect_name_type)
@@ -2850,6 +3061,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     soundkit_files = read_soundkit_files(table_dir)
     anim_names = read_anim_names()
     animkit_anims = read_animkit_anims(table_dir, anim_names)
+    anim_replacements = read_anim_replacements(table_dir, anim_names)
 
     keybounds = read_keybound_overrides(table_dir)
     implicit_bits = implicit_target_bits(version)
@@ -2857,6 +3069,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                                 implicit_bits, keybounds)
     spell_altname_text = read_override_names(table_dir, se.altnames)
     spell_icon_fid = read_spell_icons(table_dir, tdb_dir, spell_names)
+    spell_schools = read_spell_schools(table_dir, spell_names)
 
     # --- resolve the creature-display payloads ----------------------------
     # morphs: flatten to (creature, display, model fid) rows
@@ -2889,6 +3102,14 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                       kits, soundkit_files, fx, se.screens, visual_sounds,
                       se.aura_target_bits, se.cast_target_bits)
 
+    # PLAY_SOUND / PLAY_MUSIC effects: the SoundKit each plays folds into the
+    # spell's Sounds column, exactly like a kit or missile sound (masked by the
+    # effect row's implicit target). Done here, after the graph walk, because
+    # this is where both `se` and soundkit_files are in scope.
+    for (spell_id, sk), mask in se.sounds.items():
+        merge_masked(vis.sounds[spell_id],
+                     ((sk, f) for f in soundkit_files.get(sk, ())), mask)
+
     # --- file names from the listfile -------------------------------------
     used_chains = {c[0] for chains in vis.chains.values() for c in chains}
     used_dissolves = {e for effs in vis.dissolves.values() for e in effs}
@@ -2907,6 +3128,22 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         referenced_fids.update(f for f, _role in fx.screens[sc].textures)
     referenced_fids.update(f for _, _, f in morph_display_rows if f)
     referenced_fids.update(f for _, _, f in form_display_rows if f)
+    # mount model files resolve through the same listfile pass
+    used_mount_displays = sorted({d for _s, d in mounts.links})
+    referenced_fids.update(f for d in used_mount_displays
+                           if (f := mounts.fid.get(d, 0)))
+    # gameobject spawners. Entries the world dump has no row for are DROPPED
+    # (user's call, 2026-07-24, after testing in game: they spawn nothing). They
+    # are debug/TEST/cut content Blizzard ships in the client but no TrinityCore
+    # world DB ever carried — 242 of 1,428 on 9.2.7, and the newest TDB (TWW)
+    # recognises only 10 of them, so this is not a stale-snapshot problem. Same
+    # rule as keybound overrides: a payload that resolves to nothing has nothing
+    # to say. NOTE this also empties the route on the TDB-less Classic packs,
+    # where nothing can be resolved at all.
+    object_rows = sorted((s, e) for s, es in se.objects.items() for e in es
+                         if e in gobjects.name)
+    used_objects = sorted({e for _s, e in object_rows})
+    referenced_fids.update(f for e in used_objects if (f := gobjects.fid.get(e, 0)))
 
     # icon fids resolve through the same listfile pass but stay out of the
     # pack's files table (they become iconNames instead)
@@ -2937,6 +3174,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         # never rendered (the row keeps showing its real name)
         "altNames": [spell_altname_text.get(s, "") for s in spell_ids],
         "icons": spell_icons,
+        # SpellMisc.SchoolMask bitmask (1 Physical / 2 Holy / 4 Fire / 8 Nature
+        # / 16 Frost / 32 Shadow / 64 Arcane). Gathered for a future search axis;
+        # not read by the frontend yet.
+        "schools": [spell_schools.get(s, 0) for s in spell_ids],
     }
 
     file_ids = sorted(referenced_fids)
@@ -3065,15 +3306,34 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     used_animkits |= {k for _, k in vehicle_animkit_rows}
     kit_anim_rows = sorted(
         (k, a) for k, anims in animkit_anims.items() if k in used_animkits for a in anims)
-    # direct stand/walk anim ids (proc Type 7) — index into animNames, like
-    # animKitAnims; guard against ids past the anim-name table
-    anim_direct_rows = sorted(
-        {(s, a) for s, aset in vis.anims.items() for a in aset if a < len(anim_names)})
     # animations the visual kits play directly (SpellVisualAnim initial/loop,
     # kit EffectType 6) — the largest animation source, same id space
     visual_anim_rows = sorted(
         (s, a, m) for s, aset in vis.visual_anims.items()
         for a, m in aset.items() if a < len(anim_names))
+    # ANIMATION REPLACEMENTS, one merged route (§3o). Two sources that describe
+    # the same thing — the character swapping a base animation for another:
+    #   * proc Type 7 (vis.anims): Stand/Walk/Run overrides, reached through the
+    #     visual graph, already paired (base -> replacement) by read_proc_effects.
+    #   * aura 312 (se.anim_sets -> AnimReplacement): the general form, any anim.
+    # Both are (src, dst) AnimationData pairs, so they union into one per-spell
+    # set and render as a single "replace" group. Deduped (Stealth carries the
+    # same Stand->StealthStand from both). No target mask — always the caster's
+    # own body. Ids past the anim-name table are guarded out.
+    def _valid(a: int) -> bool:
+        return 0 <= a < len(anim_names)
+    replace_pairs: dict[int, set[tuple[int, int]]] = defaultdict(set)
+    for s, aset in vis.anims.items():
+        for src, dst in aset:
+            if _valid(src) and _valid(dst):
+                replace_pairs[s].add((src, dst))
+    for s, sids in se.anim_sets.items():
+        for sid in sids:
+            for src, dst in anim_replacements.get(sid, ()):
+                if _valid(src) and _valid(dst):
+                    replace_pairs[s].add((src, dst))
+    replace_anim_rows = sorted(
+        (s, src, dst) for s, pairs in replace_pairs.items() for src, dst in pairs)
     # Mechanics rows: (spell, effect, aura, targetA, targetB). One row per
     # distinct SpellEffect, so the effect's name and the thing it is aimed at
     # stay attached to each other.
@@ -3162,10 +3422,14 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellMorphs": len(morph_rows),
                 "morphs": len(morph_creature_ids),
                 "morphDisplays": len(morph_display_rows),
+                "spellMounts": len(mounts.links),
+                "mounts": len(used_mount_displays),
                 "spellShapeshifts": len(shapeshift_rows),
                 "shapeshiftDisplays": len(form_display_rows),
                 "spellSummons": len(summon_rows),
                 "summons": len(summon_creature_ids),
+                "spellObjects": len(object_rows),
+                "objects": len(used_objects),
                 "spellVehicles": len(vehicle_rows),
                 "vehicles": len(vehicle_ids),
                 "vehicleSeats": len(vehicle_seat_rows),
@@ -3192,7 +3456,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellTransparencies": len(transp_pairs),
                 "spellFreezes": len(freeze_ids),
                 "spellCamos": len(camo_ids),
-                "spellAnims": len(anim_direct_rows),
+                "spellReplaceAnims": len(replace_anim_rows),
                 "spellVisualAnims": len(visual_anim_rows),
                 "spellScreens": len(screen_pairs),
                 "screens": len(screen_ids),
@@ -3252,11 +3516,13 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "animKitIds": [r[0] for r in kit_anim_rows],
             "animIds": [r[1] for r in kit_anim_rows],
         },
-        # direct stand/walk animation ids (SpellProceduralEffect Type 7) — a
-        # second source for the Animations column; animIds index into animNames
-        "spellAnims": {
-            "spellIds": [r[0] for r in anim_direct_rows],
-            "animIds": [r[1] for r in anim_direct_rows],
+        # animation replacements (proc Type 7 + aura 312, merged §3o): one row
+        # per (spell, base anim -> replacement anim), both indexing into
+        # animNames. Rendered as one "replace" group.
+        "spellReplaceAnims": {
+            "spellIds": [r[0] for r in replace_anim_rows],
+            "srcAnims": [r[1] for r in replace_anim_rows],
+            "dstAnims": [r[2] for r in replace_anim_rows],
         },
         # animations a spell's kits play directly (SpellVisualAnim initial/loop
         # anims, kit EffectType 6) — the third and largest animation source;
@@ -3455,6 +3721,21 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "displayIds": [r[1] for r in morph_display_rows],
             "fids": [r[2] for r in morph_display_rows],
         },
+        # mounts (Mount.db2 keyed by SourceSpellID): a displayID pill in the
+        # Models column. Link section (spell -> CreatureDisplayID) plus a
+        # display -> (mount name, model fid) payload. The pill's `.mod` copies
+        # `.modify mount #{displayId}`; the name shows when Mount.db2 has one,
+        # else the pill falls back to the model file. Unlike morphs, no TDB —
+        # both the display resolution and the name are client data.
+        "spellMounts": {
+            "spellIds": [r[0] for r in mounts.links],
+            "displayIds": [r[1] for r in mounts.links],
+        },
+        "mounts": {
+            "displayIds": used_mount_displays,
+            "names": [mounts.name.get(d, "") for d in used_mount_displays],
+            "fids": [mounts.fid.get(d, 0) for d in used_mount_displays],
+        },
         # shapeshift forms (MOD_SHAPESHIFT auras): a form name plus up to four
         # creature displays; forms with no display are a name-only pill
         "spellShapeshifts": {
@@ -3486,6 +3767,26 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "names": [creatures.names.get(c, "") for c in summon_creature_ids],
         },
         "summonControlNames": SUMMON_CONTROL_NAMES,
+        # gameobject spawners (TRANS_DOOR / SUMMON_OBJECT_*): an Effects-column
+        # pill, sibling of summon. objectIds are gameobject_template entries —
+        # what `.gobject spawn` and Wowhead's object= take. `objects` resolves
+        # each used entry to its name (world dump) and model fid (its displayId
+        # via GameObjectDisplayInfo); a nameless object shows its model file,
+        # and with no TDB neither resolves and the pill is `.gobject spawn` only.
+        "spellObjects": {
+            "spellIds": [r[0] for r in object_rows],
+            "objectIds": [r[1] for r in object_rows],
+            # where the object is placed (ImplicitTarget) — usually a ground point
+            "targets": [se.object_targets.get(r, 0) for r in object_rows],
+        },
+        "objects": {
+            "ids": used_objects,
+            "names": [gobjects.name.get(e, "") for e in used_objects],
+            "fids": [gobjects.fid.get(e, 0) for e in used_objects],
+            # GAMEOBJECT_TYPE — decides whether the pill offers a Wowhead link
+            # (Wowhead indexes only player-facing types; see §3m)
+            "types": [gobjects.type.get(e, -1) for e in used_objects],
+        },
         # vehicles (SET_VEHICLE_ID auras): the aura's misc value is a Vehicle.db2
         # id; the payload is its seat count. Link section (spell -> vehicle) plus
         # a vehicle -> seat-count payload, mirroring morphs/summons.
