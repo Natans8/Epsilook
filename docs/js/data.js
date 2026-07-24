@@ -319,6 +319,8 @@ window.EpsilookData = (() => {
         // shapeshift lands on (a polymorph's morph is on the target, not the caster)
         const morphTargets = maskIndex(pack.spellMorphs, "creatureIds");
         const summonTargets = maskIndex(pack.spellSummons, "creatureIds");
+        // where a spawned gameobject is placed — usually a ground point
+        const objectTargets = maskIndex(pack.spellObjects, "objectIds");
         const vehicleTargets = maskIndex(pack.spellVehicles, "vehicleIds");
         const shapeshiftTargets = maskIndex(pack.spellShapeshifts, "formIds");
         const screenTargets = maskIndex(pack.spellScreens, "screenIds");
@@ -629,17 +631,25 @@ window.EpsilookData = (() => {
             }
         }
 
-        // direct stand/walk anim ids (Type 7) — a second source for the
-        // Animations column; matched via the anim field like animkit anims
-        /** @type {Map<number, number[]>} spell id -> [animId] */
-        const spellAnims = new Map();
-        /** @type {Map<number, number[]>} animId -> [spell id] */
-        const animDirectSpells = new Map();
-        if (pack.spellAnims) {
-            const {spellIds, animIds} = pack.spellAnims;
+        // animation replacements (proc Type 7 + aura 312, merged): the character
+        // swaps a base animation for another. One "replace" group in the
+        // Animations column; matched via the anim field on either side's name,
+        // plus the words "replace"/"stance" (the latter an alias for the proc-7
+        // form these used to render separately).
+        /** @type {Map<number, {src: number, dst: number}[]>} spell id -> swaps */
+        const spellReplaceAnims = new Map();
+        /** @type {Map<number, Set<number>>} animId (either side) -> spell ids */
+        const replaceSpells = new Map();
+        if (pack.spellReplaceAnims) {
+            const {spellIds, srcAnims, dstAnims} = pack.spellReplaceAnims;
             for (let i = 0; i < spellIds.length; i++) {
-                pushTo(spellAnims, spellIds[i], animIds[i]);
-                pushTo(animDirectSpells, animIds[i], spellIds[i]);
+                const s = spellIds[i], src = srcAnims[i], dst = dstAnims[i];
+                pushTo(spellReplaceAnims, s, {src, dst});
+                for (const a of [src, dst]) {
+                    let set = replaceSpells.get(a);
+                    if (!set) replaceSpells.set(a, set = new Set());
+                    set.add(s);
+                }
             }
         }
 
@@ -883,6 +893,77 @@ window.EpsilookData = (() => {
             }
         }
 
+        // mounts (Mount.db2 keyed by SourceSpellID): the spell puts you on a
+        // CreatureDisplayID. Client data end to end — unlike morphs, which need a
+        // TDB for the creature name — so mounts resolve on every pack. Corpus per
+        // display: "mount" + display id + mount name + model path, so
+        // model:mount, model:"mount swift" and model:"mount 2404" all work.
+        /** @type {Map<number, number[]>} spell id -> [displayId] */
+        const spellMounts = new Map();
+        /** @type {Map<number, number[]>} displayId -> [spell id] */
+        const mountSpells = new Map();
+        /** @type {Map<number, string>} displayId -> mount name ("" = unnamed) */
+        const mountNames = new Map();
+        /** @type {Map<number, number>} displayId -> model fid (0 = unresolved) */
+        const mountFids = new Map();
+        /** @type {Map<number, string>} displayId -> search corpus */
+        const mountSearchL = new Map();
+        if (pack.spellMounts) {
+            const {spellIds, displayIds} = pack.spellMounts;
+            for (let i = 0; i < spellIds.length; i++) {
+                pushTo(spellMounts, spellIds[i], displayIds[i]);
+                pushTo(mountSpells, displayIds[i], spellIds[i]);
+            }
+            const mo = pack.mounts;
+            for (let i = 0; i < mo.displayIds.length; i++) {
+                mountNames.set(mo.displayIds[i], mo.names[i]);
+                mountFids.set(mo.displayIds[i], mo.fids[i]);
+            }
+            for (const dsp of mountSpells.keys()) {
+                const f = files.get(mountFids.get(dsp) || 0);
+                mountSearchL.set(dsp, ("mount " + dsp + " "
+                    + (mountNames.get(dsp) || "").toLowerCase()
+                    + " " + (f ? f.searchL : "")).trim());
+            }
+        }
+
+        // gameobject spawners (TRANS_DOOR / SUMMON_OBJECT_*): the spell PLACES an
+        // object. Sibling of summon (which conjures a creature). The name and the
+        // model both come from the TDB world dump's gameobject_template, so on the
+        // TDB-less Classic packs both are empty and the pill degrades to a bare
+        // `.gobject spawn` id. Corpus per entry: "object" + entry + name + model.
+        /** @type {Map<number, number[]>} spell id -> [gameobject entry] */
+        const spellObjects = new Map();
+        /** @type {Map<number, number[]>} entry -> [spell id] */
+        const objectSpells = new Map();
+        /** @type {Map<number, string>} entry -> object name ("" = unresolved) */
+        const objectNames = new Map();
+        /** @type {Map<number, number>} entry -> model fid (0 = unresolved) */
+        const objectFids = new Map();
+        /** @type {Map<number, number>} entry -> GAMEOBJECT_TYPE (gates the Wowhead link) */
+        const objectTypes = new Map();
+        /** @type {Map<number, string>} entry -> search corpus */
+        const objectSearchL = new Map();
+        if (pack.spellObjects) {
+            const {spellIds, objectIds} = pack.spellObjects;
+            for (let i = 0; i < spellIds.length; i++) {
+                pushTo(spellObjects, spellIds[i], objectIds[i]);
+                pushTo(objectSpells, objectIds[i], spellIds[i]);
+            }
+            const ob = pack.objects;
+            for (let i = 0; i < ob.ids.length; i++) {
+                objectNames.set(ob.ids[i], ob.names[i]);
+                objectFids.set(ob.ids[i], ob.fids[i]);
+                if (ob.types) objectTypes.set(ob.ids[i], ob.types[i]);
+            }
+            for (const e of objectSpells.keys()) {
+                const f = files.get(objectFids.get(e) || 0);
+                objectSearchL.set(e, ("object " + e + " "
+                    + (objectNames.get(e) || "").toLowerCase()
+                    + " " + (f ? f.searchL : "")).trim());
+            }
+        }
+
         // vehicles (SET_VEHICLE_ID auras): the aura references a Vehicle.db2 id.
         // Each vehicle carries a seat count and one attachment name per seat, in
         // SeatID_0..7 order — where on the vehicle's model that seat sits. 0-seat
@@ -1088,11 +1169,14 @@ window.EpsilookData = (() => {
             spellTransps, transpSpells, transpSearchL,
             spellFreezes, spellCamos,
             spellScreens, screenSpells, screenNames, screenColors, screenTextures, screenSearchL,
-            spellAnims, animDirectSpells,
             spellVisualAnims, visualAnimSpells,
             targetNames, animKitTargets, visualAnimTargets, fxTargets,
             dissolveTargets, glowTargets, shadowyTargets, ghostMatTargets,
-            morphTargets, summonTargets, vehicleTargets, shapeshiftTargets, screenTargets,
+            morphTargets, summonTargets, objectTargets, vehicleTargets, shapeshiftTargets,
+            screenTargets,
+            spellMounts, mountSpells, mountNames, mountFids, mountSearchL,
+            spellObjects, objectSpells, objectNames, objectFids, objectTypes, objectSearchL,
+            spellReplaceAnims, replaceSpells,
             spellMorphs, morphSpells, morphNames, morphDisplays, morphSearchL,
             spellShapeshifts, shapeshiftSpells, shapeshiftNames, shapeshiftDisplays,
             shapeshiftSearchL,

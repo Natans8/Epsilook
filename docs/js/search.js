@@ -113,9 +113,9 @@ window.EpsilookSearch = (() => {
             : (d.spellModels.get(s) || []).length),
         sound: (d, s) => (d.spellSounds.get(s) || []).length,
         // every animation pill: the loose ones, those inside each AnimKit, and
-        // the headless "stance" / "passenger" groups
+        // the headless "replace" / "passenger" groups
         anim: (d, s) => (d.spellVisualAnims.get(s) || []).length
-            + (d.spellAnims.get(s) || []).length
+            + (d.spellReplaceAnims.get(s) || []).length
             + (d.spellPassengerAnims.get(s) || []).length
             + (d.spellAnimKits.get(s) || [])
                 .reduce((n, k) => n + (d.animKitAnims.get(k) || []).length, 0),
@@ -343,6 +343,11 @@ window.EpsilookSearch = (() => {
                 }
             }
         }
+        // model-column types that carry their own corpus rather than riding the
+        // (category, file) index — mounts today. The registry drives them, so a
+        // future one needs no line here; the file-based categories declare no
+        // `spells` and scanType skips them.
+        for (const type of Pills.typesFor("model")) Pills.scanType(type, data, tokens, out);
         return out;
     }
 
@@ -434,15 +439,21 @@ window.EpsilookSearch = (() => {
                 }
                 for (const s of data.visualAnimSpells.get(a) || []) out.add(s);
             }
-            if (tokens.every((t) => "stance".includes(t.text) || nameL.includes(t.text))) {
-                for (const s of data.animDirectSpells.get(a) || []) out.add(s);
+            // animation replacements group under a "replace" head; that word, or
+            // an anim name on either side of a swap, joins their corpus
+            if (tokens.every((t) => "replace".includes(t.text) || nameL.includes(t.text))) {
+                for (const s of data.replaceSpells.get(a) || []) out.add(s);
             }
             // passenger anims group under a "passenger" head, so that word joins
-            // their corpus the same way "stance" does
+            // their corpus the same way "replace" does
             if (tokens.every((t) => "passenger".includes(t.text) || nameL.includes(t.text))) {
                 for (const s of data.passengerAnimSpells.get(a) || []) out.add(s);
             }
         }
+        // anim-column types that carry their own `spells` corpus (none today —
+        // replace/stance/passenger are headless, matched in the loop above); kept
+        // as the extension point for a future one, like the model side.
+        for (const type of Pills.typesFor("anim")) Pills.scanType(type, data, tokens, out);
         return out;
     }
 

@@ -1104,7 +1104,7 @@
                 return (id) => len(d.spellSounds, id);
             case "animations":
                 return (id) =>
-                    len(d.spellAnimKits, id) + len(d.spellAnims, id) + len(d.spellVisualAnims, id);
+                    len(d.spellAnimKits, id) + len(d.spellReplaceAnims, id) + len(d.spellVisualAnims, id);
             // raw SpellEffect rows, not the rendered pill count — pills merge rows
             // that differ only in implicit target, and "how many effects does this
             // spell have" is the more meaningful sort (it is also what the export
@@ -1152,7 +1152,7 @@
                         if ((d.modelCatNames[cat] || "") === t.text) tests.push((id) => spells.has(id));
                     }
                 } else if (g.field === "anim" && t.text === "stance") {
-                    tests.push((id) => d.spellAnims.has(id));
+                    tests.push((id) => d.spellReplaceAnims.has(id));
                 }
                 // a target word floats spells that really carry a row of that type
                 // above the ones that merely have it in a file name
@@ -1176,7 +1176,7 @@
         models: (d, id) => d.spellModels.has(id),
         sounds: (d, id) => d.spellSounds.has(id),
         animations: (d, id) =>
-            d.spellAnimKits.has(id) || d.spellAnims.has(id) || d.spellVisualAnims.has(id),
+            d.spellAnimKits.has(id) || d.spellReplaceAnims.has(id) || d.spellVisualAnims.has(id),
         fx: (d, id) =>
             d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellGlows.has(id) ||
             d.spellShadowies.has(id) || d.spellGhostMats.has(id) || d.spellTints.has(id) ||
@@ -1513,14 +1513,18 @@
     function modelsCell(spellId) {
         const d = state.data;
         const entries = d.spellModelCats.get(spellId);
-        if (!entries) {
+        // mounts live outside the model graph (Mount.db2, keyed by display id),
+        // so a spell can have mounts and no model rows at all — read them before
+        // the no-categories fallback, which would otherwise drop them
+        const mountIds = d.spellMounts.get(spellId) || [];
+        if (!entries && !mountIds.length) {
             const modelFids = hitsFirst(d.spellModels.get(spellId) || [],
                 (fid) => fileIsHit(d.files.get(fid), "model"));
             return tagCell("c-models", modelFids.map((fid) => modelTag(fid)));
         }
         const td = el("td", "c-models");
         const byCat = new Map(); // cat id -> [{fid, targets}]
-        for (const e of entries) {
+        for (const e of entries || []) {
             const arr = byCat.get(e.cat);
             if (arr) arr.push(e); else byCat.set(e.cat, [e]);
         }
@@ -1562,6 +1566,19 @@
                         .map((e) => (isDisplayCat(e.cat) ? displayTag(e)
                             : isItemCat(e.cat) ? itemTag(e)
                                 : modelTag(e.fid, c.name, e.targets, e.src, e.dst, travels(e.cat)))),
+                }),
+            });
+        }
+        // mounts: their own group, keyed on display ids rather than model files.
+        // No target icons — a mount is always the caster's own.
+        if (mountIds.length) {
+            const hit = mountIds.some((m) => mountIsHit(m));
+            blocks.push({
+                hit,
+                el: P.group({
+                    head: modelCatHeadTag("mount", hit),
+                    items: hitsFirst(mountIds.slice().sort((a, b) => a - b),
+                        (m) => mountIsHit(m)).map((m) => mountTag(m)),
                 }),
             });
         }
@@ -1617,12 +1634,13 @@
    * them: they head on a category word instead. Adding another headless
    * category is one entry here plus one in ANIM_CAT_TITLES — nothing below
    * branches on which group it is. */
-    const STANCE_GROUP = -1;
     const PASSENGER_GROUP = -2;
     const ANIM_GROUPS = [
-        {id: STANCE_GROUP, word: "stance", animsOf: (d, s) => d.spellAnims.get(s)},
         {id: PASSENGER_GROUP, word: "passenger", animsOf: (d, s) => d.spellPassengerAnims.get(s)},
     ];
+    // a replacement pill is a hit when either side's anim matches the query,
+    // under the "replace" word or by anim name
+    const replaceAnimHit = (a) => animIsHit(a, "replace");
 
     function animationsCell(animKitIds, looseAnimIds, spellId) {
         const groupAnims = new Map();
@@ -1630,8 +1648,13 @@
             const anims = g.animsOf(state.data, spellId) || [];
             if (anims.length) groupAnims.set(g.id, anims);
         }
+        // animation replacements (proc Type 7 + aura 312, merged). Their items
+        // are PAIRS, not single anim ids, so they sit outside ANIM_GROUPS; the
+        // build already unioned both sources and deduped, so this is a plain read.
+        const swaps = state.data.spellReplaceAnims.get(spellId) || [];
         const td = el("td", "c-animations");
         if (animKitIds.length === 0 && groupAnims.size === 0
+            && swaps.length === 0
             && looseAnimIds.length === 0) {
             td.classList.add("empty");
             td.appendChild(el("span", "none", "—"));
@@ -1671,6 +1694,17 @@
                     items: hitsFirst(animsOf(kitId).slice().sort((a, b) => a - b),
                         (a) => animIsHit(a, wordOf(kitId)))
                         .map((animId) => animTag(animId, wordOf(kitId))),
+                }),
+            });
+        }
+        if (swaps.length) {
+            const swapHit = (sw) => replaceAnimHit(sw.src) || replaceAnimHit(sw.dst);
+            const hit = swaps.some(swapHit);
+            blocks.push({
+                hit,
+                el: P.group({
+                    head: animCatHeadTag("replace", hit),
+                    items: hitsFirst(swaps, swapHit).map((sw) => animSwapTag(sw.src, sw.dst)),
                 }),
             });
         }
@@ -1742,6 +1776,7 @@
         const morphIds = d.spellMorphs.get(spellId) || [];
         const formIds = d.spellShapeshifts.get(spellId) || [];
         const summonEntries = d.spellSummons.get(spellId) || [];
+        const objectIds = d.spellObjects.get(spellId) || [];
         const vehicleIds = d.spellVehicles.get(spellId) || [];
         const invisPills = (d.spellInvisTypes.get(spellId) || []).slice().sort((a, b) => a.type - b.type);
         const detectPills = (d.spellDetectTypes.get(spellId) || []).slice().sort((a, b) => a.type - b.type);
@@ -1753,7 +1788,7 @@
             && shadowyIds.length === 0 && ghostMatIds.length === 0 && tintIds.length === 0
             && desatPcts.length === 0 && transpPcts.length === 0 && !hasFreeze && !hasCamo
             && screenIds.length === 0 && morphIds.length === 0 && formIds.length === 0
-            && summonEntries.length === 0 && vehicleIds.length === 0
+            && summonEntries.length === 0 && objectIds.length === 0 && vehicleIds.length === 0
             && invisPills.length === 0 && detectPills.length === 0
             && keybindIds.length === 0 && speedMods.length === 0
             && scaleMods.length === 0) {
@@ -2007,6 +2042,20 @@
                 items: entries.map((e) => () => summonTag(e, t.pill(summonMask(e)))),
             });
         }
+        if (objectIds.length) {
+            // one pill per gameobject the spell places. Same shape as summon —
+            // the ImplicitTarget icon says where it lands (usually a ground point)
+            const objMask = (o) => maskOf(d.objectTargets, spellId, [o]);
+            const ids = hitsFirst(objectIds.slice().sort((a, b) => a - b),
+                (o) => objectIsHit(o));
+            const t = targetSplit(objectIds.map(objMask));
+            cats.push({
+                name: "object",
+                hit: objectIds.some((o) => objectIsHit(o)),
+                mask: t.head,
+                items: ids.map((o) => () => objectTag(o, t.pill(objMask(o)))),
+            });
+        }
         if (vehicleIds.length) {
             // one pill per SEAT, in SeatID order, labeled with its attachment
             // point — de-duped, because 38% of multi-seat vehicles put every seat
@@ -2210,6 +2259,10 @@
     const shapeshiftIsHit = isHitOf("fx:shapeshift");
     const morphIsHit = isHitOf("fx:morph");
     const keybindIsHit = isHitOf("fx:keybind");
+    /** A gameobject-spawn pill keys on the gameobject_template entry. */
+    const objectIsHit = isHitOf("fx:object");
+    /** A mount pill keys on the CreatureDisplayID it rides on. */
+    const mountIsHit = isHitOf("model:mount");
     /** A speed pill keys on the (movement, percent) pair it displays. */
     const speedIsHit = isHitOf("fx:speed");
     /** A scale pill keys on the percent, which is all it displays. */
@@ -2644,6 +2697,45 @@
                     sound ? CFG.soundKitCopyTemplate : CFG.animKitCopyTemplate, {id: kitId}),
                 sound && P.link(wowheadUrl(CFG.wowheadSoundUrl, {id: kitId}),
                     `SoundKit ${kitId} on Wowhead`),
+            ],
+        });
+    }
+
+    /**
+     * One anim-replacement swap pill: "Stand → StealthStand".
+     *
+     * Both sides are searchable, because both are questions worth asking — the
+     * base animation being overridden, and the one played instead. Reads as a
+     * pair rather than two pills because neither half means anything alone.
+     * @param {number} src base AnimationData id
+     * @param {number} dst what plays instead
+     */
+    function animSwapTag(src, dst) {
+        const d = state.data;
+        const srcName = d.animNames[src] || `#${src}`;
+        const dstName = d.animNames[dst] || `#${dst}`;
+        const srcHit = replaceAnimHit(src);
+        const dstHit = replaceAnimHit(dst);
+        // both halves are equally prominent labels (neither is "the qualifier"),
+        // joined by an inert arrow — the replacement is as real as the original
+        return P.pill({
+            cls: "anim",
+            hit: srcHit || dstHit,
+            segments: [
+                P.label(srcName, {
+                    hit: srcHit,
+                    title: `Base animation replaced: ${srcName} (${src})`,
+                    search: P.catQuery("anim", "replace", srcName),
+                    finds: `spells replacing ${srcName}`,
+                }),
+                P.label("→", {cls: "swap-arrow"}),
+                P.label(dstName, {
+                    hit: dstHit,
+                    title: `Played instead: ${dstName} (${dst})`,
+                    search: P.catQuery("anim", "replace", dstName),
+                    finds: `spells replacing into ${dstName}`,
+                }),
+                P.cmd(".lo", CFG.animCopyTemplate, {name: dstName, id: dst}),
             ],
         });
     }
@@ -3239,6 +3331,103 @@
    * ready-to-paste commands; the Wowhead icon on the left opens the NPC's
    * Wowhead page. Creatures missing from TDB show an inert "creature #id"
    * pill. */
+    /**
+     * One gameobject-spawn pill — summon's sibling, in the same column.
+     *
+     * Entries the world dump does not know are dropped at build, so every pill
+     * here resolved something. The LABEL prefers the object's name and falls back
+     * to the model's base filename; `.lookup object` always takes the MODEL file
+     * regardless, and `.gobject spawn` always takes the entry.
+     * @param {number} objectId gameobject_template entry
+     * @param {number} mask target bits
+     */
+    /**
+     * Does Wowhead have a page for this gameobject? Keyed on GAMEOBJECT_TYPE,
+     * not on whether we resolved a name — see CFG.wowheadObjectTypes for the
+     * evidence. A pack with no types (older format) links nothing rather than
+     * guessing, since a wrong link 404s.
+     * @param {number} objectId
+     */
+    function hasWowheadPage(objectId) {
+        const t = state.data.objectTypes.get(objectId);
+        return t !== undefined && (CFG.wowheadObjectTypes || []).includes(t);
+    }
+
+    function objectTag(objectId, mask = 0) {
+        const d = state.data;
+        const name = d.objectNames.get(objectId) || "";
+        const fid = d.objectFids.get(objectId) || 0;
+        const file = fid ? (d.files.get(fid) || {path: "", base: ""}) : {path: "", base: ""};
+        const base = file.base ? stripExt(file.base) : "";
+        // .lookup object ALWAYS takes the MODEL file name, never the object's
+        // display name (user's call, 2026-07-24 — the name form was a bad match
+        // for how Epsilon's lookup actually behaves). No model, no button.
+        const lookup = file.base || "";
+        return P.pill({
+            cls: "fx",
+            hit: objectIsHit(objectId),
+            segments: [
+                // Wowhead only has pages for PLAYER-FACING object types — a door,
+                // trap, spell-focus or ritual object has none, and linking one
+                // 404s. The type decides it (CFG.wowheadObjectTypes); the name
+                // does not, which is why a named GENERIC object still gets no link.
+                // Those fall back to the ordinary 3D model viewer, the same
+                // either/or the item route uses for a nameless item.
+                hasWowheadPage(objectId) && CFG.wowheadObjectUrl && P.link(
+                    wowheadUrl(CFG.wowheadObjectUrl, {id: objectId}),
+                    `Open object ${objectId} on Wowhead`),
+                !hasWowheadPage(objectId) && CFG.modelViewerUrl && fid && P.view(
+                    fillTemplate(CFG.modelViewerUrl, {fid}),
+                    `Preview ${file.base || `object #${objectId}`} in the WoW.tools model viewer (new tab)`),
+                P.targets(mask),
+                P.label(name || base || `object #${objectId}`, {
+                    title: `${name || "(unnamed object)"} — gameobject ${objectId}`,
+                    detail: [file.path || "(model unknown)"],
+                    search: P.catQuery("fx", "object", name || base || objectId),
+                    finds: "spells placing this object",
+                }),
+                P.copy("⧉", `Copy object ID: ${objectId}`, String(objectId)),
+                lookup && P.cmd(".lo", CFG.objectLookupTemplate, {name: lookup, id: objectId}),
+                P.cmd(".gob", CFG.objectSpawnTemplate, {id: objectId}),
+            ],
+        });
+    }
+
+    /**
+     * One mount pill (Models column). A display-id pill like morphTag's, but the
+     * display is what you RIDE, so the command is `.modify mount` rather than
+     * `.morph`. Mount.db2 names every mount it ships, so the label is normally
+     * the mount's name with the model file behind it in the tooltip; a nameless
+     * display falls back to the model base, then to the bare id.
+     * @param {number} displayId CreatureDisplayID
+     */
+    function mountTag(displayId) {
+        const d = state.data;
+        const name = d.mountNames.get(displayId) || "";
+        const fid = d.mountFids.get(displayId) || 0;
+        const file = fid ? (d.files.get(fid) || {path: "", base: ""}) : {path: "", base: ""};
+        const base = file.base ? stripExt(file.base) : "";
+        return P.pill({
+            cls: "model",
+            hit: mountIsHit(displayId),
+            segments: [
+                CFG.wowheadMorphUrl && P.link(
+                    fillTemplate(CFG.wowheadMorphUrl, {id: displayId}),
+                    `View DisplayID ${displayId} in Wowhead's model viewer`),
+                P.label(name || base || `#${displayId}`, {
+                    title: `${name || "(unnamed mount)"} — display ${displayId}`,
+                    detail: [file.path || "(model unknown)"],
+                    search: P.catQuery("model", "mount", name || base || displayId),
+                    finds: "spells granting this mount",
+                }),
+                P.copy("⧉", `Copy display ID: ${displayId}`, String(displayId)),
+                P.cmd(".mod", CFG.mountModifyTemplate, {id: displayId}),
+                file.base && P.cmd(".lo", CFG.morphLookupTemplate,
+                    {id: displayId, file: file.base}),
+            ],
+        });
+    }
+
     function summonTag(entry, mask = 0) {
         const d = state.data;
         const {creatureId, control} = entry;
@@ -3513,8 +3702,12 @@
                         anims: (d.animKitAnims.get(k) || []).map((a) => d.animNames[a]),
                         targets: targetWordsOf(maskOf(d.animKitTargets, id, [k])),
                     }));
-                const stance = (d.spellAnims.get(id) || []).slice().sort((a, b) => a - b);
-                if (stance.length) row.stanceAnims = stance.map((a) => d.animNames[a]);
+                const swaps = d.spellReplaceAnims.get(id) || [];
+                if (swaps.length) {
+                    row.replaceAnims = swaps.map((sw) => ({
+                        from: d.animNames[sw.src], to: d.animNames[sw.dst],
+                    }));
+                }
             }
             if (!hc.fx) {
                 // one entry per pill, in the cell's category order; the shapes differ
@@ -3683,7 +3876,9 @@
                 cols.push(esc((r.anims || []).map((a) => withTargets({path: a.name, targets: a.targets}))
                     .concat(r.animKits.map(
                         (k) => `${withTargets({path: k.id, targets: k.targets})}: ${k.anims.join(" | ")}`))
-                    .concat(r.stanceAnims ? [`stance: ${r.stanceAnims.join(" | ")}`] : []).join("; ")));
+                    .concat(r.replaceAnims
+                        ? [`replace: ${r.replaceAnims.map((sw) => `${sw.from} → ${sw.to}`).join(" | ")}`]
+                        : []).join("; ")));
             }
             if (!hc.fx) {
                 cols.push(esc(r.fx.map((e) => {

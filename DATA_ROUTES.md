@@ -238,7 +238,7 @@ payload. This is the second fan-out.
 |-----------|-------------------------------------|------------------------------|
 | 0, 12, 26 | `Value_0` → SpellChainEffects       | **chain** (beams)            |
 | 1         | `Value_0` packed RGB                | **tint**                     |
-| 7         | `Value_0..3` → AnimationData        | **stance** anims             |
+| 7         | `Value_0/1/2` → AnimationData        | **replace** (Stand/Walk/Run swaps, §3o) |
 | 9         | `Value_0` → SpellVisualKitAreaModel | **model** (`ground`)         |
 | 11        | —                                   | **freeze** (valueless)       |
 | 14        | `Value_0` alpha 0..1                | **transparency %**           |
@@ -392,7 +392,8 @@ flowchart LR
   K6 -->|" Initial/LoopAnimID "| AID2["AnimIDs — loose pills"]
   MA2["SpellVisualKitModelAttach"] -->|" AnimKitID "| AKS
   MA2 -->|" Start/Anim/EndAnimID "| AID2
-  P7["proc Type 7"] --> AID3["AnimIDs — 'stance' group"]
+  P7["proc Type 7 (Stand/Walk/Run)"] --> AID3["'replace' group — base → replacement pairs (§3o)"]
+  AR312["aura 312 → AnimReplacement"] --> AID3
   VS["VehicleSeat (via aura 296 → Vehicle)"] -->|" Enter/Ride/RideUpper/Exit anims "| AID4["AnimIDs — 'passenger' group"]
   VS -->|" VehicleEnter/Exit/RideAnimLoop "| AID2
   VS -->|" 6 × AnimKitID "| AKS
@@ -764,6 +765,130 @@ aura" / "target unset" and never matches — without that guard `mech:none` woul
 **The icon mask is not stored per row.** `implicitTargetBits` ships the
 ~130-entry map instead, and a row's mask is `bits[targetA] | bits[targetB]`. A fourth 372k-long parallel array measured
 110 KB gzipped for data derivable from a 1 KB map.
+
+### 3m. GameObject spawners — what the spell PLACES
+
+`SpellEffect.Effect` ∈ `{50 TRANS_DOOR, 76 SUMMON_OBJECT_WILD, 104 SUMMON_OBJECT_SLOT1, 171
+SUMMON_PERSONAL_GAMEOBJECT}` → `EffectMiscValue_0` is a **`gameobject_template` entry**. Renders in the **Effects
+column** as an `object` pill — summon's sibling: one conjures a creature, this places an object.
+
+```mermaid
+flowchart LR
+  SE["SpellEffect<br/>Effect 50/76/104/171"] -->|EffectMiscValue_0| GT["gameobject_template<br/>(TDB world)"]
+  GT -->|name| L["pill label"]
+  GT -->|displayId| GODI["GameObjectDisplayInfo"]
+  GODI -->|FileDataID| LF["listfile → model name"]
+```
+
+**The client `GameObjects.db2` is NOT this table.** It holds world-PLACED doodads keyed by their own id — measured 2026-
+07-24 on 9.2.7: **0 of 1,429 spell-referenced entries appear in it**. The name and the displayId live only in the TDB
+world dump, which is why this route resolves on the six TDB packs and degrades to id-only on the four TDB-less Classic
+clients, exactly like morph/summon creature names.
+
+The pill: `( [wh]|[3d] | {target}{name or model base} | ⧉ id | .lo | .gob )`. `.gob` (`.gobject spawn {entry}`) ALWAYS
+works — the entry is the effect's own misc value, needing no resolution. **`.lo` always passes the MODEL file name**,
+never the display name (user's call 2026-07-24). The label prefers the object's name and falls back to the model base.
+
+**Entries no world dump carries are DROPPED** (user's call 2026-07-24, confirmed in game: they spawn nothing). They are
+debug/TEST/cut content — 242 of 1,428 on 9.2.7, and the newest TDB (TWW, 77,908 entries) recognises only 10 of them, so
+this is not a stale-snapshot problem. Same rule as keybound overrides. Cost: the route is empty on the four TDB-less
+Classic packs, which could resolve nothing at all. 9.2.7 after the drop: 1,366 rows / 1,186 entries, all named, 1,180
+model-resolved.
+
+#### Which objects have a Wowhead page — it is the TYPE
+
+`gameobject_template.type` (GAMEOBJECT_TYPE) decides it, NOT whether we resolved a name. Wowhead indexes only
+**player-facing** objects; mechanical and invisible ones have no page, so linking every named object 404s about half the
+time. `wowheadObjectTypes` in config.js is the allowlist — **objects outside it fall back to the ordinary 3D model
+viewer**, the same either/or the item route uses for a nameless item, so every pill still opens something.
+
+Verified 2026-07-24 against wowhead.com/objects — whose own type labels (Container / Shared Container / Treasure / Herb
+/ Mining Node / Fishing Pool / Interactive / Quest / Tool) map onto exactly these — plus nine spot-checks, 9/9 agreeing:
+
+| | types | evidence |
+|---|---|---|
+| **has a page** | 3 CHEST, 10 GOOBER, 2 QUESTGIVER, 22 SPELLCASTER | Rusty Chest, Cache of the Fire Lord, Pet Stone, Scrying Bowl, Portal to Stormwind |
+| **no page** | 0 DOOR, 5 GENERIC, 6 TRAP, 8 SPELL_FOCUS, 18 RITUAL | Explosives Cart, Forgotten Mirror, Battle Standard, Witherbark Totem Bundle, Summoning Portal |
+
+25 FISHINGHOLE and 51 GATHERINGNODE are Wowhead's Fishing Pool / Herb / Mining Node labels; no spell reaches one, but
+they belong to the rule and are in the allowlist. On 9.2.7 that gates **564 of 1,186** objects to Wowhead and sends the
+other 622 to the model viewer.
+
+**Three dead hypotheses, do not retry.** (1) *A newer TDB knows the live ones* — no: all five first-tested entries,
+including both misses, are in EVERY TDB; TrinityCore keeps deleted entries forever. (2) *Era* — no: Rusty Chest is
+Vanilla and has a page, Summoning Portal is Vanilla and does not. (3) *Is it spawned in the world* — no, 3/5: Rusty
+Chest and Cache of the Fire Lord have pages but no static `gameobject` spawn rows (TrinityCore spawns those by
+script/pool), and gating on it would have killed the link for 1,129 of 1,186.
+
+### 3n. Mounts — what the spell puts you ON
+
+`Mount.db2` keyed by **`SourceSpellID`** (the mount-granting spell) → `MountXDisplay.CreatureDisplayInfoID` → the same
+creature chain morphs use (`CreatureDisplayInfo.ModelID → CreatureModelData.FileDataID`). Renders in the **Models
+column** as a display-id pill.
+
+```mermaid
+flowchart LR
+  M["Mount<br/>SourceSpellID, Name_lang"] --> MXD["MountXDisplay"]
+  MXD -->|CreatureDisplayInfoID| CDI["CreatureDisplayInfo"]
+  CDI --> CMD["CreatureModelData"] -->|FileDataID| LF["listfile → model"]
+```
+
+Pure client data — unlike morphs it needs **no TDB**, so name and model both resolve on every pack that ships
+`Mount.db2`. 9.2.7: 1,043 links / 1,015 displays, **100% named and 100% model-resolved**. The pill is morph-shaped but
+the display is what you RIDE, so the command is **`.mod` = `.modify mount {displayId}`** rather than `.morph`, alongside
+the Wowhead model-viewer link, ⧉ display id and `.lo`. No target icons: a mount is always the caster's own.
+
+**Sourced from `Mount.db2`, not the `MOUNTED` aura (78).** The aura route reaches 728 rows but carries no names; the
+Mount.db2 route names all 1,015 and still covers the aura's spells (458 Brown Horse, 470 Black Stallion are
+`SourceSpellID`s).
+
+**Dead end, do not re-chase:** there is no per-mount rider seat/anim data. `MountSpecialRiderAnimKitID` is populated on
+**3 of 1,012** mounts, and the MOUNTED aura maps into `Mount.db2` for only 11 of 509 displays. Real per-seat positions
+exist only for vehicle-mounts, which §3i already covers.
+
+### 3o. Animation replacement — which animation becomes which (`replace`)
+
+One `replace` group in the Animations column, fed by **two sources that describe the same thing** — the character
+swapping a base animation for another — unioned per spell and deduped:
+
+- **proc Type 7** (`SpellProceduralEffect`, §3b): `Value_0/1/2` are what the character plays instead of **Stand / Walk /
+  Run**. Reached through the visual graph. Paired with its base slot (AnimIDs 0 / 4 / 5) at read time, so it emits the
+  same `(src, dst)` shape as the general form. `Value_3` is dropped (no base slot, near-always junk).
+- **aura 312** `ANIM_REPLACEMENT_SET`: `EffectMiscValue_0` → an `AnimReplacementSet` id → **`AnimReplacement`**
+  (`ParentAnimReplacementSetID`) → `(SrcAnimID, DstAnimID)` pairs — the general form, any animation.
+
+```mermaid
+flowchart LR
+  P7["proc Type 7<br/>Value_0/1/2"] -->|"pair with Stand/Walk/Run"| RP["(src → dst) pairs"]
+  A312["aura 312 → AnimReplacement"] --> RP
+  RP --> G["one 'replace' group, deduped"]
+```
+
+Both anim ids index into `animNames`, so a swap renders as two equally-weighted labels with an arrow — `Stand →
+StealthStand` — and **both sides are searchable** (`anim:"replace stand"` finds swaps out of Stand, `anim:"replace
+stealthstand"` finds swaps into it). `AnimReplacementSet.db2` itself is **not fetched** (only `ID` + `ExecOrder`).
+
+**They were separate until 2026-07-24** (proc-7 as a `stance` group, aura 312 as `replace`); the user merged them
+because they are the same mechanic — Stealth carried `Stand→StealthStand` from *both*, showing it twice. `stance` is
+**not** kept as an alias (no-legacy-alias norm). 9.2.7: 3,158 (spell, src, dst) rows / 1,100 spells.
+
+**Why it can look like it does nothing in game:** a replacement only shows while the character is performing the SOURCE
+animation. Sea Legs swaps only swimming anims, Blowdart only bow-holding, Floating Death only flying/swimming — so
+testing one while standing still shows nothing.
+
+### 3p. PLAY_SOUND / PLAY_MUSIC — sounds with no visual behind them
+
+`SpellEffect.Effect` 131 (`PLAY_SOUND`) and 132 (`PLAY_MUSIC`) → `EffectMiscValue_0` is a **SoundKit**, the same
+`SoundKitEntry.SoundKitID` the missile and kit routes resolve (measured 9.2.7: 133/134 and 163/164 resolve). They fold
+into the existing **Sounds column** with no new pill or section — the only sound route that starts at `SpellEffect`
+rather than in the visual graph.
+
+### 3q. Spell school — gathered, not yet surfaced
+
+`SpellMisc.SchoolMask`, a bitmask (1 Physical / 2 Holy / 4 Fire / 8 Nature / 16 Frost / 32 Shadow / 64 Arcane; a spell
+may span several). Base difficulty wins, read straight off wago with no hotfix overlay — school is static client data.
+Shipped as `spells.schools` and **deliberately not displayed yet** (user's call): a future search axis. Present on every
+build back to Vanilla. 9.2.7: 272,847 of 276,332 spells carry a nonzero school.
 
 ---
 
@@ -1183,10 +1308,11 @@ hotlinks sit on tolerated-hotlinking footing, not an affirmative license.
 
 | Column           | Routes feeding it                                                                                                                                                                                                                                                                                                               |
 |------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Models**       | attach (kit→ModelAttach→EffectName Type 0), display (kit→ModelAttach→EffectName Type 2→CreatureDisplayID→model, morph-style pill), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect); every row also carries its M2 attachment point (§3h) |
-| **Sounds**       | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID`, `SpellVisual.AnimEventSoundID` — all → SoundKitEntry                                                                                                                                                                                                                    |
-| **Animations**   | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), ModelAttach Start/Anim/End (loose) + its AnimKit (grouped), proc Type 7 (stance), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped)                                                                      |
-| **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, seat, invis, detect, keybind, speed, scale — see §3a–3k-bis                                                                                                                                                                                                |
+| **Models**       | attach (kit→ModelAttach→EffectName Type 0), display (kit→ModelAttach→EffectName Type 2→CreatureDisplayID→model, morph-style pill), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect), **mount** (Mount.db2 SourceSpellID→MountXDisplay→display, §3n); every graph row also carries its M2 attachment point (§3h) |
+| **Sounds**       | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID`, `SpellVisual.AnimEventSoundID`, **SpellEffect 131/132 PLAY_SOUND/PLAY_MUSIC (§3p)** — all → SoundKitEntry                                                                                                                                                                                                                    |
+| **Animations**   | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), ModelAttach Start/Anim/End (loose) + its AnimKit (grouped), proc Type 7 + aura 312 merged (replace, §3o), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped), **anim-replacement sets (replace, §3o)**                                                                                                                                                                                      |
+| **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, **object (§3m)**, seat, invis, detect, keybind, speed, scale — see §3a–3q                                                                                                                                                                                                |
+| **Not shown**    | `spells.schools` — SpellMisc.SchoolMask, gathered only (§3q)                                                                                                                                                                                                                                                                    |
 | **Mechanics**    | one row per `SpellEffect`: `.Effect` + `.EffectAura` enums (names from WoWDBDefs) paired with that row's `.ImplicitTarget_0/_1` — §3l                                                                                                                                                                                           |
 | **Name search**  | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names                                                                                                                                                                                                                                                              |
 | **Target bits**  | `SpellVisualEvent.TargetType` on the kit edge (§2), resolved against `SpellEffect.ImplicitTarget` per phase (`StartEvent`) so a self-cast spell's "Target" reads as the caster, plus `Caster`/`HostileSpellVisualID` redirects that mark whatever they reach caster/target                                                      |

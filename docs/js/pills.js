@@ -466,6 +466,7 @@ window.EpsilookPills = (() => {
      * @property {string} [click]   replaces the whole action phrase
      * @property {boolean} [hit]    matched by the current query
      * @property {Record<string, any>} [data]  extra data-* attributes
+     * @property {string} [cls]     extra class on the segment element
      */
 
     /**
@@ -491,7 +492,7 @@ window.EpsilookPills = (() => {
      */
     function textSegment(kind, text, opts) {
         return {
-            kind, text, search: opts.search, hit: opts.hit, data: opts.data,
+            kind, text, search: opts.search, hit: opts.hit, data: opts.data, cls: opts.cls,
             title: tip([opts.title, ...(opts.detail || []), clickHint(opts)]),
         };
     }

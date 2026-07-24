@@ -66,14 +66,28 @@
         when: (d) => !!d.hasSyntheticFiles,
     });
 
+    /* Mounts (Mount.db2 keyed by SourceSpellID). Not a model CATEGORY — the
+     * pill is a display id, not a file in the model graph — so unlike the
+     * modelCat() words above it carries its own corpus (mount name + display id
+     * + model path), the same shape fx:morph uses one column over. */
+    T({
+        key: "model:mount", field: "model", word: "mount",
+        hint: "Mount the spell puts you on — Mount.db2 via its display id",
+        corpus: (d) => d.mountSearchL, spells: (d) => d.mountSpells,
+    });
+
     /* --------------------------------------------------------- animations */
 
     /* Headless animation groups: they head on a category word where an AnimKit
      * id would otherwise sit, and that word joins their corpus in spellsByAnim. */
+    /* Animation replacements (proc Type 7 + aura 312, one merged group). Headless
+     * — matched in spellsByAnim's per-anim loop (like passenger), so the anim
+     * names on either side of a swap join its corpus: anim:replace finds any,
+     * anim:"replace stealthstand" the ones that swap into it. */
     T({
-        key: "anim:stance", field: "anim", word: "stance",
-        hint: "Stand/walk override the caster plays while the visual is up",
-        when: (d) => d.spellAnims.size > 0,
+        key: "anim:replace", field: "anim", word: "replace",
+        hint: "Base animation the spell swaps for another, e.g. Stand to StealthStand",
+        when: (d) => d.spellReplaceAnims.size > 0,
     });
     T({
         key: "anim:passenger", field: "anim", word: "passenger",
@@ -172,6 +186,14 @@
         key: "fx:summon", field: "fx", word: "summon",
         hint: "Summoned creature (SpellEffect SUMMON)",
         corpus: (d) => d.summonPairSearchL, spells: (d) => d.summonPairSpells,
+    });
+    /* Gameobject spawners — summon's sibling: one conjures a creature, this
+     * places an OBJECT. The corpus is the object name plus its model file, so a
+     * nameless object is still found by what it looks like. */
+    T({
+        key: "fx:object", field: "fx", word: "object",
+        hint: "GameObject the spell places in the world — a campfire, portal, banner or chest",
+        corpus: (d) => d.objectSearchL, spells: (d) => d.objectSpells,
     });
     /* The two sides of an invisibility channel. All three axes at once: the
      * category word is the corpus, the invisibility TYPE is the bare number

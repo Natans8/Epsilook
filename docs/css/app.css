@@ -1298,6 +1298,18 @@ td.empty {
     text-decoration: underline;
 }
 
+/* the connector in an anim-replacement pill — a dim, inert arrow between two
+   equally-weighted labels, tight so "Stand → StealthStand" reads as one pair.
+   Specific enough to beat `.tag .tag-label` (which paints the label the tone). */
+.tag .tag-label.swap-arrow {
+    padding-inline: 0.1rem;
+    color: var(--text-dim);
+    pointer-events: none;
+}
+.tag .tag-label.swap-arrow:hover {
+    text-decoration: none;
+}
+
 /* dotted underline = mouseover shows a texture preview (hover pointers only —
    the preview never initializes on touch, so no affordance there either) */
 @media (hover: hover) {

@@ -35,6 +35,20 @@ window.EpsilookConfig = {
     summonLookupTemplate: ".lookup creature {name}",
     summonSpawnTemplate: ".npc spawn {id}",
 
+    // Copy commands on each gameobject-spawn tag. {id} = the gameobject_template
+    // entry (always known — it is the effect's misc value); {name} = the object's
+    // MODEL base filename, always — never its display name (user's call
+    // 2026-07-24). Objects with no model resolve no lookup and the button is
+    // simply omitted.
+    objectLookupTemplate: ".lookup object {name}",
+    objectSpawnTemplate: ".gobject spawn {id}",
+
+    // Copy command on each mount tag ({id} = CreatureDisplayID). Mounts use
+    // .modify mount rather than .morph — the display is what you RIDE, not what
+    // you become — and it works off the display id whether or not the mount
+    // resolved a name.
+    mountModifyTemplate: ".modify mount {id}",
+
     // Copy commands on each item tag (SpellVisualEffectName Type 1). {id} = the
     // Item::ID, {name} = the item's display name for a named item OR its model
     // base filename (NO extension) for a nameless one — .lookup item accepts
@@ -55,6 +69,24 @@ window.EpsilookConfig = {
     // makes Wowhead land on the model tab (the item's whole point here), and the
     // page still carries the tooltip the data-wowhead attribute shows on hover.
     wowheadItemUrl: "https://www.wowhead.com/{wh}item={id}/#modelviewer",
+    // GameObject page, opened on its 3D model view like the item link.
+    wowheadObjectUrl: "https://www.wowhead.com/{wh}object={id}/#modelviewer",
+
+    // GAMEOBJECT_TYPEs Wowhead actually has pages for. Wowhead indexes only
+    // PLAYER-FACING objects and skips mechanical/invisible ones, so linking
+    // every named object 404s about half the time. Verified 2026-07-24 against
+    // wowhead.com/objects (whose own type labels — Container / Shared Container
+    // / Treasure / Herb / Mining Node / Fishing Pool / Interactive / Quest /
+    // Tool — map onto exactly these) and spot-checked 9 objects, 9/9 agreeing:
+    //   HAS a page  3 CHEST (Rusty Chest, Cache of the Fire Lord),
+    //               10 GOOBER (Pet Stone), 2 QUESTGIVER (Scrying Bowl),
+    //               22 SPELLCASTER (Portal to Stormwind)
+    //   NO page     0 DOOR, 5 GENERIC, 6 TRAP, 8 SPELL_FOCUS, 18 RITUAL
+    // 25 FISHINGHOLE and 51 GATHERINGNODE are Wowhead's Fishing Pool / Herb /
+    // Mining Node labels; no spell reaches one, but they belong to the rule.
+    // Add a type here to turn its link on — no rebuild needed, the pack ships
+    // every object's type.
+    wowheadObjectTypes: [2, 3, 10, 22, 25, 51],
 
     // Wowhead has separate sections per game era, reached by a path prefix on
     // www.wowhead.com (e.g. /classic/spell=133). Data-page links ({wh} in the
