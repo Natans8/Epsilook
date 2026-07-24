@@ -250,6 +250,9 @@
         document.body.appendChild(ta);
         ta.select();
         try {
+            // Fallback for browsers without async navigator.clipboard — there is no
+            // non-deprecated synchronous copy API.
+            // noinspection JSDeprecatedSymbols
             document.execCommand("copy");
             done();
         } catch (e) {
@@ -999,7 +1002,7 @@
             b.appendChild(el("span", `suggest-field f-${state.activeField}`, w));
             // the parenthesized table name is build trivia — the plain half explains
             b.appendChild(el("span", "suggest-hint", (titles[w] || "").split(" (")[0]));
-            b.dataset.word = w;
+            b.dataset.word = String(w);
             box.appendChild(b);
         });
         suggestIndex = -1;
@@ -1092,8 +1095,8 @@
         state.results = res.spellIds;
         state.groups = groups;
         // excluded terms never appear in the results: no highlighting for them
-        state.tokens = groups.filter((g) => !g.not)
-            .flatMap((g) => g.tokens.map((t) => ({field: g.field, text: t.text})));
+        state.tokens = /** @type {HitToken[]} */ (groups.filter((g) => !g.not)
+            .flatMap((g) => g.tokens.map((t) => ({field: g.field, text: t.text}))));
         state.searchMs = res.ms;
         applyFiltersAndSort();
         stateToUrl(push);
@@ -2116,9 +2119,11 @@
         }
         // invisibility / detection channels. Counterpart count = the other side of
         // the same type; it drives the pill label AND the numeric hit test.
-        for (const [side, pills, countMap] of /** @type {const} */ ([
+        /** @type {Array<[string, {type: number, mask: number}[], Map<number, number[]>]>} */
+        const channels = [
             ["invis", invisPills, d.detectTypeSpells],
-            ["detect", detectPills, d.invisTypeSpells]])) {
+            ["detect", detectPills, d.invisTypeSpells]];
+        for (const [side, pills, countMap] of channels) {
             if (!pills.length) continue;
             const countOf = (type) => (countMap.get(type) || []).length;
             const t = targetSplit(pills.map((e) => e.mask));
@@ -2276,7 +2281,8 @@
     function isHitOf(key) {
         const type = P.TYPES.get(key);
         if (!type) throw new Error(`unknown pill type "${key}"`);
-        return (id) => groupsFor(type.field)
+        // id is optional: valueless pill types (freeze, camo) call with no id
+        return (id = undefined) => groupsFor(type.field)
             .some((g) => P.idMatches(type, state.data, id, g.tokens));
     }
 
@@ -2534,7 +2540,7 @@
         });
     }
 
-    function modelTag(fid, catName, mask = 0, src = -1, dst = -1, twoPoint = false) {
+    function modelTag(fid, catName = "", mask = 0, src = -1, dst = -1, twoPoint = false) {
         const d = state.data;
         const file = d.files.get(fid) || {fid, path: "", base: "", searchL: ""};
         // A negative fid is a fileless SENTINEL (SYNTHETIC_MODEL_FILES in
@@ -2945,6 +2951,7 @@
     /**
      * One chain (beam) pill: optional tint swatch + texture name.
      * @param {{chainId: number, fid: number, color: number, src?: number, dst?: number}} entry
+     * @param {number} [mask] Target mask, when the category head can't carry it.
      * @returns {HTMLElement}
      */
     function fxTag(entry, mask = 0) {
@@ -2990,6 +2997,8 @@
      * @param {number} [alpha] Source alpha 0..255, where the source has a real one.
      * @param {number} [mask] Target mask, when the category's rows disagree and
      *   the icons ride the pills instead of the category head.
+     * @param {PillSegment | null} [extra] An extra segment (a Shadowy attach-point
+     *   anchor) to ride in the pill when present.
      * @returns {HTMLElement}
      */
     function colorFxTag(category, color, hit, alpha, mask = 0, extra = null) {
@@ -3277,15 +3286,17 @@
         const texFids = d.screenTextures.get(screenId) || [];
 
         // only the fog color has an opacity byte; mul/add are pure grade factors
-        const swatches = /** @type {[string, number, number][]} */ (
+        /** @type {PillSegment[]} */
+        const swatches = (/** @type {[string, number, number][]} */ (
             [["fog tint", colors.fog, colors.fogAlpha],
                 ["multiply", colors.mul, -1],
-                ["addition", colors.add, -1]])
+                ["addition", colors.add, -1]]))
             .filter(([, c]) => c >= 0)
             .map(([what, c, a]) => P.swatch(hexColor(c), {
                 title: `Screen ${what} ${hexColor(c)}`, info: `screen ${what}`, alpha: a,
             }));
 
+        /** @type {string[]} */
         const texPaths = texFids.map((t) => ((d.files.get(t.fid) || {}).path || `#${t.fid}`)
             + (t.mask ? " (mask)" : ""));
         // Preview the overlay texture with the effect's color multiplied in —
@@ -3494,6 +3505,7 @@
      * the mount's name with the model file behind it in the tooltip; a nameless
      * display falls back to the model base, then to the bare id.
      * @param {number} displayId CreatureDisplayID
+     * @param {number} spellId The spell the pill belongs to (drives the command).
      */
     function mountTag(displayId, spellId) {
         const d = state.data;
@@ -3971,7 +3983,7 @@
                     .concat(r.animKits.map(
                         (k) => `${withTargets({path: k.id, targets: k.targets})}: ${k.anims.join(" | ")}`))
                     .concat(r.replaceAnims
-                        ? [`replace: ${r.replaceAnims.map((sw) => `${sw.from} → ${sw.to}`).join(" | ")}`]
+                        ? [`replace: ${/** @type {string[]} */ (r.replaceAnims.map((sw) => `${sw.from} → ${sw.to}`)).join(" | ")}`]
                         : []).join("; ")));
             }
             if (!hc.fx) {
