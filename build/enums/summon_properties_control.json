@@ -1,0 +1,13 @@
+{
+  "enum": "SummonProperties.Control",
+  "description": "SummonProperties.Control -> how the caster controls the summon. Surfaced as the control word on a summon fx pill. 0 = uncontrolled, shown as no word (like an untinted beam). Too few and too free-form to read from the WoWDBDefs .dbde via read_enum_names, so it lives here.",
+  "source": [
+    "https://github.com/wowdev/WoWDBDefs/blob/master/meta/enums/SummonPropertiesControl.dbde",
+    "https://wowdev.wiki/EnumeratedString#SummonProperties::Control"
+  ],
+  "keys": "Control",
+  "values": {
+    "0": "", "1": "guardian", "2": "pet", "3": "possessed",
+    "4": "possessed vehicle", "5": "vehicle"
+  }
+}

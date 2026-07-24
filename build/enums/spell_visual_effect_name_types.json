@@ -1,0 +1,22 @@
+{
+  "enum": "SpellVisualEffectName.Type",
+  "description": "SpellVisualEffectName.Type says how a visual effect-name resolves to a model. Types 0/1/2 come from WoWDBDefs; 3-10 were absent there and decoded (Task D), later confirmed by wowdev.wiki/EnumeratedString. 3-10 all mean 'the caster's own equipped weapon' (resolved client-side at cast), with 'slot' picking main/off/ranged/ammo; they carry no file, so build_data renders a per-slot marker pill. 8/9/10 are 3/4/5 again 'ignore disarmed' (a visibility rule, same slot); 6/7 are basic/preferred ammo (same slot). 'handler' names the build_data model bucket for 0/1/2.",
+  "source": [
+    "https://github.com/wowdev/WoWDBDefs/blob/master/meta/enums/SpellVisualEffectNameType.dbde",
+    "https://wowdev.wiki/EnumeratedString#SpellVisualEffectName::Type"
+  ],
+  "keys": "Type",
+  "values": {
+    "0":  {"name": "Model (FileDataID)", "handler": "model_file", "payload": "ModelFileDataID"},
+    "1":  {"name": "Item",               "handler": "item",       "payload": "GenericID = Item::ID"},
+    "2":  {"name": "CreatureDisplayInfo","handler": "display",     "payload": "GenericID = CreatureDisplayInfo::ID"},
+    "3":  {"name": "Unit-Item main hand","handler": "weapon", "slot": "main hand"},
+    "4":  {"name": "Unit-Item off hand", "handler": "weapon", "slot": "off hand"},
+    "5":  {"name": "Unit-Item ranged",   "handler": "weapon", "slot": "ranged"},
+    "6":  {"name": "Unit-Ammo basic",    "handler": "weapon", "slot": "ammo"},
+    "7":  {"name": "Unit-Ammo preferred","handler": "weapon", "slot": "ammo"},
+    "8":  {"name": "Unit-Item main hand (ignore disarmed)", "handler": "weapon", "slot": "main hand"},
+    "9":  {"name": "Unit-Item off hand (ignore disarmed)",  "handler": "weapon", "slot": "off hand"},
+    "10": {"name": "Unit-Item ranged (ignore disarmed)",    "handler": "weapon", "slot": "ranged"}
+  }
+}

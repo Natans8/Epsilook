@@ -1,0 +1,28 @@
+{
+  "enum": "M2Attachment",
+  "description": "M2 attachment-point id -> name. The whole enum, because these names label model, missile, beam and effect (Shadowy/Dissolve/Barrage) attach points as well as vehicle seats. Names are the game's own; on seats they read oddly ('Breath', 'ChestBloodBack') because artists reuse generic attachment slots as seat anchors. Every attachment column in the game data is a RAW id into this table EXCEPT VehicleSeat, which indexes it through vehicle_geo_component_links.",
+  "source": [
+    "https://wowdev.wiki/M2#Attachments",
+    "https://wowdev.wiki/EnumeratedString#Attachments"
+  ],
+  "keys": "attachment id",
+  "values": {
+    "0": "MountMain", "1": "HandRight", "2": "HandLeft", "3": "ElbowRight",
+    "4": "ElbowLeft", "5": "ShoulderRight", "6": "ShoulderLeft", "7": "KneeRight",
+    "8": "KneeLeft", "9": "HipRight", "10": "HipLeft", "11": "Helm", "12": "Back",
+    "13": "ShoulderFlapRight", "14": "ShoulderFlapLeft", "15": "ChestBloodFront",
+    "16": "ChestBloodBack", "17": "Breath", "18": "PlayerName", "19": "Base",
+    "20": "Head", "21": "SpellLeftHand", "22": "SpellRightHand", "23": "Special1",
+    "24": "Special2", "25": "Special3", "26": "SheathMainHand", "27": "SheathOffHand",
+    "28": "SheathShield", "29": "PlayerNameMounted", "30": "LargeWeaponLeft",
+    "31": "LargeWeaponRight", "32": "HipWeaponLeft", "33": "HipWeaponRight",
+    "34": "Chest", "35": "HandArrow", "36": "Bullet", "37": "SpellHandOmni",
+    "38": "SpellHandDirected", "39": "VehicleSeat1", "40": "VehicleSeat2",
+    "41": "VehicleSeat3", "42": "VehicleSeat4", "43": "VehicleSeat5",
+    "44": "VehicleSeat6", "45": "VehicleSeat7", "46": "VehicleSeat8",
+    "47": "LeftFoot", "48": "RightFoot", "49": "ShieldNoGlove", "50": "SpineLow",
+    "51": "AlteredShoulderR", "52": "AlteredShoulderL", "53": "BeltBuckle",
+    "54": "SheathCrossbow", "55": "HeadTop", "56": "VirtualSpellDirected",
+    "57": "Backpack"
+  }
+}
