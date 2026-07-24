@@ -368,6 +368,36 @@ window.EpsilookData = (() => {
             }
         }
 
+        // bonesets (pack format 33): the specific body region each of an
+        // AnimKit's anims (segments) animates, resolved from name indices and
+        // shown on that anim's pill. "Full Body" is the default and never
+        // shipped. Keyed by (kit, anim).
+        /** @type {string[]} */
+        const bonesetNames = pack.bonesetNames || [];
+        const bonesetList = (ids) => ids.map((i) => bonesetNames[i]);
+        /** @type {Map<number, Map<number, string[]>>} animKitId -> (animId -> region names) */
+        const animKitAnimBoneset = new Map();
+        if (pack.animKitAnimBoneset) {
+            const {animKitIds, animIds, bonesets} = pack.animKitAnimBoneset;
+            for (let i = 0; i < animKitIds.length; i++) {
+                let byAnim = animKitAnimBoneset.get(animKitIds[i]);
+                if (!byAnim) animKitAnimBoneset.set(animKitIds[i], byAnim = new Map());
+                byAnim.set(animIds[i], bonesetList(bonesets[i]));
+            }
+        }
+        // per-spell boneset haystack for the `boneset` search keyword: every
+        // region name the spell's AnimKits animate, lowercased.
+        /** @type {Map<number, string>} spell id -> boneset region haystack */
+        const spellBonesetL = new Map();
+        for (const [spellId, kits] of spellAnimKits) {
+            const words = new Set();
+            for (const kit of kits) {
+                const byAnim = animKitAnimBoneset.get(kit);
+                if (byAnim) for (const ns of byAnim.values()) for (const n of ns) words.add(n.toLowerCase());
+            }
+            if (words.size) spellBonesetL.set(spellId, [...words].join(" "));
+        }
+
         /**
          * Packed RGB -> "#rrggbb" (the form fx corpora carry, so hex queries
          * like fx:#ff5800 — or just a hex prefix — match by substring).
@@ -425,8 +455,16 @@ window.EpsilookData = (() => {
             }
         }
 
+        // Effect attach point (pack format 33): where on the model a Shadowy /
+        // Dissolve effect is anchored. A raw M2 attachment id, with -1 meaning
+        // the WHOLE body ("full body") rather than "unset". The word joins the
+        // effect's search corpus, so fx:"dissolve chest" / fx:"ghost full body"
+        // narrow by anchor the same way a texture or hue word does.
+        /** @param {number} a raw attach id @returns {string} region word */
+        const effectAttachName = (a) => a < 0 ? "full body" : (attachmentNames[a] || "");
+
         // dissolves (DissolveEffect rows): duration + TextureBlendSet textures;
-        // corpus: "dissolve" + texture paths — fx:"dissolve arcane_wisps" style.
+        // corpus: "dissolve" + texture paths + attach — fx:"dissolve arcane_wisps".
         /** @type {Map<number, number[]>} spell id -> [dissolveId] */
         const spellDissolves = new Map();
         /** @type {Map<number, number[]>} dissolveId -> [spell id] */
@@ -435,6 +473,8 @@ window.EpsilookData = (() => {
         const dissolveDurations = new Map();
         /** @type {Map<number, number[]>} dissolveId -> [fid] */
         const dissolveTextures = new Map();
+        /** @type {Map<number, number>} dissolveId -> M2 attach id (-1 = full body) */
+        const dissolveAttach = new Map();
         /** @type {Map<number, string>} dissolveId -> search corpus */
         const dissolveSearchL = new Map();
         {
@@ -446,6 +486,7 @@ window.EpsilookData = (() => {
             const ds = pack.dissolves;
             for (let i = 0; i < ds.ids.length; i++) {
                 dissolveDurations.set(ds.ids[i], ds.durations[i]);
+                if (ds.attaches) dissolveAttach.set(ds.ids[i], ds.attaches[i]);
             }
             const dt = pack.dissolveTextures;
             for (let i = 0; i < dt.dissolveIds.length; i++) {
@@ -454,7 +495,8 @@ window.EpsilookData = (() => {
             for (const id of dissolveDurations.keys()) {
                 const tex = (dissolveTextures.get(id) || [])
                     .map((fid) => (files.get(fid) || {searchL: ""}).searchL).join(" ");
-                dissolveSearchL.set(id, ("dissolve " + tex).trim());
+                const attach = dissolveAttach.has(id) ? effectAttachName(dissolveAttach.get(id)) : "";
+                dissolveSearchL.set(id, ("dissolve " + tex + " " + attach).trim().toLowerCase());
             }
         }
 
@@ -493,6 +535,8 @@ window.EpsilookData = (() => {
         const shadowySpells = new Map();
         /** @type {Map<number, {primary: number, secondary: number}>} shadowyId -> {primary, secondary} */
         const shadowyColors = new Map();
+        /** @type {Map<number, number>} shadowyId -> M2 attach id (-1 = full body) */
+        const shadowyAttach = new Map();
         /** @type {Map<number, string>} shadowyId -> search corpus */
         const shadowySearchL = new Map();
         {
@@ -505,10 +549,13 @@ window.EpsilookData = (() => {
             for (let i = 0; i < sh.ids.length; i++) {
                 const primary = sh.primaryColors[i], secondary = sh.secondaryColors[i];
                 shadowyColors.set(sh.ids[i], {primary, secondary});
+                if (sh.attaches) shadowyAttach.set(sh.ids[i], sh.attaches[i]);
+                const attach = sh.attaches ? effectAttachName(sh.attaches[i]) : "";
                 // category is "ghost" now, but keep "shadowy" searchable for the
                 // ShadowyEffect rows so old fx:shadowy queries still resolve
                 shadowySearchL.set(sh.ids[i],
-                    ("ghost shadowy " + sh.hues[i] + " " + hexColor(primary) + " " + hexColor(secondary)).trim());
+                    ("ghost shadowy " + sh.hues[i] + " " + hexColor(primary) + " " + hexColor(secondary)
+                        + " " + attach).trim().toLowerCase());
             }
         }
 
@@ -1159,10 +1206,12 @@ window.EpsilookData = (() => {
             spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles,
             spellAnimKits, animKitSpells,
             animNames, animNamesL, animKitAnims, animAnimKits,
+            bonesetNames, animKitAnimBoneset, spellBonesetL,
             spellFx, spellChainRows, fxSpells, fxChains, fxTextures, fxSearchL,
-            spellDissolves, dissolveSpells, dissolveDurations, dissolveTextures, dissolveSearchL,
+            spellDissolves, dissolveSpells, dissolveDurations, dissolveTextures,
+            dissolveAttach, dissolveSearchL,
             spellGlows, glowSpells, glowColors, glowAlphas, glowSearchL,
-            spellShadowies, shadowySpells, shadowyColors, shadowySearchL,
+            spellShadowies, shadowySpells, shadowyColors, shadowyAttach, shadowySearchL,
             spellGhostMats, ghostMatSpells, ghostMatColors, ghostMatSearchL,
             spellTints, tintSpells, tintColors, tintSearchL,
             spellDesaturates, desatSpells, desatSearchL,
