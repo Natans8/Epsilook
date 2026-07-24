@@ -425,6 +425,27 @@ group, while the vehicle's own three (`VehicleEnterAnim`, `VehicleExitAnim`,
 "used" and ships their segments. Population on 9.2.7: 99.8% of seats set at least one passenger anim, the vehicle's own
 are 3–7%, any animkit 12.7%.
 
+**Bonesets — the body region a segment animates.** Each `AnimKitSegment` (one anim in a kit) names an
+`AnimKitConfigID`; the config resolves through `AnimKitConfigBoneSet` (`ParentAnimKitConfigID → AnimKitBoneSetID`) to
+one or more `AnimKitBoneSet.Name`s — "Upper Body", "Head", "Right Hand", "Jaw", … (28 named regions on 9.2.7, all
+build-present so no drift). The bone-index blob (`BoneDataID`) is not surfaced; the region **name** is the useful part.
+
+```mermaid
+flowchart LR
+  SEG["AnimKitSegment<br/>(kit, anim, AnimKitConfigID)"] -->|ParentAnimKitConfigID| CBS["AnimKitConfigBoneSet"]
+  CBS -->|AnimKitBoneSetID| BS["AnimKitBoneSet.Name"]
+```
+
+A boneset is a property of the **segment**, so it is keyed by `(kit, anim)` and shown only on that **anim pill** —
+never on the kit head. Each region becomes its OWN pill, so an anim that animates two regions (a config naming Left +
+Right Shoulder, or two segments) renders as two pills, not one merged label. **"Full Body" is the default** (nearly
+every segment animates the whole body — 19,310 of 21,462 kits on 9.2.7) and is never shipped or shown; only a specific
+region says anything. Searchable through the `boneset` keyword inside `anim:` (`anim:"boneset upper body"`), which
+consumes every token after it as region words and matches them against the spell's boneset haystack (a name may be
+several words, unlike an `attach` point). 9.2.7 ships 4,354 `(kit, anim) → region` rows across 9 region names for the
+used AnimKits. A single `AnimKitConfig` can name several bonesets (68 name two, e.g. Left+Right Shoulder), and a single
+`(kit, anim)` can reach several through multiple segments — both unioned, then Full Body dropped.
+
 ### 3f. Routes that start at `SpellEffect`, not at a visual
 
 Nine fx categories skip the visual graph entirely: a particular `Effect` or
@@ -521,9 +542,20 @@ Two traps:
   silently blank the attachments.
 
 `SpellChainEffects` itself has **no** attachment column (its `Joint*` fields are geometry); beams attach through
-`BeamEffect`, which is why chains only carry attach points on builds that have that table. Dissolve (`AttachID`, 307
-rows), shadowy (`AttachPos`, 161) and barrage (`AttachmentPoint`, 7) also carry one and are deliberately not wired up
-yet.
+`BeamEffect` (`SourceAttachID → DestAttachID`, rendered as the source→dest pair on the chain pill), which is why chains
+only carry attach points on builds that have that table.
+
+**Three more effect tables carry an M2 attachment id, now surfaced (§3, format 33): `DissolveEffect.AttachID`,
+`ShadowyEffect.AttachPos` and `BarrageEffect.AttachmentPoint`.** Unlike a model-attach `-1` (which means "no segment"),
+on these effects **`-1` means the WHOLE body** — the frontend labels it "full body" — because an effect with no anchor
+covers the whole model (70–77% of dissolve/shadowy rows on 9.2.7). Dissolve and shadowy are fx pills: the region word
+(the M2 name, or "full body") rides the effect's own fx search corpus, so `fx:"dissolve chest"` / `fx:"ghost full body"`
+narrow by anchor with no new keyword; shadowy is grouped by colour, so a colour drawn at several points shows the union.
+Barrage is a model pill, so its point rides the model row's `src` and reuses the whole model-attach machinery
+(`model:"attach handarrow barrage"`). These columns are **absent on several Classic re-release clients** (irregularly —
+Vanilla's `DissolveEffect` has `AttachID`, TBC's does not), so all three are `OPTIONAL_COLUMNS` defaulting to `-1`
+(full body). A scan of every effect table found these three plus `BeamEffect` are the ONLY ones with an attachment
+column — EdgeGlow, WeaponTrail, ColorEffect, Emission, AreaModel and Screen have none.
 
 ### 3i. Vehicle seat payload
 
@@ -901,7 +933,7 @@ links `spellIds[i]` to `fids[i]`. That gzips far better than a list of objects.
 ```mermaid
 flowchart LR
   subgraph LINK["link sections (spell → item, + target mask)"]
-    L1["spellModels · spellSounds · spellAnimKits<br/>spellVisualAnims · spellAnims · spellFx<br/>spellDissolves · spellGlows · spellShadowies<br/>spellGhostMats · spellTints · spellDesaturates<br/>spellTransparencies · spellFreezes · spellCamos<br/>spellScreens · spellMorphs · spellShapeshifts<br/>spellSummons · spellVehicles · spellPassengerAnims<br/>spellVehicleAnims · spellVehicleAnimKits<br/>spellMechanics · spellKeybinds · spellSpeeds · spellScales"]
+    L1["spellModels · spellSounds · spellAnimKits<br/>animKitAnimBoneset · bonesetNames<br/>spellVisualAnims · spellAnims · spellFx<br/>spellDissolves · spellGlows · spellShadowies<br/>spellGhostMats · spellTints · spellDesaturates<br/>spellTransparencies · spellFreezes · spellCamos<br/>spellScreens · spellMorphs · spellShapeshifts<br/>spellSummons · spellVehicles · spellPassengerAnims<br/>spellVehicleAnims · spellVehicleAnimKits<br/>spellMechanics · spellKeybinds · spellSpeeds · spellScales"]
   end
   subgraph PAY["payload sections (item → what it is)"]
     P1["fxChains · fxTextures · dissolves · dissolveTextures<br/>glows · shadowies · ghostMats · tints<br/>screens · screenTextures · morphs · morphDisplays<br/>shapeshifts · shapeshiftDisplays · summons<br/>vehicles · vehicleSeats"]
@@ -950,9 +982,13 @@ The five Classic re-release clients (Vanilla / TBC / WotLK / Cataclysm / MoP) co
 | 10.2.7.55664 | Dragonflight              | 327,092 |  9.5 MB | TDB1027.24051 |             0 |
 | 11.2.7.65299 | The War Within            | 375,895 | 11.1 MB | TDB1127.26011 |             0 |
 
-**All ten are at pack format 31** (object-scale modifiers, §3k-bis — on top of format 30's movement-speed modifiers,
-§3k, and format 29's mechanics paired with their implicit targets, §3l, and the keybound-override route, §3j). The four pre-MoP packs each gained one absent table,
-`SpellKeyboundOverride`; nothing else drifted. Recent
+**All ten are at pack format 33** (animkit bonesets — the body region each anim animates, §3e — plus effect attachment
+points for Shadowy/Dissolve/Barrage, §3h — on top of format 32's five data-mined routes, format 31's object-scale
+modifiers, §3k-bis, format 30's movement-speed modifiers, §3k, and format 29's mechanics paired with their implicit
+targets, §3l, and the keybound-override route, §3j). The four pre-MoP packs each gained one absent table,
+`SpellKeyboundOverride`; nothing else drifted (the boneset tables are build-present everywhere, and the three effect
+attach columns are `OPTIONAL_COLUMNS`, so their absence on some Classic clients degrades to "full body" rather than
+drifting). Recent
 bumps are additive and version-agnostic: format 26 added the invis/detect channel pills (`MOD_INVISIBILITY[_DETECT]`
 auras), format 27 the `display` model category, format 28 the `item` category, format 29 replaced the flat
 `spellEffects`/`spellAuras` sets with `spellMechanics` and added
@@ -1310,8 +1346,8 @@ hotlinks sit on tolerated-hotlinking footing, not an affirmative license.
 |------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Models**       | attach (kit→ModelAttach→EffectName Type 0), display (kit→ModelAttach→EffectName Type 2→CreatureDisplayID→model, morph-style pill), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect), **mount** (Mount.db2 SourceSpellID→MountXDisplay→display, §3n); every graph row also carries its M2 attachment point (§3h) |
 | **Sounds**       | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID`, `SpellVisual.AnimEventSoundID`, **SpellEffect 131/132 PLAY_SOUND/PLAY_MUSIC (§3p)** — all → SoundKitEntry                                                                                                                                                                                                                    |
-| **Animations**   | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), ModelAttach Start/Anim/End (loose) + its AnimKit (grouped), proc Type 7 + aura 312 merged (replace, §3o), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped), **anim-replacement sets (replace, §3o)**                                                                                                                                                                                      |
-| **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, **object (§3m)**, seat, invis, detect, keybind, speed, scale — see §3a–3q                                                                                                                                                                                                |
+| **Animations**   | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), ModelAttach Start/Anim/End (loose) + its AnimKit (grouped), proc Type 7 + aura 312 merged (replace, §3o), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped), anim-replacement sets (replace, §3o); **each anim pill carries its boneset region (AnimKitConfigBoneSet→AnimKitBoneSet.Name, §3e) — one pill per region, `boneset` keyword**                                                                                                                                                                                     |
+| **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, object (§3m), seat, invis, detect, keybind, speed, scale — see §3a–3q; **chain/dissolve/ghost/barrage pills carry their M2 attachment point (§3h), -1 = "full body"**                                                                                                                                                                                                |
 | **Not shown**    | `spells.schools` — SpellMisc.SchoolMask, gathered only (§3q)                                                                                                                                                                                                                                                                    |
 | **Mechanics**    | one row per `SpellEffect`: `.Effect` + `.EffectAura` enums (names from WoWDBDefs) paired with that row's `.ImplicitTarget_0/_1` — §3l                                                                                                                                                                                           |
 | **Name search**  | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names                                                                                                                                                                                                                                                              |

@@ -166,6 +166,11 @@ window.EpsilookSearch = (() => {
      * are `attach spelllefthand attach chest`.
      */
     const ATTACH_WORD = "attach";
+    // the anim-column meta keyword: `boneset upper body` finds spells whose
+    // AnimKits animate that body region. Like `attach`, the region name is data
+    // typed after the keyword; unlike it, the name can be several words, so the
+    // keyword consumes ALL tokens that follow (see spellsByAnim).
+    const BONESET_WORD = "boneset";
 
     /**
      * The lowercased attachment names of one row, as a single haystack.
@@ -407,6 +412,26 @@ window.EpsilookSearch = (() => {
      */
     function spellsByAnim(tokens, data) {
         const out = new Set();
+
+        // bonesets: `boneset upper body` matches spells whose AnimKits animate
+        // that region. The keyword consumes every token after it as region words
+        // (a name may be several words); each must appear in the spell's boneset
+        // haystack, attach-style. Any plain anim text before the keyword still
+        // has to match too, so the two intersect.
+        const boneAt = tokens.findIndex((t) => t.text === BONESET_WORD);
+        if (boneAt >= 0) {
+            const words = tokens.slice(boneAt + 1).map((t) => t.text).filter(Boolean);
+            for (const [s, hay] of data.spellBonesetL) {
+                if (words.every((w) => hay.includes(w))) out.add(s);
+            }
+            const plain = tokens.slice(0, boneAt);
+            if (plain.length) {
+                const animMatch = spellsByAnim(plain, data);
+                for (const s of [...out]) if (!animMatch.has(s)) out.delete(s);
+            }
+            return out;
+        }
+
         const {text, tests} = splitTargetTokens(tokens);
         if (tests.length) {
             // per-row again: loose animations carry their own mask, animkit

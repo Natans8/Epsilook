@@ -9,7 +9,7 @@
     <link rel="icon"
           href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
     <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-    <link rel="stylesheet" href="css/app.css?v=20260724d">
+    <link rel="stylesheet" href="css/app.css?v=20260724e">
 </head>
 <body>
 
@@ -295,6 +295,23 @@
                         <li>
                             <button data-search='model:"missile attach head"'>model:"missile attach head"</button>
                             projectiles that fly to the head
+                        </li>
+                    </ul>
+                </section>
+                <section>
+                    <h3>Bonesets</h3>
+                    <p class="help-note">The body region an animation plays on — shown on each animation pill.
+                        Write the <code>boneset</code> keyword then the region, inside <code>anim:</code>. Most
+                        animations move the whole body, which is the default and shown plain; only a specific
+                        region (upper body, a hand, the head) is labelled.</p>
+                    <ul class="help-ex">
+                        <li>
+                            <button data-search='anim:"boneset upper body"'>anim:"boneset upper body"</button>
+                            animations limited to the upper body
+                        </li>
+                        <li>
+                            <button data-search='anim:"boneset head"'>anim:"boneset head"</button>
+                            also <code>boneset jaw</code>, <code>boneset right hand</code>
                         </li>
                     </ul>
                 </section>
@@ -595,17 +612,17 @@
     const whTooltips = {colorLinks: false, iconizeLinks: false, renameLinks: false};
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260724d"></script>
-<script src="js/data.js?v=20260724d"></script>
+<script src="js/config.js?v=20260724e"></script>
+<script src="js/data.js?v=20260724e"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260724d"></script>
-<script src="js/js-blp.js?v=20260724d"></script>
+<script src="js/bufo.js?v=20260724e"></script>
+<script src="js/js-blp.js?v=20260724e"></script>
 <!-- the pill/segment library: shared by app.js (rendering) and search.js
      (the pill-type registry), so it loads before both -->
-<script src="js/pills.js?v=20260724d"></script>
-<script src="js/pilltypes.js?v=20260724d"></script>
-<script src="js/search.js?v=20260724d"></script>
-<script src="js/app.js?v=20260724d"></script>
+<script src="js/pills.js?v=20260724e"></script>
+<script src="js/pilltypes.js?v=20260724e"></script>
+<script src="js/search.js?v=20260724e"></script>
+<script src="js/app.js?v=20260724e"></script>
 </body>
 </html>

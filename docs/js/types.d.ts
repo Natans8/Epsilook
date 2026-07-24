@@ -143,6 +143,10 @@ interface SpellPack {
     /** Animation names indexed by AnimID. */
     animNames: string[];
     animKitAnims: { animKitIds: number[]; animIds: number[] };
+    /** Boneset region names (format 33+), referenced by index below. */
+    bonesetNames?: string[];
+    /** Per-anim bonesets: (kit, anim) -> region name indices (Full Body dropped). */
+    animKitAnimBoneset?: { animKitIds: number[]; animIds: number[]; bonesets: number[][] };
     /** Animation replacements — proc Type 7 + aura 312 merged (format 32+):
      *  one row per (base anim -> replacement anim). */
     spellReplaceAnims?: { spellIds: number[]; srcAnims: number[]; dstAnims: number[] };
@@ -162,8 +166,8 @@ interface SpellPack {
     fxTextures: { chainIds: number[]; fids: number[] };
 
     spellDissolves: { spellIds: number[]; dissolveIds: number[]; targets?: number[] };
-    /** durations in seconds, 0 = unspecified. */
-    dissolves: { ids: number[]; durations: number[] };
+    /** durations in seconds, 0 = unspecified; attaches = M2 attach id, -1 = full body (format 33+). */
+    dissolves: { ids: number[]; durations: number[]; attaches?: number[] };
     dissolveTextures: { dissolveIds: number[]; fids: number[] };
 
     spellGlows: { spellIds: number[]; glowIds: number[]; targets?: number[] };
@@ -177,6 +181,8 @@ interface SpellPack {
         primaryColors: number[];
         secondaryColors: number[];
         hues: string[];
+        /** M2 attach id where anchored, -1 = full body (format 33+). */
+        attaches?: number[];
     };
 
     /** Ghost material recolors, proc Type 22 (format 14+). */
@@ -421,6 +427,12 @@ interface SpellData {
     animNamesL: string[];
     animKitAnims: Map<number, number[]>;
     animAnimKits: Map<number, number[]>;
+    /** Boneset region names, index -> name (format 33+). */
+    bonesetNames: string[];
+    /** AnimKit -> (anim -> specific region names), one entry per region pill. */
+    animKitAnimBoneset: Map<number, Map<number, string[]>>;
+    /** Spell -> lowercased haystack of every region its animkits animate. */
+    spellBonesetL: Map<number, string>;
     /** Direct stand/walk anim overrides (the "stance" group). */
     /** Animation replacements: spell -> [{src,dst}] pairs, and each anim id
      *  (either side) -> the spells whose swaps touch it. */
@@ -440,6 +452,8 @@ interface SpellData {
     dissolveSpells: Map<number, number[]>;
     dissolveDurations: Map<number, number>;
     dissolveTextures: Map<number, number[]>;
+    /** Dissolve id -> M2 attach id (-1 = full body). */
+    dissolveAttach: Map<number, number>;
     dissolveSearchL: Map<number, string>;
 
     spellGlows: Map<number, number[]>;
@@ -451,6 +465,8 @@ interface SpellData {
     spellShadowies: Map<number, number[]>;
     shadowySpells: Map<number, number[]>;
     shadowyColors: Map<number, { primary: number; secondary: number }>;
+    /** Shadowy id -> M2 attach id (-1 = full body). */
+    shadowyAttach: Map<number, number>;
     shadowySearchL: Map<number, string>;
 
     spellGhostMats: Map<number, number[]>;

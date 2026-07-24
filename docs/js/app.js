@@ -889,6 +889,10 @@
    * after it, `attach chest`). Offered only in the two columns that render
    * attachment segments, and only when the pack actually carries them. */
     const ATTACH_WORD = "attach";
+    // the anim-column twin of `attach`: the body region an AnimKit animates
+    // ("boneset upper body", "boneset head"). The region NAMES are data values
+    // the user types after the keyword, so only the keyword autocompletes.
+    const BONESET_WORD = "boneset";
 
     /**
      * One meta word: not a kind of content, but an axis any chip in `fields`
@@ -903,7 +907,14 @@
             hint: "Attachment point follows, e.g. attach chest or attach spelllefthand",
             when: (d) => !!d.attachmentNames && Object.keys(d.attachmentNames).length > 0,
         },
+        {
+            word: BONESET_WORD, fields: ["anim"],
+            hint: "Body region an animkit animates follows, e.g. boneset upper body or boneset head",
+            when: (d) => !!d.bonesetNames && d.bonesetNames.length > 0,
+        },
     ];
+    // meta words that take an argument after them get a trailing space on pick
+    const META_KEYWORDS = new Set(META_WORDS.map((m) => m.word));
 
     /**
      * The words a field offers in autocomplete, with their descriptions: its
@@ -998,11 +1009,11 @@
     }
 
     // complete the partial last word of the chip's text to the category word.
-    // the attach keyword takes a point name after it, so leave a trailing space
-    // ready for it (attach chest) rather than butting the caret against it
+    // a meta keyword (attach/boneset) takes an argument after it, so leave a
+    // trailing space ready for it (attach chest) rather than butting the caret
     function applyCategoryWord(word) {
         const input = qInput;
-        input.value = input.value.replace(/\S*$/, word) + (word === ATTACH_WORD ? " " : "");
+        input.value = input.value.replace(/\S*$/, word) + (META_KEYWORDS.has(word) ? " " : "");
         hideSuggest();
         input.focus();
         input.setSelectionRange(input.value.length, input.value.length);
@@ -1667,9 +1678,28 @@
         // a headless group's anims match through its category word too
         const wordOf = (kitId) =>
             (ANIM_GROUPS.find((g) => g.id === kitId) || {word: ""}).word;
+        // Expand a kit's anims into pill ENTRIES: one per specific boneset region
+        // an anim (segment) animates, so two regions are two pills (never merged),
+        // and an anim with no region is its plain pill. Bonesets ride real
+        // AnimKits only — a headless group (passenger/stance) has none.
+        const animEntries = (kitId) => {
+            const bones = groupAnims.has(kitId) ? null : d.animKitAnimBoneset.get(kitId);
+            const out = [];
+            for (const animId of animsOf(kitId).slice().sort((a, b) => a - b)) {
+                const regions = bones && bones.get(animId);
+                if (regions && regions.length) {
+                    for (const r of regions) out.push({animId, region: r});
+                } else {
+                    out.push({animId, region: null});
+                }
+            }
+            return out;
+        };
+        const entryHit = (kitId, e) => animIsHit(e.animId, wordOf(kitId))
+            || (!!e.region && bonesetIsHit([e.region]));
         const kitHasHit = (kitId) =>
             (!groupAnims.has(kitId) && kitIsHit(kitId, "animkit")) ||
-            animsOf(kitId).some((a) => animIsHit(a, wordOf(kitId)));
+            animEntries(kitId).some((e) => entryHit(kitId, e));
         const groups = animKitIds.slice().sort((a, b) => a - b);
         for (const g of ANIM_GROUPS) if (groupAnims.has(g.id)) groups.push(g.id);
 
@@ -1691,9 +1721,9 @@
                     head: groupAnims.has(kitId)
                         ? animCatHeadTag(wordOf(kitId), kitHasHit(kitId))
                         : kitTag(kitId, "animkit", maskOf(d.animKitTargets, spellId, [kitId])),
-                    items: hitsFirst(animsOf(kitId).slice().sort((a, b) => a - b),
-                        (a) => animIsHit(a, wordOf(kitId)))
-                        .map((animId) => animTag(animId, wordOf(kitId))),
+                    items: hitsFirst(animEntries(kitId), (e) => entryHit(kitId, e))
+                        .map((e) => animTag(e.animId, wordOf(kitId), 0,
+                            e.region ? [e.region] : null)),
                 }),
             });
         }
@@ -1904,13 +1934,16 @@
             const byColor = new Map();
             for (const id of shadowyIds.slice().sort((a, b) => a - b)) {
                 const c = d.shadowyColors.get(id) || {primary: 0, secondary: 0};
+                const region = effectRegionName(d.shadowyAttach.get(id));
                 for (const color of [c.primary, c.secondary]) {
                     const prev = byColor.get(color);
                     if (prev) {
                         prev.mask |= shadowyMask(id);
+                        if (region) prev.regions.add(region);
                         continue;
                     }
-                    byColor.set(color, {color, hit: () => shadowyIsHit(id), mask: shadowyMask(id)});
+                    byColor.set(color, {color, hit: () => shadowyIsHit(id),
+                        mask: shadowyMask(id), regions: new Set(region ? [region] : [])});
                 }
             }
             for (const id of ghostMatIds.slice().sort((a, b) => a - b)) {
@@ -1920,7 +1953,9 @@
                     prev.mask |= ghostMatMask(id);
                     continue;
                 }
-                byColor.set(color, {color, hit: () => ghostMatIsHit(id), mask: ghostMatMask(id)});
+                // Type-22 material recolors carry no attach point of their own
+                byColor.set(color, {color, hit: () => ghostMatIsHit(id),
+                    mask: ghostMatMask(id), regions: new Set()});
             }
             const catHit = shadowyIds.some((id) => shadowyIsHit(id))
                 || ghostMatIds.some((id) => ghostMatIsHit(id));
@@ -1933,7 +1968,7 @@
                 mask: t.head,
                 items: hitsFirst([...byColor.values()], (e) => e.hit())
                     .map((e) => () => colorFxTag("ghost", e.color, e.hit(), undefined,
-                        t.pill(e.mask))),
+                        t.pill(e.mask), effectAttachNote([...e.regions], "ghost"))),
             });
         }
         if (tintIds.length) {
@@ -2446,6 +2481,59 @@
         });
     }
 
+    /** The region words a group's `boneset` keyword collects (all that follow). */
+    function bonesetValues(tokens) {
+        const i = tokens.findIndex((t) => t.text === BONESET_WORD);
+        return i < 0 ? [] : tokens.slice(i + 1).map((t) => t.text).filter(Boolean);
+    }
+
+    /** A boneset pill lights up when a `boneset` query names one of its regions. */
+    function bonesetIsHit(names) {
+        const hay = names.join(" ").toLowerCase();
+        return groupsFor("anim").some((g) => {
+            const words = bonesetValues(g.tokens);
+            return words.length && words.every((w) => hay.includes(w));
+        });
+    }
+
+    /* A boneset segment: the body region(s) an AnimKit — or one of its anims —
+   * animates ("Upper Body", "Head · Right Hand"). Reads as a dim qualifier on
+   * the pill, searchable via the `boneset` keyword; multi-word names ride the
+   * one keyword (boneset upper body). Shown on the AnimKit head when the whole
+   * kit shares one region, on the anim pill when its anims differ. */
+    function bonesetSegment(names) {
+        if (!names || !names.length) return null;
+        return P.note(names.join(" · "), {
+            hit: bonesetIsHit(names),
+            title: `Animates the ${names.join(", ")} — the AnimKit segment's boneset`,
+            search: P.quoted("anim", `${BONESET_WORD} ${names.join(" ")}`),
+            finds: `spells whose animkits animate ${names.length > 1 ? "these regions" : "this region"}`,
+        });
+    }
+
+    /* A raw M2 attach id an EFFECT (Shadowy/Dissolve) carries -> its region
+   * word. -1, the common value, is the WHOLE body ("full body") rather than a
+   * missing point; anything else names the M2 attachment slot. */
+    const effectRegionName = (a) =>
+        a == null ? "" : (a < 0 ? "full body" : (state.data.attachmentNames[a] || ""));
+
+    /* Where on the model a Shadowy/Dissolve effect is anchored, as a dim note
+   * segment. Searchable through the effect's own fx corpus (`category`), so it
+   * needs no new keyword — the attach word rides the same corpus as the hue or
+   * texture words. `regionNames` may hold several when a merged pill (one ghost
+   * colour drawn by effects at different points) spans more than one. */
+    function effectAttachNote(regionNames, category) {
+        const names = [...new Set(regionNames.filter(Boolean))];
+        if (!names.length) return null;
+        const full = names.length === 1 && names[0] === "full body";
+        return P.note(names.join(" · "), {
+            title: full ? "Anchored to the whole body"
+                : `Anchored at the ${names.join(", ")} attachment point`,
+            search: P.catQuery("fx", category, names[0]),
+            finds: full ? "effects on the full body" : "effects at this attachment point",
+        });
+    }
+
     function modelTag(fid, catName, mask = 0, src = -1, dst = -1, twoPoint = false) {
         const d = state.data;
         const file = d.files.get(fid) || {fid, path: "", base: "", searchL: ""};
@@ -2740,7 +2828,7 @@
         });
     }
 
-    function animTag(animId, groupWord = "", mask = 0) {
+    function animTag(animId, groupWord = "", mask = 0, boneset = null) {
         const d = state.data;
         const name = d.animNames[animId];
         return P.pill({
@@ -2753,6 +2841,9 @@
                     search: P.quoted("anim", name),
                     finds: "spells playing this animation",
                 }),
+                // per-anim boneset: only when this kit's anims animate different
+                // regions (a uniform kit carries it on the head instead)
+                bonesetSegment(boneset),
                 P.cmd(".lo", CFG.animCopyTemplate, {name, id: animId}),
             ],
         });
@@ -2901,7 +2992,7 @@
      *   the icons ride the pills instead of the category head.
      * @returns {HTMLElement}
      */
-    function colorFxTag(category, color, hit, alpha, mask = 0) {
+    function colorFxTag(category, color, hit, alpha, mask = 0, extra = null) {
         const hex = hexColor(color);
         const colorData = {
             color: hex, colorInfo: category, alpha: alpha >= 0 ? alpha : undefined,
@@ -2920,6 +3011,8 @@
                     // the hex text is the color too — hovering it shows the same big patch
                     data: colorData,
                 }),
+                // an effect anchor (Shadowy attach point) rides here when present
+                extra,
                 P.copy("⧉", `Copy color: ${hex}`, hex),
             ],
         });
@@ -3247,6 +3340,7 @@
                     finds: "spells with this dissolve texture",
                     data: entry.fid ? {texFid: entry.fid} : undefined,
                 }),
+                effectAttachNote([effectRegionName(d.dissolveAttach.get(entry.dissolveId))], "dissolve"),
                 base && P.copy("⧉", `Copy texture name: ${base}`, base),
             ],
         });

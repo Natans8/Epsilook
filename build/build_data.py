@@ -111,6 +111,11 @@ TABLES = [
     "SpellVisualEffectName",
     "SpellVisualAnim",
     "AnimKitSegment",
+    # bonesets (§3): which body region an AnimKit segment animates. A segment's
+    # AnimKitConfigID -> AnimKitConfigBoneSet -> AnimKitBoneSet.Name ("Upper
+    # Body", "Head", "Right Hand", ...). Present on every build.
+    "AnimKitBoneSet",
+    "AnimKitConfigBoneSet",
     # anim-replacement sets (aura 312, §3): AnimReplacement holds the
     # (Src -> Dst AnimationData) swaps, keyed by ParentAnimReplacementSetID
     "AnimReplacement",
@@ -229,6 +234,13 @@ OPTIONAL_COLUMNS = {
     # float would silently blank those packs.
     ("SpellEffect", "EffectBasePoints"): "",
     ("SpellEffect", "EffectBasePointsF"): "",
+    # effect attach points (§3): the Classic re-release clients carry the effect
+    # tables but not their attach column (irregularly — Vanilla's DissolveEffect
+    # has AttachID, TBC's does not). -1 is exactly a present-but-unset row: the
+    # whole body, "full body", which is what an effect with no anchor animates.
+    ("ShadowyEffect", "AttachPos"): "-1",
+    ("DissolveEffect", "AttachID"): "-1",
+    ("BarrageEffect", "AttachmentPoint"): "-1",
 }
 
 # Spell names moved: SpellName.db2 was split out of Spell.db2 in BfA, so Legion
@@ -947,7 +959,7 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 32  # 32: mounts (spellMounts) + spell schools + gameobject spawners + play-sound/music + anim-replacement sets
+PACK_FORMAT = 33  # 33: animkit bonesets (body region) + effect attach points (Shadowy/Dissolve/Barrage)
 # 29: mechanics carry their implicit targets (spellEffects +
 #     spellAuras -> spellMechanics, implicitTargetNames) and
 #     keybound overrides (spellKeybinds, keybinds)
@@ -1590,6 +1602,7 @@ class ModelSources:
     area_model_fid: dict[int, int]  # SpellVisualKitAreaModel.ID -> model fid
     emission_fid: dict[int, int]  # SpellEffectEmission.ID -> model fid (ET 8)
     barrage_fid: dict[int, int]  # BarrageEffect.ID -> model fid (ET 17)
+    barrage_attach: dict[int, int]  # BarrageEffect.ID -> M2 attachment id (-1 none)
     weapontrail_fid: dict[int, int]  # WeaponTrail.ID -> model fid (proc Type 27)
     # kit -> {(fid, category, source attachment, destination attachment, ref)}.
     # Routes with a single attach point put it in `source` and leave
@@ -1719,11 +1732,16 @@ def read_model_sources(
 
     # kit EffectType 17 -> BarrageEffect (volley of N models) -> model via
     # the usual SpellVisualEffectName hop (count/cone columns skipped)
+    # AttachmentPoint is a raw M2 attachment id: where the volley's models
+    # spawn on the caster (HandArrow, Chest, ...). -1 = no specific point, which
+    # renders as no attach segment like any other model row.
     barrage_fid: dict[int, int] = {}
-    for b_id, en_id in read_table(
-            table_dir, "BarrageEffect", ["ID", "SpellVisualEffectNameID"]
+    barrage_attach: dict[int, int] = {}
+    for b_id, en_id, attach in read_table(
+            table_dir, "BarrageEffect", ["ID", "SpellVisualEffectNameID", "AttachmentPoint"]
     ):
         barrage_fid[to_int(b_id)] = effect_name_fid.get(to_int(en_id), 0)
+        barrage_attach[to_int(b_id)] = to_int(attach)
 
     # WeaponTrail.db2 rows carry a trail model directly in FileDataID —
     # referenced by SpellProceduralEffect Type 27 (Value_0 = WeaponTrail.ID).
@@ -1732,8 +1750,8 @@ def read_model_sources(
         weapontrail_fid[to_int(wt_id)] = to_int(wt_fid)
 
     return ModelSources(effect_name_fid, effect_name_type, area_model_fid,
-                        emission_fid, barrage_fid, weapontrail_fid, attach_models,
-                        attach_anims, attach_animkits)
+                        emission_fid, barrage_fid, barrage_attach, weapontrail_fid,
+                        attach_models, attach_anims, attach_animkits)
 
 
 # what a visual with no missiles contributes: (model fids, soundkits, animkits)
@@ -1903,10 +1921,10 @@ class FxPayloads:
     """The per-row payload tables behind the Effects column, keyed by row id."""
     chains: dict[int, tuple]  # chain ID -> (r, g, b, soundkit, texfids, subchains)
     beam_chain: dict[int, tuple[int, int, int]]  # BeamEffect.ID -> (chain, src, dst)
-    dissolves: dict[int, tuple[float, tuple[int, ...]]]  # ID -> (duration, tex fids)
+    dissolves: dict[int, tuple[float, tuple[int, ...], int]]  # ID -> (duration, tex fids, attach)
     glows: dict[int, int]  # EdgeGlowEffect.ID -> packed RGB
     glow_alphas: dict[int, int]  # EdgeGlowEffect.ID -> alpha 0..255
-    shadowies: dict[int, tuple[int, int]]  # ShadowyEffect.ID -> (primary, secondary)
+    shadowies: dict[int, tuple[int, int, int]]  # ShadowyEffect.ID -> (primary, secondary, attach)
     screens: dict[int, ScreenRow]  # ScreenEffect.ID -> payload
     svse_screen: dict[int, int]  # SpellVisualScreenEffect.ID -> ScreenEffect.ID
 
@@ -1925,13 +1943,18 @@ def read_fx_payloads(table_dir: Path) -> FxPayloads:
     # dissolves: EffectType 11 -> DissolveEffect, whose TextureBlendSet
     # carries up to 3 texture fids (mask + material; names via the listfile).
     # The geometry columns (Ramp/Start/End/Fresnel/Curve) are renderer tuning.
-    dissolves: dict[int, tuple[float, tuple[int, ...]]] = {}
-    for did, tbs_id, duration in read_table(
-            table_dir, "DissolveEffect", ["ID", "TextureBlendSetID", "Duration"]
+    # AttachID / AttachPos are RAW M2 attachment ids (attachment_name), naming
+    # where on the model the effect is anchored. -1 (the majority) means the
+    # WHOLE body rather than "unset" — the frontend labels it "full body" — so
+    # it is kept, not dropped like a model-attach -1.
+    dissolves: dict[int, tuple[float, tuple[int, ...], int]] = {}
+    for did, tbs_id, duration, attach in read_table(
+            table_dir, "DissolveEffect", ["ID", "TextureBlendSetID", "Duration", "AttachID"]
     ):
         dissolves[to_int(did)] = (
             round(float(duration), 2) if duration else 0,
             blendset_tex.get(to_int(tbs_id), ()),
+            to_int(attach),
         )
 
     # FullScreenEffect: the grade colors, the vignette triplet and the two
@@ -2007,12 +2030,15 @@ def read_fx_payloads(table_dir: Path) -> FxPayloads:
 
     # shadowy effects: EffectType 7 -> ShadowyEffect, two packed colors
     # stored as signed int32 ARGB — the alpha byte is masked off
-    shadowies: dict[int, tuple[int, int]] = {}
-    for eid, primary, secondary in read_table(
-            table_dir, "ShadowyEffect", ["ID", "PrimaryColor", "SecondaryColor"]
+    # AttachPos is a raw M2 attachment id like DissolveEffect.AttachID above;
+    # -1 = the whole body ("full body"), kept for the same reason.
+    shadowies: dict[int, tuple[int, int, int]] = {}
+    for eid, primary, secondary, attach in read_table(
+            table_dir, "ShadowyEffect", ["ID", "PrimaryColor", "SecondaryColor", "AttachPos"]
     ):
         shadowies[to_int(eid)] = (to_int(primary) & 0xFFFFFF,
-                                  to_int(secondary) & 0xFFFFFF)
+                                  to_int(secondary) & 0xFFFFFF,
+                                  to_int(attach))
 
     # chain effects (beams). Two paths lead from a kit to SpellChainEffects:
     # EffectType 1 -> SpellProceduralEffect (Types 0/12/26, Value_0 = chain
@@ -2178,7 +2204,8 @@ def read_kit_effects(
         elif et == EFFECT_TYPE_BARRAGE:
             fid = models.barrage_fid.get(e, 0)
             if fid:
-                kits.models[k].add((fid, MODEL_CAT_BARRAGE, NO_ATTACHMENT, NO_ATTACHMENT, 0))
+                attach = models.barrage_attach.get(e, NO_ATTACHMENT)
+                kits.models[k].add((fid, MODEL_CAT_BARRAGE, attach, NO_ATTACHMENT, 0))
         elif et == EFFECT_TYPE_SCREEN:
             se_id = fx.svse_screen.get(e, 0)
             if se_id in fx.screens:
@@ -2204,6 +2231,58 @@ def read_animkit_anims(table_dir: Path, anim_names: list[str]) -> dict[int, set[
         if k and 0 <= a < len(anim_names):
             animkit_anims[k].add(a)
     return animkit_anims
+
+
+# The one boneset name that is the default — nearly every AnimKit animates the
+# whole body — so it is treated as "no region" and never shown: only a specific
+# region (Upper Body, Head, a hand) says anything worth a label (§3).
+BONESET_FULL_BODY = "Full Body"
+
+
+def read_animkit_bonesets(table_dir: Path) -> dict[int, dict[int, list[str]]]:
+    """Read AnimKit -> {anim -> the body regions that anim's SEGMENT animates}.
+
+    A boneset is a property of a SEGMENT: AnimKitSegment.AnimKitConfigID ->
+    AnimKitConfigBoneSet (ParentAnimKitConfigID) -> AnimKitBoneSet.Name
+    ("Upper Body", "Head", "Right Hand", ...). It is surfaced only on the anim
+    pill it belongs to — never merged onto the kit — and "Full Body" is the
+    default, so it is dropped. Each remaining region becomes its own pill in the
+    frontend, so a segment that animates two regions is two pills, not one
+    merged label. The bone-index blob (BoneDataID) is not surfaced; the region
+    NAME is the useful part.
+
+    Returns kit -> {anim -> sorted non-Full-Body region names}, only for the
+    (kit, anim) pairs that have at least one such region.
+    """
+    boneset_name: dict[int, str] = {}
+    for bs_id, bs_name in read_table(table_dir, "AnimKitBoneSet", ["ID", "Name"]):
+        if bs_name:
+            boneset_name[to_int(bs_id)] = bs_name
+
+    # config -> the set of region names its bonesets name (a config may name
+    # several, e.g. Left + Right Shoulder)
+    cfg_regions: dict[int, set[str]] = defaultdict(set)
+    for parent_cfg, bs_id in read_table(
+            table_dir, "AnimKitConfigBoneSet", ["ParentAnimKitConfigID", "AnimKitBoneSetID"]):
+        region = boneset_name.get(to_int(bs_id))
+        if region:
+            cfg_regions[to_int(parent_cfg)].add(region)
+
+    # (kit, anim) -> the regions its segments animate (a config may repeat, and
+    # the same anim may appear in several segments, so union across them)
+    ka_regions: dict[tuple[int, int], set[str]] = defaultdict(set)
+    for seg_kit, seg_anim, seg_cfg in read_table(
+            table_dir, "AnimKitSegment", ["ParentAnimKitID", "AnimID", "AnimKitConfigID"]):
+        seg_regions = cfg_regions.get(to_int(seg_cfg))
+        if seg_regions:
+            ka_regions[(to_int(seg_kit), to_int(seg_anim))].update(seg_regions)
+
+    out: dict[int, dict[int, list[str]]] = defaultdict(dict)
+    for (kit, anim), regions in ka_regions.items():
+        specific = sorted(regions - {BONESET_FULL_BODY})
+        if specific:
+            out[kit][anim] = specific
+    return out
 
 
 def read_anim_replacements(
@@ -3070,6 +3149,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     soundkit_files = read_soundkit_files(table_dir)
     anim_names = read_anim_names()
     animkit_anims = read_animkit_anims(table_dir, anim_names)
+    animkit_bonesets = read_animkit_bonesets(table_dir)
     anim_replacements = read_anim_replacements(table_dir, anim_names)
 
     keybounds = read_keybound_overrides(table_dir)
@@ -3315,6 +3395,24 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     used_animkits |= {k for _, k in vehicle_animkit_rows}
     kit_anim_rows = sorted(
         (k, a) for k, anims in animkit_anims.items() if k in used_animkits for a in anims)
+
+    # bonesets (§3): the specific body region each of a used AnimKit's anims
+    # (segments) animates, shown on that anim's own pill. One row per (kit, anim,
+    # region) so the frontend renders one pill per region (no merging). Region
+    # names are pooled into bonesetNames and referenced by index, since the same
+    # handful ("Upper Body", "Head", ...) repeats across thousands.
+    boneset_name_ids: dict[str, int] = {}
+
+    def _boneset_ids(names: list[str]) -> list[int]:
+        return [boneset_name_ids.setdefault(n, len(boneset_name_ids)) for n in names]
+
+    kit_anim_boneset_rows = [
+        (k, a, _boneset_ids(names))
+        for k in sorted(animkit_bonesets)
+        if k in used_animkits
+        for a, names in sorted(animkit_bonesets[k].items())]
+    # index -> name, in first-seen (id) order
+    boneset_names = [n for n, _ in sorted(boneset_name_ids.items(), key=lambda kv: kv[1])]
     # animations the visual kits play directly (SpellVisualAnim initial/loop,
     # kit EffectType 6) — the largest animation source, same id space
     visual_anim_rows = sorted(
@@ -3423,6 +3521,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellSounds": len(sound_rows),
                 "spellAnimKits": len(anim_rows),
                 "animKitAnims": len(kit_anim_rows),
+                "animKitAnimBoneset": len(kit_anim_boneset_rows),
                 "spellMechanics": len(mechanic_rows),
                 "implicitTargets": len(implicit_target_names),
                 "spellKeybinds": len(keybind_rows),
@@ -3525,6 +3624,16 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "animKitIds": [r[0] for r in kit_anim_rows],
             "animIds": [r[1] for r in kit_anim_rows],
         },
+        # bonesets (§3): the specific body region each of a used AnimKit's anims
+        # animates, keyed by (kit, anim), referencing the pooled bonesetNames.
+        # Shown on the anim pill (one pill per region); "Full Body" is the
+        # default and never shipped.
+        "bonesetNames": boneset_names,
+        "animKitAnimBoneset": {
+            "animKitIds": [r[0] for r in kit_anim_boneset_rows],
+            "animIds": [r[1] for r in kit_anim_boneset_rows],
+            "bonesets": [r[2] for r in kit_anim_boneset_rows],
+        },
         # animation replacements (proc Type 7 + aura 312, merged §3o): one row
         # per (spell, base anim -> replacement anim), both indexing into
         # animNames. Rendered as one "replace" group.
@@ -3611,6 +3720,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         "dissolves": {
             "ids": dissolve_ids,
             "durations": [fx.dissolves[e][0] for e in dissolve_ids],
+            # raw M2 attachment id where the dissolve is anchored, -1 = full body
+            "attaches": [fx.dissolves[e][2] for e in dissolve_ids],
         },
         "dissolveTextures": {
             "dissolveIds": [r[0] for r in dissolve_tex_rows],
@@ -3641,6 +3752,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "primaryColors": [fx.shadowies[e][0] for e in shadowy_ids],
             "secondaryColors": [fx.shadowies[e][1] for e in shadowy_ids],
             "hues": shadowy_hues,
+            # raw M2 attachment id where the shadowy effect is anchored, -1 = full body
+            "attaches": [fx.shadowies[e][2] for e in shadowy_ids],
         },
         # ghost materials (SpellProceduralEffect Type 22): single-color
         # material recolors that render under the same "ghost" category as the
@@ -3879,6 +3992,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         f"  spells={len(spell_ids):,}  files={len(file_ids):,} ({unnamed:,} unnamed)  "
         f"models={len(model_rows):,}  sounds={len(sound_rows):,}  animkits={len(anim_rows):,}  "
         f"kitAnims={len(kit_anim_rows):,}  visualAnims={len(visual_anim_rows):,}  "
+        f"bonesets={len(kit_anim_boneset_rows):,}/{len(boneset_names)}  "
         f"mechanics={len(mechanic_rows):,} ({len(implicit_target_names):,} targets)  "
         f"fx={len(fx_rows):,}  "
         f"fxChains={len(fx_chain_ids):,}  dissolves={len(dissolve_row_pairs):,} "
