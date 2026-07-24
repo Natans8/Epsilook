@@ -63,6 +63,38 @@ BUILD_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BUILD_DIR.parent
 CACHE_DIR = BUILD_DIR / "cache"
 DATA_DIR = ROOT_DIR / "docs" / "data"
+ENUMS_DIR = BUILD_DIR / "enums"
+
+
+def load_local_enum(name: str) -> dict[int, Any]:
+    """Load a checked-in build/enums/<name>.json enum into {value: payload}.
+
+    These are the external game/client enums the build depends on (M2
+    attachment points, procedural-effect types, the kit EffectType dispatch,
+    ...) — cached as parseable files with source attribution instead of
+    hardcoded, so the one place they live is greppable, offline and editable.
+    The payload is whatever the file holds: a name string, an int, or a
+    per-value metadata dict. See enums/README.md for the format. A missing or
+    malformed file is a hard error, the same discipline as read_enum_names.
+    """
+    data = json.loads((ENUMS_DIR / f"{name}.json").read_text(encoding="utf-8"))
+    return {int(k): v for k, v in data["values"].items()}
+
+
+def _enum_ids_where(mapping: dict[int, Any], handler: str) -> set[int]:
+    """The enum values whose metadata dict carries handler == <handler>."""
+    return {k for k, v in mapping.items()
+            if isinstance(v, dict) and v.get("handler") == handler}
+
+
+def _enum_id_where(mapping: dict[int, Any], handler: str) -> int:
+    """The one enum value with handler == <handler> (errors unless exactly one)."""
+    ids = _enum_ids_where(mapping, handler)
+    if len(ids) != 1:
+        sys.exit(f"error: enums expected exactly one value for handler "
+                 f"'{handler}', got {sorted(ids)}")
+    return next(iter(ids))
+
 
 WAGO_CSV_URL = "https://wago.tools/db2/{table}/csv?build={version}"
 LISTFILE_RELEASE_API = "https://api.github.com/repos/wowdev/wow-listfile/releases/latest"
@@ -364,23 +396,18 @@ WOWDBDEFS_ENUM_URL = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/
 ENUM_FILES = ["SpellEffect", "SpellEffectAura", "Target"]
 
 # SpellVisualKitEffect.EffectType values (what the kit effect points at) —
-# the full enum is documented in WoWDBDefs definitions/SpellVisualKitEffect.dbd
-EFFECT_TYPE_PROC = 1  # Effect = SpellProceduralEffect.ID
-EFFECT_TYPE_SOUND = 5  # Effect = SoundKitID
-EFFECT_TYPE_ANIM = 6  # Effect = SpellVisualAnim.ID
-EFFECT_TYPE_SHADOWY = 7  # Effect = ShadowyEffect.ID
-EFFECT_TYPE_EMISSION = 8  # Effect = SpellEffectEmission.ID (area-model emitter)
-EFFECT_TYPE_DISSOLVE = 11  # Effect = DissolveEffect.ID
-EFFECT_TYPE_EDGE_GLOW = 12  # Effect = EdgeGlowEffect.ID
-EFFECT_TYPE_BEAM = 13  # Effect = BeamEffect.ID
-EFFECT_TYPE_BARRAGE = 17  # Effect = BarrageEffect.ID (multi-model volley)
-EFFECT_TYPE_SCREEN = 19  # Effect = SpellVisualScreenEffect.ID (verified:
-# all 18 ET-19 rows in 9.2.7 resolve there)
-# Of the remaining SpellVisualKitEffectType values (survey 2026-07-18):
-# 2 (SpellVisualKitModelAttach) is 100% redundant with the
-# ParentSpellVisualKitID walk; 10 (UnitSoundType) plays the TARGET unit's
-# own sound — no concrete file; 15/20 are absent; the rest carry no
-# model/sound columns.
+# the full enum + dispatch tags live in enums/spell_visual_kit_effect_types.json.
+_KIT_EFFECT_TYPES = load_local_enum("spell_visual_kit_effect_types")
+EFFECT_TYPE_PROC = _enum_id_where(_KIT_EFFECT_TYPES, "proc")  # SpellProceduralEffect.ID
+EFFECT_TYPE_SOUND = _enum_id_where(_KIT_EFFECT_TYPES, "sound")  # SoundKitID
+EFFECT_TYPE_ANIM = _enum_id_where(_KIT_EFFECT_TYPES, "anim")  # SpellVisualAnim.ID
+EFFECT_TYPE_SHADOWY = _enum_id_where(_KIT_EFFECT_TYPES, "shadowy")  # ShadowyEffect.ID
+EFFECT_TYPE_EMISSION = _enum_id_where(_KIT_EFFECT_TYPES, "emission")  # SpellEffectEmission.ID
+EFFECT_TYPE_DISSOLVE = _enum_id_where(_KIT_EFFECT_TYPES, "dissolve")  # DissolveEffect.ID
+EFFECT_TYPE_EDGE_GLOW = _enum_id_where(_KIT_EFFECT_TYPES, "edge_glow")  # EdgeGlowEffect.ID
+EFFECT_TYPE_BEAM = _enum_id_where(_KIT_EFFECT_TYPES, "beam")  # BeamEffect.ID
+EFFECT_TYPE_BARRAGE = _enum_id_where(_KIT_EFFECT_TYPES, "barrage")  # BarrageEffect.ID
+EFFECT_TYPE_SCREEN = _enum_id_where(_KIT_EFFECT_TYPES, "screen")  # SpellVisualScreenEffect.ID
 
 # SpellEffect.EffectAura value whose EffectMiscValue_0 is a ScreenEffect ID —
 # the main road to screen effects (~2.3k spells; the kit route via
@@ -388,11 +415,13 @@ EFFECT_TYPE_SCREEN = 19  # Effect = SpellVisualScreenEffect.ID (verified:
 AURA_SCREEN_EFFECT = 260
 
 # SpellProceduralEffect.Type values. Type IS the client character-procedure
-# index (m_characterProcedure) — see the "Proc type decode" section in
-# CLAUDE.md. Which value column carries the payload differs per type.
-PROC_TYPE_TINT = 1  # Value_0 = packed-RGB model tint (multiply)
-PROC_TYPES_CHAIN = {0, 12, 26}  # Value_0 = SpellChainEffects ID (beams)
-PROC_TYPE_STANDWALK = 7  # Value_0..2 = AnimationData IDs replacing stand/walk/run
+# index (m_characterProcedure) — the full decode + dispatch tags live in
+# enums/spell_procedural_effect_types.json (and the "Proc type decode" section
+# in CLAUDE.md). Which Value_N column carries the payload differs per type.
+_PROC_TYPES = load_local_enum("spell_procedural_effect_types")
+PROC_TYPE_TINT = _enum_id_where(_PROC_TYPES, "tint")  # Value_0 = packed-RGB tint (multiply)
+PROC_TYPES_CHAIN = _enum_ids_where(_PROC_TYPES, "chain")  # Value_0 = SpellChainEffects ID
+PROC_TYPE_STANDWALK = _enum_id_where(_PROC_TYPES, "standwalk")  # Value_0..2 = AnimationData IDs
 # proc Type 7 is animation replacement expressed through fixed engine slots: its
 # Value_0/1/2 are what the character plays INSTEAD of Stand/Walk/Run. So it is
 # the same mechanic as the aura-312 AnimReplacementSet (§3o), just narrower —
@@ -401,14 +430,14 @@ PROC_TYPE_STANDWALK = 7  # Value_0..2 = AnimationData IDs replacing stand/walk/r
 # Value_3 is dropped: it has no base slot and the decode notes it is near-always
 # junk (see the proc decode in CLAUDE.md).
 PROC_STANDWALK_SLOTS = (0, 4, 5)  # base AnimID each of Value_0/1/2 replaces
-PROC_TYPE_AREAMODEL = 9  # Value_0 = SpellVisualKitAreaModel ID (model)
-PROC_TYPE_FREEZE = 11  # valueless freeze/petrify state
-PROC_TYPE_TRANSPARENCY = 14  # Value_0 = alpha 0..1 (SetAlphaMod)
-PROC_TYPE_CAMO = 18  # valueless camouflage/cloak state
-PROC_TYPE_DESATURATE = 21  # Value_2 = desaturation strength 0..1 (no color)
-PROC_TYPE_GHOST_MAT = 22  # Value_3 = packed-RGB material recolor -> ghost
-PROC_TYPE_TINT_MAT = 23  # Value_3 = packed-RGB material recolor -> tint
-PROC_TYPE_WEAPONTRAIL = 27  # Value_0 = WeaponTrail.db2 ID (trail model)
+PROC_TYPE_AREAMODEL = _enum_id_where(_PROC_TYPES, "areamodel")  # Value_0 = SpellVisualKitAreaModel ID
+PROC_TYPE_FREEZE = _enum_id_where(_PROC_TYPES, "freeze")  # valueless freeze/petrify state
+PROC_TYPE_TRANSPARENCY = _enum_id_where(_PROC_TYPES, "transparency")  # Value_0 = alpha 0..1
+PROC_TYPE_CAMO = _enum_id_where(_PROC_TYPES, "camo")  # valueless camouflage/cloak state
+PROC_TYPE_DESATURATE = _enum_id_where(_PROC_TYPES, "desaturate")  # Value_2 = strength 0..1 (no color)
+PROC_TYPE_GHOST_MAT = _enum_id_where(_PROC_TYPES, "ghost_mat")  # Value_3 = packed-RGB recolor -> ghost
+PROC_TYPE_TINT_MAT = _enum_id_where(_PROC_TYPES, "tint_mat")  # Value_3 = packed-RGB recolor -> tint
+PROC_TYPE_WEAPONTRAIL = _enum_id_where(_PROC_TYPES, "weapontrail")  # Value_0 = WeaponTrail.db2 ID
 
 # model categories: every (spell, model) row is tagged with how the model is
 # used — the Models column groups by these short user-facing words
@@ -421,10 +450,12 @@ MODEL_CAT_DISPLAY = 5  # SpellVisualEffectName Type 2 (a CreatureDisplayID's mod
 MODEL_CAT_ITEM = 6  # SpellVisualEffectName Type 1 (an Item::ID's model)
 
 # SpellVisualEffectName.Type: how its GenericID/ModelFileDataID resolves to a
-# model (SpellVisualEffectNameType.dbde). 0 = FileDataID (ModelFileDataID),
-# 1 = Item (GenericID = Item::ID), 2 = CreatureDisplayInfo (GenericID = display).
-EFFECT_NAME_TYPE_DISPLAY = 2
-EFFECT_NAME_TYPE_ITEM = 1
+# model — full enum + dispatch tags in enums/spell_visual_effect_name_types.json.
+# 0 = FileDataID, 1 = Item (GenericID = Item::ID), 2 = CreatureDisplayInfo
+# (GenericID = display); 3-10 = the caster's equipped weapon by slot (below).
+_EFFECT_NAME_TYPES = load_local_enum("spell_visual_effect_name_types")
+EFFECT_NAME_TYPE_DISPLAY = _enum_id_where(_EFFECT_NAME_TYPES, "display")
+EFFECT_NAME_TYPE_ITEM = _enum_id_where(_EFFECT_NAME_TYPES, "item")
 
 # Item.OverallQualityID -> the quality word its pill label is coloured by
 # (ItemQuality; the classic poor/common/uncommon/rare/epic/legendary ramp). The
@@ -433,10 +464,7 @@ EFFECT_NAME_TYPE_ITEM = 1
 # wrong one. Read from ItemSearchName, which carries it for 100% of the items
 # this route reaches — no Wowhead lookup, and it is the quality for the build
 # being packed rather than for current retail.
-ITEM_QUALITY_NAMES = {
-    0: "poor", 1: "common", 2: "uncommon", 3: "rare", 4: "epic",
-    5: "legendary", 6: "artifact", 7: "heirloom", 8: "token",
-}
+ITEM_QUALITY_NAMES = load_local_enum("item_quality")
 # SpellVisualEffectName.Type 3-10 are absent from WoWDBDefs' enum, but every one
 # of them carries NO model in the data — ModelFileDataID AND GenericID are both 0
 # — while attaching to weapon/hand M2 points and being reused as missiles.
@@ -472,10 +500,13 @@ WEAPON_FID_MAIN = -1
 WEAPON_FID_OFF = -2
 WEAPON_FID_RANGED = -3
 WEAPON_FID_AMMO = -4
+# Type -> sentinel fid, built from each weapon type's "slot" tag in the
+# effect-name-type enum (types 3-10; 8/9/10 collapse onto 3/4/5's slots).
+_WEAPON_SLOT_FID = {"main hand": WEAPON_FID_MAIN, "off hand": WEAPON_FID_OFF,
+                    "ranged": WEAPON_FID_RANGED, "ammo": WEAPON_FID_AMMO}
 EFFECT_NAME_TYPE_WEAPON = {
-    3: WEAPON_FID_MAIN, 4: WEAPON_FID_OFF, 5: WEAPON_FID_RANGED,
-    6: WEAPON_FID_AMMO, 7: WEAPON_FID_AMMO,
-    8: WEAPON_FID_MAIN, 9: WEAPON_FID_OFF, 10: WEAPON_FID_RANGED,
+    t: _WEAPON_SLOT_FID[v["slot"]] for t, v in _EFFECT_NAME_TYPES.items()
+    if isinstance(v, dict) and v.get("handler") == "weapon"
 }
 # Fileless model sentinels get a synthetic files-table entry: it names the pill
 # and makes it searchable through the normal file-name path, so no search or
@@ -713,8 +744,7 @@ AURA_ANIM_REPLACEMENT_SET = 312
 # those stay unmapped on purpose and surface as a raw "idx N" label rather
 # than a guess.
 VEHICLE_GEO_COMPONENT_LINKS = [
-    20, 34, 19, 21, 22, 17, 23, 24, 25, 15, 16, 37, 38,
-    39, 40, 41, 42, 43, 44, 45, 46, 0, 47, 48, 6, 5,
+    attach for _, attach in sorted(load_local_enum("vehicle_geo_component_links").items())
 ]
 
 # M2 attachment id -> name (wowdev.wiki/M2 §8.5). The whole enum, because
@@ -729,25 +759,7 @@ VEHICLE_GEO_COMPONENT_LINKS = [
 # .DestinationAttachment and BeamEffect.SourceAttachID / .DestAttachID.
 # (`SpellVisualKitModelAttach.LowDefModelAttachID` is a FileDataID despite
 # its name — max 430259 — and is NOT an attachment.)
-M2_ATTACHMENT_NAMES = {
-    0: "MountMain", 1: "HandRight", 2: "HandLeft", 3: "ElbowRight",
-    4: "ElbowLeft", 5: "ShoulderRight", 6: "ShoulderLeft", 7: "KneeRight",
-    8: "KneeLeft", 9: "HipRight", 10: "HipLeft", 11: "Helm", 12: "Back",
-    13: "ShoulderFlapRight", 14: "ShoulderFlapLeft", 15: "ChestBloodFront",
-    16: "ChestBloodBack", 17: "Breath", 18: "PlayerName", 19: "Base",
-    20: "Head", 21: "SpellLeftHand", 22: "SpellRightHand", 23: "Special1",
-    24: "Special2", 25: "Special3", 26: "SheathMainHand", 27: "SheathOffHand",
-    28: "SheathShield", 29: "PlayerNameMounted", 30: "LargeWeaponLeft",
-    31: "LargeWeaponRight", 32: "HipWeaponLeft", 33: "HipWeaponRight",
-    34: "Chest", 35: "HandArrow", 36: "Bullet", 37: "SpellHandOmni",
-    38: "SpellHandDirected", 39: "VehicleSeat1", 40: "VehicleSeat2",
-    41: "VehicleSeat3", 42: "VehicleSeat4", 43: "VehicleSeat5",
-    44: "VehicleSeat6", 45: "VehicleSeat7", 46: "VehicleSeat8",
-    47: "LeftFoot", 48: "RightFoot", 49: "ShieldNoGlove", 50: "SpineLow",
-    51: "AlteredShoulderR", 52: "AlteredShoulderL", 53: "BeltBuckle",
-    54: "SheathCrossbow", 55: "HeadTop", 56: "VirtualSpellDirected",
-    57: "Backpack",
-}
+M2_ATTACHMENT_NAMES = load_local_enum("m2_attachments")
 
 # attachment columns use -1 for "unset"; missile columns also use -2
 NO_ATTACHMENT = -1
@@ -806,10 +818,7 @@ EFFECT_SPAWN_OBJECT = frozenset({
 # SummonProperties.Control values (meta/enums/SummonPropertiesControl.dbde —
 # too few and too free-form for read_enum_names). 0 = uncontrolled; shown as
 # no word, like untinted beams.
-SUMMON_CONTROL_NAMES = {
-    0: "", 1: "guardian", 2: "pet", 3: "possessed",
-    4: "possessed vehicle", 5: "vehicle",
-}
+SUMMON_CONTROL_NAMES = load_local_enum("summon_properties_control")
 
 # ScreenEffect.Effect value whose Param_0 carries a fog tint (swirling fog).
 SCREEN_EFFECT_FOG = 3

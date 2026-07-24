@@ -1,0 +1,22 @@
+{
+  "enum": "SpellVisualKitEffect.EffectType",
+  "description": "SpellVisualKitEffect.EffectType says which table the row's Effect column points at. 'handler' names the build_data dispatch bucket (absent = not consumed: carries no model/sound/attach column, or is redundant with the ParentSpellVisualKitID walk). Survey 2026-07-18: type 2 (SpellVisualKitModelAttach) is 100% redundant with that walk; 10 (UnitSoundType) plays the target unit's own sound (no concrete file); 15/20 are absent; the rest carry no model/sound columns.",
+  "source": [
+    "https://github.com/wowdev/WoWDBDefs/blob/master/definitions/SpellVisualKitEffect.dbd"
+  ],
+  "keys": "EffectType",
+  "values": {
+    "1":  {"name": "SpellProceduralEffect", "handler": "proc",     "points_at": "SpellProceduralEffect.ID"},
+    "2":  {"name": "SpellVisualKitModelAttach", "note": "redundant with the ParentSpellVisualKitID walk"},
+    "5":  {"name": "Sound",                 "handler": "sound",    "points_at": "SoundKitID"},
+    "6":  {"name": "SpellVisualAnim",       "handler": "anim",     "points_at": "SpellVisualAnim.ID"},
+    "7":  {"name": "ShadowyEffect",         "handler": "shadowy",  "points_at": "ShadowyEffect.ID"},
+    "8":  {"name": "SpellEffectEmission",   "handler": "emission", "points_at": "SpellEffectEmission.ID (area-model emitter)"},
+    "10": {"name": "UnitSoundType",         "note": "plays the target unit's own sound; no concrete file"},
+    "11": {"name": "DissolveEffect",        "handler": "dissolve", "points_at": "DissolveEffect.ID"},
+    "12": {"name": "EdgeGlowEffect",        "handler": "edge_glow","points_at": "EdgeGlowEffect.ID"},
+    "13": {"name": "BeamEffect",            "handler": "beam",     "points_at": "BeamEffect.ID"},
+    "17": {"name": "BarrageEffect",         "handler": "barrage",  "points_at": "BarrageEffect.ID (multi-model volley)"},
+    "19": {"name": "SpellVisualScreenEffect","handler": "screen",  "points_at": "SpellVisualScreenEffect.ID"}
+  }
+}

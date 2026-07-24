@@ -1,0 +1,15 @@
+{
+  "enum": "g_vehicleGeoComponentLinks",
+  "description": "VehicleSeat.AttachmentID is NOT a raw M2 attachment id: it is an INDEX into this client-hardcoded array, which maps a seat index to an m2_attachments id. The array lives in the client binary (in no db2), so it cannot be derived from data and has to be cached here. wowdev.wiki quotes it but hedges with a '?', so it was verified against 138 real vehicle M2s: the decoded id is present on the model 91.2% of the time vs 42.4% for the raw value, and indices 13..20 come out as VehicleSeat1..VehicleSeat8 in order. The array is 6.0.1-era; modern data has seat indices past its end (26, 27), which stay unmapped and surface as a raw 'idx N' label rather than a guess. Full method: CLAUDE.md, VehicleSeat research.",
+  "source": [
+    "https://wowdev.wiki/DB/VehicleSeat",
+    "https://wowdev.wiki/EnumeratedString#Attachments"
+  ],
+  "keys": "seat index",
+  "values": {
+    "0": 20, "1": 34, "2": 19, "3": 21, "4": 22, "5": 17, "6": 23, "7": 24,
+    "8": 25, "9": 15, "10": 16, "11": 37, "12": 38, "13": 39, "14": 40, "15": 41,
+    "16": 42, "17": 43, "18": 44, "19": 45, "20": 46, "21": 0, "22": 47, "23": 48,
+    "24": 6, "25": 5
+  }
+}
