@@ -17,8 +17,17 @@ interface SpellCommand {
     hint: string;
 }
 
+/** One entry in the theme dropdown (docs/js/config.js `themes`). */
+interface ThemeChoice {
+    /** A `:root[data-theme="id"]` palette in app.css, or the reserved "auto". */
+    id: string;
+    label: string;
+}
+
 /** The user-tunable surface (docs/js/config.js). */
 interface EpsilookConfig {
+    themes: ThemeChoice[];
+    defaultTheme: string;
     spellCommands: SpellCommand[];
     modelCopyTemplate: string;
     animCopyTemplate: string;
@@ -974,6 +983,15 @@ interface EpsilookUtilApi {
     hexColor(packed: number): string;
 }
 
+/** window.EpsilookTheme (docs/js/theme.js). */
+interface EpsilookThemeApi {
+    /**
+     * Apply the stored (or default) theme and wire the header picker.
+     * Call once, at boot.
+     */
+    init(): void;
+}
+
 /** window.EpsilookTexture (docs/js/texture.js). */
 interface EpsilookTextureApi {
     /** Supply the pack textures are fetched against. Call before any load(). */
@@ -1041,4 +1059,5 @@ interface Window {
     EpsilookUtil: EpsilookUtilApi;
     EpsilookTexture: EpsilookTextureApi;
     EpsilookExport: EpsilookExportApi;
+    EpsilookTheme: EpsilookThemeApi;
 }

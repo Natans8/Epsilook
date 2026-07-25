@@ -1,29 +1,132 @@
-/* Epsilook — dark WoW-flavored theme */
+/* Epsilook — the theme layer.
+ *
+ * Every colour in this file comes from a token declared here: no rule below
+ * this block names a colour of its own. A theme is therefore one block that
+ * re-declares the palette and nothing else:
+ *
+ *     :root[data-theme="<id>"] { --bg: ...; --text: ...;  }
+ *
+ * plus one {id, label} line in `themes` in js/config.js, which is the picker's
+ * registry. Those two places, nothing more — and the picker appears by itself
+ * once a second theme exists.
+ *
+ * Dark is the only palette shipped: a light one was built and rejected (see
+ * CLAUDE.md). Anything a light palette WOULD have to solve is noted at the
+ * token it affects — --overlay-rgb inverts, --shadow-strength drops, the
+ * item-quality ramp needs darkening, and Wowhead's embedded tooltip has no
+ * background of its own (see the wowhead links section).
+ *
+ * Two conventions keep a palette at one value per colour:
+ *   - a colour that is ALSO composited at an alpha is declared as a bare
+ *     "R, G, B" triple (--gold-rgb), used as rgba(var(--gold-rgb), 0.08).
+ *     Its solid form is derived from the triple in the last block here, so a
+ *     theme still sets the colour once.
+ *   - shadows keep their per-site alphas and scale as a family through
+ *     --shadow-strength: a light theme turns that one number down instead of
+ *     restating every shadow.
+ *
+ * data-theme lives on <html>, set by js/theme.js and replayed by the inline
+ * script in index.html before first paint. An UNSET attribute is dark — the
+ * look the app has always shipped — which is why `defaultTheme` in config.js
+ * must name the same theme as the bare :root palette here.
+ */
 
-:root {
+/* ------------------------------------------------------------ dark (default) */
+
+:root, :root[data-theme="dark"] {
+    /* surfaces and lines */
     --bg: #0e1116;
     --bg-panel: #161b23;
     --bg-row: #131820;
-    --bg-row-alt: #10141b;
+    --bg-row-hover: #1a212c;
     --border: #262d38;
     /* stronger edge for interactive controls (search bar, select, buttons) so
        their boundary clears WCAG 1.4.11's 3:1 — ~3.3:1 on the page bg */
     --border-ctrl: #626b7a;
+    /* washes that lift a surface on a dark theme and shade it on a light one:
+       chip fills, pill backgrounds, hairline column rules */
+    --overlay-rgb: 255, 255, 255;
+    /* shadows: colour + how strongly the whole family lands */
+    --shadow-rgb: 0, 0, 0;
+    --shadow-strength: 1;
+    --backdrop: rgba(5, 7, 11, 0.65);
+    /* checkerboard behind a texture preview, so alpha reads as alpha */
+    --checker-a: #1c232e;
+    --checker-b: #10141b;
+
+    /* text */
     --text: #cfd6e0;
     --text-dim: #7c8694;
+    /* spell names — the one string that outranks body text */
+    --text-strong: #e8edf4;
+    /* the "no value" marker: a readable dim (opacity .5 was ~2.3:1, failing 1.4.3) */
+    --text-muted: #7f8996;
     /* action glyphs living inside pills (3D cube, ▶ play, ⧉/.lo/.morph copies).
        Brighter than --text-dim so the small controls read clearly against the
        row without competing with the pill's colored label. */
     --tag-btn: #a9b4c4;
-    --gold: #f0c34c;
+
+    /* accents: the app's own gold, the exclusion red, the text selection */
+    --gold-rgb: 240, 195, 76;
     --gold-dim: #a8842f;
-    --model: #7fb8f0;
+    --danger-rgb: 224, 112, 112;
+    --select-rgb: 72, 130, 220;
+    --select-border-rgb: 120, 170, 240;
+
+    /* content families — one tone per kind of thing a column shows */
+    --model-rgb: 127, 184, 240;
     --sound: #8fd48f;
-    --soundkit: #5faf8f;
-    --animkit: #c99ae0;
-    --fx: #7fc9d0;
-    --hit: #f0c34c;
-    --danger: #e07070;
+    --soundkit-rgb: 95, 175, 143;
+    --animkit-rgb: 201, 154, 224;
+    --fx-rgb: 127, 201, 208;
+    --anim: #d8b4e8;
+    --mech: #e0a878;
+    /* auras sit one shade from the effects that deliver them */
+    --mech-aura: #f0d68d;
+    /* the priceless invisibility: a cool accent that never reads as a hit */
+    --priceless: #aab4ee;
+    --priceless-border: #6f7bd6;
+    --priceless-rgb: 123, 138, 214;
+
+    /* item quality — the classic WoW ramp */
+    --q-poor: #9d9d9d;
+    --q-common: #ffffff;
+    --q-uncommon: #1eff00;
+    --q-rare: #0070dd;
+    --q-epic: #a335ee;
+    --q-legendary: #ff8000;
+    --q-artifact: #e6cc80;
+    --q-heirloom: #00ccff;
+
+    /* command buttons */
+    --cmd-bg-top: #232b38;
+    --cmd-bg-bottom: #1a212c;
+    --cmd-border: #3a4351;
+    --cmd-text: #dfe6ef;
+    --cmd-bevel: rgba(255, 255, 255, 0.05);
+}
+
+/* ----------------------------------------------------------------- derived */
+
+/* Follows whichever palette won above — a theme never restates these. */
+:root {
+    --gold: rgb(var(--gold-rgb));
+    --danger: rgb(var(--danger-rgb));
+    --model: rgb(var(--model-rgb));
+    --soundkit: rgb(var(--soundkit-rgb));
+    --animkit: rgb(var(--animkit-rgb));
+    --fx: rgb(var(--fx-rgb));
+    /* faint column separators keep tall uneven rows readable */
+    --border-faint: rgba(var(--overlay-rgb), 0.045);
+
+    /* Wowhead's own surfaces: brand chrome, deliberately NOT part of a
+       palette. The button is theirs, it looks the same everywhere it appears,
+       and a theme re-skinning it only makes it look broken. */
+    --wh-bg-top: #2b1c12;
+    --wh-bg-bottom: #1d130c;
+    --wh-border: #4a2e1e;
+    --wh-hover-rgb: 192, 64, 0;
+
     font-size: 15px;
 }
 
@@ -75,7 +178,7 @@ input:focus-visible,
 }
 
 /* sticky header cell would clip an outset ring — inset it instead */
-th[data-sort] > button:focus-visible {
+#results th[data-sort] > button:focus-visible {
     outline-offset: -2px;
 }
 
@@ -108,7 +211,7 @@ h1 {
     font-size: 1.6rem;
     letter-spacing: 0.06em;
     color: var(--gold);
-    text-shadow: 0 0 18px rgba(240, 195, 76, 0.25);
+    text-shadow: 0 0 18px rgba(var(--gold-rgb), 0.25);
     display: inline;
 }
 
@@ -119,13 +222,31 @@ h1 {
     font-size: 0.9rem;
 }
 
-#version-wrap {
+/* the header's right-hand controls — the theme picker, then the version
+   selector with its logo. They wrap under one another before the header does */
+.header-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.1rem;
+    min-width: 0;
+}
+
+#theme-wrap, #version-wrap {
     display: flex;
     align-items: center;
     gap: 0.4rem;
 }
 
-#version-wrap label {
+/* both wraps ship hidden and are un-hidden only when there is a choice to make
+   (2+ themes / 2+ visible packs) — and an author `display` beats the `hidden`
+   attribute's UA rule, so it has to be said explicitly here */
+#theme-wrap[hidden], #version-wrap[hidden] {
+    display: none;
+}
+
+.header-controls label {
     color: var(--text-dim);
     font-size: 0.85rem;
 }
@@ -201,7 +322,7 @@ main {
 
 #qbar:focus-within {
     border-color: var(--gold-dim);
-    box-shadow: 0 0 0 3px rgba(240, 195, 76, 0.12);
+    box-shadow: 0 0 0 3px rgba(var(--gold-rgb), 0.12);
 }
 
 /* only the true trailing gap (nothing after it) fills the rest of the
@@ -258,7 +379,7 @@ main {
     padding: 0.05rem 0.55rem;
     border: 1px solid var(--gold-dim);
     border-radius: 999px;
-    background: rgba(240, 195, 76, 0.07);
+    background: rgba(var(--gold-rgb), 0.07);
 }
 
 /* shrink-to-fit, not flex:0 0 auto: sizeInput gives the input an explicit ch
@@ -289,7 +410,7 @@ main {
     padding: 0.12rem 0.3rem 0.12rem 0.6rem;
     border: 1px solid var(--border);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--overlay-rgb), 0.05);
     font-size: 0.98rem;
     cursor: pointer;
 }
@@ -315,32 +436,32 @@ main {
 /* bar-wide selection: chips picked up by Ctrl+A / drag / Shift+arrows read
  * as one highlighted run together with the input's own selected text */
 #q::selection {
-    background: rgba(72, 130, 220, 0.45);
+    background: rgba(var(--select-rgb), 0.45);
 }
 
 .qchip.selected {
-    background: rgba(72, 130, 220, 0.35);
-    border-color: rgba(120, 170, 240, 0.7);
+    background: rgba(var(--select-rgb), 0.35);
+    border-color: rgba(var(--select-border-rgb), 0.7);
 }
 
 .qchip.qfree.selected {
-    background: rgba(72, 130, 220, 0.45);
+    background: rgba(var(--select-rgb), 0.45);
     border-radius: 4px;
 }
 
 /* exclusion chips */
 .qchip.not {
-    border-color: rgba(224, 112, 112, 0.5);
-    background: rgba(224, 112, 112, 0.08);
+    border-color: rgba(var(--danger-rgb), 0.5);
+    background: rgba(var(--danger-rgb), 0.08);
 }
 
 .qchip.not.selected {
-    background: rgba(72, 130, 220, 0.35);
+    background: rgba(var(--select-rgb), 0.35);
 }
 
 #editwrap.editing.not {
-    border-color: rgba(224, 112, 112, 0.65);
-    background: rgba(224, 112, 112, 0.08);
+    border-color: rgba(var(--danger-rgb), 0.65);
+    background: rgba(var(--danger-rgb), 0.08);
 }
 
 #editwrap.not #editlabel {
@@ -356,7 +477,7 @@ main {
 
 .qchip-field:hover, #editlabel:hover {
     text-decoration: underline;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(var(--overlay-rgb), 0.08);
 }
 
 .qchip-field {
@@ -385,7 +506,7 @@ main {
 
 .qchip-x:hover {
     color: var(--danger);
-    background: rgba(224, 112, 112, 0.12);
+    background: rgba(var(--danger-rgb), 0.12);
 }
 
 /* field colors for chips, edit label and suggestions */
@@ -406,7 +527,7 @@ main {
 }
 
 .f-anim .qchip-field, .suggest-field.f-anim {
-    color: #d8b4e8;
+    color: var(--anim);
 }
 
 .f-fx .qchip-field, .suggest-field.f-fx {
@@ -414,7 +535,7 @@ main {
 }
 
 .f-mech .qchip-field, .suggest-field.f-mech {
-    color: #e0a878;
+    color: var(--mech);
 }
 
 .f-name .qchip-field, .suggest-field.f-name {
@@ -434,7 +555,7 @@ main {
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: 10px;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 8px 28px rgba(var(--shadow-rgb), calc(0.5 * var(--shadow-strength)));
     overflow: hidden;
 }
 
@@ -448,7 +569,7 @@ main {
 }
 
 .suggest-item:hover, .suggest-item.selected {
-    background: rgba(240, 195, 76, 0.08);
+    background: rgba(var(--gold-rgb), 0.08);
 }
 
 .suggest-field {
@@ -532,13 +653,13 @@ main {
 #tabs .tab.active {
     color: var(--gold);
     border-color: var(--gold-dim);
-    background: rgba(240, 195, 76, 0.08);
+    background: rgba(var(--gold-rgb), 0.08);
 }
 
 #tabs .tab.active-not {
     color: var(--danger);
-    border-color: rgba(224, 112, 112, 0.5);
-    background: rgba(224, 112, 112, 0.08);
+    border-color: rgba(var(--danger-rgb), 0.5);
+    background: rgba(var(--danger-rgb), 0.08);
 }
 
 #tabs .tab.active-not .tab-exc {
@@ -560,11 +681,11 @@ main {
     border: 1px solid var(--border);
     border-radius: 14px;
     padding: 1.1rem 1.5rem 1.4rem;
-    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 18px 60px rgba(var(--shadow-rgb), calc(0.55 * var(--shadow-strength)));
 }
 
 #help::backdrop {
-    background: rgba(5, 7, 11, 0.65);
+    background: var(--backdrop);
 }
 
 .help-top {
@@ -591,7 +712,7 @@ main {
 
 #help-close:hover {
     color: var(--danger);
-    background: rgba(224, 112, 112, 0.12);
+    background: rgba(var(--danger-rgb), 0.12);
 }
 
 .help-grid {
@@ -683,7 +804,7 @@ main {
 #help ul.help-ex button:focus-visible {
     color: var(--gold);
     border-color: var(--gold-dim);
-    background: rgba(240, 195, 76, 0.08);
+    background: rgba(var(--gold-rgb), 0.08);
 }
 
 /* --------------------------------------------------------------- toolbar */
@@ -783,7 +904,7 @@ main {
 #export button:hover {
     border-color: var(--gold-dim);
     color: var(--gold);
-    box-shadow: 0 0 10px rgba(240, 195, 76, 0.15);
+    box-shadow: 0 0 10px rgba(var(--gold-rgb), 0.15);
 }
 
 .export-sep {
@@ -798,13 +919,19 @@ main {
     overflow-x: auto;
 }
 
-table {
+/* SCOPED TO #results ON PURPOSE — every rule in this section is. Bare `table`
+   / `th` / `td` / `tbody tr` selectors also hit any table the page does not
+   own: Wowhead's embedded tooltip is built from one, and it was picking up the
+   sticky opaque `th` background (a rectangle that ignores their border), our
+   cell padding, our column rules and width:100%. The results table is the only
+   table the app has, so nothing here needs to be global. */
+#results {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.92rem;
 }
 
-th {
+#results th {
     text-align: left;
     color: var(--text-dim);
     font-weight: 600;
@@ -823,11 +950,11 @@ th {
 /* the sortable header's interactive part is a real <button> (keyboard-
    operable); it fills the cell so the whole header stays clickable, and
    inherits the th's uppercase/spacing so it looks identical to a plain th */
-th[data-sort] {
+#results th[data-sort] {
     padding: 0;
 }
 
-th[data-sort] > button {
+#results th[data-sort] > button {
     width: 100%;
     padding: 0.45rem 0.6rem;
     font: inherit;
@@ -836,39 +963,43 @@ th[data-sort] > button {
     cursor: pointer;
 }
 
-th[data-sort]:hover {
+#results th[data-sort]:hover {
     color: var(--text);
 }
 
-th.sorted {
+#results th.sorted {
     color: var(--gold);
 }
 
-th .arrow {
+#results th .arrow {
     font-size: 0.7em;
 }
 
-td {
+#results td {
     padding: 0.6rem 0.7rem;
     border-bottom: 1px solid var(--border);
     vertical-align: top;
 }
 
 /* faint column separators keep tall uneven rows readable */
-td:not(:last-child), th:not(:last-child) {
-    border-right: 1px solid rgba(255, 255, 255, 0.045);
+#results td:not(:last-child), #results th:not(:last-child) {
+    border-right: 1px solid var(--border-faint);
 }
 
-tbody tr {
+#results tbody tr {
     background: var(--bg-row);
 }
 
-tbody tr:hover {
-    background: #1a212c;
+#results tbody tr:hover {
+    background: var(--bg-row-hover);
     box-shadow: inset 3px 0 0 var(--gold-dim);
 }
 
-.c-idx {
+/* #results-prefixed like the cell rules above it, and for the same reason: its
+   font-size and text-align have to keep outranking `#results th`, exactly as
+   the bare `.c-idx` outranked the bare `th`. The other .c-* rules set only
+   widths, which no cell rule competes for. */
+#results .c-idx {
     width: 2.5rem;
     color: var(--text-dim);
     font-size: 0.85em;
@@ -876,7 +1007,7 @@ tbody tr:hover {
     font-variant-numeric: tabular-nums;
 }
 
-th.c-idx {
+#results th.c-idx {
     text-align: right;
 }
 
@@ -926,7 +1057,7 @@ th.c-idx {
 }
 
 .spell-name {
-    color: #e8edf4;
+    color: var(--text-strong);
     font-weight: 600;
 }
 
@@ -945,8 +1076,8 @@ th.c-idx {
     border-radius: 3px;
     vertical-align: -5px;
     margin-right: 0.4rem;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(var(--overlay-rgb), 0.14);
+    background: rgba(var(--shadow-rgb), calc(0.3 * var(--shadow-strength)));
 }
 
 .spell-sub {
@@ -955,20 +1086,20 @@ th.c-idx {
 }
 
 mark.hl {
-    background: rgba(240, 195, 76, 0.28);
+    background: rgba(var(--gold-rgb), 0.28);
     color: inherit;
     border-radius: 3px;
     padding: 0 1px;
 }
 
-td.empty {
+#results td.empty {
     text-align: center;
     vertical-align: middle;
 }
 
 /* "no value" marker — a readable dim (was opacity .5 ≈ 2.3:1, failed 1.4.3) */
 .none {
-    color: #7f8996;
+    color: var(--text-muted);
 }
 
 /* column hiding */
@@ -1020,7 +1151,7 @@ td.empty {
     margin: 0.18rem 0;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(var(--overlay-rgb), 0.02);
     overflow: hidden;
 }
 
@@ -1041,19 +1172,19 @@ td.empty {
 }
 
 .c-models .kit-head {
-    background: rgba(127, 184, 240, 0.08);
+    background: rgba(var(--model-rgb), 0.08);
 }
 
 .c-sounds .kit-head {
-    background: rgba(95, 175, 143, 0.10);
+    background: rgba(var(--soundkit-rgb), 0.10);
 }
 
 .c-animations .kit-head {
-    background: rgba(201, 154, 224, 0.09);
+    background: rgba(var(--animkit-rgb), 0.09);
 }
 
 .c-fx .kit-head {
-    background: rgba(127, 201, 208, 0.08);
+    background: rgba(var(--fx-rgb), 0.08);
 }
 
 .kit-head .tag, .kit-head .tag.hit {
@@ -1068,7 +1199,7 @@ td.empty {
 }
 
 .kit-group.hit .kit-head {
-    background: rgba(240, 195, 76, 0.13);
+    background: rgba(var(--gold-rgb), 0.13);
 }
 
 .kit-files {
@@ -1137,7 +1268,7 @@ td.empty {
     vertical-align: top;
     margin: 0.1rem 0.25rem 0.1rem 0;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(var(--overlay-rgb), 0.03);
 }
 
 .kit-group.compact .kit-head {
@@ -1145,7 +1276,7 @@ td.empty {
 }
 
 .kit-group.compact.hit {
-    background: rgba(240, 195, 76, 0.10);
+    background: rgba(var(--gold-rgb), 0.10);
 }
 
 .kit-group.compact .kit-head:not(:last-child) .tag-label {
@@ -1160,13 +1291,13 @@ td.empty {
     margin: 2px;
     border: 1px solid var(--border);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(var(--overlay-rgb), 0.04);
     overflow: hidden;
 }
 
 .kit-group.compact .kit-files:has(> .tag.hit) {
     border-color: var(--gold-dim);
-    background: rgba(240, 195, 76, 0.10);
+    background: rgba(var(--gold-rgb), 0.10);
 }
 
 .kit-group.compact .kit-files .tag,
@@ -1186,7 +1317,7 @@ td.empty {
     margin: 0.1rem 0.25rem 0.1rem 0;
     border: 1px solid var(--border);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(var(--overlay-rgb), 0.03);
     font-size: 0.86em;
     overflow: hidden;
 }
@@ -1218,15 +1349,15 @@ td.empty {
 }
 
 .t-target {
-    color: #e0a878;
+    color: var(--mech);
 }
 
 .t-notcaster {
-    color: var(--danger, #e07070);
+    color: var(--danger);
 }
 
 .t-area {
-    color: var(--fx, #7fc9d0);
+    color: var(--fx);
 }
 
 /* a label straight after the icons doesn't need its own left padding */
@@ -1257,7 +1388,7 @@ td.empty {
 }
 
 .tag [data-role="meta"] {
-    --seg-divider: var(--tag-sep, rgba(255, 255, 255, 0.12));
+    --seg-divider: rgba(var(--overlay-rgb), 0.12);
 }
 
 .tag [data-sep="left"] {
@@ -1320,7 +1451,7 @@ td.empty {
 @media (hover: hover) {
     .tag-label[data-tex-fid] {
         text-decoration: underline dotted;
-        text-decoration-color: rgba(255, 255, 255, 0.4);
+        text-decoration-color: rgba(var(--overlay-rgb), 0.4);
         text-underline-offset: 2px;
     }
 
@@ -1355,18 +1486,18 @@ td.empty {
 }
 
 .tag.anim {
-    --tone: #d8b4e8;
+    --tone: var(--anim);
 }
 
 .tag.mechanic {
-    --tone: #e0a878;
+    --tone: var(--mech);
 }
 
 /* Aura mechanics: same family as spell effects, one shade apart. The aura is
    what the spell actually DOES — it leads its pill and carries the weight,
    while the APPLY_AURA that delivers it trails as a dim .tag-attach. */
 .tag.mechanic.aura {
-    --tone: #f0d68d;
+    --tone: var(--mech-aura);
 }
 
 .tag.fx, .tag.fx-head {
@@ -1404,7 +1535,7 @@ td.empty {
     height: 0.62em;
     margin-left: 0.5rem;
     border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.35);
+    border: 1px solid rgba(var(--overlay-rgb), 0.35);
 }
 
 .fx-swatch + .tag-label {
@@ -1419,7 +1550,7 @@ td.empty {
 /* swatches with a hover panel hint at it like texture labels do */
 @media (hover: hover) {
     .fx-swatch[data-color]:hover {
-        border-color: rgba(255, 255, 255, 0.8);
+        border-color: rgba(var(--overlay-rgb), 0.8);
     }
 }
 
@@ -1447,7 +1578,7 @@ td.empty {
 
 .tag-copy:hover {
     color: var(--gold);
-    background: rgba(240, 195, 76, 0.1);
+    background: rgba(var(--gold-rgb), 0.1);
 }
 
 /* ▶ on sound file tags — streams the sound from Wowhead's CDN */
@@ -1460,7 +1591,7 @@ td.empty {
 
 .tag-play:hover {
     color: var(--gold);
-    background: rgba(240, 195, 76, 0.1);
+    background: rgba(var(--gold-rgb), 0.1);
 }
 
 .tag-play.playing {
@@ -1494,7 +1625,7 @@ td.empty {
 
 .tag-view:hover {
     color: var(--gold);
-    background: rgba(240, 195, 76, 0.1);
+    background: rgba(var(--gold-rgb), 0.1);
     text-decoration: none;
 }
 
@@ -1518,19 +1649,19 @@ td.empty {
 
 .tag.hit {
     border-color: var(--gold-dim);
-    background: rgba(240, 195, 76, 0.10);
+    background: rgba(var(--gold-rgb), 0.10);
 }
 
 /* an invisibility nothing detects — the priceless case. A distinct cool accent
    (not gold, so it never reads as a search hit) and non-interactive; a search
    hit still overrides it in gold. */
 .tag.fx.priceless:not(.hit) {
-    border-color: #6f7bd6;
-    background: rgba(123, 138, 214, 0.12);
+    border-color: var(--priceless-border);
+    background: rgba(var(--priceless-rgb), 0.12);
 }
 
 .tag.fx.priceless {
-    --tone: #aab4ee;
+    --tone: var(--priceless);
 }
 
 .tag.fx.priceless .tag-label {
@@ -1553,7 +1684,7 @@ td.empty {
     height: 1.15em;
     border-radius: 2px;
     flex: 0 0 auto;
-    border: 1px solid rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(var(--shadow-rgb), calc(0.45 * var(--shadow-strength)));
 }
 
 .tag.model.item .item-icon-link {
@@ -1583,36 +1714,36 @@ td.empty {
    which overrides the default model blue through the pill's tone. Nameless
    items set no quality class and keep --model. */
 .tag.model.item.q-poor {
-    --tone: #9d9d9d;
+    --tone: var(--q-poor);
 }
 
 .tag.model.item.q-common {
-    --tone: #ffffff;
+    --tone: var(--q-common);
 }
 
 .tag.model.item.q-uncommon {
-    --tone: #1eff00;
+    --tone: var(--q-uncommon);
 }
 
 .tag.model.item.q-rare {
-    --tone: #0070dd;
+    --tone: var(--q-rare);
 }
 
 .tag.model.item.q-epic {
-    --tone: #a335ee;
+    --tone: var(--q-epic);
 }
 
 .tag.model.item.q-legendary {
-    --tone: #ff8000;
+    --tone: var(--q-legendary);
 }
 
 .tag.model.item.q-artifact {
-    --tone: #e6cc80;
+    --tone: var(--q-artifact);
 }
 
 .tag.model.item.q-heirloom,
 .tag.model.item.q-token {
-    --tone: #00ccff;
+    --tone: var(--q-heirloom);
 }
 
 /* pills/groups the height clamp hides (layoutRow toggles .overflow directly).
@@ -1630,7 +1761,7 @@ td .tag.overflow, td .kit-group.overflow {
     margin: 0.18rem 0.25rem 0.1rem 0;
     padding: 0.1rem 0.5rem;
     color: var(--text);
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(var(--overlay-rgb), 0.06);
     border: 1px solid var(--border-ctrl);
     border-radius: 999px;
     font-size: 0.8em;
@@ -1640,7 +1771,7 @@ td .tag.overflow, td .kit-group.overflow {
 
 .more:hover {
     color: var(--gold);
-    background: rgba(240, 195, 76, 0.12);
+    background: rgba(var(--gold-rgb), 0.12);
     border-color: var(--gold-dim);
 }
 
@@ -1657,27 +1788,28 @@ td .tag.overflow, td .kit-group.overflow {
 .cmd {
     padding: 0.2rem 0.4rem;
     text-align: center;
-    border: 1px solid #3a4351;
+    border: 1px solid var(--cmd-border);
     border-radius: 7px;
-    background: linear-gradient(180deg, #232b38, #1a212c);
-    color: #dfe6ef;
+    background: linear-gradient(180deg, var(--cmd-bg-top), var(--cmd-bg-bottom));
+    color: var(--cmd-text);
     font-size: 0.78rem;
     font-weight: 600;
     font-family: Consolas, "Cascadia Mono", monospace;
     white-space: nowrap;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    box-shadow: 0 1px 2px rgba(var(--shadow-rgb), calc(0.45 * var(--shadow-strength))),
+    inset 0 1px 0 var(--cmd-bevel);
     transition: border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.06s;
 }
 
 .cmd:hover {
     border-color: var(--gold);
     color: var(--gold);
-    box-shadow: 0 0 12px rgba(240, 195, 76, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    box-shadow: 0 0 12px rgba(var(--gold-rgb), 0.35), inset 0 1px 0 var(--cmd-bevel);
 }
 
 .cmd:active {
     transform: translateY(1px);
-    box-shadow: 0 0 6px rgba(240, 195, 76, 0.25);
+    box-shadow: 0 0 6px rgba(var(--gold-rgb), 0.25);
 }
 
 /* wowhead links */
@@ -1690,9 +1822,9 @@ td .tag.overflow, td .kit-group.overflow {
     width: 1.5rem;
     height: 1.5rem;
     margin: 0.08rem 0.25rem 0.08rem 0;
-    border: 1px solid #4a2e1e;
+    border: 1px solid var(--wh-border);
     border-radius: 7px;
-    background: linear-gradient(180deg, #2b1c12, #1d130c);
+    background: linear-gradient(180deg, var(--wh-bg-top), var(--wh-bg-bottom));
     transition: border-color 0.12s, box-shadow 0.12s;
 }
 
@@ -1702,8 +1834,8 @@ td .tag.overflow, td .kit-group.overflow {
 }
 
 .wowhead:hover {
-    border-color: #c04000;
-    box-shadow: 0 0 10px rgba(192, 64, 0, 0.45);
+    border-color: rgb(var(--wh-hover-rgb));
+    box-shadow: 0 0 10px rgba(var(--wh-hover-rgb), 0.45);
 }
 
 .tag .wowhead {
@@ -1719,7 +1851,7 @@ td .tag.overflow, td .kit-group.overflow {
 }
 
 .tag .wowhead:hover {
-    background: rgba(192, 64, 0, 0.18);
+    background: rgba(var(--wh-hover-rgb), 0.18);
     box-shadow: none;
 }
 
@@ -1727,6 +1859,13 @@ td .tag.overflow, td .kit-group.overflow {
     width: 0.85rem;
     height: 0.85rem;
 }
+
+/* Their embedded tooltip (.wowhead-tooltip, injected by tooltips.js and styled
+   by their universal.css) is DELIBERATELY not styled here. It draws its own
+   border, icon and text colours but sets no background, so the page's shows
+   through — which is how it comes out of Wowhead, and it stays that way.
+   Worth knowing before writing a light palette: white name and gold body text
+   on a light surface is unreadable, and the fix is not ours to make. */
 
 /* wowhead link on a pill's LEFT edge (morph pills): divider flips sides,
    extra outer padding clears the rounded corner */
@@ -1799,7 +1938,7 @@ td .tag.overflow, td .kit-group.overflow {
 .es-examples button:hover {
     border-color: var(--gold-dim);
     color: var(--gold);
-    box-shadow: 0 0 10px rgba(240, 195, 76, 0.18);
+    box-shadow: 0 0 10px rgba(var(--gold-rgb), 0.18);
 }
 
 .es-hint {
@@ -1873,7 +2012,7 @@ footer a {
     font-size: 2rem;
     letter-spacing: 0.08em;
     color: var(--gold);
-    text-shadow: 0 0 24px rgba(240, 195, 76, 0.35);
+    text-shadow: 0 0 24px rgba(var(--gold-rgb), 0.35);
     margin-bottom: 1.2rem;
 }
 
@@ -1924,7 +2063,7 @@ footer a {
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: center;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 8px 28px rgba(var(--shadow-rgb), calc(0.4 * var(--shadow-strength)));
     z-index: 20;
 }
 
@@ -1954,14 +2093,14 @@ footer a {
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: 8px;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 8px 28px rgba(var(--shadow-rgb), calc(0.55 * var(--shadow-strength)));
     pointer-events: none; /* never traps the mouse away from the pill */
 }
 
 /* checkerboard behind the canvas so alpha reads as alpha */
 #texpreview .tex-img {
     line-height: 0;
-    background: repeating-conic-gradient(#1c232e 0% 25%, #10141b 0% 50%) 0 0 / 16px 16px;
+    background: repeating-conic-gradient(var(--checker-a) 0% 25%, var(--checker-b) 0% 50%) 0 0 / 16px 16px;
     border-radius: 3px;
     overflow: hidden;
 }

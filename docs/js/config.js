@@ -4,6 +4,24 @@
 "use strict";
 
 window.EpsilookConfig = {
+    // The theme dropdown, in the order it lists them. Each id is a palette
+    // block in css/app.css (`:root[data-theme="id"]`); adding a theme is one
+    // block there plus one line here, and the dropdown shows up on its own
+    // once there are two (with one theme there is nothing to pick, so the
+    // control stays hidden — same rule as the version selector).
+    //
+    // The id "auto" is reserved: it is not a palette but "follow the OS's
+    // light/dark setting", re-following it live. Listing it only makes sense
+    // once a light palette exists, so it is left out for now.
+    themes: [
+        {id: "dark", label: "Dark"},
+    ],
+
+    // The theme used until someone picks one. Must name the palette app.css
+    // applies with no data-theme set (its bare `:root` block) — otherwise the
+    // first visit paints that one for an instant before this takes over.
+    defaultTheme: "dark",
+
     // Copy-command buttons shown on every spell row (the spell ID itself is
     // copied by clicking it). {id} is replaced with the spell ID.
     spellCommands: [

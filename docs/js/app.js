@@ -14,6 +14,8 @@
     const Texture = window.EpsilookTexture;
     // CSV/JSON/Discord output; given what it needs by initExport() at boot
     const Export = window.EpsilookExport;
+    // the theme picker — owns everything under <html data-theme>
+    const Theme = window.EpsilookTheme;
 
     /* ---------------------------------------------------------- typedefs */
 
@@ -4337,6 +4339,8 @@
         // versionId is a getter, not a value — the active pack changes underneath.
         Texture.init({versionId: () => state.version.id});
         Export.init({state, targetWordsOf, maskOf, toast, copyText, NO_SCREEN_COLORS});
+        // owns no app state — it only needs to run before the header is seen
+        Theme.init();
         try {
             Object.assign(state.hiddenCols, JSON.parse(localStorage.getItem("epsilook.hiddenCols.v4") || "{}"));
         } catch (e) { /* corrupted storage — defaults apply */

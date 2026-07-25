@@ -48,6 +48,7 @@ docs/                    the site — GitHub Pages serves this folder as-is
   index.html             markup + the in-app help dialog
   js/config.js           copy-command templates and UI tunables
   js/util.js             leaf helpers shared by every script (DOM, templates)
+  js/theme.js            the theme registry -> <html data-theme> + the picker
   js/data.js             pack loading + in-memory index building
   js/pills.js            the segment library results are built from
   js/pilltypes.js        one record per kind of content shown and searched
@@ -73,7 +74,7 @@ cd docs && python -m http.server 8377
 ```
 
 Pushing to `main` deploys. Any CSS/JS change needs the `?v=` cache-buster in
-`index.html` bumped (8 spots); data packs bust themselves via a content hash in `versions.json`.
+`index.html` bumped (13 spots); data packs bust themselves via a content hash in `versions.json`.
 
 ### Rebuilding the data
 
@@ -137,6 +138,11 @@ into `meta.absentTables`.
   **[PILLS.md](PILLS.md)** — it also carries the segment-order convention and the rules for choosing a keyword.
 - **A new copy command**: `spellCommands` in `config.js` for per-spell buttons; the `*CopyTemplate` entries for the ones
   on tags.
+- **A new theme**: every colour in `app.css` comes from a token in the block at the top, so a theme is one
+  `:root[data-theme="<id>"] { ... }` block re-declaring those tokens plus one `{id, label}` line in `themes` in
+  `config.js`. The header picker builds itself from that registry and appears once a second theme exists; the choice is
+  remembered per browser, and the reserved id `auto` follows the OS's light/dark setting. Dark is the only palette
+  shipped — a light one was built and rejected as too harsh for the app.
 
 ### Checking your changes
 
