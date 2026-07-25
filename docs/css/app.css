@@ -1747,9 +1747,11 @@ mark.hl {
 }
 
 /* pills/groups the height clamp hides (layoutRow toggles .overflow directly).
-   The `td` prefix lifts specificity above .kit-group.compact / .kit-files .tag
-   so an overflow pill or a compact group is always hidden. */
-td .tag.overflow, td .kit-group.overflow {
+   The cell prefix lifts specificity above .kit-group.compact / .kit-files .tag
+   so an overflow pill or a compact group is always hidden. Scoped like every
+   other cell rule, which leaves the file with no bare table selectors at all —
+   see the Wowhead tooltip note above for why that matters. */
+#results td .tag.overflow, #results td .kit-group.overflow {
     display: none;
 }
 
