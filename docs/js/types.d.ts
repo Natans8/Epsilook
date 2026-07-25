@@ -954,9 +954,93 @@ declare class BLPFile {
     getPixels(mipmap: number, canvas?: HTMLCanvasElement | null): Uint8Array;
 }
 
+/** window.EpsilookUtil (docs/js/util.js). Leaf helpers — no app state. */
+interface EpsilookUtilApi {
+    /** querySelector for elements that provably exist in index.html. */
+    $(sel: string): HTMLElement;
+
+    $$(sel: string, root?: ParentNode): NodeListOf<HTMLElement>;
+
+    /** querySelectorAll for form controls, which read .checked / .value. */
+    $$inputs(sel: string, root?: ParentNode): NodeListOf<HTMLInputElement>;
+
+    el<K extends keyof HTMLElementTagNameMap>(
+        tag: K, className?: string, text?: string): HTMLElementTagNameMap[K];
+
+    targetClosest(e: Event, sel: string): HTMLElement | null;
+
+    /** Fill {slot} placeholders in a config URL/command template. */
+    fillTemplate(tpl: string, vars: Record<string, string | number>): string;
+
+    /** A packed 0xRRGGBB colour as "#rrggbb". */
+    hexColor(packed: number): string;
+}
+
+/** window.EpsilookTexture (docs/js/texture.js). */
+interface EpsilookTextureApi {
+    /** Supply the pack textures are fetched against. Call before any load(). */
+    init(deps: { versionId: () => string }): void;
+
+    /**
+     * Fetch + decode one .blp to a canvas, or null if it is missing, encrypted
+     * or undecodable. Session-cached per fid; never throws.
+     */
+    load(fid: number): Promise<HTMLCanvasElement | null>;
+
+    /** Wire the results table for texture and colour hover previews. */
+    initHoverPreview(): void;
+
+    hideHoverPreview(): void;
+}
+
+/**
+ * The slice of app.js's state the export module reads. Deliberately narrow —
+ * it is the contract, so widening it should be a visible change.
+ */
+interface EpsilookExportState {
+    /** The active pack's indexes. */
+    readonly data: any;
+    /** Columns switched off in the UI, omitted from every export. */
+    readonly hiddenCols: Record<string, boolean>;
+    /** Spell ids currently listed, in display order. */
+    readonly display: number[];
+    readonly lastQuery: string;
+    readonly version: { id: string };
+}
+
+/** What app.js lends EpsilookExport — see EpsilookExportApi.init. */
+interface EpsilookExportDeps {
+    /** Live and read-only to the export module. */
+    state: EpsilookExportState;
+    targetWordsOf(mask: number): string[];
+    maskOf(index: any, spellId: number, itemIds: number[]): number;
+    toast(msg: string): void;
+    copyText(text: string, wrapTicks?: boolean, message?: string): void;
+    /** Stand-in for a ScreenEffect row carrying no colour payload. */
+    NO_SCREEN_COLORS: ScreenColors;
+}
+
+/** window.EpsilookExport (docs/js/export.js). */
+interface EpsilookExportApi {
+    init(deps: EpsilookExportDeps): void;
+
+    /** The current results as plain serialisable objects, hidden columns omitted. */
+    rows(): any[];
+
+    csv(): void;
+
+    json(): void;
+
+    /** Copies a fenced code block to the clipboard rather than downloading. */
+    discord(): void;
+}
+
 interface Window {
     EpsilookConfig: EpsilookConfig;
     EpsilookData: EpsilookDataApi;
     EpsilookSearch: EpsilookSearchApi;
     EpsilookPills: EpsilookPillsApi;
+    EpsilookUtil: EpsilookUtilApi;
+    EpsilookTexture: EpsilookTextureApi;
+    EpsilookExport: EpsilookExportApi;
 }

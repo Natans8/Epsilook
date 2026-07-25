@@ -10,6 +10,10 @@
     const Search = window.EpsilookSearch;
     // the pill/segment library — every result-cell pill is assembled through it
     const P = window.EpsilookPills;
+    // .blp loading + the hover previews built on it
+    const Texture = window.EpsilookTexture;
+    // CSV/JSON/Discord output; given what it needs by initExport() at boot
+    const Export = window.EpsilookExport;
 
     /* ---------------------------------------------------------- typedefs */
 
@@ -141,66 +145,8 @@
      */
     const stripExt = (name) => name.replace(/\.[^.]+$/, "");
 
-    /**
-     * A packed 0xRRGGBB color as a CSS hex string. Every color in the pack —
-     * chain tints, glows, ghosts, screen grades — is stored packed, so this is
-     * the one place that formatting lives.
-     * @param {number} packed
-     * @returns {string}
-     */
-    const hexColor = (packed) => "#" + packed.toString(16).padStart(6, "0");
-
-    /**
-     * querySelector shorthand — for elements that provably exist in
-     * index.html (hence the non-null HTMLElement return).
-     * @param {string} sel
-     * @returns {HTMLElement}
-     */
-    const $ = (sel) => /** @type {HTMLElement} */ (document.querySelector(sel));
-
-    /**
-     * querySelectorAll shorthand, typed for HTML elements.
-     * @param {string} sel
-     * @param {ParentNode} [root]
-     * @returns {NodeListOf<HTMLElement>}
-     */
-    const $$ = (sel, root = document) =>
-        /** @type {NodeListOf<HTMLElement>} */ (root.querySelectorAll(sel));
-
-    /**
-     * querySelectorAll for form controls — the checkbox rows read .checked and
-     * .value, which plain Element / HTMLElement don't carry.
-     * @param {string} sel
-     * @param {ParentNode} [root]
-     * @returns {NodeListOf<HTMLInputElement>}
-     */
-    const $$inputs = (sel, root = document) =>
-        /** @type {NodeListOf<HTMLInputElement>} */ (root.querySelectorAll(sel));
-
-    /**
-     * Create an element, optionally with a class and text content.
-     * @template {keyof HTMLElementTagNameMap} K
-     * @param {K} tag
-     * @param {string} [className]
-     * @param {string} [text]
-     * @returns {HTMLElementTagNameMap[K]}
-     */
-    const el = (tag, className, text) => {
-        const node = document.createElement(tag);
-        if (className) node.className = className;
-        if (text !== undefined) node.textContent = text;
-        return node;
-    };
-
-    /**
-     * The closest ancestor of an event's target matching sel, or null —
-     * the typed form of `e.target.closest(sel)`.
-     * @param {Event} e
-     * @param {string} sel
-     * @returns {HTMLElement | null}
-     */
-    const targetClosest = (e, sel) => e.target instanceof Element
-        ? /** @type {HTMLElement | null} */ (e.target.closest(sel)) : null;
+    // Leaf DOM/template helpers - see docs/js/util.js.
+    const {$, $$, $$inputs, el, targetClosest, fillTemplate, hexColor} = window.EpsilookUtil;
 
     /* --------------------------------------------------------- clipboard */
 
@@ -261,8 +207,6 @@
         ta.remove();
         if (prev && prev !== document.body) prev.focus({preventScroll: true});
     }
-
-    const fillTemplate = (tpl, vars) => tpl.replace(/\{(\w+)}/g, (_, k) => vars[k] ?? "");
 
     /**
      * Wowhead site path prefix for the active pack's game version — "classic/"
@@ -3619,513 +3563,6 @@
         });
     }
 
-    /* --------------------------------------------- texture hover preview */
-
-    // Pills with data-tex-fid show the texture on hover: the raw .blp comes
-    // from wago.tools (version-pinned), decoded onto a canvas by the vendored
-    // js-blp + bufo libs (the same decoder wago.tools' own file viewer uses).
-    // Fetched only after a short hover-intent delay, cached per session
-    // (a failed fid caches as null and stays silent).
-    const texCache = new Map(); // fid -> Promise<canvas|null> (untinted base)
-    let texHoverKey = "";       // fid|tint of the pill being hovered
-    let texHoverTimer = 0;
-
-    function textureCanvas(fid) {
-        let p = texCache.get(fid);
-        if (!p) {
-            const url = fillTemplate(CFG.texturePreviewUrl, {fid, version: state.version.id});
-            p = fetch(url)
-                .then((r) => {
-                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                    return r.arrayBuffer();
-                })
-                .then((buf) => {
-                    // encrypted CASC files come back as all-zero bytes — no preview
-                    if (!new Uint8Array(buf).some((b) => b !== 0)) return null;
-                    const blp = new BLPFile(buf);
-                    const cv = document.createElement("canvas");
-                    cv.width = blp.width;
-                    cv.height = blp.height;
-                    blp.getPixels(0, cv); // decodes mip 0 straight into the canvas
-                    return cv;
-                })
-                .catch(() => null);
-            texCache.set(fid, p);
-        }
-        return p;
-    }
-
-    function texPanel() {
-        let panel = $("#texpreview");
-        if (!panel) {
-            panel = el("div", "");
-            panel.id = "texpreview";
-            panel.append(el("div", "tex-img"), el("div", "tex-dims"));
-            document.body.appendChild(panel);
-        }
-        return panel;
-    }
-
-    function hideTexPreview() {
-        texHoverKey = "";
-        clearTimeout(texHoverTimer);
-        const panel = $("#texpreview");
-        if (panel) panel.style.display = "none";
-    }
-
-    // beam tint: texture.rgb × tint.rgb (how the game colors chain textures),
-    // keeping the texture's own alpha
-    function tintedCanvas(base, tint) {
-        const cv = document.createElement("canvas");
-        cv.width = base.width;
-        cv.height = base.height;
-        const ctx = cv.getContext("2d");
-        ctx.drawImage(base, 0, 0);
-        ctx.globalCompositeOperation = "multiply";
-        ctx.fillStyle = tint;
-        ctx.fillRect(0, 0, cv.width, cv.height);
-        ctx.globalCompositeOperation = "destination-in";
-        ctx.drawImage(base, 0, 0); // multiply fills alpha — restore the base's
-        return cv;
-    }
-
-    // place the panel above its anchor (native title tooltips pop below the
-    // cursor), measured invisibly first; fall back to below at the viewport top
-    function placeTexPanel(panel, anchor) {
-        panel.style.visibility = "hidden";
-        panel.style.display = "block";
-        const r = anchor.getBoundingClientRect();
-        const pr = panel.getBoundingClientRect();
-        const x = Math.max(8, Math.min(r.left, window.innerWidth - pr.width - 8));
-        let y = r.top - pr.height - 6;
-        if (y < 8) y = r.bottom + 6;
-        panel.style.left = x + "px";
-        panel.style.top = y + "px";
-        panel.style.visibility = "";
-    }
-
-    function showTexPreview(label, baseCanvas) {
-        const tint = label.dataset.texTint || "";
-        const canvas = tint ? tintedCanvas(baseCanvas, tint) : baseCanvas;
-        const note = tint ? ` · tint ${tint}` : "";
-        const max = CFG.texturePreviewMax || 256;
-        const scale = Math.min(1, max / canvas.width, max / canvas.height);
-        canvas.style.width = Math.round(canvas.width * scale) + "px";
-        canvas.style.height = Math.round(canvas.height * scale) + "px";
-
-        const panel = texPanel();
-        panel.firstElementChild.replaceChildren(canvas);
-        panel.lastChild.textContent = `${canvas.width}×${canvas.height}` + note;
-        placeTexPanel(panel, label);
-    }
-
-    // same panel for color swatches: a large patch of the color, captioned with
-    // the hex, the channel values, the hue word and which effect it belongs to
-    // (data-color-info). Alpha only where the source actually carries one
-    // (data-alpha): screen fog opacity and EdgeGlowEffect.GlowAlpha.
-    function showColorPreview(swatch) {
-        const hex = swatch.dataset.color;
-        const alpha = swatch.dataset.alpha;
-        const patch = el("div", "tex-color");
-        const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-        // a translucent color shows the panel's checkerboard through it
-        patch.style.background = alpha === undefined
-            ? hex : `rgba(${r}, ${g}, ${b}, ${(alpha / 255).toFixed(3)})`;
-        const panel = texPanel();
-        panel.firstElementChild.replaceChildren(patch);
-        const hue = hueWordOf(hex);
-        const rgb = alpha === undefined
-            ? `rgb(${r}, ${g}, ${b})`
-            // show alpha both as the raw byte and the 0..1 the tables store
-            : `rgba(${r}, ${g}, ${b}, ${(alpha / 255).toFixed(2)})`;
-        panel.lastChild.textContent = `${hex} · ${rgb}`
-            + (alpha === undefined ? "" : ` · alpha ${alpha}/255`)
-            + (hue ? ` · ${hue}` : "")
-            + (swatch.dataset.colorInfo ? ` · ${swatch.dataset.colorInfo}` : "");
-        placeTexPanel(panel, swatch);
-    }
-
-    // coarse hue word for the caption — the same buckets build_data.py bakes
-    // into the search corpora, so the word shown is the word that searches
-    function hueWordOf(hex) {
-        const c = parseInt(hex.slice(1), 16);
-        const r = ((c >> 16) & 255) / 255, g = ((c >> 8) & 255) / 255, b = (c & 255) / 255;
-        const max = Math.max(r, g, b), min = Math.min(r, g, b);
-        const sat = max ? (max - min) / max : 0;
-        if (sat < 0.15 || max < 0.08) return ""; // white / grey / near-black
-        const d = max - min;
-        let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-        let deg = h * 60;
-        if (deg < 0) deg += 360;
-        for (const [limit, name] of /** @type {[number, string][]} */ ([
-            [15, "red"], [45, "orange"], [70, "yellow"], [160, "green"],
-            [200, "cyan"], [255, "blue"], [290, "purple"], [330, "pink"],
-            [361, "red"]])) {
-            if (deg < limit) return name;
-        }
-        return "";
-    }
-
-    function initTexPreview() {
-        if (!window.matchMedia("(hover: hover)").matches) return;
-        const results = $("#results");
-        results.addEventListener("mouseover", (e) => {
-            // color swatches first — no fetch involved, same intent delay
-            const swatch = targetClosest(e, "[data-color]");
-            if (swatch) {
-                const key = "color|" + swatch.dataset.color + "|" + (swatch.dataset.colorInfo || "")
-                    + "|" + (swatch.dataset.alpha || "");
-                if (key === texHoverKey) return;
-                hideTexPreview();
-                texHoverKey = key;
-                texHoverTimer = setTimeout(() => {
-                    if (texHoverKey === key && swatch.isConnected) showColorPreview(swatch);
-                }, 150);
-                return;
-            }
-            if (!CFG.texturePreviewUrl) return;
-            const label = targetClosest(e, "[data-tex-fid]");
-            if (!label) return;
-            const fid = Number(label.dataset.texFid);
-            // the tint joins the key: two pills can share a texture but tint it
-            // differently, and the cache is per-fid untinted
-            const key = fid + "|" + (label.dataset.texTint || "");
-            if (key === texHoverKey) return;
-            hideTexPreview();
-            texHoverKey = key;
-            texHoverTimer = setTimeout(async () => {
-                const canvas = await textureCanvas(fid);
-                if (canvas && texHoverKey === key && label.isConnected) showTexPreview(label, canvas);
-            }, 150);
-        });
-        results.addEventListener("mouseout", (e) => {
-            const label = targetClosest(e, "[data-tex-fid], [data-color]");
-            if (label && !label.contains(/** @type {Node} */ (e.relatedTarget))) hideTexPreview();
-        });
-        window.addEventListener("scroll", hideTexPreview, {passive: true});
-    }
-
-    /* ------------------------------------------------------------ export */
-
-    // Hidden columns are excluded from exports.
-    function exportRows() {
-        const d = state.data;
-        const hc = state.hiddenCols;
-        const pathOf = (fid) => (d.files.get(fid) || {}).path || `#${fid}`;
-        return state.display.map((id) => {
-            const i = d.spellIndex.get(id);
-            const row = {id, name: d.names[i], subtext: d.subtexts[i]};
-            if (!hc.models) {
-                // grouped by usage category (soundKits-style shape); a stale pack
-                // without categories exports the old flat path list
-                const cats = d.spellModelCats.get(id);
-                if (cats) {
-                    const byCat = new Map();
-                    for (const e of cats) {
-                        if (!byCat.has(e.cat)) byCat.set(e.cat, []);
-                        // each file carries who it plays on — the export's form of the icons
-                        byCat.get(e.cat).push({path: pathOf(e.fid), targets: targetWordsOf(e.targets)});
-                    }
-                    row.models = [...byCat.keys()].sort((a, b) => a - b).map((c) => ({
-                        // the wordless attach category renders as loose pills in the UI,
-                        // but an export still needs a name for it
-                        category: d.modelCatNames[c] || (c === 0 ? "attached" : `cat ${c}`),
-                        files: byCat.get(c),
-                    }));
-                } else {
-                    row.models = (d.spellModels.get(id) || []).map(pathOf);
-                }
-            }
-            if (!hc.sounds) {
-                const byKit = new Map();
-                const kitMask = new Map();
-                for (const e of d.spellSounds.get(id) || []) {
-                    if (!byKit.has(e.soundKitId)) byKit.set(e.soundKitId, []);
-                    byKit.get(e.soundKitId).push(pathOf(e.fid));
-                    kitMask.set(e.soundKitId, (kitMask.get(e.soundKitId) || 0) | (e.targets || 0));
-                }
-                row.soundKits = [...byKit.keys()].sort((a, b) => a - b).map((k) => ({
-                    id: k, files: byKit.get(k), targets: targetWordsOf(kitMask.get(k) || 0),
-                }));
-            }
-            if (!hc.animations) {
-                const loose = (d.spellVisualAnims.get(id) || []).slice().sort((a, b) => a - b);
-                const looseMasks = d.visualAnimTargets.get(id);
-                if (loose.length) {
-                    row.anims = loose.map((a) => ({
-                        name: d.animNames[a],
-                        targets: targetWordsOf(looseMasks ? looseMasks.get(a) || 0 : 0),
-                    }));
-                }
-                row.animKits = (d.spellAnimKits.get(id) || []).slice().sort((a, b) => a - b)
-                    .map((k) => ({
-                        id: k,
-                        anims: (d.animKitAnims.get(k) || []).map((a) => d.animNames[a]),
-                        targets: targetWordsOf(maskOf(d.animKitTargets, id, [k])),
-                    }));
-                const swaps = d.spellReplaceAnims.get(id) || [];
-                if (swaps.length) {
-                    row.replaceAnims = swaps.map((sw) => ({
-                        from: d.animNames[sw.src], to: d.animNames[sw.dst],
-                    }));
-                }
-            }
-            if (!hc.fx) {
-                // one entry per pill, in the cell's category order; the shapes differ
-                // per category, hence the shared loose ExportFxEntry
-                /** @type {ExportFxEntry[]} */
-                const chains = (d.spellFx.get(id) || []).slice().sort((a, b) => a - b).map((c) => {
-                    const info = d.fxChains.get(c) || {color: 0xffffff, hue: ""};
-                    return {
-                        type: "chain",
-                        textures: (d.fxTextures.get(c) || []).map(pathOf),
-                        tint: info.color === 0xffffff ? null : hexColor(info.color),
-                    };
-                });
-                row.fx = chains.concat((d.spellDissolves.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
-                    type: "dissolve",
-                    textures: (d.dissolveTextures.get(c) || []).map(pathOf),
-                    duration: d.dissolveDurations.get(c) || null,
-                }))).concat((d.spellGlows.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
-                    type: "glow",
-                    color: hexColor(d.glowColors.get(c) ?? 0),
-                }))).concat((d.spellShadowies.get(id) || []).slice().sort((a, b) => a - b).map((c) => {
-                    const sh = d.shadowyColors.get(c) || {primary: 0, secondary: 0};
-                    return {
-                        type: "ghost",
-                        colors: [sh.primary, sh.secondary].map(hexColor),
-                    };
-                })).concat((d.spellGhostMats.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
-                    type: "ghost",
-                    color: hexColor(d.ghostMatColors.get(c) ?? 0),
-                }))).concat((d.spellTints.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
-                    type: "tint",
-                    color: hexColor(d.tintColors.get(c) ?? 0),
-                }))).concat([...new Set(d.spellDesaturates.get(id) || [])].sort((a, b) => a - b)
-                    .map((p) => ({type: "desaturate", percent: p}))
-                ).concat([...new Set(d.spellTransps.get(id) || [])].sort((a, b) => a - b)
-                    .map((p) => ({type: "transparency", percent: p}))
-                ).concat(d.spellFreezes.has(id) ? [{type: "freeze"}] : []
-                ).concat(d.spellCamos.has(id) ? [{type: "camo"}] : []
-                ).concat((d.spellScreens.get(id) || []).slice().sort((a, b) => a - b).map((sc) => {
-                    const c = d.screenColors.get(sc) || NO_SCREEN_COLORS;
-                    /** @param {number} v -1 = the row has no such color. */
-                    const hx = (v) => v >= 0 ? hexColor(v) : null;
-                    return {
-                        type: "screen",
-                        screenId: sc,
-                        name: d.screenNames.get(sc) || null,
-                        fogTint: hx(c.fog),
-                        fogAlpha: c.fogAlpha >= 0 ? c.fogAlpha : null,
-                        colorMultiply: hx(c.mul),
-                        colorAddition: hx(c.add),
-                        // overlays are finished art; masks are painted by the colors
-                        overlays: (d.screenTextures.get(sc) || [])
-                            .filter((t) => !t.mask).map((t) => pathOf(t.fid)),
-                        masks: (d.screenTextures.get(sc) || [])
-                            .filter((t) => t.mask).map((t) => pathOf(t.fid)),
-                    };
-                })).concat((d.spellShapeshifts.get(id) || []).slice().sort((a, b) => a - b)
-                    .map((f) => ({
-                        type: "shapeshift",
-                        formId: f,
-                        form: d.shapeshiftNames.get(f) || null,
-                        displays: (d.shapeshiftDisplays.get(f) || []).map((e) => ({
-                            displayId: e.displayId,
-                            model: e.fid ? pathOf(e.fid) : null,
-                        })),
-                    }))).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
-                    type: "morph",
-                    creatureId: c,
-                    creature: d.morphNames.get(c) || null,
-                    displays: (d.morphDisplays.get(c) || []).map((e) => ({
-                        displayId: e.displayId,
-                        model: e.fid ? pathOf(e.fid) : null,
-                    })),
-                }))).concat((d.spellSummons.get(id) || []).slice()
-                    .sort((a, b) => (a.creatureId - b.creatureId) || (a.control - b.control))
-                    .map((e) => ({
-                        type: "summon",
-                        creatureId: e.creatureId,
-                        creature: d.summonNames.get(e.creatureId) || null,
-                        control: d.summonControlNames[e.control] || null,
-                    }))).concat((d.spellSpeedMods.get(id) || []).slice()
-                    .sort((a, b) => a.move.localeCompare(b.move) || a.pct - b.pct)
-                    .map((e) => ({
-                        type: "speed",
-                        movement: e.move,
-                        // signed, as the pill shows it — see speedTag for why the
-                        // change and not the resulting speed
-                        percent: e.pct,
-                    }))).concat((d.spellScaleMods.get(id) || []).slice()
-                    .sort((a, b) => a.pct - b.pct)
-                    .map((e) => ({type: "scale", percent: e.pct})));
-            }
-            if (!hc.mechanics) {
-                // one entry per effect, mirroring the pills — aura first, then the
-                // effect carrying it. An export is read without tooltips or icons, so
-                // unlike the pill it spells the implicit targets out:
-                // "PERIODIC_DAMAGE / APPLY_AURA -> TARGET_UNIT_CASTER"
-                row.mechanics = (d.spellMechanics.get(id) || []).map((m) => {
-                    const does = [
-                        m.aura ? (d.auraNames.get(m.aura) || `AURA_${m.aura}`) : "",
-                        m.effect ? (d.effectNames.get(m.effect) || `EFFECT_${m.effect}`) : "",
-                    ].filter(Boolean).join(" / ");
-                    const at = [m.targetA, m.targetB].filter(Boolean)
-                        .map((t) => `TARGET_${d.implicitTargetNames.get(t) || t}`).join(" + ");
-                    return at ? `${does} -> ${at}` : does;
-                });
-            }
-            return row;
-        });
-    }
-
-    function exportFilename(ext) {
-        const q = state.lastQuery.replace(/[^\w-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "results";
-        return `epsilook-${q}.${ext}`;
-    }
-
-    function downloadFile(name, mime, content) {
-        const a = el("a");
-        a.href = URL.createObjectURL(new Blob([content], {type: mime}));
-        a.download = name;
-        a.click();
-        URL.revokeObjectURL(a.href);
-        toast(`Exported ${name}`);
-    }
-
-    function nothingToExport() {
-        if (state.display.length === 0) {
-            toast("Nothing to export — search first");
-            return true;
-        }
-        return false;
-    }
-
-    function exportCsv() {
-        if (nothingToExport()) return;
-        const hc = state.hiddenCols;
-        const esc = (v) => {
-            const s = String(v);
-            return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-        };
-        const header = ["ID", "Name", "Subtext"];
-        if (!hc.models) header.push("Models");
-        if (!hc.sounds) header.push("SoundKits", "Sounds");
-        if (!hc.animations) header.push("AnimKits", "Animations");
-        if (!hc.fx) header.push("Effects");
-        if (!hc.mechanics) header.push("Mechanics");
-        // CSV has no icons, so a row's target types ride its text: "file [caster+target]"
-        const withTargets = (e) =>
-            (e.targets && e.targets.length ? `${e.path} [${e.targets.join("+")}]` : `${e.path}`);
-        const lines = [header.join(",")];
-        for (const r of exportRows()) {
-            const cols = [r.id, esc(r.name), esc(r.subtext)];
-            if (!hc.models) {
-                cols.push(esc(r.models.map((m) => (m.files
-                    ? `${m.category}: ${m.files.map(withTargets).join(" | ")}`
-                    : m)).join("; ")));
-            }
-            if (!hc.sounds) {
-                cols.push(esc(r.soundKits.map((k) => k.id).join("; ")));
-                cols.push(esc(r.soundKits.map(
-                    (k) => `${withTargets({path: k.id, targets: k.targets})}: ${k.files.join(" | ")}`)
-                    .join("; ")));
-            }
-            if (!hc.animations) {
-                cols.push(esc(r.animKits.map((k) => k.id).join("; ")));
-                cols.push(esc((r.anims || []).map((a) => withTargets({path: a.name, targets: a.targets}))
-                    .concat(r.animKits.map(
-                        (k) => `${withTargets({path: k.id, targets: k.targets})}: ${k.anims.join(" | ")}`))
-                    .concat(r.replaceAnims
-                        ? [`replace: ${/** @type {string[]} */ (r.replaceAnims.map((sw) => `${sw.from} → ${sw.to}`)).join(" | ")}`]
-                        : []).join("; ")));
-            }
-            if (!hc.fx) {
-                cols.push(esc(r.fx.map((e) => {
-                    if (e.type === "morph") {
-                        return `morph: ${e.creature || "?"} (creature ${e.creatureId}): `
-                            + (e.displays.map((disp) => `${disp.displayId}=${disp.model || "?"}`).join(" | ") || "?");
-                    }
-                    // a form with no display is name-only — no ": …" tail
-                    if (e.type === "shapeshift") {
-                        const disp = e.displays
-                            .map((x) => `${x.displayId}=${x.model || "?"}`).join(" | ");
-                        return `shapeshift: ${e.form || `form ${e.formId}`}`
-                            + (disp ? `: ${disp}` : "");
-                    }
-                    if (e.type === "summon") {
-                        return `summon: ${e.creature || "?"} (creature ${e.creatureId})`
-                            + (e.control ? ` [${e.control}]` : "");
-                    }
-                    // signed percent changes: the sign is half the meaning, and
-                    // for speed the movement word is the other half
-                    if (e.type === "speed" || e.type === "scale") {
-                        return `${e.type}: ${e.movement ? e.movement + " " : ""}`
-                            + `${e.percent > 0 ? "+" : ""}${e.percent}%`;
-                    }
-                    if (e.percent !== undefined) // percent-only fx (desaturate / transparency)
-                        return `${e.type}: ${e.percent}%`;
-                    if (e.type === "freeze" || e.type === "camo") // valueless fx
-                        return e.type;
-                    if (e.type === "screen") { // named + optional colors/textures
-                        const tex = e.overlays.concat(e.masks);
-                        return `screen: ${e.name || e.screenId}`
-                            + (e.fogTint ? ` (${e.fogTint})` : "")
-                            + (tex.length ? `: ${tex.join(" | ")}` : "");
-                    }
-                    if (e.color || e.colors) // color-only fx (glow / ghost / tint)
-                        return `${e.type}: ${e.color || e.colors.join(" | ")}`;
-                    return `${e.type}: ${e.textures.join(" | ") || "(untextured)"}`
-                        + (e.tint ? ` (${e.tint})` : "") + (e.duration ? ` (${e.duration}s)` : "");
-                }).join("; ")));
-            }
-            if (!hc.mechanics) cols.push(esc(r.mechanics.join("; ")));
-            lines.push(cols.join(","));
-        }
-        downloadFile(exportFilename("csv"), "text/csv", lines.join("\r\n"));
-    }
-
-    function exportJson() {
-        if (nothingToExport()) return;
-        const payload = {
-            app: "Epsilook",
-            url: location.href,
-            gameVersion: state.version.id,
-            query: state.lastQuery,
-            count: state.display.length,
-            spells: exportRows(),
-        };
-        downloadFile(exportFilename("json"), "application/json", JSON.stringify(payload, null, 2));
-    }
-
-    function exportDiscord() {
-        if (nothingToExport()) return;
-        const rows = exportRows();
-        const idWidth = Math.max(...rows.map((r) => String(r.id).length), 2);
-        const header = `**Epsilook** — ${rows.length.toLocaleString()} ${rows.length === 1 ? "spell" : "spells"} for \`${state.lastQuery}\`\n<${location.href}>\n\`\`\`\n`;
-        const closer = "\n```";
-        const footer = (remaining) => `\n…and ${remaining.toLocaleString()} more (full list: link above)`;
-        const reserve = closer.length + footer(rows.length).length; // worst-case footer length
-
-        let body = "";
-        let shown = 0;
-        for (const r of rows) {
-            const line = `${String(r.id).padEnd(idWidth)}  ${r.name}${r.subtext ? ` (${r.subtext})` : ""}`;
-            const candidate = body + (shown ? "\n" : "") + line;
-            if (shown > 0 && header.length + candidate.length + reserve > CFG.discordCharLimit) break;
-            body = candidate;
-            shown++;
-        }
-
-        let text = header + body + closer;
-        if (shown < rows.length) text += footer(rows.length - shown);
-        const summary = shown < rows.length
-            ? `Copied ${shown.toLocaleString()} of ${rows.length.toLocaleString()} spells to clipboard`
-            : `Copied ${shown.toLocaleString()} ${shown === 1 ? "spell" : "spells"} to clipboard`;
-        copyText(text, false, summary);
-    }
-
     function updateSortHeaders() {
         for (const th of $$("th[data-sort]")) {
             const active = state.sort.key === th.dataset.sort;
@@ -4664,9 +4101,9 @@
 
         // share + export
         $("#share-link").addEventListener("click", shareLink);
-        $("#export-csv").addEventListener("click", exportCsv);
-        $("#export-json").addEventListener("click", exportJson);
-        $("#export-discord").addEventListener("click", exportDiscord);
+        $("#export-csv").addEventListener("click", Export.csv);
+        $("#export-json").addEventListener("click", Export.json);
+        $("#export-discord").addEventListener("click", Export.discord);
 
         // filters — tri-state, each click cycles any -> only with -> only without.
         // Part of the shareable state, so the URL follows (a push: Back undoes the
@@ -4832,7 +4269,7 @@
         slot.replaceChildren();
         slot.title = "";
         if (!logo) return;
-        const canvas = await textureCanvas(logo.fid);
+        const canvas = await Texture.load(logo.fid);
         // a slow fetch can land after the user has switched again
         if (!canvas || state.version !== entry) return;
         canvas.style.height = CFG.expansionLogoHeight + "px";
@@ -4896,13 +4333,17 @@
     }
 
     async function boot() {
+        // hand the leaf modules what app.js owns, before anything can call them.
+        // versionId is a getter, not a value — the active pack changes underneath.
+        Texture.init({versionId: () => state.version.id});
+        Export.init({state, targetWordsOf, maskOf, toast, copyText, NO_SCREEN_COLORS});
         try {
             Object.assign(state.hiddenCols, JSON.parse(localStorage.getItem("epsilook.hiddenCols.v4") || "{}"));
         } catch (e) { /* corrupted storage — defaults apply */
         }
         buildTabs();
         wireEvents();
-        initTexPreview();
+        Texture.initHoverPreview();
         applyHiddenCols();
         try {
             state.versions = await Data.loadVersions();
@@ -4936,8 +4377,8 @@
         filtersFromUrl(h.only, h.without);
         sortFromUrl(h.sort);
         await activateVersion(entry);
-        if (autoExport === "json") exportJson();
-        else if (autoExport === "csv") exportCsv();
+        if (autoExport === "json") Export.json();
+        else if (autoExport === "csv") Export.csv();
         qInput.focus();
     }
 

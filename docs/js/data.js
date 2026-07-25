@@ -398,13 +398,9 @@ window.EpsilookData = (() => {
             if (words.size) spellBonesetL.set(spellId, [...words].join(" "));
         }
 
-        /**
-         * Packed RGB -> "#rrggbb" (the form fx corpora carry, so hex queries
-         * like fx:#ff5800 — or just a hex prefix — match by substring).
-         * @param {number} c
-         * @returns {string}
-         */
-        const hexColor = (c) => "#" + c.toString(16).padStart(6, "0");
+        // Packed RGB -> "#rrggbb" (the form fx corpora carry, so hex queries
+        // like fx:#ff5800 — or just a hex prefix — match by substring).
+        const {hexColor} = window.EpsilookUtil;
 
         // visual FX: chain/beam effects (category word "chain" since
         // 2026-07-19). Each chain has a tint (0xFFFFFF = untinted), a hue word,

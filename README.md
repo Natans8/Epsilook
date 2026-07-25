@@ -47,10 +47,13 @@ Full syntax lives behind the **?** button in the app. The short version:
 docs/                    the site — GitHub Pages serves this folder as-is
   index.html             markup + the in-app help dialog
   js/config.js           copy-command templates and UI tunables
+  js/util.js             leaf helpers shared by every script (DOM, templates)
   js/data.js             pack loading + in-memory index building
   js/pills.js            the segment library results are built from
   js/pilltypes.js        one record per kind of content shown and searched
   js/search.js           query parser + the FIELDS registry (one per prefix)
+  js/texture.js          .blp loading + the texture/colour hover previews
+  js/export.js           the results as CSV, JSON or a Discord code block
   js/app.js              all UI wiring
   js/types.d.ts          shared type declarations (dev-time only, never served)
   js/{bufo,js-blp}.js    vendored BLP texture decoder (Kruithne, MIT)
