@@ -115,9 +115,43 @@ needs editing.
 }
 ```
 
-**d. Add it to the cell** — for fx, one `cats.push(...)` block saying how the spell's ids collapse into pills. Use
-`targetSplit(masks)` for the icons:
-`.head` for the category head, `.pill(mask)` for a row.
+**d. Add it to the cell** — for fx, one `pushCat({...})` call in `fxCell` saying how the spell's rows become pills.
+The helper owns the shape every category shares (the head-vs-pill icon split, hit-floating, the group envelope), so a
+plain category is four lines:
+
+```js
+pushCat({
+  name: "sparkle",
+  rows: sparkleIds,
+  mask: (id) => maskOf(d.sparkleTargets, spellId, [id]),
+  isHit: (id) => sparkleIsHit(id),
+  render: (id, m) => sparkleTag(id, m),
+});
+```
+
+It pushes nothing when `rows` is empty, so no `if` is needed around it.
+
+**Rows are not always pills.** `pushCat` keeps two levels apart, and getting them right is the whole job:
+
+| | what it is | decides |
+|---|---|---|
+| **source rows** (`rows`) | what the spell actually has in the category | the category's hit state, and — via `targetSplit` — whether the target icon can ride the head |
+| **entries** | what becomes a pill | the pills, through `render` |
+
+`entries(rows)` maps between them and is the only place a category's collapsing rule lives. Most categories **dedupe**
+(chain, dissolve, glow, ghost, tint, keybind — rows sharing a texture or color become one pill and union their masks);
+morph and shapeshift **expand** (one creature with three displays becomes three pills). Omit `entries` when the rows
+already are the pills (summon, speed, scale, the invis/detect channels). When entries differ from rows, give
+`entryIsHit` and `entryMask` too — their defaults (`isHit`, `mask`) are only correct when the two are the same thing.
+
+Two escape hatches, both used exactly once:
+
+- **`headMasks`** — which masks decide whether the icon can ride the head. Defaults to the source rows'. `keybind`
+  overrides it to the *deduped* pills' masks, because a merged pill genuinely shows its members' union.
+- **omitting `render`** — valueless categories (`freeze`, `camo`) whose clickable head IS the whole pill. They carry one
+  nominal row so the category exists, and `entries: () => []`.
+
+Don't reach for `targetSplit` directly; `pushCat` calls it. It stays exported only because the helper needs it.
 
 ### Choosing the keyword
 
