@@ -39,6 +39,20 @@ window.EpsilookExport = (() => {
         const d = state.data;
         const hc = state.hiddenCols;
         const pathOf = (fid) => (d.files.get(fid) || {}).path || `#${fid}`;
+        /**
+         * A spell's id list in ascending order — a copy, since the index's own
+         * arrays must not be reordered. Missing (an absent route) reads as empty.
+         * @param {number[]} [ids]
+         * @returns {number[]}
+         */
+        const sorted = (ids = []) => ids.slice().sort((a, b) => a - b);
+        /**
+         * Same, deduped — the percent routes (desaturate, transparency) can
+         * carry the same value on several of a spell's rows.
+         * @param {number[]} [vals]
+         * @returns {number[]}
+         */
+        const uniqSorted = (vals = []) => sorted([...new Set(vals)]);
         return state.display.map((id) => {
             const i = d.spellIndex.get(id);
             const row = {id, name: d.names[i], subtext: d.subtexts[i]};
@@ -76,7 +90,7 @@ window.EpsilookExport = (() => {
                 }));
             }
             if (!hc.animations) {
-                const loose = (d.spellVisualAnims.get(id) || []).slice().sort((a, b) => a - b);
+                const loose = sorted(d.spellVisualAnims.get(id));
                 const looseMasks = d.visualAnimTargets.get(id);
                 if (loose.length) {
                     row.anims = loose.map((a) => ({
@@ -84,7 +98,7 @@ window.EpsilookExport = (() => {
                         targets: targetWordsOf(looseMasks ? looseMasks.get(a) || 0 : 0),
                     }));
                 }
-                row.animKits = (d.spellAnimKits.get(id) || []).slice().sort((a, b) => a - b)
+                row.animKits = sorted(d.spellAnimKits.get(id))
                     .map((k) => ({
                         id: k,
                         anims: (d.animKitAnims.get(k) || []).map((a) => d.animNames[a]),
@@ -101,7 +115,7 @@ window.EpsilookExport = (() => {
                 // one entry per pill, in the cell's category order; the shapes differ
                 // per category, hence the shared loose ExportFxEntry
                 /** @type {ExportFxEntry[]} */
-                const chains = (d.spellFx.get(id) || []).slice().sort((a, b) => a - b).map((c) => {
+                const chains = sorted(d.spellFx.get(id)).map((c) => {
                     const info = d.fxChains.get(c) || {color: 0xffffff, hue: ""};
                     return {
                         type: "chain",
@@ -109,32 +123,32 @@ window.EpsilookExport = (() => {
                         tint: info.color === 0xffffff ? null : hexColor(info.color),
                     };
                 });
-                row.fx = chains.concat((d.spellDissolves.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+                row.fx = chains.concat(sorted(d.spellDissolves.get(id)).map((c) => ({
                     type: "dissolve",
                     textures: (d.dissolveTextures.get(c) || []).map(pathOf),
                     duration: d.dissolveDurations.get(c) || null,
-                }))).concat((d.spellGlows.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+                }))).concat(sorted(d.spellGlows.get(id)).map((c) => ({
                     type: "glow",
-                    color: hexColor(d.glowColors.get(c) ?? 0),
-                }))).concat((d.spellShadowies.get(id) || []).slice().sort((a, b) => a - b).map((c) => {
+                    color: hexColor(d.glowColors.get(c) || 0),
+                }))).concat(sorted(d.spellShadowies.get(id)).map((c) => {
                     const sh = d.shadowyColors.get(c) || {primary: 0, secondary: 0};
                     return {
                         type: "ghost",
                         colors: [sh.primary, sh.secondary].map(hexColor),
                     };
-                })).concat((d.spellGhostMats.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+                })).concat(sorted(d.spellGhostMats.get(id)).map((c) => ({
                     type: "ghost",
-                    color: hexColor(d.ghostMatColors.get(c) ?? 0),
-                }))).concat((d.spellTints.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+                    color: hexColor(d.ghostMatColors.get(c) || 0),
+                }))).concat(sorted(d.spellTints.get(id)).map((c) => ({
                     type: "tint",
-                    color: hexColor(d.tintColors.get(c) ?? 0),
-                }))).concat([...new Set(d.spellDesaturates.get(id) || [])].sort((a, b) => a - b)
+                    color: hexColor(d.tintColors.get(c) || 0),
+                }))).concat(uniqSorted(d.spellDesaturates.get(id))
                     .map((p) => ({type: "desaturate", percent: p}))
-                ).concat([...new Set(d.spellTransps.get(id) || [])].sort((a, b) => a - b)
+                ).concat(uniqSorted(d.spellTransps.get(id))
                     .map((p) => ({type: "transparency", percent: p}))
                 ).concat(d.spellFreezes.has(id) ? [{type: "freeze"}] : []
                 ).concat(d.spellCamos.has(id) ? [{type: "camo"}] : []
-                ).concat((d.spellScreens.get(id) || []).slice().sort((a, b) => a - b).map((sc) => {
+                ).concat(sorted(d.spellScreens.get(id)).map((sc) => {
                     const c = d.screenColors.get(sc) || NO_SCREEN_COLORS;
                     /** @param {number} v -1 = the row has no such color. */
                     const hx = (v) => v >= 0 ? hexColor(v) : null;
@@ -152,7 +166,7 @@ window.EpsilookExport = (() => {
                         masks: (d.screenTextures.get(sc) || [])
                             .filter((t) => t.mask).map((t) => pathOf(t.fid)),
                     };
-                })).concat((d.spellShapeshifts.get(id) || []).slice().sort((a, b) => a - b)
+                })).concat(sorted(d.spellShapeshifts.get(id))
                     .map((f) => ({
                         type: "shapeshift",
                         formId: f,
@@ -161,7 +175,7 @@ window.EpsilookExport = (() => {
                             displayId: e.displayId,
                             model: e.fid ? pathOf(e.fid) : null,
                         })),
-                    }))).concat((d.spellMorphs.get(id) || []).slice().sort((a, b) => a - b).map((c) => ({
+                    }))).concat(sorted(d.spellMorphs.get(id)).map((c) => ({
                     type: "morph",
                     creatureId: c,
                     creature: d.morphNames.get(c) || null,
@@ -261,12 +275,14 @@ window.EpsilookExport = (() => {
             }
             if (!hc.animations) {
                 cols.push(esc(r.animKits.map((k) => k.id).join("; ")));
+                // the replacement pairs, as words: "from → to"
+                const swaps = /** @type {string[]} */ ((r.replaceAnims || [])
+                    .map((sw) => `${sw.from} → ${sw.to}`));
                 cols.push(esc((r.anims || []).map((a) => withTargets({path: a.name, targets: a.targets}))
                     .concat(r.animKits.map(
                         (k) => `${withTargets({path: k.id, targets: k.targets})}: ${k.anims.join(" | ")}`))
-                    .concat(r.replaceAnims
-                        ? [`replace: ${/** @type {string[]} */ (r.replaceAnims.map((sw) => `${sw.from} → ${sw.to}`)).join(" | ")}`]
-                        : []).join("; ")));
+                    .concat(swaps.length ? [`replace: ${swaps.join(" | ")}`] : [])
+                    .join("; ")));
             }
             if (!hc.fx) {
                 cols.push(esc(r.fx.map((e) => {

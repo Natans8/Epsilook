@@ -997,7 +997,7 @@ interface EpsilookTextureApi {
  */
 interface EpsilookExportState {
     /** The active pack's indexes. */
-    readonly data: any;
+    readonly data: SpellData;
     /** Columns switched off in the UI, omitted from every export. */
     readonly hiddenCols: Record<string, boolean>;
     /** Spell ids currently listed, in display order. */
