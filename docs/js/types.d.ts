@@ -932,8 +932,6 @@ interface EpsilookPillsApi {
     TARGET_MISSILE_DEST: number;
     TARGET_ICONS: { bits: number; cls: string; svg: string; title(mask: number): string }[];
 
-    targetIconNodes(mask: number): HTMLElement[];
-
     CUBE_SVG: string;
     KINDS: Map<string, any>;
 }

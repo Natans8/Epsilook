@@ -226,7 +226,10 @@ window.EpsilookPills = (() => {
         if (kind.sep !== "none") node.dataset.sep = kind.sep;
         node.dataset.role = kind.role;
 
-        if (node.tagName === "BUTTON") /** @type {HTMLButtonElement} */ (node).type = "button";
+        if (node.tagName === "BUTTON") {
+            const btn = /** @type {HTMLButtonElement} */ (node);
+            btn.type = "button";
+        }
         if (seg.href !== undefined) {
             const a = /** @type {HTMLAnchorElement} */ (node);
             a.href = seg.href;
@@ -390,7 +393,7 @@ window.EpsilookPills = (() => {
     function targetIconNodes(mask) {
         const out = [];
         for (const icon of TARGET_ICONS) {
-            if (!(mask & icon.bits)) continue;
+            if ((mask & icon.bits) === 0) continue;
             const span = el("span", `ticon ${icon.cls}`);
             span.title = icon.title(mask);
             span.innerHTML = icon.svg;
@@ -717,7 +720,7 @@ window.EpsilookPills = (() => {
         tip, query, quoted, catQuery, fillTemplate, el,
         // target-mask vocabulary
         TARGET_CASTER, TARGET_TARGET, TARGET_AREA, TARGET_NOT_CASTER,
-        TARGET_MISSILE_DEST, TARGET_ICONS, targetIconNodes, CUBE_SVG,
+        TARGET_MISSILE_DEST, TARGET_ICONS, CUBE_SVG,
         KINDS,
     };
 })();
