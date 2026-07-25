@@ -70,6 +70,15 @@ window.EpsilookData = (() => {
     }
 
     /**
+     * Stand-in for an optional id -> word table an older pack doesn't ship.
+     * Shared by every such fallback: they are read-only lookups, and one typed
+     * constant keeps `pack.x || NO_WORDS` a Record rather than a union with a
+     * bare object literal.
+     * @type {Record<number, string>}
+     */
+    const NO_WORDS = Object.freeze({});
+
+    /**
      * Turn the column-oriented pack into fast lookup structures.
      * @param {SpellPack} pack
      * @returns {SpellData}
@@ -183,10 +192,9 @@ window.EpsilookData = (() => {
         const modelCatSpells = new Map();
         /** @type {Map<number, Map<number, number[]>>} cat id -> Map(fid -> [spell id]) */
         const modelCatFidSpells = new Map();
-        /** @type {Record<number, string>} */
-        const modelCatNames = pack.modelCatNames || {};
-        /** @type {Record<number, string>} raw M2 attachment id -> name */
-        const attachmentNames = pack.attachmentNames || {};
+        const modelCatNames = /** @type {Record<number, string>} */ (pack.modelCatNames || NO_WORDS);
+        // raw M2 attachment id -> name
+        const attachmentNames = /** @type {Record<number, string>} */ (pack.attachmentNames || NO_WORDS);
         {
             const sm = pack.spellModels;
             const {spellIds, fids, cats, targets, srcAttach, dstAttach} = sm;
@@ -324,8 +332,8 @@ window.EpsilookData = (() => {
         const vehicleTargets = maskIndex(pack.spellVehicles, "vehicleIds");
         const shapeshiftTargets = maskIndex(pack.spellShapeshifts, "formIds");
         const screenTargets = maskIndex(pack.spellScreens, "screenIds");
-        /** @type {Record<number, string>} mask bit -> search word */
-        const targetNames = pack.targetNames || {};
+        // mask bit -> search word
+        const targetNames = /** @type {Record<number, string>} */ (pack.targetNames || NO_WORDS);
 
         // animkits
         /** @type {Map<number, number[]>} spell id -> [animKitId] */
@@ -913,8 +921,8 @@ window.EpsilookData = (() => {
         const summonPairSpells = new Map();
         /** @type {Map<string, string>} "creature:control" -> search corpus */
         const summonPairSearchL = new Map();
-        /** @type {Record<number, string>} control id -> word */
-        const summonControlNames = pack.summonControlNames || {};
+        // control id -> word
+        const summonControlNames = /** @type {Record<number, string>} */ (pack.summonControlNames || NO_WORDS);
         {
             const su = pack.summons;
             for (let i = 0; i < su.creatureIds.length; i++) {
