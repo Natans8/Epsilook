@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Not found — Epsilook</title>
+    <meta name="robots" content="noindex">
+    <link rel="icon"
+          href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e1116">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#dedfe9">
+    <!-- GitHub Pages serves this file for any missing path under the site, at
+         any depth, so every URL here is root-absolute. app.css carries the
+         palettes, so this page names no colour of its own. -->
+    <link rel="stylesheet" href="/Epsilook/css/app.css?v=20260725d">
+    <script>
+        // The same pre-paint theme replay as index.html — see the long comment
+        // there; index.html is the source of truth for these two ids.
+        (() => {
+            const AUTO_THEME = {light: "moonwell", dark: "dark"};
+            let pref = null;
+            try {
+                pref = localStorage.getItem("epsilook.theme");
+            } catch (e) { /* storage blocked */
+            }
+            if (pref === "auto") {
+                pref = AUTO_THEME[matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"];
+            }
+            if (pref) document.documentElement.dataset.theme = pref;
+        })();
+    </script>
+    <style>
+        /* Only layout: every colour is a token from app.css's theme layer. */
+        .notfound {
+            max-width: 34rem;
+            margin: 12vh auto;
+            padding: 1.75rem;
+            text-align: center;
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .notfound h1 {
+            margin: 0 0 .35rem;
+            font-size: 2.4rem;
+            color: var(--gold);
+        }
+
+        .notfound p {
+            margin: 0 0 1rem;
+            color: var(--text-dim);
+        }
+
+        .notfound .path {
+            color: var(--text-strong);
+            word-break: break-all;
+        }
+
+        .notfound a {
+            color: var(--text-strong);
+        }
+    </style>
+</head>
+<body>
+
+<main>
+    <div class="notfound">
+        <h1>404</h1>
+        <p>No page at <span class="path" id="path"></span></p>
+        <!-- the Pages project path; change it if the site ever moves to a
+             custom domain, where the site root becomes "/" -->
+        <p><a href="/Epsilook/">Back to the spell search</a></p>
+    </div>
+</main>
+
+<script>
+    document.getElementById("path").textContent = location.pathname;
+</script>
+</body>
+</html>

@@ -46,6 +46,8 @@ Full syntax lives behind the **?** button in the app. The short version:
 ```
 docs/                    the site — GitHub Pages serves this folder as-is
   index.html             markup + the in-app help dialog
+  404.html               the not-found page Pages serves for any missing path
+  .nojekyll              tells GitHub Pages to serve the folder without Jekyll
   js/config.js           copy-command templates and UI tunables
   js/util.js             leaf helpers shared by every script (DOM, templates)
   js/theme.js            the theme registry -> <html data-theme> + the picker
