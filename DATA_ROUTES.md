@@ -234,19 +234,19 @@ model or sound columns.
 `Type` is the client's character-procedure index, so it selects both the handler *and* which `Value_n` column holds the
 payload. This is the second fan-out.
 
-| Type      | Payload column                      | Becomes                      |
-|-----------|-------------------------------------|------------------------------|
-| 0, 12, 26 | `Value_0` → SpellChainEffects       | **chain** (beams)            |
-| 1         | `Value_0` packed RGB                | **tint**                     |
-| 7         | `Value_0/1/2` → AnimationData        | **replace** (Stand/Walk/Run swaps, §3o) |
-| 9         | `Value_0` → SpellVisualKitAreaModel | **model** (`ground`)         |
-| 11        | —                                   | **freeze** (valueless)       |
-| 14        | `Value_0` alpha 0..1                | **transparency %**           |
-| 18        | —                                   | **camo** (valueless)         |
-| 21        | `Value_2` strength 0..1             | **desaturate %**             |
-| 22        | `Value_3` packed RGB                | **ghost** (material recolor) |
-| 23        | `Value_3` packed RGB                | **tint** (material recolor)  |
-| 27        | `Value_0` → WeaponTrail             | **model** (`trail`)          |
+| Type      | Payload column                      | Becomes                                 |
+|-----------|-------------------------------------|-----------------------------------------|
+| 0, 12, 26 | `Value_0` → SpellChainEffects       | **chain** (beams)                       |
+| 1         | `Value_0` packed RGB                | **tint**                                |
+| 7         | `Value_0/1/2` → AnimationData       | **replace** (Stand/Walk/Run swaps, §3o) |
+| 9         | `Value_0` → SpellVisualKitAreaModel | **model** (`ground`)                    |
+| 11        | —                                   | **freeze** (valueless)                  |
+| 14        | `Value_0` alpha 0..1                | **transparency %**                      |
+| 18        | —                                   | **camo** (valueless)                    |
+| 21        | `Value_2` strength 0..1             | **desaturate %**                        |
+| 22        | `Value_3` packed RGB                | **ghost** (material recolor)            |
+| 23        | `Value_3` packed RGB                | **tint** (material recolor)             |
+| 27        | `Value_0` → WeaponTrail             | **model** (`trail`)                     |
 
 Colors are `0xRRGGBB`; `INT_MIN` is the "unset" sentinel. The types not surfaced (2–6, 8, 10, 13, 15–17, 19–20, 24–25,
 28–34) are renderer or gameplay state, or too rare to be worth a pill. The full decode with evidence is in CLAUDE.md →
@@ -436,14 +436,14 @@ flowchart LR
   CBS -->|AnimKitBoneSetID| BS["AnimKitBoneSet.Name"]
 ```
 
-A boneset is a property of the **segment**, so it is keyed by `(kit, anim)` and shown only on that **anim pill** —
-never on the kit head. Each region becomes its OWN pill, so an anim that animates two regions (a config naming Left +
-Right Shoulder, or two segments) renders as two pills, not one merged label. **"Full Body" is the default** (nearly
-every segment animates the whole body — 19,310 of 21,462 kits on 9.2.7) and is never shipped or shown; only a specific
-region says anything. Searchable through the `boneset` keyword inside `anim:` (`anim:"boneset upper body"`), which
-consumes every token after it as region words and matches them against the spell's boneset haystack (a name may be
-several words, unlike an `attach` point). 9.2.7 ships 4,354 `(kit, anim) → region` rows across 9 region names for the
-used AnimKits. A single `AnimKitConfig` can name several bonesets (68 name two, e.g. Left+Right Shoulder), and a single
+A boneset is a property of the **segment**, so it is keyed by `(kit, anim)` and shown only on that **anim pill** — never
+on the kit head. Each region becomes its OWN pill, so an anim that animates two regions (a config naming Left + Right
+Shoulder, or two segments) renders as two pills, not one merged label. **"Full Body" is the default** (nearly every
+segment animates the whole body — 19,310 of 21,462 kits on 9.2.7) and is never shipped or shown; only a specific region
+says anything. Searchable through the `boneset` keyword inside `anim:` (`anim:"boneset upper body"`), which consumes
+every token after it as region words and matches them against the spell's boneset haystack (a name may be several words,
+unlike an `attach` point). 9.2.7 ships 4,354 `(kit, anim) → region` rows across 9 region names for the used AnimKits. A
+single `AnimKitConfig` can name several bonesets (68 name two, e.g. Left+Right Shoulder), and a single
 `(kit, anim)` can reach several through multiple segments — both unioned, then Full Body dropped.
 
 ### 3f. Routes that start at `SpellEffect`, not at a visual
@@ -478,7 +478,6 @@ graph — it is the producing
 `TargetType`, by `implicit_target_bit`). It answers *who the effect lands on*: a polymorph's morph is on the **target**,
 a self-transform on the **caster**, a summon on the **area** where it lands. These rows never pass through
 `SpellVisualEvent`, so `TargetType` says nothing about them — the implicit target is the only source. Alt-names (aura
-
 370) are search-corpus-only and carry no mask.
 
 **misc0 on a transform aura is a creature id, not a display id** — a long-standing trap. Both morphs and shapeshift
@@ -644,16 +643,17 @@ else.
 
 ### 3k. Movement speed — which movement, and by how much
 
-The one `SpellEffect` route whose payload is not an id into another table: the **aura** says which movement is scaled and
+The one `SpellEffect` route whose payload is not an id into another table: the **aura** says which movement is scaled
+and
 `EffectBasePoints` says by what percent. Fourteen auras, five movement words.
 
-| word      | auras                       | when it applies                      |
-|-----------|-----------------------------|--------------------------------------|
-| `run`     | 31, 129, 171                | `MOVE_RUN` on foot                   |
-| `mounted` | 32, 130, 172                | `MOVE_RUN` while mounted             |
-| `swim`    | 58                          | `MOVE_SWIM`                          |
-| `flight`  | 206, 207, 208, 209, 210, 211 | `MOVE_FLIGHT`                        |
-| `all`     | 33                          | every movement type, applied last    |
+| word      | auras                        | when it applies                   |
+|-----------|------------------------------|-----------------------------------|
+| `run`     | 31, 129, 171                 | `MOVE_RUN` on foot                |
+| `mounted` | 32, 130, 172                 | `MOVE_RUN` while mounted          |
+| `swim`    | 58                           | `MOVE_SWIM`                       |
+| `flight`  | 206, 207, 208, 209, 210, 211 | `MOVE_FLIGHT`                     |
+| `all`     | 33                           | every movement type, applied last |
 
 **The mapping is `Unit::UpdateSpeed`** (TrinityCore `Entities/Unit/Unit.cpp`) — one function, one switch, and the whole
 truth about which aura scales which movement. `MOVE_WALK` returns from it immediately, so walking takes no modifiers at
@@ -684,10 +684,10 @@ it only ever comes from aura 33.
 #### Verified against the game's own tooltips
 
 A `Description_lang` writes an effect's value as `$s<N>%`, where N is the **1-based `EffectIndex`** — so the text names
-which effect it is quoting. On 9.2.7, **4,590 such placeholders point at an effect carrying one of these auras and 4,574
-(99.7%) resolve to a nonzero value**; the 16 zeros are the dropped genuinely-zero rows above. That is a per-row check of
-both the aura set and the column choice, and it is the cheapest oracle available for this route — rerun it whenever the
-set changes.
+which effect it is quoting. On 9.2.7, **4,590 such placeholders point at an effect carrying one of these auras and
+4,574 (99.7%) resolve to a nonzero value**; the 16 zeros are the dropped genuinely-zero rows above. That is a per-row
+check of both the aura set and the column choice, and it is the cheapest oracle available for this route — rerun it
+whenever the set changes.
 
 #### `EffectBasePoints` has two spellings and every build has exactly one
 
@@ -697,9 +697,8 @@ leave the float at zero** (46 of 40,249 rows nonzero on Vanilla; zero on 771 of 
 would silently blank those three packs. `EffectBasePoints` also joins the TDB hotfix overlay for the usual
 wholesale-replace reason — all four dumps that carry hotfixes at all spell it the int way, even TDB1127.
 
-Values are rounded to one decimal, which drops the float32 conversion noise the modern builds carry
-(`14.27999973297` → `14.3`) while keeping the ones that really are fractional (`47.5`). Eight rows on 9.2.7 are
-fractional, sixteen on TWW.
+Values are rounded to one decimal, which drops the float32 conversion noise the modern builds carry (`14.27999973297` →
+`14.3`) while keeping the ones that really are fractional (`47.5`). Eight rows on 9.2.7 are fractional, sixteen on TWW.
 
 #### What is deliberately not here
 
@@ -728,8 +727,8 @@ scale, so there is no movement word — a pill is the percent alone, and the `sc
 `MOD_SCALE_2` through one handler (`HandleAuraModScale`) as `scale = nativeScale + CalculatePct(1.0, Σ)`, so `+30` is
 1.3× and `-50` is half. The catch is that **`MOD_SCALE_2`'s id drifts**: it is **239** on WotLK and every retail build,
 **591** on the 2024+ Classic clients (Vanilla, TBC, Cata, MoP). No build carries both, and the same spells appear under
-each (Noggenfogger Elixir −51% is 239 on WotLK 3.4.3, 591 on TBC 2.5.6). `SCALE_AURAS = {61, 239, 591}` covers the
-drift with a set, no per-version branch — the drift is in the client's enum, not in what the aura does. (Aura 427
+each (Noggenfogger Elixir −51% is 239 on WotLK 3.4.3, 591 on TBC 2.5.6). `SCALE_AURAS = {61, 239, 591}` covers the drift
+with a set, no per-version branch — the drift is in the client's enum, not in what the aura does. (Aura 427
 `SCALE_PLAYER_LEVEL` is out: its amount is a level, not a percent.)
 
 **Same rules as speed:** the pill shows the signed **change**, not the resulting size (below −100% the server floors the
@@ -834,13 +833,14 @@ model-resolved.
 time. `wowheadObjectTypes` in config.js is the allowlist — **objects outside it fall back to the ordinary 3D model
 viewer**, the same either/or the item route uses for a nameless item, so every pill still opens something.
 
-Verified 2026-07-24 against wowhead.com/objects — whose own type labels (Container / Shared Container / Treasure / Herb
-/ Mining Node / Fishing Pool / Interactive / Quest / Tool) map onto exactly these — plus nine spot-checks, 9/9 agreeing:
+Verified 2026-07-24 against wowhead.com/objects — whose own type labels (Container / Shared Container / Treasure /
+Herb / Mining Node / Fishing Pool / Interactive / Quest / Tool) map onto exactly these — plus nine spot-checks, 9/9
+agreeing:
 
-| | types | evidence |
-|---|---|---|
-| **has a page** | 3 CHEST, 10 GOOBER, 2 QUESTGIVER, 22 SPELLCASTER | Rusty Chest, Cache of the Fire Lord, Pet Stone, Scrying Bowl, Portal to Stormwind |
-| **no page** | 0 DOOR, 5 GENERIC, 6 TRAP, 8 SPELL_FOCUS, 18 RITUAL | Explosives Cart, Forgotten Mirror, Battle Standard, Witherbark Totem Bundle, Summoning Portal |
+|                | types                                               | evidence                                                                                      |
+|----------------|-----------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| **has a page** | 3 CHEST, 10 GOOBER, 2 QUESTGIVER, 22 SPELLCASTER    | Rusty Chest, Cache of the Fire Lord, Pet Stone, Scrying Bowl, Portal to Stormwind             |
+| **no page**    | 0 DOOR, 5 GENERIC, 6 TRAP, 8 SPELL_FOCUS, 18 RITUAL | Explosives Cart, Forgotten Mirror, Battle Standard, Witherbark Totem Bundle, Summoning Portal |
 
 25 FISHINGHOLE and 51 GATHERINGNODE are Wowhead's Fishing Pool / Herb / Mining Node labels; no spell reaches one, but
 they belong to the rule and are in the allowlist. On 9.2.7 that gates **564 of 1,186** objects to Wowhead and sends the
@@ -891,7 +891,7 @@ swapping a base animation for another — unioned per spell and deduped:
 
 ```mermaid
 flowchart LR
-  P7["proc Type 7<br/>Value_0/1/2"] -->|"pair with Stand/Walk/Run"| RP["(src → dst) pairs"]
+  P7["proc Type 7<br/>Value_0/1/2"] -->|" pair with Stand/Walk/Run "| RP["(src → dst) pairs"]
   A312["aura 312 → AnimReplacement"] --> RP
   RP --> G["one 'replace' group, deduped"]
 ```
@@ -988,8 +988,8 @@ modifiers, §3k-bis, format 30's movement-speed modifiers, §3k, and format 29's
 targets, §3l, and the keybound-override route, §3j). The four pre-MoP packs each gained one absent table,
 `SpellKeyboundOverride`; nothing else drifted (the boneset tables are build-present everywhere, and the three effect
 attach columns are `OPTIONAL_COLUMNS`, so their absence on some Classic clients degrades to "full body" rather than
-drifting). Recent
-bumps are additive and version-agnostic: format 26 added the invis/detect channel pills (`MOD_INVISIBILITY[_DETECT]`
+drifting). Recent bumps are additive and version-agnostic: format 26 added the invis/detect channel pills
+(`MOD_INVISIBILITY[_DETECT]`
 auras), format 27 the `display` model category, format 28 the `item` category, format 29 replaced the flat
 `spellEffects`/`spellAuras` sets with `spellMechanics` and added
 `implicitTargetNames`/`implicitTargetBits` + `spellKeybinds`/`keybinds`. A format-28 pack is still read: its two flat
@@ -1038,18 +1038,18 @@ Rows are `(spell, percent)` pills (zero-percent rows dropped). The route exists 
 `MOD_SCALE_2` aura id drifts (239 retail/WotLK, 591 on the 2024+ Classic clients — see §3k-bis), which a set absorbs, so
 again no drift declaration. `grow` / `shrink` split the sign.
 
-| Pack         |  rows | spells | grow | shrink |    min |  max |
-|--------------|------:|-------:|-----:|-------:|-------:|-----:|
-| 1.15.8.67156 |   193 |    190 |  166 |     27 |   −100 |  700 |
-| 2.5.6.68775  |   267 |    263 |  220 |     47 | −1,000 |  599 |
-| 3.4.3.58936  |   511 |    502 |  422 |     89 | −1,000 |  599 |
-| 4.4.2.60895  |   768 |    759 |  641 |    127 |   −999 | 1000 |
-| 5.5.4.68716  | 1,137 |  1,121 |  966 |    171 |   −999 | 1000 |
-| 7.3.5.26972  | 1,996 |  1,978 | 1,694 |   302 |   −999 | 1500 |
-| 8.3.7.35662  | 2,533 |  2,508 | 2,177 |   356 |   −999 | 1500 |
-| 9.2.7.45745  | 3,194 |  3,169 | 2,773 |   421 |   −999 | 1500 |
-| 10.2.7.55664 | 3,767 |  3,737 | 3,282 |   485 |   −999 | 1500 |
-| 11.2.7.65299 | 4,426 |  4,392 | 3,867 |   559 | −1,000 | 1500 |
+| Pack         |  rows | spells |  grow | shrink |    min |  max |
+|--------------|------:|-------:|------:|-------:|-------:|-----:|
+| 1.15.8.67156 |   193 |    190 |   166 |     27 |   −100 |  700 |
+| 2.5.6.68775  |   267 |    263 |   220 |     47 | −1,000 |  599 |
+| 3.4.3.58936  |   511 |    502 |   422 |     89 | −1,000 |  599 |
+| 4.4.2.60895  |   768 |    759 |   641 |    127 |   −999 | 1000 |
+| 5.5.4.68716  | 1,137 |  1,121 |   966 |    171 |   −999 | 1000 |
+| 7.3.5.26972  | 1,996 |  1,978 | 1,694 |    302 |   −999 | 1500 |
+| 8.3.7.35662  | 2,533 |  2,508 | 2,177 |    356 |   −999 | 1500 |
+| 9.2.7.45745  | 3,194 |  3,169 | 2,773 |    421 |   −999 | 1500 |
+| 10.2.7.55664 | 3,767 |  3,737 | 3,282 |    485 |   −999 | 1500 |
+| 11.2.7.65299 | 4,426 |  4,392 | 3,867 |    559 | −1,000 | 1500 |
 
 The negative floor (−999 / −1000) is a real value the server clamps, not a sentinel; growth reaches +1500% (16× normal
 size). Grow outnumbers shrink ~6–8:1 every era.
@@ -1326,13 +1326,13 @@ belongs in a declaration or is a genuine bug.
 Nothing here is fetched during search or bulk-downloaded. All of it is user-triggered and configured in
 `docs/js/config.js`.
 
-| Route           | URL                                                                      | Trigger                                                                                                                                                                                                                                                                                                                                                                                                                     |
-|-----------------|--------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Spell icons     | `wow.zamimg.com/images/wow/icons/medium/{icon}.jpg`                      | Lazy per visible row. Icon *names* are baked into the pack.                                                                                                                                                                                                                                                                                                                                                                 |
-| Sound playback  | `wow.zamimg.com/sound-ids/live/enus/{bucket}/{fid}/{base}.ogg`           | Explicit click. Serves current retail; 404s fail soft.                                                                                                                                                                                                                                                                                                                                                                      |
-| Texture preview | `wago.tools/api/casc/{fid}?version={version}`                            | Hover, after a 150 ms intent delay. Raw `.blp`, decoded in-browser by the vendored `bufo.js` + `js-blp.js`. Version-pinned to the active pack.                                                                                                                                                                                                                                                                              |
-| Expansion logo  | same CASC API                                                            | One image per version switch.                                                                                                                                                                                                                                                                                                                                                                                               |
-| 3D model viewer | `wowtools.work/mv/?filedataid={fid}&type=m2`                             | Link-out only, nothing fetched.                                                                                                                                                                                                                                                                                                                                                                                             |
+| Route           | URL                                                                                    | Trigger                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+|-----------------|----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Spell icons     | `wow.zamimg.com/images/wow/icons/medium/{icon}.jpg`                                    | Lazy per visible row. Icon *names* are baked into the pack.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Sound playback  | `wow.zamimg.com/sound-ids/live/enus/{bucket}/{fid}/{base}.ogg`                         | Explicit click. Serves current retail; 404s fail soft.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Texture preview | `wago.tools/api/casc/{fid}?version={version}`                                          | Hover, after a 150 ms intent delay. Raw `.blp`, decoded in-browser by the vendored `bufo.js` + `js-blp.js`. Version-pinned to the active pack.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Expansion logo  | same CASC API                                                                          | One image per version switch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 3D model viewer | `wowtools.work/mv/?filedataid={fid}&type=m2`                                           | Link-out only, nothing fetched.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Wowhead         | `wowhead.com/{wh}spell=` · `/{wh}npc=` · `/{wh}sound=` · `spell={spell}/#modelviewer:` | Link-out only. `{wh}` = per-version site prefix (`config.js` `wowheadSitePrefix`): Vanilla → `classic/`, everything else → retail (empty). Only `/classic/` and retail are permanent Wowhead sections, so the mid-Classic clients point at retail rather than a seasonal section that will rot. The model viewer (morph/display/mount/shapeshift pills) has no `{wh}` — always retail (best skin compositing; display IDs render cross-era) — but opens the `#modelviewer` fragment over the spell's OWN page (`spell={spell}/#modelviewer:1:{displayId}:0`) rather than the Wowhead home page, since the fragment works on any page. |
 
 House rule, unchanged: **fetch only on explicit user action, never preload, never bulk-download.** The icon and sound
@@ -1342,13 +1342,13 @@ hotlinks sit on tolerated-hotlinking footing, not an affirmative license.
 
 ## Quick reference — where does column *X* come from?
 
-| Column           | Routes feeding it                                                                                                                                                                                                                                                                                                               |
-|------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Models**       | attach (kit→ModelAttach→EffectName Type 0), display (kit→ModelAttach→EffectName Type 2→CreatureDisplayID→model, morph-style pill), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect), **mount** (Mount.db2 SourceSpellID→MountXDisplay→display, §3n); every graph row also carries its M2 attachment point (§3h) |
-| **Sounds**       | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID`, `SpellVisual.AnimEventSoundID`, **SpellEffect 131/132 PLAY_SOUND/PLAY_MUSIC (§3p)** — all → SoundKitEntry                                                                                                                                                                                                                    |
-| **Animations**   | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), ModelAttach Start/Anim/End (loose) + its AnimKit (grouped), proc Type 7 + aura 312 merged (replace, §3o), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped), anim-replacement sets (replace, §3o); **each anim pill carries its boneset region (AnimKitConfigBoneSet→AnimKitBoneSet.Name, §3e) — one pill per region, `boneset` keyword**                                                                                                                                                                                     |
-| **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, object (§3m), seat, invis, detect, keybind, speed, scale — see §3a–3q; **chain/dissolve/ghost/barrage pills carry their M2 attachment point (§3h), -1 = "full body"**                                                                                                                                                                                                |
-| **Not shown**    | `spells.schools` — SpellMisc.SchoolMask, gathered only (§3q)                                                                                                                                                                                                                                                                    |
-| **Mechanics**    | one row per `SpellEffect`: `.Effect` + `.EffectAura` enums (names from WoWDBDefs) paired with that row's `.ImplicitTarget_0/_1` — §3l                                                                                                                                                                                           |
-| **Name search**  | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names                                                                                                                                                                                                                                                              |
-| **Target bits**  | `SpellVisualEvent.TargetType` on the kit edge (§2), resolved against `SpellEffect.ImplicitTarget` per phase (`StartEvent`) so a self-cast spell's "Target" reads as the caster, plus `Caster`/`HostileSpellVisualID` redirects that mark whatever they reach caster/target                                                      |
+| Column           | Routes feeding it                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+|------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Models**       | attach (kit→ModelAttach→EffectName Type 0), display (kit→ModelAttach→EffectName Type 2→CreatureDisplayID→model, morph-style pill), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect), **mount** (Mount.db2 SourceSpellID→MountXDisplay→display, §3n); every graph row also carries its M2 attachment point (§3h)                                                            |
+| **Sounds**       | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID`, `SpellVisual.AnimEventSoundID`, **SpellEffect 131/132 PLAY_SOUND/PLAY_MUSIC (§3p)** — all → SoundKitEntry                                                                                                                                                                                                                                                                                                |
+| **Animations**   | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), ModelAttach Start/Anim/End (loose) + its AnimKit (grouped), proc Type 7 + aura 312 merged (replace, §3o), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped), anim-replacement sets (replace, §3o); **each anim pill carries its boneset region (AnimKitConfigBoneSet→AnimKitBoneSet.Name, §3e) — one pill per region, `boneset` keyword** |
+| **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, object (§3m), seat, invis, detect, keybind, speed, scale — see §3a–3q; **chain/dissolve/ghost/barrage pills carry their M2 attachment point (§3h), -1 = "full body"**                                                                                                                                                                             |
+| **Not shown**    | `spells.schools` — SpellMisc.SchoolMask, gathered only (§3q)                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Mechanics**    | one row per `SpellEffect`: `.Effect` + `.EffectAura` enums (names from WoWDBDefs) paired with that row's `.ImplicitTarget_0/_1` — §3l                                                                                                                                                                                                                                                                                                                            |
+| **Name search**  | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Target bits**  | `SpellVisualEvent.TargetType` on the kit edge (§2), resolved against `SpellEffect.ImplicitTarget` per phase (`StartEvent`) so a self-cast spell's "Target" reads as the caster, plus `Caster`/`HostileSpellVisualID` redirects that mark whatever they reach caster/target                                                                                                                                                                                       |

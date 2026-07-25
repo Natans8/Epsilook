@@ -115,9 +115,9 @@ needs editing.
 }
 ```
 
-**d. Add it to the cell** — for fx, one `pushCat({...})` call in `fxCell` saying how the spell's rows become pills.
-The helper owns the shape every category shares (the head-vs-pill icon split, hit-floating, the group envelope), so a
-plain category is four lines:
+**d. Add it to the cell** — for fx, one `pushCat({...})` call in `fxCell` saying how the spell's rows become pills. The
+helper owns the shape every category shares (the head-vs-pill icon split, hit-floating, the group envelope), so a plain
+category is four lines:
 
 ```js
 pushCat({
@@ -133,10 +133,10 @@ It pushes nothing when `rows` is empty, so no `if` is needed around it.
 
 **Rows are not always pills.** `pushCat` keeps two levels apart, and getting them right is the whole job:
 
-| | what it is | decides |
-|---|---|---|
+|                          | what it is                                  | decides                                                                                       |
+|--------------------------|---------------------------------------------|-----------------------------------------------------------------------------------------------|
 | **source rows** (`rows`) | what the spell actually has in the category | the category's hit state, and — via `targetSplit` — whether the target icon can ride the head |
-| **entries** | what becomes a pill | the pills, through `render` |
+| **entries**              | what becomes a pill                         | the pills, through `render`                                                                   |
 
 `entries(rows)` maps between them and is the only place a category's collapsing rule lives. Most categories **dedupe**
 (chain, dissolve, glow, ghost, tint, keybind — rows sharing a texture or color become one pill and union their masks);
@@ -211,11 +211,10 @@ head leading, the lone item fused into it. With more, it becomes a full-width st
 an abstraction rather than markup — a group that is usually one-of-a-kind and occasionally many needs one renderer, not
 two, and no caller has to predict which it will be.
 
-**The head reads at full strength in both shapes.** A collapsed group's head is the same head as a full one — same
-word, same job — so it was wrong to dim it to 0.8 (as the compact style once did, on the theory that a category word
-prefixing a value is a qualifier). Dimming made one word two brightnesses depending only on how many siblings it
-happened to have. The capsule below already separates category from value; it needs no brightness gradient's help.
-(Removed 2026-07-23.)
+**The head reads at full strength in both shapes.** A collapsed group's head is the same head as a full one — same word,
+same job — so it was wrong to dim it to 0.8 (as the compact style once did, on the theory that a category word prefixing
+a value is a qualifier). Dimming made one word two brightnesses depending only on how many siblings it happened to have.
+The capsule below already separates category from value; it needs no brightness gradient's help. (Removed 2026-07-23.)
 
 **In a collapsed group the head is separated from the item by a rounded capsule, never a flat divider** —
 `( speed ( run | +70% ) )`, not `( speed | run | +70% )`. The capsule is what says "these are two different things, a
@@ -236,21 +235,21 @@ keyed on something the group itself knows, not in a flag at the call site.
 
 A results cell is an ordered list of **blocks** — a block is one loose pill *or* one group. Every pill-bearing cell
 (models, sounds, animations, fx) builds a `{hit, el}[]` and hands it to **`renderBlocks(td, blocks)`**, which floats the
-blocks holding a search hit to the top (stable partition, so with no active query nothing moves and the deliberate order
-— e.g. loose model pills before their category groups — survives).
+blocks holding a search hit to the top (stable partition, so with no active query nothing moves and the deliberate
+order — e.g. loose model pills before their category groups — survives).
 
 Two reasons this is one shared helper and not per-cell:
 
 - **The thing you searched for should be visible.** `clampCell` hides overflow from the **bottom** behind a "+N more",
   so a hit stranded below a pile of non-matching pills (or below other groups) could be clamped away entirely. Floating
   it up is what keeps it on screen.
-- **Consistency.** Before this, the fx cell did not float hit groups at all, and the models/animations cells floated
-  hit *groups* but always drew their loose pills first — so a matched category sat below non-matching attach splits.
+- **Consistency.** Before this, the fx cell did not float hit groups at all, and the models/animations cells floated hit
+  *groups* but always drew their loose pills first — so a matched category sat below non-matching attach splits.
   Treating a loose pill and a group as the same kind of block (each just `{hit, el}`) makes "hits first" one rule for
   every column instead of three near-misses.
 
-Sorting *within* a group (hit items before the rest) is the same idea one level down, via `hitsFirst(items, …)` when
-the group's items are built.
+Sorting *within* a group (hit items before the rest) is the same idea one level down, via `hitsFirst(items, …)` when the
+group's items are built.
 
 ## 5. Adding a segment kind
 
