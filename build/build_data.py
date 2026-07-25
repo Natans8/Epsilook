@@ -738,7 +738,6 @@ def keybound_type_word(type_id: int) -> str:
 # Blowdart swaps holding a bow), which is why it reads as "Stand -> StealthStand".
 AURA_ANIM_REPLACEMENT_SET = 312
 
-
 # VehicleSeat.AttachmentID is NOT an M2 attachment id: it is an index into a
 # table hardcoded in the client binary (it exists in no db2, so it cannot be
 # derived from data and has to live here). wowdev.wiki/DB/VehicleSeat quotes
@@ -821,8 +820,8 @@ EFFECT_PLAY_MUSIC = 132
 # conjures a creature). TRANS_DOOR is the general "place an object" effect; the
 # three SUMMON_OBJECT variants differ only in slot/lifetime, not in payload.
 EFFECT_SPAWN_OBJECT = frozenset({
-    50,   # TRANS_DOOR
-    76,   # SUMMON_OBJECT_WILD
+    50,  # TRANS_DOOR
+    76,  # SUMMON_OBJECT_WILD
     104,  # SUMMON_OBJECT_SLOT1
     171,  # SUMMON_PERSONAL_GAMEOBJECT
 })
@@ -1040,35 +1039,35 @@ def iter_insert_rows(line: str) -> Iterator[list[str]]:
             c = line[i]
             if in_str:
                 if c == "\\":
-                    val.append(line[i + 1]);
-                    i += 2;
+                    val.append(line[i + 1])
+                    i += 2
                     continue
                 if c == "'":
                     if i + 1 < n and line[i + 1] == "'":
-                        val.append("'");
-                        i += 2;
+                        val.append("'")
+                        i += 2
                         continue
-                    in_str = False;
-                    i += 1;
+                    in_str = False
+                    i += 1
                     continue
-                val.append(c);
-                i += 1;
+                val.append(c)
+                i += 1
                 continue
             if c == "'":
-                in_str = True;
-                i += 1;
+                in_str = True
+                i += 1
                 continue
             if c == ",":
-                row.append("".join(val).strip());
-                val = [];
-                i += 1;
+                row.append("".join(val).strip())
+                val = []
+                i += 1
                 continue
             if c == ")":
-                row.append("".join(val).strip());
+                row.append("".join(val).strip())
                 i += 1
                 yield row
                 break
-            val.append(c);
+            val.append(c)
             i += 1
 
 
@@ -3418,6 +3417,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     visual_anim_rows = sorted(
         (s, a, m) for s, aset in vis.visual_anims.items()
         for a, m in aset.items() if a < len(anim_names))
+
     # ANIMATION REPLACEMENTS, one merged route (§3o). Two sources that describe
     # the same thing — the character swapping a base animation for another:
     #   * proc Type 7 (vis.anims): Stand/Walk/Run overrides, reached through the
@@ -3429,6 +3429,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # own body. Ids past the anim-name table are guarded out.
     def _valid(a: int) -> bool:
         return 0 <= a < len(anim_names)
+
     replace_pairs: dict[int, set[tuple[int, int]]] = defaultdict(set)
     for s, aset in vis.anims.items():
         for src, dst in aset:
