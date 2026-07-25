@@ -52,8 +52,9 @@ window.EpsilookTheme = (() => {
      * @param {string} pref
      */
     function apply(pref) {
-        document.documentElement.dataset.theme =
-            pref === AUTO ? (systemIsLight() ? "light" : "dark") : pref;
+        document.documentElement.dataset.theme = pref === AUTO
+            ? CFG.autoTheme[systemIsLight() ? "light" : "dark"]
+            : pref;
     }
 
     function init() {

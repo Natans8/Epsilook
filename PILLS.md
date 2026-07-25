@@ -111,9 +111,23 @@ needs editing.
 
 ```css
 .tag.sparkle {
-  --tone: #e0c0f0;
+  --tone: var(--sparkle);   /* a palette token, never a literal */
 }
 ```
+
+`--tone` is the whole colour contract: the generic `.tag` rule derives the pill's fill, its border and its label ink
+from it, and each palette decides how loudly through `--tone-fill` / `--tone-edge` / `--ink-mix`. So a pill type never
+writes a `color` or a `background` of its own — one line here colours the shape *and* the text, in every theme.
+
+Two consequences worth knowing:
+
+- **A shape with no pill of its own still needs a tone.** `--tone` also inherits from the column (`.c-models`,
+  `.c-sounds`, …), which is what colours a kit box, its head, and a compact group's capsule. Give a new column a
+  `--tone` there or its groups come out grey — on dark that is invisible (a 3% fill is a 3% fill), on a light palette
+  it is the first thing you see.
+- **Fills stack.** A compact group's field lies under its item's pill, so the two percentages add. Labels are solved
+  against the loudest floor they ever land on; push a fill past that floor and text on it drops below AA. Re-run the
+  contrast oracle (walk every text node, composite the ancestors' alphas, measure) after touching any of them.
 
 **d. Add it to the cell** — for fx, one `pushCat({...})` call in `fxCell` saying how the spell's rows become pills. The
 helper owns the shape every category shares (the head-vs-pill icon split, hit-floating, the group envelope), so a plain

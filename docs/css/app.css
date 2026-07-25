@@ -10,13 +10,10 @@
  * registry. Those two places, nothing more — and the picker appears by itself
  * once a second theme exists.
  *
- * Dark is the only palette shipped: a light one was built and rejected (see
- * CLAUDE.md). Anything a light palette WOULD have to solve is noted at the
- * token it affects — --overlay-rgb inverts, --shadow-strength drops, the
- * item-quality ramp needs darkening, and Wowhead's embedded tooltip has no
- * background of its own (see the wowhead links section).
+ * Three palettes ship: dark, and two light ones (moonwell, vellum) that differ
+ * only in the hue their surfaces and washes are built from.
  *
- * Two conventions keep a palette at one value per colour:
+ * Three conventions keep a palette at one value per colour:
  *   - a colour that is ALSO composited at an alpha is declared as a bare
  *     "R, G, B" triple (--gold-rgb), used as rgba(var(--gold-rgb), 0.08).
  *     Its solid form is derived from the triple in the last block here, so a
@@ -24,6 +21,11 @@
  *   - shadows keep their per-site alphas and scale as a family through
  *     --shadow-strength: a light theme turns that one number down instead of
  *     restating every shadow.
+ *   - low-alpha TINTS (state fills, hairline rules, segment dividers) scale
+ *     the same way through --wash-strength, because the same alpha does not
+ *     carry the same signal on a light surface: the 13% gold wash that moves a
+ *     dark row by 1.40:1 moves a light row by 1.20:1. Light turns the number
+ *     UP where it turns --shadow-strength down.
  *
  * data-theme lives on <html>, set by js/theme.js and replayed by the inline
  * script in index.html before first paint. An UNSET attribute is dark — the
@@ -49,6 +51,8 @@
     /* shadows: colour + how strongly the whole family lands */
     --shadow-rgb: 0, 0, 0;
     --shadow-strength: 1;
+    /* and how strongly the low-alpha tints land (see the header) */
+    --wash-strength: 1;
     --backdrop: rgba(5, 7, 11, 0.65);
     /* checkerboard behind a texture preview, so alpha reads as alpha */
     --checker-a: #1c232e;
@@ -104,6 +108,217 @@
     --cmd-border: #3a4351;
     --cmd-text: #dfe6ef;
     --cmd-bevel: rgba(255, 255, 255, 0.05);
+
+    /* How loudly a shape carries the colour family it belongs to: how much of
+       --tone fills it, how much of --tone its border is mixed with, and how
+       much of --tone survives in its label. Dark asks for almost nothing — a
+       pastel tone on near-black already reads, and --ink-mix at 100% means the
+       label IS the tone, exactly as it always has been.
+
+       One fill per surface, loudest last: the field a kit box lays its pills
+       on, a pill itself, and a group's head, which leads them. */
+    --group-fill: 2%;
+    --tone-fill: 3%;
+    --head-fill: 9%;
+    --tone-edge: 0%;
+    --ink-mix: 100%;
+
+    /* How far a secondary label may step back by alpha — a summon's control
+       word, the "−" on a tab. A dark label sits at 8:1 and can give a quarter
+       of itself away and still clear AA. A light one is engineered to ~5:1 on
+       the loudest fill it ever lands on and has NO such headroom: the light
+       palettes set this to 1 and let those labels stay secondary through size
+       alone. Do not dim them by alpha there — measured against a hit's gold
+       wash, even 0.9 puts the control word on a summon pill under 4.5:1. */
+    --dim: 0.75;
+
+    /* Wowhead's button. Their logo goes on it, so it keeps their brand orange
+       in every theme — but the SURFACE under the logo has to belong to the page
+       it sits on. Pinning these to one dark pair (which they were) is what put
+       a black button on a light page. */
+    --wh-bg-top: #2b1c12;
+    --wh-bg-bottom: #1d130c;
+    --wh-border: #4a2e1e;
+    --wh-hover-rgb: 192, 64, 0;
+}
+
+/* -------------------------------------------------------------- light: two
+ *
+ * Both light palettes were generated, not picked, and they share one structure;
+ * only the hue differs (moonwell 280°, vellum 84°). Four rules produced every
+ * number below, and they are worth knowing before editing any of them:
+ *
+ *  1. NOTHING IS WHITE, and nothing is grey. The page sits at L*≈.91 and the
+ *     table row — the biggest area on screen, and the thing that actually
+ *     glares — at L*≈.97 rather than 1.0, with real chroma in both. This is
+ *     the whole answer to "painful": the first light palette was rejected for
+ *     brightness, and dropping a near-white row to a tinted one costs a
+ *     legible tone only ~.025 of lightness. Softness here is nearly free.
+ *  2. THE FAMILY TOKENS COLOUR THE PILL, not the label. Each is a vivid
+ *     mid-tone (L*=.60, near the chroma ceiling for its hue) that FILLS its
+ *     pill, and the label is that tone walked toward the ink by --ink-mix.
+ *     A first pass had it the other way round — the token was the label and
+ *     the fill was a dilution of it — and the pills came out grey, because a
+ *     colour dark enough to be 11px text has almost no chroma left to give and
+ *     a quarter of it is nothing at all. Fill and small text want opposite
+ *     things from a colour; one token can only serve both by deriving one end.
+ *  3. EVERY TONE KEEPS ITS DARK-THEME HUE, so model-blue, fx-cyan,
+ *     animkit-violet and mech-orange stay as separable here as they are on
+ *     black. Pairs that share a hue there (anim/animkit, sound/soundkit) stay
+ *     apart by chroma here too — the same relationship, not the same numbers.
+ *  4. GOLD BECOMES BRONZE, and stays out of the pill scheme. There is no dark
+ *     yellow — yellow at a legible lightness is olive — so the gold family
+ *     shifts toward amber (88° → 70°) and mech opens out to 46° to keep the
+ *     warm tones apart. Gold is small text in two dozen places and is the
+ *     search-hit wash, so it is solved dark rather than made vivid.
+ *
+ * The floor every label was solved against is not the page. It is the loudest
+ * thing that ever sits under it: its own pill, its own group head, or a search
+ * hit's gold wash. Solve there and AA holds everywhere — verified by walking
+ * every text node on the page, compositing its ancestors' alphas down to an
+ * opaque colour and measuring, over a battery of ~20 queries (~18k pills) on
+ * both palettes. Re-run that before shipping a change to any fill percentage:
+ * two fills that stack are a floor nothing was solved against.
+ *
+ * Deliberately NOT light: --checker-a/b, the chequerboard behind a texture
+ * preview. It exists so alpha reads as alpha, and WoW's particle textures are
+ * bright-on-transparent — on a light chequerboard they would vanish. The
+ * preview is a lightbox, not a page surface, so it stays dark in every theme.
+ *
+ * Wowhead's embedded tooltip needs nothing from us either way: it paints its
+ * own dark tooltip.png on the inner cells, so it stays a dark panel on a light
+ * page and its white/gold text keeps reading. (Verified in the DOM, 2026-07-25
+ * — the older note claiming it had no background of its own was wrong.)
+ */
+
+/* Moonwell — a cool violet-slate light. The dark theme's sibling: same cerebral
+   register, inverted, and a cool field is what makes the bronze accent carry.
+   Named for the night-elf pools, not for a spell school: "arcane" already means
+   something specific in this game and a theme must not claim it. */
+:root[data-theme="moonwell"] {
+    --bg: #dedfe9;
+    --bg-panel: #edeef6;
+    --bg-row: #f3f4f9;
+    --bg-row-hover: #e1e5ff;
+    --border: #c0c2d5;
+    --border-ctrl: #7376c8;
+    --overlay-rgb: 34, 38, 115;
+    --shadow-rgb: 26, 31, 85;
+    --shadow-strength: 0.45;
+    --wash-strength: 1.7;
+    --backdrop: rgba(23, 28, 78, 0.4);
+    --checker-a: #31323b;
+    --checker-b: #1f2026;
+    --text: #2e344c;
+    --text-dim: #363e70;
+    --text-strong: #121632;
+    --text-muted: #3f4874;
+    --tag-btn: #2f376c;
+    --gold-rgb: 121, 75, 0;
+    --gold-dim: #a9721d;
+    --danger-rgb: 166, 25, 43;
+    --select-rgb: 136, 182, 252;
+    --select-border-rgb: 21, 123, 245;
+    --model-rgb: 32, 132, 214;
+    --sound: #229a30;
+    --soundkit-rgb: 75, 144, 117;
+    --animkit-rgb: 185, 40, 237;
+    --fx-rgb: 34, 144, 153;
+    --anim: #9c67b3;
+    --mech: #c85c1d;
+    --mech-aura: #a3772b;
+    /* the priceless invisibility: light needs no separate solid — the ink is
+       the fill's own colour, unlike dark where the text runs a shade paler */
+    --priceless: #6870e8;
+    --priceless-rgb: 104, 112, 232;
+    --priceless-border: #676ef6;
+    --q-poor: #7f8085;
+    --q-common: #6c6e76;
+    --q-uncommon: #279a1e;
+    --q-rare: #1e7eeb;
+    --q-epic: #a93bf5;
+    --q-legendary: #bf641d;
+    --q-artifact: #a1782b;
+    --q-heirloom: #228dae;
+    --cmd-bg-top: #f4f5fb;
+    --cmd-bg-bottom: #dfe1f0;
+    --cmd-border: #989ddb;
+    --cmd-text: #3a3f59;
+    --cmd-bevel: rgba(255, 255, 255, 0.7);
+    --group-fill: 8%;
+    --tone-fill: 28%;
+    --head-fill: 38%;
+    --tone-edge: 78%;
+    --ink-mix: 66%;
+    --dim: 1;
+    --wh-bg-top: #ffe7dd;
+    --wh-bg-bottom: #facebd;
+    --wh-border: #b26b4f;
+    --wh-hover-rgb: 192, 64, 0;
+}
+
+/* Vellum — warm parchment, the game's own questlog idiom. Sepia ink, a bronze
+   that finally belongs, and cool families reading as jewel tones on sand. */
+:root[data-theme="vellum"] {
+    --bg: #e9dfcc;
+    --bg-panel: #f6eede;
+    --bg-row: #f9f4ea;
+    --bg-row-hover: #fbe5bc;
+    --border: #d4c19d;
+    --border-ctrl: #907a4e;
+    --overlay-rgb: 94, 36, 1;
+    --shadow-rgb: 71, 29, 7;
+    --shadow-strength: 0.45;
+    --wash-strength: 1.7;
+    --backdrop: rgba(64, 26, 6, 0.4);
+    --checker-a: #3a3221;
+    --checker-b: #261f12;
+    --text: #4a2e1f;
+    --text-dim: #543d32;
+    --text-strong: #2e0e00;
+    --text-muted: #59453c;
+    --tag-btn: #4d362a;
+    --gold-rgb: 121, 75, 0;
+    --gold-dim: #ab731d;
+    --danger-rgb: 166, 25, 43;
+    --select-rgb: 136, 182, 252;
+    --select-border-rgb: 21, 123, 245;
+    --model-rgb: 32, 132, 214;
+    --sound: #229a30;
+    --soundkit-rgb: 75, 144, 117;
+    --animkit-rgb: 185, 40, 237;
+    --fx-rgb: 34, 144, 153;
+    --anim: #9c67b3;
+    --mech: #c85c1d;
+    --mech-aura: #a3772b;
+    /* the priceless invisibility: light needs no separate solid — the ink is
+       the fill's own colour, unlike dark where the text runs a shade paler */
+    --priceless: #6870e8;
+    --priceless-rgb: 104, 112, 232;
+    --priceless-border: #676ef6;
+    --q-poor: #82807b;
+    --q-common: #756d69;
+    --q-uncommon: #279a1e;
+    --q-rare: #1e7eeb;
+    --q-epic: #a93bf5;
+    --q-legendary: #bf641d;
+    --q-artifact: #a1782b;
+    --q-heirloom: #228dae;
+    --cmd-bg-top: #fbf5ea;
+    --cmd-bg-bottom: #efe0c4;
+    --cmd-border: #bd9f61;
+    --cmd-text: #56392a;
+    --cmd-bevel: rgba(255, 255, 255, 0.7);
+    --group-fill: 8%;
+    --tone-fill: 28%;
+    --head-fill: 38%;
+    --tone-edge: 78%;
+    --ink-mix: 66%;
+    --dim: 1;
+    --wh-bg-top: #ffe7dd;
+    --wh-bg-bottom: #facebd;
+    --wh-border: #b46c50;
+    --wh-hover-rgb: 192, 64, 0;
 }
 
 /* ----------------------------------------------------------------- derived */
@@ -117,17 +332,63 @@
     --animkit: rgb(var(--animkit-rgb));
     --fx: rgb(var(--fx-rgb));
     /* faint column separators keep tall uneven rows readable */
-    --border-faint: rgba(var(--overlay-rgb), 0.045);
+    --border-faint: rgba(var(--overlay-rgb), calc(0.045 * var(--wash-strength)));
 
-    /* Wowhead's own surfaces: brand chrome, deliberately NOT part of a
-       palette. The button is theirs, it looks the same everywhere it appears,
-       and a theme re-skinning it only makes it look broken. */
-    --wh-bg-top: #2b1c12;
-    --wh-bg-bottom: #1d130c;
-    --wh-border: #4a2e1e;
-    --wh-hover-rgb: 192, 64, 0;
+    /* The content family in play. Anything that shows one — a pill, a search
+     * chip, a target icon — names it once here and reads it back as a colour
+     * through:
+     *
+     *     color-mix(in oklab, var(--tone) var(--ink-mix), black)
+     *
+     * which is the tone taken down to a dark version of itself. That is what
+     * lets ONE palette token per family do the two jobs a single colour cannot
+     * do at once: FILL a shape (wants it light and saturated) and be 11px TEXT
+     * on that fill (wants it dark). At --ink-mix: 100% the two are the same
+     * colour and nothing has moved — which is the dark palette.
+     *
+     * The mix partner is BLACK, not the palette's own ink, and that is load-
+     * bearing: mixing in oklab toward black scales lightness and chroma
+     * together and leaves the hue untouched, so a label stays the colour of its
+     * family. Mixing toward --text-strong instead rotates every hue toward the
+     * ink's and flattens whichever families sit opposite it — on parchment it
+     * turned the fx cyan grey and the priceless periwinkle pink.
+     *
+     * That mix is spelled out at each site on purpose. It CANNOT be hoisted
+     * into a custom property here: var() inside a custom property is
+     * substituted where the property is DECLARED, not where it is used, so a
+     * --tone-text declared on :root would freeze at the :root --tone below and
+     * paint every family the same ink. It was written that way once and every
+     * label came out grey. */
+    --tone: var(--text);
 
     font-size: 15px;
+}
+
+/* THE FAMILY A COLUMN SHOWS. Declared on the cell so that every shape inside
+   inherits it — the kit box, its head, a compact group and the capsule in it.
+   Only leaf pills re-declare it, for their own kind (a sound file inside a
+   soundkit group is --sound, not --soundkit), and the "+N more" control stays
+   deliberately out of it: it is chrome, not content.
+
+   This is what a group's colour hangs on. Tinting the head from four
+   `.c-x .kit-head` rules used to be the whole story, which is why the shapes
+   that have no head to tint — a compact group, and the capsule inside it —
+   came out grey while the pills beside them were coloured. Dark hid that: at
+   3% fill, a family tint and a neutral one look the same. */
+.c-models {
+    --tone: var(--model);
+}
+
+.c-sounds {
+    --tone: var(--soundkit);
+}
+
+.c-animations {
+    --tone: var(--animkit);
+}
+
+.c-fx {
+    --tone: var(--fx);
 }
 
 * {
@@ -379,7 +640,7 @@ main {
     padding: 0.05rem 0.55rem;
     border: 1px solid var(--gold-dim);
     border-radius: 999px;
-    background: rgba(var(--gold-rgb), 0.07);
+    background: rgba(var(--gold-rgb), calc(0.07 * var(--wash-strength)));
 }
 
 /* shrink-to-fit, not flex:0 0 auto: sizeInput gives the input an explicit ch
@@ -410,7 +671,7 @@ main {
     padding: 0.12rem 0.3rem 0.12rem 0.6rem;
     border: 1px solid var(--border);
     border-radius: 999px;
-    background: rgba(var(--overlay-rgb), 0.05);
+    background: rgba(var(--overlay-rgb), calc(0.05 * var(--wash-strength)));
     font-size: 0.98rem;
     cursor: pointer;
 }
@@ -452,7 +713,7 @@ main {
 /* exclusion chips */
 .qchip.not {
     border-color: rgba(var(--danger-rgb), 0.5);
-    background: rgba(var(--danger-rgb), 0.08);
+    background: rgba(var(--danger-rgb), calc(0.08 * var(--wash-strength)));
 }
 
 .qchip.not.selected {
@@ -461,7 +722,7 @@ main {
 
 #editwrap.editing.not {
     border-color: rgba(var(--danger-rgb), 0.65);
-    background: rgba(var(--danger-rgb), 0.08);
+    background: rgba(var(--danger-rgb), calc(0.08 * var(--wash-strength)));
 }
 
 #editwrap.not #editlabel {
@@ -477,7 +738,7 @@ main {
 
 .qchip-field:hover, #editlabel:hover {
     text-decoration: underline;
-    background: rgba(var(--overlay-rgb), 0.08);
+    background: rgba(var(--overlay-rgb), calc(0.08 * var(--wash-strength)));
 }
 
 .qchip-field {
@@ -506,36 +767,42 @@ main {
 
 .qchip-x:hover {
     color: var(--danger);
-    background: rgba(var(--danger-rgb), 0.12);
+    background: rgba(var(--danger-rgb), calc(0.12 * var(--wash-strength)));
 }
 
-/* field colors for chips, edit label and suggestions */
+/* Field colours for chips, the edit label and suggestions. Each rule names its
+   family in --tone and this one turns it into readable text — the same
+   --tone -> --ink-mix path a pill's label takes. */
+.qchip-field, .suggest-field {
+    color: color-mix(in oklab, var(--tone) var(--ink-mix), black);
+}
+
 .f-model .qchip-field, .suggest-field.f-model {
-    color: var(--model);
+    --tone: var(--model);
 }
 
 .f-sound .qchip-field, .suggest-field.f-sound {
-    color: var(--sound);
+    --tone: var(--sound);
 }
 
 .f-soundkit .qchip-field, .suggest-field.f-soundkit {
-    color: var(--soundkit);
+    --tone: var(--soundkit);
 }
 
 .f-animkit .qchip-field, .suggest-field.f-animkit {
-    color: var(--animkit);
+    --tone: var(--animkit);
 }
 
 .f-anim .qchip-field, .suggest-field.f-anim {
-    color: var(--anim);
+    --tone: var(--anim);
 }
 
 .f-fx .qchip-field, .suggest-field.f-fx {
-    color: var(--fx);
+    --tone: var(--fx);
 }
 
 .f-mech .qchip-field, .suggest-field.f-mech {
-    color: var(--mech);
+    --tone: var(--mech);
 }
 
 .f-name .qchip-field, .suggest-field.f-name {
@@ -569,7 +836,7 @@ main {
 }
 
 .suggest-item:hover, .suggest-item.selected {
-    background: rgba(var(--gold-rgb), 0.08);
+    background: rgba(var(--gold-rgb), calc(0.08 * var(--wash-strength)));
 }
 
 .suggest-field {
@@ -638,7 +905,7 @@ main {
     padding: 0.32rem 0.7rem 0.32rem 0.5rem;
     border-left: 1px solid transparent;
     border-radius: 0 999px 999px 0;
-    opacity: 0.7;
+    opacity: var(--dim);
 }
 
 #tabs .tab:hover .tab-exc {
@@ -653,13 +920,13 @@ main {
 #tabs .tab.active {
     color: var(--gold);
     border-color: var(--gold-dim);
-    background: rgba(var(--gold-rgb), 0.08);
+    background: rgba(var(--gold-rgb), calc(0.08 * var(--wash-strength)));
 }
 
 #tabs .tab.active-not {
     color: var(--danger);
     border-color: rgba(var(--danger-rgb), 0.5);
-    background: rgba(var(--danger-rgb), 0.08);
+    background: rgba(var(--danger-rgb), calc(0.08 * var(--wash-strength)));
 }
 
 #tabs .tab.active-not .tab-exc {
@@ -712,7 +979,7 @@ main {
 
 #help-close:hover {
     color: var(--danger);
-    background: rgba(var(--danger-rgb), 0.12);
+    background: rgba(var(--danger-rgb), calc(0.12 * var(--wash-strength)));
 }
 
 .help-grid {
@@ -804,7 +1071,7 @@ main {
 #help ul.help-ex button:focus-visible {
     color: var(--gold);
     border-color: var(--gold-dim);
-    background: rgba(var(--gold-rgb), 0.08);
+    background: rgba(var(--gold-rgb), calc(0.08 * var(--wash-strength)));
 }
 
 /* --------------------------------------------------------------- toolbar */
@@ -1086,7 +1353,7 @@ main {
 }
 
 mark.hl {
-    background: rgba(var(--gold-rgb), 0.28);
+    background: rgba(var(--gold-rgb), calc(0.28 * var(--wash-strength)));
     color: inherit;
     border-radius: 3px;
     padding: 0 1px;
@@ -1149,9 +1416,9 @@ mark.hl {
     align-items: stretch;
     max-width: 100%;
     margin: 0.18rem 0;
-    border: 1px solid var(--border);
+    border: 1px solid color-mix(in srgb, var(--tone) var(--tone-edge), var(--border));
     border-radius: 8px;
-    background: rgba(var(--overlay-rgb), 0.02);
+    background: color-mix(in srgb, var(--tone) var(--group-fill), transparent);
     overflow: hidden;
 }
 
@@ -1163,28 +1430,18 @@ mark.hl {
     margin-bottom: 0.05rem;
 }
 
-/* stretch so the header tag (and its full-height hover buttons) fill the
-   whole strip, even when kit-files wraps to multiple lines and grows taller */
+/* Stretch so the header tag (and its full-height hover buttons) fill the whole
+   strip, even when kit-files wraps to multiple lines and grows taller.
+
+   The head is tinted by the column's family, one step LOUDER than the field its
+   pills lie on, so a group always reads head-then-contents. One rule now, from
+   the inherited --tone: it used to be four `.c-x .kit-head` rules whose alphas
+   differed by a point or two each, and one knob is worth more than that tuning. */
 .kit-head {
     display: flex;
     align-items: stretch;
     flex: none;
-}
-
-.c-models .kit-head {
-    background: rgba(var(--model-rgb), 0.08);
-}
-
-.c-sounds .kit-head {
-    background: rgba(var(--soundkit-rgb), 0.10);
-}
-
-.c-animations .kit-head {
-    background: rgba(var(--animkit-rgb), 0.09);
-}
-
-.c-fx .kit-head {
-    background: rgba(var(--fx-rgb), 0.08);
+    background: color-mix(in srgb, var(--tone) var(--head-fill), transparent);
 }
 
 .kit-head .tag, .kit-head .tag.hit {
@@ -1199,7 +1456,7 @@ mark.hl {
 }
 
 .kit-group.hit .kit-head {
-    background: rgba(var(--gold-rgb), 0.13);
+    background: rgba(var(--gold-rgb), calc(0.13 * var(--wash-strength)));
 }
 
 .kit-files {
@@ -1268,56 +1525,72 @@ mark.hl {
     vertical-align: top;
     margin: 0.1rem 0.25rem 0.1rem 0;
     border-radius: 999px;
-    background: rgba(var(--overlay-rgb), 0.03);
+    background: color-mix(in srgb, var(--tone) var(--group-fill), transparent);
 }
 
+/* The head paints nothing of its own here — the group IS its surface. That
+   surface is the kit box's FIELD, not the head's own fill, because the item's
+   .tag lies on top of it and the two fills stack: field + pill lands right
+   about where a full group's head does, which is the loudest floor every label
+   was solved against. Give this the head's fill instead and the stack goes
+   past that floor, taking the dim labels on a summon pill under AA. */
 .kit-group.compact .kit-head {
     background: none;
 }
 
 .kit-group.compact.hit {
-    background: rgba(var(--gold-rgb), 0.10);
+    background: rgba(var(--gold-rgb), calc(0.10 * var(--wash-strength)));
 }
 
 .kit-group.compact .kit-head:not(:last-child) .tag-label {
     padding-right: 0.4rem;
 }
 
-/* the lone item sits in its own rounded capsule inside the pill —
-   attached yet distinct; head-only pills (freeze/camo) have no capsule */
+/* The lone item sits in its own rounded capsule inside the pill — attached yet
+   distinct; head-only pills (freeze/camo) have no capsule.
+
+   The capsule is a FRAME, not a surface: it draws the edge and clips to it
+   (overflow + radius), and the fill inside comes from the item's own .tag, so a
+   sound file compacted is the same green as the same file in a full group. Give
+   the capsule a fill of its own and it would be the COLUMN's family — teal
+   around a green label — because --tone here is the group's, not the item's. */
 .kit-group.compact .kit-files {
     flex: none;
     padding: 0;
     margin: 2px;
-    border: 1px solid var(--border);
+    border: 1px solid color-mix(in srgb, var(--tone) var(--tone-edge), var(--border));
     border-radius: 999px;
-    background: rgba(var(--overlay-rgb), 0.04);
     overflow: hidden;
 }
 
 .kit-group.compact .kit-files:has(> .tag.hit) {
     border-color: var(--gold-dim);
-    background: rgba(var(--gold-rgb), 0.10);
 }
 
-.kit-group.compact .kit-files .tag,
-.kit-group.compact .kit-files .tag.hit {
+/* squared off and flush: the capsule's own radius and overflow shape it */
+.kit-group.compact .kit-files .tag {
     border: none;
-    background: none;
     margin: 0;
     border-radius: 0;
 }
 
 /* tags */
 
+/* A pill is coloured by its OWN family, fill and edge included — not just its
+   label. Both come from --tone (set per pill kind below), through the two
+   theme tokens --tone-fill and --tone-edge, so how loudly pills carry their
+   colour is a property of the palette and not of any pill type. On dark that
+   is a 3% lift and a neutral border, the look the app has always had; a light
+   palette turns both up, because a pale surface needs the colour in the shape
+   rather than in eight-pixel-tall text. */
 .tag {
     display: inline-flex;
     align-items: center;
     max-width: 100%;
     margin: 0.1rem 0.25rem 0.1rem 0;
-    border: 1px solid var(--border);
+    border: 1px solid color-mix(in srgb, var(--tone) var(--tone-edge), var(--border));
     border-radius: 999px;
-    background: rgba(var(--overlay-rgb), 0.03);
+    background: color-mix(in srgb, var(--tone) var(--tone-fill), transparent);
     font-size: 0.86em;
     overflow: hidden;
 }
@@ -1349,7 +1622,8 @@ mark.hl {
 }
 
 .t-target {
-    color: var(--mech);
+    --tone: var(--mech);
+    color: color-mix(in oklab, var(--tone) var(--ink-mix), black);
 }
 
 .t-notcaster {
@@ -1357,7 +1631,8 @@ mark.hl {
 }
 
 .t-area {
-    color: var(--fx);
+    --tone: var(--fx);
+    color: color-mix(in oklab, var(--tone) var(--ink-mix), black);
 }
 
 /* a label straight after the icons doesn't need its own left padding */
@@ -1388,7 +1663,7 @@ mark.hl {
 }
 
 .tag [data-role="meta"] {
-    --seg-divider: rgba(var(--overlay-rgb), 0.12);
+    --seg-divider: rgba(var(--overlay-rgb), calc(0.12 * var(--wash-strength)));
 }
 
 .tag [data-sep="left"] {
@@ -1505,7 +1780,7 @@ mark.hl {
 }
 
 .tag .tag-label {
-    color: var(--tone);
+    color: color-mix(in oklab, var(--tone) var(--ink-mix), black);
 }
 
 .tag.mechanic.aura .tag-label {
@@ -1518,8 +1793,8 @@ mark.hl {
     padding: 0.12rem 0.55rem 0.12rem 0;
     margin-left: -0.2rem;
     font-size: 0.92em;
-    opacity: 0.75;
-    color: var(--tone);
+    opacity: var(--dim);
+    color: color-mix(in oklab, var(--tone) var(--ink-mix), black);
     white-space: nowrap;
 }
 
@@ -1578,7 +1853,7 @@ mark.hl {
 
 .tag-copy:hover {
     color: var(--gold);
-    background: rgba(var(--gold-rgb), 0.1);
+    background: rgba(var(--gold-rgb), calc(0.1 * var(--wash-strength)));
 }
 
 /* ▶ on sound file tags — streams the sound from Wowhead's CDN */
@@ -1591,7 +1866,7 @@ mark.hl {
 
 .tag-play:hover {
     color: var(--gold);
-    background: rgba(var(--gold-rgb), 0.1);
+    background: rgba(var(--gold-rgb), calc(0.1 * var(--wash-strength)));
 }
 
 .tag-play.playing {
@@ -1625,7 +1900,7 @@ mark.hl {
 
 .tag-view:hover {
     color: var(--gold);
-    background: rgba(var(--gold-rgb), 0.1);
+    background: rgba(var(--gold-rgb), calc(0.1 * var(--wash-strength)));
     text-decoration: none;
 }
 
@@ -1649,7 +1924,7 @@ mark.hl {
 
 .tag.hit {
     border-color: var(--gold-dim);
-    background: rgba(var(--gold-rgb), 0.10);
+    background: rgba(var(--gold-rgb), calc(0.10 * var(--wash-strength)));
 }
 
 /* an invisibility nothing detects — the priceless case. A distinct cool accent
@@ -1657,7 +1932,7 @@ mark.hl {
    hit still overrides it in gold. */
 .tag.fx.priceless:not(.hit) {
     border-color: var(--priceless-border);
-    background: rgba(var(--priceless-rgb), 0.12);
+    background: rgba(var(--priceless-rgb), calc(0.12 * var(--wash-strength)));
 }
 
 .tag.fx.priceless {
@@ -1763,7 +2038,7 @@ mark.hl {
     margin: 0.18rem 0.25rem 0.1rem 0;
     padding: 0.1rem 0.5rem;
     color: var(--text);
-    background: rgba(var(--overlay-rgb), 0.06);
+    background: rgba(var(--overlay-rgb), calc(0.06 * var(--wash-strength)));
     border: 1px solid var(--border-ctrl);
     border-radius: 999px;
     font-size: 0.8em;
@@ -1773,7 +2048,7 @@ mark.hl {
 
 .more:hover {
     color: var(--gold);
-    background: rgba(var(--gold-rgb), 0.12);
+    background: rgba(var(--gold-rgb), calc(0.12 * var(--wash-strength)));
     border-color: var(--gold-dim);
 }
 
@@ -1931,7 +2206,8 @@ mark.hl {
     border: 1px solid var(--border);
     border-radius: 999px;
     background: var(--bg);
-    color: var(--model);
+    --tone: var(--model);
+    color: color-mix(in oklab, var(--tone) var(--ink-mix), black);
     font-family: Consolas, "Cascadia Mono", monospace;
     font-size: 0.86rem;
     transition: border-color 0.12s, color 0.12s, box-shadow 0.12s;

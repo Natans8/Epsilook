@@ -11,11 +11,19 @@ window.EpsilookConfig = {
     // control stays hidden — same rule as the version selector).
     //
     // The id "auto" is reserved: it is not a palette but "follow the OS's
-    // light/dark setting", re-following it live. Listing it only makes sense
-    // once a light palette exists, so it is left out for now.
+    // light/dark setting", re-following it live. It only means something once a
+    // light palette exists, and which one it picks is `autoTheme` below.
     themes: [
         {id: "dark", label: "Dark"},
+        {id: "moonwell", label: "Light — Moonwell"},
+        {id: "vellum", label: "Light — Vellum"},
+        {id: "auto", label: "Match system"},
     ],
+
+    // Which palette "auto" resolves to at each OS setting. Two ids from the
+    // registry above — no magic strings in theme.js, so shipping a different
+    // light palette is a one-word change here.
+    autoTheme: {light: "moonwell", dark: "dark"},
 
     // The theme used until someone picks one. Must name the palette app.css
     // applies with no data-theme set (its bare `:root` block) — otherwise the

@@ -141,8 +141,11 @@ into `meta.absentTables`.
 - **A new theme**: every colour in `app.css` comes from a token in the block at the top, so a theme is one
   `:root[data-theme="<id>"] { ... }` block re-declaring those tokens plus one `{id, label}` line in `themes` in
   `config.js`. The header picker builds itself from that registry and appears once a second theme exists; the choice is
-  remembered per browser, and the reserved id `auto` follows the OS's light/dark setting. Dark is the only palette
-  shipped — a light one was built and rejected as too harsh for the app.
+  remembered per browser, and the reserved id `auto` follows the OS's light/dark setting (`autoTheme` in `config.js`
+  says which palette it lands on). Three ship: **Dark**, **Light — Moonwell** (cool violet slate) and
+  **Light — Vellum** (warm parchment). A palette also sets *how loudly* colour lands, not just which colour: the fill,
+  edge and ink percentages at the bottom of each block are what let one set of family tokens work on black and on
+  paper. The comment block at the top of `app.css` explains each of them.
 
 ### Checking your changes
 

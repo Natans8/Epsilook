@@ -28,6 +28,8 @@ interface ThemeChoice {
 interface EpsilookConfig {
     themes: ThemeChoice[];
     defaultTheme: string;
+    /** Which palette id the reserved "auto" theme resolves to per OS setting. */
+    autoTheme: { light: string; dark: string };
     spellCommands: SpellCommand[];
     modelCopyTemplate: string;
     animCopyTemplate: string;
