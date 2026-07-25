@@ -1848,275 +1848,335 @@
             };
         };
 
-        if (chainIds.length) {
+        /**
+         * Push one fx category onto `cats` in the shape every category shares:
+         * the head-vs-pill icon split above, hit-floating, and the
+         * {name, hit, mask, items} envelope the renderer at the end consumes.
+         * A category with no rows pushes nothing, so callers need no `if`.
+         *
+         * Two levels are deliberately distinct, because most categories collapse
+         * or expand between them:
+         *   - SOURCE ROWS (`rows`) are what the spell actually has in this
+         *     category. They decide the category's hit state and, through
+         *     `targetSplit`, whether the target icon can ride the head.
+         *   - ENTRIES are what become pills. `entries` maps rows to them: chain
+         *     and glow DEDUPE (rows drawing the same texture become one pill and
+         *     union their masks), morph and shapeshift EXPAND (one creature with
+         *     three displays becomes three pills). Omit it when rows are pills.
+         *
+         * @param {object} spec
+         * @param {string} spec.name category word — the head label, and the key
+         *   into FX_HEAD_TITLES and the `fx:` search vocabulary.
+         * @param {any[]} spec.rows source rows (see above).
+         * @param {(row: any) => boolean} spec.isHit does a source row match the query.
+         * @param {(entry: any, mask: number) => Node} [spec.render] build one pill.
+         *   Omitted only by valueless categories, whose head IS the whole pill and
+         *   which therefore produce no entries for it to be called on.
+         * @param {(row: any) => number} [spec.mask] a source row's target mask.
+         *   Default: no icons anywhere — for categories with no target data.
+         * @param {(rows: any[]) => any[]} [spec.entries] rows → pills. Default: identity.
+         * @param {(entry: any) => boolean} [spec.entryIsHit] Default: `isHit`, which
+         *   is correct whenever entries and rows are the same thing.
+         * @param {(entry: any) => number} [spec.entryMask] Default: `mask`.
+         * @param {(rows: any[], entries: any[]) => number[]} [spec.headMasks] which
+         *   masks decide whether the icon can ride the head. Defaults to the source
+         *   rows'. Override only where a row's own mask is not what a pill shows —
+         *   `keybind` merges rows by label, so a merged pill carries their union.
+         */
+        const pushCat = ({
+            name, rows, isHit,
+            render = () => el("span"),
+            mask = () => 0,
+            entries = (rs) => rs,
+            entryIsHit = isHit,
+            entryMask = mask,
+            headMasks = (rs) => rs.map(mask),
+        }) => {
+            if (!rows.length) return;
+            const pills = entries(rows);
+            const t = targetSplit(headMasks(rows, pills));
+            cats.push({
+                name,
+                hit: rows.some(isHit),
+                mask: t.head,
+                items: hitsFirst(pills, entryIsHit)
+                    .map((e) => () => render(e, t.pill(entryMask(e)))),
+            });
+        };
+
+        const chainMask = (c) => maskOf(d.fxTargets, spellId, [c]);
+        pushCat({
+            name: "chain",
+            rows: chainIds,
+            mask: chainMask,
+            isHit: (c) => fxChainIsHit(c),
             // one entry per distinct (texture, tint); untextured chains still show.
-            // Chains collapsing into one pill union their masks onto it.
-            const chainMask = (c) => maskOf(d.fxTargets, spellId, [c]);
-            const byKey = new Map();
-            // the drawing beam's attach points are part of the key, so one chain
-            // drawn by two beams from different points stays two pills
-            const rows = (d.spellChainRows.get(spellId)
-                || chainIds.map((c) => ({chain: c, src: -1, dst: -1})))
-                .slice().sort((a, b) => a.chain - b.chain);
-            for (const {chain: c, src, dst} of rows) {
-                const color = (d.fxChains.get(c) || {}).color ?? 0xffffff;
-                const fids = d.fxTextures.get(c) || [0];
-                for (const fid of fids) {
-                    const key = fid + ":" + color + ":" + src + ":" + dst;
-                    const prev = byKey.get(key);
-                    if (prev) {
-                        prev.mask |= chainMask(c);
-                        continue;
+            // The drawing beam's attach points are part of the key, so one chain
+            // drawn by two beams from different points stays two pills.
+            entries: (ids) => {
+                const byKey = new Map();
+                const rows = (d.spellChainRows.get(spellId)
+                    || ids.map((c) => ({chain: c, src: -1, dst: -1})))
+                    .slice().sort((a, b) => a.chain - b.chain);
+                for (const {chain: c, src, dst} of rows) {
+                    const color = (d.fxChains.get(c) || {}).color ?? 0xffffff;
+                    for (const fid of d.fxTextures.get(c) || [0]) {
+                        const key = fid + ":" + color + ":" + src + ":" + dst;
+                        const prev = byKey.get(key);
+                        if (prev) {
+                            prev.mask |= chainMask(c);
+                            continue;
+                        }
+                        byKey.set(key, {chainId: c, fid, color, src, dst, mask: chainMask(c)});
                     }
-                    byKey.set(key, {chainId: c, fid, color, src, dst, mask: chainMask(c)});
                 }
-            }
-            const t = targetSplit(chainIds.map(chainMask));
-            cats.push({
-                name: "chain",
-                hit: chainIds.some((c) => fxChainIsHit(c)),
-                mask: t.head,
-                items: hitsFirst([...byKey.values()], (e) => fxChainIsHit(e.chainId))
-                    .map((e) => () => fxTag(e, t.pill(e.mask))),
-            });
-        }
-        if (dissolveIds.length) {
+                return [...byKey.values()];
+            },
+            entryIsHit: (e) => fxChainIsHit(e.chainId),
+            entryMask: (e) => e.mask,
+            render: (e, m) => fxTag(e, m),
+        });
+
+        const dissolveMask = (id) => maskOf(d.dissolveTargets, spellId, [id]);
+        pushCat({
+            name: "dissolve",
+            rows: dissolveIds,
+            mask: dissolveMask,
+            isHit: (id) => dissolveIsHit(id),
             // one pill per distinct texture; textureless rows still show
-            const dissolveMask = (id) => maskOf(d.dissolveTargets, spellId, [id]);
-            const byKey = new Map();
-            for (const id of dissolveIds.slice().sort((a, b) => a - b)) {
-                for (const fid of d.dissolveTextures.get(id) || [0]) {
-                    const prev = byKey.get(fid);
+            entries: (ids) => {
+                const byKey = new Map();
+                for (const id of ids.slice().sort((a, b) => a - b)) {
+                    for (const fid of d.dissolveTextures.get(id) || [0]) {
+                        const prev = byKey.get(fid);
+                        if (prev) {
+                            prev.mask |= dissolveMask(id);
+                            continue;
+                        }
+                        byKey.set(fid, {dissolveId: id, fid, mask: dissolveMask(id)});
+                    }
+                }
+                return [...byKey.values()];
+            },
+            entryIsHit: (e) => dissolveIsHit(e.dissolveId),
+            entryMask: (e) => e.mask,
+            render: (e, m) => dissolveTag(e, m),
+        });
+
+        const glowMask = (id) => maskOf(d.glowTargets, spellId, [id]);
+        pushCat({
+            name: "glow",
+            rows: glowIds,
+            mask: glowMask,
+            isHit: (id) => glowIsHit(id),
+            // one pill per distinct color (no texture — the color is the payload)
+            entries: (ids) => {
+                const byKey = new Map();
+                for (const id of ids.slice().sort((a, b) => a - b)) {
+                    const color = d.glowColors.get(id) ?? 0;
+                    const prev = byKey.get(color);
                     if (prev) {
-                        prev.mask |= dissolveMask(id);
+                        prev.mask |= glowMask(id);
                         continue;
                     }
-                    byKey.set(fid, {dissolveId: id, fid, mask: dissolveMask(id)});
+                    byKey.set(color, {
+                        glowId: id, color, alpha: d.glowAlphas.get(id), mask: glowMask(id),
+                    });
                 }
-            }
-            const t = targetSplit(dissolveIds.map(dissolveMask));
-            cats.push({
-                name: "dissolve",
-                hit: dissolveIds.some((id) => dissolveIsHit(id)),
-                mask: t.head,
-                items: hitsFirst([...byKey.values()], (e) => dissolveIsHit(e.dissolveId))
-                    .map((e) => () => dissolveTag(e, t.pill(e.mask))),
-            });
-        }
-        if (glowIds.length) {
-            // one pill per distinct color (no texture — the color is the payload)
-            const glowMask = (id) => maskOf(d.glowTargets, spellId, [id]);
-            const byKey = new Map();
-            for (const id of glowIds.slice().sort((a, b) => a - b)) {
-                const color = d.glowColors.get(id) ?? 0;
-                const prev = byKey.get(color);
-                if (prev) {
-                    prev.mask |= glowMask(id);
-                    continue;
-                }
-                byKey.set(color, {
-                    glowId: id, color, alpha: d.glowAlphas.get(id), mask: glowMask(id),
-                });
-            }
-            const t = targetSplit(glowIds.map(glowMask));
-            cats.push({
-                name: "glow",
-                hit: glowIds.some((id) => glowIsHit(id)),
-                mask: t.head,
-                items: hitsFirst([...byKey.values()], (e) => glowIsHit(e.glowId))
-                    .map((e) => () => colorFxTag("glow", e.color, glowIsHit(e.glowId), e.alpha,
-                        t.pill(e.mask))),
-            });
-        }
-        if (shadowyIds.length || ghostMatIds.length) {
-            // "ghost" merges ShadowyEffect rows (two colors each) and Type-22
-            // material recolors (one color each). One pill per distinct color; each
-            // pill carries which isHit to use so the category can mix both sources.
-            const shadowyMask = (id) => maskOf(d.shadowyTargets, spellId, [id]);
-            const ghostMatMask = (id) => maskOf(d.ghostMatTargets, spellId, [id]);
-            const byColor = new Map();
-            for (const id of shadowyIds.slice().sort((a, b) => a - b)) {
-                const c = d.shadowyColors.get(id) || {primary: 0, secondary: 0};
-                const region = effectRegionName(d.shadowyAttach.get(id));
-                for (const color of [c.primary, c.secondary]) {
-                    const prev = byColor.get(color);
-                    if (prev) {
-                        prev.mask |= shadowyMask(id);
-                        if (region) prev.regions.add(region);
-                        continue;
+                return [...byKey.values()];
+            },
+            entryIsHit: (e) => glowIsHit(e.glowId),
+            entryMask: (e) => e.mask,
+            render: (e, m) => colorFxTag("glow", e.color, glowIsHit(e.glowId), e.alpha, m),
+        });
+        // "ghost" merges ShadowyEffect rows (two colors each) and Type-22 material
+        // recolors (one color each). Its rows are tagged with which source they
+        // came from, so one category can mix both; sorted and shadowy-first, since
+        // the dedup below keeps the first row to claim a color.
+        const ghostRows = [
+            ...shadowyIds.slice().sort((a, b) => a - b).map((id) => ({id, mat: false})),
+            ...ghostMatIds.slice().sort((a, b) => a - b).map((id) => ({id, mat: true})),
+        ];
+        pushCat({
+            name: "ghost",
+            rows: ghostRows,
+            mask: (r) => maskOf(r.mat ? d.ghostMatTargets : d.shadowyTargets, spellId, [r.id]),
+            isHit: (r) => (r.mat ? ghostMatIsHit : shadowyIsHit)(r.id),
+            // one pill per distinct color; each pill carries its own isHit, because
+            // which source a color came from decides how it matches the query
+            entries: (rows) => {
+                const byColor = new Map();
+                for (const r of rows) {
+                    const rowMask = maskOf(r.mat ? d.ghostMatTargets : d.shadowyTargets,
+                        spellId, [r.id]);
+                    // Type-22 material recolors carry one color and no attach point;
+                    // ShadowyEffect rows carry two colors and a body region
+                    const colors = r.mat
+                        ? [d.ghostMatColors.get(r.id) ?? 0]
+                        : (({primary, secondary}) => [primary, secondary])(
+                            d.shadowyColors.get(r.id) || {primary: 0, secondary: 0});
+                    const region = r.mat ? "" : effectRegionName(d.shadowyAttach.get(r.id));
+                    const hit = () => (r.mat ? ghostMatIsHit : shadowyIsHit)(r.id);
+                    for (const color of colors) {
+                        const prev = byColor.get(color);
+                        if (prev) {
+                            prev.mask |= rowMask;
+                            if (region) prev.regions.add(region);
+                            continue;
+                        }
+                        byColor.set(color, {color, hit, mask: rowMask,
+                            regions: new Set(region ? [region] : [])});
                     }
-                    byColor.set(color, {color, hit: () => shadowyIsHit(id),
-                        mask: shadowyMask(id), regions: new Set(region ? [region] : [])});
                 }
-            }
-            for (const id of ghostMatIds.slice().sort((a, b) => a - b)) {
-                const color = d.ghostMatColors.get(id) ?? 0;
-                const prev = byColor.get(color);
-                if (prev) {
-                    prev.mask |= ghostMatMask(id);
-                    continue;
-                }
-                // Type-22 material recolors carry no attach point of their own
-                byColor.set(color, {color, hit: () => ghostMatIsHit(id),
-                    mask: ghostMatMask(id), regions: new Set()});
-            }
-            const catHit = shadowyIds.some((id) => shadowyIsHit(id))
-                || ghostMatIds.some((id) => ghostMatIsHit(id));
-            // both sources feed one category, so both sets of masks decide the head
-            const t = targetSplit(shadowyIds.map(shadowyMask)
-                .concat(ghostMatIds.map(ghostMatMask)));
-            cats.push({
-                name: "ghost",
-                hit: catHit,
-                mask: t.head,
-                items: hitsFirst([...byColor.values()], (e) => e.hit())
-                    .map((e) => () => colorFxTag("ghost", e.color, e.hit(), undefined,
-                        t.pill(e.mask), effectAttachNote([...e.regions], "ghost"))),
-            });
-        }
-        if (tintIds.length) {
+                return [...byColor.values()];
+            },
+            entryIsHit: (e) => e.hit(),
+            entryMask: (e) => e.mask,
+            render: (e, m) => colorFxTag("ghost", e.color, e.hit(), undefined, m,
+                effectAttachNote([...e.regions], "ghost")),
+        });
+
+        pushCat({
+            name: "tint",
+            rows: tintIds,
+            isHit: (id) => tintIsHit(id),
             // one pill per distinct color (no texture — the color is the payload)
-            const entries = [];
-            const seen = new Set();
-            for (const id of tintIds.slice().sort((a, b) => a - b)) {
-                const color = d.tintColors.get(id) ?? 0;
-                if (seen.has(color)) continue;
-                seen.add(color);
-                entries.push({tintId: id, color});
-            }
-            cats.push({
-                name: "tint",
-                hit: tintIds.some((id) => tintIsHit(id)),
-                items: hitsFirst(entries, (e) => tintIsHit(e.tintId))
-                    .map((e) => () => colorFxTag("tint", e.color, tintIsHit(e.tintId))),
+            entries: (ids) => {
+                const byColor = new Map();
+                for (const id of ids.slice().sort((a, b) => a - b)) {
+                    const color = d.tintColors.get(id) ?? 0;
+                    if (!byColor.has(color)) byColor.set(color, {tintId: id, color});
+                }
+                return [...byColor.values()];
+            },
+            entryIsHit: (e) => tintIsHit(e.tintId),
+            render: (e) => colorFxTag("tint", e.color, tintIsHit(e.tintId)),
+        });
+
+        // one pill per distinct percent — the strength is the whole payload.
+        // (desaturate keys a computed grey swatch off it; transparency does not.)
+        const uniqueSorted = (pcts) => [...new Set(pcts)].sort((a, b) => a - b);
+        for (const [name, pcts, pctIsHit] of /** @type {[string, number[], (p: number) => boolean][]} */ ([
+            ["desaturate", desatPcts, desatIsHit],
+            ["transparency", transpPcts, transpIsHit],
+        ])) {
+            pushCat({
+                name,
+                rows: pcts,
+                isHit: pctIsHit,
+                entries: uniqueSorted,
+                render: (p) => percentFxTag(name, p, pctIsHit(p)),
             });
         }
-        if (desatPcts.length) {
-            // one pill per distinct percent — the desaturation strength is the
-            // whole payload (no color; a computed grey swatch keys off strength)
-            const pcts = [...new Set(desatPcts)].sort((a, b) => a - b);
-            cats.push({
-                name: "desaturate",
-                hit: pcts.some((p) => desatIsHit(p)),
-                items: hitsFirst(pcts, (p) => desatIsHit(p))
-                    .map((p) => () => percentFxTag("desaturate", p, desatIsHit(p))),
+
+        // valueless: the clickable category head IS the whole pill, so these have
+        // one nominal row (to exist at all) and no entries
+        for (const [name, present, isHit] of /** @type {[string, boolean, () => boolean][]} */ ([
+            ["freeze", hasFreeze, freezeIsHit],
+            ["camo", hasCamo, camoIsHit],
+        ])) {
+            pushCat({
+                name,
+                rows: present ? [null] : [],
+                isHit,
+                entries: () => [],
             });
         }
-        if (transpPcts.length) {
-            const pcts = [...new Set(transpPcts)].sort((a, b) => a - b);
-            cats.push({
-                name: "transparency",
-                hit: pcts.some((p) => transpIsHit(p)),
-                items: hitsFirst(pcts, (p) => transpIsHit(p))
-                    .map((p) => () => percentFxTag("transparency", p, transpIsHit(p))),
-            });
-        }
-        if (hasFreeze) {
-            // valueless: the clickable category head IS the whole pill
-            cats.push({name: "freeze", hit: freezeIsHit(), items: []});
-        }
-        if (hasCamo) {
-            cats.push({name: "camo", hit: camoIsHit(), items: []});
-        }
-        if (screenIds.length) {
+
+        const screenMask = (id) => maskOf(d.screenTargets, spellId, [id]);
+        pushCat({
+            name: "screen",
+            rows: screenIds,
+            mask: screenMask,
+            isHit: (id) => screenIsHit(id),
             // one pill per ScreenEffect row, labeled with its internal name.
             // ImplicitTarget icon (pack format 25): usually the caster's own view
-            const screenMask = (id) => maskOf(d.screenTargets, spellId, [id]);
-            const ids = hitsFirst(screenIds.slice().sort((a, b) => a - b), (id) => screenIsHit(id));
-            const t = targetSplit(screenIds.map(screenMask));
-            cats.push({
-                name: "screen",
-                hit: screenIds.some((id) => screenIsHit(id)),
-                mask: t.head,
-                items: ids.map((id) => () => screenTag(id, t.pill(screenMask(id)))),
-            });
-        }
-        if (formIds.length) {
-            // one pill per (form, display); a form with no display (Battle Stance,
-            // Shadowform, Stealth — 11 of the 29 used forms) gets one name-only pill
-            const ids = hitsFirst(formIds.slice().sort((a, b) => a - b), (f) => shapeshiftIsHit(f));
-            const entries = ids.flatMap((f) =>
-                (d.shapeshiftDisplays.get(f) || [{displayId: 0, fid: 0}])
-                    .map((e) => ({formId: f, displayId: e.displayId, fid: e.fid})));
-            const formMask = (f) => maskOf(d.shapeshiftTargets, spellId, [f]);
-            const t = targetSplit(formIds.map(formMask));
-            cats.push({
-                name: "shapeshift",
-                hit: formIds.some((f) => shapeshiftIsHit(f)),
-                mask: t.head,
-                items: entries.map((e) => () => shapeshiftTag(e, t.pill(formMask(e.formId)), spellId)),
-            });
-        }
-        if (morphIds.length) {
-            // one pill per (creature, display); creatures without TDB displays
-            // still get a single fallback pill
-            const ids = hitsFirst(morphIds.slice().sort((a, b) => a - b), (c) => morphIsHit(c));
-            const entries = ids.flatMap((c) =>
-                (d.morphDisplays.get(c) || [{displayId: 0, fid: 0}])
-                    .map((e) => ({creatureId: c, displayId: e.displayId, fid: e.fid})));
-            // who the morph lands on — the target for polymorph, the caster for
-            // self-transforms (ImplicitTarget, pack format 25)
-            const morphMask = (c) => maskOf(d.morphTargets, spellId, [c]);
-            const t = targetSplit(morphIds.map(morphMask));
-            cats.push({
-                name: "morph",
-                hit: morphIds.some((c) => morphIsHit(c)),
-                mask: t.head,
-                items: entries.map((e) => () => morphTag(e, t.pill(morphMask(e.creatureId)), spellId)),
-            });
-        }
-        if (summonEntries.length) {
+            entries: (ids) => ids.slice().sort((a, b) => a - b),
+            render: (id, m) => screenTag(id, m),
+        });
+        // shapeshift and morph share a shape: one pill per (row, display), with a
+        // single fallback pill for rows that have no display at all.
+        const withDisplays = (displays) => (ids) => ids.slice().sort((a, b) => a - b)
+            .flatMap((id) => (displays.get(id) || [{displayId: 0, fid: 0}])
+                .map((e) => ({id, displayId: e.displayId, fid: e.fid})));
+
+        const formMask = (f) => maskOf(d.shapeshiftTargets, spellId, [f]);
+        pushCat({
+            name: "shapeshift",
+            rows: formIds,
+            mask: formMask,
+            isHit: (f) => shapeshiftIsHit(f),
+            // a form with no display (Battle Stance, Shadowform, Stealth — 11 of
+            // the 29 used forms) gets one name-only pill
+            entries: withDisplays(d.shapeshiftDisplays),
+            entryIsHit: (e) => shapeshiftIsHit(e.id),
+            entryMask: (e) => formMask(e.id),
+            render: (e, m) => shapeshiftTag({formId: e.id, displayId: e.displayId, fid: e.fid},
+                m, spellId),
+        });
+
+        // who the morph lands on — the target for polymorph, the caster for
+        // self-transforms (ImplicitTarget, pack format 25)
+        const morphMask = (c) => maskOf(d.morphTargets, spellId, [c]);
+        pushCat({
+            name: "morph",
+            rows: morphIds,
+            mask: morphMask,
+            isHit: (c) => morphIsHit(c),
+            // creatures without TDB displays still get a single fallback pill
+            entries: withDisplays(d.morphDisplays),
+            entryIsHit: (e) => morphIsHit(e.id),
+            entryMask: (e) => morphMask(e.id),
+            render: (e, m) => morphTag({creatureId: e.id, displayId: e.displayId, fid: e.fid},
+                m, spellId),
+        });
+
+        const summonMask = (e) => maskOf(d.summonTargets, spellId, [e.creatureId]);
+        pushCat({
+            name: "summon",
+            rows: summonEntries,
+            mask: summonMask,
+            isHit: (e) => summonIsHit(e.creatureId, e.control),
             // one pill per (creature, control) pair; ImplicitTarget icon shows where
             // the summon lands (usually a ground point → area)
-            const summonMask = (e) => maskOf(d.summonTargets, spellId, [e.creatureId]);
-            const entries = hitsFirst(
-                summonEntries.slice().sort((a, b) => (a.creatureId - b.creatureId) || (a.control - b.control)),
-                (e) => summonIsHit(e.creatureId, e.control));
-            const t = targetSplit(summonEntries.map(summonMask));
-            cats.push({
-                name: "summon",
-                hit: summonEntries.some((e) => summonIsHit(e.creatureId, e.control)),
-                mask: t.head,
-                items: entries.map((e) => () => summonTag(e, t.pill(summonMask(e)))),
-            });
-        }
-        if (objectIds.length) {
+            entries: (es) => es.slice().sort(
+                (a, b) => (a.creatureId - b.creatureId) || (a.control - b.control)),
+            render: (e, m) => summonTag(e, m),
+        });
+
+        const objMask = (o) => maskOf(d.objectTargets, spellId, [o]);
+        pushCat({
+            name: "object",
+            rows: objectIds,
+            mask: objMask,
+            isHit: (o) => objectIsHit(o),
             // one pill per gameobject the spell places. Same shape as summon —
             // the ImplicitTarget icon says where it lands (usually a ground point)
-            const objMask = (o) => maskOf(d.objectTargets, spellId, [o]);
-            const ids = hitsFirst(objectIds.slice().sort((a, b) => a - b),
-                (o) => objectIsHit(o));
-            const t = targetSplit(objectIds.map(objMask));
-            cats.push({
-                name: "object",
-                hit: objectIds.some((o) => objectIsHit(o)),
-                mask: t.head,
-                items: ids.map((o) => () => objectTag(o, t.pill(objMask(o)))),
-            });
-        }
-        if (vehicleIds.length) {
-            // one pill per SEAT, in SeatID order, labeled with its attachment
-            // point — de-duped, because 38% of multi-seat vehicles put every seat
-            // on the same attachment and would otherwise repeat one pill 8 times.
-            // The mask now comes from the SET_VEHICLE_ID aura's ImplicitTarget (pack
-            // format 25) — caster when the caster becomes the vehicle, target when a
-            // unit is turned into one. It is per-vehicle, so every seat shares it and
-            // the head carries the icon; only differing vehicles drop it to the pills.
-            const d2 = state.data;
-            const vehMask = (v) => maskOf(d2.vehicleTargets, spellId, [v]);
-            const seatCount = vehicleIds.reduce(
-                (n, v) => Math.max(n, (d2.vehicleSeats.get(v) || []).length), 0);
-            const points = [...new Set(vehicleIds.flatMap((v) => d2.vehicleSeats.get(v) || []))];
-            const t = targetSplit(vehicleIds.map(vehMask));
-            const union = vehicleIds.reduce((m, v) => m | vehMask(v), 0);
-            cats.push({
-                name: "seat",
-                hit: points.some((p) => vehicleIsHit(p, seatCount)),
-                mask: t.head,
-                items: hitsFirst(points, (p) => vehicleIsHit(p, seatCount))
-                    .map((p) => () => vehicleTag(p, seatCount, t.pill(union))),
-            });
-        }
+            entries: (ids) => ids.slice().sort((a, b) => a - b),
+            render: (o, m) => objectTag(o, m),
+        });
+
+        // one pill per SEAT, in SeatID order, labeled with its attachment point —
+        // de-duped, because 38% of multi-seat vehicles put every seat on the same
+        // attachment and would otherwise repeat one pill 8 times. The mask comes
+        // from the SET_VEHICLE_ID aura's ImplicitTarget (pack format 25) — caster
+        // when the caster becomes the vehicle, target when a unit is turned into
+        // one. It is per-VEHICLE, not per-seat, so every pill in the category
+        // carries the same union of the spell's vehicles rather than its own mask.
+        const vehMask = (v) => maskOf(d.vehicleTargets, spellId, [v]);
+        const seatCount = vehicleIds.reduce(
+            (n, v) => Math.max(n, (d.vehicleSeats.get(v) || []).length), 0);
+        pushCat({
+            name: "seat",
+            rows: vehicleIds,
+            mask: vehMask,
+            // a vehicle is "hit" through the attachment points of its seats
+            isHit: (v) => (d.vehicleSeats.get(v) || []).some((p) => vehicleIsHit(p, seatCount)),
+            entries: (vs) => [...new Set(vs.flatMap((v) => d.vehicleSeats.get(v) || []))],
+            entryIsHit: (p) => vehicleIsHit(p, seatCount),
+            entryMask: () => vehicleIds.reduce((m, v) => m | vehMask(v), 0),
+            render: (p, m) => vehicleTag(p, seatCount, m),
+        });
         // invisibility / detection channels. Counterpart count = the other side of
         // the same type; it drives the pill label AND the numeric hit test.
         /** @type {Array<[string, {type: number, mask: number}[], Map<number, number[]>]>} */
@@ -2124,15 +2184,13 @@
             ["invis", invisPills, d.detectTypeSpells],
             ["detect", detectPills, d.invisTypeSpells]];
         for (const [side, pills, countMap] of channels) {
-            if (!pills.length) continue;
             const countOf = (type) => (countMap.get(type) || []).length;
-            const t = targetSplit(pills.map((e) => e.mask));
-            cats.push({
+            pushCat({
                 name: side,
-                hit: pills.some((e) => channelIsHit(side, e.type)),
-                mask: t.head,
-                items: hitsFirst(pills, (e) => channelIsHit(side, e.type))
-                    .map((e) => () => channelTag(side, e.type, countOf(e.type), t.pill(e.mask))),
+                rows: pills,
+                mask: (e) => e.mask,
+                isHit: (e) => channelIsHit(side, e.type),
+                render: (e, m) => channelTag(side, e.type, countOf(e.type), m),
             });
         }
 
@@ -2141,60 +2199,57 @@
         // replacement spell — which is not shown — so they would render as
         // duplicate pills; pills are keyed on what they actually display and their
         // masks union, the same de-duping vehicle seat attachments get.
-        if (keybindIds.length) {
-            const kbMask = (o) => maskOf(d.keybindTargets, spellId, [o]);
-            /** @type {Map<string, {label: string, fn: string, ids: number[], mask: number}>} */
-            const byLabel = new Map();
-            for (const o of keybindIds) {
-                const row = d.keybinds.get(o);
-                if (!row) continue;
-                const label = row.when ? `${row.fn} ${row.when}` : row.fn;
-                const prev = byLabel.get(label);
-                if (prev) {
-                    prev.ids.push(o);
-                    prev.mask |= kbMask(o);
-                    continue;
+        const kbMask = (o) => maskOf(d.keybindTargets, spellId, [o]);
+        pushCat({
+            name: "keybind",
+            // an override with no keybind row displays nothing, so it is not a row
+            rows: keybindIds.filter((o) => d.keybinds.has(o)),
+            mask: kbMask,
+            isHit: keybindIsHit,
+            entries: (ids) => {
+                /** @type {Map<string, {label: string, fn: string, ids: number[], mask: number}>} */
+                const byLabel = new Map();
+                for (const o of ids) {
+                    const row = d.keybinds.get(o);
+                    const label = row.when ? `${row.fn} ${row.when}` : row.fn;
+                    const prev = byLabel.get(label);
+                    if (prev) {
+                        prev.ids.push(o);
+                        prev.mask |= kbMask(o);
+                        continue;
+                    }
+                    byLabel.set(label, {label, fn: row.fn, ids: [o], mask: kbMask(o)});
                 }
-                byLabel.set(label, {label, fn: row.fn, ids: [o], mask: kbMask(o)});
-            }
-            const pills = [...byLabel.values()].sort((a, b) => a.label.localeCompare(b.label));
-            const isHit = (p) => p.ids.some(keybindIsHit);
-            const t = targetSplit(pills.map((p) => p.mask));
-            cats.push({
-                name: "keybind",
-                hit: pills.some(isHit),
-                mask: t.head,
-                items: hitsFirst(pills, isHit)
-                    .map((p) => () => keybindTag(p, t.pill(p.mask))),
-            });
-        }
+                return [...byLabel.values()].sort((a, b) => a.label.localeCompare(b.label));
+            },
+            entryIsHit: (p) => p.ids.some(keybindIsHit),
+            entryMask: (p) => p.mask,
+            // a merged pill shows its members' union, so the union is what the head
+            // has to agree with — see `headMasks` on pushCat
+            headMasks: (_rows, pills) => pills.map((p) => p.mask),
+            render: (p, m) => keybindTag(p, m),
+        });
 
         // movement-speed modifiers: one pill per (movement, percent) the spell
         // sets. The pack has already collapsed the auras that share a movement,
         // so two pills here are two genuinely different statements.
-        if (speedMods.length) {
-            const t = targetSplit(speedMods.map((p) => p.mask));
-            cats.push({
-                name: "speed",
-                hit: speedMods.some((p) => speedIsHit(p.key)),
-                mask: t.head,
-                items: hitsFirst(speedMods, (p) => speedIsHit(p.key))
-                    .map((p) => () => speedTag(p, t.pill(p.mask))),
-            });
-        }
+        pushCat({
+            name: "speed",
+            rows: speedMods,
+            mask: (p) => p.mask,
+            isHit: (p) => speedIsHit(p.key),
+            render: (p, m) => speedTag(p, m),
+        });
 
         // object-scale modifiers: one pill per distinct percent, the three scale
         // auras having already collapsed into it in the pack
-        if (scaleMods.length) {
-            const t = targetSplit(scaleMods.map((p) => p.mask));
-            cats.push({
-                name: "scale",
-                hit: scaleMods.some((p) => scaleIsHit(p.pct)),
-                mask: t.head,
-                items: hitsFirst(scaleMods, (p) => scaleIsHit(p.pct))
-                    .map((p) => () => scaleTag(p, t.pill(p.mask))),
-            });
-        }
+        pushCat({
+            name: "scale",
+            rows: scaleMods,
+            mask: (p) => p.mask,
+            isHit: (p) => scaleIsHit(p.pct),
+            render: (p, m) => scaleTag(p, m),
+        });
 
         // one block per fx category, in the order pushed above; renderBlocks
         // floats the matched category to the top. The icon rides the category
