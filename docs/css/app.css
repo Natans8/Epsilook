@@ -801,15 +801,21 @@ main {
 }
 
 /* ---- what the query grammar recognises, marked in place -------------------
-   Four roles, no more: the thing the grammar KNOWS (a category word, a meta
-   keyword, a target word, a numeric axis, an alternation bar), the VALUE a
-   keyword takes, a quoted PHRASE, and a mistake. Weight carries the first —
-   colour alone is not a distinction on three palettes — and the rest lean on
-   texture so the bar never turns into a rainbow.
+   Three roles, no more: the thing the grammar KNOWS (a category word, a target
+   word, a numeric axis, an alternation bar), a meta KEYWORD with its value —
+   drawn as a small tag inside the tag, because that is what it is — and a
+   quoted PHRASE. Nothing is ever marked wrong: a word the grammar does not
+   know is an ordinary text search, and drawing it as one is the truth.
 
    These style spans in two places at once: inside a committed chip (real DOM,
    native title tooltips) and inside #qhl (the input's backdrop, where app.js
-   serves the tooltip by hit-test). One rule set for both is the point. */
+   serves the tooltip by hit-test). One rule set for both is the point.
+
+   METRICS ARE OFF-LIMITS IN THE BACKDROP. The caret and the native selection
+   follow the input's own unstyled text, so anything that changes an advance
+   width there — weight, italics, letter-spacing, padding — slides the visible
+   glyphs out from under the caret. Colour and text-decoration are free; weight
+   and italics live under `.qchip-text`, where there is no caret to betray. */
 .bar-tok {
     border-radius: 3px;
 }
@@ -824,23 +830,31 @@ main {
     cursor: help;
 }
 
-.bar-kw, .bar-axis, .bar-alt {
+.bar-kw, .bar-axis, .bar-alt, .bar-meta-key {
     color: var(--gold);
+}
+
+/* weight only where there is no caret to slide out from under (see above) */
+.qchip-text .bar-kw,
+.qchip-text .bar-axis,
+.qchip-text .bar-alt,
+.qchip-text .bar-meta-key {
     font-weight: 650;
 }
 
-/* the separator is punctuation doing work — give it air so `fire|frost` reads
-   as two words rather than one long one */
-.bar-alt {
-    padding: 0 0.06em;
+/* A meta keyword and its value read as one small tag: the keyword tinted and
+   the value plain, exactly like the `model:` label and text of the chip around
+   it. Background rather than italics, because a background costs no width. */
+.bar-meta-key, .bar-meta-val {
+    background: rgba(var(--overlay-rgb), calc(0.10 * var(--wash-strength)));
 }
 
-/* a keyword's argument is DATA, not vocabulary: it belongs to the keyword
-   before it, and saying so is what makes `attach chest` read as one phrase */
-.bar-value {
-    font-style: italic;
-    text-decoration: underline dotted rgba(var(--overlay-rgb), 0.5);
-    text-underline-offset: 3px;
+.bar-meta-key {
+    border-radius: 4px 0 0 4px;
+}
+
+.bar-meta-val {
+    border-radius: 0 4px 4px 0;
 }
 
 .bar-phrase {
@@ -850,15 +864,6 @@ main {
 
 .bar-num {
     color: var(--gold-dim);
-}
-
-/* the one thing worth flagging: a comparison against an axis this field has
-   no such thing as. An ordinary word is never marked — in model: or fx: a word
-   the vocabulary does not know is an ordinary file-name search, not a typo. */
-.bar-bad {
-    text-decoration: underline wavy var(--danger);
-    text-underline-offset: 3px;
-    text-decoration-skip-ink: none;
 }
 
 /* a glyph, not text — centre it rather than sitting it on the chip's baseline */
@@ -1185,6 +1190,66 @@ main {
     color: var(--gold);
     border-color: var(--gold-dim);
     background: rgba(var(--gold-rgb), calc(0.08 * var(--wash-strength)));
+}
+
+/* An example redrawn as the CHIPS it makes (decorateExamples). The button
+   itself stops being a box and becomes the bar's own row of tags, so reading
+   the help and reading the search bar are the same act. Metrics are the chips'
+   own — this is static DOM, so weight and padding are free here. */
+#help ul.help-ex button.ex-chips,
+.es-examples button.ex-chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.3rem;
+    font-family: inherit;
+    background: none;
+    border: none;
+    padding: 0.1rem 0.15rem;
+}
+
+#help ul.help-ex button.ex-chips:hover,
+#help ul.help-ex button.ex-chips:focus-visible,
+.es-examples button.ex-chips:hover,
+.es-examples button.ex-chips:focus-visible {
+    background: rgba(var(--gold-rgb), calc(0.08 * var(--wash-strength)));
+    border: none;
+}
+
+.exchip {
+    display: inline-flex;
+    align-items: baseline;
+    padding: 0.05rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg);
+}
+
+/* free text is not a box in the bar either — it must not become one here */
+.exchip.exfree {
+    border: none;
+    background: none;
+    padding: 0.05rem 0;
+}
+
+.exchip.not {
+    border-color: rgba(var(--danger-rgb), 0.5);
+    background: rgba(var(--danger-rgb), calc(0.08 * var(--wash-strength)));
+}
+
+.exchip .qchip-field {
+    cursor: inherit;
+    margin-right: 0.3rem;
+    padding: 0;
+}
+
+.exchip .qchip-field:hover {
+    text-decoration: none;
+    background: none;
+}
+
+.exchip .bar-tok {
+    cursor: inherit;
 }
 
 /* --------------------------------------------------------------- toolbar */

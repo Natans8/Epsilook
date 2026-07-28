@@ -184,7 +184,7 @@ The registry decides **what a user can type**, so the choices there are product 
   (~21% of model paths contain it) in favour of `display`; the model category `area` was renamed `ground`
   because `area` is also a target word.
 - **Words name kinds of content; values are typed, not suggested.**
-  Autocomplete offers `attach`, never `Chest`; `equipped`, never
+  Autocomplete offers `attach:`, never `Chest`; `equipped`, never
   `equipped off hand`. The suggestion list is a menu of what can be *asked*, not of the answers.
 - **A description is not optional.** A word with no `hint` autocompletes with a blank line beside it. (The one
   deliberate exception is a second type sharing an existing word — `fx:ghostmat` rides `fx:shadowy`'s "ghost".)
@@ -204,6 +204,10 @@ Two axes, and the difference matters:
 number. That is what lets
 `fx:"invis 13"` mean type 13 while `mech:"invis =0"` means the invisibility nothing detects — and why `model:2` still
 matches `cfx_fire_02.m2`.
+
+**A name the field does not have is not an error** — `mech:seatz>2` falls through and is matched as ordinary text, like
+any other word the vocabulary has not heard of. Nothing in this app marks a query wrong; an unrecognised token is a
+plain text search, and that is what it is drawn as.
 
 **Every numeric axis is NAMED, and the name is part of the token with no whitespace** — `mech:seats>2`,
 `mech:speed<-50`, `fx:scale>=100`. Axis names are unique within a field, so the name alone picks the type out: no

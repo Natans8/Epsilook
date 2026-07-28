@@ -173,11 +173,16 @@ window.EpsilookSearch = (() => {
      * more than four models in all". Narrowing it to the matching rows needs the
      * column matchers restructured into per-spell entry iterators; that is its
      * own pass (see CLAUDE.md).
+     * A field with nothing to count (name:, id:, free text) keeps its tokens as
+     * TEXT — an unrecognised comparison is a plain search for those characters,
+     * not an error.
      * @param {QueryToken[]} tokens
+     * @param {boolean} countable
      * @returns {{text: QueryToken[], counts: ((n: number) => boolean)[]}}
      */
-    function splitCountTokens(tokens) {
+    function splitCountTokens(tokens, countable) {
         const text = [], counts = [];
+        if (!countable) return {text: tokens, counts};
         const lone = tokens.length === 1 && /^(<=|>=|<|>|=)-?\d+$/.test(tokens[0].text);
         for (const t of tokens) {
             const named = t.text.startsWith(COUNT_AXIS)
@@ -199,11 +204,9 @@ window.EpsilookSearch = (() => {
      * @returns {Set<number>}
      */
     function spellsForChip(tokens, field, data) {
-        const {text, counts} = splitCountTokens(tokens);
-        if (!counts.length) return FIELDS[field].run(tokens, data);
         const counter = COUNT_SOURCES[field];
-        // a field with nothing to count (name:, id:) cannot satisfy the question
-        if (!counter) return new Set();
+        const {text, counts} = splitCountTokens(tokens, !!counter);
+        if (!counts.length) return FIELDS[field].run(tokens, data);
         const base = text.length ? FIELDS[field].run(text, data) : data.ids;
         const out = new Set();
         for (const s of base) {
@@ -213,24 +216,34 @@ window.EpsilookSearch = (() => {
         return out;
     }
 
-    /* ------------------------------------------------ attachment points */
+    /* --------------------------------------------------- meta keywords */
 
     /**
-     * Attachment points are a META axis, addressed by the `attach` keyword —
-     * `model:"attach chest"`, `fx:"attach spelllefthand fireball"` — never by
-     * bare name (the point NAMES are data values, deliberately kept out of the
-     * corpus and the autocomplete). The keyword lives INSIDE model:/fx: chips
-     * so an attach point still narrows the SAME row as its file/category words:
-     * a fireball model attached at the chest is one row, not "a fireball
-     * somewhere and a chest attachment somewhere". `attach` consumes the token
-     * that FOLLOWS it as the point name (whitespace, no colon), so two points
-     * are `attach spelllefthand attach chest`.
+     * A META keyword addresses something that is not content — where on the
+     * model a thing plays, which body region an animation moves. It is written
+     * `keyword:value`, ONE token, inside an ordinary chip:
+     * `model:attach:chest`, `fx:"attach:spelllefthand fireball"`,
+     * `anim:boneset:"upper body"`.
+     *
+     * IT IS ONE TOKEN ON PURPOSE, and that is the whole design. The keyword used
+     * to take the following WORD, which meant its arity was invisible (`attach`
+     * ate one word, `boneset` ate the rest of the chip, so
+     * `anim:"boneset head kneel"` quietly searched for a region called "head
+     * kneel"), and it meant alternation could not reach it — `attach right|left`
+     * split into the alternatives "right" and "attach", which is nonsense. As
+     * one token every other part of the grammar applies to it unchanged:
+     * `attach:right|left` alternates, `boneset:"upper body"` quotes, and there
+     * is no invisible whitespace to leave behind after the keyword.
+     *
+     * The keyword lives INSIDE the field chip so it still narrows the SAME row
+     * as the chip's file/category words: a fireball model attached at the chest
+     * is one row, not "a fireball somewhere and a chest attachment somewhere".
+     * Two points are two tokens — `attach:spelllefthand attach:chest`.
+     *
+     * The point/region NAMES stay data values: never in a corpus, never offered
+     * by autocomplete. Only the keyword is vocabulary.
      */
     const ATTACH_WORD = "attach";
-    // the anim-column meta keyword: `boneset upper body` finds spells whose
-    // AnimKits animate that body region. Like `attach`, the region name is data
-    // typed after the keyword; unlike it, the name can be several words, so the
-    // keyword consumes ALL tokens that follow (see spellsByAnim).
     const BONESET_WORD = "boneset";
 
     /**
@@ -247,32 +260,32 @@ window.EpsilookSearch = (() => {
     }
 
     /**
-     * Split a group's tokens into the plain ones and the attachment-point
-     * values — each `attach` keyword consumes the token after it as a point.
-     * A trailing `attach` with nothing after it (still being typed) is dropped,
-     * so it never constrains the row.
+     * Split a chip's tokens into the plain ones and one keyword's values.
+     *
+     * `keyword:` with nothing after it — still being typed — yields no value, so
+     * a half-written keyword never constrains the row. One helper for every meta
+     * keyword: they differ in what they match, not in how they are written.
      * @param {QueryToken[]} tokens
-     * @returns {{text: QueryToken[], attaches: string[]}}
+     * @param {string} word
+     * @returns {{text: QueryToken[], values: string[]}}
      */
-    function splitAttachTokens(tokens) {
-        const text = [], attaches = [];
-        for (let i = 0; i < tokens.length; i++) {
-            if (tokens[i].text === ATTACH_WORD) {
-                const next = tokens[i + 1];
-                if (next) {
-                    attaches.push(next.text);
-                    i++;
-                }
-            } else {
-                text.push(tokens[i]);
+    function splitKeyword(tokens, word) {
+        const prefix = word + ":";
+        const text = [], values = [];
+        for (const t of tokens) {
+            if (!t.text.startsWith(prefix)) {
+                text.push(t);
+                continue;
             }
+            const v = t.text.slice(prefix.length).trim();
+            if (v) values.push(v);
         }
-        return {text, attaches};
+        return {text, values};
     }
 
     /**
      * Every attachment value must appear in the row's attachment haystack — the
-     * same substring convention the corpora use (`attach chest` hits Chest,
+     * same substring convention the corpora use (`attach:chest` hits Chest,
      * ChestBloodBack and ChestBloodFront).
      * @param {string[]} attaches
      * @param {string} attachL
@@ -363,8 +376,12 @@ window.EpsilookSearch = (() => {
             return spellsByFile(tokens, data, data.modelFids, data.modelSpells);
         }
         const out = new Set();
-        const {text: withTests, attaches} = splitAttachTokens(tokens);
+        const {text: withTests, values: attaches} = splitKeyword(tokens, ATTACH_WORD);
         const {text, tests} = splitTargetTokens(withTests);
+        // everything below reads `text`, never the raw tokens: a half-typed
+        // `attach:` has already been dropped from it, so it narrows nothing
+        // while the point name is still being written
+        tokens = text;
         // Attachment points and the target mask both live on the ROW; the
         // (cat, fid) index below has neither, being shared across spells. Either
         // one in the query therefore forces the row walk.
@@ -474,20 +491,22 @@ window.EpsilookSearch = (() => {
     function spellsByAnim(tokens, data) {
         const out = new Set();
 
-        // bonesets: `boneset upper body` matches spells whose AnimKits animate
-        // that region. The keyword consumes every token after it as region words
-        // (a name may be several words); each must appear in the spell's boneset
-        // haystack, attach-style. Any plain anim text before the keyword still
-        // has to match too, so the two intersect.
-        const boneAt = tokens.findIndex((t) => t.text === BONESET_WORD);
-        if (boneAt >= 0) {
-            const words = tokens.slice(boneAt + 1).map((t) => t.text).filter(Boolean);
+        // bonesets: `boneset:"upper body"` matches spells whose AnimKits animate
+        // that region — each value a substring of the spell's boneset haystack,
+        // attach-style. The rest of the chip is ordinary anim text and still has
+        // to match, so the two intersect: anim:"kneel boneset:head" is a kneel
+        // that moves the head. (It used to eat every token after the keyword,
+        // which made that query search for a region called "head".)
+        const bones = splitKeyword(tokens, BONESET_WORD);
+        // as in spellsByModel: a half-typed `boneset:` is gone from bones.text,
+        // so the rest of the chip keeps searching while the region is written
+        tokens = bones.text;
+        if (bones.values.length) {
             for (const [s, hay] of data.spellBonesetL) {
-                if (words.every((w) => hay.includes(w))) out.add(s);
+                if (bones.values.every((w) => hay.includes(w))) out.add(s);
             }
-            const plain = tokens.slice(0, boneAt);
-            if (plain.length) {
-                const animMatch = spellsByAnim(plain, data);
+            if (bones.text.length) {
+                const animMatch = spellsByAnim(bones.text, data);
                 for (const s of [...out]) if (!animMatch.has(s)) out.delete(s);
             }
             return out;
@@ -567,7 +586,7 @@ window.EpsilookSearch = (() => {
         // An `attach <point>` matches its points on the SAME row as any chain
         // corpus words — "a fireball beam launched from the left hand", not "a
         // fireball beam somewhere and a left-hand attachment somewhere".
-        const {text: fxText, attaches} = splitAttachTokens(tokens);
+        const {text: fxText, values: attaches} = splitKeyword(tokens, ATTACH_WORD);
         if (attaches.length) {
             for (const [s, rows] of data.spellChainRows) {
                 for (const r of rows) {

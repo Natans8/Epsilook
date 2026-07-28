@@ -28,8 +28,8 @@ Full syntax lives behind the **?** button in the app. The short version:
 - **Numbers are named and compared in one token**: `mech:seats>2`, `mech:speed<-50`, `fx:scale>=100`,
   `mech:detectors=0`. `count` is the axis every column has — `model:count>4`, `sound:count=0` — and a bare operator is
   its shorthand (`model:>4`).
-- The bar **colours what the grammar recognises** and explains it on hover; an axis name a column does not have gets a
-  red squiggle. Ordinary words are never marked — in `model:` an unknown word is just a file-name search.
+- The bar **colours what the grammar recognises** and explains it on hover. Nothing is ever marked wrong: anything it
+  leaves plain is an ordinary text search, which is exactly what it does.
 - Hiding a column is display-only. It trims exports, but never changes which spells a query returns, so a shared link
   gives everyone the same results.
 - **Target-type icons** on models, sounds, animations, effects and mechanics say who the content plays on — caster,
@@ -42,10 +42,11 @@ Full syntax lives behind the **?** button in the app. The short version:
   (`fx:"object campfire"`, with `.gobject spawn` and `.lookup object` on the pill), `model:mount` for the mount it puts
   you on (`model:"mount stallion"`, with `.modify mount`), and `anim:replace` for animations it swaps out — `Stand → StealthStand`
   (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue).
-- Two keywords address a location rather than content: `attach` for where on the model something plays
-  (`model:"attach chest"`, `fx:"chain attach hand"`) and `boneset` for the body region an animation moves
-  (`anim:"boneset upper body"`, `anim:"boneset head"`) — most animations move the whole body, so only a specific region
-  is labelled on the pill.
+- Two keywords address a place rather than content, written `keyword:value` as one word: `attach:` for where on the
+  model something plays (`model:attach:chest`, `fx:"chain attach:hand"`) and `boneset:` for the body region an
+  animation moves (`anim:boneset:"upper body"`, `anim:boneset:head`) — most animations move the whole body, so only a
+  specific region is labelled on the pill. Being one word, they alternate like anything else, and the keyword carries
+  across the bar: `model:attach:right|left`.
 - **Click any tag in the results** to search for it (shift-click to exclude).
 - The search — filters included — always lives in the URL, so any result set is a shareable link. Append `&export=json`
   or `&export=csv` to download it.

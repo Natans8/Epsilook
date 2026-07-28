@@ -669,13 +669,17 @@ window.EpsilookPills = (() => {
     function tokenMatches(type, data, id, corpusL, token) {
         const text = token.text;
         const num = numericToken(text);
-        // A NAMED axis is decided first and on its own: `seats>2` is a question
-        // only the seat type can answer, so it must not fall through to the
-        // corpus (where it would match nothing anyway) or to another type's
-        // number. A name that is not this type's axis is simply a miss.
+        // A NAMED axis is a question only the type that owns the name can
+        // answer, so it is decided on its own and never handed to another
+        // type's number — `seats>2` must not be measured against a desaturation
+        // percent. A name that belongs to no type here is not an error either:
+        // it falls through and is matched as ordinary text, like any other word
+        // the vocabulary has not heard of.
         if (num && num.axis) {
-            return type.numeric && num.axis === axisOf(type)
-                && numericHolds(type.numeric.of(data, id), num);
+            if (type.numeric && num.axis === axisOf(type)) {
+                return numericHolds(type.numeric.of(data, id), num);
+            }
+            return corpusL.includes(text);
         }
         if (corpusL.includes(text)) return true;
         const operator = !!num && !!num.op;

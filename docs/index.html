@@ -28,7 +28,7 @@
     <link rel="icon"
           href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
     <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-    <link rel="stylesheet" href="css/app.css?v=20260728g">
+    <link rel="stylesheet" href="css/app.css?v=20260728h">
     <script>
         // Replay the stored theme before the first paint, so a light theme
         // never flashes dark. Only that: the picker, the default and the
@@ -107,503 +107,257 @@
                 <h2>Help</h2>
                 <button id="help-close" type="button" title="Close" aria-label="Close help">×</button>
             </div>
+            <!-- Every data-search example is redrawn by decorateExamples() as the
+                 chips it actually makes, so the markup here only has to carry the
+                 query and the one-line reason to click it. Keep sections short:
+                 this is a reference card, not a manual. -->
             <div class="help-grid">
                 <section>
-                    <h3>Searching</h3>
+                    <h3>The basics</h3>
                     <ul>
-                        <li>Plain words search <b>names, models, sounds, animations and visual effects</b> at once; a
-                            plain number also matches a spell ID.
+                        <li>Plain words search <b>names, models, sounds, animations and effects</b> at once, matching
+                            <b>any part of a name, in any order</b>.
                         </li>
-                        <li>Words match <b>any part of the text, in any order</b> — <code>impact fireball</code> finds
-                            <code>cfx_mage_fireball_impact.m2</code>.
-                        </li>
-                        <li>Quotes make an <b>exact phrase</b>: <code>"fire bolt"</code> matches those words together,
-                            in that order. Quotes also keep a <code>model:</code> inside them from becoming a tag.
-                        </li>
-                        <li>Results are ordered by <b>relevance</b> unless you pick a column to sort by — spells whose
-                            name matches what you typed come first, and a tag naming a category floats the spells that
-                            really have it above the ones that merely have the word in a file name.
-                        </li>
-                    </ul>
-                </section>
-                <section>
-                    <h3>Either / or — <code>|</code></h3>
-                    <p class="help-note">A <b>|</b> inside a word means <em>either alternative will do</em>, in every
-                        field and anywhere in a tag. A <b>comma</b> does the same between numbers (spell names contain
-                        commas, so it only splits digits).</p>
-                    <ul class="help-ex">
-                        <li>
-                            <button data-search="model:fire|frost">model:fire|frost</button>
-                            a fiery <em>or</em> frosty model
-                        </li>
-                        <li>
-                            <button data-search='model:"fire|frost missile"'>model:"fire|frost missile"</button>
-                            either of those, as a projectile
-                        </li>
-                        <li>
-                            <button data-search="fx:chain|dissolve">fx:chain|dissolve</button>
-                            beams or dissolves
-                        </li>
-                        <li>
-                            <button data-search="id:133,116,122">id:133,116,122</button>
-                            several spells at once
-                        </li>
-                    </ul>
-                    <p class="help-note">Note the difference between the three ways of writing two words:
-                        <code>model:"fire missile"</code> is <em>one</em> model that is both,
-                        <code>model:fire model:missile</code> is <em>two different</em> models on the same spell, and
-                        <code>model:fire|missile</code> is <em>either</em> one.</p>
-                </section>
-                <section>
-                    <h3>Field tags</h3>
-                    <ul>
-                        <li>Type a prefix like <code>model:</code> (or click a field button) to search one field only.
-                            Everything you type then belongs to the tag — spaces included — until you press
-                            <kbd>Enter</kbd> or <kbd>Tab</kbd>.
-                        </li>
-                        <li>Fields: <code>name:</code> <code>model:</code> <code>sound:</code>
-                            <code>anim:</code> <code>fx:</code> <code>mech:</code> <code>id:</code>.
-                            <code>sound:</code> and <code>anim:</code> also take an exact SoundKit / AnimKit ID.
-                        </li>
-                        <li>Every tag must match (AND), and words <em>inside</em> one tag must match the
-                            <em>same</em> file or name. Several <code>id:</code> tags are the exception — they
-                            match any of them.
-                        </li>
+                        <li><code>"quoted words"</code> are an exact phrase.</li>
+                        <li>Results are ranked by <b>relevance</b> until you sort by a column.</li>
                     </ul>
                     <ul class="help-ex">
                         <li>
-                            <button data-search="name:fireball">name:fireball</button>
-                            by spell name
-                        </li>
-                        <li>
-                            <button data-search="mech:resurrect">mech:resurrect</button>
-                            by what it does
-                        </li>
-                        <li>
-                            <button data-search="sound:86835">sound:86835</button>
-                            an exact SoundKit ID
-                        </li>
+                            <button data-search="impact fireball"></button>
+                            finds <code>cfx_mage_fireball_impact.m2</code></li>
                         <li>
                             <button data-search=".cast 133">.cast 133</button>
                             Epsilon commands paste straight in
                         </li>
                     </ul>
                 </section>
+
                 <section>
-                    <h3>Effects — <code>fx:</code></h3>
-                    <p class="help-note">Visuals not tied to a model file. Each kind is searchable by its
-                        own word, plus a texture, color word, hex code or percentage.</p>
+                    <h3>Tags</h3>
+                    <ul>
+                        <li>A tag searches one column: <code>name:</code> <code>model:</code> <code>sound:</code>
+                            <code>anim:</code> <code>fx:</code> <code>mech:</code> <code>id:</code>. Type the prefix or
+                            click a field button.
+                        </li>
+                        <li>Every tag must match, and words <em>inside</em> one tag must match the <em>same</em> file
+                            or effect.
+                        </li>
+                        <li>A <b>−</b> prefix excludes instead.</li>
+                    </ul>
                     <ul class="help-ex">
                         <li>
-                            <button data-search="fx:chain red">fx:chain red</button>
-                            red beams and chains
+                            <button data-search='model:"fire missile"'></button>
+                            one model that is both
                         </li>
                         <li>
-                            <button data-search="fx:#00b4ff">fx:#00b4ff</button>
-                            that exact tint, any effect
+                            <button data-search="model:fire model:missile"></button>
+                            two different models
                         </li>
                         <li>
-                            <button data-search='fx:"dissolve arcane"'>fx:"dissolve arcane"</button>
-                            arcane materialize
+                            <button data-search="model:fire|missile"></button>
+                            either one
                         </li>
                         <li>
-                            <button data-search='fx:"glow red"'>fx:"glow red"</button>
-                            red rim-light
-                        </li>
-                        <li>
-                            <button data-search='fx:"transparency 50%"'>fx:"transparency 50%"</button>
-                            half-faded
-                        </li>
-                        <li>
-                            <button data-search="fx:freeze">fx:freeze</button>
-                            also <code>camo</code>, <code>ghost</code>, <code>tint</code>, <code>desaturate</code></li>
-                        <li>
-                            <button data-search='fx:"screen green"'>fx:"screen green"</button>
-                            full-screen tints
-                        </li>
-                        <li>
-                            <button data-search='fx:"shapeshift cat form"'>fx:"shapeshift cat form"</button>
-                            forms
-                        </li>
-                        <li>
-                            <button data-search='fx:"morph sheep"'>fx:"morph sheep"</button>
-                            transform auras
-                        </li>
-                        <li>
-                            <button data-search='fx:"summon guardian"'>fx:"summon guardian"</button>
-                            summons
-                        </li>
-                        <li>
-                            <button data-search="fx:object">fx:object</button>
-                            places a gameobject —
-                            <button data-search='fx:"object campfire"'>fx:"object campfire"</button>
-                            by name (copy <code>.gobject spawn</code>)
-                        </li>
-                        <li>
-                            <button data-search="mech:seat">mech:seat</button>
-                            spells that make you a rideable vehicle
-                        </li>
-                        <li>
-                            <button data-search="mech:invis">mech:invis</button>
-                            invisibility spells —
-                            <button data-search="mech:detect">mech:detect</button>
-                            reveals them; click a pill to jump between the two
-                        </li>
-                        <li>
-                            <button data-search="mech:detectors=0">mech:detectors=0</button>
-                            invisibility nothing can detect
-                        </li>
-                        <li>
-                            <button data-search="mech:keybind">mech:keybind</button>
-                            disables a key while the aura holds —
-                            <button data-search='mech:"keybind jump"'>mech:"keybind jump"</button>
-                            just jump,
-                            <button data-search='mech:"keybind mid-air"'>mech:"keybind mid-air"</button>
-                            only once airborne
-                        </li>
-                        <li>
-                            <button data-search="mech:speed">mech:speed</button>
-                            movement speed changes — also
-                            <code>run</code>, <code>mounted</code>, <code>swim</code>,
-                            <code>flight</code>, <code>all</code>
-                        </li>
-                        <li>
-                            <button data-search='mech:"speed swim"'>mech:"speed swim"</button>
-                            swim speed only —
-                            <button data-search="mech:speed&lt;-50">mech:speed&lt;-50</button>
-                            snares worse than half
-                        </li>
-                        <li>
-                            <button data-search="fx:scale">fx:scale</button>
-                            size changes —
-                            <button data-search="fx:scale&gt;100">fx:scale&gt;100</button>
-                            at least double,
-                            <button data-search="fx:scale&lt;0">fx:scale&lt;0</button>
-                            anything that shrinks
+                            <button data-search="name:nova -mech:school_damage"></button>
+                            novas that deal no damage
                         </li>
                     </ul>
                 </section>
+
                 <section>
-                    <h3>Mechanics — <code>mech:</code></h3>
-                    <p class="help-note">What each effect of a spell does, and what it is aimed at. Words in
-                        one tag must match the <em>same</em> effect, so you can ask for both at once. Who it
-                        lands on shows as the target icons; the exact target name is in the tooltip.</p>
-                    <p class="help-note">This column also holds the things a spell does that you cannot
-                        <em>see</em> — <code>mech:seat</code>, <code>mech:invis</code>,
-                        <code>mech:detect</code>, <code>mech:keybind</code> and <code>mech:speed</code>.
-                        They are listed with the other effect kinds below, under <code>fx:</code>, because
-                        they read as one family; only the tag changed.</p>
+                    <h3>Either / or</h3>
+                    <p class="help-note"><b>|</b> means either alternative will do — in any field, with or without
+                        spaces around it. Between numbers a comma does the same.</p>
                     <ul class="help-ex">
                         <li>
-                            <button data-search="mech:resurrect">mech:resurrect</button>
-                            by what it does
+                            <button data-search="fx:chain|dissolve"></button>
+                            beams or dissolves
                         </li>
                         <li>
-                            <button data-search='mech:"school_damage unit_target_enemy"'>mech:"school_damage
-                                unit_target_enemy"
-                            </button>
-                            damage aimed at an enemy
+                            <button data-search="id:133,116,122"></button>
+                            several spells at once
                         </li>
-                        <li>
-                            <button data-search='mech:"apply_aura unit_caster"'>mech:"apply_aura unit_caster"</button>
-                            an aura you put on yourself
-                        </li>
-                        <li>
-                            <button data-search="mech:dest_dest">mech:dest_dest</button>
-                            aimed at a spot on the ground
-                        </li>
-                        <li>
-                            <button data-search="mech:keybound_override">mech:keybound_override</button>
-                            the aura behind <code>mech:keybind</code></li>
                     </ul>
                 </section>
+
                 <section>
                     <h3>Category words</h3>
-                    <p class="help-note">The grouped words shown as headings in the Models and Animations
-                        columns. They autocomplete inside a tag, and combine with file words in the same tag.</p>
+                    <p class="help-note">Each column groups its contents under words you can search by. They
+                        autocomplete inside a tag and combine with file words in the same tag.</p>
                     <ul class="help-ex">
                         <li>
-                            <button data-search="model:missile">model:missile</button>
-                            has a projectile model
-                        </li>
+                            <button data-search="model:missile"></button>
+                            also <code>attached</code> <code>ground</code> <code>trail</code> <code>barrage</code>
+                            <code>display</code> <code>item</code> <code>mount</code> <code>equipped</code></li>
                         <li>
-                            <button data-search='model:"missile arrow"'>model:"missile arrow"</button>
+                            <button data-search='model:"missile arrow"'></button>
                             whose projectile is an arrow
                         </li>
                         <li>
-                            <button data-search="model:ground">model:ground</button>
-                            also <code>trail</code>, <code>barrage</code></li>
+                            <button data-search="fx:chain red"></button>
+                            also <code>dissolve</code> <code>glow</code> <code>ghost</code> <code>tint</code>
+                            <code>desaturate</code> <code>transparency</code> <code>freeze</code> <code>camo</code>
+                            <code>screen</code> <code>shapeshift</code> <code>morph</code> <code>summon</code>
+                            <code>object</code> <code>scale</code></li>
                         <li>
-                            <button data-search="model:display">model:display</button>
-                            a creature-display model (copy <code>.morph</code>)
+                            <button data-search="mech:speed"></button>
+                            also <code>seat</code> <code>invis</code> <code>detect</code> <code>keybind</code> — the
+                            things a spell does that you cannot see
                         </li>
                         <li>
-                            <button data-search="model:item">model:item</button>
-                            holds an in-game item;
-                            <button data-search='model:"item fishing pole"'>model:"item fishing pole"</button>
-                            by name
-                        </li>
+                            <button data-search="anim:replace"></button>
+                            also <code>passenger</code></li>
                         <li>
-                            <button data-search="model:mount">model:mount</button>
-                            puts you on a mount;
-                            <button data-search='model:"mount stallion"'>model:"mount stallion"</button>
-                            by name (copy <code>.modify mount</code>)
-                        </li>
-                        <li>
-                            <button data-search="anim:passenger">anim:passenger</button>
-                            vehicle seat animations
-                        </li>
-                        <li>
-                            <button data-search="anim:replace">anim:replace</button>
-                            swaps a base animation for another —
-                            <button data-search='anim:"replace walk"'>anim:"replace walk"</button>
-                            changes your walk,
-                            <button data-search='anim:"replace stealthstand"'>anim:"replace stealthstand"</button>
-                            makes you stand like a rogue
+                            <button data-search="fx:#00b4ff"></button>
+                            a colour, by hex or by name
                         </li>
                     </ul>
                 </section>
+
                 <section>
-                    <h3>Attachment points</h3>
-                    <p class="help-note">Where <em>on the model</em> something plays. Write the
-                        <code>attach</code> keyword then the point, inside <code>model:</code> and
-                        <code>fx:</code> — a partial name finds them all. Missiles and beams travel between
-                        two, shown as <code>SpellRightHand → Chest</code>; the same model at two points shows
-                        as two pills.</p>
+                    <h3>Places — <code>attach:</code> <code>boneset:</code></h3>
+                    <p class="help-note">Where on the model something plays, and which body region an animation
+                        moves. Written as one word with the value after the colon; quote a value with a space in it.</p>
                     <ul class="help-ex">
                         <li>
-                            <button data-search='model:"attach hand"'>model:"attach hand"</button>
-                            either hand, and the spell-hand slots
+                            <button data-search="model:attach:chest"></button>
+                            models on the chest
                         </li>
                         <li>
-                            <button data-search='model:"attach chest"'>model:"attach chest"</button>
-                            also <code>attach base</code>, <code>attach head</code></li>
-                        <li>
-                            <button data-search='fx:"chain attach chest"'>fx:"chain attach chest"</button>
-                            beams touching the chest
+                            <button data-search='model:"attach:hand fire"'></button>
+                            a fiery model at either hand
                         </li>
                         <li>
-                            <button data-search='model:"missile attach head"'>model:"missile attach head"</button>
-                            projectiles that fly to the head
+                            <button data-search="model:attach:right|left"></button>
+                            the keyword carries across the bar
                         </li>
-                    </ul>
-                </section>
-                <section>
-                    <h3>Bonesets</h3>
-                    <p class="help-note">The body region an animation plays on — shown on each animation pill.
-                        Write the <code>boneset</code> keyword then the region, inside <code>anim:</code>. Most
-                        animations move the whole body, which is the default and shown plain; only a specific
-                        region (upper body, a hand, the head) is labelled.</p>
-                    <ul class="help-ex">
                         <li>
-                            <button data-search='anim:"boneset upper body"'>anim:"boneset upper body"</button>
+                            <button data-search='anim:boneset:"upper body"'></button>
                             animations limited to the upper body
                         </li>
-                        <li>
-                            <button data-search='anim:"boneset head"'>anim:"boneset head"</button>
-                            also <code>boneset jaw</code>, <code>boneset right hand</code>
-                        </li>
                     </ul>
                 </section>
+
                 <section>
-                    <h3>Numbers — counting and comparing</h3>
-                    <p class="help-note">Every number you can ask about has a <b>name</b>, and the name goes right
-                        against the comparison with no space: <code>seats&gt;2</code>, <code>speed&lt;-50</code>,
-                        <code>count&gt;=4</code>. The name alone says which pill you mean, so no category word or
-                        quotes are needed. The operators are <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code>
-                        <code>&lt;=</code> <code>=</code>, and a bound can be negative where the value is.</p>
-                    <p class="help-note"><code>count</code> is the one every column has: how many entries it shows.
-                        An operator on its own is short for it — <code>model:&gt;4</code> means
-                        <code>model:count&gt;4</code>. The operator is required either way: a bare
-                        <code>model:2</code> still searches file names for "2".</p>
+                    <h3>Numbers</h3>
+                    <p class="help-note">Every number has a name, written against the comparison with no space.
+                        <code>count</code> is the one every column has — how many entries it shows.</p>
                     <ul class="help-ex">
                         <li>
-                            <button data-search="model:count&gt;4">model:count&gt;4</button>
-                            more than four models — or just
-                            <button data-search="model:&gt;4">model:&gt;4</button>
+                            <button data-search="model:count>4"></button>
+                            more than four models
                         </li>
                         <li>
-                            <button data-search="anim:count=3">anim:count=3</button>
-                            exactly three animations
-                        </li>
-                        <li>
-                            <button data-search="sound:count=0">sound:count=0</button>
+                            <button data-search="sound:count=0"></button>
                             silent spells
                         </li>
                         <li>
-                            <button data-search="mech:seats&gt;2">mech:seats&gt;2</button>
+                            <button data-search="mech:seats>2"></button>
                             vehicles with 3+ seats
                         </li>
                         <li>
-                            <button data-search="mech:speed&lt;-50">mech:speed&lt;-50</button>
-                            snares worse than half —
-                            <button data-search='mech:"speed run &lt;-70"'>mech:"speed run &lt;-70"</button>
-                            run speed only
+                            <button data-search="mech:speed<-50"></button>
+                            snares worse than half
                         </li>
                         <li>
-                            <button data-search="fx:scale&gt;100">fx:scale&gt;100</button>
-                            at least double size;
-                            <button data-search="fx:transparency&gt;=50">fx:transparency&gt;=50</button>
-                            half-faded or more
+                            <button data-search="fx:scale>100"></button>
+                            at least double size
                         </li>
                         <li>
-                            <button data-search="mech:detectors=0">mech:detectors=0</button>
-                            invisibility nothing can see —
-                            <button data-search="mech:reveals=1">mech:reveals=1</button>
-                            detection that reveals exactly one thing
+                            <button data-search="mech:detectors=0"></button>
+                            invisibility nothing can see
                         </li>
                     </ul>
-                    <p class="help-note">The names are <code>count</code> everywhere, plus <code>seats</code>,
-                        <code>speed</code>, <code>detectors</code> and <code>reveals</code> in
-                        <code>mech:</code>, and <code>scale</code>, <code>desaturate</code> and
-                        <code>transparency</code> in <code>fx:</code>. They autocomplete like any other word, and
-                        the search bar underlines a name it does not recognise.</p>
+                    <p class="help-note">Also <code>reveals</code>, <code>desaturate</code> and
+                        <code>transparency</code>. Operators: <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code>
+                        <code>&lt;=</code> <code>=</code>.</p>
                 </section>
+
                 <section>
-                    <h3>Target-type icons</h3>
-                    <ul>
-                        <li>Who a model, sound, animation or effect plays on. A row that plays on
-                            two types shows two icons:
-                            <span class="legend-icon t-caster"><svg viewBox="0 0 24 24" fill="none"
-                                                                    stroke="currentColor" stroke-width="2.2"
-                                                                    stroke-linecap="round" stroke-linejoin="round"
-                                                                    aria-hidden="true"><circle cx="12" cy="8" r="4"/><path
-                                    d="M4.5 20.5c1.8-3.8 4.3-5.5 7.5-5.5s5.7 1.7 7.5 5.5"/></svg></span>
-                            the caster,
-                            <span class="legend-icon t-target"><svg viewBox="0 0 24 24" fill="none"
-                                                                    stroke="currentColor" stroke-width="2.2"
-                                                                    stroke-linecap="round" stroke-linejoin="round"
-                                                                    aria-hidden="true"><circle cx="12" cy="12" r="7"/><line
-                                    x1="12" y1="1.5" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22.5"/><line
-                                    x1="1.5" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22.5" y2="12"/><circle
-                                    cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></span>
-                            the target,
-                            <span class="legend-icon t-notcaster"><svg viewBox="0 0 24 24" fill="none"
-                                                                       stroke="currentColor" stroke-width="2.2"
-                                                                       stroke-linecap="round" stroke-linejoin="round"
-                                                                       aria-hidden="true"><circle cx="12" cy="12"
-                                                                                                  r="7"/><line x1="12"
-                                                                                                               y1="1.5"
-                                                                                                               x2="12"
-                                                                                                               y2="6"/><line
-                                    x1="12" y1="18" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="6" y2="12"/><line
-                                    x1="18" y1="12" x2="22.5" y2="12"/><circle cx="12" cy="12" r="1.2"
-                                                                               fill="currentColor" stroke="none"/></svg></span>
-                            the target but never the caster,
-                            <span class="legend-icon t-area"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                                  stroke-width="2.2" stroke-linecap="round"
-                                                                  stroke-linejoin="round" aria-hidden="true"><ellipse
-                                    cx="12" cy="18" rx="9" ry="3.4"/><line x1="12" y1="3" x2="12" y2="14.5"/><path
-                                    d="M8.5 11 12 15l3.5-4"/></svg></span>
-                            where the spell lands.
-                        </li>
-                        <li>They search like category words in any marked column, and combine with other
-                            words in the same tag.
-                        </li>
-                        <li>Unmarked rows simply have no target type in the game data — projectile models
-                            and their sounds come from missile sets, which carry none.
-                        </li>
-                    </ul>
+                    <h3>Who it plays on</h3>
+                    <p class="help-note">The icons on each pill say who the content plays on. They search like
+                        category words in any marked column.
+                        <span class="legend-icon t-caster"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                                stroke-width="2.2" stroke-linecap="round"
+                                                                stroke-linejoin="round" aria-hidden="true"><circle
+                                cx="12" cy="8" r="4"/><path
+                                d="M4.5 20.5c1.8-3.8 4.3-5.5 7.5-5.5s5.7 1.7 7.5 5.5"/></svg></span>
+                        caster,
+                        <span class="legend-icon t-target"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                                stroke-width="2.2" stroke-linecap="round"
+                                                                stroke-linejoin="round" aria-hidden="true"><circle
+                                cx="12" cy="12" r="7"/><line x1="12" y1="1.5" x2="12" y2="6"/><line x1="12" y1="18"
+                                                                                                    x2="12"
+                                                                                                    y2="22.5"/><line
+                                x1="1.5" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22.5" y2="12"/><circle
+                                cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></span>
+                        target,
+                        <span class="legend-icon t-notcaster"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                                   stroke-width="2.2" stroke-linecap="round"
+                                                                   stroke-linejoin="round" aria-hidden="true"><circle
+                                cx="12" cy="12" r="7"/><line x1="12" y1="1.5" x2="12" y2="6"/><line x1="12" y1="18"
+                                                                                                    x2="12"
+                                                                                                    y2="22.5"/><line
+                                x1="1.5" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22.5" y2="12"/><circle
+                                cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></span>
+                        target but never caster,
+                        <span class="legend-icon t-area"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                              stroke-width="2.2" stroke-linecap="round"
+                                                              stroke-linejoin="round" aria-hidden="true"><ellipse
+                                cx="12" cy="18" rx="9" ry="3.4"/><line x1="12" y1="3" x2="12" y2="14.5"/><path
+                                d="M8.5 11 12 15l3.5-4"/></svg></span>
+                        where the spell lands. Unmarked rows carry no target type in the game data.
+                    </p>
                     <ul class="help-ex">
                         <li>
-                            <button data-search='model:"caster fire"'>model:"caster fire"</button>
+                            <button data-search='model:"caster fire"'></button>
                             fire model on the caster
                         </li>
                         <li>
-                            <button data-search="sound:target">sound:target</button>
-                            sounds played on the target
-                        </li>
-                        <li>
-                            <button data-search="model:both">model:both</button>
+                            <button data-search="model:both"></button>
                             plays on caster <em>and</em> target
                         </li>
                     </ul>
                 </section>
+
                 <section>
-                    <h3>Excluding</h3>
+                    <h3>The search bar</h3>
                     <ul>
-                        <li>A <b>-</b> prefix hides matches instead — <code>-mech:school_damage</code> hides every spell
-                            with that mechanic.
+                        <li>The bar colours what the search understands, and explains it on hover. Anything it does
+                            not colour is an ordinary text search.
                         </li>
-                        <li>Four ways: type <code>-model:</code>, click the <b>−</b> half of a field button,
-                            click an existing tag's field label to flip it, or type <b>-</b> at the very start
-                            of a tag you're editing.
+                        <li><kbd>Enter</kbd>, <kbd>Tab</kbd> or <kbd>→</kbd> close the tag you're typing;
+                            <kbd>←</kbd> at its start closes it the other way. In an empty gap the arrows and
+                            <kbd>Backspace</kbd> step into the neighbouring tag.
                         </li>
-                        <li>Autocomplete follows the minus: typing <code>-mod</code> offers
-                            <code>−model:</code> as an exclusion, not as an ordinary tag.
+                        <li>Click a tag's text to edit it, its <b>×</b> to remove it, its field label to flip it
+                            between include and exclude.
+                        </li>
+                        <li><kbd>Ctrl</kbd>+<kbd>A</kbd>, drag or <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd> select
+                            across tags; <kbd>Ctrl</kbd>+<kbd>C</kbd> copies the selection as query text.
+                            <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes any bar edit.
                         </li>
                     </ul>
                 </section>
+
                 <section>
-                    <h3>Editing the search bar</h3>
+                    <h3>Results, filters, sharing</h3>
                     <ul>
-                        <li><kbd>Enter</kbd>, <kbd>Tab</kbd> or <kbd>→</kbd> close the tag you're typing, landing in the
-                            gap right after it; <kbd>←</kbd> at the start of a tag closes it into the gap right before
-                            it instead.
+                        <li>Click any pill to search for it; <b>Shift-click</b> excludes it. <b>⧉</b> copies an ID;
+                            <b>.lo</b>, <b>/</b>, <b>.mod</b> and the Commands buttons copy Epsilon commands —
+                            <b>Shift-click</b> wraps the copy in <code>`backticks`</code>.
                         </li>
-                        <li>Sitting in a gap (nothing being typed) with an empty input: <kbd>←</kbd>/<kbd>→</kbd> dive
-                            into
-                            editing the neighboring tag — even before the first one or after the last — so <kbd>←</kbd>
-                            then typing inserts text or a new tag right there. <kbd>Backspace</kbd> does the same for
-                            the tag
-                            just before your cursor.
+                        <li><b>▶</b> plays a sound. Hovering a texture pill previews it; hovering a colour swatch
+                            shows the colour with its hex.
                         </li>
-                        <li>Click a tag's text to edit it, its <b>×</b> to remove it. Plain words are edited like normal
-                            text.
+                        <li><b>Filter</b> buttons cycle <em>any → only with → only without</em>. Sorting cycles ▲, ▼,
+                            back to relevance; the multi-value columns sort by number of entries.
                         </li>
-                        <li>The bar <b>colours what the search understands</b> — category words, target words, numeric
-                            axes and <code>|</code> in gold; a keyword's argument in italics; a
-                            <code>"phrase"</code> underlined. Hover any of them for what it means. A numeric axis the
-                            column doesn't have gets a red squiggle; ordinary words are never marked, since in
-                            <code>model:</code> or <code>fx:</code> an unknown word is just a file-name search.
+                        <li>Hiding a column leaves it out of exports, but <b>never</b> out of the search — a shared
+                            link gives everyone the same results.
                         </li>
-                        <li>Select across tags and text with the mouse, <kbd>Ctrl</kbd>+<kbd>A</kbd>, or
-                            <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd> at the text's edge. <kbd>Ctrl</kbd>+<kbd>C</kbd>
-                            copies
-                            the selection as query text — <code>model:book note anim:read</code> — ready to paste back
-                            into
-                            any search bar; typing, <kbd>Backspace</kbd> or pasting replaces it.
-                        </li>
-                        <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes any bar edit — tags added, removed or replaced included;
-                            <kbd>Ctrl</kbd>+<kbd>Y</kbd> (or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>) redoes.
-                        </li>
-                    </ul>
-                </section>
-                <section>
-                    <h3>In the results</h3>
-                    <ul>
-                        <li>Click any tag to find all spells that use it; <b>Shift-click</b> excludes them instead.</li>
-                        <li><b>⧉</b> copies an ID; <b>.lo</b>, <b>/</b>, <b>.mod</b> and the Commands buttons copy
-                            ready-to-paste
-                            Epsilon commands — hover to preview. <b>Shift-click</b> on those wraps the copy in <code>`backticks`</code>.
-                        </li>
-                        <li><b>▶</b> on a sound file plays it (streamed from Wowhead); click again to stop.</li>
-                        <li>Hovering a texture tag shows the texture; hovering a color swatch shows
-                            a large patch of the color with its hex and hue word.
-                        </li>
-                    </ul>
-                </section>
-                <section>
-                    <h3>Columns, filters, sharing</h3>
-                    <ul>
-                        <li>Hiding a column (toolbar) leaves it out of exports, but <b>not</b> out of the search:
-                            which spells a query returns depends on the query alone, so a shared link gives everyone
-                            the same results whatever they have on screen. Searching a hidden column with its tag
-                            brings the column back.
-                        </li>
-                        <li>The <b>Filter</b> buttons narrow the current results — click one to cycle <em>any → only
-                            spells <b>with</b> that (✓) → only spells <b>without</b> it (✕)</em>; e.g. set Sounds to ✕
-                            to find silent spells. Filters travel with shared URLs. Sorting cycles ▲, ▼, back to
-                            relevance.
-                            The multi-value columns (Models, Sounds, Animations, Effects, Mechanics) sort by
-                            <em>number of entries</em> — the first click puts the most extreme spells on top.
-                        </li>
-                        <li>The URL always holds your search — click <b>🔗 Share</b> (next to Export) to copy it, or copy
-                            it directly.
-                        </li>
-                        <li>Add <code>&amp;export=json</code> or <code>&amp;export=csv</code> to any shared URL and
-                            opening it
-                            downloads the results directly.
+                        <li>The URL always holds your search: <b>🔗 Share</b> copies it. Add
+                            <code>&amp;export=json</code> or <code>&amp;export=csv</code> to download it instead.
                         </li>
                     </ul>
                 </section>
@@ -738,23 +492,23 @@
     const whTooltips = {colorLinks: false, iconizeLinks: false, renameLinks: false};
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260728g"></script>
-<script src="js/util.js?v=20260728g"></script>
+<script src="js/config.js?v=20260728h"></script>
+<script src="js/util.js?v=20260728h"></script>
 <!-- the theme picker: applies the stored palette and wires the header
      dropdown; only needs config.js + util.js, so it goes on early -->
-<script src="js/theme.js?v=20260728g"></script>
-<script src="js/data.js?v=20260728g"></script>
+<script src="js/theme.js?v=20260728h"></script>
+<script src="js/data.js?v=20260728h"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260728g"></script>
-<script src="js/js-blp.js?v=20260728g"></script>
+<script src="js/bufo.js?v=20260728h"></script>
+<script src="js/js-blp.js?v=20260728h"></script>
 <!-- the pill/segment library: shared by app.js (rendering) and search.js
      (the pill-type registry), so it loads before both -->
-<script src="js/pills.js?v=20260728g"></script>
-<script src="js/pilltypes.js?v=20260728g"></script>
-<script src="js/search.js?v=20260728g"></script>
-<script src="js/texture.js?v=20260728g"></script>
-<script src="js/export.js?v=20260728g"></script>
-<script src="js/app.js?v=20260728g"></script>
+<script src="js/pills.js?v=20260728h"></script>
+<script src="js/pilltypes.js?v=20260728h"></script>
+<script src="js/search.js?v=20260728h"></script>
+<script src="js/texture.js?v=20260728h"></script>
+<script src="js/export.js?v=20260728h"></script>
+<script src="js/app.js?v=20260728h"></script>
 </body>
 </html>

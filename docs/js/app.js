@@ -296,6 +296,10 @@
         // inside "quoted phrases" the text stays literal
         str = (str || "").replace(ID_CMD_REWRITE,
             (m, pre) => pre === undefined ? m : pre + "id:");
+        // `model:fire | frost` is one tag with two alternatives — the bar is the
+        // operator wherever it lands, so the spaces come out here too, before
+        // the tag/free-text split decides what belongs to which chip
+        str = joinAlternations(str);
         const parts = [];
         const pushFree = (word) => {
             const last = parts[parts.length - 1];
@@ -353,7 +357,16 @@
     function altsOf(text) {
         if (text.includes("|")) {
             const parts = text.split("|").filter(Boolean);
-            if (parts.length > 1) return parts;
+            if (parts.length > 1) {
+                // A META KEYWORD CARRIES ACROSS THE BAR. `attach:right|left` is
+                // two attachment points, not "the point right" or "the word
+                // left" — so an alternative that names no keyword of its own
+                // inherits the first one's. Spelling it out in full
+                // (`attach:right|attach:left`) means the same thing, and mixing
+                // keywords (`attach:right|boneset:head`) keeps both.
+                const kw = (/^[a-z]+:/.exec(parts[0]) || [""])[0];
+                return kw ? parts.map((p) => (/^[a-z]+:/.test(p) ? p : kw + p)) : parts;
+            }
         }
         if (text.includes(",")) {
             const parts = text.split(",").filter(Boolean);
@@ -362,17 +375,69 @@
         return [text];
     }
 
+    /**
+     * Pull the whitespace out from around every `|`, so alternation reads the
+     * way people write it: `fire | frost` is the same query as `fire|frost`.
+     *
+     * It has to happen before tokenizing rather than inside it, because the
+     * spaces would otherwise have already made three tokens out of what is one
+     * choice — and a lone `|` token is meaningless in every field.
+     *
+     * Two things are left alone:
+     *   - QUOTED SPANS, because quoting is how you ask for the literal
+     *     character. (Outside them a pipe can only be the operator: no corpus in
+     *     any pack contains one, measured across every pack.)
+     *   - a `|` followed by a real FIELD TAG. `a | model:b` is two search terms
+     *     with a stray bar between them, not one alternation — joining there
+     *     would swallow the tag into a free-text word. `attach:right | left` is
+     *     unaffected: `attach` is a keyword, not a field.
+     *
+     * A comma joins the same way, but only BETWEEN DIGITS (`id:133, 116`).
+     * Spell names really do contain commas — 399 of them match "e," on 9.2.7 —
+     * so `name:Ashes, Ashes` has to keep its space and its literal comma.
+     * @param {string} text
+     * @returns {string}
+     */
+    const joinAlternations = (text) => text.split(/("[^"]*"?)/)
+        .map((part, i) => (i % 2 ? part : part
+            .replace(/\s*\|\s*/g, (m, off, s) => {
+                const tag = /^-?([a-z]+):/i.exec(s.slice(off + m.length));
+                return tag && isChipField(canonField(tag[1].toLowerCase())) ? m : "|";
+            })
+            .replace(/(\d)\s*,\s*(?=#?\d)/g, "$1,")))
+        .join("");
+
     // chip text -> search tokens: words split on whitespace, except "quoted
     // spans" which stay whole — an exact phrase, spaces and word order
     // preserved. An unclosed quote runs to the end of the text (so a phrase
     // matches live while it's still being typed). Each token carries its
     // alternatives (see altsOf); search.js distributes over them.
+    //
+    // A meta keyword may quote ITS OWN value — `boneset:"upper body"` — so the
+    // first alternative binds a `keyword:` prefix to the quoted span that
+    // follows it. Without that the quote would start a new token and the
+    // keyword would be left with nothing, which is the only way to write a
+    // multi-word value now that the keyword takes exactly one.
+    const TOKEN_RE = /([a-z]+:)"([^"]*)(?:"|$)|"([^"]*)(?:"|$)|([^\s"]+)/g;
+
     function tokenizeQuery(text) {
         const tokens = [];
-        for (const m of text.toLowerCase().matchAll(/"([^"]*)(?:"|$)|([^\s"]+)/g)) {
-            const quoted = m[1] !== undefined;
-            const t = (quoted ? m[1] : m[2]).replace(/\s+/g, " ").trim();
-            if (t) tokens.push({text: t, alts: quoted ? [t] : altsOf(t)});
+        const flat = (s) => s.replace(/\s+/g, " ").trim();
+        for (const m of joinAlternations(text.toLowerCase()).matchAll(TOKEN_RE)) {
+            if (m[1] !== undefined) {
+                // keyword:"quoted value" — quoted, so the value is literal
+                const t = m[1] + flat(m[2]);
+                if (flat(m[2])) tokens.push({text: t, alts: [t]});
+                continue;
+            }
+            const quoted = m[3] !== undefined;
+            const t = flat(quoted ? m[3] : m[4]);
+            // a token of nothing but separators is punctuation left over from a
+            // half-written alternation (`model:fire | anim:kneel`) — it can never
+            // match anything, so it must not narrow the search to nothing either
+            if (t && (quoted || !/^[|,]+$/.test(t))) {
+                tokens.push({text: t, alts: quoted ? [t] : altsOf(t)});
+            }
         }
         return tokens;
     }
@@ -883,43 +948,41 @@
         both: "Plays on the caster and the target",
     };
 
-    /* The attachment-point keyword. It is the ONE attachment meta-word that
-   * autocompletes: the point NAMES are data values (the user types the point
-   * after it, `attach chest`). Offered only in the two columns that render
-   * attachment segments, and only when the pack actually carries them. */
+    /* The two meta keywords, written `keyword:value` as ONE token — the point
+   * and region NAMES stay data values, so only the keyword itself is ever
+   * offered. See the meta-keyword note in search.js for why one token. */
     const ATTACH_WORD = "attach";
-    // the anim-column twin of `attach`: the body region an AnimKit animates
-    // ("boneset upper body", "boneset head"). The region NAMES are data values
-    // the user types after the keyword, so only the keyword autocompletes.
     const BONESET_WORD = "boneset";
 
     /**
-     * One meta word: not a kind of content, but an axis any chip in `fields`
-     * can carry. `when` gates it on the loaded pack, exactly as a pill type's
-     * does — a pack with no attachment data never suggests `attach`.
+     * One meta keyword: not a kind of content, but a place — where on the model
+     * something plays, which body region an animation moves. `when` gates it on
+     * the loaded pack, exactly as a pill type's does, so a pack with no
+     * attachment data never suggests `attach:`.
      *
-     * `value` names what it takes, and `rest` says how much of the chip that
-     * argument eats: one word for `attach` (point names are single tokens), the
-     * whole remainder for `boneset` (a region may be several words — "upper
-     * body"). Both are read by the search AND by the bar highlighting, so what
-     * the bar draws as the argument is exactly what the matcher consumes.
-     * @type {{word: string, hint: string, value: string, fields: string[],
-     *         rest?: boolean, when?: (d: SpellData) => boolean}[]}
+     * `value` names what it takes and `example` shows one; both feed the
+     * autocomplete entry and the bar's hover text, so the description of the
+     * keyword is written once.
+     * @type {{word: string, value: string, example: string, fields: string[],
+     *         when?: (d: SpellData) => boolean}[]}
      */
     const META_WORDS = [
         {
-            word: ATTACH_WORD, fields: ["model", "fx"], value: "attachment point",
-            hint: "Attachment point follows, e.g. attach chest or attach spelllefthand",
+            word: ATTACH_WORD, fields: ["model", "fx"],
+            value: "attachment point", example: "attach:chest",
             when: (d) => !!d.attachmentNames && Object.keys(d.attachmentNames).length > 0,
         },
         {
-            word: BONESET_WORD, fields: ["anim"], value: "body region", rest: true,
-            hint: "Body region an animkit animates follows, e.g. boneset upper body or boneset head",
+            word: BONESET_WORD, fields: ["anim"],
+            value: "body region", example: 'boneset:"upper body"',
             when: (d) => !!d.bonesetNames && d.bonesetNames.length > 0,
         },
     ];
-    // meta words that take an argument after them get a trailing space on pick
-    const META_KEYWORDS = new Set(META_WORDS.map((m) => m.word));
+
+    /** How a meta keyword is written and offered: with its colon, never bare. */
+    const metaKey = (word) => word + ":";
+    const metaHint = (m) =>
+        `${m.value[0].toUpperCase() + m.value.slice(1)} — write it as one word, e.g. ${m.example}`;
 
     /**
      * The words a field offers in autocomplete, with their descriptions: its
@@ -958,10 +1021,13 @@
         }
         words.push(Search.COUNT_AXIS);
         titles[Search.COUNT_AXIS] = COUNT_AXIS_HINT;
+        // meta keywords are offered WITH their colon, because that is how they
+        // are written — completing to a bare `attach` would leave the user one
+        // invisible character short of a working query
         for (const meta of META_WORDS) {
             if (!meta.fields.includes(field) || (meta.when && !meta.when(d))) continue;
-            words.push(meta.word);
-            titles[meta.word] = meta.hint;
+            words.push(metaKey(meta.word));
+            titles[metaKey(meta.word)] = metaHint(meta);
         }
         // every column that draws target icons can be filtered by them
         return {
@@ -1045,12 +1111,16 @@
         qInput.removeAttribute("aria-activedescendant");
     }
 
-    // complete the partial last word of the chip's text to the category word.
-    // a meta keyword (attach/boneset) takes an argument after it, so leave a
-    // trailing space ready for it (attach chest) rather than butting the caret
+    // Complete the partial last word of the chip's text to the category word,
+    // leaving the caret hard against its last character. NOTHING is appended:
+    // a meta keyword used to get a trailing space ready for its argument, which
+    // was invisible at the end of the input — the caret looked like it sat on
+    // the keyword, then jumped a space on the next keystroke, and a space typed
+    // by hand made two. The keyword now carries its own colon (attach:), so
+    // there is nothing to leave room for.
     function applyCategoryWord(word) {
         const input = qInput;
-        input.value = input.value.replace(/\S*$/, word) + (META_KEYWORDS.has(word) ? " " : "");
+        input.value = input.value.replace(/\S*$/, word);
         hideSuggest();
         input.focus();
         input.setSelectionRange(input.value.length, input.value.length);
@@ -1104,13 +1174,15 @@
    *     hit-testing the spans under the pointer (barHover below).
    *
    * WHAT IS MARKED is only what the grammar actually knows: category words,
-   * meta keywords and their argument, target words, named numeric axes,
+   * meta keywords with their value, target words, named numeric axes,
    * alternation bars, quoted phrases, and exact ids where a bare number means
-   * one. An ordinary word is deliberately left plain — in model: or fx: a word
-   * the vocabulary has never heard of is an ordinary file-name search, not a
-   * mistake, and squiggling it would be a lie. The one thing marked WRONG is a
-   * comparison against an axis the field does not have (`mech:seatz>2`), which
-   * cannot be anything but a typo. */
+   * one.
+   *
+   * NOTHING IS EVER MARKED WRONG. Anything the grammar does not recognise is a
+   * plain text search and is drawn as plain text — that is what it does, so
+   * there is nothing to warn about. (An earlier pass squiggled an unknown
+   * numeric axis; `mech:seatz>2` now simply searches for the characters
+   * "seatz>2", like any other word the vocabulary has not heard of.) */
 
     const PHRASE_TIP = "Exact phrase — these words together, in this order";
     const ALT_TIP = "Alternation — either side matches";
@@ -1157,9 +1229,10 @@
         if (d && fieldCategories(field)) {
             const {words, titles} = P.keywordsFor(field, d);
             for (const w of words) v.words.set(w, titles[w] || "");
+            // meta keywords are matched by PREFIX (classifyMeta), not as words —
+            // `attach:` never stands alone, so it has no entry in `words`
             for (const meta of META_WORDS) {
                 if (!meta.fields.includes(field) || (meta.when && !meta.when(d))) continue;
-                v.words.set(meta.word, meta.hint);
                 v.meta.set(meta.word, meta);
             }
             for (const w of Search.TARGET_WORDS) v.words.set(w, TARGET_WORD_TITLES[w]);
@@ -1182,30 +1255,45 @@
         const lower = word.toLowerCase();
         const num = P.numericToken(lower);
         if (num && num.op) {
-            // a bare comparison is the `count` shorthand — but only where the
-            // field has a count. In free text or name:/id: it selects nothing,
-            // and saying so is the point of the mark.
-            if (!num.axis) {
-                return v.axes.has(Search.COUNT_AXIS)
-                    ? {cls: "bar-axis", tip: COUNT_SHORTHAND_TIP}
-                    : {cls: "bar-bad", tip: "A comparison needs a column to count"
-                        + " — put it in a model:, sound:, anim:, fx: or mech: tag"};
+            // a bare comparison is the `count` shorthand, where the field has a
+            // count to compare; anywhere else it is just text
+            if (!num.axis && v.axes.has(Search.COUNT_AXIS)) {
+                return {cls: "bar-axis", tip: COUNT_SHORTHAND_TIP};
             }
-            const tip = v.axes.get(num.axis);
+            const tip = num.axis && v.axes.get(num.axis);
             if (tip) return {cls: "bar-axis", tip};
-            const known = [...v.axes.keys()].join(", ");
-            // "all" is the free-text field, which the user has no name for
-            const where = field === "all" ? "plain words have" : `${field}: has`;
-            return {
-                cls: "bar-bad",
-                tip: known
-                    ? `"${num.axis}" is not a number ${where} — try: ${known}`
-                    : `${where} no numbers to compare`,
-            };
         }
         if (v.words.has(lower)) return {cls: "bar-kw", tip: v.words.get(lower)};
-        if (num && NUMBER_TIPS[field]) return {cls: "bar-num", tip: NUMBER_TIPS[field]};
+        if (num && !num.op && NUMBER_TIPS[field]) {
+            return {cls: "bar-num", tip: NUMBER_TIPS[field]};
+        }
         return {cls: "", tip: ""};
+    }
+
+    /**
+     * A `keyword:value` token as its two runs — the keyword and what it takes.
+     *
+     * They are drawn as a pair rather than as one mark because that IS the
+     * shape: a small tag inside a tag, reading exactly like the `model:` label
+     * and value of the chip around it. The previous pass italicised the value
+     * and left the keyword looking like an ordinary word, which said nothing
+     * about the two belonging together.
+     *
+     * Returns null when the token is not one, so the caller falls through.
+     * @param {BarVocab} v
+     * @param {string} word
+     * @returns {{text: string, cls: string, tip: string}[] | null}
+     */
+    function classifyMeta(v, word) {
+        const at = word.indexOf(":");
+        if (at <= 0) return null;
+        const meta = v.meta.get(word.slice(0, at).toLowerCase());
+        if (!meta) return null;
+        const tip = metaHint(meta);
+        const runs = [{text: word.slice(0, at + 1), cls: "bar-meta-key", tip}];
+        const value = word.slice(at + 1);
+        if (value) runs.push({text: value, cls: "bar-meta-val", tip});
+        return runs;
     }
 
     /**
@@ -1223,31 +1311,43 @@
         const push = (t, cls = "", tip = "") => {
             if (t) out.push({text: t, cls, tip});
         };
-        // the meta keyword whose argument comes next, and how much of the chip
-        // that argument eats — one word, or the whole remainder (see META_WORDS)
-        let pending = null;
-        for (const m of text.matchAll(/("[^"]*(?:"|$))|(\s+)|([^\s"]+)/g)) {
-            if (m[2]) {
-                push(m[2]);
+        // one atom: a meta keyword with its value, or an ordinary word
+        const atom = (part, kw) => {
+            const meta = classifyMeta(v, kw ? kw + part : part);
+            if (meta) {
+                // an inherited keyword is not in the typed characters, so only
+                // the part actually written is drawn
+                for (const r of meta.slice(kw ? 1 : 0)) push(r.text, r.cls, r.tip);
+                return;
+            }
+            const {cls, tip} = classifyAtom(v, field, part);
+            push(part, cls, tip);
+        };
+        // `keyword:"quoted value"` is one token, so the quote is matched as part
+        // of the word rather than on its own — otherwise the keyword would be
+        // drawn bare and its value as an unrelated phrase
+        for (const m of text.matchAll(/([a-z]+:"[^"]*(?:"|$))|("[^"]*(?:"|$))|(\s+)|([^\s"]+)/gi)) {
+            if (m[3]) {
+                push(m[3]);
                 continue;
             }
             if (m[1]) {
-                push(m[1], "bar-phrase", PHRASE_TIP);
-                pending = null;
+                const at = m[1].indexOf(":");
+                const meta = v.meta.get(m[1].slice(0, at).toLowerCase());
+                if (meta) {
+                    const tip = metaHint(meta);
+                    push(m[1].slice(0, at + 1), "bar-meta-key", tip);
+                    push(m[1].slice(at + 1), "bar-meta-val", tip);
+                } else {
+                    push(m[1], "bar-phrase", PHRASE_TIP);
+                }
                 continue;
             }
-            const word = m[3];
-            if (pending) {
-                const noun = pending.value;
-                push(word, "bar-value",
-                    noun.charAt(0).toUpperCase() + noun.slice(1)
-                    + ` — the ${pending.word} keyword's argument`);
-                // `attach` takes one word; `boneset` eats the rest, because a
-                // region name may be several ("upper body"). Drawing anything
-                // else would misreport what spellsByAnim actually consumes.
-                if (!pending.rest) pending = null;
+            if (m[2]) {
+                push(m[2], "bar-phrase", PHRASE_TIP);
                 continue;
             }
+            const word = m[4];
             // alternation splits the word into alternatives that each classify on
             // their own, with the separator marked between them — altsOf is the
             // authority on whether this word has any (a comma is only a separator
@@ -1255,16 +1355,15 @@
             const alts = altsOf(word.toLowerCase());
             if (alts.length > 1) {
                 const sep = word.includes("|") ? "|" : ",";
+                // the keyword the alternatives inherit, if the first spelled one
+                const kw = (/^[a-z]+:/.exec(word) || [""])[0];
                 word.split(sep).forEach((part, i) => {
                     if (i) push(sep, "bar-alt", ALT_TIP);
-                    const {cls, tip} = classifyAtom(v, field, part);
-                    push(part, cls, tip);
+                    atom(part, i && kw && !/^[a-z]+:/.test(part) ? kw : "");
                 });
                 continue;
             }
-            const {cls, tip} = classifyAtom(v, field, word);
-            push(word, cls, tip);
-            pending = v.meta.get(word.toLowerCase()) || null;
+            atom(word, "");
         }
         return out;
     }
@@ -1336,6 +1435,42 @@
         for (const span of box.children) span.classList.toggle("hover", span === found);
         const tip = found ? found.title : "";
         if (qInput.title !== tip) qInput.title = tip;
+    }
+
+    /**
+     * Draw every `data-search` example as the chips it would actually make.
+     *
+     * The help used to spell its examples as code text, which meant the reader
+     * had to translate `model:"attach:chest"` into the thing they would see in
+     * the bar. Building them out of the SAME parser and the SAME highlighter as
+     * the bar itself means an example can never drift from what clicking it
+     * does — and a syntax the app stops supporting stops rendering as syntax.
+     *
+     * Called after the pack loads, because the keyword marking needs its
+     * vocabulary (see fieldVocab).
+     */
+    function decorateExamples() {
+        for (const btn of $$("[data-search]")) {
+            const q = btn.dataset.search;
+            // Epsilon-command examples are meant to be read as commands, and a
+            // chip row would hide the very thing they demonstrate
+            if (!q || q.startsWith(".")) continue;
+            const parts = parseQueryParts(q);
+            if (!parts.length) continue;
+            btn.textContent = "";
+            btn.classList.add("ex-chips");
+            for (const p of parts) {
+                const chip = el("span", p.field === "all"
+                    ? "exchip exfree" : `exchip f-${p.field}${p.not ? " not" : ""}`);
+                if (p.field !== "all") {
+                    chip.appendChild(el("span", "qchip-field", `${p.not ? "−" : ""}${p.field}:`));
+                }
+                const text = el("span", "qchip-text");
+                text.appendChild(highlightBar(p.field, p.text));
+                chip.appendChild(text);
+                btn.appendChild(chip);
+            }
+        }
     }
 
     function barHoverOut() {
@@ -2951,64 +3086,75 @@
                 : `Lands on the ${t} attachment point`;
         }
         const words = [s, t].filter(Boolean);
-        // each point is an `attach <point>` pair; always quoted (the space)
+        // one `attach:point` token per point, both in the same chip so they
+        // constrain the same row
         return P.note(label, {
             hit: attachIsHit(field, words),
             title: `${why} — an M2 attachment slot, not a description`,
-            search: P.quoted(field, words.map((w) => `attach ${w}`).join(" ")),
+            search: P.quoted(field, words.map((w) => keywordQuery(ATTACH_WORD, w)).join(" ")),
             finds: `spells using ${words.length > 1 ? "these points" : "this point"}`,
         });
     }
 
-    /** The attachment points named by a group's `attach <point>` pairs. */
-    function attachValues(tokens) {
-        const out = [];
-        for (let i = 0; i < tokens.length; i++) {
-            if (tokens[i].text === "attach" && tokens[i + 1]) {
-                out.push(tokens[i + 1].text);
-                i++;
-            }
-        }
-        return out;
+    /**
+     * The values a chip gives one meta keyword — the render-side twin of
+     * splitKeyword in search.js, and written the same way so a pill can only
+     * light up under a query that really selected its spell.
+     * @param {{text: string}[]} tokens
+     * @param {string} word
+     * @returns {string[]}
+     */
+    function keywordValues(tokens, word) {
+        const prefix = word + ":";
+        return tokens.filter((t) => t.text.startsWith(prefix))
+            .map((t) => t.text.slice(prefix.length).trim())
+            .filter(Boolean);
     }
 
-    // an attachment segment lights when a positive attach query in its field
+    // an attachment segment lights when a positive attach: query in its field
     // (or free text) names points this row carries — the same substring test
-    // the search uses (ATTACH_WORD in search.js)
+    // the search uses
     function attachIsHit(field, names) {
         const attachL = names.join(" ").toLowerCase();
         return anyGroup(field, (ts) => {
-            const attaches = attachValues(ts);
-            return attaches.length && attaches.every((a) => attachL.includes(a));
+            const attaches = keywordValues(ts, ATTACH_WORD);
+            return attaches.length > 0 && attaches.every((a) => attachL.includes(a));
         });
     }
 
-    /** The region words a group's `boneset` keyword collects (all that follow). */
-    function bonesetValues(tokens) {
-        const i = tokens.findIndex((t) => t.text === BONESET_WORD);
-        return i < 0 ? [] : tokens.slice(i + 1).map((t) => t.text).filter(Boolean);
-    }
-
-    /** A boneset pill lights up when a `boneset` query names one of its regions. */
+    /** A boneset pill lights up when a `boneset:` query names one of its regions. */
     function bonesetIsHit(names) {
         const hay = names.join(" ").toLowerCase();
         return anyGroup("anim", (ts) => {
-            const words = bonesetValues(ts);
-            return words.length && words.every((w) => hay.includes(w));
+            const words = keywordValues(ts, BONESET_WORD);
+            return words.length > 0 && words.every((w) => hay.includes(w));
         });
     }
 
+    /**
+     * A meta keyword and its value as chip query text. The value is quoted only
+     * when it needs to be, so the common `attach:chest` stays the short form the
+     * user would type; `boneset:"upper body"` quotes because the value has a
+     * space and the keyword takes exactly one token.
+     * @param {string} word
+     * @param {string} value
+     * @returns {string}
+     */
+    const keywordQuery = (word, value) =>
+        `${word}:${/\s/.test(value) ? `"${value}"` : value}`;
+
     /* A boneset segment: the body region(s) an AnimKit — or one of its anims —
    * animates ("Upper Body", "Head · Right Hand"). Reads as a dim qualifier on
-   * the pill, searchable via the `boneset` keyword; multi-word names ride the
-   * one keyword (boneset upper body). Shown on the AnimKit head when the whole
+   * the pill, searchable via the `boneset:` keyword; a multi-word region quotes
+   * its value (boneset:"upper body"). Shown on the AnimKit head when the whole
    * kit shares one region, on the anim pill when its anims differ. */
     function bonesetSegment(names) {
         if (!names || !names.length) return null;
         return P.note(names.join(" · "), {
             hit: bonesetIsHit(names),
             title: `Animates the ${names.join(", ")} — the AnimKit segment's boneset`,
-            search: P.quoted("anim", `${BONESET_WORD} ${names.join(" ")}`),
+            search: P.quoted("anim",
+                names.map((n) => keywordQuery(BONESET_WORD, n)).join(" ")),
             finds: `spells whose animkits animate ${names.length > 1 ? "these regions" : "this region"}`,
         });
     }
@@ -4111,6 +4257,10 @@
         if (state.sort.key !== "auto") {
             params.push("sort=" + (state.sort.dir < 0 ? "-" : "") + state.sort.key);
         }
+        // the help dialog is part of what a link can point at — "here is the
+        // syntax" is a thing people send each other, and without this the only
+        // way to share it is a sentence telling someone to click the ?
+        if (helpOpen()) params.push("help=1");
         const url = location.pathname + (params.length ? "?" + params.join("&") : "");
         if (url === location.pathname + location.search && !location.hash) return;
         // pushState (unlike the old location.hash assignment) fires no event,
@@ -4130,7 +4280,29 @@
         if (legacyMode && isChipField(legacyMode) && q && !/[a-z]+:/i.test(q)) {
             q = `${legacyMode}:${/\s/.test(q) ? `"${q}"` : q}`;
         }
-        return {v: get("v"), q, only: get("only"), without: get("without"), sort: get("sort")};
+        return {
+            v: get("v"), q, only: get("only"), without: get("without"), sort: get("sort"),
+            help: get("help"),
+        };
+    }
+
+    /** Is the help dialog on screen? (Its own open state is the truth.) */
+    const helpOpen = () =>
+        !!(/** @type {HTMLDialogElement} */ ($("#help")) || {}).open;
+
+    /**
+     * Show or hide the help dialog and write that into the URL, so it survives a
+     * reload, a share and the back button. `push` is false while restoring from
+     * a popstate — the URL is already what it should be.
+     * @param {boolean} on
+     * @param {boolean} [push]
+     */
+    function setHelp(on, push = true) {
+        const help = /** @type {HTMLDialogElement} */ ($("#help"));
+        if (on === help.open) return;
+        // showModal on an open dialog throws; close on a closed one is a no-op
+        if (on) help.showModal(); else help.close();
+        if (push) stateToUrl(true);
     }
 
     // set the "Only spells with / without" filters from the URL's only= (with)
@@ -4662,10 +4834,15 @@
 
         // help dialog (native <dialog>: Esc closes it for free)
         const help = /** @type {HTMLDialogElement} */ ($("#help"));
-        $("#help-btn").addEventListener("click", () => help.showModal());
-        $("#help-close").addEventListener("click", () => help.close());
+        $("#help-btn").addEventListener("click", () => setHelp(true));
+        $("#help-close").addEventListener("click", () => setHelp(false));
+        // Esc and the form's own close both bypass the handlers above, so the
+        // URL is squared up here — one place, whatever closed it
+        help.addEventListener("close", () => {
+            if (new URLSearchParams(location.search).has("help")) stateToUrl(true);
+        });
         help.addEventListener("click", (e) => {
-            if (e.target === help) return help.close(); // backdrop click
+            if (e.target === help) return setHelp(false); // backdrop click
             // the worked examples are live: running one closes the dialog so the
             // results it just produced are actually visible
             const ex = targetClosest(e, ".help-ex button[data-search]");
@@ -4823,6 +5000,7 @@
             // bar was drawn from the URL before any of this existed. Repaint it
             // here rather than at the ten call sites that can change the pack.
             renderBar();
+            decorateExamples();
             runSearch({push});
         } catch (err) {
             console.error(err);
@@ -4837,6 +5015,7 @@
         loadQueryString(h.q);
         filtersFromUrl(h.only, h.without);
         sortFromUrl(h.sort);
+        setHelp(!!h.help, false); // back/forward opens and closes it too
         // no v= in the URL means the default version, not "keep the current
         // one" — back/forward must return from an explicitly-chosen pack
         const wanted = findVersion(h.v) || defaultVersion();
@@ -4897,7 +5076,13 @@
         await activateVersion(entry);
         if (autoExport === "json") Export.json();
         else if (autoExport === "csv") Export.csv();
-        qInput.focus();
+        // after the pack, so the examples inside it are drawn with a vocabulary.
+        // The first search has already rewritten the URL by now (and dropped the
+        // flag, the dialog not being open yet), so put it back.
+        if (h.help) {
+            setHelp(true, false);
+            stateToUrl(false);
+        } else qInput.focus();
     }
 
     void boot(); // nothing to await it — boot renders its own load errors
