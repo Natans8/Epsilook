@@ -458,7 +458,12 @@
                 label.dataset.chipNot = String(idx);
                 chip.appendChild(label);
             }
-            chip.appendChild(el("span", "qchip-text", c.text));
+            // the chip's own text carries the same keyword marking the input
+            // does — one classifier, so a word cannot look like vocabulary while
+            // being typed and like plain text once committed
+            const textSpan = el("span", "qchip-text");
+            textSpan.appendChild(highlightBar(c.field, c.text));
+            chip.appendChild(textSpan);
             if (!isFree) {
                 const x = el("button", "qchip-x", "×");
                 x.type = "button";
@@ -512,6 +517,9 @@
         } else {
             input.style.width = Math.max(input.value.length, 1) + "ch";
         }
+        // the highlight backdrop copies the box this just settled, so it rides
+        // the one function every value/width change already goes through
+        syncHighlight();
     }
 
     function activateField(field, {not = false} = {}) {
@@ -889,17 +897,23 @@
      * One meta word: not a kind of content, but an axis any chip in `fields`
      * can carry. `when` gates it on the loaded pack, exactly as a pill type's
      * does — a pack with no attachment data never suggests `attach`.
-     * @type {{word: string, hint: string, fields: string[],
-     *         when?: (d: SpellData) => boolean}[]}
+     *
+     * `value` names what it takes, and `rest` says how much of the chip that
+     * argument eats: one word for `attach` (point names are single tokens), the
+     * whole remainder for `boneset` (a region may be several words — "upper
+     * body"). Both are read by the search AND by the bar highlighting, so what
+     * the bar draws as the argument is exactly what the matcher consumes.
+     * @type {{word: string, hint: string, value: string, fields: string[],
+     *         rest?: boolean, when?: (d: SpellData) => boolean}[]}
      */
     const META_WORDS = [
         {
-            word: ATTACH_WORD, fields: ["model", "fx"],
+            word: ATTACH_WORD, fields: ["model", "fx"], value: "attachment point",
             hint: "Attachment point follows, e.g. attach chest or attach spelllefthand",
             when: (d) => !!d.attachmentNames && Object.keys(d.attachmentNames).length > 0,
         },
         {
-            word: BONESET_WORD, fields: ["anim"],
+            word: BONESET_WORD, fields: ["anim"], value: "body region", rest: true,
             hint: "Body region an animkit animates follows, e.g. boneset upper body or boneset head",
             when: (d) => !!d.bonesetNames && d.bonesetNames.length > 0,
         },
@@ -915,12 +929,35 @@
      * @returns {{words: string[], titles: Record<string, string>} | null}
      *   Null = the field has no category words at all.
      */
+    /* The numeric axes every column shares: `count` is the size of the column
+   * itself, so it is offered wherever there is something to count — which is
+   * every column that has category words at all. */
+    const COUNT_AXIS_HINT = "How many entries this column has — count>4, count=0";
+
+    /** An axis reads as a comparison, so the suggestion says so. */
+    const axisHint = (axis, hint) =>
+        `${hint ? hint + " — " : ""}takes a comparison, e.g. ${axis}>2`;
+
     function fieldCategories(field) {
         const d = state.data;
         // mech joins the list because the non-visual categories moved there —
         // its words come from the same registry, so nothing else needed saying
         if (!d || !["model", "sound", "anim", "fx", "mech"].includes(field)) return null;
         const {words, titles} = P.keywordsFor(field, d);
+        // Named numeric axes (mech:seats>2, fx:scale>=100). An axis named after
+        // its own category word does not get a second entry — the word is already
+        // in the list, and its description gains the comparison form instead.
+        for (const a of P.axesFor(field, d)) {
+            if (a.own && titles[a.axis]) {
+                titles[a.axis] = `${titles[a.axis].split(" (")[0]} — or compare: ${a.axis}>50`;
+                continue;
+            }
+            if (words.includes(a.axis)) continue;
+            words.push(a.axis);
+            titles[a.axis] = axisHint(a.axis, a.hint);
+        }
+        words.push(Search.COUNT_AXIS);
+        titles[Search.COUNT_AXIS] = COUNT_AXIS_HINT;
         for (const meta of META_WORDS) {
             if (!meta.fields.includes(field) || (meta.when && !meta.when(d))) continue;
             words.push(meta.word);
@@ -942,7 +979,12 @@
             return fieldCategories(state.activeField) ? updateCategorySuggest() : hideSuggest();
         }
         let word = input.value.split(/\s+/).pop().toLowerCase();
-        if (word.startsWith("-")) word = word.slice(1); // "-mec" suggests mechanic: as an exclusion
+        // "-mec" suggests mech: as an EXCLUSION, and says so: the minus is part of
+        // what the user is typing, so the suggestion has to show the tag they
+        // would actually get. selectSuggestion re-reads the same "-" from the
+        // input, so the two can't disagree about which it is.
+        const not = word.startsWith("-");
+        if (not) word = word.slice(1);
         if (word.length < 2) return hideSuggest();
         // hidden columns don't suppress suggestions — an explicit field search
         // un-hides its column anyway (ensureFieldVisible)
@@ -954,8 +996,10 @@
         matches.forEach(([key, f], i) => {
             const b = el("button", "suggest-item");
             markSuggestOption(b, i);
-            b.appendChild(el("span", `suggest-field f-${key}`, `${key}:`));
-            b.appendChild(el("span", "suggest-hint", f.hint));
+            b.appendChild(el("span", `suggest-field f-${key}${not ? " not" : ""}`,
+                `${not ? "−" : ""}${key}:`));
+            b.appendChild(el("span", "suggest-hint",
+                not ? `hide spells by ${f.short}` : f.hint));
             b.dataset.field = key;
             box.appendChild(b);
         });
@@ -1040,6 +1084,264 @@
         const not = /(^|\s)-\S*$/.test(input.value);
         input.value = input.value.replace(/\S+$/, "").trimEnd();
         activateField(field, {not});
+    }
+
+    /* ------------------------------------------------ bar syntax highlighting
+
+   * THE BAR HIGHLIGHTS, IT DOES NOT RE-RENDER. Every character stays where it
+   * was typed and stays selectable and copyable — the bar's text is what gets
+   * pasted into Discord and into another search bar, so it must never become a
+   * row of mini-pills that reads differently from what the user wrote. Colour
+   * and weight go OVER the exact characters instead.
+   *
+   * Two surfaces, one classifier:
+   *   - a committed chip's text is our own DOM, so its spans carry `title` and
+   *     hover natively;
+   *   - an <input> cannot hold markup, so the same spans are drawn on a
+   *     backdrop (#qhl) sitting exactly under the input, whose own text goes
+   *     transparent. The backdrop is pointer-events: none — the input keeps
+   *     every click, caret and selection — so its tooltip is served by
+   *     hit-testing the spans under the pointer (barHover below).
+   *
+   * WHAT IS MARKED is only what the grammar actually knows: category words,
+   * meta keywords and their argument, target words, named numeric axes,
+   * alternation bars, quoted phrases, and exact ids where a bare number means
+   * one. An ordinary word is deliberately left plain — in model: or fx: a word
+   * the vocabulary has never heard of is an ordinary file-name search, not a
+   * mistake, and squiggling it would be a lie. The one thing marked WRONG is a
+   * comparison against an axis the field does not have (`mech:seatz>2`), which
+   * cannot be anything but a typo. */
+
+    const PHRASE_TIP = "Exact phrase — these words together, in this order";
+    const ALT_TIP = "Alternation — either side matches";
+    const COUNT_SHORTHAND_TIP = `Shorthand for ${Search.COUNT_AXIS}: ${COUNT_AXIS_HINT.toLowerCase()}`;
+
+    /** A bare number that means an exact id, per field. Empty = plain text. */
+    const NUMBER_TIPS = {
+        id: "An exact spell ID",
+        sound: "Also matches this SoundKit ID exactly",
+        anim: "Also matches this AnimKit ID exactly",
+    };
+
+    /* The vocabulary is rebuilt on every keystroke otherwise — it walks the
+     * whole pill-type registry — so it is cached per field until the pack
+     * changes underneath it. */
+    /**
+     * @typedef {Object} BarVocab
+     * @property {Map<string, string>} words  category / meta / target word -> description
+     * @property {Map<string, string>} axes   named numeric axis -> description
+     * @property {Map<string, any>} meta      meta keyword -> its META_WORDS record
+     */
+    /** @type {{data: any, byField: Map<string, BarVocab>}} */
+    let barVocab = {data: null, byField: new Map()};
+
+    /**
+     * Every word and axis one field's chips can carry, with descriptions. Same
+     * sources as the autocomplete — a word that autocompletes must highlight,
+     * or the two are telling the user different things about the same grammar.
+     * @param {string} field
+     */
+    function fieldVocab(field) {
+        const d = state.data;
+        if (barVocab.data !== d) barVocab = {data: d, byField: new Map()};
+        const cached = barVocab.byField.get(field);
+        if (cached) return cached;
+        /** @type {BarVocab} */
+        const v = {words: new Map(), axes: new Map(), meta: new Map()};
+        // never CACHE an empty vocabulary from a pack-less render (the bar is
+        // drawn from the URL before the pack finishes loading) — the cache key
+        // is the data object, and null is a legitimate value of it
+        if (!d) return v;
+        // fieldCategories is the gate: a field with no category words at all
+        // (name:, id:) has no vocabulary to mark, only phrases and numbers
+        if (d && fieldCategories(field)) {
+            const {words, titles} = P.keywordsFor(field, d);
+            for (const w of words) v.words.set(w, titles[w] || "");
+            for (const meta of META_WORDS) {
+                if (!meta.fields.includes(field) || (meta.when && !meta.when(d))) continue;
+                v.words.set(meta.word, meta.hint);
+                v.meta.set(meta.word, meta);
+            }
+            for (const w of Search.TARGET_WORDS) v.words.set(w, TARGET_WORD_TITLES[w]);
+            for (const a of P.axesFor(field, d)) v.axes.set(a.axis, axisHint(a.axis, a.hint));
+            v.axes.set(Search.COUNT_AXIS, COUNT_AXIS_HINT);
+        }
+        barVocab.byField.set(field, v);
+        return v;
+    }
+
+    /**
+     * One word of a chip, classified. Alternation is handled by the caller, so
+     * this only ever sees a single alternative.
+     * @param {BarVocab} v
+     * @param {string} field
+     * @param {string} word
+     * @returns {{cls: string, tip: string}}
+     */
+    function classifyAtom(v, field, word) {
+        const lower = word.toLowerCase();
+        const num = P.numericToken(lower);
+        if (num && num.op) {
+            // a bare comparison is the `count` shorthand — but only where the
+            // field has a count. In free text or name:/id: it selects nothing,
+            // and saying so is the point of the mark.
+            if (!num.axis) {
+                return v.axes.has(Search.COUNT_AXIS)
+                    ? {cls: "bar-axis", tip: COUNT_SHORTHAND_TIP}
+                    : {cls: "bar-bad", tip: "A comparison needs a column to count"
+                        + " — put it in a model:, sound:, anim:, fx: or mech: tag"};
+            }
+            const tip = v.axes.get(num.axis);
+            if (tip) return {cls: "bar-axis", tip};
+            const known = [...v.axes.keys()].join(", ");
+            // "all" is the free-text field, which the user has no name for
+            const where = field === "all" ? "plain words have" : `${field}: has`;
+            return {
+                cls: "bar-bad",
+                tip: known
+                    ? `"${num.axis}" is not a number ${where} — try: ${known}`
+                    : `${where} no numbers to compare`,
+            };
+        }
+        if (v.words.has(lower)) return {cls: "bar-kw", tip: v.words.get(lower)};
+        if (num && NUMBER_TIPS[field]) return {cls: "bar-num", tip: NUMBER_TIPS[field]};
+        return {cls: "", tip: ""};
+    }
+
+    /**
+     * Split one chip's text into classified runs that concatenate back to it
+     * EXACTLY — whitespace and quotes included. That is the invariant the
+     * backdrop depends on: it has to occupy the same glyphs as the input.
+     * @param {string} field
+     * @param {string} text
+     * @returns {{text: string, cls: string, tip: string}[]}
+     */
+    function classifyBar(field, text) {
+        const v = fieldVocab(field);
+        /** @type {{text: string, cls: string, tip: string}[]} */
+        const out = [];
+        const push = (t, cls = "", tip = "") => {
+            if (t) out.push({text: t, cls, tip});
+        };
+        // the meta keyword whose argument comes next, and how much of the chip
+        // that argument eats — one word, or the whole remainder (see META_WORDS)
+        let pending = null;
+        for (const m of text.matchAll(/("[^"]*(?:"|$))|(\s+)|([^\s"]+)/g)) {
+            if (m[2]) {
+                push(m[2]);
+                continue;
+            }
+            if (m[1]) {
+                push(m[1], "bar-phrase", PHRASE_TIP);
+                pending = null;
+                continue;
+            }
+            const word = m[3];
+            if (pending) {
+                const noun = pending.value;
+                push(word, "bar-value",
+                    noun.charAt(0).toUpperCase() + noun.slice(1)
+                    + ` — the ${pending.word} keyword's argument`);
+                // `attach` takes one word; `boneset` eats the rest, because a
+                // region name may be several ("upper body"). Drawing anything
+                // else would misreport what spellsByAnim actually consumes.
+                if (!pending.rest) pending = null;
+                continue;
+            }
+            // alternation splits the word into alternatives that each classify on
+            // their own, with the separator marked between them — altsOf is the
+            // authority on whether this word has any (a comma is only a separator
+            // between numbers, because spell names contain commas)
+            const alts = altsOf(word.toLowerCase());
+            if (alts.length > 1) {
+                const sep = word.includes("|") ? "|" : ",";
+                word.split(sep).forEach((part, i) => {
+                    if (i) push(sep, "bar-alt", ALT_TIP);
+                    const {cls, tip} = classifyAtom(v, field, part);
+                    push(part, cls, tip);
+                });
+                continue;
+            }
+            const {cls, tip} = classifyAtom(v, field, word);
+            push(word, cls, tip);
+            pending = v.meta.get(word.toLowerCase()) || null;
+        }
+        return out;
+    }
+
+    /**
+     * The classified runs as nodes. Unclassified runs stay bare text nodes, so
+     * only the marked ones become elements — which is also what makes the
+     * backdrop's hit-test cheap.
+     * @param {string} field
+     * @param {string} text
+     * @returns {DocumentFragment}
+     */
+    function highlightBar(field, text) {
+        const frag = document.createDocumentFragment();
+        for (const run of classifyBar(field, text)) {
+            if (!run.cls) {
+                frag.appendChild(document.createTextNode(run.text));
+                continue;
+            }
+            const s = el("span", `bar-tok ${run.cls}`, run.text);
+            if (run.tip) s.title = run.tip;
+            frag.appendChild(s);
+        }
+        return frag;
+    }
+
+    /**
+     * Redraw the backdrop under the live input and park it exactly over the
+     * input's box. Called from sizeInput, so every path that changes the value
+     * or the width already goes through it.
+     */
+    function syncHighlight() {
+        const box = document.getElementById("qhl");
+        if (!box) return;
+        const wrap = $("#editwrap");
+        const value = qInput.value;
+        wrap.classList.toggle("hl", !!value);
+        box.textContent = "";
+        if (!value) return;
+        box.appendChild(highlightBar(state.activeField || "all", value));
+        // #editwrap is the offsetParent of both, so the input's own offsets are
+        // already in the backdrop's coordinate system
+        box.style.left = qInput.offsetLeft + "px";
+        box.style.top = qInput.offsetTop + "px";
+        box.style.width = qInput.offsetWidth + "px";
+        box.style.height = qInput.offsetHeight + "px";
+        box.scrollLeft = qInput.scrollLeft;
+    }
+
+    /**
+     * The backdrop cannot receive :hover (it is inert by design), so the input
+     * serves the tooltip for whatever span sits under the pointer — which is
+     * also what gives a keyword in the input the same hover behaviour it has
+     * inside a committed chip.
+     * @param {MouseEvent} e
+     */
+    function barHover(e) {
+        const box = document.getElementById("qhl");
+        if (!box) return;
+        let found = null;
+        for (const span of box.children) {
+            const r = span.getBoundingClientRect();
+            if (e.clientX >= r.left && e.clientX <= r.right
+                && e.clientY >= r.top && e.clientY <= r.bottom) {
+                found = /** @type {HTMLElement} */ (span);
+                break;
+            }
+        }
+        for (const span of box.children) span.classList.toggle("hover", span === found);
+        const tip = found ? found.title : "";
+        if (qInput.title !== tip) qInput.title = tip;
+    }
+
+    function barHoverOut() {
+        const box = document.getElementById("qhl");
+        if (box) for (const span of box.children) span.classList.remove("hover");
+        qInput.title = "";
     }
 
     /* ------------------------------------------------------------ search */
@@ -1141,13 +1443,6 @@
     // Returns null when no chip names a category, else (id) -> hit count.
     function categoryRanker() {
         const d = state.data;
-        const FX_SETS = {
-            chain: d.spellFx, dissolve: d.spellDissolves, glow: d.spellGlows,
-            tint: d.spellTints, desaturate: d.spellDesaturates,
-            transparency: d.spellTransps, freeze: d.spellFreezes, camo: d.spellCamos,
-            screen: d.spellScreens, shapeshift: d.spellShapeshifts,
-            morph: d.spellMorphs, summon: d.spellSummons,
-        };
         const tests = [];
         for (const g of state.groups) {
             if (g.not) continue;
@@ -1155,19 +1450,24 @@
             // both categories, the same way it selects both
             for (const t of g.tokens.flatMap((tk) =>
                 (tk.alts || [tk.text]).map((a) => ({text: a})))) {
-                if (g.field === "fx") {
-                    if (t.text === "ghost" || t.text === "shadowy") {
-                        tests.push((id) => d.spellShadowies.has(id) || d.spellGhostMats.has(id));
-                    } else if (FX_SETS[t.text]) {
-                        const s = FX_SETS[t.text];
-                        tests.push((id) => s.has(id));
-                    }
-                } else if (g.field === "model") {
+                // every registered type answers for its own word — so this covers
+                // fx AND mech AND the model/anim types alike, and a type added
+                // later ranks without being named here. (It used to be a
+                // hand-written map of fx sets, which had already drifted: it
+                // still said "stance" for the renamed replace group and knew
+                // nothing of the categories that moved to mech.)
+                const has = P.spellsWithWord(g.field, t.text, d);
+                if (has) tests.push(has);
+                // "shadowy" is the retired name the ghost corpus still carries
+                if (g.field === "fx" && t.text === "shadowy") {
+                    tests.push((id) => d.spellShadowies.has(id) || d.spellGhostMats.has(id));
+                }
+                if (g.field === "model") {
+                    // model FILE categories: the pills are files, so the registry
+                    // records carry no reverse index — the per-category spell sets do
                     for (const [cat, spells] of d.modelCatSpells) {
                         if ((d.modelCatNames[cat] || "") === t.text) tests.push((id) => spells.has(id));
                     }
-                } else if (g.field === "anim" && t.text === "stance") {
-                    tests.push((id) => d.spellReplaceAnims.has(id));
                 }
                 // a target word floats spells that really carry a row of that type
                 // above the ones that merely have it in a file name
@@ -1444,10 +1744,15 @@
         tr.appendChild(effects.fx);
 
         // Mechanics — one pill per SpellEffect (what it does + who it targets),
-        // matched ones first, then the non-visual category blocks
-        const mechs = hitsFirst(mechanicPills(d.spellMechanics.get(spellId) || []),
-            (p) => p.rows.some(mechanicIsHit));
-        tr.appendChild(mechanicsCell(mechs.map(mechanicTag), effects.mechBlocks));
+        // then the non-visual category blocks. Both go in as blocks so the cell
+        // ranks them against each other (see mechanicsCell); an enum pill can
+        // never be a "named" hit, since its corpus is enum names, not keywords.
+        /** @type {{hit: boolean, named?: boolean, el: Node}[]} */
+        const mechBlocks = mechanicPills(d.spellMechanics.get(spellId) || []).map((p) => ({
+            hit: p.rows.some(mechanicIsHit),
+            el: mechanicTag(p),
+        }));
+        tr.appendChild(mechanicsCell(mechBlocks.concat(effects.mechBlocks)));
 
         // Commands — one compact line that fits even single-line rows
         const tdCmd = el("td", "c-cmds");
@@ -1509,12 +1814,35 @@
         return frag;
     }
 
-    // stable partition: elements matching isHit come first, original order kept
-    function hitsFirst(items, isHit) {
+    /**
+     * Stable rank-partition of a cell's contents: things the query NAMED first,
+     * then everything else it merely matched, then the rest. Original order is
+     * kept inside each band, so a cell's deliberate layout survives.
+     *
+     * The middle band exists because a category word is also ordinary text.
+     * `mech:speed` selects the spells with a movement-speed pill AND every spell
+     * whose effect enum happens to read MOD_SPEED_SLOW_ALL — both are honest
+     * hits, but only one is what was asked for, and burying it under a dozen
+     * enum names (or clamping it away behind "+N more") reads as a bug. Same
+     * story for `fx:glow` against a texture called beam_webglowwhite, and
+     * `model:missile` against a file with "missile" in its path.
+     *
+     * `isKeyword` is optional: a cell whose contents carry no category word (the
+     * sound kits) simply has no first band.
+     * @template T
+     * @param {T[]} items
+     * @param {(it: T) => boolean} isHit
+     * @param {((it: T) => boolean) | null} [isKeyword]
+     * @returns {T[]}
+     */
+    function hitsFirst(items, isHit, isKeyword = null) {
         if (!state.tokens.length) return items;
-        const hits = [], rest = [];
-        for (const it of items) (isHit(it) ? hits : rest).push(it);
-        return hits.length ? hits.concat(rest) : rest;
+        const named = [], hits = [], rest = [];
+        for (const it of items) {
+            if (!isHit(it)) rest.push(it);
+            else (isKeyword && isKeyword(it) ? named : hits).push(it);
+        }
+        return named.concat(hits, rest);
     }
 
     function tagCell(className, tags) {
@@ -1536,22 +1864,27 @@
      * speed).
      *
      * The enum pills come FIRST because they describe the effect itself, and
-     * the categories qualify it. Both halves float their own matches, and the
-     * cell only reads as empty when neither has anything — a spell with a speed
-     * aura but no SpellEffect rows still shows the speed pill.
-     * @param {Node[]} tags loose mechanic pills, already hit-floated
-     * @param {{hit: boolean, el: Node}[]} blocks category blocks for this column
+     * the categories qualify it — but the two halves are ONE ranked list, not
+     * two appended ones, because that resting order is exactly wrong under a
+     * query that names a category. `mech:speed` matches the speed pill outright
+     * and every SPELL_AURA_MOD_SPEED_* enum by substring; handing the enums the
+     * whole top of the cell buries the pill that was asked for. renderBlocks
+     * ranks them together, so a named category rises past them and an unnamed
+     * one keeps its place below.
+     *
+     * The cell only reads as empty when neither half has anything — a spell
+     * with a speed aura but no SpellEffect rows still shows the speed pill.
+     * @param {{hit: boolean, named?: boolean, el: Node}[]} blocks
      * @returns {HTMLElement}
      */
-    function mechanicsCell(tags, blocks) {
+    function mechanicsCell(blocks) {
         const td = el("td", "c-mechanics");
-        if (!tags.length && !blocks.length) {
+        if (!blocks.length) {
             td.classList.add("empty");
             td.appendChild(el("span", "none", "—"));
             return td;
         }
-        for (const tag of tags) td.appendChild(tag);
-        if (blocks.length) renderBlocks(td, blocks);
+        renderBlocks(td, blocks);
         return td;
     }
 
@@ -1610,6 +1943,7 @@
         for (const c of cats) {
             blocks.push({
                 hit: c.hit,
+                named: wordIsNamed("model", c.name),
                 el: P.group({
                     head: modelCatHeadTag(c.name, c.hit),
                     items: hitsFirst(c.items, (e) => modelFileIsHit(d.files.get(e.fid), c.name))
@@ -1625,6 +1959,7 @@
             const hit = mountIds.some((m) => mountIsHit(m));
             blocks.push({
                 hit,
+                named: wordIsNamed("model", "mount"),
                 el: P.group({
                     head: modelCatHeadTag("mount", hit),
                     items: hitsFirst(mountIds.slice().sort((a, b) => a - b),
@@ -1754,6 +2089,7 @@
         for (const kitId of groups) {
             blocks.push({
                 hit: kitHasHit(kitId),
+                named: wordIsNamed("anim", wordOf(kitId)),
                 el: P.group({
                     // stance overrides are ~96% caster — a constant, so no icon
                     // there (documented in the help dialog); animkits carry theirs
@@ -1771,6 +2107,7 @@
             const hit = swaps.some(swapHit);
             blocks.push({
                 hit,
+                named: wordIsNamed("anim", "replace"),
                 el: P.group({
                     head: animCatHeadTag("replace", hit),
                     items: hitsFirst(swaps, swapHit).map((sw) => animSwapTag(sw.src, sw.dst)),
@@ -1816,11 +2153,15 @@
    * disappearing behind "+N more". Every pill-bearing cell renders through here
    * so that one rule holds for all of them — the models, sounds, animations and
    * fx cells all build a `blocks` array and hand it over.
+   *
+   * `named` is the block's second rank: it was matched because the query spelled
+   * its category word, not because some file name contained the same letters
+   * (see hitsFirst). A block with no category word simply never sets it.
    * @param {HTMLElement} td
-   * @param {{hit: boolean, el: HTMLElement}[]} blocks
+   * @param {{hit: boolean, named?: boolean, el: Node}[]} blocks
    */
     function renderBlocks(td, blocks) {
-        for (const b of hitsFirst(blocks, (x) => x.hit)) td.appendChild(b.el);
+        for (const b of hitsFirst(blocks, (x) => x.hit, (x) => !!x.named)) td.appendChild(b.el);
     }
 
     /* Effects cell: visual FX grouped by category — "chain" (beam/chain effects),
@@ -2304,6 +2645,7 @@
         // rather than a second copy of this machinery.
         const blocksFor = (c) => cats.filter((cat) => cat.col === c).map((cat) => ({
             hit: cat.hit,
+            named: wordIsNamed(c, cat.name),
             el: P.group({
                 head: fxHeadTag(cat.name, cat.hit, cat.mask, cat.col),
                 items: cat.items.map((make) => make()),
@@ -2353,6 +2695,23 @@
      */
     function anyGroup(field, test) {
         return groupsFor(field).some((g) => Search.combosOf(g).some(test));
+    }
+
+    /**
+     * Did a positive chip of `field` NAME this category word outright — as a
+     * whole token, not as a fragment of some longer value?
+     *
+     * This is the "full keyword hit" test hitsFirst ranks on. Equality, not
+     * substring, is the whole point: `mech:speed` names the speed category,
+     * while `mech:spe` merely reaches it (and reaches half the enum names too),
+     * so only the first has earned the top of the cell.
+     * @param {string} field
+     * @param {string} word category word ("" for content that has none)
+     * @returns {boolean}
+     */
+    function wordIsNamed(field, word) {
+        if (!word) return false;
+        return anyGroup(field, (ts) => ts.some((t) => t.text === word));
     }
 
     // hit = the entity fully satisfies at least one chip of its field
@@ -2444,14 +2803,24 @@
    * name it has). Matching by vehicle would light every point of a vehicle
    * when the query names one of them. The seat count still comes from the
    * registry's numeric axis, so the two halves cannot disagree about it. */
+    const SEAT_TYPE = P.TYPES.get("fx:seat");
+    const SEAT_AXIS = P.axisOf(SEAT_TYPE);
+
     function vehicleIsHit(attachment, seats) {
         const nameL = (attachment || "").toLowerCase();
+        // the seat count, read through the registry's own token grammar so the
+        // named axis (mech:seats>2) and the bare form (fx:"seat 8") reach it
+        // exactly as they reach spellsByFx
+        const counts = (/** @type {string} */ text) => {
+            const num = P.numericToken(text);
+            if (!num || (num.axis && num.axis !== SEAT_AXIS)) return false;
+            return P.numericHolds(seats, num);
+        };
         // "mech", not "fx": this is the one migrated category whose hit test is
         // hand-written rather than derived from the registry via isHitOf, so it
         // is the one place the column move had to be repeated by hand.
         return anyGroup("mech", (ts) => ts.every((t) =>
-            "seat".includes(t.text) || nameL.includes(t.text)
-            || Search.matchNumeric(t.text, seats)));
+            "seat".includes(t.text) || nameL.includes(t.text) || counts(t.text)));
     }
 
     /* --- target-type icons ------------------------------------------------
@@ -3887,6 +4256,17 @@
             scheduleSearch();
         });
 
+        // the highlight backdrop scrolls with the input it sits under (a long
+        // value scrolls inside #q rather than widening the pill)
+        input.addEventListener("scroll", () => {
+            const box = document.getElementById("qhl");
+            if (box) box.scrollLeft = input.scrollLeft;
+        });
+        // hover behaviour for the marked words in the input: the backdrop is
+        // inert, so the input answers for whatever span is under the pointer
+        input.addEventListener("mousemove", barHover);
+        input.addEventListener("mouseleave", barHoverOut);
+
         input.addEventListener("keydown", (e) => {
             const box = suggestBox;
             if (!box.hidden) {
@@ -4438,6 +4818,11 @@
                 `${state.data.meta.counts.spells.toLocaleString()} spells`;
             $("#es-count").textContent = state.data.meta.counts.spells.toLocaleString();
             overlay.hidden = true;
+            // the bar's keyword marking is a property of the PACK — a word only
+            // highlights where the loaded version carries that content — and the
+            // bar was drawn from the URL before any of this existed. Repaint it
+            // here rather than at the ten call sites that can change the pack.
+            renderBar();
             runSearch({push});
         } catch (err) {
             console.error(err);

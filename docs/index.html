@@ -28,7 +28,7 @@
     <link rel="icon"
           href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
     <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-    <link rel="stylesheet" href="css/app.css?v=20260728f">
+    <link rel="stylesheet" href="css/app.css?v=20260728g">
     <script>
         // Replay the stored theme before the first paint, so a light theme
         // never flashes dark. Only that: the picker, the default and the
@@ -81,6 +81,11 @@
             <div id="qbar">
         <span id="editwrap">
           <span id="editlabel" hidden></span>
+          <!-- the syntax-highlight backdrop: an inert copy of the input's text,
+               drawn in classified spans directly under it (see the bar
+               highlighting section in app.js). The input keeps the caret, the
+               clicks and the selection; this only supplies colour. -->
+          <span id="qhl" aria-hidden="true"></span>
           <input id="q" type="text" autocomplete="off" spellcheck="false"
                  role="combobox" aria-expanded="false" aria-controls="suggest"
                  aria-autocomplete="list" aria-haspopup="listbox"
@@ -115,7 +120,39 @@
                         <li>Quotes make an <b>exact phrase</b>: <code>"fire bolt"</code> matches those words together,
                             in that order. Quotes also keep a <code>model:</code> inside them from becoming a tag.
                         </li>
+                        <li>Results are ordered by <b>relevance</b> unless you pick a column to sort by — spells whose
+                            name matches what you typed come first, and a tag naming a category floats the spells that
+                            really have it above the ones that merely have the word in a file name.
+                        </li>
                     </ul>
+                </section>
+                <section>
+                    <h3>Either / or — <code>|</code></h3>
+                    <p class="help-note">A <b>|</b> inside a word means <em>either alternative will do</em>, in every
+                        field and anywhere in a tag. A <b>comma</b> does the same between numbers (spell names contain
+                        commas, so it only splits digits).</p>
+                    <ul class="help-ex">
+                        <li>
+                            <button data-search="model:fire|frost">model:fire|frost</button>
+                            a fiery <em>or</em> frosty model
+                        </li>
+                        <li>
+                            <button data-search='model:"fire|frost missile"'>model:"fire|frost missile"</button>
+                            either of those, as a projectile
+                        </li>
+                        <li>
+                            <button data-search="fx:chain|dissolve">fx:chain|dissolve</button>
+                            beams or dissolves
+                        </li>
+                        <li>
+                            <button data-search="id:133,116,122">id:133,116,122</button>
+                            several spells at once
+                        </li>
+                    </ul>
+                    <p class="help-note">Note the difference between the three ways of writing two words:
+                        <code>model:"fire missile"</code> is <em>one</em> model that is both,
+                        <code>model:fire model:missile</code> is <em>two different</em> models on the same spell, and
+                        <code>model:fire|missile</code> is <em>either</em> one.</p>
                 </section>
                 <section>
                     <h3>Field tags</h3>
@@ -213,7 +250,7 @@
                             reveals them; click a pill to jump between the two
                         </li>
                         <li>
-                            <button data-search='mech:"invis =0"'>mech:"invis =0"</button>
+                            <button data-search="mech:detectors=0">mech:detectors=0</button>
                             invisibility nothing can detect
                         </li>
                         <li>
@@ -233,15 +270,15 @@
                         <li>
                             <button data-search='mech:"speed swim"'>mech:"speed swim"</button>
                             swim speed only —
-                            <button data-search='mech:"speed &lt;-50"'>mech:"speed &lt;-50"</button>
+                            <button data-search="mech:speed&lt;-50">mech:speed&lt;-50</button>
                             snares worse than half
                         </li>
                         <li>
                             <button data-search="fx:scale">fx:scale</button>
                             size changes —
-                            <button data-search='fx:"scale &gt;100"'>fx:"scale &gt;100"</button>
+                            <button data-search="fx:scale&gt;100">fx:scale&gt;100</button>
                             at least double,
-                            <button data-search='fx:"scale &lt;0"'>fx:"scale &lt;0"</button>
+                            <button data-search="fx:scale&lt;0">fx:scale&lt;0</button>
                             anything that shrinks
                         </li>
                     </ul>
@@ -369,37 +406,58 @@
                     </ul>
                 </section>
                 <section>
-                    <h3>Counting</h3>
-                    <p class="help-note">A tag holding only a comparison counts that column's entries. The
-                        operator is required — a bare <code>model:2</code> still searches file names for "2".</p>
+                    <h3>Numbers — counting and comparing</h3>
+                    <p class="help-note">Every number you can ask about has a <b>name</b>, and the name goes right
+                        against the comparison with no space: <code>seats&gt;2</code>, <code>speed&lt;-50</code>,
+                        <code>count&gt;=4</code>. The name alone says which pill you mean, so no category word or
+                        quotes are needed. The operators are <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code>
+                        <code>&lt;=</code> <code>=</code>, and a bound can be negative where the value is.</p>
+                    <p class="help-note"><code>count</code> is the one every column has: how many entries it shows.
+                        An operator on its own is short for it — <code>model:&gt;4</code> means
+                        <code>model:count&gt;4</code>. The operator is required either way: a bare
+                        <code>model:2</code> still searches file names for "2".</p>
                     <ul class="help-ex">
                         <li>
+                            <button data-search="model:count&gt;4">model:count&gt;4</button>
+                            more than four models — or just
                             <button data-search="model:&gt;4">model:&gt;4</button>
-                            more than four models
                         </li>
                         <li>
-                            <button data-search="anim:=3">anim:=3</button>
+                            <button data-search="anim:count=3">anim:count=3</button>
                             exactly three animations
                         </li>
                         <li>
-                            <button data-search="sound:&gt;=2">sound:&gt;=2</button>
-                            two or more sounds
+                            <button data-search="sound:count=0">sound:count=0</button>
+                            silent spells
                         </li>
                         <li>
-                            <button data-search='mech:"seat &gt;2"'>mech:"seat &gt;2"</button>
+                            <button data-search="mech:seats&gt;2">mech:seats&gt;2</button>
                             vehicles with 3+ seats
                         </li>
                         <li>
-                            <button data-search='fx:"transparency &gt;=50"'>fx:"transparency &gt;=50"</button>
-                            the same operators work on any numeric pill — seat, invis, desaturate, transparency,
-                            speed, scale
+                            <button data-search="mech:speed&lt;-50">mech:speed&lt;-50</button>
+                            snares worse than half —
+                            <button data-search='mech:"speed run &lt;-70"'>mech:"speed run &lt;-70"</button>
+                            run speed only
                         </li>
                         <li>
-                            <button data-search='mech:"speed &gt;100"'>mech:"speed &gt;100"</button>
-                            a bound can be negative where the value is:
-                            <button data-search='mech:"speed run &lt;-70"'>mech:"speed run &lt;-70"</button>
+                            <button data-search="fx:scale&gt;100">fx:scale&gt;100</button>
+                            at least double size;
+                            <button data-search="fx:transparency&gt;=50">fx:transparency&gt;=50</button>
+                            half-faded or more
+                        </li>
+                        <li>
+                            <button data-search="mech:detectors=0">mech:detectors=0</button>
+                            invisibility nothing can see —
+                            <button data-search="mech:reveals=1">mech:reveals=1</button>
+                            detection that reveals exactly one thing
                         </li>
                     </ul>
+                    <p class="help-note">The names are <code>count</code> everywhere, plus <code>seats</code>,
+                        <code>speed</code>, <code>detectors</code> and <code>reveals</code> in
+                        <code>mech:</code>, and <code>scale</code>, <code>desaturate</code> and
+                        <code>transparency</code> in <code>fx:</code>. They autocomplete like any other word, and
+                        the search bar underlines a name it does not recognise.</p>
                 </section>
                 <section>
                     <h3>Target-type icons</h3>
@@ -471,6 +529,9 @@
                             click an existing tag's field label to flip it, or type <b>-</b> at the very start
                             of a tag you're editing.
                         </li>
+                        <li>Autocomplete follows the minus: typing <code>-mod</code> offers
+                            <code>−model:</code> as an exclusion, not as an ordinary tag.
+                        </li>
                     </ul>
                 </section>
                 <section>
@@ -489,6 +550,12 @@
                         </li>
                         <li>Click a tag's text to edit it, its <b>×</b> to remove it. Plain words are edited like normal
                             text.
+                        </li>
+                        <li>The bar <b>colours what the search understands</b> — category words, target words, numeric
+                            axes and <code>|</code> in gold; a keyword's argument in italics; a
+                            <code>"phrase"</code> underlined. Hover any of them for what it means. A numeric axis the
+                            column doesn't have gets a red squiggle; ordinary words are never marked, since in
+                            <code>model:</code> or <code>fx:</code> an unknown word is just a file-name search.
                         </li>
                         <li>Select across tags and text with the mouse, <kbd>Ctrl</kbd>+<kbd>A</kbd>, or
                             <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd> at the text's edge. <kbd>Ctrl</kbd>+<kbd>C</kbd>
@@ -519,7 +586,11 @@
                 <section>
                     <h3>Columns, filters, sharing</h3>
                     <ul>
-                        <li>Hiding a column (toolbar) also excludes it from plain-word search and exports.</li>
+                        <li>Hiding a column (toolbar) leaves it out of exports, but <b>not</b> out of the search:
+                            which spells a query returns depends on the query alone, so a shared link gives everyone
+                            the same results whatever they have on screen. Searching a hidden column with its tag
+                            brings the column back.
+                        </li>
                         <li>The <b>Filter</b> buttons narrow the current results — click one to cycle <em>any → only
                             spells <b>with</b> that (✓) → only spells <b>without</b> it (✕)</em>; e.g. set Sounds to ✕
                             to find silent spells. Filters travel with shared URLs. Sorting cycles ▲, ▼, back to
@@ -557,7 +628,7 @@
                         aria-label="Effects filter: showing all">Effects
                 </button>
             </div>
-            <div id="columns" title="Hidden columns are also left out of plain-word search and exports">
+            <div id="columns" title="Hidden columns are left out of exports — never out of the search">
                 <span>Columns:</span>
                 <label><input type="checkbox" data-col="models" checked> Models</label>
                 <label><input type="checkbox" data-col="sounds" checked> Sounds</label>
@@ -628,7 +699,9 @@
                 <button data-search="sound:felreaver">sound:felreaver</button>
                 <button data-search="anim:ArtLoop">anim:ArtLoop</button>
                 <button data-search="fx:chain red">fx:chain red</button>
+                <button data-search="model:fire|frost">model:fire|frost</button>
                 <button data-search="mech:leap">mech:leap</button>
+                <button data-search="mech:seats&gt;2">mech:seats&gt;2</button>
                 <button data-search='name:nova -mech:school_damage'>name:nova -mech:school_damage</button>
             </div>
             <p class="es-hint">Words match any part of a name in any order — <code>impact fireball</code> finds
@@ -665,23 +738,23 @@
     const whTooltips = {colorLinks: false, iconizeLinks: false, renameLinks: false};
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260728f"></script>
-<script src="js/util.js?v=20260728f"></script>
+<script src="js/config.js?v=20260728g"></script>
+<script src="js/util.js?v=20260728g"></script>
 <!-- the theme picker: applies the stored palette and wires the header
      dropdown; only needs config.js + util.js, so it goes on early -->
-<script src="js/theme.js?v=20260728f"></script>
-<script src="js/data.js?v=20260728f"></script>
+<script src="js/theme.js?v=20260728g"></script>
+<script src="js/data.js?v=20260728g"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260728f"></script>
-<script src="js/js-blp.js?v=20260728f"></script>
+<script src="js/bufo.js?v=20260728g"></script>
+<script src="js/js-blp.js?v=20260728g"></script>
 <!-- the pill/segment library: shared by app.js (rendering) and search.js
      (the pill-type registry), so it loads before both -->
-<script src="js/pills.js?v=20260728f"></script>
-<script src="js/pilltypes.js?v=20260728f"></script>
-<script src="js/search.js?v=20260728f"></script>
-<script src="js/texture.js?v=20260728f"></script>
-<script src="js/export.js?v=20260728f"></script>
-<script src="js/app.js?v=20260728f"></script>
+<script src="js/pills.js?v=20260728g"></script>
+<script src="js/pilltypes.js?v=20260728g"></script>
+<script src="js/search.js?v=20260728g"></script>
+<script src="js/texture.js?v=20260728g"></script>
+<script src="js/export.js?v=20260728g"></script>
+<script src="js/app.js?v=20260728g"></script>
 </body>
 </html>

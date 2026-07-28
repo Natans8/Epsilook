@@ -96,11 +96,15 @@ window.EpsilookSearch = (() => {
      * asks for a numeric match rather than a value/word match. A bare number is
      * NOT an operator (it keeps its per-field literal meaning), per the search
      * convention that numeric comparison is opt-in via an operator.
+     *
+     * Anywhere in the token, not just at the front: a named axis puts the
+     * operator in the middle (`seats>2`, `count>=4`), and that token is no more
+     * a word to rank spell names against than a bare `>2` is.
      * @param {string} text
      * @returns {boolean}
      */
     function hasOperator(text) {
-        return /^[<>=]/.test(text);
+        return /[<>=]/.test(text);
     }
 
     /* ------------------------------------------------------ count queries */
@@ -108,12 +112,17 @@ window.EpsilookSearch = (() => {
     /**
      * How many items a column renders for one spell. Adding a countable column
      * is one entry here — nothing else branches on the field.
+     *
+     * These count PILLS, which is what the reader sees. The sort's counts
+     * (entryCountFn in app.js) deliberately differ where a column groups: a
+     * SoundKit or AnimKit is one entry to sort by and several pills to count.
      * @type {Record<string, (data: SpellData, spellId: number) => number>}
      */
     const COUNT_SOURCES = {
         model: (d, s) => (d.spellModelCats.size
             ? (d.spellModelCats.get(s) || []).length
-            : (d.spellModels.get(s) || []).length),
+            : (d.spellModels.get(s) || []).length)
+            + (d.spellMounts.get(s) || []).length,
         sound: (d, s) => (d.spellSounds.get(s) || []).length,
         // every animation pill: the loose ones, those inside each AnimKit, and
         // the headless "replace" / "passenger" groups
@@ -122,35 +131,84 @@ window.EpsilookSearch = (() => {
             + (d.spellPassengerAnims.get(s) || []).length
             + (d.spellAnimKits.get(s) || [])
                 .reduce((n, k) => n + (d.animKitAnims.get(k) || []).length, 0),
+        // the two pill columns. Hand-summed rather than derived from the pill-type
+        // registry because a type's `spellsWith` answers "does this spell have
+        // any", not "how many" — and the two shapes (Map of rows, Set membership)
+        // do not share a length.
+        fx: (d, s) => (d.spellFx.get(s) || []).length
+            + (d.spellDissolves.get(s) || []).length + (d.spellGlows.get(s) || []).length
+            + (d.spellShadowies.get(s) || []).length + (d.spellGhostMats.get(s) || []).length
+            + (d.spellTints.get(s) || []).length + (d.spellDesaturates.get(s) || []).length
+            + (d.spellTransps.get(s) || []).length
+            + (d.spellFreezes.has(s) ? 1 : 0) + (d.spellCamos.has(s) ? 1 : 0)
+            + (d.spellScreens.get(s) || []).length + (d.spellMorphs.get(s) || []).length
+            + (d.spellShapeshifts.get(s) || []).length + (d.spellSummons.get(s) || []).length
+            + (d.spellObjects.get(s) || []).length + (d.spellScaleMods.get(s) || []).length,
+        mech: (d, s) => (d.spellMechanics.get(s) || []).length
+            + (d.spellVehicles.get(s) || []).length + (d.spellInvisTypes.get(s) || []).length
+            + (d.spellDetectTypes.get(s) || []).length + (d.spellKeybinds.get(s) || []).length
+            + (d.spellSpeedMods.get(s) || []).length,
     };
 
+    /** The reserved universal axis: the size of the column, in every field. */
+    const COUNT_AXIS = "count";
+
     /**
-     * A count query is a field chip holding exactly ONE token that is a numeric
-     * comparison WITH an operator — `model:>4`, `anim:=3`, `sound:>=2`.
+     * Pull the cardinality tokens out of a chip.
      *
-     * Both halves of that rule carry weight. The operator is required because a
-     * bare number already means a substring match (`model:2` finds
-     * `cfx_fire_02.m2`) and that must keep working. Being alone in the chip is
-     * required because `fx:"seat >2"` already reads its numeric as a seat
-     * count — a second token means the field's own parser owns it.
+     * A CHIP IS A CARDINALITY QUESTION. "Does a matching row exist" is just
+     * `count>=1`, so the ordinary chip is the default case of this rather than
+     * something beside it, and `count` is spelled the same way in every field.
      *
-     * Returns null when the group is not a count query, so the caller falls
-     * through to the normal field search.
+     * Two forms reach it. `count>4` names the axis, so it is commutative with
+     * every other token in the chip — `model:"caster count>4"` reads the same
+     * either way round. A LONE `>4` with no axis name is its shorthand, which is
+     * also what that chip has always meant; the operator is required there
+     * because a bare `model:2` is still a substring search for "2", and being
+     * alone is required because `fx:"seat >2"` hands its numeric to the seat
+     * type instead.
+     *
+     * NOTE the count is the WHOLE column's, not the count of rows matching the
+     * chip's other tokens — `model:"caster count>4"` is "a caster model, and
+     * more than four models in all". Narrowing it to the matching rows needs the
+     * column matchers restructured into per-spell entry iterators; that is its
+     * own pass (see CLAUDE.md).
+     * @param {QueryToken[]} tokens
+     * @returns {{text: QueryToken[], counts: ((n: number) => boolean)[]}}
+     */
+    function splitCountTokens(tokens) {
+        const text = [], counts = [];
+        const lone = tokens.length === 1 && /^(<=|>=|<|>|=)-?\d+$/.test(tokens[0].text);
+        for (const t of tokens) {
+            const named = t.text.startsWith(COUNT_AXIS)
+                && /^(<=|>=|<|>|=)-?\d+(?:\.\d+)?$/.test(t.text.slice(COUNT_AXIS.length));
+            const pred = (named || lone)
+                ? numericPredicate(t.text.slice(named ? COUNT_AXIS.length : 0)) : null;
+            if (pred) counts.push(pred); else text.push(t);
+        }
+        return {text, counts};
+    }
+
+    /**
+     * One chip's spells: its cardinality constraints intersected with whatever
+     * its remaining tokens select. A chip with no count token is just the
+     * field's own search, which is the common case and costs nothing extra.
      * @param {QueryToken[]} tokens
      * @param {string} field
      * @param {SpellData} data
-     * @returns {Set<number> | null}
+     * @returns {Set<number>}
      */
-    function spellsByCount(tokens, field, data) {
+    function spellsForChip(tokens, field, data) {
+        const {text, counts} = splitCountTokens(tokens);
+        if (!counts.length) return FIELDS[field].run(tokens, data);
         const counter = COUNT_SOURCES[field];
-        if (!counter || tokens.length !== 1) return null;
-        const text = tokens[0].text;
-        if (!/^(<=|>=|<|>|=)\d+$/.test(text)) return null;
-        const pred = numericPredicate(text);
-        if (!pred) return null;
+        // a field with nothing to count (name:, id:) cannot satisfy the question
+        if (!counter) return new Set();
+        const base = text.length ? FIELDS[field].run(text, data) : data.ids;
         const out = new Set();
-        for (const s of data.ids) {
-            if (pred(counter(data, s))) out.add(s);
+        for (const s of base) {
+            const n = counter(data, s);
+            if (counts.every((p) => p(n))) out.add(s);
         }
         return out;
     }
@@ -592,7 +650,7 @@ window.EpsilookSearch = (() => {
         const field = FIELDS[g.field] ? g.field : "all";
         const combos = combosOf(g);
         const one = (/** @type {QueryToken[]} */ tokens) =>
-            spellsByCount(tokens, field, data) || FIELDS[field].run(tokens, data);
+            spellsForChip(tokens, field, data);
         if (combos.length === 1) return one(combos[0]);
         const out = new Set();
         for (const tokens of combos) for (const s of one(tokens)) out.add(s);
@@ -837,6 +895,6 @@ window.EpsilookSearch = (() => {
 
     return {
         searchGroups, sortByRelevance, expandAlts, combosOf,
-        FIELDS, TARGET_WORDS, matchNumeric, hasOperator,
+        FIELDS, TARGET_WORDS, COUNT_AXIS, COUNT_SOURCES, matchNumeric, hasOperator,
     };
 })();

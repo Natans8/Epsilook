@@ -597,7 +597,10 @@ main {
 /* only the true trailing gap (nothing after it) fills the rest of the
  * line; a gap before or between chips hugs its content instead, so it
  * doesn't shove the chips after it away */
+/* position: relative makes this the offsetParent of both #q and the highlight
+   backdrop, so syncHighlight can copy the input's box in one coordinate system */
 #editwrap {
+    position: relative;
     display: inline-flex;
     align-items: baseline;
     max-width: 100%;
@@ -627,10 +630,44 @@ main {
     background: none;
     border: none;
     outline: none;
+    /* over the highlight backdrop, so the caret and native selection stay on top */
+    position: relative;
+    z-index: 1;
 }
 
 #q::placeholder {
     color: var(--text-dim);
+}
+
+/* The highlight backdrop. Every metric here is #q's, because a glyph that lands
+   one pixel off the character it colours reads as a rendering bug; the box
+   itself is copied from the input at runtime (syncHighlight). Inert by
+   construction — the input above it owns every interaction. */
+#qhl {
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+    white-space: pre;
+    font-family: inherit;
+    font-size: 1.1rem;
+    line-height: 1.2;
+    padding: 0.15rem 0;
+    color: var(--text);
+}
+
+/* Only while there is something to draw: an empty input must keep its
+   placeholder, and a browser with the backdrop hidden must keep readable text
+   rather than a transparent one. */
+#editwrap.hl #q {
+    color: transparent;
+    caret-color: var(--text);
+}
+
+/* selected text redraws itself above the backdrop, so a selection still shows
+   the words rather than a bare highlight block */
+#editwrap.hl #q::selection {
+    color: var(--text);
 }
 
 #editwrap:not(.fill):not(.editing) #q {
@@ -763,6 +800,67 @@ main {
     max-width: 24rem;
 }
 
+/* ---- what the query grammar recognises, marked in place -------------------
+   Four roles, no more: the thing the grammar KNOWS (a category word, a meta
+   keyword, a target word, a numeric axis, an alternation bar), the VALUE a
+   keyword takes, a quoted PHRASE, and a mistake. Weight carries the first —
+   colour alone is not a distinction on three palettes — and the rest lean on
+   texture so the bar never turns into a rainbow.
+
+   These style spans in two places at once: inside a committed chip (real DOM,
+   native title tooltips) and inside #qhl (the input's backdrop, where app.js
+   serves the tooltip by hit-test). One rule set for both is the point. */
+.bar-tok {
+    border-radius: 3px;
+}
+
+/* app.js sets .hover on the backdrop span under the pointer — the backdrop is
+   pointer-events: none, so :hover can never fire there on its own */
+.bar-tok.hover, .qchip-text .bar-tok:hover {
+    background: rgba(var(--overlay-rgb), calc(0.14 * var(--wash-strength)));
+}
+
+.qchip-text .bar-tok {
+    cursor: help;
+}
+
+.bar-kw, .bar-axis, .bar-alt {
+    color: var(--gold);
+    font-weight: 650;
+}
+
+/* the separator is punctuation doing work — give it air so `fire|frost` reads
+   as two words rather than one long one */
+.bar-alt {
+    padding: 0 0.06em;
+}
+
+/* a keyword's argument is DATA, not vocabulary: it belongs to the keyword
+   before it, and saying so is what makes `attach chest` read as one phrase */
+.bar-value {
+    font-style: italic;
+    text-decoration: underline dotted rgba(var(--overlay-rgb), 0.5);
+    text-underline-offset: 3px;
+}
+
+.bar-phrase {
+    text-decoration: underline dotted var(--gold-dim);
+    text-underline-offset: 3px;
+}
+
+.bar-num {
+    color: var(--gold-dim);
+}
+
+/* the one thing worth flagging: a comparison against an axis this field has
+   no such thing as. An ordinary word is never marked — in model: or fx: a word
+   the vocabulary does not know is an ordinary file-name search, not a typo. */
+.bar-bad {
+    text-decoration: underline wavy var(--danger);
+    text-underline-offset: 3px;
+    text-decoration-skip-ink: none;
+}
+
 /* a glyph, not text — centre it rather than sitting it on the chip's baseline */
 .qchip-x {
     align-self: center;
@@ -849,6 +947,13 @@ main {
 
 .suggest-field {
     font-family: Consolas, "Cascadia Mono", monospace;
+}
+
+/* typing "-mod" suggests an EXCLUSION, so the suggestion has to look like the
+   chip it would make — the minus is already in the input, and offering a plain
+   "model:" for it reads as the app ignoring what was typed */
+.suggest-field.not {
+    color: var(--danger);
 }
 
 .suggest-hint {

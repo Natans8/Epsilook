@@ -96,14 +96,22 @@ T({
   word: "sparkle",             // the category keyword (omit for none)
   hint: "Sparkle overlay (SpellSparkleEffect)",   // autocomplete description
   corpus: (d) => d.sparkleSearchL,   // id -> lowercase haystack
-  spells: (d) => d.sparkleSpells,    // id -> spell ids
+  spells: (d) => d.sparkleSpells,    // id -> spell ids (the SEARCH index)
+  spellsWith: (d) => d.spellSparkles, // spell id -> its rows (the REVERSE index)
   when: (d) => d.sparkleSpells.size > 0,   // optional availability gate
 });
 ```
 
 From that one record you get: the autocomplete word and its description, the group head and its tooltip, `.hit`
-highlighting, and the spells the query selects. The fx column and the fx search both iterate the registry, so neither
-needs editing.
+highlighting, the spells the query selects, the word's colour and tooltip **in the search bar**, and the relevance
+ranking that floats spells really carrying the category above the ones whose file names merely contain the word. The fx
+column and the fx search both iterate the registry, so neither needs editing.
+
+**`spells` and `spellsWith` are different indexes and both are wanted.** `spells` is keyed by CONTENT id (chain id,
+creature id) — that is what the search scans. `spellsWith` is keyed by SPELL id and answers "does this spell carry the
+type at all", which no content-keyed map can. Omitting it costs the relevance ranking only, and it is what the ranker
+used to hard-code in a hand-written map that had already drifted (it still named the renamed `stance` group and knew
+nothing of the categories that moved to `mech`).
 
 **b. Write the renderer** in `app.js`, as a segment list (§1).
 
@@ -194,13 +202,24 @@ Two axes, and the difference matters:
 
 `operatorOnly: true` reserves bare numbers for the text or `bare` axis, so only `<`, `>`, `<=`, `>=`, `=` reach the
 number. That is what lets
-`fx:"invis 13"` mean type 13 while `fx:"invis =0"` means the invisibility nothing detects — and why `model:2` still
+`fx:"invis 13"` mean type 13 while `mech:"invis =0"` means the invisibility nothing detects — and why `model:2` still
 matches `cfx_fire_02.m2`.
 
-**A bound may be negative or fractional, because values are.** A movement-speed change is signed, so `fx:"speed <-50"`
-asks for snares worse than half; `numericPredicate` (search.js) and `tokenMatches` (pills.js) parse the same shape and
-must stay in step. A `count` axis is never negative and simply matches nothing against a bound it cannot reach — no
-guard needed.
+**Every numeric axis is NAMED, and the name is part of the token with no whitespace** — `mech:seats>2`,
+`mech:speed<-50`, `fx:scale>=100`. Axis names are unique within a field, so the name alone picks the type out: no
+category word, no quotes, nothing to resolve against a scope. `numeric.axis` defaults to the type's own `word` (the
+percent axes literally are "how much scale / desaturate / speed"); declare a different one only where the number counts
+something the word does not name — `seats`, `detectors`, `reveals`. `numeric.axisHint` describes it in autocomplete and
+in the search bar's tooltip. The older two-token form (`fx:"desaturate >70"`) still means exactly the same thing.
+
+**An axis name only counts with an operator.** `blue4` is a texture, not a malformed query, so `numericToken` rejects a
+name without a comparison and lets it fall through to the corpus. That is also why the name and the comparison must be
+one token.
+
+**A bound may be negative or fractional, because values are.** A movement-speed change is signed, so `mech:speed<-50`
+asks for snares worse than half; `numericPredicate` (search.js) and `numericToken`/`numericHolds` (pills.js) parse the
+same shape and must stay in step. A `count` axis is never negative and simply matches nothing against a bound it cannot
+reach — no guard needed.
 
 Where a value could be printed two ways, **ship the one the game stores**. Movement speed is the worked example: the
 pill shows the change (`+70%`) and not the resulting speed (`170%`), because the change is what `EffectBasePoints`
@@ -208,8 +227,15 @@ holds, what the game's own tooltip prints, and the only form that survives the d
 below −100%, which as a resulting speed would be negative. The friendlier reading rides the **tooltip**, where it is
 free to be absent when it says nothing.
 
-A whole-column count (`model:>4`) is a different feature: `COUNT_SOURCES` in
-`search.js`, one entry per countable column.
+`count` is the **reserved universal axis**: the size of the column itself, spelled the same way in every field
+(`model:count>4`, `fx:count>8`). Its source is `COUNT_SOURCES` in `search.js`, one entry per countable column; a lone
+operator with no name (`model:>4`) is its shorthand. It is commutative with the chip's other tokens like any other —
+but it currently counts the WHOLE column, not the rows matching those tokens, so `model:"caster count>4"` reads as "a
+caster model, and more than four models in all". Narrowing it needs the column matchers restructured into per-spell
+entry iterators; that is its own pass.
+
+Note `COUNT_SOURCES` counts **pills** while `entryCountFn` (app.js, the column sort) counts **entries** — a SoundKit is
+one thing to sort by and several pills to count. The two lists are deliberately not the same function.
 
 ## 4. Groups
 

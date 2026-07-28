@@ -21,6 +21,17 @@
  *            `operatorOnly: true` means a bare number keeps its text/bare
  *            meaning and only `>`, `<`, `>=`, `<=`, `=` reach this axis.
  *
+ * EVERY NUMERIC AXIS IS NAMED, and the name is part of the token, with no
+ * whitespace: `mech:seats>2`, `mech:speed<-50`, `fx:scale>=100`. Axis names are
+ * unique within a field, so the name ALONE picks the type out — no category
+ * word, no quotes, no scope to resolve. `axis` defaults to the type's own word
+ * (the percent axes are literally "how much desaturate/scale/speed"); declare a
+ * different one only where the number counts something the word does not name
+ * (`seats`, `detectors`, `reveals`). `axisHint` describes it in autocomplete.
+ *
+ * The older two-token form — `fx:"desaturate >70"` — still works and means the
+ * same thing; the named form is what a chip can say without quoting.
+ *
  * Types with neither corpus nor spells are KEYWORD-ONLY: their column matches
  * them through its own indexes (model files, animation names), and the record
  * exists so the word, its description and its availability live with all the
@@ -74,6 +85,7 @@
         key: "model:mount", field: "model", word: "mount",
         hint: "Mount the spell puts you on — Mount.db2 via its display id",
         corpus: (d) => d.mountSearchL, spells: (d) => d.mountSpells,
+        spellsWith: (d) => d.spellMounts,
     });
 
     /* --------------------------------------------------------- animations */
@@ -87,11 +99,13 @@
     T({
         key: "anim:replace", field: "anim", word: "replace",
         hint: "Base animation the spell swaps for another, e.g. Stand to StealthStand",
+        spellsWith: (d) => d.spellReplaceAnims,
         when: (d) => d.spellReplaceAnims.size > 0,
     });
     T({
         key: "anim:passenger", field: "anim", word: "passenger",
         hint: "What a rider plays entering, sitting in and leaving a seat",
+        spellsWith: (d) => d.spellPassengerAnims,
         when: (d) => d.spellPassengerAnims.size > 0,
     });
 
@@ -116,16 +130,19 @@
         key: "fx:chain", field: "fx", word: "chain",
         hint: "Chain / beam effect (SpellChainEffects)",
         corpus: (d) => d.fxSearchL, spells: (d) => d.fxSpells,
+        spellsWith: (d) => d.spellFx,
     });
     T({
         key: "fx:dissolve", field: "fx", word: "dissolve",
         hint: "Dissolve / materialize effect (DissolveEffect)",
         corpus: (d) => d.dissolveSearchL, spells: (d) => d.dissolveSpells,
+        spellsWith: (d) => d.spellDissolves,
     });
     T({
         key: "fx:glow", field: "fx", word: "glow",
         hint: "Edge glow / rim-light effect (EdgeGlowEffect)",
         corpus: (d) => d.glowSearchL, spells: (d) => d.glowSpells,
+        spellsWith: (d) => d.spellGlows,
     });
     /* "ghost" is one word fed by two unrelated tables — ShadowyEffect rows and
      * Type-22 material recolors. Two records, one keyword: exactly the case the
@@ -134,70 +151,93 @@
         key: "fx:shadowy", field: "fx", word: "ghost",
         hint: "Ghostly recolor (ShadowyEffect / ghost material)",
         corpus: (d) => d.shadowySearchL, spells: (d) => d.shadowySpells,
+        spellsWith: (d) => d.spellShadowies,
     });
     T({
         key: "fx:ghostmat", field: "fx", word: "ghost",
         corpus: (d) => d.ghostMatSearchL, spells: (d) => d.ghostMatSpells,
+        spellsWith: (d) => d.spellGhostMats,
     });
     T({
         key: "fx:tint", field: "fx", word: "tint",
         hint: "Model tint (SpellProceduralEffect)",
         corpus: (d) => d.tintSearchL, spells: (d) => d.tintSpells,
+        spellsWith: (d) => d.spellTints,
     });
     /* The percent IS the id, so the numeric axis reads the key itself. Bare
      * numbers stay a substring on the "desaturate 70%" corpus (fx:"desaturate
-     * 70"); only an operator asks for a comparison. */
+     * 70"); only an operator asks for a comparison. The axis is NAMED after the
+     * word, so the one-token form fx:desaturate>=80 says the same thing without
+     * the quotes — see the axis note at the top of this file. */
     T({
         key: "fx:desaturate", field: "fx", word: "desaturate",
         hint: "Model desaturation (SpellProceduralEffect)",
         corpus: (d) => d.desatSearchL, spells: (d) => d.desatSpells,
-        numeric: {kind: "value", of: (d, percent) => percent, operatorOnly: true},
+        spellsWith: (d) => d.spellDesaturates,
+        numeric: {
+            kind: "value", of: (d, percent) => percent, operatorOnly: true,
+            axisHint: "How grey it goes, in percent",
+        },
     });
     T({
         key: "fx:transparency", field: "fx", word: "transparency",
         hint: "Model transparency (SpellProceduralEffect)",
         corpus: (d) => d.transpSearchL, spells: (d) => d.transpSpells,
-        numeric: {kind: "value", of: (d, percent) => percent, operatorOnly: true},
+        spellsWith: (d) => d.spellTransps,
+        numeric: {
+            kind: "value", of: (d, percent) => percent, operatorOnly: true,
+            axisHint: "How faded it goes, in percent",
+        },
     });
     /* Valueless: there is no id, the category word is the whole query, and the
      * spell set matches as a block. */
     T({
         key: "fx:freeze", field: "fx", word: "freeze",
         hint: "Freeze / petrify in place (SpellProceduralEffect)",
-        spells: (d) => d.spellFreezes,
+        spells: (d) => d.spellFreezes, spellsWith: (d) => d.spellFreezes,
     });
     T({
         key: "fx:camo", field: "fx", word: "camo",
         hint: "Camouflage / cloaking effect (SpellProceduralEffect)",
-        spells: (d) => d.spellCamos,
+        spells: (d) => d.spellCamos, spellsWith: (d) => d.spellCamos,
     });
     /* Seat count is a genuine count, and bare numbers reach it (fx:"seat 8"),
-     * because a vehicle's corpus is words only — nothing else could claim one. */
+     * because a vehicle's corpus is words only — nothing else could claim one.
+     * The axis is `seats` rather than the word: it counts seats, and "seat > 2"
+     * would read as a comparison against one seat. */
     T({
         key: "fx:seat", field: "mech", word: "seat",
         hint: "Seat of a rideable vehicle the caster becomes (SpellEffect SET_VEHICLE_ID)",
         corpus: (d) => d.vehicleSearchL, spells: (d) => d.vehicleSpells,
-        numeric: {kind: "count", of: (d, v) => (d.vehicleSeats.get(v) || []).length},
+        spellsWith: (d) => d.spellVehicles,
+        numeric: {
+            kind: "count", of: (d, v) => (d.vehicleSeats.get(v) || []).length,
+            axis: "seats", axisHint: "How many seats the vehicle has",
+        },
     });
     T({
         key: "fx:screen", field: "fx", word: "screen",
         hint: "Full-screen tint / overlay while the aura holds (ScreenEffect)",
         corpus: (d) => d.screenSearchL, spells: (d) => d.screenSpells,
+        spellsWith: (d) => d.spellScreens,
     });
     T({
         key: "fx:shapeshift", field: "fx", word: "shapeshift",
         hint: "Shapeshift form (SpellShapeshiftForm)",
         corpus: (d) => d.shapeshiftSearchL, spells: (d) => d.shapeshiftSpells,
+        spellsWith: (d) => d.spellShapeshifts,
     });
     T({
         key: "fx:morph", field: "fx", word: "morph",
         hint: "Morph / transform aura (CreatureDisplayInfo)",
         corpus: (d) => d.morphSearchL, spells: (d) => d.morphSpells,
+        spellsWith: (d) => d.spellMorphs,
     });
     T({
         key: "fx:summon", field: "fx", word: "summon",
         hint: "Summoned creature (SpellEffect SUMMON)",
         corpus: (d) => d.summonPairSearchL, spells: (d) => d.summonPairSpells,
+        spellsWith: (d) => d.spellSummons,
     });
     /* Gameobject spawners — summon's sibling: one conjures a creature, this
      * places an OBJECT. The corpus is the object name plus its model file, so a
@@ -206,35 +246,42 @@
         key: "fx:object", field: "fx", word: "object",
         hint: "GameObject the spell places in the world — a campfire, portal, banner or chest",
         corpus: (d) => d.objectSearchL, spells: (d) => d.objectSpells,
+        spellsWith: (d) => d.spellObjects,
     });
     /* The two sides of an invisibility channel. All three axes at once: the
      * category word is the corpus, the invisibility TYPE is the bare number
      * (fx:"invis 13"), and the COUNTERPART count answers only to an operator
-     * (fx:"invis =0" = an invisibility nothing detects). */
+     * (fx:"invis =0" = an invisibility nothing detects). Each side's axis is
+     * named for what it counts on the OTHER side, which is also what the pill's
+     * note segment says — so mech:detectors=0 is the whole question in one
+     * token, no category word needed. */
     T({
         key: "fx:invis", field: "mech", word: "invis",
         hint: "Invisibility channel — hides in an invisibility type (MOD_INVISIBILITY)",
-        spells: (d) => d.invisTypeSpells,
+        spells: (d) => d.invisTypeSpells, spellsWith: (d) => d.spellInvisTypes,
         bare: (d, type) => type,
         numeric: {
             kind: "count", operatorOnly: true,
             of: (d, type) => (d.detectTypeSpells.get(type) || []).length,
+            axis: "detectors", axisHint: "How many spells can see this channel",
         },
     });
     T({
         key: "fx:detect", field: "mech", word: "detect",
         hint: "Sees an invisibility channel (MOD_INVISIBILITY_DETECT)",
-        spells: (d) => d.detectTypeSpells,
+        spells: (d) => d.detectTypeSpells, spellsWith: (d) => d.spellDetectTypes,
         bare: (d, type) => type,
         numeric: {
             kind: "count", operatorOnly: true,
             of: (d, type) => (d.invisTypeSpells.get(type) || []).length,
+            axis: "reveals", axisHint: "How many hiding spells this channel reveals",
         },
     });
     T({
         key: "fx:keybind", field: "mech", word: "keybind",
         hint: "A key that casts a spell while the aura holds (SpellKeyboundOverride)",
         corpus: (d) => d.keybindSearchL, spells: (d) => d.keybindSpells,
+        spellsWith: (d) => d.spellKeybinds,
     });
     /* Movement speed. The id is the (movement, percent) pair, so the corpus
      * holds both — fx:"speed swim" and fx:"speed +70%" ask different questions
@@ -246,9 +293,11 @@
         key: "fx:speed", field: "mech", word: "speed",
         hint: "Movement speed change — run, mounted, swim, flight or all at once",
         corpus: (d) => d.speedSearchL, spells: (d) => d.speedSpells,
+        spellsWith: (d) => d.spellSpeedMods,
         numeric: {
             kind: "value", operatorOnly: true,
             of: (d, key) => d.speedPercents.get(key) || 0,
+            axisHint: "The signed change, in percent — negative slows",
         },
     });
     /* Object scale — movement speed's shorter twin. There is only one thing
@@ -259,6 +308,10 @@
         key: "fx:scale", field: "fx", word: "scale",
         hint: "Size change — how much bigger or smaller the aura makes its target",
         corpus: (d) => d.scaleSearchL, spells: (d) => d.scaleSpells,
-        numeric: {kind: "value", of: (d, pct) => pct, operatorOnly: true},
+        spellsWith: (d) => d.spellScaleMods,
+        numeric: {
+            kind: "value", of: (d, pct) => pct, operatorOnly: true,
+            axisHint: "The signed change, in percent — negative shrinks",
+        },
     });
 })();

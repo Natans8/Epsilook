@@ -22,6 +22,16 @@ Full syntax lives behind the **?** button in the app. The short version:
   `6dr_draenei_statue_male01.m2`. `"quoted words"` are an exact phrase.
 - **Field tags** narrow a term to one column: `name:` `model:` `sound:`
   `anim:` `fx:` `mech:` `id:`. Tags AND together; a `-` prefix excludes.
+- **`|` means either** — `model:fire|frost`, `fx:chain|dissolve`, `id:133,116` (a comma does the same between numbers).
+  Note the three readings of two words: `model:"fire missile"` is one model that is both, `model:fire model:missile` is
+  two different models, `model:fire|missile` is either one.
+- **Numbers are named and compared in one token**: `mech:seats>2`, `mech:speed<-50`, `fx:scale>=100`,
+  `mech:detectors=0`. `count` is the axis every column has — `model:count>4`, `sound:count=0` — and a bare operator is
+  its shorthand (`model:>4`).
+- The bar **colours what the grammar recognises** and explains it on hover; an axis name a column does not have gets a
+  red squiggle. Ordinary words are never marked — in `model:` an unknown word is just a file-name search.
+- Hiding a column is display-only. It trims exports, but never changes which spells a query returns, so a shared link
+  gives everyone the same results.
 - **Target-type icons** on models, sounds, animations, effects and mechanics say who the content plays on — caster,
   target, or the target location. A row that plays on several shows one icon each. Search them like category words:
   `model:"caster fire"`, `sound:target`, `anim:both`.
@@ -138,6 +148,10 @@ into `meta.absentTables`.
   one record in `pilltypes.js` gives it a category word, that word's autocomplete description, its group head, its
   search-hit highlighting and the spells a query selects; the renderer is a list of segments. See
   **[PILLS.md](PILLS.md)** — it also carries the segment-order convention and the rules for choosing a keyword.
+- **A new number to compare on**: a `numeric` block on the pill-type record — `of(data, id)` reads it, `axis` names it
+  (defaults to the type's own word). The name becomes a one-token query (`mech:seats>2`), an autocomplete entry and a
+  tooltip in the search bar, all from that one declaration. A whole-column count is one entry in `COUNT_SOURCES`
+  (`search.js`) instead.
 - **A new copy command**: `spellCommands` in `config.js` for per-spell buttons; the `*CopyTemplate` entries for the ones
   on tags.
 - **A new theme**: every colour in `app.css` comes from a token in the block at the top, so a theme is one
