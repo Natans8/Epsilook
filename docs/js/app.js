@@ -107,7 +107,9 @@
         sort: {key: "auto", dir: 1},
         // hidden columns — DISPLAY ONLY (they also trim the export's column set,
         // a visible choice). They never narrow the search: see FIELDS.all.
-        hiddenCols: {models: false, sounds: false, animations: false, fx: false, mechanics: true, commands: false},
+        // Mechanics ships VISIBLE (the storage key moved to v5 so the old
+        // default does not linger for existing users).
+        hiddenCols: {models: false, sounds: false, animations: false, fx: false, mechanics: false, commands: false},
     };
 
     // column -> search fields it contributes
@@ -4199,7 +4201,7 @@
             box.addEventListener("change", () => {
                 state.hiddenCols[box.dataset.col] = !box.checked;
                 try {
-                    localStorage.setItem("epsilook.hiddenCols.v4", JSON.stringify(state.hiddenCols));
+                    localStorage.setItem("epsilook.hiddenCols.v5", JSON.stringify(state.hiddenCols));
                 } catch (e) {
                 }
                 applyHiddenCols();
@@ -4412,7 +4414,7 @@
         // owns no app state — it only needs to run before the header is seen
         Theme.init();
         try {
-            Object.assign(state.hiddenCols, JSON.parse(localStorage.getItem("epsilook.hiddenCols.v4") || "{}"));
+            Object.assign(state.hiddenCols, JSON.parse(localStorage.getItem("epsilook.hiddenCols.v5") || "{}"));
         } catch (e) { /* corrupted storage — defaults apply */
         }
         buildTabs();
