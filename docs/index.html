@@ -28,7 +28,7 @@
     <link rel="icon"
           href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
     <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-    <link rel="stylesheet" href="css/app.css?v=20260728e">
+    <link rel="stylesheet" href="css/app.css?v=20260728f">
     <script>
         // Replay the stored theme before the first paint, so a light theme
         // never flashes dark. Only that: the picker, the default and the
@@ -203,37 +203,37 @@
                             by name (copy <code>.gobject spawn</code>)
                         </li>
                         <li>
-                            <button data-search="fx:seat">fx:seat</button>
+                            <button data-search="mech:seat">mech:seat</button>
                             spells that make you a rideable vehicle
                         </li>
                         <li>
-                            <button data-search="fx:invis">fx:invis</button>
+                            <button data-search="mech:invis">mech:invis</button>
                             invisibility spells —
-                            <button data-search="fx:detect">fx:detect</button>
+                            <button data-search="mech:detect">mech:detect</button>
                             reveals them; click a pill to jump between the two
                         </li>
                         <li>
-                            <button data-search='fx:"invis =0"'>fx:"invis =0"</button>
+                            <button data-search='mech:"invis =0"'>mech:"invis =0"</button>
                             invisibility nothing can detect
                         </li>
                         <li>
-                            <button data-search="fx:keybind">fx:keybind</button>
+                            <button data-search="mech:keybind">mech:keybind</button>
                             disables a key while the aura holds —
-                            <button data-search='fx:"keybind jump"'>fx:"keybind jump"</button>
+                            <button data-search='mech:"keybind jump"'>mech:"keybind jump"</button>
                             just jump,
-                            <button data-search='fx:"keybind mid-air"'>fx:"keybind mid-air"</button>
+                            <button data-search='mech:"keybind mid-air"'>mech:"keybind mid-air"</button>
                             only once airborne
                         </li>
                         <li>
-                            <button data-search="fx:speed">fx:speed</button>
+                            <button data-search="mech:speed">mech:speed</button>
                             movement speed changes — also
                             <code>run</code>, <code>mounted</code>, <code>swim</code>,
                             <code>flight</code>, <code>all</code>
                         </li>
                         <li>
-                            <button data-search='fx:"speed swim"'>fx:"speed swim"</button>
+                            <button data-search='mech:"speed swim"'>mech:"speed swim"</button>
                             swim speed only —
-                            <button data-search='fx:"speed &lt;-50"'>fx:"speed &lt;-50"</button>
+                            <button data-search='mech:"speed &lt;-50"'>mech:"speed &lt;-50"</button>
                             snares worse than half
                         </li>
                         <li>
@@ -251,6 +251,11 @@
                     <p class="help-note">What each effect of a spell does, and what it is aimed at. Words in
                         one tag must match the <em>same</em> effect, so you can ask for both at once. Who it
                         lands on shows as the target icons; the exact target name is in the tooltip.</p>
+                    <p class="help-note">This column also holds the things a spell does that you cannot
+                        <em>see</em> — <code>mech:seat</code>, <code>mech:invis</code>,
+                        <code>mech:detect</code>, <code>mech:keybind</code> and <code>mech:speed</code>.
+                        They are listed with the other effect kinds below, under <code>fx:</code>, because
+                        they read as one family; only the tag changed.</p>
                     <ul class="help-ex">
                         <li>
                             <button data-search="mech:resurrect">mech:resurrect</button>
@@ -272,7 +277,7 @@
                         </li>
                         <li>
                             <button data-search="mech:keybound_override">mech:keybound_override</button>
-                            the aura behind <code>fx:keybind</code></li>
+                            the aura behind <code>mech:keybind</code></li>
                     </ul>
                 </section>
                 <section>
@@ -381,7 +386,7 @@
                             two or more sounds
                         </li>
                         <li>
-                            <button data-search='fx:"seat &gt;2"'>fx:"seat &gt;2"</button>
+                            <button data-search='mech:"seat &gt;2"'>mech:"seat &gt;2"</button>
                             vehicles with 3+ seats
                         </li>
                         <li>
@@ -390,9 +395,9 @@
                             speed, scale
                         </li>
                         <li>
-                            <button data-search='fx:"speed &gt;100"'>fx:"speed &gt;100"</button>
+                            <button data-search='mech:"speed &gt;100"'>mech:"speed &gt;100"</button>
                             a bound can be negative where the value is:
-                            <button data-search='fx:"speed run &lt;-70"'>fx:"speed run &lt;-70"</button>
+                            <button data-search='mech:"speed run &lt;-70"'>mech:"speed run &lt;-70"</button>
                         </li>
                     </ul>
                 </section>
@@ -660,23 +665,23 @@
     const whTooltips = {colorLinks: false, iconizeLinks: false, renameLinks: false};
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260728e"></script>
-<script src="js/util.js?v=20260728e"></script>
+<script src="js/config.js?v=20260728f"></script>
+<script src="js/util.js?v=20260728f"></script>
 <!-- the theme picker: applies the stored palette and wires the header
      dropdown; only needs config.js + util.js, so it goes on early -->
-<script src="js/theme.js?v=20260728e"></script>
-<script src="js/data.js?v=20260728e"></script>
+<script src="js/theme.js?v=20260728f"></script>
+<script src="js/data.js?v=20260728f"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260728e"></script>
-<script src="js/js-blp.js?v=20260728e"></script>
+<script src="js/bufo.js?v=20260728f"></script>
+<script src="js/js-blp.js?v=20260728f"></script>
 <!-- the pill/segment library: shared by app.js (rendering) and search.js
      (the pill-type registry), so it loads before both -->
-<script src="js/pills.js?v=20260728e"></script>
-<script src="js/pilltypes.js?v=20260728e"></script>
-<script src="js/search.js?v=20260728e"></script>
-<script src="js/texture.js?v=20260728e"></script>
-<script src="js/export.js?v=20260728e"></script>
-<script src="js/app.js?v=20260728e"></script>
+<script src="js/pills.js?v=20260728f"></script>
+<script src="js/pilltypes.js?v=20260728f"></script>
+<script src="js/search.js?v=20260728f"></script>
+<script src="js/texture.js?v=20260728f"></script>
+<script src="js/export.js?v=20260728f"></script>
+<script src="js/app.js?v=20260728f"></script>
 </body>
 </html>

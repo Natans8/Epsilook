@@ -702,6 +702,12 @@ window.EpsilookSearch = (() => {
             // the four ids the row carries.
             run(tokens, data) {
                 const out = new Set();
+                // Pill types declared for this column — the non-visual half of
+                // what used to be fx (seat, invis, detect, keybind, speed).
+                // Mirrors the identical loop in spellsByFx: the registry says
+                // which column owns a type, so moving one between columns needs
+                // no change here. Their spells UNION with the enum rows below.
+                for (const type of Pills.typesFor("mech")) Pills.scanType(type, data, tokens, out);
                 const idsFor = (/** @type {Map<number, string>} */ namesL,
                                 /** @type {QueryToken} */ t) => {
                     const hits = new Set();

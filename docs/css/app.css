@@ -391,6 +391,14 @@
     --tone: var(--fx);
 }
 
+/* The Mechanics column gained the non-visual category groups (seat, invis,
+   detect, keybind, speed), so it needs a column tone like the other four —
+   without it a group head and its capsule fall back to the :root tone and
+   render grey next to their own coloured pills. */
+.c-mechanics {
+    --tone: var(--fx);
+}
+
 * {
     box-sizing: border-box;
 }

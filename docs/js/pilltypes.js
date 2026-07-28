@@ -95,9 +95,21 @@
         when: (d) => d.spellPassengerAnims.size > 0,
     });
 
-    /* --------------------------------------------------------------- fx */
+    /* ------------------------------------------------------- fx and mech
 
-    /* Every fx type below carries a real corpus, so declaration order here IS
+     * `field` is the whole of "which column is this?" — the cell renderer, the
+     * search dispatch, the autocomplete vocabulary and the hit test all read
+     * it, so moving a type between columns is the one-word change below.
+     *
+     * THE LINE BETWEEN THE TWO COLUMNS IS "can you see it?". fx is what the
+     * spell LOOKS like; mech is what it DOES. So seat/invis/detect/keybind/
+     * speed sit in mech — a vehicle seat, an invisibility channel, a bound key
+     * and a movement-speed change render nothing — while scale stays in fx
+     * despite being an aura exactly like speed, because a size change is
+     * visible. Same reason summon, object, freeze and camo stay: you can see
+     * all four.
+     *
+     * Every fx type below carries a real corpus, so declaration order here IS
      * the order the fx search scans them (and the order they were added). */
 
     T({
@@ -162,7 +174,7 @@
     /* Seat count is a genuine count, and bare numbers reach it (fx:"seat 8"),
      * because a vehicle's corpus is words only — nothing else could claim one. */
     T({
-        key: "fx:seat", field: "fx", word: "seat",
+        key: "fx:seat", field: "mech", word: "seat",
         hint: "Seat of a rideable vehicle the caster becomes (SpellEffect SET_VEHICLE_ID)",
         corpus: (d) => d.vehicleSearchL, spells: (d) => d.vehicleSpells,
         numeric: {kind: "count", of: (d, v) => (d.vehicleSeats.get(v) || []).length},
@@ -200,7 +212,7 @@
      * (fx:"invis 13"), and the COUNTERPART count answers only to an operator
      * (fx:"invis =0" = an invisibility nothing detects). */
     T({
-        key: "fx:invis", field: "fx", word: "invis",
+        key: "fx:invis", field: "mech", word: "invis",
         hint: "Invisibility channel — hides in an invisibility type (MOD_INVISIBILITY)",
         spells: (d) => d.invisTypeSpells,
         bare: (d, type) => type,
@@ -210,7 +222,7 @@
         },
     });
     T({
-        key: "fx:detect", field: "fx", word: "detect",
+        key: "fx:detect", field: "mech", word: "detect",
         hint: "Sees an invisibility channel (MOD_INVISIBILITY_DETECT)",
         spells: (d) => d.detectTypeSpells,
         bare: (d, type) => type,
@@ -220,7 +232,7 @@
         },
     });
     T({
-        key: "fx:keybind", field: "fx", word: "keybind",
+        key: "fx:keybind", field: "mech", word: "keybind",
         hint: "A key that casts a spell while the aura holds (SpellKeyboundOverride)",
         corpus: (d) => d.keybindSearchL, spells: (d) => d.keybindSpells,
     });
@@ -231,7 +243,7 @@
      * anything); operators reach the signed value, so fx:"speed <-50" is
      * "slows worse than half". */
     T({
-        key: "fx:speed", field: "fx", word: "speed",
+        key: "fx:speed", field: "mech", word: "speed",
         hint: "Movement speed change — run, mounted, swim, flight or all at once",
         corpus: (d) => d.speedSearchL, spells: (d) => d.speedSpells,
         numeric: {

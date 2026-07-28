@@ -917,7 +917,9 @@
      */
     function fieldCategories(field) {
         const d = state.data;
-        if (!d || !["model", "sound", "anim", "fx"].includes(field)) return null;
+        // mech joins the list because the non-visual categories moved there —
+        // its words come from the same registry, so nothing else needed saying
+        if (!d || !["model", "sound", "anim", "fx", "mech"].includes(field)) return null;
         const {words, titles} = P.keywordsFor(field, d);
         for (const meta of META_WORDS) {
             if (!meta.fields.includes(field) || (meta.when && !meta.when(d))) continue;
@@ -1115,7 +1117,12 @@
             // spell have" is the more meaningful sort (it is also what the export
             // lists, one line per row)
             case "mechanics":
-                return (id) => len(d.spellMechanics, id);
+                // the SpellEffect rows plus the non-visual categories that moved
+                // into this column, so the sort counts what the cell shows
+                return (id) => len(d.spellMechanics, id)
+                    + len(d.spellVehicles, id) + len(d.spellInvisTypes, id)
+                    + len(d.spellDetectTypes, id) + len(d.spellKeybinds, id)
+                    + len(d.spellSpeedMods, id);
             case "fx":
                 return (id) =>
                     len(d.spellFx, id) + len(d.spellDissolves, id) + len(d.spellGlows, id)
@@ -1124,7 +1131,7 @@
                     + (d.spellFreezes.has(id) ? 1 : 0) + (d.spellCamos.has(id) ? 1 : 0)
                     + len(d.spellScreens, id) + len(d.spellMorphs, id)
                     + len(d.spellShapeshifts, id) + len(d.spellSummons, id)
-                    + len(d.spellKeybinds, id);
+                    + len(d.spellObjects, id) + len(d.spellScaleMods, id);
         }
     }
 
@@ -1185,15 +1192,15 @@
         sounds: (d, id) => d.spellSounds.has(id),
         animations: (d, id) =>
             d.spellAnimKits.has(id) || d.spellReplaceAnims.has(id) || d.spellVisualAnims.has(id),
+        // the five non-visual sections (vehicles, invis, detect, keybinds,
+        // speed) moved to the Mechanics column and are no longer fx content
         fx: (d, id) =>
             d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellGlows.has(id) ||
             d.spellShadowies.has(id) || d.spellGhostMats.has(id) || d.spellTints.has(id) ||
             d.spellDesaturates.has(id) || d.spellTransps.has(id) ||
             d.spellFreezes.has(id) || d.spellCamos.has(id) || d.spellScreens.has(id) ||
             d.spellMorphs.has(id) || d.spellShapeshifts.has(id) || d.spellSummons.has(id) ||
-            d.spellVehicles.has(id) || d.spellInvisTypes.has(id) ||
-            d.spellDetectTypes.has(id) || d.spellKeybinds.has(id) ||
-            d.spellSpeedMods.has(id) || d.spellScaleMods.has(id),
+            d.spellObjects.has(id) || d.spellScaleMods.has(id),
     };
 
     function applyFiltersAndSort() {
@@ -1430,14 +1437,17 @@
         tr.appendChild(animationsCell(d.spellAnimKits.get(spellId) || [],
             d.spellVisualAnims.get(spellId) || [], spellId));
 
-        // Effects — visual FX (beams, morphs, summons), grouped by category
-        tr.appendChild(fxCell(spellId));
+        // Effects — visual FX (beams, morphs, summons), grouped by category.
+        // The same pass produces the Mechanics column's non-visual categories
+        // (seat, invis, detect, keybind, speed), which used to live here.
+        const effects = effectCells(spellId);
+        tr.appendChild(effects.fx);
 
         // Mechanics — one pill per SpellEffect (what it does + who it targets),
-        // matched ones first
+        // matched ones first, then the non-visual category blocks
         const mechs = hitsFirst(mechanicPills(d.spellMechanics.get(spellId) || []),
             (p) => p.rows.some(mechanicIsHit));
-        tr.appendChild(tagCell("c-mechanics", mechs.map(mechanicTag)));
+        tr.appendChild(mechanicsCell(mechs.map(mechanicTag), effects.mechBlocks));
 
         // Commands — one compact line that fits even single-line rows
         const tdCmd = el("td", "c-cmds");
@@ -1517,6 +1527,31 @@
         // render every tag; the height-based collapse happens after layout, in
         // layoutRow — see the "row layout" section below
         for (const tag of tags) td.appendChild(tag);
+        return td;
+    }
+
+    /**
+     * The Mechanics cell: loose SpellEffect pills, then the non-visual category
+     * blocks built alongside the fx column (seat, invis, detect, keybind,
+     * speed).
+     *
+     * The enum pills come FIRST because they describe the effect itself, and
+     * the categories qualify it. Both halves float their own matches, and the
+     * cell only reads as empty when neither has anything — a spell with a speed
+     * aura but no SpellEffect rows still shows the speed pill.
+     * @param {Node[]} tags loose mechanic pills, already hit-floated
+     * @param {{hit: boolean, el: Node}[]} blocks category blocks for this column
+     * @returns {HTMLElement}
+     */
+    function mechanicsCell(tags, blocks) {
+        const td = el("td", "c-mechanics");
+        if (!tags.length && !blocks.length) {
+            td.classList.add("empty");
+            td.appendChild(el("span", "none", "—"));
+            return td;
+        }
+        for (const tag of tags) td.appendChild(tag);
+        if (blocks.length) renderBlocks(td, blocks);
         return td;
     }
 
@@ -1794,7 +1829,18 @@
    * "camo" (valueless), "screen" (full-screen effects), "morph" (transform
    * auras) and "summon" (summon effects). Chain pills carry a tint dot per
    * texture. */
-    function fxCell(spellId) {
+    /**
+     * Builds the Effects cell AND the pill half of the Mechanics cell.
+     *
+     * One function because the two columns share every piece of machinery a
+     * category needs — target-icon splitting, hit-floating, the group shape —
+     * and differ only in which column a category was declared for. Returns the
+     * fx `<td>` plus the mech-side blocks for mechanicsCell to render after its
+     * enum pills.
+     * @param {number} spellId
+     * @returns {{fx: HTMLElement, mechBlocks: {hit: boolean, el: Node}[]}}
+     */
+    function effectCells(spellId) {
         const d = state.data;
         const chainIds = d.spellFx.get(spellId) || [];
         const dissolveIds = d.spellDissolves.get(spellId) || [];
@@ -1818,19 +1864,11 @@
         const speedMods = d.spellSpeedMods.get(spellId) || [];
         const scaleMods = d.spellScaleMods.get(spellId) || [];
         const td = el("td", "c-fx");
-        if (chainIds.length === 0 && dissolveIds.length === 0 && glowIds.length === 0
-            && shadowyIds.length === 0 && ghostMatIds.length === 0 && tintIds.length === 0
-            && desatPcts.length === 0 && transpPcts.length === 0 && !hasFreeze && !hasCamo
-            && screenIds.length === 0 && morphIds.length === 0 && formIds.length === 0
-            && summonEntries.length === 0 && objectIds.length === 0 && vehicleIds.length === 0
-            && invisPills.length === 0 && detectPills.length === 0
-            && keybindIds.length === 0 && speedMods.length === 0
-            && scaleMods.length === 0) {
-            td.classList.add("empty");
-            td.appendChild(el("span", "none", "—"));
-            return td;
-        }
-
+        // No combined emptiness check up front: the categories below now feed
+        // TWO columns, so "this spell has no content at all" is not the question
+        // either cell is asking. Each is judged on its own blocks at the end —
+        // a spell with only a speed aura has an empty fx cell and a populated
+        // mechanics one, which the old single test could not express.
         const cats = [];
         /* Where a category's target icons go. One icon on the HEAD when every
      * row of the category agrees — the common case, and far less noisy than
@@ -1867,7 +1905,9 @@
          *
          * @param {object} spec
          * @param {string} spec.name category word — the head label, and the key
-         *   into FX_HEAD_TITLES and the `fx:` search vocabulary.
+         *   into the owning column's search vocabulary.
+         * @param {string} [spec.col] which column renders it — "fx" (default)
+         *   or "mech". The only thing that differs between the two.
          * @param {any[]} spec.rows source rows (see above).
          * @param {(row: any) => boolean} spec.isHit does a source row match the query.
          * @param {(entry: any, mask: number) => Node} [spec.render] build one pill.
@@ -1885,7 +1925,7 @@
          *   `keybind` merges rows by label, so a merged pill carries their union.
          */
         const pushCat = ({
-            name, rows, isHit,
+            name, rows, isHit, col = "fx",
             render = () => el("span"),
             mask = () => 0,
             entries = (rs) => rs,
@@ -1897,7 +1937,7 @@
             const pills = entries(rows);
             const t = targetSplit(headMasks(rows, pills));
             cats.push({
-                name,
+                name, col,
                 hit: rows.some(isHit),
                 mask: t.head,
                 items: hitsFirst(pills, entryIsHit)
@@ -2168,7 +2208,7 @@
         const seatCount = vehicleIds.reduce(
             (n, v) => Math.max(n, (d.vehicleSeats.get(v) || []).length), 0);
         pushCat({
-            name: "seat",
+            name: "seat", col: "mech",
             rows: vehicleIds,
             mask: vehMask,
             // a vehicle is "hit" through the attachment points of its seats
@@ -2187,7 +2227,7 @@
         for (const [side, pills, countMap] of channels) {
             const countOf = (type) => (countMap.get(type) || []).length;
             pushCat({
-                name: side,
+                name: side, col: "mech",
                 rows: pills,
                 mask: (e) => e.mask,
                 isHit: (e) => channelIsHit(side, e.type),
@@ -2202,7 +2242,7 @@
         // masks union, the same de-duping vehicle seat attachments get.
         const kbMask = (o) => maskOf(d.keybindTargets, spellId, [o]);
         pushCat({
-            name: "keybind",
+            name: "keybind", col: "mech",
             // an override with no keybind row displays nothing, so it is not a row
             rows: keybindIds.filter((o) => d.keybinds.has(o)),
             mask: kbMask,
@@ -2235,7 +2275,7 @@
         // sets. The pack has already collapsed the auras that share a movement,
         // so two pills here are two genuinely different statements.
         pushCat({
-            name: "speed",
+            name: "speed", col: "mech",
             rows: speedMods,
             mask: (p) => p.mask,
             isHit: (p) => speedIsHit(p.key),
@@ -2252,19 +2292,30 @@
             render: (p, m) => scaleTag(p, m),
         });
 
-        // one block per fx category, in the order pushed above; renderBlocks
+        // one block per category, in the order pushed above; renderBlocks
         // floats the matched category to the top. The icon rides the category
         // head, unioned over this spell's rows in the category — only where the
         // distribution isn't degenerate (a category that is always the same type
         // says nothing per pill).
-        renderBlocks(td, cats.map((cat) => ({
+        //
+        // `col` splits the categories between the two cells this builds. The
+        // pushes above are one list on purpose: a category's SHAPE is the same
+        // wherever it lands, so which column owns it is one field on the spec
+        // rather than a second copy of this machinery.
+        const blocksFor = (c) => cats.filter((cat) => cat.col === c).map((cat) => ({
             hit: cat.hit,
             el: P.group({
-                head: fxHeadTag(cat.name, cat.hit, cat.mask),
+                head: fxHeadTag(cat.name, cat.hit, cat.mask, cat.col),
                 items: cat.items.map((make) => make()),
             }),
-        })));
-        return td;
+        }));
+        const fxBlocks = blocksFor("fx");
+        if (fxBlocks.length) renderBlocks(td, fxBlocks);
+        else {
+            td.classList.add("empty");
+            td.appendChild(el("span", "none", "—"));
+        }
+        return {fx: td, mechBlocks: blocksFor("mech")};
     }
 
     /**
@@ -2395,7 +2446,10 @@
    * registry's numeric axis, so the two halves cannot disagree about it. */
     function vehicleIsHit(attachment, seats) {
         const nameL = (attachment || "").toLowerCase();
-        return anyGroup("fx", (ts) => ts.every((t) =>
+        // "mech", not "fx": this is the one migrated category whose hit test is
+        // hand-written rather than derived from the registry via isHitOf, so it
+        // is the one place the column move had to be repeated by hand.
+        return anyGroup("mech", (ts) => ts.every((t) =>
             "seat".includes(t.text) || nameL.includes(t.text)
             || Search.matchNumeric(t.text, seats)));
     }
@@ -3008,13 +3062,16 @@
    * with a dot showing the chain's tint (hidden when untinted). Clicking
    * the head searches the whole category (fx:chain). */
 
-    function fxHeadTag(category, hit, mask = 0) {
+    // `field` is which column owns the category, so a head clicked in the
+    // Mechanics column searches mech:seat rather than fx:seat — the head's
+    // query has to be the one that would actually select its own pills.
+    function fxHeadTag(category, hit, mask = 0, field = "fx") {
         return P.pill({
             cls: "fx-head", hit, segments: [
                 P.targets(mask),
                 P.label(category, {
-                    title: P.hintFor("fx", category),
-                    search: P.query("fx", category),
+                    title: P.hintFor(field, category),
+                    search: P.query(field, category),
                     finds: `all spells with a ${category} effect`,
                 }),
             ]
@@ -3135,10 +3192,10 @@
             segments: [
                 P.targets(mask),
                 P.label(label, {
-                    title: P.hintFor("fx", "seat"),
+                    title: P.hintFor("mech", "seat"),
                     detail: [`Seat at the ${label} attachment point`,
                         "(an M2 attachment slot, not a description of the seat)"],
-                    search: P.catQuery("fx", "seat", label),
+                    search: P.catQuery("mech", "seat", label),
                     finds: "spells with a seat there",
                 }),
             ],
@@ -3163,8 +3220,8 @@
         // a priceless channel has no counterpart to navigate to, so it drops the
         // action entirely — both segments render inert (no search, no click line)
         const nav = priceless ? {} : {
-            search: P.catQuery("fx", other, type),
-            click: `show the ${count} counterpart${plural} (fx:${other} ${type})`,
+            search: P.catQuery("mech", other, type),
+            click: `show the ${count} counterpart${plural} (mech:${other} ${type})`,
         };
         const detail = [`${invis ? "Invisibility" : "Detection"} channel ${type}`,
             invis
@@ -3257,15 +3314,15 @@
             segments: [
                 P.targets(mask),
                 P.label(pill.move, {
-                    title: P.hintFor("fx", "speed"),
+                    title: P.hintFor("mech", "speed"),
                     detail,
-                    search: P.catQuery("fx", "speed", pill.move),
+                    search: P.catQuery("mech", "speed", pill.move),
                     finds: `spells changing ${pill.move === "all" ? "every movement" : pill.move} speed`,
                 }),
                 P.note(pill.amount, {
-                    title: P.hintFor("fx", "speed"),
+                    title: P.hintFor("mech", "speed"),
                     detail,
-                    search: P.catQuery("fx", "speed", `${pill.move} ${pill.amount}`),
+                    search: P.catQuery("mech", "speed", `${pill.move} ${pill.amount}`),
                     finds: "spells changing it by exactly this much",
                 }),
             ],
@@ -3331,7 +3388,7 @@
                 P.label(pill.label, {
                     title: `${pill.fn} is overridden while this aura holds`,
                     detail: ["On Epsilon the key is simply disabled"],
-                    search: P.catQuery("fx", "keybind", pill.fn),
+                    search: P.catQuery("mech", "keybind", pill.fn),
                     finds: "spells overriding this key",
                 }),
             ],
