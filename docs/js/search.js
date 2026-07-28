@@ -10,9 +10,12 @@
  * excludes its matches instead. Free text (field "all") matches spell
  * names, model files, sound files, animation names and visual FX.
  *
- * Each field entry implements run(tokens, data, disabled) -> Set of
- * spell IDs. Adding a new searchable relation = adding one entry to
- * FIELDS (and, if it needs new data, extending build_data.py + data.js).
+ * Each field entry implements run(tokens, data) -> Set of spell IDs.
+ * Adding a new searchable relation = adding one entry to FIELDS (and, if
+ * it needs new data, extending build_data.py + data.js).
+ *
+ * Nothing here reads UI state. Which columns are on screen is a display
+ * preference and must never reach a result set — see FIELDS.all.
  *
  * Types (QueryToken, QueryGroup, SearchFieldSpec, SpellData) are declared
  * in types.d.ts.
@@ -555,20 +558,23 @@ window.EpsilookSearch = (() => {
     const FIELDS = {
         all: {
             label: "All", tab: false,
-            run(tokens, data, disabled) {
+            // Chipless search reads the same five content fields every time, and
+            // never consults which columns are on screen: hiding a column is a
+            // display preference (persisted per browser in localStorage, absent
+            // from the URL), so letting it narrow the result set made one shared
+            // link return different spells — and different exports — to different
+            // people, with nothing in the link to explain why. Display is display.
+            //
+            // `mech` is the one field deliberately NOT here (it never was): its
+            // corpus is enum names — SPELL_EFFECT_SCHOOL_DAMAGE, UNIT_TARGET_ENEMY
+            // — so free text like "damage" or "enemy" would drag in most of the
+            // game. It stays reachable only through an explicit mech: chip.
+            run(tokens, data) {
                 const out = spellsByName(tokens, data);
-                if (!disabled.has("model")) {
-                    for (const s of spellsByModel(tokens, data)) out.add(s);
-                }
-                if (!disabled.has("sound")) {
-                    for (const s of spellsBySound(tokens, data)) out.add(s);
-                }
-                if (!disabled.has("anim")) {
-                    for (const s of spellsByAnim(tokens, data)) out.add(s);
-                }
-                if (!disabled.has("fx")) {
-                    for (const s of spellsByFx(tokens, data)) out.add(s);
-                }
+                for (const s of spellsByModel(tokens, data)) out.add(s);
+                for (const s of spellsBySound(tokens, data)) out.add(s);
+                for (const s of spellsByAnim(tokens, data)) out.add(s);
+                for (const s of spellsByFx(tokens, data)) out.add(s);
                 // a pure number also hits the exact spell ID
                 if (tokens.length === 1 && /^\d+$/.test(tokens[0].text)
                     && data.spellIndex.has(Number(tokens[0].text))) {
@@ -696,15 +702,14 @@ window.EpsilookSearch = (() => {
     // (Kit IDs typed into sound:/anim: chips AND across chips like any
     // text field — a spell can carry two kits; ids inside ONE chip union.)
     // A query of only negative groups starts from all spells.
-    // `disabledFields` (hidden columns) are skipped inside the "all" field;
-    // explicit fields always run.
+    // The result set is a function of the QUERY ALONE — no display state feeds
+    // in (see FIELDS.all), so the same URL yields the same spells everywhere.
     /**
      * @param {QueryGroup[]} groups
      * @param {SpellData} data
-     * @param {Set<string>} [disabledFields]
      * @returns {{spellIds: number[], ms: number}} matches + evaluation time
      */
-    function searchGroups(groups, data, disabledFields = new Set()) {
+    function searchGroups(groups, data) {
         const t0 = performance.now();
 
         /** @type {Set<number> | null} */
@@ -721,7 +726,7 @@ window.EpsilookSearch = (() => {
             }
             const field = FIELDS[g.field] ? g.field : "all";
             const set = spellsByCount(g.tokens, field, data)
-                || FIELDS[field].run(g.tokens, data, disabledFields);
+                || FIELDS[field].run(g.tokens, data);
             if (FIELDS[field].orGroups) {
                 const u = orUnions.get(field);
                 if (u) {
@@ -741,7 +746,7 @@ window.EpsilookSearch = (() => {
             if (result.size === 0) break;
             const field = FIELDS[g.field] ? g.field : "all";
             const set = spellsByCount(g.tokens, field, data)
-                || FIELDS[field].run(g.tokens, data, disabledFields);
+                || FIELDS[field].run(g.tokens, data);
             for (const id of set) result.delete(id);
         }
 

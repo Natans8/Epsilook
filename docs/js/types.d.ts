@@ -751,17 +751,16 @@ interface SearchFieldSpec {
     /** Exact-ID field: multiple groups of it union (OR) before ANDing. */
     orGroups?: boolean;
 
-    /** Evaluate one group; disabled lists fields the "all" field must skip
-     *  (hidden columns). */
-    run(tokens: QueryToken[], data: SpellData, disabled?: Set<string>): Set<number>;
+    /** Evaluate one group. Takes no UI state: a result set is a function of
+     *  the query alone (hidden columns are display-only). */
+    run(tokens: QueryToken[], data: SpellData): Set<number>;
 }
 
 /** window.EpsilookSearch (docs/js/search.js). */
 interface EpsilookSearchApi {
     searchGroups(
         groups: QueryGroup[],
-        data: SpellData,
-        disabledFields?: Set<string>
+        data: SpellData
     ): { spellIds: number[]; ms: number };
 
     sortByRelevance(spellIds: number[], rawQuery: string, data: SpellData): number[];

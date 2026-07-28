@@ -105,7 +105,8 @@
         // not have. See HAS_CATEGORY / applyFiltersAndSort.
         filters: {models: "", sounds: "", animations: "", fx: ""},
         sort: {key: "auto", dir: 1},
-        // hidden columns (also excluded from All-mode search and from exports)
+        // hidden columns — DISPLAY ONLY (they also trim the export's column set,
+        // a visible choice). They never narrow the search: see FIELDS.all.
         hiddenCols: {models: false, sounds: false, animations: false, fx: false, mechanics: true, commands: false},
     };
 
@@ -118,7 +119,10 @@
         mechanics: ["mech"],
     };
 
-    function disabledFields() {
+    // Fields whose column is currently off screen. DISPLAY ONLY — this never
+    // reaches the search (see FIELDS.all in search.js); its one job is letting
+    // ensureFieldVisible un-hide a column a shared link searches into.
+    function hiddenFields() {
         const out = new Set();
         for (const [col, fields] of Object.entries(COL_FIELDS)) {
             if (state.hiddenCols[col]) fields.forEach((f) => out.add(f));
@@ -1037,7 +1041,7 @@
             stateToUrl(push);
             return;
         }
-        const res = Search.searchGroups(groups, data, disabledFields());
+        const res = Search.searchGroups(groups, data);
         state.results = res.spellIds;
         state.groups = groups;
         // excluded terms never appear in the results: no highlighting for them
@@ -1118,7 +1122,7 @@
                 // above the ones that merely have it in a file name
                 // (beamtarget_onground). Resolved once via the field's own matcher.
                 if (TARGET_WORD_TITLES[t.text] && Search.FIELDS[g.field]) {
-                    const matches = Search.FIELDS[g.field].run([{text: t.text}], d, new Set());
+                    const matches = Search.FIELDS[g.field].run([{text: t.text}], d);
                     tests.push((id) => matches.has(id));
                 }
             }
@@ -3664,7 +3668,7 @@
     // A shared link may search a field whose column is hidden here —
     // honor the link by un-hiding that column for this session.
     function ensureFieldVisible(field) {
-        if (!Search.FIELDS[field] || !disabledFields().has(field)) return;
+        if (!Search.FIELDS[field] || !hiddenFields().has(field)) return;
         for (const [col, fields] of Object.entries(COL_FIELDS)) {
             if (fields.includes(field)) state.hiddenCols[col] = false;
         }
