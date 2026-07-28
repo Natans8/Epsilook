@@ -539,6 +539,66 @@ window.EpsilookSearch = (() => {
         return out;
     }
 
+    /* ---------------------------------------------------------- alternation */
+
+    /**
+     * Expand a chip's tokens into every combination of their alternatives:
+     * `model:"fire|frost missile"` becomes `model:"fire missile"` and
+     * `model:"frost missile"`, which the caller unions.
+     *
+     * DISTRIBUTING HERE is the whole design. The alternative — teaching each
+     * matcher to loop over alternatives — would mean spelling `|` into the text
+     * axis, the numeric axis, the attachment-point walk, the target-mask tests
+     * and the kit-id lookup separately, and again into every axis added later.
+     * Instead every matcher keeps its single-token code path and gets `|` for
+     * free, which is what makes the operator mean the same thing in every chip.
+     *
+     * It also preserves the same-row invariant exactly: each combination is an
+     * ordinary chip, so "a fire missile OR a frost missile" never degrades into
+     * "something fiery somewhere and a missile somewhere".
+     *
+     * Cost is the product of the alternative counts. Real chips are one or two
+     * tokens with two or three alternatives, so this is a handful of scans; a
+     * pathological chip is correspondingly slow, which is the honest trade.
+     * @param {QueryToken[]} tokens
+     * @returns {QueryToken[][]}
+     */
+    function expandAlts(tokens) {
+        /** @type {QueryToken[][]} */
+        let combos = [[]];
+        for (const t of tokens) {
+            const alts = (t.alts && t.alts.length) ? t.alts : [t.text];
+            /** @type {QueryToken[][]} */
+            const next = [];
+            for (const c of combos) for (const a of alts) next.push(c.concat([{text: a}]));
+            combos = next;
+        }
+        return combos;
+    }
+
+    /** A group's combinations, computed once and cached on the group. */
+    function combosOf(group) {
+        if (!group.combos) group.combos = expandAlts(group.tokens);
+        return group.combos;
+    }
+
+    /**
+     * One chip's result set: the union over its alternation combinations.
+     * @param {QueryGroup} g
+     * @param {SpellData} data
+     * @returns {Set<number>}
+     */
+    function runGroup(g, data) {
+        const field = FIELDS[g.field] ? g.field : "all";
+        const combos = combosOf(g);
+        const one = (/** @type {QueryToken[]} */ tokens) =>
+            spellsByCount(tokens, field, data) || FIELDS[field].run(tokens, data);
+        if (combos.length === 1) return one(combos[0]);
+        const out = new Set();
+        for (const tokens of combos) for (const s of one(tokens)) out.add(s);
+        return out;
+    }
+
     /**
      * Set intersection (iterates the smaller set).
      * @param {Set<number>} a
@@ -725,8 +785,7 @@ window.EpsilookSearch = (() => {
                 continue;
             }
             const field = FIELDS[g.field] ? g.field : "all";
-            const set = spellsByCount(g.tokens, field, data)
-                || FIELDS[field].run(g.tokens, data);
+            const set = runGroup(g, data);
             if (FIELDS[field].orGroups) {
                 const u = orUnions.get(field);
                 if (u) {
@@ -744,10 +803,7 @@ window.EpsilookSearch = (() => {
 
         for (const g of negatives) {
             if (result.size === 0) break;
-            const field = FIELDS[g.field] ? g.field : "all";
-            const set = spellsByCount(g.tokens, field, data)
-                || FIELDS[field].run(g.tokens, data);
-            for (const id of set) result.delete(id);
+            for (const id of runGroup(g, data)) result.delete(id);
         }
 
         return {spellIds: [...result], ms: performance.now() - t0};
@@ -773,5 +829,8 @@ window.EpsilookSearch = (() => {
         return spellIds.sort((a, b) => (rank(a) - rank(b)) || (a - b));
     }
 
-    return {searchGroups, sortByRelevance, FIELDS, TARGET_WORDS, matchNumeric, hasOperator};
+    return {
+        searchGroups, sortByRelevance, expandAlts, combosOf,
+        FIELDS, TARGET_WORDS, matchNumeric, hasOperator,
+    };
 })();

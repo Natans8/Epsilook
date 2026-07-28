@@ -724,6 +724,12 @@ interface EpsilookDataApi {
 /** One search word (or exact "quoted phrase", spaces preserved). */
 interface QueryToken {
     text: string;
+    /**
+     * The values any one of which satisfies this token — `fire|frost` has two.
+     * A plain token has one (or none, when a token is synthesised by
+     * expandAlts, which has already resolved the choice).
+     */
+    alts?: string[];
 }
 
 /**
@@ -736,6 +742,13 @@ interface QueryGroup {
     tokens: QueryToken[];
     /** true = the group excludes its matches instead. */
     not?: boolean;
+    /**
+     * The token combinations this group expands to once alternation is
+     * distributed (see EpsilookSearchApi.expandAlts). Cached by combosOf on
+     * first use; both selection and hit-highlighting read it, which is what
+     * keeps them agreeing about what `|` selected.
+     */
+    combos?: QueryToken[][];
 }
 
 /** One entry of the FIELDS registry — a search prefix + its field button. */
@@ -764,6 +777,12 @@ interface EpsilookSearchApi {
     ): { spellIds: number[]; ms: number };
 
     sortByRelevance(spellIds: number[], rawQuery: string, data: SpellData): number[];
+
+    /** Distribute a chip's alternatives into one plain token list per choice. */
+    expandAlts(tokens: QueryToken[]): QueryToken[][];
+
+    /** A group's combinations, computed once and cached on the group. */
+    combosOf(group: QueryGroup): QueryToken[][];
 
     FIELDS: Record<string, SearchFieldSpec>;
     /** Target-type query words ("caster", "target", "area", "both"). */

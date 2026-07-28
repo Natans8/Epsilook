@@ -326,15 +326,51 @@
         syncBar();
     }
 
+    // a numeric alternative, with the id sigil optional
+    const NUM_ALT = /^#?\d+$/;
+
+    /**
+     * A token's ALTERNATIVES — the values any one of which satisfies it.
+     *
+     * `|` always separates them: no corpus in any pack contains a pipe
+     * (measured across names, model/sound paths, animations and fx on 9.2.7),
+     * so it can never collide with real data.
+     *
+     * A COMMA separates them only when every piece is a number. Spell names
+     * really do contain commas — 399 of them match "e," on 9.2.7 — so a
+     * literal comma has to keep working, while `id:133,134` still reads as OR.
+     * The rule is SYNTACTIC, not per-field: a comma between numbers means the
+     * same thing in every chip, which is why this is not a return to
+     * field-specific parsing.
+     *
+     * A "quoted phrase" is exempt — quoting is how you ask for the literal
+     * character.
+     * @param {string} text
+     * @returns {string[]}
+     */
+    function altsOf(text) {
+        if (text.includes("|")) {
+            const parts = text.split("|").filter(Boolean);
+            if (parts.length > 1) return parts;
+        }
+        if (text.includes(",")) {
+            const parts = text.split(",").filter(Boolean);
+            if (parts.length > 1 && parts.every((p) => NUM_ALT.test(p))) return parts;
+        }
+        return [text];
+    }
+
     // chip text -> search tokens: words split on whitespace, except "quoted
     // spans" which stay whole — an exact phrase, spaces and word order
     // preserved. An unclosed quote runs to the end of the text (so a phrase
-    // matches live while it's still being typed).
+    // matches live while it's still being typed). Each token carries its
+    // alternatives (see altsOf); search.js distributes over them.
     function tokenizeQuery(text) {
         const tokens = [];
         for (const m of text.toLowerCase().matchAll(/"([^"]*)(?:"|$)|([^\s"]+)/g)) {
-            const t = (m[1] !== undefined ? m[1] : m[2]).replace(/\s+/g, " ").trim();
-            if (t) tokens.push({text: t});
+            const quoted = m[1] !== undefined;
+            const t = (quoted ? m[1] : m[2]).replace(/\s+/g, " ").trim();
+            if (t) tokens.push({text: t, alts: quoted ? [t] : altsOf(t)});
         }
         return tokens;
     }
@@ -1044,9 +1080,12 @@
         const res = Search.searchGroups(groups, data);
         state.results = res.spellIds;
         state.groups = groups;
-        // excluded terms never appear in the results: no highlighting for them
+        // excluded terms never appear in the results: no highlighting for them.
+        // Alternatives flatten to one token each — highlighting already asks
+        // "does this pill match ANY query token", which is what `|` means.
         state.tokens = /** @type {HitToken[]} */ (groups.filter((g) => !g.not)
-            .flatMap((g) => g.tokens.map((t) => ({field: g.field, text: t.text}))));
+            .flatMap((g) => g.tokens.flatMap((t) =>
+                (t.alts || [t.text]).map((a) => ({field: g.field, text: a})))));
         state.searchMs = res.ms;
         applyFiltersAndSort();
         stateToUrl(push);
@@ -1103,7 +1142,10 @@
         const tests = [];
         for (const g of state.groups) {
             if (g.not) continue;
-            for (const t of g.tokens) {
+            // each alternative ranks on its own — `fx:chain|dissolve` floats
+            // both categories, the same way it selects both
+            for (const t of g.tokens.flatMap((tk) =>
+                (tk.alts || [tk.text]).map((a) => ({text: a})))) {
                 if (g.field === "fx") {
                     if (t.text === "ghost" || t.text === "shadowy") {
                         tests.push((id) => d.spellShadowies.has(id) || d.spellGhostMats.has(id));
@@ -1180,10 +1222,17 @@
             const count = entryCountFn(key);
             const c = new Map(list.map((id) => [id, count(id)]));
             list.sort((a, b) => (c.get(a) - c.get(b)) * dir || a - b);
-        } else { // auto
-            const nameTokens = state.tokens.filter((t) => t.field === "name" || t.field === "all");
-            if (nameTokens.length) {
-                Search.sortByRelevance(list, nameTokens.map((t) => t.text).join(" "), d);
+        } else { // auto — relevance is the default; the ID header gives ID order
+            // Ranked against tokens from EVERY field, not just name:/free text.
+            // Someone searching `model:fireball` wants the spell called Fireball
+            // first, and a token that names no spell simply leaves every row at
+            // the same rank, where sortByRelevance's tiebreak restores ID order —
+            // so this degrades to the old behaviour instead of scrambling it.
+            const words = state.tokens
+                .map((t) => t.text)
+                .filter((s) => !Search.hasOperator(s) && !/^#?\d+$/.test(s));
+            if (words.length) {
+                Search.sortByRelevance(list, words.join(" "), d);
             } else {
                 list.sort((a, b) => a - b);
             }
@@ -2236,17 +2285,34 @@
         return state.groups.filter((g) => !g.not && (g.field === field || g.field === "all"));
     }
 
+    /**
+     * Does any positive chip of `field` accept this entity?
+     *
+     * `test` receives ONE combination of a chip's tokens, with alternation
+     * already distributed by the engine — so a hit test never has to know that
+     * `|` exists, exactly as the matchers in search.js don't. Every hit test in
+     * this file goes through here, and that is what keeps highlighting in step
+     * with selection: a pill can only light up under a combination that could
+     * have selected its spell.
+     * @param {string} field
+     * @param {(tokens: QueryToken[]) => boolean} test
+     * @returns {boolean}
+     */
+    function anyGroup(field, test) {
+        return groupsFor(field).some((g) => Search.combosOf(g).some(test));
+    }
+
     // hit = the entity fully satisfies at least one chip of its field
     function fileIsHit(file, field) {
         if (!file) return false;
-        return groupsFor(field).some((g) => g.tokens.every((t) => file.searchL.includes(t.text)));
+        return anyGroup(field, (ts) => ts.every((t) => file.searchL.includes(t.text)));
     }
 
     // kit ids live in the sound:/anim: fields since the soundkit:/animkit:
     // merge — a chip's numeric tokens hit the kit whose id they equal
     function kitIsHit(kitId, field) {
         const searchField = field === "soundkit" ? "sound" : "anim";
-        return groupsFor(searchField).some((g) => g.tokens.some((t) => Number(t.text) === kitId));
+        return anyGroup(searchField, (ts) => ts.some((t) => Number(t.text) === kitId));
     }
 
     // anim pills can be hit through their group's category word too — today
@@ -2254,8 +2320,8 @@
     // Mirrors spellsByAnim's token test.
     function animIsHit(animId, groupWord = "") {
         const nameL = state.data.animNamesL[animId];
-        return groupsFor("anim").some((g) =>
-            g.tokens.every((t) => groupWord.includes(t.text) || nameL.includes(t.text)));
+        return anyGroup("anim", (ts) =>
+            ts.every((t) => groupWord.includes(t.text) || nameL.includes(t.text)));
     }
 
     /* A mechanic pill matches when any mech: group is satisfied by the names on
@@ -2268,7 +2334,7 @@
             d.effectNamesL.get(row.effect), d.auraNamesL.get(row.aura),
             d.implicitTargetNamesL.get(row.targetA), d.implicitTargetNamesL.get(row.targetB),
         ].filter(Boolean).join(" ");
-        return groupsFor("mech").some((g) => g.tokens.every((t) => corpus.includes(t.text)));
+        return anyGroup("mech", (ts) => ts.every((t) => corpus.includes(t.text)));
     }
 
     /* Every fx pill lights up through ONE matcher — the pill-type registry's
@@ -2287,8 +2353,8 @@
         const type = P.TYPES.get(key);
         if (!type) throw new Error(`unknown pill type "${key}"`);
         // id is optional: valueless pill types (freeze, camo) call with no id
-        return (id = undefined) => groupsFor(type.field)
-            .some((g) => P.idMatches(type, state.data, id, g.tokens));
+        return (id = undefined) =>
+            anyGroup(type.field, (ts) => P.idMatches(type, state.data, id, ts));
     }
 
     const fxChainIsHit = isHitOf("fx:chain");
@@ -2327,7 +2393,7 @@
    * registry's numeric axis, so the two halves cannot disagree about it. */
     function vehicleIsHit(attachment, seats) {
         const nameL = (attachment || "").toLowerCase();
-        return groupsFor("fx").some((g) => g.tokens.every((t) =>
+        return anyGroup("fx", (ts) => ts.every((t) =>
             "seat".includes(t.text) || nameL.includes(t.text)
             || Search.matchNumeric(t.text, seats)));
     }
@@ -2391,8 +2457,8 @@
     // head, via the group hit). Mirrors spellsByModel's token test.
     function modelFileIsHit(file, catName) {
         const searchL = file ? file.searchL : "";
-        return groupsFor("model").some((g) =>
-            g.tokens.every((t) => catName.includes(t.text) || searchL.includes(t.text)));
+        return anyGroup("model", (ts) =>
+            ts.every((t) => catName.includes(t.text) || searchL.includes(t.text)));
     }
 
     /**
@@ -2486,8 +2552,8 @@
     // the search uses (ATTACH_WORD in search.js)
     function attachIsHit(field, names) {
         const attachL = names.join(" ").toLowerCase();
-        return groupsFor(field).some((g) => {
-            const attaches = attachValues(g.tokens);
+        return anyGroup(field, (ts) => {
+            const attaches = attachValues(ts);
             return attaches.length && attaches.every((a) => attachL.includes(a));
         });
     }
@@ -2501,8 +2567,8 @@
     /** A boneset pill lights up when a `boneset` query names one of its regions. */
     function bonesetIsHit(names) {
         const hay = names.join(" ").toLowerCase();
-        return groupsFor("anim").some((g) => {
-            const words = bonesetValues(g.tokens);
+        return anyGroup("anim", (ts) => {
+            const words = bonesetValues(ts);
             return words.length && words.every((w) => hay.includes(w));
         });
     }
@@ -2696,7 +2762,7 @@
         const d = state.data;
         const searchL = (d.files.get(e.fid) || {searchL: ""}).searchL;
         const corpus = d.itemSearchL.get(e.ref) || "";
-        return groupsFor("model").some((g) => g.tokens.every((t) =>
+        return anyGroup("model", (ts) => ts.every((t) =>
             MODEL_CAT_ITEM_WORD.includes(t.text) || searchL.includes(t.text) || corpus.includes(t.text)));
     }
 
