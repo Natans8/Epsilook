@@ -112,12 +112,22 @@ window.Oracle = (() => {
         return {r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1};
     };
 
-    const over = (fg, bg) => ({           // src-over composite
-        r: fg.r * fg.a + bg.r * (1 - fg.a),
-        g: fg.g * fg.a + bg.g * (1 - fg.a),
-        b: fg.b * fg.a + bg.b * (1 - fg.a),
-        a: 1,
-    });
+    /* src-over composite, alpha included.
+     *
+     * The alpha is the whole point and it used to be hardcoded to 1, which
+     * made the walk below stop at the FIRST pair of layers it composited and
+     * treat the result as the finished surface. Two translucent fills are
+     * exactly what this tool exists to catch, so it was wrong precisely where
+     * it mattered: a 10% white capsule over a 5% white chip came out pure
+     * WHITE instead of the near-black the dark theme actually paints
+     * (r=255 against the true r=56), and reported two convincing AA failures
+     * for text that passes comfortably. */
+    const over = (fg, bg) => {
+        const a = fg.a + bg.a * (1 - fg.a);
+        if (!a) return {r: 0, g: 0, b: 0, a: 0};
+        const mix = (f, b) => (f * fg.a + b * bg.a * (1 - fg.a)) / a;
+        return {r: mix(fg.r, bg.r), g: mix(fg.g, bg.g), b: mix(fg.b, bg.b), a};
+    };
 
     function luminance(c) {
         const ch = [c.r, c.g, c.b].map((v) => {
