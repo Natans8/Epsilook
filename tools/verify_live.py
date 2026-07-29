@@ -42,8 +42,8 @@ def bust(url: str, token: int) -> str:
     return f"{url}{'&' if '?' in url else '?'}cachebust={token}"
 
 
-def get(url: str, token: int, head: bool = False) -> tuple[int, bytes, dict]:
-    """Fetch a URL, cache-busted. Returns (status, body, headers)."""
+def fetch_once(url: str, token: int, head: bool = False) -> tuple[int, bytes, dict]:
+    """One request, cache-busted. Returns (status, body, headers); 0 = no reply."""
     req = urllib.request.Request(bust(url, token), method="HEAD" if head else "GET",
                                  headers={"Cache-Control": "no-cache",
                                           "User-Agent": "epsilook-verify"})
@@ -52,9 +52,30 @@ def get(url: str, token: int, head: bool = False) -> tuple[int, bytes, dict]:
             return resp.status, (b"" if head else resp.read()), dict(resp.headers)
     except urllib.error.HTTPError as exc:
         return exc.code, b"", {}
-    except (urllib.error.URLError, TimeoutError) as exc:
-        print(f"{DIM}  {type(exc).__name__}: {exc}{RESET}")
+    except (urllib.error.URLError, TimeoutError):
         return 0, b"", {}
+
+
+def get(url: str, token: int, head: bool = False, tries: int = 3) -> tuple[int, bytes, dict]:
+    """Fetch, retrying what is only transient.
+
+    Pages sits behind a CDN that occasionally answers a perfectly good file
+    with a 503 - observed once on js/pills.js during this script's own first
+    run, 200 on the very next request. Reporting that as a broken deploy is
+    worse than not checking at all, because a verifier that cries wolf stops
+    being read. A 4xx is never retried: that is a real answer.
+    """
+    for attempt in range(1, tries + 1):
+        status, body, headers = fetch_once(url, token + attempt, head)
+        transient = status == 0 or status in (429, 500, 502, 503, 504)
+        if not transient or attempt == tries:
+            if transient and attempt > 1:
+                print(f"{DIM}  gave up after {tries} tries{RESET}")
+            return status, body, headers
+        print(f"{DIM}  HTTP {status or 'no reply'} on {url.rsplit('/', 1)[-1]}, "
+              f"retrying ({attempt}/{tries - 1}){RESET}")
+        time.sleep(2 * attempt)
+    return 0, b"", {}
 
 
 def git(*args: str) -> str:
