@@ -1275,7 +1275,7 @@
                 const tip = v.words.get(s.text) || "";
                 const cap = `${s.start}:${last.end}`;
                 push(text.slice(s.start, s.end), "bar-tok bar-kw bar-cap-l", tip, cap);
-                push(text.slice(s.end, last.end), "bar-tok bar-cap-r", tip, cap);
+                emitCapValue(text.slice(s.end, last.end), last, tip, cap, push);
                 at = last.end;
                 i += taken;
                 continue;
@@ -1288,6 +1288,28 @@
     }
 
     /**
+     * The separator a span actually alternates on, or "" if it does not.
+     *
+     * IT COMES FROM THE SPAN'S OWN `alts`, never from "does the text contain a
+     * bar" — so what is drawn as an alternation is exactly what the engine
+     * alternated on. `id:133,134` gets a gold comma because altsOf split it;
+     * the comma in `hunter, tame beast` stays ordinary text because it did not,
+     * and marking that one would promise an OR the search never performs.
+     * @param {{text: string, quoted: boolean, alts: string[]}} s
+     * @returns {string}
+     */
+    const altSep = (s) => (!s.quoted && s.alts.length > 1
+        ? (s.text.includes("|") ? "|" : ",") : "");
+
+    /** Split on a separator, keeping the separators as pieces of their own. */
+    function splitKeepSep(text, sep) {
+        const out = [];
+        for (const part of text.split(sep)) out.push(part, sep);
+        out.pop();
+        return out;
+    }
+
+    /**
      * One span's own characters, with its alternation bars picked out. The
      * pieces are emitted whole (spaces included) so they still concatenate back
      * to the source — `fire | frost` keeps its air and gets a gold bar.
@@ -1295,13 +1317,13 @@
     function emitSpan(v, text, s, push, lone) {
         const raw = text.slice(s.start, s.end);
         if (s.quoted) return push(raw, "bar-tok bar-phrase", PHRASE_TIP);
-        if (!raw.includes("|") && !raw.includes(",")) {
+        const sep = altSep(s);
+        if (!sep) {
             const {cls, tip} = classifyAtom(v, raw, lone);
             return push(raw, cls && `bar-tok ${cls}`, tip);
         }
         // keep the separators as their own runs; classify what sits between
-        const sep = s.text.includes("|") ? "|" : ",";
-        for (const piece of raw.split(new RegExp(`(\\${sep})`))) {
+        for (const piece of splitKeepSep(raw, sep)) {
             if (piece === sep) {
                 push(piece, "bar-tok bar-alt", ALT_TIP);
                 continue;
@@ -1309,6 +1331,37 @@
             const {cls, tip} = classifyAtom(v, piece);
             push(piece, cls && `bar-tok ${cls}`, tip);
         }
+    }
+
+    /**
+     * The VALUE half of a capsule — a keyword's one token, plus the space in
+     * front of it.
+     *
+     * It goes through the same alternation split as any other span, because an
+     * alternation means the same thing wherever it is written:
+     * `model:"attach hand|chest"` searches both points, so its bar is marked
+     * like the bar in `model:hand|chest`. It used to be emitted as one flat run
+     * and came out plain — the query worked and the bar said nothing about it.
+     *
+     * The capsule's fill is carried across every piece (and its character range
+     * with it, so markCaretCapsule still lights the whole thing as one), with
+     * the rounding kept on the far end only — otherwise the split would show as
+     * a notch in a shape that has to read as one object.
+     *
+     * What sits between the bars is NOT classified: inside a capsule every
+     * token is the keyword's value, so a piece that happens to spell a category
+     * word (`attach chest|missile`) is still an attachment name here, and
+     * tinting it gold would claim a meaning the matcher does not give it.
+     */
+    function emitCapValue(raw, s, tip, cap, push) {
+        const sep = altSep(s);
+        if (!sep) return push(raw, "bar-tok bar-cap-r", tip, cap);
+        const pieces = splitKeepSep(raw, sep);
+        pieces.forEach((piece, i) => {
+            const end = i === pieces.length - 1 ? "bar-cap-r" : "bar-cap-m";
+            const alt = piece === sep;
+            push(piece, `bar-tok ${alt ? "bar-alt " : ""}${end}`, alt ? ALT_TIP : tip, cap);
+        });
     }
 
     /**

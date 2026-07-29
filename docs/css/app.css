@@ -828,11 +828,13 @@ main {
     font-weight: 650;
 }
 
-/* the capsule: a word and its value, held together by one faint fill. The two
+/* the capsule: a word and its value, held together by one faint fill. The
    halves are separate spans only so the word can be tinted and the value not —
-   they must read as one object, hence the shared background and the rounding
-   on the outside corners only. */
-.bar-cap-l, .bar-cap-r {
+   and so an alternation INSIDE the value can get its gold bar (`attach
+   hand|chest`), which splits the value into more pieces still. They must read
+   as one object, hence the shared background, the rounding on the capsule's two
+   outside corners only, and -m for every piece in between. */
+.bar-cap-l, .bar-cap-m, .bar-cap-r {
     background: rgba(var(--overlay-rgb), calc(0.10 * var(--wash-strength)));
 }
 
@@ -840,7 +842,7 @@ main {
    across the bar SHOWS where the value begins and ends. Background only — a
    border or padding here would shift the glyphs out from under the caret, which
    is the one thing the backdrop may never do. */
-.bar-cap-l.on, .bar-cap-r.on {
+.bar-cap-l.on, .bar-cap-m.on, .bar-cap-r.on {
     background: rgba(var(--gold-rgb), calc(0.20 * var(--wash-strength)));
     box-shadow: inset 0 -1px 0 var(--gold-dim);
 }
@@ -851,6 +853,11 @@ main {
 
 .bar-cap-r {
     border-radius: 0 4px 4px 0;
+}
+
+/* squared on both sides: .bar-tok's own radius would nick the shared fill */
+.bar-cap-m {
+    border-radius: 0;
 }
 
 .bar-phrase {
