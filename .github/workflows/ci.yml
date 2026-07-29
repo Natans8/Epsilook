@@ -1,0 +1,63 @@
+# Epsilook CI — the same checks tools/check.py runs locally, run again on push.
+#
+# It deliberately does NOT deploy. GitHub Pages publishes docs/ from main by
+# itself, so a workflow cannot gate the deploy; what it can do is tell you
+# within a minute that the push you just made shipped new markup against a
+# cached stylesheet, or a pack the manifest disagrees with. That is the class
+# of failure this repo actually has: silent, invisible on the developer's
+# machine because their own browser holds the new files.
+#
+# The checks live in tools/check.py, not in this file, so there is exactly one
+# definition of "does this repo pass" and it is runnable offline.
+
+name: checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # full history so the ?v= guard can reach the previously deployed
+          # commit; blob:none keeps that cheap despite ~47 MB of data packs
+          # per commit — trees and commits only, blobs fetched on demand
+          fetch-depth: 0
+          filter: blob:none
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install the Python checkers
+        run: python -m pip install --quiet mypy pyflakes
+
+      - name: Work out what was deployed before this push
+        id: base
+        run: |
+          # a push knows its own previous tip; a PR knows its base. A new
+          # branch reports all-zeros, and a first commit has no parent — in
+          # both cases leave it empty and check.py skips the comparison.
+          case "${{ github.event_name }}" in
+            pull_request) base="${{ github.event.pull_request.base.sha }}" ;;
+            push)         base="${{ github.event.before }}" ;;
+            *)            base="" ;;
+          esac
+          if [ "$base" = "0000000000000000000000000000000000000000" ]; then base=""; fi
+          if [ -n "$base" ] && ! git cat-file -e "$base^{commit}" 2>/dev/null; then base=""; fi
+          echo "ref=${base:-HEAD}" >> "$GITHUB_OUTPUT"
+          echo "comparing against ${base:-HEAD (no previous state — bump guard will skip)}"
+
+      - name: Run the checks
+        run: python tools/check.py --base "${{ steps.base.outputs.ref }}"

@@ -68,8 +68,13 @@ docs/                    the site — GitHub Pages serves this folder as-is
   js/app.js              all UI wiring
   js/types.d.ts          shared type declarations (dev-time only, never served)
   js/{bufo,js-blp}.js    vendored BLP texture decoder (Kruithne, MIT)
+  dev/oracle.js          console measurement helpers — a dev tool, never loaded
   data/<version>/        one gzipped data pack per game version
 build/build_data.py      regenerates the packs (Python 3, stdlib only)
+tools/check.py           every check, plus the invariants that fail silently
+tools/bump.py            move the ?v= cache-buster (all thirteen spots)
+tools/rebuild.py         rebuild packs with their own labels; --verify the build
+tools/verify_live.py     wait for Pages, then check what it actually serves
 ```
 
 `build_data.py` walks the game's own tables — spell → visual → kit → model/sound/animkit/effect — and bakes the result
@@ -86,11 +91,20 @@ cd docs && python -m http.server 8377
 Pushing to `main` deploys. Any CSS/JS change needs the `?v=` cache-buster in
 `index.html` bumped (13 spots); data packs bust themselves via a content hash in `versions.json`.
 
+`python tools/bump.py` does the bumping: it compares against what `origin/main` is actually serving, rewrites all
+thirteen, and does nothing at all when no CSS/JS changed or when the string already differs — so it is safe to run
+every time rather than only when you remember. `python tools/verify_live.py` waits for Pages to publish and then
+checks that the new string really is being served and that every asset and pack resolves.
+
 ### Rebuilding the data
 
 ```
 python build/build_data.py --version 9.2.7.45745 --label "Shadowlands 9.2.7"
 ```
+
+The label and the `--default` flag are arguments, not state, so a rebuild that omits them quietly renames the pack to
+its build id and drops the default. `python tools/rebuild.py 9.2.7` reads both back out of `versions.json` and passes
+them for you; with no argument it rebuilds every pack, and `--list` prints the commands without running them.
 
 Downloads (and caches under `build/cache/`) the game tables from
 [wago.tools](https://wago.tools), the community listfile, and the
@@ -98,7 +112,9 @@ Downloads (and caches under `build/cache/`) the game tables from
 `docs/data/<version>/spelldata.json.gz` and updates
 `versions.json`. Takes ~15 s once the sources are cached, and is **deterministic** — apart from the build date in
 `meta.built`, an unchanged rebuild is byte-identical, which makes "rebuild and diff" the regression test for any change
-to the script. Pass `--refresh` to re-download. Extracting the TDB archive (once per version)
+to the script. `python tools/rebuild.py --verify` runs exactly that: rebuild, compare with the date normalised away,
+then put the committed pack back, so a no-op rebuild cannot leave a date change staged for every user to re-download.
+Pass `--refresh` to re-download. Extracting the TDB archive (once per version)
 needs [7-Zip](https://www.7-zip.org/) on the PATH.
 
 **Adding a game version** is the same command with a different `--version`
@@ -162,12 +178,44 @@ into `meta.absentTables`.
 
 ### Checking your changes
 
-Neither check is required to run the app — both are dev-time only:
+Nothing here is required to run the app — it is all dev-time only.
+
+```
+python tools/check.py
+```
+
+is the one command: it runs the type and lint checks, and then the handful of invariants that are specific to this
+repo and fail *silently* if you get them wrong — the `?v=` string being one string in all thirteen places and having
+moved if any CSS/JS did, every module in `docs/js` actually being loaded by `index.html`, the committed blobs being
+LF, and `versions.json` agreeing with the packs on disk down to their content hashes. It warns, without failing, when
+a change looks like it should have updated one of the sibling docs. `--fast` skips the toolchain and runs the repo
+guards alone. The same script runs in CI (`.github/workflows/ci.yml`), so there is one definition of "does this pass".
+
+The underlying checks, if you want them individually:
 
 ```
 npx -p typescript tsc -p docs/jsconfig.json    # JS: every file is // @ts-check'd
-python -m mypy build/build_data.py             # Python: fully annotated
+python -m mypy build/build_data.py tools       # Python: fully annotated
+python -m pyflakes build/build_data.py tools
+node --check docs/js/<file>.js
 ```
+
+### Measuring what the app does
+
+`docs/dev/oracle.js` is a dev tool the app never loads. Paste one line into the console of a running page — local or
+the live site — and it gives you the measurements this project keeps having to take:
+
+```js
+s = document.createElement("script"); s.src = "dev/oracle.js"; document.head.append(s)
+```
+
+`Oracle.q([...])` runs a battery of queries in place and tabulates the result counts; `Oracle.same([...])` asserts
+that a set of queries agree, which is the shape nearly every search-grammar check takes; `Oracle.contrast()` does the
+WCAG walk, compositing each text node's ancestor backgrounds down to an opaque colour before measuring;
+`Oracle.pills([...])` snapshots every pill-bearing cell as canonical text plus a hash, so a refactor that should not
+change what renders can be proven not to. `Oracle.help()` lists them. It switches palettes by *reloading*
+(`Oracle.theme("moonwell")`) rather than by setting `data-theme`, because Chrome serves stale computed colours for
+elements already on screen and that has produced convincing false failures.
 
 ## Data sources
 
