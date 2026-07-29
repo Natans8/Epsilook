@@ -29,11 +29,10 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import re
-import subprocess
 import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from repo import BUMP_PATHS, ROOT, changed_under, git
+
 SITE = ROOT / "site"
 
 # EVERY page under site/, not just index.html: 404.html loads the same
@@ -43,29 +42,6 @@ ASSET_RE = re.compile(r'((?:href|src)="[^"]*?(?:css|js)/[^"?/]+\?v=)([0-9a-z]+)(
 PARSE_RE = re.compile(r"^(\d{8})([a-z]*)$")
 
 GREEN, YELLOW, DIM, RESET = "\033[32m", "\033[33m", "\033[2m", "\033[0m"
-
-
-def git(*args: str, check: bool = False) -> str:
-    try:
-        out = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True,
-                             encoding="utf-8", errors="replace", check=check)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return ""
-    return out.stdout or ""
-
-
-def changed_under(base: str, paths: tuple[str, ...]) -> list[str]:
-    """Files under `paths` that differ from `base`, UNTRACKED ONES INCLUDED.
-
-    esbuild bundles what is on disk, so a module that has not been `git add`ed
-    still reaches the deploy — and a diff alone would report nothing to bump.
-    """
-    out = {f for f in git("diff", "--name-only", base, "--", *paths).splitlines() if f}
-    for line in git("status", "--porcelain", "--untracked-files=all", "--", *paths).splitlines():
-        name = line[3:].strip()
-        if name:
-            out.add(name)
-    return sorted(out)
 
 
 def versions_in(html: str) -> set[str]:
@@ -136,9 +112,7 @@ def main() -> int:
     # browser already has cached, which is the one thing a bump must never do
     now = max(current)
     was = max(deployed)
-    # site/js is the gitignored build output, so the served JS changes when
-    # its SOURCES (or the build itself) do - the same paths check.py watches
-    changed = changed_under(args.base, ("site/css", "src", "tools/build.mjs"))
+    changed = changed_under(args.base, BUMP_PATHS)
 
     if args.explicit:
         new = args.explicit

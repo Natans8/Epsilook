@@ -349,7 +349,7 @@ def load_csv_table(con: "duckdb.DuckDBPyConnection", schema: str, table: str,
     return scalar(con, f"SELECT count(*) FROM {qualified}"), bool(types)
 
 
-def build_version(con: "duckdb.DuckDBPyConnection", build_id: str, label: str,
+def build_version(con: "duckdb.DuckDBPyConnection", build_id: str,
                   catalog: list[tuple], refresh_dbd: bool) -> tuple[int, int, int]:
     """Load every CSV in one version's cache directory into its own schema."""
     schema = schema_for(build_id)
@@ -823,7 +823,7 @@ def main() -> int:
         log(f"\n{schema_for(build_id)}  ({entry.get('label', build_id)})")
         fetch_extra_tables(build_id)
         tables, rows, fallbacks = build_version(
-            con, build_id, entry.get("label", ""), catalog, args.refresh_dbd)
+            con, build_id, catalog, args.refresh_dbd)
         tdb = load_tdb(con, build_id, entry.get("tdb_tag"))
         views = build_views(con, schema_for(build_id))
         total_tables += tables + tdb

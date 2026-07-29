@@ -1,0 +1,58 @@
+"""The git queries bump.py and check.py both ask, and the one list they must agree on.
+
+These lived in both scripts, byte-identical, plus a THIRD copy of the paths
+tuple written inline in bump.py. That is the failure mode CLAUDE.md keeps
+warning about: the two are halves of one decision ("does this change need a
+?v= bump?"), so a path added to check.py's list and not bump.py's produces a
+deadlock - check.py demands a bump that bump.py refuses to make, and the
+message blames the user for not running a script that just told them there was
+nothing to do.
+
+`tools/` is a source root, so a sibling import resolves the same way
+`builddb.py` already imports `dbd`.
+"""
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+# A change to the css, the bundle's SOURCES or the build itself needs a bump.
+# site/js is generated and gitignored, so it can never appear in a diff - which
+# is why src/ is watched instead of the bundle it produces. An html-only or
+# data-only change needs nothing (data packs self-bust via versions.json).
+BUMP_PATHS = ("site/css", "src", "tools/build.mjs")
+
+
+def git(*args: str) -> str:
+    """Run git in the repo and return stdout; '' on any failure.
+
+    The encoding is spelled out because the console default on Windows is
+    cp1252, which cannot decode a UTF-8 tree - and subprocess swallows the
+    resulting error in its reader thread and hands back None.
+    """
+    try:
+        out = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True,
+                             encoding="utf-8", errors="replace", check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return ""
+    return out.stdout or ""
+
+
+def have_ref(ref: str) -> bool:
+    return bool(git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").strip())
+
+
+def changed_under(base: str, paths: tuple[str, ...] = BUMP_PATHS) -> list[str]:
+    """Files under `paths` that differ from `base`, UNTRACKED ONES INCLUDED.
+
+    esbuild bundles what is on disk, so a module that has not been `git add`ed
+    still reaches the deploy - and a diff alone would report nothing to bump.
+    """
+    out = {f for f in git("diff", "--name-only", base, "--", *paths).splitlines() if f}
+    for line in git("status", "--porcelain", "--untracked-files=all", "--", *paths).splitlines():
+        name = line[3:].strip()
+        if name:
+            out.add(name)
+    return sorted(out)

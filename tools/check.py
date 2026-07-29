@@ -41,7 +41,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from repo import BUMP_PATHS, ROOT, changed_under, git, have_ref
+
 SITE = ROOT / "site"
 MANIFEST = SITE / "data" / "versions.json"
 
@@ -50,11 +51,6 @@ MANIFEST = SITE / "data" / "versions.json"
 # (/Epsilook/css/...) on purpose, so the leading path is matched loosely and
 # only the css/js tail is captured - that tail is what resolves against site/.
 ASSET_RE = re.compile(r'(?:href|src)="[^"]*?((?:css|js)/[^"?/]+)\?v=([0-9a-z]+)"')
-
-# a change to the css, the bundle's sources or the build itself needs a bump
-# (site/js is generated and gitignored, so it can never appear in a diff);
-# an html-only or data-only change does not
-BUMP_PATHS = ("site/css", "src", "tools/build.mjs")
 
 # An LFS pointer is a ~130-byte text stub whose oid IS the sha256 of the real
 # file - the same number versions.json stores. So the manifest can be checked
@@ -102,39 +98,6 @@ class Report:
     def skip(self, name: str, detail: str) -> None:
         if not self.quiet:
             self._say(DIM, "skip", name, detail)
-
-
-def git(*args: str) -> str:
-    """Run git in the repo and return stdout; '' on any failure.
-
-    The encoding is spelled out because the console default on Windows is
-    cp1252, which cannot decode a UTF-8 tree - and subprocess swallows the
-    resulting error in its reader thread and hands back None.
-    """
-    try:
-        out = subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True,
-                             encoding="utf-8", errors="replace", check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return ""
-    return out.stdout or ""
-
-
-def changed_under(base: str, paths: tuple[str, ...]) -> list[str]:
-    """Files under `paths` that differ from `base`, UNTRACKED ONES INCLUDED.
-
-    esbuild bundles what is on disk, so a module that has not been `git add`ed
-    still reaches the deploy — and a diff alone would report nothing to bump.
-    """
-    out = {f for f in git("diff", "--name-only", base, "--", *paths).splitlines() if f}
-    for line in git("status", "--porcelain", "--untracked-files=all", "--", *paths).splitlines():
-        name = line[3:].strip()
-        if name:
-            out.add(name)
-    return sorted(out)
-
-
-def have_ref(ref: str) -> bool:
-    return bool(git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").strip())
 
 
 def asset_versions(html: str) -> list[tuple[str, str]]:

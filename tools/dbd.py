@@ -68,7 +68,7 @@ _BUILD_COLUMN_RE = re.compile(
     r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
     r"(?P<unverified>\?)?"
     r"(?:<(?P<unsigned>u)?(?P<width>8|16|32|64)>)?"
-    r"(?:\[(?P<array>\d+)\])?"
+    r"(?:\[(?P<array>\d+)])?"
     r"\s*(?://.*)?$"
 )
 
@@ -84,7 +84,7 @@ def parse_build(text: str) -> Build | None:
         return None
     while len(nums) < 4:
         nums.append(0)
-    return (nums[0], nums[1], nums[2], nums[3])
+    return nums[0], nums[1], nums[2], nums[3]
 
 
 @dataclass
