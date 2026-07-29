@@ -52,7 +52,7 @@ Full syntax lives behind the **?** button in the app. The short version:
 ## How it works
 
 ```
-docs/                    the site — GitHub Pages serves this folder as-is
+docs/                    the site — published to GitHub Pages by .github/workflows/pages.yml
   index.html             markup + the in-app help dialog
   404.html               the not-found page Pages serves for any missing path
   .nojekyll              tells GitHub Pages to serve the folder without Jekyll
@@ -90,8 +90,14 @@ Serve `docs/` with any static file server:
 cd docs && python -m http.server 8377
 ```
 
-Pushing to `main` deploys. Any CSS/JS change needs the `?v=` cache-buster in
-`index.html` bumped (13 spots); data packs bust themselves via a content hash in `versions.json`.
+The packs are stored in [Git LFS](https://git-lfs.com), so a clone needs it installed — without it `docs/data`
+holds 132-byte pointer files instead of packs and no version will load. `git lfs install && git lfs pull` fixes an
+existing clone; `python tools/check.py` says `via LFS pointer` when it is looking at stubs rather than packs.
+
+Pushing to `main` deploys, through `.github/workflows/pages.yml` — which is also why the packs can live in LFS at
+all, since GitHub Pages cannot resolve LFS pointers when it serves a branch directly. Any CSS/JS change needs the
+`?v=` cache-buster in `index.html` bumped (13 spots); data packs bust themselves via a content hash in
+`versions.json`.
 
 `python tools/bump.py` does the bumping: it compares against what `origin/main` is actually serving, rewrites all
 thirteen, and does nothing at all when no CSS/JS changed or when the string already differs — so it is safe to run
