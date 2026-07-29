@@ -1000,7 +1000,12 @@
             return fieldCategories(state.activeField) ? updateCategorySuggest() : hideSuggest();
         }
         let word = input.value.split(/\s+/).pop().toLowerCase();
-        if (word.startsWith("-")) word = word.slice(1); // "-mec" suggests mechanic: as an exclusion
+        // "-mec" suggests mech: as an EXCLUSION, and says so: the minus is part of
+        // what the user is typing, so the suggestion has to show the tag they
+        // would actually get. selectSuggestion re-reads the same "-" from the
+        // input, so the two cannot disagree about which it is.
+        const not = word.startsWith("-");
+        if (not) word = word.slice(1);
         if (word.length < 2) return hideSuggest();
         // hidden columns don't suppress suggestions — an explicit field search
         // un-hides its column anyway (ensureFieldVisible)
@@ -1012,8 +1017,10 @@
         matches.forEach(([key, f], i) => {
             const b = el("button", "suggest-item");
             markSuggestOption(b, i);
-            b.appendChild(el("span", `suggest-field f-${key}`, `${key}:`));
-            b.appendChild(el("span", "suggest-hint", f.hint));
+            b.appendChild(el("span", `suggest-field f-${key}${not ? " not" : ""}`,
+                `${not ? "−" : ""}${key}:`));
+            b.appendChild(el("span", "suggest-hint",
+                not ? `hide spells by ${f.short}` : f.hint));
             b.dataset.field = key;
             box.appendChild(b);
         });
@@ -1360,6 +1367,41 @@
         for (const span of box.children) span.classList.toggle("hover", span === found);
         const tip = found ? found.title : "";
         if (qInput.title !== tip) qInput.title = tip;
+    }
+
+    /**
+     * Draw every `data-search` example as the chips it would actually make.
+     *
+     * The help used to spell its examples as code text, which left the reader to
+     * translate `model:"attach chest"` into the thing they would see in the bar.
+     * Building them out of the SAME parser and the SAME highlighter as the bar
+     * means an example can never drift from what clicking it does — and a syntax
+     * the app stops supporting stops rendering as syntax.
+     *
+     * Called after the pack loads, because the marking needs its vocabulary.
+     */
+    function decorateExamples() {
+        for (const btn of $$("[data-search]")) {
+            const q = btn.dataset.search;
+            // Epsilon-command examples are meant to be read as commands, and a
+            // chip row would hide the very thing they demonstrate
+            if (!q || q.startsWith(".")) continue;
+            const parts = parseQueryParts(q);
+            if (!parts.length) continue;
+            btn.textContent = "";
+            btn.classList.add("ex-chips");
+            for (const p of parts) {
+                const chip = el("span", p.field === "all"
+                    ? "exchip exfree" : `exchip f-${p.field}${p.not ? " not" : ""}`);
+                if (p.field !== "all") {
+                    chip.appendChild(el("span", "qchip-field", `${p.not ? "−" : ""}${p.field}:`));
+                }
+                const text = el("span", "qchip-text");
+                text.appendChild(highlightBar(p.field, p.text));
+                chip.appendChild(text);
+                btn.appendChild(chip);
+            }
+        }
     }
 
     function barHoverOut() {
@@ -1770,10 +1812,15 @@
         tr.appendChild(effects.fx);
 
         // Mechanics — one pill per SpellEffect (what it does + who it targets),
-        // matched ones first, then the non-visual category blocks
-        const mechs = hitsFirst(mechanicPills(d.spellMechanics.get(spellId) || []),
-            (p) => p.rows.some(mechanicIsHit));
-        tr.appendChild(mechanicsCell(mechs.map(mechanicTag), effects.mechBlocks));
+        // then the non-visual category blocks. Both go in as blocks so the cell
+        // ranks them against each other (see mechanicsCell); an enum pill can
+        // never be a "named" hit, since its corpus is enum names, not keywords.
+        /** @type {{hit: boolean, named?: boolean, el: Node}[]} */
+        const mechBlocks = mechanicPills(d.spellMechanics.get(spellId) || []).map((p) => ({
+            hit: p.rows.some(mechanicIsHit),
+            el: mechanicTag(p),
+        }));
+        tr.appendChild(mechanicsCell(mechBlocks.concat(effects.mechBlocks)));
 
         // Commands — one compact line that fits even single-line rows
         const tdCmd = el("td", "c-cmds");
@@ -1835,12 +1882,34 @@
         return frag;
     }
 
-    // stable partition: elements matching isHit come first, original order kept
-    function hitsFirst(items, isHit) {
+    /**
+     * Stable rank-partition of a cell's contents: things the query NAMED first,
+     * then everything else it merely matched, then the rest. Original order is
+     * kept inside each band, so a cell's deliberate layout survives.
+     *
+     * The middle band exists because a category word is also ordinary text.
+     * `mech:speed` selects the spells with a movement-speed pill AND every spell
+     * whose effect enum happens to read MOD_SPEED_SLOW_ALL — both are honest
+     * hits, but only one is what was asked for, and burying it under a dozen
+     * enum names (or clamping it away behind "+N more") reads as a bug. Same
+     * story for `fx:glow` against a texture called beam_webglowwhite.
+     *
+     * `isKeyword` is optional: a cell whose contents carry no category word (the
+     * sound kits) simply has no first band.
+     * @template T
+     * @param {T[]} items
+     * @param {(it: T) => boolean} isHit
+     * @param {((it: T) => boolean) | null} [isKeyword]
+     * @returns {T[]}
+     */
+    function hitsFirst(items, isHit, isKeyword = null) {
         if (!state.tokens.length) return items;
-        const hits = [], rest = [];
-        for (const it of items) (isHit(it) ? hits : rest).push(it);
-        return hits.length ? hits.concat(rest) : rest;
+        const named = [], hits = [], rest = [];
+        for (const it of items) {
+            if (!isHit(it)) rest.push(it);
+            else (isKeyword && isKeyword(it) ? named : hits).push(it);
+        }
+        return named.concat(hits, rest);
     }
 
     function tagCell(className, tags) {
@@ -1862,22 +1931,27 @@
      * speed).
      *
      * The enum pills come FIRST because they describe the effect itself, and
-     * the categories qualify it. Both halves float their own matches, and the
-     * cell only reads as empty when neither has anything — a spell with a speed
-     * aura but no SpellEffect rows still shows the speed pill.
-     * @param {Node[]} tags loose mechanic pills, already hit-floated
-     * @param {{hit: boolean, el: Node}[]} blocks category blocks for this column
+     * the categories qualify it — but the two halves are ONE ranked list, not
+     * two appended ones, because that resting order is exactly wrong under a
+     * query that names a category. `mech:speed` matches the speed pill outright
+     * and every SPELL_AURA_MOD_SPEED_* enum by substring; handing the enums the
+     * whole top of the cell buries the pill that was asked for. renderBlocks
+     * ranks them together, so a named category rises past them and an unnamed
+     * one keeps its place below.
+     *
+     * The cell only reads as empty when neither half has anything — a spell
+     * with a speed aura but no SpellEffect rows still shows the speed pill.
+     * @param {{hit: boolean, named?: boolean, el: Node}[]} blocks
      * @returns {HTMLElement}
      */
-    function mechanicsCell(tags, blocks) {
+    function mechanicsCell(blocks) {
         const td = el("td", "c-mechanics");
-        if (!tags.length && !blocks.length) {
+        if (!blocks.length) {
             td.classList.add("empty");
             td.appendChild(el("span", "none", "—"));
             return td;
         }
-        for (const tag of tags) td.appendChild(tag);
-        if (blocks.length) renderBlocks(td, blocks);
+        renderBlocks(td, blocks);
         return td;
     }
 
@@ -1936,6 +2010,7 @@
         for (const c of cats) {
             blocks.push({
                 hit: c.hit,
+                named: wordIsNamed("model", c.name),
                 el: P.group({
                     head: modelCatHeadTag(c.name, c.hit),
                     items: hitsFirst(c.items, (e) => modelFileIsHit(d.files.get(e.fid), c.name))
@@ -1951,6 +2026,7 @@
             const hit = mountIds.some((m) => mountIsHit(m));
             blocks.push({
                 hit,
+                named: wordIsNamed("model", "mount"),
                 el: P.group({
                     head: modelCatHeadTag("mount", hit),
                     items: hitsFirst(mountIds.slice().sort((a, b) => a - b),
@@ -2080,6 +2156,7 @@
         for (const kitId of groups) {
             blocks.push({
                 hit: kitHasHit(kitId),
+                named: wordIsNamed("anim", wordOf(kitId)),
                 el: P.group({
                     // stance overrides are ~96% caster — a constant, so no icon
                     // there (documented in the help dialog); animkits carry theirs
@@ -2097,6 +2174,7 @@
             const hit = swaps.some(swapHit);
             blocks.push({
                 hit,
+                named: wordIsNamed("anim", "replace"),
                 el: P.group({
                     head: animCatHeadTag("replace", hit),
                     items: hitsFirst(swaps, swapHit).map((sw) => animSwapTag(sw.src, sw.dst)),
@@ -2142,11 +2220,15 @@
    * disappearing behind "+N more". Every pill-bearing cell renders through here
    * so that one rule holds for all of them — the models, sounds, animations and
    * fx cells all build a `blocks` array and hand it over.
+   *
+   * `named` is the block's second rank: it was matched because the query spelled
+   * its category word, not because some file name contained the same letters
+   * (see hitsFirst). A block with no category word simply never sets it.
    * @param {HTMLElement} td
-   * @param {{hit: boolean, el: HTMLElement}[]} blocks
+   * @param {{hit: boolean, named?: boolean, el: Node}[]} blocks
    */
     function renderBlocks(td, blocks) {
-        for (const b of hitsFirst(blocks, (x) => x.hit)) td.appendChild(b.el);
+        for (const b of hitsFirst(blocks, (x) => x.hit, (x) => !!x.named)) td.appendChild(b.el);
     }
 
     /* Effects cell: visual FX grouped by category — "chain" (beam/chain effects),
@@ -2630,6 +2712,7 @@
         // rather than a second copy of this machinery.
         const blocksFor = (c) => cats.filter((cat) => cat.col === c).map((cat) => ({
             hit: cat.hit,
+            named: wordIsNamed(c, cat.name),
             el: P.group({
                 head: fxHeadTag(cat.name, cat.hit, cat.mask, cat.col),
                 items: cat.items.map((make) => make()),
@@ -2679,6 +2762,23 @@
      */
     function anyGroup(field, test) {
         return groupsFor(field).some((g) => Search.combosOf(g).some(test));
+    }
+
+    /**
+     * Did a positive chip of `field` NAME this category word outright — as a
+     * whole token, not as a fragment of some longer value?
+     *
+     * This is the "full keyword hit" test hitsFirst ranks on. Equality, not
+     * substring, is the whole point: `mech:speed` names the speed category,
+     * while `mech:spe` merely reaches it (and reaches half the enum names too),
+     * so only the first has earned the top of the cell.
+     * @param {string} field
+     * @param {string} word category word ("" for content that has none)
+     * @returns {boolean}
+     */
+    function wordIsNamed(field, word) {
+        if (!word) return false;
+        return anyGroup(field, (ts) => ts.some((t) => t.text === word));
     }
 
     // hit = the entity fully satisfies at least one chip of its field
@@ -4061,6 +4161,10 @@
         if (state.sort.key !== "auto") {
             params.push("sort=" + (state.sort.dir < 0 ? "-" : "") + state.sort.key);
         }
+        // the help dialog is part of what a link can point at — "here is the
+        // syntax" is a thing people send each other, and without this the only
+        // way to share it is a sentence telling someone to click the ?
+        if (helpOpen()) params.push("help=1");
         const url = location.pathname + (params.length ? "?" + params.join("&") : "");
         if (url === location.pathname + location.search && !location.hash) return;
         // pushState (unlike the old location.hash assignment) fires no event,
@@ -4080,7 +4184,29 @@
         if (legacyMode && isChipField(legacyMode) && q && !/[a-z]+:/i.test(q)) {
             q = `${legacyMode}:${/\s/.test(q) ? `"${q}"` : q}`;
         }
-        return {v: get("v"), q, only: get("only"), without: get("without"), sort: get("sort")};
+        return {
+            v: get("v"), q, only: get("only"), without: get("without"), sort: get("sort"),
+            help: get("help"),
+        };
+    }
+
+    /** Is the help dialog on screen? (Its own open state is the truth.) */
+    const helpOpen = () =>
+        !!(/** @type {HTMLDialogElement} */ ($("#help")) || {}).open;
+
+    /**
+     * Show or hide the help dialog and write that into the URL, so it survives a
+     * reload, a share and the back button. `push` is false while restoring from
+     * a popstate — the URL is already what it should be.
+     * @param {boolean} on
+     * @param {boolean} [push]
+     */
+    function setHelp(on, push = true) {
+        const help = /** @type {HTMLDialogElement} */ ($("#help"));
+        if (on === help.open) return;
+        // showModal on an open dialog throws; close on a closed one is a no-op
+        if (on) help.showModal(); else help.close();
+        if (push) stateToUrl(true);
     }
 
     // set the "Only spells with / without" filters from the URL's only= (with)
@@ -4612,10 +4738,15 @@
 
         // help dialog (native <dialog>: Esc closes it for free)
         const help = /** @type {HTMLDialogElement} */ ($("#help"));
-        $("#help-btn").addEventListener("click", () => help.showModal());
-        $("#help-close").addEventListener("click", () => help.close());
+        $("#help-btn").addEventListener("click", () => setHelp(true));
+        $("#help-close").addEventListener("click", () => setHelp(false));
+        // Esc and the form's own close bypass the handlers above, so the URL is
+        // squared up here — one place, whatever closed it
+        help.addEventListener("close", () => {
+            if (new URLSearchParams(location.search).has("help")) stateToUrl(true);
+        });
         help.addEventListener("click", (e) => {
-            if (e.target === help) return help.close(); // backdrop click
+            if (e.target === help) return setHelp(false); // backdrop click
             // the worked examples are live: running one closes the dialog so the
             // results it just produced are actually visible
             const ex = targetClosest(e, ".help-ex button[data-search]");
@@ -4773,6 +4904,7 @@
             // bar was drawn from the URL before any of this existed. Repaint it
             // here rather than at the ten call sites that can change the pack.
             renderBar();
+            decorateExamples();
             runSearch({push});
         } catch (err) {
             console.error(err);
@@ -4787,6 +4919,7 @@
         loadQueryString(h.q);
         filtersFromUrl(h.only, h.without);
         sortFromUrl(h.sort);
+        setHelp(!!h.help, false); // back/forward opens and closes it too
         // no v= in the URL means the default version, not "keep the current
         // one" — back/forward must return from an explicitly-chosen pack
         const wanted = findVersion(h.v) || defaultVersion();
@@ -4847,7 +4980,13 @@
         await activateVersion(entry);
         if (autoExport === "json") Export.json();
         else if (autoExport === "csv") Export.csv();
-        qInput.focus();
+        // after the pack, so the examples inside it are drawn with a vocabulary.
+        // The first search has already rewritten the URL by now (and dropped the
+        // flag, the dialog not being open yet), so put it back.
+        if (h.help) {
+            setHelp(true, false);
+            stateToUrl(false);
+        } else qInput.focus();
     }
 
     void boot(); // nothing to await it — boot renders its own load errors

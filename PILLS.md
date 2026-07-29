@@ -192,6 +192,12 @@ Two axes, and the difference matters:
 | `numeric.kind: "value"` | a measurement the id carries     | a desaturation percent |
 | `bare`                  | a bare number that **is** the id | an invisibility type   |
 
+**A number is written as the category word, then the comparison** — `mech:"seat >2"`, `fx:"scale >100"`,
+`mech:"speed <-50"` — which is the same shape as every other value in the language (`attach chest`,
+`boneset upper body`, `count >4`). A type therefore never needs a second name for its number: the word it already has
+IS the name. An earlier pass invented `seats`, `detectors` and `reveals` as separate axis names glued to their
+operators; that gave the language a third way to attach a value and two words for one concept, and it was reverted.
+
 `operatorOnly: true` reserves bare numbers for the text or `bare` axis, so only `<`, `>`, `<=`, `>=`, `=` reach the
 number. That is what lets
 `fx:"invis 13"` mean type 13 while `fx:"invis =0"` means the invisibility nothing detects — and why `model:2` still
@@ -208,8 +214,11 @@ holds, what the game's own tooltip prints, and the only form that survives the d
 below −100%, which as a resulting speed would be negative. The friendlier reading rides the **tooltip**, where it is
 free to be absent when it says nothing.
 
-A whole-column count (`model:>4`) is a different feature: `COUNT_SOURCES` in
-`search.js`, one entry per countable column.
+`count` is the reserved word for the column's own size, spelled the same way in every field —
+`model:"count >4"`, `sound:"count =0"` — with a lone comparison (`model:>4`) as its shorthand. Its source is
+`COUNT_SOURCES` in `search.js`, one entry per countable column. It counts the WHOLE column, not the rows matching the
+chip's other tokens; narrowing that needs the column matchers rebuilt as per-spell entry iterators, which is its own
+pass.
 
 ## 4. Groups
 

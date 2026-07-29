@@ -949,6 +949,13 @@ main {
     font-family: Consolas, "Cascadia Mono", monospace;
 }
 
+/* typing "-mod" suggests an EXCLUSION, so the suggestion has to look like the
+   chip it would make — the minus is already in the input, and offering a plain
+   "model:" for it reads as the app ignoring what was typed */
+.suggest-field.not {
+    color: var(--danger);
+}
+
 .suggest-hint {
     color: var(--text-dim);
     font-size: 0.85em;
@@ -1178,6 +1185,66 @@ main {
     color: var(--gold);
     border-color: var(--gold-dim);
     background: rgba(var(--gold-rgb), calc(0.08 * var(--wash-strength)));
+}
+
+/* An example redrawn as the CHIPS it makes (decorateExamples). The button
+   stops being a code box and becomes the bar's own row of tags, so reading the
+   help and reading the search bar are the same act. Metrics are the chips' own
+   — this is static DOM, so weight and padding are free here. */
+#help ul.help-ex button.ex-chips,
+.es-examples button.ex-chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.3rem;
+    font-family: inherit;
+    background: none;
+    border: none;
+    padding: 0.1rem 0.15rem;
+}
+
+#help ul.help-ex button.ex-chips:hover,
+#help ul.help-ex button.ex-chips:focus-visible,
+.es-examples button.ex-chips:hover,
+.es-examples button.ex-chips:focus-visible {
+    background: rgba(var(--gold-rgb), calc(0.08 * var(--wash-strength)));
+    border: none;
+}
+
+.exchip {
+    display: inline-flex;
+    align-items: baseline;
+    padding: 0.05rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg);
+}
+
+/* free text is not a box in the bar either — it must not become one here */
+.exchip.exfree {
+    border: none;
+    background: none;
+    padding: 0.05rem 0;
+}
+
+.exchip.not {
+    border-color: rgba(var(--danger-rgb), 0.5);
+    background: rgba(var(--danger-rgb), calc(0.08 * var(--wash-strength)));
+}
+
+.exchip .qchip-field {
+    cursor: inherit;
+    margin-right: 0.3rem;
+    padding: 0;
+}
+
+.exchip .qchip-field:hover {
+    text-decoration: none;
+    background: none;
+}
+
+.exchip .bar-tok {
+    cursor: inherit;
 }
 
 /* --------------------------------------------------------------- toolbar */

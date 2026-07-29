@@ -32,10 +32,16 @@ Full syntax lives behind the **?** button in the app. The short version:
   (`fx:"object campfire"`, with `.gobject spawn` and `.lookup object` on the pill), `model:mount` for the mount it puts
   you on (`model:"mount stallion"`, with `.modify mount`), and `anim:replace` for animations it swaps out — `Stand → StealthStand`
   (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue).
-- Two keywords address a location rather than content: `attach` for where on the model something plays
-  (`model:"attach chest"`, `fx:"chain attach hand"`) and `boneset` for the body region an animation moves
-  (`anim:"boneset upper body"`, `anim:"boneset head"`) — most animations move the whole body, so only a specific region
-  is labelled on the pill.
+- **A word may be followed by its value**, space-separated, and that is the only value form in the language:
+  `model:"attach chest"` (where on the model it plays), `anim:"boneset upper body"` (which body region moves),
+  `mech:"seat >2"` (a numeric comparison), `model:"count >4"` (`count` works in every column, and a lone `model:>4` is
+  its shorthand). A value takes as many words as it needs and no more — `boneset upper body` is one region, while
+  `boneset head kneel` is the head region *and* a kneel animation. The search bar draws the word and its value joined,
+  so you can see how far the value reached.
+- **`|` means either** — `model:fire|frost`, `fx:chain|dissolve`, with or without spaces around the bar;
+  `id:133,116` does the same between numbers.
+- The bar **colours what the grammar recognises** and explains it on hover. Nothing is ever marked wrong: anything it
+  leaves plain is an ordinary text search, which is exactly what it does.
 - **Click any tag in the results** to search for it (shift-click to exclude).
 - The search — filters included — always lives in the URL, so any result set is a shareable link. Append `&export=json`
   or `&export=csv` to download it.
