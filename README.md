@@ -145,9 +145,10 @@ into `meta.absentTables`.
   search-hit highlighting and the spells a query selects; the renderer is a list of segments. See
   **[PILLS.md](PILLS.md)** — it also carries the segment-order convention and the rules for choosing a keyword.
 - **A new copy command**: `spellCommands` in `config.js` for per-spell buttons (they render as one nowrap strip under
-  the spell name — adding one widens the Name column rather than wrapping the strip); the `*CopyTemplate` entries for
-  the ones on tags. A label starting with `.` gets that dot drawn in the accent colour automatically — it is the chat
-  sigil, and it is what lets the buttons stay borderless until you hover them; a label without one renders plain.
+  the spell name — a new one becomes another segment of that strip and never wraps it to a second line); the
+  `*CopyTemplate` entries for the ones on tags. A label starting with `.` gets that dot drawn in the accent colour
+  automatically — it is the chat sigil; a label without one renders plain. The strip is drawn as ONE segmented
+  control rather than as separate buttons, so a command costs a hairline divider and its own text, not a box.
 - **A new theme**: every colour in `app.css` comes from a token in the block at the top, so a theme is one
   `:root[data-theme="<id>"] { ... }` block re-declaring those tokens plus one `{id, label}` line in `themes` in
   `config.js`. The header picker builds itself from that registry and appears once a second theme exists; the choice is
