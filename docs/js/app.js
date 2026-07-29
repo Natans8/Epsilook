@@ -1883,8 +1883,15 @@
     function commandStrip(spellId) {
         const row = el("div", "cmd-row");
         for (const cmd of CFG.spellCommands) {
-            const b = el("button", "cmd", cmd.label);
+            const b = el("button", "cmd");
             b.type = "button";
+            // The leading "." is Epsilon chat syntax, not decoration, so it is
+            // its own span and carries the accent. That mark is what makes the
+            // strip read as commands, which is what lets the buttons drop their
+            // borders at rest. A label with no dot just renders plain.
+            const dot = cmd.label.startsWith(".") ? "." : "";
+            if (dot) b.appendChild(el("span", "cmd-dot", dot));
+            b.appendChild(document.createTextNode(cmd.label.slice(dot.length)));
             b.title = `${cmd.hint} — ${fillTemplate(cmd.template, {id: spellId})}\nShift-click: copy wrapped in \`backticks\``;
             b.setAttribute("aria-label", `${cmd.hint} (${cmd.label})`);
             b.dataset.copy = fillTemplate(cmd.template, {id: spellId});

@@ -103,11 +103,7 @@
     --q-heirloom: #00ccff;
 
     /* command buttons */
-    --cmd-bg-top: #232b38;
-    --cmd-bg-bottom: #1a212c;
     --cmd-border: #3a4351;
-    --cmd-text: #dfe6ef;
-    --cmd-bevel: rgba(255, 255, 255, 0.05);
 
     /* How loudly a shape carries the colour family it belongs to: how much of
        --tone fills it, how much of --tone its border is mixed with, and how
@@ -240,11 +236,7 @@
     --q-legendary: #bf641d;
     --q-artifact: #a1782b;
     --q-heirloom: #228dae;
-    --cmd-bg-top: #f4f5fb;
-    --cmd-bg-bottom: #dfe1f0;
     --cmd-border: #989ddb;
-    --cmd-text: #3a3f59;
-    --cmd-bevel: rgba(255, 255, 255, 0.7);
     --group-fill: 8%;
     --tone-fill: 28%;
     --head-fill: 38%;
@@ -304,11 +296,7 @@
     --q-legendary: #bf641d;
     --q-artifact: #a1782b;
     --q-heirloom: #228dae;
-    --cmd-bg-top: #fbf5ea;
-    --cmd-bg-bottom: #efe0c4;
     --cmd-border: #bd9f61;
-    --cmd-text: #56392a;
-    --cmd-bevel: rgba(255, 255, 255, 0.7);
     --group-fill: 8%;
     --tone-fill: 28%;
     --head-fill: 38%;
@@ -1578,14 +1566,20 @@ mark.hl {
     display: none;
 }
 
-/* the wowhead button matches the command buttons' height */
+/* the wowhead link sits at the same quiet level as the commands beside it */
 .cmd-row .wh-cmd {
-    width: 2rem;
+    width: 1.4rem;
     height: auto;
     margin: 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    opacity: 0.65;
+    transition: opacity 0.12s;
+}
+
+.cmd-row .wh-cmd:hover {
+    opacity: 1;
 }
 
 .cmd-row .wh-cmd img {
@@ -2239,40 +2233,49 @@ mark.hl {
 /* command buttons: one compact line under the spell name (see .c-name), never
    wrapping — the strip is what sets that column's minimum width */
 
+/* These are chat commands you paste into the game, so they are drawn as a
+   command line, not as keycaps. At rest each one is quiet monospace text —
+   no border, no fill, no shadow — because four bordered buttons on every one
+   of ~60 rows outshouted the pills that are the actual payload of a row.
+   The chrome is spent where it is needed instead: on hover and focus. */
+
 .cmd-row {
     display: flex;
-    gap: 0.25rem;
-    align-items: stretch;
+    gap: 0.4rem;
+    align-items: center;
     flex-wrap: nowrap;
     white-space: nowrap;
-    margin-top: 0.3rem;
+    margin-top: 0.35rem;
 }
 
 .cmd {
-    padding: 0.2rem 0.4rem;
+    padding: 0.1rem 0.2rem;
     text-align: center;
-    border: 1px solid var(--cmd-border);
-    border-radius: 7px;
-    background: linear-gradient(180deg, var(--cmd-bg-top), var(--cmd-bg-bottom));
-    color: var(--cmd-text);
-    font-size: 0.78rem;
-    font-weight: 600;
+    /* transparent, not absent: the hover border must not reflow the strip */
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: none;
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    font-weight: 500;
     font-family: Consolas, "Cascadia Mono", monospace;
     white-space: nowrap;
-    box-shadow: 0 1px 2px rgba(var(--shadow-rgb), calc(0.45 * var(--shadow-strength))),
-    inset 0 1px 0 var(--cmd-bevel);
-    transition: border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.06s;
+    transition: color 0.12s, border-color 0.12s, background-color 0.12s, transform 0.06s;
+}
+
+/* the command sigil — the one mark that says "this is a command" */
+.cmd-dot {
+    color: var(--gold);
 }
 
 .cmd:hover {
-    border-color: var(--gold);
+    border-color: var(--cmd-border);
+    background: rgba(var(--gold-rgb), 0.07);
     color: var(--gold);
-    box-shadow: 0 0 12px rgba(var(--gold-rgb), 0.35), inset 0 1px 0 var(--cmd-bevel);
 }
 
 .cmd:active {
     transform: translateY(1px);
-    box-shadow: 0 0 6px rgba(var(--gold-rgb), 0.25);
 }
 
 /* wowhead links */
