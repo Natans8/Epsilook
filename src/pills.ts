@@ -642,10 +642,22 @@ function corpusOf(type: PillType, data: SpellData, id: any): string {
     return type.corpus(data).get(id) || "";
 }
 
-/* A numeric word's value: an optional comparison and a number. The number
- * may be signed, because the values are — a movement-speed change is
- * negative when it slows, so a bound may be negative too ("<-50"). */
-const VALUE_RE = /^(<=|>=|<|>|=)?(-?\d+(?:\.\d+)?)$/;
+/* THE NUMERIC GRAMMAR LIVES HERE, AND NOWHERE ELSE.
+ *
+ * A value is an optional comparison and a number. The number may be signed,
+ * because the values are — a movement-speed change is negative when it
+ * slows, so a bound may be negative too ("<-50").
+ *
+ * The two halves are named separately because the TOKENIZER needs them
+ * apart: it recognises a comparison however it is spaced (`seat >2` =
+ * `seat > 2` = `seat>2`), which means splitting a lone operator from its
+ * number and a word from a comparison glued onto it. Composing its patterns
+ * out of these (see query.ts) is what keeps one alphabet. Both files used to
+ * claim in a comment to be the single home of this and neither was: the
+ * whole grammar was spelled five times, twice as byte-identical functions. */
+export const CMP_OPS = "<=|>=|<|>|=";
+export const NUM_SRC = "-?\\d+(?:\\.\\d+)?";
+const VALUE_RE = new RegExp(`^(${CMP_OPS})?(${NUM_SRC})$`);
 
 /**
  * Does this token read as a numeric word's value? The search bar asks, so
@@ -653,6 +665,20 @@ const VALUE_RE = /^(<=|>=|<|>|=)?(-?\d+(?:\.\d+)?)$/;
  * one home, and no way for the drawing and the matching to disagree.
  */
 export const isValue = (text: string): boolean => VALUE_RE.test(text);
+
+/**
+ * True when a token carries a comparison operator — i.e. it asks for a
+ * numeric match rather than a value/word match. A bare number is NOT an
+ * operator: standing loose in a chip it keeps its per-field literal
+ * meaning. (Written against a numeric word it does ask for a comparison —
+ * see bindNumeric — but that is decided by the pair, not by the token, so
+ * it is not a question this predicate can answer.)
+ *
+ * Deliberately looser than VALUE_RE: it asks only how the token OPENS, so
+ * `>` half-typed is already a comparison. "A comparison with its number",
+ * which two callers want, is `isValue(t) && hasOperator(t)`.
+ */
+export const hasOperator = (text: string): boolean => /^[<>=]/.test(text);
 
 /**
  * A value token as a test on a number, or null when it is not one.
@@ -665,7 +691,7 @@ export const isValue = (text: string): boolean => VALUE_RE.test(text);
  * (a scale of -50% shrinks), and folding it away would leave no way to ask
  * for one direction while `scale >0` and `scale <0` already say it.
  */
-function numericTest(text: string): ((n: number) => boolean) | null {
+export function numericTest(text: string): ((n: number) => boolean) | null {
     const m = VALUE_RE.exec(text);
     if (!m) return null;
     const v = Number(m[2]);
@@ -681,6 +707,12 @@ function numericTest(text: string): ((n: number) => boolean) | null {
         default:
             return (n) => n === v; // "=", or a bare number
     }
+}
+
+/** True when `text` is a numeric-comparison token satisfied by `n`. */
+export function matchNumeric(text: string, n: number): boolean {
+    const test = numericTest(text);
+    return test ? test(n) : false;
 }
 
 /**
@@ -731,7 +763,7 @@ function tokenMatches(type: PillType, data: SpellData, id: any, corpusL: string,
                       token: { text: string }): boolean {
     const text = token.text;
     if (corpusL.includes(text)) return true;
-    const operator = /^[<>=]/.test(text);
+    const operator = hasOperator(text);
     if (type.bare && !operator && String(type.bare(data, id)) === text) return true;
     if (type.numeric && !(type.numeric.operatorOnly && !operator)) {
         const test = numericTest(text);

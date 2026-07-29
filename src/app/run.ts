@@ -1,5 +1,4 @@
 import {$} from "../util";
-import {TARGET_WORD_TITLES} from "./autocomplete";
 import {recordBar} from "./bar";
 import {currentGroups, serializeQuery} from "./query";
 import {renderResults} from "./render";
@@ -8,6 +7,7 @@ import type {QueryGroup, QueryToken} from "../search";
 import {activeData, state} from "./state";
 import type {HitToken} from "./state";
 import {stateToUrl} from "./url";
+import * as P from "../pills";
 import * as Search from "../search";
 import {CFG} from "../config";
 /* ------------------------------------------------------------ search */
@@ -68,46 +68,116 @@ export function runSearch({push = false} = {}): void {
     stateToUrl(push);
 }
 
+/* One pack section: spell id -> its entries, or a plain Set of the spells
+ * that have the thing at all (freeze and camo, which have nothing to list). */
+type Section = Map<number, unknown[]> | Set<number>;
+
+/** How many entries this section holds for one spell. A Set holds 0 or 1. */
+const sizeIn = (s: Section, id: number): number =>
+    s instanceof Set ? (s.has(id) ? 1 : 0) : (s.get(id) || []).length;
+
+/* WHICH PACK SECTIONS FEED EACH COLUMN — one list, two readers. The count
+ * sort asks how many entries they hold; the filter row asks whether any of
+ * them has the spell at all. The fx column's sixteen used to be written out
+ * in both places, so a section added to one silently stayed missing from
+ * the other. Adding a section to a column is one entry here. */
+const COLUMN_SECTIONS: Record<string, (d: SpellData) => Section[]> = {
+    // the per-category rows once the pack has them (format 15+), else the
+    // old flat file list. spellModels is DERIVED from spellModelCats when
+    // both exist, so which one is read never changes WHICH spells qualify —
+    // only whether a fid used twice counts once or twice.
+    models: (d) => [d.spellModelCats.size ? d.spellModelCats : d.spellModels],
+    sounds: (d) => [d.spellSounds],
+    animations: (d) => [d.spellAnimKits, d.spellReplaceAnims, d.spellVisualAnims],
+    // raw SpellEffect rows, not the rendered pill count — pills merge rows
+    // that differ only in implicit target, and "how many effects does this
+    // spell have" is the more meaningful sort (it is also what the export
+    // lists, one line per row). Plus the five non-visual categories that
+    // moved into this column, so the sort counts what the cell shows.
+    mechanics: (d) => [d.spellMechanics, d.spellVehicles, d.spellInvisTypes,
+                       d.spellDetectTypes, d.spellKeybinds, d.spellSpeedMods],
+    fx: (d) => [d.spellFx, d.spellDissolves, d.spellGlows, d.spellShadowies,
+                d.spellGhostMats, d.spellTints, d.spellDesaturates, d.spellTransps,
+                d.spellFreezes, d.spellCamos, d.spellScreens, d.spellMorphs,
+                d.spellShapeshifts, d.spellSummons, d.spellObjects, d.spellScaleMods],
+};
+
 // multi-value columns sort by how many entries a row shows there — the
 // count keys mirror the column names; clicking those headers starts at
 // "most entries first" (the extreme spells are the interesting ones)
-export const COUNT_SORTS = new Set(["models", "sounds", "animations", "fx", "mechanics"]);
+export const COUNT_SORTS = new Set(Object.keys(COLUMN_SECTIONS));
 
 function entryCountFn(key: string): (id: number) => number {
-    const d = activeData();
-    const len = (m: Map<number, unknown[]>, id: number) => (m.get(id) || []).length;
-    switch (key) {
-        case "models":
-            return (id) =>
-                d.spellModelCats.size ? len(d.spellModelCats, id) : len(d.spellModels, id);
-        case "sounds":
-            return (id) => len(d.spellSounds, id);
-        case "animations":
-            return (id) =>
-                len(d.spellAnimKits, id) + len(d.spellReplaceAnims, id) + len(d.spellVisualAnims, id);
-        // raw SpellEffect rows, not the rendered pill count — pills merge rows
-        // that differ only in implicit target, and "how many effects does this
-        // spell have" is the more meaningful sort (it is also what the export
-        // lists, one line per row)
-        case "mechanics":
-            // the SpellEffect rows plus the non-visual categories that moved
-            // into this column, so the sort counts what the cell shows
-            return (id) => len(d.spellMechanics, id)
-                + len(d.spellVehicles, id) + len(d.spellInvisTypes, id)
-                + len(d.spellDetectTypes, id) + len(d.spellKeybinds, id)
-                + len(d.spellSpeedMods, id);
-        case "fx":
-            return (id) =>
-                len(d.spellFx, id) + len(d.spellDissolves, id) + len(d.spellGlows, id)
-                + len(d.spellShadowies, id) + len(d.spellGhostMats, id) + len(d.spellTints, id)
-                + len(d.spellDesaturates, id) + len(d.spellTransps, id)
-                + (d.spellFreezes.has(id) ? 1 : 0) + (d.spellCamos.has(id) ? 1 : 0)
-                + len(d.spellScreens, id) + len(d.spellMorphs, id)
-                + len(d.spellShapeshifts, id) + len(d.spellSummons, id)
-                + len(d.spellObjects, id) + len(d.spellScaleMods, id);
-        default: // unreachable: callers gate on COUNT_SORTS
-            return () => 0;
+    // callers gate on COUNT_SORTS, which is this record's own key set
+    const sections = COLUMN_SECTIONS[key](activeData());
+    return (id) => sections.reduce((n, s) => n + sizeIn(s, id), 0);
+}
+
+/* Headless animation groups, which the pill-type registry cannot state:
+ * its `spells()` slot is id -> spell ids, and these have no id at all (a
+ * "replace" pair is two anim ids, not one of anything), so the build keys
+ * them BY SPELL. They still have a category word, so they still rank — one
+ * line each, keyed the way carriersOf asks. */
+const SPELL_KEYED_GROUPS: Record<string, (d: SpellData) => Map<number, unknown>> = {
+    "anim:replace": (d) => d.spellReplaceAnims,
+    "anim:passenger": (d) => d.spellPassengerAnims,
+};
+
+/* A category word's carrier set is a flatten of the registry's id -> spells
+ * map, and applyFiltersAndSort re-ranks on every sort and filter toggle
+ * without re-searching — so it is worth computing once per pack. Weak, so a
+ * pack the user switches away from is not pinned in memory by this. */
+const carrierCache = new WeakMap<SpellData, Map<string, Set<number> | null>>();
+
+/**
+ * The spells that really CARRY `word` in `field`, as opposed to merely
+ * mentioning it in a file name. Null when the word names no category.
+ *
+ * Derived from the pill-type registry — the same declaration the cells
+ * render from and the search selects with — so a new type ranks without
+ * being listed a second time. The hand-written map this replaced had
+ * drifted exactly as a second copy does: it never gained fx:object or
+ * fx:scale, and it never gained a `mech` branch at all, so none of the five
+ * categories that moved to that column had ranked since the move.
+ *
+ * Several types may share a word (ghost is fed by ShadowyEffect rows AND
+ * Type-22 material recolors), which is why this unions rather than picking.
+ */
+function carriersOf(field: string, word: string, d: SpellData): Set<number> | null {
+    let byWord = carrierCache.get(d);
+    if (!byWord) carrierCache.set(d, byWord = new Map());
+    const key = field + ":" + word;
+    const cached = byWord.get(key);
+    if (cached !== undefined) return cached;
+
+    const found = new Set<number>();
+    const add = (ids: Iterable<number>) => {
+        for (const id of ids) found.add(id);
+    };
+
+    for (const type of P.typesFor(field)) {
+        if (type.word !== word || !type.spells || (type.when && !type.when(d))) continue;
+        const spells = type.spells(d);
+        // a Set is the valueless shape (freeze/camo): it IS the spells
+        if (spells instanceof Set) add(spells);
+        else for (const ids of spells.values()) add(ids);
     }
+    const grouped = SPELL_KEYED_GROUPS[key];
+    if (grouped) add(grouped(d).keys());
+    // model categories are keyed by CATEGORY — the pills are files rather
+    // than ids of a type, so these words are registered without a `spells`
+    if (field === "model") {
+        for (const [cat, spells] of d.modelCatSpells) {
+            if ((d.modelCatNames[cat] || "") === word) add(spells);
+        }
+    }
+
+    // "nothing carries it" and "no such category" are the same answer to the
+    // ranker, so a pack without the content ranks nothing rather than
+    // sorting on a test that can never fire
+    const out = found.size ? found : null;
+    byWord.set(key, out);
+    return out;
 }
 
 // Spells that actually carry a category a chip names rank above spells
@@ -116,13 +186,6 @@ function entryCountFn(key: string): (id: number) => number {
 // Returns null when no chip names a category, else (id) -> hit count.
 function categoryRanker(): ((id: number) => number) | null {
     const d = activeData();
-    const FX_SETS: Record<string, Map<number, unknown> | Set<number>> = {
-        chain: d.spellFx, dissolve: d.spellDissolves, glow: d.spellGlows,
-        tint: d.spellTints, desaturate: d.spellDesaturates,
-        transparency: d.spellTransps, freeze: d.spellFreezes, camo: d.spellCamos,
-        screen: d.spellScreens, shapeshift: d.spellShapeshifts,
-        morph: d.spellMorphs, summon: d.spellSummons,
-    };
     const tests: ((id: number) => boolean)[] = [];
     for (const g of state.groups) {
         if (g.not) continue;
@@ -130,24 +193,12 @@ function categoryRanker(): ((id: number) => number) | null {
         // both categories, the same way it selects both
         for (const t of g.tokens.flatMap((tk) =>
             (tk.alts || [tk.text]).map((a) => ({text: a})))) {
-            if (g.field === "fx") {
-                if (t.text === "ghost" || t.text === "shadowy") {
-                    tests.push((id) => d.spellShadowies.has(id) || d.spellGhostMats.has(id));
-                } else if (FX_SETS[t.text]) {
-                    const s = FX_SETS[t.text];
-                    tests.push((id) => s.has(id));
-                }
-            } else if (g.field === "model") {
-                for (const [cat, spells] of d.modelCatSpells) {
-                    if ((d.modelCatNames[cat] || "") === t.text) tests.push((id) => spells.has(id));
-                }
-            } else if (g.field === "anim" && t.text === "stance") {
-                tests.push((id) => d.spellReplaceAnims.has(id));
-            }
+            const carriers = carriersOf(g.field, t.text, d);
+            if (carriers) tests.push((id) => carriers.has(id));
             // a target word floats spells that really carry a row of that type
             // above the ones that merely have it in a file name
             // (beamtarget_onground). Resolved once via the field's own matcher.
-            if (TARGET_WORD_TITLES[t.text] && Search.FIELDS[g.field]) {
+            if (Search.TARGET_WORD_TITLES[t.text] && Search.FIELDS[g.field]) {
                 const matches = Search.FIELDS[g.field].run([{text: t.text}], d);
                 tests.push((id) => matches.has(id));
             }
@@ -157,39 +208,29 @@ function categoryRanker(): ((id: number) => number) | null {
     return (id: number) => tests.reduce((n, f) => n + (f(id) ? 1 : 0), 0);
 }
 
-// presence test per filter category — the union of every pack section that
-// feeds that column. Both the "Only spells with / without" filter row and
-// the URL (only= / without=) read these; giving a future column a filter is
-// a one-line addition here plus its button in index.html.
-const HAS_CATEGORY: Record<string, (d: SpellData, id: number) => boolean> = {
-    models: (d, id) => d.spellModels.has(id),
-    sounds: (d, id) => d.spellSounds.has(id),
-    animations: (d, id) =>
-        d.spellAnimKits.has(id) || d.spellReplaceAnims.has(id) || d.spellVisualAnims.has(id),
-    // the five non-visual sections (vehicles, invis, detect, keybinds,
-    // speed) moved to the Mechanics column and are no longer fx content
-    fx: (d, id) =>
-        d.spellFx.has(id) || d.spellDissolves.has(id) || d.spellGlows.has(id) ||
-        d.spellShadowies.has(id) || d.spellGhostMats.has(id) || d.spellTints.has(id) ||
-        d.spellDesaturates.has(id) || d.spellTransps.has(id) ||
-        d.spellFreezes.has(id) || d.spellCamos.has(id) || d.spellScreens.has(id) ||
-        d.spellMorphs.has(id) || d.spellShapeshifts.has(id) || d.spellSummons.has(id) ||
-        d.spellObjects.has(id) || d.spellScaleMods.has(id),
-};
+/* The columns the "Only spells with / without" row can filter on. The test
+ * itself is COLUMN_SECTIONS asked "any at all?", so the sections are named
+ * once; this is only WHICH columns offer the filter. Mechanics sorts but is
+ * deliberately absent — it has no button, and a filter reachable only from a
+ * URL could not be switched back off — so giving a future column a filter is
+ * its name here plus its button in index.html. */
+const FILTER_CATEGORIES = new Set(["models", "sounds", "animations", "fx"]);
 
 export function applyFiltersAndSort(): void {
     const d = activeData();
     let list = state.results;
 
     const f = state.filters;
-    const active = Object.keys(f).filter((k) => f[k]);
+    const active = Object.keys(f).filter((k) => f[k] && FILTER_CATEGORIES.has(k));
     if (active.length) {
         // each active category is "with" (keep spells that HAVE it) or "without"
-        // (keep spells that LACK it); several AND together
+        // (keep spells that LACK it); several AND together. The sections are
+        // resolved once per category, not once per spell.
+        const gates = active.map((k) => ({want: f[k], sections: COLUMN_SECTIONS[k](d)}));
         list = list.filter((id) =>
-            active.every((k) => {
-                const has = HAS_CATEGORY[k](d, id);
-                return f[k] === "without" ? !has : has;
+            gates.every((g) => {
+                const has = g.sections.some((s) => sizeIn(s, id) > 0);
+                return g.want === "without" ? !has : has;
             }));
     } else {
         list = list.slice();
@@ -213,7 +254,7 @@ export function applyFiltersAndSort(): void {
         // so this degrades to the old behaviour instead of scrambling it.
         const words = state.tokens
             .map((t) => t.text)
-            .filter((s) => !Search.hasOperator(s) && !/^#?\d+$/.test(s));
+            .filter((s) => !P.hasOperator(s) && !/^#?\d+$/.test(s));
         if (words.length) {
             Search.sortByRelevance(list, words.join(" "), d);
         } else {

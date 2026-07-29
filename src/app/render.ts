@@ -1,4 +1,4 @@
-import {animIsHit, camoIsHit, channelIsHit, desatIsHit, dissolveIsHit, fileIsHit, freezeIsHit, fxChainIsHit, ghostMatIsHit, glowIsHit, keybindIsHit, kitIsHit, mechanicIsHit, morphIsHit, mountIsHit, objectIsHit, scaleIsHit, screenIsHit, shadowyIsHit, shapeshiftIsHit, speedIsHit, summonIsHit, tintIsHit, tokensFor, transpIsHit, vehicleIsHit, wordIsNamed} from "./hits";
+import {animIsHit, camoIsHit, channelIsHit, desatIsHit, dissolveIsHit, fileIsHit, freezeIsHit, fxChainIsHit, ghostMatIsHit, glowIsHit, keybindIsHit, kitIsHit, mechanicIsHit, morphIsHit, mountIsHit, objectIsHit, replaceAnimHit, scaleIsHit, screenIsHit, shadowyIsHit, shapeshiftIsHit, speedIsHit, summonIsHit, tintIsHit, tokensFor, transpIsHit, vehicleIsHit, wordIsNamed} from "./hits";
 import {setStatus} from "./run";
 import type {DisplayRef, SpellData} from "../data";
 import {activeData, state, wowheadUrl} from "./state";
@@ -196,7 +196,7 @@ function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
     tr.appendChild(soundsCell(d.spellSounds.get(spellId) || []));
 
     // Animations — loose kit-played anims first, then AnimKits grouped with
-    // the animations they play, then direct stand/walk anims ("stance")
+    // the animations they play, then the headless groups (passenger, replace)
     tr.appendChild(animationsCell(d.spellAnimKits.get(spellId) || [],
         d.spellVisualAnims.get(spellId) || [], spellId));
 
@@ -210,7 +210,7 @@ function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
     // then the non-visual category blocks. Both go in as blocks so the cell
     // ranks them against each other (see mechanicsCell); an enum pill can
     // never be a "named" hit, since its corpus is enum names, not keywords.
-        const mechBlocks: {hit: boolean, named?: boolean, el: Node}[] = mechanicPills(d.spellMechanics.get(spellId) || []).map((p) => ({
+    const mechBlocks: CellBlock[] = mechanicPills(d.spellMechanics.get(spellId) || []).map((p) => ({
         hit: p.rows.some(mechanicIsHit),
         el: mechanicTag(p),
     }));
@@ -299,11 +299,6 @@ function highlightMatches(name: string): DocumentFragment {
  *
  * `isKeyword` is optional: a cell whose contents carry no category word (the
  * sound kits) simply has no first band.
- * @template T
- * @param {T[]} items
- * @param {(it: T) => boolean} isHit
- * @param {((it: T) => boolean) | null} [isKeyword]
- * @returns {T[]}
  */
 function hitsFirst<T>(items: T[], isHit: (it: T) => boolean,
                       isKeyword: ((it: T) => boolean) | null = null): T[] {
@@ -479,11 +474,11 @@ function soundsCell(soundEntries: {soundKitId: number; fid: number; targets: num
 /* Animations cell, in render order: loose pills for the animations the
    * spell's visual kits play directly (SpellVisualAnim — nothing to group
    * them under, joined by a vehicle's own anims), AnimKits grouped with the
-   * animations they play, then the headless category groups — "stance" for
-   * direct stand/walk overrides (SpellProceduralEffect Type 7) and
-   * "passenger" for what a rider plays in a vehicle seat (VehicleSeat).
-   * Those use the same anim pills, with a category word where a kit id would
-   * head the group. Loose pills never collapse (99%+ of spells have ≤3). */
+   * animations they play, then the headless category groups — "passenger"
+   * for what a rider plays in a vehicle seat (VehicleSeat), and "replace"
+   * for the animations a spell swaps out. Those use the same anim pills,
+   * with a category word where a kit id would head the group. Loose pills
+   * never collapse (99%+ of spells have ≤3). */
 /* Sentinel "kit ids" for animation groups that have no AnimKit to head
    * them: they head on a category word instead. Adding another headless
    * category is one entry here plus one in ANIM_CAT_TITLES — nothing below
@@ -493,10 +488,6 @@ const ANIM_GROUPS: {id: number; word: string;
     animsOf(d: SpellData, s: number): number[] | undefined}[] = [
     {id: PASSENGER_GROUP, word: "passenger", animsOf: (d, s) => d.spellPassengerAnims.get(s)},
 ];
-// a replacement pill is a hit when either side's anim matches the query,
-// under the "replace" word or by anim name
-export const replaceAnimHit = (a: number): boolean => animIsHit(a, "replace");
-
 function animationsCell(animKitIds: number[], looseAnimIds: number[],
                         spellId: number): HTMLElement {
     const groupAnims = new Map<number, number[]>();
@@ -526,7 +517,7 @@ function animationsCell(animKitIds: number[], looseAnimIds: number[],
     // Expand a kit's anims into pill ENTRIES: one per specific boneset region
     // an anim (segment) animates, so two regions are two pills (never merged),
     // and an anim with no region is its plain pill. Bonesets ride real
-    // AnimKits only — a headless group (passenger/stance) has none.
+    // AnimKits only — a headless group (passenger) has none.
     const animEntries = (kitId: number) => {
         const bones = groupAnims.has(kitId) ? null : d.animKitAnimBoneset.get(kitId);
         const out: {animId: number; region: string | null}[] = [];
@@ -549,8 +540,9 @@ function animationsCell(animKitIds: number[], looseAnimIds: number[],
     const groups = animKitIds.slice().sort((a, b) => a - b);
     for (const g of ANIM_GROUPS) if (groupAnims.has(g.id)) groups.push(g.id);
 
-    // loose visual-anim pills first, then the kit / stance / passenger
-    // groups; renderBlocks floats whichever hold the hit to the top.
+    // loose visual-anim pills first, then the kit / passenger groups
+    // (replace follows below); renderBlocks floats whichever hold the hit
+    // to the top.
     const blocks = [];
     for (const a of looseAnimIds.slice().sort((x, y) => x - y)) {
         blocks.push({
@@ -563,8 +555,8 @@ function animationsCell(animKitIds: number[], looseAnimIds: number[],
             hit: kitHasHit(kitId),
             named: wordIsNamed("anim", wordOf(kitId)),
             el: P.group({
-                // stance overrides are ~96% caster — a constant, so no icon
-                // there (documented in the help dialog); animkits carry theirs
+                // a headless group's rows carry no target mask of their own,
+                // so its head shows no icon; animkits carry theirs
                 head: groupAnims.has(kitId)
                     ? animCatHeadTag(wordOf(kitId), kitHasHit(kitId))
                     : kitTag(kitId, "animkit", maskOf(d.animKitTargets, spellId, [kitId])),
@@ -590,8 +582,9 @@ function animationsCell(animKitIds: number[], looseAnimIds: number[],
     return td;
 }
 
-/* Head of the stance group — a category word like the model/fx heads:
-   * clicking searches the whole group via anim:stance. */
+/* Head of a headless animation group (passenger, replace) — a category word
+   * like the model/fx heads: clicking searches the whole group via that word,
+   * e.g. anim:replace. */
 
 function animCatHeadTag(word: string, hit: boolean): HTMLElement {
     return P.pill({
@@ -628,10 +621,7 @@ function animCatHeadTag(word: string, hit: boolean): HTMLElement {
    *
    * `named` is the block's second rank: it was matched because the query spelled
    * its category word, not because some file name contained the same letters
-   * (see hitsFirst). A block with no category word simply never sets it.
-   * @param {HTMLElement} td
-   * @param {{hit: boolean, named?: boolean, el: Node}[]} blocks
-   */
+   * (see hitsFirst). A block with no category word simply never sets it. */
 function renderBlocks(td: HTMLElement, blocks: CellBlock[]): void {
     for (const b of hitsFirst(blocks, (x) => x.hit, (x) => !!x.named)) td.appendChild(b.el);
 }
@@ -650,7 +640,6 @@ function renderBlocks(td: HTMLElement, blocks: CellBlock[]): void {
  * and differ only in which column a category was declared for. Returns the
  * fx `<td>` plus the mech-side blocks for mechanicsCell to render after its
  * enum pills.
- * @returns {{fx: HTMLElement, mechBlocks: {hit: boolean, el: Node}[]}}
  */
 function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]} {
     const d = activeData();
@@ -1050,7 +1039,7 @@ function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]
     });
     // invisibility / detection channels. Counterpart count = the other side of
     // the same type; it drives the pill label AND the numeric hit test.
-        const channels: Array<[string, {type: number, mask: number}[], Map<number, number[]>]> = [
+    const channels: Array<[string, {type: number, mask: number}[], Map<number, number[]>]> = [
         ["invis", invisPills, d.detectTypeSpells],
         ["detect", detectPills, d.invisTypeSpells]];
     for (const [side, pills, countMap] of channels) {
@@ -1077,7 +1066,7 @@ function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]
         mask: kbMask,
         isHit: keybindIsHit,
         entries: (ids) => {
-                        const byLabel: Map<string, {label: string, fn: string, ids: number[], mask: number}> = new Map();
+            const byLabel: Map<string, {label: string, fn: string, ids: number[], mask: number}> = new Map();
             for (const o of ids) {
                 const row = d.keybinds.get(o)!; // rows filtered on d.keybinds.has
                 const label = row.when ? `${row.fn} ${row.when}` : row.fn;

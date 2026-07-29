@@ -116,10 +116,12 @@ const NUM_ALT = /^#?\d+$/;
 
 /* The three shapes tokenSpans needs to recognise a comparison however it is
    spaced: an operator standing alone, the number that belongs to it, and a
-   word with the whole comparison glued onto it. */
-const LONE_OP = /^(<=|>=|<|>|=)$/;
-const NUMBER = /^-?\d+(?:\.\d+)?$/;
-const GLUED_CMP = /^([a-z][a-z_]*)((?:<=|>=|<|>|=)-?\d+(?:\.\d+)?)$/;
+   word with the whole comparison glued onto it. All three are built from the
+   numeric grammar's own alphabet (pills.ts), so the tokenizer cannot come to
+   read a different set of operators than the matcher accepts. */
+const LONE_OP = new RegExp(`^(${P.CMP_OPS})$`);
+const NUMBER = new RegExp(`^${P.NUM_SRC}$`);
+const GLUED_CMP = new RegExp(`^([a-z][a-z_]*)((?:${P.CMP_OPS})${P.NUM_SRC})$`);
 
 /**
  * A token's ALTERNATIVES — the values any one of which satisfies it.
@@ -182,7 +184,7 @@ function altsOf(text: string): string[] {
  */
 export function tokenSpans(text: string): TokenSpan[] {
     const lower = text.toLowerCase();
-        const spans: {start: number, end: number, text: string, quoted: boolean}[] = [];
+    const spans: {start: number, end: number, text: string, quoted: boolean}[] = [];
     for (const m of lower.matchAll(/"([^"]*)(?:"|$)|([^\s"]+)/g)) {
         const quoted = m[1] !== undefined;
         const raw = quoted ? m[1] : m[2];

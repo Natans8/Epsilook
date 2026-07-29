@@ -61,14 +61,21 @@ export function kitIsHit(kitId: number, field: string): boolean {
     return anyGroup(searchField, (ts) => ts.some((t) => Number(t.text) === kitId));
 }
 
-// anim pills can be hit through their group's category word too — today
-// only the stance group carries one ("stance"); kit groups pass "".
+// anim pills can be hit through their group's category word too — the
+// headless groups carry one ("replace", "passenger"); kit groups pass "".
 // Mirrors spellsByAnim's token test.
 export function animIsHit(animId: number, groupWord = ""): boolean {
     const nameL = activeData().animNamesL[animId];
     return anyGroup("anim", (ts) =>
         ts.every((t) => groupWord.includes(t.text) || nameL.includes(t.text)));
 }
+
+// a replacement pill is a hit when either side's anim matches the query,
+// under the "replace" word or by anim name. It lives here rather than beside
+// its renderer because tags.ts wants it and render.ts is the only thing tags
+// would otherwise have to import — one line was the whole of the cycle
+// between the two biggest modules.
+export const replaceAnimHit = (a: number): boolean => animIsHit(a, "replace");
 
 /* A mechanic pill matches when any mech: group is satisfied by the names on
    * that ROW — effect, aura and implicit targets together. Row-level rather
@@ -143,5 +150,5 @@ export function vehicleIsHit(attachment: string, seats: number): boolean {
     // is the one place the column move had to be repeated by hand.
     return anyGroup("mech", (ts) => ts.every((t) =>
         "seat".includes(t.text) || nameL.includes(t.text)
-        || Search.matchNumeric(t.text, seats)));
+        || P.matchNumeric(t.text, seats)));
 }

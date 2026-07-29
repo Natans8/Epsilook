@@ -83,56 +83,14 @@ function textMatches(haystackL: string, tokens: QueryToken[]): boolean {
 
 /* --------------------------------------------------- numeric tokens */
 
-/**
- * Parse a numeric-comparison token — "4", ">2", "<5", ">=8", "<=3", "=1"
- * — into a predicate (n) => boolean, or null when the token is not one.
- *
- * This is the single home for operator parsing: the fx column's numeric
- * categories (today just vehicle seat count, the first of what will be
- * several numeric pills) match through it, and hit-highlighting calls
- * matchNumeric so a pill lights up under exactly the query that selects
- * it. A bare number means equality.
- *
- * The bound may be negative or fractional, because the values are: a
- * movement-speed change is signed (`fx:"speed <-50"`) and a handful of them
- * are fractional. Counts never are, and a count simply matches nothing
- * against a bound it cannot reach.
- */
-function numericPredicate(text: string): ((n: number) => boolean) | null {
-    const m = /^(<=|>=|<|>|=)?(-?\d+(?:\.\d+)?)$/.exec(text);
-    if (!m) return null;
-    const v = Number(m[2]);
-    switch (m[1]) {
-        case "<":
-            return (n) => n < v;
-        case ">":
-            return (n) => n > v;
-        case "<=":
-            return (n) => n <= v;
-        case ">=":
-            return (n) => n >= v;
-        default:
-            return (n) => n === v; // "=" or a bare number
-    }
-}
-
-/** True when `text` is a numeric-comparison token satisfied by `n`. */
-export function matchNumeric(text: string, n: number): boolean {
-    const p = numericPredicate(text);
-    return p ? p(n) : false;
-}
-
-/**
- * True when a token carries a comparison operator (<, >, <=, >=, =) — i.e. it
- * asks for a numeric match rather than a value/word match. A bare number is
- * NOT an operator: standing loose in a chip it keeps its per-field literal
- * meaning. (Written against a numeric word it does ask for a comparison —
- * see bindNumeric in pills.ts — but that is decided by the pair, not the
- * token, so it is not a question this predicate can answer.)
- */
-export function hasOperator(text: string): boolean {
-    return /^[<>=]/.test(text);
-}
+/* The numeric grammar — VALUE_RE, numericTest, hasOperator, matchNumeric —
+ * lives in pills.ts and is reached through `Pills.` from here. It used to be
+ * spelled again in this file, once as a byte-identical copy of numericTest
+ * under another name; a comment above it claimed to be its single home and
+ * was wrong. The bound may be negative or fractional, because the values
+ * are: a movement-speed change is signed (`mech:"speed <-50"`) and a handful
+ * of them are fractional. Counts never are, and a count simply matches
+ * nothing against a bound it cannot reach. */
 
 /* ------------------------------------------------------ count queries */
 
@@ -183,19 +141,20 @@ function splitCountTokens(tokens: QueryToken[], countable: boolean):
     { text: QueryToken[]; counts: ((n: number) => boolean)[] } {
     if (!countable) return {text: tokens, counts: []};
     const text: QueryToken[] = [], counts: ((n: number) => boolean)[] = [];
-    const isCmp = (t: QueryToken | undefined) => !!t && /^(<=|>=|<|>|=)-?\d+(?:\.\d+)?$/.test(t.text);
     // an argument of the word — a comparison, or the bare number that means "="
     const isValue = (t: QueryToken | undefined) => !!t && Pills.isValue(t.text);
+    // a comparison that WROTE its operator, which only the shorthand needs
+    const isCmp = (t: QueryToken | undefined) => isValue(t) && Pills.hasOperator(t!.text);
     // the shorthand: one comparison, alone, with no word in front of it
     const lone = tokens.length === 1 && isCmp(tokens[0]);
     for (let i = 0; i < tokens.length; i++) {
         if (tokens[i].text === COUNT_AXIS && isValue(tokens[i + 1])) {
-            counts.push(numericPredicate(tokens[i + 1].text)!);
+            counts.push(Pills.numericTest(tokens[i + 1].text)!);
             i++;
             continue;
         }
         if (lone) {
-            counts.push(numericPredicate(tokens[i].text)!);
+            counts.push(Pills.numericTest(tokens[i].text)!);
             continue;
         }
         text.push(tokens[i]);
@@ -274,8 +233,13 @@ export const META_KEYWORDS: Record<string, {
     },
 };
 
-const ATTACH_WORD = "attach";
-const BONESET_WORD = "boneset";
+/* The two meta keywords by name, for the code that has to spell one rather
+ * than iterate them — this module's own matchers, and the pill builders that
+ * write a keyword search back out. They are the record's own keys, so they
+ * live with it: a second copy sat in app/autocomplete.ts, exported for no
+ * reason other than that the pills imported it from there. */
+export const ATTACH_WORD = "attach";
+export const BONESET_WORD = "boneset";
 
 /**
  * The keywords one field can carry, minus any the loaded pack has no data
@@ -397,6 +361,18 @@ const TARGET_TESTS: Record<string, (m: number) => boolean> = {
 
 /** The words themselves, for autocomplete and the ranker. */
 export const TARGET_WORDS = Object.keys(TARGET_TESTS);
+
+/* Their descriptions, beside the tests they describe. They read to the user
+ * as categories even though they are mask bit tests rather than corpus
+ * words, so every column that shows the icons offers them — but one record
+ * states both halves, which is what stops a word being testable and
+ * undescribed (or the reverse). */
+export const TARGET_WORD_TITLES: Record<string, string> = {
+    caster: "Plays on the caster",
+    target: "Plays on the target",
+    area: "Plays where the spell lands",
+    both: "Plays on the caster and the target",
+};
 
 /**
  * Split a group's tokens into text tokens and target-mask tests.
@@ -542,10 +518,10 @@ function spellsByName(tokens: QueryToken[], data: SpellData): Set<number> {
  * Search animation names; return spells whose AnimKits use the matches,
  * spells whose visual kits play a matching animation directly
  * (SpellVisualAnim — the loose pills), plus spells with a matching direct
- * stand/walk anim (proc Type 7). Stance anims render under a "stance"
- * group head, and that word joins their corpus — a token may hit "stance"
- * instead of the anim name (fx-corpus semantics), so anim:stance alone
- * finds every override and anim:"stance walk" scopes to walk overrides.
+ * stand/walk anim (proc Type 7, merged with aura 312). Those render under a
+ * "replace" group head, and that word joins their corpus — a token may hit
+ * "replace" instead of the anim name (fx-corpus semantics), so anim:replace
+ * alone finds every swap and anim:"replace walk" scopes to walk swaps.
  */
 function spellsByAnim(tokens: QueryToken[], data: SpellData): Set<number> {
     const out = new Set<number>();
@@ -571,7 +547,7 @@ function spellsByAnim(tokens: QueryToken[], data: SpellData): Set<number> {
     const {text, tests} = splitTargetTokens(tokens);
     if (tests.length) {
         // per-row again: loose animations carry their own mask, animkit
-        // animations inherit the kit's. Stance overrides have no mask.
+        // animations inherit the kit's. Replacement swaps have no mask.
         for (const [s, byAnim] of data.visualAnimTargets) {
             for (const [a, mask] of byAnim) {
                 if (maskMatches(tests, mask) && textMatches(data.animNamesL[a] || "", text)) {
@@ -612,7 +588,7 @@ function spellsByAnim(tokens: QueryToken[], data: SpellData): Set<number> {
         }
     }
     // anim-column types that carry their own `spells` corpus (none today —
-    // replace/stance/passenger are headless, matched in the loop above); kept
+    // replace and passenger are headless, matched in the loop above); kept
     // as the extension point for a future one, like the model side.
     for (const type of Pills.typesFor("anim")) Pills.scanType(type, data, tokens, out);
     return out;

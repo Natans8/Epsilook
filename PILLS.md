@@ -219,9 +219,16 @@ The search bar draws exactly this: `Pills.isValue` is the one predicate, and the
 drawn as a word-and-value and what binds as one cannot drift apart.
 
 **A bound may be negative or fractional, because values are.** A movement-speed change is signed, so `fx:"speed <-50"`
-asks for snares worse than half; `numericPredicate` (search.ts) and `tokenMatches` (pills.ts) parse the same shape and
-must stay in step. A `count` axis is never negative and simply matches nothing against a bound it cannot reach — no
-guard needed.
+asks for snares worse than half. A `count` axis is never negative and simply matches nothing against a bound it cannot
+reach — no guard needed.
+
+**THE WHOLE NUMERIC GRAMMAR LIVES IN `pills.ts` AND NOWHERE ELSE** — `CMP_OPS` / `NUM_SRC` (the alphabet, exported as
+regex source so the tokenizer composes its own patterns from them), `VALUE_RE`, `isValue`, `hasOperator`, `numericTest`
+and `matchNumeric`. It used to be spelled five times: search.ts carried a byte-identical copy of `numericTest` under
+the name `numericPredicate`, "a comparison with its operator written" appeared twice more (search.ts and
+app/highlight.ts), and app/query.ts's `GLUED_CMP` embedded the operator alternation a fifth time. Both files claimed in
+a comment to be its single home and neither was. If you need "a comparison that wrote its operator", that is
+`isValue(t) && hasOperator(t)` — do not respell the regex.
 
 Where a value could be printed two ways, **ship the one the game stores**. Movement speed is the worked example: the
 pill shows the change (`+70%`) and not the resulting speed (`170%`), because the change is what `EffectBasePoints`

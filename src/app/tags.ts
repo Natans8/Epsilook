@@ -1,6 +1,4 @@
-import {ATTACH_WORD, BONESET_WORD} from "./autocomplete";
-import {animIsHit, anyGroup, channelIsHit, dissolveIsHit, fileIsHit, fxChainIsHit, keybindIsHit, kitIsHit, mechanicIsHit, morphIsHit, mountIsHit, objectIsHit, scaleIsHit, screenIsHit, shapeshiftIsHit, speedIsHit, summonIsHit, vehicleIsHit} from "./hits";
-import {replaceAnimHit} from "./render";
+import {animIsHit, anyGroup, channelIsHit, dissolveIsHit, fileIsHit, fxChainIsHit, keybindIsHit, kitIsHit, mechanicIsHit, morphIsHit, mountIsHit, objectIsHit, replaceAnimHit, scaleIsHit, screenIsHit, shapeshiftIsHit, speedIsHit, summonIsHit, vehicleIsHit} from "./hits";
 import type {FileEntry, MechanicRow, ScreenColors} from "../data";
 import {activeData, stripExt, wowheadUrl} from "./state";
 import type {Segment, SegmentOpts} from "../pills";
@@ -68,6 +66,35 @@ export function modelFileIsHit(file: FileEntry | undefined, catName: string): bo
     const searchL = file ? file.searchL : "";
     return anyGroup("model", (ts) =>
         ts.every((t) => catName.includes(t.text) || searchL.includes(t.text)));
+}
+
+/**
+ * The file behind a pill, with the fallback every one of them needs.
+ *
+ * Every pill that shows a file asks the same things of it — the path for
+ * the tooltip, the base name, and the base without its extension for the
+ * label and the `.lookup` command — and every one has to survive a fid the
+ * listfile does not know, or no fid at all (0 where the slot is optional).
+ * A NEGATIVE fid is a real lookup, not a miss: the fileless model sentinels
+ * ship their slot name as the path, which is what lets them label and search
+ * themselves through the ordinary filename route.
+ *
+ * This was written out nine times in two slightly different shapes, which is
+ * how `searchL` came to be present in some of them and absent from others.
+ * The result is a whole FileEntry, so it can go straight to fileIsHit /
+ * modelFileIsHit: an unknown file has an empty corpus and so matches no
+ * token, which is the same answer `undefined` gets there.
+ */
+function fileOf(fid: number): FileEntry & { name: string } {
+    const file = fid ? activeData().files.get(fid) : undefined;
+    const base = file?.base || "";
+    return {
+        fid,
+        path: file?.path || "",
+        base,
+        name: base ? stripExt(base) : "",
+        searchL: file?.searchL || "",
+    };
 }
 
 /**
@@ -140,7 +167,7 @@ function attachSegment(src: number, dst: number, field: string, twoPoint: boolea
     return P.note(label, {
         hit: attachIsHit(field, words),
         title: why,
-        search: P.quoted(field, words.map((w) => Search.keywordValue(ATTACH_WORD, w)).join(" ")),
+        search: P.quoted(field, words.map((w) => Search.keywordValue(Search.ATTACH_WORD, w)).join(" ")),
         finds: `spells using ${words.length > 1 ? "these points" : "this point"}`,
     });
 }
@@ -163,7 +190,7 @@ const lowered = (names: string[]) => names.map((n) => n.toLowerCase());
 function attachIsHit(field: string, names: string[]): boolean {
     const namesL = lowered(names);
     return anyGroup(field, (ts) => {
-        const attaches = keywordValues(ts, ATTACH_WORD);
+        const attaches = keywordValues(ts, Search.ATTACH_WORD);
         return attaches.length > 0 && Search.matchesNames(attaches, namesL);
     });
 }
@@ -171,7 +198,7 @@ function attachIsHit(field: string, names: string[]): boolean {
 export function bonesetIsHit(names: string[]): boolean {
     const namesL = lowered(names);
     return anyGroup("anim", (ts) => {
-        const words = keywordValues(ts, BONESET_WORD);
+        const words = keywordValues(ts, Search.BONESET_WORD);
         return words.length > 0 && Search.matchesNames(words, namesL);
     });
 }
@@ -188,7 +215,7 @@ function bonesetSegment(names: string[] | null): Segment | null {
     return P.note(names.join(" · "), {
         hit: bonesetIsHit(names),
         title: `Animates ${names.join(", ")}`,
-        search: P.quoted("anim", names.map((n) => Search.keywordValue(BONESET_WORD, n)).join(" ")),
+        search: P.quoted("anim", names.map((n) => Search.keywordValue(Search.BONESET_WORD, n)).join(" ")),
         finds: `spells animating ${names.length > 1 ? "these regions" : "this region"}`,
     });
 }
@@ -218,8 +245,7 @@ export function effectAttachNote(regionNames: string[], category: string): Segme
 
 export function modelTag(fid: number, catName = "", mask = 0, src = -1, dst = -1,
                          twoPoint = false): HTMLElement {
-    const d = activeData();
-    const file = d.files.get(fid) || {fid, path: "", base: "", searchL: ""};
+    const file = fileOf(fid);
     // A negative fid is a fileless SENTINEL (SYNTHETIC_MODEL_FILES in
     // build_data): a weapon the caster already has, which has no fixed model in
     // the data — the pack ships the slot name ("equipped off hand") as the
@@ -277,13 +303,11 @@ export interface ModelCatEntry {
    * any other attached model. Label is the model's base filename (no TDB
    * needed); the displayId drives the buttons. */
 export function displayTag(e: ModelCatEntry, spellId: number): HTMLElement {
-    const d = activeData();
     const {fid, ref: displayId, targets: mask} = e;
-    const file = fid ? (d.files.get(fid) || {path: "", base: ""}) : {path: "", base: ""};
-    const base = file.base ? stripExt(file.base) : "";
+    const file = fileOf(fid), base = file.name;
     return P.pill({
         cls: "model",
-        hit: modelFileIsHit(d.files.get(fid), MODEL_CAT_DISPLAY_WORD),
+        hit: modelFileIsHit(file, MODEL_CAT_DISPLAY_WORD),
         segments: [
             displayId && CFG.wowheadMorphUrl && P.link(
                 fillTemplate(CFG.wowheadMorphUrl, {id: displayId, spell: spellId}),
@@ -321,9 +345,9 @@ export function itemTag(e: ModelCatEntry): HTMLElement {
     const d = activeData();
     const {fid, ref: itemId, targets: mask} = e;
     const info = d.items.get(itemId) || {name: "", quality: "", icon: ""};
-    const file = fid ? (d.files.get(fid) || {path: "", base: ""}) : {path: "", base: ""};
+    const file = fileOf(fid);
     const named = !!info.name;
-    const base = file.base ? stripExt(file.base) : "";
+    const base = file.name;
     // .lookup item accepts the item name OR the model base name (no extension)
     const lookupName = info.name || base;
 
@@ -376,15 +400,14 @@ export function itemTag(e: ModelCatEntry): HTMLElement {
 // model:"item sickle axe" matches on the NAME, not just the filename.
 function itemIsHit(e: ModelCatEntry): boolean {
     const d = activeData();
-    const searchL = d.files.get(e.fid)?.searchL ?? "";
+    const searchL = fileOf(e.fid).searchL;
     const corpus = d.itemSearchL.get(e.ref) || "";
     return anyGroup("model", (ts) => ts.every((t) =>
         MODEL_CAT_ITEM_WORD.includes(t.text) || searchL.includes(t.text) || corpus.includes(t.text)));
 }
 
 export function soundTag(fid: number): HTMLElement {
-    const d = activeData();
-    const file = d.files.get(fid) || {fid, path: "", base: "", searchL: ""};
+    const file = fileOf(fid);
     return P.pill({
         cls: "sound",
         hit: fileIsHit(file, "sound"),
@@ -600,11 +623,11 @@ export function fxHeadTag(category: string, hit: boolean, mask = 0, field = "fx"
 export function fxTag(entry: {chainId: number; fid: number; color: number; src?: number; dst?: number},
                       mask = 0): HTMLElement {
     const d = activeData();
-    const file = entry.fid ? (d.files.get(entry.fid) || {path: "", base: ""}) : {path: "", base: ""};
+    const file = fileOf(entry.fid);
     const info = d.fxChains.get(entry.chainId) || {color: 0xffffff, hue: ""};
     const tinted = entry.color !== 0xffffff;
     const hex = hexColor(entry.color);
-    const base = file.base ? stripExt(file.base) : "";
+    const base = file.name;
     return P.pill({
         cls: "fx",
         hit: fxChainIsHit(entry.chainId),
@@ -923,7 +946,7 @@ export function screenTag(screenId: number, mask = 0): HTMLElement {
             title: `Screen ${what} ${hexColor(c)}`, info: `screen ${what}`, alpha: a,
         }));
 
-    const texPaths: string[] = texFids.map((t) => (d.files.get(t.fid)?.path || `#${t.fid}`)
+    const texPaths: string[] = texFids.map((t) => (fileOf(t.fid).path || `#${t.fid}`)
         + (t.mask ? " (mask)" : ""));
     // Preview the overlay texture with the effect's color multiplied in —
     // the same treatment chain pills get. Overlays sort first, so [0] is the
@@ -962,9 +985,9 @@ export function screenTag(screenId: number, mask = 0): HTMLElement {
    * material textures); tooltip carries the dissolve duration. */
 export function dissolveTag(entry: {dissolveId: number; fid: number}, mask = 0): HTMLElement {
     const d = activeData();
-    const file = entry.fid ? (d.files.get(entry.fid) || {path: "", base: ""}) : {path: "", base: ""};
+    const file = fileOf(entry.fid);
     const duration = d.dissolveDurations.get(entry.dissolveId) || 0;
-    const base = file.base ? stripExt(file.base) : "";
+    const base = file.name;
     return P.pill({
         cls: "fx",
         hit: dissolveIsHit(entry.dissolveId),
@@ -998,8 +1021,7 @@ export function shapeshiftTag(entry: {formId: number; displayId: number; fid: nu
     const d = activeData();
     const {formId, displayId, fid} = entry;
     const name = d.shapeshiftNames.get(formId) || "";
-    const file = fid ? (d.files.get(fid) || {path: "", base: ""}) : {path: "", base: ""};
-    const base = file.base ? stripExt(file.base) : "";
+    const file = fileOf(fid), base = file.name;
     return P.pill({
         cls: "fx",
         hit: shapeshiftIsHit(formId),
@@ -1030,8 +1052,7 @@ export function morphTag(entry: {creatureId: number; displayId: number; fid: num
     const d = activeData();
     const {creatureId, displayId, fid} = entry;
     const name = d.morphNames.get(creatureId) || "";
-    const file = fid ? (d.files.get(fid) || {path: "", base: ""}) : {path: "", base: ""};
-    const base = file.base ? stripExt(file.base) : "";
+    const file = fileOf(fid), base = file.name;
     return P.pill({
         cls: "fx",
         hit: morphIsHit(creatureId),
@@ -1087,8 +1108,7 @@ export function objectTag(objectId: number, mask = 0): HTMLElement {
     const d = activeData();
     const name = d.objectNames.get(objectId) || "";
     const fid = d.objectFids.get(objectId) || 0;
-    const file = fid ? (d.files.get(fid) || {path: "", base: ""}) : {path: "", base: ""};
-    const base = file.base ? stripExt(file.base) : "";
+    const file = fileOf(fid), base = file.name;
     // .lookup object ALWAYS takes the MODEL file name, never the object's
     // display name (user's call, 2026-07-24 — the name form was a bad match
     // for how Epsilon's lookup actually behaves). No model, no button.
@@ -1134,8 +1154,7 @@ export function mountTag(displayId: number, spellId: number): HTMLElement {
     const d = activeData();
     const name = d.mountNames.get(displayId) || "";
     const fid = d.mountFids.get(displayId) || 0;
-    const file = fid ? (d.files.get(fid) || {path: "", base: ""}) : {path: "", base: ""};
-    const base = file.base ? stripExt(file.base) : "";
+    const file = fileOf(fid), base = file.name;
     return P.pill({
         cls: "model",
         hit: mountIsHit(displayId),

@@ -1188,8 +1188,9 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // animation replacements (proc Type 7 + aura 312, merged): the character
     // swaps a base animation for another. One "replace" group in the
     // Animations column; matched via the anim field on either side's name,
-    // plus the words "replace"/"stance" (the latter an alias for the proc-7
-    // form these used to render separately).
+    // plus the word "replace" itself. ("stance" was the proc-7 form's name
+    // before the merge and is NOT an alias — it is in no corpus and
+    // anim:stance returns nothing.)
     const spellReplaceAnims = new Map<number, { src: number; dst: number }[]>();
     const replaceSpells = new Map<number, Set<number>>(); // animId (either side) -> spell ids
     if (pack.spellReplaceAnims) {

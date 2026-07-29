@@ -23,29 +23,18 @@ const SUGGEST_LIMIT = 12;
    * file names, no creature names): the suggestion list is a menu of what can
    * be asked, not of the answers. */
 
-/* Target-type words autocomplete in every column that shows the icons —
-   * they read as categories to the user even though they are mask bit tests
-   * rather than corpus words (see TARGET_TESTS in search.js). */
-export const TARGET_WORD_TITLES: Record<string, string> = {
-    caster: "Plays on the caster",
-    target: "Plays on the target",
-    area: "Plays where the spell lands",
-    both: "Plays on the caster and the target",
-};
+/* Target-type words autocomplete in every column that shows the icons. Both
+   * the words and their descriptions live with the mask tests they describe
+   * (Search.TARGET_WORDS / TARGET_WORD_TITLES), so a word cannot come to be
+   * testable and undescribed. */
 
 /* `count` is an axis rather than content — it asks how BIG the column is
-   * instead of what is in it — so it is named here beside the target words
-   * rather than in the pill-type registry. Its description is shared with the
-   * bar's highlighter (fieldVocab below), which is what stops the suggestion
-   * list and the tooltip teaching two different things. */
+   * instead of what is in it — so it is named here rather than in the
+   * pill-type registry. Its description is shared with the bar's highlighter
+   * (fieldVocab below), which is what stops the suggestion list and the
+   * tooltip teaching two different things. */
 export const COUNT_TIP = "How many entries this column has — count >4, count =0";
 
-/* The two meta keywords, named here because app.js builds queries with them.
-   * Everything ELSE about them — which fields offer them, what the tooltip says,
-   * which packs carry the data — lives in ONE record, Search.META_KEYWORDS, so
-   * the autocomplete and the search bar cannot describe them differently. */
-export const ATTACH_WORD = "attach";
-export const BONESET_WORD = "boneset";
 /* Words that say nothing without their argument, so picking one from the
    * suggestion list leaves a trailing space ready for it. A numeric category
    * word (seat, speed, scale) is deliberately NOT here: it is a perfectly good
@@ -76,7 +65,7 @@ export function fieldCategories(field: string | null): {words: string[], titles:
     // every column that draws target icons can be filtered by them
     return {
         words: [...words, ...Search.TARGET_WORDS],
-        titles: {...titles, ...TARGET_WORD_TITLES},
+        titles: {...titles, ...Search.TARGET_WORD_TITLES},
     };
 }
 
@@ -84,7 +73,7 @@ export function updateSuggest(): void {
     const input = qInput;
     const box = $("#suggest");
     // inside a chip whose column has category words, those autocomplete
-    // instead of field prefixes ("des" -> desaturate, "sta" -> stance)
+    // instead of field prefixes ("des" -> desaturate, "rep" -> replace)
     if (state.activeField) {
         return fieldCategories(state.activeField) ? updateCategorySuggest() : hideSuggest();
     }

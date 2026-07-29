@@ -93,8 +93,8 @@ function fieldVocab(field: string): BarVocab {
     return v;
 }
 
-/** A comparison token (`>2`, `<=-50`). */
-const isComparison = (s: string) => /^(<=|>=|<|>|=)-?\d+(?:\.\d+)?$/.test(s);
+/** A comparison token that WROTE its operator (`>2`, `<=-50`). */
+const isComparison = (s: string) => P.isValue(s) && P.hasOperator(s);
 
 /**
  * Does the span at `i` take the span after it as its value?
