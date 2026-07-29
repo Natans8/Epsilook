@@ -393,17 +393,20 @@ window.EpsilookData = (() => {
                 byAnim.set(animIds[i], bonesetList(bonesets[i]));
             }
         }
-        // per-spell boneset haystack for the `boneset` search keyword: every
-        // region name the spell's AnimKits animate, lowercased.
-        /** @type {Map<number, string>} spell id -> boneset region haystack */
-        const spellBonesetL = new Map();
+        // The regions the `boneset` search keyword measures itself against: every
+        // region name the spell's AnimKits animate, lowercased. A LIST, not one
+        // joined haystack — a keyword value has to answer to a single region
+        // ("left arm" is not satisfied by a spell that animates Left Hand and
+        // Right Arm), which a haystack cannot express.
+        /** @type {Map<number, string[]>} spell id -> region names */
+        const spellBonesets = new Map();
         for (const [spellId, kits] of spellAnimKits) {
-            const words = new Set();
+            const names = new Set();
             for (const kit of kits) {
                 const byAnim = animKitAnimBoneset.get(kit);
-                if (byAnim) for (const ns of byAnim.values()) for (const n of ns) words.add(n.toLowerCase());
+                if (byAnim) for (const ns of byAnim.values()) for (const n of ns) names.add(n.toLowerCase());
             }
-            if (words.size) spellBonesetL.set(spellId, [...words].join(" "));
+            if (names.size) spellBonesets.set(spellId, [...names]);
         }
 
         // Packed RGB -> "#rrggbb" (the form fx corpora carry, so hex queries
@@ -1210,7 +1213,7 @@ window.EpsilookData = (() => {
             spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles,
             spellAnimKits, animKitSpells,
             animNames, animNamesL, animKitAnims, animAnimKits,
-            bonesetNames, animKitAnimBoneset, spellBonesetL,
+            bonesetNames, animKitAnimBoneset, spellBonesets,
             spellFx, spellChainRows, fxSpells, fxChains, fxTextures, fxSearchL,
             spellDissolves, dissolveSpells, dissolveDurations, dissolveTextures,
             dissolveAttach, dissolveSearchL,

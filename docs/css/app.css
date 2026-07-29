@@ -848,6 +848,15 @@ main {
     background: rgba(var(--overlay-rgb), calc(0.10 * var(--wash-strength)));
 }
 
+/* the caret is inside this one (app.js .on): the capsule brightens so arrowing
+   across the bar SHOWS where the value begins and ends. Background only — a
+   border or padding here would shift the glyphs out from under the caret, which
+   is the one thing the backdrop may never do. */
+.bar-cap-l.on, .bar-cap-r.on {
+    background: rgba(var(--gold-rgb), calc(0.20 * var(--wash-strength)));
+    box-shadow: inset 0 -1px 0 var(--gold-dim);
+}
+
 .bar-cap-l {
     border-radius: 4px 0 0 4px;
 }
@@ -1190,7 +1199,12 @@ main {
 /* An example redrawn as the CHIPS it makes (decorateExamples). The button
    stops being a code box and becomes the bar's own row of tags, so reading the
    help and reading the search bar are the same act. Metrics are the chips' own
-   — this is static DOM, so weight and padding are free here. */
+   — this is static DOM, so weight and padding are free here.
+
+   IT IS DRAWN AS A MINIATURE SEARCH BAR — same panel fill, same rounded
+   outline, borrowed from #qbar above. Without it two chips sitting side by side
+   read as two separate examples, which is exactly backwards for the ones whose
+   whole point is that several tags combine into ONE query. */
 #help ul.help-ex button.ex-chips,
 .es-examples button.ex-chips {
     display: inline-flex;
@@ -1198,9 +1212,10 @@ main {
     align-items: baseline;
     gap: 0.3rem;
     font-family: inherit;
-    background: none;
-    border: none;
-    padding: 0.1rem 0.15rem;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 8px;
+    padding: 0.2rem 0.45rem;
 }
 
 #help ul.help-ex button.ex-chips:hover,
@@ -1208,7 +1223,7 @@ main {
 .es-examples button.ex-chips:hover,
 .es-examples button.ex-chips:focus-visible {
     background: rgba(var(--gold-rgb), calc(0.08 * var(--wash-strength)));
-    border: none;
+    border-color: var(--gold-dim);
 }
 
 .exchip {

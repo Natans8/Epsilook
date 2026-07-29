@@ -330,10 +330,10 @@
         return parts;
     }
 
-    // load a canonical string into the bar: field tags become committed
-    // chips; syncBar pulls the trailing free run into the input
-    function loadQueryString(str) {
-        state.chips = parseQueryParts(str);
+    // put a parsed chip list in the bar, caret after the last one; syncBar
+    // pulls the trailing free run back into the input
+    function setChips(parts) {
+        state.chips = parts;
         state.activeField = null;
         state.activeNot = false;
         qInput.value = "";
@@ -341,8 +341,20 @@
         syncBar();
     }
 
+    // load a canonical string into the bar: field tags become committed chips
+    function loadQueryString(str) {
+        setChips(parseQueryParts(str));
+    }
+
     // a numeric alternative, with the id sigil optional
     const NUM_ALT = /^#?\d+$/;
+
+    /* The three shapes tokenSpans needs to recognise a comparison however it is
+       spaced: an operator standing alone, the number that belongs to it, and a
+       word with the whole comparison glued onto it. */
+    const LONE_OP = /^(<=|>=|<|>|=)$/;
+    const NUMBER = /^-?\d+(?:\.\d+)?$/;
+    const GLUED_CMP = /^([a-z][a-z_]*)((?:<=|>=|<|>|=)-?\d+(?:\.\d+)?)$/;
 
     /**
      * A token's ALTERNATIVES — the values any one of which satisfies it.
@@ -390,6 +402,11 @@
      *   - an ALTERNATION is one span however it is spaced. `fire|frost`,
      *     `fire | frost` and `fire |frost` are the same token, so the operator
      *     means the same thing whether or not you put air around it.
+     *   - a COMPARISON is one span however it is spaced, and never glued to the
+     *     word in front of it: `seat >2`, `seat > 2` and `seat>2` all tokenize
+     *     to `seat` + `>2`. Spacing is the last thing anyone should have to
+     *     remember about a number, and doing it here means the engine, the
+     *     capsule and the autocomplete all get it at once.
      * @param {string} text
      * @returns {{start: number, end: number, text: string, quoted: boolean, alts: string[]}[]}
      */
@@ -408,6 +425,15 @@
                 prev.end = m.index + m[0].length;
                 continue;
             }
+            // a lone operator adopts the number after it (`> 2` -> `>2`). Only a
+            // LONE one: `c'thun -> phase 2` must keep its arrow, and 265 spell
+            // names on 9.2.7 carry one of these characters as ordinary text.
+            if (prev && !prev.quoted && !quoted
+                && LONE_OP.test(prev.text) && NUMBER.test(raw)) {
+                prev.text += raw;
+                prev.end = m.index + m[0].length;
+                continue;
+            }
             spans.push({start: m.index, end: m.index + m[0].length, text: raw, quoted});
         }
         const out = [];
@@ -417,14 +443,28 @@
             // half-written alternation; it can never match, so it must not
             // narrow the search to nothing either
             if (!t || (!s.quoted && /^[|,]+$/.test(t))) continue;
+            // a glued `word>2` is the same two tokens, split back apart. Safe to
+            // do blind: nothing in any pack's corpus has this shape (checked
+            // across names, paths, animations and effect names on 9.2.7).
+            const glued = !s.quoted && s.end - s.start === t.length && GLUED_CMP.exec(t);
+            if (glued) {
+                const cut = s.start + glued[1].length;
+                out.push({start: s.start, end: cut, text: glued[1], quoted: false, alts: [glued[1]]});
+                out.push({start: cut, end: s.end, text: glued[2], quoted: false, alts: [glued[2]]});
+                continue;
+            }
             out.push({...s, text: t, alts: s.quoted ? [t] : altsOf(t)});
         }
         return out;
     }
 
-    /** The engine's view of a chip: just the text and the alternatives. */
+    /**
+     * The engine's view of a chip: the text, the alternatives, and whether the
+     * user quoted it — quoting is how a keyword's value is given an explicit
+     * extent, so keywordRun has to be able to see it.
+     */
     function tokenizeQuery(text) {
-        return tokenSpans(text).map((s) => ({text: s.text, alts: s.alts}));
+        return tokenSpans(text).map((s) => ({text: s.text, alts: s.alts, quoted: s.quoted}));
     }
 
     // group list for the engine: one group per chip + one for the live input,
@@ -1244,14 +1284,14 @@
      * backdrop depends on: it has to occupy the same glyphs as the input.
      * @param {string} field
      * @param {string} text
-     * @returns {{text: string, cls: string, tip: string}[]}
+     * @returns {{text: string, cls: string, tip: string, cap: string}[]}
      */
     function classifyBar(field, text) {
         const v = fieldVocab(field);
-        /** @type {{text: string, cls: string, tip: string}[]} */
+        /** @type {{text: string, cls: string, tip: string, cap: string}[]} */
         const out = [];
-        const push = (t, cls = "", tip = "") => {
-            if (t) out.push({text: t, cls, tip});
+        const push = (t, cls = "", tip = "", cap = "") => {
+            if (t) out.push({text: t, cls, tip, cap});
         };
         const spans = tokenSpans(text);
         let at = 0;
@@ -1260,11 +1300,15 @@
             if (s.start > at) push(text.slice(at, s.start)); // the gap before it
             const taken = valueRun(v, spans, i);
             if (taken) {
-                // one capsule over the word and its value, whatever lies between
+                // one capsule over the word and its value, whatever lies between.
+                // Both halves carry the WHOLE capsule's character range, so the
+                // caret can be asked whether it is inside this one thing rather
+                // than inside one of its two drawing halves.
                 const last = spans[i + taken];
-                const tip = v.words.get(s.text) || "";
-                push(text.slice(s.start, s.end), "bar-tok bar-kw bar-cap-l", tip);
-                push(text.slice(s.end, last.end), "bar-tok bar-cap-r", tip);
+                const tip = capsuleTip(v, s.text, taken);
+                const cap = `${s.start}:${last.end}`;
+                push(text.slice(s.start, s.end), "bar-tok bar-kw bar-cap-l", tip, cap);
+                push(text.slice(s.end, last.end), "bar-tok bar-cap-r", tip, cap);
                 at = last.end;
                 i += taken;
                 continue;
@@ -1274,6 +1318,21 @@
         }
         if (at < text.length) push(text.slice(at));
         return out;
+    }
+
+    /**
+     * A capsule's tooltip: what the word is, plus — for a keyword, whose value
+     * can be any number of words — how far it currently reaches, and the one
+     * way to overrule that. A numeric word takes exactly one comparison and has
+     * nothing to decide, so it says nothing extra.
+     * @param {BarVocab} v
+     * @param {string} word
+     * @param {number} taken
+     */
+    function capsuleTip(v, word, taken) {
+        const tip = v.words.get(word) || "";
+        if (!v.keywords.has(word)) return tip;
+        return `${tip}\n${taken} word${taken === 1 ? "" : "s"} — "quote" the value to say where it ends`;
     }
 
     /**
@@ -1317,6 +1376,7 @@
             }
             const s = el("span", run.cls, run.text);
             if (run.tip) s.title = run.tip;
+            if (run.cap) s.dataset.cap = run.cap;
             frag.appendChild(s);
         }
         return frag;
@@ -1343,6 +1403,38 @@
         box.style.width = qInput.offsetWidth + "px";
         box.style.height = qInput.offsetHeight + "px";
         box.scrollLeft = qInput.scrollLeft;
+        markCaretCapsule();
+    }
+
+    /* ------------------------------------------- inside a capsule, or outside
+   *
+   * A keyword and its value draw as one capsule, and how far that value reaches
+   * is decided by the data — which left it as something you could observe but
+   * never state, and never quite locate. Two answers, in that order:
+   *
+   *   THE CAPSULE LIGHTS UP while the caret is inside its characters, so walking
+   *   the caret across the bar shows you exactly where the value begins and ends.
+   *   "QUOTES" DECIDE. Quoting the value states its extent outright, and the
+   *   capsule redraws around what you said. That is deliberately the ONLY way to
+   *   overrule the data: it is text you can see, copy, share and edit by hand,
+   *   so the choice never becomes a mode the bar remembers or a keystroke you
+   *   had to be told about. A resize shortcut was built here and dropped for
+   *   exactly that reason — it could do nothing quotes cannot, and it collided
+   *   with the browser's own Alt+← (Back). */
+
+    /** Light the capsule the caret is sitting in (none, when the bar is unfocused). */
+    function markCaretCapsule() {
+        const box = document.getElementById("qhl");
+        if (!box) return;
+        const live = document.activeElement === qInput;
+        const from = live ? qInput.selectionStart : -1;
+        const to = live ? qInput.selectionEnd : -1;
+        for (const span of box.children) {
+            const cap = /** @type {HTMLElement} */ (span).dataset.cap;
+            if (!cap) continue;
+            const [s, e] = cap.split(":").map(Number);
+            span.classList.toggle("on", from >= s && to <= e);
+        }
     }
 
     /**
@@ -3028,23 +3120,26 @@
     const keywordValues = (tokens, word) =>
         Search.splitKeyword(tokens, word, state.data).values;
 
-    // an attachment segment lights when a positive attach query in its field
-    // (or free text) names points this row carries — the same substring test
-    // the search uses (ATTACH_WORD in search.js)
+    /* An attachment segment lights when a positive attach query in its field (or
+   * free text) names points this row carries; a boneset pill when a `boneset`
+   * query names one of its regions. Both defer to Search.matchesNames — the
+   * engine's own value test — so a pill can only light up under a query that
+   * really selected its spell. */
+    const lowered = (names) => names.map((n) => n.toLowerCase());
+
     function attachIsHit(field, names) {
-        const attachL = names.join(" ").toLowerCase();
+        const namesL = lowered(names);
         return anyGroup(field, (ts) => {
             const attaches = keywordValues(ts, ATTACH_WORD);
-            return attaches.length > 0 && attaches.every((a) => attachL.includes(a));
+            return attaches.length > 0 && Search.matchesNames(attaches, namesL);
         });
     }
 
-    /** A boneset pill lights up when a `boneset` query names one of its regions. */
     function bonesetIsHit(names) {
-        const hay = names.join(" ").toLowerCase();
+        const namesL = lowered(names);
         return anyGroup("anim", (ts) => {
             const words = keywordValues(ts, BONESET_WORD);
-            return words.length > 0 && words.every((w) => hay.includes(w));
+            return words.length > 0 && Search.matchesNames(words, namesL);
         });
     }
 
@@ -4254,8 +4349,35 @@
 
     /* ------------------------------------------------------------ events */
 
-    function crossSearch(query) {
-        loadQueryString(query);
+    /**
+     * Run a pill's query. `mode` says how it meets the search already in the bar:
+     *
+     *   replace   the pill's question on its own — the plain click
+     *   add       narrow what is on screen by it — Ctrl/Cmd-click
+     *   exclude   narrow by everything BUT it — Shift-click
+     *
+     * ADDING IS THE MODIFIER, NOT THE DEFAULT. A pill click is most often "show
+     * me this", asked of the whole game; a click that silently kept the last
+     * search would make an empty result the ordinary outcome of exploring, and
+     * the counterpart pills (an invisibility channel's detectors) navigate to a
+     * question the current one contradicts — they would produce nothing at all.
+     *
+     * EXCLUDING, though, always meant "…but not that", and it now says so:
+     * shift-click used to REPLACE the query with a lone exclusion, which selects
+     * nearly every spell in the game and answers nothing. With an empty bar it
+     * still does exactly what it did.
+     * @param {string} query one chip's worth of query text
+     * @param {"replace"|"add"|"exclude"} [mode]
+     */
+    function crossSearch(query, mode = "replace") {
+        const parts = mode === "replace" ? [] : parseQueryParts(serializeQuery());
+        // clicking the same pill twice must not stack the same chip twice
+        const key = (p) => `${p.not ? "-" : ""}${p.field}:${p.text}`;
+        const have = new Set(parts.map(key));
+        for (const p of parseQueryParts(mode === "exclude" ? "-" + query : query)) {
+            if (!have.has(key(p))) parts.push(p);
+        }
+        setChips(parts);
         runSearch({push: true});
         window.scrollTo({top: 0});
     }
@@ -4342,6 +4464,13 @@
         // inert, so the input answers for whatever span is under the pointer
         input.addEventListener("mousemove", barHover);
         input.addEventListener("mouseleave", barHoverOut);
+        // the caret decides which capsule is lit, and it moves without the value
+        // changing — so this cannot ride on syncHighlight alone
+        document.addEventListener("selectionchange", () => {
+            if (document.activeElement === input) markCaretCapsule();
+        });
+        input.addEventListener("focus", markCaretCapsule);
+        input.addEventListener("blur", markCaretCapsule);
 
         input.addEventListener("keydown", (e) => {
             const box = suggestBox;
@@ -4670,7 +4799,14 @@
             if (!t) return;
             if (t.dataset.copy) copyText(t.dataset.copy, e.shiftKey);
             else if (t.dataset.play) toggleSound(t);
-            else if (t.dataset.search) crossSearch((e.shiftKey ? "-" : "") + t.dataset.search);
+            else if (t.dataset.search) {
+                // data-nav marks a segment that navigates rather than filters
+                // (see clickHint in pills.js) — it only ever replaces
+                const mode = t.dataset.nav ? "replace"
+                    : e.shiftKey ? "exclude"
+                        : (e.ctrlKey || e.metaKey) ? "add" : "replace";
+                crossSearch(t.dataset.search, mode);
+            }
             else if (t.dataset.expand) {
                 // reveal this cell fully; the row grows to fit it and its siblings
                 // re-clamp to the taller budget, revealing more of themselves

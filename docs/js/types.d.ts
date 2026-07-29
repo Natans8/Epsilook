@@ -442,8 +442,8 @@ interface SpellData {
     bonesetNames: string[];
     /** AnimKit -> (anim -> specific region names), one entry per region pill. */
     animKitAnimBoneset: Map<number, Map<number, string[]>>;
-    /** Spell -> lowercased haystack of every region its animkits animate. */
-    spellBonesetL: Map<number, string>;
+    /** Spell -> the lowercased region names its animkits animate, one per name. */
+    spellBonesets: Map<number, string[]>;
     /** Direct stand/walk anim overrides (the "stance" group). */
     /** Animation replacements: spell -> [{src,dst}] pairs, and each anim id
      *  (either side) -> the spells whose swaps touch it. */
@@ -730,6 +730,11 @@ interface QueryToken {
      * expandAlts, which has already resolved the choice).
      */
     alts?: string[];
+    /**
+     * The user wrote this token in "quotes" — an exact phrase in ordinary text,
+     * and a STATED EXTENT after a meta keyword (`attach "right hand"`).
+     */
+    quoted?: boolean;
 }
 
 /**
@@ -798,11 +803,15 @@ interface EpsilookSearchApi {
     keywordsIn(field: string): string[];
 
     /** How many tokens after `tokens[i]` that keyword takes as its value (0 = none). */
-    keywordRun(tokens: { text: string }[], i: number, data: SpellData): number;
+    keywordRun(tokens: { text: string; quoted?: boolean }[], i: number, data: SpellData): number;
 
     /** A chip's tokens split into the plain ones and one keyword's values. */
     splitKeyword(tokens: QueryToken[], word: string, data: SpellData):
         { text: QueryToken[]; values: string[] };
+
+    /** Every keyword value answered by some one of the names — the engine's own
+     *  value test, so hit-highlighting can reuse it verbatim. */
+    matchesNames(values: string[], namesL: string[]): boolean;
 
     /** The reserved word for a column's own size. */
     COUNT_AXIS: string;

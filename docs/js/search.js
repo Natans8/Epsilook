@@ -208,8 +208,15 @@ window.EpsilookSearch = (() => {
      * that still names something real. `boneset upper body` takes two words
      * because a region is called that; `boneset head kneel` takes one, because
      * nothing is called "head kneel", which leaves `kneel` to match the
-     * animation as usual. `attach` degenerates to one word on its own, since
-     * every attachment point is a single word.
+     * animation as usual.
+     *
+     * QUOTES OVERRIDE IT. `attach "right hand"` takes exactly those two words
+     * whatever the data would have taken on its own, and `boneset "head" kneel`
+     * takes exactly one. That is the escape hatch the data rule needs: without
+     * it the extent is something you can only observe, never state, and the two
+     * keywords behave differently for reasons the user cannot see. Quotes here
+     * GROUP (they mark where the value ends) rather than demand an exact
+     * phrase — the same job they do around a whole tag value.
      *
      * That one rule replaced `attach` taking exactly one word while `boneset`
      * swallowed the whole rest of the chip — an arity you could not see and had
@@ -267,25 +274,70 @@ window.EpsilookSearch = (() => {
     }
 
     /**
+     * Does one name answer to one keyword value? EVERY WORD of the value must
+     * appear in the name — separately, in any order — rather than the value
+     * having to be a substring of it whole.
+     *
+     * Word-wise is the only rule that works for both name pools, and getting it
+     * wrong is what made the two keywords look like different features. Body
+     * regions are written as words ("Upper Body"), so a phrase test reads them
+     * fine; M2 attachment points are jammed together ("HandRight",
+     * "SpellLeftHand"), so a phrase test could never take more than one word —
+     * `attach right hand` silently kept `hand` as a FILE-name search and gave
+     * 26,000 results. Word-wise, both take two words and mean it.
+     *
+     * Each word is still a substring of the name, like every other match in the
+     * app: `attach ch` reaches Chest while it is still being typed.
+     * @param {string} nameL a lowercased name from the pool
+     * @param {string} value one keyword value ("right hand")
+     * @returns {boolean}
+     */
+    function nameHasValue(nameL, value) {
+        for (const w of value.split(" ")) {
+            if (w && !nameL.includes(w)) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Every value must be answered by SOME ONE name. Per name, not against the
+     * names joined together: a row attached at HandRight and ShoulderLeft is
+     * not a "right shoulder" attachment, and a spell animating Left Hand and
+     * Right Arm does not animate a "left arm".
+     * @param {string[]} values
+     * @param {string[]} namesL lowercased names the row/spell carries
+     * @returns {boolean}
+     */
+    const matchesNames = (values, namesL) =>
+        values.every((v) => namesL.some((n) => nameHasValue(n, v)));
+
+    /**
      * How many tokens after `tokens[i]` the keyword there takes as its value.
      * 0 = it names nothing real, so it is not acting as a keyword at all and
      * falls through to being ordinary text.
      *
-     * Substring, like every other match in the app: `attach ch` reaches Chest
-     * while it is still being typed. An alternation counts when ANY of its
-     * alternatives names something (`attach right|left`), because that is what
-     * the engine will ask once expandAlts has distributed it.
-     * @param {{text: string}[]} tokens
+     * A QUOTED token is taken whole and unconditionally — that is the user
+     * saying where the value ends, and it has to hold even while the value is
+     * half-typed and names nothing yet.
+     *
+     * An alternation counts when ANY of its alternatives names something
+     * (`attach right|left`), because that is what the engine will ask once
+     * expandAlts has distributed it.
+     * @param {{text: string, quoted?: boolean}[]} tokens
      * @param {number} i index of the keyword token
      * @param {SpellData} data
      * @returns {number}
      */
     function keywordRun(tokens, i, data) {
+        if (tokens[i + 1] && tokens[i + 1].quoted) return 1;
         const pool = namePool(tokens[i].text, data);
         const knows = (s) => s.split("|").filter(Boolean)
-            .some((alt) => pool.some((n) => n.includes(alt)));
+            .some((alt) => pool.some((n) => nameHasValue(n, alt)));
         let taken = 0, run = "";
         for (let n = 1; i + n < tokens.length; n++) {
+            // a quoted token further along is its own thing (a phrase, or
+            // another keyword's stated value) and never gets swallowed
+            if (tokens[i + n].quoted) break;
             const cand = run ? run + " " + tokens[i + n].text : tokens[i + n].text;
             if (!knows(cand)) break;
             run = cand;
@@ -323,27 +375,22 @@ window.EpsilookSearch = (() => {
     }
 
     /**
-     * The lowercased attachment names of one row, as a single haystack.
+     * The lowercased attachment names one row carries — one entry per point, so
+     * `attach right hand` is measured against HandRight on its own rather than
+     * against it and the row's other point run together.
      * @param {number} src
      * @param {number} dst
      * @param {SpellData} data
-     * @returns {string}
+     * @returns {string[]}
      */
-    function attachmentWords(src, dst, data) {
-        const a = src >= 0 ? (data.attachmentNames[src] || "") : "";
-        const b = dst >= 0 ? (data.attachmentNames[dst] || "") : "";
-        return (a && b ? `${a} ${b}` : a || b).toLowerCase();
+    function attachmentNamesOf(src, dst, data) {
+        const out = [];
+        for (const a of [src, dst]) {
+            const n = a >= 0 ? (data.attachmentNames[a] || "") : "";
+            if (n) out.push(n.toLowerCase());
+        }
+        return out;
     }
-
-    /**
-     * Every attachment value must appear in the row's attachment haystack — the
-     * same substring convention the corpora use (`attach chest` hits Chest,
-     * ChestBloodBack and ChestBloodFront).
-     * @param {string[]} attaches
-     * @param {string} attachL
-     * @returns {boolean}
-     */
-    const attachesMatch = (attaches, attachL) => attaches.every((a) => attachL.includes(a));
 
     /* ------------------------------------------------- target-type words */
 
@@ -441,7 +488,7 @@ window.EpsilookSearch = (() => {
             for (const [s, entries] of data.spellModelCats) {
                 for (const e of entries) {
                     if (tests.length && !maskMatches(tests, e.targets)) continue;
-                    if (attaches.length && !attachesMatch(attaches, attachmentWords(e.src, e.dst, data))) continue;
+                    if (attaches.length && !matchesNames(attaches, attachmentNamesOf(e.src, e.dst, data))) continue;
                     const catL = data.modelCatNames[e.cat] || "";
                     const file = data.files.get(e.fid);
                     const searchL = file ? file.searchL : "";
@@ -551,8 +598,8 @@ window.EpsilookSearch = (() => {
         const bones = splitKeyword(tokens, BONESET_WORD, data);
         tokens = bones.text;
         if (bones.values.length) {
-            for (const [s, hay] of data.spellBonesetL) {
-                if (bones.values.every((w) => hay.includes(w))) out.add(s);
+            for (const [s, names] of data.spellBonesets) {
+                if (matchesNames(bones.values, names)) out.add(s);
             }
             if (tokens.length) {
                 const animMatch = spellsByAnim(tokens, data);
@@ -639,7 +686,7 @@ window.EpsilookSearch = (() => {
         if (attaches.length) {
             for (const [s, rows] of data.spellChainRows) {
                 for (const r of rows) {
-                    if (!attachesMatch(attaches, attachmentWords(r.src, r.dst, data))) continue;
+                    if (!matchesNames(attaches, attachmentNamesOf(r.src, r.dst, data))) continue;
                     if (textMatches(data.fxSearchL.get(r.chain) || "", fxText)) {
                         out.add(s);
                         break;
@@ -696,7 +743,10 @@ window.EpsilookSearch = (() => {
             const alts = (t.alts && t.alts.length) ? t.alts : [t.text];
             /** @type {QueryToken[][]} */
             const next = [];
-            for (const c of combos) for (const a of alts) next.push(c.concat([{text: a}]));
+            // `quoted` has to survive the distribution: it is what tells
+            // keywordRun the user stated this value's extent, and splitKeyword
+            // runs downstream of here
+            for (const c of combos) for (const a of alts) next.push(c.concat([{text: a, quoted: t.quoted}]));
             combos = next;
         }
         return combos;
@@ -964,6 +1014,7 @@ window.EpsilookSearch = (() => {
     return {
         searchGroups, sortByRelevance, expandAlts, combosOf,
         FIELDS, TARGET_WORDS, matchNumeric, hasOperator,
-        META_KEYWORDS, keywordsIn, keywordRun, splitKeyword, COUNT_AXIS, COUNT_SOURCES,
+        META_KEYWORDS, keywordsIn, keywordRun, splitKeyword, matchesNames,
+        COUNT_AXIS, COUNT_SOURCES,
     };
 })();

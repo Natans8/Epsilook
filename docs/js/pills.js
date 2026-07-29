@@ -495,7 +495,13 @@ window.EpsilookPills = (() => {
      */
     function textSegment(kind, text, opts) {
         return {
-            kind, text, search: opts.search, hit: opts.hit, data: opts.data, cls: opts.cls,
+            kind, text, search: opts.search, hit: opts.hit, cls: opts.cls,
+            // `click` marks a segment that NAVIGATES — it asks a different
+            // question from the one on screen, so app.js must not offer to fold
+            // it into the current search. That distinction already existed for
+            // the tooltip's sake; data-nav just lets the click handler read it.
+            data: opts.click && opts.search !== undefined
+                ? {...opts.data, nav: 1} : opts.data,
             title: tip([opts.title, ...(opts.detail || []), clickHint(opts)]),
         };
     }
@@ -525,7 +531,10 @@ window.EpsilookPills = (() => {
     function clickHint(opts) {
         const action = opts.click || (opts.finds && `find ${opts.finds}`);
         if (opts.search === undefined || !action) return "";
-        return `Click: ${action} · Shift-click: exclude`;
+        // a navigating segment replaces the search and nothing else: narrowing
+        // by "the counterpart of what is on screen" is a query for no spell
+        if (opts.click) return `Click: ${action}`;
+        return `Click: ${action}\nCtrl-click: add to search · Shift-click: exclude`;
     }
 
     /* ==================================================================== */
