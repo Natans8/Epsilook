@@ -12,8 +12,8 @@ arrow`, `sound:felreaver`, `anim:ArtLoop` or `fx:"chain red"` and get every spel
 
 The whole thing is a static site: one compressed data pack per game version, every search running in the browser. No
 server, no database, no framework. The app is written in strict TypeScript and bundled into a single file by
-[esbuild](https://esbuild.github.io/) — the one build step, run by the deploy workflow, so the repo carries sources
-and the site serves one bundle. Currently shipping WoW **9.2.7.45745**, ~276k spells.
+[esbuild](https://esbuild.github.io/) — the one build step, run by the deploy workflow, so the repo carries sources and
+the site serves one bundle. Currently shipping WoW **9.2.7.45745**, ~276k spells.
 
 ## Using it
 
@@ -32,7 +32,8 @@ Full syntax lives behind the **?** button in the app. The short version:
   each somewhere.
 - Some content has its own category word inside a column — `fx:object` for the GameObject a spell places
   (`fx:"object campfire"`, with `.gobject spawn` and `.lookup object` on the pill), `model:mount` for the mount it puts
-  you on (`model:"mount stallion"`, with `.modify mount`), and `anim:replace` for animations it swaps out — `Stand → StealthStand`
+  you on (`model:"mount stallion"`, with `.modify mount`), and `anim:replace` for animations it swaps out —
+  `Stand → StealthStand`
   (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue).
 - **A word may be followed by its value**, space-separated, and that is the only value form in the language:
   `model:"attach chest"` (where on the model it plays), `anim:(boneset "upper body")` (which body region moves),
@@ -40,8 +41,8 @@ Full syntax lives behind the **?** button in the app. The short version:
   the column itself — Models, Sounds and Animations each have one — and a lone `model:>4` is its shorthand). Every one
   of these words autocompletes inside its column. **A value is always the one word that follows** — so a value with a
   space in it goes in quotes, and `boneset head kneel` is the head region *and* a kneel animation. On a number, a plain
-  value is the `=` you did not have to type: `scale 50` is `scale =50`, and the sign is yours to keep
-  (`fx:"scale -50"` shrinks). The search bar draws the word and its value joined, so you can see where the value ends.
+  value is the `=` you did not have to type: `scale 50` is `scale =50`, and the sign is yours to keep (`fx:"scale -50"`
+  shrinks). The search bar draws the word and its value joined, so you can see where the value ends.
 - **`|` means either** — `model:fire|frost`, `fx:chain|dissolve`, with or without spaces around the bar;
   `id:133,116` does the same between numbers.
 - The bar **colours what the grammar recognises** and explains it on hover. Nothing is ever marked wrong: anything it
@@ -113,8 +114,8 @@ docs/                    how it works underneath, in prose
 ```
 
 Note that `site/` is the published website and `docs/` is documentation, which is the opposite of the usual GitHub
-convention. It is possible because Pages builds from `.github/workflows/pages.yml` rather than from a branch folder,
-so no repo setting names either directory.
+convention. It is possible because Pages builds from `.github/workflows/pages.yml` rather than from a branch folder, so
+no repo setting names either directory.
 
 `build_data.py` walks the game's own tables — spell → visual → kit → model/sound/animkit/effect — and bakes the result
 into one column-oriented JSON pack per version. The browser fetches that pack once, builds its search indexes in
@@ -137,13 +138,13 @@ existing clone; `python tools/check.py` says `via LFS pointer` when it is lookin
 
 Pushing to `main` deploys, through `.github/workflows/pages.yml`: it builds the bundle and uploads `site/` — which is
 also why the packs can live in LFS at all, since GitHub Pages cannot resolve LFS pointers when it serves a branch
-directly. A change to the CSS or to the bundle's sources needs the `?v=` cache-buster in `index.html` bumped (two
-spots now: the stylesheet and the bundle); data packs bust themselves via a content hash in `versions.json`.
+directly. A change to the CSS or to the bundle's sources needs the `?v=` cache-buster in `index.html` bumped (two spots
+now: the stylesheet and the bundle); data packs bust themselves via a content hash in `versions.json`.
 
-`python tools/bump.py` does the bumping: it compares against what `origin/main` is actually serving, rewrites both,
-and does nothing at all when nothing served has changed or when the string already differs — so it is safe to run
-every time rather than only when you remember. `python tools/verify_live.py` waits for Pages to publish and then
-checks that the new string really is being served and that every asset and pack resolves.
+`python tools/bump.py` does the bumping: it compares against what `origin/main` is actually serving, rewrites both, and
+does nothing at all when nothing served has changed or when the string already differs — so it is safe to run every time
+rather than only when you remember. `python tools/verify_live.py` waits for Pages to publish and then checks that the
+new string really is being served and that every asset and pack resolves.
 
 ### Hosting it yourself
 
@@ -155,26 +156,26 @@ docker compose -f docker/compose.yaml up -d --build
 ```
 
 and the app is on `http://<host>:8378/`. Set `EPSILOOK_PORT` to move it. `.github/workflows/docker.yml` publishes the
-same image to `ghcr.io/natans8/epsilook` on every push to `main`, for `linux/amd64` and `linux/arm64`, so a NAS can
-pull it instead of building:
+same image to `ghcr.io/natans8/epsilook` on every push to `main`, for `linux/amd64` and `linux/arm64`, so a NAS can pull
+it instead of building:
 
 ```
 docker compose -f docker/compose.yaml pull
 ```
 
 The image is a three-stage build: esbuild bundles `src/`, a second stage assembles the document root and runs
-`tools/verify_site.sh` over it, and nginx serves the result with `docker/nginx.conf`. Building from a checkout needs
-the LFS packs present — the build copies the working tree, so without `git lfs pull` the image would bake ten
-130-byte pointer files in; the verify stage refuses rather than shipping a site where no version loads. The build
-context is the repo root even though the `Dockerfile` is not, so a plain `docker build` needs to say so:
+`tools/verify_site.sh` over it, and nginx serves the result with `docker/nginx.conf`. Building from a checkout needs the
+LFS packs present — the build copies the working tree, so without `git lfs pull` the image would bake ten 130-byte
+pointer files in; the verify stage refuses rather than shipping a site where no version loads. The build context is the
+repo root even though the `Dockerfile` is not, so a plain `docker build` needs to say so:
 `docker build -f docker/Dockerfile -t epsilook .`
 
 `python tools/docker_smoke.py` builds the image, runs it, and checks what a static host that merely returns 200 would
 still get wrong: that `index.html` and `versions.json` are never cached while everything they cache-bust is immutable,
-that every pack arrives byte-for-byte against its manifest hash, that no pack is transport-gzipped (the app gunzips
-them itself), and that the 404 page still finds its stylesheet. CI runs the same script, so a laptop and a runner
-agree on what "the image works" means. It is deliberately not part of `tools/check.py`, which has to keep running on
-a machine with no Docker installed.
+that every pack arrives byte-for-byte against its manifest hash, that no pack is transport-gzipped (the app gunzips them
+itself), and that the 404 page still finds its stylesheet. CI runs the same script, so a laptop and a runner agree on
+what "the image works" means. It is deliberately not part of `tools/check.py`, which has to keep running on a machine
+with no Docker installed.
 
 ### Rebuilding the data
 
@@ -242,20 +243,22 @@ into `meta.absentTables`.
 - **A new kind of pill** (a new sort of thing a results column can show):
   one record in `src/pilltypes.ts` gives it a category word, that word's autocomplete description, its group head, its
   search-hit highlighting and the spells a query selects; the renderer is a list of segments. See
-  **[docs/PILLS.md](docs/PILLS.md)** — it also carries the segment-order convention and the rules for choosing a keyword.
-- **A new copy command**: `spellCommands` in `src/config.ts` for per-spell buttons (they render as one nowrap strip under
-  the spell name — a new one becomes another segment of that strip and never wraps it to a second line); the
+  **[docs/PILLS.md](docs/PILLS.md)** — it also carries the segment-order convention and the rules for choosing a
+  keyword.
+- **A new copy command**: `spellCommands` in `src/config.ts` for per-spell buttons (they render as one nowrap strip
+  under the spell name — a new one becomes another segment of that strip and never wraps it to a second line); the
   `*CopyTemplate` entries for the ones on tags. A label starting with `.` gets that dot drawn in the accent colour
-  automatically — it is the chat sigil; a label without one renders plain. The strip is drawn as ONE segmented
-  control rather than as separate buttons, so a command costs a hairline divider and its own text, not a box.
+  automatically — it is the chat sigil; a label without one renders plain. The strip is drawn as ONE segmented control
+  rather than as separate buttons, so a command costs a hairline divider and its own text, not a box.
 - **A new theme**: every colour in `app.css` comes from a token in the block at the top, so a theme is one
   `:root[data-theme="<id>"] { ... }` block re-declaring those tokens plus one `{id, label}` line in `themes` in
-  `src/config.ts`. The header picker builds itself from that registry and appears once a second theme exists; the choice is
-  remembered per browser, and the reserved id `auto` follows the OS's light/dark setting (`autoTheme` in `src/config.ts`
-  says which palette it lands on). Three ship: **Dark**, **Light — Moonwell** (cool violet slate) and
-  **Light — Vellum** (warm parchment). A palette also sets *how loudly* colour lands, not just which colour: the fill,
-  edge and ink percentages at the bottom of each block are what let one set of family tokens work on black and on
-  paper. The comment block at the top of `app.css` explains each of them.
+  `src/config.ts`. The header picker builds itself from that registry and appears once a second theme exists; the choice
+  is remembered per browser, and the reserved id `auto` follows the OS's light/dark setting (`autoTheme` in
+  `src/config.ts`
+  says which palette it lands on). Three ship: **Dark**, **Light — Moonwell** (cool violet slate) and **Light — Vellum**
+  (warm parchment). A palette also sets *how loudly* colour lands, not just which colour: the fill, edge and ink
+  percentages at the bottom of each block are what let one set of family tokens work on black and on paper. The comment
+  block at the top of `app.css` explains each of them.
 
 ### Checking your changes
 
@@ -283,8 +286,8 @@ python -m mypy build/build_data.py tools       # Python: fully annotated
 python -m pyflakes build/build_data.py tools
 ```
 
-Touching the `docker/Dockerfile`, `docker/nginx.conf` or anything they copy adds one more, which needs Docker running and so
-stays out of `check.py`:
+Touching the `docker/Dockerfile`, `docker/nginx.conf` or anything they copy adds one more, which needs Docker running
+and so stays out of `check.py`:
 
 ```
 python tools/docker_smoke.py                   # build the image, run it, prove it serves
@@ -292,16 +295,18 @@ python tools/docker_smoke.py                   # build the image, run it, prove 
 
 ### Measuring what the app does
 
-`site/dev/oracle.js` is a dev tool the app never loads. Paste one line into the console of a running page — local or
-the live site — and it gives you the measurements this project keeps having to take:
+`site/dev/oracle.js` is a dev tool the app never loads. Paste this into the console of a running page — local or the
+live site — and it gives you the measurements this project keeps having to take:
 
 ```js
-s = document.createElement("script"); s.src = "dev/oracle.js"; document.head.append(s)
+s = document.createElement("script");
+s.src = "dev/oracle.js";
+document.head.append(s)
 ```
 
-`Oracle.q([...])` runs a battery of queries in place and tabulates the result counts; `Oracle.same([...])` asserts
-that a set of queries agree, which is the shape nearly every search-grammar check takes; `Oracle.contrast()` does the
-WCAG walk, compositing each text node's ancestor backgrounds down to an opaque colour before measuring;
+`Oracle.q([...])` runs a battery of queries in place and tabulates the result counts; `Oracle.same([...])` asserts that
+a set of queries agree, which is the shape nearly every search-grammar check takes; `Oracle.contrast()` does the WCAG
+walk, compositing each text node's ancestor backgrounds down to an opaque colour before measuring;
 `Oracle.pills([...])` snapshots every pill-bearing cell as canonical text plus a hash, so a refactor that should not
 change what renders can be proven not to. `Oracle.help()` lists them. It switches palettes by *reloading*
 (`Oracle.theme("moonwell")`) rather than by setting `data-theme`, because Chrome serves stale computed colours for
@@ -321,8 +326,8 @@ python tools/builddb.py
 
 It is a development tool and nothing in `site/` reads it: the database is a cache, gitignored, and rebuilt in about
 three minutes. `duckdb` is the only dependency outside the standard library anywhere in the project, and only this
-script needs it. **[docs/DB_SCHEMA.md](docs/DB_SCHEMA.md)** is the reference — layout, conventions, worked queries, and the
-three things to know before trusting a row.
+script needs it. **[docs/DB_SCHEMA.md](docs/DB_SCHEMA.md)** is the reference — layout, conventions, worked queries, and
+the three things to know before trusting a row.
 
 ## Data sources
 

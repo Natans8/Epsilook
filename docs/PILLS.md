@@ -5,15 +5,15 @@ is how to add another one, and the conventions to follow while doing it.
 
 Three files:
 
-| file                   | holds                                                          |
-|------------------------|----------------------------------------------------------------|
-| `src/pills.ts`         | the segment library and the pill-type registry — the machinery |
-| `src/pilltypes.ts`     | one record per content type — the declarations                  |
-| `src/app/tags.ts`      | one renderer per pill type                                      |
-| `src/app/render.ts`    | the cells that arrange them                                     |
+| file                | holds                                                          |
+|---------------------|----------------------------------------------------------------|
+| `src/pills.ts`      | the segment library and the pill-type registry — the machinery |
+| `src/pilltypes.ts`  | one record per content type — the declarations                 |
+| `src/app/tags.ts`   | one renderer per pill type                                     |
+| `src/app/render.ts` | the cells that arrange them                                    |
 
-`pills.ts` depends only on `config.ts` and never reaches into the app modules. That is deliberate: it lets `search.ts` read the
-type registry too, so matching a query is written once instead of once per file.
+`pills.ts` depends only on `config.ts` and never reaches into the app modules. That is deliberate: it lets `search.ts`
+read the type registry too, so matching a query is written once instead of once per file.
 
 ---
 
@@ -23,16 +23,16 @@ A pill is an **ordered list of segments**, written left to right exactly as it r
 
 ```js
 P.pill({
-  cls: "model",                    // classes after "tag" — drives the tone
-  hit: modelFileIsHit(file, cat),  // matched by the current query
-  title: file.path,                // tooltip on the pill body
-  segments: [
-    P.view(url, "Preview … in the model viewer"),   // 3D cube
-    P.targets(mask),                                 // who it plays on
-    P.label(name, {title, detail, search, finds}), // the clickable name
-    attachSegment(src, dst, "model", false),         // where it attaches
-    P.cmd(".lo", CFG.modelCopyTemplate, vars),       // copy button
-  ],
+    cls: "model",                    // classes after "tag" — drives the tone
+    hit: modelFileIsHit(file, cat),  // matched by the current query
+    title: file.path,                // tooltip on the pill body
+    segments: [
+        P.view(url, "Preview … in the model viewer"),   // 3D cube
+        P.targets(mask),                                 // who it plays on
+        P.label(name, {title, detail, search, finds}), // the clickable name
+        attachSegment(src, dst, "model", false),         // where it attaches
+        P.cmd(".lo", CFG.modelCopyTemplate, vars),       // copy button
+    ],
 })
 ```
 
@@ -40,12 +40,12 @@ Falsy segments are dropped and nested arrays flatten, so conditional and variabl
 
 ```js
 segments: [
-  named && P.link(href, title),        // only when the item has a name
-  swatches,                            // an array of 0–3 colour dots
-  displayId && [                       // two segments, or neither
-    P.copy("⧉", `Copy display ID: ${displayId}`, String(displayId)),
-    P.cmd(".morph", CFG.morphCopyTemplate, {id: displayId}),
-  ],
+    named && P.link(href, title),        // only when the item has a name
+    swatches,                            // an array of 0–3 colour dots
+    displayId && [                       // two segments, or neither
+        P.copy("⧉", `Copy display ID: ${displayId}`, String(displayId)),
+        P.cmd(".morph", CFG.morphCopyTemplate, {id: displayId}),
+    ],
 ]
 ```
 
@@ -92,13 +92,13 @@ Four steps. Nothing else in the app needs to know.
 
 ```js
 T({
-  key: "fx:sparkle",           // unique
-  field: "fx",                 // which column / search field
-  word: "sparkle",             // the category keyword (omit for none)
-  hint: "Sparkle overlay (SpellSparkleEffect)",   // autocomplete description
-  corpus: (d) => d.sparkleSearchL,   // id -> lowercase haystack
-  spells: (d) => d.sparkleSpells,    // id -> spell ids
-  when: (d) => d.sparkleSpells.size > 0,   // optional availability gate
+    key: "fx:sparkle",           // unique
+    field: "fx",                 // which column / search field
+    word: "sparkle",             // the category keyword (omit for none)
+    hint: "Sparkle overlay (SpellSparkleEffect)",   // autocomplete description
+    corpus: (d) => d.sparkleSearchL,   // id -> lowercase haystack
+    spells: (d) => d.sparkleSpells,    // id -> spell ids
+    when: (d) => d.sparkleSpells.size > 0,   // optional availability gate
 });
 ```
 
@@ -112,7 +112,7 @@ needs editing.
 
 ```css
 .tag.sparkle {
-  --tone: var(--sparkle);   /* a palette token, never a literal */
+    --tone: var(--sparkle); /* a palette token, never a literal */
 }
 ```
 
@@ -124,8 +124,8 @@ Two consequences worth knowing:
 
 - **A shape with no pill of its own still needs a tone.** `--tone` also inherits from the column (`.c-models`,
   `.c-sounds`, …), which is what colours a kit box, its head, and a compact group's capsule. Give a new column a
-  `--tone` there or its groups come out grey — on dark that is invisible (a 3% fill is a 3% fill), on a light palette
-  it is the first thing you see.
+  `--tone` there or its groups come out grey — on dark that is invisible (a 3% fill is a 3% fill), on a light palette it
+  is the first thing you see.
 - **Fills stack.** A compact group's field lies under its item's pill, so the two percentages add. Labels are solved
   against the loudest floor they ever land on; push a fill past that floor and text on it drops below AA. Re-run the
   contrast oracle (walk every text node, composite the ancestors' alphas, measure) after touching any of them.
@@ -136,11 +136,11 @@ category is four lines:
 
 ```js
 pushCat({
-  name: "sparkle",
-  rows: sparkleIds,
-  mask: (id) => maskOf(d.sparkleTargets, spellId, [id]),
-  isHit: (id) => sparkleIsHit(id),
-  render: (id, m) => sparkleTag(id, m),
+    name: "sparkle",
+    rows: sparkleIds,
+    mask: (id) => maskOf(d.sparkleTargets, spellId, [id]),
+    isHit: (id) => sparkleIsHit(id),
+    render: (id, m) => sparkleTag(id, m),
 });
 ```
 
@@ -195,9 +195,9 @@ Two axes, and the difference matters:
 
 **A number is written as the category word, then its value** — `mech:"seat >2"`, `fx:"scale >100"`,
 `mech:"speed <-50"`, `fx:"scale 50"` — which is the same shape as every other value in the language (`attach chest`,
-`boneset upper body`, `count >4`). A type therefore never needs a second name for its number: the word it already has
-IS the name. An earlier pass invented `seats`, `detectors` and `reveals` as separate axis names glued to their
-operators; that gave the language a third way to attach a value and two words for one concept, and it was reverted.
+`boneset upper body`, `count >4`). A type therefore never needs a second name for its number: the word it already has IS
+the name. An earlier pass invented `seats`, `detectors` and `reveals` as separate axis names glued to their operators;
+that gave the language a third way to attach a value and two words for one concept, and it was reverted.
 
 **A plain number is the `=` you did not have to type.** `fx:"scale 50"` is `fx:"scale =50"` — a synonym, not a form of
 its own, so there is one comparison grammar and omitting the operator picks its default. It is emphatically NOT an
@@ -206,8 +206,8 @@ leave no way to ask for one direction while `scale >0` and `scale <0` already sa
 
 `bindNumeric` (pills.ts) is what makes that precise. It takes the ONE token after the word — the same arity a meta
 keyword has — out of the chip and asks the numeric axis instead, so the number never reaches the corpus.
-`tokenMatches` tries the corpus first, so before this a bare `50` matched `+150%` as a substring long before it could
-be tested as a number (349 rows became 483 on 9.2.7).
+`tokenMatches` tries the corpus first, so before this a bare `50` matched `+150%` as a substring long before it could be
+tested as a number (349 rows became 483 on 9.2.7).
 
 `operatorOnly: true` governs a number standing **loose** in the chip — one not written against its word — reserving it
 for the text or `bare` axis. So `mech:"speed run 70"` still reads the corpus the pill prints, and `model:2` still
@@ -215,8 +215,8 @@ matches `cfx_fire_02.m2`. A type declaring `bare` is left alone by `bindNumeric`
 word is the id itself, which is what lets `mech:"invis 13"` mean channel 13 while `mech:"invis =0"` means the
 invisibility nothing detects.
 
-The search bar draws exactly this: `Pills.isValue` is the one predicate, and the bar's capsule asks it, so what is
-drawn as a word-and-value and what binds as one cannot drift apart.
+The search bar draws exactly this: `Pills.isValue` is the one predicate, and the bar's capsule asks it, so what is drawn
+as a word-and-value and what binds as one cannot drift apart.
 
 **A bound may be negative or fractional, because values are.** A movement-speed change is signed, so `fx:"speed <-50"`
 asks for snares worse than half. A `count` axis is never negative and simply matches nothing against a bound it cannot
@@ -224,10 +224,10 @@ reach — no guard needed.
 
 **THE WHOLE NUMERIC GRAMMAR LIVES IN `pills.ts` AND NOWHERE ELSE** — `CMP_OPS` / `NUM_SRC` (the alphabet, exported as
 regex source so the tokenizer composes its own patterns from them), `VALUE_RE`, `isValue`, `hasOperator`, `numericTest`
-and `matchNumeric`. It used to be spelled five times: search.ts carried a byte-identical copy of `numericTest` under
-the name `numericPredicate`, "a comparison with its operator written" appeared twice more (search.ts and
-app/highlight.ts), and app/query.ts's `GLUED_CMP` embedded the operator alternation a fifth time. Both files claimed in
-a comment to be its single home and neither was. If you need "a comparison that wrote its operator", that is
+and `matchNumeric`. It used to be spelled five times: search.ts carried a byte-identical copy of `numericTest` under the
+name `numericPredicate`, "a comparison with its operator written" appeared twice more (search.ts and app/highlight.ts),
+and app/query.ts's `GLUED_CMP` embedded the operator alternation a fifth time. Both files claimed in a comment to be its
+single home and neither was. If you need "a comparison that wrote its operator", that is
 `isValue(t) && hasOperator(t)` — do not respell the regex.
 
 Where a value could be printed two ways, **ship the one the game stores**. Movement speed is the worked example: the

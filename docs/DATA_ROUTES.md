@@ -6,8 +6,8 @@ Every path data takes from an upstream source to a pixel in the app. This is the
 
 Where a route ends — the pill it becomes, the category word it answers to, how a query token matches it — is
 **[PILLS.md](PILLS.md)**. The two meet at
-`src/pilltypes.ts`, which declares one record per kind of content: the route's corpus, the spells it reaches, and
-its keyword.
+`src/pilltypes.ts`, which declares one record per kind of content: the route's corpus, the spells it reaches, and its
+keyword.
 
 Read it in five stages:
 
@@ -24,35 +24,35 @@ Read it in five stages:
 
 ```mermaid
 flowchart LR
-  subgraph SRC["Sources (build-time, cached in build/cache/)"]
-    W["wago.tools<br/>33 db2 tables as CSV"]
-    L["community listfile<br/>fid → path"]
-    T["TrinityCore TDB<br/>world + hotfixes SQL"]
-    A["anims.js<br/>AnimID → name"]
-    E["WoWDBDefs enums<br/>SpellEffect / SpellEffectAura"]
-  end
+    subgraph SRC["Sources (build-time, cached in build/cache/)"]
+        W["wago.tools<br/>33 db2 tables as CSV"]
+        L["community listfile<br/>fid → path"]
+        T["TrinityCore TDB<br/>world + hotfixes SQL"]
+        A["anims.js<br/>AnimID → name"]
+        E["WoWDBDefs enums<br/>SpellEffect / SpellEffectAura"]
+    end
 
-  B["build_data.py<br/>walk + resolve + bake"]
-  P["site/data/&lt;build&gt;/pack.json.gz<br/>column-oriented, ~44 sections"]
-  D["data.ts<br/>builds in-memory indexes"]
-  U["search.ts + app/<br/>query + render"]
-  W --> B
-  L --> B
-  T --> B
-  A --> B
-  E --> B
-  B --> P --> D --> U
+    B["build_data.py<br/>walk + resolve + bake"]
+    P["site/data/&lt;build&gt;/pack.json.gz<br/>column-oriented, ~44 sections"]
+    D["data.ts<br/>builds in-memory indexes"]
+    U["search.ts + app/<br/>query + render"]
+    W --> B
+    L --> B
+    T --> B
+    A --> B
+    E --> B
+    B --> P --> D --> U
 
-  subgraph RT["Runtime hotlinks (on demand, never bulk)"]
-    Z["zamimg — icons, sounds"]
-    C["wago CASC — .blp textures, logos"]
-    V["wowtools.work — 3D viewer"]
-    H["wowhead — spell/npc/model pages"]
-  end
-  U -.-> Z
-  U -.-> C
-  U -.-> V
-  U -.-> H
+    subgraph RT["Runtime hotlinks (on demand, never bulk)"]
+        Z["zamimg — icons, sounds"]
+        C["wago CASC — .blp textures, logos"]
+        V["wowtools.work — 3D viewer"]
+        H["wowhead — spell/npc/model pages"]
+    end
+    U -.-> Z
+    U -.-> C
+    U -.-> V
+    U -.-> H
 ```
 
 Nothing is fetched from a local DB dump, and nothing is fetched per-result at runtime. Everything the search touches is
@@ -74,14 +74,14 @@ baked into the pack.
 
 ```mermaid
 flowchart LR
-  TDB["TDB release .7z"] --> WORLD["world dump"]
-  TDB --> HOT["hotfixes dump"]
-  WORLD --> CT["creature_template<br/>creature → NPC name"]
-  WORLD --> CTM["creature_template_model<br/>creature → display ids"]
-  CT --> USE1["morphs + summons<br/>(server-side; the client never ships it)"]
-  CTM --> USE1
-  HOT --> OV["9 tables overlaid onto the<br/>wago rows BY ROW ID"]
-  OV --> USE2["post-ship corrections<br/>(TDB wins where it has a row)"]
+    TDB["TDB release .7z"] --> WORLD["world dump"]
+    TDB --> HOT["hotfixes dump"]
+    WORLD --> CT["creature_template<br/>creature → NPC name"]
+    WORLD --> CTM["creature_template_model<br/>creature → display ids"]
+    CT --> USE1["morphs + summons<br/>(server-side; the client never ships it)"]
+    CTM --> USE1
+    HOT --> OV["9 tables overlaid onto the<br/>wago rows BY ROW ID"]
+    OV --> USE2["post-ship corrections<br/>(TDB wins where it has a row)"]
 ```
 
 **World tables are the only source of creature names and displays** — that data lives on the server, so without a
@@ -102,19 +102,19 @@ Almost every visual route starts here. Both hops are many-to-many.
 
 ```mermaid
 flowchart LR
-  S["Spell<br/>(SpellName, or Spell.Name_lang pre-BfA)"]
-  SXSV["SpellXSpellVisual"]
-  SV["SpellVisual"]
-  SVE["SpellVisualEvent"]
-  K["SpellVisualKit"]
-  SVKE["SpellVisualKitEffect<br/>EffectType dispatch"]
-  MS["SpellVisualMissile<br/>(missile set)"]
-  S --> SXSV --> SV
-  SV -->|" Caster/HostileSpellVisualID<br/>(redirect, + target bit) "| SV
-  SV -->|" SpellVisualEvent rows "| SVE -->|" + TargetType "| K
-  SV -->|" SpellVisualMissileSetID<br/>+ RaidSpellVisualMissileSetID "| MS
-  SV -->|" AnimEventSoundID "| AES["SoundKitEntry → sound fids"]
-  K --> SVKE
+    S["Spell<br/>(SpellName, or Spell.Name_lang pre-BfA)"]
+    SXSV["SpellXSpellVisual"]
+    SV["SpellVisual"]
+    SVE["SpellVisualEvent"]
+    K["SpellVisualKit"]
+    SVKE["SpellVisualKitEffect<br/>EffectType dispatch"]
+    MS["SpellVisualMissile<br/>(missile set)"]
+    S --> SXSV --> SV
+    SV -->|" Caster/HostileSpellVisualID<br/>(redirect, + target bit) "| SV
+    SV -->|" SpellVisualEvent rows "| SVE -->|" + TargetType "| K
+    SV -->|" SpellVisualMissileSetID<br/>+ RaidSpellVisualMissileSetID "| MS
+    SV -->|" AnimEventSoundID "| AES["SoundKitEntry → sound fids"]
+    K --> SVKE
 ```
 
 Three things to hold onto:
@@ -200,28 +200,28 @@ points at.
 
 ```mermaid
 flowchart LR
-  KE["SpellVisualKitEffect"]
-  KE -->|" 1 "| PROC["SpellProceduralEffect"]
-  KE -->|" 5 "| SK["SoundKitID"]
-  KE -->|" 6 "| SVA["SpellVisualAnim"]
-  KE -->|" 7 "| SH["ShadowyEffect"]
-  KE -->|" 8 "| EM["SpellEffectEmission"]
-  KE -->|" 11 "| DE["DissolveEffect"]
-  KE -->|" 12 "| EG["EdgeGlowEffect"]
-  KE -->|" 13 "| BE["BeamEffect"]
-  KE -->|" 17 "| BA["BarrageEffect"]
-  KE -->|" 19 "| SVSE["SpellVisualScreenEffect"]
-  PROC --> PT["dispatched again by Type<br/>(see 3b)"]
-  SK --> SKE["SoundKitEntry → sound fids"]
-  SVA --> AK["AnimKitID → AnimKitSegment"]
-  SVA --> LA["Initial/LoopAnimID → AnimationData"]
-  SH --> GH["ghost — 2 packed colors"]
-  EM --> AM["SpellVisualKitAreaModel → model fid"]
-  DE --> TBS["TextureBlendSet → texture fids"]
-  EG --> GL["glow — packed RGB + alpha"]
-  BE --> CH["SpellChainEffects"]
-  BA --> EN["SpellVisualEffectName → model fid"]
-  SVSE --> SE["ScreenEffect"]
+    KE["SpellVisualKitEffect"]
+    KE -->|" 1 "| PROC["SpellProceduralEffect"]
+    KE -->|" 5 "| SK["SoundKitID"]
+    KE -->|" 6 "| SVA["SpellVisualAnim"]
+    KE -->|" 7 "| SH["ShadowyEffect"]
+    KE -->|" 8 "| EM["SpellEffectEmission"]
+    KE -->|" 11 "| DE["DissolveEffect"]
+    KE -->|" 12 "| EG["EdgeGlowEffect"]
+    KE -->|" 13 "| BE["BeamEffect"]
+    KE -->|" 17 "| BA["BarrageEffect"]
+    KE -->|" 19 "| SVSE["SpellVisualScreenEffect"]
+    PROC --> PT["dispatched again by Type<br/>(see 3b)"]
+    SK --> SKE["SoundKitEntry → sound fids"]
+    SVA --> AK["AnimKitID → AnimKitSegment"]
+    SVA --> LA["Initial/LoopAnimID → AnimationData"]
+    SH --> GH["ghost — 2 packed colors"]
+    EM --> AM["SpellVisualKitAreaModel → model fid"]
+    DE --> TBS["TextureBlendSet → texture fids"]
+    EG --> GL["glow — packed RGB + alpha"]
+    BE --> CH["SpellChainEffects"]
+    BA --> EN["SpellVisualEffectName → model fid"]
+    SVSE --> SE["ScreenEffect"]
 ```
 
 The remaining EffectType values were audited and deliberately dropped: **2**
@@ -258,27 +258,27 @@ Every `(spell, model)` row is tagged with **how** the model is used. Same fid ca
 
 ```mermaid
 flowchart LR
-  A1["SpellVisualKitModelAttach"] --> EN["SpellVisualEffectName"]
-  M1["SpellVisual → SpellVisualMissile"] --> EN
-  E17["kit ET 17 → BarrageEffect"] --> EN
-  EN -->|" Type 0 (.ModelFileDataID) "| LF["listfile → model path"]
-  EN -->|" Type 1 (.GenericID = Item::ID)<br/>attach route only "| ITM["ItemModifiedAppearance → ItemAppearance<br/>→ ItemDisplayInfo → ModelFileData"]
-  ITM --> LF
-  EN -->|" Type 2 (.GenericID = CreatureDisplayID)<br/>attach route only "| CDI["CreatureDisplayInfo.ModelID<br/>→ CreatureModelData.FileDataID"]
-  CDI --> LF
-  EN -->|" Type 3-10, no named file "| WPN["sentinel fid per slot<br/>'equipped main hand' / 'off hand'<br/>/ 'ranged' / 'ammo'"]
-  E8["kit ET 8 → SpellEffectEmission"] --> AM["SpellVisualKitAreaModel<br/>.ModelFileDataID"]
-  P9["proc Type 9"] --> AM
-  P27["proc Type 27 → WeaponTrail<br/>.FileDataID"] --> LF
-  AM --> LF
-  A1 -.->|" category "| C0["attach — no word, loose pills"]
-  A1 -.->|" category (Type 1) "| C6["item"]
-  A1 -.->|" category (Type 2) "| C5["display"]
-  M1 -.->|" category "| C1["missile"]
-  E17 -.->|" category "| C4["barrage"]
-  E8 -.->|" category "| C2["ground"]
-  P9 -.->|" category "| C2
-  P27 -.->|" category "| C3["trail"]
+    A1["SpellVisualKitModelAttach"] --> EN["SpellVisualEffectName"]
+    M1["SpellVisual → SpellVisualMissile"] --> EN
+    E17["kit ET 17 → BarrageEffect"] --> EN
+    EN -->|" Type 0 (.ModelFileDataID) "| LF["listfile → model path"]
+    EN -->|" Type 1 (.GenericID = Item::ID)<br/>attach route only "| ITM["ItemModifiedAppearance → ItemAppearance<br/>→ ItemDisplayInfo → ModelFileData"]
+    ITM --> LF
+    EN -->|" Type 2 (.GenericID = CreatureDisplayID)<br/>attach route only "| CDI["CreatureDisplayInfo.ModelID<br/>→ CreatureModelData.FileDataID"]
+    CDI --> LF
+    EN -->|" Type 3-10, no named file "| WPN["sentinel fid per slot<br/>'equipped main hand' / 'off hand'<br/>/ 'ranged' / 'ammo'"]
+    E8["kit ET 8 → SpellEffectEmission"] --> AM["SpellVisualKitAreaModel<br/>.ModelFileDataID"]
+    P9["proc Type 9"] --> AM
+    P27["proc Type 27 → WeaponTrail<br/>.FileDataID"] --> LF
+    AM --> LF
+    A1 -.->|" category "| C0["attach — no word, loose pills"]
+    A1 -.->|" category (Type 1) "| C6["item"]
+    A1 -.->|" category (Type 2) "| C5["display"]
+    M1 -.->|" category "| C1["missile"]
+    E17 -.->|" category "| C4["barrage"]
+    E8 -.->|" category "| C2["ground"]
+    P9 -.->|" category "| C2
+    P27 -.->|" category "| C3["trail"]
 ```
 
 `SpellVisualKitAreaModel` carries its fid **directly** — no
@@ -368,11 +368,11 @@ unnamed file).
 
 ```mermaid
 flowchart LR
-  K5["kit EffectType 5"] --> SKID["SoundKitID"]
-  MSND["SpellVisualMissile.SoundEntriesID"] --> SKID
-  CSND["SpellChainEffects.SoundKitID"] --> SKID
-  AESND["SpellVisual.AnimEventSoundID"] --> SKID
-  SKID --> SKE["SoundKitEntry"] --> FID["sound FileDataIDs"]
+    K5["kit EffectType 5"] --> SKID["SoundKitID"]
+    MSND["SpellVisualMissile.SoundEntriesID"] --> SKID
+    CSND["SpellChainEffects.SoundKitID"] --> SKID
+    AESND["SpellVisual.AnimEventSoundID"] --> SKID
+    SKID --> SKE["SoundKitEntry"] --> FID["sound FileDataIDs"]
 ```
 
 The chain route is the "half": a beam's own sound folds into the spell's Sounds column and inherits the chain's target
@@ -387,20 +387,20 @@ on every pack including Vanilla — and it inherits the redirect target bit of w
 
 ```mermaid
 flowchart LR
-  K6["kit ET 6 → SpellVisualAnim"] -->|AnimKitID| AKS["AnimKitSegment"] --> AID1["AnimIDs — grouped under an AnimKit head"]
-  MAK["SpellVisualMissile.AnimKitID"] --> AKS
-  K6 -->|" Initial/LoopAnimID "| AID2["AnimIDs — loose pills"]
-  MA2["SpellVisualKitModelAttach"] -->|" AnimKitID "| AKS
-  MA2 -->|" Start/Anim/EndAnimID "| AID2
-  P7["proc Type 7 (Stand/Walk/Run)"] --> AID3["'replace' group — base → replacement pairs (§3o)"]
-  AR312["aura 312 → AnimReplacement"] --> AID3
-  VS["VehicleSeat (via aura 296 → Vehicle)"] -->|" Enter/Ride/RideUpper/Exit anims "| AID4["AnimIDs — 'passenger' group"]
-  VS -->|" VehicleEnter/Exit/RideAnimLoop "| AID2
-  VS -->|" 6 × AnimKitID "| AKS
-  AID1 --> N["names via anims.js"]
-  AID2 --> N
-  AID3 --> N
-  AID4 --> N
+    K6["kit ET 6 → SpellVisualAnim"] -->|AnimKitID| AKS["AnimKitSegment"] --> AID1["AnimIDs — grouped under an AnimKit head"]
+    MAK["SpellVisualMissile.AnimKitID"] --> AKS
+    K6 -->|" Initial/LoopAnimID "| AID2["AnimIDs — loose pills"]
+    MA2["SpellVisualKitModelAttach"] -->|" AnimKitID "| AKS
+    MA2 -->|" Start/Anim/EndAnimID "| AID2
+    P7["proc Type 7 (Stand/Walk/Run)"] --> AID3["'replace' group — base → replacement pairs (§3o)"]
+    AR312["aura 312 → AnimReplacement"] --> AID3
+    VS["VehicleSeat (via aura 296 → Vehicle)"] -->|" Enter/Ride/RideUpper/Exit anims "| AID4["AnimIDs — 'passenger' group"]
+    VS -->|" VehicleEnter/Exit/RideAnimLoop "| AID2
+    VS -->|" 6 × AnimKitID "| AKS
+    AID1 --> N["names via anims.js"]
+    AID2 --> N
+    AID3 --> N
+    AID4 --> N
 ```
 
 `SpellVisualAnim`'s initial/loop anims are **the dominant source** — 119k rows vs 32k animkit rows on 9.2.7. `-1` and
@@ -432,8 +432,8 @@ build-present so no drift). The bone-index blob (`BoneDataID`) is not surfaced; 
 
 ```mermaid
 flowchart LR
-  SEG["AnimKitSegment<br/>(kit, anim, AnimKitConfigID)"] -->|ParentAnimKitConfigID| CBS["AnimKitConfigBoneSet"]
-  CBS -->|AnimKitBoneSetID| BS["AnimKitBoneSet.Name"]
+    SEG["AnimKitSegment<br/>(kit, anim, AnimKitConfigID)"] -->|ParentAnimKitConfigID| CBS["AnimKitConfigBoneSet"]
+    CBS -->|AnimKitBoneSetID| BS["AnimKitBoneSet.Name"]
 ```
 
 A boneset is a property of the **segment**, so it is keyed by `(kit, anim)` and shown only on that **anim pill** — never
@@ -454,17 +454,17 @@ Nine fx categories skip the visual graph entirely: a particular `Effect` or
 
 ```mermaid
 flowchart LR
-  SE["SpellEffect"]
-  SE -->|" EffectAura 56 (TRANSFORM)<br/>misc0 = creature id "| MO["morph"]
-  SE -->|" Effect 28 (SUMMON)<br/>misc0 = creature, misc1 = SummonProperties "| SU["summon"]
-  SE -->|" EffectAura 260 (SCREEN_EFFECT)<br/>misc0 = ScreenEffect id "| SC["screen"]
-  SE -->|" EffectAura 36 (MOD_SHAPESHIFT)<br/>misc0 = SpellShapeshiftForm "| SS["shapeshift"]
-  SE -->|" EffectAura 370 (OVERRIDE_NAME)<br/>misc0 = SpellOverrideName "| ON["alt names — search corpus only"]
-  SE -->|" EffectAura 296 (SET_VEHICLE_ID)<br/>misc0 = Vehicle id "| VE["vehicle"]
-  SE -->|" EffectAura 406 (KEYBOUND_OVERRIDE)<br/>misc0 = SpellKeyboundOverride "| KB["keybind"]
-  SE -->|" EffectAura in SPEED_AURAS (14 of them)<br/>EffectBasePoints = the percent "| SP["speed"]
-  SE -->|" EffectAura in SCALE_AURAS (61 / 239 / 591)<br/>EffectBasePoints = the percent "| SZ["scale"]
-  SE -->|" Effect + EffectAura + ImplicitTarget "| ME["Mechanics column"]
+    SE["SpellEffect"]
+    SE -->|" EffectAura 56 (TRANSFORM)<br/>misc0 = creature id "| MO["morph"]
+    SE -->|" Effect 28 (SUMMON)<br/>misc0 = creature, misc1 = SummonProperties "| SU["summon"]
+    SE -->|" EffectAura 260 (SCREEN_EFFECT)<br/>misc0 = ScreenEffect id "| SC["screen"]
+    SE -->|" EffectAura 36 (MOD_SHAPESHIFT)<br/>misc0 = SpellShapeshiftForm "| SS["shapeshift"]
+    SE -->|" EffectAura 370 (OVERRIDE_NAME)<br/>misc0 = SpellOverrideName "| ON["alt names — search corpus only"]
+    SE -->|" EffectAura 296 (SET_VEHICLE_ID)<br/>misc0 = Vehicle id "| VE["vehicle"]
+    SE -->|" EffectAura 406 (KEYBOUND_OVERRIDE)<br/>misc0 = SpellKeyboundOverride "| KB["keybind"]
+    SE -->|" EffectAura in SPEED_AURAS (14 of them)<br/>EffectBasePoints = the percent "| SP["speed"]
+    SE -->|" EffectAura in SCALE_AURAS (61 / 239 / 591)<br/>EffectBasePoints = the percent "| SZ["scale"]
+    SE -->|" Effect + EffectAura + ImplicitTarget "| ME["Mechanics column"]
 ```
 
 **The vehicle route covers "the caster BECOMES a vehicle", not "boards one".**
@@ -478,6 +478,7 @@ graph — it is the producing
 `TargetType`, by `implicit_target_bit`). It answers *who the effect lands on*: a polymorph's morph is on the **target**,
 a self-transform on the **caster**, a summon on the **area** where it lands. These rows never pass through
 `SpellVisualEvent`, so `TargetType` says nothing about them — the implicit target is the only source. Alt-names (aura
+
 370) are search-corpus-only and carry no mask.
 
 **misc0 on a transform aura is a creature id, not a display id** — a long-standing trap. Both morphs and shapeshift
@@ -485,9 +486,9 @@ forms then walk the same creature→model chain:
 
 ```mermaid
 flowchart LR
-  CR["creature entry"] -->|" TDB creature_template_model<br/>(or legacy modelid1..4) "| DI["CreatureDisplayID"]
-  FORM["SpellShapeshiftForm.CreatureDisplayID"] --> DI
-  DI --> CDI["CreatureDisplayInfo.ModelID"] --> CMD["CreatureModelData.FileDataID"] --> LF["listfile → model path"]
+    CR["creature entry"] -->|" TDB creature_template_model<br/>(or legacy modelid1..4) "| DI["CreatureDisplayID"]
+    FORM["SpellShapeshiftForm.CreatureDisplayID"] --> DI
+    DI --> CDI["CreatureDisplayInfo.ModelID"] --> CMD["CreatureModelData.FileDataID"] --> LF["listfile → model path"]
 ```
 
 Screen effects are the one payload arriving from **both** directions — the aura route (~2.3k spells) and the kit route
@@ -497,12 +498,12 @@ via `SpellVisualScreenEffect` (18 rows on 9.2.7) — so the walk extends an alre
 
 ```mermaid
 flowchart LR
-  SEF["ScreenEffect"] -->|" Param_0 (Effect=3) "| FOG["fog tint aarrggbb<br/>low 24 bits = color, top byte = opacity"]
-  SEF -->|FullScreenEffectID| FSE["FullScreenEffect"]
-  FSE --> GR["ColorMultiply / ColorAddition"]
-  FSE --> VG["Mask triplet = radial vignette"]
-  FSE -->|OverlayTextureFileDataID| OVL["overlay — finished art"]
-  FSE -->|TextureBlendSetID| MSK["TextureBlendSet → mask textures"]
+    SEF["ScreenEffect"] -->|" Param_0 (Effect=3) "| FOG["fog tint aarrggbb<br/>low 24 bits = color, top byte = opacity"]
+    SEF -->|FullScreenEffectID| FSE["FullScreenEffect"]
+    FSE --> GR["ColorMultiply / ColorAddition"]
+    FSE --> VG["Mask triplet = radial vignette"]
+    FSE -->|OverlayTextureFileDataID| OVL["overlay — finished art"]
+    FSE -->|TextureBlendSetID| MSK["TextureBlendSet → mask textures"]
 ```
 
 The two texture columns are **not interchangeable**: overlays are finished art drawn in their own colors, masks are flat
@@ -513,10 +514,10 @@ blend-set art the grade colors paint. The pack tags each texture with its role. 
 
 ```mermaid
 flowchart LR
-  MA["SpellVisualKitModelAttach.AttachmentID"] --> AN["M2 attachment name"]
-  SV["SpellVisual.MissileAttachment<br/>+ MissileDestinationAttachment"] --> AN
-  BE["BeamEffect.SourceAttachID<br/>+ DestAttachID"] --> AN
-  AN --> P["pill segment — 'Chest' or 'SpellRightHand → Chest'"]
+    MA["SpellVisualKitModelAttach.AttachmentID"] --> AN["M2 attachment name"]
+    SV["SpellVisual.MissileAttachment<br/>+ MissileDestinationAttachment"] --> AN
+    BE["BeamEffect.SourceAttachID<br/>+ DestAttachID"] --> AN
+    AN --> P["pill segment — 'Chest' or 'SpellRightHand → Chest'"]
 ```
 
 Three routes carry an attachment, and **all three are RAW M2 attachment ids**
@@ -527,17 +528,18 @@ way, and the split is what makes a caster/target difference visible instead of s
 **Single-point vs travelling is a real distinction, not a formatting choice.**
 Attached, ground, trail and barrage models sit at ONE point and render the bare name; missiles and beams travel and
 render `Source → Dest`. The two are indistinguishable in the data (both look like "src set, dst unset"), so the renderer
-is told explicitly — `TRAVELLING_MODEL_CATS` in `src/app/tags.ts`. A travelling row that knows only one end reads `from X` /
+is told explicitly — `TRAVELLING_MODEL_CATS` in `src/app/tags.ts`. A travelling row that knows only one end reads
+`from X` /
 `to Y`; it must never render a dangling arrow.
 
 Two traps:
 
 - **`SpellVisualKitModelAttach.LowDefModelAttachID` is a SELF-REFERENCE to another row of the same table** — the
-  low-detail variant of that attachment — **not an attachment id and not a FileDataID.** It is unused by the build;
-  what matters is only that it is not mistaken for an attach point. **Corrected 2026-07-29** (this entry previously
-  said "a FileDataID", inferred from `max 430259` being far outside the 0..57 attachment range — which rules out an
-  attachment but says nothing about which of the two remaining readings is right). Measured on 9.2.7 with the
-  exploration database: of the 36 distinct nonzero values, **36 (100%) resolve as `SpellVisualKitModelAttach.ID`**
+  low-detail variant of that attachment — **not an attachment id and not a FileDataID.** It is unused by the build; what
+  matters is only that it is not mistaken for an attach point. **Corrected 2026-07-29** (this entry previously said "a
+  FileDataID", inferred from `max 430259` being far outside the 0..57 attachment range — which rules out an attachment
+  but says nothing about which of the two remaining readings is right). Measured on 9.2.7 with the exploration database:
+  of the 36 distinct nonzero values, **36 (100%) resolve as `SpellVisualKitModelAttach.ID`**
   and only **8 (22%) as a listfile FileDataID**; the referenced rows all carry `ParentSpellVisualKitID = 0`, i.e.
   orphans reachable only from the high-detail row that names them. `WoWDBDefs` agrees
   (`int<SpellVisualKitModelAttach::ID> LowDefModelAttachID`).
@@ -567,12 +569,12 @@ column — EdgeGlow, WeaponTrail, ColorEffect, Emission, AreaModel and Screen ha
 
 ```mermaid
 flowchart LR
-  V["Vehicle (via aura 296)"] -->|" SeatID_0..7 "| VS["VehicleSeat"]
-  VS -->|" AttachmentID = INDEX "| GL["g_vehicleGeoComponentLinks[]"]
-  GL -->|" M2 attachment id "| AN["attachment name — one pill per seat"]
-  VS -->|" passenger anim columns "| PA["'passenger' anim group"]
-  VS -->|" vehicle anim columns "| LP["loose anim pills"]
-  VS -->|" AnimKit columns "| AK["animkit groups"]
+    V["Vehicle (via aura 296)"] -->|" SeatID_0..7 "| VS["VehicleSeat"]
+    VS -->|" AttachmentID = INDEX "| GL["g_vehicleGeoComponentLinks[]"]
+    GL -->|" M2 attachment id "| AN["attachment name — one pill per seat"]
+    VS -->|" passenger anim columns "| PA["'passenger' anim group"]
+    VS -->|" vehicle anim columns "| LP["loose anim pills"]
+    VS -->|" AnimKit columns "| AK["animkit groups"]
 ```
 
 A vehicle fills up to eight `SeatID_n` slots; the filled count IS the seat count, and 0-seat vehicles are dropped at
@@ -604,11 +606,11 @@ versus
 
 ```mermaid
 flowchart LR
-  SE["SpellEffect<br/>EffectAura 406 (KEYBOUND_OVERRIDE)"]
-  SE -->|" misc0 = SpellKeyboundOverride::ID "| KO["SpellKeyboundOverride"]
-  KO -->|" Function "| FN["key name — the pill (JUMP, MOVEFORWARD, ...)"]
-  KO -->|" Type "| TY["timing word — '' or 'mid-air'"]
-  KO -->|" Data = Spell::ID "| SP["replacement spell — shipped, NOT displayed"]
+    SE["SpellEffect<br/>EffectAura 406 (KEYBOUND_OVERRIDE)"]
+    SE -->|" misc0 = SpellKeyboundOverride::ID "| KO["SpellKeyboundOverride"]
+    KO -->|" Function "| FN["key name — the pill (JUMP, MOVEFORWARD, ...)"]
+    KO -->|" Type "| TY["timing word — '' or 'mid-air'"]
+    KO -->|" Data = Spell::ID "| SP["replacement spell — shipped, NOT displayed"]
 ```
 
 While the aura holds, a movement/UI key stops doing what it normally does. The join is exact: **105/105 aura rows
@@ -749,14 +751,14 @@ size of the target by $s1%".
 
 ```mermaid
 flowchart LR
-  SE["SpellEffect row"]
-  SE -->|" Effect enum "| EF["SPELL_EFFECT_* name"]
-  SE -->|" EffectAura enum "| AU["SPELL_AURA_* name"]
-  SE -->|" ImplicitTarget_0 / _1 "| IT["TARGET_* names"]
-  IT -->|" implicit_target_bit() "| MK["caster / target / area icons"]
-  EF --> P["one pill"]
-  AU --> P
-  MK --> P
+    SE["SpellEffect row"]
+    SE -->|" Effect enum "| EF["SPELL_EFFECT_* name"]
+    SE -->|" EffectAura enum "| AU["SPELL_AURA_* name"]
+    SE -->|" ImplicitTarget_0 / _1 "| IT["TARGET_* names"]
+    IT -->|" implicit_target_bit() "| MK["caster / target / area icons"]
+    EF --> P["one pill"]
+    AU --> P
+    MK --> P
 ```
 
 Until pack format 29 this column shipped **two flat per-spell sets** — "this spell has `APPLY_AURA` and
@@ -812,10 +814,10 @@ column** as an `object` pill — summon's sibling: one conjures a creature, this
 
 ```mermaid
 flowchart LR
-  SE["SpellEffect<br/>Effect 50/76/104/171"] -->|EffectMiscValue_0| GT["gameobject_template<br/>(TDB world)"]
-  GT -->|name| L["pill label"]
-  GT -->|displayId| GODI["GameObjectDisplayInfo"]
-  GODI -->|FileDataID| LF["listfile → model name"]
+    SE["SpellEffect<br/>Effect 50/76/104/171"] -->|EffectMiscValue_0| GT["gameobject_template<br/>(TDB world)"]
+    GT -->|name| L["pill label"]
+    GT -->|displayId| GODI["GameObjectDisplayInfo"]
+    GODI -->|FileDataID| LF["listfile → model name"]
 ```
 
 **The client `GameObjects.db2` is NOT this table.** It holds world-PLACED doodads keyed by their own id — measured 2026-
@@ -867,9 +869,9 @@ column** as a display-id pill.
 
 ```mermaid
 flowchart LR
-  M["Mount<br/>SourceSpellID, Name_lang"] --> MXD["MountXDisplay"]
-  MXD -->|CreatureDisplayInfoID| CDI["CreatureDisplayInfo"]
-  CDI --> CMD["CreatureModelData"] -->|FileDataID| LF["listfile → model"]
+    M["Mount<br/>SourceSpellID, Name_lang"] --> MXD["MountXDisplay"]
+    MXD -->|CreatureDisplayInfoID| CDI["CreatureDisplayInfo"]
+    CDI --> CMD["CreatureModelData"] -->|FileDataID| LF["listfile → model"]
 ```
 
 Pure client data — unlike morphs it needs **no TDB**, so name and model both resolve on every pack that ships
@@ -898,9 +900,9 @@ swapping a base animation for another — unioned per spell and deduped:
 
 ```mermaid
 flowchart LR
-  P7["proc Type 7<br/>Value_0/1/2"] -->|" pair with Stand/Walk/Run "| RP["(src → dst) pairs"]
-  A312["aura 312 → AnimReplacement"] --> RP
-  RP --> G["one 'replace' group, deduped"]
+    P7["proc Type 7<br/>Value_0/1/2"] -->|" pair with Stand/Walk/Run "| RP["(src → dst) pairs"]
+    A312["aura 312 → AnimReplacement"] --> RP
+    RP --> G["one 'replace' group, deduped"]
 ```
 
 Both anim ids index into `animNames`, so a swap renders as two equally-weighted labels with an arrow — `Stand →
@@ -939,20 +941,20 @@ links `spellIds[i]` to `fids[i]`. That gzips far better than a list of objects.
 
 ```mermaid
 flowchart LR
-  subgraph LINK["link sections (spell → item, + target mask)"]
-    L1["spellModels · spellSounds · spellAnimKits<br/>animKitAnimBoneset · bonesetNames<br/>spellVisualAnims · spellAnims · spellFx<br/>spellDissolves · spellGlows · spellShadowies<br/>spellGhostMats · spellTints · spellDesaturates<br/>spellTransparencies · spellFreezes · spellCamos<br/>spellScreens · spellMorphs · spellShapeshifts<br/>spellSummons · spellVehicles · spellPassengerAnims<br/>spellVehicleAnims · spellVehicleAnimKits<br/>spellMechanics · spellKeybinds · spellSpeeds · spellScales"]
-  end
-  subgraph PAY["payload sections (item → what it is)"]
-    P1["fxChains · fxTextures · dissolves · dissolveTextures<br/>glows · shadowies · ghostMats · tints<br/>screens · screenTextures · morphs · morphDisplays<br/>shapeshifts · shapeshiftDisplays · summons<br/>vehicles · vehicleSeats"]
-  end
-  subgraph NAME["name tables"]
-    N1["files (fid → path) · animNames · effectNames<br/>auraNames · iconNames · modelCatNames<br/>targetNames · summonControlNames<br/>implicitTargetNames · implicitTargetBits · keybinds"]
-  end
-  LINK --> IDX["data.ts<br/>forward + reverse Map per section"]
-  PAY --> IDX
-  NAME --> IDX
-  IDX --> Q["search.ts — FIELDS registry"]
-  IDX --> R["app/render.ts + app/tags.ts — cells + pills"]
+    subgraph LINK["link sections (spell → item, + target mask)"]
+        L1["spellModels · spellSounds · spellAnimKits<br/>animKitAnimBoneset · bonesetNames<br/>spellVisualAnims · spellAnims · spellFx<br/>spellDissolves · spellGlows · spellShadowies<br/>spellGhostMats · spellTints · spellDesaturates<br/>spellTransparencies · spellFreezes · spellCamos<br/>spellScreens · spellMorphs · spellShapeshifts<br/>spellSummons · spellVehicles · spellPassengerAnims<br/>spellVehicleAnims · spellVehicleAnimKits<br/>spellMechanics · spellKeybinds · spellSpeeds · spellScales"]
+    end
+    subgraph PAY["payload sections (item → what it is)"]
+        P1["fxChains · fxTextures · dissolves · dissolveTextures<br/>glows · shadowies · ghostMats · tints<br/>screens · screenTextures · morphs · morphDisplays<br/>shapeshifts · shapeshiftDisplays · summons<br/>vehicles · vehicleSeats"]
+    end
+    subgraph NAME["name tables"]
+        N1["files (fid → path) · animNames · effectNames<br/>auraNames · iconNames · modelCatNames<br/>targetNames · summonControlNames<br/>implicitTargetNames · implicitTargetBits · keybinds"]
+    end
+    LINK --> IDX["data.ts<br/>forward + reverse Map per section"]
+    PAY --> IDX
+    NAME --> IDX
+    IDX --> Q["search.ts — FIELDS registry"]
+    IDX --> R["app/render.ts + app/tags.ts — cells + pills"]
 ```
 
 Sections carrying a parallel `targets` array (the target-icon feature):
@@ -1210,10 +1212,10 @@ previous section.
 
 ```mermaid
 flowchart LR
-  W["WotLK 3.4.3<br/>11 absent"] --> L["Legion 7.3.5<br/>4 absent"] --> B["BfA 8.3.7<br/>1 absent"] --> S["Shadowlands 9.2.7+<br/>complete"]
-  W -.->|" gained at Legion "| G1["BeamEffect · DissolveEffect<br/>EdgeGlowEffect · ShadowyEffect<br/>FullScreenEffect · SpellEffectEmission<br/>WeaponTrail · SpellKeyboundOverride<br/>(the last arrives at MoP)"]
-  L -.->|" gained at BfA "| G2["BarrageEffect<br/>SpellOverrideName<br/>SpellName (split out of Spell)"]
-  B -.->|" gained at Shadowlands "| G3["SpellVisualScreenEffect<br/>(the kit route into screen fx)"]
+    W["WotLK 3.4.3<br/>11 absent"] --> L["Legion 7.3.5<br/>4 absent"] --> B["BfA 8.3.7<br/>1 absent"] --> S["Shadowlands 9.2.7+<br/>complete"]
+    W -.->|" gained at Legion "| G1["BeamEffect · DissolveEffect<br/>EdgeGlowEffect · ShadowyEffect<br/>FullScreenEffect · SpellEffectEmission<br/>WeaponTrail · SpellKeyboundOverride<br/>(the last arrives at MoP)"]
+    L -.->|" gained at BfA "| G2["BarrageEffect<br/>SpellOverrideName<br/>SpellName (split out of Spell)"]
+    B -.->|" gained at Shadowlands "| G3["SpellVisualScreenEffect<br/>(the kit route into screen fx)"]
 ```
 
 **`SpellName` is the one non-monotonic case** and worth understanding: it was split out of `Spell.db2` in BfA, so Legion
