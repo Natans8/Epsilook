@@ -1,8 +1,8 @@
 # Epsilook, self-hosted. Written for Synology's Container Manager (Project ->
 # create -> paste this), but it is ordinary Compose and works anywhere.
 #
-#   docker compose up -d --build     build this checkout and run it
-#   docker compose pull && up -d     take the image CI published instead
+#   docker compose -f docker/compose.yaml up -d --build      build and run
+#   docker compose -f docker/compose.yaml pull && ... up -d  take CI's image
 #
 # Then the app is on http://<host>:8378/ — the same port `npm run dev` uses, so
 # a bookmark works against either.
@@ -17,13 +17,19 @@
 # rebuilt by build/build_data.py into a new image. Updating is `pull` +
 # `up -d`, and rolling back is the previous tag.
 
+# Without this the project would be named after this file's directory, and
+# every resource would come out called docker_something.
+name: epsilook
+
 services:
   epsilook:
     image: ghcr.io/natans8/epsilook:latest
     # Present so `--build` works straight from a checkout; harmless when
     # pulling, since Compose only builds when asked to.
     build:
-      context: .
+      # relative to THIS file, which is why the context climbs out of docker/
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: epsilook
     ports:
       # host:container. 8378 is what `npm run dev` uses, so one bookmark works

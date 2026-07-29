@@ -91,7 +91,7 @@ export function mechanicIsHit(row: MechanicRow): boolean {
 }
 
 /* Every fx pill lights up through ONE matcher — the pill-type registry's
-   * (docs/js/pilltypes.js), which is the same one spellsByFx selects spells
+   * (src/pilltypes.ts), which is the same one spellsByFx selects spells
    * with. Before, each of these was a hand-written twin of a scan loop in
    * search.js, with comments asking the next person to keep them in lockstep;
    * a pill can now only light up under a query that really selected it.

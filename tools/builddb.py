@@ -8,7 +8,7 @@
 
 The result is ONE DuckDB file at `build/cache/epsilook.duckdb`, gitignored like
 everything else under `build/cache/`. It is not part of the product, nothing in
-`docs/` reads it, and deleting it costs only the time to rebuild.
+`site/` reads it, and deleting it costs only the time to rebuild.
 
 WHY IT EXISTS
     `build/build_data.py` walks the game tables and bakes exactly the ~44 pack
@@ -84,7 +84,7 @@ CACHE = ROOT / "build" / "cache"
 DBD_CACHE = CACHE / "dbd"
 ENUM_CACHE = CACHE / "enums"
 DB_PATH = CACHE / "epsilook.duckdb"
-VERSIONS_JSON = ROOT / "docs" / "data" / "versions.json"
+VERSIONS_JSON = ROOT / "site" / "data" / "versions.json"
 
 WAGO_CSV_URL = "https://wago.tools/db2/{table}/csv?build={version}"
 DBDE_URL = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/meta/enums/{name}.dbde"
@@ -141,12 +141,12 @@ CORE_ENUMS = [
 
 # ------------------------------------------------- project knowledge as tables
 #
-# Decodes that live in DATA_ROUTES.md / CLAUDE.md prose and nowhere machine
+# Decodes that live in docs/DATA_ROUTES.md / CLAUDE.md prose and nowhere machine
 # readable. Shipping them as lookup tables is what makes the raw ids in
 # SpellVisualKitEffect / SpellProceduralEffect legible without a second window
 # open. Sources are cited so they can be re-verified, not just trusted.
 
-# DATA_ROUTES.md 3a — which table SpellVisualKitEffect.Effect points at.
+# docs/DATA_ROUTES.md 3a — which table SpellVisualKitEffect.Effect points at.
 KIT_EFFECT_TYPES = [
     (1, "SpellProceduralEffect", "dispatched again by Type; see ref.proc_type"),
     (2, "SpellVisualKitModelAttach", "dropped by the pack: redundant with the kit walk"),
@@ -207,7 +207,7 @@ PROC_TYPES = [
     (33, None, "desaturate aura", "2 dead spells"),
 ]
 
-# DATA_ROUTES.md 2 — SpellVisualEvent.TargetType and the search word it becomes.
+# docs/DATA_ROUTES.md 2 — SpellVisualEvent.TargetType and the search word it becomes.
 TARGET_TYPES = [
     (0, 0, None, "effectively unused (1 row in 207,241 on 9.2.7)"),
     (1, 1, "caster", "on the caster"),
@@ -551,7 +551,7 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
     log(f"  ref.enum_value                  {len(rows):>9,}  "
         f"({len({r[0] for r in rows})} enums)")
 
-    # -- decodes that exist only as prose in DATA_ROUTES.md / CLAUDE.md -------
+    # -- decodes that exist only as prose in docs/DATA_ROUTES.md / CLAUDE.md -------
     con.execute("CREATE OR REPLACE TABLE ref.kit_effect_type "
                 "(effect_type INTEGER PRIMARY KEY, target_table VARCHAR, note VARCHAR)")
     con.executemany("INSERT INTO ref.kit_effect_type VALUES (?, ?, ?)", KIT_EFFECT_TYPES)

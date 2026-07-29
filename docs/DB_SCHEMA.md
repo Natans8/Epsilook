@@ -1,7 +1,7 @@
 # The exploration database
 
 A cached **development tool**: every table the build downloads, in one queryable DuckDB file. It is not part of the
-product — nothing in `docs/` reads it, it is never committed (`build/cache/` is gitignored), and deleting it costs only
+product — nothing in `site/` reads it, it is never committed (`build/cache/` is gitignored), and deleting it costs only
 the two minutes it takes to rebuild.
 
 It exists because `build/build_data.py` is a *pipeline*, not a place to ask questions. Answering "how many spells reach
@@ -259,7 +259,7 @@ cache directory, so anything `build_data.py` starts downloading appears here wit
 | a table the pack does not need     | add it to `EXTRA_TABLES` in `tools/builddb.py`; it is fetched per version     |
 | a table the pack *does* need       | nothing — add it to `build_data.py`'s `TABLES` and the sweep finds it         |
 | an enum → column link              | one line in `ENUM_COLUMNS` (the `.dbd` names the enum but never the column using it) |
-| a new game version                 | nothing — it follows `docs/data/versions.json`                               |
+| a new game version                 | nothing — it follows `site/data/versions.json`                               |
 | a convenience view                 | one `make_view(...)` call in `build_views`; collisions are refused, not fatal |
 | a project decode as a table        | follow `KIT_EFFECT_TYPES` / `PROC_TYPES` — a literal list plus one `CREATE TABLE` |
 

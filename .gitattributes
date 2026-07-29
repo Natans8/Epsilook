@@ -3,15 +3,15 @@
 # checkout on Windows hands `sh` a script whose every line ends in \r — which
 # fails as `command not found: <something>^M`, and does so only for whoever
 # built the image, never for whoever committed it.
-*.sh           text eol=lf
-*.conf         text eol=lf
-Dockerfile     text eol=lf
-.dockerignore  text eol=lf
+*.sh            text eol=lf
+*.conf          text eol=lf
+Dockerfile      text eol=lf
+*.dockerignore  text eol=lf
 
 # The data packs live in Git LFS, and Pages is built by GitHub Actions.
 #
 # These two facts are COUPLED and must change together. Pages does NOT resolve
-# LFS pointers, so serving `docs/` straight off a branch would ship ~130 bytes
+# LFS pointers, so serving `site/` straight off a branch would ship ~130 bytes
 # of pointer text where data.ts expects gzip and break every version. What makes
 # LFS safe here is that .github/workflows/pages.yml checks out with `lfs: true`
 # and uploads real files as the Pages artifact — Pages never reads the repo.
@@ -22,4 +22,4 @@ Dockerfile     text eol=lf
 # over the generic `binary` rule above it. `-text` is what keeps core.autocrlf
 # (true in this repo) from ever line-ending mangling a pack.
 *.gz binary
-docs/data/**/*.gz filter=lfs diff=lfs merge=lfs -text
+site/data/**/*.gz filter=lfs diff=lfs merge=lfs -text

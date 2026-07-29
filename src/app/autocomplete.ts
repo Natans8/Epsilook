@@ -15,7 +15,7 @@ const SUGGEST_LIMIT = 12;
 /* ------------------------------------------------- keyword autocomplete */
 
 /* Every word a chip can autocomplete comes from one of two places: the
-   * pill-type registry (docs/js/pilltypes.js), which names the CONTENT types a
+   * pill-type registry (src/pilltypes.ts), which names the CONTENT types a
    * column shows, and the META words below, which are axes rather than content
    * — they qualify whatever else the chip says.
    *

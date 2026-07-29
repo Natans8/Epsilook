@@ -2,7 +2,7 @@
 #
 # GitHub Pages remains the deploy. This exists so that the OPTION of running
 # the site somewhere else (a Synology NAS is the case that prompted it) does
-# not quietly rot: the image is rebuilt from the same docs/ tree on every push
+# not quietly rot: the image is rebuilt from the same site/ tree on every push
 # to main, and it has to pass tools/docker_smoke.py before it is published.
 #
 # Like .github/workflows/ci.yml this is an alarm rather than a gate — it runs
@@ -22,10 +22,7 @@ on:
     # actually break the image are worth one. Everything else is covered by
     # the run on main.
     paths:
-      - Dockerfile
-      - .dockerignore
       - docker/**
-      - docker-compose.yml
       - tools/docker_smoke.py
       - tools/verify_site.sh
       - .github/workflows/docker.yml
@@ -86,6 +83,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: docker/Dockerfile
           load: true
           tags: epsilook:ci
           provenance: false
@@ -121,6 +119,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

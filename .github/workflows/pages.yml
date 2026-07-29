@@ -1,4 +1,4 @@
-# Epsilook deploy — publishes docs/ to GitHub Pages.
+# Epsilook deploy — publishes site/ to GitHub Pages.
 #
 # This workflow exists because the data packs are in Git LFS. Pages does NOT
 # resolve LFS pointers, so the old "deploy from a branch" setting would serve
@@ -43,7 +43,7 @@ jobs:
           lfs: true
 
       # The served JS is BUILT here, not committed: src/**/*.ts bundles into
-      # docs/js/app.js (tools/build.mjs). Note this build does NOT type-check —
+      # site/js/app.js (tools/build.mjs). Note this build does NOT type-check —
       # esbuild strips types without reading them — so a type error alone
       # cannot block a deploy; tsc runs in ci.yml, which stays an alarm
       # (CLAUDE.md, "CI is an alarm"). A genuinely unparseable source or an
@@ -67,14 +67,14 @@ jobs:
       # The same script runs inside the container image build (see the
       # Dockerfile's `site` stage), so the two deploys cannot drift on what
       # counts as a servable site.
-      - name: Prove docs/ is servable
-        run: sh tools/verify_site.sh docs
+      - name: Prove site/ is servable
+        run: sh tools/verify_site.sh site
 
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: site
 
       - id: deployment
         uses: actions/deploy-pages@v4

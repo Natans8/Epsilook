@@ -1,15 +1,15 @@
 /* Epsilook bundle build — the one esbuild invocation, so its flags exist in
  * exactly one place (check.py and pages.yml both run it through npm).
  *
- *   node tools/build.mjs             one production build into docs/js/
+ *   node tools/build.mjs             one production build into site/js/
  *   node tools/build.mjs --serve[=PORT]
- *                                    dev server on docs/ (default 8378) —
+ *                                    dev server on site/ (default 8378) —
  *                                    esbuild rebuilds on every request, so a
  *                                    reload is always the current source
  *
  * The build also guards the module graph: every .ts under src/ must be
  * reachable from the entry, or the build fails naming the orphan. That is the
- * ESM successor to the old "every module in docs/js is loaded by index.html"
+ * ESM successor to the old "every module in site/js is loaded by index.html"
  * check — a side-effect module (pilltypes.ts registering pill types) that
  * loses its import would otherwise vanish from the bundle silently.
  */
@@ -23,10 +23,10 @@ const root = resolve(import.meta.dirname, "..");
 /** @type {esbuild.BuildOptions} */
 const options = {
     entryPoints: [resolve(root, "src/main.ts")],
-    outfile: resolve(root, "docs/js/app.js"),
+    outfile: resolve(root, "site/js/app.js"),
     bundle: true,
     // an IIFE, not <script type="module">: the site must keep working when
-    // docs/index.html is opened straight from file:// (module scripts are
+    // site/index.html is opened straight from file:// (module scripts are
     // blocked by CORS there), and nothing needs code splitting
     format: "iife",
     target: "es2022",
@@ -74,8 +74,8 @@ const {values} = parseArgs({
 if (values.serve !== undefined) {
     const port = Number(values.serve);
     const ctx = await esbuild.context(options);
-    await ctx.serve({servedir: resolve(root, "docs"), port, host: "127.0.0.1"});
-    console.log(`serving docs/ on http://127.0.0.1:${port} — rebuild on every request`);
+    await ctx.serve({servedir: resolve(root, "site"), port, host: "127.0.0.1"});
+    console.log(`serving site/ on http://127.0.0.1:${port} — rebuild on every request`);
 } else {
     const result = await esbuild.build({...options, minify: true});
     checkReachability(result.metafile);

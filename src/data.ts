@@ -9,13 +9,13 @@ import {hexColor} from "./util";
 
 /* ----------------------------------------------------------- the pack */
 
-/** One entry of docs/data/versions.json (the version manifest). */
+/** One entry of site/data/versions.json (the version manifest). */
 export interface VersionEntry {
     /** Full build id, e.g. "9.2.7.45745". */
     id: string;
     /** Display label, e.g. "Shadowlands". */
     label: string;
-    /** Pack path relative to docs/, e.g. "data/9.2.7.45745/pack.json.gz". */
+    /** Pack path relative to site/, e.g. "data/9.2.7.45745/pack.json.gz". */
     file: string;
     /** Content hash appended as ?v= to bust the browser cache on data change. */
     hash?: string;

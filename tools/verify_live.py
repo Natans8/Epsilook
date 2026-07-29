@@ -29,7 +29,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-INDEX = ROOT / "docs" / "index.html"
+INDEX = ROOT / "site" / "index.html"
 SITE = "https://natans8.github.io/Epsilook/"
 
 ASSET_RE = re.compile(r'(?:href|src)="((?:css|js)/[^"?]+\?v=[0-9a-z]+)"')
@@ -111,7 +111,7 @@ def main() -> int:
     if not expected:
         found = VERSION_RE.findall(INDEX.read_text(encoding="utf-8"))
         if not found:
-            print("docs/index.html references no versioned assets", file=sys.stderr)
+            print("site/index.html references no versioned assets", file=sys.stderr)
             return 1
         expected = sorted(set(found))[0]
 
@@ -170,7 +170,7 @@ def main() -> int:
         url = args.site + entry["file"] + f"?v={entry['hash']}"
         status, _, headers = get(url, int(time.time() * 1000), head=True)
         size = int(headers.get("Content-Length", 0) or 0)
-        local = ROOT / "docs" / entry["file"]
+        local = ROOT / "site" / entry["file"]
         local_size = local.stat().st_size if local.exists() else -1
         if status != 200:
             failures += 1

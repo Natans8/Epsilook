@@ -178,7 +178,7 @@ async function boot() {
         loadError.textContent =
             `Failed to load data/versions.json: ${err instanceof Error ? err.message : err}. ` +
             `If you opened index.html directly from disk, serve the folder over HTTP instead ` +
-            `(e.g. "python -m http.server" in the docs folder).`;
+            `(e.g. "python -m http.server" in the site folder).`;
         loadError.hidden = false;
         return;
     }

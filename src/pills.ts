@@ -33,7 +33,7 @@
  * shape is one defineSegment() call.
  *
  * ---------------------------------------------------------------------------
- * Ordering is a CONVENTION, not a rule the code enforces — see PILLS.md
+ * Ordering is a CONVENTION, not a rule the code enforces — see docs/PILLS.md
  * ("Segment order"). Briefly: leading actions, then target icons, then
  * swatch/icon, then the label, then qualifying notes, then copy buttons.
  * The builder renders the array as written, so a pill that needs a different
@@ -103,7 +103,7 @@ export const catQuery = (field: string, word: string, value?: string | number): 
 export interface SegmentKind {
     /** class on the rendered element */
     cls: string;
-    /** what it is for (see PILLS.md) */
+    /** what it is for (see docs/PILLS.md) */
     role: "action" | "content" | "meta";
     /** which side carries a divider */
     sep: "none" | "left" | "right";

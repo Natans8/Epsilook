@@ -9,7 +9,7 @@
 Deliberately NOT part of tools/check.py. check.py is the ~15 s gate before
 every commit and must run on a machine that has never installed Docker - the
 same reasoning that keeps tools/builddb.py out of it. This is the command you
-run when you touched the Dockerfile, docker/nginx.conf or anything they copy,
+run when you touched docker/Dockerfile, docker/nginx.conf or anything they
 and it is what .github/workflows/docker.yml runs so that CI and a laptop agree
 on what "the image works" means.
 
@@ -53,7 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check import DIM, GREEN, RED, RESET, Report, asset_versions  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-DOCS = ROOT / "docs"
+SITE = ROOT / "site"
 CONTAINER = "epsilook-smoke"
 IMMUTABLE = "public, max-age=31536000, immutable"
 
@@ -142,7 +142,7 @@ def check_index(rep: Report, base: str) -> None:
 def check_assets(rep: Report, base: str) -> None:
     """The css and the bundle: present at the ?v= index.html asks for, immutable,
     and compressed on the wire."""
-    html = (DOCS / "index.html").read_text(encoding="utf-8")
+    html = (SITE / "index.html").read_text(encoding="utf-8")
     refs = asset_versions(html)
     if not refs:
         rep.fail("assets", "index.html references no versioned css/js")
@@ -163,11 +163,11 @@ def check_assets(rep: Report, base: str) -> None:
             continue
         # urllib does not decode for us, which is what makes the assertion above
         # meaningful — so unwrap it here and compare against the file on disk.
-        # docs/js is gitignored build output and absent on a fresh checkout, so
+        # site/js is gitignored build output and absent on a fresh checkout, so
         # that half only runs where a local build exists; when it does, it also
         # says the two esbuild runs agreed.
         served = gzip.decompress(resp.body)
-        local = DOCS / path
+        local = SITE / path
         if local.exists() and served != local.read_bytes():
             rep.fail(f"asset {path}",
                      f"{len(served)} bytes served, {local.stat().st_size} on disk")
@@ -209,8 +209,8 @@ def check_manifest(rep: Report, base: str) -> list[dict[str, Any]]:
     except json.JSONDecodeError as exc:
         rep.fail("versions.json", f"unparseable: {exc}")
         return []
-    if resp.body != (DOCS / "data" / "versions.json").read_bytes():
-        rep.fail("versions.json", "served bytes differ from docs/data/versions.json")
+    if resp.body != (SITE / "data" / "versions.json").read_bytes():
+        rep.fail("versions.json", "served bytes differ from site/data/versions.json")
         return []
     default = [e.get("id") for e in entries if e.get("default")]
     rep.ok("versions.json", f"{len(entries)} packs, no-cache, default={default[0] if default else '?'}")
@@ -260,7 +260,7 @@ def check_packs(rep: Report, base: str, entries: list[dict[str, Any]]) -> None:
 def check_not_found(rep: Report, base: str) -> None:
     """A missing path returns the 404 page — WITH its stylesheet.
 
-    docs/404.html names /Epsilook/... because Pages serves the project there and
+    site/404.html names /Epsilook/... because Pages serves the project there and
     the page is returned at any depth. docker/nginx.conf maps that prefix onto
     the same root so the page keeps working here; this is that rewrite's test.
     """
@@ -269,10 +269,10 @@ def check_not_found(rep: Report, base: str) -> None:
         rep.fail("404 page", f"a missing path is HTTP {resp.status}, want 404")
         return
     if b"<h1>404</h1>" not in resp.body:
-        rep.fail("404 page", "the body is not docs/404.html")
+        rep.fail("404 page", "the body is not site/404.html")
         return
     if b"/Epsilook/css/app.css" not in resp.body:
-        rep.fail("404 page", "docs/404.html no longer names /Epsilook/ - "
+        rep.fail("404 page", "site/404.html no longer names /Epsilook/ - "
                              "the prefix rewrite in docker/nginx.conf can go")
         return
     aliased = fetch(f"{base}/Epsilook/css/app.css")
@@ -315,7 +315,7 @@ def check_app_boots(rep: Report, base: str) -> None:
 
 
 def build_image(rep: Report, image: str) -> bool:
-    proc = docker("build", "-t", image, ".", check=False)
+    proc = docker("build", "-f", "docker/Dockerfile", "-t", image, ".", check=False)
     if proc.returncode != 0:
         output = (proc.stdout + proc.stderr).strip().splitlines()
         rep.fail("docker build", output[-1] if output else f"exit {proc.returncode}")

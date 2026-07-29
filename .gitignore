@@ -3,7 +3,7 @@ build/cache/
 
 # the bundle esbuild emits from src/ (tools/build.mjs); pages.yml builds it
 # fresh for every deploy, so the served JS is never committed
-docs/js/
+site/js/
 
 node_modules/
 

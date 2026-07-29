@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move the ?v= cache-busting string in docs/index.html.
+"""Move the ?v= cache-busting string in site/index.html.
 
     python tools/bump.py              # bump if the deployed tree needs it
     python tools/bump.py --dry-run    # say what it would do, touch nothing
@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-INDEX = ROOT / "docs" / "index.html"
+INDEX = ROOT / "site" / "index.html"
 
 ASSET_RE = re.compile(r'((?:href|src)="(?:css|js)/[^"?]+\?v=)([0-9a-z]+)(")')
 PARSE_RE = re.compile(r"^(\d{8})([a-z]*)$")
@@ -106,7 +106,7 @@ def main() -> int:
     html = INDEX.read_text(encoding="utf-8")
     current = versions_in(html)
     if not current:
-        print("docs/index.html references no versioned assets", file=sys.stderr)
+        print("site/index.html references no versioned assets", file=sys.stderr)
         return 1
     if len(current) > 1:
         print(f"{YELLOW}index.html carries {len(current)} different strings "
@@ -116,7 +116,7 @@ def main() -> int:
         remote, _, branch = args.base.partition("/")
         git("fetch", "--quiet", remote, branch or "main")
 
-    deployed_html = git("show", f"{args.base}:docs/index.html")
+    deployed_html = git("show", f"{args.base}:site/index.html")
     deployed = versions_in(deployed_html) if deployed_html else set()
     if not deployed:
         print(f"{YELLOW}cannot read the deployed ?v= from {args.base} - "
@@ -125,9 +125,9 @@ def main() -> int:
 
     now = sorted(current)[0]
     was = sorted(deployed)[0]
-    # docs/js is the gitignored build output, so the served JS changes when
+    # site/js is the gitignored build output, so the served JS changes when
     # its SOURCES (or the build itself) do - the same paths check.py watches
-    changed = changed_under(args.base, ("docs/css", "src", "tools/build.mjs"))
+    changed = changed_under(args.base, ("site/css", "src", "tools/build.mjs"))
 
     if args.explicit:
         new = args.explicit
@@ -151,7 +151,7 @@ def main() -> int:
     if not args.dry_run:
         INDEX.write_text(html2, encoding="utf-8", newline="\n")
     print(f"{GREEN}{was} -> {new}{RESET}  {DIM}{verb} {count} references "
-          f"in docs/index.html{RESET}")
+          f"in site/index.html{RESET}")
     return 0
 
 

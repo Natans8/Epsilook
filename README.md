@@ -54,7 +54,7 @@ Full syntax lives behind the **?** button in the app. The short version:
 ## How it works
 
 ```
-src/                     the app, strict TypeScript — bundled into docs/js/app.js by esbuild
+src/                     the app, strict TypeScript — bundled into site/js/app.js by esbuild
   main.ts                the entry point: the app's wiring, stated in one place
   config.ts              copy-command templates and UI tunables
   util.ts                leaf helpers shared by every module (DOM, templates)
@@ -81,7 +81,7 @@ src/                     the app, strict TypeScript — bundled into docs/js/app
     events.ts            event wiring
     boot.ts              startup: load the manifest, activate a pack
   vendor/                vendored BLP decoder (Kruithne, MIT) + hand-written .d.ts
-docs/                    the site — published to GitHub Pages by .github/workflows/pages.yml
+site/                    the site — published to GitHub Pages by .github/workflows/pages.yml
   index.html             markup + the in-app help dialog
   404.html               the not-found page Pages serves for any missing path
   .nojekyll              tells GitHub Pages to serve the folder without Jekyll
@@ -89,21 +89,32 @@ docs/                    the site — published to GitHub Pages by .github/workf
   js/                    BUILD OUTPUT, gitignored: app.js and its sourcemap
   dev/oracle.js          console measurement helpers — a dev tool, never bundled
   data/<version>/        one gzipped data pack per game version
-build/build_data.py      regenerates the packs (Python 3, stdlib only)
-tools/build.mjs          the esbuild build: bundle, dev server, module-graph guard
-tools/check.py           every check, plus the invariants that fail silently
-tools/bump.py            move the ?v= cache-buster (both spots)
-tools/rebuild.py         rebuild packs with their own labels; --verify the build
-tools/verify_live.py     wait for Pages, then check what it actually serves
-tools/verify_site.sh     is this assembled document root actually servable?
-tools/docker_smoke.py    build the image, run it, prove it serves the site
-tools/builddb.py         build the exploration database (development tool — see DB_SCHEMA.md)
-tools/dbd.py             parser for WoWDBDefs .dbd schema definitions
-Dockerfile               the container image: esbuild -> a verified doc root -> nginx
-.dockerignore            an allowlist of what the image build may see
-docker/nginx.conf        the container's server block: caching, compression, the 404 page
-docker-compose.yml       one service, ready to paste into a NAS
+build/                   the pack generator
+  build_data.py          regenerates the packs (Python 3, stdlib only)
+tools/                   every routine that would otherwise be a thing to remember
+  build.mjs              the esbuild build: bundle, dev server, module-graph guard
+  check.py               every check, plus the invariants that fail silently
+  bump.py                move the ?v= cache-buster (both spots)
+  rebuild.py             rebuild packs with their own labels; --verify the build
+  verify_live.py         wait for Pages, then check what it actually serves
+  verify_site.sh         is this assembled document root actually servable?
+  docker_smoke.py        build the image, run it, prove it serves the site
+  builddb.py             build the exploration database (development tool)
+  dbd.py                 parser for WoWDBDefs .dbd schema definitions
+docker/                  the self-hosting path — see "Hosting it yourself"
+  Dockerfile             the image: esbuild -> a verified document root -> nginx
+  Dockerfile.dockerignore  an allowlist of what the image build may see
+  nginx.conf             the server block: caching, compression, the 404 page
+  compose.yaml           one service, ready to paste into a NAS
+docs/                    how it works underneath, in prose
+  DATA_ROUTES.md         every data route: sources, the spell->visual->kit graph, the pack layout
+  PILLS.md               the pill design guide: anatomy, segment order, how to add one
+  DB_SCHEMA.md           the exploration database — a SQL mirror of every table the build downloads
 ```
+
+Note that `site/` is the published website and `docs/` is documentation, which is the opposite of the usual GitHub
+convention. It is possible because Pages builds from `.github/workflows/pages.yml` rather than from a branch folder,
+so no repo setting names either directory.
 
 `build_data.py` walks the game's own tables — spell → visual → kit → model/sound/animkit/effect — and bakes the result
 into one column-oriented JSON pack per version. The browser fetches that pack once, builds its search indexes in
@@ -116,15 +127,15 @@ Working on it takes one `npm install` — TypeScript and esbuild are the only de
 npm run dev
 ```
 
-which serves `docs/` on port 8378 and rebuilds the bundle on every request, so a reload is always the current source.
-`npm run build` writes the bundle to `docs/js/` instead, after which any static file server will do
+which serves `site/` on port 8378 and rebuilds the bundle on every request, so a reload is always the current source.
+`npm run build` writes the bundle to `site/js/` instead, after which any static file server will do
 (`cd docs && python -m http.server 8377`).
 
-The packs are stored in [Git LFS](https://git-lfs.com), so a clone needs it installed — without it `docs/data`
+The packs are stored in [Git LFS](https://git-lfs.com), so a clone needs it installed — without it `site/data`
 holds 132-byte pointer files instead of packs and no version will load. `git lfs install && git lfs pull` fixes an
 existing clone; `python tools/check.py` says `via LFS pointer` when it is looking at stubs rather than packs.
 
-Pushing to `main` deploys, through `.github/workflows/pages.yml`: it builds the bundle and uploads `docs/` — which is
+Pushing to `main` deploys, through `.github/workflows/pages.yml`: it builds the bundle and uploads `site/` — which is
 also why the packs can live in LFS at all, since GitHub Pages cannot resolve LFS pointers when it serves a branch
 directly. A change to the CSS or to the bundle's sources needs the `?v=` cache-buster in `index.html` bumped (two
 spots now: the stylesheet and the bundle); data packs bust themselves via a content hash in `versions.json`.
@@ -140,17 +151,23 @@ GitHub Pages is where the site lives, but nothing about the app depends on it �
 under any base path on any static host. The repo ships a container for that case:
 
 ```
-docker compose up -d --build
+docker compose -f docker/compose.yaml up -d --build
 ```
 
 and the app is on `http://<host>:8378/`. Set `EPSILOOK_PORT` to move it. `.github/workflows/docker.yml` publishes the
 same image to `ghcr.io/natans8/epsilook` on every push to `main`, for `linux/amd64` and `linux/arm64`, so a NAS can
-pull it instead of building — `docker compose pull && docker compose up -d`.
+pull it instead of building:
+
+```
+docker compose -f docker/compose.yaml pull
+```
 
 The image is a three-stage build: esbuild bundles `src/`, a second stage assembles the document root and runs
 `tools/verify_site.sh` over it, and nginx serves the result with `docker/nginx.conf`. Building from a checkout needs
-the LFS packs present — `docker build` copies the working tree, so without `git lfs pull` the image would bake ten
-130-byte pointer files in; the verify stage refuses rather than shipping a site where no version loads.
+the LFS packs present — the build copies the working tree, so without `git lfs pull` the image would bake ten
+130-byte pointer files in; the verify stage refuses rather than shipping a site where no version loads. The build
+context is the repo root even though the `Dockerfile` is not, so a plain `docker build` needs to say so:
+`docker build -f docker/Dockerfile -t epsilook .`
 
 `python tools/docker_smoke.py` builds the image, runs it, and checks what a static host that merely returns 200 would
 still get wrong: that `index.html` and `versions.json` are never cached while everything they cache-bust is immutable,
@@ -172,7 +189,7 @@ them for you; with no argument it rebuilds every pack, and `--list` prints the c
 Downloads (and caches under `build/cache/`) the game tables from
 [wago.tools](https://wago.tools), the community listfile, and the
 [TrinityCore TDB](https://github.com/TrinityCore/TrinityCore/releases) for the same build; writes
-`docs/data/<version>/spelldata.json.gz` and updates
+`site/data/<version>/spelldata.json.gz` and updates
 `versions.json`. Takes ~15 s once the sources are cached, and is **deterministic** — apart from the build date in
 `meta.built`, an unchanged rebuild is byte-identical, which makes "rebuild and diff" the regression test for any change
 to the script. `python tools/rebuild.py --verify` runs exactly that: rebuild, compare with the date normalised away,
@@ -225,7 +242,7 @@ into `meta.absentTables`.
 - **A new kind of pill** (a new sort of thing a results column can show):
   one record in `src/pilltypes.ts` gives it a category word, that word's autocomplete description, its group head, its
   search-hit highlighting and the spells a query selects; the renderer is a list of segments. See
-  **[PILLS.md](PILLS.md)** — it also carries the segment-order convention and the rules for choosing a keyword.
+  **[docs/PILLS.md](docs/PILLS.md)** — it also carries the segment-order convention and the rules for choosing a keyword.
 - **A new copy command**: `spellCommands` in `src/config.ts` for per-spell buttons (they render as one nowrap strip under
   the spell name — a new one becomes another segment of that strip and never wraps it to a second line); the
   `*CopyTemplate` entries for the ones on tags. A label starting with `.` gets that dot drawn in the accent colour
@@ -266,7 +283,7 @@ python -m mypy build/build_data.py tools       # Python: fully annotated
 python -m pyflakes build/build_data.py tools
 ```
 
-Touching the `Dockerfile`, `docker/nginx.conf` or anything they copy adds one more, which needs Docker running and so
+Touching the `docker/Dockerfile`, `docker/nginx.conf` or anything they copy adds one more, which needs Docker running and so
 stays out of `check.py`:
 
 ```
@@ -275,7 +292,7 @@ python tools/docker_smoke.py                   # build the image, run it, prove 
 
 ### Measuring what the app does
 
-`docs/dev/oracle.js` is a dev tool the app never loads. Paste one line into the console of a running page — local or
+`site/dev/oracle.js` is a dev tool the app never loads. Paste one line into the console of a running page — local or
 the live site — and it gives you the measurements this project keeps having to take:
 
 ```js
@@ -302,9 +319,9 @@ python -m pip install duckdb
 python tools/builddb.py
 ```
 
-It is a development tool and nothing in `docs/` reads it: the database is a cache, gitignored, and rebuilt in about
+It is a development tool and nothing in `site/` reads it: the database is a cache, gitignored, and rebuilt in about
 three minutes. `duckdb` is the only dependency outside the standard library anywhere in the project, and only this
-script needs it. **[DB_SCHEMA.md](DB_SCHEMA.md)** is the reference — layout, conventions, worked queries, and the
+script needs it. **[docs/DB_SCHEMA.md](docs/DB_SCHEMA.md)** is the reference — layout, conventions, worked queries, and the
 three things to know before trusting a row.
 
 ## Data sources

@@ -1,11 +1,12 @@
-# An allowlist, not a blocklist: the build context is ~48 MB of data packs
+# Named for docker/Dockerfile, which is how BuildKit finds an ignore file
+# that does not sit at the context root. An allowlist, not a blocklist: the build context is ~48 MB of data packs
 # already, and everything else in this tree (node_modules, .git with its LFS
 # objects, build/cache, the exploration database) is bigger than the site.
 # Listing what goes IN also means a new top-level directory cannot silently
 # start being uploaded to the daemon on every build.
 *
 
-!docs/
+!site/
 !src/
 !docker/
 !package.json
@@ -14,11 +15,11 @@
 !tools/build.mjs
 !tools/verify_site.sh
 
-# docs/js is gitignored BUILD OUTPUT. Excluding it after re-including docs/ is
+# site/js is gitignored BUILD OUTPUT. Excluding it after re-including site/ is
 # what guarantees the image's bundle comes from the Dockerfile's own esbuild
 # run and never from whatever a local `npm run dev` last left on disk.
-docs/js/
+site/js/
 
-# nothing under docs/ needs these, and a stray one would end up served
+# nothing under site/ needs these, and a stray one would end up served
 **/.DS_Store
 **/Thumbs.db

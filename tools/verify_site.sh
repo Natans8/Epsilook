@@ -1,7 +1,7 @@
 #!/bin/sh
 # Prove an assembled document root is actually servable.
 #
-#   sh tools/verify_site.sh docs        # after npm run build
+#   sh tools/verify_site.sh site        # after npm run build
 #   sh tools/verify_site.sh /site       # inside the container image build
 #
 # Every failure here is one this repo has already been bitten by, and every one
@@ -11,8 +11,8 @@
 #   - a pack that is still a ~130-byte LFS pointer, because the checkout (or
 #     the clone) never smudged it. GitHub Pages cannot resolve pointers at all,
 #     and `docker build` copies whatever is in the working tree, so both
-#     consumers of docs/ need this same guard.
-#   - a missing bundle, because docs/js is gitignored BUILD OUTPUT and a deploy
+#     consumers of site/ need this same guard.
+#   - a missing bundle, because site/js is gitignored BUILD OUTPUT and a deploy
 #     that forgot to build it would ship markup with no app behind it.
 #   - an empty or absent manifest, which is the one file the app fetches before
 #     it can fetch anything else.
@@ -25,7 +25,7 @@
 
 set -eu
 
-root=${1:-docs}
+root=${1:-site}
 
 # An LFS pointer is ~130 bytes; the smallest real pack is ~720 KB. Anything in
 # between is not a judgement call, it is a stub.

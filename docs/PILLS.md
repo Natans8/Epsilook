@@ -339,6 +339,6 @@ and reached all 23 renderers.
 For anything that touches matching, also compare **search counts** for a set of queries covering each axis — text, bare
 number, and both numeric kinds.
 
-Local: `.claude/launch.json` serves `docs/`. In-page,
+Local: `.claude/launch.json` serves `site/`. In-page,
 `history.pushState(null,"","/?v=9.2.7&q=…")` followed by a `popstate` event re-runs a search without a reload — keep
 `v=` in the URL or you will measure the default pack while thinking you measured another.

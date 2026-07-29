@@ -33,7 +33,7 @@ flowchart LR
   end
 
   B["build_data.py<br/>walk + resolve + bake"]
-  P["docs/data/&lt;build&gt;/pack.json.gz<br/>column-oriented, ~44 sections"]
+  P["site/data/&lt;build&gt;/pack.json.gz<br/>column-oriented, ~44 sections"]
   D["data.ts<br/>builds in-memory indexes"]
   U["search.ts + app/<br/>query + render"]
   W --> B

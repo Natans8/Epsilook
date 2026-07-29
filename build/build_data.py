@@ -62,7 +62,7 @@ T = TypeVar("T")
 BUILD_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BUILD_DIR.parent
 CACHE_DIR = BUILD_DIR / "cache"
-DATA_DIR = ROOT_DIR / "docs" / "data"
+DATA_DIR = ROOT_DIR / "site" / "data"
 ENUMS_DIR = BUILD_DIR / "enums"
 
 

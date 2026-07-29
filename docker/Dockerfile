@@ -4,11 +4,11 @@
 # nginx, for anyone who would rather host it themselves. A Synology NAS is the
 # case that prompted it.
 #
-#   docker build -t epsilook .
+#   docker build -f docker/Dockerfile -t epsilook .
 #   docker run --rm -p 8378:80 epsilook
 #   python tools/docker_smoke.py            # build, run, and prove it serves
 #
-# This is a SECOND CONSUMER of docs/, not a fork of it. Nothing about the app
+# This is a SECOND CONSUMER of site/, not a fork of it. Nothing about the app
 # knows it is in a container: data.ts fetches "data/versions.json" relatively,
 # so the site works at any base path, and the only file that names the Pages
 # URL space (404.html) is handled in docker/nginx.conf rather than copied and
@@ -17,7 +17,7 @@
 # Building needs the LFS packs SMUDGED — `docker build` copies the working
 # tree, so a clone without `git lfs pull` would otherwise bake ten 130-byte
 # pointer files into the image and every game version would fail to load. The
-# `site` stage refuses to do that; see tools/verify_site.sh.
+# `docroot` stage refuses to do that; see tools/verify_site.sh.
 
 ARG NODE_VERSION=24-alpine
 ARG ALPINE_VERSION=3.22
@@ -50,14 +50,14 @@ RUN npm run build
 # --- the document root -----------------------------------------------------
 # Assembled and verified in one place, so the runtime stage receives a tree
 # that is already known to be servable.
-FROM --platform=$BUILDPLATFORM alpine:${ALPINE_VERSION} AS site
+FROM --platform=$BUILDPLATFORM alpine:${ALPINE_VERSION} AS docroot
 
-WORKDIR /site
+WORKDIR /docroot
 
-# docs/js is gitignored build output and .dockerignore excludes it, so the
+# site/js is gitignored build output and the ignore file excludes it, so the
 # bundle can only come from the stage above — never from a stale local build
-COPY docs/ ./
-COPY --from=build /app/docs/js/ ./js/
+COPY site/ ./
+COPY --from=build /app/site/js/ ./js/
 
 RUN --mount=type=bind,source=tools/verify_site.sh,target=/verify_site.sh \
     sh /verify_site.sh .
@@ -75,7 +75,7 @@ LABEL org.opencontainers.image.title="Epsilook" \
       org.opencontainers.image.licenses="MIT"
 
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=site /site /usr/share/nginx/html
+COPY --from=docroot /docroot /usr/share/nginx/html
 
 EXPOSE 80
 

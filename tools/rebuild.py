@@ -10,7 +10,7 @@
 WHY IT EXISTS. build_data.py takes --label and --default on every invocation
 and forgets them otherwise, so a rebuild that omits them silently renames a
 pack to its build id and drops the default flag. Those values are already
-written down in docs/data/versions.json - this reads them back instead of
+written down in site/data/versions.json - this reads them back instead of
 asking a human to retype ten labels correctly.
 
 --verify IS THE ORACLE. The build is deterministic: rebuilding a pack whose
@@ -41,7 +41,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build" / "build_data.py"
-DATA = ROOT / "docs" / "data"
+DATA = ROOT / "site" / "data"
 MANIFEST = DATA / "versions.json"
 
 RED, GREEN, YELLOW, DIM, RESET = "\033[31m", "\033[32m", "\033[33m", "\033[2m", "\033[0m"
@@ -113,7 +113,7 @@ def describe_difference(before: dict, after: dict) -> list[str]:
 
 def verify(entry: dict, refresh: bool) -> bool:
     """Rebuild into a scratch copy, compare, restore. True when reproducible."""
-    pack_rel = f"docs/{entry['file']}"
+    pack_rel = f"site/{entry['file']}"
     pack_path = ROOT / pack_rel
 
     if git("status", "--porcelain", "--", pack_rel).strip():
@@ -152,7 +152,7 @@ def verify(entry: dict, refresh: bool) -> bool:
         return False
     finally:
         shutil.move(str(keep), str(pack_path))
-        git("checkout", "--", "docs/data/versions.json")
+        git("checkout", "--", "site/data/versions.json")
         print(f"{DIM}  restored {pack_rel} and versions.json{RESET}")
 
 

@@ -16,8 +16,8 @@ Two families of check live here.
   bumped whenever the css or the bundle's SOURCES changed against what is
   deployed, the committed blobs are LF, and versions.json agrees with the
   packs on disk down to the content hash - or with their LFS pointers, which
-  carry that same hash as their oid. The old "every module in docs/js is
-  loaded by index.html" guard lives in tools/build.mjs now: docs/js is the
+  carry that same hash as their oid. The old "every module in site/js is
+  loaded by index.html" guard lives in tools/build.mjs now: site/js is the
   BUILD OUTPUT, and the build fails on a source file its import graph never
   reaches.
 
@@ -42,17 +42,17 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DOCS = ROOT / "docs"
-INDEX = DOCS / "index.html"
-MANIFEST = DOCS / "data" / "versions.json"
+SITE = ROOT / "site"
+INDEX = SITE / "index.html"
+MANIFEST = SITE / "data" / "versions.json"
 
 # <link href="css/app.css?v=X"> / <script src="js/app.js?v=X">
 ASSET_RE = re.compile(r'(?:href|src)="((?:css|js)/[^"?]+)\?v=([0-9a-z]+)"')
 
 # a change to the css, the bundle's sources or the build itself needs a bump
-# (docs/js is generated and gitignored, so it can never appear in a diff);
+# (site/js is generated and gitignored, so it can never appear in a diff);
 # an html-only or data-only change does not
-BUMP_PATHS = ("docs/css", "src", "tools/build.mjs")
+BUMP_PATHS = ("site/css", "src", "tools/build.mjs")
 
 # An LFS pointer is a ~130-byte text stub whose oid IS the sha256 of the real
 # file - the same number versions.json stores. So the manifest can be checked
@@ -64,8 +64,8 @@ LFS_OID_RE = re.compile(rb"oid sha256:([0-9a-f]{64})")
 # warn-only: a change on the left usually means the doc on the right is stale.
 # The triggers are CLAUDE.md's own, restated where they can fire on their own.
 DOC_TRIGGERS = (
-    (("build/build_data.py",), "DATA_ROUTES.md"),
-    (("src/pills.ts", "src/pilltypes.ts"), "PILLS.md"),
+    (("build/build_data.py",), "docs/DATA_ROUTES.md"),
+    (("src/pills.ts", "src/pilltypes.ts"), "docs/PILLS.md"),
     (("src/config.ts",), "README.md"),
 )
 
@@ -146,7 +146,7 @@ def check_assets(rep: Report, built: bool) -> str | None:
     """One ?v= string, every reference resolving.
 
     Returns the current version string, or None if index.html has no assets.
-    `built` says whether the bundle was (re)built this run: docs/js is
+    `built` says whether the bundle was (re)built this run: site/js is
     generated and gitignored, so on a fresh checkout its absence means "not
     built yet", not "broken" - only a run that built may insist it exists.
     """
@@ -167,7 +167,7 @@ def check_assets(rep: Report, built: bool) -> str | None:
     referenced = {p for p, _ in found}
     generated = {p for p in referenced if p.startswith("js/")}
     required = referenced if built else referenced - generated
-    missing = sorted(p for p in required if not (DOCS / p).exists())
+    missing = sorted(p for p in required if not (SITE / p).exists())
     if missing:
         rep.fail("asset files", f"referenced but absent: {', '.join(missing)}")
     elif built:
@@ -177,9 +177,9 @@ def check_assets(rep: Report, built: bool) -> str | None:
                f"{len(required)} committed assets resolve"
                f" ({len(generated)} built ones unchecked - no build this run)")
 
-    # the other direction, for the committed css only: docs/js is generated
+    # the other direction, for the committed css only: site/js is generated
     # wholesale, and an unreachable SOURCE file fails in tools/build.mjs
-    on_disk = {f"css/{p.name}" for p in (DOCS / "css").glob("*.css")}
+    on_disk = {f"css/{p.name}" for p in (SITE / "css").glob("*.css")}
     orphans = sorted(on_disk - referenced)
     if orphans:
         rep.fail("asset wiring", f"present but never loaded: {', '.join(orphans)}")
@@ -197,7 +197,7 @@ def check_bump(rep: Report, base: str, version: str | None) -> None:
         return
 
     changed = changed_under(base, BUMP_PATHS)
-    deployed_html = git("show", f"{base}:docs/index.html")
+    deployed_html = git("show", f"{base}:site/index.html")
     deployed = {v for _, v in asset_versions(deployed_html)}
 
     if not changed:
@@ -230,7 +230,7 @@ def check_line_endings(rep: Report) -> None:
     exts = (".js", ".css", ".html", ".py", ".md", ".json", ".ts", ".svg", ".yml",
             ".sh", ".conf", ".mjs")
     names = [f for f in git("ls-files").splitlines()
-             if f.endswith(exts) or Path(f).name in ("Dockerfile", ".dockerignore")]
+             if f.endswith(exts) or Path(f).name == "Dockerfile" or f.endswith(".dockerignore")]
     bad = []
     for name in names:
         blob = subprocess.run(["git", "-C", str(ROOT), "show", f"HEAD:{name}"],
@@ -262,7 +262,7 @@ def pack_hash(path: Path) -> tuple[str, bool]:
 def check_manifest(rep: Report) -> None:
     """versions.json agrees with the packs on disk, hash included."""
     if not MANIFEST.exists():
-        rep.fail("data manifest", "docs/data/versions.json is missing")
+        rep.fail("data manifest", "site/data/versions.json is missing")
         return
     try:
         entries = json.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -277,7 +277,7 @@ def check_manifest(rep: Report) -> None:
         for key in ("id", "label", "file", "built", "hash"):
             if key not in entry:
                 problems.append(f"{entry.get('id', '?')}: no {key}")
-        path = DOCS / entry.get("file", "")
+        path = SITE / entry.get("file", "")
         listed.add(entry.get("id", ""))
         if not path.exists():
             problems.append(f"{entry.get('id')}: {entry.get('file')} missing")
@@ -288,7 +288,7 @@ def check_manifest(rep: Report) -> None:
         if actual != entry.get("hash"):
             problems.append(f"{entry.get('id')}: hash {entry.get('hash')} but pack is {actual}")
 
-    on_disk = {p.name for p in (DOCS / "data").iterdir()
+    on_disk = {p.name for p in (SITE / "data").iterdir()
                if p.is_dir() and (p / "spelldata.json.gz").exists()}
     for orphan in sorted(on_disk - listed):
         problems.append(f"{orphan}: pack on disk, no manifest entry")
@@ -344,7 +344,7 @@ def check_toolchain(rep: Report) -> None:
     devDependencies); the build doubles as the module-graph guard."""
     run_tool(rep, "tsc", ["npx", "tsc"], "strict, tsconfig.json")
     run_tool(rep, "bundle", ["npm", "run", "--silent", "build"],
-             "esbuild src/main.ts -> docs/js/app.js")
+             "esbuild src/main.ts -> site/js/app.js")
     run_tool(rep, "mypy", ["python", "-m", "mypy", "build/build_data.py", "tools"])
     run_tool(rep, "pyflakes", ["python", "-m", "pyflakes", "build/build_data.py", "tools"])
 
