@@ -768,8 +768,9 @@ VEHICLE_GEO_COMPONENT_LINKS = [
 # Every other attachment column in the game data is a RAW id into this table:
 # SpellVisualKitModelAttach.AttachmentID, SpellVisualMissile.Attachment /
 # .DestinationAttachment and BeamEffect.SourceAttachID / .DestAttachID.
-# (`SpellVisualKitModelAttach.LowDefModelAttachID` is a FileDataID despite
-# its name — max 430259 — and is NOT an attachment.)
+# (`SpellVisualKitModelAttach.LowDefModelAttachID` is NOT an attachment: it is
+# a self-reference to another row of the same table — the low-detail variant.
+# Corrected 2026-07-29; it previously said "a FileDataID". See DATA_ROUTES 3h.)
 M2_ATTACHMENT_NAMES = load_local_enum("m2_attachments")
 
 # attachment columns use -1 for "unset"; missile columns also use -2

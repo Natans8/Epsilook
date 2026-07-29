@@ -75,6 +75,8 @@ tools/check.py           every check, plus the invariants that fail silently
 tools/bump.py            move the ?v= cache-buster (all thirteen spots)
 tools/rebuild.py         rebuild packs with their own labels; --verify the build
 tools/verify_live.py     wait for Pages, then check what it actually serves
+tools/builddb.py         build the exploration database (development tool — see DB_SCHEMA.md)
+tools/dbd.py             parser for WoWDBDefs .dbd schema definitions
 ```
 
 `build_data.py` walks the game's own tables — spell → visual → kit → model/sound/animkit/effect — and bakes the result
@@ -216,6 +218,23 @@ WCAG walk, compositing each text node's ancestor backgrounds down to an opaque c
 change what renders can be proven not to. `Oracle.help()` lists them. It switches palettes by *reloading*
 (`Oracle.theme("moonwell")`) rather than by setting `data-theme`, because Chrome serves stale computed colours for
 elements already on screen and that has produced convincing false failures.
+
+### Exploring the data
+
+The app ships no SQL, but the *data* is much easier to reason about with some. `python tools/builddb.py` mirrors every
+table the build downloads into one DuckDB file under `build/cache/` — ten game versions as ten schemas, plus a `ref`
+schema holding the listfile, 169 decoded enums, and a catalog of every column's type, comment and foreign key (read
+straight out of the WoWDBDefs definitions, so the schema is derived rather than hand-written).
+
+```bash
+python -m pip install duckdb
+python tools/builddb.py
+```
+
+It is a development tool and nothing in `docs/` reads it: the database is a cache, gitignored, and rebuilt in about
+three minutes. `duckdb` is the only dependency outside the standard library anywhere in the project, and only this
+script needs it. **[DB_SCHEMA.md](DB_SCHEMA.md)** is the reference — layout, conventions, worked queries, and the
+three things to know before trusting a row.
 
 ## Data sources
 

@@ -532,8 +532,15 @@ is told explicitly — `TRAVELLING_MODEL_CATS` in app.js. A travelling row that 
 
 Two traps:
 
-- **`SpellVisualKitModelAttach.LowDefModelAttachID` is a FileDataID**, not an attachment — max 430259 on 9.2.7, despite
-  the name.
+- **`SpellVisualKitModelAttach.LowDefModelAttachID` is a SELF-REFERENCE to another row of the same table** — the
+  low-detail variant of that attachment — **not an attachment id and not a FileDataID.** It is unused by the build;
+  what matters is only that it is not mistaken for an attach point. **Corrected 2026-07-29** (this entry previously
+  said "a FileDataID", inferred from `max 430259` being far outside the 0..57 attachment range — which rules out an
+  attachment but says nothing about which of the two remaining readings is right). Measured on 9.2.7 with the
+  exploration database: of the 36 distinct nonzero values, **36 (100%) resolve as `SpellVisualKitModelAttach.ID`**
+  and only **8 (22%) as a listfile FileDataID**; the referenced rows all carry `ParentSpellVisualKitID = 0`, i.e.
+  orphans reachable only from the high-detail row that names them. `WoWDBDefs` agrees
+  (`int<SpellVisualKitModelAttach::ID> LowDefModelAttachID`).
 - **Missile attachments are taken from `SpellVisual`, not
   `SpellVisualMissile`.** The missile route is per-visual (a whole set is unioned into one bucket) and that is also
   where the data lives: 105.6k rows carry a destination there versus 14.9k on the missile table. `spell_visual`
