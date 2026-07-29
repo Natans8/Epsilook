@@ -1,8 +1,15 @@
-# The data packs are served straight off GitHub Pages, and Pages does NOT
-# resolve Git LFS pointers — it would serve the ~130-byte pointer text where
-# data.js expects gzip, breaking every version. So the packs stay ordinary
-# blobs in the repo; do not put *.gz back under LFS while Pages hosts them.
+# The data packs live in Git LFS, and Pages is built by GitHub Actions.
 #
-# "binary" (= -diff -merge -text) still matters: core.autocrlf is true in this
-# repo, and it keeps the packs from ever being line-ending mangled.
+# These two facts are COUPLED and must change together. Pages does NOT resolve
+# LFS pointers, so serving `docs/` straight off a branch would ship ~130 bytes
+# of pointer text where data.js expects gzip and break every version. What makes
+# LFS safe here is that .github/workflows/pages.yml checks out with `lfs: true`
+# and uploads real files as the Pages artifact — Pages never reads the repo.
+# If the deploy ever moves back to "deploy from a branch", the packs must come
+# OUT of LFS in the same change. See CLAUDE.md, "The packs left git history".
+#
+# Ordering matters: the LFS line is last, so its filter/diff/merge/-text win
+# over the generic `binary` rule above it. `-text` is what keeps core.autocrlf
+# (true in this repo) from ever line-ending mangling a pack.
 *.gz binary
+docs/data/**/*.gz filter=lfs diff=lfs merge=lfs -text
