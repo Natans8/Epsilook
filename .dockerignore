@@ -1,0 +1,24 @@
+# An allowlist, not a blocklist: the build context is ~48 MB of data packs
+# already, and everything else in this tree (node_modules, .git with its LFS
+# objects, build/cache, the exploration database) is bigger than the site.
+# Listing what goes IN also means a new top-level directory cannot silently
+# start being uploaded to the daemon on every build.
+*
+
+!docs/
+!src/
+!docker/
+!package.json
+!package-lock.json
+!tsconfig.json
+!tools/build.mjs
+!tools/verify_site.sh
+
+# docs/js is gitignored BUILD OUTPUT. Excluding it after re-including docs/ is
+# what guarantees the image's bundle comes from the Dockerfile's own esbuild
+# run and never from whatever a local `npm run dev` last left on disk.
+docs/js/
+
+# nothing under docs/ needs these, and a stray one would end up served
+**/.DS_Store
+**/Thumbs.db

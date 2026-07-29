@@ -1,0 +1,142 @@
+# Epsilook's container image — the self-hosting path, kept honest.
+#
+# GitHub Pages remains the deploy. This exists so that the OPTION of running
+# the site somewhere else (a Synology NAS is the case that prompted it) does
+# not quietly rot: the image is rebuilt from the same docs/ tree on every push
+# to main, and it has to pass tools/docker_smoke.py before it is published.
+#
+# Like .github/workflows/ci.yml this is an alarm rather than a gate — it runs
+# alongside pages.yml, not before it, so a red run here never blocks the site.
+# What it buys is that the Dockerfile cannot silently stop matching the app:
+# a renamed asset, a moved bundle, or a pack that stopped being a pack all
+# fail here within a couple of minutes of the push that caused them.
+
+name: docker
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    # A PR pays a full LFS checkout (~48 MB), so only the paths that can
+    # actually break the image are worth one. Everything else is covered by
+    # the run on main.
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - docker/**
+      - docker-compose.yml
+      - tools/docker_smoke.py
+      - tools/verify_site.sh
+      - .github/workflows/docker.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+# Never two publishes of the same tag at once; a superseded build of the same
+# ref has nothing to finish.
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # UNLIKE ci.yml, this one needs `lfs: true`, and the difference is
+          # deliberate: check.py verifies the manifest against an LFS
+          # pointer's own oid and so never needs the bytes, but an image is
+          # the bytes. Without this the build bakes ten ~130-byte pointer
+          # files in and every game version 404s at load. tools/verify_site.sh
+          # runs inside the build and refuses to let that ship — but the fix
+          # is here, not there.
+          #
+          # It costs ~48 MB of LFS bandwidth per run against a 10 GiB/month
+          # free allowance, which is why the pull_request trigger above is
+          # path-filtered. Do NOT add `filter: blob:none`: git-lfs cannot scan
+          # a partial clone for pointers, and the combination is what broke
+          # the checks workflow on every push for months.
+          lfs: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # Built for this runner only, and loaded into the local daemon, because
+      # a multi-platform build cannot be `load`ed and the smoke test has to
+      # RUN the thing. The manifest build below reuses these layers from the
+      # builder's cache.
+      - name: Build the image for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: epsilook:ci
+          provenance: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      # The same battery a laptop runs. It starts the container and asserts
+      # what a static host that merely returns 200 would still get wrong:
+      # the caching split between the two indexes and everything they bust,
+      # every pack byte-for-byte against its manifest hash, and no transport
+      # gzip on a body the app gunzips itself.
+      - name: Prove the image serves Epsilook
+        run: python tools/docker_smoke.py --no-build --image epsilook:ci
+
+      # Only now, and only for a real branch/tag — a pull request from a fork
+      # cannot have packages: write anyway.
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # linux/amd64 covers the Intel and AMD Synology models and any normal
+      # server; linux/arm64 covers the ARM ones (DS2xxj and friends). Both
+      # come out of one build because the Dockerfile pins its two working
+      # stages to $BUILDPLATFORM and leaves the runtime stage pure COPY — so
+      # nothing is emulated and no QEMU setup is needed here.
+      - name: Build and publish the manifest
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Say where it went
+        if: github.event_name != 'pull_request'
+        run: |
+          {
+            echo "### Published"
+            echo
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+            echo
+            echo "A new GHCR package starts PRIVATE. To pull it on the NAS without"
+            echo "logging in, make it public once: the repo's Packages page ->"
+            echo "epsilook -> Package settings -> Change visibility."
+          } >> "$GITHUB_STEP_SUMMARY"

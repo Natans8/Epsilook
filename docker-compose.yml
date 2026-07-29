@@ -1,0 +1,56 @@
+# Epsilook, self-hosted. Written for Synology's Container Manager (Project ->
+# create -> paste this), but it is ordinary Compose and works anywhere.
+#
+#   docker compose up -d --build     build this checkout and run it
+#   docker compose pull && up -d     take the image CI published instead
+#
+# Then the app is on http://<host>:8378/ — the same port `npm run dev` uses, so
+# a bookmark works against either.
+#
+# BUILDING LOCALLY NEEDS THE PACKS. They live in Git LFS and `docker build`
+# copies the working tree, so a clone without `git lfs pull` bakes ten
+# 130-byte pointer files into the image. The build refuses to do that rather
+# than shipping a site where no game version loads.
+#
+# There is nothing to persist: the whole site is baked into the image, the app
+# keeps its state in the URL and in localStorage, and the data packs are
+# rebuilt by build/build_data.py into a new image. Updating is `pull` +
+# `up -d`, and rolling back is the previous tag.
+
+services:
+  epsilook:
+    image: ghcr.io/natans8/epsilook:latest
+    # Present so `--build` works straight from a checkout; harmless when
+    # pulling, since Compose only builds when asked to.
+    build:
+      context: .
+    container_name: epsilook
+    ports:
+      # host:container. 8378 is what `npm run dev` uses, so one bookmark works
+      # against either; set EPSILOOK_PORT (or edit this) when it is taken.
+      - "${EPSILOOK_PORT:-8378}:80"
+    restart: unless-stopped
+
+    # The image is a static site behind nginx: it has no reason to write to its
+    # own filesystem, and the three paths below are the only ones nginx needs.
+    # Dropping this is what to try first if a future base image fails to start.
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+
+    # /healthz is a literal return in docker/nginx.conf, so this answers
+    # without touching the disk. Container Manager surfaces the result.
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

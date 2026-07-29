@@ -63,24 +63,12 @@ jobs:
       # and the site would deploy green while serving nothing loadable. That is
       # exactly the invisible failure this repo keeps getting bitten by, so it
       # fails here instead — before the artifact is built.
-      - name: Prove the packs are real files, not LFS pointers
-        run: |
-          set -euo pipefail
-          fail=0
-          while IFS= read -r -d '' pack; do
-            size=$(stat -c%s "$pack")
-            if [ "$size" -lt 100000 ]; then
-              echo "::error file=$pack::$pack is $size bytes — an unresolved LFS pointer, not a pack"
-              fail=1
-            else
-              echo "ok  $pack  $size bytes"
-            fi
-          done < <(find docs/data -name '*.gz' -print0)
-          if [ ! -s docs/data/versions.json ]; then
-            echo "::error::docs/data/versions.json is missing or empty"
-            fail=1
-          fi
-          exit $fail
+      #
+      # The same script runs inside the container image build (see the
+      # Dockerfile's `site` stage), so the two deploys cannot drift on what
+      # counts as a servable site.
+      - name: Prove docs/ is servable
+        run: sh tools/verify_site.sh docs
 
       - uses: actions/configure-pages@v5
 

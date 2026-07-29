@@ -217,13 +217,20 @@ def check_bump(rep: Report, base: str, version: str | None) -> None:
 
 
 def check_line_endings(rep: Report) -> None:
-    """The committed blobs are LF. A scripted rewrite is what flips them."""
+    """The committed blobs are LF. A scripted rewrite is what flips them.
+
+    .sh/.conf/Dockerfile matter more than the rest: they are read by a Linux
+    container, where a CRLF line fails as `command not found: ...^M`. Their
+    working copies are pinned by .gitattributes; this is the backstop.
+    """
     if not have_ref("HEAD"):
         rep.skip("line endings", "no commits yet")
         return
     # every tracked text file, so a new directory is covered without being listed
+    exts = (".js", ".css", ".html", ".py", ".md", ".json", ".ts", ".svg", ".yml",
+            ".sh", ".conf", ".mjs")
     names = [f for f in git("ls-files").splitlines()
-             if f.endswith((".js", ".css", ".html", ".py", ".md", ".json", ".ts", ".svg", ".yml"))]
+             if f.endswith(exts) or Path(f).name in ("Dockerfile", ".dockerignore")]
     bad = []
     for name in names:
         blob = subprocess.run(["git", "-C", str(ROOT), "show", f"HEAD:{name}"],

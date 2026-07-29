@@ -95,8 +95,14 @@ tools/check.py           every check, plus the invariants that fail silently
 tools/bump.py            move the ?v= cache-buster (both spots)
 tools/rebuild.py         rebuild packs with their own labels; --verify the build
 tools/verify_live.py     wait for Pages, then check what it actually serves
+tools/verify_site.sh     is this assembled document root actually servable?
+tools/docker_smoke.py    build the image, run it, prove it serves the site
 tools/builddb.py         build the exploration database (development tool — see DB_SCHEMA.md)
 tools/dbd.py             parser for WoWDBDefs .dbd schema definitions
+Dockerfile               the container image: esbuild -> a verified doc root -> nginx
+.dockerignore            an allowlist of what the image build may see
+docker/nginx.conf        the container's server block: caching, compression, the 404 page
+docker-compose.yml       one service, ready to paste into a NAS
 ```
 
 `build_data.py` walks the game's own tables — spell → visual → kit → model/sound/animkit/effect — and bakes the result
@@ -127,6 +133,31 @@ spots now: the stylesheet and the bundle); data packs bust themselves via a cont
 and does nothing at all when nothing served has changed or when the string already differs — so it is safe to run
 every time rather than only when you remember. `python tools/verify_live.py` waits for Pages to publish and then
 checks that the new string really is being served and that every asset and pack resolves.
+
+### Hosting it yourself
+
+GitHub Pages is where the site lives, but nothing about the app depends on it — every fetch is relative, so it runs
+under any base path on any static host. The repo ships a container for that case:
+
+```
+docker compose up -d --build
+```
+
+and the app is on `http://<host>:8378/`. Set `EPSILOOK_PORT` to move it. `.github/workflows/docker.yml` publishes the
+same image to `ghcr.io/natans8/epsilook` on every push to `main`, for `linux/amd64` and `linux/arm64`, so a NAS can
+pull it instead of building — `docker compose pull && docker compose up -d`.
+
+The image is a three-stage build: esbuild bundles `src/`, a second stage assembles the document root and runs
+`tools/verify_site.sh` over it, and nginx serves the result with `docker/nginx.conf`. Building from a checkout needs
+the LFS packs present — `docker build` copies the working tree, so without `git lfs pull` the image would bake ten
+130-byte pointer files in; the verify stage refuses rather than shipping a site where no version loads.
+
+`python tools/docker_smoke.py` builds the image, runs it, and checks what a static host that merely returns 200 would
+still get wrong: that `index.html` and `versions.json` are never cached while everything they cache-bust is immutable,
+that every pack arrives byte-for-byte against its manifest hash, that no pack is transport-gzipped (the app gunzips
+them itself), and that the 404 page still finds its stylesheet. CI runs the same script, so a laptop and a runner
+agree on what "the image works" means. It is deliberately not part of `tools/check.py`, which has to keep running on
+a machine with no Docker installed.
 
 ### Rebuilding the data
 
@@ -233,6 +264,13 @@ npx tsc                                        # the app: strict TypeScript, no 
 npm run build                                  # the bundle, plus the module-graph guard
 python -m mypy build/build_data.py tools       # Python: fully annotated
 python -m pyflakes build/build_data.py tools
+```
+
+Touching the `Dockerfile`, `docker/nginx.conf` or anything they copy adds one more, which needs Docker running and so
+stays out of `check.py`:
+
+```
+python tools/docker_smoke.py                   # build the image, run it, prove it serves
 ```
 
 ### Measuring what the app does
