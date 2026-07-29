@@ -15,7 +15,8 @@ Two families of check live here.
   remember: the ?v= string is one string in all thirteen places, it is bumped
   whenever css/js changed against what is deployed, every module in docs/js is
   actually referenced by index.html, the committed blobs are LF, and
-  versions.json agrees with the packs on disk down to the content hash.
+  versions.json agrees with the packs on disk down to the content hash - or
+  with their LFS pointers, which carry that same hash as their oid.
 
 A guard belongs here when it is mechanical and its failure is invisible. The
 ?v= bump is the archetype: nothing breaks at the time, the site just serves new
@@ -50,6 +51,13 @@ ASSET_RE = re.compile(r'(?:href|src)="((?:css|js)/[^"?]+)\?v=([0-9a-z]+)"')
 
 # a css/js change needs a bump; an html-only or data-only change does not
 BUMP_PATHS = ("docs/css", "docs/js")
+
+# An LFS pointer is a ~130-byte text stub whose oid IS the sha256 of the real
+# file - the same number versions.json stores. So the manifest can be checked
+# without pulling a single LFS object, and this script keeps working on a
+# checkout that never smudged them. See CLAUDE.md, "The packs left git history".
+LFS_POINTER_MAGIC = b"version https://git-lfs.github.com/spec/v1"
+LFS_OID_RE = re.compile(rb"oid sha256:([0-9a-f]{64})")
 
 # warn-only: a change on the left usually means the doc on the right is stale.
 # The triggers are CLAUDE.md's own, restated where they can fire on their own.
@@ -203,6 +211,22 @@ def check_line_endings(rep: Report) -> None:
         rep.ok("line endings", f"{len(names)} tracked text files are LF")
 
 
+def pack_hash(path: Path) -> tuple[str, bool]:
+    """The pack's content hash, read from the file or from its LFS pointer.
+
+    Returns (first 10 hex of its sha256, whether it came from a pointer). An
+    unsmudged pack is not an error here: the oid is a content address, so it
+    answers the manifest's question exactly, and hashing the stub instead
+    would fail with a mismatch that reads like a corrupt pack.
+    """
+    raw = path.read_bytes()
+    if raw.startswith(LFS_POINTER_MAGIC):
+        found = LFS_OID_RE.search(raw)
+        if found:
+            return found.group(1).decode()[:10], True
+    return hashlib.sha256(raw).hexdigest()[:10], False
+
+
 def check_manifest(rep: Report) -> None:
     """versions.json agrees with the packs on disk, hash included."""
     if not MANIFEST.exists():
@@ -216,6 +240,7 @@ def check_manifest(rep: Report) -> None:
 
     problems: list[str] = []
     listed: set[str] = set()
+    pointers = 0
     for entry in entries:
         for key in ("id", "label", "file", "built", "hash"):
             if key not in entry:
@@ -225,7 +250,9 @@ def check_manifest(rep: Report) -> None:
         if not path.exists():
             problems.append(f"{entry.get('id')}: {entry.get('file')} missing")
             continue
-        actual = hashlib.sha256(path.read_bytes()).hexdigest()[:10]
+        actual, from_pointer = pack_hash(path)
+        if from_pointer:
+            pointers += 1
         if actual != entry.get("hash"):
             problems.append(f"{entry.get('id')}: hash {entry.get('hash')} but pack is {actual}")
 
@@ -241,7 +268,9 @@ def check_manifest(rep: Report) -> None:
     if problems:
         rep.fail("data manifest", "; ".join(problems[:3]))
     else:
-        rep.ok("data manifest", f"{len(entries)} packs, hashes match, default={defaults[0]}")
+        via = f", {pointers} via LFS pointer" if pointers else ""
+        rep.ok("data manifest",
+               f"{len(entries)} packs, hashes match{via}, default={defaults[0]}")
 
 
 def check_docs(rep: Report, base: str) -> None:

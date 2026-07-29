@@ -1,8 +1,10 @@
 # Epsilook CI — the same checks tools/check.py runs locally, run again on push.
 #
-# It deliberately does NOT deploy. GitHub Pages publishes docs/ from main by
-# itself, so a workflow cannot gate the deploy; what it can do is tell you
-# within a minute that the push you just made shipped new markup against a
+# It deliberately does NOT deploy, and it does not gate the deploy either:
+# .github/workflows/pages.yml publishes on the same push, in parallel, so by
+# the time a check here fails the site is already live. That is the standing
+# choice - CLAUDE.md, "CI is an alarm, no git hook". What it buys is mail
+# within a minute saying the push you just made shipped new markup against a
 # cached stylesheet, or a pack the manifest disagrees with. That is the class
 # of failure this repo actually has: silent, invisible on the developer's
 # machine because their own browser holds the new files.
@@ -26,15 +28,20 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          # full history so the ?v= guard can reach the previously deployed
-          # commit; blob:none keeps that cheap — trees and commits only, blobs
-          # fetched on demand.
+          # Full history, so the ?v= guard can reach the previously deployed
+          # commit. It is cheap without a blob filter now that docs/data is out
+          # of history — the whole repo is ~1.4 MB.
+          #
+          # Do NOT add `filter: blob:none` back, and do NOT add `lfs: true`.
+          # Together they are broken: git-lfs cannot scan a partial clone for
+          # pointers ("Could not scan for Git LFS files"), which failed this
+          # job on every push. And neither is needed — check.py reads a pack's
+          # hash out of its LFS pointer when the file was never smudged, so the
+          # manifest is verified without pulling ~47 MB of objects per run.
+          # Whether the runner smudges them or not, the check is the same.
+          # pages.yml is where the real bytes must materialise, and it proves
+          # they did. See CLAUDE.md, "The packs left git history".
           fetch-depth: 0
-          filter: blob:none
-          # the packs are LFS objects now, and check.py verifies versions.json
-          # against their sha256 — without this it would hash 132-byte pointer
-          # files and fail. See CLAUDE.md, "The packs left git history".
-          lfs: true
 
       - uses: actions/setup-python@v6
         with:
