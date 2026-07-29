@@ -196,33 +196,28 @@ window.EpsilookSearch = (() => {
 
     /**
      * A META keyword addresses a PLACE rather than content — where on the model
-     * something plays, which body region an animation moves. It is written as
-     * the keyword followed by its value, space-separated like every other value
-     * in the language:
+     * something plays, which body region an animation moves.
      *
-     *   model:"attach chest"   fx:"chain attach spelllefthand"
-     *   anim:"boneset upper body"
+     * ONE RULE, AND IT NEVER VARIES: **the keyword takes the single token after
+     * it.** A "quoted phrase" is one token, so that is also how a value with a
+     * space in it is written:
      *
-     * HOW MANY WORDS THE VALUE TAKES IS DECIDED BY THE DATA, not by a per-
-     * keyword arity: the keyword consumes the LONGEST following run of words
-     * that still names something real. `boneset upper body` takes two words
-     * because a region is called that; `boneset head kneel` takes one, because
-     * nothing is called "head kneel", which leaves `kneel` to match the
-     * animation as usual.
+     *   model:"attach chest"          fx:"chain attach spelllefthand"
+     *   model:(attach "right hand")   anim:(boneset "upper body")
      *
-     * QUOTES OVERRIDE IT. `attach "right hand"` takes exactly those two words
-     * whatever the data would have taken on its own, and `boneset "head" kneel`
-     * takes exactly one. That is the escape hatch the data rule needs: without
-     * it the extent is something you can only observe, never state, and the two
-     * keywords behave differently for reasons the user cannot see. Quotes here
-     * GROUP (they mark where the value ends) rather than demand an exact
-     * phrase — the same job they do around a whole tag value.
+     * So the scope is always visible and always the same size: you go IN at the
+     * keyword and OUT one token later, wherever you are and whatever the value
+     * says. Everything after that token is an ordinary search word again —
+     * `attach chest fire` is "attached at the chest" AND "fire" in the file
+     * name, and the capsule the bar draws shows exactly that split.
      *
-     * That one rule replaced `attach` taking exactly one word while `boneset`
-     * swallowed the whole rest of the chip — an arity you could not see and had
-     * to know. It is also what the search bar DRAWS: the capsule around a
-     * keyword and its value covers exactly the words consumed here, so the
-     * arity is on screen instead of in someone's head.
+     * THIS REPLACED AN ARITY DECIDED BY THE DATA — the keyword used to eat the
+     * longest following run of words that still named something real. It could
+     * not be predicted or seen: `attach back left` took one word (leaking `left`
+     * into a file-name search) while `attach spell left hand` took three, and
+     * nothing on screen said which had happened. Do NOT reintroduce a variable
+     * arity, however clever the rule; a scope you cannot count is worse than one
+     * that occasionally needs quotes.
      *
      * The keyword lives INSIDE the field chip so its value still narrows the
      * SAME row as the chip's file/category words: a fireball model attached at
@@ -231,64 +226,65 @@ window.EpsilookSearch = (() => {
      * `attach spelllefthand attach chest`.
      *
      * The point/region NAMES stay data values: never in a corpus, never offered
-     * by autocomplete. Only the keyword itself is vocabulary.
-     * @type {Record<string, {fields: string[], value: string, example: string,
-     *                        names: (d: SpellData) => string[]}>}
+     * by autocomplete. Only the keyword itself is vocabulary — which is why this
+     * record carries no name list: nothing consults the data to parse a value.
+     * @type {Record<string, {fields: string[], hint: string,
+     *                        when?: (d: SpellData) => boolean}>}
      */
     const META_KEYWORDS = {
         attach: {
             fields: ["model", "fx"],
-            value: "attachment point",
-            example: 'model:"attach chest"',
-            names: (d) => Object.values(d.attachmentNames || {}),
+            hint: 'Attachment point — attach chest, attach "right hand"',
+            when: (d) => Object.keys(d.attachmentNames || {}).length > 0,
         },
         boneset: {
             fields: ["anim"],
-            value: "body region",
-            example: 'anim:"boneset upper body"',
-            names: (d) => d.bonesetNames || [],
+            hint: 'Body region — boneset head, boneset "upper body"',
+            when: (d) => (d.bonesetNames || []).length > 0,
         },
     };
 
     const ATTACH_WORD = "attach";
     const BONESET_WORD = "boneset";
 
-    /** The keywords one field can carry. */
-    const keywordsIn = (field) =>
-        Object.keys(META_KEYWORDS).filter((w) => META_KEYWORDS[w].fields.includes(field));
+    /**
+     * The keywords one field can carry, minus any the loaded pack has no data
+     * for. Autocomplete and the bar's highlighter both read this, so a keyword
+     * can never be suggested in a pack where it would match nothing.
+     * @param {string} field
+     * @param {SpellData} [data]
+     * @returns {string[]}
+     */
+    const keywordsIn = (field, data) =>
+        Object.keys(META_KEYWORDS).filter((w) => META_KEYWORDS[w].fields.includes(field)
+            && (!data || !META_KEYWORDS[w].when || META_KEYWORDS[w].when(data)));
 
-    /* The name pool a keyword's value is measured against, lowercased once per
-     * pack — `knows` runs per candidate run, per token, per chip. */
-    const poolCache = new WeakMap();
-
-    function namePool(word, data) {
-        let byWord = poolCache.get(data);
-        if (!byWord) poolCache.set(data, byWord = new Map());
-        let pool = byWord.get(word);
-        if (!pool) {
-            pool = (META_KEYWORDS[word].names(data) || [])
-                .filter(Boolean).map((n) => n.toLowerCase());
-            byWord.set(word, pool);
-        }
-        return pool;
-    }
+    /**
+     * A keyword and its value written back as query text — quoted exactly when
+     * the value would otherwise be more than one token. Every pill that offers a
+     * keyword search builds its query here, so what a click produces is always
+     * something the parser reads back the same way.
+     * @param {string} word
+     * @param {string} value
+     * @returns {string}
+     */
+    const keywordValue = (word, value) =>
+        `${word} ${/\s/.test(value) ? `"${value}"` : value}`;
 
     /**
      * Does one name answer to one keyword value? EVERY WORD of the value must
      * appear in the name — separately, in any order — rather than the value
      * having to be a substring of it whole.
      *
-     * Word-wise is the only rule that works for both name pools, and getting it
-     * wrong is what made the two keywords look like different features. Body
-     * regions are written as words ("Upper Body"), so a phrase test reads them
-     * fine; M2 attachment points are jammed together ("HandRight",
-     * "SpellLeftHand"), so a phrase test could never take more than one word —
-     * `attach right hand` silently kept `hand` as a FILE-name search and gave
-     * 26,000 results. Word-wise, both take two words and mean it.
+     * Word-wise is what lets ONE spelling reach both pools, which otherwise
+     * write the same idea two ways: body regions are spaced ("Upper Body"),
+     * M2 attachment points are jammed together ("HandRight", "SpellLeftHand").
+     * A whole-string test would find `"upper body"` and miss `"right hand"`, so
+     * the two keywords would need different values for the same-shaped question.
      *
      * Each word is still a substring of the name, like every other match in the
      * app: `attach ch` reaches Chest while it is still being typed.
-     * @param {string} nameL a lowercased name from the pool
+     * @param {string} nameL a lowercased name the row carries
      * @param {string} value one keyword value ("right hand")
      * @returns {boolean}
      */
@@ -312,64 +308,37 @@ window.EpsilookSearch = (() => {
         values.every((v) => namesL.some((n) => nameHasValue(n, v)));
 
     /**
-     * How many tokens after `tokens[i]` the keyword there takes as its value.
-     * 0 = it names nothing real, so it is not acting as a keyword at all and
-     * falls through to being ordinary text.
+     * How many tokens after `tokens[i]` the keyword there takes as its value:
+     * ONE, or none when the keyword is the chip's last token (a keyword with
+     * nothing after it is just a word, and searches as one).
      *
-     * A QUOTED token is taken whole and unconditionally — that is the user
-     * saying where the value ends, and it has to hold even while the value is
-     * half-typed and names nothing yet.
-     *
-     * An alternation counts when ANY of its alternatives names something
-     * (`attach right|left`), because that is what the engine will ask once
-     * expandAlts has distributed it.
-     * @param {{text: string, quoted?: boolean}[]} tokens
+     * Trivial on purpose, and still a function: the bar's capsule is drawn from
+     * this exact call, so what the highlighter covers and what the matcher
+     * consumes cannot drift apart.
+     * @param {{text: string}[]} tokens
      * @param {number} i index of the keyword token
-     * @param {SpellData} data
      * @returns {number}
      */
-    function keywordRun(tokens, i, data) {
-        if (tokens[i + 1] && tokens[i + 1].quoted) return 1;
-        const pool = namePool(tokens[i].text, data);
-        const knows = (s) => s.split("|").filter(Boolean)
-            .some((alt) => pool.some((n) => nameHasValue(n, alt)));
-        let taken = 0, run = "";
-        for (let n = 1; i + n < tokens.length; n++) {
-            // a quoted token further along is its own thing (a phrase, or
-            // another keyword's stated value) and never gets swallowed
-            if (tokens[i + n].quoted) break;
-            const cand = run ? run + " " + tokens[i + n].text : tokens[i + n].text;
-            if (!knows(cand)) break;
-            run = cand;
-            taken = n;
-        }
-        return taken;
-    }
+    const keywordRun = (tokens, i) => (tokens[i + 1] ? 1 : 0);
 
     /**
      * Split a chip's tokens into the plain ones and one keyword's values.
-     * A keyword with nothing usable after it stays in `text` — an unrecognised
-     * phrase is a plain text search, never an error.
+     * A trailing keyword with nothing after it stays in `text` — an
+     * unrecognised phrase is a plain text search, never an error.
      * @param {QueryToken[]} tokens
      * @param {string} word
-     * @param {SpellData} data
      * @returns {{text: QueryToken[], values: string[]}}
      */
-    function splitKeyword(tokens, word, data) {
+    function splitKeyword(tokens, word) {
         if (!META_KEYWORDS[word]) return {text: tokens, values: []};
         const text = [], values = [];
         for (let i = 0; i < tokens.length; i++) {
-            if (tokens[i].text !== word) {
-                text.push(tokens[i]);
+            if (tokens[i].text === word && keywordRun(tokens, i)) {
+                values.push(tokens[i + 1].text);
+                i++;
                 continue;
             }
-            const taken = keywordRun(tokens, i, data);
-            if (!taken) {
-                text.push(tokens[i]);
-                continue;
-            }
-            values.push(tokens.slice(i + 1, i + 1 + taken).map((t) => t.text).join(" "));
-            i += taken;
+            text.push(tokens[i]);
         }
         return {text, values};
     }
@@ -475,11 +444,13 @@ window.EpsilookSearch = (() => {
             return spellsByFile(tokens, data, data.modelFids, data.modelSpells);
         }
         const out = new Set();
-        const {text: withTests, values: attaches} = splitKeyword(tokens, ATTACH_WORD, data);
+        const {text: withTests, values: attaches} = splitKeyword(tokens, ATTACH_WORD);
         const {text, tests} = splitTargetTokens(withTests);
-        // everything below reads `text`, never the raw tokens, so a keyword and
-        // its value are accounted for exactly once
-        tokens = text;
+        // EVERYTHING below reads `text`, never `tokens` — the keyword, its value
+        // and the target words have all been taken out of it, so each is
+        // accounted for exactly once. (This used to rebind `tokens = text` and
+        // then use both names for the same array, which was correct only by
+        // accident and would stop being so the moment a line moved.)
         // Attachment points and the target mask both live on the ROW; the
         // (cat, fid) index below has neither, being shared across spells. Either
         // one in the query therefore forces the row walk.
@@ -508,7 +479,7 @@ window.EpsilookSearch = (() => {
             for (const [fid, spells] of fidSpells) {
                 const file = data.files.get(fid);
                 const searchL = file ? file.searchL : "";
-                if (tokens.every((t) => catL.includes(t.text) || searchL.includes(t.text))) {
+                if (text.every((t) => catL.includes(t.text) || searchL.includes(t.text))) {
                     for (const s of spells) out.add(s);
                 }
             }
@@ -519,7 +490,7 @@ window.EpsilookSearch = (() => {
         if (data.itemSpells && data.itemSpells.size) {
             for (const [itemId, spells] of data.itemSpells) {
                 const corpus = data.itemSearchL.get(itemId) || "";
-                if (corpus && tokens.every((t) => corpus.includes(t.text))) {
+                if (corpus && text.every((t) => corpus.includes(t.text))) {
                     for (const s of spells) out.add(s);
                 }
             }
@@ -528,7 +499,7 @@ window.EpsilookSearch = (() => {
         // (category, file) index — mounts today. The registry drives them, so a
         // future one needs no line here; the file-based categories declare no
         // `spells` and scanType skips them.
-        for (const type of Pills.typesFor("model")) Pills.scanType(type, data, tokens, out);
+        for (const type of Pills.typesFor("model")) Pills.scanType(type, data, text, out);
         return out;
     }
 
@@ -589,13 +560,12 @@ window.EpsilookSearch = (() => {
     function spellsByAnim(tokens, data) {
         const out = new Set();
 
-        // bonesets: `boneset upper body` matches spells whose AnimKits animate
-        // that region. The keyword takes as many following words as still name a
-        // real region and no more (keywordRun), so `boneset head kneel` is the
-        // head region AND a kneel animation — it used to be a search for a
-        // region called "head kneel", which nothing is. Whatever is left is
-        // ordinary anim text and still has to match, so the two intersect.
-        const bones = splitKeyword(tokens, BONESET_WORD, data);
+        // bonesets: `boneset "upper body"` matches spells whose AnimKits animate
+        // that region. The keyword takes exactly the one token after it, so
+        // `boneset head kneel` is the head region AND a kneel animation, and a
+        // region whose name has a space in it is quoted. Whatever is left over
+        // is ordinary anim text and still has to match, so the two intersect.
+        const bones = splitKeyword(tokens, BONESET_WORD);
         tokens = bones.text;
         if (bones.values.length) {
             for (const [s, names] of data.spellBonesets) {
@@ -677,23 +647,33 @@ window.EpsilookSearch = (() => {
      */
     function spellsByFx(tokens, data) {
         const out = new Set();
-        for (const type of Pills.typesFor("fx")) Pills.scanType(type, data, tokens, out);
-
-        // An `attach <point>` matches its points on the SAME row as any chain
-        // corpus words — "a fireball beam launched from the left hand", not "a
-        // fireball beam somewhere and a left-hand attachment somewhere".
-        const {text: fxText, values: attaches} = splitKeyword(tokens, ATTACH_WORD, data);
+        // A chain's attachment points live on the (spell, chain) ROW rather than
+        // on the chain, so they cannot be baked into a per-id corpus: a chip
+        // carrying `attach` is answered ENTIRELY by the row walk, exactly as the
+        // same keyword forces the row walk in spellsByModel.
+        //
+        // It used to scan the registry with the RAW tokens and then union the row
+        // walk in — so the keyword and its value were also offered to every fx
+        // corpus as ordinary words, and a keyword widened the result instead of
+        // narrowing it. Both halves now read `text`, so the keyword and its value
+        // are accounted for exactly once.
+        const {text, values: attaches} = splitKeyword(tokens, ATTACH_WORD);
         if (attaches.length) {
+            // the points match on the SAME row as any chain corpus words — "a
+            // fireball beam launched from the left hand", not "a fireball beam
+            // somewhere and a left-hand attachment somewhere"
             for (const [s, rows] of data.spellChainRows) {
                 for (const r of rows) {
                     if (!matchesNames(attaches, attachmentNamesOf(r.src, r.dst, data))) continue;
-                    if (textMatches(data.fxSearchL.get(r.chain) || "", fxText)) {
+                    if (textMatches(data.fxSearchL.get(r.chain) || "", text)) {
                         out.add(s);
                         break;
                     }
                 }
             }
+            return out;
         }
+        for (const type of Pills.typesFor("fx")) Pills.scanType(type, data, tokens, out);
         return out;
     }
 
@@ -743,10 +723,7 @@ window.EpsilookSearch = (() => {
             const alts = (t.alts && t.alts.length) ? t.alts : [t.text];
             /** @type {QueryToken[][]} */
             const next = [];
-            // `quoted` has to survive the distribution: it is what tells
-            // keywordRun the user stated this value's extent, and splitKeyword
-            // runs downstream of here
-            for (const c of combos) for (const a of alts) next.push(c.concat([{text: a, quoted: t.quoted}]));
+            for (const c of combos) for (const a of alts) next.push(c.concat([{text: a}]));
             combos = next;
         }
         return combos;
@@ -1014,7 +991,7 @@ window.EpsilookSearch = (() => {
     return {
         searchGroups, sortByRelevance, expandAlts, combosOf,
         FIELDS, TARGET_WORDS, matchNumeric, hasOperator,
-        META_KEYWORDS, keywordsIn, keywordRun, splitKeyword, matchesNames,
+        META_KEYWORDS, keywordsIn, keywordRun, keywordValue, splitKeyword, matchesNames,
         COUNT_AXIS, COUNT_SOURCES,
     };
 })();

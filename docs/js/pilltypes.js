@@ -62,7 +62,7 @@
      * No parentheses in the hint: updateCategorySuggest cuts it at the first " (" */
     T({
         key: "model:equipped", field: "model", word: "equipped",
-        hint: "A weapon the caster already has — main hand, off hand, ranged or ammo",
+        hint: "Weapon the caster already has — main hand, off hand, ranged or ammo",
         when: (d) => !!d.hasSyntheticFiles,
     });
 
@@ -72,7 +72,7 @@
      * + model path), the same shape fx:morph uses one column over. */
     T({
         key: "model:mount", field: "model", word: "mount",
-        hint: "Mount the spell puts you on — Mount.db2 via its display id",
+        hint: "Mount the spell puts you on",
         corpus: (d) => d.mountSearchL, spells: (d) => d.mountSpells,
     });
 
@@ -175,7 +175,7 @@
      * because a vehicle's corpus is words only — nothing else could claim one. */
     T({
         key: "fx:seat", field: "mech", word: "seat",
-        hint: "Seat of a rideable vehicle the caster becomes (SpellEffect SET_VEHICLE_ID)",
+        hint: "Seat of the vehicle the caster becomes (SpellEffect SET_VEHICLE_ID)",
         corpus: (d) => d.vehicleSearchL, spells: (d) => d.vehicleSpells,
         numeric: {kind: "count", of: (d, v) => (d.vehicleSeats.get(v) || []).length},
     });
@@ -204,7 +204,7 @@
      * nameless object is still found by what it looks like. */
     T({
         key: "fx:object", field: "fx", word: "object",
-        hint: "GameObject the spell places in the world — a campfire, portal, banner or chest",
+        hint: "GameObject the spell places — campfire, portal, banner, chest",
         corpus: (d) => d.objectSearchL, spells: (d) => d.objectSpells,
     });
     /* The two sides of an invisibility channel. All three axes at once: the
@@ -213,7 +213,7 @@
      * (fx:"invis =0" = an invisibility nothing detects). */
     T({
         key: "fx:invis", field: "mech", word: "invis",
-        hint: "Invisibility channel — hides in an invisibility type (MOD_INVISIBILITY)",
+        hint: "Invisibility channel the aura hides in (MOD_INVISIBILITY)",
         spells: (d) => d.invisTypeSpells,
         bare: (d, type) => type,
         numeric: {
@@ -233,7 +233,7 @@
     });
     T({
         key: "fx:keybind", field: "mech", word: "keybind",
-        hint: "A key that casts a spell while the aura holds (SpellKeyboundOverride)",
+        hint: "Key that casts a spell while the aura holds (SpellKeyboundOverride)",
         corpus: (d) => d.keybindSearchL, spells: (d) => d.keybindSpells,
     });
     /* Movement speed. The id is the (movement, percent) pair, so the corpus
@@ -257,7 +257,7 @@
      * fx:"scale 30" should find +30%, not 30 of something. */
     T({
         key: "fx:scale", field: "fx", word: "scale",
-        hint: "Size change — how much bigger or smaller the aura makes its target",
+        hint: "Size change the aura applies",
         corpus: (d) => d.scaleSearchL, spells: (d) => d.scaleSpells,
         numeric: {kind: "value", of: (d, pct) => pct, operatorOnly: true},
     });

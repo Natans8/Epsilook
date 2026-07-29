@@ -730,11 +730,6 @@ interface QueryToken {
      * expandAlts, which has already resolved the choice).
      */
     alts?: string[];
-    /**
-     * The user wrote this token in "quotes" — an exact phrase in ordinary text,
-     * and a STATED EXTENT after a meta keyword (`attach "right hand"`).
-     */
-    quoted?: boolean;
 }
 
 /**
@@ -793,20 +788,25 @@ interface EpsilookSearchApi {
     /** Target-type query words ("caster", "target", "area", "both"). */
     TARGET_WORDS: string[];
 
-    /** The meta keywords, keyed by word: which fields carry them, what they take. */
+    /** The meta keywords, keyed by word: which fields carry them, how they are
+     *  described, and which packs have the data. The ONE description — the bar
+     *  and the autocomplete both read it. */
     META_KEYWORDS: Record<string, {
-        fields: string[]; value: string; example: string;
-        names(d: SpellData): string[];
+        fields: string[]; hint: string;
+        when?(d: SpellData): boolean;
     }>;
 
-    /** The meta keywords one field can carry. */
-    keywordsIn(field: string): string[];
+    /** The meta keywords one field can carry, minus any this pack lacks data for. */
+    keywordsIn(field: string, data?: SpellData): string[];
 
-    /** How many tokens after `tokens[i]` that keyword takes as its value (0 = none). */
-    keywordRun(tokens: { text: string; quoted?: boolean }[], i: number, data: SpellData): number;
+    /** A keyword and its value as query text, quoted iff the value is spaced. */
+    keywordValue(word: string, value: string): string;
+
+    /** Tokens after `tokens[i]` that keyword takes: 1, or 0 when it ends the chip. */
+    keywordRun(tokens: { text: string }[], i: number): number;
 
     /** A chip's tokens split into the plain ones and one keyword's values. */
-    splitKeyword(tokens: QueryToken[], word: string, data: SpellData):
+    splitKeyword(tokens: QueryToken[], word: string):
         { text: QueryToken[]; values: string[] };
 
     /** Every keyword value answered by some one of the names — the engine's own
@@ -978,6 +978,13 @@ interface EpsilookPillsApi {
 
     /** `field:"word value"` — a value scoped to its category word. */
     catQuery(field: string, word: string, value?: string | number): string;
+
+    /** A chip value as query text: bare, "grouped", or (parenthesised) when it
+     *  already carries phrase quotes. The one canonical rule. */
+    tagValue(text: string): string;
+
+    /** A whole chip as query text, optionally negated. */
+    tagQuery(field: string, text: string, not?: boolean): string;
 
     fillTemplate(tpl: string, vars: Record<string, any>): string;
 

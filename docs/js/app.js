@@ -262,14 +262,11 @@
     // canonical string form: model:"fel reaver" -mechanic:knockback free words.
     // The live input's contribution is spliced in at state.pos, so a query
     // typed before or between chips serializes (and round-trips) in place.
-    // one chip as query text: single words as-is, multi-word values wrapped in
-    // "quotes" (grouping — words match the same entity in any order), values
-    // that themselves contain "phrase quotes" wrapped in (parens) instead so
-    // the two kinds of quotes don't collide
-    const tagStr = (field, text, not) => {
-        const t = text.includes('"') ? `(${text})` : /\s/.test(text) ? `"${text}"` : text;
-        return `${not ? "-" : ""}${field}:${t}`;
-    };
+    // one chip as query text. The rule lives in pills.js (P.tagQuery) because
+    // pill queries are built there and the two must agree character for
+    // character — a pill click that did not serialize like a typed chip would
+    // not survive the URL.
+    const tagStr = P.tagQuery;
 
     function serializeQuery() {
         const parts = state.chips.map((c) =>
@@ -458,13 +455,9 @@
         return out;
     }
 
-    /**
-     * The engine's view of a chip: the text, the alternatives, and whether the
-     * user quoted it — quoting is how a keyword's value is given an explicit
-     * extent, so keywordRun has to be able to see it.
-     */
+    /** The engine's view of a chip: just the text and the alternatives. */
     function tokenizeQuery(text) {
-        return tokenSpans(text).map((s) => ({text: s.text, alts: s.alts, quoted: s.quoted}));
+        return tokenSpans(text).map((s) => ({text: s.text, alts: s.alts}));
     }
 
     // group list for the engine: one group per chip + one for the live input,
@@ -973,37 +966,14 @@
         both: "Plays on the caster and the target",
     };
 
-    /* The attachment-point keyword. It is the ONE attachment meta-word that
-   * autocompletes: the point NAMES are data values (the user types the point
-   * after it, `attach chest`). Offered only in the two columns that render
-   * attachment segments, and only when the pack actually carries them. */
+    /* The two meta keywords, named here because app.js builds queries with them.
+   * Everything ELSE about them — which fields offer them, what the tooltip says,
+   * which packs carry the data — lives in ONE record, Search.META_KEYWORDS, so
+   * the autocomplete and the search bar cannot describe them differently. */
     const ATTACH_WORD = "attach";
-    // the anim-column twin of `attach`: the body region an AnimKit animates
-    // ("boneset upper body", "boneset head"). The region NAMES are data values
-    // the user types after the keyword, so only the keyword autocompletes.
     const BONESET_WORD = "boneset";
-
-    /**
-     * One meta word: not a kind of content, but an axis any chip in `fields`
-     * can carry. `when` gates it on the loaded pack, exactly as a pill type's
-     * does — a pack with no attachment data never suggests `attach`.
-     * @type {{word: string, hint: string, fields: string[],
-     *         when?: (d: SpellData) => boolean}[]}
-     */
-    const META_WORDS = [
-        {
-            word: ATTACH_WORD, fields: ["model", "fx"],
-            hint: "Attachment point follows, e.g. attach chest or attach spelllefthand",
-            when: (d) => !!d.attachmentNames && Object.keys(d.attachmentNames).length > 0,
-        },
-        {
-            word: BONESET_WORD, fields: ["anim"],
-            hint: "Body region an animkit animates follows, e.g. boneset upper body or boneset head",
-            when: (d) => !!d.bonesetNames && d.bonesetNames.length > 0,
-        },
-    ];
-    // meta words that take an argument after them get a trailing space on pick
-    const META_KEYWORDS = new Set(META_WORDS.map((m) => m.word));
+    // meta words take an argument after them, so picking one leaves a trailing space
+    const META_KEYWORDS = new Set(Object.keys(Search.META_KEYWORDS));
 
     /**
      * The words a field offers in autocomplete, with their descriptions: its
@@ -1019,10 +989,9 @@
         // its words come from the same registry, so nothing else needed saying
         if (!d || !["model", "sound", "anim", "fx", "mech"].includes(field)) return null;
         const {words, titles} = P.keywordsFor(field, d);
-        for (const meta of META_WORDS) {
-            if (!meta.fields.includes(field) || (meta.when && !meta.when(d))) continue;
-            words.push(meta.word);
-            titles[meta.word] = meta.hint;
+        for (const w of Search.keywordsIn(field, d)) {
+            words.push(w);
+            titles[w] = Search.META_KEYWORDS[w].hint;
         }
         // every column that draws target icons can be filtered by them
         return {
@@ -1222,11 +1191,9 @@
                 v.valued.add(Search.COUNT_AXIS);
             }
         }
-        for (const w of Search.keywordsIn(field)) {
-            const spec = Search.META_KEYWORDS[w];
+        for (const w of Search.keywordsIn(field, d)) {
             v.keywords.add(w);
-            v.words.set(w, `${spec.value[0].toUpperCase() + spec.value.slice(1)}`
-                + ` — the word after it, e.g. ${spec.example}`);
+            v.words.set(w, Search.META_KEYWORDS[w].hint);
         }
         barVocab.byField.set(field, v);
         return v;
@@ -1236,13 +1203,13 @@
     const isComparison = (s) => /^(<=|>=|<|>|=)-?\d+(?:\.\d+)?$/.test(s);
 
     /**
-     * Does the span at `i` take the spans after it as its value, and how many?
+     * Does the span at `i` take the span after it as its value?
      *
-     * The two kinds of value are deliberately answered by one function, because
-     * the bar draws them identically and the user is told one rule. A meta
-     * keyword's run is decided by the DATA (search.js owns that, so the capsule
-     * always covers exactly what the matcher consumed); a numeric word takes the
-     * one comparison after it.
+     * Both kinds of value are ONE token, and one function answers for both, so
+     * the bar draws a single capsule shape and the user is told a single rule.
+     * A meta keyword takes whatever token follows (search.js owns that call, so
+     * the capsule always covers exactly what the matcher consumed); a numeric
+     * word takes the one comparison after it, and nothing else.
      * @param {BarVocab} v
      * @param {{text: string}[]} spans
      * @param {number} i
@@ -1250,7 +1217,7 @@
      */
     function valueRun(v, spans, i) {
         const word = spans[i].text;
-        if (v.keywords.has(word)) return Search.keywordRun(spans, i, state.data);
+        if (v.keywords.has(word)) return Search.keywordRun(spans, i);
         if (v.valued.has(word) && spans[i + 1] && isComparison(spans[i + 1].text)) return 1;
         return 0;
     }
@@ -1305,7 +1272,7 @@
                 // caret can be asked whether it is inside this one thing rather
                 // than inside one of its two drawing halves.
                 const last = spans[i + taken];
-                const tip = capsuleTip(v, s.text, taken);
+                const tip = v.words.get(s.text) || "";
                 const cap = `${s.start}:${last.end}`;
                 push(text.slice(s.start, s.end), "bar-tok bar-kw bar-cap-l", tip, cap);
                 push(text.slice(s.end, last.end), "bar-tok bar-cap-r", tip, cap);
@@ -1318,21 +1285,6 @@
         }
         if (at < text.length) push(text.slice(at));
         return out;
-    }
-
-    /**
-     * A capsule's tooltip: what the word is, plus — for a keyword, whose value
-     * can be any number of words — how far it currently reaches, and the one
-     * way to overrule that. A numeric word takes exactly one comparison and has
-     * nothing to decide, so it says nothing extra.
-     * @param {BarVocab} v
-     * @param {string} word
-     * @param {number} taken
-     */
-    function capsuleTip(v, word, taken) {
-        const tip = v.words.get(word) || "";
-        if (!v.keywords.has(word)) return tip;
-        return `${tip}\n${taken} word${taken === 1 ? "" : "s"} — "quote" the value to say where it ends`;
     }
 
     /**
@@ -3087,24 +3039,29 @@
         const s = nameOf(src);
         const t = twoPoint ? nameOf(dst) : "";
         if (!s && !t) return null;
+        // The label already shows the slot name, so the tooltip only has to say
+        // what the pill does WITH it. It used to append "an M2 attachment slot,
+        // not a description" to every one of these — 42 characters of the same
+        // caveat on every attachment pill on screen.
         let label, why;
         if (s && t) {
             label = `${s} → ${t}`;
-            why = `Travels from the ${s} attachment point to the ${t} one`;
+            why = `Travels from ${s} to ${t}`;
         } else if (!twoPoint) {
             label = s;
-            why = `Plays at the ${s} attachment point`;
+            why = `Plays at ${s}`;
         } else {
             label = s ? `from ${s}` : `to ${t}`;
-            why = s ? `Launches from the ${s} attachment point`
-                : `Lands on the ${t} attachment point`;
+            why = s ? `Launches from ${s}` : `Lands on ${t}`;
         }
         const words = [s, t].filter(Boolean);
-        // each point is an `attach <point>` pair; always quoted (the space)
+        // one `attach <point>` per point, so two points AND rather than running
+        // together into one unreadable value (Search.keywordValue quotes if the
+        // name ever gains a space)
         return P.note(label, {
             hit: attachIsHit(field, words),
-            title: `${why} — an M2 attachment slot, not a description`,
-            search: P.quoted(field, words.map((w) => `attach ${w}`).join(" ")),
+            title: why,
+            search: P.quoted(field, words.map((w) => Search.keywordValue(ATTACH_WORD, w)).join(" ")),
             finds: `spells using ${words.length > 1 ? "these points" : "this point"}`,
         });
     }
@@ -3118,7 +3075,7 @@
      * @returns {string[]}
      */
     const keywordValues = (tokens, word) =>
-        Search.splitKeyword(tokens, word, state.data).values;
+        Search.splitKeyword(tokens, word).values;
 
     /* An attachment segment lights when a positive attach query in its field (or
    * free text) names points this row carries; a boneset pill when a `boneset`
@@ -3145,16 +3102,18 @@
 
     /* A boneset segment: the body region(s) an AnimKit — or one of its anims —
    * animates ("Upper Body", "Head · Right Hand"). Reads as a dim qualifier on
-   * the pill, searchable via the `boneset` keyword; multi-word names ride the
-   * one keyword (boneset upper body). Shown on the AnimKit head when the whole
-   * kit shares one region, on the anim pill when its anims differ. */
+   * the pill, searchable via the `boneset` keyword. Built exactly like its twin
+   * attachSegment — ONE keyword per region, each quoted if its name is spaced
+   * ("Upper Body") — so the two twins produce the same shape of query. Shown on
+   * the AnimKit head when the whole kit shares one region, on the anim pill when
+   * its anims differ. */
     function bonesetSegment(names) {
         if (!names || !names.length) return null;
         return P.note(names.join(" · "), {
             hit: bonesetIsHit(names),
-            title: `Animates the ${names.join(", ")} — the AnimKit segment's boneset`,
-            search: P.quoted("anim", `${BONESET_WORD} ${names.join(" ")}`),
-            finds: `spells whose animkits animate ${names.length > 1 ? "these regions" : "this region"}`,
+            title: `Animates ${names.join(", ")}`,
+            search: P.quoted("anim", names.map((n) => Search.keywordValue(BONESET_WORD, n)).join(" ")),
+            finds: `spells animating ${names.length > 1 ? "these regions" : "this region"}`,
         });
     }
 

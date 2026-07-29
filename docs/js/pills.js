@@ -79,28 +79,54 @@ window.EpsilookPills = (() => {
     const tip = (lines) => lines.filter(Boolean).join("\n");
 
     /**
-     * A search value as a chip query: `field:value`, quoted when the value has
-     * spaces. Quotes inside the value are dropped — a tag value cannot carry
-     * them, and the substring match does not need them.
-     * @param {string} field
-     * @param {string | number} value
+     * One chip's value as query text — THE canonical rule, and the only one.
+     * A bare word stays bare; a value with spaces takes "grouping quotes"; a
+     * value that already contains phrase quotes takes (parens) instead, so the
+     * two kinds of quote never collide.
+     *
+     * It lives here because pills.js loads first and both sides need it: every
+     * pill query is built through this, and app.js serializes its chips through
+     * it too. They used to disagree — pills.js DELETED inner quotes, which
+     * silently broke any query carrying a quoted keyword value
+     * (`boneset "Upper Body"` came back as `boneset Upper Body`, a different
+     * search). One rule is what makes a pill click round-trip through the URL.
+     * @param {string} text
      * @returns {string}
      */
-    const query = (field, value) => {
-        const v = String(value).replace(/"/g, "");
-        return /\s/.test(v) ? `${field}:"${v}"` : `${field}:${v}`;
-    };
+    const tagValue = (text) =>
+        text.includes('"') ? `(${text})` : /\s/.test(text) ? `"${text}"` : text;
 
     /**
-     * As `query`, but always quoted. Values taken from game data (file names,
-     * creature names, attachment pairs) quote unconditionally: whether today's
-     * value happens to contain a space is not a property worth leaking into the
-     * shared URL a user copies.
+     * A whole chip as query text, optionally negated.
+     * @param {string} field
+     * @param {string} text
+     * @param {boolean} [not]
+     * @returns {string}
+     */
+    const tagQuery = (field, text, not) => `${not ? "-" : ""}${field}:${tagValue(text)}`;
+
+    /**
+     * A search value as a chip query: `field:value`, grouped when it needs it.
      * @param {string} field
      * @param {string | number} value
      * @returns {string}
      */
-    const quoted = (field, value) => `${field}:"${String(value).replace(/"/g, "")}"`;
+    const query = (field, value) => tagQuery(field, String(value));
+
+    /**
+     * As `query`, but a value with no spaces is still quoted. Values taken from
+     * game data (file names, creature names, attachment pairs) quote
+     * unconditionally: whether today's value happens to contain a space is not a
+     * property worth leaking into the shared URL a user copies. A value carrying
+     * phrase quotes still takes the paren form — that is not optional.
+     * @param {string} field
+     * @param {string | number} value
+     * @returns {string}
+     */
+    const quoted = (field, value) => {
+        const v = String(value);
+        return v.includes('"') ? `${field}:(${v})` : `${field}:"${v}"`;
+    };
 
     /**
      * A search value scoped to a category word — `fx:"chain lightning"`.
@@ -726,7 +752,7 @@ window.EpsilookPills = (() => {
         // pill-type registry
         defineType, typesFor, idMatches, scanType, keywordsFor, hintFor, TYPES,
         // composition helpers
-        tip, query, quoted, catQuery, fillTemplate, el,
+        tip, query, quoted, catQuery, tagValue, tagQuery, fillTemplate, el,
         // target-mask vocabulary
         TARGET_CASTER, TARGET_TARGET, TARGET_AREA, TARGET_NOT_CASTER,
         TARGET_MISSILE_DEST, TARGET_ICONS, CUBE_SVG,

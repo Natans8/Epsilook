@@ -28,7 +28,7 @@
     <link rel="icon"
           href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
     <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-    <link rel="stylesheet" href="css/app.css?v=20260729a">
+    <link rel="stylesheet" href="css/app.css?v=20260729c">
     <script>
         // Replay the stored theme before the first paint, so a light theme
         // never flashes dark. Only that: the picker, the default and the
@@ -182,17 +182,17 @@
 
                 <section>
                     <h3>A word, then what it takes</h3>
-                    <p class="help-note">Some words take a value after them, written as the next word (or words).
-                        The search bar draws the word and its value joined together, so you can always see how far the
-                        value reached.</p>
+                    <p class="help-note">Some words take a value after them: <strong>the one word that follows</strong>,
+                        always. The search bar draws the word and its value joined together, so you can see exactly
+                        where the value ends.</p>
                     <ul class="help-ex">
                         <li>
                             <button data-search='model:"attach chest"'></button>
                             where on the model it plays
                         </li>
                         <li>
-                            <button data-search='anim:"boneset upper body"'></button>
-                            which body region moves
+                            <button data-search='anim:(boneset "upper body")'></button>
+                            which body region moves — <strong>quote a value that has a space in it</strong>
                         </li>
                         <li>
                             <button data-search='mech:"seat >2"'></button>
@@ -203,9 +203,9 @@
                             more than four models — <code>count</code> works in every column
                         </li>
                     </ul>
-                    <p class="help-note">A value takes as many words as it needs and no more:
-                        <code>boneset upper body</code> is one region, while <code>boneset head kneel</code> is the
-                        head region <em>and</em> a kneel animation.</p>
+                    <p class="help-note">Anything past that one word is an ordinary search word again, so
+                        <code>boneset head kneel</code> is the head region <em>and</em> a kneel animation. To give a
+                        value more than one word, put it in quotes: <code>attach "right hand"</code>.</p>
                 </section>
 
                 <section>
@@ -457,23 +457,23 @@
     const whTooltips = {colorLinks: false, iconizeLinks: false, renameLinks: false};
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260729a"></script>
-<script src="js/util.js?v=20260729a"></script>
+<script src="js/config.js?v=20260729c"></script>
+<script src="js/util.js?v=20260729c"></script>
 <!-- the theme picker: applies the stored palette and wires the header
      dropdown; only needs config.js + util.js, so it goes on early -->
-<script src="js/theme.js?v=20260729a"></script>
-<script src="js/data.js?v=20260729a"></script>
+<script src="js/theme.js?v=20260729c"></script>
+<script src="js/data.js?v=20260729c"></script>
 <!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
      raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260729a"></script>
-<script src="js/js-blp.js?v=20260729a"></script>
+<script src="js/bufo.js?v=20260729c"></script>
+<script src="js/js-blp.js?v=20260729c"></script>
 <!-- the pill/segment library: shared by app.js (rendering) and search.js
      (the pill-type registry), so it loads before both -->
-<script src="js/pills.js?v=20260729a"></script>
-<script src="js/pilltypes.js?v=20260729a"></script>
-<script src="js/search.js?v=20260729a"></script>
-<script src="js/texture.js?v=20260729a"></script>
-<script src="js/export.js?v=20260729a"></script>
-<script src="js/app.js?v=20260729a"></script>
+<script src="js/pills.js?v=20260729c"></script>
+<script src="js/pilltypes.js?v=20260729c"></script>
+<script src="js/search.js?v=20260729c"></script>
+<script src="js/texture.js?v=20260729c"></script>
+<script src="js/export.js?v=20260729c"></script>
+<script src="js/app.js?v=20260729c"></script>
 </body>
 </html>
