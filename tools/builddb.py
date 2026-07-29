@@ -67,7 +67,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 import dbd  # noqa: E402  (path set above)
 
 try:
-    import duckdb
+    # The `type: ignore` is REQUIRED, not cosmetic: tools/check.py type-checks
+    # all of tools/, and CI runs it on a machine that has never installed
+    # duckdb. Without this, mypy fails with import-not-found and the whole
+    # check goes red over an optional dependency of a development tool.
+    import duckdb  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - the one dependency, and it is optional
     sys.exit(
         "tools/builddb.py needs DuckDB (the only dependency outside the stdlib,\n"
