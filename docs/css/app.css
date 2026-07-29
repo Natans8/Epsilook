@@ -102,9 +102,6 @@
     --q-artifact: #e6cc80;
     --q-heirloom: #00ccff;
 
-    /* command buttons */
-    --cmd-border: #3a4351;
-
     /* How loudly a shape carries the colour family it belongs to: how much of
        --tone fills it, how much of --tone its border is mixed with, and how
        much of --tone survives in its label. Dark asks for almost nothing — a
@@ -236,7 +233,6 @@
     --q-legendary: #bf641d;
     --q-artifact: #a1782b;
     --q-heirloom: #228dae;
-    --cmd-border: #989ddb;
     --group-fill: 8%;
     --tone-fill: 28%;
     --head-fill: 38%;
@@ -296,7 +292,6 @@
     --q-legendary: #bf641d;
     --q-artifact: #a1782b;
     --q-heirloom: #228dae;
-    --cmd-border: #bd9f61;
     --group-fill: 8%;
     --tone-fill: 28%;
     --head-fill: 38%;
@@ -828,11 +823,13 @@ main {
     font-weight: 650;
 }
 
-/* the capsule: a word and its value, held together by one faint fill. The two
+/* the capsule: a word and its value, held together by one faint fill. The
    halves are separate spans only so the word can be tinted and the value not —
-   they must read as one object, hence the shared background and the rounding
-   on the outside corners only. */
-.bar-cap-l, .bar-cap-r {
+   and so an alternation INSIDE the value can get its gold bar (`attach
+   hand|chest`), which splits the value into more pieces still. They must read
+   as one object, hence the shared background, the rounding on the capsule's two
+   outside corners only, and -m for every piece in between. */
+.bar-cap-l, .bar-cap-m, .bar-cap-r {
     background: rgba(var(--overlay-rgb), calc(0.10 * var(--wash-strength)));
 }
 
@@ -840,7 +837,7 @@ main {
    across the bar SHOWS where the value begins and ends. Background only — a
    border or padding here would shift the glyphs out from under the caret, which
    is the one thing the backdrop may never do. */
-.bar-cap-l.on, .bar-cap-r.on {
+.bar-cap-l.on, .bar-cap-m.on, .bar-cap-r.on {
     background: rgba(var(--gold-rgb), calc(0.20 * var(--wash-strength)));
     box-shadow: inset 0 -1px 0 var(--gold-dim);
 }
@@ -851,6 +848,11 @@ main {
 
 .bar-cap-r {
     border-radius: 0 4px 4px 0;
+}
+
+/* squared on both sides: .bar-tok's own radius would nick the shared fill */
+.bar-cap-m {
+    border-radius: 0;
 }
 
 .bar-phrase {
@@ -1566,20 +1568,24 @@ mark.hl {
     display: none;
 }
 
-/* the wowhead link sits at the same quiet level as the commands beside it */
+/* the wowhead link is the strip's last segment — same slab, same divider, so
+   the row carries one object rather than a control plus a stray icon */
 .cmd-row .wh-cmd {
-    width: 1.4rem;
+    width: 1.5rem;
     height: auto;
     margin: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0.65;
-    transition: opacity 0.12s;
+    opacity: 0.7;
+    transition: opacity 0.12s, background-color 0.12s;
 }
 
+/* it does NOT invert like a command does — the favicon is a coloured image,
+   and a gold plate behind it reads as a swatch rather than a hover */
 .cmd-row .wh-cmd:hover {
     opacity: 1;
+    background: rgba(var(--overlay-rgb), calc(0.10 * var(--wash-strength)));
 }
 
 .cmd-row .wh-cmd img {
@@ -2231,36 +2237,75 @@ mark.hl {
 }
 
 /* command buttons: one compact line under the spell name (see .c-name), never
-   wrapping — the strip is what sets that column's minimum width */
+   wrapping — so adding a command to CFG.spellCommands widens the strip rather
+   than folding it onto a second line */
 
-/* These are chat commands you paste into the game, so they are drawn as a
-   command line, not as keycaps. At rest each one is quiet monospace text —
-   no border, no fill, no shadow — because four bordered buttons on every one
-   of ~60 rows outshouted the pills that are the actual payload of a row.
-   The chrome is spent where it is needed instead: on hover and focus. */
+/* ONE segmented control per row, not four buttons.
+ *
+ * What made the keycap version shout was never the borders alone, it was the
+ * count: four separate objects, each ringed, filled, shadowed and bevelled, on
+ * every one of ~60 rows. Stripping all of it off went as far the other way —
+ * four grey words under a name read as a footnote, not as something you click.
+ *
+ * So the ink is spent ONCE, on the strip, and the affordance is per command:
+ * a single quiet slab holds the four, divided by hairlines, and a segment
+ * lights only under the pointer. Three shared rules replace eight button
+ * edges, and the row gains one object instead of four.
+ *
+ * The shape is the app's own: `.tag` already builds a pill out of segments
+ * with [data-sep] hairlines between them, so the strip reads as family. What
+ * keeps it from competing with those pills is that it carries no --tone at all
+ * — monospace text on a neutral wash, with the gold '.' as its only colour.
+ *
+ * It also came out NARROWER, not wider: 216px against the borderless version's
+ * 233px, because the segments buy their padding back from the gaps that used to
+ * sit between them. Both are under .c-name's declared 17rem, so the Name column
+ * is now floored by that rule rather than by the strip, and the table's width
+ * is unchanged either way (measured: 1977px before and after).
+ */
 
 .cmd-row {
-    display: flex;
-    gap: 0.4rem;
-    align-items: center;
+    /* inline, so the strip is only as wide as its commands */
+    display: inline-flex;
+    align-items: stretch;
     flex-wrap: nowrap;
     white-space: nowrap;
-    margin-top: 0.35rem;
+    margin-top: 0.32rem;
+    border-radius: 6px;
+    /* an overlay wash lifts this off a dark row and sinks it into a light one,
+       so the slab reads as a surface of its own in every palette */
+    background: rgba(var(--overlay-rgb), calc(0.07 * var(--wash-strength)));
+}
+
+/* the ends are rounded by their segments, NOT by overflow:hidden on the strip:
+   a clipped focus ring is not a focus ring */
+.cmd-row > :first-child {
+    border-radius: 6px 0 0 6px;
+}
+
+.cmd-row > :last-child {
+    border-radius: 0 6px 6px 0;
 }
 
 .cmd {
-    padding: 0.1rem 0.2rem;
+    padding: 0.14rem 0.45rem;
     text-align: center;
-    /* transparent, not absent: the hover border must not reflow the strip */
-    border: 1px solid transparent;
-    border-radius: 5px;
+    border: 0;
     background: none;
-    color: var(--text-muted);
-    font-size: 0.74rem;
+    color: var(--text);
+    font-size: 0.72rem;
     font-weight: 500;
     font-family: Consolas, "Cascadia Mono", monospace;
     white-space: nowrap;
-    transition: color 0.12s, border-color 0.12s, background-color 0.12s, transform 0.06s;
+    transition: color 0.12s, background-color 0.12s, transform 0.06s;
+}
+
+/* the segment dividers — one hairline between neighbours, shared. Same wash
+   as a pill's own meta divider (.tag [data-role="meta"]), for the same reason:
+   a hairline is a low-alpha tint and scales with --wash-strength, so it does
+   not need a colour of its own in any palette */
+.cmd + .cmd, .cmd-row .wh-cmd {
+    border-left: 1px solid rgba(var(--overlay-rgb), calc(0.12 * var(--wash-strength)));
 }
 
 /* the command sigil — the one mark that says "this is a command" */
@@ -2268,14 +2313,32 @@ mark.hl {
     color: var(--gold);
 }
 
+/* Hover INVERTS the segment rather than tinting it — and that is a contrast
+   decision as much as a visual one. A gold WASH under gold text works on dark
+   and collapses on the light palettes, where --gold is a dark bronze and the
+   wash is made of the same bronze: measured 3.69:1 on moonwell, under AA, and
+   no alpha fixes it because the slab has already spent the headroom (a resting
+   dot sits at 5.45:1 there). Inverting sidesteps the stack entirely — the text
+   lands on solid gold instead of on gold-over-slab-over-row — and measures
+   10.7:1 dark / 6.78 moonwell / 6.79 vellum. One rule, three palettes, no
+   per-theme branch.
+
+   The sigil goes with it: on a gold fill a gold dot would disappear, and by
+   then the whole segment is the accent, so it has nothing left to mark. */
 .cmd:hover {
-    border-color: var(--cmd-border);
-    background: rgba(var(--gold-rgb), 0.07);
-    color: var(--gold);
+    background: var(--gold);
+    color: var(--bg-row);
 }
 
+.cmd:hover .cmd-dot {
+    color: inherit;
+}
+
+/* pressed shrinks in place: the strip is a slab of adjacent segments, so a
+   translate would push one of them out through its edge, and any recolour of
+   the gold would eat the contrast the inversion just bought */
 .cmd:active {
-    transform: translateY(1px);
+    transform: scale(0.94);
 }
 
 /* wowhead links */
