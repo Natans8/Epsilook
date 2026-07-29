@@ -318,7 +318,6 @@
             if (isChipField(field)) {
                 const text = (m[3] ?? m[4] ?? m[5] ?? "").trim();
                 if (text) parts.push({field, text, not});
-                ensureFieldVisible(field);
             } else {
                 const t = m[0].trim(); // unknown prefixes and quotes stay literal
                 if (t && t !== '""') pushFree(t);
@@ -330,6 +329,7 @@
     // put a parsed chip list in the bar, caret after the last one; syncBar
     // pulls the trailing free run back into the input
     function setChips(parts) {
+        ensureFieldsVisible(parts);
         state.chips = parts;
         state.activeField = null;
         state.activeNot = false;
@@ -4299,6 +4299,15 @@
         state.sort = known ? {key, dir: s.startsWith("-") ? -1 : 1} : {key: "auto", dir: 1};
     }
 
+    // Un-hide every column a freshly loaded chip list searches into. This is
+    // deliberately NOT inside parseQueryParts: that parser is also how the help
+    // dialog draws its examples (decorateExamples), and merely rendering help
+    // text must not touch the user's column choices — it used to, which is why
+    // hiding a column never survived a reload.
+    function ensureFieldsVisible(parts) {
+        for (const p of parts) ensureFieldVisible(p.field);
+    }
+
     // A shared link may search a field whose column is hidden here —
     // honor the link by un-hiding that column for this session.
     function ensureFieldVisible(field) {
@@ -4371,6 +4380,7 @@
                     && (/(^|\s)-?[a-z]+:\S/i.test(input.value) || ID_CMD_PASTE.test(input.value))) {
                     const parts = parseQueryParts(input.value);
                     if (parts.some((p) => p.field !== "all")) {
+                        ensureFieldsVisible(parts); // splices chips in without setChips
                         const last = parts[parts.length - 1];
                         const trailing = last && last.field === "all" ? parts.pop().text : "";
                         const at = Math.min(state.pos, state.chips.length);
