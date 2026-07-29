@@ -220,16 +220,17 @@ def parse(text: str, table: str) -> Definition:
         if block is not None:
             m = _BUILD_COLUMN_RE.match(line)
             if m:
-                annotations = (m["annotations"] or "").split(",")
+                # not `annotations`: that name is taken by the __future__ import
+                annos = (m["annotations"] or "").split(",")
                 block.columns.append(
                     BuildColumn(
                         name=m["name"],
                         width=int(m["width"]) if m["width"] else None,
                         unsigned=bool(m["unsigned"]),
                         array=int(m["array"]) if m["array"] else None,
-                        is_id="id" in annotations,
-                        is_relation="relation" in annotations,
-                        noninline="noninline" in annotations,
+                        is_id="id" in annos,
+                        is_relation="relation" in annos,
+                        noninline="noninline" in annos,
                     )
                 )
 

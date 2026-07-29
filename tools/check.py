@@ -43,11 +43,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SITE = ROOT / "site"
-INDEX = SITE / "index.html"
 MANIFEST = SITE / "data" / "versions.json"
 
-# <link href="css/app.css?v=X"> / <script src="js/app.js?v=X">
-ASSET_RE = re.compile(r'(?:href|src)="((?:css|js)/[^"?]+)\?v=([0-9a-z]+)"')
+# <link href="css/app.css?v=X"> / <script src="js/app.js?v=X">, in EVERY page
+# under site/. 404.html loads the same stylesheet by a root-absolute href
+# (/Epsilook/css/...) on purpose, so the leading path is matched loosely and
+# only the css/js tail is captured - that tail is what resolves against site/.
+ASSET_RE = re.compile(r'(?:href|src)="[^"]*?((?:css|js)/[^"?/]+)\?v=([0-9a-z]+)"')
 
 # a change to the css, the bundle's sources or the build itself needs a bump
 # (site/js is generated and gitignored, so it can never appear in a diff);
@@ -139,27 +141,35 @@ def asset_versions(html: str) -> list[tuple[str, str]]:
     return ASSET_RE.findall(html)
 
 
+def site_pages() -> list[Path]:
+    return sorted(SITE.glob("*.html"))
+
+
 # --------------------------------------------------------------- repo guards
 
 
 def check_assets(rep: Report, built: bool) -> str | None:
     """One ?v= string, every reference resolving.
 
-    Returns the current version string, or None if index.html has no assets.
+    Returns the current version string, or None if site/ has no assets.
     `built` says whether the bundle was (re)built this run: site/js is
     generated and gitignored, so on a fresh checkout its absence means "not
     built yet", not "broken" - only a run that built may insist it exists.
+
+    Every page under site/ counts, not just index.html: they share one
+    stylesheet, so a page left behind by a bump serves it from a stale URL.
     """
-    html = INDEX.read_text(encoding="utf-8")
-    found = asset_versions(html)
+    pages = site_pages()
+    found = [ref for p in pages for ref in asset_versions(p.read_text(encoding="utf-8"))]
     if not found:
-        rep.fail("asset ?v=", "index.html references no versioned css/js at all")
+        rep.fail("asset ?v=", "site/*.html reference no versioned css/js at all")
         return None
 
     versions = {v for _, v in found}
     if len(versions) > 1:
         listing = ", ".join(sorted(versions))
-        rep.fail("asset ?v=", f"{len(versions)} different strings in index.html: {listing}")
+        names = ", ".join(p.name for p in pages)
+        rep.fail("asset ?v=", f"{len(versions)} different strings across {names}: {listing}")
         return None
     version = versions.pop()
     rep.ok("asset ?v=", f"{version} on all {len(found)} references")
@@ -197,8 +207,9 @@ def check_bump(rep: Report, base: str, version: str | None) -> None:
         return
 
     changed = changed_under(base, BUMP_PATHS)
-    deployed_html = git("show", f"{base}:site/index.html")
-    deployed = {v for _, v in asset_versions(deployed_html)}
+    deployed = {v
+                for p in site_pages()
+                for _, v in asset_versions(git("show", f"{base}:site/{p.name}"))}
 
     if not changed:
         rep.ok("?v= bump", f"no css/js change against {base}")
@@ -213,7 +224,7 @@ def check_bump(rep: Report, base: str, version: str | None) -> None:
                  f"{len(changed)} css/js file(s) changed but ?v= is still "
                  f"{version} - run tools/bump.py  [{head}{more}]")
     else:
-        rep.ok("?v= bump", f"{sorted(deployed)[0]} -> {version}, {len(changed)} file(s)")
+        rep.ok("?v= bump", f"{max(deployed)} -> {version}, {len(changed)} file(s)")
 
 
 def check_line_endings(rep: Report) -> None:

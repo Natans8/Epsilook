@@ -64,7 +64,7 @@ modelCat("item", "An in-game item's model, held by the caster (SpellVisualEffect
 T({
     key: "model:equipped", field: "model", word: "equipped",
     hint: "Weapon the caster already has — main hand, off hand, ranged or ammo",
-    when: (d) => !!d.hasSyntheticFiles,
+    when: (d) => d.hasSyntheticFiles,
 });
 
 /* Mounts (Mount.db2 keyed by SourceSpellID). Not a model CATEGORY — the

@@ -141,8 +141,7 @@ export function wireEvents() {
     input.addEventListener("blur", markCaretCapsule);
 
     input.addEventListener("keydown", (e) => {
-        const box = suggestBox;
-        if (!box.hidden) {
+        if (!suggestBox.hidden) {
             if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                 e.preventDefault();
                 moveSuggestSelection(e.key === "ArrowDown" ? 1 : -1);

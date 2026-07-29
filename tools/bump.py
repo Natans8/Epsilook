@@ -34,9 +34,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-INDEX = ROOT / "site" / "index.html"
+SITE = ROOT / "site"
 
-ASSET_RE = re.compile(r'((?:href|src)="(?:css|js)/[^"?]+\?v=)([0-9a-z]+)(")')
+# EVERY page under site/, not just index.html: 404.html loads the same
+# stylesheet and its href is root-absolute (/Epsilook/css/...) on purpose, so
+# the leading path is matched loosely and only the css/js tail is anchored.
+ASSET_RE = re.compile(r'((?:href|src)="[^"]*?(?:css|js)/[^"?/]+\?v=)([0-9a-z]+)(")')
 PARSE_RE = re.compile(r"^(\d{8})([a-z]*)$")
 
 GREEN, YELLOW, DIM, RESET = "\033[32m", "\033[33m", "\033[2m", "\033[0m"
@@ -103,28 +106,36 @@ def main() -> int:
                     help="bump even when the current string already differs from the deployed one")
     args = ap.parse_args()
 
-    html = INDEX.read_text(encoding="utf-8")
-    current = versions_in(html)
+    pages = sorted(SITE.glob("*.html"))
+    sources = {p: p.read_text(encoding="utf-8") for p in pages}
+    current = {v for text in sources.values() for v in versions_in(text)}
     if not current:
-        print("site/index.html references no versioned assets", file=sys.stderr)
+        print("site/*.html reference no versioned assets", file=sys.stderr)
         return 1
     if len(current) > 1:
-        print(f"{YELLOW}index.html carries {len(current)} different strings "
+        print(f"{YELLOW}site/ carries {len(current)} different strings "
               f"({', '.join(sorted(current))}) - rewriting all of them{RESET}")
 
     if not args.no_fetch and not args.explicit:
         remote, _, branch = args.base.partition("/")
         git("fetch", "--quiet", remote, branch or "main")
 
-    deployed_html = git("show", f"{args.base}:site/index.html")
-    deployed = versions_in(deployed_html) if deployed_html else set()
+    deployed = set()
+    for page in pages:
+        deployed_html = git("show", f"{args.base}:site/{page.name}")
+        if deployed_html:
+            deployed |= versions_in(deployed_html)
     if not deployed:
         print(f"{YELLOW}cannot read the deployed ?v= from {args.base} - "
               f"falling back to the local string{RESET}")
         deployed = set(current)
 
-    now = sorted(current)[0]
-    was = sorted(deployed)[0]
+    # the NEWEST string on each side, never the lowest: with more than one page
+    # they can disagree (one left behind by an earlier bump), and stepping off
+    # the laggard would walk the suffix backwards - re-issuing a string some
+    # browser already has cached, which is the one thing a bump must never do
+    now = max(current)
+    was = max(deployed)
     # site/js is the gitignored build output, so the served JS changes when
     # its SOURCES (or the build itself) do - the same paths check.py watches
     changed = changed_under(args.base, ("site/css", "src", "tools/build.mjs"))
@@ -146,12 +157,18 @@ def main() -> int:
         while new in current | deployed:            # never re-use a live string
             new = next_version(new, new[:8])
 
-    html2, count = ASSET_RE.subn(lambda m: f"{m.group(1)}{new}{m.group(3)}", html)
+    total, touched = 0, []
+    for page in pages:
+        text, count = ASSET_RE.subn(lambda m: f"{m.group(1)}{new}{m.group(3)}", sources[page])
+        if not count:
+            continue
+        if not args.dry_run:
+            page.write_text(text, encoding="utf-8", newline="\n")
+        total += count
+        touched.append(page.name)
     verb = "would rewrite" if args.dry_run else "rewrote"
-    if not args.dry_run:
-        INDEX.write_text(html2, encoding="utf-8", newline="\n")
-    print(f"{GREEN}{was} -> {new}{RESET}  {DIM}{verb} {count} references "
-          f"in site/index.html{RESET}")
+    print(f"{GREEN}{was} -> {new}{RESET}  {DIM}{verb} {total} references "
+          f"in {', '.join(touched)}{RESET}")
     return 0
 
 

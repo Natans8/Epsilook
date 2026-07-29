@@ -119,8 +119,6 @@ def main() -> int:
 
     # 1. wait for the new index.html to be the one Pages serves
     deadline = time.time() + (0 if args.now else args.timeout)
-    html = ""
-    served = ""
     attempt = 0
     while True:
         attempt += 1

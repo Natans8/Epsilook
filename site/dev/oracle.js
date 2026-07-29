@@ -88,6 +88,7 @@ window.Oracle = (() => {
      * writing it as an assertion means the answer is PASS/FAIL rather than a
      * table someone still has to compare by eye.
      * @param {Array<Array<string>>} groups
+     * @param {{v?: string}} [opts]
      */
     function same(groups, opts = {}) {
         const out = groups.map((group) => {
