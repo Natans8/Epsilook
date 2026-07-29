@@ -597,10 +597,7 @@ main {
 /* only the true trailing gap (nothing after it) fills the rest of the
  * line; a gap before or between chips hugs its content instead, so it
  * doesn't shove the chips after it away */
-/* position: relative makes this the offsetParent of both #q and the highlight
-   backdrop, so syncHighlight can copy the input's box in one coordinate system */
 #editwrap {
-    position: relative;
     display: inline-flex;
     align-items: baseline;
     max-width: 100%;
@@ -630,44 +627,10 @@ main {
     background: none;
     border: none;
     outline: none;
-    /* over the highlight backdrop, so the caret and native selection stay on top */
-    position: relative;
-    z-index: 1;
 }
 
 #q::placeholder {
     color: var(--text-dim);
-}
-
-/* The highlight backdrop. Every metric here is #q's, because a glyph that lands
-   one pixel off the character it colours reads as a rendering bug; the box
-   itself is copied from the input at runtime (syncHighlight). Inert by
-   construction — the input above it owns every interaction. */
-#qhl {
-    position: absolute;
-    z-index: 0;
-    pointer-events: none;
-    overflow: hidden;
-    white-space: pre;
-    font-family: inherit;
-    font-size: 1.1rem;
-    line-height: 1.2;
-    padding: 0.15rem 0;
-    color: var(--text);
-}
-
-/* Only while there is something to draw: an empty input must keep its
-   placeholder, and a browser with the backdrop hidden must keep readable text
-   rather than a transparent one. */
-#editwrap.hl #q {
-    color: transparent;
-    caret-color: var(--text);
-}
-
-/* selected text redraws itself above the backdrop, so a selection still shows
-   the words rather than a bare highlight block */
-#editwrap.hl #q::selection {
-    color: var(--text);
 }
 
 #editwrap:not(.fill):not(.editing) #q {
@@ -800,72 +763,6 @@ main {
     max-width: 24rem;
 }
 
-/* ---- what the query grammar recognises, marked in place -------------------
-   Three roles, no more: the thing the grammar KNOWS (a category word, a target
-   word, a numeric axis, an alternation bar), a meta KEYWORD with its value —
-   drawn as a small tag inside the tag, because that is what it is — and a
-   quoted PHRASE. Nothing is ever marked wrong: a word the grammar does not
-   know is an ordinary text search, and drawing it as one is the truth.
-
-   These style spans in two places at once: inside a committed chip (real DOM,
-   native title tooltips) and inside #qhl (the input's backdrop, where app.js
-   serves the tooltip by hit-test). One rule set for both is the point.
-
-   METRICS ARE OFF-LIMITS IN THE BACKDROP. The caret and the native selection
-   follow the input's own unstyled text, so anything that changes an advance
-   width there — weight, italics, letter-spacing, padding — slides the visible
-   glyphs out from under the caret. Colour and text-decoration are free; weight
-   and italics live under `.qchip-text`, where there is no caret to betray. */
-.bar-tok {
-    border-radius: 3px;
-}
-
-/* app.js sets .hover on the backdrop span under the pointer — the backdrop is
-   pointer-events: none, so :hover can never fire there on its own */
-.bar-tok.hover, .qchip-text .bar-tok:hover {
-    background: rgba(var(--overlay-rgb), calc(0.14 * var(--wash-strength)));
-}
-
-.qchip-text .bar-tok {
-    cursor: help;
-}
-
-.bar-kw, .bar-axis, .bar-alt, .bar-meta-key {
-    color: var(--gold);
-}
-
-/* weight only where there is no caret to slide out from under (see above) */
-.qchip-text .bar-kw,
-.qchip-text .bar-axis,
-.qchip-text .bar-alt,
-.qchip-text .bar-meta-key {
-    font-weight: 650;
-}
-
-/* A meta keyword and its value read as one small tag: the keyword tinted and
-   the value plain, exactly like the `model:` label and text of the chip around
-   it. Background rather than italics, because a background costs no width. */
-.bar-meta-key, .bar-meta-val {
-    background: rgba(var(--overlay-rgb), calc(0.10 * var(--wash-strength)));
-}
-
-.bar-meta-key {
-    border-radius: 4px 0 0 4px;
-}
-
-.bar-meta-val {
-    border-radius: 0 4px 4px 0;
-}
-
-.bar-phrase {
-    text-decoration: underline dotted var(--gold-dim);
-    text-underline-offset: 3px;
-}
-
-.bar-num {
-    color: var(--gold-dim);
-}
-
 /* a glyph, not text — centre it rather than sitting it on the chip's baseline */
 .qchip-x {
     align-self: center;
@@ -952,13 +849,6 @@ main {
 
 .suggest-field {
     font-family: Consolas, "Cascadia Mono", monospace;
-}
-
-/* typing "-mod" suggests an EXCLUSION, so the suggestion has to look like the
-   chip it would make — the minus is already in the input, and offering a plain
-   "model:" for it reads as the app ignoring what was typed */
-.suggest-field.not {
-    color: var(--danger);
 }
 
 .suggest-hint {
@@ -1190,66 +1080,6 @@ main {
     color: var(--gold);
     border-color: var(--gold-dim);
     background: rgba(var(--gold-rgb), calc(0.08 * var(--wash-strength)));
-}
-
-/* An example redrawn as the CHIPS it makes (decorateExamples). The button
-   itself stops being a box and becomes the bar's own row of tags, so reading
-   the help and reading the search bar are the same act. Metrics are the chips'
-   own — this is static DOM, so weight and padding are free here. */
-#help ul.help-ex button.ex-chips,
-.es-examples button.ex-chips {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.3rem;
-    font-family: inherit;
-    background: none;
-    border: none;
-    padding: 0.1rem 0.15rem;
-}
-
-#help ul.help-ex button.ex-chips:hover,
-#help ul.help-ex button.ex-chips:focus-visible,
-.es-examples button.ex-chips:hover,
-.es-examples button.ex-chips:focus-visible {
-    background: rgba(var(--gold-rgb), calc(0.08 * var(--wash-strength)));
-    border: none;
-}
-
-.exchip {
-    display: inline-flex;
-    align-items: baseline;
-    padding: 0.05rem 0.4rem;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    background: var(--bg);
-}
-
-/* free text is not a box in the bar either — it must not become one here */
-.exchip.exfree {
-    border: none;
-    background: none;
-    padding: 0.05rem 0;
-}
-
-.exchip.not {
-    border-color: rgba(var(--danger-rgb), 0.5);
-    background: rgba(var(--danger-rgb), calc(0.08 * var(--wash-strength)));
-}
-
-.exchip .qchip-field {
-    cursor: inherit;
-    margin-right: 0.3rem;
-    padding: 0;
-}
-
-.exchip .qchip-field:hover {
-    text-decoration: none;
-    background: none;
-}
-
-.exchip .bar-tok {
-    cursor: inherit;
 }
 
 /* --------------------------------------------------------------- toolbar */

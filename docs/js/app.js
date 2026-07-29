@@ -296,10 +296,6 @@
         // inside "quoted phrases" the text stays literal
         str = (str || "").replace(ID_CMD_REWRITE,
             (m, pre) => pre === undefined ? m : pre + "id:");
-        // `model:fire | frost` is one tag with two alternatives — the bar is the
-        // operator wherever it lands, so the spaces come out here too, before
-        // the tag/free-text split decides what belongs to which chip
-        str = joinAlternations(str);
         const parts = [];
         const pushFree = (word) => {
             const last = parts[parts.length - 1];
@@ -357,16 +353,7 @@
     function altsOf(text) {
         if (text.includes("|")) {
             const parts = text.split("|").filter(Boolean);
-            if (parts.length > 1) {
-                // A META KEYWORD CARRIES ACROSS THE BAR. `attach:right|left` is
-                // two attachment points, not "the point right" or "the word
-                // left" — so an alternative that names no keyword of its own
-                // inherits the first one's. Spelling it out in full
-                // (`attach:right|attach:left`) means the same thing, and mixing
-                // keywords (`attach:right|boneset:head`) keeps both.
-                const kw = (/^[a-z]+:/.exec(parts[0]) || [""])[0];
-                return kw ? parts.map((p) => (/^[a-z]+:/.test(p) ? p : kw + p)) : parts;
-            }
+            if (parts.length > 1) return parts;
         }
         if (text.includes(",")) {
             const parts = text.split(",").filter(Boolean);
@@ -375,69 +362,17 @@
         return [text];
     }
 
-    /**
-     * Pull the whitespace out from around every `|`, so alternation reads the
-     * way people write it: `fire | frost` is the same query as `fire|frost`.
-     *
-     * It has to happen before tokenizing rather than inside it, because the
-     * spaces would otherwise have already made three tokens out of what is one
-     * choice — and a lone `|` token is meaningless in every field.
-     *
-     * Two things are left alone:
-     *   - QUOTED SPANS, because quoting is how you ask for the literal
-     *     character. (Outside them a pipe can only be the operator: no corpus in
-     *     any pack contains one, measured across every pack.)
-     *   - a `|` followed by a real FIELD TAG. `a | model:b` is two search terms
-     *     with a stray bar between them, not one alternation — joining there
-     *     would swallow the tag into a free-text word. `attach:right | left` is
-     *     unaffected: `attach` is a keyword, not a field.
-     *
-     * A comma joins the same way, but only BETWEEN DIGITS (`id:133, 116`).
-     * Spell names really do contain commas — 399 of them match "e," on 9.2.7 —
-     * so `name:Ashes, Ashes` has to keep its space and its literal comma.
-     * @param {string} text
-     * @returns {string}
-     */
-    const joinAlternations = (text) => text.split(/("[^"]*"?)/)
-        .map((part, i) => (i % 2 ? part : part
-            .replace(/\s*\|\s*/g, (m, off, s) => {
-                const tag = /^-?([a-z]+):/i.exec(s.slice(off + m.length));
-                return tag && isChipField(canonField(tag[1].toLowerCase())) ? m : "|";
-            })
-            .replace(/(\d)\s*,\s*(?=#?\d)/g, "$1,")))
-        .join("");
-
     // chip text -> search tokens: words split on whitespace, except "quoted
     // spans" which stay whole — an exact phrase, spaces and word order
     // preserved. An unclosed quote runs to the end of the text (so a phrase
     // matches live while it's still being typed). Each token carries its
     // alternatives (see altsOf); search.js distributes over them.
-    //
-    // A meta keyword may quote ITS OWN value — `boneset:"upper body"` — so the
-    // first alternative binds a `keyword:` prefix to the quoted span that
-    // follows it. Without that the quote would start a new token and the
-    // keyword would be left with nothing, which is the only way to write a
-    // multi-word value now that the keyword takes exactly one.
-    const TOKEN_RE = /([a-z]+:)"([^"]*)(?:"|$)|"([^"]*)(?:"|$)|([^\s"]+)/g;
-
     function tokenizeQuery(text) {
         const tokens = [];
-        const flat = (s) => s.replace(/\s+/g, " ").trim();
-        for (const m of joinAlternations(text.toLowerCase()).matchAll(TOKEN_RE)) {
-            if (m[1] !== undefined) {
-                // keyword:"quoted value" — quoted, so the value is literal
-                const t = m[1] + flat(m[2]);
-                if (flat(m[2])) tokens.push({text: t, alts: [t]});
-                continue;
-            }
-            const quoted = m[3] !== undefined;
-            const t = flat(quoted ? m[3] : m[4]);
-            // a token of nothing but separators is punctuation left over from a
-            // half-written alternation (`model:fire | anim:kneel`) — it can never
-            // match anything, so it must not narrow the search to nothing either
-            if (t && (quoted || !/^[|,]+$/.test(t))) {
-                tokens.push({text: t, alts: quoted ? [t] : altsOf(t)});
-            }
+        for (const m of text.toLowerCase().matchAll(/"([^"]*)(?:"|$)|([^\s"]+)/g)) {
+            const quoted = m[1] !== undefined;
+            const t = (quoted ? m[1] : m[2]).replace(/\s+/g, " ").trim();
+            if (t) tokens.push({text: t, alts: quoted ? [t] : altsOf(t)});
         }
         return tokens;
     }
@@ -523,12 +458,7 @@
                 label.dataset.chipNot = String(idx);
                 chip.appendChild(label);
             }
-            // the chip's own text carries the same keyword marking the input
-            // does — one classifier, so a word cannot look like vocabulary while
-            // being typed and like plain text once committed
-            const textSpan = el("span", "qchip-text");
-            textSpan.appendChild(highlightBar(c.field, c.text));
-            chip.appendChild(textSpan);
+            chip.appendChild(el("span", "qchip-text", c.text));
             if (!isFree) {
                 const x = el("button", "qchip-x", "×");
                 x.type = "button";
@@ -582,9 +512,6 @@
         } else {
             input.style.width = Math.max(input.value.length, 1) + "ch";
         }
-        // the highlight backdrop copies the box this just settled, so it rides
-        // the one function every value/width change already goes through
-        syncHighlight();
     }
 
     function activateField(field, {not = false} = {}) {
@@ -948,41 +875,37 @@
         both: "Plays on the caster and the target",
     };
 
-    /* The two meta keywords, written `keyword:value` as ONE token — the point
-   * and region NAMES stay data values, so only the keyword itself is ever
-   * offered. See the meta-keyword note in search.js for why one token. */
+    /* The attachment-point keyword. It is the ONE attachment meta-word that
+   * autocompletes: the point NAMES are data values (the user types the point
+   * after it, `attach chest`). Offered only in the two columns that render
+   * attachment segments, and only when the pack actually carries them. */
     const ATTACH_WORD = "attach";
+    // the anim-column twin of `attach`: the body region an AnimKit animates
+    // ("boneset upper body", "boneset head"). The region NAMES are data values
+    // the user types after the keyword, so only the keyword autocompletes.
     const BONESET_WORD = "boneset";
 
     /**
-     * One meta keyword: not a kind of content, but a place — where on the model
-     * something plays, which body region an animation moves. `when` gates it on
-     * the loaded pack, exactly as a pill type's does, so a pack with no
-     * attachment data never suggests `attach:`.
-     *
-     * `value` names what it takes and `example` shows one; both feed the
-     * autocomplete entry and the bar's hover text, so the description of the
-     * keyword is written once.
-     * @type {{word: string, value: string, example: string, fields: string[],
+     * One meta word: not a kind of content, but an axis any chip in `fields`
+     * can carry. `when` gates it on the loaded pack, exactly as a pill type's
+     * does — a pack with no attachment data never suggests `attach`.
+     * @type {{word: string, hint: string, fields: string[],
      *         when?: (d: SpellData) => boolean}[]}
      */
     const META_WORDS = [
         {
             word: ATTACH_WORD, fields: ["model", "fx"],
-            value: "attachment point", example: "attach:chest",
+            hint: "Attachment point follows, e.g. attach chest or attach spelllefthand",
             when: (d) => !!d.attachmentNames && Object.keys(d.attachmentNames).length > 0,
         },
         {
             word: BONESET_WORD, fields: ["anim"],
-            value: "body region", example: 'boneset:"upper body"',
+            hint: "Body region an animkit animates follows, e.g. boneset upper body or boneset head",
             when: (d) => !!d.bonesetNames && d.bonesetNames.length > 0,
         },
     ];
-
-    /** How a meta keyword is written and offered: with its colon, never bare. */
-    const metaKey = (word) => word + ":";
-    const metaHint = (m) =>
-        `${m.value[0].toUpperCase() + m.value.slice(1)} — write it as one word, e.g. ${m.example}`;
+    // meta words that take an argument after them get a trailing space on pick
+    const META_KEYWORDS = new Set(META_WORDS.map((m) => m.word));
 
     /**
      * The words a field offers in autocomplete, with their descriptions: its
@@ -992,42 +915,16 @@
      * @returns {{words: string[], titles: Record<string, string>} | null}
      *   Null = the field has no category words at all.
      */
-    /* The numeric axes every column shares: `count` is the size of the column
-   * itself, so it is offered wherever there is something to count — which is
-   * every column that has category words at all. */
-    const COUNT_AXIS_HINT = "How many entries this column has — count>4, count=0";
-
-    /** An axis reads as a comparison, so the suggestion says so. */
-    const axisHint = (axis, hint) =>
-        `${hint ? hint + " — " : ""}takes a comparison, e.g. ${axis}>2`;
-
     function fieldCategories(field) {
         const d = state.data;
         // mech joins the list because the non-visual categories moved there —
         // its words come from the same registry, so nothing else needed saying
         if (!d || !["model", "sound", "anim", "fx", "mech"].includes(field)) return null;
         const {words, titles} = P.keywordsFor(field, d);
-        // Named numeric axes (mech:seats>2, fx:scale>=100). An axis named after
-        // its own category word does not get a second entry — the word is already
-        // in the list, and its description gains the comparison form instead.
-        for (const a of P.axesFor(field, d)) {
-            if (a.own && titles[a.axis]) {
-                titles[a.axis] = `${titles[a.axis].split(" (")[0]} — or compare: ${a.axis}>50`;
-                continue;
-            }
-            if (words.includes(a.axis)) continue;
-            words.push(a.axis);
-            titles[a.axis] = axisHint(a.axis, a.hint);
-        }
-        words.push(Search.COUNT_AXIS);
-        titles[Search.COUNT_AXIS] = COUNT_AXIS_HINT;
-        // meta keywords are offered WITH their colon, because that is how they
-        // are written — completing to a bare `attach` would leave the user one
-        // invisible character short of a working query
         for (const meta of META_WORDS) {
             if (!meta.fields.includes(field) || (meta.when && !meta.when(d))) continue;
-            words.push(metaKey(meta.word));
-            titles[metaKey(meta.word)] = metaHint(meta);
+            words.push(meta.word);
+            titles[meta.word] = meta.hint;
         }
         // every column that draws target icons can be filtered by them
         return {
@@ -1045,12 +942,7 @@
             return fieldCategories(state.activeField) ? updateCategorySuggest() : hideSuggest();
         }
         let word = input.value.split(/\s+/).pop().toLowerCase();
-        // "-mec" suggests mech: as an EXCLUSION, and says so: the minus is part of
-        // what the user is typing, so the suggestion has to show the tag they
-        // would actually get. selectSuggestion re-reads the same "-" from the
-        // input, so the two can't disagree about which it is.
-        const not = word.startsWith("-");
-        if (not) word = word.slice(1);
+        if (word.startsWith("-")) word = word.slice(1); // "-mec" suggests mechanic: as an exclusion
         if (word.length < 2) return hideSuggest();
         // hidden columns don't suppress suggestions — an explicit field search
         // un-hides its column anyway (ensureFieldVisible)
@@ -1062,10 +954,8 @@
         matches.forEach(([key, f], i) => {
             const b = el("button", "suggest-item");
             markSuggestOption(b, i);
-            b.appendChild(el("span", `suggest-field f-${key}${not ? " not" : ""}`,
-                `${not ? "−" : ""}${key}:`));
-            b.appendChild(el("span", "suggest-hint",
-                not ? `hide spells by ${f.short}` : f.hint));
+            b.appendChild(el("span", `suggest-field f-${key}`, `${key}:`));
+            b.appendChild(el("span", "suggest-hint", f.hint));
             b.dataset.field = key;
             box.appendChild(b);
         });
@@ -1111,16 +1001,12 @@
         qInput.removeAttribute("aria-activedescendant");
     }
 
-    // Complete the partial last word of the chip's text to the category word,
-    // leaving the caret hard against its last character. NOTHING is appended:
-    // a meta keyword used to get a trailing space ready for its argument, which
-    // was invisible at the end of the input — the caret looked like it sat on
-    // the keyword, then jumped a space on the next keystroke, and a space typed
-    // by hand made two. The keyword now carries its own colon (attach:), so
-    // there is nothing to leave room for.
+    // complete the partial last word of the chip's text to the category word.
+    // a meta keyword (attach/boneset) takes an argument after it, so leave a
+    // trailing space ready for it (attach chest) rather than butting the caret
     function applyCategoryWord(word) {
         const input = qInput;
-        input.value = input.value.replace(/\S*$/, word);
+        input.value = input.value.replace(/\S*$/, word) + (META_KEYWORDS.has(word) ? " " : "");
         hideSuggest();
         input.focus();
         input.setSelectionRange(input.value.length, input.value.length);
@@ -1154,329 +1040,6 @@
         const not = /(^|\s)-\S*$/.test(input.value);
         input.value = input.value.replace(/\S+$/, "").trimEnd();
         activateField(field, {not});
-    }
-
-    /* ------------------------------------------------ bar syntax highlighting
-
-   * THE BAR HIGHLIGHTS, IT DOES NOT RE-RENDER. Every character stays where it
-   * was typed and stays selectable and copyable — the bar's text is what gets
-   * pasted into Discord and into another search bar, so it must never become a
-   * row of mini-pills that reads differently from what the user wrote. Colour
-   * and weight go OVER the exact characters instead.
-   *
-   * Two surfaces, one classifier:
-   *   - a committed chip's text is our own DOM, so its spans carry `title` and
-   *     hover natively;
-   *   - an <input> cannot hold markup, so the same spans are drawn on a
-   *     backdrop (#qhl) sitting exactly under the input, whose own text goes
-   *     transparent. The backdrop is pointer-events: none — the input keeps
-   *     every click, caret and selection — so its tooltip is served by
-   *     hit-testing the spans under the pointer (barHover below).
-   *
-   * WHAT IS MARKED is only what the grammar actually knows: category words,
-   * meta keywords with their value, target words, named numeric axes,
-   * alternation bars, quoted phrases, and exact ids where a bare number means
-   * one.
-   *
-   * NOTHING IS EVER MARKED WRONG. Anything the grammar does not recognise is a
-   * plain text search and is drawn as plain text — that is what it does, so
-   * there is nothing to warn about. (An earlier pass squiggled an unknown
-   * numeric axis; `mech:seatz>2` now simply searches for the characters
-   * "seatz>2", like any other word the vocabulary has not heard of.) */
-
-    const PHRASE_TIP = "Exact phrase — these words together, in this order";
-    const ALT_TIP = "Alternation — either side matches";
-    const COUNT_SHORTHAND_TIP = `Shorthand for ${Search.COUNT_AXIS}: ${COUNT_AXIS_HINT.toLowerCase()}`;
-
-    /** A bare number that means an exact id, per field. Empty = plain text. */
-    const NUMBER_TIPS = {
-        id: "An exact spell ID",
-        sound: "Also matches this SoundKit ID exactly",
-        anim: "Also matches this AnimKit ID exactly",
-    };
-
-    /* The vocabulary is rebuilt on every keystroke otherwise — it walks the
-     * whole pill-type registry — so it is cached per field until the pack
-     * changes underneath it. */
-    /**
-     * @typedef {Object} BarVocab
-     * @property {Map<string, string>} words  category / meta / target word -> description
-     * @property {Map<string, string>} axes   named numeric axis -> description
-     * @property {Map<string, any>} meta      meta keyword -> its META_WORDS record
-     */
-    /** @type {{data: any, byField: Map<string, BarVocab>}} */
-    let barVocab = {data: null, byField: new Map()};
-
-    /**
-     * Every word and axis one field's chips can carry, with descriptions. Same
-     * sources as the autocomplete — a word that autocompletes must highlight,
-     * or the two are telling the user different things about the same grammar.
-     * @param {string} field
-     */
-    function fieldVocab(field) {
-        const d = state.data;
-        if (barVocab.data !== d) barVocab = {data: d, byField: new Map()};
-        const cached = barVocab.byField.get(field);
-        if (cached) return cached;
-        /** @type {BarVocab} */
-        const v = {words: new Map(), axes: new Map(), meta: new Map()};
-        // never CACHE an empty vocabulary from a pack-less render (the bar is
-        // drawn from the URL before the pack finishes loading) — the cache key
-        // is the data object, and null is a legitimate value of it
-        if (!d) return v;
-        // fieldCategories is the gate: a field with no category words at all
-        // (name:, id:) has no vocabulary to mark, only phrases and numbers
-        if (d && fieldCategories(field)) {
-            const {words, titles} = P.keywordsFor(field, d);
-            for (const w of words) v.words.set(w, titles[w] || "");
-            // meta keywords are matched by PREFIX (classifyMeta), not as words —
-            // `attach:` never stands alone, so it has no entry in `words`
-            for (const meta of META_WORDS) {
-                if (!meta.fields.includes(field) || (meta.when && !meta.when(d))) continue;
-                v.meta.set(meta.word, meta);
-            }
-            for (const w of Search.TARGET_WORDS) v.words.set(w, TARGET_WORD_TITLES[w]);
-            for (const a of P.axesFor(field, d)) v.axes.set(a.axis, axisHint(a.axis, a.hint));
-            v.axes.set(Search.COUNT_AXIS, COUNT_AXIS_HINT);
-        }
-        barVocab.byField.set(field, v);
-        return v;
-    }
-
-    /**
-     * One word of a chip, classified. Alternation is handled by the caller, so
-     * this only ever sees a single alternative.
-     * @param {BarVocab} v
-     * @param {string} field
-     * @param {string} word
-     * @returns {{cls: string, tip: string}}
-     */
-    function classifyAtom(v, field, word) {
-        const lower = word.toLowerCase();
-        const num = P.numericToken(lower);
-        if (num && num.op) {
-            // a bare comparison is the `count` shorthand, where the field has a
-            // count to compare; anywhere else it is just text
-            if (!num.axis && v.axes.has(Search.COUNT_AXIS)) {
-                return {cls: "bar-axis", tip: COUNT_SHORTHAND_TIP};
-            }
-            const tip = num.axis && v.axes.get(num.axis);
-            if (tip) return {cls: "bar-axis", tip};
-        }
-        if (v.words.has(lower)) return {cls: "bar-kw", tip: v.words.get(lower)};
-        if (num && !num.op && NUMBER_TIPS[field]) {
-            return {cls: "bar-num", tip: NUMBER_TIPS[field]};
-        }
-        return {cls: "", tip: ""};
-    }
-
-    /**
-     * A `keyword:value` token as its two runs — the keyword and what it takes.
-     *
-     * They are drawn as a pair rather than as one mark because that IS the
-     * shape: a small tag inside a tag, reading exactly like the `model:` label
-     * and value of the chip around it. The previous pass italicised the value
-     * and left the keyword looking like an ordinary word, which said nothing
-     * about the two belonging together.
-     *
-     * Returns null when the token is not one, so the caller falls through.
-     * @param {BarVocab} v
-     * @param {string} word
-     * @returns {{text: string, cls: string, tip: string}[] | null}
-     */
-    function classifyMeta(v, word) {
-        const at = word.indexOf(":");
-        if (at <= 0) return null;
-        const meta = v.meta.get(word.slice(0, at).toLowerCase());
-        if (!meta) return null;
-        const tip = metaHint(meta);
-        const runs = [{text: word.slice(0, at + 1), cls: "bar-meta-key", tip}];
-        const value = word.slice(at + 1);
-        if (value) runs.push({text: value, cls: "bar-meta-val", tip});
-        return runs;
-    }
-
-    /**
-     * Split one chip's text into classified runs that concatenate back to it
-     * EXACTLY — whitespace and quotes included. That is the invariant the
-     * backdrop depends on: it has to occupy the same glyphs as the input.
-     * @param {string} field
-     * @param {string} text
-     * @returns {{text: string, cls: string, tip: string}[]}
-     */
-    function classifyBar(field, text) {
-        const v = fieldVocab(field);
-        /** @type {{text: string, cls: string, tip: string}[]} */
-        const out = [];
-        const push = (t, cls = "", tip = "") => {
-            if (t) out.push({text: t, cls, tip});
-        };
-        // one atom: a meta keyword with its value, or an ordinary word
-        const atom = (part, kw) => {
-            const meta = classifyMeta(v, kw ? kw + part : part);
-            if (meta) {
-                // an inherited keyword is not in the typed characters, so only
-                // the part actually written is drawn
-                for (const r of meta.slice(kw ? 1 : 0)) push(r.text, r.cls, r.tip);
-                return;
-            }
-            const {cls, tip} = classifyAtom(v, field, part);
-            push(part, cls, tip);
-        };
-        // `keyword:"quoted value"` is one token, so the quote is matched as part
-        // of the word rather than on its own — otherwise the keyword would be
-        // drawn bare and its value as an unrelated phrase
-        for (const m of text.matchAll(/([a-z]+:"[^"]*(?:"|$))|("[^"]*(?:"|$))|(\s+)|([^\s"]+)/gi)) {
-            if (m[3]) {
-                push(m[3]);
-                continue;
-            }
-            if (m[1]) {
-                const at = m[1].indexOf(":");
-                const meta = v.meta.get(m[1].slice(0, at).toLowerCase());
-                if (meta) {
-                    const tip = metaHint(meta);
-                    push(m[1].slice(0, at + 1), "bar-meta-key", tip);
-                    push(m[1].slice(at + 1), "bar-meta-val", tip);
-                } else {
-                    push(m[1], "bar-phrase", PHRASE_TIP);
-                }
-                continue;
-            }
-            if (m[2]) {
-                push(m[2], "bar-phrase", PHRASE_TIP);
-                continue;
-            }
-            const word = m[4];
-            // alternation splits the word into alternatives that each classify on
-            // their own, with the separator marked between them — altsOf is the
-            // authority on whether this word has any (a comma is only a separator
-            // between numbers, because spell names contain commas)
-            const alts = altsOf(word.toLowerCase());
-            if (alts.length > 1) {
-                const sep = word.includes("|") ? "|" : ",";
-                // the keyword the alternatives inherit, if the first spelled one
-                const kw = (/^[a-z]+:/.exec(word) || [""])[0];
-                word.split(sep).forEach((part, i) => {
-                    if (i) push(sep, "bar-alt", ALT_TIP);
-                    atom(part, i && kw && !/^[a-z]+:/.test(part) ? kw : "");
-                });
-                continue;
-            }
-            atom(word, "");
-        }
-        return out;
-    }
-
-    /**
-     * The classified runs as nodes. Unclassified runs stay bare text nodes, so
-     * only the marked ones become elements — which is also what makes the
-     * backdrop's hit-test cheap.
-     * @param {string} field
-     * @param {string} text
-     * @returns {DocumentFragment}
-     */
-    function highlightBar(field, text) {
-        const frag = document.createDocumentFragment();
-        for (const run of classifyBar(field, text)) {
-            if (!run.cls) {
-                frag.appendChild(document.createTextNode(run.text));
-                continue;
-            }
-            const s = el("span", `bar-tok ${run.cls}`, run.text);
-            if (run.tip) s.title = run.tip;
-            frag.appendChild(s);
-        }
-        return frag;
-    }
-
-    /**
-     * Redraw the backdrop under the live input and park it exactly over the
-     * input's box. Called from sizeInput, so every path that changes the value
-     * or the width already goes through it.
-     */
-    function syncHighlight() {
-        const box = document.getElementById("qhl");
-        if (!box) return;
-        const wrap = $("#editwrap");
-        const value = qInput.value;
-        wrap.classList.toggle("hl", !!value);
-        box.textContent = "";
-        if (!value) return;
-        box.appendChild(highlightBar(state.activeField || "all", value));
-        // #editwrap is the offsetParent of both, so the input's own offsets are
-        // already in the backdrop's coordinate system
-        box.style.left = qInput.offsetLeft + "px";
-        box.style.top = qInput.offsetTop + "px";
-        box.style.width = qInput.offsetWidth + "px";
-        box.style.height = qInput.offsetHeight + "px";
-        box.scrollLeft = qInput.scrollLeft;
-    }
-
-    /**
-     * The backdrop cannot receive :hover (it is inert by design), so the input
-     * serves the tooltip for whatever span sits under the pointer — which is
-     * also what gives a keyword in the input the same hover behaviour it has
-     * inside a committed chip.
-     * @param {MouseEvent} e
-     */
-    function barHover(e) {
-        const box = document.getElementById("qhl");
-        if (!box) return;
-        let found = null;
-        for (const span of box.children) {
-            const r = span.getBoundingClientRect();
-            if (e.clientX >= r.left && e.clientX <= r.right
-                && e.clientY >= r.top && e.clientY <= r.bottom) {
-                found = /** @type {HTMLElement} */ (span);
-                break;
-            }
-        }
-        for (const span of box.children) span.classList.toggle("hover", span === found);
-        const tip = found ? found.title : "";
-        if (qInput.title !== tip) qInput.title = tip;
-    }
-
-    /**
-     * Draw every `data-search` example as the chips it would actually make.
-     *
-     * The help used to spell its examples as code text, which meant the reader
-     * had to translate `model:"attach:chest"` into the thing they would see in
-     * the bar. Building them out of the SAME parser and the SAME highlighter as
-     * the bar itself means an example can never drift from what clicking it
-     * does — and a syntax the app stops supporting stops rendering as syntax.
-     *
-     * Called after the pack loads, because the keyword marking needs its
-     * vocabulary (see fieldVocab).
-     */
-    function decorateExamples() {
-        for (const btn of $$("[data-search]")) {
-            const q = btn.dataset.search;
-            // Epsilon-command examples are meant to be read as commands, and a
-            // chip row would hide the very thing they demonstrate
-            if (!q || q.startsWith(".")) continue;
-            const parts = parseQueryParts(q);
-            if (!parts.length) continue;
-            btn.textContent = "";
-            btn.classList.add("ex-chips");
-            for (const p of parts) {
-                const chip = el("span", p.field === "all"
-                    ? "exchip exfree" : `exchip f-${p.field}${p.not ? " not" : ""}`);
-                if (p.field !== "all") {
-                    chip.appendChild(el("span", "qchip-field", `${p.not ? "−" : ""}${p.field}:`));
-                }
-                const text = el("span", "qchip-text");
-                text.appendChild(highlightBar(p.field, p.text));
-                chip.appendChild(text);
-                btn.appendChild(chip);
-            }
-        }
-    }
-
-    function barHoverOut() {
-        const box = document.getElementById("qhl");
-        if (box) for (const span of box.children) span.classList.remove("hover");
-        qInput.title = "";
     }
 
     /* ------------------------------------------------------------ search */
@@ -1578,6 +1141,13 @@
     // Returns null when no chip names a category, else (id) -> hit count.
     function categoryRanker() {
         const d = state.data;
+        const FX_SETS = {
+            chain: d.spellFx, dissolve: d.spellDissolves, glow: d.spellGlows,
+            tint: d.spellTints, desaturate: d.spellDesaturates,
+            transparency: d.spellTransps, freeze: d.spellFreezes, camo: d.spellCamos,
+            screen: d.spellScreens, shapeshift: d.spellShapeshifts,
+            morph: d.spellMorphs, summon: d.spellSummons,
+        };
         const tests = [];
         for (const g of state.groups) {
             if (g.not) continue;
@@ -1585,24 +1155,19 @@
             // both categories, the same way it selects both
             for (const t of g.tokens.flatMap((tk) =>
                 (tk.alts || [tk.text]).map((a) => ({text: a})))) {
-                // every registered type answers for its own word — so this covers
-                // fx AND mech AND the model/anim types alike, and a type added
-                // later ranks without being named here. (It used to be a
-                // hand-written map of fx sets, which had already drifted: it
-                // still said "stance" for the renamed replace group and knew
-                // nothing of the categories that moved to mech.)
-                const has = P.spellsWithWord(g.field, t.text, d);
-                if (has) tests.push(has);
-                // "shadowy" is the retired name the ghost corpus still carries
-                if (g.field === "fx" && t.text === "shadowy") {
-                    tests.push((id) => d.spellShadowies.has(id) || d.spellGhostMats.has(id));
-                }
-                if (g.field === "model") {
-                    // model FILE categories: the pills are files, so the registry
-                    // records carry no reverse index — the per-category spell sets do
+                if (g.field === "fx") {
+                    if (t.text === "ghost" || t.text === "shadowy") {
+                        tests.push((id) => d.spellShadowies.has(id) || d.spellGhostMats.has(id));
+                    } else if (FX_SETS[t.text]) {
+                        const s = FX_SETS[t.text];
+                        tests.push((id) => s.has(id));
+                    }
+                } else if (g.field === "model") {
                     for (const [cat, spells] of d.modelCatSpells) {
                         if ((d.modelCatNames[cat] || "") === t.text) tests.push((id) => spells.has(id));
                     }
+                } else if (g.field === "anim" && t.text === "stance") {
+                    tests.push((id) => d.spellReplaceAnims.has(id));
                 }
                 // a target word floats spells that really carry a row of that type
                 // above the ones that merely have it in a file name
@@ -1879,15 +1444,10 @@
         tr.appendChild(effects.fx);
 
         // Mechanics — one pill per SpellEffect (what it does + who it targets),
-        // then the non-visual category blocks. Both go in as blocks so the cell
-        // ranks them against each other (see mechanicsCell); an enum pill can
-        // never be a "named" hit, since its corpus is enum names, not keywords.
-        /** @type {{hit: boolean, named?: boolean, el: Node}[]} */
-        const mechBlocks = mechanicPills(d.spellMechanics.get(spellId) || []).map((p) => ({
-            hit: p.rows.some(mechanicIsHit),
-            el: mechanicTag(p),
-        }));
-        tr.appendChild(mechanicsCell(mechBlocks.concat(effects.mechBlocks)));
+        // matched ones first, then the non-visual category blocks
+        const mechs = hitsFirst(mechanicPills(d.spellMechanics.get(spellId) || []),
+            (p) => p.rows.some(mechanicIsHit));
+        tr.appendChild(mechanicsCell(mechs.map(mechanicTag), effects.mechBlocks));
 
         // Commands — one compact line that fits even single-line rows
         const tdCmd = el("td", "c-cmds");
@@ -1949,35 +1509,12 @@
         return frag;
     }
 
-    /**
-     * Stable rank-partition of a cell's contents: things the query NAMED first,
-     * then everything else it merely matched, then the rest. Original order is
-     * kept inside each band, so a cell's deliberate layout survives.
-     *
-     * The middle band exists because a category word is also ordinary text.
-     * `mech:speed` selects the spells with a movement-speed pill AND every spell
-     * whose effect enum happens to read MOD_SPEED_SLOW_ALL — both are honest
-     * hits, but only one is what was asked for, and burying it under a dozen
-     * enum names (or clamping it away behind "+N more") reads as a bug. Same
-     * story for `fx:glow` against a texture called beam_webglowwhite, and
-     * `model:missile` against a file with "missile" in its path.
-     *
-     * `isKeyword` is optional: a cell whose contents carry no category word (the
-     * sound kits) simply has no first band.
-     * @template T
-     * @param {T[]} items
-     * @param {(it: T) => boolean} isHit
-     * @param {((it: T) => boolean) | null} [isKeyword]
-     * @returns {T[]}
-     */
-    function hitsFirst(items, isHit, isKeyword = null) {
+    // stable partition: elements matching isHit come first, original order kept
+    function hitsFirst(items, isHit) {
         if (!state.tokens.length) return items;
-        const named = [], hits = [], rest = [];
-        for (const it of items) {
-            if (!isHit(it)) rest.push(it);
-            else (isKeyword && isKeyword(it) ? named : hits).push(it);
-        }
-        return named.concat(hits, rest);
+        const hits = [], rest = [];
+        for (const it of items) (isHit(it) ? hits : rest).push(it);
+        return hits.length ? hits.concat(rest) : rest;
     }
 
     function tagCell(className, tags) {
@@ -1999,27 +1536,22 @@
      * speed).
      *
      * The enum pills come FIRST because they describe the effect itself, and
-     * the categories qualify it — but the two halves are ONE ranked list, not
-     * two appended ones, because that resting order is exactly wrong under a
-     * query that names a category. `mech:speed` matches the speed pill outright
-     * and every SPELL_AURA_MOD_SPEED_* enum by substring; handing the enums the
-     * whole top of the cell buries the pill that was asked for. renderBlocks
-     * ranks them together, so a named category rises past them and an unnamed
-     * one keeps its place below.
-     *
-     * The cell only reads as empty when neither half has anything — a spell
-     * with a speed aura but no SpellEffect rows still shows the speed pill.
-     * @param {{hit: boolean, named?: boolean, el: Node}[]} blocks
+     * the categories qualify it. Both halves float their own matches, and the
+     * cell only reads as empty when neither has anything — a spell with a speed
+     * aura but no SpellEffect rows still shows the speed pill.
+     * @param {Node[]} tags loose mechanic pills, already hit-floated
+     * @param {{hit: boolean, el: Node}[]} blocks category blocks for this column
      * @returns {HTMLElement}
      */
-    function mechanicsCell(blocks) {
+    function mechanicsCell(tags, blocks) {
         const td = el("td", "c-mechanics");
-        if (!blocks.length) {
+        if (!tags.length && !blocks.length) {
             td.classList.add("empty");
             td.appendChild(el("span", "none", "—"));
             return td;
         }
-        renderBlocks(td, blocks);
+        for (const tag of tags) td.appendChild(tag);
+        if (blocks.length) renderBlocks(td, blocks);
         return td;
     }
 
@@ -2078,7 +1610,6 @@
         for (const c of cats) {
             blocks.push({
                 hit: c.hit,
-                named: wordIsNamed("model", c.name),
                 el: P.group({
                     head: modelCatHeadTag(c.name, c.hit),
                     items: hitsFirst(c.items, (e) => modelFileIsHit(d.files.get(e.fid), c.name))
@@ -2094,7 +1625,6 @@
             const hit = mountIds.some((m) => mountIsHit(m));
             blocks.push({
                 hit,
-                named: wordIsNamed("model", "mount"),
                 el: P.group({
                     head: modelCatHeadTag("mount", hit),
                     items: hitsFirst(mountIds.slice().sort((a, b) => a - b),
@@ -2224,7 +1754,6 @@
         for (const kitId of groups) {
             blocks.push({
                 hit: kitHasHit(kitId),
-                named: wordIsNamed("anim", wordOf(kitId)),
                 el: P.group({
                     // stance overrides are ~96% caster — a constant, so no icon
                     // there (documented in the help dialog); animkits carry theirs
@@ -2242,7 +1771,6 @@
             const hit = swaps.some(swapHit);
             blocks.push({
                 hit,
-                named: wordIsNamed("anim", "replace"),
                 el: P.group({
                     head: animCatHeadTag("replace", hit),
                     items: hitsFirst(swaps, swapHit).map((sw) => animSwapTag(sw.src, sw.dst)),
@@ -2288,15 +1816,11 @@
    * disappearing behind "+N more". Every pill-bearing cell renders through here
    * so that one rule holds for all of them — the models, sounds, animations and
    * fx cells all build a `blocks` array and hand it over.
-   *
-   * `named` is the block's second rank: it was matched because the query spelled
-   * its category word, not because some file name contained the same letters
-   * (see hitsFirst). A block with no category word simply never sets it.
    * @param {HTMLElement} td
-   * @param {{hit: boolean, named?: boolean, el: Node}[]} blocks
+   * @param {{hit: boolean, el: HTMLElement}[]} blocks
    */
     function renderBlocks(td, blocks) {
-        for (const b of hitsFirst(blocks, (x) => x.hit, (x) => !!x.named)) td.appendChild(b.el);
+        for (const b of hitsFirst(blocks, (x) => x.hit)) td.appendChild(b.el);
     }
 
     /* Effects cell: visual FX grouped by category — "chain" (beam/chain effects),
@@ -2780,7 +2304,6 @@
         // rather than a second copy of this machinery.
         const blocksFor = (c) => cats.filter((cat) => cat.col === c).map((cat) => ({
             hit: cat.hit,
-            named: wordIsNamed(c, cat.name),
             el: P.group({
                 head: fxHeadTag(cat.name, cat.hit, cat.mask, cat.col),
                 items: cat.items.map((make) => make()),
@@ -2830,23 +2353,6 @@
      */
     function anyGroup(field, test) {
         return groupsFor(field).some((g) => Search.combosOf(g).some(test));
-    }
-
-    /**
-     * Did a positive chip of `field` NAME this category word outright — as a
-     * whole token, not as a fragment of some longer value?
-     *
-     * This is the "full keyword hit" test hitsFirst ranks on. Equality, not
-     * substring, is the whole point: `mech:speed` names the speed category,
-     * while `mech:spe` merely reaches it (and reaches half the enum names too),
-     * so only the first has earned the top of the cell.
-     * @param {string} field
-     * @param {string} word category word ("" for content that has none)
-     * @returns {boolean}
-     */
-    function wordIsNamed(field, word) {
-        if (!word) return false;
-        return anyGroup(field, (ts) => ts.some((t) => t.text === word));
     }
 
     // hit = the entity fully satisfies at least one chip of its field
@@ -2938,24 +2444,14 @@
    * name it has). Matching by vehicle would light every point of a vehicle
    * when the query names one of them. The seat count still comes from the
    * registry's numeric axis, so the two halves cannot disagree about it. */
-    const SEAT_TYPE = P.TYPES.get("fx:seat");
-    const SEAT_AXIS = P.axisOf(SEAT_TYPE);
-
     function vehicleIsHit(attachment, seats) {
         const nameL = (attachment || "").toLowerCase();
-        // the seat count, read through the registry's own token grammar so the
-        // named axis (mech:seats>2) and the bare form (fx:"seat 8") reach it
-        // exactly as they reach spellsByFx
-        const counts = (/** @type {string} */ text) => {
-            const num = P.numericToken(text);
-            if (!num || (num.axis && num.axis !== SEAT_AXIS)) return false;
-            return P.numericHolds(seats, num);
-        };
         // "mech", not "fx": this is the one migrated category whose hit test is
         // hand-written rather than derived from the registry via isHitOf, so it
         // is the one place the column move had to be repeated by hand.
         return anyGroup("mech", (ts) => ts.every((t) =>
-            "seat".includes(t.text) || nameL.includes(t.text) || counts(t.text)));
+            "seat".includes(t.text) || nameL.includes(t.text)
+            || Search.matchNumeric(t.text, seats)));
     }
 
     /* --- target-type icons ------------------------------------------------
@@ -3086,75 +2582,64 @@
                 : `Lands on the ${t} attachment point`;
         }
         const words = [s, t].filter(Boolean);
-        // one `attach:point` token per point, both in the same chip so they
-        // constrain the same row
+        // each point is an `attach <point>` pair; always quoted (the space)
         return P.note(label, {
             hit: attachIsHit(field, words),
             title: `${why} — an M2 attachment slot, not a description`,
-            search: P.quoted(field, words.map((w) => keywordQuery(ATTACH_WORD, w)).join(" ")),
+            search: P.quoted(field, words.map((w) => `attach ${w}`).join(" ")),
             finds: `spells using ${words.length > 1 ? "these points" : "this point"}`,
         });
     }
 
-    /**
-     * The values a chip gives one meta keyword — the render-side twin of
-     * splitKeyword in search.js, and written the same way so a pill can only
-     * light up under a query that really selected its spell.
-     * @param {{text: string}[]} tokens
-     * @param {string} word
-     * @returns {string[]}
-     */
-    function keywordValues(tokens, word) {
-        const prefix = word + ":";
-        return tokens.filter((t) => t.text.startsWith(prefix))
-            .map((t) => t.text.slice(prefix.length).trim())
-            .filter(Boolean);
+    /** The attachment points named by a group's `attach <point>` pairs. */
+    function attachValues(tokens) {
+        const out = [];
+        for (let i = 0; i < tokens.length; i++) {
+            if (tokens[i].text === "attach" && tokens[i + 1]) {
+                out.push(tokens[i + 1].text);
+                i++;
+            }
+        }
+        return out;
     }
 
-    // an attachment segment lights when a positive attach: query in its field
+    // an attachment segment lights when a positive attach query in its field
     // (or free text) names points this row carries — the same substring test
-    // the search uses
+    // the search uses (ATTACH_WORD in search.js)
     function attachIsHit(field, names) {
         const attachL = names.join(" ").toLowerCase();
         return anyGroup(field, (ts) => {
-            const attaches = keywordValues(ts, ATTACH_WORD);
-            return attaches.length > 0 && attaches.every((a) => attachL.includes(a));
+            const attaches = attachValues(ts);
+            return attaches.length && attaches.every((a) => attachL.includes(a));
         });
     }
 
-    /** A boneset pill lights up when a `boneset:` query names one of its regions. */
+    /** The region words a group's `boneset` keyword collects (all that follow). */
+    function bonesetValues(tokens) {
+        const i = tokens.findIndex((t) => t.text === BONESET_WORD);
+        return i < 0 ? [] : tokens.slice(i + 1).map((t) => t.text).filter(Boolean);
+    }
+
+    /** A boneset pill lights up when a `boneset` query names one of its regions. */
     function bonesetIsHit(names) {
         const hay = names.join(" ").toLowerCase();
         return anyGroup("anim", (ts) => {
-            const words = keywordValues(ts, BONESET_WORD);
-            return words.length > 0 && words.every((w) => hay.includes(w));
+            const words = bonesetValues(ts);
+            return words.length && words.every((w) => hay.includes(w));
         });
     }
 
-    /**
-     * A meta keyword and its value as chip query text. The value is quoted only
-     * when it needs to be, so the common `attach:chest` stays the short form the
-     * user would type; `boneset:"upper body"` quotes because the value has a
-     * space and the keyword takes exactly one token.
-     * @param {string} word
-     * @param {string} value
-     * @returns {string}
-     */
-    const keywordQuery = (word, value) =>
-        `${word}:${/\s/.test(value) ? `"${value}"` : value}`;
-
     /* A boneset segment: the body region(s) an AnimKit — or one of its anims —
    * animates ("Upper Body", "Head · Right Hand"). Reads as a dim qualifier on
-   * the pill, searchable via the `boneset:` keyword; a multi-word region quotes
-   * its value (boneset:"upper body"). Shown on the AnimKit head when the whole
+   * the pill, searchable via the `boneset` keyword; multi-word names ride the
+   * one keyword (boneset upper body). Shown on the AnimKit head when the whole
    * kit shares one region, on the anim pill when its anims differ. */
     function bonesetSegment(names) {
         if (!names || !names.length) return null;
         return P.note(names.join(" · "), {
             hit: bonesetIsHit(names),
             title: `Animates the ${names.join(", ")} — the AnimKit segment's boneset`,
-            search: P.quoted("anim",
-                names.map((n) => keywordQuery(BONESET_WORD, n)).join(" ")),
+            search: P.quoted("anim", `${BONESET_WORD} ${names.join(" ")}`),
             finds: `spells whose animkits animate ${names.length > 1 ? "these regions" : "this region"}`,
         });
     }
@@ -4257,10 +3742,6 @@
         if (state.sort.key !== "auto") {
             params.push("sort=" + (state.sort.dir < 0 ? "-" : "") + state.sort.key);
         }
-        // the help dialog is part of what a link can point at — "here is the
-        // syntax" is a thing people send each other, and without this the only
-        // way to share it is a sentence telling someone to click the ?
-        if (helpOpen()) params.push("help=1");
         const url = location.pathname + (params.length ? "?" + params.join("&") : "");
         if (url === location.pathname + location.search && !location.hash) return;
         // pushState (unlike the old location.hash assignment) fires no event,
@@ -4280,29 +3761,7 @@
         if (legacyMode && isChipField(legacyMode) && q && !/[a-z]+:/i.test(q)) {
             q = `${legacyMode}:${/\s/.test(q) ? `"${q}"` : q}`;
         }
-        return {
-            v: get("v"), q, only: get("only"), without: get("without"), sort: get("sort"),
-            help: get("help"),
-        };
-    }
-
-    /** Is the help dialog on screen? (Its own open state is the truth.) */
-    const helpOpen = () =>
-        !!(/** @type {HTMLDialogElement} */ ($("#help")) || {}).open;
-
-    /**
-     * Show or hide the help dialog and write that into the URL, so it survives a
-     * reload, a share and the back button. `push` is false while restoring from
-     * a popstate — the URL is already what it should be.
-     * @param {boolean} on
-     * @param {boolean} [push]
-     */
-    function setHelp(on, push = true) {
-        const help = /** @type {HTMLDialogElement} */ ($("#help"));
-        if (on === help.open) return;
-        // showModal on an open dialog throws; close on a closed one is a no-op
-        if (on) help.showModal(); else help.close();
-        if (push) stateToUrl(true);
+        return {v: get("v"), q, only: get("only"), without: get("without"), sort: get("sort")};
     }
 
     // set the "Only spells with / without" filters from the URL's only= (with)
@@ -4427,17 +3886,6 @@
             sizeInput();
             scheduleSearch();
         });
-
-        // the highlight backdrop scrolls with the input it sits under (a long
-        // value scrolls inside #q rather than widening the pill)
-        input.addEventListener("scroll", () => {
-            const box = document.getElementById("qhl");
-            if (box) box.scrollLeft = input.scrollLeft;
-        });
-        // hover behaviour for the marked words in the input: the backdrop is
-        // inert, so the input answers for whatever span is under the pointer
-        input.addEventListener("mousemove", barHover);
-        input.addEventListener("mouseleave", barHoverOut);
 
         input.addEventListener("keydown", (e) => {
             const box = suggestBox;
@@ -4834,15 +4282,10 @@
 
         // help dialog (native <dialog>: Esc closes it for free)
         const help = /** @type {HTMLDialogElement} */ ($("#help"));
-        $("#help-btn").addEventListener("click", () => setHelp(true));
-        $("#help-close").addEventListener("click", () => setHelp(false));
-        // Esc and the form's own close both bypass the handlers above, so the
-        // URL is squared up here — one place, whatever closed it
-        help.addEventListener("close", () => {
-            if (new URLSearchParams(location.search).has("help")) stateToUrl(true);
-        });
+        $("#help-btn").addEventListener("click", () => help.showModal());
+        $("#help-close").addEventListener("click", () => help.close());
         help.addEventListener("click", (e) => {
-            if (e.target === help) return setHelp(false); // backdrop click
+            if (e.target === help) return help.close(); // backdrop click
             // the worked examples are live: running one closes the dialog so the
             // results it just produced are actually visible
             const ex = targetClosest(e, ".help-ex button[data-search]");
@@ -4995,12 +4438,6 @@
                 `${state.data.meta.counts.spells.toLocaleString()} spells`;
             $("#es-count").textContent = state.data.meta.counts.spells.toLocaleString();
             overlay.hidden = true;
-            // the bar's keyword marking is a property of the PACK — a word only
-            // highlights where the loaded version carries that content — and the
-            // bar was drawn from the URL before any of this existed. Repaint it
-            // here rather than at the ten call sites that can change the pack.
-            renderBar();
-            decorateExamples();
             runSearch({push});
         } catch (err) {
             console.error(err);
@@ -5015,7 +4452,6 @@
         loadQueryString(h.q);
         filtersFromUrl(h.only, h.without);
         sortFromUrl(h.sort);
-        setHelp(!!h.help, false); // back/forward opens and closes it too
         // no v= in the URL means the default version, not "keep the current
         // one" — back/forward must return from an explicitly-chosen pack
         const wanted = findVersion(h.v) || defaultVersion();
@@ -5076,13 +4512,7 @@
         await activateVersion(entry);
         if (autoExport === "json") Export.json();
         else if (autoExport === "csv") Export.csv();
-        // after the pack, so the examples inside it are drawn with a vocabulary.
-        // The first search has already rewritten the URL by now (and dropped the
-        // flag, the dialog not being open yet), so put it back.
-        if (h.help) {
-            setHelp(true, false);
-            stateToUrl(false);
-        } else qInput.focus();
+        qInput.focus();
     }
 
     void boot(); // nothing to await it — boot renders its own load errors

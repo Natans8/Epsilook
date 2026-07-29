@@ -788,12 +788,6 @@ interface EpsilookSearchApi {
     /** Target-type query words ("caster", "target", "area", "both"). */
     TARGET_WORDS: string[];
 
-    /** The reserved universal numeric axis: how big the column is. */
-    COUNT_AXIS: string;
-
-    /** How many pills a column shows for one spell, per countable field. */
-    COUNT_SOURCES: Record<string, (data: SpellData, spellId: number) => number>;
-
     /** True when `text` is a numeric-comparison token ("4", ">2", "<=3")
      *  satisfied by `n`. Shared by the fx column's numeric categories. */
     matchNumeric(text: string, n: number): boolean;
@@ -851,12 +845,6 @@ interface PillNumericAxis {
 
     /** Bare numbers keep their text/bare meaning; only <, >, <=, >=, = reach here. */
     operatorOnly?: boolean;
-
-    /** The axis NAME a token may carry (`seats>2`); defaults to the type's word. */
-    axis?: string;
-
-    /** What the number means, for autocomplete. */
-    axisHint?: string;
 }
 
 /**
@@ -876,9 +864,6 @@ interface PillType {
 
     /** id -> spell ids, or a plain Set of spells for a valueless type. */
     spells?(data: SpellData): Map<any, number[]> | Set<number>;
-
-    /** The reverse index, keyed by SPELL id: does this spell carry the type? */
-    spellsWith?(data: SpellData): Map<number, any> | Set<number>;
 
     numeric?: PillNumericAxis;
 
@@ -949,23 +934,6 @@ interface EpsilookPillsApi {
 
     /** The description of one category word (a head pill's tooltip). */
     hintFor(field: string, word: string): string;
-
-    /** "Does this spell carry the category `word`?", or null if nothing does. */
-    spellsWithWord(field: string, word: string, data: SpellData):
-        ((spellId: number) => boolean) | null;
-
-    /** The named numeric axes a field offers, for autocomplete. */
-    axesFor(field: string, data: SpellData):
-        { axis: string; word: string; hint: string; own: boolean }[];
-
-    /** A type's axis name — declared, or its category word. */
-    axisOf(type: PillType): string;
-
-    /** Split `seats>2` / `>2` / `70` into axis, operator and bound. */
-    numericToken(text: string): { axis: string; op: string; n: number } | null;
-
-    /** Compare a value against a parsed numeric token. */
-    numericHolds(n: number, token: { op: string; n: number }): boolean;
 
     TYPES: Map<string, PillType>;
 

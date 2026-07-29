@@ -562,49 +562,7 @@ window.EpsilookPills = (() => {
      * @property {"count"|"value"} kind  what the number means, for the docs
      * @property {(data: any, id: any) => number} of
      * @property {boolean} [operatorOnly] bare numbers are NOT this axis
-     * @property {string} [axis]      the axis NAME a token may carry
-     *   (`seats>2`); defaults to the type's own word
-     * @property {string} [axisHint]  what the number means, for autocomplete
      */
-
-    /** A type's axis name — declared, or its category word. */
-    const axisOf = (type) => (type.numeric
-        ? (type.numeric.axis || type.word || "") : "");
-
-    /**
-     * Split a numeric token into its optional axis name, operator and bound.
-     * `seats>2` -> {axis: "seats", op: ">", n: 2}; `>2` -> {axis: "", op: ">"};
-     * `70` -> {axis: "", op: ""}; anything else -> null. The bound may be signed
-     * and fractional, because the values are: a movement-speed change is
-     * negative when it slows.
-     *
-     * An axis name only counts WITH an operator. Without one the token is
-     * ordinary text — `blue4` is a texture, not a bad query — which is why the
-     * name and the comparison are one token in the first place.
-     * @param {string} text
-     * @returns {{axis: string, op: string, n: number} | null}
-     */
-    function numericToken(text) {
-        const m = /^([a-z]*)(<=|>=|<|>|=)?(-?\d+(?:\.\d+)?)$/.exec(text);
-        if (!m || (m[1] && !m[2])) return null;
-        return {axis: m[1], op: m[2] || "", n: Number(m[3])};
-    }
-
-    /** Compare a value against a parsed numeric token. */
-    function numericHolds(n, {op, n: v}) {
-        switch (op) {
-            case "<":
-                return n < v;
-            case ">":
-                return n > v;
-            case "<=":
-                return n <= v;
-            case ">=":
-                return n >= v;
-            default:
-                return n === v;
-        }
-    }
 
     /**
      * @typedef {Object} PillType
@@ -614,12 +572,6 @@ window.EpsilookPills = (() => {
      * @property {string} [hint]   one-line description (autocomplete + tooltip)
      * @property {(data: any) => Map<any, string>} [corpus] id -> lowercase text
      * @property {(data: any) => Map<any, number[]> | Set<number>} [spells]
-     * @property {(data: any) => Map<number, any> | Set<number>} [spellsWith]
-     *   the reverse index: keyed by SPELL id, "does this spell carry the type at
-     *   all". `spells` cannot answer that — it is keyed by CONTENT id (chain id,
-     *   creature id), which is what makes it the search side. Used by the
-     *   relevance ranker to float spells that really have the category above the
-     *   ones whose file or enum names merely contain the same letters.
      * @property {PillNumericAxis} [numeric]
      * @property {(data: any, id: any) => number|string} [bare]
      * @property {(data: any) => boolean} [when] does this pack carry it?
@@ -668,24 +620,28 @@ window.EpsilookPills = (() => {
      */
     function tokenMatches(type, data, id, corpusL, token) {
         const text = token.text;
-        const num = numericToken(text);
-        // A NAMED axis is a question only the type that owns the name can
-        // answer, so it is decided on its own and never handed to another
-        // type's number — `seats>2` must not be measured against a desaturation
-        // percent. A name that belongs to no type here is not an error either:
-        // it falls through and is matched as ordinary text, like any other word
-        // the vocabulary has not heard of.
-        if (num && num.axis) {
-            if (type.numeric && num.axis === axisOf(type)) {
-                return numericHolds(type.numeric.of(data, id), num);
-            }
-            return corpusL.includes(text);
-        }
         if (corpusL.includes(text)) return true;
-        const operator = !!num && !!num.op;
+        const operator = /^[<>=]/.test(text);
         if (type.bare && !operator && String(type.bare(data, id)) === text) return true;
-        if (num && type.numeric && !(type.numeric.operatorOnly && !operator)) {
-            return numericHolds(type.numeric.of(data, id), num);
+        if (type.numeric && !(type.numeric.operatorOnly && !operator)) {
+            // the value may be signed (a movement-speed change is negative when
+            // it slows), so a comparison may name a negative bound: "<-50"
+            const m = /^(<=|>=|<|>|=)?(-?\d+(?:\.\d+)?)$/.exec(text);
+            if (m) {
+                const n = type.numeric.of(data, id), v = Number(m[2]);
+                switch (m[1]) {
+                    case "<":
+                        return n < v;
+                    case ">":
+                        return n > v;
+                    case "<=":
+                        return n <= v;
+                    case ">=":
+                        return n >= v;
+                    default:
+                        return n === v;
+                }
+            }
         }
         return false;
     }
@@ -749,51 +705,9 @@ window.EpsilookPills = (() => {
         return {words, titles};
     }
 
-    /**
-     * The named numeric axes a field offers, deduped and gated by `when` like
-     * the keywords above. `own` says the axis name IS the category word, so
-     * autocomplete can fold it into that word's entry instead of listing the
-     * same string twice.
-     * @param {string} field
-     * @param {any} data
-     * @returns {{axis: string, word: string, hint: string, own: boolean}[]}
-     */
-    function axesFor(field, data) {
-        const out = [];
-        for (const type of typesFor(field)) {
-            if (!type.numeric || (type.when && !type.when(data))) continue;
-            const axis = axisOf(type);
-            if (!axis || out.some((a) => a.axis === axis)) continue;
-            out.push({
-                axis, word: type.word || "",
-                hint: type.numeric.axisHint || "",
-                own: axis === type.word,
-            });
-        }
-        return out;
-    }
-
     /** Description of one category word, for a head pill's tooltip. */
     const hintFor = (field, word) =>
         (typesFor(field).find((t) => t.word === word) || {}).hint || "";
-
-    /**
-     * "Does this spell carry the category `word`?", for every type that answers
-     * to the word (ghost has two) — the ranker's test, derived from the registry
-     * rather than from a second hand-written map of the same relations.
-     * @param {string} field
-     * @param {string} word
-     * @param {any} data
-     * @returns {((spellId: number) => boolean) | null} null = no such category,
-     *   or one that keeps no reverse index.
-     */
-    function spellsWithWord(field, word, data) {
-        const sets = typesFor(field)
-            .filter((t) => t.word === word && t.spellsWith && (!t.when || t.when(data)))
-            .map((t) => t.spellsWith(data));
-        if (!sets.length) return null;
-        return (id) => sets.some((s) => s.has(id));
-    }
 
     return {
         // builders
@@ -801,8 +715,7 @@ window.EpsilookPills = (() => {
         // segment constructors
         link, view, play, targets, swatch, icon, label, note, aside, copy, cmd,
         // pill-type registry
-        defineType, typesFor, idMatches, scanType, keywordsFor, hintFor,
-        spellsWithWord, axesFor, axisOf, numericToken, numericHolds, TYPES,
+        defineType, typesFor, idMatches, scanType, keywordsFor, hintFor, TYPES,
         // composition helpers
         tip, query, quoted, catQuery, fillTemplate, el,
         // target-mask vocabulary

@@ -96,15 +96,11 @@ window.EpsilookSearch = (() => {
      * asks for a numeric match rather than a value/word match. A bare number is
      * NOT an operator (it keeps its per-field literal meaning), per the search
      * convention that numeric comparison is opt-in via an operator.
-     *
-     * Anywhere in the token, not just at the front: a named axis puts the
-     * operator in the middle (`seats>2`, `count>=4`), and that token is no more
-     * a word to rank spell names against than a bare `>2` is.
      * @param {string} text
      * @returns {boolean}
      */
     function hasOperator(text) {
-        return /[<>=]/.test(text);
+        return /^[<>=]/.test(text);
     }
 
     /* ------------------------------------------------------ count queries */
@@ -112,17 +108,12 @@ window.EpsilookSearch = (() => {
     /**
      * How many items a column renders for one spell. Adding a countable column
      * is one entry here — nothing else branches on the field.
-     *
-     * These count PILLS, which is what the reader sees. The sort's counts
-     * (entryCountFn in app.js) deliberately differ where a column groups: a
-     * SoundKit or AnimKit is one entry to sort by and several pills to count.
      * @type {Record<string, (data: SpellData, spellId: number) => number>}
      */
     const COUNT_SOURCES = {
         model: (d, s) => (d.spellModelCats.size
             ? (d.spellModelCats.get(s) || []).length
-            : (d.spellModels.get(s) || []).length)
-            + (d.spellMounts.get(s) || []).length,
+            : (d.spellModels.get(s) || []).length),
         sound: (d, s) => (d.spellSounds.get(s) || []).length,
         // every animation pill: the loose ones, those inside each AnimKit, and
         // the headless "replace" / "passenger" groups
@@ -131,119 +122,57 @@ window.EpsilookSearch = (() => {
             + (d.spellPassengerAnims.get(s) || []).length
             + (d.spellAnimKits.get(s) || [])
                 .reduce((n, k) => n + (d.animKitAnims.get(k) || []).length, 0),
-        // the two pill columns. Hand-summed rather than derived from the pill-type
-        // registry because a type's `spellsWith` answers "does this spell have
-        // any", not "how many" — and the two shapes (Map of rows, Set membership)
-        // do not share a length.
-        fx: (d, s) => (d.spellFx.get(s) || []).length
-            + (d.spellDissolves.get(s) || []).length + (d.spellGlows.get(s) || []).length
-            + (d.spellShadowies.get(s) || []).length + (d.spellGhostMats.get(s) || []).length
-            + (d.spellTints.get(s) || []).length + (d.spellDesaturates.get(s) || []).length
-            + (d.spellTransps.get(s) || []).length
-            + (d.spellFreezes.has(s) ? 1 : 0) + (d.spellCamos.has(s) ? 1 : 0)
-            + (d.spellScreens.get(s) || []).length + (d.spellMorphs.get(s) || []).length
-            + (d.spellShapeshifts.get(s) || []).length + (d.spellSummons.get(s) || []).length
-            + (d.spellObjects.get(s) || []).length + (d.spellScaleMods.get(s) || []).length,
-        mech: (d, s) => (d.spellMechanics.get(s) || []).length
-            + (d.spellVehicles.get(s) || []).length + (d.spellInvisTypes.get(s) || []).length
-            + (d.spellDetectTypes.get(s) || []).length + (d.spellKeybinds.get(s) || []).length
-            + (d.spellSpeedMods.get(s) || []).length,
     };
 
-    /** The reserved universal axis: the size of the column, in every field. */
-    const COUNT_AXIS = "count";
-
     /**
-     * Pull the cardinality tokens out of a chip.
+     * A count query is a field chip holding exactly ONE token that is a numeric
+     * comparison WITH an operator — `model:>4`, `anim:=3`, `sound:>=2`.
      *
-     * A CHIP IS A CARDINALITY QUESTION. "Does a matching row exist" is just
-     * `count>=1`, so the ordinary chip is the default case of this rather than
-     * something beside it, and `count` is spelled the same way in every field.
+     * Both halves of that rule carry weight. The operator is required because a
+     * bare number already means a substring match (`model:2` finds
+     * `cfx_fire_02.m2`) and that must keep working. Being alone in the chip is
+     * required because `fx:"seat >2"` already reads its numeric as a seat
+     * count — a second token means the field's own parser owns it.
      *
-     * Two forms reach it. `count>4` names the axis, so it is commutative with
-     * every other token in the chip — `model:"caster count>4"` reads the same
-     * either way round. A LONE `>4` with no axis name is its shorthand, which is
-     * also what that chip has always meant; the operator is required there
-     * because a bare `model:2` is still a substring search for "2", and being
-     * alone is required because `fx:"seat >2"` hands its numeric to the seat
-     * type instead.
-     *
-     * NOTE the count is the WHOLE column's, not the count of rows matching the
-     * chip's other tokens — `model:"caster count>4"` is "a caster model, and
-     * more than four models in all". Narrowing it to the matching rows needs the
-     * column matchers restructured into per-spell entry iterators; that is its
-     * own pass (see CLAUDE.md).
-     * A field with nothing to count (name:, id:, free text) keeps its tokens as
-     * TEXT — an unrecognised comparison is a plain search for those characters,
-     * not an error.
-     * @param {QueryToken[]} tokens
-     * @param {boolean} countable
-     * @returns {{text: QueryToken[], counts: ((n: number) => boolean)[]}}
-     */
-    function splitCountTokens(tokens, countable) {
-        const text = [], counts = [];
-        if (!countable) return {text: tokens, counts};
-        const lone = tokens.length === 1 && /^(<=|>=|<|>|=)-?\d+$/.test(tokens[0].text);
-        for (const t of tokens) {
-            const named = t.text.startsWith(COUNT_AXIS)
-                && /^(<=|>=|<|>|=)-?\d+(?:\.\d+)?$/.test(t.text.slice(COUNT_AXIS.length));
-            const pred = (named || lone)
-                ? numericPredicate(t.text.slice(named ? COUNT_AXIS.length : 0)) : null;
-            if (pred) counts.push(pred); else text.push(t);
-        }
-        return {text, counts};
-    }
-
-    /**
-     * One chip's spells: its cardinality constraints intersected with whatever
-     * its remaining tokens select. A chip with no count token is just the
-     * field's own search, which is the common case and costs nothing extra.
+     * Returns null when the group is not a count query, so the caller falls
+     * through to the normal field search.
      * @param {QueryToken[]} tokens
      * @param {string} field
      * @param {SpellData} data
-     * @returns {Set<number>}
+     * @returns {Set<number> | null}
      */
-    function spellsForChip(tokens, field, data) {
+    function spellsByCount(tokens, field, data) {
         const counter = COUNT_SOURCES[field];
-        const {text, counts} = splitCountTokens(tokens, !!counter);
-        if (!counts.length) return FIELDS[field].run(tokens, data);
-        const base = text.length ? FIELDS[field].run(text, data) : data.ids;
+        if (!counter || tokens.length !== 1) return null;
+        const text = tokens[0].text;
+        if (!/^(<=|>=|<|>|=)\d+$/.test(text)) return null;
+        const pred = numericPredicate(text);
+        if (!pred) return null;
         const out = new Set();
-        for (const s of base) {
-            const n = counter(data, s);
-            if (counts.every((p) => p(n))) out.add(s);
+        for (const s of data.ids) {
+            if (pred(counter(data, s))) out.add(s);
         }
         return out;
     }
 
-    /* --------------------------------------------------- meta keywords */
+    /* ------------------------------------------------ attachment points */
 
     /**
-     * A META keyword addresses something that is not content — where on the
-     * model a thing plays, which body region an animation moves. It is written
-     * `keyword:value`, ONE token, inside an ordinary chip:
-     * `model:attach:chest`, `fx:"attach:spelllefthand fireball"`,
-     * `anim:boneset:"upper body"`.
-     *
-     * IT IS ONE TOKEN ON PURPOSE, and that is the whole design. The keyword used
-     * to take the following WORD, which meant its arity was invisible (`attach`
-     * ate one word, `boneset` ate the rest of the chip, so
-     * `anim:"boneset head kneel"` quietly searched for a region called "head
-     * kneel"), and it meant alternation could not reach it — `attach right|left`
-     * split into the alternatives "right" and "attach", which is nonsense. As
-     * one token every other part of the grammar applies to it unchanged:
-     * `attach:right|left` alternates, `boneset:"upper body"` quotes, and there
-     * is no invisible whitespace to leave behind after the keyword.
-     *
-     * The keyword lives INSIDE the field chip so it still narrows the SAME row
-     * as the chip's file/category words: a fireball model attached at the chest
-     * is one row, not "a fireball somewhere and a chest attachment somewhere".
-     * Two points are two tokens — `attach:spelllefthand attach:chest`.
-     *
-     * The point/region NAMES stay data values: never in a corpus, never offered
-     * by autocomplete. Only the keyword is vocabulary.
+     * Attachment points are a META axis, addressed by the `attach` keyword —
+     * `model:"attach chest"`, `fx:"attach spelllefthand fireball"` — never by
+     * bare name (the point NAMES are data values, deliberately kept out of the
+     * corpus and the autocomplete). The keyword lives INSIDE model:/fx: chips
+     * so an attach point still narrows the SAME row as its file/category words:
+     * a fireball model attached at the chest is one row, not "a fireball
+     * somewhere and a chest attachment somewhere". `attach` consumes the token
+     * that FOLLOWS it as the point name (whitespace, no colon), so two points
+     * are `attach spelllefthand attach chest`.
      */
     const ATTACH_WORD = "attach";
+    // the anim-column meta keyword: `boneset upper body` finds spells whose
+    // AnimKits animate that body region. Like `attach`, the region name is data
+    // typed after the keyword; unlike it, the name can be several words, so the
+    // keyword consumes ALL tokens that follow (see spellsByAnim).
     const BONESET_WORD = "boneset";
 
     /**
@@ -260,32 +189,32 @@ window.EpsilookSearch = (() => {
     }
 
     /**
-     * Split a chip's tokens into the plain ones and one keyword's values.
-     *
-     * `keyword:` with nothing after it — still being typed — yields no value, so
-     * a half-written keyword never constrains the row. One helper for every meta
-     * keyword: they differ in what they match, not in how they are written.
+     * Split a group's tokens into the plain ones and the attachment-point
+     * values — each `attach` keyword consumes the token after it as a point.
+     * A trailing `attach` with nothing after it (still being typed) is dropped,
+     * so it never constrains the row.
      * @param {QueryToken[]} tokens
-     * @param {string} word
-     * @returns {{text: QueryToken[], values: string[]}}
+     * @returns {{text: QueryToken[], attaches: string[]}}
      */
-    function splitKeyword(tokens, word) {
-        const prefix = word + ":";
-        const text = [], values = [];
-        for (const t of tokens) {
-            if (!t.text.startsWith(prefix)) {
-                text.push(t);
-                continue;
+    function splitAttachTokens(tokens) {
+        const text = [], attaches = [];
+        for (let i = 0; i < tokens.length; i++) {
+            if (tokens[i].text === ATTACH_WORD) {
+                const next = tokens[i + 1];
+                if (next) {
+                    attaches.push(next.text);
+                    i++;
+                }
+            } else {
+                text.push(tokens[i]);
             }
-            const v = t.text.slice(prefix.length).trim();
-            if (v) values.push(v);
         }
-        return {text, values};
+        return {text, attaches};
     }
 
     /**
      * Every attachment value must appear in the row's attachment haystack — the
-     * same substring convention the corpora use (`attach:chest` hits Chest,
+     * same substring convention the corpora use (`attach chest` hits Chest,
      * ChestBloodBack and ChestBloodFront).
      * @param {string[]} attaches
      * @param {string} attachL
@@ -376,12 +305,8 @@ window.EpsilookSearch = (() => {
             return spellsByFile(tokens, data, data.modelFids, data.modelSpells);
         }
         const out = new Set();
-        const {text: withTests, values: attaches} = splitKeyword(tokens, ATTACH_WORD);
+        const {text: withTests, attaches} = splitAttachTokens(tokens);
         const {text, tests} = splitTargetTokens(withTests);
-        // everything below reads `text`, never the raw tokens: a half-typed
-        // `attach:` has already been dropped from it, so it narrows nothing
-        // while the point name is still being written
-        tokens = text;
         // Attachment points and the target mask both live on the ROW; the
         // (cat, fid) index below has neither, being shared across spells. Either
         // one in the query therefore forces the row walk.
@@ -491,22 +416,20 @@ window.EpsilookSearch = (() => {
     function spellsByAnim(tokens, data) {
         const out = new Set();
 
-        // bonesets: `boneset:"upper body"` matches spells whose AnimKits animate
-        // that region — each value a substring of the spell's boneset haystack,
-        // attach-style. The rest of the chip is ordinary anim text and still has
-        // to match, so the two intersect: anim:"kneel boneset:head" is a kneel
-        // that moves the head. (It used to eat every token after the keyword,
-        // which made that query search for a region called "head".)
-        const bones = splitKeyword(tokens, BONESET_WORD);
-        // as in spellsByModel: a half-typed `boneset:` is gone from bones.text,
-        // so the rest of the chip keeps searching while the region is written
-        tokens = bones.text;
-        if (bones.values.length) {
+        // bonesets: `boneset upper body` matches spells whose AnimKits animate
+        // that region. The keyword consumes every token after it as region words
+        // (a name may be several words); each must appear in the spell's boneset
+        // haystack, attach-style. Any plain anim text before the keyword still
+        // has to match too, so the two intersect.
+        const boneAt = tokens.findIndex((t) => t.text === BONESET_WORD);
+        if (boneAt >= 0) {
+            const words = tokens.slice(boneAt + 1).map((t) => t.text).filter(Boolean);
             for (const [s, hay] of data.spellBonesetL) {
-                if (bones.values.every((w) => hay.includes(w))) out.add(s);
+                if (words.every((w) => hay.includes(w))) out.add(s);
             }
-            if (bones.text.length) {
-                const animMatch = spellsByAnim(bones.text, data);
+            const plain = tokens.slice(0, boneAt);
+            if (plain.length) {
+                const animMatch = spellsByAnim(plain, data);
                 for (const s of [...out]) if (!animMatch.has(s)) out.delete(s);
             }
             return out;
@@ -586,7 +509,7 @@ window.EpsilookSearch = (() => {
         // An `attach <point>` matches its points on the SAME row as any chain
         // corpus words — "a fireball beam launched from the left hand", not "a
         // fireball beam somewhere and a left-hand attachment somewhere".
-        const {text: fxText, values: attaches} = splitKeyword(tokens, ATTACH_WORD);
+        const {text: fxText, attaches} = splitAttachTokens(tokens);
         if (attaches.length) {
             for (const [s, rows] of data.spellChainRows) {
                 for (const r of rows) {
@@ -669,7 +592,7 @@ window.EpsilookSearch = (() => {
         const field = FIELDS[g.field] ? g.field : "all";
         const combos = combosOf(g);
         const one = (/** @type {QueryToken[]} */ tokens) =>
-            spellsForChip(tokens, field, data);
+            spellsByCount(tokens, field, data) || FIELDS[field].run(tokens, data);
         if (combos.length === 1) return one(combos[0]);
         const out = new Set();
         for (const tokens of combos) for (const s of one(tokens)) out.add(s);
@@ -914,6 +837,6 @@ window.EpsilookSearch = (() => {
 
     return {
         searchGroups, sortByRelevance, expandAlts, combosOf,
-        FIELDS, TARGET_WORDS, COUNT_AXIS, COUNT_SOURCES, matchNumeric, hasOperator,
+        FIELDS, TARGET_WORDS, matchNumeric, hasOperator,
     };
 })();

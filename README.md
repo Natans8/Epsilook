@@ -22,16 +22,6 @@ Full syntax lives behind the **?** button in the app. The short version:
   `6dr_draenei_statue_male01.m2`. `"quoted words"` are an exact phrase.
 - **Field tags** narrow a term to one column: `name:` `model:` `sound:`
   `anim:` `fx:` `mech:` `id:`. Tags AND together; a `-` prefix excludes.
-- **`|` means either** — `model:fire|frost`, `fx:chain|dissolve`, `id:133,116` (a comma does the same between numbers).
-  Note the three readings of two words: `model:"fire missile"` is one model that is both, `model:fire model:missile` is
-  two different models, `model:fire|missile` is either one.
-- **Numbers are named and compared in one token**: `mech:seats>2`, `mech:speed<-50`, `fx:scale>=100`,
-  `mech:detectors=0`. `count` is the axis every column has — `model:count>4`, `sound:count=0` — and a bare operator is
-  its shorthand (`model:>4`).
-- The bar **colours what the grammar recognises** and explains it on hover. Nothing is ever marked wrong: anything it
-  leaves plain is an ordinary text search, which is exactly what it does.
-- Hiding a column is display-only. It trims exports, but never changes which spells a query returns, so a shared link
-  gives everyone the same results.
 - **Target-type icons** on models, sounds, animations, effects and mechanics say who the content plays on — caster,
   target, or the target location. A row that plays on several shows one icon each. Search them like category words:
   `model:"caster fire"`, `sound:target`, `anim:both`.
@@ -42,11 +32,10 @@ Full syntax lives behind the **?** button in the app. The short version:
   (`fx:"object campfire"`, with `.gobject spawn` and `.lookup object` on the pill), `model:mount` for the mount it puts
   you on (`model:"mount stallion"`, with `.modify mount`), and `anim:replace` for animations it swaps out — `Stand → StealthStand`
   (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue).
-- Two keywords address a place rather than content, written `keyword:value` as one word: `attach:` for where on the
-  model something plays (`model:attach:chest`, `fx:"chain attach:hand"`) and `boneset:` for the body region an
-  animation moves (`anim:boneset:"upper body"`, `anim:boneset:head`) — most animations move the whole body, so only a
-  specific region is labelled on the pill. Being one word, they alternate like anything else, and the keyword carries
-  across the bar: `model:attach:right|left`.
+- Two keywords address a location rather than content: `attach` for where on the model something plays
+  (`model:"attach chest"`, `fx:"chain attach hand"`) and `boneset` for the body region an animation moves
+  (`anim:"boneset upper body"`, `anim:"boneset head"`) — most animations move the whole body, so only a specific region
+  is labelled on the pill.
 - **Click any tag in the results** to search for it (shift-click to exclude).
 - The search — filters included — always lives in the URL, so any result set is a shareable link. Append `&export=json`
   or `&export=csv` to download it.
@@ -149,10 +138,6 @@ into `meta.absentTables`.
   one record in `pilltypes.js` gives it a category word, that word's autocomplete description, its group head, its
   search-hit highlighting and the spells a query selects; the renderer is a list of segments. See
   **[PILLS.md](PILLS.md)** — it also carries the segment-order convention and the rules for choosing a keyword.
-- **A new number to compare on**: a `numeric` block on the pill-type record — `of(data, id)` reads it, `axis` names it
-  (defaults to the type's own word). The name becomes a one-token query (`mech:seats>2`), an autocomplete entry and a
-  tooltip in the search bar, all from that one declaration. A whole-column count is one entry in `COUNT_SOURCES`
-  (`search.js`) instead.
 - **A new copy command**: `spellCommands` in `config.js` for per-spell buttons; the `*CopyTemplate` entries for the ones
   on tags.
 - **A new theme**: every colour in `app.css` comes from a token in the block at the top, so a theme is one
