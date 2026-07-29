@@ -34,8 +34,9 @@ Full syntax lives behind the **?** button in the app. The short version:
   (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue).
 - **A word may be followed by its value**, space-separated, and that is the only value form in the language:
   `model:"attach chest"` (where on the model it plays), `anim:(boneset "upper body")` (which body region moves),
-  `mech:"seat >2"` (a numeric comparison), `fx:"scale 50"` (exactly +50%), `model:"count >4"` (`count` works in every
-  column, and a lone `model:>4` is its shorthand). **A value is always the one word that follows** — so a value with a
+  `mech:"seat >2"` (a numeric comparison), `fx:"scale 50"` (exactly +50%), `model:"count >4"` (`count` is the size of
+  the column itself — Models, Sounds and Animations each have one — and a lone `model:>4` is its shorthand). Every one
+  of these words autocompletes inside its column. **A value is always the one word that follows** — so a value with a
   space in it goes in quotes, and `boneset head kneel` is the head region *and* a kneel animation. On a number, a plain
   value is the `=` you did not have to type: `scale 50` is `scale =50`, and the sign is yours to keep
   (`fx:"scale -50"` shrinks). The search bar draws the word and its value joined, so you can see where the value ends.

@@ -966,14 +966,24 @@
         both: "Plays on the caster and the target",
     };
 
+    /* `count` is an axis rather than content — it asks how BIG the column is
+   * instead of what is in it — so it is named here beside the target words
+   * rather than in the pill-type registry. Its description is shared with the
+   * bar's highlighter (fieldVocab below), which is what stops the suggestion
+   * list and the tooltip teaching two different things. */
+    const COUNT_TIP = "How many entries this column has — count >4, count =0";
+
     /* The two meta keywords, named here because app.js builds queries with them.
    * Everything ELSE about them — which fields offer them, what the tooltip says,
    * which packs carry the data — lives in ONE record, Search.META_KEYWORDS, so
    * the autocomplete and the search bar cannot describe them differently. */
     const ATTACH_WORD = "attach";
     const BONESET_WORD = "boneset";
-    // meta words take an argument after them, so picking one leaves a trailing space
-    const META_KEYWORDS = new Set(Object.keys(Search.META_KEYWORDS));
+    /* Words that say nothing without their argument, so picking one from the
+   * suggestion list leaves a trailing space ready for it. A numeric category
+   * word (seat, speed, scale) is deliberately NOT here: it is a perfectly good
+   * search on its own, and the value only narrows it. */
+    const ARGUMENT_WORDS = new Set([...Object.keys(Search.META_KEYWORDS), Search.COUNT_AXIS]);
 
     /**
      * The words a field offers in autocomplete, with their descriptions: its
@@ -989,6 +999,11 @@
         // its words come from the same registry, so nothing else needed saying
         if (!d || !["model", "sound", "anim", "fx", "mech"].includes(field)) return null;
         const {words, titles} = P.keywordsFor(field, d);
+        // the count axis, wherever the column has anything to count
+        if (Search.COUNT_SOURCES[field]) {
+            words.push(Search.COUNT_AXIS);
+            titles[Search.COUNT_AXIS] = COUNT_TIP;
+        }
         for (const w of Search.keywordsIn(field, d)) {
             words.push(w);
             titles[w] = Search.META_KEYWORDS[w].hint;
@@ -1076,11 +1091,11 @@
     }
 
     // complete the partial last word of the chip's text to the category word.
-    // a meta keyword (attach/boneset) takes an argument after it, so leave a
-    // trailing space ready for it (attach chest) rather than butting the caret
+    // a word that needs an argument (attach/boneset/count) leaves a trailing
+    // space ready for it (attach chest, count >4) rather than butting the caret
     function applyCategoryWord(word) {
         const input = qInput;
-        input.value = input.value.replace(/\S*$/, word) + (META_KEYWORDS.has(word) ? " " : "");
+        input.value = input.value.replace(/\S*$/, word) + (ARGUMENT_WORDS.has(word) ? " " : "");
         hideSuggest();
         input.focus();
         input.setSelectionRange(input.value.length, input.value.length);
@@ -1146,7 +1161,6 @@
 
     const PHRASE_TIP = "Exact phrase — these words together, in this order";
     const ALT_TIP = "Either side matches";
-    const COUNT_TIP = "How many entries this column has — count >4, count =0";
 
     /* The vocabulary is rebuilt on every keystroke otherwise — it walks the
      * whole pill-type registry — so it is cached per field until the pack
@@ -1162,8 +1176,10 @@
 
     /**
      * Every word one field's chips can carry, and which of them take a value.
-     * Same sources as the autocomplete — a word that autocompletes must
-     * highlight, or the two are describing different languages.
+     * THE WORDS ARE THE AUTOCOMPLETE'S OWN LIST, read from `fieldCategories`
+     * rather than reassembled here — a word that autocompletes must highlight,
+     * or the two are describing different languages. All this adds is which of
+     * them take something after them, which the suggestion list has no use for.
      * @param {string} field
      * @returns {BarVocab}
      */
@@ -1178,23 +1194,16 @@
         // drawn from the URL before the pack finishes loading) — the cache key
         // is the data object, and null is a legitimate value of it
         if (!d) return v;
-        if (fieldCategories(field)) {
-            const {words, titles} = P.keywordsFor(field, d);
-            for (const w of words) v.words.set(w, titles[w] || "");
-            for (const w of Search.TARGET_WORDS) v.words.set(w, TARGET_WORD_TITLES[w]);
+        const cats = fieldCategories(field);
+        if (cats) {
+            for (const w of cats.words) v.words.set(w, cats.titles[w] || "");
             // a category word whose pill type carries a number takes a comparison
             for (const t of P.typesFor(field)) {
                 if (t.numeric && t.word && (!t.when || t.when(d))) v.valued.add(t.word);
             }
-            if (Search.COUNT_SOURCES[field]) {
-                v.words.set(Search.COUNT_AXIS, COUNT_TIP);
-                v.valued.add(Search.COUNT_AXIS);
-            }
+            if (Search.COUNT_SOURCES[field]) v.valued.add(Search.COUNT_AXIS);
         }
-        for (const w of Search.keywordsIn(field, d)) {
-            v.keywords.add(w);
-            v.words.set(w, Search.META_KEYWORDS[w].hint);
-        }
+        for (const w of Search.keywordsIn(field, d)) v.keywords.add(w);
         barVocab.byField.set(field, v);
         return v;
     }
