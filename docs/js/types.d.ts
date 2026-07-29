@@ -788,6 +788,28 @@ interface EpsilookSearchApi {
     /** Target-type query words ("caster", "target", "area", "both"). */
     TARGET_WORDS: string[];
 
+    /** The meta keywords, keyed by word: which fields carry them, what they take. */
+    META_KEYWORDS: Record<string, {
+        fields: string[]; value: string; example: string;
+        names(d: SpellData): string[];
+    }>;
+
+    /** The meta keywords one field can carry. */
+    keywordsIn(field: string): string[];
+
+    /** How many tokens after `tokens[i]` that keyword takes as its value (0 = none). */
+    keywordRun(tokens: { text: string }[], i: number, data: SpellData): number;
+
+    /** A chip's tokens split into the plain ones and one keyword's values. */
+    splitKeyword(tokens: QueryToken[], word: string, data: SpellData):
+        { text: QueryToken[]; values: string[] };
+
+    /** The reserved word for a column's own size. */
+    COUNT_AXIS: string;
+
+    /** How many pills a column shows for one spell, per countable field. */
+    COUNT_SOURCES: Record<string, (data: SpellData, spellId: number) => number>;
+
     /** True when `text` is a numeric-comparison token ("4", ">2", "<=3")
      *  satisfied by `n`. Shared by the fx column's numeric categories. */
     matchNumeric(text: string, n: number): boolean;

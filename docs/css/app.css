@@ -597,7 +597,10 @@ main {
 /* only the true trailing gap (nothing after it) fills the rest of the
  * line; a gap before or between chips hugs its content instead, so it
  * doesn't shove the chips after it away */
+/* position: relative makes this the offsetParent of both #q and the highlight
+   backdrop, so syncHighlight can copy the input's box in one coordinate system */
 #editwrap {
+    position: relative;
     display: inline-flex;
     align-items: baseline;
     max-width: 100%;
@@ -631,6 +634,37 @@ main {
 
 #q::placeholder {
     color: var(--text-dim);
+}
+
+/* The highlight backdrop. Every metric here is #q's, because a glyph that lands
+   one pixel off the character it colours reads as a rendering bug; the box
+   itself is copied from the input at runtime (syncHighlight). Inert by
+   construction — the input above it owns every interaction. */
+#qhl {
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+    white-space: pre;
+    font-family: inherit;
+    font-size: 1.1rem;
+    line-height: 1.2;
+    padding: 0.15rem 0;
+    color: var(--text);
+}
+
+/* Only while there is something to draw: an empty input must keep its
+   placeholder, and a browser with the backdrop hidden must keep readable text
+   rather than a transparent one. */
+#editwrap.hl #q {
+    color: transparent;
+    caret-color: var(--text);
+}
+
+/* selected text redraws itself above the backdrop, so a selection still shows
+   the words rather than a bare highlight block */
+#editwrap.hl #q::selection {
+    color: var(--text);
 }
 
 #editwrap:not(.fill):not(.editing) #q {
@@ -761,6 +795,70 @@ main {
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 24rem;
+}
+
+/* ---- what the query grammar recognises, marked in place -------------------
+   ONE SHAPE, because the grammar has one: a word, optionally followed by its
+   value. `attach chest`, `boneset upper body`, `seat >2`, `count >4` are all
+   the same thing, so they all draw the same way — a subtle capsule around the
+   word and its value together, the word tinted and the value plain. A word
+   with no value (`missile`, `caster`) is just the tint.
+
+   Nothing is ever marked wrong. Anything the grammar does not recognise is an
+   ordinary text search, and is drawn as ordinary text.
+
+   These style spans in two places at once: inside a committed chip (real DOM,
+   native title tooltips) and inside #qhl (the input's backdrop, where app.js
+   serves the tooltip by hit-test). One rule set for both is the point.
+
+   METRICS ARE OFF-LIMITS IN THE BACKDROP. The caret and the native selection
+   follow the input's own unstyled text, so anything that changes an advance
+   width there — weight, italics, letter-spacing, padding — slides the visible
+   glyphs out from under the caret. Colour, background and text-decoration are
+   free; weight lives under `.qchip-text`, where there is no caret to betray. */
+.bar-tok {
+    border-radius: 3px;
+}
+
+/* app.js sets .hover on the backdrop span under the pointer — the backdrop is
+   pointer-events: none, so :hover can never fire there on its own */
+.bar-tok.hover, .qchip-text .bar-tok:hover {
+    background: rgba(var(--overlay-rgb), calc(0.14 * var(--wash-strength)));
+}
+
+.qchip-text .bar-tok {
+    cursor: help;
+}
+
+.bar-kw, .bar-alt, .bar-num {
+    color: var(--gold);
+}
+
+/* weight only where there is no caret to slide out from under (see above) */
+.qchip-text .bar-kw,
+.qchip-text .bar-alt {
+    font-weight: 650;
+}
+
+/* the capsule: a word and its value, held together by one faint fill. The two
+   halves are separate spans only so the word can be tinted and the value not —
+   they must read as one object, hence the shared background and the rounding
+   on the outside corners only. */
+.bar-cap-l, .bar-cap-r {
+    background: rgba(var(--overlay-rgb), calc(0.10 * var(--wash-strength)));
+}
+
+.bar-cap-l {
+    border-radius: 4px 0 0 4px;
+}
+
+.bar-cap-r {
+    border-radius: 0 4px 4px 0;
+}
+
+.bar-phrase {
+    text-decoration: underline dotted var(--gold-dim);
+    text-underline-offset: 3px;
 }
 
 /* a glyph, not text — centre it rather than sitting it on the chip's baseline */
