@@ -1209,16 +1209,23 @@
      * the bar draws a single capsule shape and the user is told a single rule.
      * A meta keyword takes whatever token follows (search.js owns that call, so
      * the capsule always covers exactly what the matcher consumed); a numeric
-     * word takes the one comparison after it, and nothing else.
+     * word takes the one VALUE after it — a comparison, or the bare number that
+     * means `=` — which pills.js owns for the same reason.
+     *
+     * "Is a value" is asked of every ALTERNATIVE, not of the raw text, so
+     * `count >4|>9` capsules exactly like `count >4`: the engine runs an
+     * alternation as one combination per branch, and each of these branches is
+     * a value, so the whole token is one.
      * @param {BarVocab} v
-     * @param {{text: string}[]} spans
+     * @param {{text: string, alts: string[]}[]} spans
      * @param {number} i
      * @returns {number} tokens taken (0 = no value)
      */
     function valueRun(v, spans, i) {
         const word = spans[i].text;
         if (v.keywords.has(word)) return Search.keywordRun(spans, i);
-        if (v.valued.has(word) && spans[i + 1] && isComparison(spans[i + 1].text)) return 1;
+        const next = spans[i + 1];
+        if (v.valued.has(word) && next && next.alts.every((a) => P.isValue(a))) return 1;
         return 0;
     }
 

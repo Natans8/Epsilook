@@ -192,16 +192,30 @@ Two axes, and the difference matters:
 | `numeric.kind: "value"` | a measurement the id carries     | a desaturation percent |
 | `bare`                  | a bare number that **is** the id | an invisibility type   |
 
-**A number is written as the category word, then the comparison** — `mech:"seat >2"`, `fx:"scale >100"`,
-`mech:"speed <-50"` — which is the same shape as every other value in the language (`attach chest`,
+**A number is written as the category word, then its value** — `mech:"seat >2"`, `fx:"scale >100"`,
+`mech:"speed <-50"`, `fx:"scale 50"` — which is the same shape as every other value in the language (`attach chest`,
 `boneset upper body`, `count >4`). A type therefore never needs a second name for its number: the word it already has
 IS the name. An earlier pass invented `seats`, `detectors` and `reveals` as separate axis names glued to their
 operators; that gave the language a third way to attach a value and two words for one concept, and it was reverted.
 
-`operatorOnly: true` reserves bare numbers for the text or `bare` axis, so only `<`, `>`, `<=`, `>=`, `=` reach the
-number. That is what lets
-`fx:"invis 13"` mean type 13 while `fx:"invis =0"` means the invisibility nothing detects — and why `model:2` still
-matches `cfx_fire_02.m2`.
+**A plain number is the `=` you did not have to type.** `fx:"scale 50"` is `fx:"scale =50"` — a synonym, not a form of
+its own, so there is one comparison grammar and omitting the operator picks its default. It is emphatically NOT an
+absolute value: the sign is meaningful on every axis that has one (`fx:"scale -50"` shrinks), and folding it away would
+leave no way to ask for one direction while `scale >0` and `scale <0` already say it.
+
+`bindNumeric` (pills.js) is what makes that precise. It takes the ONE token after the word — the same arity a meta
+keyword has — out of the chip and asks the numeric axis instead, so the number never reaches the corpus.
+`tokenMatches` tries the corpus first, so before this a bare `50` matched `+150%` as a substring long before it could
+be tested as a number (349 rows became 483 on 9.2.7).
+
+`operatorOnly: true` governs a number standing **loose** in the chip — one not written against its word — reserving it
+for the text or `bare` axis. So `mech:"speed run 70"` still reads the corpus the pill prints, and `model:2` still
+matches `cfx_fire_02.m2`. A type declaring `bare` is left alone by `bindNumeric` entirely: there the number after the
+word is the id itself, which is what lets `mech:"invis 13"` mean channel 13 while `mech:"invis =0"` means the
+invisibility nothing detects.
+
+The search bar draws exactly this: `Pills.isValue` is the one predicate, and the bar's capsule asks it, so what is
+drawn as a word-and-value and what binds as one cannot drift apart.
 
 **A bound may be negative or fractional, because values are.** A movement-speed change is signed, so `fx:"speed <-50"`
 asks for snares worse than half; `numericPredicate` (search.js) and `tokenMatches` (pills.js) parse the same shape and
@@ -215,7 +229,9 @@ below −100%, which as a resulting speed would be negative. The friendlier read
 free to be absent when it says nothing.
 
 `count` is the reserved word for the column's own size, spelled the same way in every field —
-`model:"count >4"`, `sound:"count =0"` — with a lone comparison (`model:>4`) as its shorthand. Its source is
+`model:"count >4"`, `sound:"count =0"`, `model:"count 4"` — with a lone comparison (`model:>4`) as its shorthand. The
+shorthand still needs its operator, and only the shorthand does: written against the word a bare number is that word's
+argument like any other, but standing alone `model:4` is a substring search for "4" and always has been. Its source is
 `COUNT_SOURCES` in `search.js`, one entry per countable column. It counts the WHOLE column, not the rows matching the
 chip's other tokens; narrowing that needs the column matchers rebuilt as per-spell entry iterators, which is its own
 pass.

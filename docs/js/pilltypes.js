@@ -18,8 +18,10 @@
  *   bare     a bare number that IS the id (an invisibility type).
  *   numeric  a number the id carries. `kind: "count"` counts things (a
  *            vehicle's seats), `kind: "value"` is a measurement (a percent).
- *            `operatorOnly: true` means a bare number keeps its text/bare
- *            meaning and only `>`, `<`, `>=`, `<=`, `=` reach this axis.
+ *            Written against the word it is that word's ARGUMENT and always
+ *            reaches this axis, bare or not — fx:"scale 50" is fx:"scale =50".
+ *            `operatorOnly: true` governs a number standing LOOSE in the chip:
+ *            without an operator it keeps its text/bare meaning instead.
  *
  * Types with neither corpus nor spells are KEYWORD-ONLY: their column matches
  * them through its own indexes (model files, animation names), and the record
@@ -144,9 +146,9 @@
         hint: "Model tint (SpellProceduralEffect)",
         corpus: (d) => d.tintSearchL, spells: (d) => d.tintSpells,
     });
-    /* The percent IS the id, so the numeric axis reads the key itself. Bare
-     * numbers stay a substring on the "desaturate 70%" corpus (fx:"desaturate
-     * 70"); only an operator asks for a comparison. */
+    /* The percent IS the id, so the numeric axis reads the key itself.
+     * fx:"desaturate 70" asks it for exactly 70%; a number loose in the chip
+     * stays a substring on the "desaturate 70%" corpus. */
     T({
         key: "fx:desaturate", field: "fx", word: "desaturate",
         hint: "Model desaturation (SpellProceduralEffect)",
@@ -171,8 +173,9 @@
         hint: "Camouflage / cloaking effect (SpellProceduralEffect)",
         spells: (d) => d.spellCamos,
     });
-    /* Seat count is a genuine count, and bare numbers reach it (fx:"seat 8"),
-     * because a vehicle's corpus is words only — nothing else could claim one. */
+    /* Seat count is a genuine count, and mech:"seat 8" asks it for exactly 8.
+     * No operatorOnly: a vehicle's corpus is attachment names, so a loose
+     * number has nothing else here it could have meant. */
     T({
         key: "fx:seat", field: "mech", word: "seat",
         hint: "Seat of the vehicle the caster becomes (SpellEffect SET_VEHICLE_ID)",
@@ -209,8 +212,12 @@
     });
     /* The two sides of an invisibility channel. All three axes at once: the
      * category word is the corpus, the invisibility TYPE is the bare number
-     * (fx:"invis 13"), and the COUNTERPART count answers only to an operator
-     * (fx:"invis =0" = an invisibility nothing detects). */
+     * (mech:"invis 13"), and the COUNTERPART count answers only to an operator
+     * (mech:"invis =0" = an invisibility nothing detects).
+     *
+     * The ONE pair whose argument is not the numeric axis: a number after the
+     * word is the channel, because that is what its number IS. Declaring `bare`
+     * is the whole of saying so — bindNumeric leaves such a type alone. */
     T({
         key: "fx:invis", field: "mech", word: "invis",
         hint: "Invisibility channel the aura hides in (MOD_INVISIBILITY)",
@@ -238,10 +245,9 @@
     });
     /* Movement speed. The id is the (movement, percent) pair, so the corpus
      * holds both — fx:"speed swim" and fx:"speed +70%" ask different questions
-     * of the same pills. The percent answers to an operator only, leaving a
-     * bare number its literal meaning (fx:"speed 70" finds +70%, not 70 of
-     * anything); operators reach the signed value, so fx:"speed <-50" is
-     * "slows worse than half". */
+     * of the same pills. fx:"speed 70" is the percent, exactly +70%; the axis
+     * is signed, so fx:"speed <-50" is "slows worse than half". Loose numbers
+     * stay corpus text (fx:"speed run 70" reads the pill's own label). */
     T({
         key: "fx:speed", field: "mech", word: "speed",
         hint: "Movement speed change — run, mounted, swim, flight or all at once",
@@ -253,8 +259,8 @@
     });
     /* Object scale — movement speed's shorter twin. There is only one thing
      * these auras scale, so the percent IS the id and the numeric axis reads it
-     * directly, the way desaturate does. Operator-only for the same reason:
-     * fx:"scale 30" should find +30%, not 30 of something. */
+     * directly, the way desaturate does. fx:"scale 30" is exactly +30%, and
+     * -30% is written as it reads: fx:"scale -30". */
     T({
         key: "fx:scale", field: "fx", word: "scale",
         hint: "Size change the aura applies",

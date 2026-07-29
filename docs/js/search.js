@@ -94,8 +94,10 @@ window.EpsilookSearch = (() => {
     /**
      * True when a token carries a comparison operator (<, >, <=, >=, =) — i.e. it
      * asks for a numeric match rather than a value/word match. A bare number is
-     * NOT an operator (it keeps its per-field literal meaning), per the search
-     * convention that numeric comparison is opt-in via an operator.
+     * NOT an operator: standing loose in a chip it keeps its per-field literal
+     * meaning. (Written against a numeric word it does ask for a comparison —
+     * see Pills.bindNumeric — but that is decided by the pair, not the token,
+     * so it is not a question this predicate can answer.)
      * @param {string} text
      * @returns {boolean}
      */
@@ -131,11 +133,14 @@ window.EpsilookSearch = (() => {
      * `count` is the size of the column itself, and it is written the way every
      * other value is: the word, then its comparison.
      *
-     *   model:"count >4"   sound:"count =0"   fx:"chain count >2"
+     *   model:"count >4"   sound:"count =0"   fx:"chain count >2"   anim:"count 3"
      *
      * A LONE comparison is its shorthand, which is what that chip has always
-     * meant: `model:>4` is `model:"count >4"`. The operator is required either
-     * way, because a bare `model:2` is still a substring search for "2".
+     * meant: `model:>4` is `model:"count >4"`. THE SHORTHAND STILL NEEDS ITS
+     * OPERATOR, and only the shorthand does: written against the word a bare
+     * number is the word's argument and means `=` (`count 3` is `count =3`,
+     * like every other numeric word), but standing alone it is nothing of the
+     * sort — a bare `model:2` is a substring search for "2" and always has been.
      *
      * Being a word rather than a private form is what makes it commutative with
      * the chip's other tokens — the same rule as `seat >2` one column over.
@@ -153,10 +158,12 @@ window.EpsilookSearch = (() => {
         if (!countable) return {text: tokens, counts: []};
         const text = [], counts = [];
         const isCmp = (t) => t && /^(<=|>=|<|>|=)-?\d+(?:\.\d+)?$/.test(t.text);
+        // an argument of the word — a comparison, or the bare number that means "="
+        const isValue = (t) => t && Pills.isValue(t.text);
         // the shorthand: one comparison, alone, with no word in front of it
         const lone = tokens.length === 1 && isCmp(tokens[0]);
         for (let i = 0; i < tokens.length; i++) {
-            if (tokens[i].text === COUNT_AXIS && isCmp(tokens[i + 1])) {
+            if (tokens[i].text === COUNT_AXIS && isValue(tokens[i + 1])) {
                 counts.push(numericPredicate(tokens[i + 1].text));
                 i++;
                 continue;

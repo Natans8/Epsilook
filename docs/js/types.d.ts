@@ -957,6 +957,11 @@ interface EpsilookPillsApi {
     /** Does one id of this type satisfy every token of a chip? */
     idMatches(type: PillType, data: SpellData, id: any, tokens: { text: string }[]): boolean;
 
+    /** Does this token read as a numeric word's value — a comparison, or the
+     *  bare number that means "="? The search bar asks, so its capsule covers
+     *  exactly what the matcher binds. */
+    isValue(text: string): boolean;
+
     /** Add every spell this type's matching ids reach to `out`. */
     scanType(type: PillType, data: SpellData, tokens: { text: string }[], out: Set<number>): void;
 

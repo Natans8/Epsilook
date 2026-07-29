@@ -581,10 +581,16 @@ window.EpsilookPills = (() => {
      *            for a type with no per-id corpus, the category word itself
      *   bare     a bare number that IS the id's identity (an invisibility type)
      *   numeric  a number the id CARRIES — a count of things (a vehicle's seats)
-     *            or a value (a desaturation percent). `operatorOnly` reserves
-     *            bare numbers for the other axes: without an operator the token
-     *            keeps its text/bare meaning, which is what lets fx:"invis 13"
-     *            mean type 13 while fx:"invis =0" means "nothing detects it".
+     *            or a value (a desaturation percent). `operatorOnly` reserves a
+     *            LOOSE bare number for the other axes: standing on its own the
+     *            token keeps its text/bare meaning, which is what lets
+     *            fx:"invis 13" mean type 13 and fx:"speed run 70" stay a search
+     *            of the corpus the pill prints.
+     *
+     * THE ARGUMENT (bindNumeric, below). Saying the word first is what makes a
+     * bare number a NUMBER: `fx:"scale 50"` asks the scale axis for exactly 50,
+     * the same question as `fx:"scale =50"`, and `operatorOnly` does not apply
+     * because the number is no longer loose.
      *
      * KEYWORDS. A type with a `word` contributes it to its field's autocomplete,
      * with `hint` as the description, gated by `when(data)` so a pack that
@@ -596,7 +602,8 @@ window.EpsilookPills = (() => {
      * @typedef {Object} PillNumericAxis
      * @property {"count"|"value"} kind  what the number means, for the docs
      * @property {(data: any, id: any) => number} of
-     * @property {boolean} [operatorOnly] bare numbers are NOT this axis
+     * @property {boolean} [operatorOnly] a LOOSE bare number is not this axis
+     *                                    (one written against the word still is)
      */
 
     /**
@@ -643,6 +650,93 @@ window.EpsilookPills = (() => {
         return type.corpus(data).get(id) || "";
     }
 
+    /* A numeric word's value: an optional comparison and a number. The number
+     * may be signed, because the values are — a movement-speed change is
+     * negative when it slows, so a bound may be negative too ("<-50"). */
+    const VALUE_RE = /^(<=|>=|<|>|=)?(-?\d+(?:\.\d+)?)$/;
+
+    /**
+     * Does this token read as a numeric word's value? The search bar asks, so
+     * that the capsule it draws covers exactly what binds below — one regex,
+     * one home, and no way for the drawing and the matching to disagree.
+     * @param {string} text
+     * @returns {boolean}
+     */
+    const isValue = (text) => VALUE_RE.test(text);
+
+    /**
+     * A value token as a test on a number, or null when it is not one.
+     *
+     * A BARE number is the `=` case — an operator you did not have to type —
+     * rather than a form of its own. That is the whole of "a plain number is a
+     * synonym for equals": there is one comparison grammar, and omitting the
+     * operator picks its default. Absolute value was the alternative and is
+     * NOT what this does: the sign is meaningful on every axis that has one
+     * (a scale of -50% shrinks), and folding it away would leave no way to ask
+     * for one direction while `scale >0` and `scale <0` already say it.
+     * @param {string} text
+     * @returns {((n: number) => boolean) | null}
+     */
+    function numericTest(text) {
+        const m = VALUE_RE.exec(text);
+        if (!m) return null;
+        const v = Number(m[2]);
+        switch (m[1]) {
+            case "<":
+                return (n) => n < v;
+            case ">":
+                return (n) => n > v;
+            case "<=":
+                return (n) => n <= v;
+            case ">=":
+                return (n) => n >= v;
+            default:
+                return (n) => n === v; // "=", or a bare number
+        }
+    }
+
+    /**
+     * Bind a numeric word's ARGUMENT: the one token after the word, taken out
+     * of the chip's text and asked of the type's numeric axis instead.
+     *
+     *   fx:"scale 50"    fx:"scale >50"    mech:"seat 8"    fx:"speed <-50"
+     *
+     * ONE TOKEN AFTER THE WORD — the same arity a meta keyword has, so there is
+     * a single rule for every value in the language and the bar can draw a
+     * single capsule shape. A number that is NOT written against its word stays
+     * loose and keeps the meaning it always had (`operatorOnly` decides whether
+     * it reaches this axis at all), which is exactly what the capsule's absence
+     * says on screen.
+     *
+     * Binding is what makes a bare number precise. `tokenMatches` tries the
+     * corpus first, so a loose `50` matched `+150%` as a substring long before
+     * it could be tested as a number; bound, it never reaches the corpus.
+     *
+     * A type with a `bare` axis is left alone: there the number after the word
+     * is the id ITSELF (`fx:"invis 13"` is channel 13, and its numeric axis
+     * counts something else entirely — the detectors on the other side). It is
+     * still the word's argument, just bound to identity, which `tokenMatches`
+     * already answers per token.
+     * @param {PillType} type
+     * @param {{text: string}[]} tokens
+     * @returns {{tokens: {text: string}[], tests: ((n: number) => boolean)[]}}
+     */
+    function bindNumeric(type, tokens) {
+        if (!type.numeric || !type.word || type.bare) return {tokens, tests: []};
+        const rest = [];
+        /** @type {((n: number) => boolean)[]} */
+        const tests = [];
+        for (let i = 0; i < tokens.length; i++) {
+            rest.push(tokens[i]);
+            const next = tokens[i + 1];
+            const test = tokens[i].text === type.word && next && numericTest(next.text);
+            if (!test) continue;
+            tests.push(test);
+            i++;
+        }
+        return {tokens: rest, tests};
+    }
+
     /**
      * Does one query token match this id of this type? The one place the axes
      * are combined — every caller, in both files, goes through here.
@@ -659,31 +753,41 @@ window.EpsilookPills = (() => {
         const operator = /^[<>=]/.test(text);
         if (type.bare && !operator && String(type.bare(data, id)) === text) return true;
         if (type.numeric && !(type.numeric.operatorOnly && !operator)) {
-            // the value may be signed (a movement-speed change is negative when
-            // it slows), so a comparison may name a negative bound: "<-50"
-            const m = /^(<=|>=|<|>|=)?(-?\d+(?:\.\d+)?)$/.exec(text);
-            if (m) {
-                const n = type.numeric.of(data, id), v = Number(m[2]);
-                switch (m[1]) {
-                    case "<":
-                        return n < v;
-                    case ">":
-                        return n > v;
-                    case "<=":
-                        return n <= v;
-                    case ">=":
-                        return n >= v;
-                    default:
-                        return n === v;
-                }
-            }
+            const test = numericTest(text);
+            if (test) return test(type.numeric.of(data, id));
         }
         return false;
     }
 
     /**
-     * Does this id satisfy a whole chip? (Every token must match — the group
-     * semantics the rest of the search uses.)
+     * Does this id satisfy a chip whose argument is already bound? Every
+     * remaining token must match, and every bound value must hold — the group
+     * semantics the rest of the search uses.
+     * @param {PillType} type
+     * @param {any} data
+     * @param {any} id
+     * @param {{text: string}[]} tokens  what bindNumeric left
+     * @param {((n: number) => boolean)[]} tests
+     * @returns {boolean}
+     */
+    function matchesBound(type, data, id, tokens, tests) {
+        if (tests.length) {
+            const n = type.numeric.of(data, id);
+            for (const test of tests) {
+                if (!test(n)) return false;
+            }
+        }
+        const corpusL = corpusOf(type, data, id);
+        for (const t of tokens) {
+            if (!tokenMatches(type, data, id, corpusL, t)) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Does this id satisfy a whole chip? The single-id entry point — app.js
+     * lights a pill up through it, so a pill can only ever glow under a query
+     * that also selects its spell.
      * @param {PillType} type
      * @param {any} data
      * @param {any} id
@@ -691,11 +795,8 @@ window.EpsilookPills = (() => {
      * @returns {boolean}
      */
     function idMatches(type, data, id, tokens) {
-        const corpusL = corpusOf(type, data, id);
-        for (const t of tokens) {
-            if (!tokenMatches(type, data, id, corpusL, t)) return false;
-        }
-        return true;
+        const {tokens: rest, tests} = bindNumeric(type, tokens);
+        return matchesBound(type, data, id, rest, tests);
     }
 
     /**
@@ -709,14 +810,17 @@ window.EpsilookPills = (() => {
     function scanType(type, data, tokens, out) {
         if (!type.spells) return;
         const spells = type.spells(data);
+        // the argument depends on the chip and the type, never on the id, so it
+        // binds once for the whole scan rather than per row
+        const {tokens: rest, tests} = bindNumeric(type, tokens);
         // a Set is the valueless shape (freeze/camo): no ids, the word is the
         // whole query, and every spell in the set matches or none does
         if (spells instanceof Set) {
-            if (idMatches(type, data, null, tokens)) for (const s of spells) out.add(s);
+            if (matchesBound(type, data, null, rest, tests)) for (const s of spells) out.add(s);
             return;
         }
         for (const [id, ids] of spells) {
-            if (idMatches(type, data, id, tokens)) for (const s of ids) out.add(s);
+            if (matchesBound(type, data, id, rest, tests)) for (const s of ids) out.add(s);
         }
     }
 
@@ -751,6 +855,7 @@ window.EpsilookPills = (() => {
         link, view, play, targets, swatch, icon, label, note, aside, copy, cmd,
         // pill-type registry
         defineType, typesFor, idMatches, scanType, keywordsFor, hintFor, TYPES,
+        isValue,
         // composition helpers
         tip, query, quoted, catQuery, tagValue, tagQuery, fillTemplate, el,
         // target-mask vocabulary

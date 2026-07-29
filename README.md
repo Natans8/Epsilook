@@ -33,16 +33,17 @@ Full syntax lives behind the **?** button in the app. The short version:
   you on (`model:"mount stallion"`, with `.modify mount`), and `anim:replace` for animations it swaps out — `Stand → StealthStand`
   (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue).
 - **A word may be followed by its value**, space-separated, and that is the only value form in the language:
-  `model:"attach chest"` (where on the model it plays), `anim:"boneset upper body"` (which body region moves),
-  `mech:"seat >2"` (a numeric comparison), `model:"count >4"` (`count` works in every column, and a lone `model:>4` is
-  its shorthand). A value takes as many words as it needs and no more — `boneset upper body` is one region, while
-  `boneset head kneel` is the head region *and* a kneel animation. The search bar draws the word and its value joined,
-  so you can see how far the value reached.
+  `model:"attach chest"` (where on the model it plays), `anim:(boneset "upper body")` (which body region moves),
+  `mech:"seat >2"` (a numeric comparison), `fx:"scale 50"` (exactly +50%), `model:"count >4"` (`count` works in every
+  column, and a lone `model:>4` is its shorthand). **A value is always the one word that follows** — so a value with a
+  space in it goes in quotes, and `boneset head kneel` is the head region *and* a kneel animation. On a number, a plain
+  value is the `=` you did not have to type: `scale 50` is `scale =50`, and the sign is yours to keep
+  (`fx:"scale -50"` shrinks). The search bar draws the word and its value joined, so you can see where the value ends.
 - **`|` means either** — `model:fire|frost`, `fx:chain|dissolve`, with or without spaces around the bar;
   `id:133,116` does the same between numbers.
 - The bar **colours what the grammar recognises** and explains it on hover. Nothing is ever marked wrong: anything it
   leaves plain is an ordinary text search, which is exactly what it does.
-- **Click any tag in the results** to search for it (shift-click to exclude).
+- **Click any tag in the results** to search for it — shift-click adds it to the search, ctrl-click excludes it.
 - The search — filters included — always lives in the URL, so any result set is a shareable link. Append `&export=json`
   or `&export=csv` to download it.
 - Pasting an Epsilon command works: `.cast 12345` becomes an `id:` search.
