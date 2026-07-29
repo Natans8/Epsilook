@@ -12,11 +12,14 @@ Two families of check live here.
   just used to be four commands to remember.
 
   REPO GUARDS - the invariants CLAUDE.md states in prose and a human has to
-  remember: the ?v= string is one string in all thirteen places, it is bumped
-  whenever css/js changed against what is deployed, every module in docs/js is
-  actually referenced by index.html, the committed blobs are LF, and
-  versions.json agrees with the packs on disk down to the content hash - or
-  with their LFS pointers, which carry that same hash as their oid.
+  remember: the ?v= string is one string in both places (1 css + 1 js), it is
+  bumped whenever the css or the bundle's SOURCES changed against what is
+  deployed, the committed blobs are LF, and versions.json agrees with the
+  packs on disk down to the content hash - or with their LFS pointers, which
+  carry that same hash as their oid. The old "every module in docs/js is
+  loaded by index.html" guard lives in tools/build.mjs now: docs/js is the
+  BUILD OUTPUT, and the build fails on a source file its import graph never
+  reaches.
 
 A guard belongs here when it is mechanical and its failure is invisible. The
 ?v= bump is the archetype: nothing breaks at the time, the site just serves new
@@ -43,14 +46,13 @@ DOCS = ROOT / "docs"
 INDEX = DOCS / "index.html"
 MANIFEST = DOCS / "data" / "versions.json"
 
-# vendored: not ours to lint, and they carry no // @ts-check
-VENDORED = {"bufo.js", "js-blp.js"}
-
 # <link href="css/app.css?v=X"> / <script src="js/app.js?v=X">
 ASSET_RE = re.compile(r'(?:href|src)="((?:css|js)/[^"?]+)\?v=([0-9a-z]+)"')
 
-# a css/js change needs a bump; an html-only or data-only change does not
-BUMP_PATHS = ("docs/css", "docs/js")
+# a change to the css, the bundle's sources or the build itself needs a bump
+# (docs/js is generated and gitignored, so it can never appear in a diff);
+# an html-only or data-only change does not
+BUMP_PATHS = ("docs/css", "src", "tools/build.mjs")
 
 # An LFS pointer is a ~130-byte text stub whose oid IS the sha256 of the real
 # file - the same number versions.json stores. So the manifest can be checked
@@ -63,8 +65,8 @@ LFS_OID_RE = re.compile(rb"oid sha256:([0-9a-f]{64})")
 # The triggers are CLAUDE.md's own, restated where they can fire on their own.
 DOC_TRIGGERS = (
     (("build/build_data.py",), "DATA_ROUTES.md"),
-    (("docs/js/pills.js", "docs/js/pilltypes.js"), "PILLS.md"),
-    (("docs/js/config.js",), "README.md"),
+    (("src/pills.ts", "src/pilltypes.ts"), "PILLS.md"),
+    (("src/config.ts",), "README.md"),
 )
 
 RED, GREEN, YELLOW, DIM, RESET = "\033[31m", "\033[32m", "\033[33m", "\033[2m", "\033[0m"
@@ -115,6 +117,20 @@ def git(*args: str) -> str:
     return out.stdout or ""
 
 
+def changed_under(base: str, paths: tuple[str, ...]) -> list[str]:
+    """Files under `paths` that differ from `base`, UNTRACKED ONES INCLUDED.
+
+    esbuild bundles what is on disk, so a module that has not been `git add`ed
+    still reaches the deploy — and a diff alone would report nothing to bump.
+    """
+    out = {f for f in git("diff", "--name-only", base, "--", *paths).splitlines() if f}
+    for line in git("status", "--porcelain", "--untracked-files=all", "--", *paths).splitlines():
+        name = line[3:].strip()
+        if name:
+            out.add(name)
+    return sorted(out)
+
+
 def have_ref(ref: str) -> bool:
     return bool(git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").strip())
 
@@ -126,10 +142,13 @@ def asset_versions(html: str) -> list[tuple[str, str]]:
 # --------------------------------------------------------------- repo guards
 
 
-def check_assets(rep: Report) -> str | None:
-    """One ?v= string, every module referenced, every reference resolving.
+def check_assets(rep: Report, built: bool) -> str | None:
+    """One ?v= string, every reference resolving.
 
     Returns the current version string, or None if index.html has no assets.
+    `built` says whether the bundle was (re)built this run: docs/js is
+    generated and gitignored, so on a fresh checkout its absence means "not
+    built yet", not "broken" - only a run that built may insist it exists.
     """
     html = INDEX.read_text(encoding="utf-8")
     found = asset_versions(html)
@@ -146,20 +165,26 @@ def check_assets(rep: Report) -> str | None:
     rep.ok("asset ?v=", f"{version} on all {len(found)} references")
 
     referenced = {p for p, _ in found}
-    missing = sorted(p for p in referenced if not (DOCS / p).exists())
+    generated = {p for p in referenced if p.startswith("js/")}
+    required = referenced if built else referenced - generated
+    missing = sorted(p for p in required if not (DOCS / p).exists())
     if missing:
         rep.fail("asset files", f"referenced but absent: {', '.join(missing)}")
-    else:
+    elif built:
         rep.ok("asset files", f"all {len(referenced)} resolve")
+    else:
+        rep.ok("asset files",
+               f"{len(required)} committed assets resolve"
+               f" ({len(generated)} built ones unchecked - no build this run)")
 
-    # the other direction: a module added to docs/js that index.html never loads
-    on_disk = {f"js/{p.name}" for p in (DOCS / "js").glob("*.js")}
-    on_disk |= {f"css/{p.name}" for p in (DOCS / "css").glob("*.css")}
+    # the other direction, for the committed css only: docs/js is generated
+    # wholesale, and an unreachable SOURCE file fails in tools/build.mjs
+    on_disk = {f"css/{p.name}" for p in (DOCS / "css").glob("*.css")}
     orphans = sorted(on_disk - referenced)
     if orphans:
         rep.fail("asset wiring", f"present but never loaded: {', '.join(orphans)}")
     else:
-        rep.ok("asset wiring", "no unreferenced modules")
+        rep.ok("asset wiring", "no unreferenced stylesheets")
     return version
 
 
@@ -171,7 +196,7 @@ def check_bump(rep: Report, base: str, version: str | None) -> None:
         rep.skip("?v= bump", f"{base} not available here")
         return
 
-    changed = [f for f in git("diff", "--name-only", base, "--", *BUMP_PATHS).splitlines() if f]
+    changed = changed_under(base, BUMP_PATHS)
     deployed_html = git("show", f"{base}:docs/index.html")
     deployed = {v for _, v in asset_versions(deployed_html)}
 
@@ -308,11 +333,11 @@ def run_tool(rep: Report, name: str, cmd: list[str], detail: str = "") -> None:
 
 
 def check_toolchain(rep: Report) -> None:
-    ours = sorted(p for p in (DOCS / "js").glob("*.js") if p.name not in VENDORED)
-    run_tool(rep, "node --check", ["node", "--check", *[str(p) for p in ours]],
-             f"{len(ours)} hand-written modules")
-    run_tool(rep, "tsc", ["npx", "-p", "typescript", "tsc", "-p", "docs/jsconfig.json"],
-             "docs/jsconfig.json")
+    """tsc needs `npm install` once (typescript and esbuild are pinned
+    devDependencies); the build doubles as the module-graph guard."""
+    run_tool(rep, "tsc", ["npx", "tsc"], "strict, tsconfig.json")
+    run_tool(rep, "bundle", ["npm", "run", "--silent", "build"],
+             "esbuild src/main.ts -> docs/js/app.js")
     run_tool(rep, "mypy", ["python", "-m", "mypy", "build/build_data.py", "tools"])
     run_tool(rep, "pyflakes", ["python", "-m", "pyflakes", "build/build_data.py", "tools"])
 
@@ -331,12 +356,14 @@ def main() -> int:
     args = ap.parse_args()
 
     rep = Report(quiet=args.quiet)
-    version = check_assets(rep)
+    # toolchain first: the build must exist before the asset check may
+    # insist the bundle does
+    if not args.fast:
+        check_toolchain(rep)
+    version = check_assets(rep, built=not args.fast)
     check_bump(rep, args.base, version)
     check_line_endings(rep)
     check_manifest(rep)
-    if not args.fast:
-        check_toolchain(rep)
     check_docs(rep, args.base)
 
     print()

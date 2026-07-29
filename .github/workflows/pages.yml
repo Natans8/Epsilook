@@ -42,6 +42,23 @@ jobs:
         with:
           lfs: true
 
+      # The served JS is BUILT here, not committed: src/**/*.ts bundles into
+      # docs/js/app.js (tools/build.mjs). Note this build does NOT type-check —
+      # esbuild strips types without reading them — so a type error alone
+      # cannot block a deploy; tsc runs in ci.yml, which stays an alarm
+      # (CLAUDE.md, "CI is an alarm"). A genuinely unparseable source or an
+      # unreachable module does fail here, because then there is no bundle
+      # worth serving.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Build the bundle
+        run: |
+          npm ci
+          npm run build
+
       # If the LFS checkout silently no-ops, every pack is a 132-byte pointer
       # and the site would deploy green while serving nothing loadable. That is
       # exactly the invisible failure this repo keeps getting bitten by, so it

@@ -2,7 +2,7 @@
 #
 # These two facts are COUPLED and must change together. Pages does NOT resolve
 # LFS pointers, so serving `docs/` straight off a branch would ship ~130 bytes
-# of pointer text where data.js expects gzip and break every version. What makes
+# of pointer text where data.ts expects gzip and break every version. What makes
 # LFS safe here is that .github/workflows/pages.yml checks out with `lfs: true`
 # and uploads real files as the Pages artifact — Pages never reads the repo.
 # If the deploy ever moves back to "deploy from a branch", the packs must come

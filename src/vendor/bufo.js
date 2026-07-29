@@ -2,6 +2,10 @@
 	Bufo (https://github.com/Kruithne/node-bufo)
 	Author: Kruithne <kruithne@gmail.com>
 	License: MIT
+
+	Vendored: upstream's GitHub repository no longer exists and this is
+	newer than the last npm release (1.1.6). Only the export line below is
+	ours; the body is upstream's.
  */
 
 const ENDIAN_LITTLE = 0x0;
@@ -749,6 +753,4 @@ class Bufo {
     }
 }
 
-// Export to NodeJS.
-if (typeof module === 'object' && typeof module.exports === 'object')
-    module.exports = Bufo;
+export default Bufo;

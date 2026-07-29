@@ -21,21 +21,22 @@
     <meta property="og:description"
           content="Find spells by how they look and sound — search World of Warcraft spells by name, model, sound, animation or visual effect, and copy the Epsilon command.">
     <meta name="twitter:card" content="summary">
-    <!-- the address-bar tint follows `autoTheme` in config.js: dark's --bg and
+    <!-- the address-bar tint follows `autoTheme` in src/config.ts: dark's --bg and
          moonwell's (the light default) --bg -->
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e1116">
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#dedfe9">
     <link rel="icon"
           href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
-    <!-- bump ?v= on every deploy that touches css/js, or browsers keep stale copies -->
-    <link rel="stylesheet" href="css/app.css?v=20260729g">
+    <!-- bump ?v= on every deploy that touches the css or the bundle's sources,
+         or browsers keep stale copies (python tools/bump.py does both spots) -->
+    <link rel="stylesheet" href="css/app.css?v=20260729h">
     <script>
         // Replay the stored theme before the first paint, so a light theme
         // never flashes dark. Only that: the picker, the default and the
-        // registry live in js/theme.js + config.js, and no stored choice
+        // registry live in src/theme.ts + src/config.ts, and no stored choice
         // means the palette app.css already applies. The key and the "auto"
-        // id must match THEME_KEY / AUTO in js/theme.js, and the two ids below
-        // must match `autoTheme` in js/config.js — config has not loaded yet,
+        // id must match THEME_KEY / AUTO in src/theme.ts, and the two ids below
+        // must match `autoTheme` in src/config.ts — config has not loaded yet,
         // so this is the one place those ids are spelled twice.
         (() => {
             const AUTO_THEME = {light: "moonwell", dark: "dark"};
@@ -59,7 +60,7 @@
         <p class="tagline">Find spells by how they look and sound — a companion for Epsilon WoW</p>
     </div>
     <div class="header-controls">
-        <!-- filled from `themes` in config.js by js/theme.js, which also
+        <!-- filled from `themes` in src/config.ts by src/theme.ts, which also
              un-hides this once a second theme exists -->
         <div id="theme-wrap" hidden>
             <label for="theme">Theme</label>
@@ -84,7 +85,7 @@
           <!-- the syntax-highlight backdrop: an inert copy of the input's text
                drawn in classified spans directly under it. The input keeps the
                caret, the clicks and the selection; this only supplies colour.
-               See the bar-highlighting section in app.js. -->
+               See src/app/highlight.ts. -->
           <span id="qhl" aria-hidden="true"></span>
           <input id="q" type="text" autocomplete="off" spellcheck="false"
                  role="combobox" aria-expanded="false" aria-controls="suggest"
@@ -459,23 +460,8 @@
     const whTooltips = {colorLinks: false, iconizeLinks: false, renameLinks: false};
 </script>
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
-<script src="js/config.js?v=20260729g"></script>
-<script src="js/util.js?v=20260729g"></script>
-<!-- the theme picker: applies the stored palette and wires the header
-     dropdown; only needs config.js + util.js, so it goes on early -->
-<script src="js/theme.js?v=20260729g"></script>
-<script src="js/data.js?v=20260729g"></script>
-<!-- vendored MIT libs (Kruithne/node-bufo + Kruithne/js-blp) for decoding
-     raw .blp textures in the hover preview; bufo must load first -->
-<script src="js/bufo.js?v=20260729g"></script>
-<script src="js/js-blp.js?v=20260729g"></script>
-<!-- the pill/segment library: shared by app.js (rendering) and search.js
-     (the pill-type registry), so it loads before both -->
-<script src="js/pills.js?v=20260729g"></script>
-<script src="js/pilltypes.js?v=20260729g"></script>
-<script src="js/search.js?v=20260729g"></script>
-<script src="js/texture.js?v=20260729g"></script>
-<script src="js/export.js?v=20260729g"></script>
-<script src="js/app.js?v=20260729g"></script>
+<!-- the whole app: esbuild bundles src/**/*.ts into this one file
+     (tools/build.mjs) — module order lives in the import graph now -->
+<script src="js/app.js?v=20260729h"></script>
 </body>
 </html>

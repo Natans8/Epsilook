@@ -11,7 +11,9 @@ arrow`, `sound:felreaver`, `anim:ArtLoop` or `fx:"chain red"` and get every spel
 `.aura` / `.lookup` commands.
 
 The whole thing is a static site: one compressed data pack per game version, every search running in the browser. No
-server, no database, no build step, no runtime dependencies. Currently shipping WoW **9.2.7.45745**, ~276k spells.
+server, no database, no framework. The app is written in strict TypeScript and bundled into a single file by
+[esbuild](https://esbuild.github.io/) — the one build step, run by the deploy workflow, so the repo carries sources
+and the site serves one bundle. Currently shipping WoW **9.2.7.45745**, ~276k spells.
 
 ## Using it
 
@@ -52,27 +54,45 @@ Full syntax lives behind the **?** button in the app. The short version:
 ## How it works
 
 ```
+src/                     the app, strict TypeScript — bundled into docs/js/app.js by esbuild
+  main.ts                the entry point: the app's wiring, stated in one place
+  config.ts              copy-command templates and UI tunables
+  util.ts                leaf helpers shared by every module (DOM, templates)
+  theme.ts               the theme registry -> <html data-theme> + the picker
+  data.ts                pack loading + index building; the pack and index types
+  pills.ts               the segment library results are built from + the pill-type registry
+  pilltypes.ts           one record per kind of content shown and searched
+  search.ts              query parser + the FIELDS registry (one per prefix)
+  texture.ts             .blp loading + the texture/colour hover previews
+  export.ts              the results as CSV, JSON or a Discord code block
+  app/                   the UI, one module per subsystem
+    state.ts             the mutable UI state every other module reads
+    query.ts             chips <-> query text, and THE tokenizer
+    bar.ts               the chip search bar: sync, selection, undo
+    autocomplete.ts      the suggestion list (field prefixes + category words)
+    highlight.ts         bar syntax highlighting (the #qhl backdrop, capsules)
+    run.ts               running a search: debounce, filters, sort
+    render.ts            the results table: rows, cells, the height clamp
+    tags.ts              every pill builder (model/sound/anim/fx/mechanic)
+    hits.ts              hit-highlighting tests (shared with search selection)
+    sound.ts             the ▶ playback
+    clipboard.ts         copy + toast
+    url.ts               the URL as state: read, write, share
+    events.ts            event wiring
+    boot.ts              startup: load the manifest, activate a pack
+  vendor/                vendored BLP decoder (Kruithne, MIT) + hand-written .d.ts
 docs/                    the site — published to GitHub Pages by .github/workflows/pages.yml
   index.html             markup + the in-app help dialog
   404.html               the not-found page Pages serves for any missing path
   .nojekyll              tells GitHub Pages to serve the folder without Jekyll
-  js/config.js           copy-command templates and UI tunables
-  js/util.js             leaf helpers shared by every script (DOM, templates)
-  js/theme.js            the theme registry -> <html data-theme> + the picker
-  js/data.js             pack loading + in-memory index building
-  js/pills.js            the segment library results are built from
-  js/pilltypes.js        one record per kind of content shown and searched
-  js/search.js           query parser + the FIELDS registry (one per prefix)
-  js/texture.js          .blp loading + the texture/colour hover previews
-  js/export.js           the results as CSV, JSON or a Discord code block
-  js/app.js              all UI wiring
-  js/types.d.ts          shared type declarations (dev-time only, never served)
-  js/{bufo,js-blp}.js    vendored BLP texture decoder (Kruithne, MIT)
-  dev/oracle.js          console measurement helpers — a dev tool, never loaded
+  css/app.css            every style, themed by the token block at the top
+  js/                    BUILD OUTPUT, gitignored: app.js and its sourcemap
+  dev/oracle.js          console measurement helpers — a dev tool, never bundled
   data/<version>/        one gzipped data pack per game version
 build/build_data.py      regenerates the packs (Python 3, stdlib only)
+tools/build.mjs          the esbuild build: bundle, dev server, module-graph guard
 tools/check.py           every check, plus the invariants that fail silently
-tools/bump.py            move the ?v= cache-buster (all thirteen spots)
+tools/bump.py            move the ?v= cache-buster (both spots)
 tools/rebuild.py         rebuild packs with their own labels; --verify the build
 tools/verify_live.py     wait for Pages, then check what it actually serves
 tools/builddb.py         build the exploration database (development tool — see DB_SCHEMA.md)
@@ -81,26 +101,30 @@ tools/dbd.py             parser for WoWDBDefs .dbd schema definitions
 
 `build_data.py` walks the game's own tables — spell → visual → kit → model/sound/animkit/effect — and bakes the result
 into one column-oriented JSON pack per version. The browser fetches that pack once, builds its search indexes in
-`data.js`, and every query after that is pure in-memory set intersection. Joins and search logic live in the app, not in
+`data.ts`, and every query after that is pure in-memory set intersection. Joins and search logic live in the app, not in
 SQL.
 
-Serve `docs/` with any static file server:
+Working on it takes one `npm install` — TypeScript and esbuild are the only dependencies — and then:
 
 ```
-cd docs && python -m http.server 8377
+npm run dev
 ```
+
+which serves `docs/` on port 8378 and rebuilds the bundle on every request, so a reload is always the current source.
+`npm run build` writes the bundle to `docs/js/` instead, after which any static file server will do
+(`cd docs && python -m http.server 8377`).
 
 The packs are stored in [Git LFS](https://git-lfs.com), so a clone needs it installed — without it `docs/data`
 holds 132-byte pointer files instead of packs and no version will load. `git lfs install && git lfs pull` fixes an
 existing clone; `python tools/check.py` says `via LFS pointer` when it is looking at stubs rather than packs.
 
-Pushing to `main` deploys, through `.github/workflows/pages.yml` — which is also why the packs can live in LFS at
-all, since GitHub Pages cannot resolve LFS pointers when it serves a branch directly. Any CSS/JS change needs the
-`?v=` cache-buster in `index.html` bumped (13 spots); data packs bust themselves via a content hash in
-`versions.json`.
+Pushing to `main` deploys, through `.github/workflows/pages.yml`: it builds the bundle and uploads `docs/` — which is
+also why the packs can live in LFS at all, since GitHub Pages cannot resolve LFS pointers when it serves a branch
+directly. A change to the CSS or to the bundle's sources needs the `?v=` cache-buster in `index.html` bumped (two
+spots now: the stylesheet and the bundle); data packs bust themselves via a content hash in `versions.json`.
 
-`python tools/bump.py` does the bumping: it compares against what `origin/main` is actually serving, rewrites all
-thirteen, and does nothing at all when no CSS/JS changed or when the string already differs — so it is safe to run
+`python tools/bump.py` does the bumping: it compares against what `origin/main` is actually serving, rewrites both,
+and does nothing at all when nothing served has changed or when the string already differs — so it is safe to run
 every time rather than only when you remember. `python tools/verify_live.py` waits for Pages to publish and then
 checks that the new string really is being served and that every asset and pack resolves.
 
@@ -143,7 +167,7 @@ Two flags control how a pack is presented:
 
 Both live in `versions.json`, so changing them means rebuilding that version with the flag — e.g. `--version 9.2.7.45745 --label "Shadowlands 9.2.7"
 --default`. The version dropdown appears once two or more visible packs exist, with the active expansion's logo beside
-it (`expansionLogos` in `config.js`, decoded from the game's own `.blp`).
+it (`expansionLogos` in `src/config.ts`, decoded from the game's own `.blp`).
 
 **Older versions** work too, and mostly differ by what does not exist yet: db2 tables get introduced, split and renamed
 as the game evolves. Rather than branch per version, the differences are declared in one block near the top of
@@ -165,20 +189,21 @@ into `meta.absentTables`.
 ### Extending it
 
 - **A new search field**: emit the data in `build_data.py`, index it in
-  `data.js`, then add one entry to `FIELDS` in `search.js` — it becomes a query prefix and a field button automatically.
+  `src/data.ts`, then add one entry to `FIELDS` in `src/search.ts` — it becomes a query prefix and a field button
+  automatically.
 - **A new kind of pill** (a new sort of thing a results column can show):
-  one record in `pilltypes.js` gives it a category word, that word's autocomplete description, its group head, its
+  one record in `src/pilltypes.ts` gives it a category word, that word's autocomplete description, its group head, its
   search-hit highlighting and the spells a query selects; the renderer is a list of segments. See
   **[PILLS.md](PILLS.md)** — it also carries the segment-order convention and the rules for choosing a keyword.
-- **A new copy command**: `spellCommands` in `config.js` for per-spell buttons (they render as one nowrap strip under
+- **A new copy command**: `spellCommands` in `src/config.ts` for per-spell buttons (they render as one nowrap strip under
   the spell name — a new one becomes another segment of that strip and never wraps it to a second line); the
   `*CopyTemplate` entries for the ones on tags. A label starting with `.` gets that dot drawn in the accent colour
   automatically — it is the chat sigil; a label without one renders plain. The strip is drawn as ONE segmented
   control rather than as separate buttons, so a command costs a hairline divider and its own text, not a box.
 - **A new theme**: every colour in `app.css` comes from a token in the block at the top, so a theme is one
   `:root[data-theme="<id>"] { ... }` block re-declaring those tokens plus one `{id, label}` line in `themes` in
-  `config.js`. The header picker builds itself from that registry and appears once a second theme exists; the choice is
-  remembered per browser, and the reserved id `auto` follows the OS's light/dark setting (`autoTheme` in `config.js`
+  `src/config.ts`. The header picker builds itself from that registry and appears once a second theme exists; the choice is
+  remembered per browser, and the reserved id `auto` follows the OS's light/dark setting (`autoTheme` in `src/config.ts`
   says which palette it lands on). Three ship: **Dark**, **Light — Moonwell** (cool violet slate) and
   **Light — Vellum** (warm parchment). A palette also sets *how loudly* colour lands, not just which colour: the fill,
   edge and ink percentages at the bottom of each block are what let one set of family tokens work on black and on
@@ -192,20 +217,22 @@ Nothing here is required to run the app — it is all dev-time only.
 python tools/check.py
 ```
 
-is the one command: it runs the type and lint checks, and then the handful of invariants that are specific to this
-repo and fail *silently* if you get them wrong — the `?v=` string being one string in all thirteen places and having
-moved if any CSS/JS did, every module in `docs/js` actually being loaded by `index.html`, the committed blobs being
-LF, and `versions.json` agreeing with the packs on disk down to their content hashes. It warns, without failing, when
-a change looks like it should have updated one of the sibling docs. `--fast` skips the toolchain and runs the repo
-guards alone. The same script runs in CI (`.github/workflows/ci.yml`), so there is one definition of "does this pass".
+is the one command: it type-checks, builds, lints, and then runs the handful of invariants that are specific to this
+repo and fail *silently* if you get them wrong — the `?v=` string being one string in both places and having moved if
+the CSS or the bundle's sources did, the committed blobs being LF, and `versions.json` agreeing with the packs on disk
+down to their content hashes. (The old "every module is loaded by `index.html`" guard moved into the build itself:
+`tools/build.mjs` fails on any source file its import graph never reaches, which is the same invariant expressed where
+it cannot be forgotten.) It warns, without failing, when a change looks like it should have updated one of the sibling
+docs. `--fast` skips the toolchain and runs the repo guards alone. The same script runs in CI
+(`.github/workflows/ci.yml`), so there is one definition of "does this pass".
 
 The underlying checks, if you want them individually:
 
 ```
-npx -p typescript tsc -p docs/jsconfig.json    # JS: every file is // @ts-check'd
+npx tsc                                        # the app: strict TypeScript, no implicit any
+npm run build                                  # the bundle, plus the module-graph guard
 python -m mypy build/build_data.py tools       # Python: fully annotated
 python -m pyflakes build/build_data.py tools
-node --check docs/js/<file>.js
 ```
 
 ### Measuring what the app does
@@ -256,7 +283,7 @@ Three things are fetched live by the browser, always on explicit user action (a 
 bulk-downloaded: spell **icons**
 and **sound files** hotlink from Wowhead's CDN, and **texture previews** pull the raw `.blp` from wago.tools' CASC API
 and decode it in-page with the vendored [js-blp](https://github.com/Kruithne/js-blp). Each can be tuned or disabled in
-`docs/js/config.js`.
+`src/config.ts`.
 
 Epsilook is a fan tool, not affiliated with Blizzard, Wowhead or Epsilon. World of Warcraft and its data are property of
 Blizzard Entertainment.

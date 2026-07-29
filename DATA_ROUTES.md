@@ -6,7 +6,7 @@ Every path data takes from an upstream source to a pixel in the app. This is the
 
 Where a route ends — the pill it becomes, the category word it answers to, how a query token matches it — is
 **[PILLS.md](PILLS.md)**. The two meet at
-`docs/js/pilltypes.js`, which declares one record per kind of content: the route's corpus, the spells it reaches, and
+`src/pilltypes.ts`, which declares one record per kind of content: the route's corpus, the spells it reaches, and
 its keyword.
 
 Read it in five stages:
@@ -34,8 +34,8 @@ flowchart LR
 
   B["build_data.py<br/>walk + resolve + bake"]
   P["docs/data/&lt;build&gt;/pack.json.gz<br/>column-oriented, ~44 sections"]
-  D["data.js<br/>builds in-memory indexes"]
-  U["search.js + app.js<br/>query + render"]
+  D["data.ts<br/>builds in-memory indexes"]
+  U["search.ts + app/<br/>query + render"]
   W --> B
   L --> B
   T --> B
@@ -527,7 +527,7 @@ way, and the split is what makes a caster/target difference visible instead of s
 **Single-point vs travelling is a real distinction, not a formatting choice.**
 Attached, ground, trail and barrage models sit at ONE point and render the bare name; missiles and beams travel and
 render `Source → Dest`. The two are indistinguishable in the data (both look like "src set, dst unset"), so the renderer
-is told explicitly — `TRAVELLING_MODEL_CATS` in app.js. A travelling row that knows only one end reads `from X` /
+is told explicitly — `TRAVELLING_MODEL_CATS` in `src/app/tags.ts`. A travelling row that knows only one end reads `from X` /
 `to Y`; it must never render a dangling arrow.
 
 Two traps:
@@ -621,8 +621,8 @@ override the build does not ship — and those are dropped rather than shown as 
 **The replacement spell is shipped but deliberately not displayed** (user's call, 2026-07-23). Retail casts it in the
 key's place, but on **Epsilon the override only disables the key** — it never casts the replacement — so naming it would
 promise behaviour Epsilon users cannot get. It stays in the pack (`keybinds.spells`) so a future pass can surface it
-without a rebuild; restoring it means adding the id and name back to `keybindSearchL` in `data.js`
-and to `keybindTag` in `app.js`, nothing more.
+without a rebuild; restoring it means adding the id and name back to `keybindSearchL` in `data.ts`
+and to `keybindTag` in `src/app/tags.ts`, nothing more.
 
 #### `Type` is decoded, not documented
 
@@ -837,7 +837,7 @@ model-resolved.
 
 `gameobject_template.type` (GAMEOBJECT_TYPE) decides it, NOT whether we resolved a name. Wowhead indexes only
 **player-facing** objects; mechanical and invisible ones have no page, so linking every named object 404s about half the
-time. `wowheadObjectTypes` in config.js is the allowlist — **objects outside it fall back to the ordinary 3D model
+time. `wowheadObjectTypes` in `config.ts` is the allowlist — **objects outside it fall back to the ordinary 3D model
 viewer**, the same either/or the item route uses for a nameless item, so every pill still opens something.
 
 Verified 2026-07-24 against wowhead.com/objects — whose own type labels (Container / Shared Container / Treasure /
@@ -948,11 +948,11 @@ flowchart LR
   subgraph NAME["name tables"]
     N1["files (fid → path) · animNames · effectNames<br/>auraNames · iconNames · modelCatNames<br/>targetNames · summonControlNames<br/>implicitTargetNames · implicitTargetBits · keybinds"]
   end
-  LINK --> IDX["data.js<br/>forward + reverse Map per section"]
+  LINK --> IDX["data.ts<br/>forward + reverse Map per section"]
   PAY --> IDX
   NAME --> IDX
-  IDX --> Q["search.js — FIELDS registry"]
-  IDX --> R["app.js — cells + pills"]
+  IDX --> Q["search.ts — FIELDS registry"]
+  IDX --> R["app/render.ts + app/tags.ts — cells + pills"]
 ```
 
 Sections carrying a parallel `targets` array (the target-icon feature):
@@ -960,10 +960,10 @@ Sections carrying a parallel `targets` array (the target-icon feature):
 `spellDissolves`, `spellGlows`, `spellShadowies`, `spellGhostMats` (these from
 `SpellVisualEvent.TargetType`, §2), plus — from `SpellEffect.ImplicitTarget`
 (§3f, pack format 25) — `spellMorphs`, `spellSummons`, `spellVehicles`,
-`spellShapeshifts`, `spellScreens`, `spellSpeeds`, `spellScales`. Both feed the same `maskIndex` in `data.js`
+`spellShapeshifts`, `spellScreens`, `spellSpeeds`, `spellScales`. Both feed the same `maskIndex` in `data.ts`
 and the same icon renderer, so the two mask sources are indistinguishable downstream.
 
-`data.js` builds a **forward and a reverse index** for each — spell→items for rendering, item→spells for searching.
+`data.ts` builds a **forward and a reverse index** for each — spell→items for rendering, item→spells for searching.
 Every section read is guarded (`if (pack.X)`) so an older-format pack degrades rather than crashes.
 
 ---
@@ -1331,7 +1331,7 @@ belongs in a declaration or is a genuine bug.
 ## 6. Runtime routes (browser, on demand)
 
 Nothing here is fetched during search or bulk-downloaded. All of it is user-triggered and configured in
-`docs/js/config.js`.
+`src/config.ts`.
 
 | Route           | URL                                                                                    | Trigger                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 |-----------------|----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -1340,7 +1340,7 @@ Nothing here is fetched during search or bulk-downloaded. All of it is user-trig
 | Texture preview | `wago.tools/api/casc/{fid}?version={version}`                                          | Hover, after a 150 ms intent delay. Raw `.blp`, decoded in-browser by the vendored `bufo.js` + `js-blp.js`. Version-pinned to the active pack.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Expansion logo  | same CASC API                                                                          | One image per version switch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | 3D model viewer | `wowtools.work/mv/?filedataid={fid}&type=m2`                                           | Link-out only, nothing fetched.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Wowhead         | `wowhead.com/{wh}spell=` · `/{wh}npc=` · `/{wh}sound=` · `spell={spell}/#modelviewer:` | Link-out only. `{wh}` = per-version site prefix (`config.js` `wowheadSitePrefix`): Vanilla → `classic/`, everything else → retail (empty). Only `/classic/` and retail are permanent Wowhead sections, so the mid-Classic clients point at retail rather than a seasonal section that will rot. The model viewer (morph/display/mount/shapeshift pills) has no `{wh}` — always retail (best skin compositing; display IDs render cross-era) — but opens the `#modelviewer` fragment over the spell's OWN page (`spell={spell}/#modelviewer:1:{displayId}:0`) rather than the Wowhead home page, since the fragment works on any page. |
+| Wowhead         | `wowhead.com/{wh}spell=` · `/{wh}npc=` · `/{wh}sound=` · `spell={spell}/#modelviewer:` | Link-out only. `{wh}` = per-version site prefix (`config.ts` `wowheadSitePrefix`): Vanilla → `classic/`, everything else → retail (empty). Only `/classic/` and retail are permanent Wowhead sections, so the mid-Classic clients point at retail rather than a seasonal section that will rot. The model viewer (morph/display/mount/shapeshift pills) has no `{wh}` — always retail (best skin compositing; display IDs render cross-era) — but opens the `#modelviewer` fragment over the spell's OWN page (`spell={spell}/#modelviewer:1:{displayId}:0`) rather than the Wowhead home page, since the fragment works on any page. |
 
 House rule, unchanged: **fetch only on explicit user action, never preload, never bulk-download.** The icon and sound
 hotlinks sit on tolerated-hotlinking footing, not an affirmative license.

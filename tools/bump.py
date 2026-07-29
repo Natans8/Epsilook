@@ -51,6 +51,20 @@ def git(*args: str, check: bool = False) -> str:
     return out.stdout or ""
 
 
+def changed_under(base: str, paths: tuple[str, ...]) -> list[str]:
+    """Files under `paths` that differ from `base`, UNTRACKED ONES INCLUDED.
+
+    esbuild bundles what is on disk, so a module that has not been `git add`ed
+    still reaches the deploy — and a diff alone would report nothing to bump.
+    """
+    out = {f for f in git("diff", "--name-only", base, "--", *paths).splitlines() if f}
+    for line in git("status", "--porcelain", "--untracked-files=all", "--", *paths).splitlines():
+        name = line[3:].strip()
+        if name:
+            out.add(name)
+    return sorted(out)
+
+
 def versions_in(html: str) -> set[str]:
     return {m.group(2) for m in ASSET_RE.finditer(html)}
 
@@ -111,15 +125,16 @@ def main() -> int:
 
     now = sorted(current)[0]
     was = sorted(deployed)[0]
-    changed = [f for f in git("diff", "--name-only", args.base, "--",
-                              "docs/css", "docs/js").splitlines() if f]
+    # docs/js is the gitignored build output, so the served JS changes when
+    # its SOURCES (or the build itself) do - the same paths check.py watches
+    changed = changed_under(args.base, ("docs/css", "src", "tools/build.mjs"))
 
     if args.explicit:
         new = args.explicit
     elif not changed and not args.force:
         # bumping costs every user a re-download of css and js; spend it only
         # on a deploy that actually changes them
-        print(f"{GREEN}nothing to do{RESET}  no css/js change against {args.base} "
+        print(f"{GREEN}nothing to do{RESET}  no css/src change against {args.base} "
               f"{DIM}(still {now}){RESET}")
         return 0
     elif not (current & deployed) and not args.force:

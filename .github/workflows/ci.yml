@@ -49,10 +49,13 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '24'
+          cache: npm
 
-      - name: Install the Python checkers
-        run: python -m pip install --quiet mypy pyflakes
+      - name: Install the checkers and the toolchain
+        run: |
+          python -m pip install --quiet mypy pyflakes
+          npm ci
 
       - name: Work out what was deployed before this push
         id: base

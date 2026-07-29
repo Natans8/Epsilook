@@ -1,9 +1,68 @@
-// @ts-check
 /* Epsilook configuration — the file to edit for quick customization.
- * The full shape is documented in types.d.ts (EpsilookConfig). */
-"use strict";
+ * EpsilookConfig below documents the full shape. */
 
-window.EpsilookConfig = {
+/** One copy-command button on a spell row ({id} = spell ID). */
+export interface SpellCommand {
+    label: string;
+    template: string;
+    hint: string;
+}
+
+/** One entry in the theme dropdown (`themes` below). */
+export interface ThemeChoice {
+    /** A `:root[data-theme="id"]` palette in app.css, or the reserved "auto". */
+    id: string;
+    label: string;
+}
+
+/** The user-tunable surface. */
+export interface EpsilookConfig {
+    themes: ThemeChoice[];
+    defaultTheme: string;
+    /** Which palette id the reserved "auto" theme resolves to per OS setting. */
+    autoTheme: { light: string; dark: string };
+    spellCommands: SpellCommand[];
+    modelCopyTemplate: string;
+    animCopyTemplate: string;
+    soundKitCopyTemplate: string;
+    animKitCopyTemplate: string;
+    morphCopyTemplate: string;
+    morphLookupTemplate: string;
+    summonLookupTemplate: string;
+    summonSpawnTemplate: string;
+    objectLookupTemplate: string;
+    objectSpawnTemplate: string;
+    mountModifyTemplate: string;
+    itemLookupTemplate: string;
+    itemAddTemplate: string;
+    wowheadSpellUrl: string;
+    wowheadSoundUrl: string;
+    wowheadMorphUrl: string;
+    wowheadNpcUrl: string;
+    wowheadItemUrl: string;
+    wowheadObjectUrl: string;
+    wowheadObjectTypes: number[];
+    /** Wowhead site path prefix keyed by game major version ("classic/" for 1);
+     *  unlisted versions fall back to retail (empty prefix). */
+    wowheadSitePrefix: Record<number, string>;
+    modelViewerUrl: string;
+    soundPlayUrl: string;
+    soundVolume: number;
+    texturePreviewUrl: string;
+    texturePreviewMax: number;
+    /** Expansion logo per build MAJOR version, e.g. 9 -> Shadowlands. */
+    expansionLogos: Record<number, { name: string; fid: number }>;
+    /** Rendered height of that logo, in CSS pixels. */
+    expansionLogoHeight: number;
+    spellIconUrl: string;
+    discordCharLimit: number;
+    scrollBatch: number;
+    collapsedRowHeight: number;
+    searchDebounceMs: number;
+    minQueryLength: number;
+}
+
+export const CFG: EpsilookConfig = {
     // The theme dropdown, in the order it lists them. Each id is a palette
     // block in css/app.css (`:root[data-theme="id"]`); adding a theme is one
     // block there plus one line here, and the dropdown shows up on its own
@@ -21,7 +80,7 @@ window.EpsilookConfig = {
     ],
 
     // Which palette "auto" resolves to at each OS setting. Two ids from the
-    // registry above — no magic strings in theme.js, so shipping a different
+    // registry above — no magic strings in theme.ts, so shipping a different
     // light palette is a one-word change here.
     autoTheme: {light: "moonwell", dark: "dark"},
 

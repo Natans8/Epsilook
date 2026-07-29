@@ -7,11 +7,12 @@ Three files:
 
 | file                   | holds                                                          |
 |------------------------|----------------------------------------------------------------|
-| `docs/js/pills.js`     | the segment library and the pill-type registry — the machinery |
-| `docs/js/pilltypes.js` | one record per content type — the declarations                 |
-| `docs/js/app.js`       | one renderer per pill type, and the cells that arrange them    |
+| `src/pills.ts`         | the segment library and the pill-type registry — the machinery |
+| `src/pilltypes.ts`     | one record per content type — the declarations                  |
+| `src/app/tags.ts`      | one renderer per pill type                                      |
+| `src/app/render.ts`    | the cells that arrange them                                     |
 
-`pills.js` depends only on `config.js` and never reaches into `app.js`. That is deliberate: it lets `search.js` read the
+`pills.ts` depends only on `config.ts` and never reaches into the app modules. That is deliberate: it lets `search.ts` read the
 type registry too, so matching a query is written once instead of once per file.
 
 ---
@@ -87,7 +88,7 @@ The reasoning, so a future pill can depart from it deliberately:
 
 Four steps. Nothing else in the app needs to know.
 
-**a. Declare the type** in `pilltypes.js`:
+**a. Declare the type** in `pilltypes.ts`:
 
 ```js
 T({
@@ -105,7 +106,7 @@ From that one record you get: the autocomplete word and its description, the gro
 highlighting, and the spells the query selects. The fx column and the fx search both iterate the registry, so neither
 needs editing.
 
-**b. Write the renderer** in `app.js`, as a segment list (§1).
+**b. Write the renderer** in `src/app/tags.ts`, as a segment list (§1).
 
 **c. Give it a tone** in `app.css`, if it isn't reusing one:
 
@@ -203,7 +204,7 @@ its own, so there is one comparison grammar and omitting the operator picks its 
 absolute value: the sign is meaningful on every axis that has one (`fx:"scale -50"` shrinks), and folding it away would
 leave no way to ask for one direction while `scale >0` and `scale <0` already say it.
 
-`bindNumeric` (pills.js) is what makes that precise. It takes the ONE token after the word — the same arity a meta
+`bindNumeric` (pills.ts) is what makes that precise. It takes the ONE token after the word — the same arity a meta
 keyword has — out of the chip and asks the numeric axis instead, so the number never reaches the corpus.
 `tokenMatches` tries the corpus first, so before this a bare `50` matched `+150%` as a substring long before it could
 be tested as a number (349 rows became 483 on 9.2.7).
@@ -218,7 +219,7 @@ The search bar draws exactly this: `Pills.isValue` is the one predicate, and the
 drawn as a word-and-value and what binds as one cannot drift apart.
 
 **A bound may be negative or fractional, because values are.** A movement-speed change is signed, so `fx:"speed <-50"`
-asks for snares worse than half; `numericPredicate` (search.js) and `tokenMatches` (pills.js) parse the same shape and
+asks for snares worse than half; `numericPredicate` (search.ts) and `tokenMatches` (pills.ts) parse the same shape and
 must stay in step. A `count` axis is never negative and simply matches nothing against a bound it cannot reach — no
 guard needed.
 
@@ -232,7 +233,7 @@ free to be absent when it says nothing.
 `model:"count >4"`, `sound:"count =0"`, `model:"count 4"` — with a lone comparison (`model:>4`) as its shorthand. The
 shorthand still needs its operator, and only the shorthand does: written against the word a bare number is that word's
 argument like any other, but standing alone `model:4` is a substring search for "4" and always has been. Its source is
-`COUNT_SOURCES` in `search.js`, one entry per countable column. It counts the WHOLE column, not the rows matching the
+`COUNT_SOURCES` in `search.ts`, one entry per countable column. It counts the WHOLE column, not the rows matching the
 chip's other tokens; narrowing that needs the column matchers rebuilt as per-spell entry iterators, which is its own
 pass.
 

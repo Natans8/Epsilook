@@ -2,8 +2,14 @@
 	js-blp (https://github.com/Kruithne/js-blp)
 	Author: Kruithne <kruithne@gmail.com>
 	License: MIT
+
+	Vendored: the npm release (1.0.5) predates the getPixels(mip, canvas)
+	API texture.ts uses, so this is upstream's GitHub master. Only the
+	import/export wrapper is ours; the body is upstream's.
  */
-const BLPFile = ((Bufo) => {
+import Bufo from './bufo.js';
+
+const BLPFile = (() => {
     /**
      * Error thrown by the BLPFile class.
      * @class BLPError
@@ -376,8 +382,6 @@ const BLPFile = ((Bufo) => {
             }
         }
     }
-})(typeof Bufo === 'undefined' ? require('bufo') : Bufo);
+})();
 
-// Export to NodeJS.
-if (typeof module === 'object' && typeof module.exports === 'object')
-    module.exports = BLPFile;
+export default BLPFile;

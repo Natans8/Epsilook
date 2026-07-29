@@ -1,0 +1,22 @@
+{
+  // Type checking only — esbuild does the emitting (tools/build.mjs).
+  // Check from the repo root with: npx tsc  (tools/check.py runs it too).
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "strict": true,
+    // esbuild compiles one file at a time, so every file must be checkable
+    // alone, and type-only imports must say so (`import type`)
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "noFallthroughCasesInSwitch": true,
+    // vendored libs in src/vendor are plain JS with hand-written .d.ts
+    // beside them; tsc reads the declarations, esbuild bundles the .js
+    "allowJs": false,
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+}
