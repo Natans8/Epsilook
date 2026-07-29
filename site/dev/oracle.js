@@ -100,7 +100,7 @@ window.Oracle = (() => {
         console.table(out);
         const bad = out.filter((r) => !r.ok);
         console.log(bad.length ? `%c${bad.length} of ${out.length} DISAGREE` : `%call ${out.length} agree`,
-                    `color:${bad.length ? "#e66" : "#6c6"};font-weight:600`);
+            `color:${bad.length ? "#e66" : "#6c6"};font-weight:600`);
         return out;
     }
 
@@ -197,11 +197,11 @@ window.Oracle = (() => {
         rows.sort((a, b) => a.ratio - b.ratio);
         const theme = document.documentElement.getAttribute("data-theme") || "dark";
         console.log(`%ccontrast · theme=${theme} · ${rows.length} ${opts.all ? "nodes" : "FAILURES"}`,
-                    `color:${rows.length && !opts.all ? "#e66" : "#6c6"};font-weight:600`);
+            `color:${rows.length && !opts.all ? "#e66" : "#6c6"};font-weight:600`);
         console.table(rows.slice(0, 40));
         if (!opts.all && rows.length) {
             console.log("%cremember: this is only trustworthy on a real page load — " +
-                        "use Oracle.theme(id) to switch, never setAttribute", "color:#ca6");
+                "use Oracle.theme(id) to switch, never setAttribute", "color:#ca6");
         }
         return rows;
     }
@@ -277,15 +277,17 @@ window.Oracle = (() => {
             }
             const text = chunks.join("\n---\n");
             dump.push(text);
-            out.push({query, cells: chunks.length, pills: $$("#results tbody .tag").length,
-                      hash: hash(text)});
+            out.push({
+                query, cells: chunks.length, pills: $$("#results tbody .tag").length,
+                hash: hash(text)
+            });
         }
         const text = dump.join("\n===\n");
         const total = hash(text);
         console.table(out);
         console.log(`%ctotal ${total}%c  ${out.length} queries · ` +
-                    `${out.reduce((n, r) => n + r.cells, 0)} cells · ${text.length.toLocaleString()} chars`,
-                    "font-weight:600", "color:#888");
+            `${out.reduce((n, r) => n + r.cells, 0)} cells · ${text.length.toLocaleString()} chars`,
+            "font-weight:600", "color:#888");
         api.last = {total, rows: out, text};
         return {total, rows: out};
     }

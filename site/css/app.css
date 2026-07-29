@@ -1901,6 +1901,7 @@ mark.hl {
     color: var(--text-dim);
     pointer-events: none;
 }
+
 .tag .tag-label.swap-arrow:hover {
     text-decoration: none;
 }

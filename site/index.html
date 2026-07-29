@@ -29,7 +29,7 @@
           href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
     <!-- bump ?v= on every deploy that touches the css or the bundle's sources,
          or browsers keep stale copies (python tools/bump.py does both spots) -->
-    <link rel="stylesheet" href="css/app.css?v=20260729k">
+    <link rel="stylesheet" href="css/app.css?v=20260729l">
     <script>
         // Replay the stored theme before the first paint, so a light theme
         // never flashes dark. Only that: the picker, the default and the
@@ -82,10 +82,10 @@
             <div id="qbar">
         <span id="editwrap">
           <span id="editlabel" hidden></span>
-          <!-- the syntax-highlight backdrop: an inert copy of the input's text
-               drawn in classified spans directly under it. The input keeps the
-               caret, the clicks and the selection; this only supplies colour.
-               See src/app/highlight.ts. -->
+            <!-- the syntax-highlight backdrop: an inert copy of the input's text
+                 drawn in classified spans directly under it. The input keeps the
+                 caret, the clicks and the selection; this only supplies colour.
+                 See src/app/highlight.ts. -->
           <span id="qhl" aria-hidden="true"></span>
           <input id="q" type="text" autocomplete="off" spellcheck="false"
                  role="combobox" aria-expanded="false" aria-controls="suggest"
@@ -462,6 +462,6 @@
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
 <!-- the whole app: esbuild bundles src/**/*.ts into this one file
      (tools/build.mjs) — module order lives in the import graph now -->
-<script src="js/app.js?v=20260729k"></script>
+<script src="js/app.js?v=20260729l"></script>
 </body>
 </html>
