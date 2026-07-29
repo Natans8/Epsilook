@@ -1470,13 +1470,13 @@ main {
     width: 5.5rem;
 }
 
+/* Carries the command strip under the name, so the floor is "one nowrap strip
+   of command buttons", not the name text. min-width states that intent; the
+   strip's own min-content width enforces it, so adding a command to
+   CFG.spellCommands widens the column instead of wrapping the strip. */
 .c-name {
-    min-width: 13rem;
-    max-width: 20rem;
-}
-
-.c-cmds {
-    width: 1%;
+    min-width: 17rem;
+    max-width: 24rem;
 }
 
 /* matches .kit-files' line-height below, so a bare model pill (no kit
@@ -1575,10 +1575,6 @@ mark.hl {
 }
 
 #results.hide-mechanics .c-mechanics {
-    display: none;
-}
-
-#results.hide-commands .c-cmds {
     display: none;
 }
 
@@ -2240,7 +2236,8 @@ mark.hl {
     border-color: var(--gold-dim);
 }
 
-/* command buttons: one compact line, never taller than a text row */
+/* command buttons: one compact line under the spell name (see .c-name), never
+   wrapping — the strip is what sets that column's minimum width */
 
 .cmd-row {
     display: flex;
@@ -2248,6 +2245,7 @@ mark.hl {
     align-items: stretch;
     flex-wrap: nowrap;
     white-space: nowrap;
+    margin-top: 0.3rem;
 }
 
 .cmd {
@@ -2542,10 +2540,6 @@ footer a {
     header, main, footer {
         padding-left: 0.8rem;
         padding-right: 0.8rem;
-    }
-
-    .c-cmds {
-        width: auto;
     }
 }
 

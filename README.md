@@ -144,8 +144,9 @@ into `meta.absentTables`.
   one record in `pilltypes.js` gives it a category word, that word's autocomplete description, its group head, its
   search-hit highlighting and the spells a query selects; the renderer is a list of segments. See
   **[PILLS.md](PILLS.md)** — it also carries the segment-order convention and the rules for choosing a keyword.
-- **A new copy command**: `spellCommands` in `config.js` for per-spell buttons; the `*CopyTemplate` entries for the ones
-  on tags.
+- **A new copy command**: `spellCommands` in `config.js` for per-spell buttons (they render as one nowrap strip under
+  the spell name — adding one widens the Name column rather than wrapping the strip); the `*CopyTemplate` entries for
+  the ones on tags.
 - **A new theme**: every colour in `app.css` comes from a token in the block at the top, so a theme is one
   `:root[data-theme="<id>"] { ... }` block re-declaring those tokens plus one `{id, label}` line in `themes` in
   `config.js`. The header picker builds itself from that registry and appears once a second theme exists; the choice is

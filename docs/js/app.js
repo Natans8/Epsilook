@@ -109,7 +109,7 @@
         // a visible choice). They never narrow the search: see FIELDS.all.
         // Mechanics ships VISIBLE (the storage key moved to v5 so the old
         // default does not linger for existing users).
-        hiddenCols: {models: false, sounds: false, animations: false, fx: false, mechanics: false, commands: false},
+        hiddenCols: {models: false, sounds: false, animations: false, fx: false, mechanics: false},
     };
 
     // column -> search fields it contributes
@@ -1865,7 +1865,10 @@
         tr.appendChild(tdId);
 
         // Name — wowhead link (their widget adds the hover tooltip); the parts
-        // matched by a name search are highlighted
+        // matched by a name search are highlighted. The Epsilon command strip
+        // rides under the name rather than in a column of its own: a command is
+        // ABOUT the spell, and beside the name it can never be pushed off the
+        // right edge by however many pills the visual columns happen to carry.
         const tdName = el("td", "c-name");
         const nameDiv = el("div", "spell-name");
         const nameLink = el("a", "spell-name-link");
@@ -1884,6 +1887,7 @@
         nameDiv.appendChild(nameLink);
         tdName.appendChild(nameDiv);
         if (d.subtexts[i]) tdName.appendChild(el("div", "spell-sub", d.subtexts[i]));
+        tdName.appendChild(commandStrip(spellId));
         tr.appendChild(tdName);
 
         // Models — grouped by how each model is used (attach/missile/area/...)
@@ -1914,8 +1918,17 @@
         }));
         tr.appendChild(mechanicsCell(mechBlocks.concat(effects.mechBlocks)));
 
-        // Commands — one compact line that fits even single-line rows
-        const tdCmd = el("td", "c-cmds");
+        return tr;
+    }
+
+    /**
+     * The Epsilon command strip for one spell — a copy button per configured
+     * command, then the Wowhead link. One nowrap line, so it sets the name
+     * column's minimum width (see .c-name) instead of ever wrapping to two.
+     * @param {number} spellId
+     * @returns {HTMLElement}
+     */
+    function commandStrip(spellId) {
         const row = el("div", "cmd-row");
         for (const cmd of CFG.spellCommands) {
             const b = el("button", "cmd", cmd.label);
@@ -1930,10 +1943,7 @@
             wowheadUrl(CFG.wowheadSpellUrl, {id: spellId}), "Open on Wowhead"));
         wh.classList.add("wh-cmd");
         row.appendChild(wh);
-        tdCmd.appendChild(row);
-        tr.appendChild(tdCmd);
-
-        return tr;
+        return row;
     }
 
     /**
@@ -5075,7 +5085,15 @@
         // owns no app state — it only needs to run before the header is seen
         Theme.init();
         try {
-            Object.assign(state.hiddenCols, JSON.parse(localStorage.getItem("epsilook.hiddenCols.v5") || "{}"));
+            // Take only keys we still have a column for. A retired column
+            // (Commands) otherwise survives in a returning user's storage and
+            // toggles a `hide-*` class that no longer matches anything — and
+            // reading through the defaults keeps the storage key stable, so
+            // retiring a column costs nobody their other column choices.
+            const saved = JSON.parse(localStorage.getItem("epsilook.hiddenCols.v5") || "{}");
+            for (const col of Object.keys(state.hiddenCols)) {
+                if (typeof saved[col] === "boolean") state.hiddenCols[col] = saved[col];
+            }
         } catch (e) { /* corrupted storage — defaults apply */
         }
         buildTabs();
