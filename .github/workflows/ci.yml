@@ -27,10 +27,14 @@ jobs:
       - uses: actions/checkout@v5
         with:
           # full history so the ?v= guard can reach the previously deployed
-          # commit; blob:none keeps that cheap despite ~47 MB of data packs
-          # per commit — trees and commits only, blobs fetched on demand
+          # commit; blob:none keeps that cheap — trees and commits only, blobs
+          # fetched on demand.
           fetch-depth: 0
           filter: blob:none
+          # the packs are LFS objects now, and check.py verifies versions.json
+          # against their sha256 — without this it would hash 132-byte pointer
+          # files and fail. See CLAUDE.md, "The packs left git history".
+          lfs: true
 
       - uses: actions/setup-python@v6
         with:
