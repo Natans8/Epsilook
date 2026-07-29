@@ -4312,8 +4312,12 @@
      * Run a pill's query. `mode` says how it meets the search already in the bar:
      *
      *   replace   the pill's question on its own — the plain click
-     *   add       narrow what is on screen by it — Ctrl/Cmd-click
-     *   exclude   narrow by everything BUT it — Shift-click
+     *   add       narrow what is on screen by it — SHIFT-click
+     *   exclude   narrow by everything BUT it — CTRL/Cmd-click
+     *
+     * Shift adds and Ctrl excludes, by the user's call (2026-07-29). The pairing
+     * is deliberate: adding is the one you reach for while exploring, and Shift
+     * is the easier chord.
      *
      * ADDING IS THE MODIFIER, NOT THE DEFAULT. A pill click is most often "show
      * me this", asked of the whole game; a click that silently kept the last
@@ -4321,10 +4325,10 @@
      * the counterpart pills (an invisibility channel's detectors) navigate to a
      * question the current one contradicts — they would produce nothing at all.
      *
-     * EXCLUDING, though, always meant "…but not that", and it now says so:
-     * shift-click used to REPLACE the query with a lone exclusion, which selects
-     * nearly every spell in the game and answers nothing. With an empty bar it
-     * still does exactly what it did.
+     * BOTH MODIFIERS NARROW. Excluding used to REPLACE the query with a lone
+     * exclusion, which selects nearly every spell in the game and answers
+     * nothing; it now means "what I am looking at, but not that". With an empty
+     * bar it still does exactly what it always did.
      * @param {string} query one chip's worth of query text
      * @param {"replace"|"add"|"exclude"} [mode]
      */
@@ -4762,8 +4766,8 @@
                 // data-nav marks a segment that navigates rather than filters
                 // (see clickHint in pills.js) — it only ever replaces
                 const mode = t.dataset.nav ? "replace"
-                    : e.shiftKey ? "exclude"
-                        : (e.ctrlKey || e.metaKey) ? "add" : "replace";
+                    : e.shiftKey ? "add"
+                        : (e.ctrlKey || e.metaKey) ? "exclude" : "replace";
                 crossSearch(t.dataset.search, mode);
             }
             else if (t.dataset.expand) {

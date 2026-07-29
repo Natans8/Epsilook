@@ -560,7 +560,7 @@ window.EpsilookPills = (() => {
         // a navigating segment replaces the search and nothing else: narrowing
         // by "the counterpart of what is on screen" is a query for no spell
         if (opts.click) return `Click: ${action}`;
-        return `Click: ${action}\nCtrl-click: add to search · Shift-click: exclude`;
+        return `Click: ${action}\nShift-click: add to search · Ctrl-click: exclude`;
     }
 
     /* ==================================================================== */
