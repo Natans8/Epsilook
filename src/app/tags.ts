@@ -159,6 +159,29 @@ export const isDisplayCat = (cat: number): boolean =>
 export const isItemCat = (cat: number): boolean =>
     ((activeData().modelCatNames || {})[cat] || "") === MODEL_CAT_ITEM_WORD;
 
+/**
+ * Who a row plays on, as the target icons — LIT when the query named a target
+ * type this row's mask carries.
+ *
+ * Without this a target query lit NOTHING, so the cell had nothing to float:
+ * `model:caster` selected 101,307 spells and every Models cell kept its resting
+ * order, which is the same complaint `attach` and `motion` produced by a
+ * different route (see the ranking entry in PILLS.md §4-bis).
+ *
+ * The icons are the one segment whose COLOUR already carries the meaning —
+ * caster dim, target mech-tone, area fx-tone, never-caster danger — so a hit
+ * must not recolour them. `.ticons.hit` puts the gold BEHIND the group and the
+ * glyphs keep their hues, exactly as `.tag.hit` washes a pill without touching
+ * its label. Recolouring to gold would trade a type distinction for a state
+ * one, which is the trap the command strip already documents.
+ *
+ * `field` is the search field whose chips can name a target ("model", "sound",
+ * "anim", "fx", "mech") — the same one the pill's own segments search in.
+ */
+function targetSeg(field: string, mask: number): Segment | null {
+    return P.targets(mask, !!mask && anyGroup(field, (ts) => Search.maskIsNamed(ts, mask)));
+}
+
 function attachSegment(src: number, dst: number, field: string, twoPoint: boolean): Segment | null {
     const d = activeData();
     const nameOf = (a: number) => (a >= 0 ? (d.attachmentNames[a] || "") : "");
@@ -323,7 +346,7 @@ export function modelTag(fid: number, catName = "", mask = 0, src = -1, dst = -1
             !synthetic && CFG.modelViewerUrl && P.view(
                 fillTemplate(CFG.modelViewerUrl, {fid}),
                 `Preview ${file.base || `file #${fid}`} in the WoW.tools model viewer (new tab)`),
-            P.targets(mask),
+            targetSeg("model", mask),
             P.label(labelText, {
                 title: synthetic
                     ? "No fixed model — the game fills this in from the caster's own gear at"
@@ -371,7 +394,7 @@ export function displayTag(e: ModelCatEntry, spellId: number): HTMLElement {
             displayId && CFG.wowheadMorphUrl && P.link(
                 fillTemplate(CFG.wowheadMorphUrl, {id: displayId, spell: spellId}),
                 `View DisplayID ${displayId} in Wowhead's model viewer`),
-            P.targets(mask),
+            targetSeg("model", mask),
             P.label(base || `display #${displayId}`, {
                 title: file.path || "(model name unknown)",
                 detail: [`DisplayID ${displayId}`],
@@ -421,7 +444,7 @@ export function itemTag(e: ModelCatEntry): HTMLElement {
             !named && CFG.modelViewerUrl && fid && P.view(
                 fillTemplate(CFG.modelViewerUrl, {fid}),
                 `Preview ${base || `file #${fid}`} in the WoW.tools model viewer (new tab)`),
-            P.targets(mask),
+            targetSeg("model", mask),
             // icon, then label, with nothing between them so they read as one unit.
             // On a named item the icon is a Wowhead item link, the same mechanism the
             // name link / [wh] button use — that anchor+href is what the app's tooltips
@@ -502,7 +525,7 @@ export function kitTag(kitId: number, field: "soundkit" | "animkit", mask = 0): 
         cls: field,
         hit: kitIsHit(kitId, field),
         segments: [
-            P.targets(mask),
+            targetSeg(sound ? "sound" : "anim", mask),
             P.label(String(kitId), {
                 title: `${kind} ${kitId}`,
                 search: P.query(sound ? "sound" : "anim", kitId),
@@ -562,7 +585,7 @@ export function animTag(animId: number, groupWord = "", mask = 0,
         cls: "anim",
         hit: animIsHit(animId, groupWord),
         segments: [
-            P.targets(mask),
+            targetSeg("anim", mask),
             P.label(name, {
                 title: `Animation ${animId}: ${name}`,
                 search: P.quoted("anim", name),
@@ -617,7 +640,7 @@ export function mechanicTag(pill: MechanicPill): HTMLElement {
         cls: "mechanic" + (pill.aura ? " aura" : ""),
         hit: pill.rows.some(mechanicIsHit),
         segments: [
-            P.targets(pill.mask),
+            targetSeg("mech", pill.mask),
             // the aura leads when there is one, else the effect does
             auraName && seg(P.label, auraName, `Aura ${pill.aura}: SPELL_AURA_${auraName}`),
             effectName && seg(auraName ? P.note : P.label, effectName,
@@ -670,7 +693,7 @@ export function mechanicPills(rows: MechanicRow[]): MechanicPill[] {
 export function fxHeadTag(category: string, hit: boolean, mask = 0, field = "fx"): HTMLElement {
     return P.pill({
         cls: "fx-head", hit, segments: [
-            P.targets(mask),
+            targetSeg(field, mask),
             P.label(category, {
                 title: P.hintFor(field, category),
                 search: P.query(field, category),
@@ -695,7 +718,7 @@ export function fxTag(entry: { chainId: number; fid: number; color: number; src?
         cls: "fx",
         hit: fxChainIsHit(entry.chainId),
         segments: [
-            P.targets(mask),
+            targetSeg("fx", mask),
             tinted && P.swatch(hex, {
                 title: `Tint ${hex}` + (info.hue ? ` (${info.hue})` : ""),
                 info: "chain tint",
@@ -734,7 +757,7 @@ export function colorFxTag(category: string, color: number, hit: boolean, alpha?
         cls: "fx",
         hit,
         segments: [
-            P.targets(mask),
+            targetSeg("fx", mask),
             P.swatch(hex, {info: category, alpha}),
             P.label(hex, {
                 title: P.hintFor("fx", category),
@@ -784,7 +807,7 @@ export function vehicleTag(attachment: string, seats: number, mask = 0): HTMLEle
         cls: "fx",
         hit: vehicleIsHit(attachment, seats),
         segments: [
-            P.targets(mask),
+            targetSeg("mech", mask),
             P.label(label, {
                 title: P.hintFor("mech", "seat"),
                 detail: [`Seat at the ${label} attachment point`,
@@ -828,7 +851,7 @@ export function channelTag(side: string, type: number, count: number, mask = 0):
         cls: "fx" + (priceless ? " priceless" : ""),
         hit: channelIsHit(side, type),
         segments: [
-            P.targets(mask),
+            targetSeg("mech", mask),
             P.label(String(type), {detail, ...nav}),
             P.note(verb, {detail, ...nav}),
         ],
@@ -900,7 +923,7 @@ export function speedTag(pill: { move: string; pct: number; amount: string; key:
         cls: "fx",
         hit: speedIsHit(pill.key),
         segments: [
-            P.targets(mask),
+            targetSeg("mech", mask),
             P.label(pill.move, {
                 title: P.hintFor("mech", "speed"),
                 detail,
@@ -937,7 +960,7 @@ export function scaleTag(pill: { pct: number; amount: string }, mask = 0): HTMLE
         cls: "fx",
         hit: scaleIsHit(pill.pct),
         segments: [
-            P.targets(mask),
+            targetSeg("fx", mask),
             P.label(pill.amount, {
                 title: P.hintFor("fx", "scale"),
                 detail: [`Size ${pill.amount}`,
@@ -969,7 +992,7 @@ export function keybindTag(pill: { label: string; fn: string; ids: number[] },
         cls: "fx",
         hit: pill.ids.some(keybindIsHit),
         segments: [
-            P.targets(mask),
+            targetSeg("mech", mask),
             P.label(pill.label, {
                 title: `${pill.fn} is overridden while this aura holds`,
                 detail: ["On Epsilon the key is simply disabled"],
@@ -1026,7 +1049,7 @@ export function screenTag(screenId: number, mask = 0): HTMLElement {
         cls: "fx",
         hit: screenIsHit(screenId),
         segments: [
-            P.targets(mask),
+            targetSeg("fx", mask),
             swatches,
             P.label(name || `screen #${screenId}`, {
                 title: `${name || "(unnamed)"} — ScreenEffect ${screenId}`,
@@ -1055,7 +1078,7 @@ export function dissolveTag(entry: { dissolveId: number; fid: number }, mask = 0
         cls: "fx",
         hit: dissolveIsHit(entry.dissolveId),
         segments: [
-            P.targets(mask),
+            targetSeg("fx", mask),
             P.label(base || "(untextured)", {
                 title: file.path || "(no texture)",
                 detail: [duration && `Duration ${duration}s`],
@@ -1092,7 +1115,7 @@ export function shapeshiftTag(entry: { formId: number; displayId: number; fid: n
             displayId && CFG.wowheadMorphUrl && P.link(
                 fillTemplate(CFG.wowheadMorphUrl, {id: displayId, spell: spellId}),
                 `View DisplayID ${displayId} in Wowhead's model viewer`),
-            P.targets(mask),
+            targetSeg("fx", mask),
             P.label(base || name || `form #${formId}`, {
                 title: `${name || "(unnamed form)"} — SpellShapeshiftForm ${formId}`,
                 detail: [displayId ? `DisplayID ${displayId}`
@@ -1123,7 +1146,7 @@ export function morphTag(entry: { creatureId: number; displayId: number; fid: nu
             displayId && CFG.wowheadMorphUrl && P.link(
                 fillTemplate(CFG.wowheadMorphUrl, {id: displayId, spell: spellId}),
                 `View DisplayID ${displayId} in Wowhead's model viewer`),
-            P.targets(mask),
+            targetSeg("fx", mask),
             P.label(base || (displayId ? `#${displayId}` : `creature #${creatureId}`), {
                 title: `${name || "(unknown creature)"} — creature ${creatureId}`,
                 detail: [displayId ? `DisplayID ${displayId}`
@@ -1193,7 +1216,7 @@ export function objectTag(objectId: number, mask = 0): HTMLElement {
             !hasWowheadPage(objectId) && CFG.modelViewerUrl && fid && P.view(
                 fillTemplate(CFG.modelViewerUrl, {fid}),
                 `Preview ${file.base || `object #${objectId}`} in the WoW.tools model viewer (new tab)`),
-            P.targets(mask),
+            targetSeg("fx", mask),
             P.label(name || base || `object #${objectId}`, {
                 title: `${name || "(unnamed object)"} — gameobject ${objectId}`,
                 detail: [file.path || "(model unknown)"],
@@ -1251,7 +1274,7 @@ export function summonTag(entry: { creatureId: number; control: number }, mask =
         segments: [
             CFG.wowheadNpcUrl && P.link(wowheadUrl(CFG.wowheadNpcUrl, {id: creatureId}),
                 `Open NPC ${creatureId} on Wowhead`),
-            P.targets(mask),
+            targetSeg("fx", mask),
             P.label(name || `creature #${creatureId}`, {
                 title: `${name || "(unknown creature)"} — creature ${creatureId}`,
                 detail: [ctrl && `Control: ${ctrl}`],

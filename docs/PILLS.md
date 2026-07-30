@@ -317,6 +317,18 @@ spelled `p.rows.some(mechanicIsHit)` twice — once for the pill, once for the b
 `hit` survives on `groupBlock` for one case only: a **valueless** fx category whose clickable head IS the whole pill and
 which has no items to derive from (`freeze`, `camo`). It ORs in, never overrides.
 
+**The target icons light too, and they are the one segment where a hit must NOT recolour.** `targetSeg(field, mask)`
+gives `P.targets` its hit — the query named a target type this row's mask carries, tested through the engine's own
+`Search.maskIsNamed` so what lights up and what was selected cannot drift. Before it, a target query lit *nothing*:
+`model:caster` selected 101,307 spells and every cell kept its resting order, because there was no hit for `holdsHit` to
+find. But these glyphs already carry meaning **in their colour** — caster dim, target mech-tone, area fx-tone,
+never-caster danger — so `.ticons.hit` puts the gold *behind* the group as a capsule and the glyphs keep their hues,
+exactly as `.tag.hit` washes a pill without touching its label. Tinting them gold would trade a type distinction for a
+state one. Measured on real page loads, all three palettes: the capsule's 1px ring carries the state at **3.74:1**
+(moonwell) and **3.68:1** (vellum) against the row — over the 3:1 non-text bar — and the glyphs stay **6.0:1** and
+**12.5:1** on top of the wash. Text contrast is untouched in every palette (dark keeps only its known `.qchip-x`
+failure). The field is per renderer, because a target word only ever means its own column.
+
 Verified as a stable partition, not a re-sort: over 30 queries × 5 columns, **147 of 150 cell orderings came back
 byte-identical**, all 30 result counts unchanged, and the three that moved were exactly the Models column under the two
 attach queries and the motion query. Re-run that way after touching any of this — and note the trap it exposes:

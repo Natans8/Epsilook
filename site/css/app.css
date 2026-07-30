@@ -1795,6 +1795,22 @@ mark.hl {
     cursor: help;
 }
 
+/* The query named a target type this row carries. The gold goes BEHIND the
+   glyphs, never on them: these icons are the one segment whose colour already
+   carries the meaning (caster dim, target mech, area fx, never-caster danger),
+   so tinting them gold would trade a type distinction for a state one. Same
+   move as .tag.hit, which washes a pill without touching its label. */
+.ticons.hit {
+    background: rgba(var(--gold-rgb), calc(0.16 * var(--wash-strength)));
+    box-shadow: inset 0 0 0 1px var(--gold-dim);
+    border-radius: 999px;
+    /* the wash needs room to read as a shape, and the pill's own left padding
+       is what it borrows — so the icons do not shift when they light up */
+    padding-right: 0.28rem;
+    padding-left: 0.3rem;
+    margin-left: 0.15rem;
+}
+
 .ticon svg {
     width: 0.82em;
     height: 0.82em;

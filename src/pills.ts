@@ -452,8 +452,8 @@ export const play = (url: string, title: string): Segment =>
     ({kind: "play", play: url, title, aria: title, text: "▶"});
 
 /** Target-type icons. Renders nothing for an empty mask. */
-export const targets = (mask: number): Segment | null => (mask
-    ? {kind: "targets", nodes: targetIconNodes(mask)}
+export const targets = (mask: number, hit = false): Segment | null => (mask
+    ? {kind: "targets", nodes: targetIconNodes(mask), hit}
     : null);
 
 /**

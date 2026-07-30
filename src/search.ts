@@ -384,9 +384,9 @@ export const TARGET_WORD_TITLES: Record<string, string> = {
  * Split a group's tokens into text tokens and target-mask tests.
  * A field with no masks simply never gets tests back.
  */
-function splitTargetTokens(tokens: QueryToken[]):
-    { text: QueryToken[]; tests: ((mask: number) => boolean)[] } {
-    const text: QueryToken[] = [], tests: ((mask: number) => boolean)[] = [];
+function splitTargetTokens<T extends { text: string }>(tokens: T[]):
+    { text: T[]; tests: ((mask: number) => boolean)[] } {
+    const text: T[] = [], tests: ((mask: number) => boolean)[] = [];
     for (const t of tokens) {
         const test = TARGET_TESTS[t.text];
         if (test) tests.push(test); else text.push(t);
@@ -396,6 +396,19 @@ function splitTargetTokens(tokens: QueryToken[]):
 
 const maskMatches = (tests: ((mask: number) => boolean)[], mask: number): boolean =>
     tests.every((fn) => fn(mask));
+
+/**
+ * Did a group's tokens NAME a target type this row's mask carries?
+ *
+ * The pills' hit test for the target icons, sharing `splitTargetTokens` and
+ * `maskMatches` with the search itself — so what lights up and what was
+ * actually selected cannot drift. Answers false when the group names no target
+ * word at all, which is what keeps every icon dark under an ordinary query.
+ */
+export function maskIsNamed(tokens: { text: string }[], mask: number): boolean {
+    const {tests} = splitTargetTokens(tokens);
+    return tests.length > 0 && maskMatches(tests, mask);
+}
 
 /**
  * Search file names within a scope of fids; return spells using the matches.
