@@ -105,6 +105,11 @@ TABLES = [
     "SpellXSpellVisual",
     "SpellVisual",
     "SpellVisualMissile",
+    # missile flight paths (§3, Models column): SpellVisualMissile.SpellMissileMotionID
+    # names the arc a projectile travels — "Parabola (High)", "Boomerang",
+    # "Mage - Fire - Fireball". Only ID + Name are kept; the Lua-ish ScriptBody
+    # is the bulk of the table and nothing renders it. Present on every build.
+    "SpellMissileMotion",
     "SpellVisualEvent",
     "SpellVisualKitEffect",
     "SpellVisualKitModelAttach",
@@ -357,8 +362,10 @@ TDB_TABLES = {
         "spell_visual": ["ID", "SpellVisualMissileSetID", "RaidSpellVisualMissileSetID",
                          "MissileAttachment", "MissileDestinationAttachment",
                          "AnimEventSoundID", *VISUAL_REDIRECTS],
+        # SpellMissileMotionID is here for the wholesale-replace reason above:
+        # a hotfixed missile row that omitted it would blank the flight path.
         "spell_visual_missile": ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID",
-                                 "SoundEntriesID", "AnimKitID"],
+                                 "SoundEntriesID", "AnimKitID", "SpellMissileMotionID"],
         "spell_visual_effect_name": ["ID", "ModelFileDataID"],
         # EffectBasePoints joins the overlay for the wholesale-replace reason
         # above: it is the movement-speed percent. All four dumps that ship
@@ -776,6 +783,10 @@ M2_ATTACHMENT_NAMES = load_local_enum("m2_attachments")
 # attachment columns use -1 for "unset"; missile columns also use -2
 NO_ATTACHMENT = -1
 
+# SpellVisualMissile.SpellMissileMotionID uses 0 for "no flight path declared",
+# which is also a model row's value on every non-missile category.
+NO_MOTION = 0
+
 
 def attachment_name(attachment: int) -> str:
     """Raw M2 attachment id -> name, or "" when unset or unknown."""
@@ -959,7 +970,7 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 33  # 33: animkit bonesets (body region) + effect attach points (Shadowy/Dissolve/Barrage)
+PACK_FORMAT = 34  # 34: missile flight paths (SpellMissileMotion) on missile model rows
 # 29: mechanics carry their implicit targets (spellEffects +
 #     spellAuras -> spellMechanics, implicitTargetNames) and
 #     keybound overrides (spellKeybinds, keybinds)
@@ -1604,15 +1615,18 @@ class ModelSources:
     barrage_fid: dict[int, int]  # BarrageEffect.ID -> model fid (ET 17)
     barrage_attach: dict[int, int]  # BarrageEffect.ID -> M2 attachment id (-1 none)
     weapontrail_fid: dict[int, int]  # WeaponTrail.ID -> model fid (proc Type 27)
-    # kit -> {(fid, category, source attachment, destination attachment, ref)}.
-    # Routes with a single attach point put it in `source` and leave
+    # kit -> {(fid, category, source attachment, destination attachment, ref,
+    # motion)}. Routes with a single attach point put it in `source` and leave
     # `destination` NO_ATTACHMENT; routes with none use NO_ATTACHMENT for both.
     # `ref` is the id of the game entity the model came FROM, and the category
     # says which id space it is in: a CreatureDisplayID on MODEL_CAT_DISPLAY, an
     # Item::ID on MODEL_CAT_ITEM, 0 everywhere else. A row can only ever come
     # from one such entity, so the categories share the field rather than each
     # adding its own — that is the extension point for the next Type-N route.
-    attach_models: dict[int, set[tuple[int, int, int, int, int]]]
+    # `motion` is a SpellMissileMotion id (0 = none) and is MODEL_CAT_MISSILE's
+    # alone — it is a separate field rather than a second meaning for `ref`
+    # because it describes how the model TRAVELS, not what it came from.
+    attach_models: dict[int, set[tuple[int, int, int, int, int, int]]]
     # animations carried on the SAME SpellVisualKitModelAttach rows — the
     # attached model's start/loop/end AnimationData ids and its AnimKit. Keyed
     # by kit, they union straight into the existing visual-anim / animkit
@@ -1666,7 +1680,7 @@ def read_model_sources(
     # model at two different points stays two rows (and renders as two pills)
     # instead of merging — 10.5% of (kit, effect name) pairs on 9.2.7 carry
     # more than one distinct attachment.
-    attach_models: dict[int, set[tuple[int, int, int, int, int]]] = defaultdict(set)
+    attach_models: dict[int, set[tuple[int, int, int, int, int, int]]] = defaultdict(set)
     attach_anims: dict[int, set[int]] = defaultdict(set)
     attach_animkits: dict[int, set[int]] = defaultdict(set)
     for kit_id, en_id, attach, start_a, anim_a, end_a, animkit in read_table(
@@ -1687,7 +1701,7 @@ def read_model_sources(
             disp = effect_name_generic.get(e, 0)
             fid = creatures.fid_for_display(disp)
             if fid:
-                attach_models[k].add((fid, MODEL_CAT_DISPLAY, at, NO_ATTACHMENT, disp))
+                attach_models[k].add((fid, MODEL_CAT_DISPLAY, at, NO_ATTACHMENT, disp, NO_MOTION))
         elif en_type == EFFECT_NAME_TYPE_ITEM:
             # Type 1: the effect-name names an Item::ID. The item carries its own
             # model through the appearance chain, plus the name/quality/icon the
@@ -1697,15 +1711,15 @@ def read_model_sources(
             item = effect_name_generic.get(e, 0)
             fid = items.model_fid.get(item, 0)
             if fid:
-                attach_models[k].add((fid, MODEL_CAT_ITEM, at, NO_ATTACHMENT, item))
+                attach_models[k].add((fid, MODEL_CAT_ITEM, at, NO_ATTACHMENT, item, NO_MOTION))
         else:
             fid = effect_name_fid.get(e, 0)
             if fid:
-                attach_models[k].add((fid, MODEL_CAT_ATTACH, at, NO_ATTACHMENT, 0))
+                attach_models[k].add((fid, MODEL_CAT_ATTACH, at, NO_ATTACHMENT, 0, NO_MOTION))
             elif weapon_fid := EFFECT_NAME_TYPE_WEAPON.get(en_type, 0):
                 # Type 3-10 with no file: a weapon the caster already has, held
                 # at this attachment point. Sentinel fid -> per-slot marker pill.
-                attach_models[k].add((weapon_fid, MODEL_CAT_ATTACH, at, NO_ATTACHMENT, 0))
+                attach_models[k].add((weapon_fid, MODEL_CAT_ATTACH, at, NO_ATTACHMENT, 0, NO_MOTION))
         # the start/loop/end anims animate the attached model, but they are
         # AnimationData / AnimKit ids the spell's kit plays — index them even
         # when the model fid is unresolved (a Type 1/2 effect-name). 0 = Stand
@@ -1754,22 +1768,36 @@ def read_model_sources(
                         attach_models, attach_anims, attach_animkits)
 
 
-# what a visual with no missiles contributes: (model fids, soundkits, animkits)
+# what a visual with no missiles contributes: ({(fid, motion)}, soundkits, animkits)
 NO_MISSILES: tuple = (frozenset(), frozenset(), frozenset(),
                       (NO_ATTACHMENT, NO_ATTACHMENT))
+
+
+def read_missile_motions(table_dir: Path) -> dict[int, str]:
+    """SpellMissileMotion ID -> name (the arc a projectile flies).
+
+    Name only: the table's other real column is ScriptBody, a Lua-ish motion
+    script that is the bulk of its bytes and that nothing renders.
+    """
+    motions: dict[int, str] = {}
+    for mid, name in read_table(table_dir, "SpellMissileMotion", ["ID", "Name"]):
+        if name:
+            motions[to_int(mid)] = name
+    return motions
 
 
 def read_missiles(
         table_dir: Path, tdb_dir: Path | None, effect_name_fid: dict[int, int],
         effect_name_type: dict[int, int]
 ) -> dict[int, tuple]:
-    """Read visual -> (missile models, soundkits, animkits).
+    """Read visual -> ({(missile model, motion)}, soundkits, animkits).
 
     Missiles are the second path out of SpellVisual, and the only one that
     reaches projectile models: SpellVisual.SpellVisualMissileSetID (plus the
-    raid variant) groups SpellVisualMissile rows, each carrying a model and
-    sometimes a flight/launch SoundKit and an AnimKit. Arcane Missiles'
-    cfx_mage_arcanemissiles_missile.m2 exists nowhere else in the graph.
+    raid variant) groups SpellVisualMissile rows, each carrying a model, a
+    flight path, and sometimes a launch SoundKit and an AnimKit. Arcane
+    Missiles' cfx_mage_arcanemissiles_missile.m2 exists nowhere else in the
+    graph.
     """
     # The launch/impact attachment points come from SpellVisual, not from the
     # individual SpellVisualMissile rows: the missile route is per-visual (a
@@ -1784,27 +1812,32 @@ def read_missiles(
     for rid, ms, rms, a, b in hotfix_rows(tdb_dir, "spell_visual", sv_cols):
         sv_rows[to_int(rid)] = (to_int(ms), to_int(rms), to_int(a), to_int(b))
 
+    # SpellMissileMotionID rides the same row as the model, so the flight path
+    # pairs with the projectile it belongs to rather than with the whole set:
+    # 99.4% of (set, effect-name) pairs on 9.2.7 name exactly one motion, and
+    # the handful that name several become several rows — the same rule the
+    # attachment pair already follows (see the "spellModels" pack comment).
     svm_cols = ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID",
-                "SoundEntriesID", "AnimKitID"]
-    svm_rows: dict[int, tuple[int, ...]] = {}  # missile ID -> (set, en, soundkit, animkit)
+                "SoundEntriesID", "AnimKitID", "SpellMissileMotionID"]
+    svm_rows: dict[int, tuple[int, ...]] = {}  # missile ID -> (set, en, soundkit, animkit, motion)
     for rid, *vals in read_table(table_dir, "SpellVisualMissile", svm_cols):
         svm_rows[to_int(rid)] = tuple(to_int(v) for v in vals)
     for rid, *vals in hotfix_rows(tdb_dir, "spell_visual_missile", svm_cols):
         svm_rows[to_int(rid)] = tuple(to_int(v) for v in vals)
 
-    set_models: dict[int, set[int]] = defaultdict(set)
+    set_models: dict[int, set[tuple[int, int]]] = defaultdict(set)  # -> {(fid, motion)}
     set_soundkits: dict[int, set[int]] = defaultdict(set)
     set_animkits: dict[int, set[int]] = defaultdict(set)
-    for set_id, en_id, sk, ak in svm_rows.values():
+    for set_id, en_id, sk, ak, motion in svm_rows.values():
         if not set_id:
             continue
         fid = effect_name_fid.get(en_id, 0)
         if fid:
-            set_models[set_id].add(fid)
+            set_models[set_id].add((fid, motion))
         elif weapon_fid := EFFECT_NAME_TYPE_WEAPON.get(effect_name_type.get(en_id, 0), 0):
             # Type 3-10 with no file: the caster's own weapon THROWN as the
             # projectile. Sentinel fid -> per-slot marker missile pill.
-            set_models[set_id].add(weapon_fid)
+            set_models[set_id].add((weapon_fid, motion))
         if sk:
             set_soundkits[set_id].add(sk)
         if ak:
@@ -1840,7 +1873,7 @@ class ProcEffects:
     transps: dict[int, int]  # proc ID -> transparency percent (Type 14)
     freezes: set[int]  # proc IDs of freeze (Type 11)
     camos: set[int]  # proc IDs of camo (Type 18)
-    models: dict[int, tuple[int, int, int, int, int]]  # proc ID -> model tuple (Types 9, 27)
+    models: dict[int, tuple[int, int, int, int, int, int]]  # proc ID -> model tuple (Types 9, 27)
     anims: dict[int, tuple[tuple[int, int], ...]]  # proc ID -> (base, replacement) pairs (Type 7)
 
 
@@ -1876,11 +1909,11 @@ def read_proc_effects(table_dir: Path, models: ModelSources) -> ProcEffects:
         elif pt == PROC_TYPE_AREAMODEL:
             fid = models.area_model_fid.get(to_int_from_float(v0), 0)
             if fid:
-                procs.models[p] = (fid, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0)
+                procs.models[p] = (fid, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION)
         elif pt == PROC_TYPE_WEAPONTRAIL:
             fid = models.weapontrail_fid.get(to_int_from_float(v0), 0)
             if fid:
-                procs.models[p] = (fid, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0)
+                procs.models[p] = (fid, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION)
         elif pt == PROC_TYPE_STANDWALK:
             # (base slot -> replacement) pairs, so proc-7 folds into the same
             # replace group as aura 312. A value of 0 means "slot unchanged" and
@@ -2100,7 +2133,7 @@ class KitEffects:
     where the SpellVisualKitEffect dispatch lands; the per-spell walk then
     just unions these over the kits a spell reaches.
     """
-    models: dict[int, set[tuple[int, int, int, int, int]]]  # (fid, category, src, dst, display)
+    models: dict[int, set[tuple[int, int, int, int, int, int]]]  # (fid, cat, src, dst, ref, motion)
     soundkits: dict[int, set[int]]
     animkits: dict[int, set[int]]
     anims: dict[int, set[tuple[int, int]]]  # (base, replacement) pairs (proc Type 7)
@@ -2200,12 +2233,12 @@ def read_kit_effects(
         elif et == EFFECT_TYPE_EMISSION:
             fid = models.emission_fid.get(e, 0)
             if fid:
-                kits.models[k].add((fid, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0))
+                kits.models[k].add((fid, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION))
         elif et == EFFECT_TYPE_BARRAGE:
             fid = models.barrage_fid.get(e, 0)
             if fid:
                 attach = models.barrage_attach.get(e, NO_ATTACHMENT)
-                kits.models[k].add((fid, MODEL_CAT_BARRAGE, attach, NO_ATTACHMENT, 0))
+                kits.models[k].add((fid, MODEL_CAT_BARRAGE, attach, NO_ATTACHMENT, 0, NO_MOTION))
         elif et == EFFECT_TYPE_SCREEN:
             se_id = fx.svse_screen.get(e, 0)
             if se_id in fx.screens:
@@ -2947,7 +2980,7 @@ class SpellVisuals:
     mask even where the pack does not currently emit one, so giving a category
     an icon later is a pack-section change, not a walk change.
     """
-    models: dict[int, dict[tuple[int, int, int, int, int], int]]  # (fid, category, src, dst, display)
+    models: dict[int, dict[tuple[int, int, int, int, int, int], int]]  # (fid, cat, src, dst, ref, motion)
     sounds: dict[int, dict[tuple[int, int], int]]  # (soundkit, sound fid)
     animkits: dict[int, dict[int, int]]
     anims: dict[int, dict[tuple[int, int], int]]  # (base, replacement) pairs (proc Type 7)
@@ -3010,7 +3043,8 @@ def walk_spells(
             # missile-set content has no SpellVisualEvent row, so no target type
             m_fids, m_sks, m_aks, (m_src, m_dst) = visual_missiles.get(v, NO_MISSILES)
             merge_masked(vis.models[spell_id],
-                         ((f, MODEL_CAT_MISSILE, m_src, m_dst, 0) for f in m_fids), extra)
+                         ((f, MODEL_CAT_MISSILE, m_src, m_dst, 0, motion)
+                          for f, motion in m_fids), extra)
             merge_masked(vis.animkits[spell_id], m_aks, extra)
             for sk in m_sks:
                 merge_masked(vis.sounds[spell_id],
@@ -3143,6 +3177,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     models = read_model_sources(table_dir, tdb_dir, creatures, items, listfile_path)
     visual_missiles = read_missiles(table_dir, tdb_dir, models.effect_name_fid,
                                     models.effect_name_type)
+    missile_motions = read_missile_motions(table_dir)
     procs = read_proc_effects(table_dir, models)
     fx = read_fx_payloads(table_dir)
     kits = read_kit_effects(table_dir, models, procs, fx)
@@ -3241,7 +3276,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # game shows in the bag), so they join the one listfile pass
     icon_fids |= {items.icon_fid.get(ref, 0)
                   for pairs in vis.models.values()
-                  for (_f, c, _s, _d, ref) in pairs
+                  for (_f, c, _s, _d, ref, _m) in pairs
                   if c == MODEL_CAT_ITEM and ref}
     icon_fids.discard(0)
     lookup_fids = referenced_fids | icon_fids
@@ -3286,8 +3321,14 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # every kit-derived row carries its target mask as the last element (see
     # TARGET_BITS); the pack emits it as a parallel "targets" array
     model_rows = sorted(
-        (s, f, c, m, src, dst, ref)
-        for s, pairs in vis.models.items() for (f, c, src, dst, ref), m in pairs.items())
+        (s, f, c, m, src, dst, ref, motion)
+        for s, pairs in vis.models.items() for (f, c, src, dst, ref, motion), m in pairs.items())
+
+    # the missile motions those rows actually name, as a parallel-array block
+    # (same shape as `items` below): the pack ships only the flight paths in
+    # use, not all ~1.6k the build downloads.
+    used_motions = sorted({r[7] for r in model_rows if r[7]})
+    motion_names = [missile_motions.get(i, "") for i in used_motions]
 
     # items reached by a MODEL_CAT_ITEM row: ship the name, quality word and
     # icon each pill needs. An item with no ItemSearchName row still ships (with
@@ -3515,6 +3556,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellModels": len(model_rows),
                 "spellDisplayModels": sum(1 for r in model_rows if r[2] == MODEL_CAT_DISPLAY),
                 "spellItemModels": sum(1 for r in model_rows if r[2] == MODEL_CAT_ITEM),
+                "spellMissileMotions": sum(1 for r in model_rows if r[7]),
+                "missileMotions": len(used_motions),
                 "items": len(used_items),
                 "namedItems": sum(1 for i in used_items if items.name.get(i)),
                 # equipped-weapon marker rows (SpellVisualEffectName Type 3-10,
@@ -3594,7 +3637,16 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             # an Item::ID on MODEL_CAT_ITEM, 0 elsewhere. One field rather than
             # one per category — a row only ever comes from one such entity.
             "refIds": [r[6] for r in model_rows],
+            # SpellMissileMotion id (0 = none) — the arc the projectile flies.
+            # Missile rows only, and part of the row key like the attach pair,
+            # so a model flown two ways is two rows and renders as two pills.
+            "motions": [r[7] for r in model_rows],
         },
+        # the flight paths "motions" points at (parallel arrays, by motion id).
+        # Names are the client's own and come in two families: geometry
+        # ("Parabola (High)", "Boomerang") and per-spell scripts
+        # ("Mage - Fire - Fireball") — see DATA_ROUTES §3j.
+        "missileMotions": {"ids": used_motions, "names": motion_names},
         # the items MODEL_CAT_ITEM rows point at (parallel arrays, by item id).
         # `names` is "" for an item with no ItemSearchName row — about a third of
         # them, internal props that exist only to be held in a spell visual. Those

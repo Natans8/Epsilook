@@ -64,7 +64,7 @@ baked into the pack.
 
 | Source                      | URL shape                                         | Role                                                                                                                                |
 |-----------------------------|---------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| **wago.tools**              | `wago.tools/db2/{table}/csv?build={version}`      | The 33 client db2 tables. Version-pinned, so a pack always matches its build.                                                       |
+| **wago.tools**              | `wago.tools/db2/{table}/csv?build={version}`      | The 34 client db2 tables. Version-pinned, so a pack always matches its build.                                                       |
 | **community listfile**      | `github.com/wowdev/wow-listfile` (latest release) | `FileDataID → path`. The only way a fid becomes `cfx_mage_fireball_missile.m2`. ~150 MB, streamed and filtered, never loaded whole. |
 | **TrinityCore TDB**         | GitHub release `.7z` per era                      | Two distinct roles — see below.                                                                                                     |
 | **anims.js**                | `wow.tools.local` raw                             | `AnimID → name` (Stand, SpellCastDirected, …).                                                                                      |
@@ -275,6 +275,7 @@ flowchart LR
     A1 -.->|" category (Type 1) "| C6["item"]
     A1 -.->|" category (Type 2) "| C5["display"]
     M1 -.->|" category "| C1["missile"]
+    M1 ==>|" SpellMissileMotionID "| MO["SpellMissileMotion.Name<br/>flight path — part of the row key"]
     E17 -.->|" category "| C4["barrage"]
     E8 -.->|" category "| C2["ground"]
     P9 -.->|" category "| C2
@@ -363,6 +364,40 @@ trusted **only when the listfile can name it**, which keeps genuinely hardcoded 
 and rewrites the placeholder to 0 so every downstream route takes its existing "no file → sentinel" branch. Only weapon
 rows are touched — a Type-0 row naming the same fid keeps its normal model pill (which is why Cata still reports one
 unnamed file).
+
+#### Missile flight paths — the arc a projectile travels
+
+`SpellVisualMissile.SpellMissileMotionID → SpellMissileMotion.Name` names the path a missile flies. It rides the same
+row as the model, so the flight path pairs with the **projectile it belongs to** rather than with the whole missile set,
+and it is part of the model row key exactly as the attachment pair is — a model flown two ways is two rows and renders
+as two pills. On 9.2.7 that costs 163 extra rows out of 317,613: **99.4%** of `(set, effect-name)` pairs name exactly
+one motion.
+
+Only ID and Name are read. The table's other real column is `ScriptBody`, a Lua-ish motion script that is the bulk of
+its bytes and that nothing renders. The pack ships only the motions in use (**1,199** of ~1,650 on 9.2.7) as a
+`missileMotions: {ids, names}` block, with `spellModels.motions` indexing into it by id (0 = none, and 0 on every
+non-missile category).
+
+Coverage on 9.2.7: **14,439** of 24,029 missile model rows (60.1%) carry a motion, reaching **13,301** spells.
+
+**The names come in two families**, and both are useful:
+
+| family               | shape                                                                 | share |
+|----------------------|-----------------------------------------------------------------------|-------|
+| **geometry**         | `Parabola (High)`, `Boomerang`, `Spiral`, `Fountain`, `Snake`         | ~60%  |
+| **per-spell script** | `Mage - Fire - Fireball`, `Warlock - Destro - Chaos Bolt (Secondary)` | ~40%  |
+
+The script family is effectively a second, Blizzard-authored name for the spell, which is why the names are worth
+shipping rather than reducing to a geometry enum. A few carry developer intent recorded nowhere else —
+`Always Miss - Left or Right, Miss by 1-2 yd` (Wrath, 83457) is a deliberate miss behaviour, and one motion's name is a
+shipped code comment.
+
+**The TDB hotfix overlay must carry the column too.** `spell_visual_missile` is overlaid by row ID *wholesale*, so a
+hotfixed missile row that omitted `SpellMissileMotionID` would silently blank the flight path — the same reason
+`spell_visual` overlays its missile attachments. Adding it to `TDB_TABLES` requires deleting the stale distilled
+`spell_visual_missile.csv` per TDB release, because the distilled-CSV cache is keyed on file existence, not columns.
+
+Present on **every build** (45 motions on Vanilla 1.15.8 → 1,997 on TWW 11.2.7), so no drift declaration is needed.
 
 ### 3d. The four-and-a-half sound routes
 
@@ -948,7 +983,7 @@ flowchart LR
         P1["fxChains · fxTextures · dissolves · dissolveTextures<br/>glows · shadowies · ghostMats · tints<br/>screens · screenTextures · morphs · morphDisplays<br/>shapeshifts · shapeshiftDisplays · summons<br/>vehicles · vehicleSeats"]
     end
     subgraph NAME["name tables"]
-        N1["files (fid → path) · animNames · effectNames<br/>auraNames · iconNames · modelCatNames<br/>targetNames · summonControlNames<br/>implicitTargetNames · implicitTargetBits · keybinds"]
+        N1["files (fid → path) · animNames · effectNames<br/>auraNames · iconNames · modelCatNames<br/>targetNames · summonControlNames · missileMotions<br/>implicitTargetNames · implicitTargetBits · keybinds"]
     end
     LINK --> IDX["data.ts<br/>forward + reverse Map per section"]
     PAY --> IDX

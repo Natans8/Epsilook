@@ -69,7 +69,13 @@ export interface SpellPack {
         /** Ref id: CreatureDisplayID (display cat) or Item::ID (item cat), 0 else
          *  (format 28+). Format 27 shipped it as displayIds (display rows only). */
         refIds?: number[]; displayIds?: number[]
+        /** SpellMissileMotion id, 0 = none (format 34+). Missile rows only —
+         *  the arc the projectile flies. Part of the row key like the attach
+         *  pair, so one model flown two ways is two rows. */
+        motions?: number[]
     };
+    /** Flight paths "motions" points at (format 34+), parallel by motion id. */
+    missileMotions?: { ids: number[]; names: string[] };
     /** Items reached by "item"-category rows (format 28+), parallel by item id.
      *  names[i] is "" for a nameless item; icons[i] is a 1-based index into
      *  itemIconNames (0 = none); qualities[i] indexes itemQualityNames (-1 = none). */
