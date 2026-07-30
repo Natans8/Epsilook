@@ -1,12 +1,72 @@
-import {camoIsHit, channelIsHit, desatIsHit, dissolveIsHit, freezeIsHit, fxChainIsHit, ghostMatIsHit, glowIsHit, keybindIsHit, morphIsHit, objectIsHit, scaleIsHit, screenIsHit, shadowyIsHit, shapeshiftIsHit, speedIsHit, summonIsHit, tintIsHit, tokensFor, transpIsHit, vehicleIsHit, wordIsNamed} from "./hits";
+import {
+    camoIsHit,
+    channelIsHit,
+    desatIsHit,
+    dissolveIsHit,
+    freezeIsHit,
+    fxChainIsHit,
+    ghostMatIsHit,
+    glowIsHit,
+    keybindIsHit,
+    morphIsHit,
+    objectIsHit,
+    scaleIsHit,
+    screenIsHit,
+    shadowyIsHit,
+    shapeshiftIsHit,
+    speedIsHit,
+    summonIsHit,
+    tintIsHit,
+    tokensFor,
+    transpIsHit,
+    triggeredByIsHit,
+    triggersIsHit,
+    vehicleIsHit,
+    wordIsNamed
+} from "./hits";
 import {setStatus} from "./run";
-import type {DisplayRef, SpellData} from "../data";
+import type {DisplayRef, SpellData, SpellLink} from "../data";
 import {activeData, state, wowheadUrl} from "./state";
-import {animSwapTag, animTag, channelTag, colorFxTag, displayTag, dissolveTag, effectAttachNote, effectRegionName, fxHeadTag, fxTag, isDisplayCat, isItemCat, itemTag, keybindTag, kitTag, maskOf, mechanicPills, mechanicTag, modelCatHeadTag, modelTag, morphTag, mountTag, objectTag, percentFxTag, scaleTag, screenTag, shapeshiftTag, soundTag, speedTag, summonTag, travels, vehicleTag} from "./tags";
+import {
+    animSwapTag,
+    animTag,
+    channelTag,
+    colorFxTag,
+    displayTag,
+    dissolveTag,
+    effectAttachNote,
+    effectRegionName,
+    fxHeadTag,
+    fxTag,
+    isDisplayCat,
+    isItemCat,
+    itemTag,
+    keybindTag,
+    kitTag,
+    maskOf,
+    mechanicPills,
+    mechanicTag,
+    modelCatHeadTag,
+    modelTag,
+    morphTag,
+    mountTag,
+    objectTag,
+    percentFxTag,
+    scaleTag,
+    screenTag,
+    shapeshiftTag,
+    soundTag,
+    speedTag,
+    spellLinkTag,
+    summonTag,
+    travels,
+    vehicleTag
+} from "./tags";
 import type {ModelCatEntry} from "./tags";
 import * as P from "../pills";
 import {CFG} from "../config";
 import {$, $$, el, fillTemplate} from "../util";
+
 /* --------------------------------------------------------- rendering */
 
 export function renderResults(): void {
@@ -54,6 +114,7 @@ export function renderMore(): void {
    * cell's content flows top-to-bottom in DOM order (inline pills wrap, kit
    * groups stack), leaf bottoms are monotonic, so a leading prefix is exactly
    * "what fits". */
+
 /* One renderable unit of a cell: a loose pill, or a whole group (a head with
    * its items). `named` ranks it above the merely-matched (the query spelled its
    * category word — see hitsFirst). Whether it
@@ -377,7 +438,7 @@ function modelsCell(spellId: number): HTMLElement {
     // usefully say — which unit the model plays on is the target icon's job
     // now — so those render as loose pills, like the loose animation pills
     const loose: ModelCatEntry[] = [];
-    const cats: {name: string; items: ModelCatEntry[]}[] = [];
+    const cats: { name: string; items: ModelCatEntry[] }[] = [];
     for (const c of [...byCat.keys()].sort((a, b) => a - b)) {
         const name = d.modelCatNames[c] || "";
         const items = byCat.get(c)!;
@@ -418,7 +479,7 @@ function modelsCell(spellId: number): HTMLElement {
 }
 
 /* One cell showing each SoundKit with the sound files it contains. */
-function soundsCell(soundEntries: {soundKitId: number; fid: number; targets: number}[]): HTMLElement {
+function soundsCell(soundEntries: { soundKitId: number; fid: number; targets: number }[]): HTMLElement {
     const td = el("td", "c-sounds");
     if (soundEntries.length === 0) {
         td.classList.add("empty");
@@ -457,10 +518,13 @@ function soundsCell(soundEntries: {soundKitId: number; fid: number; targets: num
    * category is one entry here plus one in ANIM_CAT_TITLES — nothing below
    * branches on which group it is. */
 const PASSENGER_GROUP = -2;
-const ANIM_GROUPS: {id: number; word: string;
-    animsOf(d: SpellData, s: number): number[] | undefined}[] = [
+const ANIM_GROUPS: {
+    id: number; word: string;
+    animsOf(d: SpellData, s: number): number[] | undefined
+}[] = [
     {id: PASSENGER_GROUP, word: "passenger", animsOf: (d, s) => d.spellPassengerAnims.get(s)},
 ];
+
 function animationsCell(animKitIds: number[], looseAnimIds: number[],
                         spellId: number): HTMLElement {
     const groupAnims = new Map<number, number[]>();
@@ -493,7 +557,7 @@ function animationsCell(animKitIds: number[], looseAnimIds: number[],
     // AnimKits only — a headless group (passenger) has none.
     const animEntries = (kitId: number) => {
         const bones = groupAnims.has(kitId) ? null : d.animKitAnimBoneset.get(kitId);
-        const out: {animId: number; region: string | null}[] = [];
+        const out: { animId: number; region: string | null }[] = [];
         for (const animId of animsOf(kitId).slice().sort((a, b) => a - b)) {
             const regions = bones && bones.get(animId);
             if (regions && regions.length) {
@@ -560,6 +624,7 @@ function animCatHeadTag(word: string, hit: boolean): HTMLElement {
    * whatever overflows the row budget behind the cell's single "+N more".
    * Groups rendering ≤1 item for THIS row collapse to an inline pill — see
    * P.group, which decides that for every column alike. */
+
 /* Render a cell's BLOCKS with search hits floated to the top.
    *
    * A block is one renderable unit of a cell — a loose pill, or a whole group
@@ -629,7 +694,7 @@ function groupBlock(spec: {
  * fx `<td>` plus the mech-side blocks for mechanicsCell to render after its
  * enum pills.
  */
-function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]} {
+function effectCells(spellId: number): { fx: HTMLElement; mechBlocks: CellBlock[] } {
     const d = activeData();
     const chainIds = d.spellFx.get(spellId) || [];
     const dissolveIds = d.spellDissolves.get(spellId) || [];
@@ -658,8 +723,10 @@ function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]
     // either cell is asking. Each is judged on its own blocks at the end —
     // a spell with only a speed aura has an empty fx cell and a populated
     // mechanics one, which the old single test could not express.
-    const cats: {name: string; col: string; hit: boolean; mask: number;
-        items: (() => HTMLElement)[]}[] = [];
+    const cats: {
+        name: string; col: string; hit: boolean; mask: number;
+        finds?: string; items: (() => HTMLElement)[]
+    }[] = [];
     /* Where a category's target icons go. One icon on the HEAD when every
  * row of the category agrees — the common case, and far less noisy than
  * repeating it on each pill. When they disagree, the head would have to
@@ -705,23 +772,32 @@ function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]
         /** which column renders it — "fx" (default) or "mech". The only
          *  thing that differs between the two. */
         col?: "fx" | "mech";
+        /** what the HEAD's click finds, when "a <word> effect" does not read
+         *  as English (the link words are verbs). Default: that phrase. */
+        finds?: string;
         /** source rows (see above) */
         rows: any[];
+
         /** does a source row match the query */
         isHit(row: any): boolean;
+
         /** build one pill. Omitted only by valueless categories, whose head
          *  IS the whole pill and which therefore produce no entries for it
          *  to be called on. */
         render?(entry: any, mask: number): HTMLElement;
+
         /** a source row's target mask. Default: no icons anywhere — for
          *  categories with no target data. */
         mask?(row: any): number;
+
         /** rows -> pills. Default: identity. */
         entries?(rows: any[]): any[];
+
         /** Default: `isHit`, which is correct whenever entries and rows are
          *  the same thing. */
         /** Default: `mask`. */
         entryMask?(entry: any): number;
+
         /** which masks decide whether the icon can ride the head. Defaults to
          *  the source rows'. Override only where a row's own mask is not what
          *  a pill shows — `keybind` merges rows by label, so a merged pill
@@ -730,13 +806,13 @@ function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]
     }
 
     const pushCat = ({
-        name, rows, isHit, col = "fx",
-        render = () => el("span"),
-        mask = () => 0,
-        entries = (rs) => rs,
-        entryMask = mask,
-        headMasks = (rs) => rs.map(mask),
-    }: CatSpec) => {
+                         name, rows, isHit, col = "fx", finds,
+                         render = () => el("span"),
+                         mask = () => 0,
+                         entries = (rs) => rs,
+                         entryMask = mask,
+                         headMasks = (rs) => rs.map(mask),
+                     }: CatSpec) => {
         if (!rows.length) return;
         const pills = entries(rows);
         const t = targetSplit(headMasks(rows, pills));
@@ -745,7 +821,7 @@ function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]
         // head IS the pill. Item order is not decided here: groupBlock ranks the
         // built pills by P.holdsHit, so each renderer's own hit is what counts.
         cats.push({
-            name, col,
+            name, col, finds,
             hit: rows.some(isHit),
             mask: t.head,
             items: pills.map((e) => () => render(e, t.pill(entryMask(e)))),
@@ -869,8 +945,10 @@ function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]
                         if (region) prev.regions.add(region);
                         continue;
                     }
-                    byColor.set(color, {color, hit, mask: rowMask,
-                        regions: new Set(region ? [region] : [])});
+                    byColor.set(color, {
+                        color, hit, mask: rowMask,
+                        regions: new Set(region ? [region] : [])
+                    });
                 }
             }
             return [...byColor.values()];
@@ -973,7 +1051,7 @@ function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]
             m, spellId),
     });
 
-    const summonMask = (e: {creatureId: number}) => maskOf(d.summonTargets, spellId, [e.creatureId]);
+    const summonMask = (e: { creatureId: number }) => maskOf(d.summonTargets, spellId, [e.creatureId]);
     pushCat({
         name: "summon",
         rows: summonEntries,
@@ -1020,7 +1098,7 @@ function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]
     });
     // invisibility / detection channels. Counterpart count = the other side of
     // the same type; it drives the pill label AND the numeric hit test.
-    const channels: Array<[string, {type: number, mask: number}[], Map<number, number[]>]> = [
+    const channels: Array<[string, { type: number, mask: number }[], Map<number, number[]>]> = [
         ["invis", invisPills, d.detectTypeSpells],
         ["detect", detectPills, d.invisTypeSpells]];
     for (const [side, pills, countMap] of channels) {
@@ -1047,7 +1125,7 @@ function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]
         mask: kbMask,
         isHit: keybindIsHit,
         entries: (ids) => {
-            const byLabel: Map<string, {label: string, fn: string, ids: number[], mask: number}> = new Map();
+            const byLabel: Map<string, { label: string, fn: string, ids: number[], mask: number }> = new Map();
             for (const o of ids) {
                 const row = d.keybinds.get(o)!; // rows filtered on d.keybinds.has
                 const label = row.when ? `${row.fn} ${row.when}` : row.fn;
@@ -1089,6 +1167,33 @@ function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]
         render: (p, m) => scaleTag(p, m),
     });
 
+    // Spell -> spell links, one category per DIRECTION. Rows are already the
+    // pills (data.ts merged a pair joined two ways into one entry), and there
+    // is no target mask on a link — an edge has no ImplicitTarget of its own —
+    // so both default.
+    //
+    // Sorted by name so a row with several links reads alphabetically rather
+    // than in pack order; renderBlocks then floats the matched one anyway.
+    const byName = (a: SpellLink, b: SpellLink) => {
+        const i = d.spellIndex.get(a.spell), j = d.spellIndex.get(b.spell);
+        return (i === undefined ? "" : d.names[i])
+            .localeCompare(j === undefined ? "" : d.names[j]);
+    };
+    pushCat({
+        name: "triggers", col: "mech",
+        finds: "all spells that reach another spell",
+        rows: (d.spellTriggers.get(spellId) || []).slice().sort(byName),
+        isHit: (l: SpellLink) => triggersIsHit(l.spell),
+        render: (l: SpellLink) => spellLinkTag(l, "triggers"),
+    });
+    pushCat({
+        name: "triggeredby", col: "mech",
+        finds: "all spells another spell reaches",
+        rows: (d.spellTriggeredBy.get(spellId) || []).slice().sort(byName),
+        isHit: (l: SpellLink) => triggeredByIsHit(l.spell),
+        render: (l: SpellLink) => spellLinkTag(l, "triggeredby"),
+    });
+
     // one block per category, in the order pushed above; renderBlocks
     // floats the matched category to the top. The icon rides the category
     // head, unioned over this spell's rows in the category — only where the
@@ -1102,7 +1207,7 @@ function effectCells(spellId: number): {fx: HTMLElement; mechBlocks: CellBlock[]
     const blocksFor = (c: string) => cats.filter((cat) => cat.col === c).map((cat) => groupBlock({
         hit: cat.hit,
         named: wordIsNamed(c, cat.name),
-        head: (hit) => fxHeadTag(cat.name, hit, cat.mask, cat.col),
+        head: (hit) => fxHeadTag(cat.name, hit, cat.mask, cat.col, cat.finds),
         items: cat.items.map((make) => make()),
     }));
     const fxBlocks = blocksFor("fx");

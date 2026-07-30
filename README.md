@@ -35,6 +35,10 @@ Full syntax lives behind the **?** button in the app. The short version:
   you on (`model:"mount stallion"`, with `.modify mount`), and `anim:replace` for animations it swaps out —
   `Stand → StealthStand`
   (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue).
+- **Spells link to each other**, and the Mechanics column shows both directions: `mech:triggers` for what a spell casts,
+  ticks, procs or removes, `mech:triggeredby` for what reaches it. Each chip is the other spell — its icon opens
+  Wowhead, its name filters to that spell's own row — and the note says how they are joined (`on cast`, `every tick`,
+  `removes`). Search either end by name or by mechanism: `mech:"triggers fireball"`, `mech:"triggeredby every tick"`.
 - **A word may be followed by its value**, space-separated, and that is the only value form in the language:
   `model:"attach chest"` (where on the model it plays), `model:"motion parabola"` (the arc a projectile flies),
   `anim:(boneset "upper body")` (which body region moves),

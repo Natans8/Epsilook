@@ -387,26 +387,25 @@ renders as a `motion` pill segment between the model name and the attachment pai
 Both `SpellVisual` and `SpellVisualMissile` carry a launch/impact attachment pair, and they are **complementary, not
 redundant**. Over the 18,553 missile rows reachable from a visual on 9.2.7:
 
-| source attachment              | rows              |
-|--------------------------------|-------------------|
-| `SpellVisual` only             | 3,039 (16.4%)     |
-| `SpellVisualMissile` row only  | 9,409 (50.7%)     |
-| **either**                     | **9,774 (52.7%)** |
-| neither                        | 8,779 (47.3%)     |
+| source attachment             | rows              |
+|-------------------------------|-------------------|
+| `SpellVisual` only            | 3,039 (16.4%)     |
+| `SpellVisualMissile` row only | 9,409 (50.7%)     |
+| **either**                    | **9,774 (52.7%)** |
+| neither                       | 8,779 (47.3%)     |
 
 So the row is read first and the visual is the fallback — **more than tripling** source coverage against reading the
 visual alone. Where both are set they agree (322 conflicts of ~3,000). An earlier comment justified preferring
-`SpellVisual` with "105.6k rows carry a destination versus 14.9k" — that counted all 105k visuals, ~87k of which have
-no missile at all, so it measured the wrong population.
+`SpellVisual` with "105.6k rows carry a destination versus 14.9k" — that counted all 105k visuals, ~87k of which have no
+missile at all, so it measured the wrong population.
 
 **The destination precedence was settled in game**, because there the two disagree on **4,457 rows (24%)**: casting
 `Glacial Blast` (369018), where the visual says Chest and the row says Base, lands at the **base**. The row wins.
 
-**A row with no attachment in either column launches from `VirtualSpellDirected` (M2 attachment 56)** — the client's
-own name for a computed point, verified in game on two independent models (a blank Fireball 9053 is indistinguishable
-from Fireball 133, which declares it explicitly; Shadow Bolt agreed). It is materialised in the build, so **every
-missile row now has a launch point** — 0% blank, down from ~84%. `DEFAULT_MISSILE_SOURCE` is the one place it is
-spelled.
+**A row with no attachment in either column launches from `VirtualSpellDirected` (M2 attachment 56)** — the client's own
+name for a computed point, verified in game on two independent models (a blank Fireball 9053 is indistinguishable from
+Fireball 133, which declares it explicitly; Shadow Bolt agreed). It is materialised in the build, so **every missile row
+now has a launch point** — 0% blank, down from ~84%. `DEFAULT_MISSILE_SOURCE` is the one place it is spelled.
 
 **The names come in two families**, and both are useful:
 
@@ -540,9 +539,8 @@ graph — it is the producing
 `SpellEffect` row's `ImplicitTarget_0`/`_1` (the `Target` enum, mapped to the same caster/target/area bits as §2's
 `TargetType`, by `implicit_target_bit`). It answers *who the effect lands on*: a polymorph's morph is on the **target**,
 a self-transform on the **caster**, a summon on the **area** where it lands. These rows never pass through
-`SpellVisualEvent`, so `TargetType` says nothing about them — the implicit target is the only source. Alt-names (aura
-
-370) are search-corpus-only and carry no mask.
+`SpellVisualEvent`, so `TargetType` says nothing about them — the implicit target is the only source. Alt-names
+(`aura 370`) are search-corpus-only and carry no mask.
 
 **misc0 on a transform aura is a creature id, not a display id** — a long-standing trap. Both morphs and shapeshift
 forms then walk the same creature→model chain:
@@ -994,6 +992,70 @@ may span several). Base difficulty wins, read straight off wago with no hotfix o
 Shipped as `spells.schools` and **deliberately not displayed yet** (user's call): a future search axis. Present on every
 build back to Vanilla. 9.2.7: 272,847 of 276,332 spells carry a nonzero school.
 
+### 3r. Spell links — the one route whose payload is another spell
+
+`SpellEffect.EffectTriggerSpell` names another `Spell::ID`. **Every other route in this document ends at a payload — a
+model, a sound, a kit, a number. This one ends at another ROW of the results table**, which is what shapes the pill (a
+spell icon and name, clicking to `id:<n>`) and what makes the reverse direction worth building.
+
+```mermaid
+flowchart LR
+    SE["SpellEffect<br/>EffectTriggerSpell"] -->|names| S2["Spell::ID<br/>(another row)"]
+    SE -->|" EffectAura ≠ 0 "| AW["aura word<br/>every tick · on proc · linked"]
+    SE -->|" else "| EW["effect word<br/>on cast · removes · teaches"]
+    AW --> K["spellLinks.kindNames"]
+    EW --> K
+```
+
+**The payoff number: 8,791 spells on 9.2.7 have no `SpellXSpellVisual` row of their own but trigger one that does.**
+Those rows look empty in every other column and are not — the visual is one hop away, and before this route there was
+nothing on screen saying so.
+
+**HOW the two are joined is the effect, or on `APPLY_AURA` the aura, that owns the column** — an `APPLY_AURA` effect
+says only "applies an aura", which all of them do, so the aura is what carries meaning. Two dispatch dicts, because the
+two enums collide numerically: effect 3 is `DUMMY` while aura 3 is `PERIODIC_DAMAGE`, effect 42 is `JUMP_DEST` while
+aura 42 is `PROC_TRIGGER_SPELL`.
+
+**NOT EVERY EDGE IS A TRIGGER, and the word is the only thing that says so.** `REMOVE_AURA`/`REMOVE_AURA_2` name the
+aura being *removed* — 8,250 edges, 14% of the graph — so calling the whole graph "triggers" would read backwards on one
+edge in seven. Top words on 9.2.7:
+
+| word             | edges  | | word              | edges |
+|------------------|--------|-|-------------------|-------|
+| every tick       | 11,799 | | while summoned    | 1,669 |
+| on cast          | 10,478 | | on landing        | 1,181 |
+| removes          | 8,250  | | teaches           | 1,161 |
+| as a missile     | 7,486  | | linked            | 694   |
+| forced on target | 7,036  | | on confirm        | 457   |
+| on proc          | 4,546  | | on damage         | 150   |
+| by script        | 2,276  | | *(147 fallbacks)* | 754   |
+
+An unlisted effect/aura falls back to **its own enum name, lowercased** — the same fallback an unknown id already gets
+in the Mechanics column (§3l). That tail is 1.3% of edges over 147 auras that merely happen to carry the column, so its
+word is honestly "the aura this came from" rather than a relationship. It **ships rather than being dropped** because
+114 spells reach their one visual-bearing link *only* on such an edge.
+
+**Two rows are dropped at build time**, both because the chip is an icon and a name: a target this pack cannot name
+(3,160 of 63,883 rows on 9.2.7 — the chip would be a bare id nobody can act on) and a self-link (51 rows — a chip
+pointing at its own row).
+
+**The pack ships ONE direction.** `spellLinks` is `{srcIds, dstIds, kinds, kindNames}`, sorted by source so the source
+column delta-encodes under gzip; "triggered by" is the same edges read backwards, so `data.ts` inverts the index at load
+rather than the pack paying for it twice. A (source, target) pair joined two different ways stays two rows — two
+distinct facts — which the renderer merges into one chip listing both words (252 of 58,214 pairs).
+
+Two search axes, one per direction: **`mech:triggers`** and **`mech:triggeredby`**, each keyed by the LINKED spell's id
+with a corpus of that spell's name, its id and every word the two are joined by — so `mech:"triggers fireball"` and
+`mech:"triggers every tick"` are one code path. Neither collides with the effect/aura names the Mechanics column already
+matches, which are singular (`TRIGGER_SPELL`), so `mech:trigger` still finds the enum rows.
+
+**Mechanics, not fx** — fx is what a spell *looks* like, mech is what it *does*, and a link renders nothing in game. The
+visible thing is on the other row, which is exactly why the chip has to get you there.
+
+**Present on all ten builds** (Vanilla 7,256 edges / 17 words → TWW 83,566 / 196), so it is not in `OPTIONAL_COLUMNS`.
+`EffectTriggerSpell` joins the TDB hotfix overlay for the wholesale-replace reason §1 gives: a hotfixed `spell_effect`
+row omitting it would blank the edge. It is spelled the same on both sides, unlike the misc/target columns.
+
 ---
 
 ## 4. The pack
@@ -1007,6 +1069,9 @@ flowchart LR
     subgraph LINK["link sections (spell → item, + target mask)"]
         L1["spellModels · spellSounds · spellAnimKits<br/>animKitAnimBoneset · bonesetNames<br/>spellVisualAnims · spellAnims · spellFx<br/>spellDissolves · spellGlows · spellShadowies<br/>spellGhostMats · spellTints · spellDesaturates<br/>spellTransparencies · spellFreezes · spellCamos<br/>spellScreens · spellMorphs · spellShapeshifts<br/>spellSummons · spellVehicles · spellPassengerAnims<br/>spellVehicleAnims · spellVehicleAnimKits<br/>spellMechanics · spellKeybinds · spellSpeeds · spellScales"]
     end
+    subgraph SPELL["spell → spell (§3r)"]
+        S1["spellLinks — srcIds · dstIds · kinds · kindNames<br/>ONE direction; data.ts inverts it at load"]
+    end
     subgraph PAY["payload sections (item → what it is)"]
         P1["fxChains · fxTextures · dissolves · dissolveTextures<br/>glows · shadowies · ghostMats · tints<br/>screens · screenTextures · morphs · morphDisplays<br/>shapeshifts · shapeshiftDisplays · summons<br/>vehicles · vehicleSeats"]
     end
@@ -1016,6 +1081,7 @@ flowchart LR
     LINK --> IDX["data.ts<br/>forward + reverse Map per section"]
     PAY --> IDX
     NAME --> IDX
+    SPELL --> IDX
     IDX --> Q["search.ts — FIELDS registry"]
     IDX --> R["app/render.ts + app/tags.ts — cells + pills"]
 ```
@@ -1079,6 +1145,12 @@ existing `files`/`spellModels` sections, and the frontend reads any negative fid
 the keybind sections are ~1 KB. **Format 30 is nearly free too** — one link section of 5.7k rows on 9.2.7, under 0.1 MB
 gzipped, and no pack changed size band. **Format 31 (scale)** is smaller still — 3.2k rows on 9.2.7, one section — and
 dropping the zero-percent speed/scale rows in the same build shaves a little back; no pack changed size band.
+
+**Format 35 (spell links, §3r) is the most expensive additive bump so far: +3.43% over all ten packs** (48.69 → 50.37 MB
+gzipped; per pack +2.18% on TBC to +5.05% on Vanilla, and +3.56% on 9.2.7). That is the price of a section whose rows
+are two 6-digit spell ids rather than an index into a small payload table — 58,485 rows on 9.2.7, 83,566 on TWW. It buys
+the only route that reaches another spell's row, and **shipping one direction rather than two is what keeps it to 3%**:
+`data.ts` inverts the edge list at load. No pack changed size band.
 
 ### Movement speed by version
 
@@ -1421,6 +1493,6 @@ hotlinks sit on tolerated-hotlinking footing, not an affirmative license.
 | **Animations**   | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), ModelAttach Start/Anim/End (loose) + its AnimKit (grouped), proc Type 7 + aura 312 merged (replace, §3o), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped), anim-replacement sets (replace, §3o); **each anim pill carries its boneset region (AnimKitConfigBoneSet→AnimKitBoneSet.Name, §3e) — one pill per region, `boneset` keyword** |
 | **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, object (§3m), seat, invis, detect, keybind, speed, scale — see §3a–3q; **chain/dissolve/ghost/barrage pills carry their M2 attachment point (§3h), -1 = "full body"**                                                                                                                                                                             |
 | **Not shown**    | `spells.schools` — SpellMisc.SchoolMask, gathered only (§3q)                                                                                                                                                                                                                                                                                                                                                                                                     |
-| **Mechanics**    | one row per `SpellEffect`: `.Effect` + `.EffectAura` enums (names from WoWDBDefs) paired with that row's `.ImplicitTarget_0/_1` — §3l                                                                                                                                                                                                                                                                                                                            |
+| **Mechanics**    | one row per `SpellEffect`: `.Effect` + `.EffectAura` enums (names from WoWDBDefs) paired with that row's `.ImplicitTarget_0/_1` — §3l; plus **spell links** (`.EffectTriggerSpell` → another spell's row, both directions, §3r)                                                                                                                                                                                                                                  |
 | **Name search**  | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Target bits**  | `SpellVisualEvent.TargetType` on the kit edge (§2), resolved against `SpellEffect.ImplicitTarget` per phase (`StartEvent`) so a self-cast spell's "Target" reads as the caster, plus `Caster`/`HostileSpellVisualID` redirects that mark whatever they reach caster/target                                                                                                                                                                                       |

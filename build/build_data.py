@@ -372,10 +372,13 @@ TDB_TABLES = {
         # EffectBasePoints joins the overlay for the wholesale-replace reason
         # above: it is the movement-speed percent. All four dumps that ship
         # hotfixes at all spell it the int way, even TDB1127 whose client
-        # exports only the float.
+        # exports only the float. EffectTriggerSpell is here for the same
+        # wholesale-replace reason — a hotfixed row omitting it would blank the
+        # spell-link edge (§3r). Unlike the misc/target columns it is spelled
+        # the SAME on both sides, verified against TDB927's hotfix schema.
         "spell_effect": ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1",
                          "EffectMiscValue2", "ImplicitTarget1", "ImplicitTarget2",
-                         "EffectBasePoints"],
+                         "EffectBasePoints", "EffectTriggerSpell"],
         "spell_misc": ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"],
         "creature_display_info": ["ID", "ModelID"],
         "creature_model_data": ["ID", "FileDataID"],
@@ -855,6 +858,117 @@ EFFECT_SPAWN_OBJECT = frozenset({
 # no word, like untinted beams.
 SUMMON_CONTROL_NAMES = load_local_enum("summon_properties_control")
 
+# ---------------------------------------------------------------- spell links
+#
+# SpellEffect.EffectTriggerSpell names ANOTHER Spell::ID (§3r) — the one edge in
+# the data that joins two spell ROWS rather than a spell to a payload. Measured
+# on 9.2.7: 58,485 shipped edges over 49,209 source and 47,024 target spells,
+# and 8,791 spells have no SpellXSpellVisual row of their own while triggering
+# one that does. That last number is the feature: those rows look empty and are
+# not.
+#
+# HOW the two are joined is the effect (or, on APPLY_AURA, the aura) that owns
+# the column, and the word below is what the pill prints. Two dicts because the
+# two enums COLLIDE numerically: effect 3 is DUMMY while aura 3 is
+# PERIODIC_DAMAGE, effect 42 is JUMP_DEST while aura 42 is PROC_TRIGGER_SPELL.
+#
+# NOT EVERY EDGE IS A TRIGGER, and the word is the only thing that says so:
+# REMOVE_AURA/REMOVE_AURA_2 name the aura being REMOVED (8,263 edges, 14% of the
+# graph), so labelling the whole graph "triggers" would read backwards on one
+# edge in seven. Anything unlisted falls back to its own enum name lowercased —
+# the same fallback unknown effect/aura ids already get in the Mechanics column
+# — so the long tail stays legible without needing an entry apiece.
+#
+# EXTENSION POINT: one line per aura/effect -> the word its edge prints.
+LINK_KIND_BY_AURA = {
+    23: "every tick",  # PERIODIC_TRIGGER_SPELL
+    227: "every tick",  # PERIODIC_TRIGGER_SPELL_WITH_VALUE
+    48: "every tick",  # PERIODIC_TRIGGER_SPELL_FROM_CLIENT
+    3: "every tick",  # PERIODIC_DAMAGE
+    226: "by script",  # PERIODIC_DUMMY
+    4: "by script",  # DUMMY
+    42: "on proc",  # PROC_TRIGGER_SPELL
+    231: "on proc",  # PROC_TRIGGER_SPELL_WITH_VALUE
+    360: "on proc",  # PROC_TRIGGER_SPELL_COPY
+    43: "on proc",  # PROC_TRIGGER_DAMAGE
+    109: "on proc",  # ADD_TARGET_TRIGGER
+    428: "while summoned",  # LINKED_SUMMON
+    284: "linked",  # LINKED
+    285: "linked",  # LINKED_2
+    394: "on confirm",  # SHOW_CONFIRMATION_PROMPT
+    469: "on confirm",  # SHOW_CONFIRMATION_PROMPT_WITH_DIFFICULTY
+    468: "on low health",  # TRIGGER_SPELL_ON_HEALTH_BELOW_PCT
+    396: "on power",  # TRIGGER_SPELL_ON_POWER_AMOUNT
+    328: "on power",  # TRIGGER_SPELL_ON_POWER_PCT
+    495: "when it expires",  # TRIGGER_SPELL_ON_EXPIRE
+    395: "in its area",  # AREA_TRIGGER
+    361: "replaces autoattack",  # OVERRIDE_AUTOATTACK_WITH_MELEE_SPELL
+    367: "replaces autoattack",  # OVERRIDE_AUTOATTACK_WITH_RANGED_SPELL
+    403: "overrides its visual",  # OVERRIDE_SPELL_VISUAL
+    293: "overrides",  # OVERRIDE_SPELLS
+    332: "overrides",  # OVERRIDE_ACTIONBAR_SPELLS
+    333: "overrides",  # OVERRIDE_ACTIONBAR_SPELLS_TRIGGERED
+    258: "overrides",  # OVERRIDE_SUMMONED_OBJECT
+    406: "on a key",  # KEYBOUND_OVERRIDE (the keybind route shows the key itself)
+}
+LINK_KIND_BY_EFFECT = {
+    64: "on cast",  # TRIGGER_SPELL
+    142: "on cast",  # TRIGGER_SPELL_WITH_VALUE
+    151: "on cast",  # TRIGGER_SPELL_2
+    226: "on cast",  # TRIGGER_ACTION_SET
+    32: "as a missile",  # TRIGGER_MISSILE
+    148: "as a missile",  # TRIGGER_MISSILE_SPELL_WITH_VALUE
+    140: "forced on target",  # FORCE_CAST
+    141: "forced on target",  # FORCE_CAST_WITH_VALUE
+    160: "forced on target",  # FORCE_CAST_2
+    164: "removes",  # REMOVE_AURA
+    203: "removes",  # REMOVE_AURA_2
+    36: "teaches",  # LEARN_SPELL
+    57: "teaches",  # LEARN_PET_SPELL
+    133: "unlearns",  # UNLEARN_SPECIALIZATION
+    41: "on landing",  # JUMP
+    42: "on landing",  # JUMP_DEST
+    213: "on landing",  # JUMP_DEST_2
+    254: "on landing",  # JUMP_CHARGE
+    138: "on landing",  # LEAP_BACK
+    96: "on landing",  # CHARGE
+    149: "on landing",  # CHARGE_DEST
+    179: "in its area",  # CREATE_AREATRIGGER
+    182: "in its area",  # DESPAWN_AREATRIGGER
+    3: "by script",  # DUMMY
+    77: "by script",  # SCRIPT_EFFECT
+    2: "on damage",  # SCHOOL_DAMAGE
+}
+
+
+def link_kind_word(effect: int, aura: int,
+                   effect_names: dict[int, str], aura_names: dict[int, str]) -> str:
+    """The word one spell-link edge prints, from the effect/aura that owns it.
+
+    An APPLY_AURA row is described by its AURA (the effect says only "applies an
+    aura", which every one of them does); anything else by its effect.
+
+    Unlisted values fall back to the enum's own name, lowercased and
+    de-underscored — the same fallback the Mechanics column already gives an
+    unknown effect/aura id. That tail is 1.3% of edges on 9.2.7 (754 of 58,485)
+    spread over 147 auras that merely happen to carry the column, so the word is
+    honestly "the aura this came from" rather than a relationship. It is SHIPPED
+    rather than dropped because 114 of the spells that gain a visual through a
+    link reach it ONLY on one of these edges, and a blank cell buys a tidier
+    word list at the cost of real content.
+
+    An id the enum table itself does not name falls back to `aura N` / `effect
+    N` (10 edges on 9.2.7) — never the empty string, which would render a
+    note-shaped hole.
+    """
+    if aura:
+        return (LINK_KIND_BY_AURA.get(aura)
+                or aura_names.get(aura, "").lower().replace("_", " ")
+                or f"aura {aura}")
+    return (LINK_KIND_BY_EFFECT.get(effect)
+            or effect_names.get(effect, "").lower().replace("_", " ")
+            or f"effect {effect}")
+
 # ScreenEffect.Effect value whose Param_0 carries a fog tint (swirling fog).
 SCREEN_EFFECT_FOG = 3
 
@@ -982,7 +1096,8 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 34  # 34: missile flight paths (SpellMissileMotion) on missile model rows
+PACK_FORMAT = 35  # 35: spell -> spell links (SpellEffect.EffectTriggerSpell)
+# 34: missile flight paths (SpellMissileMotion) on missile model rows
 # 29: mechanics carry their implicit targets (spellEffects +
 #     spellAuras -> spellMechanics, implicitTargetNames) and
 #     keybound overrides (spellKeybinds, keybinds)
@@ -2402,6 +2517,12 @@ class SpellEffectRows:
     invis: dict[int, set[int]] = _by_spell()  # invisibility types (aura 18)
     detect: dict[int, set[int]] = _by_spell()  # detect types (aura 19)
     keybinds: dict[int, set[int]] = _by_spell()  # override ids (aura 406)
+    # spell -> spell edges (EffectTriggerSpell, §3r). Stored raw as
+    # (source, target, effect, aura): the WORD each edge prints needs the enum
+    # name tables, which live in the main build, so the mapping happens there
+    # (link_kind_word) rather than here. One direction only — the reverse index
+    # is derived in the browser, which halves what the pack carries.
+    links: set[tuple[int, int, int, int]] = field(default_factory=set)
     # (spell, SoundKit) -> mask, for PLAY_SOUND/PLAY_MUSIC effects (131/132).
     # Keyed like the *_targets masks so it folds into the Sounds column masked
     # like any other sound; merged in the main build where soundkit_files is in
@@ -2455,20 +2576,22 @@ def read_spell_effect_rows(
     vs EffectMiscValue_0) — same field, different source.
     """
     se_cols = ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue_0", "EffectMiscValue_1",
-               "ImplicitTarget_0", "ImplicitTarget_1", "EffectBasePoints", "EffectBasePointsF"]
+               "ImplicitTarget_0", "ImplicitTarget_1", "EffectBasePoints", "EffectBasePointsF",
+               "EffectTriggerSpell"]
     se_hotfix_cols = ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1", "EffectMiscValue2",
-                      "ImplicitTarget1", "ImplicitTarget2", "EffectBasePoints"]
-    se_rows: dict[int, tuple[int, int, int, int, int, int, int, float]] = {}
+                      "ImplicitTarget1", "ImplicitTarget2", "EffectBasePoints", "EffectTriggerSpell"]
+    se_rows: dict[int, tuple[int, int, int, int, int, int, int, float, int]] = {}
     for (rid, spell_id, effect, aura, misc0, misc1, t0, t1,
-         points, points_f) in read_table(table_dir, "SpellEffect", se_cols):
+         points, points_f, trigger) in read_table(table_dir, "SpellEffect", se_cols):
         se_rows[to_int(rid)] = (to_int(spell_id), to_int(effect), to_int(aura),
                                 to_int_from_float(misc0), to_int_from_float(misc1),
-                                to_int(t0), to_int(t1), to_amount(points, points_f))
+                                to_int(t0), to_int(t1), to_amount(points, points_f),
+                                to_int(trigger))
     for (rid, spell_id, effect, aura, misc0, misc1, t0, t1,
-         points) in hotfix_rows(tdb_dir, "spell_effect", se_hotfix_cols):
+         points, trigger) in hotfix_rows(tdb_dir, "spell_effect", se_hotfix_cols):
         se_rows[to_int(rid)] = (to_int(spell_id), to_int(effect), to_int(aura),
                                 to_int_from_float(misc0), to_int_from_float(misc1),
-                                to_int(t0), to_int(t1), to_amount(points))
+                                to_int(t0), to_int(t1), to_amount(points), to_int(trigger))
 
     # SummonProperties: only Control matters (guardian/pet/possessed/...)
     summon_control: dict[int, int] = {}
@@ -2476,9 +2599,16 @@ def read_spell_effect_rows(
         summon_control[to_int(pid)] = to_int(ctrl)
 
     out = SpellEffectRows()
-    for s, effect_id, aura_id, m0, m1, it0, it1, amount in se_rows.values():
+    for s, effect_id, aura_id, m0, m1, it0, it1, amount, trigger_id in se_rows.values():
         if s not in spell_names:
             continue
+        # spell -> spell edge (§3r). A target the pack has no name for is
+        # DROPPED (3,160 of 63,883 rows on 9.2.7): the chip is an icon and a
+        # name, so an unnameable row would render as a bare id nobody can act
+        # on. A self-link (51 rows) is dropped too — a chip pointing at its own
+        # row.
+        if trigger_id and trigger_id != s and trigger_id in spell_names:
+            out.links.add((s, trigger_id, effect_id, aura_id))
         mask = target_bits.get(it0, 0) | target_bits.get(it1, 0)
         # accumulate the whole-spell views resolve_target_mask reads: every
         # effect, and the APPLY_AURA effects on their own
@@ -3566,6 +3696,27 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     effect_names = read_enum_names("SpellEffect", version)
     aura_names = read_enum_names("SpellEffectAura", version)
 
+    # spell -> spell links (§3r). The edge's (effect, aura) pair becomes the WORD
+    # it prints here, where the enum name tables are in hand; the pack ships a
+    # small string table plus one index per edge rather than the raw enum pair,
+    # so the frontend needs no enum knowledge to render a chip.
+    #
+    # ONE DIRECTION ONLY. "triggered by" is the same edges read backwards, so
+    # data.ts inverts the index at load instead of the pack carrying it twice.
+    #
+    # A (source, target) pair joined in two DIFFERENT ways stays two rows (256
+    # pairs on 9.2.7) — they are two distinct facts. The renderer merges them
+    # into one chip listing both words, which is what `entries` is for.
+    link_kinds: dict[str, int] = {}
+    link_rows: list[tuple[int, int, int]] = []
+    for src, dst, effect_id, aura_id in sorted(se.links):
+        word = link_kind_word(effect_id, aura_id, effect_names, aura_names)
+        link_rows.append((src, dst, link_kinds.setdefault(word, len(link_kinds))))
+    # dedupe on (source, target, word): two effect rows differing only in an
+    # index we do not ship are one edge once the word is what identifies it
+    link_rows = sorted(set(link_rows))
+    link_kind_names = [w for w, _ in sorted(link_kinds.items(), key=lambda kv: kv[1])]
+
     pack = {
         "meta": {
             "format": PACK_FORMAT,
@@ -3599,6 +3750,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "implicitTargets": len(implicit_target_names),
                 "spellKeybinds": len(keybind_rows),
                 "keybinds": len(used_keybounds),
+                "spellLinks": len(link_rows),
+                "linkKinds": len(link_kind_names),
                 "spellFx": len(fx_rows),
                 "spellMorphs": len(morph_rows),
                 "morphs": len(morph_creature_ids),
@@ -3673,7 +3826,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         # the flight paths "motions" points at (parallel arrays, by motion id).
         # Names are the client's own and come in two families: geometry
         # ("Parabola (High)", "Boomerang") and per-spell scripts
-        # ("Mage - Fire - Fireball") — see DATA_ROUTES §3j.
+        # ("Mage - Fire - Fireball") — see DATA_ROUTES §3c.
         "missileMotions": {"ids": used_motions, "names": motion_names},
         # the items MODEL_CAT_ITEM rows point at (parallel arrays, by item id).
         # `names` is "" for an item with no ItemSearchName row — about a third of
@@ -3768,6 +3921,15 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "functions": [keybounds[o].function for o in used_keybounds],
             "whens": [keybounds[o].when for o in used_keybounds],
             "spells": [keybounds[o].spell for o in used_keybounds],
+        },
+        # spell -> spell links (§3r): `srcIds[i]` is joined to `dstIds[i]` in the
+        # way `kindNames[kinds[i]]` names. Sorted by source, which is what lets
+        # the source column delta-encode well under gzip.
+        "spellLinks": {
+            "srcIds": [r[0] for r in link_rows],
+            "dstIds": [r[1] for r in link_rows],
+            "kinds": [r[2] for r in link_rows],
+            "kindNames": link_kind_names,
         },
         # visual FX: chain/beam effects (SpellChainEffects). spellFx links
         # spells to chains; fxChains carries each chain's tint + hue word;
@@ -4091,6 +4253,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         f"vehicles={len(vehicle_rows):,} ({len(vehicle_ids):,} distinct, "
         f"{len(vehicle_seat_rows):,} seats, {len(passenger_anim_rows):,} passenger anims)  "
         f"keybinds={len(keybind_rows):,} ({len(used_keybounds):,} overrides)  "
+        f"links={len(link_rows):,} ({len({r[0] for r in link_rows}):,} sources, "
+        f"{len({r[1] for r in link_rows}):,} targets, {len(link_kind_names):,} kinds)  "
         f"speeds={len(speed_rows):,} ({len({r[0] for r in speed_rows}):,} spells)  "
         f"scales={len(scale_rows):,} ({len({r[0] for r in scale_rows}):,} spells)  "
         f"icons={len(icon_names):,}  "

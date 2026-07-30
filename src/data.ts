@@ -273,6 +273,19 @@ export interface SpellPack {
      * spellSpeeds there is no word beside the number.
      */
     spellScales?: { spellIds: number[]; percents: number[]; targets: number[] };
+
+    /* --- spell -> spell links (SpellEffect.EffectTriggerSpell) --- */
+
+    /**
+     * One row per edge: `srcIds[i]` is joined to `dstIds[i]` in the way
+     * `kindNames[kinds[i]]` names ("on cast", "every tick", "removes", ...).
+     *
+     * ONE DIRECTION ONLY — "triggered by" is these same edges read backwards,
+     * so the reverse index is built at load rather than shipped twice. Both
+     * ends are always spells this pack names, and a self-link never appears;
+     * the build drops both cases.
+     */
+    spellLinks?: { srcIds: number[]; dstIds: number[]; kinds: number[]; kindNames: string[] };
 }
 
 /* ------------------------------------------------- in-memory indexes */
@@ -327,6 +340,18 @@ export interface KeybindRow {
      * disables the key, it does not cast this.
      */
     spell: number;
+}
+
+/**
+ * One end of a spell -> spell link, as a chip renders it: the OTHER spell, and
+ * the word(s) joining it to the row being drawn. `kinds` holds more than one
+ * only where the same pair really is joined twice — e.g. a spell that both
+ * triggers another on cast and removes it — which is 252 of 58,214 pairs on
+ * 9.2.7. Order is the pack's, so it is stable between loads.
+ */
+export interface SpellLink {
+    spell: number;
+    kinds: string[];
 }
 
 /** A ScreenEffect row's color payload (-1 = the row has no such color). */
@@ -603,6 +628,30 @@ export interface SpellData {
     implicitTargetNames: Map<number, string>;
     implicitTargetNamesL: Map<number, string>;
     implicitTargetBits: Map<number, number>;
+
+    /* --- spell -> spell links (pack format 35) --- */
+
+    /**
+     * The two directions of one edge set, as the Mechanics column renders them:
+     * `spellTriggers` is what a spell reaches, `spellTriggeredBy` what reaches
+     * it. Keyed by the spell whose ROW is being drawn; the entry's `spell` is
+     * the other end, and `kinds` the word(s) joining them — several when one
+     * pair is joined two ways (252 pairs on 9.2.7).
+     */
+    spellTriggers: Map<number, SpellLink[]>;
+    spellTriggeredBy: Map<number, SpellLink[]>;
+    /**
+     * The search side, keyed by the LINKED spell — the id a chip stands for —
+     * mapping to the spells whose row carries that chip. `triggersSpells` backs
+     * mech:triggers, `triggeredBySpells` mech:triggeredby, and each has a
+     * corpus of the linked spell's name plus every word it is joined by — but
+     * NOT its id, which a substring match turns into numeric noise across the
+     * whole field (see the measurement where the corpus is built).
+     */
+    triggersSpells: Map<number, number[]>;
+    triggersSearchL: Map<number, string>;
+    triggeredBySpells: Map<number, number[]>;
+    triggeredBySearchL: Map<number, string>;
 }
 
 /* ------------------------------------------------------------ loading */
@@ -1581,6 +1630,79 @@ export function buildIndexes(pack: SpellPack): SpellData {
     }
     const keybindTargets = maskIndex(pack.spellKeybinds, "overrideIds");
 
+    /* Spell -> spell links (pack format 35). The pack ships ONE direction; both
+     * are built here, because "what triggers this" is the same edge list read
+     * backwards and shipping it twice would pay for it twice.
+     *
+     * Four indexes per direction, and the split matters: the RENDER side is
+     * keyed by the spell whose row is drawn (its chips), while the SEARCH side
+     * is keyed by the spell a chip STANDS FOR — that is the id `mech:triggers`
+     * resolves, exactly as fx:summon resolves a creature id.
+     *
+     * The corpus opens with the category word so a bare `mech:triggers` matches
+     * through the same path as `mech:"triggers fireball"`, and carries the
+     * linked spell's name plus every word it is joined by — so
+     * mech:"triggers every tick" finds spells whose link is periodic. */
+    const spellTriggers = new Map<number, SpellLink[]>();
+    const spellTriggeredBy = new Map<number, SpellLink[]>();
+    const triggersSpells = new Map<number, number[]>();
+    const triggeredBySpells = new Map<number, number[]>();
+    const triggersSearchL = new Map<number, string>();
+    const triggeredBySearchL = new Map<number, string>();
+    if (pack.spellLinks) {
+        const {srcIds, dstIds, kinds, kindNames} = pack.spellLinks;
+        // one entry per (row spell, other end), collecting the words — a pair
+        // joined two ways is ONE chip listing both, not two chips
+        const push = (into: Map<number, SpellLink[]>, key: number, other: number, word: string) => {
+            const list = into.get(key);
+            if (!list) {
+                into.set(key, [{spell: other, kinds: [word]}]);
+                return;
+            }
+            const prev = list.find((l) => l.spell === other);
+            if (!prev) list.push({spell: other, kinds: [word]});
+            else if (!prev.kinds.includes(word)) prev.kinds.push(word);
+        };
+        for (let i = 0; i < srcIds.length; i++) {
+            const word = kindNames[kinds[i]] || "";
+            push(spellTriggers, srcIds[i], dstIds[i], word);
+            push(spellTriggeredBy, dstIds[i], srcIds[i], word);
+        }
+        /* The two directions are DUALS, which is what makes the search side
+         * free: the spells whose row shows "triggers X" are exactly the spells
+         * X is triggered BY. So each search index is the opposite render map
+         * with the words dropped, and each corpus is that map's words joined —
+         * no third pass over the edges, and no chance of the two disagreeing. */
+        const nameOf = (id: number) => {
+            const idx = spellIndex.get(id);
+            return idx === undefined ? "" : sp.names[idx];
+        };
+        /* THE LINKED SPELL'S ID IS DELIBERATELY NOT IN THE CORPUS, and it was
+         * measured out rather than left out. A corpus is matched by SUBSTRING,
+         * so a 6-digit id makes every numeric token in the whole `mech:` field
+         * match a tenth of the graph by accident. It broke a bound number
+         * outright: `mech:"speed 70"` is 76 spells and became 85, which
+         * contradicts this app's own rule that a number written against its
+         * word means `=` on that axis. `mech:"invis 13"` went 11 -> 47, i.e.
+         * 77% noise, against 11 -> 16 without the id.
+         *
+         * The cost is that `mech:"triggers 133"` finds nothing, and that is
+         * the right trade: the chip's own click already navigates to `id:133`,
+         * which answers the same question exactly rather than by substring.
+         * `mech:"triggers fireball"` is the name route and is unaffected. */
+        const derive = (from: Map<number, SpellLink[]>, word: string,
+                        spells: Map<number, number[]>, out: Map<number, string>) => {
+            for (const [id, list] of from) {
+                spells.set(id, list.map((l) => l.spell));
+                const ws = new Set(list.flatMap((l) => l.kinds));
+                out.set(id, `${word} ${nameOf(id)} ${[...ws].join(" ")}`
+                    .replace(/\s+/g, " ").trim().toLowerCase());
+            }
+        };
+        derive(spellTriggeredBy, "triggers", triggersSpells, triggersSearchL);
+        derive(spellTriggers, "triggeredby", triggeredBySpells, triggeredBySearchL);
+    }
+
     // invisibility / detection channels (pack format 26). Grouped by
     // invisibility TYPE, which is the pairing key: an invis spell links to the
     // detect spells sharing its type and vice versa. Per spell we keep the
@@ -1714,6 +1836,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellScaleMods, scaleSpells, scaleSearchL,
         spellPassengerAnims, passengerAnimSpells,
         spellKeybinds, keybindSpells, keybinds, keybindSearchL, keybindTargets,
+        spellTriggers, spellTriggeredBy,
+        triggersSpells, triggersSearchL, triggeredBySpells, triggeredBySearchL,
         spellMechanics, mechanicCols,
         effectNames, effectNamesL, auraNames, auraNamesL,
         implicitTargetNames, implicitTargetNamesL, implicitTargetBits,

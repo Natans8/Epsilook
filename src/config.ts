@@ -22,6 +22,13 @@ export interface EpsilookConfig {
     /** Which palette id the reserved "auto" theme resolves to per OS setting. */
     autoTheme: { light: string; dark: string };
     spellCommands: SpellCommand[];
+    /**
+     * Which of `spellCommands` ride a spell-link chip, by label. Named rather
+     * than re-templated so `.cast {id}` has one definition — a chip and a row
+     * must never disagree about what `.cast` copies. An unknown label is
+     * skipped; empty means no command buttons on link chips at all.
+     */
+    linkCommands: string[];
     modelCopyTemplate: string;
     animCopyTemplate: string;
     soundKitCopyTemplate: string;
@@ -97,6 +104,12 @@ export const CFG: EpsilookConfig = {
         {label: ".lookup", template: ".lookup spell id {id}", hint: "Copy .lookup command"},
         {label: ".learn", template: ".learn {id}", hint: "Copy .learn command"},
     ],
+
+    // Which commands a spell-link chip carries (labels from spellCommands
+    // above). A chip is narrow and sits inside a group, so it gets the two that
+    // actually put the linked spell on screen — .lookup and .learn are row-level
+    // questions. Add a label here to offer more.
+    linkCommands: [".cast", ".aura"],
 
     // Copy command on each model tag.
     // {base} = file name without path and extension, {file} = file name, {path} = full path, {fid} = FileDataID.

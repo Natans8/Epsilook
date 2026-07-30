@@ -17,9 +17,11 @@ import {
     shapeshiftIsHit,
     speedIsHit,
     summonIsHit,
+    triggeredByIsHit,
+    triggersIsHit,
     vehicleIsHit
 } from "./hits";
-import type {FileEntry, MechanicRow, ScreenColors} from "../data";
+import type {FileEntry, MechanicRow, ScreenColors, SpellLink} from "../data";
 import {activeData, stripExt, wowheadUrl} from "./state";
 import type {Segment, SegmentOpts} from "../pills";
 import * as P from "../pills";
@@ -690,14 +692,19 @@ export function mechanicPills(rows: MechanicRow[]): MechanicPill[] {
 // `field` is which column owns the category, so a head clicked in the
 // Mechanics column searches mech:seat rather than fx:seat — the head's
 // query has to be the one that would actually select its own pills.
-export function fxHeadTag(category: string, hit: boolean, mask = 0, field = "fx"): HTMLElement {
+// `finds` is overridable because "a <word> effect" is not grammatical for every
+// category: the link words are verbs, so `triggers` would read "all spells with
+// a triggers effect". A category that needs its own phrase passes one (see
+// CatSpec.finds); everything else keeps the default it always had.
+export function fxHeadTag(category: string, hit: boolean, mask = 0, field = "fx",
+                          finds = `all spells with a ${category} effect`): HTMLElement {
     return P.pill({
         cls: "fx-head", hit, segments: [
             targetSeg(field, mask),
             P.label(category, {
                 title: P.hintFor(field, category),
                 search: P.query(field, category),
-                finds: `all spells with a ${category} effect`,
+                finds,
             }),
         ]
     });
@@ -1259,6 +1266,72 @@ export function mountTag(displayId: number, spellId: number): HTMLElement {
             P.cmd(".mod", CFG.mountModifyTemplate, {id: displayId}),
             file.base && P.cmd(".lo", CFG.morphLookupTemplate,
                 {id: displayId, file: file.base}),
+        ],
+    });
+}
+
+/**
+ * One spell-link chip (Mechanics column) — the only pill in the app whose
+ * subject is another SPELL ROW, which is what shapes every choice in it.
+ *
+ * `word` is the direction ("triggers" / "triggeredby"), which is also the group
+ * head above it; `link.kinds` are the ways the two spells are joined and ride
+ * the note, so the head says WHICH WAY and the note says HOW. That split is
+ * load-bearing: `removes` is 14% of the graph and is emphatically not a
+ * trigger, so the mechanism can never be inferred from the direction alone.
+ *
+ * THE ICON CARRIES WOWHEAD, THE TEXT CARRIES THE SEARCH (user's call). An
+ * anchor with a wowhead href is what their tooltips.js binds to, so hovering
+ * the icon raises the real spell tooltip — the same mechanism the Name column's
+ * link uses — while clicking the name filters to that spell's own row, which is
+ * this chip's primary job. There is no separate leading [wh] action: the chip
+ * lives inside a group and two wowhead affordances would spend width twice.
+ */
+export function spellLinkTag(link: SpellLink, word: string): HTMLElement {
+    const d = activeData();
+    const id = link.spell;
+    const i = d.spellIndex.get(id);
+    // A link whose target this pack does not name is dropped at BUILD time, so
+    // an absent index here means a pack/format mismatch rather than bad data.
+    const name = (i === undefined ? "" : d.names[i]) || `spell #${id}`;
+    const icon = i === undefined ? "" : d.icons[i];
+    const href = wowheadUrl(CFG.wowheadSpellUrl, {id});
+    const kinds = link.kinds.filter(Boolean);
+    const hit = word === "triggers" ? triggersIsHit(id) : triggeredByIsHit(id);
+    // "Fireball triggers this" vs "this triggers Fireball" — the tooltip says
+    // which, because a chip read out of context is ambiguous and the group head
+    // scrolls out of view inside a clamped cell.
+    const way = word === "triggers" ? "This spell reaches" : "Reached by";
+    return P.pill({
+        cls: "mech link",
+        hit,
+        segments: [
+            // icon then label, nothing between them: they read as one unit and
+            // the icon is the wowhead affordance (see above)
+            icon && CFG.spellIconUrl && P.icon(fillTemplate(CFG.spellIconUrl, {icon}), {
+                href, title: `Open ${name} on Wowhead`, data: {wowhead: `spell=${id}`},
+            }),
+            P.label(name, {
+                title: `${way} ${name} — spell ${id}`,
+                detail: [kinds.length ? `How: ${kinds.join(", ")}` : ""],
+                // filter to the LINKED SPELL'S OWN ROW, not to other spells
+                // linking the same way — "show me that spell" is the question a
+                // chip pointing at a row is asking. id: bypasses the
+                // min-length gate, so it lands however short the id is.
+                search: `id:${id}`,
+                finds: `spell ${id}`,
+                data: {wowhead: `spell=${id}`}, // tooltip on the name too
+            }),
+            kinds.length && P.note(kinds.join(" · "), {
+                title: `Joined by: ${kinds.join(", ")}`,
+                search: P.catQuery("mech", word, kinds[0]),
+                finds: `${word === "triggers" ? "links" : "back-links"} of this kind`,
+            }),
+            P.copy("⧉", `Copy spell ID: ${id}`, String(id)),
+            // .cast / .aura, from the row strip's own templates (CFG.linkCommands)
+            ...CFG.spellCommands
+                .filter((c) => CFG.linkCommands.includes(c.label))
+                .map((c) => P.cmd(c.label, c.template, {id})),
         ],
     });
 }

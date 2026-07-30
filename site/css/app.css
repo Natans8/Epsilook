@@ -2175,11 +2175,17 @@ mark.hl {
     font-style: italic;
 }
 
-/* Item pill (SpellVisualEffectName Type 1). The inventory icon sits flush
-   against the label with nothing between them, so the two read as one unit. On
-   a named item the icon is wrapped in a Wowhead link (.item-icon-link) which
-   must not add any box of its own. */
-.tag.model.item .item-icon {
+/* The `icon` SEGMENT, wherever a pill uses one: an item's inventory art
+   (SpellVisualEffectName Type 1) and a spell-link chip's spell icon. It sits
+   flush against the label with nothing between them, so the two read as one
+   unit — "the swatch or icon is part of the name" (docs/PILLS.md §2). When it
+   links out it is wrapped in an anchor (.item-icon-link) which must not add any
+   box of its own.
+
+   Scoped to the SEGMENT, not to the item pill that was once its only caller:
+   this describes the shape of an icon in a pill, so a second pill type using
+   one inherits it rather than restating it. */
+.tag .item-icon {
     width: 1.15em;
     height: 1.15em;
     border-radius: 2px;
@@ -2187,27 +2193,36 @@ mark.hl {
     border: 1px solid rgba(var(--shadow-rgb), calc(0.45 * var(--shadow-strength)));
 }
 
-.tag.model.item .item-icon-link {
+.tag .item-icon-link {
     display: inline-flex;
     align-items: center;
     flex: 0 0 auto;
 }
 
-.tag.model.item .item-icon-link:hover .item-icon {
+.tag .item-icon-link:hover .item-icon {
     outline: 1px solid var(--gold);
 }
 
 /* space before the icon (loose from the target glyphs) goes on the pill's
    DIRECT child — the bare img on a nameless item, or the link wrapper on a
    named one — so a wrapped img gets no extra inset of its own */
-.tag.model.item > .item-icon,
-.tag.model.item > .item-icon-link {
+.tag > .item-icon,
+.tag > .item-icon-link {
     margin-left: 0.3rem;
 }
 
-.tag.model.item > .item-icon + .tag-label,
-.tag.model.item > .item-icon-link + .tag-label {
+.tag > .item-icon + .tag-label,
+.tag > .item-icon-link + .tag-label {
     padding-left: 0.3rem;
+}
+
+/* Spell-link chip (SpellEffect.EffectTriggerSpell): another SPELL, shown in the
+   Mechanics column. It reuses the column's own --mech family rather than
+   claiming a palette token of its own — the icon is what distinguishes it from
+   the enum pills beside it, and a new token would need contrast-walking in
+   three palettes to say nothing new. */
+.tag.mech.link {
+    --tone: var(--mech);
 }
 
 /* Named item labels are coloured by item quality (the classic WoW ramp),

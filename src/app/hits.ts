@@ -4,6 +4,7 @@ import {activeData, state} from "./state";
 import type {HitToken} from "./state";
 import * as P from "../pills";
 import * as Search from "../search";
+
 /**
  * The query tokens that can highlight in a given field's column — the
  * field's own plus the unscoped free text.
@@ -123,6 +124,13 @@ export const morphIsHit = isHitOf("fx:morph");
 export const keybindIsHit = isHitOf("fx:keybind");
 /** A gameobject-spawn pill keys on the gameobject_template entry. */
 export const objectIsHit = isHitOf("fx:object");
+/* A spell-link chip keys on the LINKED spell's id — the id its own corpus is
+   * built under, and the one a click filters to. The two directions are
+   * separate types because a query naming one must not light the other: a row
+   * can carry both, and "what this triggers" is a different answer from "what
+   * triggers this". */
+export const triggersIsHit = isHitOf("mech:triggers");
+export const triggeredByIsHit = isHitOf("mech:triggeredby");
 /** A mount pill keys on the CreatureDisplayID it rides on. */
 export const mountIsHit = isHitOf("model:mount");
 /** A speed pill keys on the (movement, percent) pair it displays. */

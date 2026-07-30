@@ -256,6 +256,43 @@ T({
         of: (d, key) => d.speedPercents.get(key) || 0,
     },
 });
+/* Spell -> spell links (SpellEffect.EffectTriggerSpell). The one edge in the
+ * data that joins two spell ROWS, so unlike every other type here the pill's
+ * id is a Spell::ID and clicking it filters to that spell's own row.
+ *
+ * MECH, NOT FX, by this file's own rule two screens up: fx is what the spell
+ * LOOKS like and mech is what it DOES. A link renders nothing in game — the
+ * thing you can see is on the OTHER row, which is the whole reason the chip
+ * needs to get you there.
+ *
+ * TWO TYPES, ONE EDGE SET, because direction is the first thing you want to
+ * ask: `triggers` is what this spell reaches, `triggeredby` what reaches it.
+ * The corpus of each is the linked spell's NAME plus every word the two are
+ * joined by — not its id, which substring-matches numerically across the whole
+ * field (measured in data.ts) — so mech:"triggers fireball" and
+ * mech:"triggers every tick" are the same code path, and a spell is reached by
+ * id through the chip's own click.
+ *
+ * Neither word collides with an effect/aura NAME the mech column already
+ * matches — verified zero on 9.2.7, because those are singular
+ * (`PROC_TRIGGER_SPELL`), so `mech:trigger` still finds the enum rows. The
+ * corpus's name half can still match, exactly as every other category word in
+ * this app matches filenames: `mech:triggers` is 49,216 against 49,209 link
+ * sources, the 7 extra being spells reached from ones literally named
+ * "... Area Triggers". Documented substring behaviour, not a leak. */
+T({
+    key: "mech:triggers", field: "mech", word: "triggers",
+    hint: "Another spell this one casts, ticks, procs or removes",
+    corpus: (d) => d.triggersSearchL, spells: (d) => d.triggersSpells,
+    when: (d) => d.triggersSpells.size > 0,
+});
+T({
+    key: "mech:triggeredby", field: "mech", word: "triggeredby",
+    hint: "A spell that casts, ticks, procs or removes this one",
+    corpus: (d) => d.triggeredBySearchL, spells: (d) => d.triggeredBySpells,
+    when: (d) => d.triggeredBySpells.size > 0,
+});
+
 /* Object scale — movement speed's shorter twin. There is only one thing
  * these auras scale, so the percent IS the id and the numeric axis reads it
  * directly, the way desaturate does. fx:"scale 30" is exactly +30%, and
