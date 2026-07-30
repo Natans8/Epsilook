@@ -1001,7 +1001,7 @@ spell icon and name, clicking to `id:<n>`) and what makes the reverse direction 
 ```mermaid
 flowchart LR
     SE["SpellEffect<br/>EffectTriggerSpell"] -->|names| S2["Spell::ID<br/>(another row)"]
-    SE -->|" EffectAura ≠ 0 "| AW["aura word<br/>every tick · on proc · linked"]
+    SE -->|" EffectAura ≠ 0 "| AW["aura word<br/>periodically · on proc · linked"]
     SE -->|" else "| EW["effect word<br/>on cast · removes · teaches"]
     AW --> K["spellLinks.kindNames"]
     EW --> K
@@ -1023,37 +1023,65 @@ edge in seven. Top words on 9.2.7:
 
 | word             | edges  | | word              | edges |
 |------------------|--------|-|-------------------|-------|
-| every tick       | 11,741 | | linked summon     | 1,669 |
-| on cast          | 10,478 | | on landing        | 1,181 |
+| periodically     | 11,741 | | linked summon     | 1,669 |
+| on cast          | 10,472 | | on landing        | 1,181 |
 | removes          | 8,250  | | teaches           | 1,161 |
 | as a missile     | 7,486  | | linked            | 694   |
 | forced on target | 7,036  | | on confirm        | 457   |
-| on proc          | 4,546  | | on low health     | 141   |
-| by script        | 2,276  | | *(150 fallbacks)* | 964   |
+| on proc          | 4,531  | | periodic dummy    | 308   |
+| by script        | 1,968  | | *(160 fallbacks)* | 1,317 |
 
 An unlisted effect/aura falls back to **its own enum name, lowercased** — the same fallback an unknown id already gets
-in the Mechanics column (§3l). That tail is 1.6% of edges over 150 auras that merely happen to carry the column, so its
+in the Mechanics column (§3l). That tail is 2.3% of edges over 160 auras that merely happen to carry the column, so its
 word is honestly "the aura this came from" rather than a relationship. It **ships rather than being dropped** because
 114 spells reach their one visual-bearing link *only* on such an edge.
 
-**AN EXPLICIT WORD EARNS ITS PLACE ONE OF TWO WAYS, AND "it sounds right" IS NOT ONE OF THEM** (audited 2026-07-30,
-after the first cut asserted mechanisms the enums do not name). Either **(a)** the enum names a trigger and the word
-says *when* it fires (`PERIODIC_TRIGGER_SPELL` → "every tick", `TRIGGER_SPELL_ON_EXPIRE` → "when it expires"), or **(
-b)** the enum names one relationship under several spellings and the word collapses them (`REMOVE_AURA` +
-`REMOVE_AURA_2` → "removes", the six jump/charge effects → "on landing"). Everything else takes the fallback, which
-claims only where the edge came from. Four entries changed under that rule:
+**AN EXPLICIT WORD EARNS ITS PLACE ONE OF TWO WAYS, AND "it sounds right" IS NOT ONE OF THEM.** Either **(a)** the enum
+names a trigger and the word says *when* it fires (`PROC_TRIGGER_SPELL` → "on proc", `TRIGGER_SPELL_ON_EXPIRE` → "when
+it expires"), or **(b)** the enum names one relationship under several spellings and the word collapses them
+(`REMOVE_AURA` + `REMOVE_AURA_2` → "removes", the seven jump/charge effects → "on landing"). Everything else takes the
+fallback, which claims only where the edge came from.
 
-| enum                             | was            | now                   | why                                                                                                             |
-|----------------------------------|----------------|-----------------------|-----------------------------------------------------------------------------------------------------------------|
-| aura 3 `PERIODIC_DAMAGE`         | every tick     | *periodic damage*     | matched on the name starting `PERIODIC_`; it is a damage aura and nothing casts the trigger per tick (59 edges) |
-| effect 2 `SCHOOL_DAMAGE`         | on damage      | *school damage*       | same shape-not-meaning match (150 edges)                                                                        |
-| effect 182 `DESPAWN_AREATRIGGER` | in its area    | *despawn areatrigger* | shared 179's word while being its opposite (1 edge)                                                             |
-| aura 428 `LINKED_SUMMON`         | while summoned | `linked summon`       | the enum names a link, not a duration (1,669 edges)                                                             |
+**THE RULE WAS AUDITED TWICE AND THE SECOND PASS IS THE ONE THAT MATTERED** (2026-07-30). The first pass applied it only
+to the entries it happened to look at, and left the biggest word in the feature untouched — `PERIODIC_TRIGGER_SPELL`
+still read "every tick", **12,554 edges, 21% of the graph and the most-displayed word here**. "Tick" is community jargon
+(TrinityCore's own `PeriodicTick`), but it is not what the enum says and it **names no interval**: periodic means *at an
+interval*, and the interval is `EffectAuraPeriod` — set on **99.75%** of these rows, median **1 s**, ranging 0.05 s to 2
+h. The word is now `periodically`, which claims exactly what the enum does.
 
-`TRIGGER_SPELL_ON_POWER_AMOUNT`/`_PCT` were also reworded "on power" → `on power level`, which read as "powered on".
-**The one measurable consequence: `mech:"triggers every tick"` drops 11,822 → 11,739**, i.e. exactly the 83 spells whose
-only "every tick" claim came from a `PERIODIC_DAMAGE` edge — simulated against the pack under both word maps, so the
-delta is exact rather than inferred.
+The second pass also stopped **rewording single enums**, the subtler half of the same mistake: a lone enum has no
+spellings to collapse, so a reword is just a second name for one thing and it always claims slightly more than the
+original. What changed, with 9.2.7 edge counts:
+
+| enum                                | was                  | now                      | why                                                                             |
+|-------------------------------------|----------------------|--------------------------|---------------------------------------------------------------------------------|
+| aura 23/227/48 `PERIODIC_TRIGGER_*` | every tick           | `periodically`           | the enum says *periodic*; "tick" names an interval it never gives (12,685)      |
+| aura 226 `PERIODIC_DUMMY`           | by script            | *periodic dummy*         | being periodic is the fact that distinguishes it from `DUMMY` (342)             |
+| aura 109 `ADD_TARGET_TRIGGER`       | on proc              | *add target trigger*     | asserted a proc the enum never mentions (15)                                    |
+| aura 395 `AREA_TRIGGER`             | in its area          | *area trigger*           | asserted a firing condition (units inside) it never states (26)                 |
+| auras 293/332/333/258 `OVERRIDE_*`  | overrides            | *(four fallbacks)*       | four different things — spells, two action-bar flavours, a summoned OBJECT (34) |
+| aura 403 `OVERRIDE_SPELL_VISUAL`    | overrides its visual | *override spell visual*  | lone enum, nothing to collapse (1)                                              |
+| effect 226 `TRIGGER_ACTION_SET`     | on cast              | *trigger action set*     | an action set is not a cast (6)                                                 |
+| effect 133 `UNLEARN_SPECIALIZATION` | unlearns             | *unlearn specialization* | "unlearns" dropped the specialization (65)                                      |
+| effect 179 `CREATE_AREATRIGGER`     | in its area          | *create areatrigger*     | same overclaim as aura 395; 182 already fell back (46)                          |
+| aura 428 `LINKED_SUMMON`            | linked summon        | *linked summon*          | **identical** — the entry restated the fallback, so it was deleted (1,669)      |
+
+Earlier under the same rule: aura 3 `PERIODIC_DAMAGE` (was "every tick"), effect 2 `SCHOOL_DAMAGE` (was "on damage"),
+effect 182 `DESPAWN_AREATRIGGER` (shared 179's word while being its opposite), and
+`TRIGGER_SPELL_ON_POWER_AMOUNT`/`_PCT` "on power" → `on power level`, which had read as "powered on".
+
+**No edge was gained or lost — 58,486 both times**, and no SPELL changed bucket either: `mech:"triggers every tick"`
+was 11,739 and `mech:"triggers periodically"` is **11,739**, because all three `PERIODIC_TRIGGER_*` auras already shared
+the old word and simply share the new one. The retired spelling now returns **0**, per the standing no-legacy-alias
+norm. Distinct words went **168 → 178** as the over-collapsed entries split apart, which is where the movement is: "by
+script" 2,276 → 1,968 (`PERIODIC_DUMMY` left) and "on cast" 10,478 → 10,472 (`TRIGGER_ACTION_SET` left). **Counting
+note, since it is easy to get wrong here: 11,741 is the EDGE count for `periodically` and 11,739 is the SPELL count — a
+spell with two periodic links is one spell and two edges.**
+
+**THE EXACT VERSION IS AVAILABLE AND IS NOT YET A DECISION.** `EffectAuraPeriod` would let the pill read "every 1s" /
+"every 3s" instead of "periodically". It is not built because it costs a pack format bump and all ten packs re-shipped,
+fragments one word into ~40, and puts **numbers in the mech corpus** — the substring-noise trap the spell id was
+deliberately kept out of (§3r, above). Raise it before building it.
 
 **Two rows are dropped at build time**, both because the chip is an icon and a name: a target this pack cannot name
 (3,160 of 63,883 rows on 9.2.7 — the chip would be a bare id nobody can act on) and a self-link (51 rows — a chip
@@ -1072,7 +1100,7 @@ equally who the triggered spell lands on.
 
 Two search axes, one per direction: **`mech:triggers`** and **`mech:origin`**, each keyed by the LINKED spell's id with
 a corpus of that spell's name and every word the two are joined by (never its id — see §3r's note in `data.ts`) — so
-`mech:"triggers fireball"` and `mech:"triggers every tick"` are one code path. Neither collides with the effect/aura
+`mech:"triggers fireball"` and `mech:"triggers periodically"` are one code path. Neither collides with the effect/aura
 names the Mechanics column already matches, which are singular (`TRIGGER_SPELL`), so `mech:trigger` still finds the enum
 rows. `origin` replaced `triggeredby` on 2026-07-30 (user: "not aesthetic") — every other category word in the app is
 one plain word. **`mech:origin` is 47,031 against 47,024 link targets**, the 7 extra arriving through the *other*

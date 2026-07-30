@@ -278,7 +278,7 @@ export interface SpellPack {
 
     /**
      * One row per edge: `srcIds[i]` is joined to `dstIds[i]` in the way
-     * `kindNames[kinds[i]]` names ("on cast", "every tick", "removes", ...).
+     * `kindNames[kinds[i]]` names ("on cast", "periodically", "removes", ...).
      *
      * ONE DIRECTION ONLY — the reverse ("origin") index is built at load rather
      * than shipped twice. Both ends are always spells this pack names, and a
@@ -1655,7 +1655,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
      * The corpus opens with the category word so a bare `mech:triggers` matches
      * through the same path as `mech:"triggers fireball"`, and carries the
      * linked spell's name plus every word it is joined by — so
-     * mech:"triggers every tick" finds spells whose link is periodic. */
+     * mech:"triggers periodically" finds spells whose link is periodic. */
     const spellTriggers = new Map<number, SpellLink[]>();
     const spellOrigins = new Map<number, SpellLink[]>();
     const triggersSpells = new Map<number, number[]>();

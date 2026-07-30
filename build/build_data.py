@@ -879,43 +879,66 @@ SUMMON_CONTROL_NAMES = load_local_enum("summon_properties_control")
 # the same fallback unknown effect/aura ids already get in the Mechanics column
 # — so the long tail stays legible without needing an entry apiece.
 #
-# AN ENTRY EARNS ITS PLACE ONE OF TWO WAYS, AND NEITHER IS "it sounds right".
-# Audited 2026-07-30 after the first cut asserted mechanisms the enums do not
-# name (see below), so the rule is now written down:
+# AN ENTRY EARNS ITS PLACE ONE OF TWO WAYS, AND NEITHER IS "it sounds right":
 #
 #   (a) the enum NAMES a trigger, and the word says WHEN it fires
-#       (PERIODIC_TRIGGER_SPELL -> "every tick", PROC_TRIGGER_SPELL ->
-#       "on proc", TRIGGER_SPELL_ON_EXPIRE -> "when it expires");
+#       (PROC_TRIGGER_SPELL -> "on proc", TRIGGER_SPELL_ON_EXPIRE -> "when it
+#       expires", PERIODIC_TRIGGER_SPELL -> "periodically");
 #   (b) the enum names one relationship under several spellings, and the word
 #       collapses them (REMOVE_AURA + REMOVE_AURA_2 -> "removes", LINKED +
-#       LINKED_2 -> "linked", the six jump/charge effects -> "on landing").
+#       LINKED_2 -> "linked", the seven jump/charge effects -> "on landing").
 #
 # ANYTHING ELSE FALLS BACK to its own enum name, lowercased and de-underscored.
 # That is not a gap: a column carried by an aura that does not name a trigger
 # tells you WHERE the edge came from and nothing about when it fires, and the
-# fallback says exactly that much. Two entries were REMOVED here for claiming
-# more than the enum supports, both matched on the enum's shape rather than its
-# meaning: PERIODIC_DAMAGE said "every tick" because the name starts PERIODIC_
-# (90 edges on 9.2.7; it is a damage aura, and nothing casts the trigger per
-# tick), and SCHOOL_DAMAGE said "on damage" for the same reason (191 edges).
-# They now read "periodic damage" and "school damage" — honest, and the tail
-# they join is already 1.3% of edges.
+# fallback says exactly that much.
+#
+# AUDITED TWICE, AND THE SECOND PASS IS THE ONE THAT MATTERED (2026-07-30). The
+# first pass applied the rule only to the entries it happened to look at and
+# left the biggest word in the feature untouched: PERIODIC_TRIGGER_SPELL said
+# "every tick" — 12,554 edges, 21% of the graph, the most-displayed word here.
+# "Tick" is community jargon (TrinityCore's own PeriodicTick), but it is NOT
+# what the enum says and it names no interval: periodic means AT AN INTERVAL,
+# and the interval is EffectAuraPeriod, set on 99.75% of these rows (median 1s,
+# range 0.05s..2h). So the word is now "periodically", which is the enum's own
+# claim and nothing more. See the note under LINK_KIND_BY_AURA about printing
+# the real period, which is the exact version of this and is NOT yet a decision.
+#
+# The second pass also stopped rewording SINGLE enums, which was the subtler
+# half of the same mistake — a lone enum has no spellings to collapse, so a
+# reword is just a second name for one thing, and it always claims a little
+# more than the original. AREA_TRIGGER -> "in its area" asserted the linked
+# spell fires on units inside; ADD_TARGET_TRIGGER -> "on proc" asserted a proc
+# the enum never mentions; the four OVERRIDE_* auras were four DIFFERENT things
+# (spells, two action-bar flavours, a summoned OBJECT) flattened into one word.
+# All of them fall back now. Removed entries, with their edge counts on 9.2.7:
+# aura 226 PERIODIC_DUMMY (342, was "by script" — it is periodic, which is the
+# fact that distinguishes it), aura 109 ADD_TARGET_TRIGGER (15), aura 395
+# AREA_TRIGGER (26), auras 293/332/333/258 OVERRIDE_* (34 between them), aura
+# 403 OVERRIDE_SPELL_VISUAL (1), effect 226 TRIGGER_ACTION_SET (6, was "on
+# cast" — an action set is not a cast), effect 133 UNLEARN_SPECIALIZATION (65,
+# "unlearns" dropped the specialization), effect 179 CREATE_AREATRIGGER (46).
+# Aura 428 LINKED_SUMMON went too because "linked summon" WAS the fallback
+# already — a dict entry that restates the fallback is pure upkeep.
 #
 # EXTENSION POINT: one line per aura/effect -> the word its edge prints.
 LINK_KIND_BY_AURA = {
-    23: "every tick",  # PERIODIC_TRIGGER_SPELL
-    227: "every tick",  # PERIODIC_TRIGGER_SPELL_WITH_VALUE
-    48: "every tick",  # PERIODIC_TRIGGER_SPELL_FROM_CLIENT
-    226: "by script",  # PERIODIC_DUMMY
-    4: "by script",  # DUMMY
+    # (a) the aura names a trigger and the word says WHEN it fires.
+    #
+    # "periodically" is the interval WITHOUT its length. The length is right
+    # there in EffectAuraPeriod (99.75% set, median 1s) and printing it —
+    # "every 1s", "every 3s" — would be the exact word rather than the merely
+    # honest one. NOT DONE, and it is a real decision rather than a TODO: it
+    # needs the period in the pack (a format bump and all ten packs re-shipped),
+    # it fragments one word into ~40, and it puts NUMBERS in the mech corpus,
+    # which is the substring-noise trap the spell id was kept out of for.
+    23: "periodically",  # PERIODIC_TRIGGER_SPELL
+    227: "periodically",  # PERIODIC_TRIGGER_SPELL_WITH_VALUE
+    48: "periodically",  # PERIODIC_TRIGGER_SPELL_FROM_CLIENT
     42: "on proc",  # PROC_TRIGGER_SPELL
     231: "on proc",  # PROC_TRIGGER_SPELL_WITH_VALUE
     360: "on proc",  # PROC_TRIGGER_SPELL_COPY
     43: "on proc",  # PROC_TRIGGER_DAMAGE
-    109: "on proc",  # ADD_TARGET_TRIGGER
-    428: "linked summon",  # LINKED_SUMMON ("while summoned" overclaimed the WHEN)
-    284: "linked",  # LINKED
-    285: "linked",  # LINKED_2
     394: "on confirm",  # SHOW_CONFIRMATION_PROMPT
     469: "on confirm",  # SHOW_CONFIRMATION_PROMPT_WITH_DIFFICULTY
     468: "on low health",  # TRIGGER_SPELL_ON_HEALTH_BELOW_PCT
@@ -924,23 +947,32 @@ LINK_KIND_BY_AURA = {
     396: "on power level",  # TRIGGER_SPELL_ON_POWER_AMOUNT
     328: "on power level",  # TRIGGER_SPELL_ON_POWER_PCT
     495: "when it expires",  # TRIGGER_SPELL_ON_EXPIRE
-    395: "in its area",  # AREA_TRIGGER
+    406: "on a key",  # KEYBOUND_OVERRIDE (the keybind route shows the key itself)
+
+    # (b) one relationship under several spellings.
+    284: "linked",  # LINKED
+    285: "linked",  # LINKED_2
     361: "replaces autoattack",  # OVERRIDE_AUTOATTACK_WITH_MELEE_SPELL
     367: "replaces autoattack",  # OVERRIDE_AUTOATTACK_WITH_RANGED_SPELL
-    403: "overrides its visual",  # OVERRIDE_SPELL_VISUAL
-    293: "overrides",  # OVERRIDE_SPELLS
-    332: "overrides",  # OVERRIDE_ACTIONBAR_SPELLS
-    333: "overrides",  # OVERRIDE_ACTIONBAR_SPELLS_TRIGGERED
-    258: "overrides",  # OVERRIDE_SUMMONED_OBJECT
-    406: "on a key",  # KEYBOUND_OVERRIDE (the keybind route shows the key itself)
+    # The one JUDGEMENT CALL left in either table, kept deliberately: DUMMY has
+    # no spellings to collapse WITHIN this dict, but it is the same relationship
+    # as effects 3 DUMMY and 77 SCRIPT_EFFECT below — the engine does nothing and
+    # a script does the work (TrinityCore's HandleAuraDummy is empty). The bare
+    # fallback "dummy" would say less than nothing to a reader. PERIODIC_DUMMY is
+    # NOT folded in here: being periodic is the fact that distinguishes it, so it
+    # falls back to "periodic dummy" and keeps both halves.
+    4: "by script",  # DUMMY
 }
 LINK_KIND_BY_EFFECT = {
+    # (a) names a trigger, and the word says WHEN. These three also satisfy (b).
     64: "on cast",  # TRIGGER_SPELL
     142: "on cast",  # TRIGGER_SPELL_WITH_VALUE
     151: "on cast",  # TRIGGER_SPELL_2
-    226: "on cast",  # TRIGGER_ACTION_SET
+
+    # (b) one relationship under several spellings.
     32: "as a missile",  # TRIGGER_MISSILE
     148: "as a missile",  # TRIGGER_MISSILE_SPELL_WITH_VALUE
+    # WHO casts it is the essential fact here — the TARGET does, not you
     140: "forced on target",  # FORCE_CAST
     141: "forced on target",  # FORCE_CAST_WITH_VALUE
     160: "forced on target",  # FORCE_CAST_2
@@ -948,7 +980,8 @@ LINK_KIND_BY_EFFECT = {
     203: "removes",  # REMOVE_AURA_2
     36: "teaches",  # LEARN_SPELL
     57: "teaches",  # LEARN_PET_SPELL
-    133: "unlearns",  # UNLEARN_SPECIALIZATION
+    # seven spellings of one relationship, and the word says when: the movement
+    # finishes, then the spell is cast
     41: "on landing",  # JUMP
     42: "on landing",  # JUMP_DEST
     213: "on landing",  # JUMP_DEST_2
@@ -956,11 +989,13 @@ LINK_KIND_BY_EFFECT = {
     138: "on landing",  # LEAP_BACK
     96: "on landing",  # CHARGE
     149: "on landing",  # CHARGE_DEST
-    179: "in its area",  # CREATE_AREATRIGGER
-    # 182 DESPAWN_AREATRIGGER is the OPPOSITE of 179 and shared its word; it
-    # falls back to "despawn areatrigger" rather than claiming the area is live
     3: "by script",  # DUMMY
     77: "by script",  # SCRIPT_EFFECT
+    # 179 CREATE_AREATRIGGER and 182 DESPAWN_AREATRIGGER both fall back. 182 is
+    # the OPPOSITE of 179 and used to share its word; 179's "in its area" then
+    # went too, because a lone enum has nothing to collapse and the phrase
+    # asserted a firing condition (units inside it) that CREATE_AREATRIGGER
+    # never states.
 }
 
 

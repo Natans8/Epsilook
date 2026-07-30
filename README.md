@@ -38,8 +38,8 @@ Full syntax lives behind the **?** button in the app. The short version:
 - **Spells link to each other**, and the Mechanics column shows both directions: `mech:triggers` for what a spell casts,
   ticks, procs or removes, `mech:origin` for what reaches it. Each chip is the other spell — its id copies, its icon
   opens Wowhead, its name filters to that spell's own row, target icons say who the triggering effect is aimed at, and
-  the note says how they are joined (`on cast`, `every tick`, `removes`). Search either end by name or by mechanism:
-  `mech:"triggers fireball"`, `mech:"origin every tick"`.
+  the note says how they are joined (`on cast`, `periodically`, `removes`). Search either end by name or by mechanism:
+  `mech:"triggers fireball"`, `mech:"origin periodically"`.
 - **A word may be followed by its value**, space-separated, and that is the only value form in the language:
   `model:"attach chest"` (where on the model it plays), `model:"motion parabola"` (the arc a projectile flies),
   `anim:(boneset "upper body")` (which body region moves),
