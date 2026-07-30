@@ -1005,6 +1005,7 @@ flowchart LR
     SE -->|" else "| EW["effect word<br/>on cast · removes · teaches"]
     AW --> K["spellLinks.kindNames"]
     EW --> K
+    SE -->|" ImplicitTarget_0/_1 "| T["spellLinks.targets<br/>caster · target · area"]
 ```
 
 **The payoff number: 8,791 spells on 9.2.7 have no `SpellXSpellVisual` row of their own but trigger one that does.**
@@ -1022,32 +1023,61 @@ edge in seven. Top words on 9.2.7:
 
 | word             | edges  | | word              | edges |
 |------------------|--------|-|-------------------|-------|
-| every tick       | 11,799 | | while summoned    | 1,669 |
+| every tick       | 11,741 | | linked summon     | 1,669 |
 | on cast          | 10,478 | | on landing        | 1,181 |
 | removes          | 8,250  | | teaches           | 1,161 |
 | as a missile     | 7,486  | | linked            | 694   |
 | forced on target | 7,036  | | on confirm        | 457   |
-| on proc          | 4,546  | | on damage         | 150   |
-| by script        | 2,276  | | *(147 fallbacks)* | 754   |
+| on proc          | 4,546  | | on low health     | 141   |
+| by script        | 2,276  | | *(150 fallbacks)* | 964   |
 
 An unlisted effect/aura falls back to **its own enum name, lowercased** — the same fallback an unknown id already gets
-in the Mechanics column (§3l). That tail is 1.3% of edges over 147 auras that merely happen to carry the column, so its
+in the Mechanics column (§3l). That tail is 1.6% of edges over 150 auras that merely happen to carry the column, so its
 word is honestly "the aura this came from" rather than a relationship. It **ships rather than being dropped** because
 114 spells reach their one visual-bearing link *only* on such an edge.
+
+**AN EXPLICIT WORD EARNS ITS PLACE ONE OF TWO WAYS, AND "it sounds right" IS NOT ONE OF THEM** (audited 2026-07-30,
+after the first cut asserted mechanisms the enums do not name). Either **(a)** the enum names a trigger and the word
+says *when* it fires (`PERIODIC_TRIGGER_SPELL` → "every tick", `TRIGGER_SPELL_ON_EXPIRE` → "when it expires"), or **(
+b)** the enum names one relationship under several spellings and the word collapses them (`REMOVE_AURA` +
+`REMOVE_AURA_2` → "removes", the six jump/charge effects → "on landing"). Everything else takes the fallback, which
+claims only where the edge came from. Four entries changed under that rule:
+
+| enum                             | was            | now                   | why                                                                                                             |
+|----------------------------------|----------------|-----------------------|-----------------------------------------------------------------------------------------------------------------|
+| aura 3 `PERIODIC_DAMAGE`         | every tick     | *periodic damage*     | matched on the name starting `PERIODIC_`; it is a damage aura and nothing casts the trigger per tick (59 edges) |
+| effect 2 `SCHOOL_DAMAGE`         | on damage      | *school damage*       | same shape-not-meaning match (150 edges)                                                                        |
+| effect 182 `DESPAWN_AREATRIGGER` | in its area    | *despawn areatrigger* | shared 179's word while being its opposite (1 edge)                                                             |
+| aura 428 `LINKED_SUMMON`         | while summoned | `linked summon`       | the enum names a link, not a duration (1,669 edges)                                                             |
+
+`TRIGGER_SPELL_ON_POWER_AMOUNT`/`_PCT` were also reworded "on power" → `on power level`, which read as "powered on".
+**The one measurable consequence: `mech:"triggers every tick"` drops 11,822 → 11,739**, i.e. exactly the 83 spells whose
+only "every tick" claim came from a `PERIODIC_DAMAGE` edge — simulated against the pack under both word maps, so the
+delta is exact rather than inferred.
 
 **Two rows are dropped at build time**, both because the chip is an icon and a name: a target this pack cannot name
 (3,160 of 63,883 rows on 9.2.7 — the chip would be a bare id nobody can act on) and a self-link (51 rows — a chip
 pointing at its own row).
 
-**The pack ships ONE direction.** `spellLinks` is `{srcIds, dstIds, kinds, kindNames}`, sorted by source so the source
-column delta-encodes under gzip; "triggered by" is the same edges read backwards, so `data.ts` inverts the index at load
-rather than the pack paying for it twice. A (source, target) pair joined two different ways stays two rows — two
+**The pack ships ONE direction.** `spellLinks` is `{srcIds, dstIds, kinds, targets, kindNames}`, sorted by source so the
+source column delta-encodes under gzip; the reverse is the same edges read backwards, so `data.ts` inverts the index at
+load rather than the pack paying for it twice. A (source, target) pair joined two different ways stays two rows — two
 distinct facts — which the renderer merges into one chip listing both words (252 of 58,214 pairs).
 
-Two search axes, one per direction: **`mech:triggers`** and **`mech:triggeredby`**, each keyed by the LINKED spell's id
-with a corpus of that spell's name, its id and every word the two are joined by — so `mech:"triggers fireball"` and
-`mech:"triggers every tick"` are one code path. Neither collides with the effect/aura names the Mechanics column already
-matches, which are singular (`TRIGGER_SPELL`), so `mech:trigger` still finds the enum rows.
+**`targets` (pack format 36) is the edge's own `ImplicitTarget_0/_1` mask** — set on 55,595 of 58,486 edges (95.1%) on
+9.2.7 — so a link chip wears the same target icons, from the same bits, as every other effect-driven route in §3. **A
+link DOES have an implicit target**: the edge *is* a `SpellEffect` row, so its implicit targets say who the effect
+carrying the trigger is aimed at. It rides both directions unchanged, because who the triggering effect aims at is
+equally who the triggered spell lands on.
+
+Two search axes, one per direction: **`mech:triggers`** and **`mech:origin`**, each keyed by the LINKED spell's id with
+a corpus of that spell's name and every word the two are joined by (never its id — see §3r's note in `data.ts`) — so
+`mech:"triggers fireball"` and `mech:"triggers every tick"` are one code path. Neither collides with the effect/aura
+names the Mechanics column already matches, which are singular (`TRIGGER_SPELL`), so `mech:trigger` still finds the enum
+rows. `origin` replaced `triggeredby` on 2026-07-30 (user: "not aesthetic") — every other category word in the app is
+one plain word. **`mech:origin` is 47,031 against 47,024 link targets**, the 7 extra arriving through the *other*
+direction's corpus on names like "Reorigination" — the documented "a category word matches names in addition to the
+category" behaviour, and the exact mirror of `mech:triggers` being 49,216 against 49,209 sources.
 
 **Mechanics, not fx** — fx is what a spell *looks* like, mech is what it *does*, and a link renders nothing in game. The
 visible thing is on the other row, which is exactly why the chip has to get you there.
@@ -1070,7 +1100,7 @@ flowchart LR
         L1["spellModels · spellSounds · spellAnimKits<br/>animKitAnimBoneset · bonesetNames<br/>spellVisualAnims · spellAnims · spellFx<br/>spellDissolves · spellGlows · spellShadowies<br/>spellGhostMats · spellTints · spellDesaturates<br/>spellTransparencies · spellFreezes · spellCamos<br/>spellScreens · spellMorphs · spellShapeshifts<br/>spellSummons · spellVehicles · spellPassengerAnims<br/>spellVehicleAnims · spellVehicleAnimKits<br/>spellMechanics · spellKeybinds · spellSpeeds · spellScales"]
     end
     subgraph SPELL["spell → spell (§3r)"]
-        S1["spellLinks — srcIds · dstIds · kinds · kindNames<br/>ONE direction; data.ts inverts it at load"]
+        S1["spellLinks — srcIds · dstIds · kinds · targets · kindNames<br/>ONE direction; data.ts inverts it at load"]
     end
     subgraph PAY["payload sections (item → what it is)"]
         P1["fxChains · fxTextures · dissolves · dissolveTextures<br/>glows · shadowies · ghostMats · tints<br/>screens · screenTextures · morphs · morphDisplays<br/>shapeshifts · shapeshiftDisplays · summons<br/>vehicles · vehicleSeats"]

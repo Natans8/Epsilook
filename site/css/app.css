@@ -1874,6 +1874,19 @@ mark.hl {
     border-right: 1px solid var(--seg-divider);
 }
 
+/* A divider separates two segments, so the outer edges never carry one — a
+   border on the first or last child draws a line down the pill's own rim. It
+   only came up once the spell-link chip put its id (a copy segment, which asks
+   for a left divider) FIRST, but the rule belongs to the divider system rather
+   than to that pill: any kind can now lead or trail without a special case. */
+.tag > :first-child[data-sep="left"] {
+    border-left: 0;
+}
+
+.tag > :last-child[data-sep="right"] {
+    border-right: 0;
+}
+
 /* where on the model a row plays (M2 attachment point). A quiet segment
    between the label and the copy button — it qualifies the model rather than
    naming it, so it reads dimmer and smaller than the label it follows.
@@ -2223,6 +2236,46 @@ mark.hl {
    three palettes to say nothing new. */
 .tag.mech.link {
     --tone: var(--mech);
+}
+
+/* A link chip carries more than any other pill in the column — an icon, a spell
+   name, an id, target icons, the joining words and three commands — and the
+   column's width is set by whatever the widest chip needs. So its two
+   variable-length parts are clamped here rather than at the call site (the
+   .tag-motion precedent above): the name to 7rem and the joining words to 5rem,
+   both with the full text on the tooltip every text segment already composes.
+   Measured on 9.2.7: unclamped, the widest chip was 358px and made Mechanics
+   449px against the 364px it wanted with no links at all. */
+.tag.link .tag-label.link-name {
+    max-width: 7rem;
+}
+
+.tag.link .tag-attach.link-kind {
+    max-width: 5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The spell id IS the copy button (see spellLinkTag). Tabular figures so a
+   column of chips does not shimmer, and note-sized because it is a value being
+   shown rather than an action being offered — the gold on hover is what says it
+   is clickable, exactly as .id-copy does in the Name column.
+
+   IT KEEPS THE COPY SEGMENT'S OWN COLOUR, and that is a contrast call, not an
+   oversight. Dimming it to --text-dim (the obvious way to say "quieter than the
+   commands beside it") measured 3.16:1 against 4.5 on the dark palette: a link
+   chip that MATCHES sits in a compact hit group, so the group's gold wash and
+   the pill's own stack into a background nothing was solved against — the trap
+   the theme section warns about. The size and the tabular figures carry the
+   distinction on their own, and the default copy colour clears AA at 5.6:1. */
+.tag.link .tag-copy.link-id {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.86em;
+}
+
+.tag.link .tag-copy.link-id:hover {
+    color: var(--gold);
 }
 
 /* Named item labels are coloured by item quality (the classic WoW ramp),

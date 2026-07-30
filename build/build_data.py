@@ -879,12 +879,33 @@ SUMMON_CONTROL_NAMES = load_local_enum("summon_properties_control")
 # the same fallback unknown effect/aura ids already get in the Mechanics column
 # — so the long tail stays legible without needing an entry apiece.
 #
+# AN ENTRY EARNS ITS PLACE ONE OF TWO WAYS, AND NEITHER IS "it sounds right".
+# Audited 2026-07-30 after the first cut asserted mechanisms the enums do not
+# name (see below), so the rule is now written down:
+#
+#   (a) the enum NAMES a trigger, and the word says WHEN it fires
+#       (PERIODIC_TRIGGER_SPELL -> "every tick", PROC_TRIGGER_SPELL ->
+#       "on proc", TRIGGER_SPELL_ON_EXPIRE -> "when it expires");
+#   (b) the enum names one relationship under several spellings, and the word
+#       collapses them (REMOVE_AURA + REMOVE_AURA_2 -> "removes", LINKED +
+#       LINKED_2 -> "linked", the six jump/charge effects -> "on landing").
+#
+# ANYTHING ELSE FALLS BACK to its own enum name, lowercased and de-underscored.
+# That is not a gap: a column carried by an aura that does not name a trigger
+# tells you WHERE the edge came from and nothing about when it fires, and the
+# fallback says exactly that much. Two entries were REMOVED here for claiming
+# more than the enum supports, both matched on the enum's shape rather than its
+# meaning: PERIODIC_DAMAGE said "every tick" because the name starts PERIODIC_
+# (90 edges on 9.2.7; it is a damage aura, and nothing casts the trigger per
+# tick), and SCHOOL_DAMAGE said "on damage" for the same reason (191 edges).
+# They now read "periodic damage" and "school damage" — honest, and the tail
+# they join is already 1.3% of edges.
+#
 # EXTENSION POINT: one line per aura/effect -> the word its edge prints.
 LINK_KIND_BY_AURA = {
     23: "every tick",  # PERIODIC_TRIGGER_SPELL
     227: "every tick",  # PERIODIC_TRIGGER_SPELL_WITH_VALUE
     48: "every tick",  # PERIODIC_TRIGGER_SPELL_FROM_CLIENT
-    3: "every tick",  # PERIODIC_DAMAGE
     226: "by script",  # PERIODIC_DUMMY
     4: "by script",  # DUMMY
     42: "on proc",  # PROC_TRIGGER_SPELL
@@ -892,14 +913,16 @@ LINK_KIND_BY_AURA = {
     360: "on proc",  # PROC_TRIGGER_SPELL_COPY
     43: "on proc",  # PROC_TRIGGER_DAMAGE
     109: "on proc",  # ADD_TARGET_TRIGGER
-    428: "while summoned",  # LINKED_SUMMON
+    428: "linked summon",  # LINKED_SUMMON ("while summoned" overclaimed the WHEN)
     284: "linked",  # LINKED
     285: "linked",  # LINKED_2
     394: "on confirm",  # SHOW_CONFIRMATION_PROMPT
     469: "on confirm",  # SHOW_CONFIRMATION_PROMPT_WITH_DIFFICULTY
     468: "on low health",  # TRIGGER_SPELL_ON_HEALTH_BELOW_PCT
-    396: "on power",  # TRIGGER_SPELL_ON_POWER_AMOUNT
-    328: "on power",  # TRIGGER_SPELL_ON_POWER_PCT
+    # both fire when power reaches a level, absolute on one and relative on the
+    # other; "on power" read as "powered on" and named neither
+    396: "on power level",  # TRIGGER_SPELL_ON_POWER_AMOUNT
+    328: "on power level",  # TRIGGER_SPELL_ON_POWER_PCT
     495: "when it expires",  # TRIGGER_SPELL_ON_EXPIRE
     395: "in its area",  # AREA_TRIGGER
     361: "replaces autoattack",  # OVERRIDE_AUTOATTACK_WITH_MELEE_SPELL
@@ -934,10 +957,10 @@ LINK_KIND_BY_EFFECT = {
     96: "on landing",  # CHARGE
     149: "on landing",  # CHARGE_DEST
     179: "in its area",  # CREATE_AREATRIGGER
-    182: "in its area",  # DESPAWN_AREATRIGGER
+    # 182 DESPAWN_AREATRIGGER is the OPPOSITE of 179 and shared its word; it
+    # falls back to "despawn areatrigger" rather than claiming the area is live
     3: "by script",  # DUMMY
     77: "by script",  # SCRIPT_EFFECT
-    2: "on damage",  # SCHOOL_DAMAGE
 }
 
 
@@ -1096,7 +1119,8 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 35  # 35: spell -> spell links (SpellEffect.EffectTriggerSpell)
+PACK_FORMAT = 36  # 36: target masks on spell links (spellLinks.targets)
+# 35: spell -> spell links (SpellEffect.EffectTriggerSpell)
 # 34: missile flight paths (SpellMissileMotion) on missile model rows
 # 29: mechanics carry their implicit targets (spellEffects +
 #     spellAuras -> spellMechanics, implicitTargetNames) and
@@ -2523,6 +2547,13 @@ class SpellEffectRows:
     # (link_kind_word) rather than here. One direction only — the reverse index
     # is derived in the browser, which halves what the pack carries.
     links: set[tuple[int, int, int, int]] = field(default_factory=set)
+    # (source spell, triggered spell) -> mask. An edge DOES have an implicit
+    # target of its own: it IS a SpellEffect row, so ImplicitTarget_0/_1 say who
+    # the effect carrying the trigger is aimed at, exactly as they do for every
+    # other effect-driven route above. Keyed on the pair rather than the (effect,
+    # aura) tuple because the chip is the pair — a spell reached two ways shows
+    # one chip, so its icons are the union.
+    link_targets: dict[tuple[int, int], int] = _mask()
     # (spell, SoundKit) -> mask, for PLAY_SOUND/PLAY_MUSIC effects (131/132).
     # Keyed like the *_targets masks so it folds into the Sounds column masked
     # like any other sound; merged in the main build where soundkit_files is in
@@ -2602,6 +2633,7 @@ def read_spell_effect_rows(
     for s, effect_id, aura_id, m0, m1, it0, it1, amount, trigger_id in se_rows.values():
         if s not in spell_names:
             continue
+        mask = target_bits.get(it0, 0) | target_bits.get(it1, 0)
         # spell -> spell edge (§3r). A target the pack has no name for is
         # DROPPED (3,160 of 63,883 rows on 9.2.7): the chip is an icon and a
         # name, so an unnameable row would render as a bare id nobody can act
@@ -2609,7 +2641,7 @@ def read_spell_effect_rows(
         # row.
         if trigger_id and trigger_id != s and trigger_id in spell_names:
             out.links.add((s, trigger_id, effect_id, aura_id))
-        mask = target_bits.get(it0, 0) | target_bits.get(it1, 0)
+            out.link_targets[(s, trigger_id)] |= mask
         # accumulate the whole-spell views resolve_target_mask reads: every
         # effect, and the APPLY_AURA effects on their own
         out.cast_target_bits[s] |= mask
@@ -3929,6 +3961,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "srcIds": [r[0] for r in link_rows],
             "dstIds": [r[1] for r in link_rows],
             "kinds": [r[2] for r in link_rows],
+            # who the effect carrying the trigger is aimed at — the same
+            # ImplicitTarget read every other effect-driven route ships, so a
+            # link chip wears the same target icons as the pills beside it
+            "targets": [se.link_targets.get((r[0], r[1]), 0) for r in link_rows],
             "kindNames": link_kind_names,
         },
         # visual FX: chain/beam effects (SpellChainEffects). spellFx links

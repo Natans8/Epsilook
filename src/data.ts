@@ -280,12 +280,18 @@ export interface SpellPack {
      * One row per edge: `srcIds[i]` is joined to `dstIds[i]` in the way
      * `kindNames[kinds[i]]` names ("on cast", "every tick", "removes", ...).
      *
-     * ONE DIRECTION ONLY — "triggered by" is these same edges read backwards,
-     * so the reverse index is built at load rather than shipped twice. Both
-     * ends are always spells this pack names, and a self-link never appears;
-     * the build drops both cases.
+     * ONE DIRECTION ONLY — the reverse ("origin") index is built at load rather
+     * than shipped twice. Both ends are always spells this pack names, and a
+     * self-link never appears; the build drops both cases.
+     *
+     * `targets[i]` is the ImplicitTarget mask of the effect carrying the
+     * trigger — the edge's own target, read exactly like every other
+     * effect-driven route's (pack format 36).
      */
-    spellLinks?: { srcIds: number[]; dstIds: number[]; kinds: number[]; kindNames: string[] };
+    spellLinks?: {
+        srcIds: number[]; dstIds: number[]; kinds: number[];
+        targets?: number[]; kindNames: string[];
+    };
 }
 
 /* ------------------------------------------------- in-memory indexes */
@@ -352,6 +358,13 @@ export interface KeybindRow {
 export interface SpellLink {
     spell: number;
     kinds: string[];
+    /**
+     * caster/target/area bits of the effect carrying the trigger, unioned over
+     * the ways the pair is joined. Rides both directions because it describes
+     * the EDGE: who the triggering effect is aimed at is equally who the
+     * triggered spell lands on. 0 on a pack older than format 36.
+     */
+    mask: number;
 }
 
 /** A ScreenEffect row's color payload (-1 = the row has no such color). */
@@ -633,25 +646,25 @@ export interface SpellData {
 
     /**
      * The two directions of one edge set, as the Mechanics column renders them:
-     * `spellTriggers` is what a spell reaches, `spellTriggeredBy` what reaches
+     * `spellTriggers` is what a spell reaches, `spellOrigins` what reaches
      * it. Keyed by the spell whose ROW is being drawn; the entry's `spell` is
      * the other end, and `kinds` the word(s) joining them — several when one
      * pair is joined two ways (252 pairs on 9.2.7).
      */
     spellTriggers: Map<number, SpellLink[]>;
-    spellTriggeredBy: Map<number, SpellLink[]>;
+    spellOrigins: Map<number, SpellLink[]>;
     /**
      * The search side, keyed by the LINKED spell — the id a chip stands for —
      * mapping to the spells whose row carries that chip. `triggersSpells` backs
-     * mech:triggers, `triggeredBySpells` mech:triggeredby, and each has a
-     * corpus of the linked spell's name plus every word it is joined by — but
-     * NOT its id, which a substring match turns into numeric noise across the
-     * whole field (see the measurement where the corpus is built).
+     * mech:triggers, `originSpells` mech:origin, and each has a corpus of the
+     * linked spell's name plus every word it is joined by — but NOT its id,
+     * which a substring match turns into numeric noise across the whole field
+     * (see the measurement where the corpus is built).
      */
     triggersSpells: Map<number, number[]>;
     triggersSearchL: Map<number, string>;
-    triggeredBySpells: Map<number, number[]>;
-    triggeredBySearchL: Map<number, string>;
+    originSpells: Map<number, number[]>;
+    originSearchL: Map<number, string>;
 }
 
 /* ------------------------------------------------------------ loading */
@@ -1644,29 +1657,35 @@ export function buildIndexes(pack: SpellPack): SpellData {
      * linked spell's name plus every word it is joined by — so
      * mech:"triggers every tick" finds spells whose link is periodic. */
     const spellTriggers = new Map<number, SpellLink[]>();
-    const spellTriggeredBy = new Map<number, SpellLink[]>();
+    const spellOrigins = new Map<number, SpellLink[]>();
     const triggersSpells = new Map<number, number[]>();
-    const triggeredBySpells = new Map<number, number[]>();
+    const originSpells = new Map<number, number[]>();
     const triggersSearchL = new Map<number, string>();
-    const triggeredBySearchL = new Map<number, string>();
+    const originSearchL = new Map<number, string>();
     if (pack.spellLinks) {
-        const {srcIds, dstIds, kinds, kindNames} = pack.spellLinks;
+        const {srcIds, dstIds, kinds, targets, kindNames} = pack.spellLinks;
         // one entry per (row spell, other end), collecting the words — a pair
-        // joined two ways is ONE chip listing both, not two chips
-        const push = (into: Map<number, SpellLink[]>, key: number, other: number, word: string) => {
+        // joined two ways is ONE chip listing both, not two chips, so its mask
+        // is the union of the ways too
+        const push = (into: Map<number, SpellLink[]>, key: number, other: number,
+                      word: string, mask: number) => {
             const list = into.get(key);
             if (!list) {
-                into.set(key, [{spell: other, kinds: [word]}]);
+                into.set(key, [{spell: other, kinds: [word], mask}]);
                 return;
             }
             const prev = list.find((l) => l.spell === other);
-            if (!prev) list.push({spell: other, kinds: [word]});
-            else if (!prev.kinds.includes(word)) prev.kinds.push(word);
+            if (!prev) list.push({spell: other, kinds: [word], mask});
+            else {
+                if (!prev.kinds.includes(word)) prev.kinds.push(word);
+                prev.mask |= mask;
+            }
         };
         for (let i = 0; i < srcIds.length; i++) {
             const word = kindNames[kinds[i]] || "";
-            push(spellTriggers, srcIds[i], dstIds[i], word);
-            push(spellTriggeredBy, dstIds[i], srcIds[i], word);
+            const mask = targets ? targets[i] : 0;
+            push(spellTriggers, srcIds[i], dstIds[i], word, mask);
+            push(spellOrigins, dstIds[i], srcIds[i], word, mask);
         }
         /* The two directions are DUALS, which is what makes the search side
          * free: the spells whose row shows "triggers X" are exactly the spells
@@ -1699,8 +1718,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
                     .replace(/\s+/g, " ").trim().toLowerCase());
             }
         };
-        derive(spellTriggeredBy, "triggers", triggersSpells, triggersSearchL);
-        derive(spellTriggers, "triggeredby", triggeredBySpells, triggeredBySearchL);
+        derive(spellOrigins, "triggers", triggersSpells, triggersSearchL);
+        derive(spellTriggers, "origin", originSpells, originSearchL);
     }
 
     // invisibility / detection channels (pack format 26). Grouped by
@@ -1836,8 +1855,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellScaleMods, scaleSpells, scaleSearchL,
         spellPassengerAnims, passengerAnimSpells,
         spellKeybinds, keybindSpells, keybinds, keybindSearchL, keybindTargets,
-        spellTriggers, spellTriggeredBy,
-        triggersSpells, triggersSearchL, triggeredBySpells, triggeredBySearchL,
+        spellTriggers, spellOrigins,
+        triggersSpells, triggersSearchL, originSpells, originSearchL,
         spellMechanics, mechanicCols,
         effectNames, effectNamesL, auraNames, auraNamesL,
         implicitTargetNames, implicitTargetNamesL, implicitTargetBits,

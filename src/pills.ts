@@ -539,12 +539,17 @@ function textSegment(kind: string, text: string, opts: SegmentOpts): Segment {
  * Copy button. The glyph is "⧉" for an id, or the command itself (".lo",
  * ".morph", "/") — so the accessible name has to spell out what it copies.
  */
-export const copy = (glyph: string, title: string, value: string): Segment => ({
-    kind: "copy", text: glyph, copy: value, aria: title,
+export const copy = (glyph: string, title: string, value: string, cls?: string): Segment => ({
+    kind: "copy", text: glyph, copy: value, aria: title, cls,
     title: `${title}\nShift-click: copy wrapped in \`backticks\``,
 });
 
-/** Copy button for a filled command template. */
+/**
+ * Copy button for a filled command template. `glyph` is what the button SHOWS,
+ * which is routinely an abbreviation (`.lo`, `.mod`) of the command it copies —
+ * the tooltip carries the real thing, so the pill spends width on the value and
+ * not on the label.
+ */
 export const cmd = (glyph: string, template: string, vars: Record<string, string | number>): Segment => {
     const text = fillTemplate(template, vars);
     return copy(glyph, `Copy:  ${text}`, text);

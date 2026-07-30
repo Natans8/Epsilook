@@ -361,6 +361,29 @@ copy button gets pushed out of the Models column. Measured: 0 overflowing blocks
 tooltip, so the ellipsis costs nothing. Adding a `maxWidth` option to `note` was the alternative and was rejected — it
 would put a layout number at every call site instead of in the stylesheet.
 
+**A width budget for ONE pill is a class, not a kind.** `motion` earned a kind because any pill could want a
+harder-clamped note. The spell-link chip's two clamps did not: `.link-name` (7rem) and `.link-kind` (5rem) are passed as
+`opts.cls` and sized under `.tag.link` in app.css, because they describe how much room *this* pill can spare, not a
+reusable budget. Same rule, opposite answer — ask whether the number belongs to the segment or to the pill.
+
+**The spell-link chip is where the width rules got their hardest test, and it is worth reading as a worked example.** It
+carries more than any other pill in its column — icon, spell name, spell id, target icons, joining words, three
+commands — and the Mechanics column's width is whatever its widest chip needs. Three moves paid for the content:
+
+- **The id IS the copy button.** A chip has to show the spell id (it is what `.cast` takes) and has to offer copying it;
+  those are one control, exactly as the Name column's own id already is. A `⧉` beside a printed id spends width saying
+  the same thing twice.
+- **Commands wear Epsilon's own abbreviations.** `.c` / `.au` / `.lo` are real accepted spellings of `.cast` / `.aura` /
+  `.lookup`, so the short label is honest rather than a private code. `SpellCommand.short` holds it beside the template,
+  so what is shown and what is copied cannot drift; the row strip still shows the full label, where there is room.
+- **The variable-length parts clamp, the fixed ones do not.** A name and a joining word are unbounded; an id and a
+  command are not.
+
+Measured on 9.2.7 (`mech:triggers`, 75 chips): widest chip **349 → 321 px** and the Mechanics column **437 → 434 px**,
+while gaining the id, the target icons and a third command. The column is still ~70 px wider than the 364 px it wants
+with no links at all — that residue is the content itself, and cutting it further means clipping spell names to about 12
+characters, which is the wrong trade.
+
 ## 6. Tooltips
 
 Never hand-write one. Every text segment composes the same three parts:

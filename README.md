@@ -36,9 +36,10 @@ Full syntax lives behind the **?** button in the app. The short version:
   `Stand → StealthStand`
   (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue).
 - **Spells link to each other**, and the Mechanics column shows both directions: `mech:triggers` for what a spell casts,
-  ticks, procs or removes, `mech:triggeredby` for what reaches it. Each chip is the other spell — its icon opens
-  Wowhead, its name filters to that spell's own row — and the note says how they are joined (`on cast`, `every tick`,
-  `removes`). Search either end by name or by mechanism: `mech:"triggers fireball"`, `mech:"triggeredby every tick"`.
+  ticks, procs or removes, `mech:origin` for what reaches it. Each chip is the other spell — its id copies, its icon
+  opens Wowhead, its name filters to that spell's own row, target icons say who the triggering effect is aimed at, and
+  the note says how they are joined (`on cast`, `every tick`, `removes`). Search either end by name or by mechanism:
+  `mech:"triggers fireball"`, `mech:"origin every tick"`.
 - **A word may be followed by its value**, space-separated, and that is the only value form in the language:
   `model:"attach chest"` (where on the model it plays), `model:"motion parabola"` (the arc a projectile flies),
   `anim:(boneset "upper body")` (which body region moves),
@@ -254,7 +255,9 @@ into `meta.absentTables`.
   under the spell name — a new one becomes another segment of that strip and never wraps it to a second line); the
   `*CopyTemplate` entries for the ones on tags. A label starting with `.` gets that dot drawn in the accent colour
   automatically — it is the chat sigil; a label without one renders plain. The strip is drawn as ONE segmented control
-  rather than as separate buttons, so a command costs a hairline divider and its own text, not a box.
+  rather than as separate buttons, so a command costs a hairline divider and its own text, not a box. Give it a `short`
+  (`.lookup` → `.lo`) and pills use that where width is scarce while the strip keeps the full label; list it in
+  `linkCommands` to put it on spell-link chips too.
 - **A new theme**: every colour in `app.css` comes from a token in the block at the top, so a theme is one
   `:root[data-theme="<id>"] { ... }` block re-declaring those tokens plus one `{id, label}` line in `themes` in
   `src/config.ts`. The header picker builds itself from that registry and appears once a second theme exists; the choice

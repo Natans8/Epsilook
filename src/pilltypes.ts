@@ -266,12 +266,20 @@ T({
  * needs to get you there.
  *
  * TWO TYPES, ONE EDGE SET, because direction is the first thing you want to
- * ask: `triggers` is what this spell reaches, `triggeredby` what reaches it.
- * The corpus of each is the linked spell's NAME plus every word the two are
- * joined by — not its id, which substring-matches numerically across the whole
- * field (measured in data.ts) — so mech:"triggers fireball" and
- * mech:"triggers every tick" are the same code path, and a spell is reached by
- * id through the chip's own click.
+ * ask: `triggers` is what this spell reaches, `origin` what reaches it. The
+ * corpus of each is the linked spell's NAME plus every word the two are joined
+ * by — not its id, which substring-matches numerically across the whole field
+ * (measured in data.ts) — so mech:"triggers fireball" and mech:"triggers every
+ * tick" are the same code path, and a spell is reached by id through the chip's
+ * own click.
+ *
+ * `origin` replaced `triggeredby` on 2026-07-30 (user: "not aesthetic"). Every
+ * other category word in this app is one plain word; a run-together compound
+ * was the odd one out, and it read no better as a group head than in the bar.
+ * The pair is a verb and a noun on purpose — "what it triggers" and "where it
+ * came from" are the two questions, and the Mechanics column's other heads
+ * (speed, seat, invis, keybind) are nouns already. No legacy alias, per the
+ * standing norm on renames.
  *
  * Neither word collides with an effect/aura NAME the mech column already
  * matches — verified zero on 9.2.7, because those are singular
@@ -287,10 +295,10 @@ T({
     when: (d) => d.triggersSpells.size > 0,
 });
 T({
-    key: "mech:triggeredby", field: "mech", word: "triggeredby",
+    key: "mech:origin", field: "mech", word: "origin",
     hint: "A spell that casts, ticks, procs or removes this one",
-    corpus: (d) => d.triggeredBySearchL, spells: (d) => d.triggeredBySpells,
-    when: (d) => d.triggeredBySpells.size > 0,
+    corpus: (d) => d.originSearchL, spells: (d) => d.originSpells,
+    when: (d) => d.originSpells.size > 0,
 });
 
 /* Object scale — movement speed's shorter twin. There is only one thing

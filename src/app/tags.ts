@@ -17,7 +17,7 @@ import {
     shapeshiftIsHit,
     speedIsHit,
     summonIsHit,
-    triggeredByIsHit,
+    originIsHit,
     triggersIsHit,
     vehicleIsHit
 } from "./hits";
@@ -1274,9 +1274,9 @@ export function mountTag(displayId: number, spellId: number): HTMLElement {
  * One spell-link chip (Mechanics column) — the only pill in the app whose
  * subject is another SPELL ROW, which is what shapes every choice in it.
  *
- * `word` is the direction ("triggers" / "triggeredby"), which is also the group
- * head above it; `link.kinds` are the ways the two spells are joined and ride
- * the note, so the head says WHICH WAY and the note says HOW. That split is
+ * `word` is the direction ("triggers" / "origin"), which is also the group head
+ * above it; `link.kinds` are the ways the two spells are joined and ride the
+ * note, so the head says WHICH WAY and the note says HOW. That split is
  * load-bearing: `removes` is 14% of the graph and is emphatically not a
  * trigger, so the mechanism can never be inferred from the direction alone.
  *
@@ -1286,8 +1286,20 @@ export function mountTag(displayId: number, spellId: number): HTMLElement {
  * link uses — while clicking the name filters to that spell's own row, which is
  * this chip's primary job. There is no separate leading [wh] action: the chip
  * lives inside a group and two wowhead affordances would spend width twice.
+ *
+ * THE ID IS THE COPY BUTTON, not a label beside one. The chip has to show the
+ * id (it is what `.cast` takes and what the user pastes into Epsilon) and it
+ * has to offer copying it — and those are one control, exactly as the Name
+ * column's own id already is. A `⧉` next to a printed id would spend width
+ * saying the same thing twice.
+ *
+ * WIDTH IS THE STANDING CONSTRAINT HERE. A link chip is the widest thing the
+ * Mechanics column holds, so the two variable-length parts (the spell name and
+ * the joining words) are clamped with an ellipsis and the full text rides the
+ * tooltip — the `motion` precedent, PILLS.md §5 — and the commands wear
+ * Epsilon's own abbreviations. The budgets live in app.css, not here.
  */
-export function spellLinkTag(link: SpellLink, word: string): HTMLElement {
+export function spellLinkTag(link: SpellLink, word: string, mask = 0): HTMLElement {
     const d = activeData();
     const id = link.spell;
     const i = d.spellIndex.get(id);
@@ -1297,7 +1309,7 @@ export function spellLinkTag(link: SpellLink, word: string): HTMLElement {
     const icon = i === undefined ? "" : d.icons[i];
     const href = wowheadUrl(CFG.wowheadSpellUrl, {id});
     const kinds = link.kinds.filter(Boolean);
-    const hit = word === "triggers" ? triggersIsHit(id) : triggeredByIsHit(id);
+    const hit = word === "triggers" ? triggersIsHit(id) : originIsHit(id);
     // "Fireball triggers this" vs "this triggers Fireball" — the tooltip says
     // which, because a chip read out of context is ambiguous and the group head
     // scrolls out of view inside a clamped cell.
@@ -1306,12 +1318,20 @@ export function spellLinkTag(link: SpellLink, word: string): HTMLElement {
         cls: "mech link",
         hit,
         segments: [
+            // The id LEADS (user's call, 2026-07-30). It is the chip's key —
+            // what `.cast` takes and what gets pasted into Epsilon — and a
+            // column of chips reading their ids down a common left edge is
+            // scannable in a way a ragged right-hand id is not. It also keeps
+            // the icon fused to the name it belongs to, rather than splitting
+            // that pair around it.
+            P.copy(String(id), `Copy spell ID: ${id}`, String(id), "link-id"),
             // icon then label, nothing between them: they read as one unit and
             // the icon is the wowhead affordance (see above)
             icon && CFG.spellIconUrl && P.icon(fillTemplate(CFG.spellIconUrl, {icon}), {
                 href, title: `Open ${name} on Wowhead`, data: {wowhead: `spell=${id}`},
             }),
             P.label(name, {
+                cls: "link-name",
                 title: `${way} ${name} — spell ${id}`,
                 detail: [kinds.length ? `How: ${kinds.join(", ")}` : ""],
                 // filter to the LINKED SPELL'S OWN ROW, not to other spells
@@ -1322,16 +1342,20 @@ export function spellLinkTag(link: SpellLink, word: string): HTMLElement {
                 finds: `spell ${id}`,
                 data: {wowhead: `spell=${id}`}, // tooltip on the name too
             }),
+            // who the triggering effect is aimed at — the same icons, from the
+            // same mask, as every other pill in the column (pack format 36)
+            targetSeg("mech", mask),
             kinds.length && P.note(kinds.join(" · "), {
+                cls: "link-kind",
                 title: `Joined by: ${kinds.join(", ")}`,
                 search: P.catQuery("mech", word, kinds[0]),
                 finds: `${word === "triggers" ? "links" : "back-links"} of this kind`,
             }),
-            P.copy("⧉", `Copy spell ID: ${id}`, String(id)),
-            // .cast / .aura, from the row strip's own templates (CFG.linkCommands)
+            // .c / .au / .lo, from the row strip's own templates
+            // (CFG.linkCommands), abbreviated by each command's own `short`
             ...CFG.spellCommands
                 .filter((c) => CFG.linkCommands.includes(c.label))
-                .map((c) => P.cmd(c.label, c.template, {id})),
+                .map((c) => P.cmd(c.short || c.label, c.template, {id})),
         ],
     });
 }

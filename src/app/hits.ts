@@ -130,7 +130,7 @@ export const objectIsHit = isHitOf("fx:object");
    * can carry both, and "what this triggers" is a different answer from "what
    * triggers this". */
 export const triggersIsHit = isHitOf("mech:triggers");
-export const triggeredByIsHit = isHitOf("mech:triggeredby");
+export const originIsHit = isHitOf("mech:origin");
 /** A mount pill keys on the CreatureDisplayID it rides on. */
 export const mountIsHit = isHitOf("model:mount");
 /** A speed pill keys on the (movement, percent) pair it displays. */

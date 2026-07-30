@@ -19,7 +19,7 @@ import {
     tintIsHit,
     tokensFor,
     transpIsHit,
-    triggeredByIsHit,
+    originIsHit,
     triggersIsHit,
     vehicleIsHit,
     wordIsNamed
@@ -1168,9 +1168,10 @@ function effectCells(spellId: number): { fx: HTMLElement; mechBlocks: CellBlock[
     });
 
     // Spell -> spell links, one category per DIRECTION. Rows are already the
-    // pills (data.ts merged a pair joined two ways into one entry), and there
-    // is no target mask on a link — an edge has no ImplicitTarget of its own —
-    // so both default.
+    // pills (data.ts merged a pair joined two ways into one entry). The mask is
+    // the edge's own ImplicitTarget: a link IS a SpellEffect row, so it says who
+    // the triggering effect is aimed at exactly like every category above (pack
+    // format 36 — 0 on an older pack, which simply draws no icons).
     //
     // Sorted by name so a row with several links reads alphabetically rather
     // than in pack order; renderBlocks then floats the matched one anyway.
@@ -1183,15 +1184,17 @@ function effectCells(spellId: number): { fx: HTMLElement; mechBlocks: CellBlock[
         name: "triggers", col: "mech",
         finds: "all spells that reach another spell",
         rows: (d.spellTriggers.get(spellId) || []).slice().sort(byName),
+        mask: (l: SpellLink) => l.mask,
         isHit: (l: SpellLink) => triggersIsHit(l.spell),
-        render: (l: SpellLink) => spellLinkTag(l, "triggers"),
+        render: (l: SpellLink, m) => spellLinkTag(l, "triggers", m),
     });
     pushCat({
-        name: "triggeredby", col: "mech",
+        name: "origin", col: "mech",
         finds: "all spells another spell reaches",
-        rows: (d.spellTriggeredBy.get(spellId) || []).slice().sort(byName),
-        isHit: (l: SpellLink) => triggeredByIsHit(l.spell),
-        render: (l: SpellLink) => spellLinkTag(l, "triggeredby"),
+        rows: (d.spellOrigins.get(spellId) || []).slice().sort(byName),
+        mask: (l: SpellLink) => l.mask,
+        isHit: (l: SpellLink) => originIsHit(l.spell),
+        render: (l: SpellLink, m) => spellLinkTag(l, "origin", m),
     });
 
     // one block per category, in the order pushed above; renderBlocks

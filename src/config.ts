@@ -6,6 +6,14 @@ export interface SpellCommand {
     label: string;
     template: string;
     hint: string;
+    /**
+     * The label a PILL uses, where width is scarce — Epsilon's own accepted
+     * abbreviation of the command (`.cast`/`.cas`/`.ca`/`.c`, `.aura`/`.au`).
+     * The row strip always shows the full `label`; a pill falls back to it when
+     * this is absent. What gets COPIED is `template` either way, so the two can
+     * never say different things.
+     */
+    short?: string;
 }
 
 /** One entry in the theme dropdown (`themes` below). */
@@ -99,17 +107,20 @@ export const CFG: EpsilookConfig = {
     // Copy-command buttons shown on every spell row (the spell ID itself is
     // copied by clicking it). {id} is replaced with the spell ID.
     spellCommands: [
-        {label: ".cast", template: ".cast {id}", hint: "Copy .cast command"},
-        {label: ".aura", template: ".aura {id}", hint: "Copy .aura command"},
-        {label: ".lookup", template: ".lookup spell id {id}", hint: "Copy .lookup command"},
-        {label: ".learn", template: ".learn {id}", hint: "Copy .learn command"},
+        {label: ".cast", template: ".cast {id}", hint: "Copy .cast command", short: ".c"},
+        {label: ".aura", template: ".aura {id}", hint: "Copy .aura command", short: ".au"},
+        {
+            label: ".lookup", template: ".lookup spell id {id}",
+            hint: "Copy .lookup command", short: ".lo",
+        },
+        {label: ".learn", template: ".learn {id}", hint: "Copy .learn command", short: ".le"},
     ],
 
     // Which commands a spell-link chip carries (labels from spellCommands
-    // above). A chip is narrow and sits inside a group, so it gets the two that
-    // actually put the linked spell on screen — .lookup and .learn are row-level
-    // questions. Add a label here to offer more.
-    linkCommands: [".cast", ".aura"],
+    // above). A chip is narrow and sits inside a group, so it gets the three
+    // that act on the linked spell itself; .learn is a row-level question about
+    // your own character. Add a label here to offer more.
+    linkCommands: [".cast", ".aura", ".lookup"],
 
     // Copy command on each model tag.
     // {base} = file name without path and extension, {file} = file name, {path} = full path, {fid} = FileDataID.
