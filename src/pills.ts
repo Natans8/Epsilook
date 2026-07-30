@@ -559,10 +559,15 @@ export const cmd = (glyph: string, template: string, vars: Record<string, string
 function clickHint(opts: { search?: string; finds?: string; click?: string }): string {
     const action = opts.click || (opts.finds && `find ${opts.finds}`);
     if (opts.search === undefined || !action) return "";
+    // The middle-click is on BOTH branches: it asks the segment's own question
+    // in a new tab, which a navigating segment has just as much as a filtering
+    // one. The modifiers are what it does not get — those narrow what is on
+    // screen, and a new tab has nothing on screen yet to narrow.
+    const newTab = "Middle-click: open in a new tab";
     // a navigating segment replaces the search and nothing else: narrowing
     // by "the counterpart of what is on screen" is a query for no spell
-    if (opts.click) return `Click: ${action}`;
-    return `Click: ${action}\nShift-click: add to search · Ctrl-click: exclude`;
+    if (opts.click) return `Click: ${action}\n${newTab}`;
+    return `Click: ${action}\nShift-click: add to search · Ctrl-click: exclude\n${newTab}`;
 }
 
 /* ==================================================================== */

@@ -366,13 +366,21 @@ would put a layout number at every call site instead of in the stylesheet.
 Never hand-write one. Every text segment composes the same three parts:
 
 ```
-<what it is>          opts.title
-<details>             opts.detail — falsy lines dropped
-Click: find <finds> · Shift-click: exclude     from opts.finds
+<what it is>                                                              opts.title
+<details>                                                                 opts.detail — falsy lines dropped
+Click: find <finds>                                                       from opts.finds
+Shift-click: add to search · Ctrl-click: exclude · Middle-click: new tab
 ```
 
 Use `opts.click` instead of `finds` when the click navigates rather than filters ("show the 3 counterparts"). A segment
 with no `search` gets no action line and renders inert — that is how the priceless invisibility pill is built.
+
+**A navigating segment keeps only the middle-click line.** The modifiers narrow what is on screen, and "the counterpart
+of what is on screen" is a query for no spell — but a new tab has nothing on screen to narrow, so opening the segment's
+own question in one is meaningful for every clickable segment. That asymmetry is the whole of `clickHint`.
+
+**Every modifier is written into the tooltip, always.** It is what made them acceptable when a hidden keybinding was
+not: a gesture nobody can discover is a gesture nobody has.
 
 ## 7. Verifying a change
 

@@ -37,13 +37,26 @@ export function defaultVersion(): VersionEntry | undefined {
 const encodeQueryValue = (s: string) =>
     encodeURIComponent(s).replace(/%3A/gi, ":").replace(/%20/g, "+").replace(/%22/g, '"');
 
-export function stateToUrl(push: boolean): void {
+/**
+ * The URL for a view of the current page showing `query` — the pack, the
+ * filters and the sort are the ones on screen, because everything except the
+ * question is context the reader is already in.
+ *
+ * ONE BUILDER, TWO CALLERS, and that is the point: `stateToUrl` commits the
+ * current query to history while `urlForQuery` hands a DIFFERENT query to a new
+ * tab without touching this page. Those differ in exactly two things — which
+ * query, and whether the help dialog counts — so they differ in two arguments
+ * rather than in two copies of the parameter list. The copy is what drifts: a
+ * new piece of shareable state added to one and not the other would make a
+ * middle-click quietly drop it.
+ */
+function viewUrl(query: string, withHelp: boolean): string {
     const params: string[] = [];
     const dv = defaultVersion();
     if (state.version && dv && state.version.id !== dv.id) {
         params.push("v=" + encodeQueryValue(shortVersion(state.version.id)));
     }
-    if (state.lastQuery) params.push("q=" + encodeQueryValue(state.lastQuery));
+    if (query) params.push("q=" + encodeQueryValue(query));
     // the "Only spells with / without" filters shape the shared result list
     // just like the query does, so they ride in the URL too: only= lists the
     // "with" categories (unchanged for back-compat), without= the "without" ones
@@ -59,8 +72,21 @@ export function stateToUrl(push: boolean): void {
     // the help dialog is part of what a link can point at — "here is the
     // syntax" is a thing people send each other, and without this the only
     // way to share it is a sentence telling someone to click the ?
-    if (helpOpen()) params.push("help=1");
-    const url = location.pathname + (params.length ? "?" + params.join("&") : "");
+    if (withHelp && helpOpen()) params.push("help=1");
+    return location.pathname + (params.length ? "?" + params.join("&") : "");
+}
+
+/**
+ * The URL a middle-click opens in a new tab. `help=1` is deliberately dropped:
+ * a new tab is opened to look at RESULTS, and a modal over them is not what was
+ * asked for.
+ */
+export function urlForQuery(query: string): string {
+    return viewUrl(query, false);
+}
+
+export function stateToUrl(push: boolean): void {
+    const url = viewUrl(state.lastQuery, true);
     if (url === location.pathname + location.search && !location.hash) return;
     // pushState (unlike the old location.hash assignment) fires no event,
     // so no suppression dance is needed

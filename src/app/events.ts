@@ -1,15 +1,52 @@
-import {currentSuggestIndex, hideSuggest, moveSuggestSelection, pickCurrentSuggestion, pickSuggestItem, updateSuggest} from "./autocomplete";
-import {activateField, applyKbSel, atomCount, atomGapAtPoint, cancelActiveField, clearBarSel, commitActiveChip, deleteBarSel, editChipAt, flushPending, inputAtom, insertFreeChipHere, paintBarSel, redoBar, renderBar, selRange, serializeBarSel, sizeInput, syncBar, undoBar} from "./bar";
+import {
+    currentSuggestIndex,
+    hideSuggest,
+    moveSuggestSelection,
+    pickCurrentSuggestion,
+    pickSuggestItem,
+    updateSuggest
+} from "./autocomplete";
+import {
+    activateField,
+    applyKbSel,
+    atomCount,
+    atomGapAtPoint,
+    cancelActiveField,
+    clearBarSel,
+    commitActiveChip,
+    deleteBarSel,
+    editChipAt,
+    flushPending,
+    inputAtom,
+    insertFreeChipHere,
+    paintBarSel,
+    redoBar,
+    renderBar,
+    selRange,
+    serializeBarSel,
+    sizeInput,
+    syncBar,
+    undoBar
+} from "./bar";
 import {activateVersion, applyUrl} from "./boot";
 import {copyText} from "./clipboard";
 import {barHover, barHoverOut, markCaretCapsule} from "./highlight";
-import {ID_CMD_PASTE, ID_CMD_TYPED, canonField, isChipField, parseQueryParts, serializeQuery, setChips} from "./query";
+import {
+    ID_CMD_PASTE,
+    ID_CMD_TYPED,
+    canonField,
+    isChipField,
+    parseQueryParts,
+    serializeChips,
+    serializeQuery,
+    setChips
+} from "./query";
 import {layoutRow, renderMore} from "./render";
 import {COUNT_SORTS, applyFiltersAndSort, runSearch, scheduleSearch} from "./run";
 import {toggleSound} from "./sound";
 import {TRI_LABELS, qInput, state} from "./state";
 import type {Chip} from "./state";
-import {ensureFieldsVisible, setHelp, shareLink, stateToUrl} from "./url";
+import {ensureFieldsVisible, setHelp, shareLink, stateToUrl, urlForQuery} from "./url";
 import * as Export from "../export";
 import {$, $$, $$inputs, targetClosest} from "../util";
 /* ------------------------------------------------------------ events */
@@ -36,7 +73,14 @@ import {$, $$, $$inputs, targetClosest} from "../util";
  * nothing; it now means "what I am looking at, but not that". With an empty
  * bar it still does exactly what it always did.
  */
-function crossSearch(query: string, mode: "replace"|"add"|"exclude" = "replace") {
+type CrossMode = "replace" | "add" | "exclude";
+
+/**
+ * The chips a pill's query would put in the bar — PURE, so the same answer can
+ * be committed (a click) or merely written into a URL (a middle-click) without
+ * the two ever diverging about what the pill means.
+ */
+function crossSearchParts(query: string, mode: CrossMode): Chip[] {
     const parts = mode === "replace" ? [] : parseQueryParts(serializeQuery());
     // clicking the same pill twice must not stack the same chip twice
     const key = (p: Chip) => `${p.not ? "-" : ""}${p.field}:${p.text}`;
@@ -44,9 +88,30 @@ function crossSearch(query: string, mode: "replace"|"add"|"exclude" = "replace")
     for (const p of parseQueryParts(mode === "exclude" ? "-" + query : query)) {
         if (!have.has(key(p))) parts.push(p);
     }
-    setChips(parts);
+    return parts;
+}
+
+function crossSearch(query: string, mode: CrossMode = "replace") {
+    setChips(crossSearchParts(query, mode));
     runSearch({push: true});
     window.scrollTo({top: 0});
+}
+
+/**
+ * Open a pill's query in a new tab, keeping this one exactly as it is.
+ *
+ * IT IS ALWAYS THE PILL'S OWN QUESTION — mode "replace" — and the modifiers
+ * play no part. That is not a simplification, it is what the gesture means: the
+ * modifiers exist to NARROW what is on screen, and a new tab already keeps what
+ * is on screen, in the tab you came from. "This, on its own, over there" is the
+ * whole question, so there is one rule and nothing to remember.
+ *
+ * `noopener` because the opened page has no business reaching back through
+ * `window.opener`, and it lets the browser give the tab its own process.
+ */
+function crossSearchNewTab(query: string) {
+    window.open(urlForQuery(serializeChips(crossSearchParts(query, "replace"))),
+        "_blank", "noopener");
 }
 
 export function wireEvents() {
@@ -315,7 +380,7 @@ export function wireEvents() {
     // mouse-drag selection across the bar. A drag within the input stays
     // native; once the pointer leaves the editor (or the drag started on a
     // chip), whole atoms select between the anchor gap and the pointer.
-    let dragSel: {anchor: number; x0: number; y0: number; fromInput: boolean; engaged: boolean} | null = null;
+    let dragSel: { anchor: number; x0: number; y0: number; fromInput: boolean; engaged: boolean } | null = null;
     let suppressBarClick = false;
 
     function onBarDragMove(e: MouseEvent): void {
@@ -466,8 +531,7 @@ export function wireEvents() {
                 : e.shiftKey ? "add"
                     : (e.ctrlKey || e.metaKey) ? "exclude" : "replace";
             crossSearch(t.dataset.search!, mode);
-        }
-        else if (t.dataset.expand) {
+        } else if (t.dataset.expand) {
             // reveal this cell fully; the row grows to fit it and its siblings
             // re-clamp to the taller budget, revealing more of themselves
             const td = t.closest("td")!;
@@ -480,6 +544,31 @@ export function wireEvents() {
     $("#empty-state").addEventListener("click", (e) => {
         const b = targetClosest(e, "button[data-search]");
         if (b) crossSearch(b.dataset.search!);
+    });
+
+    /* Middle-click any searchable pill to open its question in a new tab.
+     *
+     * ONE HANDLER ON THE DOCUMENT, not one per surface. Every affordance that
+     * filters is already a `button[data-search]` — result pills, the empty
+     * state's examples, the help dialog's worked examples — so delegating from
+     * the top means a fourth surface inherits this instead of having to
+     * remember it. (The plain-click handlers stay per-surface because they
+     * differ: the help one closes its dialog first.)
+     *
+     * `auxclick` is the event for a non-primary button; a middle press never
+     * fires `click` at all. And the mousedown below is not decoration — on
+     * Windows a middle press over a non-link starts the browser's autoscroll,
+     * so without it the new tab opens behind a drifting scroll cursor.
+     */
+    document.addEventListener("mousedown", (e) => {
+        if (e.button === 1 && targetClosest(e, "button[data-search]")) e.preventDefault();
+    });
+    document.addEventListener("auxclick", (e) => {
+        if (e.button !== 1) return; // right-click keeps the browser's own menu
+        const b = targetClosest(e, "button[data-search]");
+        if (!b) return;
+        e.preventDefault();
+        crossSearchNewTab(b.dataset.search!);
     });
 
     // share + export

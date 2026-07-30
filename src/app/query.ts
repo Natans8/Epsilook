@@ -36,9 +36,19 @@ export function isChipField(f: string): boolean {
 // not survive the URL.
 export const tagStr = P.tagQuery;
 
+// how ONE chip is written. Both serializers below go through it, so a chip
+// list that is not the bar's own can never be quoted differently from one
+// that is.
+const chipStr = (c: Chip) => c.field === "all" ? c.text : tagStr(c.field, c.text, c.not);
+
+// a chip list as query text — the inverse of parseQueryParts, and the form a
+// URL carries. Split out from serializeQuery because a chip list that is NOT
+// the bar's own also has to be written: a middle-click serializes the chips a
+// click WOULD have committed, without committing them.
+export const serializeChips = (chips: Chip[]): string => chips.map(chipStr).join(" ");
+
 export function serializeQuery() {
-    const parts = state.chips.map((c) =>
-        c.field === "all" ? c.text : tagStr(c.field, c.text, c.not));
+    const parts = state.chips.map(chipStr);
     const at = Math.min(state.pos, state.chips.length);
     const inputText = qInput.value.trim();
     if (inputText) {
@@ -184,7 +194,7 @@ function altsOf(text: string): string[] {
  */
 export function tokenSpans(text: string): TokenSpan[] {
     const lower = text.toLowerCase();
-    const spans: {start: number, end: number, text: string, quoted: boolean}[] = [];
+    const spans: { start: number, end: number, text: string, quoted: boolean }[] = [];
     for (const m of lower.matchAll(/"([^"]*)(?:"|$)|([^\s"]+)/g)) {
         const quoted = m[1] !== undefined;
         const raw = quoted ? m[1] : m[2];
