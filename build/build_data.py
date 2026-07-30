@@ -362,10 +362,12 @@ TDB_TABLES = {
         "spell_visual": ["ID", "SpellVisualMissileSetID", "RaidSpellVisualMissileSetID",
                          "MissileAttachment", "MissileDestinationAttachment",
                          "AnimEventSoundID", *VISUAL_REDIRECTS],
-        # SpellMissileMotionID is here for the wholesale-replace reason above:
-        # a hotfixed missile row that omitted it would blank the flight path.
+        # SpellMissileMotionID and the two attachments are here for the
+        # wholesale-replace reason above: a hotfixed missile row that omitted
+        # them would blank the flight path and the launch/impact points.
         "spell_visual_missile": ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID",
-                                 "SoundEntriesID", "AnimKitID", "SpellMissileMotionID"],
+                                 "SoundEntriesID", "AnimKitID", "SpellMissileMotionID",
+                                 "Attachment", "DestinationAttachment"],
         "spell_visual_effect_name": ["ID", "ModelFileDataID"],
         # EffectBasePoints joins the overlay for the wholesale-replace reason
         # above: it is the movement-speed percent. All four dumps that ship
@@ -786,6 +788,16 @@ NO_ATTACHMENT = -1
 # SpellVisualMissile.SpellMissileMotionID uses 0 for "no flight path declared",
 # which is also a model row's value on every non-missile category.
 NO_MOTION = 0
+
+# Where a missile launches from when NEITHER SpellVisualMissile.Attachment nor
+# SpellVisual.MissileAttachment names a point — 47.3% of missile rows on 9.2.7.
+# VERIFIED IN GAME 2026-07-30 on two independent models: a blank Fireball
+# (9053) is indistinguishable from one that declares this explicitly (133) on
+# the same model, and Shadow Bolt agreed. "Virtual" is the client's own name
+# for a COMPUTED point, which is exactly what a fallback is. See the
+# "SOLVED IN-GAME" entry in CLAUDE.md for the test design — three earlier ones
+# failed. Materialised here so the pill, the search and the exports all agree.
+DEFAULT_MISSILE_SOURCE = 56  # M2 attachment "VirtualSpellDirected"
 
 
 def attachment_name(attachment: int) -> str:
@@ -1768,9 +1780,9 @@ def read_model_sources(
                         attach_models, attach_anims, attach_animkits)
 
 
-# what a visual with no missiles contributes: ({(fid, motion)}, soundkits, animkits)
-NO_MISSILES: tuple = (frozenset(), frozenset(), frozenset(),
-                      (NO_ATTACHMENT, NO_ATTACHMENT))
+# what a visual with no missiles contributes:
+# ({(fid, motion, src, dst)}, soundkits, animkits)
+NO_MISSILES: tuple = (frozenset(), frozenset(), frozenset())
 
 
 def read_missile_motions(table_dir: Path) -> dict[int, str]:
@@ -1790,7 +1802,7 @@ def read_missiles(
         table_dir: Path, tdb_dir: Path | None, effect_name_fid: dict[int, int],
         effect_name_type: dict[int, int]
 ) -> dict[int, tuple]:
-    """Read visual -> ({(missile model, motion)}, soundkits, animkits).
+    """Read visual -> ({(model, motion, src attach, dst attach)}, soundkits, animkits).
 
     Missiles are the second path out of SpellVisual, and the only one that
     reaches projectile models: SpellVisual.SpellVisualMissileSetID (plus the
@@ -1799,11 +1811,15 @@ def read_missiles(
     Missiles' cfx_mage_arcanemissiles_missile.m2 exists nowhere else in the
     graph.
     """
-    # The launch/impact attachment points come from SpellVisual, not from the
-    # individual SpellVisualMissile rows: the missile route is per-visual (a
-    # whole set is unioned into one bucket), and SpellVisual is also where the
-    # data actually lives — 105.6k rows carry a destination on 9.2.7 versus
-    # 14.9k on SpellVisualMissile.
+    # The launch/impact attachment points live on BOTH SpellVisual and the
+    # individual SpellVisualMissile rows, and the two are COMPLEMENTARY rather
+    # than redundant — see DATA_ROUTES §3c. Over the 18,553 missile rows
+    # reachable from a visual on 9.2.7 the visual alone carries a source for
+    # 16.4%, the missile row alone for 50.7%, and either for 52.7%. So the row
+    # is read first and the visual is the fallback. (An older comment here
+    # claimed SpellVisual was "where the data actually lives, 105.6k rows
+    # versus 14.9k" — that counted all 105k visuals, ~87k of which have no
+    # missile at all, so it compared the wrong population.)
     sv_cols = ["ID", "SpellVisualMissileSetID", "RaidSpellVisualMissileSetID",
                "MissileAttachment", "MissileDestinationAttachment"]
     sv_rows: dict[int, tuple[int, int, int, int]] = {}  # visual -> (set, raid set, src, dst)
@@ -1818,41 +1834,53 @@ def read_missiles(
     # the handful that name several become several rows — the same rule the
     # attachment pair already follows (see the "spellModels" pack comment).
     svm_cols = ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID",
-                "SoundEntriesID", "AnimKitID", "SpellMissileMotionID"]
-    svm_rows: dict[int, tuple[int, ...]] = {}  # missile ID -> (set, en, soundkit, animkit, motion)
+                "SoundEntriesID", "AnimKitID", "SpellMissileMotionID",
+                "Attachment", "DestinationAttachment"]
+    # missile ID -> (set, en, soundkit, animkit, motion, src, dst)
+    svm_rows: dict[int, tuple[int, ...]] = {}
     for rid, *vals in read_table(table_dir, "SpellVisualMissile", svm_cols):
         svm_rows[to_int(rid)] = tuple(to_int(v) for v in vals)
     for rid, *vals in hotfix_rows(tdb_dir, "spell_visual_missile", svm_cols):
         svm_rows[to_int(rid)] = tuple(to_int(v) for v in vals)
 
-    set_models: dict[int, set[tuple[int, int]]] = defaultdict(set)  # -> {(fid, motion)}
+    # -> {(fid, motion, row source, row destination)}; the attachments are the
+    # ROW's own and are resolved against the visual's below
+    set_models: dict[int, set[tuple[int, int, int, int]]] = defaultdict(set)
     set_soundkits: dict[int, set[int]] = defaultdict(set)
     set_animkits: dict[int, set[int]] = defaultdict(set)
-    for set_id, en_id, sk, ak, motion in svm_rows.values():
+    for set_id, en_id, sk, ak, motion, m_src, m_dst in svm_rows.values():
         if not set_id:
             continue
         fid = effect_name_fid.get(en_id, 0)
         if fid:
-            set_models[set_id].add((fid, motion))
+            set_models[set_id].add((fid, motion, m_src, m_dst))
         elif weapon_fid := EFFECT_NAME_TYPE_WEAPON.get(effect_name_type.get(en_id, 0), 0):
             # Type 3-10 with no file: the caster's own weapon THROWN as the
             # projectile. Sentinel fid -> per-slot marker missile pill.
-            set_models[set_id].add((weapon_fid, motion))
+            set_models[set_id].add((weapon_fid, motion, m_src, m_dst))
         if sk:
             set_soundkits[set_id].add(sk)
         if ak:
             set_animkits[set_id].add(ak)
 
     visual_missiles: dict[int, tuple] = {}
-    for v, (set_id, raid_set_id, src, dst) in sv_rows.items():
-        parts = tuple(
-            d.get(set_id, set()) | d.get(raid_set_id, set())
-            for d in (set_models, set_soundkits, set_animkits)
-        )
-        if any(parts):
-            # the attachment pair rides along as a 4th element so the walk can
-            # key missile models by where they launch from and land on
-            visual_missiles[v] = (*parts, (src, dst))
+    for v, (set_id, raid_set_id, v_src, v_dst) in sv_rows.items():
+        raw = set_models.get(set_id, set()) | set_models.get(raid_set_id, set())
+        # Resolve each missile row's attachments against its visual: the ROW
+        # wins where it says anything, the visual fills in where it does not.
+        # The row winning is not a guess — the two disagree on 4,457 rows
+        # (24%) and the user cast Glacial Blast (369018), where the visual says
+        # Chest and the row says Base, and it landed at the BASE.
+        models = {
+            (fid, motion,
+             m_src if m_src >= 0 else (v_src if v_src >= 0 else DEFAULT_MISSILE_SOURCE),
+             m_dst if m_dst >= 0 else v_dst)
+            for fid, motion, m_src, m_dst in raw
+        }
+        sounds = set_soundkits.get(set_id, set()) | set_soundkits.get(raid_set_id, set())
+        animkits = set_animkits.get(set_id, set()) | set_animkits.get(raid_set_id, set())
+        if models or sounds or animkits:
+            visual_missiles[v] = (models, sounds, animkits)
     return visual_missiles
 
 
@@ -3041,10 +3069,10 @@ def walk_spells(
             # (VISUAL_REDIRECTS) — so redirect-only content says whose view it is
             # even though it never passed through a SpellVisualEvent row.
             # missile-set content has no SpellVisualEvent row, so no target type
-            m_fids, m_sks, m_aks, (m_src, m_dst) = visual_missiles.get(v, NO_MISSILES)
+            m_fids, m_sks, m_aks = visual_missiles.get(v, NO_MISSILES)
             merge_masked(vis.models[spell_id],
                          ((f, MODEL_CAT_MISSILE, m_src, m_dst, 0, motion)
-                          for f, motion in m_fids), extra)
+                          for f, motion, m_src, m_dst in m_fids), extra)
             merge_masked(vis.animkits[spell_id], m_aks, extra)
             for sk in m_sks:
                 merge_masked(vis.sounds[spell_id],

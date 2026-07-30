@@ -231,6 +231,11 @@ export const META_KEYWORDS: Record<string, {
         hint: 'Body region — boneset head, boneset "upper body"',
         when: (d) => (d.bonesetNames || []).length > 0,
     },
+    motion: {
+        fields: ["model"],
+        hint: 'Missile flight path — motion parabola, motion "forward spin"',
+        when: (d) => (d.missileMotionNames || []).length > 0,
+    },
 };
 
 /* The two meta keywords by name, for the code that has to spell one rather
@@ -240,6 +245,7 @@ export const META_KEYWORDS: Record<string, {
  * reason other than that the pills imported it from there. */
 export const ATTACH_WORD = "attach";
 export const BONESET_WORD = "boneset";
+export const MOTION_WORD = "motion";
 
 /**
  * The keywords one field can carry, minus any the loaded pack has no data
@@ -421,7 +427,8 @@ function spellsByModel(tokens: QueryToken[], data: SpellData): Set<number> {
         return spellsByFile(tokens, data, data.modelFids, data.modelSpells);
     }
     const out = new Set<number>();
-    const {text: withTests, values: attaches} = splitKeyword(tokens, ATTACH_WORD);
+    const {text: withMotions, values: attaches} = splitKeyword(tokens, ATTACH_WORD);
+    const {text: withTests, values: motions} = splitKeyword(withMotions, MOTION_WORD);
     const {text, tests} = splitTargetTokens(withTests);
     // EVERYTHING below reads `text`, never `tokens` — the keyword, its value
     // and the target words have all been taken out of it, so each is
@@ -439,11 +446,14 @@ function spellsByModel(tokens: QueryToken[], data: SpellData): Set<number> {
     // in data.ts rather than re-found here, so the two gates cannot drift.
     const itemL = (e: { cat: number; ref: number }) =>
         (e.cat === data.itemCat && e.ref ? (data.itemSearchL.get(e.ref) || "") : "");
-    if (tests.length || attaches.length) {
+    // the flight path lives on the ROW too, so it forces the row walk for the
+    // same reason the attachment pair and the target mask do
+    if (tests.length || attaches.length || motions.length) {
         for (const [s, entries] of data.spellModelCats) {
             for (const e of entries) {
                 if (tests.length && !maskMatches(tests, e.targets)) continue;
                 if (attaches.length && !matchesNames(attaches, attachmentNamesOf(e.src, e.dst, data))) continue;
+                if (motions.length && !(e.motion && matchesNames(motions, [e.motion.toLowerCase()]))) continue;
                 const catL = data.modelCatNames[e.cat] || "";
                 const file = data.files.get(e.fid);
                 const searchL = file ? file.searchL : "";

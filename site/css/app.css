@@ -1881,6 +1881,30 @@ mark.hl {
     color: var(--gold);
 }
 
+/* A missile's flight path. Reads exactly like .tag-attach — same dim weight,
+   same divider — but clamps at 9rem rather than 14: the per-spell script names
+   ("5.2 Legendary Scenario - Throw Axes") run past 40 characters, and a pill
+   already spends its width on the model name and the attachment pair. The full
+   name is on the tooltip, so nothing is lost to the ellipsis. */
+.tag-motion {
+    padding: 0.12rem 0.45rem;
+    font-size: 0.86em;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 9rem;
+}
+
+.tag-motion:hover {
+    text-decoration: underline;
+    color: inherit;
+}
+
+.tag-motion.hit {
+    color: var(--gold);
+}
+
 .tag-label {
     padding: 0.12rem 0.55rem;
     overflow: hidden;

@@ -134,6 +134,12 @@ defineSegment("swatch", {cls: "fx-swatch", role: "meta", sep: "none", inert: tru
 defineSegment("icon", {cls: "item-icon", role: "content", sep: "none", wrapCls: "item-icon-link"});
 defineSegment("label", {cls: "tag-label", role: "content", sep: "none"});
 defineSegment("note", {cls: "tag-attach", role: "meta", sep: "left"});
+// a note that clamps harder: missile flight-path names run to 40+ characters
+// ("5.2 Legendary Scenario - Throw Axes") and a note's 14rem is wide enough to
+// push the copy button out of the Models column. Same role and divider as a
+// note — only the width budget differs, which is why it is a kind and not a
+// second meaning for `note`.
+defineSegment("motion", {cls: "tag-motion", role: "meta", sep: "left"});
 defineSegment("aside", {cls: "tag-ctrl", role: "meta", sep: "none"});
 defineSegment("copy", {cls: "tag-copy", role: "action", sep: "left"});
 
@@ -312,6 +318,25 @@ export function pill(spec: PillSpec): HTMLElement {
  * category sat inline. A rule that describes the shape of a group cannot
  * be something each caller remembers separately.
  */
+/**
+ * Does this pill or group hold a search hit anywhere inside it?
+ *
+ * THE ONE ANSWER to "did the query hit this thing" for the code that ranks a
+ * cell's contents. It reads the `.hit` class THIS module writes — the pill's
+ * own, one segment's, or an item's inside a group — so what is gold and what
+ * floats to the top of a cell cannot disagree.
+ *
+ * It exists because they did disagree, twice, the same way. A segment with its
+ * own hit test lit up gold while its cell went on ranking by the file corpus
+ * alone, so the row that was asked for sank to the BOTTOM of its cell — where
+ * clampCell hides it behind "+N more". `attach` did it first and `motion`
+ * repeated it, because the rank was re-derived beside the cell instead of read
+ * off the pill. Anything a future segment kind can light, this can see.
+ */
+export function holdsHit(el: HTMLElement): boolean {
+    return el.classList.contains("hit") || el.querySelector(".hit") !== null;
+}
+
 export function group(spec: { head: HTMLElement; items: HTMLElement[] }): HTMLElement {
     const box = el("div", "kit-group");
     if (spec.items.length <= 1) box.classList.add("compact");
@@ -484,6 +509,10 @@ export const label = (text: string, opts: SegmentOpts = {}): Segment =>
 /** A dim qualifier after the label (attachment point, counterpart count). */
 export const note = (text: string, opts: SegmentOpts = {}): Segment =>
     textSegment("note", text, opts);
+
+/** A note with a tighter width budget (a missile's flight path). */
+export const motion = (text: string, opts: SegmentOpts = {}): Segment =>
+    textSegment("motion", text, opts);
 
 /** A dim word beside the label (a summon's control type). */
 export const aside = (text: string, opts: SegmentOpts = {}): Segment =>

@@ -4,56 +4,56 @@
     "label": "Vanilla Classic 1.15.8",
     "file": "data/1.15.8.67156/spelldata.json.gz",
     "built": "2026-07-30",
-    "hash": "290bb2febe"
+    "hash": "b0422ddd05"
   },
   {
     "id": "2.5.6.68775",
     "label": "TBC Classic 2.5.6",
     "file": "data/2.5.6.68775/spelldata.json.gz",
     "built": "2026-07-30",
-    "hash": "16dec89a3f"
+    "hash": "8555fb32b7"
   },
   {
     "id": "3.4.3.58936",
     "label": "WotLK Classic 3.4.3",
     "file": "data/3.4.3.58936/spelldata.json.gz",
     "built": "2026-07-30",
-    "hash": "31a4e3b047"
+    "hash": "25590cafd0"
   },
   {
     "id": "4.4.2.60895",
     "label": "Cataclysm Classic 4.4.2",
     "file": "data/4.4.2.60895/spelldata.json.gz",
     "built": "2026-07-30",
-    "hash": "fee04afedf"
+    "hash": "f4431cec9f"
   },
   {
     "id": "5.5.4.68716",
     "label": "MoP Classic 5.5.4",
     "file": "data/5.5.4.68716/spelldata.json.gz",
     "built": "2026-07-30",
-    "hash": "54555f1256"
+    "hash": "487207b5be"
   },
   {
     "id": "7.3.5.26972",
     "label": "Legion 7.3.5",
     "file": "data/7.3.5.26972/spelldata.json.gz",
     "built": "2026-07-30",
-    "hash": "c89cdf4171"
+    "hash": "c9752cb28e"
   },
   {
     "id": "8.3.7.35662",
     "label": "Battle for Azeroth 8.3.7",
     "file": "data/8.3.7.35662/spelldata.json.gz",
     "built": "2026-07-30",
-    "hash": "d6aace06aa"
+    "hash": "12135dfe99"
   },
   {
     "id": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/spelldata.json.gz",
     "built": "2026-07-30",
-    "hash": "e37272809d",
+    "hash": "edc6977c2a",
     "default": true
   },
   {
@@ -61,13 +61,13 @@
     "label": "Dragonflight 10.2.7",
     "file": "data/10.2.7.55664/spelldata.json.gz",
     "built": "2026-07-30",
-    "hash": "aceb429dd6"
+    "hash": "61aa281c3c"
   },
   {
     "id": "11.2.7.65299",
     "label": "The War Within 11.2.7",
     "file": "data/11.2.7.65299/spelldata.json.gz",
     "built": "2026-07-30",
-    "hash": "35cf30a7b6"
+    "hash": "4ee03a69e8"
   }
 ]

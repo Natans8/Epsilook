@@ -36,7 +36,8 @@ Full syntax lives behind the **?** button in the app. The short version:
   `Stand → StealthStand`
   (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue).
 - **A word may be followed by its value**, space-separated, and that is the only value form in the language:
-  `model:"attach chest"` (where on the model it plays), `anim:(boneset "upper body")` (which body region moves),
+  `model:"attach chest"` (where on the model it plays), `model:"motion parabola"` (the arc a projectile flies),
+  `anim:(boneset "upper body")` (which body region moves),
   `mech:"seat >2"` (a numeric comparison), `fx:"scale 50"` (exactly +50%), `model:"count >4"` (`count` is the size of
   the column itself — Models, Sounds and Animations each have one — and a lone `model:>4` is its shorthand). Every one
   of these words autocompletes inside its column. **A value is always the one word that follows** — so a value with a

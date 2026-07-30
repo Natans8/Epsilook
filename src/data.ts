@@ -380,6 +380,8 @@ export interface SpellData {
         src: number; dst: number;
         /** Ref id: CreatureDisplayID (display cat) or Item::ID (item cat); 0 else. */
         ref: number;
+        /** Flight path name (format 34+); "" on every non-missile row. */
+        motion: string;
     }[]>;
     /** Item::ID -> {name, quality, icon} for "item"-category rows (format 28+).
      *  name "" = a nameless item (renders as a plain model pill). */
@@ -393,6 +395,8 @@ export interface SpellData {
      *  a display row's CreatureDisplayID can otherwise collide with an
      *  Item::ID and match an unrelated item's corpus. */
     itemCat: number;
+    /** Every missile flight-path name this pack uses (format 34+). */
+    missileMotionNames: string[];
     modelCatSpells: Map<number, Set<number>>;
     modelCatFidSpells: Map<number, Map<number, number[]>>;
     /** Category id -> word; "" means the category renders as loose pills. */
@@ -760,12 +764,16 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const modelSpells = new Map<number, number[]>();       // fid -> [spell id]
     const spellModelCats = new Map<number, {
         fid: number; cat: number; targets: number; src: number; dst: number; ref: number;
+        motion: string;
     }[]>();
     const modelCatSpells = new Map<number, Set<number>>(); // cat id -> Set(spell id)
     const modelCatFidSpells = new Map<number, Map<number, number[]>>(); // cat id -> (fid -> [spell id])
     const modelCatNames = pack.modelCatNames || NO_WORDS;
     // raw M2 attachment id -> name
     const attachmentNames = pack.attachmentNames || NO_WORDS;
+    // every flight path this pack uses — the `motion` keyword's availability
+    // gate and its value-matching pool (format 34+; empty on older packs)
+    const missileMotionNames = pack.missileMotions ? pack.missileMotions.names : [];
     {
         const sm = pack.spellModels;
         const {spellIds, fids, cats, targets, srcAttach, dstAttach} = sm;
@@ -774,6 +782,14 @@ export function buildIndexes(pack: SpellPack): SpellData {
         // item rows). Renamed refIds in format 28; format 27 packs still ship it
         // as displayIds (display rows only), so fall back to that.
         const refIds = sm.refIds || sm.displayIds;
+        // flight path per row (format 34+), missile rows only. The pack ships
+        // only the motions in use, so this is id -> name over ~1.2k entries.
+        const motions = sm.motions;
+        const motionNames = new Map<number, string>();
+        if (pack.missileMotions) {
+            const mm = pack.missileMotions;
+            for (let i = 0; i < mm.ids.length; i++) motionNames.set(mm.ids[i], mm.names[i]);
+        }
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(modelSpells, fids[i], spellIds[i]);
             if (!cats) {
@@ -788,6 +804,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
                 dst: dstAttach ? dstAttach[i] : -1,
                 // ref id: CreatureDisplayID (display cat) or Item::ID (item cat); 0 else
                 ref: refIds ? refIds[i] : 0,
+                // the arc the projectile flies; "" on every non-missile row
+                motion: motions ? (motionNames.get(motions[i]) || "") : "",
             });
             let set = modelCatSpells.get(cats[i]);
             if (!set) modelCatSpells.set(cats[i], set = new Set());
@@ -1662,7 +1680,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         namesL, spellIndex, files, hasSyntheticFiles,
         spellModels, modelSpells, modelFids, attachmentNames,
         spellModelCats, modelCatSpells, modelCatFidSpells, modelCatNames,
-        items, itemSearchL, itemSpells, itemCat,
+        items, itemSearchL, itemSpells, itemCat, missileMotionNames,
         spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles,
         spellAnimKits, animKitSpells,
         animNames, animNamesL, animKitAnims, animAnimKits,

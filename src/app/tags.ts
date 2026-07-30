@@ -82,7 +82,7 @@ export function modelCatHeadTag(category: string, hit: boolean): HTMLElement {
 // model pills can be hit through their usage-category word too —
 // model:"attached backpack01" lights that attached pill (and its group
 // head, via the group hit). Mirrors spellsByModel's token test.
-export function modelFileIsHit(file: FileEntry | undefined, catName: string): boolean {
+function modelFileIsHit(file: FileEntry | undefined, catName: string): boolean {
     const searchL = file ? file.searchL : "";
     return anyGroup("model", (ts) =>
         ts.every((t) => catName.includes(t.text) || searchL.includes(t.text)));
@@ -215,7 +215,7 @@ function attachIsHit(field: string, names: string[]): boolean {
     });
 }
 
-export function bonesetIsHit(names: string[]): boolean {
+function bonesetIsHit(names: string[]): boolean {
     const namesL = lowered(names);
     return anyGroup("anim", (ts) => {
         const words = keywordValues(ts, Search.BONESET_WORD);
@@ -263,8 +263,44 @@ export function effectAttachNote(regionNames: string[], category: string): Segme
     });
 }
 
+/**
+ * The arc a projectile flies (SpellMissileMotion), as a note segment.
+ *
+ * Sits between the label and the attachment point, which is the order the
+ * convention asks for and also the order it reads in: what it is, how it
+ * flies, where it lands. Missile rows only — every other category ships "".
+ *
+ * The names come in two families and both are the client's own: geometry
+ * ("Parabola (High)", "Boomerang") and per-spell scripts
+ * ("Mage - Fire - Fireball"). The script family is effectively a second,
+ * Blizzard-authored name for the spell, which is why they are worth showing
+ * rather than reducing to a geometry enum. They also run long — the label is
+ * clamped by CSS and the full name rides the tooltip, so a 35-character
+ * motion cannot push the copy button out of the cell.
+ */
+function motionSegment(motion: string): Segment | null {
+    if (!motion) return null;
+    return P.motion(motion, {
+        hit: motionIsHit(motion),
+        title: `Flies a "${motion}" path`,
+        search: P.quoted("model", Search.keywordValue(Search.MOTION_WORD, motion)),
+        finds: "spells whose missile flies this path",
+    });
+}
+
+/* Lights when a positive `motion` query in the model field names this row's
+   * flight path — same shape as attachIsHit, deferring to the engine's own
+   * value test so a pill can only light under a query that selected its spell. */
+function motionIsHit(motion: string): boolean {
+    const namesL = [motion.toLowerCase()];
+    return anyGroup("model", (ts) => {
+        const values = keywordValues(ts, Search.MOTION_WORD);
+        return values.length > 0 && Search.matchesNames(values, namesL);
+    });
+}
+
 export function modelTag(fid: number, catName = "", mask = 0, src = -1, dst = -1,
-                         twoPoint = false): HTMLElement {
+                         twoPoint = false, motion = ""): HTMLElement {
     const file = fileOf(fid);
     // A negative fid is a fileless SENTINEL (SYNTHETIC_MODEL_FILES in
     // build_data): a weapon the caster already has, which has no fixed model in
@@ -297,6 +333,7 @@ export function modelTag(fid: number, catName = "", mask = 0, src = -1, dst = -1
                 search: file.base ? P.quoted("model", file.base) : "",
                 finds: "spells using this model",
             }),
+            motionSegment(motion),
             attachSegment(src, dst, "model", twoPoint),
             // fileless sentinels have no fid to look up / copy — the marker is the pill
             !synthetic && P.cmd(".lo", CFG.modelCopyTemplate,
@@ -313,6 +350,8 @@ export interface ModelCatEntry {
     src: number;
     dst: number;
     ref: number;
+    /** Flight path name; "" on every non-missile row. */
+    motion: string;
 }
 
 /* Display pill (MODELS column): a model reached through a CreatureDisplayID

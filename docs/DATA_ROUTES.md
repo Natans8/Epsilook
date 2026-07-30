@@ -378,7 +378,35 @@ its bytes and that nothing renders. The pack ships only the motions in use (**1,
 `missileMotions: {ids, names}` block, with `spellModels.motions` indexing into it by id (0 = none, and 0 on every
 non-missile category).
 
-Coverage on 9.2.7: **14,439** of 24,029 missile model rows (60.1%) carry a motion, reaching **13,301** spells.
+Coverage on 9.2.7: **14,514** of 24,145 missile model rows (60.1%) carry a motion, reaching **13,301** spells. It
+renders as a `motion` pill segment between the model name and the attachment pair, and is searchable as
+`model:"motion parabola"` / `model:(motion "forward spin")` — 7,796 spells and 924 respectively.
+
+#### Missile attachments come from the ROW first, then the visual, then a verified default
+
+Both `SpellVisual` and `SpellVisualMissile` carry a launch/impact attachment pair, and they are **complementary, not
+redundant**. Over the 18,553 missile rows reachable from a visual on 9.2.7:
+
+| source attachment              | rows              |
+|--------------------------------|-------------------|
+| `SpellVisual` only             | 3,039 (16.4%)     |
+| `SpellVisualMissile` row only  | 9,409 (50.7%)     |
+| **either**                     | **9,774 (52.7%)** |
+| neither                        | 8,779 (47.3%)     |
+
+So the row is read first and the visual is the fallback — **more than tripling** source coverage against reading the
+visual alone. Where both are set they agree (322 conflicts of ~3,000). An earlier comment justified preferring
+`SpellVisual` with "105.6k rows carry a destination versus 14.9k" — that counted all 105k visuals, ~87k of which have
+no missile at all, so it measured the wrong population.
+
+**The destination precedence was settled in game**, because there the two disagree on **4,457 rows (24%)**: casting
+`Glacial Blast` (369018), where the visual says Chest and the row says Base, lands at the **base**. The row wins.
+
+**A row with no attachment in either column launches from `VirtualSpellDirected` (M2 attachment 56)** — the client's
+own name for a computed point, verified in game on two independent models (a blank Fireball 9053 is indistinguishable
+from Fireball 133, which declares it explicitly; Shadow Bolt agreed). It is materialised in the build, so **every
+missile row now has a launch point** — 0% blank, down from ~84%. `DEFAULT_MISSILE_SOURCE` is the one place it is
+spelled.
 
 **The names come in two families**, and both are useful:
 

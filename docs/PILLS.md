@@ -281,9 +281,9 @@ keyed on something the group itself knows, not in a flag at the call site.
 ## 4-bis. Search hits float to the top of a cell
 
 A results cell is an ordered list of **blocks** — a block is one loose pill *or* one group. Every pill-bearing cell
-(models, sounds, animations, fx) builds a `{hit, el}[]` and hands it to **`renderBlocks(td, blocks)`**, which floats the
-blocks holding a search hit to the top (stable partition, so with no active query nothing moves and the deliberate
-order — e.g. loose model pills before their category groups — survives).
+(models, sounds, animations, fx, mechanics) builds a `{el}[]` and hands it to **`renderBlocks(td, blocks)`**, which
+floats the blocks holding a search hit to the top (stable partition, so with no active query nothing moves and the
+deliberate order — e.g. loose model pills before their category groups — survives).
 
 Two reasons this is one shared helper and not per-cell:
 
@@ -292,15 +292,40 @@ Two reasons this is one shared helper and not per-cell:
   it up is what keeps it on screen.
 - **Consistency.** Before this, the fx cell did not float hit groups at all, and the models/animations cells floated hit
   *groups* but always drew their loose pills first — so a matched category sat below non-matching attach splits.
-  Treating a loose pill and a group as the same kind of block (each just `{hit, el}`) makes "hits first" one rule for
-  every column instead of three near-misses.
+  Treating a loose pill and a group as the same kind of block makes "hits first" one rule for every column instead of
+  three near-misses.
 
-Sorting *within* a group (hit items before the rest) is the same idea one level down, via `hitsFirst(items, …)` when the
-group's items are built.
+### The rank is READ OFF THE PILL — never re-derived beside the cell
+
+**`P.holdsHit(el)` is the only answer to "does this hold a hit": the pill's own `.hit`, one segment's, or an item's
+inside a group.** A block therefore has no `hit` field to disagree with what is on screen, and `groupBlock({items,
+head, hit?, named?})` builds a group's items *first* so both of its answers come from them — items ordered by which hold
+a hit, head told whether any of them does.
+
+**This is the fix for a bug that shipped twice, and the second time is why the mechanism changed.** The block's rank
+used to be a predicate written next to the cell (`modelFileIsHit`, the file corpus plus the category word). Segments
+grew their own hit tests — `attach` first, then `motion` — which lit them gold while that predicate knew nothing about
+them, so the row that was asked for sank to the **bottom** of its cell and the clamp hid it behind "+N more". Measured
+on 9.2.7 the day it was fixed: `model:"motion parabola"` put the matched block last in **37 of 40** cells,
+`model:"attach chest"` in **9 of 40**. Deriving the rank from the rendered pill fixed both at once and cannot be
+re-broken by a new segment kind — which reading a predicate beside the cell can, and did.
+
+The same rewrite removed three latent copies of the same mistake: a display pill and an item pill were both ranked by
+`modelFileIsHit` although each computes a different hit of its own (`morphIsHit`, `itemIsHit`), and the mechanics cell
+spelled `p.rows.some(mechanicIsHit)` twice — once for the pill, once for the block.
+
+`hit` survives on `groupBlock` for one case only: a **valueless** fx category whose clickable head IS the whole pill and
+which has no items to derive from (`freeze`, `camo`). It ORs in, never overrides.
+
+Verified as a stable partition, not a re-sort: over 30 queries × 5 columns, **147 of 150 cell orderings came back
+byte-identical**, all 30 result counts unchanged, and the three that moved were exactly the Models column under the two
+attach queries and the motion query. Re-run that way after touching any of this — and note the trap it exposes:
+**a cell snapshot that includes the clamp's "+N more" is not comparable across page states**, because a change in one
+column's width re-clamps every other column. Exclude `.more` (or reveal the cell) before diffing.
 
 ## 5. Adding a segment kind
 
-Rare — the ten cover a lot — but it is one declaration plus one CSS rule:
+Rare — the eleven cover a lot — but it is one declaration plus one CSS rule:
 
 ```js
 defineSegment("badge", {cls: "tag-badge", role: "meta", sep: "left"});
@@ -315,6 +340,14 @@ defineSegment("badge", {cls: "tag-badge", role: "meta", sep: "left"});
 - `wrapCls` for an image kind that needs an anchor around it when clickable.
 
 Then a shorthand constructor beside the others, so pills read as named parts rather than `{kind: "badge", …}` literals.
+
+**A width budget is a legitimate reason for a new kind.** `motion` (a missile's flight path) is a `note` in every
+respect — same dim weight, same `role: "meta"`, same left divider — and exists only because it clamps at 9rem where a
+note clamps at 14. The per-spell flight-path names run past 40 characters (`5.2 Legendary Scenario - Throw Axes`), and a
+missile pill already spends its width on the model name plus a two-point attachment, so at a note's budget the `.lo`
+copy button gets pushed out of the Models column. Measured: 0 overflowing blocks of 861 at 9rem. The full name rides the
+tooltip, so the ellipsis costs nothing. Adding a `maxWidth` option to `note` was the alternative and was rejected — it
+would put a layout number at every call site instead of in the stylesheet.
 
 ## 6. Tooltips
 
