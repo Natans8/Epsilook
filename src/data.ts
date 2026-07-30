@@ -382,6 +382,11 @@ export interface SpellData {
     itemSearchL: Map<number, string>;
     /** Item::ID -> the spells that reach it, for model:"item <name>" search. */
     itemSpells: Map<number, Set<number>>;
+    /** The "item" model category id, or -1 when this pack has none. `ref` is a
+     *  PER-CATEGORY id space, so any itemSearchL lookup must gate on this —
+     *  a display row's CreatureDisplayID can otherwise collide with an
+     *  Item::ID and match an unrelated item's corpus. */
+    itemCat: number;
     modelCatSpells: Map<number, Set<number>>;
     modelCatFidSpells: Map<number, Map<number, number[]>>;
     /** Category id -> word; "" means the category renders as loose pills. */
@@ -821,18 +826,19 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // and category word are already searchable through the ordinary model
     // index; this is the extra dimension items add — their NAME and quality.
     const itemSpells = new Map<number, Set<number>>();
-    if (items.size) {
-        const itemCat = Number(Object.keys(modelCatNames)
-            .find((c) => modelCatNames[Number(c)] === "item"));
-        if (Number.isFinite(itemCat)) {
-            for (const [s, entries] of spellModelCats)
-                for (const e of entries)
-                    if (e.cat === itemCat && e.ref) {
-                        let set = itemSpells.get(e.ref);
-                        if (!set) itemSpells.set(e.ref, set = new Set());
-                        set.add(s);
-                    }
-        }
+    // derived once and carried on SpellData: search.ts needs the same gate, and
+    // a second copy of this lookup is how the two would drift apart
+    const foundCat = Number(Object.keys(modelCatNames)
+        .find((c) => modelCatNames[Number(c)] === "item"));
+    const itemCat = Number.isFinite(foundCat) ? foundCat : -1;
+    if (items.size && itemCat >= 0) {
+        for (const [s, entries] of spellModelCats)
+            for (const e of entries)
+                if (e.cat === itemCat && e.ref) {
+                    let set = itemSpells.get(e.ref);
+                    if (!set) itemSpells.set(e.ref, set = new Set());
+                    set.add(s);
+                }
     }
 
     // sounds
@@ -1650,7 +1656,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         namesL, spellIndex, files, hasSyntheticFiles,
         spellModels, modelSpells, modelFids, attachmentNames,
         spellModelCats, modelCatSpells, modelCatFidSpells, modelCatNames,
-        items, itemSearchL, itemSpells,
+        items, itemSearchL, itemSpells, itemCat,
         spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles,
         spellAnimKits, animKitSpells,
         animNames, animNamesL, animKitAnims, animAnimKits,

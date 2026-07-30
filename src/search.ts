@@ -431,7 +431,14 @@ function spellsByModel(tokens: QueryToken[], data: SpellData): Set<number> {
     // Attachment points and the target mask both live on the ROW; the
     // (cat, fid) index below has neither, being shared across spells. Either
     // one in the query therefore forces the row walk.
-    const itemL = (e: { ref: number }) => (e.ref ? (data.itemSearchL.get(e.ref) || "") : "");
+    // `ref` is a PER-CATEGORY id space (a CreatureDisplayID on display rows, an
+    // Item::ID on item rows, 0 elsewhere), so the item corpus may only be
+    // consulted for item rows. Ungated, a display row whose CreatureDisplayID
+    // happens to equal a real Item::ID matched that unrelated item's name —
+    // one live collision on 9.2.7 (display 95279). data.itemCat is derived once
+    // in data.ts rather than re-found here, so the two gates cannot drift.
+    const itemL = (e: { cat: number; ref: number }) =>
+        (e.cat === data.itemCat && e.ref ? (data.itemSearchL.get(e.ref) || "") : "");
     if (tests.length || attaches.length) {
         for (const [s, entries] of data.spellModelCats) {
             for (const e of entries) {

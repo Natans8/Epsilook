@@ -1,4 +1,24 @@
-import {animIsHit, anyGroup, channelIsHit, dissolveIsHit, fileIsHit, fxChainIsHit, keybindIsHit, kitIsHit, mechanicIsHit, morphIsHit, mountIsHit, objectIsHit, replaceAnimHit, scaleIsHit, screenIsHit, shapeshiftIsHit, speedIsHit, summonIsHit, vehicleIsHit} from "./hits";
+import {
+    animIsHit,
+    anyGroup,
+    channelIsHit,
+    dissolveIsHit,
+    fileIsHit,
+    fxChainIsHit,
+    keybindIsHit,
+    kitIsHit,
+    mechanicIsHit,
+    morphIsHit,
+    mountIsHit,
+    objectIsHit,
+    replaceAnimHit,
+    scaleIsHit,
+    screenIsHit,
+    shapeshiftIsHit,
+    speedIsHit,
+    summonIsHit,
+    vehicleIsHit
+} from "./hits";
 import type {FileEntry, MechanicRow, ScreenColors} from "../data";
 import {activeData, stripExt, wowheadUrl} from "./state";
 import type {Segment, SegmentOpts} from "../pills";
@@ -177,7 +197,7 @@ function attachSegment(src: number, dst: number, field: string, twoPoint: boolea
  * a pill can only light up under a query that really selected its spell,
  * and the arity a hit test assumes is the arity the search used.
  */
-const keywordValues = (tokens: {text: string}[], word: string) =>
+const keywordValues = (tokens: { text: string }[], word: string) =>
     Search.splitKeyword(tokens, word).values;
 
 /* An attachment segment lights when a positive attach query in its field (or
@@ -401,6 +421,10 @@ export function itemTag(e: ModelCatEntry): HTMLElement {
 function itemIsHit(e: ModelCatEntry): boolean {
     const d = activeData();
     const searchL = fileOf(e.fid).searchL;
+    // safe to read `ref` as an Item::ID without gating on the category: itemTag
+    // is the only caller and it renders item rows only. Anywhere the category
+    // is NOT already known, gate on data.itemCat — `ref` is a per-category id
+    // space and the spaces collide (see itemL in search.ts).
     const corpus = d.itemSearchL.get(e.ref) || "";
     return anyGroup("model", (ts) => ts.every((t) =>
         MODEL_CAT_ITEM_WORD.includes(t.text) || searchL.includes(t.text) || corpus.includes(t.text)));
@@ -620,7 +644,7 @@ export function fxHeadTag(category: string, hit: boolean, mask = 0, field = "fx"
 /**
  * One chain (beam) pill: optional tint swatch + texture name.
  */
-export function fxTag(entry: {chainId: number; fid: number; color: number; src?: number; dst?: number},
+export function fxTag(entry: { chainId: number; fid: number; color: number; src?: number; dst?: number },
                       mask = 0): HTMLElement {
     const d = activeData();
     const file = fileOf(entry.fid);
@@ -828,7 +852,7 @@ function changeMultiplier(pct: number, noun: string, bottom: string): string {
    * The sign is the whole story of faster-vs-slower and the aura NAME is not:
    * "MOD_DECREASE_SPEED" carries a positive amount on 187 rows of 9.2.7. So the
    * pill prints what the data says and never translates it into a verb. */
-export function speedTag(pill: {move: string; pct: number; amount: string; key: string},
+export function speedTag(pill: { move: string; pct: number; amount: string; key: string },
                          mask = 0): HTMLElement {
     const detail = [`Movement speed ${pill.amount}`,
         changeMultiplier(pill.pct, "speed", "Brings movement to a stop"),
@@ -869,7 +893,7 @@ export function speedTag(pill: {move: string; pct: number; amount: string; key: 
    * (0.1 for players, 0.01 otherwise), which is what the fourteen rows down to
    * -999% on 9.2.7 really mean. The pill still shows the change, for the same
    * reason speed does — it is what the game stores and prints. */
-export function scaleTag(pill: {pct: number; amount: string}, mask = 0): HTMLElement {
+export function scaleTag(pill: { pct: number; amount: string }, mask = 0): HTMLElement {
     return P.pill({
         cls: "fx",
         hit: scaleIsHit(pill.pct),
@@ -900,7 +924,7 @@ export function scaleTag(pill: {pct: number; amount: string}, mask = 0): HTMLEle
    * The timing word rides the key segment rather than taking its own: it says
    * WHEN that same key is overridden, so it reads as part of the key, and the
    * ordinary press stays bare so the common case is uncluttered. */
-export function keybindTag(pill: {label: string; fn: string; ids: number[]},
+export function keybindTag(pill: { label: string; fn: string; ids: number[] },
                            mask = 0): HTMLElement {
     return P.pill({
         cls: "fx",
@@ -983,7 +1007,7 @@ export function screenTag(screenId: number, mask = 0): HTMLElement {
 
 /* Dissolve pill: one per texture of the row's TextureBlendSet (mask +
    * material textures); tooltip carries the dissolve duration. */
-export function dissolveTag(entry: {dissolveId: number; fid: number}, mask = 0): HTMLElement {
+export function dissolveTag(entry: { dissolveId: number; fid: number }, mask = 0): HTMLElement {
     const d = activeData();
     const file = fileOf(entry.fid);
     const duration = d.dissolveDurations.get(entry.dissolveId) || 0;
@@ -1016,7 +1040,7 @@ export function dissolveTag(entry: {dissolveId: number; fid: number}, mask = 0):
    * where the form has a display, otherwise the form name itself — Battle
    * Stance and Shadowform are real forms with no model at all, and a
    * name-only pill is the honest rendering. */
-export function shapeshiftTag(entry: {formId: number; displayId: number; fid: number},
+export function shapeshiftTag(entry: { formId: number; displayId: number; fid: number },
                               mask: number, spellId: number): HTMLElement {
     const d = activeData();
     const {formId, displayId, fid} = entry;
@@ -1047,7 +1071,7 @@ export function shapeshiftTag(entry: {formId: number; displayId: number; fid: nu
     });
 }
 
-export function morphTag(entry: {creatureId: number; displayId: number; fid: number},
+export function morphTag(entry: { creatureId: number; displayId: number; fid: number },
                          mask: number, spellId: number): HTMLElement {
     const d = activeData();
     const {creatureId, displayId, fid} = entry;
@@ -1085,6 +1109,7 @@ export function morphTag(entry: {creatureId: number; displayId: number; fid: num
    * ready-to-paste commands; the Wowhead icon on the left opens the NPC's
    * Wowhead page. Creatures missing from TDB show an inert "creature #id"
    * pill. */
+
 /**
  * One gameobject-spawn pill — summon's sibling, in the same column.
  *
@@ -1176,7 +1201,7 @@ export function mountTag(displayId: number, spellId: number): HTMLElement {
     });
 }
 
-export function summonTag(entry: {creatureId: number; control: number}, mask = 0): HTMLElement {
+export function summonTag(entry: { creatureId: number; control: number }, mask = 0): HTMLElement {
     const d = activeData();
     const {creatureId, control} = entry;
     const name = d.summonNames.get(creatureId) || "";
