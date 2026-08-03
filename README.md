@@ -107,6 +107,7 @@ tools/                   every routine that would otherwise be a thing to rememb
   verify_site.sh         is this assembled document root actually servable?
   docker_smoke.py        build the image, run it, prove it serves the site
   builddb.py             build the exploration database (development tool)
+  dossier.py             one spell, every route followed to the leaves
   dbd.py                 parser for WoWDBDefs .dbd schema definitions
 docker/                  the self-hosting path — see "Hosting it yourself"
   Dockerfile             the image: esbuild -> a verified document root -> nginx
@@ -336,6 +337,18 @@ It is a development tool and nothing in `site/` reads it: the database is a cach
 three minutes. `duckdb` is the only dependency outside the standard library anywhere in the project, and only this
 script needs it. **[docs/DB_SCHEMA.md](docs/DB_SCHEMA.md)** is the reference — layout, conventions, worked queries, and
 the three things to know before trusting a row.
+
+`python tools/dossier.py <spell>` is the other half of the same idea: one spell, every route followed to its leaves, as
+a readable summary or as JSON. It answers "what IS this spell" without writing the eight joins yourself — effects and
+auras with their enums decoded, what each `EffectMiscValue` actually points at, the whole visual chain, the missile's
+flight path, and every file the spell reaches. `--diff` puts two spells side by side, which is how you find out whether
+they share a model or merely look like they should.
+
+```bash
+python tools/dossier.py fireball
+python tools/dossier.py 3562 1953 --diff
+python tools/dossier.py 133 --json | jq '.assets.models'
+```
 
 ## Data sources
 
