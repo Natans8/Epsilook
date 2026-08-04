@@ -45,7 +45,7 @@ import {
 import {layoutRow, renderMore} from "./render";
 import {COUNT_SORTS, applyFiltersAndSort, runSearch, scheduleSearch} from "./run";
 import {toggleSound} from "./sound";
-import {TRI_LABELS, qInput, state} from "./state";
+import {COL_ORDER, TRI_LABELS, qInput, state} from "./state";
 import type {Chip} from "./state";
 import {ensureFieldsVisible, setHelp, shareLink, stateToUrl, urlForQuery} from "./url";
 import * as Export from "../export";
@@ -605,8 +605,9 @@ export function wireEvents() {
             runSearch();
         });
     }
-    // …and column order, in the same panel
+    // …and column order, and the chip↔column pairing, on the same rack
     wireColumnOrder();
+    wireColumnHighlight();
 
     // sorting: click cycles ascending -> descending -> back to automatic
     // order; entry-count columns start descending (extreme spells first)
@@ -700,7 +701,9 @@ export function applyHiddenCols() {
     for (const chip of $$("#columns .col-chip")) {
         const shown = !state.hiddenCols[chip.dataset.col!];
         chip.classList.toggle("off", !shown);
-        chip.setAttribute("aria-pressed", String(shown));
+        // role="switch", so the state is aria-checked — a switch that reported
+        // aria-pressed would be a button wearing a switch's clothes
+        chip.setAttribute("aria-checked", String(shown));
     }
     describeCols();
 }
@@ -740,10 +743,10 @@ export function applyColOrder(): void {
             if (td) row.appendChild(td);
         }
     }
-    const panel = $("#columns");
+    const rack = $("#cols-rack");
     for (const col of state.colOrder) {
-        const chip = panel.querySelector(`.col-chip[data-col="${col}"]`);
-        if (chip) panel.appendChild(chip);
+        const chip = rack.querySelector(`.col-chip[data-col="${col}"]`);
+        if (chip) rack.appendChild(chip);
     }
     describeCols();
 }
@@ -760,9 +763,15 @@ function describeCols(): void {
     const n = state.colOrder.length;
     for (const chip of $$("#columns .col-chip")) {
         const col = chip.dataset.col!;
-        const name = (chip.textContent || "").trim();
+        // its own span, not the chip's textContent: the grip and the switch are
+        // empty elements today and a trim would still work, but a segment that
+        // ever gains text would silently join the name
+        const name = (chip.querySelector(".col-name")?.textContent || col).trim();
         const shown = !state.hiddenCols[col];
         const at = state.colOrder.indexOf(col) + 1;
+        // the switch and the grip now say "click" and "drag" on their own, so
+        // what is left for the tooltip is the CONSEQUENCE (which is invisible
+        // and surprising) and the keyboard route (which has no affordance)
         chip.title = [
             `${name} column — ${shown ? `column ${at} of ${n}` : "hidden"}`,
             shown
@@ -790,6 +799,58 @@ function moveCol(col: string, to: number): void {
 
 /** How far the pointer must travel before a press becomes a drag, not a tick. */
 const DRAG_SLOP = 4;
+
+/** Suppressed mid-drag: the chips move under the pointer, so the pair would
+ *  strobe through every column the dragged chip passes over. */
+let dragging = false;
+
+/**
+ * Light one column and its chip together, or clear both.
+ *
+ * THIS IS THE ANSWER TO "NOTHING SAYS IT IS TIED TO THE COLUMNS BELOW", and it
+ * had to be a demonstration rather than a label. The obvious fix — position
+ * each chip over the column it controls — is not available: the table is about
+ * 2,280px wide inside a ~1,230px wrap, so it scrolls horizontally, and the
+ * fifth column starts past the right edge of the window the rack is drawn in.
+ * A relationship you watch happen survives that; an alignment cannot.
+ *
+ * Both directions are wired, and the second is the one that teaches: hovering a
+ * HEADER lights its chip, which is how someone who never looked at the toolbar
+ * finds out what moves the column under their pointer.
+ */
+function litColumn(col: string | null): void {
+    const table = $("#results");
+    for (const c of COL_ORDER) table.classList.toggle(`lit-${c}`, c === col);
+    for (const chip of $$("#columns .col-chip")) {
+        chip.classList.toggle("lit", chip.dataset.col === col);
+    }
+}
+
+/** Hover and focus, from either end. */
+function wireColumnHighlight(): void {
+    const pair = (el: Element | null, key: "col" | "sort") => {
+        const val = (el as HTMLElement | null)?.dataset[key];
+        // `id` and `name` are sortable headers too, and neither is a column the
+        // rack can move — so the key has to be one the rack actually holds
+        litColumn(val && COL_ORDER.includes(val) ? val : null);
+    };
+
+    for (const [root, sel, key] of [
+        [$("#columns"), ".col-chip", "col"],
+        [$("#results").querySelector("thead"), "th", "sort"],
+    ] as const) {
+        if (!root) continue;
+        root.addEventListener("pointerover", (e) => {
+            if (dragging) return;
+            pair((e.target as Element)?.closest(sel), key);
+        });
+        root.addEventListener("pointerleave", () => litColumn(null));
+        // keyboard parity: the same pairing on focus, so tabbing the rack shows
+        // which column each chip owns
+        root.addEventListener("focusin", (e) => pair((e.target as Element)?.closest(sel), key));
+        root.addEventListener("focusout", () => litColumn(null));
+    }
+}
 
 /**
  * Drag a column label to reorder the table, with an arrow-key equivalent.
@@ -848,6 +909,8 @@ function wireColumnOrder(): void {
         if (!held) return;
         if (!moved && Math.abs(e.clientX - startX) < DRAG_SLOP) return;
         moved = true;
+        dragging = true;
+        litColumn(null);       // the pair would strobe as the chips reflow
         held.classList.add("dragging");
         const to = overAt(e.clientX, e.clientY);
         for (const c of $$("#columns .col-chip")) c.classList.remove("drop-before", "drop-after");
@@ -858,6 +921,7 @@ function wireColumnOrder(): void {
         if (!held) return;
         const chip = held, dragged = moved;
         held = null;
+        dragging = false;
         clearMarks();
         if (!dragged) return;              // a plain press: let the click toggle
         const to = overAt(e.clientX, e.clientY);
@@ -879,6 +943,7 @@ function wireColumnOrder(): void {
 
     panel.addEventListener("pointercancel", () => {
         held = null;
+        dragging = false;
         clearMarks();
     });
 

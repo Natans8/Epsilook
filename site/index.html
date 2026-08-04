@@ -29,7 +29,7 @@
           href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
     <!-- bump ?v= on every deploy that touches the css or the bundle's sources,
          or browsers keep stale copies (python tools/bump.py does both spots) -->
-    <link rel="stylesheet" href="css/app.css?v=20260804c">
+    <link rel="stylesheet" href="css/app.css?v=20260805a">
     <script>
         // Replay the stored theme before the first paint, so a light theme
         // never flashes dark. Only that: the picker, the default and the
@@ -253,27 +253,6 @@
                         aria-label="Effects filter: showing all">Effects
                 </button>
             </div>
-            <!-- THE PANEL IS A SCALE MODEL OF THE TABLE'S COLUMNS. Each chip
-                 wears its own column's tone and they sit in the order the
-                 columns do, so "these are the columns, in this order" is
-                 something you can see rather than something to be told — which
-                 is what a row of identical tickboxes could never say. On/off is
-                 the same filled-vs-hollow the pills in that column use.
-                 Order and state are applied from state.colOrder /
-                 state.hiddenCols (events.ts), so the sequence here is only the
-                 pre-script fallback. -->
-            <div id="columns">
-                <span>Columns:</span>
-                <button type="button" class="col-chip" data-col="models" aria-pressed="true">Models</button>
-                <button type="button" class="col-chip" data-col="sounds" aria-pressed="true">Sounds</button>
-                <button type="button" class="col-chip" data-col="animations" aria-pressed="true">
-                    Animations
-                </button>
-                <button type="button" class="col-chip" data-col="fx" aria-pressed="true">Effects</button>
-                <button type="button" class="col-chip" data-col="mechanics" aria-pressed="true">
-                    Mechanics
-                </button>
-            </div>
             <div id="export">
                 <button id="share-link"
                         title="A link to this exact search — query, filters, sort and game version&#10;Click: copy it">
@@ -291,6 +270,67 @@
                 <button id="export-discord"
                         title="These results as plain text, ready to paste into Discord&#10;Click: copy it">Copy as Text
                 </button>
+            </div>
+            <!-- THE RACK: one handle per column, in the column order, sitting on
+                 its own line directly above the table it edits.
+
+                 IT IS INLINE AND ONE CLICK. A dropdown exists to save room, and
+                 this toolbar has room to spare — paying a click to open a list
+                 would buy nothing and cost the row its at-a-glance answer.
+
+                 THREE THINGS HAD TO BECOME VISIBLE, because the chip row this
+                 replaces said none of them and put both gestures in a `title`,
+                 which is the one place nobody reads:
+
+                 DRAGGABLE — a grip, lit at rest. A handle that appears on hover
+                 is a handle nobody knows is there, which was the whole fault.
+
+                 TOGGLABLE — a real switch. On/off used to ride on solid-vs-
+                 dashed border, a difference you have to be told to look for,
+                 directly beside a near-identical row of tri-state FILTER chips
+                 that do something else entirely.
+
+                 TIED TO THE COLUMNS BELOW — the chip and its table header wear
+                 one identity colour (--col-tone, declared once for both), and
+                 hovering either lights the other plus the whole column. The tie
+                 is DEMONSTRATED rather than asserted, which is the only thing
+                 that can work here: the table is ~2,280px wide in a ~1,230px
+                 wrap, so it scrolls, and no amount of aligning a chip over its
+                 column would survive that.
+
+                 Order and state are applied from state.colOrder /
+                 state.hiddenCols (events.ts), so the sequence here is only the
+                 pre-script fallback. -->
+            <div id="columns">
+                <span id="cols-label">Columns:</span>
+                <div id="cols-rack">
+                    <button type="button" class="col-chip" data-col="models" role="switch" aria-checked="true">
+                        <span class="col-grip" aria-hidden="true"></span>
+                        <span class="col-name">Models</span>
+                        <span class="col-switch" aria-hidden="true"></span>
+                    </button>
+                    <button type="button" class="col-chip" data-col="sounds" role="switch" aria-checked="true">
+                        <span class="col-grip" aria-hidden="true"></span>
+                        <span class="col-name">Sounds</span>
+                        <span class="col-switch" aria-hidden="true"></span>
+                    </button>
+                    <button type="button" class="col-chip" data-col="animations" role="switch" aria-checked="true">
+                        <span class="col-grip" aria-hidden="true"></span>
+                        <span class="col-name">Animations</span>
+                        <span class="col-switch" aria-hidden="true"></span>
+                    </button>
+                    <button type="button" class="col-chip" data-col="fx" role="switch" aria-checked="true">
+                        <span class="col-grip" aria-hidden="true"></span>
+                        <span class="col-name">Effects</span>
+                        <span class="col-switch" aria-hidden="true"></span>
+                    </button>
+                    <button type="button" class="col-chip" data-col="mechanics" role="switch" aria-checked="true">
+                        <span class="col-grip" aria-hidden="true"></span>
+                        <span class="col-name">Mechanics</span>
+                        <span class="col-switch" aria-hidden="true"></span>
+                    </button>
+                </div>
+                <p id="cols-hint">Drag to reorder · click to show or hide</p>
             </div>
         </div>
 
@@ -404,6 +444,6 @@
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
 <!-- the whole app: esbuild bundles src/**/*.ts into this one file
      (tools/build.mjs) — module order lives in the import graph now -->
-<script src="js/app.js?v=20260804c"></script>
+<script src="js/app.js?v=20260805a"></script>
 </body>
 </html>

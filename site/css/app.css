@@ -1587,74 +1587,164 @@ main {
     gap: 0.4rem;
 }
 
-/* THE COLUMN CHIPS ARE A SCALE MODEL OF THE TABLE. Each wears the tone its own
-   column's pills wear (the .c-* classes on the button supply --tone, the same
-   declaration the cells use), and they sit in the column order — so the row
-   reads as "these columns, this order" without a word of explanation. That is
-   the whole reason this stopped being tickboxes: a tickbox row shows state and
-   says nothing about sequence, and sequence is now half of what it controls.
+/* ------------------------------------------------- the column rack
 
-   ON is filled, OFF is hollow: the same contrast a pill uses between carrying
-   content and being a bare outline, so the vocabulary is one the user has
-   already learnt from the table. */
-/* the tone comes off data-col rather than the cells' own .c-* classes: those
-   also carry each column's min-width, and a 14rem chip is not a chip */
-#columns .col-chip[data-col="models"] {
-    --tone: var(--model);
+   ONE IDENTITY COLOUR, DECLARED ONCE, WORN BY BOTH SURFACES: the chip in the
+   rack and the column's own header cell. That shared colour is what lets the
+   two be recognised as one object, and it is why this is --col-tone and not
+   the --tone the cells already carry. THE TWO ARE NOT THE SAME SCALE and must
+   not be merged: .c-sounds is --soundkit, .c-animations is --animkit, and
+   .c-fx and .c-mechanics are BOTH --fx — a set of five that contains a
+   duplicate, which is fine for tinting a group box and useless as identity,
+   since two headers would come out the same colour. --tone is left exactly as
+   it is; every pill in the table reads it. */
+.c-models, #columns .col-chip[data-col="models"] {
+    --col-tone: var(--model);
 }
 
-#columns .col-chip[data-col="sounds"] {
-    --tone: var(--sound);
+.c-sounds, #columns .col-chip[data-col="sounds"] {
+    --col-tone: var(--sound);
 }
 
-#columns .col-chip[data-col="animations"] {
-    --tone: var(--anim);
+.c-animations, #columns .col-chip[data-col="animations"] {
+    --col-tone: var(--anim);
 }
 
-#columns .col-chip[data-col="fx"] {
-    --tone: var(--fx);
+.c-fx, #columns .col-chip[data-col="fx"] {
+    --col-tone: var(--fx);
 }
 
-#columns .col-chip[data-col="mechanics"] {
-    --tone: var(--mech);
+.c-mechanics, #columns .col-chip[data-col="mechanics"] {
+    --col-tone: var(--mech);
 }
 
+/* Its own line, hard against the table, with a rule above it: the rack belongs
+   to the table below rather than to the toolbar it sits in, and adjacency is
+   the cheapest half of saying so. */
+#columns {
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    border-top: 1px solid var(--border);
+    margin-top: 0.15rem;
+    padding-top: 0.5rem;
+}
+
+#cols-rack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+/* The gestures, in print. The row this replaces kept both of them in a `title`
+   and the complaint was exactly that nothing said either one out loud — so the
+   hint is stated rather than hovered for, and it earns its place in the space
+   the toolbar was already wasting. */
+#cols-hint {
+    margin: 0 0 0 auto;
+    color: var(--text-dim);
+    font-size: 0.82em;
+}
+
+/* A HANDLE, NOT A PILL — square-ish where the table's pills are round, because
+   this is chrome that edits content and the two should not be read as the same
+   kind of thing. It is also what separates the rack at a glance from the
+   tri-state FILTER chips one line up, which are pills and mean something else
+   entirely. */
 #columns .col-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
     font: inherit;
-    color: color-mix(in oklab, var(--tone) var(--ink-mix), black);
-    background: rgba(var(--overlay-rgb), calc(0.1 * var(--wash-strength)));
-    border: 1px solid var(--tone);
-    border-radius: 999px;
-    padding: 0.08rem 0.65rem;
+    color: var(--text);
+    background: color-mix(in srgb, var(--col-tone) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--col-tone) 55%, var(--border));
+    border-radius: 8px;
+    padding: 0.2rem 0.45rem 0.2rem 0.35rem;
     line-height: 1.5;
     cursor: grab;
     user-select: none;
+    transition: background-color 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
     /* the drag is pointer-driven, so the browser must not claim a horizontal
        swipe for scrolling before pointermove is seen */
     touch-action: none;
 }
 
 #columns .col-chip:hover {
-    background: rgba(var(--overlay-rgb), calc(0.2 * var(--wash-strength)));
+    background: color-mix(in srgb, var(--col-tone) 20%, transparent);
+    border-color: var(--col-tone);
+    transform: translateY(-1px);
 }
 
 #columns .col-chip:active {
     cursor: grabbing;
+    transform: none;
 }
 
-/* OFF: the tone drains out of it entirely. Colour is doing the work, so the
-   dashed edge is what carries the state where colour cannot be seen. */
+/* SIX DOTS, DRAWN RATHER THAN DRAWN FROM. The app's icon set is seven 24×24
+   line-art glyphs with a process behind it (build/icons) and this is a texture,
+   not a picture of anything, so it adds nothing to that set. It stays lit at
+   rest: a handle that only appears on hover is a handle nobody knows is there,
+   which is the fault being fixed. */
+.col-grip {
+    flex: none;
+    width: 6px;
+    height: 12px;
+    background-image: radial-gradient(currentColor 45%, transparent 47%);
+    background-size: 3px 4px;
+    color: var(--text-dim);
+}
+
+#columns .col-chip:hover .col-grip {
+    color: var(--text);
+}
+
+/* THE SWITCH. A track and a knob — the one on/off vocabulary nobody has to be
+   taught. What it replaces was a solid border against a dashed one, which is a
+   difference you have to be told to look for before you can see it. */
+.col-switch {
+    flex: none;
+    position: relative;
+    width: 24px;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--col-tone);
+    transition: background-color 0.14s ease;
+}
+
+.col-switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 12px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--bg);
+    transition: left 0.14s ease;
+}
+
+/* OFF: the knob slides home, the track goes neutral, the tone drains from the
+   chip and the name steps back. Four signals for one fact, because this is the
+   fact the old row asked a dashed border to carry alone. */
 #columns .col-chip.off {
     color: var(--text-dim);
     background: none;
-    border-style: dashed;
-    border-color: var(--border-ctrl);
+    border-color: var(--border);
 }
 
 #columns .col-chip.off:hover {
     color: var(--text);
-    border-color: var(--text-dim);
+    border-color: var(--border-ctrl);
     background: rgba(var(--overlay-rgb), calc(0.08 * var(--wash-strength)));
+}
+
+#columns .col-chip.off .col-switch {
+    background: var(--border-ctrl);
+}
+
+#columns .col-chip.off .col-switch::after {
+    left: 2px;
 }
 
 #columns .col-chip.dragging {
@@ -1670,6 +1760,58 @@ main {
 
 #columns .col-chip.drop-after {
     box-shadow: inset -3px 0 0 var(--gold);
+}
+
+/* THE OTHER END OF THE TIE. Each payload column's header sits on a rule in its
+   own identity colour — the same colour its chip wears — so the rack and the
+   table read as one set of five things rather than two unrelated rows of five.
+   It costs no layout: `#results th` already draws a 2px bottom border and only
+   its COLOUR changes here. The three bookkeeping headers (#, ID, Name) keep the
+   neutral border, which is true — they are not columns the rack can move. */
+#results th.c-models,
+#results th.c-sounds,
+#results th.c-animations,
+#results th.c-fx,
+#results th.c-mechanics {
+    border-bottom-color: color-mix(in srgb, var(--col-tone) 60%, var(--border));
+}
+
+/* AND THE TIE, DEMONSTRATED. Point at a chip and its column lights all the way
+   down the table; point at a header and its chip lights back. A relationship
+   you watch happen needs no legend, and here it is the only thing that can
+   work: the table is far wider than its wrapper and scrolls, so a chip can
+   never be positioned over the column it controls.
+
+   A VEIL, NOT A FILL — color-mix with transparent, so it lies OVER the row and
+   the row's own colour (and its hover) still reads through. An opaque tint
+   would take the row's hover away from exactly the column being pointed at. */
+#results.lit-models td.c-models,
+#results.lit-sounds td.c-sounds,
+#results.lit-animations td.c-animations,
+#results.lit-fx td.c-fx,
+#results.lit-mechanics td.c-mechanics {
+    background: color-mix(in srgb, var(--col-tone) 8%, transparent);
+}
+
+#results.lit-models th.c-models,
+#results.lit-sounds th.c-sounds,
+#results.lit-animations th.c-animations,
+#results.lit-fx th.c-fx,
+#results.lit-mechanics th.c-mechanics {
+    border-bottom-color: var(--col-tone);
+    color: var(--text-strong);
+}
+
+/* the return path: hovering a header lights that column's chip, which is how a
+   reader finds out the rack is what moves the thing under their pointer */
+#columns .col-chip.lit {
+    background: color-mix(in srgb, var(--col-tone) 20%, transparent);
+    border-color: var(--col-tone);
+}
+
+#columns .col-chip.off.lit {
+    background: rgba(var(--overlay-rgb), calc(0.08 * var(--wash-strength)));
+    border-color: var(--border-ctrl);
 }
 
 /* tri-state filter buttons: any -> only-with (gold ✓) -> only-without (red ✕) */
