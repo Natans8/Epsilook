@@ -427,6 +427,16 @@ Two things carry the panel, and both are read off content that already existed:
 the real in-game one — so ours must never stack on it; and `#q`'s title is rewritten on every mousemove by
 `highlight.ts` §`barHover`, which hit-tests the bar's backdrop spans. That attribute is the bar's mechanism.
 
+**The panel is a `popover`, and that is what lets it show over the help dialog.** A modal `<dialog>` renders in the
+**top layer**, which no `z-index` can reach over — so the help was covering its own tooltips, which is where the detail
+went when its prose came out (see the vocabulary in `app/help.ts`). A popover is promoted to that same layer, and the
+top layer stacks in promotion order, so a tooltip opened while the dialog is up paints above it. It is
+`popover="manual"`
+because this is driven entirely by hover and focus: the light dismiss of `auto` would close it on the very click the app
+is explaining, and auto popovers close each other. Feature-detected — where `showPopover` is missing the panel keeps its
+`z-index` and behaves exactly as before, which is right everywhere except over a modal. The UA's popover defaults have
+to be undone in CSS (`inset: 0` + `margin: auto` would centre it in the viewport).
+
 **A title that was an element's only accessible name is replaced by an `aria-label` when it is hoisted.** A target icon
 and a colour swatch have no text of their own, so taking `title` away without putting a name back would make them
 unreadable to a screen reader. The hoist is what makes the panel possible at all — an attribute cannot be drawn by us

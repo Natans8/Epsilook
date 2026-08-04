@@ -78,18 +78,20 @@ src/                     the app, strict TypeScript — bundled into site/js/app
     bar.ts               the chip search bar: sync, selection, undo
     autocomplete.ts      the suggestion list (field prefixes + category words)
     highlight.ts         bar syntax highlighting (the #qhl backdrop, capsules)
+    help.ts              the help dialog's generated half: specimen, legend, vocabulary
     run.ts               running a search: debounce, filters, sort
     render.ts            the results table: rows, cells, the height clamp
     tags.ts              every pill builder (model/sound/anim/fx/mechanic)
     hits.ts              hit-highlighting tests (shared with search selection)
     sound.ts             the ▶ playback
     clipboard.ts         copy + toast
+    tooltip.ts           the app's own tooltip panel (every [title] on the page)
     url.ts               the URL as state: read, write, share
     events.ts            event wiring
     boot.ts              startup: load the manifest, activate a pack
   vendor/                vendored BLP decoder (Kruithne, MIT) + hand-written .d.ts
 site/                    the site — published to GitHub Pages by .github/workflows/pages.yml
-  index.html             markup + the in-app help dialog
+  index.html             markup + the in-app help dialog (its frame and prose; src/app/help.ts fills it)
   404.html               the not-found page Pages serves for any missing path
   .nojekyll              tells GitHub Pages to serve the folder without Jekyll
   css/app.css            every style, themed by the token block at the top
