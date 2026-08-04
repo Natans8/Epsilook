@@ -405,6 +405,34 @@ own question in one is meaningful for every clickable segment. That asymmetry is
 **Every modifier is written into the tooltip, always.** It is what made them acceptable when a hidden keybinding was
 not: a gesture nobody can discover is a gesture nobody has.
 
+### The app draws it, not the browser (`src/app/tooltip.ts`)
+
+**The composed string above is still the source of truth and nothing about writing one changes.** What changed is who
+renders it: `title` handed the whole thing to the OS, which drew an unstyled box after a one-second wait and flattened
+the structure the composer had just built. A panel in the app's own tones draws it instead — one delegated listener on
+the document, so every `[title]` in the app inherits it and no renderer opts in.
+
+Two things carry the panel, and both are read off content that already existed:
+
+- **The left edge is the hovered pill's own `--tone`**, read from the element's computed value. A model tooltip is blue,
+  a mechanic tooltip orange, so the panel says which column it came from before a word of it is read. It is deliberately
+  **not** a copy of the game tooltip: Wowhead's real one is a few pixels away on the same row, and a near-miss beside
+  the genuine article reads as a bad imitation.
+- **The gesture lines become a two-column key map**, because that is what they always were — `title` is what flattened a
+  key→action mapping into prose. The split point is `KEY_LINE_RE` in `pills.ts`, which sits beside `clickHint` so the
+  test and the thing it tests cannot drift. The colon is load-bearing: "Click to sort by count" and
+  "Copy:  .lookup object x.m2" describe rather than instruct, and both stay in the body.
+
+**Two surfaces are excluded, on ownership rather than taste.** A `wowhead.com` link already shows Wowhead's tooltip —
+the real in-game one — so ours must never stack on it; and `#q`'s title is rewritten on every mousemove by
+`highlight.ts` §`barHover`, which hit-tests the bar's backdrop spans. That attribute is the bar's mechanism.
+
+**A title that was an element's only accessible name is replaced by an `aria-label` when it is hoisted.** A target icon
+and a colour swatch have no text of their own, so taking `title` away without putting a name back would make them
+unreadable to a screen reader. The hoist is what makes the panel possible at all — an attribute cannot be drawn by us
+and suppressed in the browser at the same time — and a fresh `title` always wins, so an element that rewrites its own
+keeps working.
+
 ## 7. Verifying a change
 
 The DOM is the oracle. For a refactor that should not change what renders:

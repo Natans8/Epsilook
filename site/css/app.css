@@ -70,8 +70,16 @@
        row without competing with the pill's colored label. */
     --tag-btn: #a9b4c4;
 
-    /* accents: the app's own gold, the exclusion red, the text selection */
-    --gold-rgb: 240, 195, 76;
+    /* accents: the app's own gold, the exclusion red, the text selection.
+       The gold is the GAME's gold — #ffd100 is what FrameXML paints its
+       highlights in (43 of the colour declarations on wowdev's Font page) and
+       what Wowhead paints its result counts in, so the one accent this app
+       shares with everything else in the ecosystem is spelled the same way.
+       It also measures better than the hand-picked #f0c34c it replaced:
+       12.19:1 on the row against 10.70:1. Dark only — both light palettes
+       declare their own gold, because a light surface has no room for this
+       one (1.33:1 there). */
+    --gold-rgb: 255, 209, 0;
     --gold-dim: #a8842f;
     --danger-rgb: 224, 112, 112;
     --select-rgb: 72, 130, 220;
@@ -2709,6 +2717,97 @@ footer a {
 #toast.show {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
+}
+
+/* ------------------------------------------------- the app's tooltip
+ *
+ * Built by app/tooltip.ts out of the string the composer was already
+ * writing (pills.ts §tip). Two things carry it, and neither is ornament:
+ *
+ *  - the LEFT EDGE is the hovered pill's own --tone, so the panel says which
+ *    column it came from before a word of it is read. Set inline by the
+ *    controller; the fallback is for anything the read comes back empty on.
+ *  - the GESTURE HALF is a two-column map, not a paragraph. It always was a
+ *    key-to-action mapping — `title` is what flattened it into prose.
+ *
+ * Measured on --bg-panel across all three palettes: what 14.69/15.31/15.44,
+ * detail 11.81/10.61/10.70, keys 4.69/8.73/8.71, dt 8.24/9.64/9.70 — every
+ * role over 4.5 — and the --tone edge 8.24/3.41/3.41 over the 3:1 it needs
+ * as a non-text mark. Motion is handled by the blanket reduced-motion rule
+ * at the end of this file.
+ */
+
+#tip {
+    position: fixed;
+    top: 0;
+    left: 0;
+    /* above the sticky table header (10), the toast (20) and the texture
+       preview (30) — it is the topmost thing and it can afford to be,
+       because pointer-events: none means it never eats a click */
+    z-index: 40;
+    pointer-events: none;
+    max-width: min(24rem, 90vw);
+    padding: 0.5rem 0.65rem;
+    background: var(--bg-panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--tone, var(--border-ctrl));
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(var(--shadow-rgb), calc(0.5 * var(--shadow-strength)));
+    font-size: 0.86rem;
+    line-height: 1.4;
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+
+#tip.show {
+    opacity: 1;
+}
+
+#tip[hidden] {
+    display: none;
+}
+
+#tip p {
+    margin: 0;
+}
+
+.tip-what {
+    color: var(--text-strong);
+    font-weight: 600;
+    /* a model path or a flight-path name runs long, and the panel is the one
+       place in the app that has room to show it whole */
+    overflow-wrap: anywhere;
+}
+
+.tip-detail {
+    color: var(--text);
+}
+
+.tip-keys {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.1rem 0.6rem;
+    margin: 0.45rem 0 0;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.92em;
+}
+
+/* the wrapper exists only to pair a dt with its dd in the markup; the grid
+   is what actually aligns them, so it steps out of the box tree */
+.tip-keys > div {
+    display: contents;
+}
+
+.tip-keys dt {
+    color: var(--tag-btn);
+    white-space: nowrap;
+}
+
+.tip-keys dd {
+    margin: 0;
 }
 
 @media (max-width: 900px) {

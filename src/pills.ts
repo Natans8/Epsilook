@@ -575,6 +575,22 @@ function clickHint(opts: { search?: string; finds?: string; click?: string }): s
     return `Click: ${action}\nShift-click: add to search · Ctrl-click: exclude\n${newTab}`;
 }
 
+/**
+ * Does a tooltip line map a GESTURE to an action, rather than describe the
+ * thing? The trailing lines of every tooltip do, and `app/tooltip.ts` renders
+ * them as a two-column key map instead of prose — so this test has to agree
+ * with what `clickHint` and `copy` above actually write, which is why it lives
+ * beside them and is not respelled there.
+ *
+ * The colon is load-bearing: "Click to sort by count" (index.html) and
+ * "Copy:  .lookup object x.m2" (`cmd`) are descriptions, not gestures, and
+ * both must stay in the panel's body.
+ */
+export const KEY_LINE_RE = /^(?:Click|Shift-click|Ctrl-click|Alt-click|Middle-click): /;
+
+/** Where a key line packs two gestures onto one row. */
+export const KEY_LINE_SEP = " · ";
+
 /* ==================================================================== */
 /* PILL-TYPE REGISTRY                                                    */
 /* ==================================================================== */

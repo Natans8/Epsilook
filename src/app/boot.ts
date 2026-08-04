@@ -6,6 +6,7 @@ import {runSearch} from "./run";
 import {toast, copyText} from "./clipboard";
 import {maskOf, targetWordsOf, NO_SCREEN_COLORS} from "./tags";
 import {activeData, qInput, state, versionLabel} from "./state";
+import {initTooltips} from "./tooltip";
 import {defaultVersion, filtersFromUrl, findVersion, setHelp, sortFromUrl, stateToUrl, urlToState} from "./url";
 import * as Data from "../data";
 import type {VersionEntry} from "../data";
@@ -15,6 +16,7 @@ import * as Texture from "../texture";
 import * as Theme from "../theme";
 import {CFG} from "../config";
 import {$, el} from "../util";
+
 /* ------------------------------------------------------------- boot */
 
 function buildTabs() {
@@ -119,7 +121,7 @@ export async function activateVersion(entry: VersionEntry, {push = false} = {}):
     }
 }
 
-export function applyUrl({push}: {push: boolean}): void {
+export function applyUrl({push}: { push: boolean }): void {
     const h = urlToState();
     loadQueryString(h.q);
     filtersFromUrl(h.only, h.without);
@@ -144,11 +146,21 @@ async function boot() {
     // the getters assert per read instead of freezing a snapshot at boot
     Export.init({
         state: {
-            get data() { return activeData(); },
-            get hiddenCols() { return state.hiddenCols; },
-            get display() { return state.display; },
-            get lastQuery() { return state.lastQuery; },
-            get version() { return state.version ?? {id: ""}; },
+            get data() {
+                return activeData();
+            },
+            get hiddenCols() {
+                return state.hiddenCols;
+            },
+            get display() {
+                return state.display;
+            },
+            get lastQuery() {
+                return state.lastQuery;
+            },
+            get version() {
+                return state.version ?? {id: ""};
+            },
         },
         targetWordsOf, maskOf, toast, copyText, NO_SCREEN_COLORS,
     });
@@ -169,6 +181,8 @@ async function boot() {
     buildTabs();
     wireEvents();
     Texture.initHoverPreview();
+    // delegated from the document, so it covers markup that does not exist yet
+    initTooltips();
     applyHiddenCols();
     try {
         state.versions = await Data.loadVersions();
