@@ -29,7 +29,7 @@
           href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
     <!-- bump ?v= on every deploy that touches the css or the bundle's sources,
          or browsers keep stale copies (python tools/bump.py does both spots) -->
-    <link rel="stylesheet" href="css/app.css?v=20260804a">
+    <link rel="stylesheet" href="css/app.css?v=20260804b">
     <script>
         // Replay the stored theme before the first paint, so a light theme
         // never flashes dark. Only that: the picker, the default and the
@@ -103,235 +103,136 @@
         <nav id="tabs" aria-label="Field tags"></nav>
         <div id="status" role="status"></div>
 
-        <dialog id="help">
+        <!-- THE HELP IS AN ANATOMY DIAGRAM OF A QUERY. Everything generated
+             lives in src/app/help.ts; this file carries only the frame, the
+             prose and the data-search strings. Every [data-search] here is
+             redrawn by decorateExamples() as the chips it really makes, so an
+             example can never describe a syntax the app dropped.
+             It is a reference card, not a manual — keep it that way. -->
+        <dialog id="help" aria-labelledby="help-title">
             <div class="help-top">
-                <h2>Help</h2>
+                <h2 id="help-title">How search works</h2>
                 <button id="help-close" type="button" title="Close" aria-label="Close help">×</button>
             </div>
-            <!-- Every data-search example is redrawn by decorateExamples() as the
-                 chips it actually makes, so the markup here only has to carry the
-                 query and the one-line reason to click it. Keep sections short:
-                 this is a reference card, not a manual. -->
-            <div class="help-grid">
-                <section>
-                    <h3>The basics</h3>
-                    <ul>
-                        <li>Plain words search <b>names, models, sounds, animations and effects</b> at once, matching
-                            <b>any part of a name, in any order</b>.
+
+            <div class="help-body">
+                <section class="help-band help-anatomy">
+                    <h3>Anatomy of a search</h3>
+                    <p class="help-lead">The bar draws what it understood. Learn its six marks and you can read
+                        any search at a glance — this one narrows the whole game down to a single spell.</p>
+
+                    <button id="help-specimen" type="button"
+                            data-search='model:"caster attach hand|chest" -mech:school_damage "fel reaver"'
+                            title="Run this search"></button>
+
+                    <ul class="legend">
+                        <li data-mark="field" tabindex="0"><span class="legend-swatch f-model">model:</span>
+                            <b>Column tag</b> searches one column only
                         </li>
-                        <li><code>"quoted words"</code> are an exact phrase.</li>
-                        <li>Results are ranked by <b>relevance</b> until you sort by a column.</li>
-                    </ul>
-                    <ul class="help-ex">
-                        <li>
-                            <button data-search="impact fireball"></button>
-                            finds <code>cfx_mage_fireball_impact.m2</code></li>
-                        <li>
-                            <button data-search=".cast 133">.cast 133</button>
-                            Epsilon commands paste straight in
+                        <li data-mark="word" tabindex="0"><span class="legend-swatch bar-kw">caster</span>
+                            <b>Category word</b> one of the kinds that column holds
+                        </li>
+                        <li data-mark="value" tabindex="0"><span
+                                class="legend-swatch bar-kw bar-cap-l">attach</span><span
+                                class="legend-swatch bar-cap-r"> chest</span>
+                            <b>Word and its value</b> the one word after it
+                        </li>
+                        <li data-mark="alt" tabindex="0"><span class="legend-swatch bar-alt">|</span>
+                            <b>Either one</b> also a comma, between numbers
+                        </li>
+                        <li data-mark="phrase" tabindex="0"><span class="legend-swatch bar-phrase">"fel reaver"</span>
+                            <b>Exact phrase</b> unquoted, the words match separately
+                        </li>
+                        <li data-mark="not" tabindex="0"><span class="legend-swatch legend-not">−mech:</span>
+                            <b>Exclude</b> drop everything that matches
                         </li>
                     </ul>
+
+                    <p class="help-rule">Tags <b>all</b> have to match. Words inside <b>one</b> tag have to match the
+                        <b>same</b> file, sound or effect — which is the difference between one thing that is both,
+                        and two separate things.</p>
                 </section>
 
-                <section>
-                    <h3>Tags</h3>
-                    <ul>
-                        <li>A tag searches one column: <code>name:</code> <code>model:</code> <code>sound:</code>
-                            <code>anim:</code> <code>fx:</code> <code>mech:</code> <code>id:</code>. Type the prefix or
-                            click a field button.
-                        </li>
-                        <li>Every tag must match, and words <em>inside</em> one tag must match the <em>same</em> file
-                            or effect.
-                        </li>
-                        <li>A <b>−</b> prefix excludes instead.</li>
-                    </ul>
-                    <ul class="help-ex">
-                        <li>
-                            <button data-search='model:"fire missile"'></button>
-                            one model that is both
-                        </li>
-                        <li>
-                            <button data-search="model:fire model:missile"></button>
-                            two different models
-                        </li>
-                        <li>
-                            <button data-search="model:fire|missile"></button>
-                            either one
-                        </li>
-                        <li>
-                            <button data-search="name:nova -mech:school_damage"></button>
-                            novas that deal no damage
-                        </li>
-                    </ul>
-                </section>
+                <div class="help-cols">
+                    <section class="help-band">
+                        <h3>Where a tag ends</h3>
+                        <p class="help-lead">A tag takes <b>one word</b>; quotes hold more together. The bar shows
+                            which is which, so the boundary is never a guess.</p>
+                        <ul class="help-pairs">
+                            <li>
+                                <button data-search='fx:"chain red"'></button>
+                                <span>a chain effect that is <b>also</b> red</span>
+                            </li>
+                            <li>
+                                <button data-search="fx:chain red"></button>
+                                <span>a chain effect — and “red” anywhere at all</span>
+                            </li>
+                            <li>
+                                <button data-search='model:"fire missile"'></button>
+                                <span>one model that is both</span>
+                            </li>
+                            <li>
+                                <button data-search="model:fire model:missile"></button>
+                                <span>two different models on one spell</span>
+                            </li>
+                        </ul>
+                        <p class="help-rule">A value with a space in it needs quotes of its own:
+                            <button class="help-inline" data-search='anim:(boneset "upper body")'></button>
+                        </p>
+                    </section>
 
-                <section>
-                    <h3>Either / or</h3>
-                    <p class="help-note"><b>|</b> means either alternative will do — in any field, with or without
-                        spaces around it. Between numbers a comma does the same.</p>
-                    <ul class="help-ex">
-                        <li>
-                            <button data-search="fx:chain|dissolve"></button>
-                            beams or dissolves
-                        </li>
-                        <li>
-                            <button data-search="id:133,116,122"></button>
-                            several spells at once
-                        </li>
-                    </ul>
-                </section>
+                    <section class="help-band">
+                        <h3>What you can ask for</h3>
+                        <p class="help-lead">Every column sorts its contents under words you can search by. They
+                            autocomplete inside a tag — <b>hover one to see what it finds, click to run it</b>.</p>
+                        <div id="help-vocab"></div>
+                        <p class="help-rule">Category words match <b>file names</b> too, so
+                            <button class="help-inline" data-search='model:"missile arrow"'></button>
+                            is a projectile whose model is an arrow. Colours work by name or by hex:
+                            <button class="help-inline" data-search="fx:#00b4ff"></button>
+                        </p>
+                    </section>
+                </div>
 
-                <section>
-                    <h3>A word, then what it takes</h3>
-                    <p class="help-note">Some words take a value after them: <strong>the one word that follows</strong>,
-                        always. The search bar draws the word and its value joined together, so you can see exactly
-                        where the value ends.</p>
-                    <ul class="help-ex">
-                        <li>
-                            <button data-search='model:"attach chest"'></button>
-                            where on the model it plays
-                        </li>
-                        <li>
-                            <button data-search='anim:(boneset "upper body")'></button>
-                            which body region moves — <strong>quote a value that has a space in it</strong>
-                        </li>
-                        <li>
-                            <button data-search='mech:"seat >2"'></button>
-                            vehicles with 3+ seats
-                        </li>
-                        <li>
-                            <button data-search='fx:"scale 50"'></button>
-                            exactly +50% — a plain number is the <code>=</code> you did not have to type
-                        </li>
-                        <li>
-                            <button data-search='model:"count >4"'></button>
-                            more than four models — <code>count</code> works in every column
-                        </li>
-                    </ul>
-                    <p class="help-note">Anything past that one word is an ordinary search word again, so
-                        <code>boneset head kneel</code> is the head region <em>and</em> a kneel animation. To give a
-                        value more than one word, put it in quotes: <code>attach "right hand"</code>.</p>
-                </section>
-
-                <section>
-                    <h3>Category words</h3>
-                    <p class="help-note">Each column groups its contents under words you can search by. They
-                        autocomplete inside a tag and combine with file words in the same tag.</p>
-                    <ul class="help-ex">
-                        <li>
-                            <button data-search="model:missile"></button>
-                            also <code>attached</code> <code>ground</code> <code>trail</code> <code>barrage</code>
-                            <code>display</code> <code>item</code> <code>mount</code> <code>equipped</code></li>
-                        <li>
-                            <button data-search='model:"missile arrow"'></button>
-                            whose projectile is an arrow
-                        </li>
-                        <li>
-                            <button data-search="fx:chain red"></button>
-                            also <code>dissolve</code> <code>glow</code> <code>ghost</code> <code>tint</code>
-                            <code>desaturate</code> <code>transparency</code> <code>freeze</code> <code>camo</code>
-                            <code>screen</code> <code>shapeshift</code> <code>morph</code> <code>summon</code>
-                            <code>object</code> <code>scale</code></li>
-                        <li>
-                            <button data-search="mech:speed"></button>
-                            also <code>seat</code> <code>invis</code> <code>detect</code> <code>keybind</code> — the
-                            things a spell does that you cannot see
-                        </li>
-                        <li>
-                            <button data-search="anim:replace"></button>
-                            also <code>passenger</code></li>
-                        <li>
-                            <button data-search="fx:#00b4ff"></button>
-                            a colour, by hex or by name
-                        </li>
-                    </ul>
-                </section>
-
-                <section>
-                    <h3>Who it plays on</h3>
-                    <p class="help-note">The icons on each pill say who the content plays on. They search like
-                        category words in any marked column.
-                        <span class="legend-icon t-caster"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                                stroke-width="2.2" stroke-linecap="round"
-                                                                stroke-linejoin="round" aria-hidden="true"><circle
-                                cx="12" cy="8" r="4"/><path
-                                d="M4.5 20.5c1.8-3.8 4.3-5.5 7.5-5.5s5.7 1.7 7.5 5.5"/></svg></span>
-                        caster,
-                        <span class="legend-icon t-target"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                                stroke-width="2.2" stroke-linecap="round"
-                                                                stroke-linejoin="round" aria-hidden="true"><circle
-                                cx="12" cy="12" r="7"/><line x1="12" y1="1.5" x2="12" y2="6"/><line x1="12" y1="18"
-                                                                                                    x2="12"
-                                                                                                    y2="22.5"/><line
-                                x1="1.5" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22.5" y2="12"/><circle
-                                cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></span>
-                        target,
-                        <span class="legend-icon t-notcaster"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                                   stroke-width="2.2" stroke-linecap="round"
-                                                                   stroke-linejoin="round" aria-hidden="true"><circle
-                                cx="12" cy="12" r="7"/><line x1="12" y1="1.5" x2="12" y2="6"/><line x1="12" y1="18"
-                                                                                                    x2="12"
-                                                                                                    y2="22.5"/><line
-                                x1="1.5" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22.5" y2="12"/><circle
-                                cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></span>
-                        target but never caster,
-                        <span class="legend-icon t-area"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                              stroke-width="2.2" stroke-linecap="round"
-                                                              stroke-linejoin="round" aria-hidden="true"><ellipse
-                                cx="12" cy="18" rx="9" ry="3.4"/><line x1="12" y1="3" x2="12" y2="14.5"/><path
-                                d="M8.5 11 12 15l3.5-4"/></svg></span>
-                        where the spell lands. Unmarked rows carry no target type in the game data.
+                <section class="help-band">
+                    <h3>Clicks and keys</h3>
+                    <div class="help-keys">
+                        <dl>
+                            <dt>Click a pill</dt>
+                            <dd>search for just that</dd>
+                            <dt><kbd>Shift</kbd> + click</dt>
+                            <dd>add it to the search</dd>
+                            <dt><kbd>Ctrl</kbd> + click</dt>
+                            <dd>exclude it</dd>
+                            <dt>Middle-click</dt>
+                            <dd>open it in a new tab</dd>
+                        </dl>
+                        <dl>
+                            <dt><b>⧉</b> <b>.lo</b> <b>/</b> <b>.mod</b></dt>
+                            <dd>copy an ID or an Epsilon command</dd>
+                            <dt><kbd>Shift</kbd> + click</dt>
+                            <dd>copy it wrapped in <code>`backticks`</code></dd>
+                            <dt><b>▶</b></dt>
+                            <dd>play the sound</dd>
+                            <dt>Hover a texture</dt>
+                            <dd>preview it, tinted as it plays</dd>
+                        </dl>
+                        <dl>
+                            <dt><kbd>Enter</kbd> <kbd>Tab</kbd> <kbd>→</kbd></dt>
+                            <dd>close the tag you are typing</dd>
+                            <dt><kbd>←</kbd> <kbd>Backspace</kbd></dt>
+                            <dd>step back into the tag before it</dd>
+                            <dt><kbd>Ctrl</kbd>+<kbd>A</kbd>, <kbd>Shift</kbd>+<kbd>←</kbd></dt>
+                            <dd>select across tags</dd>
+                            <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt>
+                            <dd>undo any bar edit</dd>
+                        </dl>
+                    </div>
+                    <p class="help-rule">The URL always holds your search, so <b>🔗 Share</b> copies a link straight
+                        to it. Epsilon commands paste in as they are —
+                        <button class="help-inline" data-search=".cast 133">.cast 133</button>
+                        becomes a spell ID.
                     </p>
-                    <ul class="help-ex">
-                        <li>
-                            <button data-search='model:"caster fire"'></button>
-                            fire model on the caster
-                        </li>
-                        <li>
-                            <button data-search="model:both"></button>
-                            plays on caster <em>and</em> target
-                        </li>
-                    </ul>
-                </section>
-
-                <section>
-                    <h3>The search bar</h3>
-                    <ul>
-                        <li>The bar colours what the search understands, and explains it on hover. Anything it does
-                            not colour is an ordinary text search.
-                        </li>
-                        <li><kbd>Enter</kbd>, <kbd>Tab</kbd> or <kbd>→</kbd> close the tag you're typing;
-                            <kbd>←</kbd> at its start closes it the other way. In an empty gap the arrows and
-                            <kbd>Backspace</kbd> step into the neighbouring tag.
-                        </li>
-                        <li>Click a tag's text to edit it, its <b>×</b> to remove it, its field label to flip it
-                            between include and exclude.
-                        </li>
-                        <li><kbd>Ctrl</kbd>+<kbd>A</kbd>, drag or <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd> select
-                            across tags; <kbd>Ctrl</kbd>+<kbd>C</kbd> copies the selection as query text.
-                            <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes any bar edit.
-                        </li>
-                    </ul>
-                </section>
-
-                <section>
-                    <h3>Results, filters, sharing</h3>
-                    <ul>
-                        <li>Click any pill to search for it; <b>Shift-click</b> excludes it. <b>⧉</b> copies an ID;
-                            <b>.lo</b>, <b>/</b>, <b>.mod</b> and the Commands buttons copy Epsilon commands —
-                            <b>Shift-click</b> wraps the copy in <code>`backticks`</code>.
-                        </li>
-                        <li><b>▶</b> plays a sound. Hovering a texture pill previews it; hovering a colour swatch
-                            shows the colour with its hex.
-                        </li>
-                        <li><b>Filter</b> buttons cycle <em>any → only with → only without</em>. Sorting cycles ▲, ▼,
-                            back to relevance; the multi-value columns sort by number of entries.
-                        </li>
-                        <li>Hiding a column also leaves it out of plain-word search and exports.</li>
-                        <li>The URL always holds your search: <b>🔗 Share</b> copies it. Add
-                            <code>&amp;export=json</code> or <code>&amp;export=csv</code> to download it instead.
-                        </li>
-                    </ul>
                 </section>
             </div>
         </dialog>
@@ -422,7 +323,7 @@
                 <button data-search="model:book">model:book</button>
                 <button data-search="sound:felreaver">sound:felreaver</button>
                 <button data-search="anim:ArtLoop">anim:ArtLoop</button>
-                <button data-search="fx:chain red">fx:chain red</button>
+                <button data-search='fx:"chain red"'>fx:"chain red"</button>
                 <button data-search="mech:leap">mech:leap</button>
                 <button data-search='name:nova -mech:school_damage'>name:nova -mech:school_damage</button>
             </div>
@@ -462,6 +363,6 @@
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
 <!-- the whole app: esbuild bundles src/**/*.ts into this one file
      (tools/build.mjs) — module order lives in the import graph now -->
-<script src="js/app.js?v=20260804a"></script>
+<script src="js/app.js?v=20260804b"></script>
 </body>
 </html>

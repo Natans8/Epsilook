@@ -357,8 +357,12 @@ function attachmentNamesOf(src: number, dst: number, data: SpellData): string[] 
  * Note the normal corpus path still substring-matches file names that
  * contain these words (beamtarget_onground) — the same accepted overlap as
  * fx:glow, which categoryRanker sorts out.
+ *
+ * EXPORTED for the help dialog's legend, which pairs each word with the glyph
+ * that stands for it by asking the test about the icon's own bits — rather
+ * than keeping a second word -> icon table that could disagree with the search.
  */
-const TARGET_TESTS: Record<string, (m: number) => boolean> = {
+export const TARGET_TESTS: Record<string, (m: number) => boolean> = {
     caster: (m) => (m & 1) !== 0,
     target: (m) => (m & (2 | 8)) !== 0,
     area: (m) => (m & (4 | 16)) !== 0,

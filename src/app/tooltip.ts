@@ -53,6 +53,26 @@ let anchor: HTMLElement | null = null;
 let showTimer = 0;
 let hiddenAt = 0;
 
+/**
+ * Whether the panel can join the TOP LAYER.
+ *
+ * A modal `<dialog>` renders in the top layer, which no z-index can reach over
+ * — so the help dialog was covering its own tooltips, which is where a
+ * generated word's description now lives. A popover is promoted to that same
+ * layer, and the top layer stacks in promotion order, so a tooltip opened while
+ * the dialog is up paints above it.
+ *
+ * Feature-detected rather than assumed: where it is missing the panel keeps its
+ * z-index and behaves exactly as before, which is right everywhere except over
+ * a modal.
+ */
+const CAN_POPOVER = typeof HTMLElement !== "undefined"
+    && typeof HTMLElement.prototype.showPopover === "function";
+
+/** Is the panel on screen? Popover state and `hidden` answer differently. */
+const isOpen = (): boolean => !!panel
+    && (CAN_POPOVER ? panel.matches(":popover-open") : !panel.hidden);
+
 /** Move `title` out of the browser's reach, once, and answer with its text. */
 function hoist(node: HTMLElement): string {
     const title = node.getAttribute("title");
@@ -134,7 +154,13 @@ function show(node: HTMLElement, text: string): void {
     const tone = getComputedStyle(node).getPropertyValue("--tone").trim();
     panel.style.setProperty("--tone", tone || "var(--text-dim)");
     fill(text);
-    panel.hidden = false;
+    if (CAN_POPOVER) {
+        // showPopover throws if it is already open, and a re-anchor without a
+        // close in between is an ordinary path (sweeping across two pills)
+        if (!panel.matches(":popover-open")) panel.showPopover();
+    } else {
+        panel.hidden = false;
+    }
     place();
     panel.classList.add("show");
     node.setAttribute("aria-describedby", "tip");
@@ -142,9 +168,10 @@ function show(node: HTMLElement, text: string): void {
 
 function hide(): void {
     clearTimeout(showTimer);
-    if (!panel || panel.hidden) return;
+    if (!panel || !isOpen()) return;
     panel.classList.remove("show");
-    panel.hidden = true;
+    if (CAN_POPOVER) panel.hidePopover();
+    else panel.hidden = true;
     anchor?.removeAttribute("aria-describedby");
     anchor = null;
     hiddenAt = Date.now();
@@ -170,7 +197,11 @@ export function initTooltips(): void {
     panel = el("div", "", "");
     panel.id = "tip";
     panel.setAttribute("role", "tooltip");
-    panel.hidden = true;
+    // "manual" because this is driven entirely by hover and focus: the light
+    // dismiss of "auto" would close it on the very click the app is explaining,
+    // and auto popovers close each other, which a tooltip must never do
+    if (CAN_POPOVER) panel.setAttribute("popover", "manual");
+    else panel.hidden = true;
     document.body.append(panel);
 
     document.addEventListener("pointerover", (e) => {

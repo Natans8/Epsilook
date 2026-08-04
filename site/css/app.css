@@ -1060,14 +1060,26 @@ main {
     font-size: 0.9rem;
 }
 
-/* help dialog */
+/* -------------------------------------------------------- help dialog
+
+   AN ANATOMY DIAGRAM OF A QUERY. The dialog's one idea is that the bar already
+   draws six marks and nothing ever named them, so the specimen at the top is a
+   real rendered query and the legend under it names its parts — with every
+   swatch drawn by the HIGHLIGHTER'S OWN CLASSES (.bar-kw, .bar-cap-*,
+   .bar-phrase, .bar-alt, .qchip-field) rather than by lookalike rules here.
+   That is what makes it impossible for the legend to describe a mark the bar
+   draws differently. Hovering either side lights the other; see app/help.ts.
+
+   No colour token is invented below. Everything comes from the theme layer, so
+   all three palettes get this for free. */
 #help {
-    width: min(74rem, calc(100vw - 3rem));
+    width: min(72rem, calc(100vw - 3rem));
+    max-height: calc(100vh - 3rem);
     background: var(--bg-panel);
     color: var(--text);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 1.1rem 1.5rem 1.4rem;
+    padding: 0;
     box-shadow: 0 18px 60px rgba(var(--shadow-rgb), calc(0.55 * var(--shadow-strength)));
 }
 
@@ -1075,18 +1087,28 @@ main {
     background: var(--backdrop);
 }
 
+/* the title bar stays put while the body scrolls — on a short viewport the
+   close button must never be the thing you have to scroll back up to find */
 .help-top {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.9rem;
+    gap: 1rem;
+    padding: 0.85rem 1.4rem 0.7rem;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    border-radius: 14px 14px 0 0;
 }
 
 .help-top h2 {
     margin: 0;
-    font-size: 1.2rem;
+    font-size: 1.05rem;
+    font-weight: 600;
     color: var(--gold);
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
 }
 
 #help-close {
@@ -1102,32 +1124,56 @@ main {
     background: rgba(var(--danger-rgb), calc(0.12 * var(--wash-strength)));
 }
 
-.help-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-    gap: 1.1rem 1.8rem;
+.help-body {
+    overflow-y: auto;
+    max-height: calc(100vh - 7rem);
+    padding: 0 1.4rem 1.3rem;
+}
+
+/* One band per question a reader arrives with, separated by a rule rather than
+   by a box: eight equal panels is what made the old version unreadable — every
+   section looked as important as every other. */
+.help-band {
+    padding: 1rem 0 0.1rem;
+}
+
+.help-band + .help-band,
+.help-cols + .help-band,
+.help-band + .help-cols {
+    border-top: 1px solid var(--border);
 }
 
 #help h3 {
-    margin: 0 0 0.4rem;
-    font-size: 0.82rem;
+    margin: 0 0 0.35rem;
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.07em;
+    letter-spacing: 0.09em;
     color: var(--gold);
 }
 
-#help ul {
-    margin: 0;
-    padding-left: 1.1rem;
-    font-size: 0.9rem;
-}
-
-#help li {
-    margin: 0.3rem 0;
-}
-
-#help li::marker {
+/* the sentence that sets up a band — never the explanation itself, which is
+   the job of the worked example under it */
+.help-lead {
+    margin: 0 0 0.7rem;
+    font-size: 0.86rem;
+    line-height: 1.5;
     color: var(--text-dim);
+    max-width: 62ch;
+}
+
+.help-lead b, .help-rule b {
+    color: var(--text);
+    font-weight: 600;
+}
+
+/* the closing qualifier of a band: the thing you need only once you have read
+   the examples, so it sits after them and steps back */
+.help-rule {
+    margin: 0.7rem 0 0;
+    font-size: 0.8rem;
+    line-height: 1.55;
+    color: var(--text-dim);
+    max-width: 74ch;
 }
 
 #help code {
@@ -1146,78 +1192,331 @@ main {
     padding: 0 0.35rem;
     font-family: Consolas, "Cascadia Mono", monospace;
     font-size: 0.85em;
+    white-space: nowrap;
 }
 
-/* A section's short lead-in above its worked examples — the prose that used to
- * carry the whole explanation now only has to set up the list below it. */
-.help-note {
-    margin: 0 0 0.45rem;
-    font-size: 0.85rem;
-    color: var(--text-dim);
-    line-height: 1.45;
+/* ------------------------------------------------ the specimen + legend */
+
+/* The specimen is the real bar at reading size — same fill, same outline, same
+   chips — so what the dialog dissects is visibly the thing on the page above
+   it, not a picture of it. */
+#help-specimen.ex-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    font-size: 1.02rem;
+    background: var(--bg);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
 }
 
-/* Worked examples: a runnable query followed by what it finds. Bulletless and
- * hanging-indented so the queries line up as a scannable column. */
-#help ul.help-ex {
+#help-specimen.ex-chips:hover,
+#help-specimen.ex-chips:focus-visible {
+    border-color: var(--gold-dim);
+    background: rgba(var(--gold-rgb), calc(0.05 * var(--wash-strength)));
+}
+
+.legend {
     list-style: none;
-    padding-left: 0;
-    margin-top: 0.4rem;
-    font-size: 0.85rem;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(19rem, 100%), 1fr));
+    gap: 0.2rem 1.4rem;
 }
 
-#help ul.help-ex li {
-    margin: 0.25rem 0;
-    padding-left: 1rem;
-    text-indent: -1rem;
+.legend li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    padding: 0.22rem 0.4rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    line-height: 1.4;
     color: var(--text-dim);
-    line-height: 1.5;
+    cursor: default;
 }
 
-#help ul.help-ex button {
+.legend b {
+    color: var(--text);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* THE SWATCH IS THE MARK: highlighter classes on real text, so it cannot come
+   to look different from the bar. It takes --text rather than inheriting the
+   row's --text-dim for the same reason — a capsule's value half is ordinary
+   chip text in the bar — and because dim over the capsule's own fill measures
+   3.5:1 on the dark palette, the known --text-dim-on-a-wash failure. */
+.legend-swatch {
     font-family: Consolas, "Cascadia Mono", monospace;
-    font-size: 0.88em;
+    font-size: 0.95em;
+    white-space: pre;
+    color: var(--text);
+}
+
+.legend-swatch.f-model {
+    color: color-mix(in oklab, var(--tone) var(--ink-mix), black);
+    font-weight: 600;
+}
+
+.legend-swatch.legend-not {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+/* CROSS-HIGHLIGHT. Hovering a legend row (or a part of the specimen) lights
+   the matching thing at the other end and quiets everything else, which is the
+   whole reason the legend beats a list of definitions: it points.
+   Colour and opacity only — nothing moves, so there is no motion to reduce. */
+.help-anatomy.lit .legend li,
+.help-anatomy.lit #help-specimen .exchip {
+    opacity: 0.4;
+    transition: opacity 0.12s ease;
+}
+
+.help-anatomy.lit .legend li.lit,
+.help-anatomy.lit #help-specimen .exchip:has([data-mark].lit),
+.help-anatomy.lit #help-specimen .exchip.lit {
+    opacity: 1;
+}
+
+.legend li.lit {
+    background: rgba(var(--gold-rgb), calc(0.10 * var(--wash-strength)));
+}
+
+/* THE LIT PART OF THE SPECIMEN IS UNDERLINED, NOT RINGED, and that is not a
+   taste call. A capsule is drawn in several adjacent spans, so a ring per span
+   would draw internal walls through the one shape it is meant to point at,
+   while adjacent underlines merge into a single continuous rule. It also keeps
+   clear of the fills these marks already carry — stacking a second fill over a
+   capsule or an excluded chip is the two-fills trap the theme section warns
+   about. The chip-level mark keeps a ring, because there it IS one shape. */
+#help-specimen [data-mark].lit {
+    box-shadow: inset 0 -2px 0 var(--gold);
+}
+
+#help-specimen .exchip.not[data-mark].lit {
+    box-shadow: 0 0 0 2px var(--gold);
+    border-radius: 999px;
+}
+
+/* --------------------------------------------------------- two-up bands */
+
+.help-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(24rem, 100%), 1fr));
+    gap: 0 2.2rem;
+}
+
+/* a column border only once they are actually side by side */
+@media (min-width: 56rem) {
+    .help-cols > .help-band + .help-band {
+        border-top: none;
+        border-left: 1px solid var(--border);
+        padding-left: 2.2rem;
+    }
+}
+
+/* -------------------------------------------------- query / meaning pairs */
+
+/* Two queries that differ by one pair of quotes, stacked so the difference is
+   the only thing that moves. This is the band that answers "why did my search
+   do that", so the pairs are aligned in a column and read down. */
+.help-pairs {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.3rem;
+}
+
+/* TWO COLUMNS, so the queries stack in one column and their meanings in
+   another: this band exists to show that two queries differ by one pair of
+   quotes, and that only reads if the difference is the ONLY thing that moves.
+   max-content sizes the first column to the widest query rather than to each
+   row's own. */
+.help-pairs li {
+    display: grid;
+    grid-template-columns: minmax(0, max-content) 1fr;
+    align-items: center;
+    gap: 0.15rem 0.6rem;
+}
+
+/* narrow: the meaning drops under its query and indents, so it still reads as
+   belonging to the one above rather than to the one below */
+@media (max-width: 34rem) {
+    .help-pairs li {
+        grid-template-columns: 1fr;
+    }
+
+    .help-pairs span {
+        padding-left: 0.8rem;
+    }
+}
+
+.help-pairs span {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    line-height: 1.4;
+}
+
+/* an example dropped into a sentence — it must sit on the text's baseline
+   rather than starting a new block */
+.help-inline.ex-chips {
+    vertical-align: baseline;
+}
+
+/* ----------------------------------------------------------- vocabulary */
+
+/* The words a column offers, generated from the same registry autocomplete
+   reads (app/help.ts). Each is a real search button, so the row doubles as the
+   fastest way into the data — and each carries the registry's own hint as its
+   tooltip, which is where the detail went when the prose came out. */
+#help-vocab {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.vocab-row {
+    display: grid;
+    grid-template-columns: 5.2rem 1fr;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.vocab-field {
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-align: right;
+    color: color-mix(in oklab, var(--tone) var(--ink-mix), black);
+    cursor: help;
+}
+
+/* the shared row is not a column, so it must not borrow a column's colour */
+.vocab-shared .vocab-field {
+    font-family: inherit;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--text-dim);
+}
+
+.vocab-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.vocab-word {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.05rem 0.42rem;
+    font-size: 0.78rem;
     color: var(--text);
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0.05rem 0.35rem;
-    margin-right: 0.3rem;
+    border-radius: 999px;
     cursor: pointer;
-    text-indent: 0;
 }
 
-#help ul.help-ex button:hover,
-#help ul.help-ex button:focus-visible {
+.vocab-word:hover,
+.vocab-word:focus-visible {
     color: var(--gold);
     border-color: var(--gold-dim);
-    background: rgba(var(--gold-rgb), calc(0.08 * var(--wash-strength)));
+    background: rgba(var(--gold-rgb), calc(0.10 * var(--wash-strength)));
 }
 
-/* An example redrawn as the CHIPS it makes (decorateExamples). The button
-   stops being a code box and becomes the bar's own row of tags, so reading the
-   help and reading the search bar are the same act. Metrics are the chips' own
-   — this is static DOM, so weight and padding are free here.
+.vocab-shared {
+    margin-top: 0.15rem;
+    padding-top: 0.4rem;
+    border-top: 1px dashed var(--border);
+}
+
+/* A word that says nothing on its own gets a blank to fill in — the value half
+   of a capsule, empty. Clicking it starts the word in the bar with the caret
+   there (see the help dialog's click handler) rather than running it. */
+.vocab-word.takes-value::after {
+    content: "";
+    width: 0.85em;
+    border-bottom: 1px dashed currentColor;
+    opacity: 0.55;
+    margin-bottom: 0.22em;
+    align-self: flex-end;
+}
+
+/* the target glyphs ride their word at text size */
+.vocab-word .ticon svg {
+    width: 0.95em;
+    height: 0.95em;
+}
+
+/* ------------------------------------------------------------- key map */
+
+/* The gesture bands are a KEY MAP, not prose — the same shape app/tooltip.ts
+   renders a pill's gesture lines as, so the help and the tooltips teach in one
+   voice. It is a <dl> because that is what it is. */
+.help-keys {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr));
+    gap: 0.2rem 2rem;
+}
+
+.help-keys dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: baseline;
+    gap: 0.22rem 0.7rem;
+    margin: 0;
+    font-size: 0.8rem;
+}
+
+.help-keys dt {
+    text-align: right;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.help-keys dd {
+    margin: 0;
+    color: var(--text-dim);
+}
+
+/* ------------------------------------------- worked examples, both homes */
+
+/* An example redrawn as the CHIPS it makes (decorateExamples). The button stops
+   being a code box and becomes the bar's own row of tags, so reading the help
+   and reading the search bar are the same act. Metrics are the chips' own —
+   this is static DOM, so weight and padding are free here.
 
    IT IS DRAWN AS A MINIATURE SEARCH BAR — same panel fill, same rounded
    outline, borrowed from #qbar above. Without it two chips sitting side by side
    read as two separate examples, which is exactly backwards for the ones whose
    whole point is that several tags combine into ONE query. */
-#help ul.help-ex button.ex-chips,
+#help .ex-chips,
 .es-examples button.ex-chips {
     display: inline-flex;
     flex-wrap: wrap;
     align-items: baseline;
     gap: 0.3rem;
     font-family: inherit;
+    font-size: 0.8rem;
+    color: var(--text);
     background: var(--bg-panel);
     border: 1px solid var(--border-ctrl);
     border-radius: 8px;
-    padding: 0.2rem 0.45rem;
+    padding: 0.15rem 0.4rem;
+    cursor: pointer;
 }
 
-#help ul.help-ex button.ex-chips:hover,
-#help ul.help-ex button.ex-chips:focus-visible,
+#help .ex-chips:hover,
+#help .ex-chips:focus-visible,
 .es-examples button.ex-chips:hover,
 .es-examples button.ex-chips:focus-visible {
     background: rgba(var(--gold-rgb), calc(0.08 * var(--wash-strength)));
@@ -2737,10 +3036,21 @@ footer a {
  * at the end of this file.
  */
 
+/* IT IS A POPOVER, so it can paint over a modal <dialog>. The help dialog is
+   in the TOP LAYER, which no z-index reaches over, and its generated words
+   carry their descriptions as tooltips — so the panel has to be promoted to
+   that layer too (see app/tooltip.ts). The UA's popover defaults have to come
+   off first: `inset: 0` + `margin: auto` would centre it in the viewport, and
+   its border/padding would stack under ours. The z-index stays for the browser
+   that has no popover, where the panel is an ordinary fixed box. */
 #tip {
     position: fixed;
+    inset: auto;
     top: 0;
     left: 0;
+    margin: 0;
+    width: max-content;
+    overflow: visible;
     /* above the sticky table header (10), the toast (20) and the texture
        preview (30) — it is the topmost thing and it can afford to be,
        because pointer-events: none means it never eats a click */
@@ -2766,6 +3076,12 @@ footer a {
 
 #tip[hidden] {
     display: none;
+}
+
+/* the UA gives an open popover `display: block`; ours needs the same box it
+   had as a plain div, and `:popover-open` is what re-states it */
+#tip:popover-open {
+    display: block;
 }
 
 #tip p {

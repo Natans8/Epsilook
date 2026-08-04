@@ -1,5 +1,6 @@
 import {renderBar} from "./bar";
 import {applyHiddenCols, wireEvents} from "./events";
+import {buildHelp} from "./help";
 import {decorateExamples} from "./highlight";
 import {loadQueryString} from "./query";
 import {runSearch} from "./run";
@@ -112,6 +113,11 @@ export async function activateVersion(entry: VersionEntry, {push = false} = {}):
         // here rather than at the ten call sites that can change the pack.
         renderBar();
         decorateExamples();
+        // AFTER decorateExamples: the help's legend finds the specimen's parts
+        // by the classes that call just wrote, and its vocabulary is this
+        // pack's — so both belong to the same "a version finished loading"
+        // moment as the bar's own repaint above.
+        buildHelp();
         runSearch({push});
     } catch (err) {
         console.error(err);
@@ -126,7 +132,7 @@ export function applyUrl({push}: { push: boolean }): void {
     loadQueryString(h.q);
     filtersFromUrl(h.only, h.without);
     sortFromUrl(h.sort);
-    setHelp(!!h.help, false); // back/forward opens and closes it too
+    setHelp(h.help, false); // back/forward opens and closes it too
     // no v= in the URL means the default version, not "keep the current
     // one" — back/forward must return from an explicitly-chosen pack
     const wanted = findVersion(h.v) || defaultVersion();

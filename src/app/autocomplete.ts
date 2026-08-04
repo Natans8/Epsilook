@@ -39,7 +39,11 @@ export const COUNT_TIP = "How many entries this column has — count >4, count =
    * suggestion list leaves a trailing space ready for it. A numeric category
    * word (seat, speed, scale) is deliberately NOT here: it is a perfectly good
    * search on its own, and the value only narrows it. */
-const ARGUMENT_WORDS = new Set([...Object.keys(Search.META_KEYWORDS), Search.COUNT_AXIS]);
+/* The help dialog reads this too, for the same distinction from the other end:
+ * a word it lists is a search you can RUN, unless it is one of these — in which
+ * case clicking it STARTS the word in the bar rather than running a question
+ * nobody asked (`model:attach` is a filename search for the letters "attach"). */
+export const ARGUMENT_WORDS = new Set([...Object.keys(Search.META_KEYWORDS), Search.COUNT_AXIS]);
 
 /**
  * The words a field offers in autocomplete, with their descriptions: its
@@ -47,7 +51,7 @@ const ARGUMENT_WORDS = new Set([...Object.keys(Search.META_KEYWORDS), Search.COU
  * marked column shares.
  *   Null = the field has no category words at all.
  */
-export function fieldCategories(field: string | null): {words: string[], titles: Record<string, string>} | null {
+export function fieldCategories(field: string | null): { words: string[], titles: Record<string, string> } | null {
     const d = state.data;
     // mech joins the list because the non-visual categories moved there —
     // its words come from the same registry, so nothing else needed saying
@@ -148,7 +152,7 @@ function updateCategorySuggest(): void {
 // complete the partial last word of the chip's text to the category word.
 // a word that needs an argument (attach/boneset/count) leaves a trailing
 // space ready for it (attach chest, count >4) rather than butting the caret
-function applyCategoryWord(word: string): void {
+export function applyCategoryWord(word: string): void {
     const input = qInput;
     input.value = input.value.replace(/\S*$/, word) + (ARGUMENT_WORDS.has(word) ? " " : "");
     hideSuggest();

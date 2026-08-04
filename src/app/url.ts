@@ -72,12 +72,17 @@ function viewUrl(query: string, withHelp: boolean): string {
     // the help dialog is part of what a link can point at — "here is the
     // syntax" is a thing people send each other, and without this the only
     // way to share it is a sentence telling someone to click the ?
-    if (withHelp && helpOpen()) params.push("help=1");
+    //
+    // It is a BARE FLAG (`?help`), not `help=1`: there is no second value it
+    // could take, so the `=1` was a value pretending to mean something. Old
+    // `help=1` links still open it — the reader asks whether the key is
+    // present, which is true either way.
+    if (withHelp && helpOpen()) params.push("help");
     return location.pathname + (params.length ? "?" + params.join("&") : "");
 }
 
 /**
- * The URL a middle-click opens in a new tab. `help=1` is deliberately dropped:
+ * The URL a middle-click opens in a new tab. `?help` is deliberately dropped:
  * a new tab is opened to look at RESULTS, and a modal over them is not what was
  * asked for.
  */
@@ -107,7 +112,9 @@ export function urlToState() {
     }
     return {
         v: get("v"), q, only: get("only"), without: get("without"), sort: get("sort"),
-        help: get("help"),
+        // presence, not value: `?help` and the older `?help=1` both open it,
+        // and a bare key reads as "" rather than null, which is falsy
+        help: params.has("help") || legacy.has("help"),
     };
 }
 

@@ -1,4 +1,5 @@
 import {
+    applyCategoryWord,
     currentSuggestIndex,
     hideSuggest,
     moveSuggestSelection,
@@ -631,9 +632,21 @@ export function wireEvents() {
     });
     help.addEventListener("click", (e) => {
         if (e.target === help) return setHelp(false); // backdrop click
-        // the worked examples are live: running one closes the dialog so the
+        /* A word that says nothing without an argument is not run — it is
+         * STARTED. `attach` alone is a filename search for "attach", so
+         * clicking it would answer a question nobody asked; instead the field
+         * opens with the word typed and the caret waiting where its value
+         * goes, which is what picking the same word from the suggestion list
+         * already does (applyCategoryWord). */
+        const start = targetClosest(e, "[data-start]");
+        if (start) {
+            help.close();
+            activateField(start.dataset.field!);
+            return applyCategoryWord(start.dataset.start!);
+        }
+        // every worked example is live: running one closes the dialog so the
         // results it just produced are actually visible
-        const ex = targetClosest(e, ".help-ex button[data-search]");
+        const ex = targetClosest(e, "button[data-search]");
         if (ex) {
             help.close();
             crossSearch(ex.dataset.search!);
