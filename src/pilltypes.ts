@@ -95,6 +95,34 @@ T({
     hint: "What a rider plays entering, sitting in and leaving a seat",
     when: (d) => d.spellPassengerAnims.size > 0,
 });
+/* WHERE an animation comes from, which is the one thing the Animations column
+ * draws plainly and the search could not ask about. An anim either arrives
+ * through an AnimKit — the numbered boxes, a named bundle the client plays as a
+ * unit, and the only source that carries bonesets — or the spell's visual kit
+ * plays it directly, which is the loose pills above them. On 9.2.7 that is
+ * 31,259 spells against 82,009, with 11,168 carrying both, so it genuinely
+ * partitions the column rather than naming a corner of it.
+ *
+ * HEADLESS, like replace and passenger, and matched the same way: the word
+ * joins the corpus of the anims from that source (spellsByAnim), so `anim:kit`
+ * is every kit-borne animation and `anim:"kit dance"` is a dance that came from
+ * one. That uniformity is the point — four sources, four words, one rule — and
+ * it is why `loose` still finds Attack2HLoosePierce by name, the same
+ * documented overlap as fx:glow matching beam_webglowwhite.
+ *
+ * They describe a ROW's origin, so they are not `count`-like axes and not
+ * target words; nothing else in the anim column branches on which source a pill
+ * came from, and nothing has to. */
+T({
+    key: "anim:kit", field: "anim", word: "kit",
+    hint: "Animation played through an AnimKit — the numbered bundles",
+    when: (d) => d.animKitSpells.size > 0,
+});
+T({
+    key: "anim:loose", field: "anim", word: "loose",
+    hint: "Animation the spell's visual kit plays directly, in no AnimKit",
+    when: (d) => d.visualAnimSpells.size > 0,
+});
 
 /* ------------------------------------------------------- fx and mech
 
@@ -117,16 +145,19 @@ T({
     key: "fx:chain", field: "fx", word: "chain",
     hint: "Chain / beam effect (SpellChainEffects)",
     corpus: (d) => d.fxSearchL, spells: (d) => d.fxSpells,
+    targets: (d) => d.fxTargets,
 });
 T({
     key: "fx:dissolve", field: "fx", word: "dissolve",
     hint: "Dissolve / materialize effect (DissolveEffect)",
     corpus: (d) => d.dissolveSearchL, spells: (d) => d.dissolveSpells,
+    targets: (d) => d.dissolveTargets,
 });
 T({
     key: "fx:glow", field: "fx", word: "glow",
     hint: "Edge glow / rim-light effect (EdgeGlowEffect)",
     corpus: (d) => d.glowSearchL, spells: (d) => d.glowSpells,
+    targets: (d) => d.glowTargets,
 });
 /* "ghost" is one word fed by two unrelated tables — ShadowyEffect rows and
  * Type-22 material recolors. Two records, one keyword: exactly the case the
@@ -135,10 +166,12 @@ T({
     key: "fx:shadowy", field: "fx", word: "ghost",
     hint: "Ghostly recolor (ShadowyEffect / ghost material)",
     corpus: (d) => d.shadowySearchL, spells: (d) => d.shadowySpells,
+    targets: (d) => d.shadowyTargets,
 });
 T({
     key: "fx:ghostmat", field: "fx", word: "ghost",
     corpus: (d) => d.ghostMatSearchL, spells: (d) => d.ghostMatSpells,
+    targets: (d) => d.ghostMatTargets,
 });
 T({
     key: "fx:tint", field: "fx", word: "tint",
@@ -185,21 +218,25 @@ T({
     key: "fx:screen", field: "fx", word: "screen",
     hint: "Full-screen tint / overlay while the aura holds (ScreenEffect)",
     corpus: (d) => d.screenSearchL, spells: (d) => d.screenSpells,
+    targets: (d) => d.screenTargets,
 });
 T({
     key: "fx:shapeshift", field: "fx", word: "shapeshift",
     hint: "Shapeshift form (SpellShapeshiftForm)",
     corpus: (d) => d.shapeshiftSearchL, spells: (d) => d.shapeshiftSpells,
+    targets: (d) => d.shapeshiftTargets,
 });
 T({
     key: "fx:morph", field: "fx", word: "morph",
     hint: "Morph / transform aura (CreatureDisplayInfo)",
     corpus: (d) => d.morphSearchL, spells: (d) => d.morphSpells,
+    targets: (d) => d.morphTargets,
 });
 T({
     key: "fx:summon", field: "fx", word: "summon",
     hint: "Summoned creature (SpellEffect SUMMON)",
     corpus: (d) => d.summonPairSearchL, spells: (d) => d.summonPairSpells,
+    targets: (d) => d.summonTargets,
 });
 /* Gameobject spawners — summon's sibling: one conjures a creature, this
  * places an OBJECT. The corpus is the object name plus its model file, so a
@@ -208,6 +245,7 @@ T({
     key: "fx:object", field: "fx", word: "object",
     hint: "GameObject the spell places — campfire, portal, banner, chest",
     corpus: (d) => d.objectSearchL, spells: (d) => d.objectSpells,
+    targets: (d) => d.objectTargets,
 });
 /* The two sides of an invisibility channel. All three axes at once: the
  * category word is the corpus, the invisibility TYPE is the bare number
@@ -268,10 +306,17 @@ T({
  * TWO TYPES, ONE EDGE SET, because direction is the first thing you want to
  * ask: `triggers` is what this spell reaches, `origin` what reaches it. The
  * corpus of each is the linked spell's NAME plus every word the two are joined
- * by — not its id, which substring-matches numerically across the whole field
- * (measured in data.ts) — so mech:"triggers fireball" and mech:"triggers every
- * tick" are the same code path, and a spell is reached by id through the chip's
- * own click.
+ * by, so mech:"triggers fireball" and mech:"triggers periodically" are the same
+ * code path.
+ *
+ * THE ID ANSWERS THROUGH `bare`, NEVER THROUGH THE CORPUS — the distinction is
+ * the whole reason `mech:"triggers 133"` can exist at all. A corpus is matched
+ * by SUBSTRING, and putting a 6-digit id in one was measured out (data.ts:
+ * `mech:"speed 70"` 76 -> 85, `mech:"invis 13"` 11 -> 47). `bare` is EQUALITY
+ * against the id the chip stands for, so 133 means spell 133 and nothing else —
+ * the same mechanism invis/detect already use for their channel number, and the
+ * reason declaring it here is two lines rather than a new axis. Generalise that
+ * before adding any other id-bearing search: the corpus is for words.
  *
  * `origin` replaced `triggeredby` on 2026-07-30 (user: "not aesthetic"). Every
  * other category word in this app is one plain word; a run-together compound
@@ -290,14 +335,16 @@ T({
  * "... Area Triggers". Documented substring behaviour, not a leak. */
 T({
     key: "mech:triggers", field: "mech", word: "triggers",
-    hint: "Another spell this one casts, ticks, procs or removes",
+    hint: "Another spell this one casts, ticks, procs or removes — by name or id",
     corpus: (d) => d.triggersSearchL, spells: (d) => d.triggersSpells,
+    bare: (d, id) => id,
     when: (d) => d.triggersSpells.size > 0,
 });
 T({
     key: "mech:origin", field: "mech", word: "origin",
-    hint: "A spell that casts, ticks, procs or removes this one",
+    hint: "A spell that casts, ticks, procs or removes this one — by name or id",
     corpus: (d) => d.originSearchL, spells: (d) => d.originSpells,
+    bare: (d, id) => id,
     when: (d) => d.originSpells.size > 0,
 });
 
@@ -309,5 +356,6 @@ T({
     key: "fx:scale", field: "fx", word: "scale",
     hint: "Size change the aura applies",
     corpus: (d) => d.scaleSearchL, spells: (d) => d.scaleSpells,
+    targets: (d) => d.scaleTargets,
     numeric: {kind: "value", of: (d, pct) => pct, operatorOnly: true},
 });

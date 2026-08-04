@@ -1,7 +1,7 @@
 /* Leaf helpers shared by every Epsilook module.
  *
  * Two families, both dependency-free:
- *   - typed DOM shorthands ($, $$, $$inputs, el, targetClosest). The app builds
+ *   - typed DOM shorthands ($, $$, el, targetClosest). The app builds
  *     its result rows by hand, so these are the vocabulary that does it, and
  *     the type assertions live here once instead of at every call site.
  *   - fillTemplate, which fills the {slot} placeholders in the URL and command
@@ -22,13 +22,6 @@ export const $ = (sel: string): HTMLElement =>
 
 /** querySelectorAll shorthand, typed for HTML elements. */
 export const $$ = (sel: string, root: ParentNode = document): NodeListOf<HTMLElement> =>
-    root.querySelectorAll(sel);
-
-/**
- * querySelectorAll for form controls — the checkbox rows read .checked and
- * .value, which plain Element / HTMLElement don't carry.
- */
-export const $$inputs = (sel: string, root: ParentNode = document): NodeListOf<HTMLInputElement> =>
     root.querySelectorAll(sel);
 
 /** Create an element, optionally with a class and text content. */

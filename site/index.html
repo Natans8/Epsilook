@@ -29,7 +29,7 @@
           href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
     <!-- bump ?v= on every deploy that touches the css or the bundle's sources,
          or browsers keep stale copies (python tools/bump.py does both spots) -->
-    <link rel="stylesheet" href="css/app.css?v=20260804b">
+    <link rel="stylesheet" href="css/app.css?v=20260804c">
     <script>
         // Replay the stored theme before the first paint, so a light theme
         // never flashes dark. Only that: the picker, the default and the
@@ -94,7 +94,8 @@
                  placeholder="Search names, models, sounds and animations — or type model: for a field tag">
         </span>
             </div>
-            <button id="help-btn" type="button" title="Search syntax" aria-label="Search syntax help"
+            <button id="help-btn" type="button" title="How search works&#10;Click: open the reference card"
+                    aria-label="Search syntax help"
                     aria-haspopup="dialog">?
             </button>
         </div>
@@ -112,7 +113,9 @@
         <dialog id="help" aria-labelledby="help-title">
             <div class="help-top">
                 <h2 id="help-title">How search works</h2>
-                <button id="help-close" type="button" title="Close" aria-label="Close help">×</button>
+                <button id="help-close" type="button" title="Close&#10;Click: close this&#10;Esc: close this"
+                        aria-label="Close help">×
+                </button>
             </div>
 
             <div class="help-body">
@@ -123,7 +126,7 @@
 
                     <button id="help-specimen" type="button"
                             data-search='model:"caster attach hand|chest" -mech:school_damage "fel reaver"'
-                            title="Run this search"></button>
+                            title="A real search, drawn exactly as the bar draws it&#10;Click: run it"></button>
 
                     <ul class="legend">
                         <li data-mark="field" tabindex="0"><span class="legend-swatch f-model">model:</span>
@@ -148,51 +151,45 @@
                         </li>
                     </ul>
 
-                    <p class="help-rule">Tags <b>all</b> have to match. Words inside <b>one</b> tag have to match the
-                        <b>same</b> file, sound or effect — which is the difference between one thing that is both,
-                        and two separate things.</p>
+                    <!-- The rule and the four queries that PROVE it are one thing, so they
+                         sit together. They used to be a band apart headed "Where a tag ends",
+                         which restated this sentence and then illustrated it a screen later. -->
+                    <p class="help-rule">Tags <b>all</b> have to match, and a tag takes <b>one word</b> unless
+                        quotes hold more together. So where a word sits is the whole question:</p>
+                    <ul class="help-pairs">
+                        <li>
+                            <button data-search='model:"fire missile"'></button>
+                            <span><b>one</b> model that is both</span>
+                        </li>
+                        <li>
+                            <button data-search="model:fire model:missile"></button>
+                            <span><b>two</b> different models on one spell</span>
+                        </li>
+                        <li class="pair-break">
+                            <button data-search='fx:"chain red"'></button>
+                            <span>a chain effect that is <b>also</b> red</span>
+                        </li>
+                        <li>
+                            <button data-search="fx:chain red"></button>
+                            <span>a chain effect — and “red” <b>anywhere</b> at all</span>
+                        </li>
+                    </ul>
+                    <p class="help-rule">A value with a space in it needs quotes of its own:
+                        <button class="help-inline" data-search='anim:(boneset "upper body")'></button>
+                    </p>
                 </section>
 
-                <div class="help-cols">
-                    <section class="help-band">
-                        <h3>Where a tag ends</h3>
-                        <p class="help-lead">A tag takes <b>one word</b>; quotes hold more together. The bar shows
-                            which is which, so the boundary is never a guess.</p>
-                        <ul class="help-pairs">
-                            <li>
-                                <button data-search='fx:"chain red"'></button>
-                                <span>a chain effect that is <b>also</b> red</span>
-                            </li>
-                            <li>
-                                <button data-search="fx:chain red"></button>
-                                <span>a chain effect — and “red” anywhere at all</span>
-                            </li>
-                            <li>
-                                <button data-search='model:"fire missile"'></button>
-                                <span>one model that is both</span>
-                            </li>
-                            <li>
-                                <button data-search="model:fire model:missile"></button>
-                                <span>two different models on one spell</span>
-                            </li>
-                        </ul>
-                        <p class="help-rule">A value with a space in it needs quotes of its own:
-                            <button class="help-inline" data-search='anim:(boneset "upper body")'></button>
-                        </p>
-                    </section>
-
-                    <section class="help-band">
-                        <h3>What you can ask for</h3>
-                        <p class="help-lead">Every column sorts its contents under words you can search by. They
-                            autocomplete inside a tag — <b>hover one to see what it finds, click to run it</b>.</p>
-                        <div id="help-vocab"></div>
-                        <p class="help-rule">Category words match <b>file names</b> too, so
-                            <button class="help-inline" data-search='model:"missile arrow"'></button>
-                            is a projectile whose model is an arrow. Colours work by name or by hex:
-                            <button class="help-inline" data-search="fx:#00b4ff"></button>
-                        </p>
-                    </section>
-                </div>
+                <section class="help-band">
+                    <h3>What you can ask for</h3>
+                    <p class="help-lead">Every column sorts its contents under words you can search by. They
+                        autocomplete inside a tag — <b>hover one to see what it finds, click to run it</b>.</p>
+                    <div id="help-vocab"></div>
+                    <p class="help-rule">Category words match <b>file names</b> too, so
+                        <button class="help-inline" data-search='model:"missile arrow"'></button>
+                        is a projectile whose model is an arrow. Colours work by name or by hex:
+                        <button class="help-inline" data-search="fx:#00b4ff"></button>
+                    </p>
+                </section>
 
                 <section class="help-band">
                     <h3>Clicks and keys</h3>
@@ -240,7 +237,8 @@
 
     <section id="listing">
         <div id="toolbar">
-            <div id="filters" title="Click to cycle: any → only spells with → only spells without">
+            <div id="filters"
+                 title="Keep only spells that have (or lack) a kind of content&#10;Independent of which columns are shown&#10;Click: cycle any → only with → only without">
                 <span>Filter:</span>
                 <button type="button" class="tri" data-filter="models" data-state=""
                         aria-label="Models filter: showing all">Models
@@ -255,21 +253,44 @@
                         aria-label="Effects filter: showing all">Effects
                 </button>
             </div>
-            <div id="columns" title="Hidden columns are also left out of plain-word search and exports">
+            <!-- THE PANEL IS A SCALE MODEL OF THE TABLE'S COLUMNS. Each chip
+                 wears its own column's tone and they sit in the order the
+                 columns do, so "these are the columns, in this order" is
+                 something you can see rather than something to be told — which
+                 is what a row of identical tickboxes could never say. On/off is
+                 the same filled-vs-hollow the pills in that column use.
+                 Order and state are applied from state.colOrder /
+                 state.hiddenCols (events.ts), so the sequence here is only the
+                 pre-script fallback. -->
+            <div id="columns">
                 <span>Columns:</span>
-                <label><input type="checkbox" data-col="models" checked> Models</label>
-                <label><input type="checkbox" data-col="sounds" checked> Sounds</label>
-                <label><input type="checkbox" data-col="animations" checked> Animations</label>
-                <label><input type="checkbox" data-col="fx" checked> Effects</label>
-                <label><input type="checkbox" data-col="mechanics"> Mechanics</label>
+                <button type="button" class="col-chip" data-col="models" aria-pressed="true">Models</button>
+                <button type="button" class="col-chip" data-col="sounds" aria-pressed="true">Sounds</button>
+                <button type="button" class="col-chip" data-col="animations" aria-pressed="true">
+                    Animations
+                </button>
+                <button type="button" class="col-chip" data-col="fx" aria-pressed="true">Effects</button>
+                <button type="button" class="col-chip" data-col="mechanics" aria-pressed="true">
+                    Mechanics
+                </button>
             </div>
             <div id="export">
-                <button id="share-link" title="Copy a link to this exact search">🔗 Share</button>
+                <button id="share-link"
+                        title="A link to this exact search — query, filters, sort and game version&#10;Click: copy it">
+                    🔗 Share
+                </button>
                 <span class="export-sep"></span>
                 <span>Export:</span>
-                <button id="export-csv" title="Download these results as CSV">CSV</button>
-                <button id="export-json" title="Download these results as JSON">JSON</button>
-                <button id="export-discord" title="Copy a pasteable text list — good for Discord">Copy as Text</button>
+                <button id="export-csv"
+                        title="These results as a spreadsheet — one row per spell, hidden columns left out&#10;Click: download it">
+                    CSV
+                </button>
+                <button id="export-json"
+                        title="These results as JSON — the full structure behind every pill&#10;Click: download it">JSON
+                </button>
+                <button id="export-discord"
+                        title="These results as plain text, ready to paste into Discord&#10;Click: copy it">Copy as Text
+                </button>
             </div>
         </div>
 
@@ -278,29 +299,49 @@
                 <thead>
                 <tr>
                     <th class="c-idx">#</th>
+                    <!-- ONE SHAPE FOR EVERY HEADER: what the column holds, then the
+                         gesture. They used to be three different things — three
+                         columns said only "Click to sort by count", two described
+                         themselves and then said it in prose, and ID and Name said
+                         nothing at all. A trailing "Gesture: action" line is what
+                         tooltip.ts renders as a key map (pills.ts §GESTURES), so
+                         matching that format is also what gets them the keycaps
+                         every pill tooltip already has. -->
                     <th data-sort="id" class="c-id" aria-sort="none">
-                        <button type="button">ID <span class="arrow"></span></button>
+                        <button type="button"
+                                title="The spell's own ID — what .cast and .aura take&#10;Click: sort by ID">ID
+                            <span class="arrow"></span></button>
                     </th>
                     <th data-sort="name" class="c-name" aria-sort="none">
-                        <button type="button">Name <span class="arrow"></span></button>
+                        <button type="button"
+                                title="The spell's name, with the Epsilon commands for it underneath&#10;Click: sort by name">
+                            Name <span class="arrow"></span></button>
                     </th>
                     <th data-sort="models" class="c-models" aria-sort="none">
-                        <button type="button" title="Click to sort by count">Models <span class="arrow"></span></button>
+                        <button type="button"
+                                title="Every model the spell shows — missiles, attached effects, ground art — and where each is attached&#10;Click: sort by how many">
+                            Models <span class="arrow"></span></button>
                     </th>
                     <th data-sort="sounds" class="c-sounds" aria-sort="none">
-                        <button type="button" title="Click to sort by count">Sounds <span class="arrow"></span></button>
+                        <button type="button"
+                                title="The sound files it plays, grouped by the SoundKit that plays them&#10;Click: sort by how many">
+                            Sounds <span class="arrow"></span></button>
                     </th>
                     <th data-sort="animations" class="c-animations" aria-sort="none">
-                        <button type="button" title="Click to sort by count">Animations <span class="arrow"></span>
+                        <button type="button"
+                                title="The character animations it plays, loose or bundled into an AnimKit&#10;Click: sort by how many">
+                            Animations <span class="arrow"></span>
                         </button>
                     </th>
                     <th data-sort="fx" class="c-fx" aria-sort="none">
                         <button type="button"
-                                title="Visual effects not tied to a model — beams, glows, tints, morphs, summons and more. Click to sort by count">
+                                title="Visual effects not tied to a model — beams, glows, tints, morphs, summons and more&#10;Click: sort by how many">
                             Effects <span class="arrow"></span></button>
                     </th>
                     <th data-sort="mechanics" class="c-mechanics" aria-sort="none">
-                        <button type="button" title="What the spell does mechanically. Click to sort by count">Mechanics
+                        <button type="button"
+                                title="What the spell does mechanically — its effects, auras, and the spells it triggers&#10;Click: sort by how many">
+                            Mechanics
                             <span class="arrow"></span></button>
                     </th>
                 </tr>
@@ -363,6 +404,6 @@
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
 <!-- the whole app: esbuild bundles src/**/*.ts into this one file
      (tools/build.mjs) — module order lives in the import graph now -->
-<script src="js/app.js?v=20260804b"></script>
+<script src="js/app.js?v=20260804c"></script>
 </body>
 </html>

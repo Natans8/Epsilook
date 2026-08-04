@@ -133,17 +133,48 @@ function fill(text: string): void {
 /**
  * Anchor to the element's box, not the pointer: it holds still while the
  * pointer moves inside a pill, and it is the only option on keyboard focus.
- * Below by default, flipped above when the viewport runs out.
+ * Below by default, flipped above when the viewport runs out — OR when the
+ * anchor is a wide block, which is the rule below.
  */
 function place(): void {
     const a = anchor!.getBoundingClientRect();
     const p = panel!.getBoundingClientRect();
+    const above = Math.max(MARGIN, a.top - p.height - GAP);
     let top = a.bottom + GAP;
-    if (top + p.height > window.innerHeight - MARGIN) {
-        top = Math.max(MARGIN, a.top - p.height - GAP);
+    if (top + p.height > window.innerHeight - MARGIN || coversWhatFollows(a, p)) {
+        top = above;
     }
     const left = Math.max(MARGIN, Math.min(a.left, window.innerWidth - p.width - MARGIN));
     panel!.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+}
+
+/**
+ * How much wider than the panel an anchor must be to count as a "block".
+ * Two panel widths is the point past which the panel can no longer sit clear
+ * of the anchor's own column, so below is guaranteed to land on whatever
+ * follows rather than beside it.
+ */
+const BLOCK_RATIO = 2;
+
+/**
+ * Would placing below bury the content this anchor leads INTO?
+ *
+ * Reported by the user on the help dialog's specimen: the query at the top of
+ * the band is a full-width button, so its tooltip landed exactly on the legend
+ * row explaining the mark under the pointer — it covered the one thing the
+ * reader was looking at.
+ *
+ * The signal is the anchor's WIDTH, not its identity. A pill in a table row is
+ * narrow, so its panel hangs beside most of what is beneath it and below stays
+ * the predictable default; a wide block is a paragraph-shaped thing, and what
+ * follows a block is nearly always its continuation. Above it sits over the
+ * lead-in instead — text already read on the way down.
+ *
+ * Only when there is genuinely room above: a wide anchor at the top of the
+ * viewport keeps the old behaviour rather than being clamped over itself.
+ */
+function coversWhatFollows(a: DOMRect, p: DOMRect): boolean {
+    return a.width > p.width * BLOCK_RATIO && a.top - p.height - GAP >= MARGIN;
 }
 
 function show(node: HTMLElement, text: string): void {

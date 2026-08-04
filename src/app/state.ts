@@ -36,6 +36,28 @@ export const DEFAULT_PLACEHOLDER = qInput.placeholder;
 export const TRI_LABELS: Record<string, string> =
     {"": "showing all", with: "only spells with", without: "only spells without"};
 
+/* column -> search fields it contributes.
+ *
+ * DECLARATION ORDER IS THE DEFAULT COLUMN ORDER, and it is the only place that
+ * order is written down. index.html's <th> sequence and the row builder's
+ * appendChild sequence used to be two literals saying the same thing, which is
+ * the "two copies of one decision" failure tools/repo.py and viewUrl() exist to
+ * end — and it is what made reordering impossible to add without a third. Both
+ * sides now read `state.colOrder`, seeded from these keys.
+ *
+ * It sits ABOVE `state` because the initializer reads it: a `const` below would
+ * be in its temporal dead zone and throw at module load, not at first use. */
+export const COL_FIELDS: Record<string, string[]> = {
+    models: ["model"],
+    sounds: ["sound"],
+    animations: ["anim"],
+    fx: ["fx"],
+    mechanics: ["mech"],
+};
+
+/** The payload columns in their default left-to-right order. */
+export const COL_ORDER = Object.keys(COL_FIELDS);
+
 /* ------------------------------------------------------------- state */
 
 /** A column filter's tri-state: any / must have / must not have. */
@@ -65,6 +87,7 @@ export interface AppState {
     filters: Record<string, TriState>;
     sort: { key: string; dir: number };
     hiddenCols: Record<string, boolean>;
+    colOrder: string[];
 }
 
 export const state: AppState = {
@@ -97,6 +120,11 @@ export const state: AppState = {
     // Mechanics ships VISIBLE (the storage key moved to v5 so the old
     // default does not linger for existing users).
     hiddenCols: {models: false, sounds: false, animations: false, fx: false, mechanics: false},
+    // the payload columns left to right. DISPLAY ONLY, like hiddenCols, and
+    // persisted the same way — deliberately absent from the URL (the user's
+    // call): a shared link should show the recipient THEIR layout, and the
+    // order changes nothing about which spells come back.
+    colOrder: COL_ORDER.slice(),
 };
 
 /**
@@ -108,15 +136,6 @@ export function activeData(): SpellData {
     if (!state.data) throw new Error("no pack loaded yet");
     return state.data;
 }
-
-// column -> search fields it contributes
-export const COL_FIELDS: Record<string, string[]> = {
-    models: ["model"],
-    sounds: ["sound"],
-    animations: ["anim"],
-    fx: ["fx"],
-    mechanics: ["mech"],
-};
 
 // Fields whose column is currently off screen. DISPLAY ONLY — this never
 // reaches the search (see FIELDS.all in search.ts); its one job is letting

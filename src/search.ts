@@ -350,9 +350,16 @@ function attachmentNamesOf(src: number, dst: number, data: SpellData): string[] 
  * They have to be bit tests, not corpus words, for two reasons: the mask
  * lives on the ROW, so `model:"caster fireball"` must mean one row that is
  * both — not a spell that happens to have a caster row and a fireball row
- * — and "both" is a combination no single bit spells. "target" covers the
- * never-caster bit too: it keeps its own bit (and its own icon color) but
- * nobody searches for it by another name.
+ * — and "both" is a combination no single bit spells.
+ *
+ * `target` and `others` are deliberately NESTED rather than exclusive.
+ * TargetType 4 ("not the caster", 11,227 spells on 9.2.7) is still a target
+ * and is what you want back from `model:target`; `others` is the narrower
+ * question — content the caster never sees — and it exists because the pill
+ * draws that bit in its own colour, so a red crosshair had a glyph and no
+ * name. `area` nests the same way over the missile-destination bit, which
+ * keeps no word of its own: a missile's destination is a place on the
+ * ground like any other, and the icon's tooltip already says which.
  *
  * Note the normal corpus path still substring-matches file names that
  * contain these words (beamtarget_onground) — the same accepted overlap as
@@ -365,6 +372,7 @@ function attachmentNamesOf(src: number, dst: number, data: SpellData): string[] 
 export const TARGET_TESTS: Record<string, (m: number) => boolean> = {
     caster: (m) => (m & 1) !== 0,
     target: (m) => (m & (2 | 8)) !== 0,
+    others: (m) => (m & 8) !== 0,
     area: (m) => (m & (4 | 16)) !== 0,
     both: (m) => (m & 1) !== 0 && (m & 2) !== 0,
 };
@@ -379,8 +387,9 @@ export const TARGET_WORDS = Object.keys(TARGET_TESTS);
  * undescribed (or the reverse). */
 export const TARGET_WORD_TITLES: Record<string, string> = {
     caster: "Plays on the caster",
-    target: "Plays on the target",
-    area: "Plays where the spell lands",
+    target: "Plays on the target — including the never-caster kind",
+    others: "Plays on the target and never on the caster",
+    area: "Plays where the spell lands — its effect area, or where a missile hits",
     both: "Plays on the caster and the target",
 };
 
@@ -548,14 +557,38 @@ function spellsByName(tokens: QueryToken[], data: SpellData): Set<number> {
     return out;
 }
 
+/* The two words that name where an animation came from. They head no pill —
+ * a real AnimKit group is headed by its id and a loose animation has no head
+ * at all — so unlike `replace` and `passenger` these are words for a shape
+ * that was already on screen and previously unsayable. */
+const KIT_WORD = "kit", LOOSE_WORD = "loose";
+
 /**
- * Search animation names; return spells whose AnimKits use the matches,
- * spells whose visual kits play a matching animation directly
- * (SpellVisualAnim — the loose pills), plus spells with a matching direct
- * stand/walk anim (proc Type 7, merged with aura 312). Those render under a
- * "replace" group head, and that word joins their corpus — a token may hit
- * "replace" instead of the anim name (fx-corpus semantics), so anim:replace
- * alone finds every swap and anim:"replace walk" scopes to walk swaps.
+ * Does every token match this animation, read as part of `word`'s group?
+ *
+ * The anim column's one matching rule. A token hits either the group's head
+ * word or the animation's own name, which is what makes `anim:replace` find
+ * every swap while `anim:"replace stealthstand"` scopes to one — and, applied
+ * to all four sources alike, what makes `anim:kit` mean kit-borne rather than
+ * "an animation with 'kit' in its name". The overlap is deliberate and is this
+ * app's documented behaviour everywhere: `anim:loose` also finds
+ * Attack2HLoosePierce, exactly as `fx:glow` finds beam_webglowwhite.
+ */
+function inSource(word: string, data: SpellData, anim: number,
+                  tokens: QueryToken[]): boolean {
+    const nameL = data.animNamesL[anim] || "";
+    return tokens.every((t) => word.includes(t.text) || nameL.includes(t.text));
+}
+
+/**
+ * Search the animations column.
+ *
+ * Four sources, each with a head word that joins its corpus (see inSource):
+ * `kit` for animations an AnimKit plays, `loose` for ones the spell's visual
+ * kit plays directly, `replace` for stand/walk swaps (proc Type 7 merged with
+ * aura 312) and `passenger` for what a rider plays in a seat. So anim:replace
+ * finds every swap, anim:"replace walk" scopes to walk swaps, and anim:kit is
+ * every animation that arrived in a bundle.
  */
 function spellsByAnim(tokens: QueryToken[], data: SpellData): Set<number> {
     const out = new Set<number>();
@@ -584,7 +617,7 @@ function spellsByAnim(tokens: QueryToken[], data: SpellData): Set<number> {
         // animations inherit the kit's. Replacement swaps have no mask.
         for (const [s, byAnim] of data.visualAnimTargets) {
             for (const [a, mask] of byAnim) {
-                if (maskMatches(tests, mask) && textMatches(data.animNamesL[a] || "", text)) {
+                if (maskMatches(tests, mask) && inSource(LOOSE_WORD, data, a, text)) {
                     out.add(s);
                     break;
                 }
@@ -594,7 +627,7 @@ function spellsByAnim(tokens: QueryToken[], data: SpellData): Set<number> {
             for (const [kit, mask] of byKit) {
                 if (!maskMatches(tests, mask)) continue;
                 const anims = data.animKitAnims.get(kit) || [];
-                if (anims.some((a) => textMatches(data.animNamesL[a] || "", text))) {
+                if (anims.some((a) => inSource(KIT_WORD, data, a, text))) {
                     out.add(s);
                     break;
                 }
@@ -603,21 +636,22 @@ function spellsByAnim(tokens: QueryToken[], data: SpellData): Set<number> {
         return out;
     }
     for (let a = 0; a < data.animNamesL.length; a++) {
-        const nameL = data.animNamesL[a];
-        if (textMatches(nameL, tokens)) {
+        // Four sources, four head words, ONE rule (see inSource). `kit` and
+        // `loose` used to share an untagged branch, which is exactly why the
+        // column could show you where an animation came from and the search
+        // could not ask.
+        if (inSource(KIT_WORD, data, a, tokens)) {
             for (const kit of data.animAnimKits.get(a) || []) {
                 for (const s of data.animKitSpells.get(kit) || []) out.add(s);
             }
+        }
+        if (inSource(LOOSE_WORD, data, a, tokens)) {
             for (const s of data.visualAnimSpells.get(a) || []) out.add(s);
         }
-        // animation replacements group under a "replace" head; that word, or
-        // an anim name on either side of a swap, joins their corpus
-        if (tokens.every((t) => "replace".includes(t.text) || nameL.includes(t.text))) {
+        if (inSource("replace", data, a, tokens)) {
             for (const s of data.replaceSpells.get(a) || []) out.add(s);
         }
-        // passenger anims group under a "passenger" head, so that word joins
-        // their corpus the same way "replace" does
-        if (tokens.every((t) => "passenger".includes(t.text) || nameL.includes(t.text))) {
+        if (inSource("passenger", data, a, tokens)) {
             for (const s of data.passengerAnimSpells.get(a) || []) out.add(s);
         }
     }
@@ -644,6 +678,18 @@ function spellsByAnim(tokens: QueryToken[], data: SpellData): Set<number> {
  */
 function spellsByFx(tokens: QueryToken[], data: SpellData): Set<number> {
     const out = new Set<number>();
+    /* TARGET WORDS FIRST, and they are per-ROW here exactly as they are in the
+     * model, sound and anim columns: the same chain plays on the caster for one
+     * spell and on the target for another, so the mask lives on (spell, id).
+     *
+     * This column drew the icons and offered the words in autocomplete long
+     * before it tested them — `fx:caster` fell through to ordinary corpus text
+     * and selected the 32 spells with "caster" in an asset path, while 27 of
+     * their cells lit their target icons anyway (the icons ask the mask, the
+     * search did not). That is the one drift this app's registry exists to make
+     * impossible, so the test belongs here rather than a note in the docs. */
+    const {text: aimed, tests} = splitTargetTokens(tokens);
+    const maskOk = tests.length ? (m: number) => maskMatches(tests, m) : undefined;
     // A chain's attachment points live on the (spell, chain) ROW rather than
     // on the chain, so they cannot be baked into a per-id corpus: a chip
     // carrying `attach` is answered ENTIRELY by the row walk, exactly as the
@@ -654,14 +700,18 @@ function spellsByFx(tokens: QueryToken[], data: SpellData): Set<number> {
     // corpus as ordinary words, and a keyword widened the result instead of
     // narrowing it. Both halves now read `text`, so the keyword and its value
     // are accounted for exactly once.
-    const {text, values: attaches} = splitKeyword(tokens, ATTACH_WORD);
+    const {text, values: attaches} = splitKeyword(aimed, ATTACH_WORD);
     if (attaches.length) {
         // the points match on the SAME row as any chain corpus words — "a
         // fireball beam launched from the left hand", not "a fireball beam
         // somewhere and a left-hand attachment somewhere"
         for (const [s, rows] of data.spellChainRows) {
+            const masks = data.fxTargets.get(s);
             for (const r of rows) {
                 if (!matchesNames(attaches, attachmentNamesOf(r.src, r.dst, data))) continue;
+                // the row again: who the beam plays on is part of the same row
+                // the attachment points came off
+                if (maskOk && !maskOk(masks?.get(r.chain) || 0)) continue;
                 if (textMatches(data.fxSearchL.get(r.chain) || "", text)) {
                     out.add(s);
                     break;
@@ -670,7 +720,7 @@ function spellsByFx(tokens: QueryToken[], data: SpellData): Set<number> {
         }
         return out;
     }
-    for (const type of Pills.typesFor("fx")) Pills.scanType(type, data, tokens, out);
+    for (const type of Pills.typesFor("fx")) Pills.scanType(type, data, text, out, maskOk);
     return out;
 }
 

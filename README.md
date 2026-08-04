@@ -26,7 +26,8 @@ Full syntax lives behind the **?** button in the app. The short version:
   `anim:` `fx:` `mech:` `id:`. Tags AND together; a `-` prefix excludes.
 - **Target-type icons** on models, sounds, animations, effects and mechanics say who the content plays on — caster,
   target, or the target location. A row that plays on several shows one icon each. Search them like category words:
-  `model:"caster fire"`, `sound:target`, `anim:both`.
+  `model:"caster fire"`, `sound:target`, `anim:both`, `fx:"chain caster"`. `others` is the narrow one — content the
+  caster never sees — and `target` finds it too.
 - `mech:` covers what an effect does *and* what it is aimed at, matched on the same effect:
   `mech:"school_damage unit_target_enemy"` finds spells with one effect that is both, not spells that happen to have
   each somewhere.
@@ -34,12 +35,13 @@ Full syntax lives behind the **?** button in the app. The short version:
   (`fx:"object campfire"`, with `.gobject spawn` and `.lookup object` on the pill), `model:mount` for the mount it puts
   you on (`model:"mount stallion"`, with `.modify mount`), and `anim:replace` for animations it swaps out —
   `Stand → StealthStand`
-  (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue).
+  (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue). `anim:kit` and `anim:loose`
+  say where an animation came from: a numbered AnimKit bundle, or the spell's visual kit playing it directly.
 - **Spells link to each other**, and the Mechanics column shows both directions: `mech:triggers` for what a spell casts,
   ticks, procs or removes, `mech:origin` for what reaches it. Each chip is the other spell — its id copies, its icon
   opens Wowhead, its name filters to that spell's own row, target icons say who the triggering effect is aimed at, and
-  the note says how they are joined (`on cast`, `periodically`, `removes`). Search either end by name or by mechanism:
-  `mech:"triggers fireball"`, `mech:"origin periodically"`.
+  the note says how they are joined (`on cast`, `periodically`, `removes`). Search either end by name, by mechanism or
+  by exact id: `mech:"triggers fireball"`, `mech:"origin periodically"`, `mech:"triggers 265714"`.
 - **A word may be followed by its value**, space-separated, and that is the only value form in the language:
   `model:"attach chest"` (where on the model it plays), `model:"motion parabola"` (the arc a projectile flies),
   `anim:(boneset "upper body")` (which body region moves),
@@ -54,6 +56,10 @@ Full syntax lives behind the **?** button in the app. The short version:
 - The bar **colours what the grammar recognises** and explains it on hover. Nothing is ever marked wrong: anything it
   leaves plain is an ordinary text search, which is exactly what it does.
 - **Click any tag in the results** to search for it — shift-click adds it to the search, ctrl-click excludes it.
+- **The Columns row is a scale model of the table**: each chip wears its own column's colour and sits where that column
+  does. Click one to show or hide the column (hidden ones also drop out of plain-word search and exports), drag it to
+  move the column, or use `Alt` + `←` `→` from the keyboard. The layout is remembered per browser and stays out of
+  shared links, so a link shows the recipient their own arrangement.
 - The search — filters included — always lives in the URL, so any result set is a shareable link. Append `&export=json`
   or `&export=csv` to download it.
 - Pasting an Epsilon command works: `.cast 12345` becomes an `id:` search.

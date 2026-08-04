@@ -124,14 +124,31 @@ with everything that kit contributes. A visual can reach the same kit through se
 edge. Impact kits genuinely carry duplicate rows differing only in TargetType — that is why a row can be caster *and*
 target.
 
-| TargetType | bit | search word | icon meaning                                                        |
-|------------|-----|-------------|---------------------------------------------------------------------|
-| 1          | 1   | `caster`    | on the caster                                                       |
-| 2          | 2   | `target`    | on the target                                                       |
-| 3          | 4   | `area`      | on the ground at the target                                         |
-| 4          | 8   | `target`    | on the target only, never the caster                                |
-| 5          | 16  | `area`      | on the ground where the missile lands                               |
-| 0          | —   | —           | effectively unused (1 row in 207,241 on 9.2.7); contributes nothing |
+| TargetType | bit | search words       | icon meaning                                                        |
+|------------|-----|--------------------|---------------------------------------------------------------------|
+| 1          | 1   | `caster`           | on the caster                                                       |
+| 2          | 2   | `target`           | on the target                                                       |
+| 3          | 4   | `area`             | on the ground at the target                                         |
+| 4          | 8   | `target`, `others` | on the target only, never the caster                                |
+| 5          | 16  | `area`             | on the ground where the missile lands                               |
+| 0          | —   | —                  | effectively unused (1 row in 207,241 on 9.2.7); contributes nothing |
+
+**The words NEST, they do not partition.** `target` covers bit 8 as well as bit 2, because a never-caster row is still a
+target row and is what you want back from `model:target`; `others` is the narrower question — content the caster never
+sees — and it exists because the pill draws that bit in its own colour, so the red crosshair had a glyph and no name
+(11,227 spells on 9.2.7 in Models, 8,213 in Sounds). `area` nests the same way over bit 16, which keeps **no** word of
+its own: a missile's destination is a place on the ground like any other, and the icon's own tooltip says which. `both`
+is derived (bits 1 **and** 2) rather than being a bit.
+
+**All five payload columns test the mask, since 2026-08-04 — `fx:` did not, and it was drawing the icons anyway.**
+Models, sounds and anims had split target words out of the tokens since the words existed; the fx search never did, so
+`fx:caster` fell through to ordinary corpus text and selected the 32 spells with "caster" in an asset path while 27 of
+their cells lit their icons off the mask. It is now `fx:caster` = 14,641. The mask reaches the fx search through the
+pill-type registry's `targets` axis (docs/PILLS.md §3) — **a type that declares none answers NOTHING to a target word**,
+which is right for a tint or a desaturation and is the thing to check when adding a type that draws the icons.
+`mech:` is the exception and deliberately so: its corpus **is** the `TARGET_*` enum names the column prints, so
+`mech:caster` matches `UNIT_CASTER` / `DEST_CASTER` / `SRC_CASTER` by name — the same "category words match file names
+too" rule the whole app runs on, one level up.
 
 **…but `TargetType` is relative to the CAST, not to the visual.** It distinguishes
 "the caster" from "the unit being cast at" — and on a **self-cast spell those are the same unit**, where the client
@@ -467,6 +484,14 @@ flowchart LR
 
 `SpellVisualAnim`'s initial/loop anims are **the dominant source** — 119k rows vs 32k animkit rows on 9.2.7. `-1` and
 `0` both mean unset (0 would be Stand). Impact kits animate the *target*, so these are not caster-only.
+
+**That split is searchable as `anim:kit` / `anim:loose`** (2026-08-04): where an animation came from is the one thing
+the column draws plainly — numbered AnimKit boxes above, loose pills below — and the search could not ask about it.
+31,259 spells have an AnimKit, 82,009 have a loose anim and 11,168 have both, so it partitions the column rather than
+naming a corner of it. They are **head words like `replace` and `passenger`**, matched the same way (the word OR the
+anim's own name), which is what makes `anim:"kit dance"` a dance that arrived in a bundle and leaves `anim:loose` still
+finding `Attack2HLoosePierce` by name — the documented overlap, same as `fx:glow` finding `beam_webglowwhite`. Four
+sources, four words, one rule (`inSource` in search.ts).
 
 `SpellVisualKitModelAttach` carries animations on the SAME rows that attach a model (§3c, attachment point in §3h): its
 `StartAnimID`/`AnimID`/`EndAnimID` are AnimationData ids for the attached model's start/loop/end and join the loose
@@ -1099,11 +1124,18 @@ carrying the trigger is aimed at. It rides both directions unchanged, because wh
 equally who the triggered spell lands on.
 
 Two search axes, one per direction: **`mech:triggers`** and **`mech:origin`**, each keyed by the LINKED spell's id with
-a corpus of that spell's name and every word the two are joined by (never its id — see §3r's note in `data.ts`) — so
-`mech:"triggers fireball"` and `mech:"triggers periodically"` are one code path. Neither collides with the effect/aura
-names the Mechanics column already matches, which are singular (`TRIGGER_SPELL`), so `mech:trigger` still finds the enum
-rows. `origin` replaced `triggeredby` on 2026-07-30 (user: "not aesthetic") — every other category word in the app is
-one plain word. **`mech:origin` is 47,031 against 47,024 link targets**, the 7 extra arriving through the *other*
+a corpus of that spell's name and every word the two are joined by — so `mech:"triggers fireball"` and
+`mech:"triggers periodically"` are one code path.
+
+**The ID is searchable too, and NOT through that corpus**: `mech:"triggers 265714"` is 101 spells, matched by equality
+against the id the chip stands for via the pill type's `bare` axis — the same mechanism invis/detect use for a channel
+number. The distinction is the whole reason it can exist. A corpus is matched by SUBSTRING, so putting a 6-digit id in
+one was measured out (`mech:"speed 70"` 76 → 85, `mech:"invis 13"` 11 → 47); equality costs the field nothing. Note a
+spell that is neither end of an edge answers 0 — `mech:"triggers 133"` is empty because Fireball triggers nothing and is
+triggered by nothing, which is correct rather than broken. Neither collides with the effect/aura names the Mechanics
+column already matches, which are singular (`TRIGGER_SPELL`), so `mech:trigger` still finds the enum rows. `origin`
+replaced `triggeredby` on 2026-07-30 (user: "not aesthetic") — every other category word in the app is one plain word.
+**`mech:origin` is 47,031 against 47,024 link targets**, the 7 extra arriving through the *other*
 direction's corpus on names like "Reorigination" — the documented "a category word matches names in addition to the
 category" behaviour, and the exact mirror of `mech:triggers` being 49,216 against 49,209 sources.
 

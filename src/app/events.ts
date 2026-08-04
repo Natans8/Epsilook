@@ -49,7 +49,7 @@ import {TRI_LABELS, qInput, state} from "./state";
 import type {Chip} from "./state";
 import {ensureFieldsVisible, setHelp, shareLink, stateToUrl, urlForQuery} from "./url";
 import * as Export from "../export";
-import {$, $$, $$inputs, targetClosest} from "../util";
+import {$, $$, targetClosest} from "../util";
 /* ------------------------------------------------------------ events */
 
 /**
@@ -594,18 +594,19 @@ export function wireEvents() {
         });
     }
 
-    // column visibility
-    for (const box of $$inputs("#columns input[type=checkbox]")) {
-        box.addEventListener("change", () => {
-            state.hiddenCols[box.dataset.col!] = !box.checked;
-            try {
-                localStorage.setItem("epsilook.hiddenCols.v5", JSON.stringify(state.hiddenCols));
-            } catch { /* storage blocked — the choice lasts this page only */
-            }
+    // column visibility — the chip's click, suppressed by wireColumnOrder when
+    // the press turned out to be a drag
+    for (const chip of $$("#columns .col-chip")) {
+        chip.addEventListener("click", () => {
+            const col = chip.dataset.col!;
+            state.hiddenCols[col] = !state.hiddenCols[col];
+            saveColPrefs();
             applyHiddenCols();
             runSearch();
         });
     }
+    // …and column order, in the same panel
+    wireColumnOrder();
 
     // sorting: click cycles ascending -> descending -> back to automatic
     // order; entry-count columns start descending (extreme spells first)
@@ -696,7 +697,200 @@ export function applyHiddenCols() {
     for (const [col, hidden] of Object.entries(state.hiddenCols)) {
         table.classList.toggle(`hide-${col}`, hidden);
     }
-    for (const box of $$inputs("#columns input[type=checkbox]")) {
-        box.checked = !state.hiddenCols[box.dataset.col!];
+    for (const chip of $$("#columns .col-chip")) {
+        const shown = !state.hiddenCols[chip.dataset.col!];
+        chip.classList.toggle("off", !shown);
+        chip.setAttribute("aria-pressed", String(shown));
     }
+    describeCols();
+}
+
+/** Both display preferences live under one key family, written together. */
+function saveColPrefs(): void {
+    try {
+        localStorage.setItem("epsilook.hiddenCols.v5", JSON.stringify(state.hiddenCols));
+        localStorage.setItem("epsilook.colOrder.v1", JSON.stringify(state.colOrder));
+    } catch { /* storage blocked — the choice lasts this page only */
+    }
+}
+
+/**
+ * Put the table and the panel into `state.colOrder`.
+ *
+ * Reordering is pure DOM movement: hiding is a class on the table, so a hidden
+ * column is still a cell in every row and nothing here has to know or care
+ * which columns are on screen. Moving the nodes rather than re-running the
+ * search is also what keeps this instant — the cells already exist, and a
+ * re-render would throw away the icons the rows have lazily loaded.
+ */
+export function applyColOrder(): void {
+    const table = $("#results");
+    const headRow = table.querySelector("thead tr");
+    const at = (row: Element, col: string) => row.querySelector(`.c-${col}`);
+    // append in order: a node already in the parent MOVES rather than
+    // duplicating, so walking the order once is the whole reorder
+    for (const col of state.colOrder) {
+        const th = headRow && at(headRow, col);
+        if (th) headRow!.appendChild(th);
+    }
+    for (const row of table.querySelectorAll("tbody tr")) {
+        // an "empty" placeholder row spans the table and has no payload cells
+        for (const col of state.colOrder) {
+            const td = at(row, col);
+            if (td) row.appendChild(td);
+        }
+    }
+    const panel = $("#columns");
+    for (const col of state.colOrder) {
+        const chip = panel.querySelector(`.col-chip[data-col="${col}"]`);
+        if (chip) panel.appendChild(chip);
+    }
+    describeCols();
+}
+
+/**
+ * Say what each chip is and does, in the tooltip and to a screen reader.
+ *
+ * Both facts a chip carries are POSITIONAL — whether its column is on, and
+ * where in the order it sits — so both change under the user's hands and
+ * neither can be written into the markup once. Composed here, next to the two
+ * functions that change them.
+ */
+function describeCols(): void {
+    const n = state.colOrder.length;
+    for (const chip of $$("#columns .col-chip")) {
+        const col = chip.dataset.col!;
+        const name = (chip.textContent || "").trim();
+        const shown = !state.hiddenCols[col];
+        const at = state.colOrder.indexOf(col) + 1;
+        chip.title = [
+            `${name} column — ${shown ? `column ${at} of ${n}` : "hidden"}`,
+            shown
+                ? "Hiding it also leaves it out of plain-word search and exports"
+                : "Hidden: not shown, not searched by plain words, not exported",
+            `Click: ${shown ? "hide it" : "show it"}`,
+            "Drag: move it left or right",
+            "Alt + ← →: move it from the keyboard",
+        ].join("\n");
+        chip.setAttribute("aria-label",
+            `${name} column, ${shown ? `shown, position ${at} of ${n}` : "hidden"}`);
+    }
+}
+
+/** Move a column to a new index, then apply and remember it. */
+function moveCol(col: string, to: number): void {
+    const from = state.colOrder.indexOf(col);
+    const at = Math.max(0, Math.min(state.colOrder.length - 1, to));
+    if (from < 0 || from === at) return;
+    state.colOrder.splice(from, 1);
+    state.colOrder.splice(at, 0, col);
+    applyColOrder();
+    saveColPrefs();
+}
+
+/** How far the pointer must travel before a press becomes a drag, not a tick. */
+const DRAG_SLOP = 4;
+
+/**
+ * Drag a column label to reorder the table, with an arrow-key equivalent.
+ *
+ * IN THE PANEL THAT ALREADY TICKS THEM (the user's first suggestion), because
+ * the panel is the one place the columns are listed as a set — the table's own
+ * headers are click-to-sort, and overloading a header with a drag would put two
+ * meanings on one press.
+ *
+ * POINTER EVENTS, NOT HTML5 DRAG-AND-DROP, and the reason is not preference:
+ * `draggable` + dragstart/dragover/drop was written first and cannot be
+ * verified here — CDP's synthetic mouse input does not start a native drag, so
+ * the automation reports success while nothing moves. It is also mouse-only:
+ * a touch device gets no drag at all. Pointer events cover mouse, touch and pen
+ * through one path and can be driven end to end in a browser, which is the
+ * difference between "should work" and "measured".
+ *
+ * The keyboard half is not a courtesy either — a drag has no keyboard form, so
+ * without it the feature would simply not exist for part of the audience. It
+ * hangs off the checkbox, already in the tab order, and the panel's title says
+ * so rather than leaving it to be found.
+ */
+function wireColumnOrder(): void {
+    const panel = $("#columns");
+    let held: HTMLElement | null = null;   // the label under the press
+    let startX = 0;
+    let moved = false;                     // has it passed the slop yet
+
+    const clearMarks = () => {
+        for (const c of $$("#columns .col-chip")) {
+            c.classList.remove("dragging", "drop-before", "drop-after");
+        }
+    };
+    /** The chip the pointer is over, and which side of its midline. */
+    const overAt = (x: number, y: number) => {
+        const el = document.elementFromPoint(x, y);
+        const chip = el && (el as Element).closest<HTMLElement>("#columns .col-chip");
+        if (!chip || chip === held) return null;
+        const box = chip.getBoundingClientRect();
+        return {chip, before: x < box.left + box.width / 2};
+    };
+
+    panel.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        const chip = (e.target as Element)?.closest<HTMLElement>(".col-chip");
+        if (!chip) return;
+        held = chip;
+        startX = e.clientX;
+        moved = false;
+        // capture so the drag survives the pointer leaving the chip — the
+        // chips reorder underneath it, so it leaves constantly
+        chip.setPointerCapture(e.pointerId);
+    });
+
+    panel.addEventListener("pointermove", (e) => {
+        if (!held) return;
+        if (!moved && Math.abs(e.clientX - startX) < DRAG_SLOP) return;
+        moved = true;
+        held.classList.add("dragging");
+        const to = overAt(e.clientX, e.clientY);
+        for (const c of $$("#columns .col-chip")) c.classList.remove("drop-before", "drop-after");
+        if (to) to.chip.classList.add(to.before ? "drop-before" : "drop-after");
+    });
+
+    panel.addEventListener("pointerup", (e) => {
+        if (!held) return;
+        const chip = held, dragged = moved;
+        held = null;
+        clearMarks();
+        if (!dragged) return;              // a plain press: let the click toggle
+        const to = overAt(e.clientX, e.clientY);
+        if (to) {
+            const col = chip.dataset.col!;
+            // index in the list WITHOUT the dragged column, so dropping to the
+            // right of a neighbour does not land one short
+            const rest = state.colOrder.filter((c) => c !== col);
+            const target = rest.indexOf(to.chip.dataset.col!);
+            moveCol(col, to.before ? target : target + 1);
+        }
+        // the press is about to become a click, and a click hides the column —
+        // swallow exactly this one
+        panel.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+        }, {capture: true, once: true});
+    });
+
+    panel.addEventListener("pointercancel", () => {
+        held = null;
+        clearMarks();
+    });
+
+    // keyboard parity. Alt keeps it clear of the arrow keys that walk a
+    // toolbar, and of the Space/Enter that toggle the chip.
+    panel.addEventListener("keydown", (e) => {
+        if (!e.altKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+        const chip = (e.target as Element)?.closest<HTMLElement>(".col-chip");
+        if (!chip) return;
+        e.preventDefault();
+        const col = chip.dataset.col!;
+        moveCol(col, state.colOrder.indexOf(col) + (e.key === "ArrowLeft" ? -1 : 1));
+        chip.focus();   // the node moved out from under the focus ring
+    });
 }

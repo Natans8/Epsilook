@@ -576,17 +576,36 @@ function clickHint(opts: { search?: string; finds?: string; click?: string }): s
 }
 
 /**
+ * Every gesture the app can put in a tooltip, and the ONLY things `tooltip.ts`
+ * lifts out of the prose into its key map.
+ *
+ * AN EXPLICIT LIST, NOT "any line with a colon", and the counter-example is in
+ * the app already: `cmd` writes "Copy:  .lookup object x.m2", which is a
+ * description of what lands on the clipboard rather than an instruction. A
+ * colon rule would demote it to a keycap. Conversely "Click to sort by count"
+ * has no colon and is prose, which is why the format below is `Gesture: action`
+ * everywhere and why the headers were rewritten to match rather than left to
+ * their own phrasing.
+ *
+ * Adding a gesture to the app means adding it here — one line, and the panel,
+ * the keycaps and the accessible name all follow.
+ */
+const GESTURES = ["Click", "Shift-click", "Ctrl-click", "Alt-click", "Middle-click",
+    "Double-click", "Drag", "Hover", "Alt + ← →", "Esc"];
+
+/**
  * Does a tooltip line map a GESTURE to an action, rather than describe the
  * thing? The trailing lines of every tooltip do, and `app/tooltip.ts` renders
  * them as a two-column key map instead of prose — so this test has to agree
  * with what `clickHint` and `copy` above actually write, which is why it lives
  * beside them and is not respelled there.
- *
- * The colon is load-bearing: "Click to sort by count" (index.html) and
- * "Copy:  .lookup object x.m2" (`cmd`) are descriptions, not gestures, and
- * both must stay in the panel's body.
  */
-export const KEY_LINE_RE = /^(?:Click|Shift-click|Ctrl-click|Alt-click|Middle-click): /;
+export const KEY_LINE_RE = new RegExp(
+    // ESCAPED, because the gestures are prose: "Alt + ← →" carries a `+`, which
+    // as a raw quantifier makes that alternative match nothing — and since the
+    // scan walks BACK from the last line, one unmatchable gesture at the bottom
+    // stops the walk and silently demotes EVERY key line above it to prose.
+    `^(?:${GESTURES.map((g) => g.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")}): `);
 
 /** Where a key line packs two gestures onto one row. */
 export const KEY_LINE_SEP = " · ";
@@ -666,6 +685,18 @@ export interface PillType {
 
     /** a bare number that IS the id's identity (an invisibility type) */
     bare?(data: SpellData, id: any): number | string;
+
+    /**
+     * spell id -> this type's id -> target mask, for the target-type words.
+     *
+     * The one axis keyed by (spell, id) rather than by id alone, and it has to
+     * be: "who does it play on" is a fact about the ROW, so the same chain can
+     * be caster-side on one spell and target-side on another. Absent means the
+     * content carries no mask at all (a tint, a desaturation) — which is not
+     * the same as a mask of zero, and is why scanType makes such a type answer
+     * NOTHING to a target word rather than answering everything.
+     */
+    targets?(data: SpellData): Map<number, Map<any, number>>;
 
     /** does the loaded pack carry this content at all? */
     when?(data: SpellData): boolean;
@@ -862,10 +893,22 @@ export function idMatches(type: PillType, data: SpellData, id: any,
 /**
  * Add every spell reached by a type's matching ids to `out`. This is the
  * search side; the app's hit test is idMatches on a single id.
+ *
+ * `maskOk` is the target-type question, when the chip asked one. It is passed
+ * as a plain predicate rather than the caller's mask tests so this file needs
+ * no vocabulary of bits — search.ts owns what `caster` means, pills.ts owns
+ * where the mask for a (spell, id) row lives, and neither has to know the
+ * other's half.
  */
 export function scanType(type: PillType, data: SpellData, tokens: { text: string }[],
-                         out: Set<number>): void {
+                         out: Set<number>, maskOk?: (mask: number) => boolean): void {
     if (!type.spells) return;
+    /* A type with no mask cannot answer "who does it play on", so it must
+     * contribute NOTHING — the alternative, letting it through untested, is how
+     * a target word silently degrades into ordinary corpus text and selects
+     * spells that have no targeting information at all. */
+    const masks = maskOk && type.targets?.(data);
+    if (maskOk && !masks) return;
     const spells = type.spells(data);
     // the argument depends on the chip and the type, never on the id, so it
     // binds once for the whole scan rather than per row
@@ -877,7 +920,12 @@ export function scanType(type: PillType, data: SpellData, tokens: { text: string
         return;
     }
     for (const [id, ids] of spells) {
-        if (matchesBound(type, data, id, rest, tests)) for (const s of ids) out.add(s);
+        if (!matchesBound(type, data, id, rest, tests)) continue;
+        for (const s of ids) {
+            // the mask is per (spell, id): the same chain plays on the caster
+            // for one spell and on the target for another
+            if (!masks || maskOk!(masks.get(s)?.get(id) || 0)) out.add(s);
+        }
     }
 }
 

@@ -1,12 +1,12 @@
 import {renderBar} from "./bar";
-import {applyHiddenCols, wireEvents} from "./events";
+import {applyColOrder, applyHiddenCols, wireEvents} from "./events";
 import {buildHelp} from "./help";
 import {decorateExamples} from "./highlight";
 import {loadQueryString} from "./query";
 import {runSearch} from "./run";
 import {toast, copyText} from "./clipboard";
 import {maskOf, targetWordsOf, NO_SCREEN_COLORS} from "./tags";
-import {activeData, qInput, state, versionLabel} from "./state";
+import {COL_ORDER, activeData, qInput, state, versionLabel} from "./state";
 import {initTooltips} from "./tooltip";
 import {defaultVersion, filtersFromUrl, findVersion, setHelp, sortFromUrl, stateToUrl, urlToState} from "./url";
 import * as Data from "../data";
@@ -182,6 +182,17 @@ async function boot() {
         for (const col of Object.keys(state.hiddenCols)) {
             if (typeof saved[col] === "boolean") state.hiddenCols[col] = saved[col];
         }
+        /* The order is rebuilt from the DEFAULTS rather than trusted: a stored
+         * order naming a retired column, or missing a new one, would leave the
+         * table with a cell the header row has no <th> for. Reading the saved
+         * list as a PRIORITY over the default list survives both — a column it
+         * does not mention simply keeps its declared place. */
+        const order = JSON.parse(localStorage.getItem("epsilook.colOrder.v1") || "[]");
+        if (Array.isArray(order)) {
+            const known = order.filter((c: unknown) =>
+                typeof c === "string" && COL_ORDER.includes(c));
+            state.colOrder = [...new Set([...known, ...COL_ORDER])] as string[];
+        }
     } catch { /* corrupted storage — defaults apply */
     }
     buildTabs();
@@ -190,6 +201,7 @@ async function boot() {
     // delegated from the document, so it covers markup that does not exist yet
     initTooltips();
     applyHiddenCols();
+    applyColOrder();
     try {
         state.versions = await Data.loadVersions();
     } catch (err) {

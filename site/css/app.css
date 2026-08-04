@@ -1137,9 +1137,7 @@ main {
     padding: 1rem 0 0.1rem;
 }
 
-.help-band + .help-band,
-.help-cols + .help-band,
-.help-band + .help-cols {
+.help-band + .help-band {
     border-top: 1px solid var(--border);
 }
 
@@ -1306,34 +1304,32 @@ main {
     border-radius: 999px;
 }
 
-/* --------------------------------------------------------- two-up bands */
-
-.help-cols {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(24rem, 100%), 1fr));
-    gap: 0 2.2rem;
-}
-
-/* a column border only once they are actually side by side */
-@media (min-width: 56rem) {
-    .help-cols > .help-band + .help-band {
-        border-top: none;
-        border-left: 1px solid var(--border);
-        padding-left: 2.2rem;
-    }
-}
-
 /* -------------------------------------------------- query / meaning pairs */
 
 /* Two queries that differ by one pair of quotes, stacked so the difference is
-   the only thing that moves. This is the band that answers "why did my search
-   do that", so the pairs are aligned in a column and read down. */
+   the only thing that moves. These answer "why did my search do that", so the
+   pairs are aligned in a column and read down. */
 .help-pairs {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
     gap: 0.3rem;
+}
+
+/* TWO CONTRASTS, SIDE BY SIDE — but each one still stacked, which is the whole
+   constraint. Column flow is what buys both: items 1-2 fill the left column and
+   3-4 the right, so the two queries of a contrast stay one above the other and
+   the quotes are still the only thing that moves. Laying them out in ROWS would
+   halve the height just as well and put a paragraph of meaning between the two
+   queries you are meant to be comparing. */
+@media (min-width: 56rem) {
+    .help-pairs {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: repeat(2, auto);
+        grid-auto-flow: column;
+        gap: 0.3rem 2.2rem;
+    }
 }
 
 /* TWO COLUMNS, so the queries stack in one column and their meanings in
@@ -1364,6 +1360,15 @@ main {
     font-size: 0.8rem;
     color: var(--text-dim);
     line-height: 1.4;
+}
+
+/* Stacked (narrow), the two contrasts need saying apart, because nothing else
+   does it: a gap wide enough to read as "new question" and narrow enough to
+   stay one list. Side by side the columns already say it. */
+@media (max-width: 55.99rem) {
+    .help-pairs li.pair-break {
+        margin-top: 0.75rem;
+    }
 }
 
 /* an example dropped into a sentence — it must sit on the text's baseline
@@ -1582,14 +1587,89 @@ main {
     gap: 0.4rem;
 }
 
-#columns label {
-    cursor: pointer;
-    user-select: none;
+/* THE COLUMN CHIPS ARE A SCALE MODEL OF THE TABLE. Each wears the tone its own
+   column's pills wear (the .c-* classes on the button supply --tone, the same
+   declaration the cells use), and they sit in the column order — so the row
+   reads as "these columns, this order" without a word of explanation. That is
+   the whole reason this stopped being tickboxes: a tickbox row shows state and
+   says nothing about sequence, and sequence is now half of what it controls.
+
+   ON is filled, OFF is hollow: the same contrast a pill uses between carrying
+   content and being a bare outline, so the vocabulary is one the user has
+   already learnt from the table. */
+/* the tone comes off data-col rather than the cells' own .c-* classes: those
+   also carry each column's min-width, and a 14rem chip is not a chip */
+#columns .col-chip[data-col="models"] {
+    --tone: var(--model);
 }
 
-#columns input {
-    accent-color: var(--gold);
-    vertical-align: -2px;
+#columns .col-chip[data-col="sounds"] {
+    --tone: var(--sound);
+}
+
+#columns .col-chip[data-col="animations"] {
+    --tone: var(--anim);
+}
+
+#columns .col-chip[data-col="fx"] {
+    --tone: var(--fx);
+}
+
+#columns .col-chip[data-col="mechanics"] {
+    --tone: var(--mech);
+}
+
+#columns .col-chip {
+    font: inherit;
+    color: color-mix(in oklab, var(--tone) var(--ink-mix), black);
+    background: rgba(var(--overlay-rgb), calc(0.1 * var(--wash-strength)));
+    border: 1px solid var(--tone);
+    border-radius: 999px;
+    padding: 0.08rem 0.65rem;
+    line-height: 1.5;
+    cursor: grab;
+    user-select: none;
+    /* the drag is pointer-driven, so the browser must not claim a horizontal
+       swipe for scrolling before pointermove is seen */
+    touch-action: none;
+}
+
+#columns .col-chip:hover {
+    background: rgba(var(--overlay-rgb), calc(0.2 * var(--wash-strength)));
+}
+
+#columns .col-chip:active {
+    cursor: grabbing;
+}
+
+/* OFF: the tone drains out of it entirely. Colour is doing the work, so the
+   dashed edge is what carries the state where colour cannot be seen. */
+#columns .col-chip.off {
+    color: var(--text-dim);
+    background: none;
+    border-style: dashed;
+    border-color: var(--border-ctrl);
+}
+
+#columns .col-chip.off:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+    background: rgba(var(--overlay-rgb), calc(0.08 * var(--wash-strength)));
+}
+
+#columns .col-chip.dragging {
+    opacity: 0.45;
+}
+
+/* WHERE IT WILL LAND, on the side the pointer is on. An inset shadow rather
+   than a border: a border would widen the chip and shove its neighbours
+   sideways while the pointer is trying to aim at them. */
+#columns .col-chip.drop-before {
+    box-shadow: inset 3px 0 0 var(--gold);
+}
+
+#columns .col-chip.drop-after {
+    box-shadow: inset -3px 0 0 var(--gold);
 }
 
 /* tri-state filter buttons: any -> only-with (gold ✓) -> only-without (red ✕) */
@@ -2581,6 +2661,29 @@ mark.hl {
     font-size: 0.86em;
 }
 
+/* THE ⧉ IS THE AFFORDANCE, AND THE CHIP NEEDED IT (user's ask, 2026-08-04).
+   The id has been the copy button since this chip shipped, and the entry above
+   argues that a ⧉ *beside* a printed id spends width saying the same thing
+   twice — which is still true. What was missing is that every other id-bearing
+   pill in the app (display, item, object, creature, kit, fid) wears a ⧉, so an
+   id with none reads as a printed value and the control was invisible until
+   hover. Marking the same button rather than adding a second one keeps the
+   original argument intact and costs one glyph.
+
+   ::after rather than markup, so the copied text stays exactly the id: the
+   glyph is decoration, the button already carries its own aria-label, and
+   nothing in spellLinkTag has to know about it. */
+.tag.link .tag-copy.link-id::after {
+    content: "⧉";
+    margin-left: 0.22em;
+    font-size: 0.92em;
+    opacity: 0.55;
+}
+
+.tag.link .tag-copy.link-id:hover::after {
+    opacity: 1;
+}
+
 .tag.link .tag-copy.link-id:hover {
     color: var(--gold);
 }
@@ -3117,13 +3220,27 @@ footer a {
     display: contents;
 }
 
+/* THE GESTURE IS A KEYCAP, the same one the help dialog's "Clicks and keys"
+   band draws — so a gesture looks like a gesture wherever the app names one,
+   and the eye can find the actionable half of a panel without reading it. The
+   bottom border is the whole trick: one extra pixel reads as a key's edge. */
 .tip-keys dt {
     color: var(--tag-btn);
     white-space: nowrap;
+    justify-self: start;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 0 0.3rem;
+    font-size: 0.94em;
 }
 
 .tip-keys dd {
     margin: 0;
+    /* the caps have their own box now, so the text beside them needs nudging
+       back onto their optical centre line */
+    padding-top: 0.06rem;
 }
 
 @media (max-width: 900px) {

@@ -251,30 +251,36 @@ function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
     tdName.appendChild(commandStrip(spellId));
     tr.appendChild(tdName);
 
-    // Models — grouped by how each model is used (attach/missile/area/...)
-    tr.appendChild(modelsCell(spellId));
-
-    // Sounds — grouped by SoundKit; kits containing a match come first
-    tr.appendChild(soundsCell(d.spellSounds.get(spellId) || []));
-
-    // Animations — loose kit-played anims first, then AnimKits grouped with
-    // the animations they play, then the headless groups (passenger, replace)
-    tr.appendChild(animationsCell(d.spellAnimKits.get(spellId) || [],
-        d.spellVisualAnims.get(spellId) || [], spellId));
-
     // Effects — visual FX (beams, morphs, summons), grouped by category.
     // The same pass produces the Mechanics column's non-visual categories
-    // (seat, invis, detect, keybind, speed), which used to live here.
+    // (seat, invis, detect, keybind, speed), which used to live here — so it
+    // stays ONE call feeding two cells, whatever order they end up in.
     const effects = effectCells(spellId);
-    tr.appendChild(effects.fx);
-
     // Mechanics — one pill per SpellEffect (what it does + who it targets),
     // then the non-visual category blocks. Both go in as blocks so the cell
     // ranks them against each other (see mechanicsCell); an enum pill can
     // never be a "named" hit, since its corpus is enum names, not keywords.
     const mechBlocks: CellBlock[] = mechanicPills(d.spellMechanics.get(spellId) || [])
         .map((p) => ({el: mechanicTag(p)}));
-    tr.appendChild(mechanicsCell(mechBlocks.concat(effects.mechBlocks)));
+
+    /* THE PAYLOAD CELLS ARE BUILT BY NAME AND APPENDED BY ORDER. Every cell is
+     * built either way — they are the row's content, not a layout choice — so
+     * this costs nothing and leaves `state.colOrder` as the single statement of
+     * where each one goes, shared with the <th> row (events.ts applyColOrder).
+     * The three leading columns (#, ID, Name) are fixed and stay above. */
+    const cells: Record<string, HTMLElement> = {
+        // grouped by how each model is used (attach/missile/area/...)
+        models: modelsCell(spellId),
+        // grouped by SoundKit; kits containing a match come first
+        sounds: soundsCell(d.spellSounds.get(spellId) || []),
+        // loose kit-played anims first, then AnimKits grouped with the
+        // animations they play, then the headless groups (passenger, replace)
+        animations: animationsCell(d.spellAnimKits.get(spellId) || [],
+            d.spellVisualAnims.get(spellId) || [], spellId),
+        fx: effects.fx,
+        mechanics: mechanicsCell(mechBlocks.concat(effects.mechBlocks)),
+    };
+    for (const col of state.colOrder) tr.appendChild(cells[col]);
 
     return tr;
 }

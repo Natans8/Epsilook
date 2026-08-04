@@ -98,6 +98,7 @@ T({
     hint: "Sparkle overlay (SpellSparkleEffect)",   // autocomplete description
     corpus: (d) => d.sparkleSearchL,   // id -> lowercase haystack
     spells: (d) => d.sparkleSpells,    // id -> spell ids
+    targets: (d) => d.sparkleTargets,  // spell -> id -> target mask (see below)
     when: (d) => d.sparkleSpells.size > 0,   // optional availability gate
 });
 ```
@@ -105,6 +106,18 @@ T({
 From that one record you get: the autocomplete word and its description, the group head and its tooltip, `.hit`
 highlighting, and the spells the query selects. The fx column and the fx search both iterate the registry, so neither
 needs editing.
+
+**Declare `targets` if the pill draws target icons.** It is the one axis keyed by **(spell, id)** rather than by id
+alone, because "who does this play on" is a fact about the ROW — the same chain is caster-side on one spell and
+target-side on another. `data.ts` already builds these maps with `maskIndex`, so this is a one-line reference, not new
+data.
+
+Omitting it is a real decision and not a default: a type with no mask **answers nothing** to `fx:caster`, which is right
+for a tint or a desaturation (they carry no targeting information) and wrong for anything that draws the icons. Getting
+it wrong the other way is what the fx column did for a year — it drew the icons and offered the words in autocomplete
+while `fx:caster` quietly fell through to corpus text, selecting the 32 spells with "caster" in an asset path while 27
+of their cells lit their icons anyway. **The icons ask the mask; if the search cannot, the two are already lying to each
+other.**
 
 **b. Write the renderer** in `src/app/tags.ts`, as a segment list (§1).
 
@@ -187,11 +200,17 @@ The registry decides **what a user can type**, so the choices there are product 
 
 Two axes, and the difference matters:
 
-| axis                    | means                            | example                |
-|-------------------------|----------------------------------|------------------------|
-| `numeric.kind: "count"` | how many things the id has       | a vehicle's seats      |
-| `numeric.kind: "value"` | a measurement the id carries     | a desaturation percent |
-| `bare`                  | a bare number that **is** the id | an invisibility type   |
+| axis                    | means                            | example                       |
+|-------------------------|----------------------------------|-------------------------------|
+| `numeric.kind: "count"` | how many things the id has       | a vehicle's seats             |
+| `numeric.kind: "value"` | a measurement the id carries     | a desaturation percent        |
+| `bare`                  | a bare number that **is** the id | an invisibility type, a spell |
+
+**`bare` is also how an ID becomes searchable without poisoning a corpus**, and that is worth stating plainly because
+the alternative was measured and rejected. `mech:"triggers 133"` matches by **equality** against the id the chip stands
+for; putting the same id in the corpus instead makes every numeric token in the field match by substring, which broke a
+bound number outright (`mech:"speed 70"` 76 → 85) and put 77% noise into `mech:"invis 13"` (11 → 47). **The corpus is
+for words.** Anything with an id that a user might type exactly wants `bare`.
 
 **A number is written as the category word, then its value** — `mech:"seat >2"`, `fx:"scale >100"`,
 `mech:"speed <-50"`, `fx:"scale 50"` — which is the same shape as every other value in the language (`attach chest`,
@@ -419,9 +438,19 @@ Two things carry the panel, and both are read off content that already existed:
   **not** a copy of the game tooltip: Wowhead's real one is a few pixels away on the same row, and a near-miss beside
   the genuine article reads as a bad imitation.
 - **The gesture lines become a two-column key map**, because that is what they always were — `title` is what flattened a
-  key→action mapping into prose. The split point is `KEY_LINE_RE` in `pills.ts`, which sits beside `clickHint` so the
-  test and the thing it tests cannot drift. The colon is load-bearing: "Click to sort by count" and
-  "Copy:  .lookup object x.m2" describe rather than instruct, and both stay in the body.
+  key→action mapping into prose. Each gesture then renders as a **keycap**, the same one the help dialog's
+  "Clicks and keys" band draws, so the actionable half of a panel is findable without reading it.
+
+**The gestures are an explicit list (`GESTURES` in `pills.ts`), not "any line with a colon".** The counter-example is
+already in the app: `cmd` writes "Copy:  .lookup object x.m2", which describes what lands on the clipboard rather than
+instructing, and a colon rule would put it in a keycap. So the format is `Gesture: action` everywhere, and **a tooltip
+written anywhere in the app — including index.html's static ones — gets the key map by matching it.** That is why the
+column headers and the toolbar were rewritten to say "Click: sort by how many" rather than "Click to sort by count":
+one shape, one renderer.
+
+Adding a gesture is one entry in `GESTURES`. **Escape it** — the list is prose and `Alt + ← →` carries a `+`; as a raw
+quantifier that alternative matches nothing, and since the scan walks BACK from the last line, one unmatchable gesture
+at the bottom silently demotes every key line above it to prose.
 
 **Two surfaces are excluded, on ownership rather than taste.** A `wowhead.com` link already shows Wowhead's tooltip —
 the real in-game one — so ours must never stack on it; and `#q`'s title is rewritten on every mousemove by

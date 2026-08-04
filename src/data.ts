@@ -614,6 +614,7 @@ export interface SpellData {
     spellScaleMods: Map<number, { pct: number; amount: string; mask: number }[]>;
     scaleSpells: Map<number, number[]>;
     scaleSearchL: Map<number, string>;
+    scaleTargets: Map<number, Map<number, number>>;
 
     /** spell id -> [animId] the rider plays; the "passenger" anim group. */
     spellPassengerAnims: Map<number, number[]>;
@@ -977,6 +978,10 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const vehicleTargets = maskIndex(pack.spellVehicles, "vehicleIds");
     const shapeshiftTargets = maskIndex(pack.spellShapeshifts, "formIds");
     const screenTargets = maskIndex(pack.spellScreens, "screenIds");
+    // scale's id IS its percent, so the "id array" is `percents` — the mask was
+    // already on the pill (it rides spellScaleMods); this indexes it the way
+    // every other category is indexed, so the SEARCH can read it too
+    const scaleTargets = maskIndex(pack.spellScales, "percents");
     // mask bit -> search word
     const targetNames = pack.targetNames || NO_WORDS;
 
@@ -1705,10 +1710,12 @@ export function buildIndexes(pack: SpellPack): SpellData {
          * word means `=` on that axis. `mech:"invis 13"` went 11 -> 47, i.e.
          * 77% noise, against 11 -> 16 without the id.
          *
-         * The cost is that `mech:"triggers 133"` finds nothing, and that is
-         * the right trade: the chip's own click already navigates to `id:133`,
-         * which answers the same question exactly rather than by substring.
-         * `mech:"triggers fireball"` is the name route and is unaffected. */
+         * `mech:"triggers 133"` DOES work, and it is worth being precise about
+         * why that is not a contradiction: it resolves through the pill type's
+         * `bare` axis (pilltypes.ts), which is EQUALITY against the id this map
+         * is keyed by — not a substring of any corpus. So the id is searchable
+         * and costs the field nothing. `mech:"triggers fireball"` is the name
+         * route through the corpus below and is unaffected by either. */
         const derive = (from: Map<number, SpellLink[]>, word: string,
                         spells: Map<number, number[]>, out: Map<number, string>) => {
             for (const [id, list] of from) {
@@ -1852,7 +1859,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellVehicles, vehicleSpells, vehicleSeats, vehicleSearchL,
         spellInvisTypes, spellDetectTypes, invisTypeSpells, detectTypeSpells,
         spellSpeedMods, speedSpells, speedSearchL, speedPercents,
-        spellScaleMods, scaleSpells, scaleSearchL,
+        spellScaleMods, scaleSpells, scaleSearchL, scaleTargets,
         spellPassengerAnims, passengerAnimSpells,
         spellKeybinds, keybindSpells, keybinds, keybindSearchL, keybindTargets,
         spellTriggers, spellOrigins,
