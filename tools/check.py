@@ -44,7 +44,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from repo import BUMP_PATHS, ROOT, changed_under, git, have_ref
+from repo import BUMP_PATHS, ROOT, changed_under, git, have_ref, main_checkout
 
 SITE = ROOT / "site"
 MANIFEST = SITE / "data" / "versions.json"
@@ -369,6 +369,16 @@ def check_inspectors(rep: Report) -> None:
     """
     if os.environ.get("CI"):
         rep.skip("ide inspectors", "CI has no IDE")
+        return
+    # REACHABILITY IS NOT RELEVANCE. The IDE resolves every path against the
+    # project it has OPEN, which is the main checkout - so from a worktree both
+    # ports answer, this check goes green, and the pass it stands for cannot be
+    # run here at all (ide.py refuses outright). Reporting "reachable" would be
+    # the same lie one level up that the check exists to prevent.
+    main_root = main_checkout()
+    if main_root != ROOT:
+        rep.skip("ide inspectors",
+                 f"worktree - the inspection pass belongs to {main_root}, not here")
         return
     down = []
     for name, port in INSPECTORS:

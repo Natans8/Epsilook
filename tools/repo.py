@@ -44,6 +44,23 @@ def have_ref(ref: str) -> bool:
     return bool(git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").strip())
 
 
+def main_checkout() -> Path:
+    """The checkout the JetBrains IDEs have open, which is not always ROOT.
+
+    A git worktree has its own root but shares one .git, so `--git-common-dir`
+    names the MAIN checkout's .git from either side and its parent is the
+    directory WebStorm and PyCharm actually opened. `main_checkout() != ROOT`
+    is therefore "this is a worktree", and it is the one question two scripts
+    both need: ide.py refuses to run (it would format the OTHER tree's copy of
+    every file), and check.py stops claiming the inspectors mean anything.
+
+    Falls back to ROOT when git cannot answer. The guard is worth having, but
+    not at the price of refusing to run on a machine with an older git.
+    """
+    common = git("rev-parse", "--path-format=absolute", "--git-common-dir").strip()
+    return Path(common).resolve().parent if common else ROOT
+
+
 def changed_under(base: str, paths: tuple[str, ...] = BUMP_PATHS) -> list[str]:
     """Files under `paths` that differ from `base`, UNTRACKED ONES INCLUDED.
 

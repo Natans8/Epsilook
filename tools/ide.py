@@ -47,6 +47,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from repo import main_checkout
+
 ROOT = Path(__file__).resolve().parent.parent
 
 # CLAUDE.md > Checks. `datagrip` is deliberately absent: it was only ever a SQL
@@ -129,23 +131,6 @@ def owner(path: str) -> str | None:
     if rel.endswith(".py"):
         return "pycharm"
     return "webstorm" if rel.endswith(OWNER_SUFFIX) else None
-
-
-def main_checkout() -> Path:
-    """The checkout the IDEs have open, which is not always ROOT.
-
-    A git worktree has its own root but shares one .git, so
-    `--git-common-dir` names the MAIN checkout's .git from either side and its
-    parent is the directory WebStorm and PyCharm actually opened. Falls back
-    to ROOT when git cannot answer: the guard below is worth having, but not
-    at the price of refusing to run on a machine with an older git.
-    """
-    out = subprocess.run(["git", "-C", str(ROOT), "rev-parse",
-                          "--path-format=absolute", "--git-common-dir"],
-                         capture_output=True, encoding="utf-8", errors="replace",
-                         check=False)
-    common = out.stdout.strip()
-    return Path(common).resolve().parent if common else ROOT
 
 
 def changed_files(base: str) -> list[str]:
