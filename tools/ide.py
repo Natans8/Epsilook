@@ -30,6 +30,12 @@ WHAT IT DOES NOT DO
     It does not fix anything. Reformatting is the IDE's; the findings are
     yours to triage — see docs/DECISIONS.md for the standing noise that must
     NOT be "fixed".
+
+    It REFUSES to run from a git worktree. The JetBrains MCP resolves every
+    path against the project the IDE has OPEN, which is the main checkout, so
+    a run from a worktree formats and lints the main checkout's copy of each
+    file instead — silently, because both trees hold the same paths. Measured
+    2026-08-06; see CLAUDE.md > Working next to other sessions.
 """
 from __future__ import annotations
 
@@ -125,6 +131,23 @@ def owner(path: str) -> str | None:
     return "webstorm" if rel.endswith(OWNER_SUFFIX) else None
 
 
+def main_checkout() -> Path:
+    """The checkout the IDEs have open, which is not always ROOT.
+
+    A git worktree has its own root but shares one .git, so
+    `--git-common-dir` names the MAIN checkout's .git from either side and its
+    parent is the directory WebStorm and PyCharm actually opened. Falls back
+    to ROOT when git cannot answer: the guard below is worth having, but not
+    at the price of refusing to run on a machine with an older git.
+    """
+    out = subprocess.run(["git", "-C", str(ROOT), "rev-parse",
+                          "--path-format=absolute", "--git-common-dir"],
+                         capture_output=True, encoding="utf-8", errors="replace",
+                         check=False)
+    common = out.stdout.strip()
+    return Path(common).resolve().parent if common else ROOT
+
+
 def changed_files(base: str) -> list[str]:
     """Everything modified or added against `base`, plus untracked files.
 
@@ -195,6 +218,22 @@ def main() -> int:
     ap.add_argument("--lint-only", action="store_true", help="skip the reformat pass")
     ap.add_argument("--status", action="store_true", help="report which IDEs answer, and exit")
     args = ap.parse_args()
+
+    # A worktree run is silently WRONG, not merely unsupported: relative paths
+    # resolve against the open project, so it reformats the main checkout's
+    # copy — another session's working tree — and leaves yours untouched. An
+    # absolute path out of the project fares no better; it answers `{"items":
+    # []}`, which reads as a clean pass. Both were measured on 2026-08-06.
+    main_root = main_checkout()
+    if main_root != ROOT:
+        print(f"{RED}refusing to run from a worktree{RESET}\n"
+              f"  this tree:    {ROOT}\n"
+              f"  IDE project:  {main_root}\n"
+              f"{DIM}The IDE resolves every path against the project it has open, so this "
+              f"would format and lint the MAIN checkout's copy of each file - silently, "
+              f"since both trees hold the same paths. Do the format/lint pass in the main "
+              f"checkout after merging.{RESET}", file=sys.stderr)
+        return 2
 
     ides = {name: Ide(name, port) for name, port in IDES.items()}
     live = {name: ide for name, ide in ides.items() if ide.up()}
