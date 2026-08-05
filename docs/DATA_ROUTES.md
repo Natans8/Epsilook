@@ -1203,6 +1203,14 @@ channelled flag, and Wowhead presents it exactly that way: "Cast time 1.8 second
   corpus carries it. `casttime` and `channelled` measure 0, `instant` 35 on a 214k base. See PILLS.md, *Choosing the
   keyword*.
 
+  **⚠ THIS COLLIDES WITH A PENDING USER INSTRUCTION AND IS NOT YET RESOLVED (2026-08-05).** The user asked for *"instead
+  of casttime call it plain cast"*. That is unambiguous for the DISPLAY LABEL on the delivery line (`2.25s cast`), which
+  is free text and collides with nothing. It is **not safe for the SEARCH WORD**: a bare
+  `mech:cast` would return ~200k rows off the corpus, which is the whole table. **Do not perform the rename on the
+  search axis without deciding one of these first** — keep the axis `casttime` while the label reads `cast`; make
+  `cast` a bound word that declines the corpus substring reading; or ship only the value form (`mech:"cast 2"` /
+  `mech:"cast >3"`), which is bound already. **Ask the user; do not pick silently.**
+
 **COUNT SPELLS, NOT `SpellMisc` ROWS.** A spell with several difficulty rows is one spell, and the two readings differ
 by up to 15% — the same five flags are 799 / 2,748 / 591 / 3,400 / 19,812 counted as rows. Base difficulty wins, the
 same rule `read_spell_icons` and `read_spell_schools` use.

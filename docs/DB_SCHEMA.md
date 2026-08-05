@@ -304,12 +304,19 @@ cache directory, so anything `build_data.py` starts downloading appears here wit
 | a convenience view             | one `make_view(...)` call in `build_views`; collisions are refused, not fatal        |
 | a project decode as a table    | follow `KIT_EFFECT_TYPES` / `PROC_TYPES` — a literal list plus one `CREATE TABLE`    |
 
-`EXTRA_TABLES` currently adds five tables the pack build never reads: **`SpellVisualKit`** (the kit rows themselves —
+`EXTRA_TABLES` currently adds four tables the pack build never reads: **`SpellVisualKit`** (the kit rows themselves —
 `build_data.py` reaches kits through `SpellVisualEvent` and never reads the table, so 6.65% of `SpellVisualKitEffect`
-rows point at a kit no event reaches and were invisible), `AnimKit`, `AnimKitConfig`, `SpellVisualKitPicker`, and **
-`SpellInterrupts`** (what breaks a cast, an aura or a channel — `InterruptFlags`, `AuraInterruptFlags[2]`,
-`ChannelInterruptFlags[2]`, with bit 0 = `Movement`). It is **present on all ten builds** (79,587 spells on 9.2.7;
-51,643 break casting on movement) and is the standing candidate for a future route.
+rows point at a kit no event reaches and were invisible), `AnimKit`, `AnimKitConfig` and `SpellVisualKitPicker`.
+
+**`SpellCastTimes`, `SpellDuration` and `SpellInterrupts` were REMOVED from this list on 2026-08-05** — they became
+`build_data.py` `TABLES` for the delivery line, so the normal CSV sweep caches them and listing them here would only be
+a second place to keep in step. They are still in the database, from the ordinary route.
+
+**MIND THE INTERRUPT ENUMS — this file previously said "bit 0 = `Movement`" for `SpellInterrupts` as a whole, and that
+is wrong.** The three columns do **not** share an enum: `InterruptFlags` (casting) uses
+`SpellInterrupts::InterruptFlags`, where bit 0 *is* `Movement`; `AuraInterruptFlags` and `ChannelInterruptFlags` use
+`SpellInterruptFlags`, where bit 0 is `HostileActionReceivedCancels` and **movement is bit 3 (`MovingCancels`)**.
+Measured on 9.2.7: breaks on movement — casting **51,643**, aura **1,690**, channel **7,376**.
 
 **This list is the answer to "our tooling can't answer that".** A question the database cannot reach is one line here,
 not a reason to go around the database — see CLAUDE.md, *"a gap in a tool we maintain is a task, not a constraint"*.

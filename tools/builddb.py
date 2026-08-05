@@ -114,14 +114,10 @@ EXTRA_TABLES = {
     "AnimKitConfig": "AnimKitSegment.AnimKitConfigID resolves here (bonesets go through it)",
     "AnimKit": "the animkit rows themselves; segments carry ParentAnimKitID",
     "SpellVisualKitPicker": "kits chosen at random — SpellVisualKitPickerEntry's parent",
-    # Not a SpellMisc attribute, which is why the 449-bit attribute sweep never
-    # surfaced it: its own table, carrying InterruptFlags (casting),
-    # AuraInterruptFlags[2] and ChannelInterruptFlags[2]. Bit 0 is Movement.
-    "SpellInterrupts": "what breaks a cast, an aura or a channel — bit 0 is Movement",
-    # SpellMisc.CastingTimeIndex resolves here: Base/Minimum/PerLevel in ms.
-    # Base = 0 is what makes a spell INSTANT, which is half of the delivery
-    # question (immediate / cast / channel).
-    "SpellCastTimes": "CastingTimeIndex -> Base cast time in ms (0 = instant)",
+    # SpellCastTimes, SpellDuration and SpellInterrupts USED to be listed here.
+    # They are build_data.py TABLES now (the delivery line reads all three), so
+    # the normal CSV sweep already caches them and repeating them here would
+    # only be a second place to keep in step.
 }
 
 # ---------------------------------------------------------------- enum linkage

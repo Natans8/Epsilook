@@ -132,6 +132,18 @@ TABLES = [
     # instant, which is half of the delivery question (§3s-bis); the other half
     # is the IsChannelled bit. Ships on every build back to Vanilla.
     "SpellCastTimes",
+    # SpellMisc.DurationIndex -> Duration (ms), the OTHER half of the delivery
+    # line: how long a channel holds. A 314-row index table. Duration < 0 (and
+    # the INT_MAX-ish rows) mean NO LIMIT — 5,717 of 9.2.7's 14,223 channels,
+    # which is the case a roleplayer actually wants ("a beam that holds").
+    "SpellDuration",
+    # What breaks a cast / an aura / a channel. Its own table, which is why the
+    # 449-bit attribute sweep never surfaced it. THE THREE COLUMNS DO NOT SHARE
+    # AN ENUM: InterruptFlags uses SpellInterrupts::InterruptFlags (bit 0 =
+    # Movement), while AuraInterruptFlags and ChannelInterruptFlags use
+    # SpellInterruptFlags, where movement is bit 3 (MovingCancels). Assuming
+    # they matched put two wrong numbers in the queue once already.
+    "SpellInterrupts",
     "SpellChainEffects",
     "SpellProceduralEffect",
     "BeamEffect",
@@ -221,6 +233,12 @@ OPTIONAL_TABLES = {
     "GameObjectDisplayInfo": "gameobject model files (names still resolve)",
     # arrives in MoP (5.0.1); 404s on Vanilla/TBC/WotLK/Cata
     "SpellKeyboundOverride": "the keybind fx category (aura 406)",
+    # both confirmed present on all ten builds as of 2026-08-05; declared
+    # optional anyway so a build that predates one loses only that half of the
+    # delivery line rather than failing — no duration reads as "no limit shown",
+    # no interrupts reads as "nothing known to break it"
+    "SpellDuration": "the channel duration on the delivery line",
+    "SpellInterrupts": "the 'breaks on move' half of the delivery line",
 }
 
 # (table, column) -> the value to use on builds that lack the column
