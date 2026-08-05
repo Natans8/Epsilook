@@ -127,11 +127,32 @@ point of the database is to have the answer before the question.
 Knowledge that lived only as prose, shipped as joinable tables so raw ids are legible without a second window open. Each
 cites where it came from:
 
-| Table             | Source                       | What it decodes                                                  |
-|-------------------|------------------------------|------------------------------------------------------------------|
-| `kit_effect_type` | DATA_ROUTES §3a              | `SpellVisualKitEffect.EffectType` → the table `Effect` points at |
-| `proc_type`       | CLAUDE.md *Proc type decode* | `SpellProceduralEffect.Type` → which `Value_n` is the payload    |
-| `target_type`     | DATA_ROUTES §2               | `SpellVisualEvent.TargetType` → bit, search word, meaning        |
+| Table             | Source                              | What it decodes                                                  |
+|-------------------|-------------------------------------|------------------------------------------------------------------|
+| `kit_effect_type` | DATA_ROUTES §3a                     | `SpellVisualKitEffect.EffectType` → the table `Effect` points at |
+| `proc_type`       | CLAUDE.md *Proc type decode*        | `SpellProceduralEffect.Type` → which `Value_n` is the payload    |
+| `target_type`     | DATA_ROUTES §2                      | `SpellVisualEvent.TargetType` → bit, search word, meaning        |
+| `spell_attribute` | `build/enums/spell_attributes.json` | all 449 `SpellMisc.Attributes` bits → name, column, mask         |
+
+`spell_attribute` is the one that makes `SpellMisc`'s widest columns readable at all. The flags are packed 32 to a
+column across `Attributes_0..N`, so a raw value is unreadable without knowing which column and which bit — `attr_column`
+and `mask` are exactly the two things a query needs:
+
+```sql
+-- which of the shipped flags does this spell carry?
+SELECT a.name, a.label, a.handler
+FROM ref.spell_attribute a, v9_2_7."SpellMisc" m
+WHERE m."SpellID" = 131041 AND a.handler IS NOT NULL
+  AND CASE a.attr_column WHEN 'Attributes_0' THEN m."Attributes_0"
+                         WHEN 'Attributes_1' THEN m."Attributes_1"
+                         WHEN 'Attributes_5' THEN m."Attributes_5"
+                         WHEN 'Attributes_11' THEN m."Attributes_11" END & a.mask <> 0
+```
+
+`handler` is non-null on the bits the **pack ships as pills**, and `requires` carries the one intersection rule (bit 160
+`AllowActionsDuringChannel` only means anything AND-ed with bit 34 `IsChannelled`). **Builds ship between 14 and 17
+`Attributes_N` columns**, so a high bit is simply absent on an older build rather than renumbered — verified by counting
+each flag across all ten schemas and getting a clean monotonic rise.
 
 ### The metadata catalog
 
@@ -283,9 +304,15 @@ cache directory, so anything `build_data.py` starts downloading appears here wit
 | a convenience view             | one `make_view(...)` call in `build_views`; collisions are refused, not fatal        |
 | a project decode as a table    | follow `KIT_EFFECT_TYPES` / `PROC_TYPES` — a literal list plus one `CREATE TABLE`    |
 
-`EXTRA_TABLES` currently adds four tables the pack build never reads: **`SpellVisualKit`** (the kit rows themselves —
+`EXTRA_TABLES` currently adds five tables the pack build never reads: **`SpellVisualKit`** (the kit rows themselves —
 `build_data.py` reaches kits through `SpellVisualEvent` and never reads the table, so 6.65% of `SpellVisualKitEffect`
-rows point at a kit no event reaches and were invisible), plus `AnimKit`, `AnimKitConfig` and `SpellVisualKitPicker`.
+rows point at a kit no event reaches and were invisible), `AnimKit`, `AnimKitConfig`, `SpellVisualKitPicker`, and **
+`SpellInterrupts`** (what breaks a cast, an aura or a channel — `InterruptFlags`, `AuraInterruptFlags[2]`,
+`ChannelInterruptFlags[2]`, with bit 0 = `Movement`). It is **present on all ten builds** (79,587 spells on 9.2.7;
+51,643 break casting on movement) and is the standing candidate for a future route.
+
+**This list is the answer to "our tooling can't answer that".** A question the database cannot reach is one line here,
+not a reason to go around the database — see CLAUDE.md, *"a gap in a tool we maintain is a task, not a constraint"*.
 
 **`tools/dbd.py`** is the WoWDBDefs parser, standalone and reusable. It never raises on malformed input: a missing
 definition, an unmatched build or an unknown column all degrade to "no metadata", and the column still loads. Losing a

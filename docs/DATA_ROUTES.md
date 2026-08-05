@@ -1148,6 +1148,77 @@ row omitting it would blank the edge. It is spelled the same on both sides, unli
 
 ---
 
+### 3s. Spell attribute flags — the route with no payload at all
+
+`SpellMisc.Attributes_0..N`, 32 bits per column. **Every other route in this document resolves an id to a payload; this
+one resolves to nothing but its own truth value** — the flag IS the content, which is why the pills are valueless (the
+category word is the whole pill, like `fx:freeze`) and why the pack section is a bare list of spell ids per flag.
+
+**Bit B lives in `Attributes_(B//32)` at `1<<(B%32)`.** The 449 names come from wowdev.wiki `EnumeratedString`
+§`SpellMisc::Attributes` and are checked in as `build/enums/spell_attributes.json` — the single source of truth for both
+`build_data.py` (which flags to ship) and `tools/builddb.py` (`ref.spell_attribute`).
+
+**WHICH flags ship is a data edit, not a code change.** A `handler` tag on a bit in that JSON is what puts it in the
+pack; adding one costs a tag plus one `attrFlag(...)` line in `src/pilltypes.ts`. Nothing in the reader, in `data.ts`,
+in either render site or in the export branches on which flag it is.
+
+**`requires` is an intersection, declared as data.** Bit 160 `AllowActionsDuringChannel` is AND-ed with bit 34
+`IsChannelled` in the build, because the flag alone samples spells that are not channels at all — the reason it is done
+in the build rather than in the UI is that a word which lies is worse than a word which is missing.
+
+| flag                        | bit | word               | 9.2.7 spells | column                                  |
+|-----------------------------|-----|--------------------|--------------|-----------------------------------------|
+| `PreventsAnim`              | 50  | `anim:pose`        | 784          | Animations                              |
+| `TrackTargetInChannel`      | 46  | `fx:tracking`      | 2,712        | **Effects** — it is the caster's FACING |
+| `UnbreakableChannel`        | 358 | `mech:unbreakable` | 580          | Mechanics                               |
+| `AllowActionsDuringChannel` | 160 | `mech:unhindered`  | 868 (∩ 34)   | Mechanics                               |
+| `AuraIsDebuff`              | 26  | `mech:debuff`      | 17,193       | Mechanics                               |
+
+**`TrackTargetInChannel` is the CASTER'S FACING, not the beam** (user's correction, tested): the caster stays turned
+toward the target, locked in its direction, for the whole channel — the beam merely follows from that. It renders in
+Effects rather than Mechanics because a character being turned is what the spell LOOKS like; 59% of them also carry a
+chain, and the move cut the word's corpus noise from 175 to 8. Its unshipped sibling is bit 22
+`TrackTargetInCastPlayerOnly`, the cast-time equivalent.
+
+### 3s-bis. Delivery — instant / cast time / channelled (derived, format 38)
+
+**Not a bit: a derived three-way partition, riding the same `spellAttrs` section** so the pill, render, search and
+export halves cost nothing. The user asked for it as the parent the channel properties hang off.
+
+| bucket     | word              | rule                                               | 9.2.7   |
+|------------|-------------------|----------------------------------------------------|---------|
+| channelled | `mech:channelled` | `IsChannelled` (34) **or** `IsSelfChannelled` (38) | 14,228  |
+| cast time  | `mech:casttime`   | otherwise, `SpellCastTimes.Base > 0`               | 45,725  |
+| instant    | `mech:instant`    | otherwise                                          | 214,532 |
+
+**Channel wins over cast time, and that is not a simplification** — Mind Control (605) has an 1,800 ms cast *and* the
+channelled flag, and Wowhead presents it exactly that way: "Cast time 1.8 seconds" with `Channeled` in its flag list.
+
+- **New source table: `SpellCastTimes`** (`SpellMisc.CastingTimeIndex` → `Base` ms). Ships on every build back to
+  Vanilla. An unresolved index reads as 0 = instant, which is what the client does with one — 97 of 274,485 rows on
+  9.2.7 point at no row.
+- **Zero overlap between the three, verified from the built pack.** They cover 274,485 of 276,332 spells; the remaining
+  1,847 have no `SpellMisc` row at all and so cannot be classified.
+- **`cast` is unusable as a word — it measures 200,496 hits**, because `on cast` is a spell-link word and the whole mech
+  corpus carries it. `casttime` and `channelled` measure 0, `instant` 35 on a 214k base. See PILLS.md, *Choosing the
+  keyword*.
+
+**COUNT SPELLS, NOT `SpellMisc` ROWS.** A spell with several difficulty rows is one spell, and the two readings differ
+by up to 15% — the same five flags are 799 / 2,748 / 591 / 3,400 / 19,812 counted as rows. Base difficulty wins, the
+same rule `read_spell_icons` and `read_spell_schools` use.
+
+**Present on all ten builds, and the bit numbering is stable across them** — counting each flag per build gives a clean
+monotonic rise (`PreventsAnim`: Vanilla 127 → TWW 967), which is what consistent numbering looks like. Builds ship
+between **14 and 17** `Attributes_N` columns, so the columns come from `array_columns` and a bit beyond a build's array
+simply reads as unset: the flag switches off for that version rather than erroring. No `OPTIONAL_COLUMNS` entry needed.
+
+**THE WORDING IS EPSILON'S, NOT RETAIL'S.** Roughly half the flags tested did not survive contact with Epsilon, so only
+flags the user confirmed in game ship at all, and the phrasing describes what they saw — `UnbreakableChannel` must not
+say "locks you in place", because the caster can move and act while it holds. See docs/DECISIONS.md *"EPSILON
+BEHAVIOUR"*.
+
+---
+
 ## 4. The pack
 
 The build bakes everything into one gzipped, **column-oriented** JSON per game version: a section like
@@ -1210,10 +1281,35 @@ The five Classic re-release clients (Vanilla / TBC / WotLK / Cataclysm / MoP) co
 | 10.2.7.55664 | Dragonflight              | 327,092 |  9.5 MB | TDB1027.24051 |             0 |
 | 11.2.7.65299 | The War Within            | 375,895 | 11.1 MB | TDB1127.26011 |             0 |
 
-**All ten are at pack format 33** (animkit bonesets — the body region each anim animates, §3e — plus effect attachment
-points for Shadowy/Dissolve/Barrage, §3h — on top of format 32's five data-mined routes, format 31's object-scale
-modifiers, §3k-bis, format 30's movement-speed modifiers, §3k, and format 29's mechanics paired with their implicit
-targets, §3l, and the keybound-override route, §3j). The four pre-MoP packs each gained one absent table,
+**All ten are at pack format 37** (spell attribute flags, §3s — on top of format 36's target masks on spell links, §3r,
+format 35's spell-link route, and format 34's missile flight paths).
+
+**Format 37's per-version drift, read from the packs rather than estimated** (`meta.counts["spellAttrs.<handler>"]`):
+
+| pack                | `anim:pose` | `fx:tracking` | `mech:unbreakable` | `mech:unhindered` | `mech:debuff` |
+|---------------------|------------:|--------------:|-------------------:|------------------:|--------------:|
+| Vanilla 1.15.8      |         127 |           193 |             **15** |                13 |           901 |
+| TBC 2.5.6           |         153 |           294 |              **0** |                50 |           700 |
+| WotLK 3.4.3         |         233 |           611 |              **0** |               133 |         1,330 |
+| Cataclysm 4.4.2     |         254 |           884 |              **0** |               299 |         1,870 |
+| MoP 5.5.4           |         361 |         1,185 |                 66 |               429 |         3,109 |
+| Legion 7.3.5        |         559 |         1,874 |                318 |               611 |         8,814 |
+| BfA 8.3.7           |         680 |         2,264 |                411 |               728 |        12,481 |
+| Shadowlands 9.2.7   |         784 |         2,712 |                580 |               868 |        17,193 |
+| Dragonflight 10.2.7 |         891 |         3,228 |                650 |               940 |        20,632 |
+| TWW 11.2.7          |         967 |         3,711 |                861 |             1,074 |        24,710 |
+
+**The three zeroes are real data, not drift** — `Attributes_11` exists on those builds, no spell sets bit 358. The word
+is simply not offered there, through the pill type's `when` gate, which is the same mechanism an absent table uses. The
+monotonic rise everywhere else is the evidence that **bit numbering is stable across builds**; that is how it was
+checked, rather than by hunting per-build enum definitions.
+
+The formats below are the older history, kept for what a stale pack still reads as:
+
+**Format 33** (animkit bonesets — the body region each anim animates, §3e — plus effect attachment points for
+Shadowy/Dissolve/Barrage, §3h — on top of format 32's five data-mined routes, format 31's object-scale modifiers,
+§3k-bis, format 30's movement-speed modifiers, §3k, and format 29's mechanics paired with their implicit targets, §3l,
+and the keybound-override route, §3j). The four pre-MoP packs each gained one absent table,
 `SpellKeyboundOverride`; nothing else drifted (the boneset tables are build-present everywhere, and the three effect
 attach columns are `OPTIONAL_COLUMNS`, so their absence on some Classic clients degrades to "full body" rather than
 drifting). Recent bumps are additive and version-agnostic: format 26 added the invis/detect channel pills

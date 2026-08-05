@@ -114,6 +114,14 @@ EXTRA_TABLES = {
     "AnimKitConfig": "AnimKitSegment.AnimKitConfigID resolves here (bonesets go through it)",
     "AnimKit": "the animkit rows themselves; segments carry ParentAnimKitID",
     "SpellVisualKitPicker": "kits chosen at random — SpellVisualKitPickerEntry's parent",
+    # Not a SpellMisc attribute, which is why the 449-bit attribute sweep never
+    # surfaced it: its own table, carrying InterruptFlags (casting),
+    # AuraInterruptFlags[2] and ChannelInterruptFlags[2]. Bit 0 is Movement.
+    "SpellInterrupts": "what breaks a cast, an aura or a channel — bit 0 is Movement",
+    # SpellMisc.CastingTimeIndex resolves here: Base/Minimum/PerLevel in ms.
+    # Base = 0 is what makes a spell INSTANT, which is half of the delivery
+    # question (immediate / cast / channel).
+    "SpellCastTimes": "CastingTimeIndex -> Base cast time in ms (0 = instant)",
 }
 
 # ---------------------------------------------------------------- enum linkage
@@ -527,6 +535,24 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
         con.executemany("INSERT INTO ref.vehicle_geo_component_link VALUES (?, ?)",
                         pairs)
         log(f"  ref.vehicle_geo_component_link  {len(pairs):>9,}")
+
+        # The 449 spell attribute bits. They are packed across
+        # SpellMisc.Attributes_0..N (32 bits per column), so the raw columns are
+        # unreadable without this: attr_column + mask are the two things a query
+        # needs. `handler` marks the bits the pack ships as pills, `requires` the
+        # one intersection rule (160 only means anything AND 34).
+        attrs = build_data.load_local_enum("spell_attributes")
+        con.execute("CREATE OR REPLACE TABLE ref.spell_attribute ("
+                    " bit INTEGER PRIMARY KEY, name VARCHAR, label VARCHAR,"
+                    " attr_column VARCHAR, mask BIGINT,"
+                    " handler VARCHAR, requires INTEGER)")
+        con.executemany(
+            "INSERT INTO ref.spell_attribute VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [(bit, meta["name"], meta["label"],
+              f"Attributes_{bit // 32}", 1 << (bit % 32),
+              meta.get("handler"), meta.get("requires"))
+             for bit, meta in sorted(attrs.items())])
+        log(f"  ref.spell_attribute             {len(attrs):>9,}")
     except (ImportError, AttributeError) as exc:
         log(f"  ! build_data.py tables unavailable ({exc})")
 
@@ -587,7 +613,8 @@ def build_catalog(con: "duckdb.DuckDBPyConnection", catalog: list[tuple]) -> Non
     data has dangling references and constraints would reject them.
     """
     con.execute("""
-        CREATE OR REPLACE TABLE ref.column_info (
+                CREATE
+                OR REPLACE TABLE ref.column_info (
             schema_name   VARCHAR,  build_id      VARCHAR,
             table_name    VARCHAR,  column_name   VARCHAR,
             dbd_column    VARCHAR,  array_index   INTEGER,
@@ -608,16 +635,21 @@ def build_catalog(con: "duckdb.DuckDBPyConnection", catalog: list[tuple]) -> Non
     # a `.dbd` names tables we never download, and a relation you cannot join is
     # noise. `resolvable` is which side of that line a row falls on.
     con.execute("""
-        CREATE OR REPLACE VIEW ref.relation AS
-        SELECT c.schema_name, c.build_id,
-               c.table_name AS from_table, c.column_name AS from_column,
-               c.fk_table   AS to_table,   c.fk_column   AS to_column,
-               c.comment,
-               EXISTS (SELECT 1 FROM ref.column_info t
-                       WHERE t.schema_name = c.schema_name
-                         AND lower(t.table_name) = lower(c.fk_table)) AS resolvable
-        FROM ref.column_info c
-        WHERE c.fk_table IS NOT NULL""")
+                CREATE
+                OR REPLACE VIEW ref.relation AS
+                SELECT c.schema_name,
+                       c.build_id,
+                       c.table_name                                           AS from_table,
+                       c.column_name                                          AS from_column,
+                       c.fk_table                                             AS to_table,
+                       c.fk_column                                            AS to_column,
+                       c.comment,
+                       EXISTS (SELECT 1
+                               FROM ref.column_info t
+                               WHERE t.schema_name = c.schema_name
+                                 AND lower(t.table_name) = lower(c.fk_table)) AS resolvable
+                FROM ref.column_info c
+                WHERE c.fk_table IS NOT NULL""")
 
     total = scalar(con, "SELECT count(*) FROM ref.relation")
     usable = scalar(con, "SELECT count(*) FROM ref.relation WHERE resolvable")
@@ -747,13 +779,16 @@ def build_views(con: "duckdb.DuckDBPyConnection", schema: str) -> int:
 def build_summary(con: "duckdb.DuckDBPyConnection") -> None:
     """`ref.table_info` — what actually landed, so `--list` and the docs agree."""
     con.execute("""
-        CREATE OR REPLACE TABLE ref.table_info AS
-        SELECT t.table_schema AS schema_name, t.table_name,
-               (SELECT count(*) FROM ref.column_info c
-                 WHERE c.schema_name = t.table_schema
-                   AND c.table_name  = t.table_name) AS column_count
-        FROM information_schema.tables t
-        WHERE t.table_type = 'BASE TABLE'""")
+                CREATE
+                OR REPLACE TABLE ref.table_info AS
+                SELECT t.table_schema                      AS schema_name,
+                       t.table_name,
+                       (SELECT count(*)
+                        FROM ref.column_info c
+                        WHERE c.schema_name = t.table_schema
+                          AND c.table_name = t.table_name) AS column_count
+                FROM information_schema.tables t
+                WHERE t.table_type = 'BASE TABLE'""")
 
 
 def main() -> int:
@@ -798,7 +833,7 @@ def main() -> int:
             csvs = len(list(directory.glob("*.csv"))) if directory.is_dir() else 0
             mark = "*" if entry in selected else " "
             log(f" {mark} {schema_for(entry['id']):<9} {entry['id']:<14} "
-                f"{csvs:>3} csv  tdb={entry['tdb_tag'] or '-'}  {entry.get('label','')}")
+                f"{csvs:>3} csv  tdb={entry['tdb_tag'] or '-'}  {entry.get('label', '')}")
         return 0
 
     started = time.time()

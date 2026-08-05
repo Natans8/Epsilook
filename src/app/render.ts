@@ -22,8 +22,10 @@ import {
     originIsHit,
     triggersIsHit,
     vehicleIsHit,
+    isHitOf,
     wordIsNamed
 } from "./hits";
+import {ATTR_FLAGS} from "../pilltypes";
 import {setStatus} from "./run";
 import type {DisplayRef, SpellData, SpellLink} from "../data";
 import {activeData, state, wowheadUrl} from "./state";
@@ -542,9 +544,17 @@ function animationsCell(animKitIds: number[], looseAnimIds: number[],
     // are PAIRS, not single anim ids, so they sit outside ANIM_GROUPS; the
     // build already unioned both sources and deduped, so this is a plain read.
     const swaps = activeData().spellReplaceAnims.get(spellId) || [];
+    // Attribute flags that render here (anim:pose). They count toward the
+    // emptiness test below: a spell whose ONLY animation fact is the flag is
+    // exactly the case this feature exists for — before it, those rows looked
+    // empty and were not.
+    const animFlags = ATTR_FLAGS.filter(
+        (f) => f.field === "anim"
+            && (activeData().spellAttrs.get(f.handler)?.has(spellId) ?? false));
     const td = el("td", "c-animations");
     if (animKitIds.length === 0 && groupAnims.size === 0
         && swaps.length === 0
+        && animFlags.length === 0
         && looseAnimIds.length === 0) {
         td.classList.add("empty");
         td.appendChild(el("span", "none", "—"));
@@ -603,6 +613,11 @@ function animationsCell(animKitIds: number[], looseAnimIds: number[],
             head: (hit) => animCatHeadTag("replace", hit),
             items: swaps.map((sw) => animSwapTag(sw.src, sw.dst)),
         }));
+    }
+    // valueless, so the category head IS the pill — the same shape freeze and
+    // camo take in the fx column.
+    for (const f of animFlags) {
+        blocks.push({el: animCatHeadTag(f.word, isHitOf(f.key)())});
     }
     renderBlocks(td, blocks);
     return td;
@@ -1006,6 +1021,22 @@ function effectCells(spellId: number): { fx: HTMLElement; mechBlocks: CellBlock[
             name,
             rows: present ? [null] : [],
             isHit,
+            entries: () => [],
+        });
+    }
+
+    // Attribute flags in the mechanics column — the same valueless shape, read
+    // from the registry's own list so a flag cannot be searchable and invisible.
+    for (const f of ATTR_FLAGS) {
+        // Both columns this function feeds. The flag's own `field` picks which,
+        // so routing a flag by its SUBJECT (the user's rule) is a one-word edit
+        // in the registry rather than a move between two render loops.
+        if (f.field !== "mech" && f.field !== "fx") continue;
+        pushCat({
+            name: f.word,
+            col: f.field,
+            rows: (d.spellAttrs.get(f.handler)?.has(spellId) ?? false) ? [null] : [],
+            isHit: isHitOf(f.key),
             entries: () => [],
         });
     }

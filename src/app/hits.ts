@@ -100,7 +100,7 @@ export function mechanicIsHit(row: MechanicRow): boolean {
    * Each name below is that matcher bound to one type, so the renderers read
    * as before and a typo'd type key fails loudly at load, not silently at
    * match time. A pill id's shape varies per type, hence the `any`. */
-function isHitOf(key: string): (id?: any) => boolean {
+export function isHitOf(key: string): (id?: any) => boolean {
     const type = P.TYPES.get(key);
     if (!type) throw new Error(`unknown pill type "${key}"`);
     // id is optional: valueless pill types (freeze, camo) call with no id

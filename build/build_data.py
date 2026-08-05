@@ -128,6 +128,10 @@ TABLES = [
     "SpellEffect",
     "SummonProperties",
     "SpellMisc",
+    # SpellMisc.CastingTimeIndex -> Base (ms). Base 0 is what makes a spell
+    # instant, which is half of the delivery question (§3s-bis); the other half
+    # is the IsChannelled bit. Ships on every build back to Vanilla.
+    "SpellCastTimes",
     "SpellChainEffects",
     "SpellProceduralEffect",
     "BeamEffect",
@@ -1154,7 +1158,7 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 36  # 36: target masks on spell links (spellLinks.targets)
+PACK_FORMAT = 38  # 38: delivery (instant / casttime / channelled) in spellAttrs
 # 35: spell -> spell links (SpellEffect.EffectTriggerSpell)
 # 34: missile flight paths (SpellMissileMotion) on missile model rows
 # 29: mechanics carry their implicit targets (spellEffects +
@@ -3188,6 +3192,105 @@ def read_spell_schools(table_dir: Path, spell_names: dict[int, str]) -> dict[int
     return school
 
 
+# Upper bound on SpellMisc's Attributes array when probing the header. The
+# widest build seen ships 17 columns (TBC/MoP Classic) and the enum tops out at
+# bit 448 = 15 columns, so this is slack, not a limit — array_columns returns
+# only the spellings the build actually has.
+ATTRIBUTE_COLUMNS_MAX = 32
+
+
+def _attr_bit(words: tuple[int, ...], bit: int) -> bool:
+    """Is `bit` set in a row's Attributes array?
+
+    Bit B lives in Attributes_(B//32) at 1<<(B%32). A build whose array is
+    shorter than that column simply predates the flag, which reads as "not
+    set" rather than an error — the same "the feature switches off" rule
+    OPTIONAL_TABLES applies one level down.
+    """
+    column, offset = divmod(bit, 32)
+    return column < len(words) and bool(words[column] & (1 << offset))
+
+
+def read_spell_attributes(table_dir: Path, spell_names: dict[int, str]) -> dict[str, list[int]]:
+    """Read the shipped SpellMisc attribute flags (base difficulty wins).
+
+    WHICH flags ship is declared in build/enums/spell_attributes.json by a
+    `handler` tag, not here: adding one is a data edit plus a pill type, with
+    no change to this reader. `requires` on a bit is an intersection — bit 160
+    (AllowActionsDuringChannel) only means anything AND-ed with bit 34
+    (IsChannelled), because the flag alone samples spells that are not channels
+    at all. That is a measured finding, not a guess; see docs/DECISIONS.md
+    "EPSILON BEHAVIOUR".
+
+    Counts SPELLS, not SpellMisc rows: a spell with several difficulty rows is
+    one spell. (The feature-queue populations were row counts and so run a few
+    percent high — AuraIsDebuff 19,812 rows is 17,197 spells on 9.2.7.)
+    """
+    attrs = load_local_enum("spell_attributes")
+    shipped = {bit: meta for bit, meta in attrs.items()
+               if isinstance(meta, dict) and meta.get("handler")}
+    if not shipped:
+        sys.exit("error: spell_attributes.json declares no handler — nothing to ship")
+
+    columns = array_columns(table_dir, "SpellMisc", "Attributes", ATTRIBUTE_COLUMNS_MAX)
+    words: dict[int, tuple[int, ...]] = {}
+    for row in read_table(table_dir, "SpellMisc", ["SpellID", "DifficultyID"] + columns):
+        s, d = to_int(row[0]), to_int(row[1])
+        if s in spell_names and (s not in words or d == 0):
+            words[s] = tuple(to_int(v) for v in row[2:])
+
+    out: dict[str, list[int]] = {}
+    for bit, meta in sorted(shipped.items()):
+        required = meta.get("requires")
+        out[meta["handler"]] = sorted(
+            s for s, w in words.items()
+            if _attr_bit(w, bit) and (required is None or _attr_bit(w, required)))
+    out.update(derive_delivery(table_dir, words))
+    return out
+
+
+# The two channelled bits. 38 is IsSelfChannelled — a channel that targets the
+# caster; it is still a channel, so delivery treats the pair as one.
+CHANNEL_BITS = (34, 38)
+
+
+def derive_delivery(table_dir: Path, words: dict[int, tuple[int, ...]]) -> dict[str, list[int]]:
+    """How the spell is DELIVERED: instant, cast time, or channelled.
+
+    Not an attribute bit — a derived three-way partition, which is why it rides
+    the same `spellAttrs` section rather than inventing a second one: the pill,
+    render, search and export halves then cost nothing. Every spell lands in
+    exactly one bucket.
+
+        channelled  IsChannelled (34) or IsSelfChannelled (38)
+        casttime    otherwise, SpellCastTimes.Base > 0 — it has a cast bar
+        instant     otherwise — Base 0, no channel
+
+    An unresolved CastingTimeIndex reads as 0 (instant), which is what the
+    client does with one: 97 of 274,485 rows on 9.2.7 point at no row.
+    """
+    base_ms: dict[int, int] = {}
+    for cid, base in read_table(table_dir, "SpellCastTimes", ["ID", "Base"]):
+        base_ms[to_int(cid)] = to_int(base)
+
+    index: dict[int, int] = {}
+    for spell_id, diff, cti in read_table(
+            table_dir, "SpellMisc", ["SpellID", "DifficultyID", "CastingTimeIndex"]):
+        s, d = to_int(spell_id), to_int(diff)
+        if s in words and (s not in index or d == 0):
+            index[s] = to_int(cti)
+
+    out: dict[str, list[int]] = {"instant": [], "casttime": [], "channelled": []}
+    for s, w in words.items():
+        if any(_attr_bit(w, b) for b in CHANNEL_BITS):
+            out["channelled"].append(s)
+        elif base_ms.get(index.get(s, 0), 0) > 0:
+            out["casttime"].append(s)
+        else:
+            out["instant"].append(s)
+    return {k: sorted(v) for k, v in out.items()}
+
+
 # -------------------------------------------------------------- the walk
 
 @dataclass
@@ -3419,6 +3522,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     spell_altname_text = read_override_names(table_dir, se.altnames)
     spell_icon_fid = read_spell_icons(table_dir, tdb_dir, spell_names)
     spell_schools = read_spell_schools(table_dir, spell_names)
+    spell_attrs = read_spell_attributes(table_dir, spell_names)
 
     # --- resolve the creature-display payloads ----------------------------
     # morphs: flatten to (creature, display, model fid) rows
@@ -3857,6 +3961,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellTransparencies": len(transp_pairs),
                 "spellFreezes": len(freeze_ids),
                 "spellCamos": len(camo_ids),
+                # one count per shipped attribute flag, so §5's drift table can
+                # be read straight out of the packs rather than estimated
+                **{f"spellAttrs.{handler}": len(ids)
+                   for handler, ids in sorted(spell_attrs.items())},
                 "spellReplaceAnims": len(replace_anim_rows),
                 "spellVisualAnims": len(visual_anim_rows),
                 "spellScreens": len(screen_pairs),
@@ -4108,6 +4216,11 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         # freeze (Type 11) / camo (Type 18): valueless standalone pills
         "spellFreezes": {"spellIds": freeze_ids},
         "spellCamos": {"spellIds": camo_ids},
+        # SpellMisc attribute flags: one spell-id list per handler declared in
+        # build/enums/spell_attributes.json. A dict rather than a section per
+        # flag so that shipping another one is a data edit there plus a pill
+        # type — nothing here, and no new pack key, branches on which flag it is.
+        "spellAttrs": spell_attrs,
         # screen effects (ScreenEffect via SCREEN_EFFECT auras + kit ET 19):
         # per row an internal name, a fog tint (-1 = none), FullScreenEffect
         # multiply/addition screen colors (-1 = none) and texture fids

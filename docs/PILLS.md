@@ -181,14 +181,44 @@ Two escape hatches, both used exactly once:
 
 Don't reach for `targetSplit` directly; `pushCat` calls it. It stays exported only because the helper needs it.
 
+### A FAMILY of types: declare the list once and let every surface read it
+
+The four steps above are right for one type. **When you are adding a FAMILY that will grow — the spell attribute flags
+are the first — do not write the family out four times.** Declare the members once and let the registry, both render
+sites and the export all read that one list:
+
+```js
+export const ATTR_FLAGS = [];                  // filled by the helper below
+const attrFlag = (key, field, word, handler, hint) => {
+    T({key, field, word, hint, spells: (d) => d.spellAttrs.get(handler) || new Set(), ...});
+    ATTR_FLAGS.push({handler, field, word, key});
+};
+attrFlag("mech:unbreakable", "mech", "unbreakable", "unbreakablechannel", "...");
+```
+
+`render.ts` then filters `ATTR_FLAGS` by `field` in each cell and `export.ts` maps over it, so **a member cannot be
+searchable and undrawn, or drawn and unexportable.** That is the same failure the fx column shipped for a year, and the
+fix is structural rather than remembered. The pack matches: one open-ended `spellAttrs` section keyed by handler, not a
+key per flag — so adding a member is a `handler` tag in `build/enums/spell_attributes.json` plus one line here.
+
+**The gate is `when`, not a version test.** `when: (d) => (d.spellAttrs.get(handler)?.size ?? 0) > 0` switches the word
+off for a pack too old to carry it *and* for a game build whose data simply has none, without either case being named.
+
 ### Choosing the keyword
 
 The registry decides **what a user can type**, so the choices there are product choices:
 
-- **Check the word for collisions first.** Category words match *in addition*
-  to file names, so a word that appears in the model corpus drags unrelated results in. `creature` was rejected for this
-  (~21% of model paths contain it) in favour of `display`; the model category `area` was renamed `ground`
-  because `area` is also a target word.
+- **Check the word for collisions first, BY MEASURING IT.** Category words match *in addition* to file names, so a word
+  that appears in the column's corpus drags unrelated results in. `creature` was rejected for this (~21% of model paths
+  contain it) in favour of `display`; the model category `area` was renamed `ground` because `area` is also a target
+  word. **An unregistered word is its own collision test** — search `mech:<candidate>` before you register it and the
+  hit count IS the noise it will carry. Four candidates measured 0 that way in one call.
+- **Not all overlap is equal: reject a word that matches something meaning the OPPOSITE.** `mech:actions` for
+  `AllowActionsDuringChannel` measured +497 because `actions` is a substring of the aura name `MOD_NO_ACTIONS` — 342
+  spells that specifically *cannot* act. It shipped as `unhindered` (0 collisions) instead. Compare `fx:tracking`, which
+  carries +175 from spells literally named "Beast Tracking" / "Dragon Tracking": **that** overlap is the documented,
+  defensible behaviour, because those spells really are about tracking. The test is not "does it overlap"
+  but "does the overlap mean the same kind of thing".
 - **Words name kinds of content; values are typed, not suggested.**
   Autocomplete offers `attach`, never `Chest`; `equipped`, never
   `equipped off hand`. The suggestion list is a menu of what can be *asked*, not of the answers.

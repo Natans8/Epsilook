@@ -1,0 +1,1815 @@
+{
+  "enum": "SpellMisc.Attributes",
+  "description": "Spell attribute flags, packed across SpellMisc.Attributes_0..N as 32 bits per column: bit B lives in Attributes_(B//32) at 1<<(B%32). Names and labels are the client's own enumerated strings. `handler` marks the bits the pack actually ships as pills — adding one is a data edit here, not a code change. Bit numbering is the modern (11.x) client's; older builds simply have fewer Attributes_N columns, so high bits are absent rather than renumbered (verified per build, see docs/DATA_ROUTES.md).",
+  "source": [
+    "https://wowdev.wiki/EnumeratedString#SpellMisc::Attributes",
+    "https://wowdev.wiki/api.php?action=parse&page=EnumeratedString&section=9&prop=wikitext&format=json"
+  ],
+  "keys": "bit index (0-based) across the Attributes_N array",
+  "values": {
+    "0": {
+      "name": "ProcFailureBurnsCharge",
+      "label": "Proc Failure Burns Charge"
+    },
+    "1": {
+      "name": "UsesRangedSlot",
+      "label": "Uses Ranged Slot"
+    },
+    "2": {
+      "name": "OnNextSwingNoDamage",
+      "label": "On Next Swing (No Damage)"
+    },
+    "3": {
+      "name": "DoNotLogImmuneMisses",
+      "label": "Do Not Log Immune Misses"
+    },
+    "4": {
+      "name": "IsAbility",
+      "label": "Is Ability"
+    },
+    "5": {
+      "name": "IsTradeskill",
+      "label": "Is Tradeskill"
+    },
+    "6": {
+      "name": "Passive",
+      "label": "Passive"
+    },
+    "7": {
+      "name": "DoNotDisplaySpellbookAuraIconCombatLog",
+      "label": "Do Not Display (Spellbook, Aura Icon, Combat Log)"
+    },
+    "8": {
+      "name": "DoNotLog",
+      "label": "Do Not Log"
+    },
+    "9": {
+      "name": "HeldItemOnly",
+      "label": "Held Item Only"
+    },
+    "10": {
+      "name": "OnNextSwing",
+      "label": "On Next Swing"
+    },
+    "11": {
+      "name": "WearerCastsProcTrigger",
+      "label": "Wearer Casts Proc Trigger"
+    },
+    "12": {
+      "name": "ServerOnly",
+      "label": "Server Only"
+    },
+    "13": {
+      "name": "AllowItemSpellInPvP",
+      "label": "Allow Item Spell In PvP"
+    },
+    "14": {
+      "name": "OnlyIndoors",
+      "label": "Only Indoors"
+    },
+    "15": {
+      "name": "OnlyOutdoors",
+      "label": "Only Outdoors"
+    },
+    "16": {
+      "name": "NotShapeshifted",
+      "label": "Not Shapeshifted"
+    },
+    "17": {
+      "name": "OnlyStealthed",
+      "label": "Only Stealthed"
+    },
+    "18": {
+      "name": "DoNotSheath",
+      "label": "Do Not Sheath"
+    },
+    "19": {
+      "name": "ScalesWithCreatureLevel",
+      "label": "Scales w/ Creature Level"
+    },
+    "20": {
+      "name": "CancelsAutoAttackCombat",
+      "label": "Cancels Auto Attack Combat"
+    },
+    "21": {
+      "name": "NoActiveDefense",
+      "label": "No Active Defense"
+    },
+    "22": {
+      "name": "TrackTargetInCastPlayerOnly",
+      "label": "Track Target in Cast (Player Only)"
+    },
+    "23": {
+      "name": "AllowCastWhileDead",
+      "label": "Allow Cast While Dead"
+    },
+    "24": {
+      "name": "AllowWhileMounted",
+      "label": "Allow While Mounted"
+    },
+    "25": {
+      "name": "CooldownOnEvent",
+      "label": "Cooldown On Event"
+    },
+    "26": {
+      "name": "AuraIsDebuff",
+      "label": "Aura Is Debuff",
+      "handler": "auraisdebuff"
+    },
+    "27": {
+      "name": "AllowWhileSitting",
+      "label": "Allow While Sitting"
+    },
+    "28": {
+      "name": "NotInCombatOnlyPeaceful",
+      "label": "Not In Combat (Only Peaceful)"
+    },
+    "29": {
+      "name": "NoImmunities",
+      "label": "No Immunities"
+    },
+    "30": {
+      "name": "HeartbeatResist",
+      "label": "Heartbeat Resist"
+    },
+    "31": {
+      "name": "NoAuraCancel",
+      "label": "No Aura Cancel"
+    },
+    "32": {
+      "name": "DismissPetFirst",
+      "label": "Dismiss Pet First"
+    },
+    "33": {
+      "name": "UseAllMana",
+      "label": "Use All Mana"
+    },
+    "34": {
+      "name": "IsChannelled",
+      "label": "Is Channelled"
+    },
+    "35": {
+      "name": "NoRedirection",
+      "label": "No Redirection"
+    },
+    "36": {
+      "name": "NoSkillIncrease",
+      "label": "No Skill Increase"
+    },
+    "37": {
+      "name": "AllowWhileStealthed",
+      "label": "Allow While Stealthed"
+    },
+    "38": {
+      "name": "IsSelfChannelled",
+      "label": "Is Self Channelled"
+    },
+    "39": {
+      "name": "NoReflection",
+      "label": "No Reflection"
+    },
+    "40": {
+      "name": "OnlyPeacefulTargets",
+      "label": "Only Peaceful Targets"
+    },
+    "41": {
+      "name": "InitiatesCombatEnablesAutoAttack",
+      "label": "Initiates Combat (Enables Auto-Attack)"
+    },
+    "42": {
+      "name": "NoThreat",
+      "label": "No Threat"
+    },
+    "43": {
+      "name": "AuraUnique",
+      "label": "Aura Unique"
+    },
+    "44": {
+      "name": "FailureBreaksStealth",
+      "label": "Failure Breaks Stealth"
+    },
+    "45": {
+      "name": "ToggleFarSight",
+      "label": "Toggle Far Sight"
+    },
+    "46": {
+      "name": "TrackTargetInChannel",
+      "label": "Track Target in Channel",
+      "handler": "tracktargetinchannel",
+      "context": 34
+    },
+    "47": {
+      "name": "ImmunityPurgesEffect",
+      "label": "Immunity Purges Effect"
+    },
+    "48": {
+      "name": "ImmunityToHostileAndFriendlyEffects",
+      "label": "Immunity to Hostile & Friendly Effects"
+    },
+    "49": {
+      "name": "NoAutoCastAI",
+      "label": "No AutoCast (AI)"
+    },
+    "50": {
+      "name": "PreventsAnim",
+      "label": "Prevents Anim",
+      "handler": "preventsanim"
+    },
+    "51": {
+      "name": "ExcludeCaster",
+      "label": "Exclude Caster"
+    },
+    "52": {
+      "name": "FinishingMoveDamage",
+      "label": "Finishing Move - Damage"
+    },
+    "53": {
+      "name": "ThreatOnlyOnMiss",
+      "label": "Threat only on Miss"
+    },
+    "54": {
+      "name": "FinishingMoveDuration",
+      "label": "Finishing Move - Duration"
+    },
+    "55": {
+      "name": "IgnoreOwnersDeath",
+      "label": "Ignore Owner's Death"
+    },
+    "56": {
+      "name": "SpecialSkillup",
+      "label": "Special Skillup"
+    },
+    "57": {
+      "name": "AuraStaysAfterCombat",
+      "label": "Aura Stays After Combat"
+    },
+    "58": {
+      "name": "RequireAllTargets",
+      "label": "Require All Targets"
+    },
+    "59": {
+      "name": "DiscountPowerOnMiss",
+      "label": "Discount Power On Miss"
+    },
+    "60": {
+      "name": "NoAuraIcon",
+      "label": "No Aura Icon"
+    },
+    "61": {
+      "name": "NameInChannelBar",
+      "label": "Name in Channel Bar"
+    },
+    "62": {
+      "name": "ComboOnBlockMainline_DispelAllStacks",
+      "label": "Combo on Block (Mainline: Dispel All Stacks)"
+    },
+    "63": {
+      "name": "CastWhenLearned",
+      "label": "Cast When Learned"
+    },
+    "64": {
+      "name": "AllowDeadTarget",
+      "label": "Allow Dead Target"
+    },
+    "65": {
+      "name": "NoShapeshiftUI",
+      "label": "No shapeshift UI"
+    },
+    "66": {
+      "name": "IgnoreLineOfSight",
+      "label": "Ignore Line of Sight"
+    },
+    "67": {
+      "name": "AllowLowLevelBuff",
+      "label": "Allow Low Level Buff"
+    },
+    "68": {
+      "name": "UseShapeshiftBar",
+      "label": "Use Shapeshift Bar"
+    },
+    "69": {
+      "name": "AutoRepeat",
+      "label": "Auto Repeat"
+    },
+    "70": {
+      "name": "CannotCastOnTapped",
+      "label": "Cannot cast on tapped"
+    },
+    "71": {
+      "name": "DoNotReportSpellFailure",
+      "label": "Do Not Report Spell Failure"
+    },
+    "72": {
+      "name": "IncludeInAdvancedCombatLog",
+      "label": "Include In Advanced Combat Log"
+    },
+    "73": {
+      "name": "AlwaysCastAsUnit",
+      "label": "Always Cast As Unit"
+    },
+    "74": {
+      "name": "SpecialTamingFlag",
+      "label": "Special Taming Flag"
+    },
+    "75": {
+      "name": "NoTargetPerSecondCosts",
+      "label": "No Target Per-Second Costs"
+    },
+    "76": {
+      "name": "ChainFromCaster",
+      "label": "Chain From Caster"
+    },
+    "77": {
+      "name": "EnchantOwnItemOnly",
+      "label": "Enchant own item only"
+    },
+    "78": {
+      "name": "AllowWhileInvisible",
+      "label": "Allow While Invisible"
+    },
+    "79": {
+      "name": "DoNotConsumeIfGainedDuringCast",
+      "label": "Do Not Consume if Gained During Cast"
+    },
+    "80": {
+      "name": "NoActivePets",
+      "label": "No Active Pets"
+    },
+    "81": {
+      "name": "DoNotResetCombatTimers",
+      "label": "Do Not Reset Combat Timers"
+    },
+    "82": {
+      "name": "NoJumpWhileCastPending",
+      "label": "No Jump While Cast Pending"
+    },
+    "83": {
+      "name": "AllowWhileNotShapeshiftedCasterForm",
+      "label": "Allow While Not Shapeshifted (caster form)"
+    },
+    "84": {
+      "name": "InitiateCombatPostCastEnablesAutoAttack",
+      "label": "Initiate Combat Post-Cast (Enables Auto-Attack)"
+    },
+    "85": {
+      "name": "FailOnAllTargetsImmune",
+      "label": "Fail on all targets immune"
+    },
+    "86": {
+      "name": "NoInitialThreat",
+      "label": "No Initial Threat"
+    },
+    "87": {
+      "name": "ProcCooldownOnFailure",
+      "label": "Proc Cooldown On Failure"
+    },
+    "88": {
+      "name": "ItemCastWithOwnerSkill",
+      "label": "Item Cast With Owner Skill"
+    },
+    "89": {
+      "name": "DontBlockManaRegen",
+      "label": "Don't Block Mana Regen"
+    },
+    "90": {
+      "name": "NoSchoolImmunities",
+      "label": "No School Immunities"
+    },
+    "91": {
+      "name": "IgnoreWeaponskill",
+      "label": "Ignore Weaponskill"
+    },
+    "92": {
+      "name": "NotAnAction",
+      "label": "Not an Action"
+    },
+    "93": {
+      "name": "CantCrit",
+      "label": "Can't Crit"
+    },
+    "94": {
+      "name": "ActiveThreat",
+      "label": "Active Threat"
+    },
+    "95": {
+      "name": "RetainItemCast",
+      "label": "Retain Item Cast"
+    },
+    "96": {
+      "name": "PvPEnabling",
+      "label": "PvP Enabling"
+    },
+    "97": {
+      "name": "NoProcEquipRequirement",
+      "label": "No Proc Equip Requirement"
+    },
+    "98": {
+      "name": "NoCastingBarText",
+      "label": "No Casting Bar Text"
+    },
+    "99": {
+      "name": "CompletelyBlocked",
+      "label": "Completely Blocked"
+    },
+    "100": {
+      "name": "NoResTimer",
+      "label": "No Res Timer"
+    },
+    "101": {
+      "name": "NoDurabilityLoss",
+      "label": "No Durability Loss"
+    },
+    "102": {
+      "name": "NoAvoidance",
+      "label": "No Avoidance"
+    },
+    "103": {
+      "name": "DoTStackingRule",
+      "label": "DoT Stacking Rule"
+    },
+    "104": {
+      "name": "OnlyOnPlayer",
+      "label": "Only On Player"
+    },
+    "105": {
+      "name": "NotAProc",
+      "label": "Not a Proc"
+    },
+    "106": {
+      "name": "RequiresMainHandWeapon",
+      "label": "Requires Main-Hand Weapon"
+    },
+    "107": {
+      "name": "OnlyBattlegrounds",
+      "label": "Only Battlegrounds"
+    },
+    "108": {
+      "name": "OnlyOnGhosts",
+      "label": "Only On Ghosts"
+    },
+    "109": {
+      "name": "HideChannelBar",
+      "label": "Hide Channel Bar"
+    },
+    "110": {
+      "name": "HideInRaidFilter",
+      "label": "Hide In Raid Filter"
+    },
+    "111": {
+      "name": "NormalRangedAttack",
+      "label": "Normal Ranged Attack"
+    },
+    "112": {
+      "name": "SuppressCasterProcs",
+      "label": "Suppress Caster Procs"
+    },
+    "113": {
+      "name": "SuppressTargetProcs",
+      "label": "Suppress Target Procs"
+    },
+    "114": {
+      "name": "AlwaysHit",
+      "label": "Always Hit"
+    },
+    "115": {
+      "name": "InstantTargetProcs",
+      "label": "Instant Target Procs"
+    },
+    "116": {
+      "name": "AllowAuraWhileDead",
+      "label": "Allow Aura While Dead"
+    },
+    "117": {
+      "name": "OnlyProcOutdoors",
+      "label": "Only Proc Outdoors"
+    },
+    "118": {
+      "name": "CastingCancelsAutorepeatMainline_DoNotTriggerTargetStand",
+      "label": "Casting Cancels Autorepeat (Mainline: Do Not Trigger Target Stand)"
+    },
+    "119": {
+      "name": "NoDamageHistory",
+      "label": "No Damage History"
+    },
+    "120": {
+      "name": "RequiresOffHandWeapon",
+      "label": "Requires Off-Hand Weapon"
+    },
+    "121": {
+      "name": "TreatAsPeriodic",
+      "label": "Treat As Periodic"
+    },
+    "122": {
+      "name": "CanProcFromProcs",
+      "label": "Can Proc From Procs"
+    },
+    "123": {
+      "name": "OnlyProcOnCaster",
+      "label": "Only Proc on Caster"
+    },
+    "124": {
+      "name": "IgnoreCasterAndTargetRestrictions",
+      "label": "Ignore Caster & Target Restrictions"
+    },
+    "125": {
+      "name": "IgnoreCasterModifiers",
+      "label": "Ignore Caster Modifiers"
+    },
+    "126": {
+      "name": "DoNotDisplayRange",
+      "label": "Do Not Display Range"
+    },
+    "127": {
+      "name": "NotOnAOEImmune",
+      "label": "Not On AOE Immune"
+    },
+    "128": {
+      "name": "NoCastLog",
+      "label": "No Cast Log"
+    },
+    "129": {
+      "name": "ClassTriggerOnlyOnTarget",
+      "label": "Class Trigger Only On Target"
+    },
+    "130": {
+      "name": "AuraExpiresOffline",
+      "label": "Aura Expires Offline"
+    },
+    "131": {
+      "name": "NoHelpfulThreat",
+      "label": "No Helpful Threat"
+    },
+    "132": {
+      "name": "NoHarmfulThreat",
+      "label": "No Harmful Threat"
+    },
+    "133": {
+      "name": "AllowClientTargeting",
+      "label": "Allow Client Targeting"
+    },
+    "134": {
+      "name": "CannotBeStolen",
+      "label": "Cannot Be Stolen"
+    },
+    "135": {
+      "name": "AllowCastWhileCasting",
+      "label": "Allow Cast While Casting"
+    },
+    "136": {
+      "name": "IgnoreDamageTakenModifiers",
+      "label": "Ignore Damage Taken Modifiers"
+    },
+    "137": {
+      "name": "CombatFeedbackWhenUsable",
+      "label": "Combat Feedback When Usable"
+    },
+    "138": {
+      "name": "WeaponSpeedCostScaling",
+      "label": "Weapon Speed Cost Scaling"
+    },
+    "139": {
+      "name": "NoPartialImmunity",
+      "label": "No Partial Immunity"
+    },
+    "140": {
+      "name": "AuraIsBuff",
+      "label": "Aura Is Buff"
+    },
+    "141": {
+      "name": "DoNotLogCaster",
+      "label": "Do Not Log Caster"
+    },
+    "142": {
+      "name": "ReactiveDamageProc",
+      "label": "Reactive Damage Proc"
+    },
+    "143": {
+      "name": "NotInSpellbook",
+      "label": "Not In Spellbook"
+    },
+    "144": {
+      "name": "NotInArenaOrRatedBattleground",
+      "label": "Not In Arena or Rated Battleground"
+    },
+    "145": {
+      "name": "IgnoreDefaultArenaRestrictions",
+      "label": "Ignore Default Arena Restrictions"
+    },
+    "146": {
+      "name": "BouncyChainMissiles",
+      "label": "Bouncy Chain Missiles"
+    },
+    "147": {
+      "name": "AllowProcWhileSitting",
+      "label": "Allow Proc While Sitting"
+    },
+    "148": {
+      "name": "AuraNeverBounces",
+      "label": "Aura Never Bounces"
+    },
+    "149": {
+      "name": "AllowEnteringArena",
+      "label": "Allow Entering Arena"
+    },
+    "150": {
+      "name": "ProcSuppressSwingAnim",
+      "label": "Proc Suppress Swing Anim"
+    },
+    "151": {
+      "name": "SuppressWeaponProcs",
+      "label": "Suppress Weapon Procs"
+    },
+    "152": {
+      "name": "AutoRangedCombat",
+      "label": "Auto Ranged Combat"
+    },
+    "153": {
+      "name": "OwnerPowerScaling",
+      "label": "Owner Power Scaling"
+    },
+    "154": {
+      "name": "OnlyFlyingAreas",
+      "label": "Only Flying Areas"
+    },
+    "155": {
+      "name": "ForceDisplayCastbar",
+      "label": "Force Display Castbar"
+    },
+    "156": {
+      "name": "IgnoreCombatTimer",
+      "label": "Ignore Combat Timer"
+    },
+    "157": {
+      "name": "AuraBounceFailsSpell",
+      "label": "Aura Bounce Fails Spell"
+    },
+    "158": {
+      "name": "Obsolete",
+      "label": "Obsolete"
+    },
+    "159": {
+      "name": "UseFacingFromSpell",
+      "label": "Use Facing From Spell"
+    },
+    "160": {
+      "name": "AllowActionsDuringChannel",
+      "label": "Allow Actions During Channel",
+      "handler": "actionsduringchannel",
+      "requires": 34
+    },
+    "161": {
+      "name": "NoReagentCostWithAura",
+      "label": "No Reagent Cost With Aura"
+    },
+    "162": {
+      "name": "RemoveEnteringArena",
+      "label": "Remove Entering Arena"
+    },
+    "163": {
+      "name": "AllowWhileStunned",
+      "label": "Allow While Stunned"
+    },
+    "164": {
+      "name": "TriggersChanneling",
+      "label": "Triggers Channeling"
+    },
+    "165": {
+      "name": "LimitN",
+      "label": "Limit N"
+    },
+    "166": {
+      "name": "IgnoreAreaEffectPvPCheck",
+      "label": "Ignore Area Effect PvP Check"
+    },
+    "167": {
+      "name": "NotOnPlayer",
+      "label": "Not On Player"
+    },
+    "168": {
+      "name": "NotOnPlayerControlledNPC",
+      "label": "Not On Player Controlled NPC"
+    },
+    "169": {
+      "name": "ExtraInitialPeriod",
+      "label": "Extra Initial Period"
+    },
+    "170": {
+      "name": "DoNotDisplayDuration",
+      "label": "Do Not Display Duration"
+    },
+    "171": {
+      "name": "ImpliedTargeting",
+      "label": "Implied Targeting"
+    },
+    "172": {
+      "name": "MeleeChainTargeting",
+      "label": "Melee Chain Targeting"
+    },
+    "173": {
+      "name": "SpellHasteAffectsPeriodic",
+      "label": "Spell Haste Affects Periodic"
+    },
+    "174": {
+      "name": "NotAvailableWhileCharmed",
+      "label": "Not Available While Charmed"
+    },
+    "175": {
+      "name": "TreatAsAreaEffect",
+      "label": "Treat as Area Effect"
+    },
+    "176": {
+      "name": "AuraAffectsNotJustReqEquippedItem",
+      "label": "Aura Affects Not Just Req. Equipped Item"
+    },
+    "177": {
+      "name": "AllowWhileFleeing",
+      "label": "Allow While Fleeing"
+    },
+    "178": {
+      "name": "AllowWhileConfused",
+      "label": "Allow While Confused"
+    },
+    "179": {
+      "name": "AIDoesntFaceTarget",
+      "label": "AI Doesn't Face Target"
+    },
+    "180": {
+      "name": "DoNotAttemptAPetResummonWhenDismounting",
+      "label": "Do Not Attempt a Pet Resummon When Dismounting"
+    },
+    "181": {
+      "name": "IgnoreTargetRequirements",
+      "label": "Ignore Target Requirements"
+    },
+    "182": {
+      "name": "NotOnTrivial",
+      "label": "Not On Trivial"
+    },
+    "183": {
+      "name": "NoPartialResists",
+      "label": "No Partial Resists"
+    },
+    "184": {
+      "name": "IgnoreCasterRequirements",
+      "label": "Ignore Caster Requirements"
+    },
+    "185": {
+      "name": "AlwaysLineOfSight",
+      "label": "Always Line of Sight"
+    },
+    "186": {
+      "name": "AlwaysAOELineOfSight",
+      "label": "Always AOE Line of Sight"
+    },
+    "187": {
+      "name": "NoCasterAuraIcon",
+      "label": "No Caster Aura Icon"
+    },
+    "188": {
+      "name": "NoTargetAuraIcon",
+      "label": "No Target Aura Icon"
+    },
+    "189": {
+      "name": "AuraUniquePerCaster",
+      "label": "Aura Unique Per Caster"
+    },
+    "190": {
+      "name": "AlwaysShowGroundTexture",
+      "label": "Always Show Ground Texture"
+    },
+    "191": {
+      "name": "AddMeleeHitRating",
+      "label": "Add Melee Hit Rating"
+    },
+    "192": {
+      "name": "NoCooldownOnTooltip",
+      "label": "No Cooldown On Tooltip"
+    },
+    "193": {
+      "name": "DoNotResetCooldownInArena",
+      "label": "Do Not Reset Cooldown In Arena"
+    },
+    "194": {
+      "name": "NotAnAttack",
+      "label": "Not an Attack"
+    },
+    "195": {
+      "name": "CanAssistImmunePC",
+      "label": "Can Assist Immune PC"
+    },
+    "196": {
+      "name": "IgnoreForModTimeRate",
+      "label": "Ignore For Mod Time Rate"
+    },
+    "197": {
+      "name": "DoNotConsumeResources",
+      "label": "Do Not Consume Resources"
+    },
+    "198": {
+      "name": "FloatingCombatTextOnCast",
+      "label": "Floating Combat Text On Cast"
+    },
+    "199": {
+      "name": "AuraIsWeaponProc",
+      "label": "Aura Is Weapon Proc"
+    },
+    "200": {
+      "name": "DoNotChainToCrowdControlledTargets",
+      "label": "Do Not Chain To Crowd-Controlled Targets"
+    },
+    "201": {
+      "name": "AllowOnCharmedTargets",
+      "label": "Allow On Charmed Targets"
+    },
+    "202": {
+      "name": "NoAuraLog",
+      "label": "No Aura Log"
+    },
+    "203": {
+      "name": "NotInRaidInstances",
+      "label": "Not In Raid Instances"
+    },
+    "204": {
+      "name": "AllowWhileRidingVehicle",
+      "label": "Allow While Riding Vehicle"
+    },
+    "205": {
+      "name": "IgnorePhaseShift",
+      "label": "Ignore Phase Shift"
+    },
+    "206": {
+      "name": "AIPrimaryRangedAttack",
+      "label": "AI Primary Ranged Attack"
+    },
+    "207": {
+      "name": "NoPushback",
+      "label": "No Pushback"
+    },
+    "208": {
+      "name": "NoJumpPathing",
+      "label": "No Jump Pathing"
+    },
+    "209": {
+      "name": "AllowEquipWhileCasting",
+      "label": "Allow Equip While Casting"
+    },
+    "210": {
+      "name": "OriginateFromController",
+      "label": "Originate From Controller"
+    },
+    "211": {
+      "name": "DelayCombatTimerDuringCast",
+      "label": "Delay Combat Timer During Cast"
+    },
+    "212": {
+      "name": "AuraIconOnlyForCasterLimit10",
+      "label": "Aura Icon Only For Caster (Limit 10)"
+    },
+    "213": {
+      "name": "ShowMechanicAsCombatText",
+      "label": "Show Mechanic as Combat Text"
+    },
+    "214": {
+      "name": "AbsorbCannotBeIgnore",
+      "label": "Absorb Cannot Be Ignore"
+    },
+    "215": {
+      "name": "TapsImmediately",
+      "label": "Taps immediately"
+    },
+    "216": {
+      "name": "CanTargetUntargetable",
+      "label": "Can Target Untargetable"
+    },
+    "217": {
+      "name": "DoesntResetSwingTimerIfInstant",
+      "label": "Doesn't Reset Swing Timer if Instant"
+    },
+    "218": {
+      "name": "VehicleImmunityCategory",
+      "label": "Vehicle Immunity Category"
+    },
+    "219": {
+      "name": "IgnoreHealingModifiers",
+      "label": "Ignore Healing Modifiers"
+    },
+    "220": {
+      "name": "DoNotAutoSelectTargetWithInitiatesCombat",
+      "label": "Do Not Auto Select Target with Initiates Combat"
+    },
+    "221": {
+      "name": "IgnoreCasterDamageModifiers",
+      "label": "Ignore Caster Damage Modifiers"
+    },
+    "222": {
+      "name": "DisableTiedEffectPoints",
+      "label": "Disable Tied Effect Points"
+    },
+    "223": {
+      "name": "NoCategoryCooldownMods",
+      "label": "No Category Cooldown Mods"
+    },
+    "224": {
+      "name": "AllowSpellReflection",
+      "label": "Allow Spell Reflection"
+    },
+    "225": {
+      "name": "NoTargetDurationMod",
+      "label": "No Target Duration Mod"
+    },
+    "226": {
+      "name": "DisableAuraWhileDead",
+      "label": "Disable Aura While Dead"
+    },
+    "227": {
+      "name": "DebugSpell",
+      "label": "Debug Spell"
+    },
+    "228": {
+      "name": "TreatAsRaidBuff",
+      "label": "Treat as Raid Buff"
+    },
+    "229": {
+      "name": "CanBeMultiCast",
+      "label": "Can Be Multi Cast"
+    },
+    "230": {
+      "name": "DontCauseSpellPushback",
+      "label": "Don't Cause Spell Pushback"
+    },
+    "231": {
+      "name": "PrepareForVehicleControlEnd",
+      "label": "Prepare for Vehicle Control End"
+    },
+    "232": {
+      "name": "HordeSpecificSpell",
+      "label": "Horde Specific Spell"
+    },
+    "233": {
+      "name": "AllianceSpecificSpell",
+      "label": "Alliance Specific Spell"
+    },
+    "234": {
+      "name": "DispelRemovesCharges",
+      "label": "Dispel Removes Charges"
+    },
+    "235": {
+      "name": "CanCauseInterrupt",
+      "label": "Can Cause Interrupt"
+    },
+    "236": {
+      "name": "CanCauseSilence",
+      "label": "Can Cause Silence"
+    },
+    "237": {
+      "name": "NoUINotInterruptible",
+      "label": "No UI Not Interruptible"
+    },
+    "238": {
+      "name": "RecastOnResummon",
+      "label": "Recast On Resummon"
+    },
+    "239": {
+      "name": "ResetSwingTimerAtSpellStart",
+      "label": "Reset Swing Timer at spell start"
+    },
+    "240": {
+      "name": "OnlyInSpellbookUntilLearned",
+      "label": "Only In Spellbook Until Learned"
+    },
+    "241": {
+      "name": "DoNotLogPvPKill",
+      "label": "Do Not Log PvP Kill"
+    },
+    "242": {
+      "name": "AttackOnChargeToUnit",
+      "label": "Attack on Charge to Unit"
+    },
+    "243": {
+      "name": "ReportSpellFailureToUnitTarget",
+      "label": "Report Spell failure to unit target"
+    },
+    "244": {
+      "name": "NoClientFailWhileStunnedFleeingConfused",
+      "label": "No Client Fail While Stunned, Fleeing, Confused"
+    },
+    "245": {
+      "name": "RetainCooldownThroughLoad",
+      "label": "Retain Cooldown Through Load"
+    },
+    "246": {
+      "name": "IgnoresColdWeatherFlyingRequirement",
+      "label": "Ignores Cold Weather Flying Requirement"
+    },
+    "247": {
+      "name": "NoAttackDodge",
+      "label": "No Attack Dodge"
+    },
+    "248": {
+      "name": "NoAttackParry",
+      "label": "No Attack Parry"
+    },
+    "249": {
+      "name": "NoAttackMiss",
+      "label": "No Attack Miss"
+    },
+    "250": {
+      "name": "TreatAsNPCAoE",
+      "label": "Treat as NPC AoE"
+    },
+    "251": {
+      "name": "BypassNoResurrectAura",
+      "label": "Bypass No Resurrect Aura"
+    },
+    "252": {
+      "name": "DoNotCountForPvPScoreboard",
+      "label": "Do Not Count For PvP Scoreboard"
+    },
+    "253": {
+      "name": "ReflectionOnlyDefends",
+      "label": "Reflection Only Defends"
+    },
+    "254": {
+      "name": "CanProcFromSuppressedTargetProcs",
+      "label": "Can Proc From Suppressed Target Procs"
+    },
+    "255": {
+      "name": "AlwaysCastLog",
+      "label": "Always Cast Log"
+    },
+    "256": {
+      "name": "NoAttackBlock",
+      "label": "No Attack Block"
+    },
+    "257": {
+      "name": "IgnoreDynamicObjectCaster",
+      "label": "Ignore Dynamic Object Caster"
+    },
+    "258": {
+      "name": "RemoveOutsideDungeonsAndRaids",
+      "label": "Remove Outside Dungeons and Raids"
+    },
+    "259": {
+      "name": "OnlyTargetIfSameCreator",
+      "label": "Only Target If Same Creator"
+    },
+    "260": {
+      "name": "CanHitAOEUntargetable",
+      "label": "Can Hit AOE Untargetable"
+    },
+    "261": {
+      "name": "AllowWhileCharmed",
+      "label": "Allow While Charmed"
+    },
+    "262": {
+      "name": "AuraRequiredByClient",
+      "label": "Aura Required by Client"
+    },
+    "263": {
+      "name": "IgnoreSanctuary",
+      "label": "Ignore Sanctuary"
+    },
+    "264": {
+      "name": "UseTargetsLevelForSpellScaling",
+      "label": "Use Target's Level for Spell Scaling"
+    },
+    "265": {
+      "name": "PeriodicCanCrit",
+      "label": "Periodic Can Crit"
+    },
+    "266": {
+      "name": "MirrorCreatureName",
+      "label": "Mirror creature name"
+    },
+    "267": {
+      "name": "OnlyPlayersCanCastThisSpell",
+      "label": "Only Players Can Cast This Spell"
+    },
+    "268": {
+      "name": "AuraPointsOnClient",
+      "label": "Aura Points On Client"
+    },
+    "269": {
+      "name": "NotInSpellbookUntilLearned",
+      "label": "Not In Spellbook Until Learned"
+    },
+    "270": {
+      "name": "TargetProcsOnCaster",
+      "label": "Target Procs On Caster"
+    },
+    "271": {
+      "name": "RequiresLocationToBeOnLiquidSurface",
+      "label": "Requires location to be on liquid surface"
+    },
+    "272": {
+      "name": "OnlyTargetOwnSummons",
+      "label": "Only Target Own Summons"
+    },
+    "273": {
+      "name": "HasteAffectsDuration",
+      "label": "Haste Affects Duration"
+    },
+    "274": {
+      "name": "IgnoreSpellcastOverrideCost",
+      "label": "Ignore Spellcast Override Cost"
+    },
+    "275": {
+      "name": "AllowTargetsHiddenBySpawnTracking",
+      "label": "Allow Targets Hidden by Spawn Tracking"
+    },
+    "276": {
+      "name": "RequiresEquippedInvTypes",
+      "label": "Requires Equipped Inv Types"
+    },
+    "277": {
+      "name": "NoSummonAndDestFromClientTargetingPathingRequirement",
+      "label": "No 'Summon + Dest from Client' Targeting Pathing Requirement"
+    },
+    "278": {
+      "name": "MeleeHasteAffectsPeriodic",
+      "label": "Melee Haste Affects Periodic"
+    },
+    "279": {
+      "name": "EnforceInCombatRessurectionLimit",
+      "label": "Enforce In Combat Ressurection Limit"
+    },
+    "280": {
+      "name": "HealPrediction",
+      "label": "Heal Prediction"
+    },
+    "281": {
+      "name": "NoLevelUpToast",
+      "label": "No Level Up Toast"
+    },
+    "282": {
+      "name": "SkipIsKnownCheck",
+      "label": "Skip Is Known Check"
+    },
+    "283": {
+      "name": "AIFaceTarget",
+      "label": "AI Face Target"
+    },
+    "284": {
+      "name": "NotInBattleground",
+      "label": "Not in Battleground"
+    },
+    "285": {
+      "name": "MasteryAffectsPoints",
+      "label": "Mastery Affects Points"
+    },
+    "286": {
+      "name": "DisplayLargeAuraIconOnUnitFramesBossAura",
+      "label": "Display Large Aura Icon On Unit Frames (Boss Aura)"
+    },
+    "287": {
+      "name": "CanAttackImmunePC",
+      "label": "Can Attack ImmunePC"
+    },
+    "288": {
+      "name": "ForceDestLocation",
+      "label": "Force Dest Location"
+    },
+    "289": {
+      "name": "ModInvisIncludesParty",
+      "label": "Mod Invis Includes Party"
+    },
+    "290": {
+      "name": "OnlyWhenIllegallyMounted",
+      "label": "Only When Illegally Mounted"
+    },
+    "291": {
+      "name": "DoNotLogAuraRefresh",
+      "label": "Do Not Log Aura Refresh"
+    },
+    "292": {
+      "name": "MissileSpeedIsDelayInSec",
+      "label": "Missile Speed is Delay (in sec)"
+    },
+    "293": {
+      "name": "IgnoreTotemRequirementsForCasting",
+      "label": "Ignore Totem Requirements for Casting"
+    },
+    "294": {
+      "name": "ItemCastGrantsSkillGain",
+      "label": "Item Cast Grants Skill Gain"
+    },
+    "295": {
+      "name": "DoNotAddToUnlearnList",
+      "label": "Do Not Add to Unlearn List"
+    },
+    "296": {
+      "name": "CooldownIgnoresRangedWeapon",
+      "label": "Cooldown Ignores Ranged Weapon"
+    },
+    "297": {
+      "name": "NotInArena",
+      "label": "Not In Arena"
+    },
+    "298": {
+      "name": "TargetMustBeGrounded",
+      "label": "Target Must Be Grounded"
+    },
+    "299": {
+      "name": "AllowWhileBanishedAuraState",
+      "label": "Allow While Banished Aura State"
+    },
+    "300": {
+      "name": "FaceUnitTargetUponCompletionOfJumpCharge",
+      "label": "Face unit target upon completion of jump charge"
+    },
+    "301": {
+      "name": "HasteAffectsMeleeAbilityCasttime",
+      "label": "Haste Affects Melee Ability Casttime"
+    },
+    "302": {
+      "name": "IgnoreDefaultRatedBattlegroundRestrictions",
+      "label": "Ignore Default Rated Battleground Restrictions"
+    },
+    "303": {
+      "name": "DoNotDisplayPowerCost",
+      "label": "Do Not Display Power Cost"
+    },
+    "304": {
+      "name": "NextModalSpellRequiresSameUnitTarget",
+      "label": "Next modal spell requires same unit target"
+    },
+    "305": {
+      "name": "AutoCastOffByDefault",
+      "label": "AutoCast Off By Default"
+    },
+    "306": {
+      "name": "IgnoreSchoolLockout",
+      "label": "Ignore School Lockout"
+    },
+    "307": {
+      "name": "AllowDarkSimulacrum",
+      "label": "Allow Dark Simulacrum"
+    },
+    "308": {
+      "name": "AllowCastWhileChanneling",
+      "label": "Allow Cast While Channeling"
+    },
+    "309": {
+      "name": "SuppressVisualKitErrors",
+      "label": "Suppress Visual Kit Errors"
+    },
+    "310": {
+      "name": "SpellcastOverrideInSpellbook",
+      "label": "Spellcast Override In Spellbook"
+    },
+    "311": {
+      "name": "JumpChargeNoFacingControl",
+      "label": "JumpCharge - no facing control"
+    },
+    "312": {
+      "name": "IgnoreCasterHealingModifiers",
+      "label": "Ignore Caster Healing Modifiers"
+    },
+    "313": {
+      "name": "ProgrammerOnlyDontConsumeChargeIfItemDeleted",
+      "label": "(Programmer Only) Don't consume charge if item deleted"
+    },
+    "314": {
+      "name": "ItemPassiveOnClient",
+      "label": "Item Passive On Client"
+    },
+    "315": {
+      "name": "ForceCorpseTarget",
+      "label": "Force Corpse Target"
+    },
+    "316": {
+      "name": "CannotKillTarget",
+      "label": "Cannot Kill Target"
+    },
+    "317": {
+      "name": "LogPassive",
+      "label": "Log Passive"
+    },
+    "318": {
+      "name": "NoMovementRadiusBonus",
+      "label": "No Movement Radius Bonus"
+    },
+    "319": {
+      "name": "ChannelPersistsOnPetFollow",
+      "label": "Channel Persists on Pet Follow"
+    },
+    "320": {
+      "name": "BypassVisibilityCheck",
+      "label": "Bypass Visibility Check"
+    },
+    "321": {
+      "name": "IgnorePositiveDamageTakenModifiers",
+      "label": "Ignore Positive Damage Taken Modifiers"
+    },
+    "322": {
+      "name": "UsesRangedSlotCosmeticOnly",
+      "label": "Uses Ranged Slot (Cosmetic Only)"
+    },
+    "323": {
+      "name": "DoNotLogFullOverheal",
+      "label": "Do Not Log Full Overheal"
+    },
+    "324": {
+      "name": "NPCKnockbackIgnoreDoors",
+      "label": "NPC Knockback - ignore doors"
+    },
+    "325": {
+      "name": "ForceNonBinaryResistance",
+      "label": "Force Non-Binary Resistance"
+    },
+    "326": {
+      "name": "NoSummonLog",
+      "label": "No Summon Log"
+    },
+    "327": {
+      "name": "IgnoreInstanceLockAndFarmLimitOnTeleport",
+      "label": "Ignore instance lock and farm limit on teleport"
+    },
+    "328": {
+      "name": "AreaEffectsUseTargetRadius",
+      "label": "Area Effects Use Target Radius"
+    },
+    "329": {
+      "name": "ChargeOrJumpChargeUseAbsoluteSpeed",
+      "label": "Charge/JumpCharge - Use Absolute Speed"
+    },
+    "330": {
+      "name": "ProcCooldownOnAPerTargetBasis",
+      "label": "Proc cooldown on a per target basis"
+    },
+    "331": {
+      "name": "LockChestAtPrecast",
+      "label": "Lock chest at precast"
+    },
+    "332": {
+      "name": "UseSpellBaseLevelForScaling",
+      "label": "Use Spell Base Level For Scaling"
+    },
+    "333": {
+      "name": "ResetCooldownUponEndingAnEncounter",
+      "label": "Reset cooldown upon ending an encounter"
+    },
+    "334": {
+      "name": "RollingPeriodic",
+      "label": "Rolling Periodic"
+    },
+    "335": {
+      "name": "SpellbookHiddenUntilOverridden",
+      "label": "Spellbook Hidden Until Overridden"
+    },
+    "336": {
+      "name": "DefendAgainstFriendlyCast",
+      "label": "Defend Against Friendly Cast"
+    },
+    "337": {
+      "name": "AllowDefenseWhileCasting",
+      "label": "Allow Defense While Casting"
+    },
+    "338": {
+      "name": "AllowDefenseWhileChanneling",
+      "label": "Allow Defense While Channeling"
+    },
+    "339": {
+      "name": "AllowFatalDuelDamage",
+      "label": "Allow Fatal Duel Damage"
+    },
+    "340": {
+      "name": "MultiClickGroundTargeting",
+      "label": "Multi-Click Ground Targeting"
+    },
+    "341": {
+      "name": "AoECanHitSummonedInvis",
+      "label": "AoE Can Hit Summoned Invis"
+    },
+    "342": {
+      "name": "AllowWhileStunnedByHorrorMechanic",
+      "label": "Allow While Stunned By Horror Mechanic"
+    },
+    "343": {
+      "name": "VisibleOnlyToCasterConversationsOnly",
+      "label": "Visible only to caster (conversations only)"
+    },
+    "344": {
+      "name": "UpdatePassivesOnApplyOrRemove",
+      "label": "Update Passives on Apply/Remove"
+    },
+    "345": {
+      "name": "NormalMeleeAttack",
+      "label": "Normal Melee Attack"
+    },
+    "346": {
+      "name": "IgnoreFeignDeath",
+      "label": "Ignore Feign Death"
+    },
+    "347": {
+      "name": "CasterDeathCancelsPersistentAreaAuras",
+      "label": "Caster Death Cancels Persistent Area Auras"
+    },
+    "348": {
+      "name": "DoNotLogAbsorb",
+      "label": "Do Not Log Absorb"
+    },
+    "349": {
+      "name": "ThisMountIsNOTAtTheAccountLevel",
+      "label": "This Mount is NOT at the account level"
+    },
+    "350": {
+      "name": "PreventClientCastCancel",
+      "label": "Prevent Client Cast Cancel"
+    },
+    "351": {
+      "name": "EnforceFacingOnPrimaryTargetOnly",
+      "label": "Enforce Facing on Primary Target Only"
+    },
+    "352": {
+      "name": "LockCasterMovementAndFacingWhileCasting",
+      "label": "Lock Caster Movement and Facing While Casting"
+    },
+    "353": {
+      "name": "DontCancelWhenAllEffectsAreDisabled",
+      "label": "Don't Cancel When All Effects are Disabled"
+    },
+    "354": {
+      "name": "ScalesWithCastingItemsLevel",
+      "label": "Scales with Casting Item's Level"
+    },
+    "355": {
+      "name": "DoNotLogOnLearn",
+      "label": "Do Not Log on Learn"
+    },
+    "356": {
+      "name": "HideShapeshiftRequirements",
+      "label": "Hide Shapeshift Requirements"
+    },
+    "357": {
+      "name": "AbsorbFallingDamage",
+      "label": "Absorb Falling Damage"
+    },
+    "358": {
+      "name": "UnbreakableChannel",
+      "label": "Unbreakable Channel",
+      "handler": "unbreakablechannel",
+      "context": 34
+    },
+    "359": {
+      "name": "IgnoreCastersSpellLevel",
+      "label": "Ignore Caster's spell level"
+    },
+    "360": {
+      "name": "TransferMountSpell",
+      "label": "Transfer Mount Spell"
+    },
+    "361": {
+      "name": "IgnoreSpellcastOverrideShapeshiftRequirements",
+      "label": "Ignore Spellcast Override Shapeshift Requirements"
+    },
+    "362": {
+      "name": "NewestExclusiveComplete",
+      "label": "Newest Exclusive Complete"
+    },
+    "363": {
+      "name": "NotInInstances",
+      "label": "Not in Instances"
+    },
+    "364": {
+      "name": "Obsolete",
+      "label": "Obsolete"
+    },
+    "365": {
+      "name": "IgnorePvPPower",
+      "label": "Ignore PvP Power"
+    },
+    "366": {
+      "name": "CanAssistUninteractible",
+      "label": "Can Assist Uninteractible"
+    },
+    "367": {
+      "name": "CastWhenInitialLoggingIn",
+      "label": "Cast When Initial Logging In"
+    },
+    "368": {
+      "name": "NotInMythicAndModeChallengeMode",
+      "label": "Not in Mythic+ Mode (Challenge Mode)"
+    },
+    "369": {
+      "name": "CheaperNPCKnockback",
+      "label": "Cheaper NPC Knockback"
+    },
+    "370": {
+      "name": "IgnoreCasterAbsorbModifiers",
+      "label": "Ignore Caster Absorb Modifiers"
+    },
+    "371": {
+      "name": "IgnoreTargetAbsorbModifiers",
+      "label": "Ignore Target Absorb Modifiers"
+    },
+    "372": {
+      "name": "HideLossOfControlUI",
+      "label": "Hide Loss of Control UI"
+    },
+    "373": {
+      "name": "AllowHarmfulOnFriendly",
+      "label": "Allow Harmful on Friendly"
+    },
+    "374": {
+      "name": "CheapMissileAOI",
+      "label": "Cheap Missile AOI"
+    },
+    "375": {
+      "name": "ExpensiveMissileAOI",
+      "label": "Expensive Missile AOI"
+    },
+    "376": {
+      "name": "NoClientFailOnNoPet",
+      "label": "No Client Fail on No Pet"
+    },
+    "377": {
+      "name": "AIAttemptCastOnImmunePlayer",
+      "label": "AI Attempt Cast on Immune Player"
+    },
+    "378": {
+      "name": "AllowWhileStunnedByStunMechanic",
+      "label": "Allow While Stunned by Stun Mechanic"
+    },
+    "379": {
+      "name": "DontCloseLootWindow",
+      "label": "Don't close loot window"
+    },
+    "380": {
+      "name": "HideDamageAbsorbUI",
+      "label": "Hide Damage Absorb UI"
+    },
+    "381": {
+      "name": "DoNotTreatAsAreaEffect",
+      "label": "Do Not Treat As Area Effect"
+    },
+    "382": {
+      "name": "CheckRequiredTargetAuraByCaster",
+      "label": "Check Required Target Aura By Caster"
+    },
+    "383": {
+      "name": "ApplyZoneAuraSpellToPets",
+      "label": "Apply Zone Aura Spell To Pets"
+    },
+    "384": {
+      "name": "EnableProcsFromSuppressedCasterProcs",
+      "label": "Enable Procs from Suppressed Caster Procs"
+    },
+    "385": {
+      "name": "CanProcFromSuppressedCasterProcs",
+      "label": "Can Proc from Suppressed Caster Procs"
+    },
+    "386": {
+      "name": "ShowCooldownAsChargeUp",
+      "label": "Show Cooldown As Charge Up"
+    },
+    "387": {
+      "name": "NoPvPBattleFatigue",
+      "label": "No PvP Battle Fatigue"
+    },
+    "388": {
+      "name": "TreatSelfCastAsReflect",
+      "label": "Treat Self Cast As Reflect"
+    },
+    "389": {
+      "name": "DoNotCancelAreaAuraOnSpecSwitch",
+      "label": "Do Not Cancel Area Aura on Spec Switch"
+    },
+    "390": {
+      "name": "CooldownOnAuraCancelUntilCombatEnds",
+      "label": "Cooldown on Aura Cancel Until Combat Ends"
+    },
+    "391": {
+      "name": "DoNotReapplyAreaAuraIfItPersistsThroughUpdate",
+      "label": "Do Not Re-apply Area Aura if it Persists Through Update"
+    },
+    "392": {
+      "name": "DisplayToastMessage",
+      "label": "Display Toast Message"
+    },
+    "393": {
+      "name": "ActivePassive",
+      "label": "Active Passive"
+    },
+    "394": {
+      "name": "IgnoreDamageCancelsAuraInterrupt",
+      "label": "Ignore Damage Cancels Aura Interrupt"
+    },
+    "395": {
+      "name": "FaceDestination",
+      "label": "Face Destination"
+    },
+    "396": {
+      "name": "ImmunityPurgesSpell",
+      "label": "Immunity Purges Spell"
+    },
+    "397": {
+      "name": "DoNotLogSpellMiss",
+      "label": "Do Not Log Spell Miss"
+    },
+    "398": {
+      "name": "IgnoreDistanceCheckOnChargeOrJumpChargeDoneTriggerSpell",
+      "label": "Ignore Distance Check On Charge/Jump Charge Done Trigger Spell"
+    },
+    "399": {
+      "name": "DisableKnownSpellsWhileCharmed",
+      "label": "Disable known spells while charmed"
+    },
+    "400": {
+      "name": "IgnoreDamageAbsorb",
+      "label": "Ignore Damage Absorb"
+    },
+    "401": {
+      "name": "NotInProvingGrounds",
+      "label": "Not In Proving Grounds"
+    },
+    "402": {
+      "name": "OverrideDefaultSpellClickRange",
+      "label": "Override Default SpellClick Range"
+    },
+    "403": {
+      "name": "IsInGameStoreEffect",
+      "label": "Is In-Game Store Effect"
+    },
+    "404": {
+      "name": "AllowDuringSpellOverride",
+      "label": "Allow during spell override"
+    },
+    "405": {
+      "name": "UseFloatValuesForScalingAmounts",
+      "label": "Use float values for scaling amounts"
+    },
+    "406": {
+      "name": "SuppressToastsOnItemPush",
+      "label": "Suppress toasts on item push"
+    },
+    "407": {
+      "name": "TriggerCooldownOnSpellStart",
+      "label": "Trigger Cooldown On Spell Start"
+    },
+    "408": {
+      "name": "NeverLearn",
+      "label": "Never Learn"
+    },
+    "409": {
+      "name": "NoDeflect",
+      "label": "No Deflect"
+    },
+    "410": {
+      "name": "DeprecatedUseStartofCastLocationForSpellDest",
+      "label": "(Deprecated) Use Start-of-Cast Location for Spell Dest"
+    },
+    "411": {
+      "name": "RecomputeAuraOnMercenaryMode",
+      "label": "Recompute Aura on Mercenary Mode"
+    },
+    "412": {
+      "name": "UseWeightedRandomForFlexMaxTargets",
+      "label": "Use Weighted Random For Flex Max Targets"
+    },
+    "413": {
+      "name": "IgnoreResilience",
+      "label": "Ignore Resilience"
+    },
+    "414": {
+      "name": "ApplyResilienceToSelfDamage",
+      "label": "Apply Resilience To Self Damage"
+    },
+    "415": {
+      "name": "OnlyProcFromClassAbilities",
+      "label": "Only Proc From Class Abilities"
+    },
+    "416": {
+      "name": "AllowClassAbilityProcs",
+      "label": "Allow Class Ability Procs"
+    },
+    "417": {
+      "name": "AllowWhileFearedByFearMechanic",
+      "label": "Allow While Feared By Fear Mechanic"
+    },
+    "418": {
+      "name": "CooldownSharedWithAIGroup",
+      "label": "Cooldown Shared With AI Group"
+    },
+    "419": {
+      "name": "InterruptsCurrentCast",
+      "label": "Interrupts Current Cast"
+    },
+    "420": {
+      "name": "PeriodicScriptRunsLate",
+      "label": "Periodic Script Runs Late"
+    },
+    "421": {
+      "name": "RecipeHiddenUntilKnown",
+      "label": "Recipe Hidden Until Known"
+    },
+    "422": {
+      "name": "CanProcFromLifesteal",
+      "label": "Can Proc From Lifesteal"
+    },
+    "423": {
+      "name": "NameplatePersonalBuffsOrDebuffs",
+      "label": "Nameplate Personal Buffs/Debuffs"
+    },
+    "424": {
+      "name": "CannotLifestealOrLeech",
+      "label": "Cannot Lifesteal/Leech"
+    },
+    "425": {
+      "name": "GlobalAura",
+      "label": "Global Aura"
+    },
+    "426": {
+      "name": "NameplateEnemyDebuffs",
+      "label": "Nameplate Enemy Debuffs"
+    },
+    "427": {
+      "name": "AlwaysAllowPvPFlaggedTarget",
+      "label": "Always Allow PvP Flagged Target"
+    },
+    "428": {
+      "name": "DoNotConsumeAuraStackOnProc",
+      "label": "Do Not Consume Aura Stack On Proc"
+    },
+    "429": {
+      "name": "DoNotPvPFlagCaster",
+      "label": "Do Not PvP Flag Caster"
+    },
+    "430": {
+      "name": "AlwaysRequirePvPTargetMatch",
+      "label": "Always Require PvP Target Match"
+    },
+    "431": {
+      "name": "DoNotFailIfNoTarget",
+      "label": "Do Not Fail if No Target"
+    },
+    "432": {
+      "name": "DisplayedOutsideOfSpellbook",
+      "label": "Displayed Outside Of Spellbook"
+    },
+    "433": {
+      "name": "CheckPhaseOnStringIDResults",
+      "label": "Check Phase on String ID Results"
+    },
+    "434": {
+      "name": "DoNotEnforceShapeshiftRequirements",
+      "label": "Do Not Enforce Shapeshift Requirements"
+    },
+    "435": {
+      "name": "AuraPersistsThroughTamePet",
+      "label": "Aura Persists Through Tame Pet"
+    },
+    "436": {
+      "name": "PeriodicRefreshExtendsDuration",
+      "label": "Periodic Refresh Extends Duration"
+    },
+    "437": {
+      "name": "UseSkillRankAsSpellLevel",
+      "label": "Use Skill Rank As Spell Level"
+    },
+    "438": {
+      "name": "AuraAlwaysShown",
+      "label": "Aura Always Shown"
+    },
+    "439": {
+      "name": "UseSpellLevelForItemSquishCompensation",
+      "label": "Use Spell Level For Item Squish Compensation"
+    },
+    "440": {
+      "name": "ChainByMostHit",
+      "label": "Chain by Most Hit"
+    },
+    "441": {
+      "name": "DoNotDisplayCastTime",
+      "label": "Do Not Display Cast Time"
+    },
+    "442": {
+      "name": "AlwaysAllowNegativeHealingPercentModifiers",
+      "label": "Always Allow Negative Healing Percent Modifiers"
+    },
+    "443": {
+      "name": "DoNotAllowDisableMovementInterrupt",
+      "label": "Do Not Allow \"Disable Movement Interrupt\""
+    },
+    "444": {
+      "name": "AllowAuraOnLevelScale",
+      "label": "Allow Aura On Level Scale"
+    },
+    "445": {
+      "name": "RemoveAuraOnLevelScale",
+      "label": "Remove Aura On Level Scale"
+    },
+    "446": {
+      "name": "RecomputeAuraOnLevelScale",
+      "label": "Recompute Aura On Level Scale"
+    },
+    "447": {
+      "name": "UpdateFallSpeedAfterAuraRemoval",
+      "label": "Update Fall Speed After Aura Removal"
+    },
+    "448": {
+      "name": "PreventJumpingDuringPrecast",
+      "label": "Prevent Jumping During Precast"
+    }
+  }
+}

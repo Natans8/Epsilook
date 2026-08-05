@@ -37,6 +37,17 @@ Full syntax lives behind the **?** button in the app. The short version:
   `Stand → StealthStand`
   (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue). `anim:kit` and `anim:loose`
   say where an animation came from: a numbered AnimKit bundle, or the spell's visual kit playing it directly.
+- **How a spell is delivered is a chip**: `mech:instant` (no cast bar), `mech:casttime` (has one) and
+  `mech:channelled` (held rather than cast once) — every spell is exactly one of the three, and the channel properties
+  below hang off the last. Note the word is `casttime`, not `cast`: `on cast` is a spell-link word, so `cast` alone
+  would match 200,000 spells.
+- **Some spells are findable only by a flag.** A handful of `SpellMisc` attribute bits are their own chips:
+  `anim:pose` holds the character's pose (the Permanent Feign Death and Cosmetic Dead poses — these have no model, sound
+  or animation of their own, so before this they could not be found at all), and in Mechanics `mech:unbreakable` (a
+  channel that persists while the caster moves and acts), `fx:tracking` (the caster stays facing the target),
+  `mech:unhindered` (a channel you can act during) and `mech:debuff` (shows in the red debuff frame). **Only flags
+  confirmed to work in Epsilon ship** — roughly half of those tested did not, so the wording describes what the server
+  actually does rather than what retail documents.
 - **Spells link to each other**, and the Mechanics column shows both directions: `mech:triggers` for what a spell casts,
   ticks, procs or removes, `mech:origin` for what reaches it. Each chip is the other spell — its id copies, its icon
   opens Wowhead, its name filters to that spell's own row, target icons say who the triggering effect is aimed at, and

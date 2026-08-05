@@ -153,6 +153,14 @@ export interface SpellPack {
     spellFreezes?: { spellIds: number[] };
     spellCamos?: { spellIds: number[] };
 
+    /**
+     * SpellMisc attribute flags (format 37+), keyed by the `handler` declared
+     * in build/enums/spell_attributes.json. Open-ended on purpose: shipping
+     * another flag adds a key here and a pill type, and nothing in this module
+     * names the individual flags.
+     */
+    spellAttrs?: Record<string, number[]>;
+
     /** ScreenEffect rows (format 16+). Colors are packed RGB, -1 = none
      *  (0 is a real black). mask* (format 18+) = the radial vignette params,
      *  maskSize 0 = the row has no FullScreenEffect. */
@@ -536,6 +544,9 @@ export interface SpellData {
 
     spellFreezes: Set<number>;
     spellCamos: Set<number>;
+
+    /** attribute-flag handler -> the spells carrying it (format 37+). */
+    spellAttrs: Map<string, Set<number>>;
 
     spellScreens: Map<number, number[]>;
     screenSpells: Map<number, number[]>;
@@ -1234,6 +1245,12 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const spellFreezes = new Set<number>(pack.spellFreezes ? pack.spellFreezes.spellIds : []);
     const spellCamos = new Set<number>(pack.spellCamos ? pack.spellCamos.spellIds : []);
 
+    // attribute flags: whatever handlers the pack carries. A pack older than
+    // format 37 has none, which switches every flag pill off through its
+    // `when` rather than through a version test.
+    const spellAttrs = new Map<string, Set<number>>(
+        Object.entries(pack.spellAttrs || {}).map(([handler, ids]) => [handler, new Set(ids)]));
+
     // screen effects (ScreenEffect rows): the whole screen tints/overlays
     // while the aura holds. Each row: internal name, optional fog tint and
     // FullScreenEffect multiply/addition colors (-1 = none — 0 is a real
@@ -1842,7 +1859,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellTints, tintSpells, tintColors, tintSearchL,
         spellDesaturates, desatSpells, desatSearchL,
         spellTransps, transpSpells, transpSearchL,
-        spellFreezes, spellCamos,
+        spellFreezes, spellCamos, spellAttrs,
         spellScreens, screenSpells, screenNames, screenColors, screenTextures, screenSearchL,
         spellVisualAnims, visualAnimSpells,
         targetNames, animKitTargets, visualAnimTargets, fxTargets,

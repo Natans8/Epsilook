@@ -33,10 +33,13 @@ things to look at, not things to fix before pushing.
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
+import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -65,7 +68,27 @@ DOC_TRIGGERS = (
     (("build/build_data.py",), "docs/DATA_ROUTES.md"),
     (("src/pills.ts", "src/pilltypes.ts"), "docs/PILLS.md"),
     (("src/config.ts",), "README.md"),
+    (("tools/builddb.py",), "docs/DB_SCHEMA.md"),
 )
+
+# A PACK FORMAT BUMP MEANS THE PACK'S SHAPE CHANGED, and these consume that
+# shape. Warn-only because a given bump need not touch all of them (a pure
+# target-mask addition does not change what dossier prints) — but every one is
+# a surface that goes quietly INCOMPLETE rather than breaking, which is exactly
+# the failure a human does not notice. 2026-08-05: `spellAttrs` shipped and
+# dossier.py and export.ts were both forgotten until the user asked.
+FORMAT_CONSUMERS = (
+    "src/data.ts",
+    "src/export.ts",
+    "tools/dossier.py",
+    "docs/DATA_ROUTES.md",
+)
+
+# The JetBrains MCP endpoints. The inspection pass is a REQUIRED check
+# (CLAUDE.md > Checks) and its documented hazard is that a closed IDE makes it
+# silently PASS — so absence is a failure here rather than a shrug. Skipped in
+# CI, which has no IDE and is not where the pass is meant to happen.
+INSPECTORS = (("webstorm", 64542), ("pycharm", 64462))
 
 RED, GREEN, YELLOW, DIM, RESET = "\033[31m", "\033[32m", "\033[33m", "\033[2m", "\033[0m"
 
@@ -291,6 +314,74 @@ def check_docs(rep: Report, base: str) -> None:
         if hits and doc not in changed:
             rep.warn(f"{doc} freshness", f"{', '.join(hits)} changed, {doc} did not")
 
+    # A format bump is the precise signal that the pack's SHAPE moved.
+    if "build/build_data.py" in changed and _format_moved(base):
+        missed = [f for f in FORMAT_CONSUMERS if f not in changed]
+        if missed:
+            rep.warn("pack format consumers",
+                     f"PACK_FORMAT moved but {', '.join(missed)} did not")
+
+
+def _format_moved(base: str) -> bool:
+    """Did this diff change PACK_FORMAT? Read off the diff, not the file."""
+    diff = git("diff", "-U0", base, "--", "build/build_data.py")
+    return any(line.startswith(("+PACK_FORMAT", "-PACK_FORMAT"))
+               for line in diff.splitlines())
+
+
+def check_pack_sections(rep: Report) -> None:
+    """Every section the pack SHIPS must be named in src/data.ts.
+
+    Mechanical, and its failure is invisible in the worst way: a route can be
+    built, gzipped and deployed to ten packs while the app never reads a byte
+    of it. Nothing errors — the column is simply empty forever. The pack is the
+    artifact, so this reads the built file rather than parsing the builder.
+    """
+    if not MANIFEST.exists():
+        rep.skip("pack sections", "no versions.json")
+        return
+    entries = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    default = next((e for e in entries if e.get("default")), entries[0] if entries else None)
+    if not default:
+        rep.skip("pack sections", "no default pack")
+        return
+    pack = SITE / default["file"]
+    if not pack.exists() or pack.read_bytes()[:len(LFS_POINTER_MAGIC)] == LFS_POINTER_MAGIC:
+        rep.skip("pack sections", "default pack not smudged locally")
+        return
+    with gzip.open(pack, "rt", encoding="utf-8") as fh:
+        sections = set(json.load(fh)) - {"meta"}
+    source = (ROOT / "src" / "data.ts").read_text(encoding="utf-8")
+    unread = sorted(s for s in sections if s not in source)
+    if unread:
+        rep.fail("pack sections", f"shipped but unread by data.ts: {', '.join(unread)}")
+    else:
+        rep.ok("pack sections", f"all {len(sections)} read by data.ts")
+
+
+def check_inspectors(rep: Report) -> None:
+    """The IDE inspection servers must be REACHABLE, not merely intended.
+
+    CLAUDE.md names the hazard exactly — "a closed IDE silently passes" — and
+    it has now cost two sessions. A prose rule cannot fire; a port either
+    answers or it does not, so this is the mechanical form of that rule.
+    Reachability is all this proves: it does not prove the pass was RUN.
+    """
+    if os.environ.get("CI"):
+        rep.skip("ide inspectors", "CI has no IDE")
+        return
+    down = []
+    for name, port in INSPECTORS:
+        with socket.socket() as s:
+            s.settimeout(0.4)
+            if s.connect_ex(("127.0.0.1", port)) != 0:
+                down.append(f"{name}:{port}")
+    if down:
+        rep.fail("ide inspectors", f"not listening: {', '.join(down)} — launch it, "
+                                   f"the inspection pass silently passes without it")
+    else:
+        rep.ok("ide inspectors", " + ".join(n for n, _ in INSPECTORS) + " reachable")
+
 
 # ----------------------------------------------------------------- toolchain
 
@@ -345,6 +436,8 @@ def main() -> int:
     check_bump(rep, args.base, version)
     check_line_endings(rep)
     check_manifest(rep)
+    check_pack_sections(rep)
+    check_inspectors(rep)
     check_docs(rep, args.base)
 
     print()

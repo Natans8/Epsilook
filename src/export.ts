@@ -16,6 +16,7 @@
  */
 import {CFG} from "./config";
 import type {ScreenColors, SpellData} from "./data";
+import {ATTR_FLAGS} from "./pilltypes";
 import {el, hexColor} from "./util";
 
 /** The slice of app state this module reads. Deliberately narrow. */
@@ -34,10 +35,15 @@ export interface ExportState {
 export interface ExportDeps {
     /** Live and read-only to the export module. */
     state: ExportState;
+
     targetWordsOf(mask: number): string[];
+
     maskOf(index: Map<number, Map<number, number>>, spellId: number, itemIds: number[]): number;
+
     toast(msg: string): void;
+
     copyText(text: string, wrapTicks?: boolean, message?: string): void;
+
     /** Stand-in for a ScreenEffect row carrying no colour payload. */
     NO_SCREEN_COLORS: ScreenColors;
 }
@@ -226,6 +232,12 @@ function exportRows(): ExportRow[] {
                 .map((p) => ({type: "transparency", percent: p}))
             ).concat(d.spellFreezes.has(id) ? [{type: "freeze"}] : []
             ).concat(d.spellCamos.has(id) ? [{type: "camo"}] : []
+                // Attribute flags, from the registry's own list rather than a
+                // second one here: a flag added there exports without touching
+                // this file. Valueless, so the word IS the payload.
+            ).concat(ATTR_FLAGS
+                .filter((f) => d.spellAttrs.get(f.handler)?.has(id) ?? false)
+                .map((f) => ({type: f.word}))
             ).concat(sorted(d.spellScreens.get(id)).map((sc) => {
                 const c = d.screenColors.get(sc) || NO_SCREEN_COLORS;
                 // -1 = the row has no such color

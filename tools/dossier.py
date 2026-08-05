@@ -241,6 +241,30 @@ class Dossier:
             self.absent.discard("SpellMissileMotion")
         return got
 
+    def _attr_names(self) -> dict[int, dict[str, Any]]:
+        """bit -> {name, label, handler} for the 449 spell attribute flags.
+
+        `ref.spell_attribute` first, then the checked-in enum the database is
+        itself built from — same "both are read, newest first" rule as
+        _motion_names, so a database built before the table existed still names
+        its bits instead of printing bare indices.
+        """
+        got = {int(b): {"name": n, "label": lb, "handler": h}
+               for b, n, lb, h in
+               self._ref("SELECT bit, name, label, handler FROM ref.spell_attribute")}
+        if got:
+            return got
+        path = ROOT / "build" / "enums" / "spell_attributes.json"
+        if not path.exists():
+            return {}
+        data = json.loads(path.read_text(encoding="utf-8"))
+        got = {int(b): {"name": m["name"], "label": m.get("label", m["name"]),
+                        "handler": m.get("handler")}
+               for b, m in data["values"].items()}
+        if got:
+            self.absent.discard("ref.spell_attribute")
+        return got
+
     # -------------------------------------------------------------- name search
     def find(self, text: str, limit: int = 20) -> tuple[list[dict[str, Any]], int]:
         """Spells whose name contains `text`, exact matches first. (rows, total)."""
@@ -532,12 +556,25 @@ class Dossier:
         if not r:
             return None
         m = r[0]
+        # The row's OWN Attributes_N columns, not a fixed count: builds ship
+        # between 14 and 17 of them, so a hardcoded range silently drops the
+        # high bits on the widest ones (TBC and MoP Classic both have 17).
+        words = sorted(
+            (int(k.split("_")[1]), int(m.get(k) or 0))
+            for k in m if k.startswith("Attributes_") and k.split("_")[1].isdigit())
+        names = self._attr_names()
         attrs = []
-        for w in range(15):
-            v = m.get(f"Attributes_{w}") or 0
+        for w, v in words:
             for b in range(32):
-                if (int(v) >> b) & 1:
-                    attrs.append({"word": w, "bit": b, "index": w * 32 + b})
+                if (v >> b) & 1:
+                    index = w * 32 + b
+                    meta = names.get(index, {})
+                    attrs.append({
+                        "word": w, "bit": b, "index": index,
+                        "name": meta.get("name"), "label": meta.get("label"),
+                        # set = this bit is one the pack ships as a pill
+                        "handler": meta.get("handler"),
+                    })
         mask = int(m.get("SchoolMask") or 0)
         return {
             "schools": [SCHOOLS[b] for b in range(8) if (mask >> b) & 1],
@@ -971,6 +1008,19 @@ def show(d: dict[str, Any], full: bool = False) -> None:
     print(f"  school {', '.join(m.get('schools') or ['-'])}   "
           f"{m.get('attribute_count', 0)} attribute flags   "
           f"icon {(m.get('icon') or {}).get('path', '-')}")
+    # The flags the app SHIPS as pills are called out by name, because they are
+    # the ones that answer "why does this spell behave like that" — the rest are
+    # a 449-bit haystack and stay behind --full.
+    attrs = m.get("attributes") or []
+    shipped = [a for a in attrs if a.get("handler")]
+    if shipped:
+        print(f"  {GOLD}flags{RESET} " + ", ".join(
+            f"{a['name']} ({a['index']})" for a in shipped))
+    if full and attrs:
+        named = [a for a in attrs if a.get("name")]
+        for i in range(0, len(named), 3):
+            print("    " + DIM + "  ".join(
+                f"{a['index']:>3} {a['name'][:26]:<26}" for a in named[i:i + 3]) + RESET)
     s = d["summary"]
     print(f"  {s['effects']} effects ({s['auras']} auras) - {s['visuals']} visuals, "
           f"{s['kits']} kit events, {s['missiles']} missiles - "
@@ -1077,7 +1127,10 @@ def diff(a: dict[str, Any], b: dict[str, Any]) -> None:
                 for v in d["visuals"] for ev in v["events"]}
 
     def attrs(d: dict[str, Any]) -> set[Any]:
-        return {x["index"] for x in (d["misc"] or {}).get("attributes", [])}
+        # Name where the decode has one, bare index where it does not, so a
+        # difference reads as "one has PreventsAnim" rather than "one has 50".
+        return {x.get("name") or x["index"]
+                for x in (d["misc"] or {}).get("attributes", [])}
 
     print(f"\n{'=' * 96}")
     print(f"  {BOLD}{a['name']} [{a['id']}]   vs   {b['name']} [{b['id']}]{RESET}")

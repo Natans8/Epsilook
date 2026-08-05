@@ -348,6 +348,89 @@ T({
     when: (d) => d.originSpells.size > 0,
 });
 
+/* ------------------------------------------------- attribute flags */
+
+/* SpellMisc attribute bits. Valueless like fx:freeze — membership IS the
+ * payload — but they come from ONE open-ended pack section keyed by handler,
+ * so shipping another flag is a `handler` tag in
+ * build/enums/spell_attributes.json plus one line here. Nothing branches on
+ * which flag it is, in this file or in data.ts.
+ *
+ * THE WORDING DESCRIBES WHAT EPSILON DOES, not what retail documents. Roughly
+ * half the flags tested did not survive contact with Epsilon, so every one
+ * below was confirmed in game by the user before it shipped and the phrasing
+ * is theirs — see docs/DECISIONS.md "EPSILON BEHAVIOUR". `when` is what keeps
+ * a pre-format-37 pack (and a build too old to have the bit) from offering the
+ * word at all. */
+export interface AttrFlag {
+    /** pack key: the `handler` in build/enums/spell_attributes.json */
+    handler: string;
+    /** the column it renders in */
+    field: string;
+    /** its category word, which IS the whole pill */
+    word: string;
+    /** the pill type's key, for the hit test */
+    key: string;
+}
+
+/** Every shipped flag, in declaration order. render.ts draws the cells from
+ *  THIS, so a flag cannot be registered as a search word and then forgotten by
+ *  the renderer (or vice versa) — the two halves read one list. */
+export const ATTR_FLAGS: AttrFlag[] = [];
+
+const attrFlag = (key: string, field: string, word: string, handler: string, hint: string) => {
+    T({
+        key, field, word, hint,
+        spells: (d) => d.spellAttrs.get(handler) || new Set<number>(),
+        when: (d) => (d.spellAttrs.get(handler)?.size ?? 0) > 0,
+    });
+    ATTR_FLAGS.push({handler, field, word, key});
+};
+
+/* HOW THE SPELL IS DELIVERED — a derived three-way partition, and the parent
+ * the channel properties below hang off. Every spell is in exactly one.
+ * `cast` was measured at 200,496 hits and is unusable as a word: "on cast" is
+ * a spell-link word, so it is all corpus. `casttime` and `channelled` measure
+ * zero, `instant` measures 35 on a 214k base. */
+attrFlag("mech:instant", "mech", "instant", "instant",
+    "Goes off at once — no cast bar, no channel");
+attrFlag("mech:casttime", "mech", "casttime", "casttime",
+    "Has a cast bar before it goes off");
+attrFlag("mech:channelled", "mech", "channelled", "channelled",
+    "Channelled — held rather than cast once");
+
+/* The channel group: three ways a channelled beam behaves, which is the most
+ * scene-relevant cluster in the whole attribute sweep. */
+attrFlag("mech:unbreakable", "mech", "unbreakable", "unbreakablechannel",
+    "Channel that persists — the caster can still move and act while it holds");
+/* IT IS THE CASTER'S FACING, NOT THE BEAM (user's correction): the caster stays
+ * turned toward the target for the whole channel, locked in its direction. The
+ * beam merely follows from that. fx rather than mech is the user's call and
+ * survives the correction — a character being turned is what the spell LOOKS
+ * like, not a rule about what it does. The move also cut the word's corpus
+ * noise 175 -> 8, the fx corpus being filenames rather than aura/link names.
+ * Sibling not shipped: bit 22 `TrackTargetInCastPlayerOnly`, the cast-time
+ * equivalent. */
+attrFlag("fx:tracking", "fx", "tracking", "tracktargetinchannel",
+    "Caster stays facing the target for the whole channel");
+/* Shipped as the INTERSECTION with IsChannelled, in the pack. The flag alone
+ * samples spells that are not channels at all, which made its examples
+ * meaningless — the build does the AND so the word cannot lie here. */
+/* NOT `actions`: that word substring-matches the aura name `MOD_NO_ACTIONS`,
+ * dragging in 342 spells that mean the OPPOSITE. Every category word in this
+ * app also matches names, so a word has to be checked against the corpus it
+ * will live in — `unhindered` measures zero collisions where `actions` measured
+ * +497. The hint is what separates it from `unbreakable` next door. */
+attrFlag("mech:unhindered", "mech", "unhindered", "actionsduringchannel",
+    "Channel the caster can act during (still breaks on the usual interrupts)");
+attrFlag("mech:debuff", "mech", "debuff", "auraisdebuff",
+    "Aura that shows in the red debuff frame");
+/* The RP body-pose library, and the reason this feature exists: these spells
+ * have no distinguishing model, sound or animation, so before the flag they
+ * were unfindable. Permanent Feign Death, Cosmetic Dead Hanging and friends. */
+attrFlag("anim:pose", "anim", "pose", "preventsanim",
+    "Holds the character's pose — the spell suppresses its own animation");
+
 /* Object scale — movement speed's shorter twin. There is only one thing
  * these auras scale, so the percent IS the id and the numeric axis reads it
  * directly, the way desaturate does. fx:"scale 30" is exactly +30%, and
