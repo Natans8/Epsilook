@@ -125,8 +125,10 @@ tools/                   every routine that would otherwise be a thing to rememb
   verify_live.py         wait for Pages, then check what it actually serves
   verify_site.sh         is this assembled document root actually servable?
   docker_smoke.py        build the image, run it, prove it serves the site
+  ide.py                 format + lint through the JetBrains IDEs, routed by owner
   builddb.py             build the exploration database (development tool)
   dossier.py             one spell, every route followed to the leaves
+  epsilon_test.py        in-game test sheets: one command per line, with controls
   dbd.py                 parser for WoWDBDefs .dbd schema definitions
 docker/                  the self-hosting path — see "Hosting it yourself"
   Dockerfile             the image: esbuild -> a verified document root -> nginx
@@ -312,6 +314,7 @@ npx tsc                                        # the app: strict TypeScript, no 
 npm run build                                  # the bundle, plus the module-graph guard
 python -m mypy build/build_data.py tools       # Python: fully annotated
 python -m pyflakes build/build_data.py tools
+python tools/ide.py                            # the JetBrains inspections + formatting
 ```
 
 Touching the `docker/Dockerfile`, `docker/nginx.conf` or anything they copy adds one more, which needs Docker running
