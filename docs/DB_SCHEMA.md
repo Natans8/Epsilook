@@ -392,9 +392,12 @@ Present on **all ten builds, zero drift**.
   GROUP BY SpellID` is the safe read, and the row-vs-spell trap here is the same one that put five wrong populations in
   the feature queue.
 - **Measured against the scale/speed pills the app already draws: 621 of the `SCALE_AURAS` spells stack and 584 of the
-  `SPEED_AURAS` ones do** (median limit 15 and 10). **Whether the amount COMPOUNDS per stack is a behaviour question
-  this table does not answer** — it gives the per-stack amount (`SpellEffect.EffectBasePointsF`) and the ceiling, and
-  nothing more. Do not write that N stacks means N× the percent until Epsilon has been asked.
+  `SPEED_AURAS` ones do** (median limit 15 and 10).
+- **THIS TABLE DOES NOT SAY THE AMOUNT COMPOUNDS, AND FOR SCALE IT DEMONSTRABLY DOES NOT.** It gives the per-stack
+  amount (`SpellEffect.EffectBasePointsF`) and the ceiling, and nothing more. **Tested in game 2026-08-06: a
+  `MOD_SCALE` aura applies once on Epsilon and stacks never recalculate size** — 4 of 4 rows, see DECISIONS.md, *"A
+  scale aura applies once"*. The other 212 stacking aura types are untested and the prior is now "does not compound
+  until shown otherwise". **Never write that N stacks means N× the amount without a test for that family.**
 
 **`SpellCastTimes`, `SpellDuration` and `SpellInterrupts` were REMOVED from this list on 2026-08-05** — they became
 `build_data.py` `TABLES` for the delivery line, so the normal CSV sweep caches them and listing them here would only be
