@@ -1176,7 +1176,7 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 38  # 38: delivery (instant / casttime / channelled) in spellAttrs
+PACK_FORMAT = 39  # 39: spellDelivery — cast/channel VALUES, and they overlap
 # 35: spell -> spell links (SpellEffect.EffectTriggerSpell)
 # 34: missile flight paths (SpellMissileMotion) on missile model rows
 # 29: mechanics carry their implicit targets (spellEffects +
@@ -3216,6 +3216,11 @@ def read_spell_schools(table_dir: Path, spell_names: dict[int, str]) -> dict[int
 # only the spellings the build actually has.
 ATTRIBUTE_COLUMNS_MAX = 32
 
+# SpellInterrupts' three flag columns are declared [2] in the db2 — 64 bits,
+# which covers SpellInterruptFlags' 49. Over-generous on purpose: array_columns
+# keeps only the columns a build actually exports.
+INTERRUPT_COLUMNS_MAX = 4
+
 
 def _attr_bit(words: tuple[int, ...], bit: int) -> bool:
     """Is `bit` set in a row's Attributes array?
@@ -3227,6 +3232,29 @@ def _attr_bit(words: tuple[int, ...], bit: int) -> bool:
     """
     column, offset = divmod(bit, 32)
     return column < len(words) and bool(words[column] & (1 << offset))
+
+
+def _read_attribute_words(table_dir: Path,
+                          spell_names: dict[int, str]) -> dict[int, tuple[int, ...]]:
+    """Each spell's SpellMisc.Attributes_N array, base difficulty winning.
+
+    Shared by the flag reader and the delivery reader because both dispatch on
+    the same bits and a second copy of this loop would be a second answer to
+    "which row represents the spell".
+    """
+    columns = array_columns(table_dir, "SpellMisc", "Attributes", ATTRIBUTE_COLUMNS_MAX)
+    words: dict[int, tuple[int, ...]] = {}
+    for row in read_table(table_dir, "SpellMisc", ["SpellID", "DifficultyID"] + columns):
+        s, d = to_int(row[0]), to_int(row[1])
+        if s in spell_names and (s not in words or d == 0):
+            words[s] = tuple(to_int(v) for v in row[2:])
+    return words
+
+
+def read_spell_delivery(table_dir: Path,
+                        spell_names: dict[int, str]) -> list[tuple[int, int, int, int]]:
+    """The delivery rows for the pack — see derive_delivery for the shape."""
+    return derive_delivery(table_dir, _read_attribute_words(table_dir, spell_names))
 
 
 def read_spell_attributes(table_dir: Path, spell_names: dict[int, str]) -> dict[str, list[int]]:
@@ -3250,20 +3278,13 @@ def read_spell_attributes(table_dir: Path, spell_names: dict[int, str]) -> dict[
     if not shipped:
         sys.exit("error: spell_attributes.json declares no handler — nothing to ship")
 
-    columns = array_columns(table_dir, "SpellMisc", "Attributes", ATTRIBUTE_COLUMNS_MAX)
-    words: dict[int, tuple[int, ...]] = {}
-    for row in read_table(table_dir, "SpellMisc", ["SpellID", "DifficultyID"] + columns):
-        s, d = to_int(row[0]), to_int(row[1])
-        if s in spell_names and (s not in words or d == 0):
-            words[s] = tuple(to_int(v) for v in row[2:])
-
+    words = _read_attribute_words(table_dir, spell_names)
     out: dict[str, list[int]] = {}
     for bit, meta in sorted(shipped.items()):
         required = meta.get("requires")
         out[meta["handler"]] = sorted(
             s for s, w in words.items()
             if _attr_bit(w, bit) and (required is None or _attr_bit(w, required)))
-    out.update(derive_delivery(table_dir, words))
     return out
 
 
@@ -3271,42 +3292,124 @@ def read_spell_attributes(table_dir: Path, spell_names: dict[int, str]) -> dict[
 # caster; it is still a channel, so delivery treats the pair as one.
 CHANNEL_BITS = (34, 38)
 
+# SpellCastTimes.Base sentinel: "use the caster's ranged weapon speed", NOT a
+# duration. One row (ID 18) behind 51 spells on 9.2.7, every one a hunter ranged
+# shot. Wowhead prints no cast-time line at all for these, but Epsilon fires them
+# with no cast bar, so they are INSTANT here — the wording is Epsilon's, not
+# retail's. Verified in game on Arcane Shot 51742; see docs/DECISIONS.md.
+WEAPON_SPEED_CAST = -1000000
 
-def derive_delivery(table_dir: Path, words: dict[int, tuple[int, ...]]) -> dict[str, list[int]]:
-    """How the spell is DELIVERED: instant, cast time, or channelled.
+# SpellDuration.Duration at or beyond this (or negative) is the client's "no
+# limit" — a channel that runs until something stops it.
+DURATION_UNLIMITED = 100_000_000
 
-    Not an attribute bit — a derived three-way partition, which is why it rides
-    the same `spellAttrs` section rather than inventing a second one: the pill,
-    render, search and export halves then cost nothing. Every spell lands in
-    exactly one bucket.
+# spellDelivery.flags bits. Channelled has to be explicit rather than inferred
+# from durMs, because a channel is allowed to carry no duration row at all.
+DELIVERY_CHANNELLED = 1 << 0
+DELIVERY_BREAKS_ON_MOVE = 1 << 1
 
-        channelled  IsChannelled (34) or IsSelfChannelled (38)
-        casttime    otherwise, SpellCastTimes.Base > 0 — it has a cast bar
-        instant     otherwise — Base 0, no channel
 
-    An unresolved CastingTimeIndex reads as 0 (instant), which is what the
-    client does with one: 97 of 274,485 rows on 9.2.7 point at no row.
+def _moving_cancels_bit(enum_name: str) -> int:
+    """The one bit tagged handler "moving" in an interrupt-flags enum.
+
+    Read from build/enums/ rather than written here BECAUSE THE TWO ENUMS
+    DISAGREE: movement is bit 3 in SpellInterruptFlags (aura + channel columns)
+    and bit 0 in SpellInterrupts::InterruptFlags (the cast column). Assuming the
+    three columns of one table shared an enum has already reported the channel
+    population 4.4x too low once.
+    """
+    bits = _enum_ids_where(load_local_enum(enum_name), "moving")
+    if len(bits) != 1:
+        sys.exit(f"error: {enum_name}.json must tag exactly one bit handler=moving, found {sorted(bits)}")
+    return next(iter(bits))
+
+
+def derive_delivery(table_dir: Path,
+                    words: dict[int, tuple[int, ...]]) -> list[tuple[int, int, int, int]]:
+    """How a spell is DELIVERED — a cast time, a channel, or both.
+
+    Returns (spell id, castMs, durMs, flags) for every spell that has ANY of the
+    two, sorted by id. Spells with neither are omitted, which is what makes
+    `instant` the COMPLEMENT at load time rather than a third list here — and
+    that is deliberate: it also sweeps up the 1,847 spells with no SpellMisc row
+    at all, which fell out of every delivery query while this was a partition.
+
+    THIS IS NOT A PARTITION AND MUST NOT BE TURNED BACK INTO ONE. 3,148 spells
+    on 9.2.7 (22% of all channels) carry a cast time AND the channelled flag,
+    and the old "channel wins" rule discarded the cast number for every one of
+    them. Verified in game: a 12s-cast channel shows a cast bar and THEN a
+    draining channel bar, and the same spell name with the cast time removed
+    shows no fill-up phase. See docs/DECISIONS.md, "Cast-then-channel is REAL".
+
+        castMs  SpellCastTimes.Base, 0 when there is no cast bar. The
+                WEAPON_SPEED_CAST sentinel and an unresolved CastingTimeIndex
+                (97 spells on 9.2.7 — the table starts at ID 1) both read as 0.
+        durMs   channel length; -1 = no limit, 0 = no duration row. Only
+                meaningful with DELIVERY_CHANNELLED set.
+        flags   DELIVERY_CHANNELLED | DELIVERY_BREAKS_ON_MOVE
+
+    SpellCastTimes.Minimum is deliberately ignored: it is the haste floor (164
+    of 212 rows equal Base, 44 are 0), and Base is the nominal number to show.
     """
     base_ms: dict[int, int] = {}
     for cid, base in read_table(table_dir, "SpellCastTimes", ["ID", "Base"]):
         base_ms[to_int(cid)] = to_int(base)
 
-    index: dict[int, int] = {}
-    for spell_id, diff, cti in read_table(
-            table_dir, "SpellMisc", ["SpellID", "DifficultyID", "CastingTimeIndex"]):
-        s, d = to_int(spell_id), to_int(diff)
-        if s in words and (s not in index or d == 0):
-            index[s] = to_int(cti)
+    duration_ms: dict[int, int] = {}
+    for did, duration in read_table(table_dir, "SpellDuration", ["ID", "Duration"]):
+        duration_ms[to_int(did)] = to_int(duration)
 
-    out: dict[str, list[int]] = {"instant": [], "casttime": [], "channelled": []}
-    for s, w in words.items():
-        if any(_attr_bit(w, b) for b in CHANNEL_BITS):
-            out["channelled"].append(s)
-        elif base_ms.get(index.get(s, 0), 0) > 0:
-            out["casttime"].append(s)
-        else:
-            out["instant"].append(s)
-    return {k: sorted(v) for k, v in out.items()}
+    cast_of: dict[int, int] = {}
+    dur_of: dict[int, int] = {}
+    for spell_id, diff, cti, dti in read_table(
+            table_dir, "SpellMisc",
+            ["SpellID", "DifficultyID", "CastingTimeIndex", "DurationIndex"]):
+        s, d = to_int(spell_id), to_int(diff)
+        if s in words and (s not in cast_of or d == 0):
+            cast_of[s] = to_int(cti)
+            dur_of[s] = to_int(dti)
+
+    # which channels end when the caster walks. The CHANNEL column, so the
+    # SpellInterruptFlags enum — see _moving_cancels_bit. SpellInterrupts is an
+    # OPTIONAL_TABLE, so array_columns (which exits on a missing header) only
+    # gets asked once the file is known to be there; a build without it loses
+    # the breaks-on-move half and keeps the rest.
+    breaks_on_move: set[int] = set()
+    if (table_dir / "SpellInterrupts.csv").exists():
+        moving = _moving_cancels_bit("spell_interrupt_flags")
+        channel_cols = array_columns(table_dir, "SpellInterrupts", "ChannelInterruptFlags",
+                                     INTERRUPT_COLUMNS_MAX)
+        seen_base: set[int] = set()
+        for row in read_table(table_dir, "SpellInterrupts",
+                              ["SpellID", "DifficultyID"] + channel_cols):
+            s, d = to_int(row[0]), to_int(row[1])
+            if s not in words or (s in seen_base and d != 0):
+                continue
+            if d == 0:
+                seen_base.add(s)
+            if _attr_bit(tuple(to_int(v) for v in row[2:]), moving):
+                breaks_on_move.add(s)
+            elif d == 0:
+                breaks_on_move.discard(s)  # the base row overrides a difficulty one
+
+    out: list[tuple[int, int, int, int]] = []
+    for s, w in sorted(words.items()):
+        channelled = any(_attr_bit(w, b) for b in CHANNEL_BITS)
+        cast = base_ms.get(cast_of.get(s, 0), 0)
+        if cast < 0:  # WEAPON_SPEED_CAST — a sentinel, not a duration
+            cast = 0
+        flags = 0
+        dur = 0
+        if channelled:
+            flags |= DELIVERY_CHANNELLED
+            if s in breaks_on_move:
+                flags |= DELIVERY_BREAKS_ON_MOVE
+            raw = duration_ms.get(dur_of.get(s, 0))
+            if raw is not None:
+                dur = -1 if raw < 0 or raw > DURATION_UNLIMITED else raw
+        if cast or flags:
+            out.append((s, cast, dur, flags))
+    return out
 
 
 # -------------------------------------------------------------- the walk
@@ -3541,6 +3644,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     spell_icon_fid = read_spell_icons(table_dir, tdb_dir, spell_names)
     spell_schools = read_spell_schools(table_dir, spell_names)
     spell_attrs = read_spell_attributes(table_dir, spell_names)
+    delivery = read_spell_delivery(table_dir, spell_names)
 
     # --- resolve the creature-display payloads ----------------------------
     # morphs: flatten to (creature, display, model fid) rows
@@ -3983,6 +4087,17 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 # be read straight out of the packs rather than estimated
                 **{f"spellAttrs.{handler}": len(ids)
                    for handler, ids in sorted(spell_attrs.items())},
+                # delivery: the three are NOT disjoint and deliberately do not
+                # sum to the pack — `casttime` and `channelled` overlap, and
+                # `instant` is everything listed in neither.
+                "spellDelivery": len(delivery),
+                "delivery.casttime": sum(1 for r in delivery if r[1] > 0),
+                "delivery.channelled": sum(1 for r in delivery if r[3] & DELIVERY_CHANNELLED),
+                "delivery.both": sum(1 for r in delivery
+                                     if r[1] > 0 and r[3] & DELIVERY_CHANNELLED),
+                "delivery.breaksOnMove": sum(1 for r in delivery
+                                             if r[3] & DELIVERY_BREAKS_ON_MOVE),
+                "delivery.instant": len(spell_ids) - len(delivery),
                 "spellReplaceAnims": len(replace_anim_rows),
                 "spellVisualAnims": len(visual_anim_rows),
                 "spellScreens": len(screen_pairs),
@@ -4239,6 +4354,19 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         # flag so that shipping another one is a data edit there plus a pill
         # type — nothing here, and no new pack key, branches on which flag it is.
         "spellAttrs": spell_attrs,
+        # how each spell is DELIVERED (§3s-ter). Only spells that HAVE a cast
+        # time or a channel are listed — `instant` is the complement, worked out
+        # at load, which is what lets a spell with no SpellMisc row at all still
+        # get an answer. castMs 0 = no cast bar; durMs -1 = channel with no
+        # limit, 0 = channel with no duration row; flags = 1 channelled,
+        # 2 breaks on move. NOT a partition: a spell can have both a cast and a
+        # channel, and 3,148 on 9.2.7 do.
+        "spellDelivery": {
+            "spellIds": [r[0] for r in delivery],
+            "castMs": [r[1] for r in delivery],
+            "durMs": [r[2] for r in delivery],
+            "flags": [r[3] for r in delivery],
+        },
         # screen effects (ScreenEffect via SCREEN_EFFECT auras + kit ET 19):
         # per row an internal name, a fog tint (-1 = none), FullScreenEffect
         # multiply/addition screen colors (-1 = none) and texture fids

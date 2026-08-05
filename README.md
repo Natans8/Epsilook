@@ -37,10 +37,13 @@ Full syntax lives behind the **?** button in the app. The short version:
   `Stand → StealthStand`
   (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue). `anim:kit` and `anim:loose`
   say where an animation came from: a numbered AnimKit bundle, or the spell's visual kit playing it directly.
-- **How a spell is delivered is a chip**: `mech:instant` (no cast bar), `mech:casttime` (has one) and
-  `mech:channelled` (held rather than cast once) — every spell is exactly one of the three, and the channel properties
-  below hang off the last. Note the word is `casttime`, not `cast`: `on cast` is a spell-link word, so `cast` alone
-  would match 200,000 spells.
+- **How a spell is delivered is written under its name** — `1.8 sec cast · 30 sec channel · breaks on move`, or just
+  `Instant`. Every spell has one, which is why it is a line rather than a pill.
+- **And it is searchable**: `mech:instant` (no cast bar), `mech:casttime` (has one) and `mech:channeled` (held rather
+  than cast once). **A spell can be both `casttime` and `channeled`** — 3,148 of them cast first and then channel, like
+  Mind Control, so these are not three exclusive buckets. Two spellings to know: the word is `casttime`, not `cast`
+  (`on cast` is a spell-link word, so `cast` alone would match most of the game), and `channeled` has one `l`, matching
+  Wowhead and the game client.
 - **Some spells are findable only by a flag.** A handful of `SpellMisc` attribute bits are their own chips:
   `anim:pose` holds the character's pose (the Permanent Feign Death and Cosmetic Dead poses — these have no model, sound
   or animation of their own, so before this they could not be found at all), and in Mechanics `mech:unbreakable` (a

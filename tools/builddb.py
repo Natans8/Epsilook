@@ -59,7 +59,9 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
@@ -78,6 +80,19 @@ except ImportError:  # pragma: no cover - the one dependency, and it is optional
         "and only for this development tool — the product build stays stdlib-only):\n"
         "    python -m pip install duckdb"
     )
+
+try:
+    # Progress bars are a NICETY, so unlike duckdb above this one degrades to
+    # nothing rather than exiting: a ~2.5 minute build with no output for
+    # minutes at a time reads as a hang, and that is all this fixes.
+    #     python -m pip install tqdm
+    # BOTH codes are needed and neither is redundant: a machine with tqdm
+    # installed but no stubs raises import-untyped, and CI — which has never
+    # installed it — raises import-not-found. Silencing only one leaves
+    # tools/check.py red on the other kind of machine.
+    from tqdm import tqdm  # type: ignore[import-not-found,import-untyped]
+except ImportError:  # pragma: no cover - optional, and absence is not an error
+    tqdm = None
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "build" / "cache"
@@ -125,8 +140,16 @@ EXTRA_TABLES = {
     #   CAST gates  — SpellCastingRequirements (zone/focus/faction),
     #                 SpellAuraRestrictions, SpellTargetRestrictions,
     #                 SpellLevels, SpellEquippedItems, SpellReagents,
-    #                 SpellTotems. Server-enforced; Epsilon's `triggered` flag
-    #                 bypasses them.
+    #                 SpellTotems.
+    #
+    #                 DO NOT ASSUME THESE ARE ENFORCED. Tested in game
+    #                 2026-08-05: Epsilon enforces the AREA gate and does NOT
+    #                 enforce OnlyOutdoors or CasterAuraSpell, though retail
+    #                 TrinityCore checks all three. `.aura` bypasses every
+    #                 restriction outright (it never enters CheckCast). See
+    #                 docs/DECISIONS.md, "Epsilon enforces the AREA gate and
+    #                 almost nothing else" — the data being present here says
+    #                 nothing about whether the audience's server honours it.
     #   VISUAL gates — SpellXSpellVisual's four condition columns resolve into
     #                 PlayerCondition / UnitCondition.
     "SpellCastingRequirements": "RequiredAreasID / RequiresSpellFocus / MinFactionID — the zone gate",
@@ -249,7 +272,28 @@ TARGET_TYPES = [
 
 
 def log(message: str) -> None:
-    print(message, flush=True)
+    # Routed through tqdm.write when a bar may be on screen: an ordinary print
+    # lands ON TOP of the bar and shreds it. Falls back to print when tqdm is
+    # not installed, which is the whole compatibility story.
+    if tqdm is not None:
+        tqdm.write(message)
+    else:
+        print(message, flush=True)
+
+
+def progress(items: "Iterable[Any]", desc: str, unit: str,
+             total: int | None = None, nested: bool = False) -> "Iterable[Any]":
+    """Wrap an iterable in a tqdm bar, or return it untouched.
+
+    Two reasons it can decline: tqdm is not installed, or stderr is not a TTY —
+    the second matters because this script is routinely run redirected to a log
+    file (`python tools/builddb.py > out.log`), and a bar rendered into a file
+    is thousands of lines of carriage-return noise that buries the real output.
+    """
+    if tqdm is None or not sys.stderr.isatty():
+        return items
+    return tqdm(items, desc=desc, unit=unit, total=total,
+                leave=not nested, dynamic_ncols=True)
 
 
 def scalar(con: "duckdb.DuckDBPyConnection", sql: str,
@@ -392,7 +436,8 @@ def build_version(con: "duckdb.DuckDBPyConnection", build_id: str,
     con.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
     tables = rows = fallbacks = 0
 
-    for path in sorted(source.glob("*.csv")):
+    csvs = sorted(source.glob("*.csv"))
+    for path in progress(csvs, f"  {schema} db2", "table", len(csvs), nested=True):
         table = path.stem
         header = csv_header(path)
         if not header:
@@ -448,7 +493,8 @@ def load_tdb(con: "duckdb.DuckDBPyConnection", build_id: str, tdb_tag: str | Non
         return 0
     schema = schema_for(build_id)
     loaded = 0
-    for path in sorted(directory.glob("*.csv")):
+    tdb_csvs = sorted(directory.glob("*.csv"))
+    for path in progress(tdb_csvs, f"  {schema} tdb", "table", len(tdb_csvs), nested=True):
         if not csv_header(path):
             continue
         literal = str(path).replace("'", "''")
@@ -575,6 +621,29 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
               meta.get("handler"), meta.get("requires"))
              for bit, meta in sorted(attrs.items())])
         log(f"  ref.spell_attribute             {len(attrs):>9,}")
+
+        # The two interrupt-flag enums, in ONE table with the column each
+        # applies to — because SpellInterrupts' three flag columns do NOT share
+        # an enum and reading them with one decode has already reported the
+        # breaks-on-movement channel population 4.4x too low. Query with the
+        # `flag_column` you are actually decoding:
+        #   InterruptFlags          -> SpellInterrupts::InterruptFlags, move = 0
+        #   AuraInterruptFlags_N    -> SpellInterruptFlags,             move = 3
+        #   ChannelInterruptFlags_N -> SpellInterruptFlags,             move = 3
+        con.execute("CREATE OR REPLACE TABLE ref.spell_interrupt_flag ("
+                    " enum VARCHAR, applies_to VARCHAR, bit INTEGER,"
+                    " name VARCHAR, label VARCHAR, mask BIGINT, handler VARCHAR)")
+        interrupt_rows = []
+        for enum_file, applies in (("spell_interrupts_interrupt_flags", "InterruptFlags"),
+                                   ("spell_interrupt_flags", "AuraInterruptFlags / ChannelInterruptFlags")):
+            enum = build_data.load_local_enum(enum_file)
+            interrupt_rows += [
+                (enum_file, applies, bit, meta["name"], meta["label"],
+                 1 << (bit % 32), meta.get("handler"))
+                for bit, meta in sorted(enum.items())]
+        con.executemany("INSERT INTO ref.spell_interrupt_flag VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        interrupt_rows)
+        log(f"  ref.spell_interrupt_flag        {len(interrupt_rows):>9,}")
     except (ImportError, AttributeError) as exc:
         log(f"  ! build_data.py tables unavailable ({exc})")
 
@@ -875,7 +944,7 @@ def main() -> int:
 
     catalog: list[tuple] = []
     total_tables = total_rows = total_views = 0
-    for entry in selected:
+    for entry in progress(selected, "versions", "pack", len(selected)):
         build_id = entry["id"]
         log(f"\n{schema_for(build_id)}  ({entry.get('label', build_id)})")
         fetch_extra_tables(build_id)

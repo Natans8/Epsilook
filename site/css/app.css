@@ -2059,6 +2059,30 @@ main {
     font-size: 0.85em;
 }
 
+/* The delivery line — how the spell is cast, in words, under its name.
+   NO COLOUR HERE ON PURPOSE: colour in this app names a content family, and
+   delivery is identity rather than content (see docs/PILLS.md). Weight is the
+   only typography — the number and its load-bearing word read at --text, the
+   rest at --text-dim. */
+.delivery {
+    font-size: 0.85em;
+    color: var(--text-dim);
+    margin-top: 1px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.34em;
+    align-items: baseline;
+}
+
+.delivery .d-v {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.delivery .d-sep {
+    opacity: 0.55;
+}
+
 mark.hl {
     background: rgba(var(--gold-rgb), calc(0.28 * var(--wash-strength)));
     color: inherit;

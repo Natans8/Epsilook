@@ -45,3 +45,10 @@ code change.
 | `spell_visual_effect_name_types.json` | `SpellVisualEffectName.Type` (how the effect-name resolves to a model / equipped-weapon slot) | Type |
 | `item_quality.json` | `Item.OverallQualityID` quality ramp | OverallQualityID |
 | `summon_properties_control.json` | `SummonProperties.Control` | Control |
+| `spell_interrupt_flags.json` | `SpellInterruptFlags` — what cancels an **aura or channel** (`SpellInterrupts.AuraInterruptFlags` / `.ChannelInterruptFlags`); movement is **bit 3** | bit number |
+| `spell_interrupts_interrupt_flags.json` | `SpellInterrupts::InterruptFlags` — what cancels a **cast** (the scalar column only); movement is **bit 0** | bit number |
+
+**The last two are a matched pair and the whole point is that they are DIFFERENT.** `SpellInterrupts` carries three
+interrupt columns and only two of them share an enum; reading all three with one decode is a mistake already made
+once here, and it reported the breaks-on-movement channel population 4.4× too low. Check which column you are
+decoding before you reach for either file.

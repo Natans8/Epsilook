@@ -161,6 +161,17 @@ export interface SpellPack {
      */
     spellAttrs?: Record<string, number[]>;
 
+    /** Delivery values (format 39+): parallel arrays over the spells that have
+     *  a cast time or a channel. `instant` is the complement and is not
+     *  shipped. castMs 0 = no cast bar; durMs -1 = no limit, 0 = no duration
+     *  row; flags bit 0 = channelled, bit 1 = breaks on move. */
+    spellDelivery?: {
+        spellIds: number[];
+        castMs: number[];
+        durMs: number[];
+        flags: number[];
+    };
+
     /** ScreenEffect rows (format 16+). Colors are packed RGB, -1 = none
      *  (0 is a real black). mask* (format 18+) = the radial vignette params,
      *  maskSize 0 = the row has no FullScreenEffect. */
@@ -376,6 +387,24 @@ export interface SpellLink {
 }
 
 /** A ScreenEffect row's color payload (-1 = the row has no such color). */
+/* spellDelivery.flags bits. Channelled is explicit rather than inferred from
+ * durMs, because a channel is allowed to carry no duration row at all — 674 on
+ * 9.2.7 do, and they are NOT the same thing as an unlimited channel. */
+export const DELIVERY_CHANNELLED = 1 << 0;
+export const DELIVERY_BREAKS_ON_MOVE = 1 << 1;
+
+/** How one spell is delivered. See `SpellData.spellDelivery`. */
+export interface Delivery {
+    /** Cast-bar length in ms; 0 = no cast bar. The "ranged weapon speed"
+     *  sentinel (-1000000, 51 hunter shots) arrives here as 0 — Epsilon fires
+     *  those with no bar, verified in game. */
+    castMs: number;
+    /** Channel length in ms. -1 = no limit, 0 = no duration row. Only
+     *  meaningful when DELIVERY_CHANNELLED is set. */
+    durMs: number;
+    flags: number;
+}
+
 export interface ScreenColors {
     fog: number;
     /** Fog opacity byte 0..255, -1 = none. */
@@ -545,8 +574,17 @@ export interface SpellData {
     spellFreezes: Set<number>;
     spellCamos: Set<number>;
 
-    /** attribute-flag handler -> the spells carrying it (format 37+). */
+    /** attribute-flag handler -> the spells carrying it (format 37+).
+     *  Also carries the three DERIVED delivery handlers (`instant`,
+     *  `casttime`, `channeled`) so the flag pill types read one map — see
+     *  spellDelivery below for why they are derived rather than shipped. */
     spellAttrs: Map<string, Set<number>>;
+
+    /** How each spell is delivered (format 39+). Only spells that HAVE a cast
+     *  time or a channel are present; everything else is instant, which is why
+     *  `spellAttrs.get("instant")` is a complement rather than a shipped list.
+     *  NOT a partition: a spell can have both, and 3,148 on 9.2.7 do. */
+    spellDelivery: Map<number, Delivery>;
 
     spellScreens: Map<number, number[]>;
     screenSpells: Map<number, number[]>;
@@ -1251,6 +1289,35 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const spellAttrs = new Map<string, Set<number>>(
         Object.entries(pack.spellAttrs || {}).map(([handler, ids]) => [handler, new Set(ids)]));
 
+    // Delivery: the pack ships VALUES for the spells that have a cast or a
+    // channel, and the three searchable sets are derived from them HERE rather
+    // than shipped alongside — one source of truth, so a spell cannot be in the
+    // `casttime` list while its castMs says otherwise.
+    //
+    // THE SETS OVERLAP ON PURPOSE. 3,148 spells on 9.2.7 cast and THEN channel
+    // (verified in game), so `casttime` and `channeled` are not exclusive;
+    // only `instant` is exclusive with both, being the complement.
+    const spellDelivery = new Map<number, Delivery>();
+    const castTimeSpells = new Set<number>();
+    const channelSpells = new Set<number>();
+    const del = pack.spellDelivery;
+    if (del) {
+        for (let i = 0; i < del.spellIds.length; i++) {
+            const id = del.spellIds[i], castMs = del.castMs[i], flags = del.flags[i];
+            spellDelivery.set(id, {castMs, durMs: del.durMs[i], flags});
+            if (castMs > 0) castTimeSpells.add(id);
+            if (flags & DELIVERY_CHANNELLED) channelSpells.add(id);
+        }
+        // `instant` = has neither, which is why it also covers the 1,846 spells
+        // with no SpellMisc row at all — they used to fall out of every
+        // delivery query rather than reading as instant.
+        const instant = new Set<number>();
+        for (const id of spellIndex.keys()) if (!spellDelivery.has(id)) instant.add(id);
+        spellAttrs.set("instant", instant);
+        spellAttrs.set("casttime", castTimeSpells);
+        spellAttrs.set("channeled", channelSpells);
+    }
+
     // screen effects (ScreenEffect rows): the whole screen tints/overlays
     // while the aura holds. Each row: internal name, optional fog tint and
     // FullScreenEffect multiply/addition colors (-1 = none — 0 is a real
@@ -1859,7 +1926,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellTints, tintSpells, tintColors, tintSearchL,
         spellDesaturates, desatSpells, desatSearchL,
         spellTransps, transpSpells, transpSearchL,
-        spellFreezes, spellCamos, spellAttrs,
+        spellFreezes, spellCamos, spellAttrs, spellDelivery,
         spellScreens, screenSpells, screenNames, screenColors, screenTextures, screenSearchL,
         spellVisualAnims, visualAnimSpells,
         targetNames, animKitTargets, visualAnimTargets, fxTargets,

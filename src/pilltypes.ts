@@ -371,6 +371,13 @@ export interface AttrFlag {
     word: string;
     /** the pill type's key, for the hit test */
     key: string;
+    /** Does it render as a pill in its column? False for the delivery flags,
+     *  which are INHERENT to every spell and so are stated once on the Name
+     *  cell's delivery line instead of repeated as pills in Mechanics. They
+     *  stay fully searchable — this is a display flag, not a registration one.
+     *  Both render sites read this list, so it cannot go out of step with the
+     *  search half the way the fx column's target masks once did. */
+    draw: boolean;
 }
 
 /** Every shipped flag, in declaration order. render.ts draws the cells from
@@ -378,26 +385,44 @@ export interface AttrFlag {
  *  the renderer (or vice versa) — the two halves read one list. */
 export const ATTR_FLAGS: AttrFlag[] = [];
 
-const attrFlag = (key: string, field: string, word: string, handler: string, hint: string) => {
+const attrFlag = (key: string, field: string, word: string, handler: string, hint: string,
+                  draw = true) => {
     T({
         key, field, word, hint,
         spells: (d) => d.spellAttrs.get(handler) || new Set<number>(),
         when: (d) => (d.spellAttrs.get(handler)?.size ?? 0) > 0,
     });
-    ATTR_FLAGS.push({handler, field, word, key});
+    ATTR_FLAGS.push({handler, field, word, key, draw});
 };
 
-/* HOW THE SPELL IS DELIVERED — a derived three-way partition, and the parent
- * the channel properties below hang off. Every spell is in exactly one.
- * `cast` was measured at 200,496 hits and is unusable as a word: "on cast" is
- * a spell-link word, so it is all corpus. `casttime` and `channelled` measure
- * zero, `instant` measures 35 on a 214k base. */
+/* HOW THE SPELL IS DELIVERED. Derived in data.ts from the spellDelivery values
+ * rather than shipped as lists, so the word and the number on the delivery line
+ * cannot disagree.
+ *
+ * NOT A PARTITION — `casttime` and `channeled` OVERLAP on 3,148 spells that
+ * cast and then channel (verified in game; see docs/DECISIONS.md). Only
+ * `instant` is exclusive with both, being the complement. Do not "fix" the
+ * counts into summing to the pack.
+ *
+ * `draw: false` on all three: they are inherent to every spell, so the Name
+ * cell's delivery line states them once instead of Mechanics repeating them as
+ * pills (the user's call — "remove the unnecessary garbage from the mech
+ * column then").
+ *
+ * THE WORDS ARE WOWHEAD'S, on the user's call ("Match the wowhead convention"):
+ * Wowhead's own row label is `Cast time`, so the axis is `casttime` — a bare
+ * `cast` measures 216,457 and is unusable, "on cast" being a spell-link word
+ * carried by the whole mech corpus. And it is `channeled` with ONE l, because
+ * that is how Wowhead, the client and Blizzard spell it: the British spelling
+ * shipped for one day and made `mech:channeled` return 4 spells instead of
+ * 14,228, i.e. it failed exactly the person who read the word on Wowhead and
+ * typed it here. `instant` measures 35 on a 216k base. */
 attrFlag("mech:instant", "mech", "instant", "instant",
-    "Goes off at once — no cast bar, no channel");
+    "Goes off at once — no cast bar, no channel", false);
 attrFlag("mech:casttime", "mech", "casttime", "casttime",
-    "Has a cast bar before it goes off");
-attrFlag("mech:channelled", "mech", "channelled", "channelled",
-    "Channelled — held rather than cast once");
+    "Has a cast bar before it goes off", false);
+attrFlag("mech:channeled", "mech", "channeled", "channeled",
+    "Channeled — held rather than cast once", false);
 
 /* The channel group: three ways a channelled beam behaves, which is the most
  * scene-relevant cluster in the whole attribute sweep. */

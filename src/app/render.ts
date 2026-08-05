@@ -26,6 +26,7 @@ import {
     wordIsNamed
 } from "./hits";
 import {ATTR_FLAGS} from "../pilltypes";
+import {DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED} from "../data";
 import {setStatus} from "./run";
 import type {DisplayRef, SpellData, SpellLink} from "../data";
 import {activeData, state, wowheadUrl} from "./state";
@@ -209,6 +210,66 @@ export function layoutRow(tr: HTMLElement): void {
     }
 }
 
+/** ms as the number Wowhead prints: "2", "1.75", "1.8" — no trailing zeros. */
+function secs(ms: number): string {
+    return String(Math.round(ms / 10) / 100);
+}
+
+/**
+ * The delivery line: how the spell is cast, in words, under its name.
+ *
+ * NOT A PILL, deliberately — delivery is inherent to every spell, "in the same
+ * weight category as the spell name or ID" (the user), so it is identity rather
+ * than payload and carries no content colour. See docs/PILLS.md.
+ *
+ * TWO SEGMENTS, because a spell can cast AND THEN channel — 3,148 on 9.2.7 do,
+ * verified in game. The old three-way partition printed one and threw the other
+ * number away.
+ *
+ * THE SLOT ORDER IS `<value> <label>` AND IT NEVER FLIPS (the user's rule), so
+ * it is `unlimited channel`, never `channel, no limit` — and Wowhead's own
+ * `Channeled (5 sec cast)` parenthetical is deliberately NOT copied, since it
+ * puts the label first. The vocabulary is Wowhead's ("Match the wowhead
+ * convention"); only the ordering is ours.
+ */
+function deliveryLine(spellId: number): HTMLElement {
+    const d = activeData();
+    const dl = d.spellDelivery.get(spellId);
+    const line = el("div", "delivery");
+    const seg = (value: string, label: string) => {
+        if (line.childElementCount) line.appendChild(el("span", "d-sep", "·"));
+        const s = el("span", "d-seg");
+        if (value) {
+            s.appendChild(el("span", "d-v", value));
+            // a REAL space, not just the css margin: the line is selectable
+            // text and "1.8 seccast" is what a copy would otherwise produce
+            s.appendChild(document.createTextNode(" "));
+        }
+        s.appendChild(el("span", "d-l", label));
+        line.appendChild(s);
+    };
+    // no row at all = neither a cast bar nor a channel. That is also how the
+    // 1,846 spells with no SpellMisc row read, which is correct rather than a
+    // fallback: nothing about them says otherwise.
+    if (!dl) {
+        seg("", "Instant");
+        return line;
+    }
+    if (dl.castMs > 0) seg(`${secs(dl.castMs)} sec`, "cast");
+    if (dl.flags & DELIVERY_CHANNELLED) {
+        // durMs -1 = runs until something stops it; 0 = the spell is flagged as
+        // a channel but ships no duration row (674 on 9.2.7). Those two are NOT
+        // folded together: one in-game test showed a no-duration channel doing
+        // nothing at all, which is not what "unlimited" looks like, but it was
+        // inconclusive — see docs/DECISIONS.md before merging them.
+        if (dl.durMs > 0) seg(`${secs(dl.durMs)} sec`, "channel");
+        else if (dl.durMs < 0) seg("", "unlimited channel");
+        else seg("", "channel");
+    }
+    if (dl.flags & DELIVERY_BREAKS_ON_MOVE) seg("", "breaks on move");
+    return line;
+}
+
 function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
     const d = activeData();
     const i = d.spellIndex.get(spellId)!;
@@ -250,6 +311,7 @@ function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
     nameDiv.appendChild(nameLink);
     tdName.appendChild(nameDiv);
     if (d.subtexts[i]) tdName.appendChild(el("div", "spell-sub", d.subtexts[i]));
+    tdName.appendChild(deliveryLine(spellId));
     tdName.appendChild(commandStrip(spellId));
     tr.appendChild(tdName);
 
@@ -549,7 +611,7 @@ function animationsCell(animKitIds: number[], looseAnimIds: number[],
     // exactly the case this feature exists for — before it, those rows looked
     // empty and were not.
     const animFlags = ATTR_FLAGS.filter(
-        (f) => f.field === "anim"
+        (f) => f.field === "anim" && f.draw
             && (activeData().spellAttrs.get(f.handler)?.has(spellId) ?? false));
     const td = el("td", "c-animations");
     if (animKitIds.length === 0 && groupAnims.size === 0
@@ -1032,6 +1094,9 @@ function effectCells(spellId: number): { fx: HTMLElement; mechBlocks: CellBlock[
         // so routing a flag by its SUBJECT (the user's rule) is a one-word edit
         // in the registry rather than a move between two render loops.
         if (f.field !== "mech" && f.field !== "fx") continue;
+        // the delivery flags are searchable but never drawn here — the Name
+        // cell's delivery line already states them, once
+        if (!f.draw) continue;
         pushCat({
             name: f.word,
             col: f.field,

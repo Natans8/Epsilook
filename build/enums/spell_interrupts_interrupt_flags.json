@@ -1,0 +1,22 @@
+{
+  "enum": "SpellInterrupts::InterruptFlags",
+  "description": "What cancels a CAST — the enum behind the scalar SpellInterrupts.InterruptFlags column only. ITS SIBLING COLUMNS DO NOT SHARE IT: AuraInterruptFlags and ChannelInterruptFlags use SpellInterruptFlags (see spell_interrupt_flags.json), where movement is bit 3 rather than bit 0. Treating the three columns as one enum is a mistake this project has already made once, and it reported the channel population 4.4x too low. Here movement is bit 0. `handler` marks the bits the pack ships.",
+  "source": [
+    "https://wowdev.wiki/EnumeratedString#SpellInterrupts::InterruptFlags",
+    "https://wowdev.wiki/DB/SpellInterrupts"
+  ],
+  "keys": "bit number (not the mask value)",
+  "values": {
+    "0": {"name": "Movement", "label": "movement", "handler": "moving"},
+    "1": {"name": "DmgPushbackPlayer", "label": "damage pushback (player)"},
+    "2": {"name": "Stun", "label": "stun"},
+    "3": {"name": "Combat", "label": "combat"},
+    "4": {"name": "DmgCancelsPlayer", "label": "damage cancels (player)"},
+    "5": {"name": "MeleeCombat", "label": "melee combat"},
+    "6": {"name": "Immunity", "label": "immunity"},
+    "7": {"name": "DamageAbsorb", "label": "damage absorb"},
+    "8": {"name": "ZeroDamageCancels", "label": "zero damage"},
+    "9": {"name": "DamagePushback", "label": "damage pushback"},
+    "10": {"name": "DamageCancels", "label": "damage cancels"}
+  }
+}

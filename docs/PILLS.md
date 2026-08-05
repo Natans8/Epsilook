@@ -17,6 +17,34 @@ read the type registry too, so matching a query is written once instead of once 
 
 ---
 
+## 0. What is NOT a pill — the delivery line
+
+**Some things about a spell are not payload, and those do not get pills.** The delivery line under the spell name
+(`1.8 sec cast · 30 sec channel · breaks on move`) is the worked example, and the user's framing is the rule to reuse:
+
+> *"Those are inherent properties of spells. Pills are meant for stuff that doesn't always appear, this is in the same
+> weight category as the spell name or ID."*
+
+So the test before adding a pill type is **does every spell have one?** A model, a sound, a tint — these are payload:
+present on some rows, absent on others, and a pill's whole job is to show you which. Delivery is identity: every spell
+has an answer, even if the answer is `Instant`. Rendering 276,332 pills that say the same thing would be noise, and
+276,332 pills of *any* kind in the Mechanics column would bury the ones that mean something.
+
+**Three consequences worth copying if this ever comes up again:**
+
+- **It lives in the Name cell** (`render.ts deliveryLine`), between the subtext and the command strip — beside the
+  identity it belongs to, not in a column of its own.
+- **It carries NO content colour.** Colour in this app names a content family; delivery is not a family. Weight is the
+  only typography: the number and its load-bearing word at `--text`, the rest at `--text-dim`.
+- **It is still fully searchable.** `mech:instant` / `mech:casttime` / `mech:channeled` are registered pill types like
+  any other — they simply carry `draw: false` in `ATTR_FLAGS`, which both render sites honour. **Searchable and undrawn
+  is a supported state; searchable and *accidentally* undrawn is the fx-column bug.** The difference is that one list
+  drives both halves.
+
+**The slot order is `<value> <label>` and it never flips** (the user's rule) — `unlimited channel`, never
+`channel, no limit`. Wowhead's own tooltip writes `Channeled (5 sec cast)`, label first; the vocabulary is borrowed from
+it, the ordering is not. See docs/DATA_ROUTES.md §3s-bis for the data behind the line.
+
 ## 1. Anatomy
 
 A pill is an **ordered list of segments**, written left to right exactly as it renders:

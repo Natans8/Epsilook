@@ -1180,36 +1180,79 @@ Effects rather than Mechanics because a character being turned is what the spell
 chain, and the move cut the word's corpus noise from 175 to 8. Its unshipped sibling is bit 22
 `TrackTargetInCastPlayerOnly`, the cast-time equivalent.
 
-### 3s-bis. Delivery — instant / cast time / channelled (derived, format 38)
+### 3s-bis. Delivery — the cast time and the channel, with VALUES (`spellDelivery`, format 39)
 
-**Not a bit: a derived three-way partition, riding the same `spellAttrs` section** so the pill, render, search and
-export halves cost nothing. The user asked for it as the parent the channel properties hang off.
+**A route of its own, and NOT A PARTITION.** It ships per-spell values rather than membership lists, and the three
+searchable sets are derived from those values in `data.ts` — one source of truth, so a spell cannot sit in the
+`casttime` set while its `castMs` says otherwise.
 
-| bucket     | word              | rule                                               | 9.2.7   |
-|------------|-------------------|----------------------------------------------------|---------|
-| channelled | `mech:channelled` | `IsChannelled` (34) **or** `IsSelfChannelled` (38) | 14,228  |
-| cast time  | `mech:casttime`   | otherwise, `SpellCastTimes.Base > 0`               | 45,725  |
-| instant    | `mech:instant`    | otherwise                                          | 214,532 |
+| set       | word             | rule                                               | 9.2.7   |
+|-----------|------------------|----------------------------------------------------|---------|
+| casttime  | `mech:casttime`  | `SpellCastTimes.Base > 0`                          | 48,873  |
+| channeled | `mech:channeled` | `IsChannelled` (34) **or** `IsSelfChannelled` (38) | 14,228  |
+| instant   | `mech:instant`   | **the complement** — in neither of the above       | 216,379 |
+|           |                  | *of which, in BOTH casttime and channeled*         | *3,148* |
 
-**Channel wins over cast time, and that is not a simplification** — Mind Control (605) has an 1,800 ms cast *and* the
-channelled flag, and Wowhead presents it exactly that way: "Cast time 1.8 seconds" with `Channeled` in its flag list.
+**⚠ `casttime` AND `channeled` OVERLAP ON 3,148 SPELLS AND THAT IS THE POINT.** They cast and *then* channel. The
+format-38 version of this route made delivery a strict three-way partition with "channel wins", which threw the cast
+number away for every one of those spells. **Verified in game 2026-08-05** (docs/DECISIONS.md, *"Cast-then-channel is
+REAL"*): `Gripping Shadows` 249466 — 12 s cast, 6 s channel — shows a cast bar and then a second draining bar, while the
+same spell NAME with the cast time removed (186350) shows no fill-up phase. **Do not restore the partition, and do not
+expect the three counts to sum to the pack.**
 
-- **New source table: `SpellCastTimes`** (`SpellMisc.CastingTimeIndex` → `Base` ms). Ships on every build back to
-  Vanilla. An unresolved index reads as 0 = instant, which is what the client does with one — 97 of 274,485 rows on
-  9.2.7 point at no row.
-- **Zero overlap between the three, verified from the built pack.** They cover 274,485 of 276,332 spells; the remaining
-  1,847 have no `SpellMisc` row at all and so cannot be classified.
-- **`cast` is unusable as a word — it measures 200,496 hits**, because `on cast` is a spell-link word and the whole mech
-  corpus carries it. `casttime` and `channelled` measure 0, `instant` 35 on a 214k base. See PILLS.md, *Choosing the
-  keyword*.
+**Coverage is now total: 276,332 of 276,332.** Because `instant` is the complement rather than a third list, the 1,846
+spells with **no `SpellMisc` row at all** finally get an answer instead of falling out of every delivery query.
 
-  **⚠ THIS COLLIDES WITH A PENDING USER INSTRUCTION AND IS NOT YET RESOLVED (2026-08-05).** The user asked for *"instead
-  of casttime call it plain cast"*. That is unambiguous for the DISPLAY LABEL on the delivery line (`2.25s cast`), which
-  is free text and collides with nothing. It is **not safe for the SEARCH WORD**: a bare
-  `mech:cast` would return ~200k rows off the corpus, which is the whole table. **Do not perform the rename on the
-  search axis without deciding one of these first** — keep the axis `casttime` while the label reads `cast`; make
-  `cast` a bound word that declines the corpus substring reading; or ship only the value form (`mech:"cast 2"` /
-  `mech:"cast >3"`), which is bound already. **Ask the user; do not pick silently.**
+#### The pack section
+
+`spellDelivery` — parallel arrays over **only** the spells that have a cast time or a channel (59,953 on 9.2.7):
+
+| field      | meaning                                                                              |
+|------------|--------------------------------------------------------------------------------------|
+| `spellIds` | the spell                                                                            |
+| `castMs`   | cast-bar length; **0 = no cast bar**                                                 |
+| `durMs`    | channel length; **-1 = no limit**, **0 = no duration row**. Only read with bit 0 set |
+| `flags`    | bit 0 `DELIVERY_CHANNELLED`, bit 1 `DELIVERY_BREAKS_ON_MOVE`                         |
+
+**`durMs` 0 and -1 are DIFFERENT and are not folded.** 674 spells on 9.2.7 are flagged as channels but ship no duration
+row; one was tested in game and did nothing at all, which is not what an unlimited channel looks like — but that result
+was inconclusive (the sheet could not tell "nothing to display" from "did not cast"). See DECISIONS.md before merging
+them.
+
+#### Sources
+
+- **`SpellCastTimes`** (`SpellMisc.CastingTimeIndex` → `Base` ms), on every build back to Vanilla. Three edge cases, all
+  swept 2026-08-05:
+    - **`Base = 0`** — one shared row (ID 1) behind 225,465 spells. Instant.
+    - **An unresolved index** — the table starts at ID 1, so `CastingTimeIndex = 0` resolves to nothing. 97 spells.
+      Instant, same as above.
+    - **`Base = -1000000`** — the **ranged weapon speed sentinel**, not a duration. One row (ID 18) behind 51 spells,
+      every one a hunter ranged shot. **Wowhead prints no cast-time line at all for these** (checked on 1516 and 22914:
+      only `Requires Ranged Weapon`), **but Epsilon fires them with no cast bar, so here they are `Instant`** — the
+      wording is Epsilon's, not retail's. Because all 51 share ONE table row, one in-game test settles all of them.
+    - **`SpellCastTimes.Minimum` is deliberately IGNORED**: it is the haste floor (164 of 212 rows equal `Base`, 44 are
+      0), and `Base` is the nominal number to show.
+- **`SpellDuration`** (`SpellMisc.DurationIndex` → `Duration` ms), 314 rows. `Duration < 0` or `> 1e8` = no limit.
+- **`SpellInterrupts.ChannelInterruptFlags`** → breaks-on-move, **6,689** spells. **MIND THE ENUM:** that column uses
+  `SpellInterruptFlags` where movement is **bit 3**, while the sibling `InterruptFlags` (cast) uses a *different* enum
+  where movement is bit 0 — see `build/enums/README.md`. And mind the intersection: **7,375 spells carry the channel
+  movement bit but 686 of them are not channels at all**, so the build ANDs it with the channelled flag, the same
+  correction `AllowActionsDuringChannel` already needed.
+
+#### The words are Wowhead's
+
+On the user's call (*"Match the wowhead convention"*):
+
+- **`casttime`, not `cast`.** Wowhead's own spell-page row label is literally `Cast time`, so the axis already matched.
+  A bare `cast` measures **216,457** — `on cast` is a spell-link word carried by the whole mech corpus, so the word is
+  unusable. (This was recorded as 200,496 before format 38; the word `casttime`, which `cast` substring-matches, is the
+  difference.)
+- **`channeled` with ONE `l`.** Wowhead, the client and Blizzard all spell it that way. The British `channelled`
+  shipped for one day at format 38 and made **`mech:channeled` return 4 spells against 14,228** — i.e. it failed exactly
+  the roleplayer who read the word on Wowhead and typed it here. No legacy alias: `mech:channelled` is now 0.
+- **The line's own wording follows Wowhead's tooltip** (`Instant`, `1.8 sec cast`) **but never its slot order.** Wowhead
+  writes `Channeled (5 sec cast)`, label first; ours is always `<value> <label>`, so it is `5 sec channel`. See PILLS.md
+  for why the delivery line is not a pill at all.
 
 **COUNT SPELLS, NOT `SpellMisc` ROWS.** A spell with several difficulty rows is one spell, and the two readings differ
 by up to 15% — the same five flags are 799 / 2,748 / 591 / 3,400 / 19,812 counted as rows. Base difficulty wins, the
@@ -1289,8 +1332,34 @@ The five Classic re-release clients (Vanilla / TBC / WotLK / Cataclysm / MoP) co
 | 10.2.7.55664 | Dragonflight              | 327,092 |  9.5 MB | TDB1027.24051 |             0 |
 | 11.2.7.65299 | The War Within            | 375,895 | 11.1 MB | TDB1127.26011 |             0 |
 
-**All ten are at pack format 37** (spell attribute flags, §3s — on top of format 36's target masks on spell links, §3r,
-format 35's spell-link route, and format 34's missile flight paths).
+**All ten are at pack format 39** (the delivery route with values, §3s-bis — on top of format 38's attribute flags and
+first delivery partition, §3s, format 36's target masks on spell links, §3r, format 35's spell-link route, and format
+34's missile flight paths).
+
+**Format 39's per-version drift, read from the packs rather than estimated** (`meta.counts["delivery.*"]`):
+
+| pack                | `mech:instant` | `mech:casttime` | `mech:channeled` | both cast+channel | breaks on move |
+|---------------------|---------------:|----------------:|-----------------:|------------------:|---------------:|
+| Vanilla 1.15.8      |         23,523 |           7,273 |              518 |                66 |            382 |
+| TBC 2.5.6           |         21,059 |           6,723 |              972 |               104 |            654 |
+| WotLK 3.4.3         |         36,575 |          11,097 |            1,921 |               199 |          1,178 |
+| Cataclysm 4.4.2     |         54,256 |          14,206 |            3,107 |               342 |          1,668 |
+| MoP 5.5.4           |         75,518 |          18,735 |            4,563 |               687 |          2,400 |
+| Legion 7.3.5        |        139,413 |          32,788 |            9,045 |             1,864 |          4,416 |
+| BfA 8.3.7           |        176,732 |          41,328 |           11,688 |             2,511 |          5,626 |
+| Shadowlands 9.2.7   |        216,379 |          48,873 |           14,228 |             3,148 |          6,689 |
+| Dragonflight 10.2.7 |        256,848 |          57,426 |           16,589 |             3,771 |          7,811 |
+| TWW 11.2.7          |        295,024 |          66,672 |           18,646 |             4,447 |          8,753 |
+
+**`instant` + `casttime` + `channeled` DOES NOT SUM TO THE PACK, and must not be made to.** The middle two overlap by
+the "both" column; `instant` is the complement of their union. Per pack: `instant + (casttime + channeled - both)` = the
+full spell count, exactly.
+
+**No build lost the route** — `SpellCastTimes`, `SpellDuration` and `SpellInterrupts` are present on all ten, so there
+is no `OPTIONAL_TABLES` degradation to document here. **The cast+channel overlap exists as far back as Vanilla** (66
+spells), so it is not a modern-retail artifact and never was a safe simplification.
+
+**Format 37's per-version drift** (`meta.counts["spellAttrs.<handler>"]`):
 
 **Format 37's per-version drift, read from the packs rather than estimated** (`meta.counts["spellAttrs.<handler>"]`):
 

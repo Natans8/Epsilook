@@ -582,12 +582,58 @@ class Dossier:
             "icon": self.file_ref(m.get("SpellIconFileDataID")),
             "casting_time_index": m.get("CastingTimeIndex"),
             "duration_index": m.get("DurationIndex"),
+            # the two indexes above RESOLVED — an index is unreadable on its own
+            # and this is the route the delivery line ships (DATA_ROUTES §3s-ter)
+            "delivery": self.delivery(sid, m, {a["index"] for a in attrs if a["index"] is not None}),
             "range_index": m.get("RangeIndex"),
             "speed": m.get("Speed"),
             "launch_delay": m.get("LaunchDelay"),
             "attributes": attrs,
             "attribute_count": len(attrs),
         }
+
+    def delivery(self, sid: int, misc: dict[str, Any], bits: set[int]) -> dict[str, Any]:
+        """How the spell is delivered — the resolved cast time and channel.
+
+        Mirrors derive_delivery in build_data.py: it is NOT a partition, so a
+        spell can carry both a cast time and a channel (3,148 do on 9.2.7, and
+        they cast and THEN channel — verified in game). `cast_ms` 0 means no cast
+        bar, including the -1000000 "ranged weapon speed" sentinel, which Epsilon
+        fires with no bar. `channel_ms` -1 = no limit, 0 = flagged as a channel
+        but shipping no duration row (674 on 9.2.7 — NOT the same thing).
+        """
+        cast = self._lookup_int("SpellCastTimes", "Base", misc.get("CastingTimeIndex"))
+        channelled = bool(bits & {34, 38})  # IsChannelled / IsSelfChannelled
+        out: dict[str, Any] = {
+            "cast_ms": cast if cast and cast > 0 else 0,
+            "weapon_speed_cast": cast == -1000000,
+            "channelled": channelled,
+            "channel_ms": 0,
+            "breaks_on_move": False,
+        }
+        if channelled:
+            raw = self._lookup_int("SpellDuration", "Duration", misc.get("DurationIndex"))
+            if raw is not None:
+                out["channel_ms"] = -1 if raw < 0 or raw > 100_000_000 else raw
+            # the CHANNEL column, so SpellInterruptFlags — movement is bit 3
+            # there, and bit 0 in the DIFFERENT enum the cast column uses
+            r = self.rows('SELECT * FROM {V}."SpellInterrupts" WHERE "SpellID"=? '
+                          'ORDER BY "DifficultyID"', sid)
+            for row in r:
+                cols = [int(row.get(k) or 0) for k in row
+                        if k.startswith("ChannelInterruptFlags")]
+                if any((w >> 3) & 1 for w in cols[:1]):
+                    out["breaks_on_move"] = True
+                    break
+        return out
+
+    def _lookup_int(self, table: str, column: str, key: Any) -> int | None:
+        """One integer column out of an index table, or None if it resolves to
+        no row (index 0 usually does — these tables start at ID 1)."""
+        if key in (None, ""):
+            return None
+        r = self.rows(f'SELECT "{column}" AS v FROM {{V}}."{table}" WHERE "ID"=?', int(key))
+        return int(r[0]["v"]) if r and r[0]["v"] is not None else None
 
     def effects(self, sid: int) -> list[dict[str, Any]]:
         out = []
@@ -1008,6 +1054,23 @@ def show(d: dict[str, Any], full: bool = False) -> None:
     print(f"  school {', '.join(m.get('schools') or ['-'])}   "
           f"{m.get('attribute_count', 0)} attribute flags   "
           f"icon {(m.get('icon') or {}).get('path', '-')}")
+    dl = m.get("delivery") or {}
+    if dl:
+        segs = []
+        if dl.get("cast_ms"):
+            segs.append(f"{dl['cast_ms'] / 1000:g} sec cast")
+        if dl.get("channelled"):
+            ms = dl.get("channel_ms", 0)
+            segs.append("unlimited channel" if ms < 0
+                        else f"{ms / 1000:g} sec channel" if ms else "channel")
+        if dl.get("breaks_on_move"):
+            segs.append("breaks on move")
+        # the sentinel ANNOTATES the answer, it does not replace it: these
+        # spells are instant in Epsilon, and the note says why there is no number
+        line = " · ".join(segs) or "Instant"
+        if dl.get("weapon_speed_cast"):
+            line += f"  {DIM}(no cast bar — cast time is the ranged weapon speed){RESET}"
+        print(f"  {GOLD}delivery{RESET} {line}")
     # The flags the app SHIPS as pills are called out by name, because they are
     # the ones that answer "why does this spell behave like that" — the rest are
     # a 449-bit haystack and stay behind --full.

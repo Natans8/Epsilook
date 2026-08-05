@@ -13,6 +13,15 @@ python -m pip install duckdb
 python tools/builddb.py
 ```
 
+**`tqdm` is optional and worth having** — the build is ~2.5 minutes and goes quiet for long stretches, which reads as a
+hang. With it installed you get per-version and per-table progress bars; without it, nothing changes and nothing breaks.
+The bars also switch themselves off when stderr is not a terminal, so `python tools/builddb.py > out.log`
+stays a clean log rather than thousands of carriage returns.
+
+```bash
+python -m pip install tqdm
+```
+
 - **[1. Getting connected](#1-getting-connected)**
 - **[2. Layout](#2-layout)** — schemas, naming, what lives where
 - **[3. The `ref` schema](#3-the-ref-schema)** — universal data + the metadata catalog
@@ -127,12 +136,13 @@ point of the database is to have the answer before the question.
 Knowledge that lived only as prose, shipped as joinable tables so raw ids are legible without a second window open. Each
 cites where it came from:
 
-| Table             | Source                              | What it decodes                                                  |
-|-------------------|-------------------------------------|------------------------------------------------------------------|
-| `kit_effect_type` | DATA_ROUTES §3a                     | `SpellVisualKitEffect.EffectType` → the table `Effect` points at |
-| `proc_type`       | CLAUDE.md *Proc type decode*        | `SpellProceduralEffect.Type` → which `Value_n` is the payload    |
-| `target_type`     | DATA_ROUTES §2                      | `SpellVisualEvent.TargetType` → bit, search word, meaning        |
-| `spell_attribute` | `build/enums/spell_attributes.json` | all 449 `SpellMisc.Attributes` bits → name, column, mask         |
+| Table                  | Source                              | What it decodes                                                  |
+|------------------------|-------------------------------------|------------------------------------------------------------------|
+| `kit_effect_type`      | DATA_ROUTES §3a                     | `SpellVisualKitEffect.EffectType` → the table `Effect` points at |
+| `proc_type`            | CLAUDE.md *Proc type decode*        | `SpellProceduralEffect.Type` → which `Value_n` is the payload    |
+| `target_type`          | DATA_ROUTES §2                      | `SpellVisualEvent.TargetType` → bit, search word, meaning        |
+| `spell_attribute`      | `build/enums/spell_attributes.json` | all 449 `SpellMisc.Attributes` bits → name, column, mask         |
+| `spell_interrupt_flag` | `build/enums/spell_interrupt*.json` | BOTH interrupt enums, tagged with the column each applies to     |
 
 `spell_attribute` is the one that makes `SpellMisc`'s widest columns readable at all. The flags are packed 32 to a
 column across `Attributes_0..N`, so a raw value is unreadable without knowing which column and which bit — `attr_column`
@@ -152,6 +162,25 @@ WHERE m."SpellID" = 131041
           WHEN 'Attributes_11' THEN m."Attributes_11" END
     & a.mask <> 0
 ```
+
+`spell_interrupt_flag` exists because **`SpellInterrupts`' three flag columns do NOT share one enum**, and decoding them
+as if they did has already reported a population 4.4× too low. Filter on `applies_to` for the column you are actually
+reading — `InterruptFlags` (the cast) is a different enum from `AuraInterruptFlags` / `ChannelInterruptFlags`, and
+**movement is bit 0 in the first and bit 3 in the second**:
+
+```sql
+-- channels that end when the caster walks (the CHANNEL column -> bit 3)
+SELECT count(*)
+FROM v9_2_7."SpellInterrupts" s
+JOIN ref.spell_interrupt_flag f
+  ON f.applies_to = 'AuraInterruptFlags / ChannelInterruptFlags'
+ AND f.handler = 'moving'
+WHERE s."DifficultyID" = 0
+  AND s."ChannelInterruptFlags_0" & f.mask <> 0
+```
+
+**That count is 7,375 and it is NOT the shippable number** — 686 of those spells are not channels at all, so the pack
+ANDs it with the channelled flag and ships 6,689. Same correction `AllowActionsDuringChannel` needed.
 
 `handler` is non-null on the bits the **pack ships as pills**, and `requires` carries the one intersection rule (bit 160
 `AllowActionsDuringChannel` only means anything AND-ed with bit 34 `IsChannelled`). **Builds ship between 14 and 17

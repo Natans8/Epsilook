@@ -15,6 +15,7 @@
  * point; widening it should be a visible change.
  */
 import {CFG} from "./config";
+import {DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED} from "./data";
 import type {ScreenColors, SpellData} from "./data";
 import {ATTR_FLAGS} from "./pilltypes";
 import {el, hexColor} from "./util";
@@ -107,6 +108,20 @@ export interface ExportRow {
     replaceAnims?: { from: string; to: string }[];
     fx?: ExportFxEntry[];
     mechanics?: string[];
+    /** How the spell is delivered. Always present — every spell has an answer,
+     *  `instant` being the one for a spell with neither a cast nor a channel.
+     *  `castMs`/`durMs` are omitted when they do not apply rather than sent as
+     *  0, so a consumer never has to know which zero means "none". */
+    delivery?: {
+        instant: boolean;
+        castMs?: number;
+        channel?: boolean;
+        /** Omitted for an unlimited channel and for one with no duration row;
+         *  `unlimited` tells the two apart. */
+        durMs?: number;
+        unlimited?: boolean;
+        breaksOnMove?: boolean;
+    };
 }
 
 /* Injected by init() — the app calls it at boot, before any export runs. */
@@ -141,6 +156,21 @@ function exportRows(): ExportRow[] {
     return state.display.map((id) => {
         const i = d.spellIndex.get(id)!;
         const row: ExportRow = {id, name: d.names[i], subtext: d.subtexts[i]};
+        // Delivery rides with the NAME, not with a column, so it is exported
+        // unconditionally — there is no "delivery column" to hide it with.
+        const dl = d.spellDelivery.get(id);
+        if (!dl) {
+            row.delivery = {instant: true};
+        } else {
+            row.delivery = {instant: false};
+            if (dl.castMs > 0) row.delivery.castMs = dl.castMs;
+            if (dl.flags & DELIVERY_CHANNELLED) {
+                row.delivery.channel = true;
+                if (dl.durMs > 0) row.delivery.durMs = dl.durMs;
+                else if (dl.durMs < 0) row.delivery.unlimited = true;
+            }
+            if (dl.flags & DELIVERY_BREAKS_ON_MOVE) row.delivery.breaksOnMove = true;
+        }
         if (!hc.models) {
             // grouped by usage category (soundKits-style shape); a stale pack
             // without categories exports the old flat path list
@@ -236,7 +266,9 @@ function exportRows(): ExportRow[] {
                 // second one here: a flag added there exports without touching
                 // this file. Valueless, so the word IS the payload.
             ).concat(ATTR_FLAGS
-                .filter((f) => d.spellAttrs.get(f.handler)?.has(id) ?? false)
+                // `draw: false` flags are the delivery ones — they get their
+                // own structured field below rather than a bare word here
+                .filter((f) => f.draw && (d.spellAttrs.get(f.handler)?.has(id) ?? false))
                 .map((f) => ({type: f.word}))
             ).concat(sorted(d.spellScreens.get(id)).map((sc) => {
                 const c = d.screenColors.get(sc) || NO_SCREEN_COLORS;
