@@ -11,7 +11,11 @@ node_modules/
 .idea/
 .vscode/
 
-# local tooling
-.claude/
+# local tooling: machine-specific settings, dev-server ports, worktrees. The
+# wildcard rather than a bare `.claude/` is what lets skills/ be re-included --
+# git cannot re-include a file whose parent DIRECTORY is excluded. A skill is a
+# protocol this repo maintains, not local state, so it is tracked.
+.claude/*
+!.claude/skills/
 __pycache__/
 .mypy_cache/
