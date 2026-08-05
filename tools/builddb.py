@@ -169,6 +169,14 @@ EXTRA_TABLES = {
     "SpellFocusObject": "names SpellCastingRequirements.RequiresSpellFocus (the second binding gate)",
     "PlayerCondition": "SpellXSpellVisual.{Caster,Viewer}PlayerConditionID resolves here",
     "UnitCondition": "SpellXSpellVisual.{Caster,Viewer}UnitConditionID resolves here",
+    # ---------------------------------------------------------------- stacking
+    #
+    # CumulativeAura is the stack CEILING and it lives nowhere else — not on
+    # Spell, not on SpellMisc, not in any attribute bit. Without this table the
+    # question "how far can I stack this" has no answer in SQL at all.
+    # ProcCharges is the other, unrelated counter on the same row: charges are
+    # spent by procs, stacks are not, and the two are independent.
+    "SpellAuraOptions": "CumulativeAura — the stack limit; plus ProcCharges and the proc mask",
     # SpellCastTimes, SpellDuration and SpellInterrupts USED to be listed here.
     # They are build_data.py TABLES now (the delivery line reads all three), so
     # the normal CSV sweep already caches them and repeating them here would

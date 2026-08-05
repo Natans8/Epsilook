@@ -378,6 +378,24 @@ gate on an aura and **685 carry a `ModifierTreeID`** — a recursive tree this d
 class (294) and gender (207) are the legible majority of the rest; `Failure_description_lang` is set on only 11, so it
 is not a shortcut to wording. Budget for the `ModifierTree` walk before promising a decoded condition.
 
+**`SpellAuraOptions`, added 2026-08-06 — the stack ceiling, which lives nowhere else.** Not on `Spell`, not on
+`SpellMisc`, not in any attribute bit: before this table, *"how far does this stack"* had no answer in SQL at all.
+Present on **all ten builds, zero drift**.
+
+- **`CumulativeAura` IS the limit, and 0 / 1 / >1 are three different things.** Of the 20,889 spells with a row on
+  9.2.7: **10,796 are 0** (no stacking), **2,343 are 1** (a single application), and **7,750 genuinely stack** — 7,550
+  of those in the sane 2–100 range, 200 above it. Filter `> 1`, never `> 0`.
+- **`ProcCharges` is a DIFFERENT counter on the same row and the two are independent.** Charges are spent by procs;
+  stacks are not. Do not read one for the other. 971 spells carry charges.
+- **A spell can have several rows — one per `DifficultyID` — so collapse before counting.** 21,087 rows cover 20,889
+  spells; only 138 spells have more than one row and 110 of those disagree about the limit. `max(CumulativeAura)
+  GROUP BY SpellID` is the safe read, and the row-vs-spell trap here is the same one that put five wrong populations in
+  the feature queue.
+- **Measured against the scale/speed pills the app already draws: 621 of the `SCALE_AURAS` spells stack and 584 of the
+  `SPEED_AURAS` ones do** (median limit 15 and 10). **Whether the amount COMPOUNDS per stack is a behaviour question
+  this table does not answer** — it gives the per-stack amount (`SpellEffect.EffectBasePointsF`) and the ceiling, and
+  nothing more. Do not write that N stacks means N× the percent until Epsilon has been asked.
+
 **`SpellCastTimes`, `SpellDuration` and `SpellInterrupts` were REMOVED from this list on 2026-08-05** — they became
 `build_data.py` `TABLES` for the delivery line, so the normal CSV sweep caches them and listing them here would only be
 a second place to keep in step. They are still in the database, from the ordinary route.
