@@ -114,6 +114,32 @@ EXTRA_TABLES = {
     "AnimKitConfig": "AnimKitSegment.AnimKitConfigID resolves here (bonesets go through it)",
     "AnimKit": "the animkit rows themselves; segments carry ParentAnimKitID",
     "SpellVisualKitPicker": "kits chosen at random — SpellVisualKitPickerEntry's parent",
+    # ------------------------------------------------------------ conditionals
+    #
+    # THE GATES ON A SPELL — everything that decides whether it casts at all,
+    # and which of several visuals plays when it does. None of it was reachable
+    # here before 2026-08-05, which made "why does this spell do nothing"
+    # unanswerable in SQL.
+    #
+    # Two independent families, and they are evaluated in different places:
+    #   CAST gates  — SpellCastingRequirements (zone/focus/faction),
+    #                 SpellAuraRestrictions, SpellTargetRestrictions,
+    #                 SpellLevels, SpellEquippedItems, SpellReagents,
+    #                 SpellTotems. Server-enforced; Epsilon's `triggered` flag
+    #                 bypasses them.
+    #   VISUAL gates — SpellXSpellVisual's four condition columns resolve into
+    #                 PlayerCondition / UnitCondition.
+    "SpellCastingRequirements": "RequiredAreasID / RequiresSpellFocus / MinFactionID — the zone gate",
+    "AreaGroupMember": "SpellCastingRequirements.RequiredAreasID expands to area ids here",
+    "AreaTable": "names the areas AreaGroupMember lists (and every other AreaID in the data)",
+    "SpellAuraRestrictions": "caster/target aura and aura-state gates, incl. the Exclude* pair",
+    "SpellTargetRestrictions": "who may be targeted — creature type, max targets, cone",
+    "SpellLevels": "BaseLevel / MaxLevel / SpellLevel gates",
+    "SpellEquippedItems": "weapon/armour class gates (EquippedItemClass/-Subclass/-InvTypes)",
+    "SpellReagents": "material components a cast consumes",
+    "SpellTotems": "required totem items",
+    "PlayerCondition": "SpellXSpellVisual.{Caster,Viewer}PlayerConditionID resolves here",
+    "UnitCondition": "SpellXSpellVisual.{Caster,Viewer}UnitConditionID resolves here",
     # SpellCastTimes, SpellDuration and SpellInterrupts USED to be listed here.
     # They are build_data.py TABLES now (the delivery line reads all three), so
     # the normal CSV sweep already caches them and repeating them here would

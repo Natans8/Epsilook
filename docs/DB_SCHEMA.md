@@ -141,12 +141,16 @@ and `mask` are exactly the two things a query needs:
 ```sql
 -- which of the shipped flags does this spell carry?
 SELECT a.name, a.label, a.handler
-FROM ref.spell_attribute a, v9_2_7."SpellMisc" m
-WHERE m."SpellID" = 131041 AND a.handler IS NOT NULL
-  AND CASE a.attr_column WHEN 'Attributes_0' THEN m."Attributes_0"
-                         WHEN 'Attributes_1' THEN m."Attributes_1"
-                         WHEN 'Attributes_5' THEN m."Attributes_5"
-                         WHEN 'Attributes_11' THEN m."Attributes_11" END & a.mask <> 0
+FROM ref.spell_attribute a,
+     v9_2_7."SpellMisc" m
+WHERE m."SpellID" = 131041
+  AND a.handler IS NOT NULL
+  AND CASE a.attr_column
+          WHEN 'Attributes_0' THEN m."Attributes_0"
+          WHEN 'Attributes_1' THEN m."Attributes_1"
+          WHEN 'Attributes_5' THEN m."Attributes_5"
+          WHEN 'Attributes_11' THEN m."Attributes_11" END
+    & a.mask <> 0
 ```
 
 `handler` is non-null on the bits the **pack ships as pills**, and `requires` carries the one intersection rule (bit 160
@@ -304,9 +308,38 @@ cache directory, so anything `build_data.py` starts downloading appears here wit
 | a convenience view             | one `make_view(...)` call in `build_views`; collisions are refused, not fatal        |
 | a project decode as a table    | follow `KIT_EFFECT_TYPES` / `PROC_TYPES` — a literal list plus one `CREATE TABLE`    |
 
-`EXTRA_TABLES` currently adds four tables the pack build never reads: **`SpellVisualKit`** (the kit rows themselves —
-`build_data.py` reaches kits through `SpellVisualEvent` and never reads the table, so 6.65% of `SpellVisualKitEffect`
-rows point at a kit no event reaches and were invisible), `AnimKit`, `AnimKitConfig` and `SpellVisualKitPicker`.
+`EXTRA_TABLES` adds two families the pack build never reads.
+
+**The visual-graph four:** **`SpellVisualKit`** (the kit rows themselves — `build_data.py` reaches kits through
+`SpellVisualEvent` and never reads the table, so 6.65% of `SpellVisualKitEffect` rows point at a kit no event reaches
+and were invisible), `AnimKit`, `AnimKitConfig` and `SpellVisualKitPicker`.
+
+**The conditionals eleven, added 2026-08-05** — everything that decides whether a spell casts at all, and which of
+several visuals plays when it does. None of it was reachable here before, which made *"why does this spell do nothing"*
+unanswerable in SQL. Present on **all ten builds, zero drift**, so nothing needs declaring optional.
+
+| table                      | the gate it carries                                                     |
+|----------------------------|-------------------------------------------------------------------------|
+| `SpellCastingRequirements` | `RequiredAreasID`, `RequiresSpellFocus`, `MinFactionID`, facing, vision |
+| `AreaGroupMember`          | expands `RequiredAreasID` into area ids                                 |
+| `AreaTable`                | names those areas (and every other `AreaID` in the data)                |
+| `SpellAuraRestrictions`    | caster/target aura + aura-state gates, incl. the `Exclude*` pair        |
+| `SpellTargetRestrictions`  | who may be targeted — creature type, max targets, cone                  |
+| `SpellLevels`              | `BaseLevel` / `MaxLevel` / `SpellLevel`                                 |
+| `SpellEquippedItems`       | weapon/armour class gates                                               |
+| `SpellReagents`            | material components a cast consumes                                     |
+| `SpellTotems`              | required totem items                                                    |
+| `PlayerCondition`          | `SpellXSpellVisual.{Caster,Viewer}PlayerConditionID` resolves here      |
+| `UnitCondition`            | `SpellXSpellVisual.{Caster,Viewer}UnitConditionID` resolves here        |
+
+**The zone gate is a flat two-hop join and is fully legible** — `SpellCastingRequirements.RequiredAreasID` →
+`AreaGroupMember.AreaID` → `AreaTable.AreaName_lang`. Measured on 9.2.7: **12,381 spells zone-gated**, 8,065 of them to
+a single area, over 2,149 distinct area groups. Worked example — spell 199453 `Drift Leap` → group 4507 → *The Drift*.
+
+**`PlayerCondition` is NOT flat, and a third of it is opaque.** Of the 2,018 rows `SpellXSpellVisual` references, 730
+gate on an aura and **685 carry a `ModifierTreeID`** — a recursive tree this database does not yet decode. Race (284),
+class (294) and gender (207) are the legible majority of the rest; `Failure_description_lang` is set on only 11, so it
+is not a shortcut to wording. Budget for the `ModifierTree` walk before promising a decoded condition.
 
 **`SpellCastTimes`, `SpellDuration` and `SpellInterrupts` were REMOVED from this list on 2026-08-05** — they became
 `build_data.py` `TABLES` for the delivery line, so the normal CSV sweep caches them and listing them here would only be
