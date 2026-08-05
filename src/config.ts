@@ -175,7 +175,12 @@ export const CFG: EpsilookConfig = {
     // .worldport are not (user's call — an area name is rarely a tele name).
     // The map command is omitted when the area resolved no map.
     areaLookupTemplate: ".lookup tele {name}",
-    areaMapTemplate: "/run C_Map.OpenWorldMap({id})",
+    // ⚠ THE FrameXML GLOBAL, NOT `C_Map.OpenWorldMap` — that one was ADDED IN
+    // PATCH 11.1.5 and does not exist on the 9.2.7 client Epsilon runs, so the
+    // macro silently did nothing. Verified in game: this form works, as do
+    // `ShowUIPanel(WorldMapFrame); WorldMapFrame:SetMapID(id)` and an
+    // IsShown-guarded ToggleWorldMap; this is simply the shortest of the three.
+    areaMapTemplate: "/run OpenWorldMap({id})",
 
     // External links ({id} = spell / soundkit / creature display / NPC ID,
     // {wh} = the version-appropriate Wowhead site prefix, see wowheadSitePrefix).

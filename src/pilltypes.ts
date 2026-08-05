@@ -466,8 +466,16 @@ attrFlag("mech:instant", "mech", "instant", "instant",
  * are keys in the map, so `mech:channeled` still returns all 14,228 — but `of`
  * reads NaN for them, and every comparison rejects NaN. That is the same rule
  * the line on screen follows: it prints `unlimited channel` with no seconds in
- * it, so no question about seconds should sweep it in. Selecting those two
- * groups wants a WORD (the no-limit one in the queue), never a bound. */
+ * it, so no question about seconds should sweep it in.
+ *
+ * SO THE UNLIMITED ONES GET A WORD INSTEAD (the user asked for one), and it is
+ * a CORPUS word rather than a type of its own: `mech:"channeled unlimited"` is
+ * the phrase, `mech:unlimited` the shorthand, and both fall out of the axis the
+ * app already has — the same shape as `fx:"chain red"`. It is the word the
+ * delivery line prints, measured at ONE collision in the whole mech field
+ * against `endless` 96 and `permanent` 13. The 674 with no duration row keep a
+ * bare `channeled` and get no word: what they DO is still an open question
+ * (docs/DECISIONS.md), and naming a group implies knowing what it is. */
 T({
     key: "mech:casttime", field: "mech", word: "casttime",
     hint: "Has a cast bar before it goes off — its length in seconds, casttime >3",
@@ -477,8 +485,8 @@ T({
 });
 T({
     key: "mech:channeled", field: "mech", word: "channeled",
-    hint: "Channeled rather than cast once — its length in seconds, channeled 5",
-    spells: (d) => d.channelSpells,
+    hint: "Channeled rather than cast once — channeled 5 for its seconds, or unlimited",
+    corpus: (d) => d.channelSearchL, spells: (d) => d.channelSpells,
     numeric: {
         kind: "value", operatorOnly: true,
         of: (d, ms) => (ms > 0 ? deliverySecs(ms) : NaN),

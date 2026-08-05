@@ -172,9 +172,9 @@ reading — `InterruptFlags` (the cast) is a different enum from `AuraInterruptF
 -- channels that end when the caster walks (the CHANNEL column -> bit 3)
 SELECT count(*)
 FROM v9_2_7."SpellInterrupts" s
-JOIN ref.spell_interrupt_flag f
-  ON f.applies_to = 'AuraInterruptFlags / ChannelInterruptFlags'
- AND f.handler = 'moving'
+         JOIN ref.spell_interrupt_flag f
+              ON f.applies_to = 'AuraInterruptFlags / ChannelInterruptFlags'
+                  AND f.handler = 'moving'
 WHERE s."DifficultyID" = 0
   AND s."ChannelInterruptFlags_0" & f.mask <> 0
 ```
@@ -361,7 +361,7 @@ unanswerable in SQL. Present on **all ten builds, zero drift**, so nothing needs
 | `PlayerCondition`          | `SpellXSpellVisual.{Caster,Viewer}PlayerConditionID` resolves here      |
 | `UnitCondition`            | `SpellXSpellVisual.{Caster,Viewer}UnitConditionID` resolves here        |
 | `SpellFocusObject`         | names `RequiresSpellFocus` — the OTHER gate Epsilon enforces on `.cast` |
-| `UiMap`                    | map ids Lua's `C_Map.OpenWorldMap()` takes — **not** `AreaTable.ID`     |
+| `UiMap`                    | map ids Lua's `OpenWorldMap()` takes — **not** `AreaTable.ID`           |
 | `UiMapAssignment`          | `AreaID` → `UiMapID`, the only bridge from an area to a map             |
 
 **The two map tables exist for the area pill's map button (DATA_ROUTES §3t), and the lookup is deliberately strict.**

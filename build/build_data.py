@@ -233,7 +233,7 @@ OPTIONAL_TABLES = {
     "SpellName": "spell names (pre-BfA they live on Spell itself)",
     # The two map tables are the area pill's OPTIONAL half: without them the
     # pill still names its areas and still links Wowhead, it just offers no
-    # `C_Map.OpenWorldMap` button. Confirmed present on 9.2.7; the other nine
+    # `/run OpenWorldMap(id)` button. Confirmed present on 9.2.7; the other nine
     # are undeclared rather than checked, and this is the declaration path
     # exactly so a Classic build lacking them is not a blocker.
     "UiMap": "zone map ids for the area pill's map command",
@@ -4498,7 +4498,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         # the group renders four items; there is no "primary" area and none is
         # invented. "areas" carries the area's OWN name (never its parent's —
         # see derive_areas), the root area for the Wowhead zone link, and a
-        # UiMapID for C_Map.OpenWorldMap, 0 where there is no usable map.
+        # UiMapID for the /run OpenWorldMap(id) macro, 0 where there is no usable map.
         "spellAreas": {
             "spellIds": [r[0] for r in area_rows],
             "areaIds": [r[1] for r in area_rows],

@@ -1,13 +1,16 @@
 import {
     areaIsHit,
     camoIsHit,
+    castTimeIsHit,
     channelIsHit,
+    channeledIsHit,
     desatIsHit,
     dissolveIsHit,
     freezeIsHit,
     fxChainIsHit,
     ghostMatIsHit,
     glowIsHit,
+    instantIsHit,
     keybindIsHit,
     morphIsHit,
     objectIsHit,
@@ -233,14 +236,23 @@ const secs = (ms: number): string => String(deliverySecs(ms));
  * `Channeled (5 sec cast)` parenthetical is deliberately NOT copied, since it
  * puts the label first. The vocabulary is Wowhead's ("Match the wowhead
  * convention"); only the ordering is ours.
+ *
+ * EACH SEGMENT LIGHTS WHEN IT IS WHAT WAS ASKED FOR, through the pill registry's
+ * own matcher (hits.ts) rather than a test re-derived here — so `mech:"casttime
+ * >3"` golds the cast half of a cast-then-channel row and leaves the channel
+ * half alone. It is the Name cell's existing highlight idiom, the one
+ * `mark.hl` uses on the name itself two lines up, because a cell should not
+ * have two ways of saying "this is your match". The one segment that cannot
+ * light is `breaks on move`: no word selects it yet.
  */
 function deliveryLine(spellId: number): HTMLElement {
     const d = activeData();
     const dl = d.spellDelivery.get(spellId);
     const line = el("div", "delivery");
-    const seg = (value: string, label: string) => {
+    const seg = (value: string, label: string, hit = false) => {
         if (line.childElementCount) line.appendChild(el("span", "d-sep", "·"));
         const s = el("span", "d-seg");
+        if (hit) s.classList.add("hit");
         if (value) {
             s.appendChild(el("span", "d-v", value));
             // a REAL space, not just the css margin: the line is selectable
@@ -254,19 +266,23 @@ function deliveryLine(spellId: number): HTMLElement {
     // 1,846 spells with no SpellMisc row read, which is correct rather than a
     // fallback: nothing about them says otherwise.
     if (!dl) {
-        seg("", "Instant");
+        seg("", "Instant", instantIsHit());
         return line;
     }
-    if (dl.castMs > 0) seg(`${secs(dl.castMs)} sec`, "cast");
+    if (dl.castMs > 0) seg(`${secs(dl.castMs)} sec`, "cast", castTimeIsHit(dl.castMs));
     if (dl.flags & DELIVERY_CHANNELLED) {
         // durMs -1 = runs until something stops it; 0 = the spell is flagged as
         // a channel but ships no duration row (674 on 9.2.7). Those two are NOT
         // folded together: one in-game test showed a no-duration channel doing
         // nothing at all, which is not what "unlimited" looks like, but it was
         // inconclusive — see docs/DECISIONS.md before merging them.
-        if (dl.durMs > 0) seg(`${secs(dl.durMs)} sec`, "channel");
-        else if (dl.durMs < 0) seg("", "unlimited channel");
-        else seg("", "channel");
+        //
+        // All three key on durMs, so the hit follows whichever shape rendered:
+        // `mech:"channeled unlimited"` golds the -1 line and only that one.
+        const hit = channeledIsHit(dl.durMs);
+        if (dl.durMs > 0) seg(`${secs(dl.durMs)} sec`, "channel", hit);
+        else if (dl.durMs < 0) seg("", "unlimited channel", hit);
+        else seg("", "channel", hit);
     }
     if (dl.flags & DELIVERY_BREAKS_ON_MOVE) seg("", "breaks on move");
     return line;

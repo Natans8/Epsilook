@@ -1282,7 +1282,25 @@ second rounding rule to drift.
 real keys in the map — `mech:channeled` still returns all 14,228 — but the axis reads **`NaN`** for them, and every
 comparison rejects NaN. That is why `mech:"channeled <99999"` is 8,324 and not 14,228: the line prints `unlimited
 channel` with no seconds in it, so no question *about* seconds should sweep it in. **Selecting those two groups wants a
-WORD, not a bound** (the no-limit word in the CLAUDE.md queue).
+WORD, not a bound** — and one of them now has it.
+
+**✅ `unlimited` IS THAT WORD, shipped 2026-08-05.** The channel type gained a **corpus** (`channelSearchL`, keyed by
+`durMs` exactly as the spell map is), holding `channeled unlimited` on the -1 bucket and a bare `channeled` everywhere
+else. So the phrase falls out of the axis the app already has, with no new pill type and no new pack section:
+
+| query                        | means                                      | 9.2.7     |
+|------------------------------|--------------------------------------------|-----------|
+| `mech:"channeled unlimited"` | the bound phrase — **exactly the members** | **5,230** |
+| `mech:unlimited`             | the shorthand, +1 corpus collision         | 5,231     |
+
+**Measured against the alternatives before registering**, per PILLS.md *Choosing the keyword*: 1 collision for
+`unlimited`, against 96 for `endless` and 13 for `permanent`. It is also the word the line already prints, so the thing
+on screen is the thing you type.
+
+**THE 674 WITH NO DURATION ROW DELIBERATELY GET NO WORD.** They keep a bare `channeled`. What they do in game is still
+open (one test showed no bar at all, which is not what unlimited looks like, and the question was inconclusive — see
+DECISIONS.md), and naming a group implies knowing what it is. **NUMBERS STAY OUT of the corpus**: a substring `5` would
+match 15, 25 and 50, which is measurably what happened to `speed` (76 → 85). The corpus carries only what has no number.
 
 **`operatorOnly`, like `speed` and `scale`.** The `mech:` field is shared with ~980 effect/aura/target names, so a
 number standing loose in a chip keeps the literal meaning it always had: `mech:1.5` is 6 spells (a substring), not the
@@ -1392,12 +1410,12 @@ items. There is deliberately no "primary" area.
 
 `areas` — the deduped area table the rows point at:
 
-| field    | meaning                                                                                        |
-|----------|------------------------------------------------------------------------------------------------|
-| `ids`    | `AreaTable.ID`                                                                                 |
-| `names`  | the area's own name — **never its parent's**                                                   |
-| `roots`  | top-level ancestor, for `wowhead.com/zone=<root>`                                              |
-| `mapIds` | `UiMapID` for `/run C_Map.OpenWorldMap(<id>)`, **0 = no usable map** (2,468 of 3,147 have one) |
+| field    | meaning                                                                                  |
+|----------|------------------------------------------------------------------------------------------|
+| `ids`    | `AreaTable.ID`                                                                           |
+| `names`  | the area's own name — **never its parent's**                                             |
+| `roots`  | top-level ancestor, for `wowhead.com/zone=<root>`                                        |
+| `mapIds` | `UiMapID` for `/run OpenWorldMap(<id>)`, **0 = no usable map** (2,468 of 3,147 have one) |
 
 **Wowhead only has pages for ROOT areas**, which is why `roots` exists: `zone=7964` (the subzone The Drift) is a 404,
 while its root `zone=7637` (Suramar) resolves. Verified by hand on three ids.

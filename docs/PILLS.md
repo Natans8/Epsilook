@@ -46,6 +46,14 @@ has an answer, even if the answer is `Instant`. Rendering 276,332 pills that say
   honest is that the line and the axis share one rounding function (`deliverySecs`), rather than the display formatting
   its number and the search rounding its own. **A number a surface SHOWS and a number it MATCHES must come from the same
   call**; that is the same rule as `P.holdsHit` reading the class `pills.ts` writes.
+- **AND IT LIGHTS LIKE A PILL, THROUGH THE PILL REGISTRY'S OWN MATCHER.** `hits.ts` exports `castTimeIsHit` /
+  `channeledIsHit` / `instantIsHit` exactly as it does for every pill type, and `deliveryLine` calls them per segment —
+  so `mech:"channeled >8"` golds the channel half of a cast-then-channel row and leaves `2 sec cast` plain. **The point
+  is that the segment cannot glow under a query that did not select its row**, because one function answers both
+  questions; a hand-written `castMs > 3` beside the renderer would be the fx-column bug in miniature. The wash is
+  `mark.hl`'s, deliberately: the spell name two lines up highlights its matched letters that way, and one cell must not
+  own two idioms for "this is your match". **`breaks on move` is the one segment that never lights — no word selects it
+  yet**, which is a gap in the vocabulary rather than in the wiring.
 
 **The slot order is `<value> <label>` and it never flips** (the user's rule) — `unlimited channel`, never
 `channel, no limit`. Wowhead's own tooltip writes `Channeled (5 sec cast)`, label first; the vocabulary is borrowed from
@@ -277,6 +285,19 @@ The registry decides **what a user can type**, so the choices there are product 
   called "… Location …" ("Ashran Zone Location 00"), and 22 sources plus 33 targets of theirs come along. That is the
   same documented behaviour as `fx:tracking` matching 8 texture paths. **The lesson for the next keyword: measuring a
   word against the enum names is not the whole test, because every corpus in the column is also a haystack.**
+- **A QUALIFYING WORD CAN BE A CORPUS ENTRY RATHER THAN A TYPE — `unlimited` is (2026-08-05).** A channel with `durMs`
+  -1 has no number, so the numeric axis reads `NaN` and every bound rejects it; the 5,230 spells were reachable only by
+  the unqualified `mech:channeled`. The fix is one line of corpus (`channelSearchL`), not a new pill type: the channel
+  type gains `corpus`, and `mech:"channeled unlimited"` falls out of the axis the app already has — the same shape as
+  `fx:"chain red"`. **Measured before registering, per the rule at the top of this list**: `unlimited` carries **1**
+  collision in the whole mech field (5,231 answered against 5,230 members), against 96 for `endless` and 13 for
+  `permanent`. It is also the word the delivery line already prints, so **the thing on screen is the thing you type**.
+
+    - **NUMBERS STAY OUT OF THE CORPUS.** Writing the seconds in as words would make a substring `5` match 15, 25 and
+      50 — the measured shape of that mistake is on `speed`, where it moved 76 to 85. Numbers are what the numeric axis
+      is for; the corpus carries only what has no number.
+    - **The 674 channels with no duration row get NO word, on purpose.** They keep a bare `channeled`. What they
+      actually do in game is still open (docs/DECISIONS.md), and naming a group implies knowing what it is.
 - **Words name kinds of content; values are typed, not suggested.**
   Autocomplete offers `attach`, never `Chest`; `equipped`, never
   `equipped off hand`. The suggestion list is a menu of what can be *asked*, not of the answers.

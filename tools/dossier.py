@@ -81,6 +81,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -146,6 +147,21 @@ def select_pack(wanted: str | None) -> dict[str, Any]:
 def wowhead_prefix(build_id: str) -> str:
     """Vanilla ids only resolve on Wowhead's Classic site (config.ts's rule)."""
     return "classic/" if build_id.split(".")[0] == "1" else ""
+
+
+def delivery_secs(ms: int) -> str:
+    """A delivery time as the number the APP prints — `deliverySecs` in src/data.ts.
+
+    A port rather than a shared implementation, because one side is TypeScript
+    in the browser and the other is Python here; so it is spelled to agree
+    exactly, and that is the whole reason it is a named function instead of an
+    f-string. `ms / 1000:g` was the old spelling and it disagrees on the six
+    values that are not on a 10 ms grid: 333, 666, 1333, 1625 and 2125 ms of
+    cast time, and a 1 ms channel. `floor(x + 0.5)`, not `round()`, because
+    Python rounds halves to EVEN and JavaScript rounds them UP — 1625 ms is
+    1.63 in the app and would be 1.62 here.
+    """
+    return f"{math.floor(ms / 10 + 0.5) / 100:g}"
 
 
 class Dossier:
@@ -1094,11 +1110,11 @@ def show(d: dict[str, Any], full: bool = False) -> None:
     if dl:
         segs = []
         if dl.get("cast_ms"):
-            segs.append(f"{dl['cast_ms'] / 1000:g} sec cast")
+            segs.append(f"{delivery_secs(dl['cast_ms'])} sec cast")
         if dl.get("channelled"):
-            ms = dl.get("channel_ms", 0)
+            ms = int(dl.get("channel_ms", 0))
             segs.append("unlimited channel" if ms < 0
-                        else f"{ms / 1000:g} sec channel" if ms else "channel")
+                        else f"{delivery_secs(ms)} sec channel" if ms else "channel")
         if dl.get("breaks_on_move"):
             segs.append("breaks on move")
         # the sentinel ANNOTATES the answer, it does not replace it: these

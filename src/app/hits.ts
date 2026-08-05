@@ -133,6 +133,15 @@ export const triggersIsHit = isHitOf("mech:triggers");
 export const originIsHit = isHitOf("mech:origin");
 /** An area-gate pill keys on the AreaTable id it names. */
 export const areaIsHit = isHitOf("mech:location");
+/* The delivery line is not a pill, but it lights like one: each segment keys on
+ * the very value its pill type is built under — the cast segment on its ms, the
+ * channel segment on its duration ms (-1 and 0 included, which is how
+ * `unlimited` lights) — and `Instant` is valueless, so it is called with no id.
+ * Reading the registry here is what stops the line and the search disagreeing:
+ * a segment can only glow under a query that also selected its row. */
+export const castTimeIsHit = isHitOf("mech:casttime");
+export const channeledIsHit = isHitOf("mech:channeled");
+export const instantIsHit = isHitOf("mech:instant");
 /** A mount pill keys on the CreatureDisplayID it rides on. */
 export const mountIsHit = isHitOf("model:mount");
 /** A speed pill keys on the (movement, percent) pair it displays. */

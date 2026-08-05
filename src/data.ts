@@ -607,6 +607,9 @@ export interface SpellData {
      *  keys, holding the channels that answer no numeric question). */
     castTimeSpells: Map<number, number[]>;
     channelSpells: Map<number, number[]>;
+    /** Words qualifying a channel, keyed the same way: `channeled`, plus
+     *  `unlimited` on the one bucket (-1) that has no number to compare. */
+    channelSearchL: Map<number, string>;
 
     /** How each spell is delivered (format 39+). Only spells that HAVE a cast
      *  time or a channel are present; everything else is instant, which is why
@@ -623,7 +626,7 @@ export interface SpellData {
     /** area -> top-level ancestor, for `wowhead.com/zone=<root>` — a subzone
      *  has no Wowhead page of its own. */
     areaRoots: Map<number, number>;
-    /** area -> UiMapID for C_Map.OpenWorldMap; absent = no usable map. */
+    /** area -> UiMapID for the map macro; absent = no usable map. */
     areaMapIds: Map<number, number>;
     areaSearchL: Map<number, string>;
 
@@ -1346,6 +1349,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const spellDelivery = new Map<number, Delivery>();
     const castTimeSpells = new Map<number, number[]>();
     const channelSpells = new Map<number, number[]>();
+    const channelSearchL = new Map<number, string>();
     const del = pack.spellDelivery;
     if (del) {
         for (let i = 0; i < del.spellIds.length; i++) {
@@ -1356,7 +1360,18 @@ export function buildIndexes(pack: SpellPack): SpellData {
             // durMs -1 and 0 are keys like any other: a channel with no number
             // is still a channel, and `mech:channeled` must keep returning it.
             // What it is not is a LENGTH, which the pill type's `of` says.
-            if (flags & DELIVERY_CHANNELLED) pushTo(channelSpells, durMs, id);
+            if (flags & DELIVERY_CHANNELLED) {
+                pushTo(channelSpells, durMs, id);
+                // The one qualifying WORD this route has, and the reason the
+                // channel gets a corpus at all: a channel with no limit has no
+                // number to compare, so `unlimited` is the only handle on it.
+                // It is the word the delivery line already prints, so the thing
+                // on screen is the thing you type. NUMBERS STAY OUT of the
+                // corpus — a substring "5" would match 15, 25, 50 (measured on
+                // speed: 76 -> 85), which is exactly what the numeric axis is
+                // for.
+                channelSearchL.set(durMs, durMs < 0 ? "channeled unlimited" : "channeled");
+            }
         }
         // `instant` = has neither, which is why it also covers the 1,846 spells
         // with no SpellMisc row at all — they used to fall out of every
@@ -2006,7 +2021,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellDesaturates, desatSpells, desatSearchL,
         spellTransps, transpSpells, transpSearchL,
         spellFreezes, spellCamos, spellAttrs, spellDelivery,
-        castTimeSpells, channelSpells,
+        castTimeSpells, channelSpells, channelSearchL,
         spellAreas, areaSpells, areaNames, areaRoots, areaMapIds, areaSearchL,
         spellScreens, screenSpells, screenNames, screenColors, screenTextures, screenSearchL,
         spellVisualAnims, visualAnimSpells,

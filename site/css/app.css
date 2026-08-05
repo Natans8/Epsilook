@@ -2083,6 +2083,26 @@ main {
     opacity: 0.55;
 }
 
+/* The segment the query asked for. GOLD IS NOT A CONTENT COLOUR, which is why
+   this does not contradict the rule above: every other tone in the app names a
+   family of content, gold names "this is your match", and the delivery line is
+   as entitled to say that as a pill is.
+   IT IS `mark.hl`'s WASH, deliberately — the name two lines up highlights its
+   matched letters exactly this way, and one cell must not have two idioms for
+   the same statement. The label is lifted off --text-dim while it holds,
+   because dim text on a hit wash is this app's one standing contrast failure
+   (see CLAUDE.md); at --text it is the same composite mark.hl already ships. */
+.delivery .d-seg.hit {
+    background: rgba(var(--gold-rgb), calc(0.28 * var(--wash-strength)));
+    border-radius: 3px;
+    padding: 0 3px;
+    margin: 0 -1px;
+}
+
+.delivery .d-seg.hit .d-l {
+    color: var(--text);
+}
+
 mark.hl {
     background: rgba(var(--gold-rgb), calc(0.28 * var(--wash-strength)));
     color: inherit;
