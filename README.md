@@ -128,7 +128,6 @@ tools/                   every routine that would otherwise be a thing to rememb
   ide.py                 format + lint through the JetBrains IDEs, routed by owner
   builddb.py             build the exploration database (development tool)
   dossier.py             one spell, every route followed to the leaves
-  epsilon_test.py        in-game test sheets: one command per line, with controls
   dbd.py                 parser for WoWDBDefs .dbd schema definitions
 docker/                  the self-hosting path — see "Hosting it yourself"
   Dockerfile             the image: esbuild -> a verified document root -> nginx
