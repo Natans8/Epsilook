@@ -1,4 +1,5 @@
 import {
+    areaIsHit,
     camoIsHit,
     channelIsHit,
     desatIsHit,
@@ -33,6 +34,7 @@ import {activeData, state, wowheadUrl} from "./state";
 import {
     animSwapTag,
     animTag,
+    areaTag,
     channelTag,
     colorFxTag,
     displayTag,
@@ -808,7 +810,7 @@ function effectCells(spellId: number): { fx: HTMLElement; mechBlocks: CellBlock[
     // mechanics one, which the old single test could not express.
     const cats: {
         name: string; col: string; hit: boolean; mask: number;
-        finds?: string; items: (() => HTMLElement)[]
+        finds?: string; label?: string; items: (() => HTMLElement)[]
     }[] = [];
     /* Where a category's target icons go. One icon on the HEAD when every
  * row of the category agrees — the common case, and far less noisy than
@@ -858,6 +860,9 @@ function effectCells(spellId: number): { fx: HTMLElement; mechBlocks: CellBlock[
         /** what the HEAD's click finds, when "a <word> effect" does not read
          *  as English (the link words are verbs). Default: that phrase. */
         finds?: string;
+        /** what the head PRINTS, when that differs from the word it searches.
+         *  Only `location` uses it (it prints "only in"); see fxHeadTag. */
+        label?: string;
         /** source rows (see above) */
         rows: any[];
 
@@ -889,7 +894,7 @@ function effectCells(spellId: number): { fx: HTMLElement; mechBlocks: CellBlock[
     }
 
     const pushCat = ({
-                         name, rows, isHit, col = "fx", finds,
+                         name, rows, isHit, col = "fx", finds, label,
                          render = () => el("span"),
                          mask = () => 0,
                          entries = (rs) => rs,
@@ -904,7 +909,7 @@ function effectCells(spellId: number): { fx: HTMLElement; mechBlocks: CellBlock[
         // head IS the pill. Item order is not decided here: groupBlock ranks the
         // built pills by P.holdsHit, so each renderer's own hit is what counts.
         cats.push({
-            name, col, finds,
+            name, col, finds, label,
             hit: rows.some(isHit),
             mask: t.head,
             items: pills.map((e) => () => render(e, t.pill(entryMask(e)))),
@@ -1299,6 +1304,54 @@ function effectCells(spellId: number): { fx: HTMLElement; mechBlocks: CellBlock[
         render: (l: SpellLink, m) => spellLinkTag(l, "origin", m),
     });
 
+    // The area gate — where the spell REFUSES to cast. A group like every
+    // category here, which is what made the head carry the restriction: `P.group`
+    // already collapses a one-item group inline, so the 65% of gated spells
+    // naming a single area read `only in ( Suramar )` and the rest render a
+    // strip, with no second renderer and no caller predicting which.
+    //
+    // No mask: a gate is a property of the SPELL, not of a target, so there are
+    // no target icons to draw. Sorted by name — the pack ships area ids in
+    // ascending order, which is not an order anyone reads in.
+    // Two areas can share a NAME and a ROOT — Eye of Azshara is 7578 and 8373,
+    // both rooted on 7578 with the same map — and such a pair renders byte for
+    // byte the same pill: same label, same Wowhead href, same `.lo tele`. Drop
+    // the repeat, keeping whichever variant carries a map so the button
+    // survives. 818 of 39,807 rows on 9.2.7, across 508 spells.
+    //
+    // MERGING ON THE NAME ALONE WOULD BE WRONG, and it is tempting because it
+    // is 7.5% rather than 2.1%. Same-named areas with DIFFERENT roots are
+    // different places, not duplicates: `zone=7334` is the Azsuna zone and
+    // `zone=8625` is the scenario "Turn Back the Tides: Azsuna" — both are real
+    // Wowhead pages with different content (verified by hand). So a spell
+    // legitimately shows `Azsuna · Azsuna`, and collapsing them would throw one
+    // destination away. 230 of the 292 repeated names are this case.
+    const areaRows: number[] = [];
+    {
+        const seen = new Map<string, number>(); // name+root -> index into areaRows
+        for (const a of d.spellAreas.get(spellId) || []) {
+            const key = (d.areaNames.get(a) || "") + "\u0000" + (d.areaRoots.get(a) || 0);
+            const at = seen.get(key);
+            if (at === undefined) {
+                seen.set(key, areaRows.length);
+                areaRows.push(a);
+            } else if (!d.areaMapIds.has(areaRows[at]) && d.areaMapIds.has(a)) {
+                areaRows[at] = a;
+            }
+        }
+        // by name: the pack ships area ids ascending, which is not an order
+        // anyone reads in. renderBlocks still floats the matched one above it.
+        areaRows.sort((a, b) =>
+            (d.areaNames.get(a) || "").localeCompare(d.areaNames.get(b) || ""));
+    }
+    pushCat({
+        name: "location", col: "mech", label: "only in",
+        finds: "all spells restricted to an area",
+        rows: areaRows,
+        isHit: (areaId: number) => areaIsHit(areaId),
+        render: (areaId: number) => areaTag(areaId),
+    });
+
     // one block per category, in the order pushed above; renderBlocks
     // floats the matched category to the top. The icon rides the category
     // head, unioned over this spell's rows in the category — only where the
@@ -1312,7 +1365,7 @@ function effectCells(spellId: number): { fx: HTMLElement; mechBlocks: CellBlock[
     const blocksFor = (c: string) => cats.filter((cat) => cat.col === c).map((cat) => groupBlock({
         hit: cat.hit,
         named: wordIsNamed(c, cat.name),
-        head: (hit) => fxHeadTag(cat.name, hit, cat.mask, cat.col, cat.finds),
+        head: (hit) => fxHeadTag(cat.name, hit, cat.mask, cat.col, cat.finds, cat.label),
         items: cat.items.map((make) => make()),
     }));
     const fxBlocks = blocksFor("fx");

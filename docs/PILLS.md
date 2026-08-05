@@ -260,6 +260,17 @@ The registry decides **what a user can type**, so the choices there are product 
   stays reachable without being printed: clicking the head searches it, autocomplete offers it, and `help.ts` generates
   the vocabulary from the registry. **Do this only when the head has a job the word cannot do**; matching is still the
   default.
+
+  **The mechanism is one optional argument, not a branch** — `fxHeadTag(category, hit, mask, field, finds, label)`,
+  where `label` defaults to `category`. `location` is the only caller that passes it. What makes this safe is that the
+  head's *search* still comes from `category`, so the printed word can never drift from the query it runs.
+- **⚠ `location` HAS 0 COLLISIONS AGAINST TARGET NAMES AND STILL DOES NOT MATCH ITS OWN POPULATION** —
+  `mech:location` answers **12,423** against a pack population of **12,375**. Both numbers are right and the entry above
+  is not wrong: the measurement that found 0 was against *target and implicit-target names*, which is where `area` lost.
+  The +48 arrive through the **link corpora**, which carry the linked spell's NAME — 167 spells on 9.2.7 are literally
+  called "… Location …" ("Ashran Zone Location 00"), and 22 sources plus 33 targets of theirs come along. That is the
+  same documented behaviour as `fx:tracking` matching 8 texture paths. **The lesson for the next keyword: measuring a
+  word against the enum names is not the whole test, because every corpus in the column is also a haystack.**
 - **Words name kinds of content; values are typed, not suggested.**
   Autocomplete offers `attach`, never `Chest`; `equipped`, never
   `equipped off hand`. The suggestion list is a menu of what can be *asked*, not of the answers.

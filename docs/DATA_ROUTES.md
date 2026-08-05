@@ -1311,9 +1311,8 @@ Every section read is guarded (`if (pack.X)`) so an older-format pack degrades r
 
 ### 3t. The area gate — WHERE a spell may be cast (`spellAreas` + `areas`, format 40)
 
-**⚠ SHIPPED IN THE PACK, NOT YET READ BY THE APP (2026-08-05).** `build_data.py` writes both sections and only the 9.2.7
-pack has been rebuilt; `data.ts` does not read them and no pill is drawn yet. See CLAUDE.md → *Open items* for the
-handoff.
+**SHIPPED AND LIVE (2026-08-05).** All ten packs carry both sections, `data.ts` reads them, and the Mechanics column
+draws the group described below. Searchable as `mech:location` / `mech:"location <name>"`.
 
 **The first route that is a RESTRICTION rather than content.** Every other route in this file answers *what does this
 spell do*; this one answers *where will it refuse to cast*. That difference is why it is drawn as a group whose head
@@ -1407,13 +1406,12 @@ The five Classic re-release clients (Vanilla / TBC / WotLK / Cataclysm / MoP) co
 | 10.2.7.55664 | Dragonflight              | 327,092 |  9.5 MB | TDB1027.24051 |             0 |
 | 11.2.7.65299 | The War Within            | 375,895 | 11.1 MB | TDB1127.26011 |             0 |
 
-**⚠ FORMAT 40 IS HALF-SHIPPED (2026-08-05): `PACK_FORMAT` is 40 (§3t, the area gate) but the shipped packs are all at
-39.** The area sections exist in `build_data.py` and nothing reads them yet, so the next pass rebuilds all ten. Mixed
-formats are safe by construction — `buildIndexes` guards every section — but do not read the line below as current.
+**All ten are at pack format 40** (the area gate, §3t — on top of format 39's delivery route with values, §3s-bis,
+format 38's attribute flags and first delivery partition, §3s, format 36's target masks on spell links, §3r, format
+35's spell-link route, and format 34's missile flight paths).
 
-**All ten are at pack format 39** (the delivery route with values, §3s-bis — on top of format 38's attribute flags and
-first delivery partition, §3s, format 36's target masks on spell links, §3r, format 35's spell-link route, and format
-34's missile flight paths).
+**Format 40 added no spells** — it only says where existing ones may be cast — so every count in this section carries
+over from format 39 unchanged.
 
 **Format 39's per-version drift, read from the packs rather than estimated** (`meta.counts["delivery.*"]`):
 

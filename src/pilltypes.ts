@@ -348,6 +348,32 @@ T({
     when: (d) => d.originSpells.size > 0,
 });
 
+/* The area gate (SpellCastingRequirements.RequiredAreasID) — the only type here
+ * whose subject is a RESTRICTION rather than something the spell does, which is
+ * why its group head reads `only in` and not the word below. See docs/PILLS.md
+ * "Choosing the keyword" for both halves of that.
+ *
+ * THE WORD IS `location`, AND `area` IS SPENT THREE TIMES OVER. It is a target
+ * word, it was already taken from the model column once (area -> ground), and
+ * 37,548 spells carry an implicit-target name containing it (UNIT_SRC_AREA_ENEMY
+ * and 21 more), so `mech:area` would answer ~49,066 for a feature with 12,375
+ * real members. `location` collides with nothing — measured 0 on 9.2.7. `zone`
+ * also measures 0 and lost on meaning: half these gates name a SUBZONE
+ * (Meredil, Shal'Aran), which is not a zone.
+ *
+ * MECH, NOT FX, by this file's own rule: fx is what a spell looks like, mech is
+ * what it does. Where it may be cast renders nothing at all.
+ *
+ * No `bare` axis, unlike the link types above. An area id is a number nobody has
+ * a way to know — it is not `.cast`'s argument the way a spell id is — so there
+ * is no id-shaped question to answer and the corpus stays words only. */
+T({
+    key: "mech:location", field: "mech", word: "location",
+    hint: "Where the spell refuses to cast — Epsilon enforces this gate on .cast",
+    corpus: (d) => d.areaSearchL, spells: (d) => d.areaSpells,
+    when: (d) => d.areaSpells.size > 0,
+});
+
 /* ------------------------------------------------- attribute flags */
 
 /* SpellMisc attribute bits. Valueless like fx:freeze — membership IS the

@@ -1,6 +1,7 @@
 import {
     animIsHit,
     anyGroup,
+    areaIsHit,
     channelIsHit,
     dissolveIsHit,
     fileIsHit,
@@ -696,12 +697,21 @@ export function mechanicPills(rows: MechanicRow[]): MechanicPill[] {
 // category: the link words are verbs, so `triggers` would read "all spells with
 // a triggers effect". A category that needs its own phrase passes one (see
 // CatSpec.finds); everything else keeps the default it always had.
+//
+// `label` lets a head PRINT something other than the word it searches, and only
+// `location` uses it: it prints `only in`, because a bare `location` reads as
+// "this spell is associated with Suramar" — the exact misreading that got the
+// first draft rejected — while the restriction is the whole point. The word
+// stays reachable everywhere else (this head's click, autocomplete, help).
+// Do this only when the head has a job the word cannot do; matching is the
+// default and every other category keeps it.
 export function fxHeadTag(category: string, hit: boolean, mask = 0, field = "fx",
-                          finds = `all spells with a ${category} effect`): HTMLElement {
+                          finds = `all spells with a ${category} effect`,
+                          label = category): HTMLElement {
     return P.pill({
         cls: "fx-head", hit, segments: [
             targetSeg(field, mask),
-            P.label(category, {
+            P.label(label, {
                 title: P.hintFor(field, category),
                 search: P.query(field, category),
                 finds,
@@ -1356,6 +1366,56 @@ export function spellLinkTag(link: SpellLink, word: string, mask = 0): HTMLEleme
             ...CFG.spellCommands
                 .filter((c) => CFG.linkCommands.includes(c.label))
                 .map((c) => P.cmd(c.short || c.label, c.template, {id})),
+        ],
+    });
+}
+
+/**
+ * One area-gate pill (Mechanics column) — a place the spell WILL cast, under a
+ * group head reading `only in`.
+ *
+ * THE THREE AFFORDANCES ARE THREE DIFFERENT QUESTIONS, which is why this chip
+ * has actions at both edges rather than one: the Wowhead link asks *what is this
+ * place*, `.lo tele` asks *how do I get there*, and the map command asks *where
+ * is it*. None substitutes for another.
+ *
+ * THE NAME IS THE AREA'S OWN, NEVER ITS PARENT ZONE'S. Rolling a multi-area
+ * group up to its parent collapses 86% of these spells to one pretty name and is
+ * wrong — 98.6% of such groups cover only PART of the parent, so "only in
+ * Suramar" would be false on almost every pill it was printed on. The root is
+ * used for the Wowhead href and nothing else, where naming the containing zone
+ * is exactly right (Wowhead has no page for a subzone).
+ *
+ * The map button is DROPPED rather than guessed when the area resolved no map:
+ * an area also reaches a continent map and a neighbouring zone's, and opening
+ * the wrong map is worse than offering no button. See DATA_ROUTES §3t.
+ */
+export function areaTag(areaId: number): HTMLElement {
+    const d = activeData();
+    const name = d.areaNames.get(areaId) || `area #${areaId}`;
+    // `.lookup tele` SEARCHES the teleport list, so its argument is query text
+    // rather than a name — punctuation in it can only fail to match. Every
+    // non-alphanumeric run becomes a SPACE rather than being deleted, keeping
+    // the words apart: Zul'Gurub has to read as "Zul Gurub", not "ZulGurub"
+    // (user's call). 644 of 3,147 areas on 9.2.7 carry one, 591 an apostrophe.
+    // Unicode-aware, because the name is a localized string.
+    const lookupName = name.replace(/[^\p{L}\p{N}]+/gu, " ").trim() || name;
+    const root = d.areaRoots.get(areaId) || areaId;
+    const mapId = d.areaMapIds.get(areaId);
+    return P.pill({
+        cls: "mech area",
+        hit: areaIsHit(areaId),
+        segments: [
+            CFG.wowheadZoneUrl && P.link(wowheadUrl(CFG.wowheadZoneUrl, {id: root}),
+                `Open ${d.areaNames.get(root) || `zone ${root}`} on Wowhead`),
+            P.label(name, {
+                cls: "area-name",
+                title: `${name} — the spell casts here and refuses elsewhere`,
+                search: P.catQuery("mech", "location", name),
+                finds: "all spells gated to this area",
+            }),
+            P.cmd(".lo", CFG.areaLookupTemplate, {name: lookupName}),
+            mapId && P.cmd("map", CFG.areaMapTemplate, {id: mapId}),
         ],
     });
 }

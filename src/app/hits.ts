@@ -131,6 +131,8 @@ export const objectIsHit = isHitOf("fx:object");
    * triggers this". */
 export const triggersIsHit = isHitOf("mech:triggers");
 export const originIsHit = isHitOf("mech:origin");
+/** An area-gate pill keys on the AreaTable id it names. */
+export const areaIsHit = isHitOf("mech:location");
 /** A mount pill keys on the CreatureDisplayID it rides on. */
 export const mountIsHit = isHitOf("model:mount");
 /** A speed pill keys on the (movement, percent) pair it displays. */

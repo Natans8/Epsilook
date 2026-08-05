@@ -50,10 +50,13 @@ export interface EpsilookConfig {
     mountModifyTemplate: string;
     itemLookupTemplate: string;
     itemAddTemplate: string;
+    areaLookupTemplate: string;
+    areaMapTemplate: string;
     wowheadSpellUrl: string;
     wowheadSoundUrl: string;
     wowheadMorphUrl: string;
     wowheadNpcUrl: string;
+    wowheadZoneUrl: string;
     wowheadItemUrl: string;
     wowheadObjectUrl: string;
     wowheadObjectTypes: number[];
@@ -166,6 +169,14 @@ export const CFG: EpsilookConfig = {
     itemLookupTemplate: ".lookup item {name}",
     itemAddTemplate: ".additem {id}",
 
+    // Copy commands on each area-gate tag ({name} = the area's own name,
+    // {id} = its UiMapID). .lookup tele SEARCHES the teleport list rather than
+    // assuming a destination exists, which is why it is right here and .tele /
+    // .worldport are not (user's call — an area name is rarely a tele name).
+    // The map command is omitted when the area resolved no map.
+    areaLookupTemplate: ".lookup tele {name}",
+    areaMapTemplate: "/run C_Map.OpenWorldMap({id})",
+
     // External links ({id} = spell / soundkit / creature display / NPC ID,
     // {wh} = the version-appropriate Wowhead site prefix, see wowheadSitePrefix).
     // The morph model viewer has no {wh} — it stays on retail (best creature-skin
@@ -177,6 +188,10 @@ export const CFG: EpsilookConfig = {
     wowheadSoundUrl: "https://www.wowhead.com/{wh}sound={id}",
     wowheadMorphUrl: "https://www.wowhead.com/spell={spell}/#modelviewer:1:{id}:0",
     wowheadNpcUrl: "https://www.wowhead.com/{wh}npc={id}",
+    // Zone page. {id} is the area's ROOT, never the area itself: Wowhead has
+    // pages for top-level zones only, so zone=7964 (the subzone The Drift) is a
+    // 404 while its root zone=7637 (Suramar) resolves.
+    wowheadZoneUrl: "https://www.wowhead.com/{wh}zone={id}",
     // Item page, opened straight on its 3D model view. The #modelviewer fragment
     // makes Wowhead land on the model tab (the item's whole point here), and the
     // page still carries the tooltip the data-wowhead attribute shows on hover.

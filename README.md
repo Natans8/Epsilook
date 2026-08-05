@@ -56,6 +56,12 @@ Full syntax lives behind the **?** button in the app. The short version:
   opens Wowhead, its name filters to that spell's own row, target icons say who the triggering effect is aimed at, and
   the note says how they are joined (`on cast`, `periodically`, `removes`). Search either end by name, by mechanism or
   by exact id: `mech:"triggers fireball"`, `mech:"origin periodically"`, `mech:"triggers 265714"`.
+- **Some spells only work in one place**, and the Mechanics column says so under an `only in` head: `mech:location`
+  finds every spell with an area gate, `mech:"location suramar"` the ones tied to a named place. This is a real
+  restriction rather than a note — Epsilon enforces it on `.cast`, unlike most conditions — so a spell that refuses to
+  fire may simply be somewhere else's. Each area links to its zone on Wowhead and copies `.lookup tele <area>` to get
+  there, plus a command to open its map. Two areas can share a name and still be different places, so a spell may
+  honestly list `Azsuna` twice.
 - **A word may be followed by its value**, space-separated, and that is the only value form in the language:
   `model:"attach chest"` (where on the model it plays), `model:"motion parabola"` (the arc a projectile flies),
   `anim:(boneset "upper body")` (which body region moves),

@@ -157,6 +157,14 @@ TABLES = [
     "SpellCastingRequirements",
     "AreaGroupMember",
     "AreaTable",
+    # The area pill's map button. BOTH LISTS ARE REQUIRED and they do different
+    # jobs: this one is what gets DOWNLOADED, OPTIONAL_TABLES only says a 404 is
+    # allowed. Declaring them optional alone left them un-fetched on every build,
+    # and 9.2.7 kept working purely because an exploration run had left its CSVs
+    # in the cache — so the button worked here and nowhere else, and would have
+    # died here too on a clean checkout.
+    "UiMap",
+    "UiMapAssignment",
     "SpellChainEffects",
     "SpellProceduralEffect",
     "BeamEffect",
@@ -260,6 +268,17 @@ OPTIONAL_TABLES = {
     "SpellDuration": "the channel duration on the delivery line",
     "SpellInterrupts": "the 'breaks on move' half of the delivery line",
 }
+
+# THE TWO LISTS DO DIFFERENT JOBS AND A TABLE USUALLY NEEDS BOTH: TABLES is what
+# fetch_sources DOWNLOADS, OPTIONAL_TABLES only says a 404 on one is allowed.
+# Declaring a table optional and forgetting TABLES leaves it never fetched, which
+# looks exactly like a build that predates it — the feature switches off silently
+# on every version and the log says "absent", so nothing points at the mistake.
+# That happened to UiMap/UiMapAssignment at format 40: the map button worked on
+# 9.2.7 alone, and only because an exploration run had left the CSVs in its cache.
+assert not set(OPTIONAL_TABLES) - set(TABLES), (
+    f"OPTIONAL_TABLES entries missing from TABLES (never downloaded): "
+    f"{sorted(set(OPTIONAL_TABLES) - set(TABLES))}")
 
 # (table, column) -> the value to use on builds that lack the column
 OPTIONAL_COLUMNS = {

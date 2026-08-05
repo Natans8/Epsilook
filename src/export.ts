@@ -108,6 +108,11 @@ export interface ExportRow {
     replaceAnims?: { from: string; to: string }[];
     fx?: ExportFxEntry[];
     mechanics?: string[];
+    /** Areas the spell is gated to, by name, absent when it is gated to none.
+     *  Names only: an area's name is both what a reader needs and what
+     *  `.lookup tele` takes, and the pill's other two affordances (a Wowhead
+     *  href, a map id) are buttons with nothing to press in a file. */
+    areas?: string[];
     /** How the spell is delivered. Always present — every spell has an answer,
      *  `instant` being the one for a spell with neither a cast nor a channel.
      *  `castMs`/`durMs` are omitted when they do not apply rather than sent as
@@ -338,6 +343,17 @@ function exportRows(): ExportRow[] {
                     .map((t) => `TARGET_${d.implicitTargetNames.get(t) || t}`).join(" + ");
                 return at ? `${does} -> ${at}` : does;
             });
+            // The area gate rides the Mechanics column, so it hides with it.
+            // Sorted by name, matching the pill order rather than pack order.
+            //
+            // Deduped by NAME, which is a wider merge than the pill's (that one
+            // keeps same-name/different-root areas apart because their Wowhead
+            // links differ). Here the name IS the whole entry — no link, no
+            // command — so two areas sharing one are indistinguishable to a
+            // reader, and "Azsuna; Azsuna" says nothing the single name does not.
+            const areas = [...new Set((d.spellAreas.get(id) || [])
+                .map((a) => d.areaNames.get(a) || `area #${a}`))].sort();
+            if (areas.length) row.areas = areas;
         }
         return row;
     });
@@ -377,7 +393,10 @@ function exportCsv(): void {
     if (!hc.sounds) header.push("SoundKits", "Sounds");
     if (!hc.animations) header.push("AnimKits", "Animations");
     if (!hc.fx) header.push("Effects");
-    if (!hc.mechanics) header.push("Mechanics");
+    // Its own column rather than folded into Mechanics: that cell is a list of
+    // effect/aura rows, and a place name buried among
+    // "PERIODIC_DAMAGE / APPLY_AURA -> TARGET_UNIT_CASTER" reads as one of them.
+    if (!hc.mechanics) header.push("Mechanics", "Areas");
     // CSV has no icons, so a row's target types ride its text: "file [caster+target]"
     const withTargets = (e: { path: string | number; targets?: string[] }) =>
         (e.targets && e.targets.length ? `${e.path} [${e.targets.join("+")}]` : `${e.path}`);
@@ -446,7 +465,10 @@ function exportCsv(): void {
                     + (e.tint ? ` (${e.tint})` : "") + (e.duration ? ` (${e.duration}s)` : "");
             }).join("; ")));
         }
-        if (!hc.mechanics) cols.push(esc((r.mechanics ?? []).join("; ")));
+        if (!hc.mechanics) {
+            cols.push(esc((r.mechanics ?? []).join("; ")));
+            cols.push(esc((r.areas ?? []).join("; ")));
+        }
         lines.push(cols.join(","));
     }
     downloadFile(exportFilename("csv"), "text/csv", lines.join("\r\n"));

@@ -2854,6 +2854,28 @@ mark.hl {
     color: var(--gold);
 }
 
+/* Area-gate chip (SpellCastingRequirements.RequiredAreasID): WHERE the spell
+   refuses to cast, shown in the Mechanics column under an `only in` head. Same
+   call as the link chip above — it reuses the column's own --mech family rather
+   than claiming a palette token, because what distinguishes it from the enum
+   pills beside it is the head, and a new token would need contrast-walking in
+   three palettes to say nothing new.
+
+   The name is clamped for the same reason the link name is: an area name runs to
+   48 characters (Hillsbrad Foothills (Southshore vs. Tarren Mill)) and one long
+   one would set the whole column's width. 8rem covers the 95th percentile at 23
+   characters; the rest ellipsis with the full name on the tooltip every text
+   segment already composes — the .tag-motion precedent, PILLS.md §5. Slightly
+   wider than the link chip's 7rem because this chip carries far less: no icon,
+   no id, no target icons, no joining words, and two commands rather than three. */
+.tag.mech.area {
+    --tone: var(--mech);
+}
+
+.tag.area .tag-label.area-name {
+    max-width: 8rem;
+}
+
 /* Named item labels are coloured by item quality (the classic WoW ramp),
    which overrides the default model blue through the pill's tone. Nameless
    items set no quality class and keep --model. */

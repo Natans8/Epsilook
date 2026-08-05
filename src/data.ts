@@ -172,6 +172,16 @@ export interface SpellPack {
         flags: number[];
     };
 
+    /** The area gate (format 40+): where a spell REFUSES to cast, one row per
+     *  (spell, area) pair — a spell gated to four areas ships four rows and
+     *  there is deliberately no "primary" area. */
+    spellAreas?: { spellIds: number[]; areaIds: number[] };
+    /** The areas those rows point at. `names` is the area's OWN name, never its
+     *  parent's — see DATA_ROUTES §3t for why the parent-zone rollup is wrong.
+     *  `roots` is the top-level ancestor, because Wowhead only has pages for
+     *  those. `mapIds` 0 = no usable map, and the pill drops the button. */
+    areas?: { ids: number[]; names: string[]; roots: number[]; mapIds: number[] };
+
     /** ScreenEffect rows (format 16+). Colors are packed RGB, -1 = none
      *  (0 is a real black). mask* (format 18+) = the radial vignette params,
      *  maskSize 0 = the row has no FullScreenEffect. */
@@ -585,6 +595,19 @@ export interface SpellData {
      *  `spellAttrs.get("instant")` is a complement rather than a shipped list.
      *  NOT a partition: a spell can have both, and 3,148 on 9.2.7 do. */
     spellDelivery: Map<number, Delivery>;
+
+    /** The area gate (format 40+): spell -> the areas it may be cast in, and
+     *  back. 65% of gated spells name exactly one area, which is why the pill
+     *  collapses to a single word that often. */
+    spellAreas: Map<number, number[]>;
+    areaSpells: Map<number, number[]>;
+    areaNames: Map<number, string>;
+    /** area -> top-level ancestor, for `wowhead.com/zone=<root>` — a subzone
+     *  has no Wowhead page of its own. */
+    areaRoots: Map<number, number>;
+    /** area -> UiMapID for C_Map.OpenWorldMap; absent = no usable map. */
+    areaMapIds: Map<number, number>;
+    areaSearchL: Map<number, string>;
 
     spellScreens: Map<number, number[]>;
     screenSpells: Map<number, number[]>;
@@ -1318,6 +1341,37 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellAttrs.set("channeled", channelSpells);
     }
 
+    // The area gate: the one route in the pack that is a RESTRICTION rather
+    // than content — where the spell refuses to cast, not what it does. Corpus
+    // per area: the category word + the area's own name, so mech:location is
+    // every gated spell and mech:"location suramar" the ones gated to a place
+    // named that. The id is NOT in the corpus: an area id is a number a user
+    // has no way to know, and putting ids in corpora was measured out.
+    const spellAreas = new Map<number, number[]>();
+    const areaSpells = new Map<number, number[]>();
+    const areaNames = new Map<number, string>();
+    const areaRoots = new Map<number, number>();
+    const areaMapIds = new Map<number, number>();
+    const areaSearchL = new Map<number, string>();
+    if (pack.spellAreas && pack.areas) {
+        const {spellIds, areaIds} = pack.spellAreas;
+        for (let i = 0; i < spellIds.length; i++) {
+            pushTo(spellAreas, spellIds[i], areaIds[i]);
+            pushTo(areaSpells, areaIds[i], spellIds[i]);
+        }
+        const a = pack.areas;
+        for (let i = 0; i < a.ids.length; i++) {
+            const id = a.ids[i];
+            areaNames.set(id, a.names[i]);
+            areaRoots.set(id, a.roots[i]);
+            // 0 means "no zone map matched this area", which is a real answer
+            // and not a missing one — the build refuses to guess a neighbour's
+            // map. Leaving it out of the map is how the pill drops the button.
+            if (a.mapIds[i]) areaMapIds.set(id, a.mapIds[i]);
+            areaSearchL.set(id, ("location " + a.names[i]).toLowerCase());
+        }
+    }
+
     // screen effects (ScreenEffect rows): the whole screen tints/overlays
     // while the aura holds. Each row: internal name, optional fog tint and
     // FullScreenEffect multiply/addition colors (-1 = none — 0 is a real
@@ -1927,6 +1981,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellDesaturates, desatSpells, desatSearchL,
         spellTransps, transpSpells, transpSearchL,
         spellFreezes, spellCamos, spellAttrs, spellDelivery,
+        spellAreas, areaSpells, areaNames, areaRoots, areaMapIds, areaSearchL,
         spellScreens, screenSpells, screenNames, screenColors, screenTextures, screenSearchL,
         spellVisualAnims, visualAnimSpells,
         targetNames, animKitTargets, visualAnimTargets, fxTargets,

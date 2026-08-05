@@ -627,6 +627,41 @@ class Dossier:
                     break
         return out
 
+    def areas(self, sid: int) -> list[dict[str, Any]]:
+        """WHERE the spell may be cast — the area gate (DATA_ROUTES §3t).
+
+        The one gate the pack ships, because it is one of only two Epsilon
+        enforces on `.cast` (the other is spell focus). Two flat hops with no
+        decoder: RequiredAreasID -> AreaGroupMember.AreaID -> AreaTable.
+
+        The area's OWN name, never its parent's — a group almost never covers a
+        whole zone, so rolling up to the parent would assert something false.
+        `root` is reported because it is what Wowhead has a page for.
+        """
+        # asked directly rather than through _lookup_int, which keys on "ID"
+        r = self.rows('SELECT "RequiredAreasID" AS g FROM {V}."SpellCastingRequirements" '
+                      'WHERE "SpellID"=?', sid)
+        gid = int(r[0]["g"] or 0) if r else 0
+        if not gid:
+            return []
+        out = []
+        for row in self.rows(
+                'SELECT a."ID" AS id, a."AreaName_lang" AS name, a."ParentAreaID" AS parent '
+                'FROM {V}."AreaGroupMember" m JOIN {V}."AreaTable" a ON a."ID"=m."AreaID" '
+                'WHERE m."AreaGroupID"=? ORDER BY a."AreaName_lang"', gid):
+            aid = int(row["id"])
+            root, seen = aid, set()
+            while root not in seen:
+                seen.add(root)
+                p = self.rows('SELECT "ParentAreaID" AS p FROM {V}."AreaTable" '
+                              'WHERE "ID"=?', root)
+                nxt = int(p[0]["p"] or 0) if p else 0
+                if not nxt:
+                    break
+                root = nxt
+            out.append({"id": aid, "name": row["name"], "root": root, "group": gid})
+        return out
+
     def _lookup_int(self, table: str, column: str, key: Any) -> int | None:
         """One integer column out of an index table, or None if it resolves to
         no row (index 0 usually does — these tables start at ID 1)."""
@@ -1015,6 +1050,7 @@ class Dossier:
         doc = self.identity(sid)
         doc["era"] = self.era(sid)
         doc["misc"] = self.misc(sid)
+        doc["areas"] = self.areas(sid)
         doc["effects"] = self.effects(sid)
         doc["visuals"] = self.visuals(sid)
         doc["mount"] = self.mount(sid)
@@ -1071,6 +1107,14 @@ def show(d: dict[str, Any], full: bool = False) -> None:
         if dl.get("weapon_speed_cast"):
             line += f"  {DIM}(no cast bar — cast time is the ranged weapon speed){RESET}"
         print(f"  {GOLD}delivery{RESET} {line}")
+    # WHERE it may be cast. Printed in full rather than clamped: the whole point
+    # of the gate is which places are on the list, and 65% of gated spells name
+    # exactly one.
+    areas = d.get("areas") or []
+    if areas:
+        names = [a["name"] or f"#{a['id']}" for a in areas]
+        print(f"  {GOLD}only in{RESET} {', '.join(names)}"
+              f"  {DIM}(area group {areas[0]['group']}){RESET}")
     # The flags the app SHIPS as pills are called out by name, because they are
     # the ones that answer "why does this spell behave like that" — the rest are
     # a 449-bit haystack and stay behind --full.
