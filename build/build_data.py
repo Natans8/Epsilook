@@ -144,6 +144,19 @@ TABLES = [
     # SpellInterruptFlags, where movement is bit 3 (MovingCancels). Assuming
     # they matched put two wrong numbers in the queue once already.
     "SpellInterrupts",
+    # WHERE a spell may be cast (§3t). RequiredAreasID is one of only TWO gates
+    # Epsilon enforces on `.cast` — verified in game 2026-08-05, against five
+    # families that it does NOT enforce (see docs/DECISIONS.md). The rule that
+    # picked it: its check has no bypass guard. 12,381 spells on 9.2.7, 65% of
+    # them gated to a single area.
+    #
+    # The other columns of this table are deliberately unused. RequiresSpellFocus
+    # also binds but needs SpellFocusObject to be legible; RequiredAuraVision,
+    # MinFactionID and MinReputation have ZERO references in TrinityCore's spell
+    # code, so they gate nothing; FacingCasterFlags is a range check.
+    "SpellCastingRequirements",
+    "AreaGroupMember",
+    "AreaTable",
     "SpellChainEffects",
     "SpellProceduralEffect",
     "BeamEffect",
@@ -210,6 +223,13 @@ TABLES = [
 # table -> the user-facing feature that switches off when the build predates it
 OPTIONAL_TABLES = {
     "SpellName": "spell names (pre-BfA they live on Spell itself)",
+    # The two map tables are the area pill's OPTIONAL half: without them the
+    # pill still names its areas and still links Wowhead, it just offers no
+    # `C_Map.OpenWorldMap` button. Confirmed present on 9.2.7; the other nine
+    # are undeclared rather than checked, and this is the declaration path
+    # exactly so a Classic build lacking them is not a blocker.
+    "UiMap": "zone map ids for the area pill's map command",
+    "UiMapAssignment": "AreaID -> UiMapID, the only bridge from an area to a map",
     "BeamEffect": "the BeamEffect route into chain/beam fx",
     "SpellEffectEmission": "area-emitter models",
     "SpellVisualKitAreaModel": "area models",
@@ -1176,7 +1196,7 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 39  # 39: spellDelivery — cast/channel VALUES, and they overlap
+PACK_FORMAT = 40  # 40: spellAreas + areas — the area gate (§3t)
 # 35: spell -> spell links (SpellEffect.EffectTriggerSpell)
 # 34: missile flight paths (SpellMissileMotion) on missile model rows
 # 29: mechanics carry their implicit targets (spellEffects +
@@ -3303,6 +3323,90 @@ WEAPON_SPEED_CAST = -1000000
 # limit" — a channel that runs until something stops it.
 DURATION_UNLIMITED = 100_000_000
 
+# ----------------------------------------------------------------- area gates
+#
+# §3t. WHERE a spell may be cast. SpellCastingRequirements.RequiredAreasID ->
+# AreaGroupMember -> AreaTable: two flat hops, no decoder, and it resolves
+# 12,381 of 9.2.7's spells with ZERO unnamed areas. 65% are gated to a single
+# area, which is why most pills print one word.
+#
+# THE PARENT ZONE IS NOT THE ANSWER AND MUST NOT BE SUBSTITUTED FOR THE AREA.
+# AreaTable carries ParentAreaID, and rolling a multi-area group up to its
+# parent is very tempting -- it collapses 86% of these spells to one pretty
+# name (Masquerade's 32 areas become the single word "Suramar"). It is WRONG.
+# Of the 3,864 groups that roll up to a single parent, only 55 contain every
+# child of that parent; 3,809 (98.6%) cover PART of the zone. "only in Suramar"
+# would be false on almost every pill it was printed on. The area's OWN name
+# ships. The root is used for the two LINKS and nothing else, where pointing at
+# the containing zone is exactly right.
+UI_MAP_TYPE_ZONE = 3
+
+
+def derive_areas(
+        table_dir: Path
+) -> tuple[list[tuple[int, int]], dict[int, tuple[str, int, int]]]:
+    """The area gate per spell.
+
+    Returns (rows, areas). `rows` is sorted (spell id, area id), one row per
+    area a spell is gated to. `areas` maps area id -> (name, root area, UiMapID)
+    where root is the top-level ancestor -- Wowhead only has pages for those
+    (`zone=7964` for the subzone The Drift is a 404; its root `zone=7637`,
+    Suramar, resolves) -- and UiMapID is 0 when the area has no usable map.
+    """
+    members: dict[int, list[int]] = {}
+    for gid, aid in read_table(table_dir, "AreaGroupMember", ["AreaGroupID", "AreaID"]):
+        members.setdefault(to_int(gid), []).append(to_int(aid))
+
+    names: dict[int, str] = {}
+    parents: dict[int, int] = {}
+    for aid, name, parent in read_table(
+            table_dir, "AreaTable", ["ID", "AreaName_lang", "ParentAreaID"]):
+        names[to_int(aid)] = name
+        parents[to_int(aid)] = to_int(parent)
+
+    # BOTH filters below are load-bearing. An area also resolves to Type 2
+    # (continent) maps and to a NEIGHBOURING zone's map -- Zereth Mortis reaches
+    # one called "Resonant Peaks" -- and opening the wrong map is worse than
+    # offering no button at all, which is why this stays strict and the pill
+    # simply drops the segment when nothing matches.
+    zone_maps: dict[int, str] = {}
+    for mid, mname, mtype in read_table(table_dir, "UiMap", ["ID", "Name_lang", "Type"]):
+        if to_int(mtype) == UI_MAP_TYPE_ZONE:
+            zone_maps[to_int(mid)] = mname
+    area_map: dict[int, int] = {}
+    for aid, mid in read_table(table_dir, "UiMapAssignment", ["AreaID", "UiMapID"]):
+        area, ui_map = to_int(aid), to_int(mid)
+        if zone_maps.get(ui_map) == names.get(area) and area in names:
+            if area not in area_map or ui_map < area_map[area]:
+                area_map[area] = ui_map
+
+    def root_of(area: int) -> int:
+        """Walk to the top-level ancestor. The seen-set is a cycle guard, not
+        decoration: this data is not ours and a self-parenting row would hang."""
+        seen: set[int] = set()
+        while parents.get(area) and area not in seen:
+            seen.add(area)
+            area = parents[area]
+        return area
+
+    rows: list[tuple[int, int]] = []
+    used: dict[int, tuple[str, int, int]] = {}
+    for sid, gid in read_table(
+            table_dir, "SpellCastingRequirements", ["SpellID", "RequiredAreasID"]):
+        group = to_int(gid)
+        if not group:
+            continue
+        for area in sorted(set(members.get(group, ()))):
+            if area not in names:
+                continue  # 6 spells on 9.2.7 name a group with no live area
+            rows.append((to_int(sid), area))
+            if area not in used:
+                root = root_of(area)
+                used[area] = (names[area], root, area_map.get(root, 0))
+    rows.sort()
+    return rows, used
+
+
 # spellDelivery.flags bits. Channelled has to be explicit rather than inferred
 # from durMs, because a channel is allowed to carry no duration row at all.
 DELIVERY_CHANNELLED = 1 << 0
@@ -3645,6 +3749,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     spell_schools = read_spell_schools(table_dir, spell_names)
     spell_attrs = read_spell_attributes(table_dir, spell_names)
     delivery = read_spell_delivery(table_dir, spell_names)
+    area_rows, area_info = derive_areas(table_dir)
 
     # --- resolve the creature-display payloads ----------------------------
     # morphs: flatten to (creature, display, model fid) rows
@@ -4061,6 +4166,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "vehicles": len(vehicle_ids),
                 "vehicleSeats": len(vehicle_seat_rows),
                 "spellInvis": len(invis_rows),
+                "spellAreas": len(area_rows),
+                "areas": len(area_info),
                 "spellDetects": len(detect_rows),
                 "invisChannels": len(invis_types),
                 "spellSpeeds": len(speed_rows),
@@ -4366,6 +4473,22 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "castMs": [r[1] for r in delivery],
             "durMs": [r[2] for r in delivery],
             "flags": [r[3] for r in delivery],
+        },
+        # §3t where a spell may be cast. One row per (spell, area) pair — the
+        # pill is a GROUP, so a spell gated to four areas ships four rows and
+        # the group renders four items; there is no "primary" area and none is
+        # invented. "areas" carries the area's OWN name (never its parent's —
+        # see derive_areas), the root area for the Wowhead zone link, and a
+        # UiMapID for C_Map.OpenWorldMap, 0 where there is no usable map.
+        "spellAreas": {
+            "spellIds": [r[0] for r in area_rows],
+            "areaIds": [r[1] for r in area_rows],
+        },
+        "areas": {
+            "ids": sorted(area_info),
+            "names": [area_info[a][0] for a in sorted(area_info)],
+            "roots": [area_info[a][1] for a in sorted(area_info)],
+            "mapIds": [area_info[a][2] for a in sorted(area_info)],
         },
         # screen effects (ScreenEffect via SCREEN_EFFECT auras + kit ET 19):
         # per row an internal name, a fog tint (-1 = none), FullScreenEffect

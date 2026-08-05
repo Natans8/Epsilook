@@ -247,6 +247,19 @@ The registry decides **what a user can type**, so the choices there are product 
   carries +175 from spells literally named "Beast Tracking" / "Dragon Tracking": **that** overlap is the documented,
   defensible behaviour, because those spells really are about tracking. The test is not "does it overlap"
   but "does the overlap mean the same kind of thing".
+- **`area` IS ALREADY SPENT, THREE TIMES OVER — the area gate ships as `location` (measured 2026-08-05).** The obvious
+  word for a route built on `AreaTable` is `area`, and it is the wrong one: it is a target word (`targetNames` carries
+  it twice), it was already taken from the model column once (`area` → `ground`, above), and **37,548 spells carry an
+  implicit-target name containing it** (`UNIT_SRC_AREA_ENEMY`, `UNIT_DEST_AREA_ENTRY`, 22 such names). `mech:area`
+  would therefore answer **~49,066 for a feature with 12,375 real members**, only 857 of the collisions being genuinely
+  area-gated. `location` appears in **no** target or implicit-target name — 0 collisions. `zone` also measures 0 and
+  lost on meaning: half these gates name a SUBZONE (Meredil, Shal'Aran), which is not a zone.
+- **The printed head and the typed word may differ, and here they deliberately do.** The group head reads **`only in`**
+  while the keyword is `location`. The head's job is to say that this is a RESTRICTION — a bare `location` reads as
+  "this spell is associated with Suramar", which is the exact misreading that got the first draft rejected. The word
+  stays reachable without being printed: clicking the head searches it, autocomplete offers it, and `help.ts` generates
+  the vocabulary from the registry. **Do this only when the head has a job the word cannot do**; matching is still the
+  default.
 - **Words name kinds of content; values are typed, not suggested.**
   Autocomplete offers `attach`, never `Chest`; `equipped`, never
   `equipped off hand`. The suggestion list is a menu of what can be *asked*, not of the answers.

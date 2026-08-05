@@ -360,6 +360,14 @@ unanswerable in SQL. Present on **all ten builds, zero drift**, so nothing needs
 | `SpellTotems`              | required totem items                                                    |
 | `PlayerCondition`          | `SpellXSpellVisual.{Caster,Viewer}PlayerConditionID` resolves here      |
 | `UnitCondition`            | `SpellXSpellVisual.{Caster,Viewer}UnitConditionID` resolves here        |
+| `SpellFocusObject`         | names `RequiresSpellFocus` — the OTHER gate Epsilon enforces on `.cast` |
+| `UiMap`                    | map ids Lua's `C_Map.OpenWorldMap()` takes — **not** `AreaTable.ID`     |
+| `UiMapAssignment`          | `AreaID` → `UiMapID`, the only bridge from an area to a map             |
+
+**The two map tables exist for the area pill's map button (DATA_ROUTES §3t), and the lookup is deliberately strict.**
+Only `UiMap.Type = 3` (Zone) rows whose name equals the area's are accepted — an area also resolves to Type 2 continent
+maps and to a *neighbouring* zone's map (Zereth Mortis reaches one called "Resonant Peaks"). 2,468 of the 3,147 areas
+the gate reaches get a map that way; the rest get none, and the pill drops the button rather than opening the wrong one.
 
 **The zone gate is a flat two-hop join and is fully legible** — `SpellCastingRequirements.RequiredAreasID` →
 `AreaGroupMember.AreaID` → `AreaTable.AreaName_lang`. Measured on 9.2.7: **12,381 spells zone-gated**, 8,065 of them to

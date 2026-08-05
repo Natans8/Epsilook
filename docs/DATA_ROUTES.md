@@ -1309,6 +1309,81 @@ and the same icon renderer, so the two mask sources are indistinguishable downst
 `data.ts` builds a **forward and a reverse index** for each — spell→items for rendering, item→spells for searching.
 Every section read is guarded (`if (pack.X)`) so an older-format pack degrades rather than crashes.
 
+### 3t. The area gate — WHERE a spell may be cast (`spellAreas` + `areas`, format 40)
+
+**⚠ SHIPPED IN THE PACK, NOT YET READ BY THE APP (2026-08-05).** `build_data.py` writes both sections and only the 9.2.7
+pack has been rebuilt; `data.ts` does not read them and no pill is drawn yet. See CLAUDE.md → *Open items* for the
+handoff.
+
+**The first route that is a RESTRICTION rather than content.** Every other route in this file answers *what does this
+spell do*; this one answers *where will it refuse to cast*. That difference is why it is drawn as a group whose head
+reads **`only in`** — see docs/PILLS.md.
+
+**Why this gate and not the other thirteen: it is one of only two Epsilon actually enforces on `.cast`.** Seven gate
+families were tested in game on 2026-08-05 and the rule that explains all seven is *a gate binds on `.cast` exactly when
+its check has no bypass guard*. Area (`CheckCast:6050` → `CheckLocation`) and spell focus (`CheckCast:6068`) are
+unguarded; reagents, equipped items, caster auras, shapeshift and `OnlyOutdoors` each sit behind a `TRIGGERED_IGNORE_*`
+flag or a config guard and do not bind. Full evidence in docs/DECISIONS.md.
+
+**The route is two flat hops and needs no decoder:**
+
+```
+SpellCastingRequirements.RequiredAreasID
+  -> AreaGroupMember.AreaID          (a group is 1..N areas)
+    -> AreaTable.AreaName_lang       (the name)
+       AreaTable.ParentAreaID        (walked to the root, for the two LINKS only)
+       UiMapAssignment -> UiMap      (Type 3 + name match -> a map id, or none)
+```
+
+Measured on 9.2.7: **12,375 spells**, **39,807 (spell, area) rows**, **3,147 distinct areas**, **0 unnamed**. **65.2%
+are gated to exactly one area**, which is why most pills collapse to a single word. 6 spells name an area group with no
+live area and are dropped.
+
+#### THE PARENT ZONE IS NOT THE ANSWER — do not "improve" this into a rollup
+
+`AreaTable.ParentAreaID` makes it trivial to collapse a multi-area group to one pretty name: *Masquerade*'s 32 areas
+become the single word **Suramar**, and 86% of all gated spells reduce to one name. **It is wrong.** Of the 3,864 groups
+that roll up to a single parent, **only 55 contain every child of that parent — 3,809 (98.6%) cover only PART of the
+zone.** "Only in Suramar" would be false on almost every pill it was printed on. The area's OWN name ships; the root is
+used for the two links and nothing else, where naming the containing zone is correct.
+
+#### The pack sections
+
+`spellAreas` — one row per (spell, area) pair, so a spell gated to four areas ships four rows and the group renders four
+items. There is deliberately no "primary" area.
+
+| field      | meaning                 |
+|------------|-------------------------|
+| `spellIds` | the spell               |
+| `areaIds`  | one area it is gated to |
+
+`areas` — the deduped area table the rows point at:
+
+| field    | meaning                                                                                        |
+|----------|------------------------------------------------------------------------------------------------|
+| `ids`    | `AreaTable.ID`                                                                                 |
+| `names`  | the area's own name — **never its parent's**                                                   |
+| `roots`  | top-level ancestor, for `wowhead.com/zone=<root>`                                              |
+| `mapIds` | `UiMapID` for `/run C_Map.OpenWorldMap(<id>)`, **0 = no usable map** (2,468 of 3,147 have one) |
+
+**Wowhead only has pages for ROOT areas**, which is why `roots` exists: `zone=7964` (the subzone The Drift) is a 404,
+while its root `zone=7637` (Suramar) resolves. Verified by hand on three ids.
+
+**The map lookup is deliberately strict and the pill drops the segment rather than guessing.** Only `UiMap.Type = 3`
+(Zone) maps whose name equals the area's are accepted — an area also resolves to Type 2 continent maps and to a
+*neighbouring* zone's map (Zereth Mortis reaches one called "Resonant Peaks"), and opening the wrong map is worse than
+offering no button.
+
+#### Sources
+
+- **`SpellCastingRequirements`**, **`AreaGroupMember`**, **`AreaTable`** — in `TABLES`, present on all ten builds.
+- **`UiMap`**, **`UiMapAssignment`** — in `OPTIONAL_TABLES`. Confirmed on 9.2.7 only; the other nine are *undeclared
+  rather than checked*, and a build lacking them simply ships `mapIds` 0 and loses the map button.
+- **Deliberately unused columns of `SpellCastingRequirements`:** `RequiresSpellFocus` also binds on `.cast` but needs
+  `SpellFocusObject` to be legible; `RequiredAuraVision`, `MinFactionID` and `MinReputation` have **zero references** in
+  TrinityCore's spell code, so they gate nothing; `FacingCasterFlags` is evaluated in `Spell::CheckRange`, a positional
+  check, not a property of the spell.
+
 ---
 
 ## 5. Version differences
@@ -1331,6 +1406,10 @@ The five Classic re-release clients (Vanilla / TBC / WotLK / Cataclysm / MoP) co
 | 9.2.7.45745  | Shadowlands *(default)*   | 276,332 |  7.9 MB | TDB927.22111  |             0 |
 | 10.2.7.55664 | Dragonflight              | 327,092 |  9.5 MB | TDB1027.24051 |             0 |
 | 11.2.7.65299 | The War Within            | 375,895 | 11.1 MB | TDB1127.26011 |             0 |
+
+**⚠ FORMAT 40 IS HALF-SHIPPED (2026-08-05): `PACK_FORMAT` is 40 (§3t, the area gate) but the shipped packs are all at
+39.** The area sections exist in `build_data.py` and nothing reads them yet, so the next pass rebuilds all ten. Mixed
+formats are safe by construction — `buildIndexes` guards every section — but do not read the line below as current.
 
 **All ten are at pack format 39** (the delivery route with values, §3s-bis — on top of format 38's attribute flags and
 first delivery partition, §3s, format 36's target masks on spell links, §3r, format 35's spell-link route, and format

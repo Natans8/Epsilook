@@ -161,6 +161,12 @@ EXTRA_TABLES = {
     "SpellEquippedItems": "weapon/armour class gates (EquippedItemClass/-Subclass/-InvTypes)",
     "SpellReagents": "material components a cast consumes",
     "SpellTotems": "required totem items",
+    # The area pill needs a MAP to link to, and AreaTable.ID is not one:
+    # `OpenWorldMap()` in Lua takes a UiMapID. UiMapAssignment is the only
+    # bridge between the two.
+    "UiMap": "the map ids Lua's OpenWorldMap() takes — NOT AreaTable.ID",
+    "UiMapAssignment": "AreaID -> UiMapID, the only bridge from an area to a map",
+    "SpellFocusObject": "names SpellCastingRequirements.RequiresSpellFocus (the second binding gate)",
     "PlayerCondition": "SpellXSpellVisual.{Caster,Viewer}PlayerConditionID resolves here",
     "UnitCondition": "SpellXSpellVisual.{Caster,Viewer}UnitConditionID resolves here",
     # SpellCastTimes, SpellDuration and SpellInterrupts USED to be listed here.
