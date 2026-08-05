@@ -403,6 +403,17 @@ export interface SpellLink {
 export const DELIVERY_CHANNELLED = 1 << 0;
 export const DELIVERY_BREAKS_ON_MOVE = 1 << 1;
 
+/**
+ * A delivery time in ms as the number the app both PRINTS and SEARCHES:
+ * hundredths of a second, with no trailing zeros ("2", "1.75", "1.8").
+ *
+ * One rounding rule, in one place, because two would be a way for the delivery
+ * line to show a number that `mech:"casttime 1.75"` then misses. Seconds and
+ * not milliseconds because that is the unit Wowhead, the client and the person
+ * typing all use — nobody asks for a 1750 ms cast.
+ */
+export const deliverySecs = (ms: number): number => Math.round(ms / 10) / 100;
+
 /** How one spell is delivered. See `SpellData.spellDelivery`. */
 export interface Delivery {
     /** Cast-bar length in ms; 0 = no cast bar. The "ranged weapon speed"
@@ -585,10 +596,17 @@ export interface SpellData {
     spellCamos: Set<number>;
 
     /** attribute-flag handler -> the spells carrying it (format 37+).
-     *  Also carries the three DERIVED delivery handlers (`instant`,
-     *  `casttime`, `channeled`) so the flag pill types read one map — see
-     *  spellDelivery below for why they are derived rather than shipped. */
+     *  Also carries the DERIVED `instant` handler, which is the one delivery
+     *  word with no number behind it — see spellDelivery below for why the
+     *  three are derived rather than shipped. */
     spellAttrs: Map<string, Set<number>>;
+
+    /** The two delivery words that carry a NUMBER, keyed BY that number so the
+     *  pill registry's numeric axis can read it: cast-bar length in ms, and
+     *  channel length in ms (-1 = no limit, 0 = no duration row — both real
+     *  keys, holding the channels that answer no numeric question). */
+    castTimeSpells: Map<number, number[]>;
+    channelSpells: Map<number, number[]>;
 
     /** How each spell is delivered (format 39+). Only spells that HAVE a cast
      *  time or a channel are present; everything else is instant, which is why
@@ -1320,16 +1338,25 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // THE SETS OVERLAP ON PURPOSE. 3,148 spells on 9.2.7 cast and THEN channel
     // (verified in game), so `casttime` and `channeled` are not exclusive;
     // only `instant` is exclusive with both, being the complement.
+    //
+    // KEYED BY THE TIME, not collected into flat sets, which is the whole of
+    // making the two words numeric: the pill type's `of` reads the key, so
+    // mech:"casttime >3" asks the same number the delivery line prints. Only
+    // `instant` stays a set — it is the one delivery word with no number.
     const spellDelivery = new Map<number, Delivery>();
-    const castTimeSpells = new Set<number>();
-    const channelSpells = new Set<number>();
+    const castTimeSpells = new Map<number, number[]>();
+    const channelSpells = new Map<number, number[]>();
     const del = pack.spellDelivery;
     if (del) {
         for (let i = 0; i < del.spellIds.length; i++) {
             const id = del.spellIds[i], castMs = del.castMs[i], flags = del.flags[i];
-            spellDelivery.set(id, {castMs, durMs: del.durMs[i], flags});
-            if (castMs > 0) castTimeSpells.add(id);
-            if (flags & DELIVERY_CHANNELLED) channelSpells.add(id);
+            const durMs = del.durMs[i];
+            spellDelivery.set(id, {castMs, durMs, flags});
+            if (castMs > 0) pushTo(castTimeSpells, castMs, id);
+            // durMs -1 and 0 are keys like any other: a channel with no number
+            // is still a channel, and `mech:channeled` must keep returning it.
+            // What it is not is a LENGTH, which the pill type's `of` says.
+            if (flags & DELIVERY_CHANNELLED) pushTo(channelSpells, durMs, id);
         }
         // `instant` = has neither, which is why it also covers the 1,846 spells
         // with no SpellMisc row at all — they used to fall out of every
@@ -1337,8 +1364,6 @@ export function buildIndexes(pack: SpellPack): SpellData {
         const instant = new Set<number>();
         for (const id of spellIndex.keys()) if (!spellDelivery.has(id)) instant.add(id);
         spellAttrs.set("instant", instant);
-        spellAttrs.set("casttime", castTimeSpells);
-        spellAttrs.set("channeled", channelSpells);
     }
 
     // The area gate: the one route in the pack that is a RESTRICTION rather
@@ -1981,6 +2006,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellDesaturates, desatSpells, desatSearchL,
         spellTransps, transpSpells, transpSearchL,
         spellFreezes, spellCamos, spellAttrs, spellDelivery,
+        castTimeSpells, channelSpells,
         spellAreas, areaSpells, areaNames, areaRoots, areaMapIds, areaSearchL,
         spellScreens, screenSpells, screenNames, screenColors, screenTextures, screenSearchL,
         spellVisualAnims, visualAnimSpells,

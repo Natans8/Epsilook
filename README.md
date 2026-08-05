@@ -44,6 +44,11 @@ Full syntax lives behind the **?** button in the app. The short version:
   Mind Control, so these are not three exclusive buckets. Two spellings to know: the word is `casttime`, not `cast`
   (`on cast` is a spell-link word, so `cast` alone would match most of the game), and `channeled` has one `l`, matching
   Wowhead and the game client.
+- **Both of those take a number, in seconds** — the same number the line shows you. `mech:"casttime 2"` is a two-second
+  cast, `mech:"casttime >3"` the slow ones, `mech:"channeled <=3"` the short channels, and `mech:"casttime 1.75"` works
+  because fractions do. Write them together to ask about both halves at once: `mech:"casttime >8" mech:"channeled >8"`
+  is the handful of spells with a long wind-up *and* a long hold. A channel with no length on its line — `unlimited
+  channel`, or a bare `channel` — has no number to compare, so it answers `mech:channeled` and no bound.
 - **Some spells are findable only by a flag.** A handful of `SpellMisc` attribute bits are their own chips:
   `anim:pose` holds the character's pose (the Permanent Feign Death and Cosmetic Dead poses — these have no model, sound
   or animation of their own, so before this they could not be found at all), and in Mechanics `mech:unbreakable` (a

@@ -1393,11 +1393,19 @@ export function spellLinkTag(link: SpellLink, word: string, mask = 0): HTMLEleme
 export function areaTag(areaId: number): HTMLElement {
     const d = activeData();
     const name = d.areaNames.get(areaId) || `area #${areaId}`;
-    // `.lookup tele` SEARCHES the teleport list, so its argument is query text
-    // rather than a name — punctuation in it can only fail to match. Every
-    // non-alphanumeric run becomes a SPACE rather than being deleted, keeping
-    // the words apart: Zul'Gurub has to read as "Zul Gurub", not "ZulGurub"
-    // (user's call). 644 of 3,147 areas on 9.2.7 carry one, 591 an apostrophe.
+    // `.lookup tele` is a LOOSE FRAGMENT SEARCH, not a substring match (user,
+    // 2026-08-05) — it splits the argument on whitespace and finds tele names
+    // containing the fragments. So punctuation is replaced by a SPACE rather
+    // than deleted: `.lo tele Nesingwary s Expedition` really does find
+    // `NesingwarysExpedition`, and the stray "s" costs nothing.
+    //
+    // That the tele names themselves are run together (`ZulGurub`,
+    // `AcherusTheEbonHold` — they are hand-maintained, and a minority keep
+    // spaces) is therefore NOT a reason to run the argument together too. The
+    // fragments match either style; a deleted space only helps if the matcher
+    // is a substring one, and it is not.
+    //
+    // 644 of 3,147 areas on 9.2.7 carry a mark, 591 of them an apostrophe.
     // Unicode-aware, because the name is a localized string.
     const lookupName = name.replace(/[^\p{L}\p{N}]+/gu, " ").trim() || name;
     const root = d.areaRoots.get(areaId) || areaId;

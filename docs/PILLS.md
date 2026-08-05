@@ -37,9 +37,15 @@ has an answer, even if the answer is `Instant`. Rendering 276,332 pills that say
 - **It carries NO content colour.** Colour in this app names a content family; delivery is not a family. Weight is the
   only typography: the number and its load-bearing word at `--text`, the rest at `--text-dim`.
 - **It is still fully searchable.** `mech:instant` / `mech:casttime` / `mech:channeled` are registered pill types like
-  any other — they simply carry `draw: false` in `ATTR_FLAGS`, which both render sites honour. **Searchable and undrawn
-  is a supported state; searchable and *accidentally* undrawn is the fx-column bug.** The difference is that one list
-  drives both halves.
+  any other. `instant` carries `draw: false` in `ATTR_FLAGS`, which both render sites honour; the other two are not in
+  that list at all, being ordinary valued types rather than flag memberships. **Searchable and undrawn is a supported
+  state; searchable and *accidentally* undrawn is the fx-column bug.** The difference is that one list drives both
+  halves.
+- **A type with no pill can still have a numeric axis, and these two do.** `mech:"casttime >3"` and `mech:"channeled 5"`
+  ask about the seconds the line prints — the type is keyed BY the time, so `numeric.of` reads the key. What makes that
+  honest is that the line and the axis share one rounding function (`deliverySecs`), rather than the display formatting
+  its number and the search rounding its own. **A number a surface SHOWS and a number it MATCHES must come from the same
+  call**; that is the same rule as `P.holdsHit` reading the class `pills.ts` writes.
 
 **The slot order is `<value> <label>` and it never flips** (the user's rule) — `unlimited channel`, never
 `channel, no limit`. Wowhead's own tooltip writes `Channeled (5 sec cast)`, label first; the vocabulary is borrowed from

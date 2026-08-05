@@ -27,7 +27,7 @@ import {
     wordIsNamed
 } from "./hits";
 import {ATTR_FLAGS} from "../pilltypes";
-import {DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED} from "../data";
+import {DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED, deliverySecs} from "../data";
 import {setStatus} from "./run";
 import type {DisplayRef, SpellData, SpellLink} from "../data";
 import {activeData, state, wowheadUrl} from "./state";
@@ -212,10 +212,10 @@ export function layoutRow(tr: HTMLElement): void {
     }
 }
 
-/** ms as the number Wowhead prints: "2", "1.75", "1.8" — no trailing zeros. */
-function secs(ms: number): string {
-    return String(Math.round(ms / 10) / 100);
-}
+/** ms as the number Wowhead prints: "2", "1.75", "1.8" — no trailing zeros.
+ *  The rounding is data.ts's own, shared with the numeric search axis, so the
+ *  number this line shows is exactly the one `mech:"casttime 1.75"` matches. */
+const secs = (ms: number): string => String(deliverySecs(ms));
 
 /**
  * The delivery line: how the spell is cast, in words, under its name.

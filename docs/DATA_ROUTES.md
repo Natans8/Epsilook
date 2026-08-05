@@ -1193,6 +1193,12 @@ searchable sets are derived from those values in `data.ts` — one source of tru
 | instant   | `mech:instant`   | **the complement** — in neither of the above       | 216,379 |
 |           |                  | *of which, in BOTH casttime and channeled*         | *3,148* |
 
+**THE TWO TIMED WORDS TAKE A NUMBER, IN SECONDS** — `mech:"casttime 2"`, `mech:"casttime >3"`, `mech:"channeled <=3"`.
+They are not attribute-flag memberships like the rest of §3s: their pill types are keyed BY the time, so the registry's
+ordinary numeric axis reads it (`of` → `deliverySecs`, the same rounding `render.ts` prints with). The overlap is
+queryable on both numbers at once — `mech:"casttime >8" mech:"channeled >8"` is 4 spells on 9.2.7, which the format-38
+partition could not have asked at all. Full grammar and populations below, under *The two timed words take a value*.
+
 **⚠ `casttime` AND `channeled` OVERLAP ON 3,148 SPELLS AND THAT IS THE POINT.** They cast and *then* channel. The
 format-38 version of this route made delivery a strict three-way partition with "channel wins", which threw the cast
 number away for every one of those spells. **Verified in game 2026-08-05** (docs/DECISIONS.md, *"Cast-then-channel is
@@ -1253,6 +1259,34 @@ On the user's call (*"Match the wowhead convention"*):
 - **The line's own wording follows Wowhead's tooltip** (`Instant`, `1.8 sec cast`) **but never its slot order.** Wowhead
   writes `Channeled (5 sec cast)`, label first; ours is always `<value> <label>`, so it is `5 sec channel`. See PILLS.md
   for why the delivery line is not a pill at all.
+
+#### The two timed words take a value (2026-08-05)
+
+**`casttime` and `channeled` are numeric words, in SECONDS** — the unit Wowhead, the client and the person typing all
+use. The argument grammar is the one every other numeric word already has, so there is nothing new to learn:
+
+| query                                      | means                               | 9.2.7  |
+|--------------------------------------------|-------------------------------------|--------|
+| `mech:"casttime 2"` = `mech:"casttime =2"` | exactly a two-second cast bar       | 15,187 |
+| `mech:"casttime >3"`                       | casts longer than three seconds     | 5,216  |
+| `mech:"casttime 1.75"`                     | fractions work; 125 distinct values | 65     |
+| `mech:"channeled 5"`                       | a five-second channel               | 1,232  |
+| `mech:"channeled <=3"`                     | short channels                      | 1,750  |
+| `mech:"channeled >=0"`                     | **every channel that HAS a length** | 8,324  |
+
+**THE NUMBER SEARCHED IS THE NUMBER PRINTED.** `data.ts` exports `deliverySecs(ms)` and both the delivery line and the
+numeric axis go through it, so a row showing `1.75 sec cast` is reachable by `mech:"casttime 1.75"` and there is no
+second rounding rule to drift.
+
+**A CHANNEL WITH NO NUMBER ANSWERS NO NUMERIC QUESTION.** `durMs` -1 (unlimited, 5,230) and 0 (no duration row, 674) are
+real keys in the map — `mech:channeled` still returns all 14,228 — but the axis reads **`NaN`** for them, and every
+comparison rejects NaN. That is why `mech:"channeled <99999"` is 8,324 and not 14,228: the line prints `unlimited
+channel` with no seconds in it, so no question *about* seconds should sweep it in. **Selecting those two groups wants a
+WORD, not a bound** (the no-limit word in the CLAUDE.md queue).
+
+**`operatorOnly`, like `speed` and `scale`.** The `mech:` field is shared with ~980 effect/aura/target names, so a
+number standing loose in a chip keeps the literal meaning it always had: `mech:1.5` is 6 spells (a substring), not the
+10,241 with a 1.5 s cast. Only a comparison — or a number written against the word — asks about time.
 
 **COUNT SPELLS, NOT `SpellMisc` ROWS.** A spell with several difficulty rows is one spell, and the two readings differ
 by up to 15% — the same five flags are 799 / 2,748 / 591 / 3,400 / 19,812 counted as rows. Base difficulty wins, the
@@ -1376,8 +1410,19 @@ offering no button.
 #### Sources
 
 - **`SpellCastingRequirements`**, **`AreaGroupMember`**, **`AreaTable`** — in `TABLES`, present on all ten builds.
-- **`UiMap`**, **`UiMapAssignment`** — in `OPTIONAL_TABLES`. Confirmed on 9.2.7 only; the other nine are *undeclared
-  rather than checked*, and a build lacking them simply ships `mapIds` 0 and loses the map button.
+- **`UiMap`**, **`UiMapAssignment`** — in **both** `TABLES` and `OPTIONAL_TABLES`, and it must be both: `TABLES` is what
+  gets DOWNLOADED and `OPTIONAL_TABLES` only permits a 404. They were declared optional alone at first, so nothing ever
+  fetched them and the map button worked on 9.2.7 only — because an exploration run had left those CSVs in its cache.
+  Now asserted at module level in `build_data.py`. **Measured on all ten (2026-08-05): present everywhere except Legion
+  7.3.5, which 404s both** — `UiMap` replaced `WorldMapArea` in BfA 8.0, so Legion predates it and correctly ships
+  `mapIds` 0 with no map button. The five Classic re-releases DO have it, being modern clients serving old content.
+
+| pack   | 1.15.8 | 2.5.6 | 3.4.3 | 4.4.2 | 5.5.4 | 7.3.5 | 8.3.7 | 9.2.7  | 10.2.7 | 11.2.7 |
+|--------|--------|-------|-------|-------|-------|-------|-------|--------|--------|--------|
+| gated  | 220    | 203   | 566   | 1,914 | 3,244 | 5,813 | 7,914 | 12,375 | 14,074 | 15,561 |
+| areas  | 163    | 181   | 364   | 803   | 1,158 | 2,091 | 2,769 | 3,147  | 3,576  | 4,519  |
+| w/ map | 114    | 152   | 292   | 689   | 960   | **0** | 2,163 | 2,468  | 2,819  | 3,666  |
+
 - **Deliberately unused columns of `SpellCastingRequirements`:** `RequiresSpellFocus` also binds on `.cast` but needs
   `SpellFocusObject` to be legible; `RequiredAuraVision`, `MinFactionID` and `MinReputation` have **zero references** in
   TrinityCore's spell code, so they gate nothing; `FacingCasterFlags` is evaluated in `Spell::CheckRange`, a positional
@@ -1407,8 +1452,8 @@ The five Classic re-release clients (Vanilla / TBC / WotLK / Cataclysm / MoP) co
 | 11.2.7.65299 | The War Within            | 375,895 | 11.1 MB | TDB1127.26011 |             0 |
 
 **All ten are at pack format 40** (the area gate, §3t — on top of format 39's delivery route with values, §3s-bis,
-format 38's attribute flags and first delivery partition, §3s, format 36's target masks on spell links, §3r, format
-35's spell-link route, and format 34's missile flight paths).
+format 38's attribute flags and first delivery partition, §3s, format 36's target masks on spell links, §3r, format 35's
+spell-link route, and format 34's missile flight paths).
 
 **Format 40 added no spells** — it only says where existing ones may be cast — so every count in this section carries
 over from format 39 unchanged.

@@ -31,6 +31,7 @@
  * them, and forgetting that import would fail tools/build.mjs's reachability
  * guard rather than silently dropping every category word.
  */
+import {deliverySecs} from "./data";
 import {defineType as T} from "./pills";
 
 /* ------------------------------------------------------------- models */
@@ -397,12 +398,12 @@ export interface AttrFlag {
     word: string;
     /** the pill type's key, for the hit test */
     key: string;
-    /** Does it render as a pill in its column? False for the delivery flags,
-     *  which are INHERENT to every spell and so are stated once on the Name
-     *  cell's delivery line instead of repeated as pills in Mechanics. They
-     *  stay fully searchable — this is a display flag, not a registration one.
-     *  Both render sites read this list, so it cannot go out of step with the
-     *  search half the way the fx column's target masks once did. */
+    /** Does it render as a pill in its column? False for `instant`, which is
+     *  INHERENT to every spell and so is stated once on the Name cell's
+     *  delivery line instead of repeated as a pill in Mechanics. It stays fully
+     *  searchable — this is a display flag, not a registration one. Both render
+     *  sites read this list, so it cannot go out of step with the search half
+     *  the way the fx column's target masks once did. */
     draw: boolean;
 }
 
@@ -430,10 +431,11 @@ const attrFlag = (key: string, field: string, word: string, handler: string, hin
  * `instant` is exclusive with both, being the complement. Do not "fix" the
  * counts into summing to the pack.
  *
- * `draw: false` on all three: they are inherent to every spell, so the Name
+ * NONE OF THE THREE DRAWS A PILL: they are inherent to every spell, so the Name
  * cell's delivery line states them once instead of Mechanics repeating them as
  * pills (the user's call — "remove the unnecessary garbage from the mech
- * column then").
+ * column then"). For `instant` that is `draw: false` below; the other two are
+ * not in ATTR_FLAGS at all, so there is nothing for a renderer to skip.
  *
  * THE WORDS ARE WOWHEAD'S, on the user's call ("Match the wowhead convention"):
  * Wowhead's own row label is `Cast time`, so the axis is `casttime` — a bare
@@ -445,10 +447,44 @@ const attrFlag = (key: string, field: string, word: string, handler: string, hin
  * typed it here. `instant` measures 35 on a 216k base. */
 attrFlag("mech:instant", "mech", "instant", "instant",
     "Goes off at once — no cast bar, no channel", false);
-attrFlag("mech:casttime", "mech", "casttime", "casttime",
-    "Has a cast bar before it goes off", false);
-attrFlag("mech:channeled", "mech", "channeled", "channeled",
-    "Channeled — held rather than cast once", false);
+
+/* THE TWO THAT CARRY A NUMBER, so they are ordinary valued pill types rather
+ * than attrFlag() memberships: the id IS the time, and `of` hands it to the
+ * numeric axis in SECONDS — the very number the delivery line prints, through
+ * the one rounding rule in data.ts. `mech:"casttime 2"` is exactly a two-second
+ * cast, `mech:"casttime >3"` the long ones, `mech:"channeled <=3"` the short
+ * channels; the argument grammar is the one every other numeric word uses, so
+ * there is nothing new to learn and nothing new to parse.
+ *
+ * `operatorOnly`, like speed and scale, because this field is shared with ~980
+ * effect/aura/target NAMES: a number standing loose in a mech chip keeps the
+ * literal meaning it always had, and only a comparison — or a number written
+ * against the word — asks about time.
+ *
+ * A CHANNEL WITH NO NUMBER ANSWERS NO NUMERIC QUESTION. durMs -1 (unlimited,
+ * 5,230 on 9.2.7) and 0 (flagged a channel but shipping no duration row, 674)
+ * are keys in the map, so `mech:channeled` still returns all 14,228 — but `of`
+ * reads NaN for them, and every comparison rejects NaN. That is the same rule
+ * the line on screen follows: it prints `unlimited channel` with no seconds in
+ * it, so no question about seconds should sweep it in. Selecting those two
+ * groups wants a WORD (the no-limit one in the queue), never a bound. */
+T({
+    key: "mech:casttime", field: "mech", word: "casttime",
+    hint: "Has a cast bar before it goes off — its length in seconds, casttime >3",
+    spells: (d) => d.castTimeSpells,
+    numeric: {kind: "value", operatorOnly: true, of: (d, ms) => deliverySecs(ms)},
+    when: (d) => d.castTimeSpells.size > 0,
+});
+T({
+    key: "mech:channeled", field: "mech", word: "channeled",
+    hint: "Channeled rather than cast once — its length in seconds, channeled 5",
+    spells: (d) => d.channelSpells,
+    numeric: {
+        kind: "value", operatorOnly: true,
+        of: (d, ms) => (ms > 0 ? deliverySecs(ms) : NaN),
+    },
+    when: (d) => d.channelSpells.size > 0,
+});
 
 /* The channel group: three ways a channelled beam behaves, which is the most
  * scene-relevant cluster in the whole attribute sweep. */
