@@ -258,6 +258,56 @@ FROM ref.listfile
 WHERE fid = 3597252;
 ```
 
+### `ref.listfile` IS ALSO THE COMPLETE TABLE CATALOGUE — 1,298 db2s, with their fids (2026-08-06)
+
+**`dbfilesclient/` in the listfile names every db2 table that has ever existed, independent of wago's dbd coverage.**
+That matters because it turns "does table X exist in build Y?" into a definitive check for *any* table, with no
+definition needed — which is the method that settled `SoundKitName` (DATA_ROUTES §3u):
+
+```sql
+SELECT path, fid
+FROM ref.listfile
+WHERE path LIKE 'dbfilesclient/%.db2'; -- 1,298 tables
+```
+
+then `https://wago.tools/api/casc/<fid>?version=<build>`. **Read the three outcomes precisely — they are NOT the same
+thing, and conflating them is how the sound-kit hunt went wrong twice:**
+
+| result       | means                                                               |
+|--------------|---------------------------------------------------------------------|
+| **non-zero** | the table ships in that build                                       |
+| **0 bytes**  | fid is known to the build but carries nothing (retired/not shipped) |
+| **HTTP 404** | fid is not in that build's file index at all                        |
+
+**⛔ THE ENTIRE `*_internal` FAMILY IS 404 EVERYWHERE — do not chase it.** ~40 of them exist as paths (`spell_internal`,
+`spelleffect_internal`, `spellxspellvisual_internal`, `soundkit_internal`, `creature_internal` …)
+and they look exactly like where dev-facing data would live. They are internal-build-only files whose PATHS leaked into
+the community listfile; none is served for 9.2.7 or 11.2.7. (`spellname_internal.scn` is the lone exception at **84
+bytes** on 9.2.7 — an empty stub.)
+
+**94 of the 1,298 are in the exploration DB; 1,166 have never been touched.** Probed on 9.2.7, these are present and
+unread — several answer items already sitting in CLAUDE.md's queue:
+
+| table                                    | 9.2.7 bytes     | why it is interesting                               |
+|------------------------------------------|-----------------|-----------------------------------------------------|
+| `SpellCooldowns`                         | 380,224         | the Wowhead-tooltip task: cooldown + GCD            |
+| `SpellPower`                             | 90,550          | the Wowhead-tooltip task: cost                      |
+| `SpellRange`                             | 6,799           | the Wowhead-tooltip task: range                     |
+| `SpellDispelType`                        | 539             | the Wowhead-tooltip task: dispel type               |
+| `ScreenEffectType`                       | 180             | the parked "screen-effect type words in the corpus" |
+| `Emotes` / `EmotesTextSound`             | 20,593 / 43,350 | emote ids — what Arcanum's `mod anim` takes         |
+| `AnimKitReplacement` / `AnimKitPriority` | 2,652 / 477     | the anim-replacement family, unread                 |
+| `SpellMissile` / `MissileTargeting`      | 14,470 / 5,487  | missile params beyond `SpellMissileMotion`          |
+| `ObjectEffect`                           | 81,474          | gameobject visual/sound effects                     |
+| `ItemVisuals`                            | 6,424           | pairs with proc 17 `AddItemVisual`                  |
+| `WeaponTrailModelDef`                    | 4,568           | pairs with proc 27 (weapon trail)                   |
+| `SpellAuraVisibility`                    | 7,406           | may bear on the parked `VisibleOnlyToCaster`        |
+
+**Measured ABSENT on 9.2.7 (0 bytes), so do not plan against them:** `SpellVisualKitDecalAttach` (0 on 11.2.7 too — a
+12.x table, and it is the one that sounded like it would rescue the parked ground-decal idea),
+`SpellEffectCameraShakes`,
+`ItemVisualEffects`, `ModelSoundOverrideName`, `SpellSparse`.
+
 **Compare a table across every version at once** — the thing a single-schema database made painful:
 
 ```sql
