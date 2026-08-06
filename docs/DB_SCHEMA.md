@@ -378,6 +378,21 @@ gate on an aura and **685 carry a `ModifierTreeID`** — a recursive tree this d
 class (294) and gender (207) are the legible majority of the rest; `Failure_description_lang` is set on only 11, so it
 is not a shortcut to wording. Budget for the `ModifierTree` walk before promising a decoded condition.
 
+**`SpellItemEnchantment`, added 2026-08-06 — what `.enchant mainhand <id>` actually takes.** An enchant id in a macro or
+an ArcSpell was an opaque number before this: nothing else in the cache names one. **4,270 rows on 9.2.7, 4,269 of them
+named.**
+
+- **⚠ DECLARED AND CACHED, BUT NOT YET IN THE DUCKDB** — the CSV is fetched for 9.2.7 and 11.2.7, and the next
+  `python tools/builddb.py` folds it in. Until someone runs that, `v9_2_7."SpellItemEnchantment"` does not exist. **A
+  missing table here means "rebuild", not "unavailable".**
+- **`ItemVisual` is the field that matters for RP, and it is rare: only 231 of 4,270 rows carry one**, across 104
+  distinct visuals. That column is the weapon glow; the other 4,039 rows are stat enchants with nothing to see.
+- **Names are not always human-readable** — many are stat templates carrying `$k1` / `$7784s1` substitution tokens
+  (`+$k1 Versatility`). Prefer rows with an `ItemVisual` when hunting for something castable.
+- **The two ends of the toggle idiom, both from a real ArcSpell (2026-08-06):** **5877 `Chronos`** (ItemVisual 347) to
+  turn a glow ON, and **5385 `Hidden`** (ItemVisual 309) to turn it off. `Hidden` is the standard "no enchant glow"
+  row, which is why an RP toggle enchants to it rather than clearing.
+
 **`SpellAuraOptions`, added 2026-08-06 — the stack ceiling, which lives nowhere else.** Not on `Spell`, not on
 `SpellMisc`, not in any attribute bit: before this table, *"how far does this stack"* had no answer in SQL at all.
 Present on **all ten builds, zero drift**.

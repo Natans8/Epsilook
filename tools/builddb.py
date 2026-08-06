@@ -177,6 +177,14 @@ EXTRA_TABLES = {
     # ProcCharges is the other, unrelated counter on the same row: charges are
     # spent by procs, stacks are not, and the two are independent.
     "SpellAuraOptions": "CumulativeAura — the stack limit; plus ProcCharges and the proc mask",
+    # ---------------------------------------------------------------- enchants
+    #
+    # `.enchant mainhand <id>` takes a SpellItemEnchantment ID, and nothing else
+    # in the cache names one — an enchant id in a macro or an ArcSpell was an
+    # opaque number until this was added (2026-08-06, resolving 5877/5385 out of
+    # a real ArcSpell). Weapon-glow enchants are the RP-relevant ones: the
+    # Effect_* / EffectArg_* columns carry the enchant TYPE and its payload.
+    "SpellItemEnchantment": "names enchant ids — what `.enchant mainhand <id>` takes",
     # SpellCastTimes, SpellDuration and SpellInterrupts USED to be listed here.
     # They are build_data.py TABLES now (the delivery line reads all three), so
     # the normal CSV sweep already caches them and repeating them here would
