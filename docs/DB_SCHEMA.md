@@ -308,6 +308,44 @@ unread — several answer items already sitting in CLAUDE.md's queue:
 `SpellEffectCameraShakes`,
 `ItemVisualEffects`, `ModelSoundOverrideName`, `SpellSparse`.
 
+### THE TDB IS THE SAME STORY, AND THE TWO HALVES BEHAVE COMPLETELY DIFFERENTLY (2026-08-06)
+
+The cached TDB archive is a full TrinityCore dump — **`build/cache/tdb-TDB927.22111/*.7z`, 712 MB uncompressed in two
+SQL files** — and `TDB_TABLES` in `build_data.py` distils **12** of them. Stream the table names without extracting 700
+MB:
+
+```bash
+7z x -so <archive> TDB_full_hotfixes_927.22111_2022_11_20.sql | grep -oP '(?<=^CREATE TABLE `)[a-z0-9_]+'
+```
+
+**⛔ `hotfixes` IS AN OVERLAY, NOT A SOURCE — 388 tables, and they are essentially EMPTY.** It mirrors db2 names, so it
+looks like a second copy of the client data and is nothing of the kind: it carries only the rows Blizzard actually
+hotfixed. Measured on TDB927 — **`spell_range` 0 rows, `emotes` 0, `emotes_text_sound` 0, `spell_power` 1,
+`spell_cooldowns` 4, `sound_kit` 3**, against `spell_effect` 214 and `spell_name` 41. **So finding a table name in
+`hotfixes` says nothing about being able to read that table's data**, and it can never substitute for the wago CSV.
+`sound_kit_name` is not among the 388 at all, so the TDB is no route to sound-kit names either.
+
+**✅ `world` IS REAL AUTHORED DATA — 231 tables, and we read TWO.** This half is TrinityCore's own content, with no db2
+equivalent, and it is already on disk. Row counts from TDB927:
+
+| table                                               | rows            | why it matters                                                          |
+|-----------------------------------------------------|-----------------|-------------------------------------------------------------------------|
+| `creature_template`                                 | 160,883         | read already                                                            |
+| `gameobject_template`                               | 65,801          | read already                                                            |
+| `npc_text`                                          | 15,107          | —                                                                       |
+| `conditions`                                        | 14,982          | the generic condition system, behind the spell-conditionals research    |
+| `creature_template_addon`                           | 21,172          | includes the auras a creature spawns with                               |
+| `spell_script_names`                                | 2,497           | which C++ script a spell runs                                           |
+| `spell_target_position`                             | 2,243           | where a teleport spell actually puts you                                |
+| **`game_tele`**                                     | **1,925**       | ⭐ the table `.lookup tele` SEARCHES — the area pill emits that command |
+| **`spell_area`**                                    | **918**         | ⭐ the queued server-side gate (area/quest/aura/level/gender/faction)   |
+| `spell_proc` · `spell_linked_spell` · `spell_group` | 431 · 333 · 282 | proc/link/stack rules                                                   |
+
+**⚠ TWO CAVEATS BEFORE BUILDING ON ANY OF IT.** Epsilon runs **its own TrinityCore fork**
+(`github.com/EpsilonRP/TrinityCore`), so stock TDB content is a strong hint and not their live data — verify in game,
+which is cheap for `game_tele` in particular. And **four Classic packs ship TDB-less**, so anything sourced here
+degrades on them exactly as creature and gameobject names already do.
+
 **Compare a table across every version at once** — the thing a single-schema database made painful:
 
 ```sql
