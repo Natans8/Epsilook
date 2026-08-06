@@ -541,6 +541,35 @@ SPELL_CATEGORIES: dict[str, dict[str, Any]] = {
 _CHAT_ACTIONS = {"SendSay", "SendYell", "SendEmote", "RaidMsg", "BoxMsg", "TalkingHead"}
 _DEBUG_PRINT_ACTIONS = {"PrintMsg", "ErrorMsg"}
 
+# ---------------------------------------------------------------------------
+# The destructive-revert class.
+#
+# These actions set persistent character state that THE PLAYER HAS ALREADY CUSTOMISED, and Arcanum's built-in revert
+# is a hardcoded constant rather than a saved previous value. So the "rollback" does not undo the spell -- it
+# overwrites the player's own setting with a server default, silently and permanently.
+#
+# The user, 2026-08-06: *"most players don't walk around with the default 1.0 scale, if you mess with it too much you
+# might upset their character height."* That is `mod scale 1` reverting a 1.15-scale character to 1.0.
+#
+# Each entry names the route that gets the same look WITHOUT touching the player's setting.
+# ---------------------------------------------------------------------------
+_STOMPS_PLAYER_STATE = {
+    "Scale": ("the character's own height (reverts to `mod scale 1`, not to what they were)",
+              "a SCALE AURA instead -- `.aura <id>` multiplies on top of their scale and `.unaura` removes it "
+              "cleanly. Epsilook's scale pill searches these by percentage (aura 61, ~71 distinct values)"),
+    "Speed": ("their movement speed (reverts to `mod speed 1`)",
+              "a speed AURA -- same argument, and Epsilook's speed pill indexes them"),
+    "SpeedWalk": ("their walk speed (reverts to `mod speed walk 1`)", "a speed aura"),
+    "SpeedFly": ("their fly speed (reverts to `mod speed fly 1`)", "a speed aura"),
+    "SpeedSwim": ("their swim speed (reverts to `mod speed swim 1`)", "a speed aura"),
+    "SpeedBackwalk": ("their backwalk speed (reverts to `mod speed backwalk 1`)", "a speed aura"),
+    "Native": ("their NATIVE model -- and the revert is `demorph`, which removes ALL morphs including the native "
+               "they set for their character",
+               "a morph aura, or accept that this is a permanent change the player must undo themselves"),
+    "Morph": ("nothing by itself, but its revert is `demorph`, which also strips any NATIVE the player had set",
+              "a transform AURA, which removes cleanly and leaves their native alone"),
+}
+
 
 def lint_spell(spell: ArcSpell, category: str = "personal") -> list[str]:
     """Design review, not validity: things the addon accepts happily and a player would resent.
@@ -576,6 +605,17 @@ def lint_spell(spell: ArcSpell, category: str = "personal") -> list[str]:
             alt = entry.get("revertAlternative")
             warnings.append(f"action {i}: {action.actionType} has no revert, so revertDelay is silently DROPPED"
                             + (f" -- {alt.splitlines()[0]}" if alt else ""))
+
+        # The worst class: a "rollback" that overwrites the player's own persistent setting with a server default.
+        stomp = _STOMPS_PLAYER_STATE.get(action.actionType)
+        if stomp:
+            damage, instead = stomp
+            if action.revertDelay is not None:
+                warnings.append(f"action {i}: {action.actionType}'s revert RESETS TO A DEFAULT, so it clobbers "
+                                f"{damage}. Use {instead}.")
+            else:
+                warnings.append(f"action {i}: {action.actionType} changes {damage} and you left it that way. "
+                                f"Either that is the point, or use {instead}.")
 
         if entry.get("permission") in ("member", "officer"):
             warnings.append(f"action {i}: {action.actionType} runs '.{entry['command'].split()[0]}', which a phase "
@@ -876,6 +916,11 @@ def regen_catalog(checkout: Path) -> dict[str, Any]:
         # A revertDelay is FORCE-NULLED by Execute.lua when the action has no revert, so "can this roll itself back"
         # is a property worth stating outright rather than inferring from the presence of a string.
         entry["revertable"] = bool(re.search(r"^\s*revert\s*=", body, re.M))
+        # A revert with no @N@ placeholder is a CONSTANT: it restores a server default, not the value the player
+        # had before the spell ran. `mod scale 1` is the dangerous shape -- it does not undo the spell, it sets the
+        # character to 1.0, and most players do not walk around at 1.0.
+        if entry.get("revert") and "@N@" not in entry["revert"]:
+            entry["revertResetsToDefault"] = True
         if entry.get("command"):
             entry["permission"] = _PERMISSION_BY_ROOT.get(entry["command"].split()[0], "unknown")
         # A dependency wins over the hand-written family: an action that needs Kinesis or TRP3 loaded is an

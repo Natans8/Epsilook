@@ -135,6 +135,7 @@
       "description": "Modifies target's current animation using 'mod anim'.\n\nUse .look emote to find IDs.",
       "convertLinks": true,
       "revertable": true,
+      "revertResetsToDefault": true,
       "permission": "anyone",
       "family": "animation"
     },
@@ -183,6 +184,7 @@
       "description": "Morph into a Display ID.",
       "convertLinks": true,
       "revertable": true,
+      "revertResetsToDefault": true,
       "permission": "anyone",
       "family": "appearance"
     },
@@ -197,6 +199,7 @@
       "description": "Mount your character.",
       "convertLinks": true,
       "revertable": true,
+      "revertResetsToDefault": true,
       "permission": "anyone",
       "family": "appearance"
     },
@@ -211,6 +214,7 @@
       "description": "Modifies your Native to specified Display ID.",
       "convertLinks": true,
       "revertable": true,
+      "revertResetsToDefault": true,
       "permission": "anyone",
       "family": "appearance"
     },
@@ -245,6 +249,7 @@
       "description": "Change the emote of your character while standing to an Emote ID.",
       "convertLinks": true,
       "revertable": true,
+      "revertResetsToDefault": true,
       "permission": "anyone",
       "family": "animation"
     },
@@ -382,6 +387,7 @@
       "inputDescription": "Value may range from 0.1 to 10.",
       "description": "Modifies your targets size using 'mod scale'.\n\nApplies to self if no target is selected and/or not in DM mode.",
       "revertable": true,
+      "revertResetsToDefault": true,
       "permission": "anyone",
       "family": "appearance"
     },
@@ -395,6 +401,7 @@
       "inputDescription": "Value may range from 0.1 to 50.",
       "description": "Modifies movement speed using 'mod speed'.",
       "revertable": true,
+      "revertResetsToDefault": true,
       "permission": "anyone",
       "family": "movement"
     },
@@ -408,6 +415,7 @@
       "inputDescription": "Value may range from 0.1 to 50.",
       "description": "Modifies speed of walking backwards.",
       "revertable": true,
+      "revertResetsToDefault": true,
       "permission": "anyone",
       "family": "movement"
     },
@@ -421,6 +429,7 @@
       "inputDescription": "Value may range from 0.1 to 50.",
       "description": "Modifies flying speed.",
       "revertable": true,
+      "revertResetsToDefault": true,
       "permission": "anyone",
       "family": "movement"
     },
@@ -434,6 +443,7 @@
       "inputDescription": "Value may range from 0.1 to 50.",
       "description": "Modifies walking speed.",
       "revertable": true,
+      "revertResetsToDefault": true,
       "permission": "anyone",
       "family": "movement"
     },
@@ -447,6 +457,7 @@
       "inputDescription": "Value may range from 0.1 to 50.",
       "description": "Modifies swimming speed.",
       "revertable": true,
+      "revertResetsToDefault": true,
       "permission": "anyone",
       "family": "movement"
     },
@@ -1398,6 +1409,7 @@
       "description": "Spawns a Gob Blueprint at your position.",
       "doNotDelimit": true,
       "revertable": true,
+      "revertResetsToDefault": true,
       "permission": "member",
       "family": "objects"
     },
