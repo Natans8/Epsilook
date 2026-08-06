@@ -149,6 +149,8 @@ tools/                   every routine that would otherwise be a thing to rememb
   builddb.py             build the exploration database (development tool)
   dossier.py             one spell, every route followed to the leaves
   dbd.py                 parser for WoWDBDefs .dbd schema definitions
+  arcanum.py             build/read Arcanum ArcSpell import strings (development tool)
+  arcanum_actions.json   the Arcanum action catalogue arcanum.py validates against
 docker/                  the self-hosting path — see "Hosting it yourself"
   Dockerfile             the image: esbuild -> a verified document root -> nginx
   Dockerfile.dockerignore  an allowlist of what the image build may see
