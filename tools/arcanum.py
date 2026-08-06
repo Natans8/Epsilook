@@ -3,8 +3,22 @@
 
 Arcanum is the Epsilon addon downstream of Epsilook: you find a spell id here, you paste it into an ArcSpell action
 row there. This module mirrors Arcanum's data structures well enough to author a spell OUTSIDE the game and hand the
-user one string to paste into the addon's Import box -- which is the cheap way to test a batch of spell ids, commands
-or macros in one go instead of typing rows by hand.
+user one string -- which is the cheap way to test a batch of spell ids, commands or macros in one go instead of typing
+rows by hand.
+
+That string has two doors, and for a throwaway test sheet the second is the better one (both verified in game,
+2026-08-06)::
+
+    Import box                      saves to the personal vault; a duplicate commID prompts to overwrite
+    /run ARC.CASTIMPORT("<str>")    casts immediately and NEVER saves -- nothing to clean up between sheets
+
+``ARC`` is a plain global (Constants.lua), so both ``ARC.CASTIMPORT`` and ``ARC.ImportSpell`` (the Import button's own
+function) are reachable from chat. Use a DOT on ``ImportSpell``: it is assigned raw rather than through
+``wrapToEvalFinalVal``, so ``ARC:ImportSpell(x)`` passes the ARC table as the string and dies. ``CASTIMPORT`` is
+wrapped and takes either. The chat box is not length-capped on Epsilon (``UnlimitedChatMessage`` sets
+``SetMaxLetters(0)``; a 391-character line was verified whole), so a full spell goes in the CHAT BOX -- saved macros
+are still capped at 255 by Blizzard. No escaping is ever needed: the payload alphabet is ``a-zA-Z0-9()`` and commIDs
+are ``[A-Za-z0-9_]+``, so neither can contain a quote or a backslash.
 
 THE EXPORT FORMAT, read out of the addon source (SpellCreator/serializer.lua + UI/ImportExport.lua)::
 
@@ -395,7 +409,12 @@ class ArcSpell:
 
 
 def encode_spell(spell: ArcSpell, validate: bool = True) -> str:
-    """Return the string to paste into Arcanum's Import box."""
+    """Return the export string: paste into Arcanum's Import box, or feed to ``/run ARC.CASTIMPORT("...")``.
+
+    The ``commID:`` prefix is emitted because that is what the addon's own export button produces. CASTIMPORT does
+    not require it (verified in game against a byte-identical unprefixed control, 2026-08-06); the Import box was
+    never tested without it, so do not drop the prefix.
+    """
     if validate:
         problems = validate_spell(spell)
         if problems:
