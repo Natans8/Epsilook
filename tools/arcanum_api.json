@@ -1,0 +1,174 @@
+{
+  "_comment": "Generated from EpsilonRP/PublicAddOns API.lua by `python tools/arcanum.py regen-catalog <checkout>`. This is the ARC surface a Macro Script action can call. `kind` is how the entry is assigned: 'wrapped' entries went through wrapToEvalFinalVal and accept BOTH `ARC:X(a)` and `ARC.X(a)`; 'raw' entries accept ONLY the DOT form, because a colon call passes the ARC table as the first argument. ARC.ImportSpell is the raw case that has already bitten us.",
+  "api": {
+    "ARC.TOGAURA": {
+      "kind": "wrapped"
+    },
+    "ARC.UNLOCK": {
+      "kind": "wrapped"
+    },
+    "ARC.CMD": {
+      "kind": "wrapped"
+    },
+    "ARC.COMM": {
+      "kind": "wrapped"
+    },
+    "ARC.COPY": {
+      "kind": "wrapped"
+    },
+    "ARC:GETNAME": {
+      "kind": "method",
+      "syntax": [
+        "ARC:GETNAME() - Gets the Name of the Target and prints it to chat, with MogIt Link Filtering. This allows MogIt links to be copied easily."
+      ]
+    },
+    "ARC.CAST": {
+      "kind": "wrapped"
+    },
+    "ARC.CASTIMPORT": {
+      "kind": "wrapped"
+    },
+    "ARC.STOP": {
+      "kind": "wrapped"
+    },
+    "ARC.IF": {
+      "kind": "wrapped"
+    },
+    "ARC.IFS": {
+      "kind": "wrapped"
+    },
+    "ARC.TOG": {
+      "kind": "wrapped"
+    },
+    "ARC.SET": {
+      "kind": "wrapped"
+    },
+    "ARC.GET": {
+      "kind": "wrapped"
+    },
+    "ARC.RAND": {
+      "kind": "wrapped"
+    },
+    "ARC.RANDW": {
+      "kind": "wrapped"
+    },
+    "ARC:STOPSPELLS": {
+      "kind": "method"
+    },
+    "ARC.TELEPORT": {
+      "kind": "wrapped"
+    },
+    "ARC.PHASE.SAVE": {
+      "kind": "wrapped"
+    },
+    "ARC.SAVE": {
+      "kind": "raw"
+    },
+    "ARC.PHASE.CAST": {
+      "kind": "wrapped"
+    },
+    "ARC.CASTP": {
+      "kind": "wrapped"
+    },
+    "ARC.PHASE.IF": {
+      "kind": "wrapped"
+    },
+    "ARC.PHASE.IFS": {
+      "kind": "wrapped"
+    },
+    "ARC.PHASE.TOG": {
+      "kind": "wrapped"
+    },
+    "ARC.PHASE.SET": {
+      "kind": "wrapped"
+    },
+    "ARC.PHASE.GET": {
+      "kind": "wrapped"
+    },
+    "ARC.PHASE.IsMember": {
+      "kind": "raw"
+    },
+    "ARC.PHASE.IsOfficer": {
+      "kind": "raw"
+    },
+    "ARC.PHASE.IsOwner": {
+      "kind": "raw"
+    },
+    "ARC.PHASE.GetPhaseId": {
+      "kind": "raw"
+    },
+    "ARC.PHASE.IsDM": {
+      "kind": "raw"
+    },
+    "ARC.LOCATIONS.SAVE": {
+      "kind": "wrapped"
+    },
+    "ARC.LOCATIONS.LOAD": {
+      "kind": "wrapped"
+    },
+    "ARC.LOCATIONS.GOTO": {
+      "kind": "wrapped"
+    },
+    "ARC.LOCATIONS.GetPosition": {
+      "kind": "raw"
+    },
+    "ARC.XAPI.Sparks": {
+      "kind": "raw"
+    },
+    "ARC.XAPI.Sounds": {
+      "kind": "raw"
+    },
+    "ARC.XAPI.Phase": {
+      "kind": "raw"
+    },
+    "ARC.XAPI.Items.LinkSpell": {
+      "kind": "wrapped"
+    },
+    "ARC.XAPI.Items.UnlinkSpell": {
+      "kind": "wrapped"
+    },
+    "ARC.XAPI.GetPosition": {
+      "kind": "raw"
+    },
+    "ARC.XAPI.HasAuraID": {
+      "kind": "wrapped"
+    },
+    "ARC.XAPI.HasAura": {
+      "kind": "wrapped"
+    },
+    "ARC.XAPI.HasItem": {
+      "kind": "wrapped"
+    },
+    "ARC.XAPI.HasItems": {
+      "kind": "wrapped"
+    },
+    "ARC.XAPI.ToggleAura": {
+      "kind": "wrapped"
+    },
+    "ARC.XAPI.HasArcSpell": {
+      "kind": "wrapped"
+    },
+    "ARC.XAPI.GetArcSpell": {
+      "kind": "wrapped"
+    },
+    "ARC.XAPI.Actions": {
+      "kind": "raw"
+    },
+    "ARC.XAPI.Quickcast": {
+      "kind": "raw"
+    },
+    "ARC.RegisterAction": {
+      "kind": "raw",
+      "params": [
+        "category string",
+        "key string",
+        "commandType \"server\"|string|any",
+        "name string",
+        "actionData FunctionActionTypeData|ServerActionTypeData"
+      ]
+    },
+    "ARC.ImportSpell": {
+      "kind": "raw"
+    }
+  }
+}

@@ -1,0 +1,803 @@
+{
+  "_comment": "Generated from EpsilonRP/PublicAddOns Actions/ConditionsData.lua by `python tools/arcanum.py regen-catalog <checkout>`. Conditions attach to a whole spell (spell.conditions) or to one action (action.conditions), same shape either way: a list of GROUPS, each a list of ROWS of {Type, Input, IsNot}. Execute.lua ANDs within a group and ORs across groups -- disjunctive normal form. No conditions, or an empty list, passes. Input is a comma-delimited string and runs through input substitution before evaluation.",
+  "conditions": {
+    "hasAura": {
+      "category": "Spells & Effects",
+      "name": "Has Aura (Self)",
+      "description": "If your character currently has the specified aura active",
+      "inputs": [
+        {
+          "label": "Aura ID",
+          "type": "number"
+        }
+      ]
+    },
+    "hasAuraNum": {
+      "category": "Spells & Effects",
+      "name": "Has Number of Aura (Self)",
+      "description": "If your character currently has X number of stacks of the specified aura. May specify 'true' as the 3rd input to change it to a 'Greater Than or Equal To' check (use 'not' on the condition for Less Than).",
+      "inputExample": "<296289, 6, true> - Checks if your character has the 'Rage Stacking' aura applied 6 or more times.",
+      "inputs": [
+        {
+          "label": "Aura ID",
+          "type": "number"
+        },
+        {
+          "label": "Stacks",
+          "type": "number"
+        },
+        {
+          "label": "Or Greater Than",
+          "type": "boolean?"
+        }
+      ]
+    },
+    "isSpellOnCooldown": {
+      "category": "Spells & Effects",
+      "name": "Is Spell on Cooldown",
+      "description": "If the Spell ID given is currently on Cooldown.",
+      "inputDesc": "To check the Global Cooldown, you can use the dummy GCD spell ID 61304.",
+      "inputs": [
+        {
+          "label": "Spell ID",
+          "type": "number"
+        }
+      ]
+    },
+    "hasItem": {
+      "category": "Items / Inventory",
+      "name": "Has Item(s)",
+      "description": "If your character currently has at least one of each item.",
+      "inputDesc": "May supply multiple items, separated by commas.",
+      "inputs": [
+        {
+          "label": "Item ID(s)",
+          "type": "number"
+        }
+      ]
+    },
+    "hasNumItems": {
+      "category": "Items / Inventory",
+      "name": "Has X Number of Items",
+      "description": "If your character currently has exactly X number of this item.",
+      "inputs": [
+        {
+          "label": "Item ID",
+          "type": "number"
+        },
+        {
+          "label": "Number",
+          "type": "number"
+        }
+      ]
+    },
+    "hasMoreThanItems": {
+      "category": "Items / Inventory",
+      "name": "Has More than X Items",
+      "description": "If your character currently has more than X number of this item.",
+      "inputs": [
+        {
+          "label": "Item ID",
+          "type": "number"
+        },
+        {
+          "label": "Number",
+          "type": "number"
+        }
+      ]
+    },
+    "hasLessThanItems": {
+      "category": "Items / Inventory",
+      "name": "Has Less than X Items",
+      "description": "If your character currently has less than X number of this item.",
+      "inputs": [
+        {
+          "label": "Item ID",
+          "type": "number"
+        }
+      ]
+    },
+    "hasItemEquipped": {
+      "category": "Items / Inventory",
+      "name": "Has Item Equipped",
+      "description": "If your character currently has a specific item equipped.",
+      "inputs": [
+        {
+          "label": "Item ID",
+          "type": "number"
+        }
+      ]
+    },
+    "hasSlotEquipped": {
+      "category": "Items / Inventory",
+      "name": "Has Item Equipped in Slot",
+      "description": "If your character currently has any item equipped in a specific slot, or if ItemID is given, that specific itemID is equipped in that slot.",
+      "inputs": [
+        {
+          "label": "Slot Name",
+          "type": "string"
+        },
+        {
+          "label": "ItemID?",
+          "type": "number"
+        }
+      ]
+    },
+    "isSoundIDPlaying": {
+      "category": "Sounds (Self)",
+      "name": "Is Sound Kit ID Playing",
+      "description": "If the given Sound Kit ID is currently playing from an Arcanum Spell / Action / ARC.XAPI. Cannot tell if sounds are playing if played from another source.",
+      "inputs": [
+        {
+          "label": "Sound ID",
+          "type": "number"
+        }
+      ]
+    },
+    "isSoundFilePlaying": {
+      "category": "Sounds (Self)",
+      "name": "Is Sound File Playing",
+      "description": "If the given Sound File ID is currently playing from an Arcanum Spell / Action / ARC.XAPI. Cannot tell if sounds are playing if played from another source.\n\nSounds played by File are considered to be 'playing' forever until explicitly told to stop. If you need better control / knowledge if a sound is actually still playing, you need to either use a SoundKit based Play Sound, or manually 'stop' it after the proper time via revert or separate action.",
+      "inputs": [
+        {
+          "label": "File ID",
+          "type": "string"
+        }
+      ]
+    },
+    "isMusicPlaying": {
+      "category": "Sounds (Self)",
+      "name": "Is Music File Playing",
+      "description": "If the given Music File ID is currently playing from an Arcanum Spell / Action / ARC.XAPI. Cannot tell if sounds are playing if played from another source.\n\nSounds played by File are considered to be 'playing' forever until explicitly told to stop, including music. If you need better control / knowledge if a sound is actually still playing, you need to either use a SoundKit based Play Sound, or manually 'stop' it after the proper time via revert or separate action.",
+      "inputs": [
+        {
+          "label": "File ID",
+          "type": "string"
+        }
+      ]
+    },
+    "isDead": {
+      "category": "Player or Target .. ",
+      "name": "Is Dead",
+      "description": "Continues only if the specified unit is currently dead.",
+      "inputDesc": "Defaults to player if no input is given.",
+      "inputs": [
+        {
+          "label": "Unit",
+          "type": "unit?"
+        }
+      ]
+    },
+    "isFlying": {
+      "category": "Player or Target .. ",
+      "name": "Is Flying",
+      "description": "Continues only if the specified unit is currently flying. This includes flying mounts, spell effects, and `.cheat fly`.",
+      "inputDesc": "Defaults to player if no input is given.",
+      "inputs": [
+        {
+          "label": "Unit",
+          "type": "unit?"
+        }
+      ]
+    },
+    "isFalling": {
+      "category": "Player or Target .. ",
+      "name": "Is Falling",
+      "description": "Returns true if the specified unit is currently falling.",
+      "inputDesc": "Defaults to player if no input is given.",
+      "inputs": [
+        {
+          "label": "Unit",
+          "type": "unit?"
+        }
+      ]
+    },
+    "isSwimming": {
+      "category": "Player or Target .. ",
+      "name": "Is Swimming",
+      "description": "Returns true if the character is currently swimming. This only applies if you are in water & in the swimming animation.",
+      "inputDesc": "Defaults to player if no input is given.",
+      "inputs": [
+        {
+          "label": "Unit",
+          "type": "unit?"
+        }
+      ]
+    },
+    "isSubmerged": {
+      "category": "Player or Target .. ",
+      "name": "Is Submerged",
+      "description": "Returns true if the character is currently underwater. This applies any time you are in water, even if running at the bottom of a surface of water, unless the water is too shallow to swim in.",
+      "inputDesc": "Defaults to player if no input is given.",
+      "inputs": [
+        {
+          "label": "Unit",
+          "type": "unit?"
+        }
+      ]
+    },
+    "isRace": {
+      "category": "Player or Target .. ",
+      "name": "Is Race",
+      "description": "If the specified unit is the specified race.",
+      "inputDesc": "Defaults to player if only 'race' is given. Race can be given as name or ID.",
+      "inputs": [
+        {
+          "label": "Unit",
+          "type": "unit?"
+        },
+        {
+          "label": "Race",
+          "type": "string"
+        }
+      ]
+    },
+    "isClass": {
+      "category": "Player or Target .. ",
+      "name": "Is Class",
+      "description": "If the specified unit is the specified class.",
+      "inputDesc": "Defaults to player if only 'class' is given. Class can be given as name or ID.",
+      "inputs": [
+        {
+          "label": "Unit",
+          "type": "unit?"
+        },
+        {
+          "label": "Class",
+          "type": "string|number"
+        }
+      ]
+    },
+    "isGender": {
+      "category": "Player or Target .. ",
+      "name": "Is Gender",
+      "description": "If the specified unit is the specified sex/gender. Sex can be given as a word or ID.",
+      "inputDesc": "Defaults to player if only 'sex' is given.",
+      "inputs": [
+        {
+          "label": "Unit",
+          "type": "unit?"
+        },
+        {
+          "label": "Sex",
+          "type": "string"
+        }
+      ]
+    },
+    "hasTarget": {
+      "category": "Player Character",
+      "name": "Has Target",
+      "description": "Returns true if you currently have anything targeted."
+    },
+    "isIndoors": {
+      "category": "Player Character",
+      "name": "Is Indoors",
+      "description": "Returns true if the player character is currently indoors."
+    },
+    "isOutdoors": {
+      "category": "Player Character",
+      "name": "Is Outdoors",
+      "description": "Returns true if the player character is currently outdoors."
+    },
+    "isMounted": {
+      "category": "Player Character",
+      "name": "Is Mounted",
+      "description": "Returns true if the player character is mounted."
+    },
+    "isStealth": {
+      "category": "Player Character",
+      "name": "Is Stealthed",
+      "description": "Returns true if the player character is currently stealthed."
+    },
+    "isInInstance": {
+      "category": "Player Character",
+      "name": "Is In Instance",
+      "description": "Returns true the if player character is inside an instance (battleground, arena, dungeon, raid, etc)."
+    },
+    "isInParty": {
+      "category": "Player Character",
+      "name": "Is in Party (Self)",
+      "description": "Returns true if the player character is in a party.",
+      "inputs": []
+    },
+    "isInRaid": {
+      "category": "Player Character",
+      "name": "Is in Raid (Self)",
+      "description": "Returns true if the player character is part of a raid. You can stack this as 'not' on top of a 'Is In Party (Self)' to check if in a party, but not a raid.",
+      "inputs": []
+    },
+    "facStanding": {
+      "category": "Player Character",
+      "name": "Has Standing with Faction",
+      "description": "Returns true if the player has a standing equal to (or 'greater than / equal to' if enabled) with the specified faction.",
+      "inputDesc": "Faction Standing IDs range from 0 (Unknown) to 4 (Neutral) to 8 (Exalted).\nWhen using '.look faction', use the ID in the actual faction name.",
+      "inputExample": "<1228, 5, true> - Checks if your current standing with faction 1228 (Forest Hozen) is rank 5 (Friendly), or higher.",
+      "inputs": [
+        {
+          "label": "Faction ID",
+          "type": "number"
+        },
+        {
+          "label": "Standing ID",
+          "type": "number"
+        },
+        {
+          "label": "Or Greater Than",
+          "type": "boolean?"
+        }
+      ]
+    },
+    "tarHasTar": {
+      "category": "Target",
+      "name": "Has Target",
+      "description": "Returns true if your target currently has anything targeted. Target-ception."
+    },
+    "tarInParty": {
+      "category": "Target",
+      "name": "Target is in my Party",
+      "description": "Returns true if the target is in your party. Cannot check if a target is just in any party."
+    },
+    "tarNameIs": {
+      "category": "Target",
+      "name": "Target Name Equals...",
+      "description": "Returns true if the specified unit's current target is equal to the specified string. Case sensitive.",
+      "inputDesc": "Name is case sensitive.",
+      "inputs": [
+        {
+          "label": "Name",
+          "type": "string"
+        }
+      ]
+    },
+    "tarPosRange": {
+      "category": "Target",
+      "name": "Target in X Range",
+      "description": "Checks if your target is within the number of meters from you. Limited to only working outdoors & not in an instance (dungeon/raid/bg/arena). Only checks XY distance on a 2D plane, does not consider Z / height.",
+      "inputs": [
+        {
+          "label": "Range",
+          "type": "number"
+        }
+      ]
+    },
+    "tarInterRange": {
+      "category": "Target",
+      "name": "Target in Interact Range",
+      "description": "Checks if your target is within the given interaction range. Factors in height.",
+      "inputDesc": "Available Interaction Index IDs: 1 = 28 yards, 2 = 8 yards, 3 = 7 yards.",
+      "inputs": [
+        {
+          "label": "Interact Index",
+          "type": "number"
+        }
+      ]
+    },
+    "tarAura": {
+      "category": "Target",
+      "name": "Target has Aura",
+      "description": "If the target has a specific aura applied.",
+      "inputs": [
+        {
+          "label": "Aura ID",
+          "type": "number"
+        }
+      ]
+    },
+    "tarAuraNum": {
+      "category": "Target",
+      "name": "Target has Number of Aura",
+      "description": "If the target currently has X number of stacks of the specified aura.",
+      "inputDesc": "May specify 'true' as the 3rd input to change it to a 'Greater Than or Equal To' check (use 'not' on the condition for Less Than).",
+      "inputExample": "<296289, 6, true> - Checks if the target has the 'Rage Stacking' aura applied 6 or more times.",
+      "inputs": [
+        {
+          "label": "Aura ID",
+          "type": "number"
+        },
+        {
+          "label": "Stacks",
+          "type": "number"
+        },
+        {
+          "label": "Or Greater Than",
+          "type": "boolean?"
+        }
+      ]
+    },
+    "tarIsFriend": {
+      "category": "Target",
+      "name": "Target is Friend",
+      "description": "Returns true if the target is friendly to the player."
+    },
+    "tarIsEnemy": {
+      "category": "Target",
+      "name": "Target is Enemy",
+      "description": "Returns true if the target is hostile to the player."
+    },
+    "tarIsPlayer": {
+      "category": "Target",
+      "name": "Target is Player",
+      "description": "Returns true if the target is a real player character."
+    },
+    "tarType": {
+      "category": "Target",
+      "name": "Target is NPC Type",
+      "description": "Returns true if the target's type (humanoid, beast, undead, etc) matches the type specified.",
+      "inputDesc": "See https://warcraft.wiki.gg/wiki/API_UnitCreatureType for type options.",
+      "inputs": [
+        {
+          "label": "Unit Type",
+          "type": "string"
+        }
+      ]
+    },
+    "tarFamily": {
+      "category": "Target",
+      "name": "Target is NPC Family",
+      "description": "Returns true if the target's family (Fox, Crab, Bear, etc) matches the family specified. Does not work on all creatures, but works on almost all beasts. Will return false for anything it doesn't work on.",
+      "inputDesc": "See https://warcraft.wiki.gg/wiki/API_UnitCreatureFamily for family options.",
+      "inputs": [
+        {
+          "label": "Unit Family",
+          "type": "string"
+        }
+      ]
+    },
+    "tarDisplay": {
+      "category": "Target",
+      "name": "Target has Display ID",
+      "description": "Checks if your target has the given Display ID. Note that this relies on the Epsilon AddOn, and that Display ID sync is not instant and may have a very small delay from when you target the NPC until that data is available.",
+      "inputs": [
+        {
+          "label": "Display ID",
+          "type": "number"
+        }
+      ]
+    },
+    "zoneName": {
+      "category": "Map / Zone / Location",
+      "name": "Zone Name",
+      "description": "Returns true if the name of the zone you are currently in is the same as the name provided.",
+      "inputs": [
+        {
+          "label": "Zone Name",
+          "type": "string"
+        }
+      ]
+    },
+    "subZoneName": {
+      "category": "Map / Zone / Location",
+      "name": "Subzone Name",
+      "description": "Returns true if the name of the sub-zone you are currently in is the same as the name provided.",
+      "inputs": [
+        {
+          "label": "Subzone Name",
+          "type": "string"
+        }
+      ]
+    },
+    "mmZoneName": {
+      "category": "Map / Zone / Location",
+      "name": "Minimap Zone Name",
+      "description": "Returns true if the name of the zone name shown on your mini-map you are currently in is the same as the name provided. Zone name on Mini-Map is dynamic between Zone, Sub-Zone, and WMO Areas.",
+      "inputs": [
+        {
+          "label": "Subzone Name",
+          "type": "string"
+        }
+      ]
+    },
+    "mapID": {
+      "category": "Map / Zone / Location",
+      "name": "Map ID",
+      "description": "Returns true if the map you are currently on is the same ID as the ID provided.",
+      "inputs": [
+        {
+          "label": "Map ID",
+          "type": "number"
+        }
+      ]
+    },
+    "inRangeXYZ": {
+      "category": "Map / Zone / Location",
+      "name": "Within Range of Coordinates",
+      "description": "Checks if you are within the given range (distance / radius) of specific X Y Z coordinates on the given map ID.",
+      "inputDesc": "Range is calculated as radial distance from the point. Z Coord (Height) is optional; if given, height is included in distance check, if not, distance is calculated on a 2D plane excluding height.\nMap ID is required and will fail range checks if you are on a different map; You may set Map ID as 0 however to skip map ID checks and only look at XY(Z) Range.",
+      "inputExample": "<2932, 6175.5, 123.5, 1737, 15> - Checks if player is within 15 yards of the given coordinates in Dranosh Valley (which in this case, is the '.tele start' portal).",
+      "inputs": [
+        {
+          "label": "X Coordinate",
+          "type": "number"
+        },
+        {
+          "label": "Y Coordinate",
+          "type": "number"
+        },
+        {
+          "label": "Z Coordinate",
+          "type": "number?"
+        },
+        {
+          "label": "Map ID",
+          "type": "number"
+        },
+        {
+          "label": "Range (Distance)",
+          "type": "number"
+        }
+      ]
+    },
+    "arcLocations": {
+      "category": "Map / Zone / Location",
+      "name": "Arc Location Exists",
+      "description": "Checks if an Arc Location already exists, by name.",
+      "inputDesc": "The name of the Arc Location 'Key', created by the ARC.LOCATIONS API or a 'Save Location (ARC)' action.",
+      "inputExample": "<169_Tavern> - Checks if the ArcLocation named <169_Tavern> exists.",
+      "inputs": [
+        {
+          "label": "Location Name/Key",
+          "type": "string"
+        }
+      ]
+    },
+    "phIsMember": {
+      "category": "Phase",
+      "name": "Is Member",
+      "description": "If your character is a member of the phase."
+    },
+    "phIsOfficer": {
+      "category": "Phase",
+      "name": "Is Officer",
+      "description": "If your character is an officer of the phase."
+    },
+    "phIsOwner": {
+      "category": "Phase",
+      "name": "Is Owner",
+      "description": "If your character is the owner of the phase."
+    },
+    "phDMOn": {
+      "category": "Phase",
+      "name": "DM Mode Enabled",
+      "description": "If phase DM mode is currently enabled."
+    },
+    "phIDIs": {
+      "category": "Phase",
+      "name": "Is in Phase ID",
+      "description": "If you are in a specific phase number / ID.",
+      "inputs": [
+        {
+          "label": "Phase ID",
+          "type": "number"
+        }
+      ]
+    },
+    "phTime": {
+      "category": "Phase",
+      "name": "Current Time (Phase)",
+      "description": "If the Phase Time is a certain time. Can provide a second input to check if within X minutes of that time.",
+      "inputDesc": "If modifier input is a number, checks if you are within that many minutes of the given time, otherwise checks if it's exactly that time.",
+      "inputExample": "<13:30, 30> - Check's if it's within 30 minutes from 1:30pm - AKA: Check's if it's 1pm-2pm at all.",
+      "inputs": [
+        {
+          "label": "Time",
+          "type": "string<hour:minute>"
+        },
+        {
+          "label": "Mod",
+          "type": "number?"
+        }
+      ]
+    },
+    "phTimeAft": {
+      "category": "Phase",
+      "name": "Current Time is After",
+      "description": "If the Phase Time is after (later than) a certain time.",
+      "inputs": [
+        {
+          "label": "Time",
+          "type": "string<hour:minute>"
+        }
+      ]
+    },
+    "phTimeBef": {
+      "category": "Phase",
+      "name": "Current Time is Before",
+      "description": "If the Phase Time is before (earlier than) a certain time.",
+      "inputs": [
+        {
+          "label": "Time",
+          "type": "string<hour:minute>"
+        }
+      ]
+    },
+    "UnitPowerBarShown": {
+      "category": "UI",
+      "name": "UnitPowerBar Shown",
+      "description": "Returns true if the Arcanum UnitPowerBar is shown, and optionally only if it's with the specific Power Name.",
+      "inputs": [
+        {
+          "label": "Power Name",
+          "type": "string?"
+        }
+      ]
+    },
+    "shiftKeyDown": {
+      "category": "Key Pressed",
+      "name": "Shift Key Pressed",
+      "description": "Returns true if the Shift Key is currently pressed. No input required."
+    },
+    "altKeyDown": {
+      "category": "Key Pressed",
+      "name": "Alt Key Pressed",
+      "description": "Returns true if the Alt Key is currently pressed. No input required."
+    },
+    "ctrlKeyDown": {
+      "category": "Key Pressed",
+      "name": "Control Key Pressed",
+      "description": "Returns true if the Control Key is currently pressed. No input required."
+    },
+    "genKeyDown": {
+      "category": "Key Pressed",
+      "name": "Other Key Pressed",
+      "description": "Returns true if the user-defined key is currently pressed. Can accept key (i.e., <tab>) or mouse button (i.e., <LeftButton>, <RightButton>) names.",
+      "inputs": [
+        {
+          "label": "Key or Mouse Button",
+          "type": "string"
+        }
+      ]
+    },
+    "arcSpellExists": {
+      "category": "Arcanum",
+      "name": "ArcSpell Exists (ArcID)",
+      "description": "Returns true if an ArcSpell exists. Can use this in a Cast ArcSpell action for example to make sure that spell exists first before attempting to cast it.",
+      "inputs": [
+        {
+          "label": "ArcSpell ID",
+          "type": "string<arcID>"
+        },
+        {
+          "label": "Phase?",
+          "type": "boolean?"
+        }
+      ]
+    },
+    "arcSpellOnCd": {
+      "category": "Arcanum",
+      "name": "ArcSpell is on Cooldown",
+      "description": "Returns true if the ArcSpell is on cooldown. Use a 'Not' condition if you want to ensure the spell is .. NOT.. on cooldown.",
+      "inputs": [
+        {
+          "label": "ArcSpell ID",
+          "type": "string<arcID>"
+        },
+        {
+          "label": "Phase?",
+          "type": "boolean?"
+        }
+      ]
+    },
+    "arcVarIsTrue": {
+      "category": "Arcanum",
+      "name": "ArcVar is True",
+      "description": "Returns true if the ArcVar tested is true / truthy. Note that any value that's NOT 'false' or 'nil' is considered truthy, so if the ArcVar = 'Tacos', then this would still succeed.",
+      "inputs": [
+        {
+          "label": "ArcVar",
+          "type": "string"
+        },
+        {
+          "label": "Phase?",
+          "type": "boolean?"
+        }
+      ]
+    },
+    "arcVarEquals": {
+      "category": "Arcanum",
+      "name": "ArcVar Equals",
+      "description": "Returns true if the ArcVar equals the given string directly.",
+      "inputs": [
+        {
+          "label": "ArcVar",
+          "type": "string"
+        },
+        {
+          "label": "Value",
+          "type": "string"
+        },
+        {
+          "label": "Phase?",
+          "type": "boolean?"
+        }
+      ]
+    },
+    "sparkOnCDCurr": {
+      "category": "Arcanum",
+      "name": "Spark on Cooldown (Current)",
+      "description": "Returns true if the current Spark is on cooldown. Best example is paired with 'Not' to hide a Spark when it's on Cooldown."
+    },
+    "sparkOnCDName": {
+      "category": "Arcanum",
+      "name": "Spark on Cooldown (By Spark CD Name)",
+      "description": "Returns true if the given Spark, by Cooldown (CD) Name, is on cooldown. Alt+Right-Click a Spark to copy it's CD Name.",
+      "inputs": [
+        {
+          "label": "Spark CD Name",
+          "type": "string"
+        }
+      ]
+    },
+    "cheatFly": {
+      "category": "Cheats",
+      "name": "Cheat Fly Enabled",
+      "description": "Returns true if Cheat Fly is enabled."
+    },
+    "cheatCast": {
+      "category": "Cheats",
+      "name": "Cheat Casttime Enabled",
+      "description": "Returns true if Cheat Casttime is enabled."
+    },
+    "cheatCooldown": {
+      "category": "Cheats",
+      "name": "Cheat Cooldown Enabled",
+      "description": "Returns true if Cheat Cooldown is enabled."
+    },
+    "cheatDuration": {
+      "category": "Cheats",
+      "name": "Cheat Duration Enabled",
+      "description": "Returns true if Cheat Duration is enabled."
+    },
+    "cheatGod": {
+      "category": "Cheats",
+      "name": "Cheat God Enabled",
+      "description": "Returns true if Cheat God is enabled."
+    },
+    "cheatPower": {
+      "category": "Cheats",
+      "name": "Cheat Power Enabled",
+      "description": "Returns true if Cheat Power is enabled."
+    },
+    "cheatSlowcast": {
+      "category": "Cheats",
+      "name": "Cheat Slowcast Enabled",
+      "description": "Returns true if Cheat Slowcast is enabled."
+    },
+    "cheatWaterwalk": {
+      "category": "Cheats",
+      "name": "Cheat Waterwalk Enabled",
+      "description": "Returns true if Cheat Waterwalk is enabled."
+    },
+    "roll": {
+      "category": "Cheats",
+      "name": "Random Roll",
+      "description": "Rolls a random number between the given min & max, and returns true only if the required number is Greater Than or Equal to the roll. If only min is given, it is treated as the max from 1 to #max.",
+      "inputDesc": "Because sometimes life needs to be unpredictable.",
+      "inputExample": "<15, 1, 20> to only succeed if a 15 or higher is rolled, out of a roll between 1 and 20.",
+      "inputs": [
+        {
+          "label": "Required Roll",
+          "type": "number"
+        },
+        {
+          "label": "Min Number",
+          "type": "number"
+        },
+        {
+          "label": "Max Number",
+          "type": "number"
+        }
+      ]
+    },
+    "script": {
+      "category": "Cheats",
+      "name": "Macro Script",
+      "description": "Perform a specified macro script.",
+      "inputs": [
+        {
+          "label": "Macro or Lua Script",
+          "type": "string"
+        }
+      ]
+    }
+  }
+}

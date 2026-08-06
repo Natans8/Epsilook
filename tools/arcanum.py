@@ -50,14 +50,22 @@ As a module::
     spell = ArcSpell(commID="fxtest", fullName="FX Test", actions=[ArcAction("SpellCast", "118")])
     print(encode_spell(spell))
 
-The action catalogue in ``arcanum_actions.json`` is generated from the addon source; regenerate it against a fresh
-clone with ``--regen-catalog <path-to-SpellCreator-checkout>``.
+Three catalogues sit beside this file, all generated from the addon source by ``regen-catalog``:
 
-**THE CATALOGUE SHIPPED HERE IS FROM THE STALER MIRROR.** It was parsed from a MindScape00/SpellCreator clone (last
-push 2024), while Epsilon serves the CURRENT addon from ``EpsilonRP/PublicAddOns`` at
-``_retail_/Interface/AddOns/SpellCreator/``. Real user exports carry ``breakOnMove``, ``flags``, ``castOnFail`` and
-per-action ``conditions`` that no source we parsed declares -- which is why ``ArcSpell.extra`` / ``ArcAction.extra``
-exist and why nothing here may enumerate-and-drop. Regenerate against PublicAddOns if an action ever looks missing.
+===========================  =============================================================================
+``arcanum_actions.json``     every action row type, its command, its typed inputs and whether it reverts
+``arcanum_conditions.json``  every condition type, for the OR-of-ANDs gate on a spell or a single action
+``arcanum_api.json``         the ``ARC`` runtime surface reachable from a Macro Script action
+===========================  =============================================================================
+
+**REGENERATE THEM AGAINST ``EpsilonRP/PublicAddOns``, NEVER AGAINST THE MINDSCAPE00 MIRROR.** Epsilon serves the
+current addon from ``_retail_/Interface/AddOns/SpellCreator/``; the MindScape00 clone was last pushed in 2024 and is
+**24 actions behind** (measured 2026-08-06 -- it lacks ``AnimKit``, ``Mount``/``Dismount``, ``PlayMusic``, the three
+sound-STOP actions, ``SendSay``/``SendYell``/``SendEmote`` and more). Keep MindScape00 for its wiki prose only.
+
+The addon is still ahead of us in places -- a real user export carried ``breakOnMove``, ``flags`` and ``castOnFail``
+before any source we had declared them -- which is why ``ArcSpell.extra`` / ``ArcAction.extra`` exist and why nothing
+here may enumerate-and-drop.
 """
 
 from __future__ import annotations
@@ -67,11 +75,14 @@ import json
 import re
 import sys
 import zlib
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 CATALOG_PATH = Path(__file__).with_name("arcanum_actions.json")
+CONDITIONS_PATH = Path(__file__).with_name("arcanum_conditions.json")
+API_PATH = Path(__file__).with_name("arcanum_api.json")
 
 # ---------------------------------------------------------------------------
 # AceSerializer-3.0
@@ -309,6 +320,34 @@ def decompress_for_import(text: str) -> Any:
 # ---------------------------------------------------------------------------
 
 
+# A conditions table is GROUPS of ROWS: Execute.lua's checkConditions ANDs the rows inside a group (a failed row
+# breaks that group) and ORs the groups (the first group to pass returns true). Disjunctive normal form. Absent or
+# empty passes. One row is {"Type": <catalogue key>, "Input": <comma-delimited string>, "IsNot": <bool>}.
+ConditionRow = dict[str, Any]
+ConditionGroup = list[ConditionRow]
+ConditionTable = list[ConditionGroup]
+
+
+def cond(type_: str, input_: str = "", is_not: bool = False) -> ConditionRow:
+    """One condition row. ``Input`` runs through input substitution before the check is evaluated."""
+    row: ConditionRow = {"Type": type_}
+    if input_:
+        row["Input"] = input_
+    if is_not:
+        row["IsNot"] = True
+    return row
+
+
+def all_of(*rows: ConditionRow) -> ConditionTable:
+    """Every row must pass -- one group. ``all_of(cond("hasAura", "1234"), cond("isOutdoors"))``."""
+    return [list(rows)]
+
+
+def any_of(*groups: ConditionGroup | ConditionRow) -> ConditionTable:
+    """Any group may pass. A bare row is promoted to its own group, so ``any_of(cond(a), cond(b))`` is a plain OR."""
+    return [g if isinstance(g, list) else [g] for g in groups]
+
+
 @dataclass
 class ArcAction:
     """One row of an ArcSpell. ``vars`` is the row's input box, verbatim."""
@@ -318,6 +357,9 @@ class ArcAction:
     delay: float = 0
     revertDelay: float | None = None
     selfOnly: bool = False
+    # Gates THIS row. Checked when the row fires -- and again when its revert fires, with whatever the world looks
+    # like by then, which is the trap: a condition that has since flipped silently cancels the rollback.
+    conditions: ConditionTable | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_table(self) -> dict[str, Any]:
@@ -331,18 +373,21 @@ class ArcAction:
         }
         if self.revertDelay is not None:
             table["revertDelay"] = self.revertDelay
+        if self.conditions is not None:
+            table["conditions"] = self.conditions
         table.update(self.extra)
         return table
 
     @classmethod
     def from_table(cls, t: dict[str, Any]) -> ArcAction:
-        known = {"actionType", "vars", "delay", "revertDelay", "selfOnly"}
+        known = {"actionType", "vars", "delay", "revertDelay", "selfOnly", "conditions"}
         return cls(
             actionType=t.get("actionType", ""),
             vars=t.get("vars", ""),
             delay=t.get("delay", 0),
             revertDelay=t.get("revertDelay"),
             selfOnly=bool(t.get("selfOnly", False)),
+            conditions=t.get("conditions"),
             extra={k: v for k, v in t.items() if k not in known},
         )
 
@@ -370,6 +415,13 @@ class ArcSpell:
     icon: int | None = None
     castbar: int | None = None
     cooldown: float | None = None
+    # Gates the WHOLE spell: checked once before any row fires. A failing check runs `castOnFail` if one is set.
+    conditions: ConditionTable | None = None
+    # Cancel the spell the moment the caster moves, jumps or sits. Every pending revert fires immediately when it
+    # cancels, so this is safe for a spell that changes state -- see stopRunningReverts in Execute.lua.
+    breakOnMove: bool | None = None
+    # commID of a spell to cast instead when `conditions` fail -- the graceful-refusal path.
+    castOnFail: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_table(self) -> dict[str, Any]:
@@ -378,23 +430,20 @@ class ArcSpell:
             "fullName": self.fullName,
             "actions": [a.to_table() for a in self.actions],
         }
-        if self.description is not None:
-            table["description"] = self.description
-        if self.author is not None:
-            table["author"] = self.author
-        if self.icon is not None:
-            table["icon"] = self.icon
-        if self.castbar is not None:
-            table["castbar"] = self.castbar
-        if self.cooldown is not None:
-            table["cooldown"] = self.cooldown
+        for key, value in (("description", self.description), ("author", self.author), ("icon", self.icon),
+                           ("castbar", self.castbar), ("cooldown", self.cooldown),
+                           ("conditions", self.conditions), ("breakOnMove", self.breakOnMove),
+                           ("castOnFail", self.castOnFail)):
+            if value is not None:
+                table[key] = value
         table.update(self.extra)
         return table
 
     @classmethod
     def from_table(cls, t: dict[str, Any]) -> ArcSpell:
         """Rebuild a spell from a decoded export, so decode -> edit -> re-encode is lossless."""
-        known = {"commID", "fullName", "actions", "description", "author", "icon", "castbar", "cooldown"}
+        known = {"commID", "fullName", "actions", "description", "author", "icon", "castbar", "cooldown",
+                 "conditions", "breakOnMove", "castOnFail"}
         return cls(
             commID=t.get("commID", ""),
             fullName=t.get("fullName", ""),
@@ -404,6 +453,9 @@ class ArcSpell:
             icon=t.get("icon"),
             castbar=t.get("castbar"),
             cooldown=t.get("cooldown"),
+            conditions=t.get("conditions"),
+            breakOnMove=t.get("breakOnMove"),
+            castOnFail=t.get("castOnFail"),
             extra={k: v for k, v in t.items() if k not in known},
         )
 
@@ -441,6 +493,121 @@ def load_catalog() -> dict[str, dict[str, Any]]:
     return json.loads(CATALOG_PATH.read_text(encoding="utf-8"))["actions"]
 
 
+# ---------------------------------------------------------------------------
+# Categories -- HOW a spell gets triggered, which decides what it may politely do.
+#
+# The user's rule, 2026-08-06: *"regular spells for personal use shouldn't shit in the chat, this is the job of the
+# roleplayer. Regular spells are visual aid."* The exception is a spell the PHASE author wrote to speak on its own
+# behalf -- a spark prompt, a gossip reply, an item that talks. So "may it write to chat" is not a property of the
+# action, it is a property of who triggered the spell, which is why this axis exists at all.
+# ---------------------------------------------------------------------------
+
+SPELL_CATEGORIES: dict[str, dict[str, Any]] = {
+    "personal": {
+        "trigger": "the player, from their vault, Quickcast book or a hotkey",
+        "chat": False,
+        "note": "A visual aid. The roleplayer writes their own emotes -- do not write them for them.",
+    },
+    "spark": {
+        "trigger": "walking into a location prompt (Sparks)",
+        "chat": True,
+        "note": "Phase-authored and speaks for the phase, not the player. Runs for GUESTS, so it must not need "
+                "member+ commands. Sparks pass inputs, so @input1@ is available.",
+    },
+    "item": {
+        "trigger": "using an item carrying an ArcTag, or a linked ArcSpell",
+        "chat": True,
+        "note": "@itemID@ / @itemName@ / @itemLink@ / @itemIcon@ are substituted. Reaches anyone holding the item.",
+    },
+    "gossip": {
+        "trigger": "an NPC gossip option",
+        "chat": True,
+        "note": "The NPC is speaking. Phase-authored; runs for guests.",
+    },
+    "chained": {
+        "trigger": "another ArcSpell (an ArcSpell action, or ARC:CAST)",
+        "chat": False,
+        "note": "A component, not a performance. Its caller owns the narration and the cleanup.",
+    },
+    "scene": {
+        "trigger": "an author or DM running a set piece",
+        "chat": True,
+        "note": "May take over camera, UI and music. Everything it takes over, it must give back.",
+    },
+}
+
+# Actions that put words on someone's screen. `speech` minus the two debug printers, which are for US, plus the
+# prompt family, which also interrupts.
+_CHAT_ACTIONS = {"SendSay", "SendYell", "SendEmote", "RaidMsg", "BoxMsg", "TalkingHead"}
+_DEBUG_PRINT_ACTIONS = {"PrintMsg", "ErrorMsg"}
+
+
+def lint_spell(spell: ArcSpell, category: str = "personal") -> list[str]:
+    """Design review, not validity: things the addon accepts happily and a player would resent.
+
+    ``validate_spell`` answers *would the addon reject this*. This answers *is this a well-made spell* -- state left
+    behind, chat the roleplayer did not ask for, a revert that will be silently dropped, a race between rows sharing
+    a delay. Returns human-readable warnings; empty means nothing to say.
+    """
+    warnings: list[str] = []
+    catalog = load_catalog()
+    meta = SPELL_CATEGORIES.get(category)
+    if meta is None:
+        return [f"unknown category {category!r} (one of: {', '.join(SPELL_CATEGORIES)})"]
+
+    if not spell.icon:
+        warnings.append("no icon -- it is the only thing identifying the spell in a Quickcast book or a Spark prompt")
+    if not spell.description:
+        warnings.append("no description -- this becomes the item tooltip's 'Use:' text if it is ever linked to one")
+
+    for i, action in enumerate(spell.actions, start=1):
+        entry = catalog.get(action.actionType, {})
+
+        if not meta["chat"] and action.actionType in _CHAT_ACTIONS:
+            warnings.append(
+                f"action {i}: {action.actionType} writes to chat, but a '{category}' spell should not -- "
+                "the roleplayer narrates. Move it to a spark/gossip/item spell, or drop it.")
+        if action.actionType in _DEBUG_PRINT_ACTIONS:
+            warnings.append(f"action {i}: {action.actionType} is a debug printer -- fine while testing, "
+                            "noise in a spell you hand to someone else")
+
+        # Execute.lua force-nulls revertDelay when the action declares no revert, so this is dropped in silence.
+        if action.revertDelay and not entry.get("revertable", True):
+            alt = entry.get("revertAlternative")
+            warnings.append(f"action {i}: {action.actionType} has no revert, so revertDelay is silently DROPPED"
+                            + (f" -- {alt.splitlines()[0]}" if alt else ""))
+
+        if entry.get("permission") in ("member", "officer"):
+            warnings.append(f"action {i}: {action.actionType} runs '.{entry['command'].split()[0]}', which a phase "
+                            f"GUEST cannot -- expect it to fail silently for most of your audience")
+
+        # Comma-splitting is the single most surprising thing about the input box.
+        if "," in action.vars and not entry.get("doNotDelimit") and entry.get("target") == "server":
+            warnings.append(f"action {i}: '{action.vars}' contains a comma and {action.actionType} is comma-split, "
+                            "so this runs once PER value -- intended?")
+
+    # A row that stops the spell has to beat every row it is stopping. The wiki's own item-requirement recipe says
+    # the same thing, and getting it wrong means the guard passes while the payload has already fired.
+    stops = [a for a in spell.actions if a.actionType == "ArcStopThisSpell"]
+    for stop in stops:
+        racing = [a for a in spell.actions if a is not stop and a.delay <= stop.delay]
+        if racing:
+            warnings.append(
+                f"ArcStopThisSpell fires at {stop.delay}s but {len(racing)} row(s) fire at or before it -- "
+                "a stop only stops what has not run yet. Give every guarded row a later delay.")
+
+    # State a spell turns on and never turns off. Not wrong -- a deliberate toggle is a real design -- but it is the
+    # thing most often forgotten, so it is worth naming.
+    if category in ("personal", "spark", "item", "gossip"):
+        sticky = [(i, a) for i, a in enumerate(spell.actions, start=1)
+                  if catalog.get(a.actionType, {}).get("family") in ("appearance", "ui", "camera")
+                  and a.revertDelay is None and catalog.get(a.actionType, {}).get("revertable")]
+        for i, action in sticky:
+            warnings.append(f"action {i}: {action.actionType} changes state with no revertDelay -- it persists after "
+                            "the spell ends. Intended as a toggle, or a missing rollback?")
+    return warnings
+
+
 def validate_spell(spell: ArcSpell) -> list[str]:
     """Return a list of problems the addon would reject or silently mangle. Empty list means good."""
     problems: list[str] = []
@@ -465,6 +632,33 @@ def validate_spell(spell: ArcSpell) -> list[str]:
             problems.append(f"action {i}: {action.actionType} does not support selfOnly")
         if entry and entry.get("dataName") and not action.vars:
             problems.append(f"action {i}: {action.actionType} expects input ({entry['dataName']})")
+        problems += _validate_conditions(action.conditions, f"action {i}")
+    problems += _validate_conditions(spell.conditions, "spell")
+    return problems
+
+
+def _validate_conditions(table: ConditionTable | None, where: str) -> list[str]:
+    """A conditions table is groups-of-rows. A bare row where a group belongs silently never matches."""
+    if table is None:
+        return []
+    problems: list[str] = []
+    catalog: dict[str, Any] = {}
+    if CONDITIONS_PATH.exists():
+        catalog = json.loads(CONDITIONS_PATH.read_text(encoding="utf-8"))["conditions"]
+    if not isinstance(table, list):
+        return [f"{where}: conditions must be a list of GROUPS, each a list of rows"]
+    for g, group in enumerate(table, start=1):
+        if not isinstance(group, list):
+            problems.append(f"{where}: condition group {g} is not a list -- conditions are groups of rows "
+                            "(OR of ANDs), so a single row still needs to be wrapped: [[{...}]]")
+            continue
+        for r, row in enumerate(group, start=1):
+            if not isinstance(row, dict) or "Type" not in row:
+                problems.append(f"{where}: condition {g}.{r} needs a 'Type'")
+                continue
+            if catalog and row["Type"] not in catalog:
+                problems.append(f"{where}: condition {g}.{r} unknown Type {row['Type']!r} "
+                                "(see: arcanum.py conditions)")
     return problems
 
 
@@ -476,7 +670,8 @@ def validate_spell(spell: ArcSpell) -> list[str]:
 def spell_from_spec(spec: dict[str, Any]) -> ArcSpell:
     actions = [ArcAction(**a) for a in spec.get("actions", [])]
     known = {f for f in ArcSpell.__dataclass_fields__ if f != "actions"}
-    unknown = set(spec) - known - {"actions"}
+    # `category` is ours, not the addon's: it drives lint_spell and is never encoded into the export.
+    unknown = set(spec) - known - {"actions", "category"}
     if unknown:
         raise ValueError(f"unknown spec field(s): {', '.join(sorted(unknown))}")
     return ArcSpell(actions=actions, **{k: v for k, v in spec.items() if k in known})
@@ -526,33 +721,62 @@ def summarize(spell: ArcSpell) -> str:
 # ---------------------------------------------------------------------------
 
 
-# The action families worth having at hand for testing what Epsilook shows: the two cast paths, auras, animations,
-# sounds, the morph/scale/speed routes the app draws pills for, teleports, and the raw command/macro escape hatches.
-# Everything else in the addon (Kinesis, TRP3, books, camera, mail, targeting minutiae) is still catalogued below --
-# it is just not listed by default, because it has nothing to do with this app.
-CORE_ACTIONS = {
-    # casting -- server-side .cast, and the client-side path that runs the pre-check layer
-    "SpellCast", "SpellTrig", "secCast", "secCastID", "secStopCasting",
-    # auras
-    "SpellAura", "RemoveAura", "RemoveAllAuras", "ToggleAura", "ToggleAuraSelf",
-    "PhaseAura", "PhaseUnaura", "GroupAura", "GroupUnaura",
-    # animations and poses
-    "Anim", "ResetAnim", "Standstate", "ResetStandstate", "ToggleSheath", "DefaultEmote",
-    # sound
-    "PlayLocalSoundKit", "PlayLocalSoundFile", "PlayPhaseSound",
-    # appearance and movement -- the routes Epsilook draws pills for
-    "Morph", "Unmorph", "Native", "Scale",
-    "Speed", "SpeedWalk", "SpeedFly", "SpeedSwim", "SpeedBackwalk",
-    # raw escape hatches
-    "Command", "MacroText",
-    # teleports -- the area pill's own route
-    "TeleCommand", "PhaseTeleCommand", "WorldportCommand",
-    # targeting, so a two-path test can fix its target instead of guessing at a refusal
-    "secTarget", "secClearTarg",
-    # labelling a test sheet as it runs
-    "PrintMsg", "ErrorMsg",
-    "CheatOn", "CheatOff",
+# Every action, grouped by what it is FOR. This replaced a flat core/non-core boolean, which was drawn up for
+# testing what Epsilook shows and is the wrong cut for composing a spell: it hid the whole camera, speech and
+# flow-control surface, which is most of what turns a list of effects into a scene.
+#
+# Anything not named here falls to "misc", and anything with a `dependency` is re-tagged "integration" during
+# generation -- so a new action in a future addon version lands somewhere honest instead of being dropped.
+ACTION_FAMILIES: dict[str, set[str]] = {
+    # the two cast paths: server-side .cast, and the client path that runs the pre-check layer
+    "casting": {"SpellCast", "SpellTrig", "secCast", "secCastID", "secStopCasting"},
+    "auras": {"SpellAura", "RemoveAura", "RemoveAllAuras", "ToggleAura", "ToggleAuraSelf",
+              "PhaseAura", "PhaseUnaura", "GroupAura", "GroupUnaura"},
+    "animation": {"Anim", "ResetAnim", "AnimKit", "Standstate", "ResetStandstate", "ToggleSheath", "DefaultEmote"},
+    "sound": {"PlayLocalSoundKit", "PlayLocalSoundFile", "PlayPhaseSound", "PlayMusic",
+              "StopLocalSoundKit", "StopLocalSoundFile", "StopMusic"},
+    "appearance": {"Morph", "Unmorph", "Native", "Scale", "Mount", "Dismount",
+                   "Equip", "Unequip", "EquipSet", "MogitEquip"},
+    "movement": {"Speed", "SpeedWalk", "SpeedFly", "SpeedSwim", "SpeedBackwalk",
+                 "StartAutoRun", "StopAutoRun", "ToggleAutoRun", "ToggleRun",
+                 "FollowUnit", "StopFollow", "MouselookModeStart"},
+    "teleport": {"TeleCommand", "PhaseTeleCommand", "WorldportCommand",
+                 "SaveARCLocation", "GotoARCLocation"},
+    # what the scene SAYS -- the half of RP that is not a visual at all
+    "speech": {"SendSay", "SendYell", "SendEmote", "PrintMsg", "ErrorMsg", "RaidMsg", "BoxMsg", "TalkingHead"},
+    # framing: what the audience is looking at, and what is in the way
+    "camera": {"ZoomCameraInBy", "ZoomCameraOutBy", "ZoomCameraInStart", "ZoomCameraOutStart", "ZoomCameraSet",
+               "ZoomCameraSaveCurrent", "ZoomCameraLoadSaved",
+               "RotateCameraLeftStart", "RotateCameraRightStart", "RotateCameraUpStart", "RotateCameraDownStart",
+               "RotateCameraStop"},
+    "ui": {"HideMostUI", "UnhideMostUI", "FadeInMainUI", "FadeOutMainUI",
+           "HideNames", "ShowNames", "RestoreNames", "ToggleNames",
+           "OpenWorldMap", "ToggleWorldMap", "UnitPowerBar", "UnitPowerBarValue", "ArcCastbar"},
+    # branching, chaining and stopping -- what makes an ArcSpell a program rather than a list
+    "flow": {"ArcStopThisSpell", "ArcSpell", "ArcSpellPhase", "ArcSpellCastImport", "ArcImport",
+             "ArcSaveFromPhase", "ArcStopSpells", "ArcStopSpellByName", "ArcTrigCooldown"},
+    # persistent values, which is how a spell becomes a two-way toggle
+    "state": {"ARCSet", "ARCTog", "ARCPhaseSet", "ARCPhaseTog"},
+    "prompts": {"BoxPromptCommand", "BoxPromptCommandChoice", "BoxPromptCommandNoInput",
+                "BoxPromptScript", "BoxPromptScriptChoice", "BoxPromptScriptNoInput"},
+    "items": {"AddItem", "AddRandomItem", "RemoveItem", "secUseItem", "OpenSendMail", "SendMail"},
+    "targeting": {"secTarget", "secClearTarg", "secFocus", "secClearFocus", "secAssist",
+                  "secTargLEnemy", "secTargLFriend", "secTargLTarg", "secTargNAny", "secTargNEnPlayer",
+                  "secTargNEnemy", "secTargNFrPlayer", "secTargNFriend", "secTargNParty", "secTargNRaid"},
+    "objects": {"SpawnBlueprint"},
+    "cheats": {"CheatOn", "CheatOff"},
+    # the escape hatches: anything the catalogue does not cover goes through one of these two
+    "raw": {"Command", "MacroText"},
+    "arcanum": {"ARCCopy", "QCBookAddSpell", "QCBookNewBook", "QCBookNewPage", "QCBookSetPosition",
+                "QCBookStyle", "QCBookSwitchPage", "QCBookToggle"},
 }
+
+_FAMILY_BY_KEY = {key: family for family, keys in ACTION_FAMILIES.items() for key in keys}
+
+# The families a composer reaches for constantly. `arcanum.py actions` shows these unless asked for more; it is a
+# display default, not a judgement about the rest.
+CORE_FAMILIES = {"casting", "auras", "animation", "sound", "appearance", "movement",
+                 "teleport", "speech", "flow", "state", "raw"}
 
 
 def _lua_string(text: str) -> str | None:
@@ -560,50 +784,248 @@ def _lua_string(text: str) -> str | None:
     return m.group(1).replace('\\"', '"').replace("\\n", "\n").replace("\\r", "\n") if m else None
 
 
+# One literal in a Lua concatenation chain: a quoted string, a helper that wraps a quoted string (the addon uses
+# these to colour a word in a tooltip -- the colour is noise here, the word is not), or a bare local we can resolve.
+_CHUNK = re.compile(
+    r"""\s*(?:
+        "(?P<dq>(?:[^"\\]|\\.)*)"
+      | '(?P<sq>(?:[^'\\]|\\.)*)'
+      | (?:\w+\.)*gen(?:Contrast|Example|Tooltip)?Text\s*\(\s*(?:'[^']*'\s*,\s*)?["'](?P<help>[^"']*)["']\s*\)
+      | (?P<ident>[A-Za-z_]\w*)
+    )""",
+    re.X,
+)
+
+
+def _lua_expr_string(text: str, consts: dict[str, str]) -> str | None:
+    """Resolve a Lua expression that is literals joined by ``..`` into one string.
+
+    The addon writes half its help text as ``"literal " .. Tooltip.genContrastText('.look spell') .. " more"``.
+    Taking only the first chunk -- what this used to do -- truncated 83 descriptions mid-sentence, which is exactly
+    the class of half-truth that gets acted on. Returns None if the expression starts with something unresolvable
+    (a function call, a table index), so the caller can leave the field out rather than record a guess.
+    """
+    out: list[str] = []
+    pos = 0
+    while True:
+        m = _CHUNK.match(text, pos)
+        if not m:
+            break
+        if m.group("dq") is not None:
+            out.append(m.group("dq"))
+        elif m.group("sq") is not None:
+            out.append(m.group("sq"))
+        elif m.group("help") is not None:
+            out.append(m.group("help"))
+        else:
+            ident = m.group("ident")
+            if ident not in consts:
+                break  # an unresolvable name: stop, but keep whatever we already have
+            out.append(consts[ident])
+        pos = m.end()
+        cont = re.match(r"\s*\.\.", text[pos:])
+        if not cont:
+            break
+        pos += cont.end()
+    if not out:
+        return None
+    joined = "".join(out)
+    return joined.replace('\\"', '"').replace("\\n", "\n").replace("\\r", "\n").replace("\\t", "\t")
+
+
+# What a command root implies about who may run it. DERIVED FROM THE COMMAND WORD, NOT MEASURED IN GAME -- Arcanum
+# itself carries no phase-permission field (all 28 `requirement`s in Data.lua are `C_Epsilon.RunPrivileged`, a
+# CLIENT-side protected-function gate, not a phase tier). Treat "member" and "officer" as "expect this to fail for a
+# guest and confirm before shipping a spell that relies on it", never as fact.
+_PERMISSION_BY_ROOT = {
+    "cast": "anyone", "aura": "anyone", "unaura": "anyone", "mod": "anyone", "morph": "anyone",
+    "demorph": "anyone", "dismount": "anyone", "tele": "anyone", "worldport": "anyone", "cheat": "anyone",
+    "group": "anyone",
+    "phase": "member", "gob": "member", "additem": "member",
+}
+
+
 def regen_catalog(checkout: Path) -> dict[str, Any]:
     """Extract the action registry from a SpellCreator checkout (Actions/Data.lua)."""
-    data_lua = checkout / "SpellCreator" / "Actions" / "Data.lua"
-    if not data_lua.exists():
-        data_lua = checkout / "Actions" / "Data.lua"
-    src = data_lua.read_text(encoding="utf-8")
+    src = _read_addon_file(checkout, "Actions/Data.lua")
+    consts = _top_level_consts(src)
 
     actions: dict[str, Any] = {}
     for m in re.finditer(r"\[ACTION_TYPE\.(\w+)]\s*=\s*(serverAction|scriptAction)\(\s*\"([^\"]*)\"\s*,\s*\{", src):
         key, kind, name = m.group(1), m.group(2), m.group(3)
-        # Walk braces to find the end of this entry's table.
-        depth, i = 1, m.end()
-        while depth and i < len(src):
-            if src[i] == "{":
-                depth += 1
-            elif src[i] == "}":
-                depth -= 1
-            i += 1
-        body = src[m.end(): i - 1]
+        body = src[m.end(): _match_brace(src, m.end()) - 1]
 
         entry: dict[str, Any] = {"name": name, "target": "server" if kind == "serverAction" else "script"}
-        for fieldname in ("command", "dataName", "example", "revert", "revertDesc", "inputDescription", "description"):
-            fm = re.search(rf"\b{fieldname}\s*=", body)
+        for fieldname in ("command", "dataName", "example", "revert", "revertDesc", "revertAlternative",
+                          "inputDescription", "description", "dependency", "disabledWarning"):
+            fm = re.search(rf"^\s*{fieldname}\s*=", body, re.M)
             if not fm:
                 continue
-            value = _lua_string(body[fm.end():])
+            value = _lua_expr_string(body[fm.end():], consts)
             if value is not None:
                 entry[fieldname] = value
-        entry["selfAble"] = bool(re.search(r"\bselfAble\s*=\s*true", body))
-        if key in CORE_ACTIONS:
-            entry["core"] = True
-        dep_match = re.search(r"\bdependency\s*=", body)
-        if dep_match:
-            dep = _lua_string(body[dep_match.end():])
-            if dep:
-                entry["dependency"] = dep
+
+        # Flags that change what the row DOES, not just how it reads.
+        for flag in ("selfAble", "doNotDelimit", "convertLinks", "softDependency", "doNotSanitizeNewLines"):
+            if re.search(rf"\b{flag}\s*=\s*true", body):
+                entry[flag] = True
+        req = re.search(r"^\s*requirement\s*=", body, re.M)
+        if req:
+            entry["requirement"] = _lua_expr_string(body[req.end():], consts) or "function"
+
+        # A revertDelay is FORCE-NULLED by Execute.lua when the action has no revert, so "can this roll itself back"
+        # is a property worth stating outright rather than inferring from the presence of a string.
+        entry["revertable"] = bool(re.search(r"^\s*revert\s*=", body, re.M))
+        if entry.get("command"):
+            entry["permission"] = _PERMISSION_BY_ROOT.get(entry["command"].split()[0], "unknown")
+        # A dependency wins over the hand-written family: an action that needs Kinesis or TRP3 loaded is an
+        # integration first and an animation second, because "is it even available" outranks what it does.
+        entry["family"] = "integration" if entry.get("dependency") else _FAMILY_BY_KEY.get(key, "misc")
         actions[key] = entry
 
     return {
-        "_comment": "Generated from MindScape00/SpellCreator Actions/Data.lua by tools/arcanum.py --regen-catalog. "
-                    "Script actions take a Lua function as their command, so only server actions carry a command string. "
-                    "Descriptions are best-effort: the addon builds some of them by concatenation and only the first "
-                    "literal chunk is captured.",
+        "_comment": "Generated from EpsilonRP/PublicAddOns Actions/Data.lua by "
+                    "`python tools/arcanum.py regen-catalog <checkout>`. Script actions take a Lua function as their "
+                    "command, so only server actions carry a command string. `revertable` is whether the action "
+                    "declares a revert at all -- Execute.lua force-nulls revertDelay when it does not, so a revert on "
+                    "a non-revertable row is silently dropped. `doNotDelimit` means the input is NOT comma-split: "
+                    "without it, `a,b` runs the action once per value. `permission` is DERIVED FROM THE COMMAND WORD "
+                    "and is a prediction, not a measurement -- the addon carries no phase-permission field. `family` "
+                    "groups actions by what they are FOR; anything needing another addon is tagged 'integration', "
+                    "because whether it is available outranks what it does.",
         "actions": actions,
+    }
+
+
+def _match_brace(src: str, start: int) -> int:
+    """Index just past the ``}`` closing the ``{`` that ``start`` sits inside."""
+    depth, i = 1, start
+    while depth and i < len(src):
+        if src[i] == "{":
+            depth += 1
+        elif src[i] == "}":
+            depth -= 1
+        i += 1
+    return i
+
+
+def _read_addon_file(checkout: Path, relative: str) -> str:
+    """Read a file from a SpellCreator checkout, tolerating either nesting depth."""
+    for candidate in (checkout / "SpellCreator" / relative, checkout / relative):
+        if candidate.exists():
+            return candidate.read_text(encoding="utf-8")
+    raise SystemExit(
+        f"{relative} not found under {checkout}.\n"
+        "Point this at a SpellCreator checkout -- prefer EpsilonRP/PublicAddOns at "
+        "_retail_/Interface/AddOns/SpellCreator/, which is the addon Epsilon actually serves."
+    )
+
+
+def _top_level_consts(src: str) -> dict[str, str]:
+    """The file-local string constants the help text is concatenated from."""
+    consts: dict[str, str] = {}
+    for m in re.finditer(r'^local (\w+)\s*=\s*"((?:[^"\\]|\\.)*)"\s*$', src, re.M):
+        consts[m.group(1)] = m.group(2).replace('\\"', '"').replace("\\n", "\n").replace("\\r", "\n")
+    return consts
+
+
+def regen_conditions(checkout: Path) -> dict[str, Any]:
+    """Extract the condition registry from Actions/ConditionsData.lua.
+
+    A spell and every individual action can carry ``conditions``: a list of GROUPS, each a list of ROWS. Execute.lua
+    ANDs the rows within a group (a failed row breaks the group) and ORs the groups (a passed group returns true),
+    so the table is disjunctive normal form. Each row is ``{Type = <key>, Input = <string>, IsNot = <bool?>}``.
+    """
+    src = _read_addon_file(checkout, "Actions/ConditionsData.lua")
+    consts = _top_level_consts(src)
+
+    conditions: dict[str, Any] = {}
+    category = None
+    # Categories and condition entries interleave in one literal table, so walk the source in order and let the most
+    # recent catName own the keys that follow it.
+    for m in re.finditer(r'catName\s*=\s*"([^"]+)"|^\s*key\s*=\s*"([^"]+)"', src, re.M):
+        if m.group(1):
+            category = m.group(1)
+            continue
+        key = m.group(2)
+        body = src[m.end(): _match_brace(src, m.end()) - 1]
+        entry: dict[str, Any] = {"category": category}
+        for fieldname in ("name", "description", "inputDesc", "inputExample"):
+            fm = re.search(rf"^\s*{fieldname}\s*=", body, re.M)
+            if fm:
+                value = _lua_expr_string(body[fm.end():], consts)
+                if value is not None:
+                    entry[fieldname] = value
+        inputs_match = re.search(r"^\s*inputs\s*=\s*\{", body, re.M)
+        if inputs_match:
+            inputs_body = body[inputs_match.end(): _match_brace(body, inputs_match.end()) - 1]
+            entry["inputs"] = [
+                {"label": im.group(1), "type": im.group(2)}
+                for im in re.finditer(r'input\(\s*"([^"]*)"\s*,\s*"([^"]*)"', inputs_body)
+            ]
+        conditions[key] = entry
+
+    return {
+        "_comment": "Generated from EpsilonRP/PublicAddOns Actions/ConditionsData.lua by "
+                    "`python tools/arcanum.py regen-catalog <checkout>`. Conditions attach to a whole spell "
+                    "(spell.conditions) or to one action (action.conditions), same shape either way: a list of "
+                    "GROUPS, each a list of ROWS of {Type, Input, IsNot}. Execute.lua ANDs within a group and ORs "
+                    "across groups -- disjunctive normal form. No conditions, or an empty list, passes. Input is a "
+                    "comma-delimited string and runs through input substitution before evaluation.",
+        "conditions": conditions,
+    }
+
+
+def regen_api(checkout: Path) -> dict[str, Any]:
+    """Extract the ARC runtime surface from API.lua -- what a Macro Script action can call.
+
+    Worth generating rather than reading the wiki: the wiki documents about ten of these and the file exposes far
+    more, including the whole ``ARC.XAPI`` tree (sparks, UI messages, sounds, cooldowns, phase, items, time).
+    """
+    src = _read_addon_file(checkout, "API.lua")
+    lines = src.splitlines()
+
+    entries: dict[str, Any] = {}
+    for i, line in enumerate(lines):
+        entry: dict[str, Any]
+        m = re.match(r"^(ARC[\w.]*(?:\.\w+)?)\s*=\s*(.+)$", line)
+        if not m:
+            m = re.match(r"^function (ARC[\w.]*):(\w+)\(", line)
+            if not m:
+                continue
+            name, entry = f"{m.group(1)}:{m.group(2)}", {"kind": "method"}
+        else:
+            name, rhs = m.group(1), m.group(2)
+            if rhs.startswith("{}"):
+                continue  # namespace table, not a callable
+            entry = {"kind": "wrapped" if "wrapToEvalFinalVal" in rhs else "raw"}
+        # The addon documents these as `-- SYNTAX:` comments and luadoc `---@param` lines directly above.
+        doc: list[str] = []
+        params: list[str] = []
+        for back in range(i - 1, max(-1, i - 12), -1):
+            prev = lines[back].strip()
+            if prev.startswith("-- SYNTAX:"):
+                doc.insert(0, prev[len("-- SYNTAX:"):].strip())
+            elif prev.startswith("---@param"):
+                params.insert(0, prev[len("---@param"):].strip())
+            elif prev.startswith("--") or prev == "":
+                continue
+            else:
+                break
+        if doc:
+            entry["syntax"] = doc
+        if params:
+            entry["params"] = params
+        entries[name] = entry
+
+    return {
+        "_comment": "Generated from EpsilonRP/PublicAddOns API.lua by "
+                    "`python tools/arcanum.py regen-catalog <checkout>`. This is the ARC surface a Macro Script "
+                    "action can call. `kind` is how the entry is assigned: 'wrapped' entries went through "
+                    "wrapToEvalFinalVal and accept BOTH `ARC:X(a)` and `ARC.X(a)`; 'raw' entries accept ONLY the DOT "
+                    "form, because a colon call passes the ARC table as the first argument. ARC.ImportSpell is the "
+                    "raw case that has already bitten us.",
+        "api": entries,
     }
 
 
@@ -747,11 +1169,27 @@ def main(argv: list[str] | None = None) -> int:
     p_decode = sub.add_parser("decode", help="decode an export string back to JSON")
     p_decode.add_argument("string", help="the export string, or '-' for stdin")
 
+    p_lint = sub.add_parser("lint", help="design review: state left behind, unwanted chat, dropped reverts, races")
+    p_lint.add_argument("spec", help="path to a JSON spec, or '-' for stdin")
+    p_lint.add_argument("--category", choices=sorted(SPELL_CATEGORIES),
+                        help="how the spell is triggered (default: the spec's own, else personal)")
+
+    sub.add_parser("categories", help="how a spell gets triggered, and what that lets it politely do")
+
     p_actions = sub.add_parser("actions", help="list or search the action catalogue (core families by default)")
     p_actions.add_argument("query", nargs="?", default="")
-    p_actions.add_argument("--all", action="store_true", help="include the addon's non-core families")
+    p_actions.add_argument("--all", action="store_true", help="include every family, integrations included")
+    p_actions.add_argument("--family", help=f"one of: {', '.join(sorted(ACTION_FAMILIES))}, integration, misc")
     p_actions.add_argument("--server-only", action="store_true")
     p_actions.add_argument("--verbose", "-v", action="store_true")
+
+    p_cond = sub.add_parser("conditions", help="list or search the condition catalogue")
+    p_cond.add_argument("query", nargs="?", default="")
+    p_cond.add_argument("--verbose", "-v", action="store_true")
+
+    p_api = sub.add_parser("api", help="list or search the ARC runtime surface (for Macro Script actions)")
+    p_api.add_argument("query", nargs="?", default="")
+    p_api.add_argument("--verbose", "-v", action="store_true")
 
     p_round = sub.add_parser("roundtrip", help="encode a spec, decode it again, assert they match")
     p_round.add_argument("spec")
@@ -766,18 +1204,58 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.cmd == "regen-catalog":
-        catalog = regen_catalog(Path(args.checkout))
+        checkout = Path(args.checkout)
+        catalog = regen_catalog(checkout)
         CATALOG_PATH.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        core = sum(1 for e in catalog["actions"].values() if e.get("core"))
-        print(f"wrote {CATALOG_PATH} ({len(catalog['actions'])} actions, {core} core)")
+        families = Counter(e["family"] for e in catalog["actions"].values())
+        print(f"wrote {CATALOG_PATH.name} ({len(catalog['actions'])} actions across {len(families)} families)")
+        unclassified = families.get("misc", 0)
+        if unclassified:
+            print(f"  ⚠ {unclassified} landed in 'misc' -- the addon added actions ACTION_FAMILIES does not know: "
+                  + ", ".join(k for k, e in catalog["actions"].items() if e["family"] == "misc"))
+
+        conditions = regen_conditions(checkout)
+        CONDITIONS_PATH.write_text(json.dumps(conditions, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"wrote {CONDITIONS_PATH.name} ({len(conditions['conditions'])} conditions)")
+
+        api = regen_api(checkout)
+        API_PATH.write_text(json.dumps(api, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"wrote {API_PATH.name} ({len(api['api'])} ARC entry points)")
         return 0
 
     if args.cmd == "build":
-        spell = spell_from_spec(_read_spec(args.spec))
+        spec = _read_spec(args.spec)
+        spell = spell_from_spec(spec)
         out = encode_spell(spell, validate=not args.no_validate)
         if args.pretty:
             print(summarize(spell), file=sys.stderr)
+        # Design warnings always go to stderr, so the export string on stdout stays pipeable either way. They are
+        # advice, not errors -- a deliberate toggle legitimately trips the "changes state" warning.
+        for warning in lint_spell(spell, spec.get("category", "personal")):
+            print(f"lint: {warning}", file=sys.stderr)
         print(out)
+        return 0
+
+    if args.cmd == "lint":
+        spec = _read_spec(args.spec)
+        spell = spell_from_spec(spec)
+        category = args.category or spec.get("category", "personal")
+        problems = validate_spell(spell)
+        warnings = lint_spell(spell, category)
+        for p in problems:
+            print(f"INVALID  {p}")
+        for w in warnings:
+            print(f"warn     {w}")
+        if not problems and not warnings:
+            print(f"clean ({category}): {len(spell.actions)} actions, nothing to flag")
+        return 1 if problems else 0
+
+    if args.cmd == "categories":
+        for name, meta in SPELL_CATEGORIES.items():
+            print(f"{name:<10} triggered by {meta['trigger']}")
+            print(f"{'':<10} chat: {'allowed -- it speaks for the phase' if meta['chat'] else 'NO -- visual aid only'}")
+            print(f"{'':<10} {meta['note']}")
+            print()
         return 0
 
     if args.cmd == "quick":
@@ -801,21 +1279,76 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "actions":
         catalog = load_catalog()
         query = args.query.lower()
-        for key, entry in sorted(catalog.items()):
+        shown = 0
+        for key, entry in sorted(catalog.items(), key=lambda kv: (kv[1].get("family", "misc"), kv[0])):
+            family = entry.get("family", "misc")
             if args.server_only and entry["target"] != "server":
                 continue
-            if not args.all and not entry.get("core"):
+            if args.family and family != args.family:
                 continue
-            haystack = f"{key} {entry.get('name', '')} {entry.get('command', '')} {entry.get('description', '')}".lower()
+            if not args.all and not args.family and family not in CORE_FAMILIES:
+                continue
+            haystack = f"{key} {family} {entry.get('name', '')} {entry.get('command', '')} " \
+                       f"{entry.get('description', '')}".lower()
             if query and query not in haystack:
                 continue
+            shown += 1
             cmd = f"  .{entry['command']}" if entry.get("command") else ""
-            print(f"{key:<28} {entry.get('name', ''):<28}{cmd}")
+            revert = "" if entry.get("revertable") else "  [no revert]"
+            print(f"{family:<12} {key:<28} {entry.get('name', ''):<30}{cmd}{revert}")
             if args.verbose:
                 if entry.get("dataName"):
-                    print(f"    input: {entry['dataName']}")
+                    print(f"    input: {entry['dataName']}"
+                          + ("  (comma-split: one run per value)" if not entry.get("doNotDelimit") else ""))
                 if entry.get("description"):
                     print(f"    {entry['description'].splitlines()[0]}")
+                for extra in ("inputDescription", "example", "revertAlternative", "dependency"):
+                    if entry.get(extra):
+                        print(f"    {extra}: {entry[extra].splitlines()[0]}")
+        if not shown:
+            print("no actions matched -- try --all, or --family "
+                  f"({', '.join(sorted(ACTION_FAMILIES))}, integration, misc)", file=sys.stderr)
+        return 0
+
+    if args.cmd == "conditions":
+        if not CONDITIONS_PATH.exists():
+            print("no conditions catalogue -- run: arcanum.py regen-catalog <checkout>", file=sys.stderr)
+            return 1
+        conditions = json.loads(CONDITIONS_PATH.read_text(encoding="utf-8"))["conditions"]
+        query = args.query.lower()
+        for key, entry in sorted(conditions.items(), key=lambda kv: (kv[1].get("category") or "", kv[0])):
+            haystack = f"{key} {entry.get('category', '')} {entry.get('name', '')} " \
+                       f"{entry.get('description', '')}".lower()
+            if query and query not in haystack:
+                continue
+            inputs = ", ".join(f"{i['label']}:{i['type']}" for i in entry.get("inputs", []))
+            print(f"{entry.get('category', ''):<22} {key:<26} {entry.get('name', '')}")
+            if inputs:
+                print(f"    inputs: {inputs}")
+            if args.verbose and entry.get("description"):
+                print(f"    {entry['description'].splitlines()[0]}")
+            if args.verbose and entry.get("inputExample"):
+                print(f"    e.g. {entry['inputExample'].splitlines()[0]}")
+        return 0
+
+    if args.cmd == "api":
+        if not API_PATH.exists():
+            print("no API catalogue -- run: arcanum.py regen-catalog <checkout>", file=sys.stderr)
+            return 1
+        api_catalog: dict[str, dict[str, Any]] = json.loads(API_PATH.read_text(encoding="utf-8"))["api"]
+        query = args.query.lower()
+        for name, entry in sorted(api_catalog.items()):
+            if query and query not in f"{name} {' '.join(entry.get('syntax', []))}".lower():
+                continue
+            # A 'raw' entry must be called with a DOT: it was assigned without wrapToEvalFinalVal, so a colon call
+            # passes the ARC table in as the first argument and dies. ARC.ImportSpell is the one that has bitten us.
+            call = "ARC.X only" if entry["kind"] == "raw" else "ARC:X or ARC.X"
+            print(f"{name:<34} [{call}]")
+            for line in entry.get("syntax", []):
+                print(f"    {line}")
+            if args.verbose:
+                for p in entry.get("params", []):
+                    print(f"    @param {p}")
         return 0
 
     if args.cmd == "selftest":
