@@ -507,6 +507,26 @@ named.**
   the server adds its own, they exist in no client db2, and the only sources are the user or Epsilon's own data. Check
   the max before reporting an id as missing.
 
+**`SoundKit`, `AnimationData`, `Emotes`, `EmotesTextSound`, added 2026-08-06 — the RAW-ID ARSENAL.** Arcanum addresses
+assets by raw id (`.mod anim`, `.mod animkit`, its sound actions), and Epsilook only ever indexed the ones a SPELL
+reaches. **9.2.7 — the build Epsilon RUNS — was the one version that cached `SoundKitEntry` but neither `SoundKit` nor
+`AnimationData`**, while 10.2.7 and 11.2.7 had both; so the product version could not answer *"what sound kits exist"*
+or *"what is animation 403 called"*. Now on 9.2.7: **`SoundKit` 180,112 · `SoundKitEntry` 494,534 · `AnimationData`
+1,726 · `Emotes` 409 · `EmotesTextSound` 2,687.**
+
+- **`Emotes` is the one `.mod anim` takes** — the action's own help says *"Use `.look emote` to find IDs"*.
+  `AnimationData` is the layer beneath (what `AnimKitSegment` points at); they are different id spaces, so do not cross
+  them.
+- **`SoundKit` carries `SoundType`**, which is the parked "sound vocabulary" idea's data — now queryable without a pack
+  rebuild.
+- **A kit with many `SoundKitEntry` rows is a RANDOM-VARIATION kit**: casting it plays *one* of them. For a sound that
+  must be identical every time, take a single `FileDataID` and play the file instead.
+- **⛔ `SoundKitName` WAS TRIED HERE AND REMOVED THE SAME HOUR — do not add it back.** It stopped shipping after 8.3.0
+  (DATA_ROUTES §3u), so wago returns **0 bytes** on every 9.x/10.x/11.x build — and because `fetch_extra_tables` skips a
+  destination that already exists, that empty file is **permanent cache poisoning against a table that will never
+  arrive**. 8 were written and deleted. The Classic builds that do ship it already get it through the normal CSV sweep,
+  and 9.2.7's kit names come from the pinned 8.3.0 download the pack build makes.
+
 **`SpellAuraOptions`, added 2026-08-06 — the stack ceiling, which lives nowhere else.** Not on `Spell`, not on
 `SpellMisc`, not in any attribute bit: before this table, *"how far does this stack"* had no answer in SQL at all.
 Present on **all ten builds, zero drift**.
