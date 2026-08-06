@@ -359,6 +359,28 @@ def check_pack_sections(rep: Report) -> None:
         rep.ok("pack sections", f"all {len(sections)} read by data.ts")
 
 
+def check_arcanum(rep: Report) -> None:
+    """tools/arcanum.py must still produce strings Arcanum can import.
+
+    The codec is a reimplementation of the addon's AceSerializer + LibDeflate
+    chain, so it can drift from the real thing silently: a spell we emit still
+    round-trips through our OWN decoder while the game rejects it. The selftest
+    decodes a fixture the addon's actual Lua libraries produced, which is the
+    half that cannot be faked from inside this file.
+    """
+    try:
+        sys.path.insert(0, str(ROOT / "tools"))
+        import arcanum
+    except ImportError as exc:
+        rep.skip("arcanum codec", f"not importable ({exc})")
+        return
+    failures = arcanum.selftest()
+    if failures:
+        rep.fail("arcanum codec", failures[0].splitlines()[0])
+    else:
+        rep.ok("arcanum codec", f"{len(arcanum.load_catalog())} actions, golden fixture decodes")
+
+
 def check_inspectors(rep: Report) -> None:
     """The IDE inspection servers must be REACHABLE, not merely intended.
 
@@ -447,6 +469,7 @@ def main() -> int:
     check_line_endings(rep)
     check_manifest(rep)
     check_pack_sections(rep)
+    check_arcanum(rep)
     check_inspectors(rep)
     check_docs(rep, args.base)
 
