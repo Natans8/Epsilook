@@ -279,11 +279,33 @@ thing, and conflating them is how the sound-kit hunt went wrong twice:**
 | **0 bytes**  | fid is known to the build but carries nothing (retired/not shipped) |
 | **HTTP 404** | fid is not in that build's file index at all                        |
 
-**⛔ THE ENTIRE `*_internal` FAMILY IS 404 EVERYWHERE — do not chase it.** ~40 of them exist as paths (`spell_internal`,
-`spelleffect_internal`, `spellxspellvisual_internal`, `soundkit_internal`, `creature_internal` …)
-and they look exactly like where dev-facing data would live. They are internal-build-only files whose PATHS leaked into
-the community listfile; none is served for 9.2.7 or 11.2.7. (`spellname_internal.scn` is the lone exception at **84
-bytes** on 9.2.7 — an empty stub.)
+#### ⛔ THE `*_internal` FAMILY IS NOT DATA, AND THE NAMES ARE NOT BLIZZARD'S — traced 2026-08-06
+
+46 `dbfilesclient/*_internal.db2` paths exist (`spell_internal`, `spelleffect_internal`, `spellxspellvisual_internal`,
+`soundkit_internal`, `creature_internal` …) and they look exactly like where dev-facing data would live. **All three
+independent checks say there is nothing behind them:**
+
+- **Never shipped, in any build.** `soundkit_internal` (fid 1323193) is **HTTP 404** at 7.3.0, 7.3.2, 7.3.5, 8.0.1,
+  8.3.0 and 9.2.7 — including the Legion builds contemporary with its own fid — while the `soundkit.db2` control returns
+  1.5–2.8 MB every time. Nobody has ever held one of these files.
+- **The NAMES are community guesses, not official.** All 46 are in `community-listfile.csv` and **0 are in
+  `verified-listfile.csv`**, whose names are hash-backed. The listfile README is explicit that unverified names "can
+  change at any time if a better name is thought of". By contrast `soundkitname.db2` **is** in the verified listfile — a
+  real, hash-confirmed Blizzard filename. So the two are not the same class of fact at all.
+- **No structural definition exists** for any of them: `SoundKit_internal.dbd`, `SpellEffect_internal.dbd` and
+  `Spell_internal.dbd` all 404 in WoWDBDefs, where `SoundKitName.dbd` resolves.
+
+**⭐ WHERE THE NAMES MOST LIKELY CAME FROM — 38 of the 46 map exactly onto TrinityCore's `hotfixes` table set**
+(`soundkit_internal` → `sound_kit`, `spellauraoptions_internal` → `spell_aura_options`, `questv2_internal` →
+`quest_v2` …). That set is the community's canonical list of "the db2s a server needs", which is almost certainly how
+unknown server-shaped fids got labelled. **This is the best explanation, not a proven provenance** — the submitting
+issue was not found. The 8 with no counterpart are `spell_internal`, `spellactivationoverlay_internal`,
+`spellauravisibility_internal`, `spelleffectgroupsize_internal`, `spellmissile_internal`,
+`scalingstatdistribution_internal`, `wbaccesscontrollist_internal`, `wbcertwhitelist_internal`.
+
+**A PR SEARCH ON THE LISTFILE REPO WILL ALWAYS COME BACK EMPTY** — `wowdev/wow-listfile` forbids pull requests ("Do not
+make pull requests"); suggestions arrive as ISSUES and land as `Merge suggestions from #NNN` commits. Search issues, not
+PRs. (`spellname_internal.scn` is the family's lone CASC responder, at **84 bytes** on 9.2.7 — an empty stub.)
 
 **94 of the 1,298 are in the exploration DB; 1,166 have never been touched.** Probed on 9.2.7, these are present and
 unread — several answer items already sitting in CLAUDE.md's queue:
