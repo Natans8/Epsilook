@@ -570,6 +570,27 @@ _STOMPS_PLAYER_STATE = {
               "a transform AURA, which removes cleanly and leaves their native alone"),
 }
 
+# A modifier key is only still held for the instant around the cast. Conditions are re-checked when a DELAYED row
+# executes and again when its revert fires, so a key gate on anything later than the cast itself silently never
+# matches. The corpus's toggle spells all keep their gated rows at 0.0-0.1s, which is why the idiom looks safe.
+_MODIFIER_CONDITIONS = {"shiftKeyDown", "altKeyDown", "ctrlKeyDown", "genKeyDown"}
+_MODIFIER_GRACE = 0.2
+
+# Actions that drive the character's own locomotion. breakOnMove hooks PLAYER_STARTED_MOVING, so a spell carrying
+# both aborts the movement it just started.
+_SELF_MOVING_ACTIONS = {"StartAutoRun", "ToggleAutoRun", "FollowUnit"}
+
+# `.morph`, `.mod anim` and friends act on your TARGET if you have one, and only fall back to self if you do not.
+# In a scene you usually do, so these land on a scene partner unless the spell clears the target first.
+_TARGET_UNSAFE_FAMILIES = {"appearance", "animation", "movement"}
+
+# An explicit teardown row where the action's own revert already does the job. Not wrong, just two rows for one.
+_INVERSE_OF = {
+    "StopAutoRun": "StartAutoRun", "Unmorph": "Morph", "ResetAnim": "Anim",
+    "ResetStandstate": "Standstate", "RemoveAura": "SpellAura", "StopFollow": "FollowUnit",
+    "CheatOff": "CheatOn", "StopMusic": "PlayMusic", "StopLocalSoundKit": "PlayLocalSoundKit",
+}
+
 
 def lint_spell(spell: ArcSpell, category: str = "personal") -> list[str]:
     """Design review, not validity: things the addon accepts happily and a player would resent.
@@ -626,6 +647,30 @@ def lint_spell(spell: ArcSpell, category: str = "personal") -> list[str]:
             warnings.append(f"action {i}: '{action.vars}' contains a comma and {action.actionType} is comma-split, "
                             "so this runs once PER value -- intended?")
 
+        # The trap that nearly shipped a spell leaving its caster permanently invisible: the player releases the key
+        # within a frame or two of casting, so a gated row at 1.8s -- or the REVERT of a gated row -- never matches.
+        held = sorted({str(row["Type"]) for group in (action.conditions or []) for row in group
+                       if isinstance(row, dict) and row.get("Type") in _MODIFIER_CONDITIONS})
+        if held:
+            keys = "/".join(held)
+            if action.delay > _MODIFIER_GRACE:
+                warnings.append(f"action {i}: gated on {keys} but fires at {action.delay}s -- the key is long "
+                                f"released by then, so this row silently never runs. Modifier gates only hold for "
+                                f"~{_MODIFIER_GRACE}s after the cast; for a longer sequence use a castOnFail pair, "
+                                "whose condition is checked ONCE at spell level.")
+            if action.revertDelay is not None:
+                warnings.append(f"action {i}: gated on {keys} AND has a revert -- conditions are re-evaluated when "
+                                "the revert fires, so the rollback is skipped and the state is STRANDED. Put the "
+                                "gate on the spell, not on a row that has to undo itself.")
+
+        # Silently landing a transformation on whoever you had selected is the worst failure available here.
+        if (entry.get("target") == "server" and not entry.get("selfAble")
+                and entry.get("family") in _TARGET_UNSAFE_FAMILIES
+                and not any(a.actionType == "secClearTarg" and a.delay <= action.delay for a in spell.actions)):
+            warnings.append(f"action {i}: {action.actionType} acts on your TARGET if you have one and cannot take "
+                            "selfOnly -- in a scene it will land on your partner. Add a secClearTarg row at or "
+                            "before this delay.")
+
     # A row that stops the spell has to beat every row it is stopping. The wiki's own item-requirement recipe says
     # the same thing, and getting it wrong means the guard passes while the payload has already fired.
     stops = [a for a in spell.actions if a.actionType == "ArcStopThisSpell"]
@@ -635,6 +680,30 @@ def lint_spell(spell: ArcSpell, category: str = "personal") -> list[str]:
             warnings.append(
                 f"ArcStopThisSpell fires at {stop.delay}s but {len(racing)} row(s) fire at or before it -- "
                 "a stop only stops what has not run yet. Give every guarded row a later delay.")
+
+    # A spell that drives its own movement cannot also break on movement -- it aborts itself the instant it starts.
+    if spell.breakOnMove:
+        movers = [i for i, a in enumerate(spell.actions, start=1) if a.actionType in _SELF_MOVING_ACTIONS]
+        if movers:
+            names = ", ".join(f"action {i}" for i in movers)
+            warnings.append(f"breakOnMove is set but {names} moves the caster -- PLAYER_STARTED_MOVING fires the "
+                            "moment it does, so the spell aborts the movement it just started. Drop breakOnMove.")
+
+    # Two rows where one revert would do. The catalogue records what each revert actually runs, so check revertDesc
+    # before writing a teardown by hand.
+    for i, action in enumerate(spell.actions, start=1):
+        opener = _INVERSE_OF.get(action.actionType)
+        if not opener:
+            continue
+        for j, other in enumerate(spell.actions, start=1):
+            if other.actionType != opener or other.delay > action.delay or other.revertDelay is not None:
+                continue
+            if action.actionType == "RemoveAura" and other.vars.strip() != action.vars.strip():
+                continue
+            warnings.append(f"action {i}: {action.actionType} undoes action {j} ({opener}) by hand -- "
+                            f"{opener}'s own revert already does that. One row with "
+                            f"revertDelay {round(action.delay - other.delay, 3)} replaces both.")
+            break
 
     # State a spell turns on and never turns off. Not wrong -- a deliberate toggle is a real design -- but it is the
     # thing most often forgotten, so it is worth naming.
@@ -791,7 +860,9 @@ def timeline(spell: ArcSpell) -> str:
                 # the normal way to end an anim. The loud warning lives in lint_spell, which knows which of these
                 # touch state the PLAYER customises (scale, native, speed) rather than state the spell set itself.
                 warn = "  [to default, not to prior]" if entry.get("revertResetsToDefault") else ""
-                events.append((float(a.delay or 0) + float(a.revertDelay), 1,
+                # Rounded because a revert time is a SUM: 0.1 + 9.7 and 3.9 + 5.9 are the same instant to the
+                # player and 1.8e-15 apart in binary, which printed a phantom gap and split one instant in two.
+                events.append((round(float(a.delay or 0) + float(a.revertDelay), 3), 1,
                                f"<<  row {i}  revert {label(a)} -> .{undo}{warn}"))
 
     lines = [f"{spell.fullName}  (/sf {spell.commID})"]
