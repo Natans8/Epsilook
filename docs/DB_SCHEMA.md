@@ -392,6 +392,11 @@ named.**
 - **The two ends of the toggle idiom, both from a real ArcSpell (2026-08-06):** **5877 `Chronos`** (ItemVisual 347) to
   turn a glow ON, and **5385 `Hidden`** (ItemVisual 309) to turn it off. `Hidden` is the standard "no enchant glow"
   row, which is why an RP toggle enchants to it rather than clearing.
+- **⛔ AN ID ABOVE THE BUILD'S MAX IS AN EPSILON CUSTOM ENCHANT, AND THIS TABLE WILL NEVER NAME IT.** Measured 2026-08-06
+  on `enchant mainhand 9347` from a real ArcSpell: **9.2.7 tops out at 6378** (4,270 rows) and even **11.2.7 tops out at
+  8578** (5,124 rows), so 9347 is 769 past the newest retail id in existence. **Do not conclude the lookup is broken** —
+  the server adds its own, they exist in no client db2, and the only sources are the user or Epsilon's own data. Check
+  the max before reporting an id as missing.
 
 **`SpellAuraOptions`, added 2026-08-06 — the stack ceiling, which lives nowhere else.** Not on `Spell`, not on
 `SpellMisc`, not in any attribute bit: before this table, *"how far does this stack"* had no answer in SQL at all.
