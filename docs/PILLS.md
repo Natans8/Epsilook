@@ -386,6 +386,32 @@ head leading, the lone item fused into it. With more, it becomes a full-width st
 an abstraction rather than markup — a group that is usually one-of-a-kind and occasionally many needs one renderer, not
 two, and no caller has to predict which it will be.
 
+### The SoundKit head is NAMED where it can be, and the id moves into the copy button (format 41)
+
+`kitTag` gives a named sound kit **the name as its label** (`SPELL_MA_Revamp_Frostbolt_Precast`) and prints the id **as
+its own copy button** (`.pill-id`) instead of beside one. An **unnamed** kit is unchanged: the id is the label and the
+copy button stays the bare `⧉`.
+
+**The rule is "the id stops being printed TWICE", not "the id is hidden"** (user's call, 2026-08-06). Once a pill has a
+better identity to show, a printed id next to a separate `⧉` spends width saying the same thing twice — so the two
+collapse into one control. Where there is no name, the id IS the identity and keeps the label.
+
+**`.pill-id` is shared with the spell-link chip**, which reached this shape first and used to own it as `.link-id`. It
+was generalised the moment there was a second caller, so the two cannot drift apart — one rule, one look.
+
+**A missing name renders exactly as before format 41** — the segment is simply absent, never an empty or placeholder
+one, and **never a name derived from the kit's file paths**. That last part is a measured decision, not an oversight:
+kits reuse files, so a file-derived name is confidently WRONG for about a third of them, and merely duplicates the file
+list already rendered under the head for the rest. See docs/DECISIONS.md → *"No fallback name for an unnamed sound
+kit"*.
+
+**The name is searchable and it lights**, through `kitNameIsHit` in `hits.ts` rather than a test beside the renderer —
+so `sound:frostbolt` golds the name on kits it selected, and a kit found by id leaves it plain. This is the fx-column
+rule again: a surface that can light for a reason the search does not evaluate is already lying.
+
+**Long names are handled by `.tag-label`'s existing 24rem ellipsis** — names run to 91 characters (median 42), so the
+full string goes on the tooltip, which is the same contract `.tag-motion` has.
+
 **The head reads at full strength in both shapes.** A collapsed group's head is the same head as a full one — same word,
 same job — so it was wrong to dim it to 0.8 (as the compact style once did, on the theory that a category word prefixing
 a value is a qualifier). Dimming made one word two brightnesses depending only on how many siblings it happened to have.

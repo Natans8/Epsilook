@@ -109,14 +109,15 @@ Quote the PascalCase names (`v9_2_7."SpellEffect"`); unquoted identifiers get fo
 
 ### Universal data
 
-| Table                        | Rows      | What it is                                                        |
-|------------------------------|-----------|-------------------------------------------------------------------|
-| `listfile`                   | 2,204,763 | `fid → path`. The only route from a FileDataID to a filename.     |
-| `anim_name`                  | 1,778     | `AnimID → "Stand"`, from `anims.js`.                              |
-| `m2_attachment`              | 58        | raw M2 attachment id → name, imported from `build_data.py`.       |
-| `vehicle_geo_component_link` | 26        | the client's hardcoded seat-index → attachment table (§3i).       |
-| `enum_value`                 | 5,206     | **169 enums** from WoWDBDefs `meta/enums/`, one long table.       |
-| `game_build`                 | 10        | the manifest: schema name, build id, label, default flag, TDB tag |
+| Table                        | Rows      | What it is                                                                                                                                                                                                                                               |
+|------------------------------|-----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `listfile`                   | 2,204,763 | `fid → path`. The only route from a FileDataID to a filename.                                                                                                                                                                                            |
+| `anim_name`                  | 1,778     | `AnimID → "Stand"`, from `anims.js`.                                                                                                                                                                                                                     |
+| `sound_kit_name`             | 131,092   | `SoundKitID → "Invisibility Impact"`. **Pinned to build 8.3.0.32218** — the last one that ships `SoundKitName`; no 9.x+ build has it, and kit ids are stable, so one copy names every schema. Sparse for post-8.3.0 kits **by nature**, not by omission. |
+| `m2_attachment`              | 58        | raw M2 attachment id → name, imported from `build_data.py`.                                                                                                                                                                                              |
+| `vehicle_geo_component_link` | 26        | the client's hardcoded seat-index → attachment table (§3i).                                                                                                                                                                                              |
+| `enum_value`                 | 5,206     | **169 enums** from WoWDBDefs `meta/enums/`, one long table.                                                                                                                                                                                              |
+| `game_build`                 | 10        | the manifest: schema name, build id, label, default flag, TDB tag                                                                                                                                                                                        |
 
 `enum_value` is keyed `(enum_name, value) → name`:
 
@@ -382,9 +383,7 @@ is not a shortcut to wording. Budget for the `ModifierTree` walk before promisin
 an ArcSpell was an opaque number before this: nothing else in the cache names one. **4,270 rows on 9.2.7, 4,269 of them
 named.**
 
-- **⚠ DECLARED AND CACHED, BUT NOT YET IN THE DUCKDB** — the CSV is fetched for 9.2.7 and 11.2.7, and the next
-  `python tools/builddb.py` folds it in. Until someone runs that, `v9_2_7."SpellItemEnchantment"` does not exist. **A
-  missing table here means "rebuild", not "unavailable".**
+- **Live in the database since the 2026-08-06 rebuild** — `v9_2_7."SpellItemEnchantment"`, 4,270 rows, verified.
 - **`ItemVisual` is the field that matters for RP, and it is rare: only 231 of 4,270 rows carry one**, across 104
   distinct visuals. That column is the weapon glow; the other 4,039 rows are stat enchants with nothing to see.
 - **Names are not always human-readable** — many are stat templates carrying `$k1` / `$7784s1` substitution tokens

@@ -524,6 +524,30 @@ function spellsByModel(tokens: QueryToken[], data: SpellData): Set<number> {
 }
 
 /**
+ * Search sound kits by Blizzard's own name for them (pack section
+ * `soundKitNames`, from the pinned 8.3.0 table).
+ *
+ * Unions with the file-name search rather than replacing it — the same way a
+ * category word matches file names IN ADDITION to the category — so adding
+ * names can only ever widen a `sound:` result, never narrow one. Target words
+ * are ignored here: a name describes the kit, not who it plays on, and the
+ * file-name half of the union already answers the targeted question.
+ */
+function spellsBySoundKitName(tokens: QueryToken[], data: SpellData): Set<number> {
+    const out = new Set<number>();
+    if (!data.soundKitName.size) return out;
+    const {text} = splitTargetTokens(tokens);
+    const words = text.map((t) => t.text).filter(Boolean);
+    if (!words.length) return out;
+    for (const [kitId, name] of data.soundKitName) {
+        const nameL = name.toLowerCase();
+        if (!words.every((w) => nameL.includes(w))) continue;
+        for (const s of data.soundKitSpells.get(kitId) || []) out.add(s);
+    }
+    return out;
+}
+
+/**
  * Search sound file names, honouring target words. The mask lives on the
  * (spell, kit, file) row, so a target word turns this into a row walk the
  * way it does for models.
@@ -845,6 +869,7 @@ export const FIELDS: Record<string, SearchFieldSpec> = {
             if (tokens.every((t) => /^\d+$/.test(t.text))) {
                 for (const s of spellsByKitId(tokens, data.soundKitSpells)) out.add(s);
             }
+            for (const s of spellsBySoundKitName(tokens, data)) out.add(s);
             return out;
         },
     },

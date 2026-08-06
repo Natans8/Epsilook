@@ -8,6 +8,7 @@ import {
     fxChainIsHit,
     keybindIsHit,
     kitIsHit,
+    kitNameIsHit,
     mechanicIsHit,
     morphIsHit,
     mountIsHit,
@@ -524,17 +525,45 @@ export function soundTag(fid: number): HTMLElement {
 export function kitTag(kitId: number, field: "soundkit" | "animkit", mask = 0): HTMLElement {
     const sound = field === "soundkit";
     const kind = sound ? "SoundKit" : "AnimKit";
+    // Blizzard's own name for the kit, where one exists. Absent for every
+    // AnimKit and for the 35.6% of SoundKits added after 8.3.0, which is the
+    // last build that ships a name for anything (see SOUNDKITNAME_BUILD).
+    const name = sound ? activeData().soundKitName.get(kitId) : undefined;
     return P.pill({
         cls: field,
-        hit: kitIsHit(kitId, field),
+        hit: kitIsHit(kitId, field) || (sound && kitNameIsHit(kitId)),
         segments: [
             targetSeg(sound ? "sound" : "anim", mask),
-            P.label(String(kitId), {
-                title: `${kind} ${kitId}`,
-                search: P.query(sound ? "sound" : "anim", kitId),
-                finds: `spells using this ${field}`,
-            }),
-            P.copy("⧉", `Copy ${kind} ID ${kitId}`, String(kitId)),
+            // THE NAME IS THE IDENTITY WHERE THERE IS ONE (user's call,
+            // 2026-08-06). A named kit spends its label on the name and moves
+            // the id into the copy button — the shape spellLinkTag already
+            // uses, hence the shared .pill-id. An UNNAMED kit keeps the id as
+            // its label, because then the id is the only thing it has: the
+            // rule is "the id stops being printed TWICE", not "the id is
+            // hidden". There is deliberately no derived fallback name — see
+            // docs/DECISIONS.md, "No fallback name for an unnamed sound kit".
+            //
+            // hit is per-SEGMENT, not inherited from the pill: the name golds
+            // only when the NAME is what matched, so a kit found by id stays
+            // plain. Same rule as the delivery line's per-segment highlight.
+            name
+                ? P.label(name, {
+                    // the full name on the tooltip, because .tag-label
+                    // ellipsises at 24rem and these run to 91 characters
+                    title: name,
+                    detail: [`${kind} ${kitId} — Blizzard's own name for it`],
+                    search: P.quoted("sound", name),
+                    finds: "spells using a sound kit with this name",
+                    hit: kitNameIsHit(kitId),
+                })
+                : P.label(String(kitId), {
+                    title: `${kind} ${kitId}`,
+                    search: P.query(sound ? "sound" : "anim", kitId),
+                    finds: `spells using this ${field}`,
+                }),
+            name
+                ? P.copy(String(kitId), `Copy ${kind} ID ${kitId}`, String(kitId), "pill-id")
+                : P.copy("⧉", `Copy ${kind} ID ${kitId}`, String(kitId)),
             P.cmd(sound ? "/" : ".mod",
                 sound ? CFG.soundKitCopyTemplate : CFG.animKitCopyTemplate, {id: kitId}),
             sound && P.link(wowheadUrl(CFG.wowheadSoundUrl, {id: kitId}),
@@ -1334,7 +1363,7 @@ export function spellLinkTag(link: SpellLink, word: string, mask = 0): HTMLEleme
             // scannable in a way a ragged right-hand id is not. It also keeps
             // the icon fused to the name it belongs to, rather than splitting
             // that pair around it.
-            P.copy(String(id), `Copy spell ID: ${id}`, String(id), "link-id"),
+            P.copy(String(id), `Copy spell ID: ${id}`, String(id), "pill-id"),
             // icon then label, nothing between them: they read as one unit and
             // the icon is the wowhead affordance (see above)
             icon && CFG.spellIconUrl && P.icon(fillTemplate(CFG.spellIconUrl, {icon}), {

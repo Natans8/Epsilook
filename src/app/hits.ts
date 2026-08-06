@@ -62,6 +62,15 @@ export function kitIsHit(kitId: number, field: string): boolean {
     return anyGroup(searchField, (ts) => ts.some((t) => Number(t.text) === kitId));
 }
 
+// A sound kit's human name is searchable like a file name, so it has to be able
+// to light for the same reason. Kept beside kitIsHit rather than inside it
+// because only sound kits have names, and mirrors spellsBySoundKitName's test.
+export function kitNameIsHit(kitId: number): boolean {
+    const name = activeData().soundKitName.get(kitId)?.toLowerCase();
+    if (!name) return false;
+    return anyGroup("sound", (ts) => ts.every((t) => name.includes(t.text)));
+}
+
 // anim pills can be hit through their group's category word too — the
 // headless groups carry one ("replace", "passenger"); kit groups pass "".
 // Mirrors spellsByAnim's token test.

@@ -206,7 +206,11 @@ function exportRows(): ExportRow[] {
                 kitMask.set(e.soundKitId, (kitMask.get(e.soundKitId) || 0) | (e.targets || 0));
             }
             row.soundKits = [...byKit.keys()].sort((a, b) => a - b).map((k) => ({
-                id: k, files: byKit.get(k)!, targets: targetWordsOf(kitMask.get(k) || 0),
+                id: k,
+                // omitted rather than empty when the kit has no name — only
+                // kits named on or before 8.3.0 have one
+                ...(d.soundKitName.get(k) ? {name: d.soundKitName.get(k)!} : {}),
+                files: byKit.get(k)!, targets: targetWordsOf(kitMask.get(k) || 0),
             }));
         }
         if (!hc.animations) {

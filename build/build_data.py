@@ -99,6 +99,23 @@ def _enum_id_where(mapping: dict[int, Any], handler: str) -> int:
 WAGO_CSV_URL = "https://wago.tools/db2/{table}/csv?build={version}"
 LISTFILE_RELEASE_API = "https://api.github.com/repos/wowdev/wow-listfile/releases/latest"
 
+# THE ONE CROSS-VERSION SOURCE: sound-kit names come from a build that is not
+# the one being packed, because no build we ship has them.
+#
+# `SoundKitName` shipped 7.3.0 -> 8.3.0 and in the Classic re-releases, and
+# 8.3.0.32218 is the LAST build that contains the file at all — verified at the
+# CASC level (dbfilesclient/soundkitname.db2, fid 1665033, is 5,263,340 bytes
+# there and 0 bytes in every later build, against a working soundkit.db2
+# control). It did not move to another table: it is one of only five tables
+# defined for 8.3 and for no 9.x build. So a modern pack can only be named by
+# joining an old table, which is sound because kit IDs are stable across builds
+# (99.65% of kits present on two builds play a byte-identical file set).
+#
+# 8.3.0 strictly contains the Legion, Wrath and Epsilon-addon name sets, so it
+# is the only one worth fetching. Full record: docs/DECISIONS.md ->
+# "Sound kit names — BfA 8.3.0 is the source".
+SOUNDKITNAME_BUILD = "8.3.0.32218"
+
 TABLES = [
     "SpellName",
     "Spell",
@@ -1215,7 +1232,8 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 40  # 40: spellAreas + areas — the area gate (§3t)
+PACK_FORMAT = 41  # 41: soundKitNames — human names for sound kits (§3u)
+# 40: spellAreas + areas — the area gate (§3t)
 # 35: spell -> spell links (SpellEffect.EffectTriggerSpell)
 # 34: missile flight paths (SpellMissileMotion) on missile model rows
 # 29: mechanics carry their implicit targets (spellEffects +
@@ -1453,6 +1471,12 @@ def fetch_sources(version: str, refresh: bool) -> tuple[Path, Path, Path | None]
         download(WAGO_CSV_URL.format(table=table, version=version),
                  table_dir / f"{table}.csv", refresh,
                  optional=table in OPTIONAL_TABLES)
+
+    # Pinned to another build on purpose — see SOUNDKITNAME_BUILD. Cached under
+    # that build's own directory, so read_table() reads it with no new code.
+    log(f"Sound-kit names (wago.tools, pinned build {SOUNDKITNAME_BUILD}):")
+    download(WAGO_CSV_URL.format(table="SoundKitName", version=SOUNDKITNAME_BUILD),
+             CACHE_DIR / SOUNDKITNAME_BUILD / "SoundKitName.csv", refresh)
 
     log("Animation names (wow.tools):")
     download(ANIMS_JS_URL, CACHE_DIR / "anims.js", refresh)
@@ -3926,6 +3950,19 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         item_icons.append(idx + 1)  # 1-based; 0 = no icon
     sound_rows = sorted(
         (s, sk, f, m) for s, pairs in vis.sounds.items() for (sk, f), m in pairs.items())
+
+    # Human names for the sound kits this pack actually reaches, from the pinned
+    # 8.3.0 table (SOUNDKITNAME_BUILD). Purely ADDITIVE: the kit keeps its id and
+    # its files, and an unnamed kit renders exactly as it does today. Kits added
+    # after 8.3.0 (Shadowlands onward) have no name anywhere and are simply
+    # absent here rather than given a made-up one.
+    used_kits = {r[1] for r in sound_rows}
+    kit_name_map = {
+        int(kid): nm.strip()
+        for kid, nm in read_table(CACHE_DIR / SOUNDKITNAME_BUILD, "SoundKitName", ["ID", "Name"])
+        if nm.strip() and int(kid) in used_kits
+    }
+    kit_name_rows = sorted(kit_name_map.items())
     anim_rows = sorted(
         (s, a, m) for s, aks in vis.animkits.items() for a, m in aks.items())
     fx_rows = sorted(
@@ -4160,6 +4197,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 # SYNTHETIC_MODEL_FILES sentinels) — attach + thrown-missile, §3
                 "spellWeaponModels": sum(1 for r in model_rows if r[1] in SYNTHETIC_MODEL_FILES),
                 "spellSounds": len(sound_rows),
+                "soundKitNames": len(kit_name_rows),
                 "spellAnimKits": len(anim_rows),
                 "animKitAnims": len(kit_anim_rows),
                 "animKitAnimBoneset": len(kit_anim_boneset_rows),
@@ -4283,6 +4321,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "soundKitIds": [r[1] for r in sound_rows],
             "fids": [r[2] for r in sound_rows],
             "targets": [r[3] for r in sound_rows],
+        },
+        "soundKitNames": {
+            "soundKitIds": [r[0] for r in kit_name_rows],
+            "names": [r[1] for r in kit_name_rows],
         },
         "spellAnimKits": {
             "spellIds": [r[0] for r in anim_rows],

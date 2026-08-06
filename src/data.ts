@@ -92,6 +92,14 @@ export interface SpellPack {
     /** Spell -> (SoundKit, sound file) rows. */
     spellSounds: { spellIds: number[]; soundKitIds: number[]; fids: number[]; targets?: number[] };
 
+    /**
+     * Human names for the sound kits this pack reaches, from the pinned 8.3.0
+     * `SoundKitName` (see build_data.SOUNDKITNAME_BUILD). Sparse on purpose —
+     * kits added after 8.3.0 have no name in any build, so they are absent
+     * rather than invented.
+     */
+    soundKitNames?: { soundKitIds: number[]; names: string[] };
+
     spellAnimKits: { spellIds: number[]; animKitIds: number[]; targets?: number[] };
     /** Animation names indexed by AnimID. */
     animNames: string[];
@@ -526,6 +534,11 @@ export interface SpellData {
     soundFids: number[];
     soundKitSpells: Map<number, number[]>;
     soundKitFiles: Map<number, Set<number>>;
+    /**
+     * SoundKit id -> human name, where one exists. Sparse: only kits named on
+     * or before build 8.3.0 have one, so callers must treat a miss as normal.
+     */
+    soundKitName: Map<number, string>;
 
     spellAnimKits: Map<number, number[]>;
     animKitSpells: Map<number, number[]>;
@@ -1026,6 +1039,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const soundSpells = new Map<number, number[]>();    // fid -> [spell id]
     const soundKitSpells = new Map<number, number[]>(); // soundKitId -> [spell id]
     const soundKitFiles = new Map<number, Set<number>>(); // soundKitId -> Set(fid)
+    const soundKitName = new Map<number, string>();     // soundKitId -> human name
     {
         const {spellIds, soundKitIds, fids, targets} = pack.spellSounds;
         for (let i = 0; i < spellIds.length; i++) {
@@ -1039,6 +1053,10 @@ export function buildIndexes(pack: SpellPack): SpellData {
         }
         // soundKitSpells values contain duplicates (one per kit file) — dedupe
         for (const [k, arr] of soundKitSpells) soundKitSpells.set(k, [...new Set(arr)]);
+        const kn = pack.soundKitNames;
+        if (kn) for (let i = 0; i < kn.soundKitIds.length; i++) {
+            soundKitName.set(kn.soundKitIds[i], kn.names[i]);
+        }
         // dedupe (kit, file) per spell, unioning the target masks of the rows
         // that collapse together rather than keeping only the first one's
         for (const [s, arr] of spellSounds) {
@@ -2007,7 +2025,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellModels, modelSpells, modelFids, attachmentNames,
         spellModelCats, modelCatSpells, modelCatFidSpells, modelCatNames,
         items, itemSearchL, itemSpells, itemCat, missileMotionNames,
-        spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles,
+        spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles, soundKitName,
         spellAnimKits, animKitSpells,
         animNames, animNamesL, animKitAnims, animAnimKits,
         bonesetNames, animKitAnimBoneset, spellBonesets,

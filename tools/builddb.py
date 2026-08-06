@@ -590,6 +590,23 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
         count = scalar(con, "SELECT count(*) FROM ref.listfile")
         log(f"  ref.listfile                    {count:>9,}")
 
+    # -- sound-kit names (SoundKitID -> "Invisibility Impact") ----------------
+    # Build-independent on purpose, hence `ref` and not a per-version table:
+    # `SoundKitName` was last shipped at 8.3.0.32218 and exists in NO 9.x+
+    # build, so one pinned copy names kits for every schema here. Kit ids are
+    # stable across builds (99.65% identical file sets), which is what makes the
+    # join sound. See build_data.SOUNDKITNAME_BUILD.
+    skn = CACHE / "8.3.0.32218" / "SoundKitName.csv"
+    if skn.exists():
+        literal = str(skn).replace("'", "''")
+        con.execute(f"""
+            CREATE OR REPLACE TABLE ref.sound_kit_name AS
+            SELECT CAST("ID" AS UINTEGER) AS sound_kit_id, "Name" AS name
+            FROM read_csv('{literal}', header=true)
+            WHERE "Name" IS NOT NULL AND "Name" <> ''""")
+        count = scalar(con, "SELECT count(*) FROM ref.sound_kit_name")
+        log(f"  ref.sound_kit_name              {count:>9,}")
+
     # -- animation names (AnimID -> "Stand") ----------------------------------
     anims = CACHE / "anims.js"
     if anims.exists():

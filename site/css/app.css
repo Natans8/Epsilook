@@ -2830,10 +2830,17 @@ mark.hl {
     white-space: nowrap;
 }
 
-/* The spell id IS the copy button (see spellLinkTag). Tabular figures so a
-   column of chips does not shimmer, and note-sized because it is a value being
-   shown rather than an action being offered — the gold on hover is what says it
-   is clickable, exactly as .id-copy does in the Name column.
+/* AN ID SHOWN AS ITS OWN COPY BUTTON — the spell-link chip (spellLinkTag) and
+   a NAMED sound kit (kitTag). Both reached the same shape for the same reason:
+   once a pill has a better identity to print (a spell name, Blizzard's kit
+   name), printing the id beside a separate ⧉ spends width saying the same
+   thing twice. Generalised from `.link-id` on 2026-08-06 when the kit pill
+   became the second caller — one rule, so the two cannot drift apart.
+
+   Tabular figures so a column of chips does not shimmer, and note-sized
+   because it is a value being shown rather than an action being offered — the
+   gold on hover is what says it is clickable, exactly as .id-copy does in the
+   Name column.
 
    IT KEEPS THE COPY SEGMENT'S OWN COLOUR, and that is a contrast call, not an
    oversight. Dimming it to --text-dim (the obvious way to say "quieter than the
@@ -2842,7 +2849,7 @@ mark.hl {
    the pill's own stack into a background nothing was solved against — the trap
    the theme section warns about. The size and the tabular figures carry the
    distinction on their own, and the default copy colour clears AA at 5.6:1. */
-.tag.link .tag-copy.link-id {
+.tag-copy.pill-id {
     font-variant-numeric: tabular-nums;
     font-size: 0.86em;
 }
@@ -2858,20 +2865,16 @@ mark.hl {
 
    ::after rather than markup, so the copied text stays exactly the id: the
    glyph is decoration, the button already carries its own aria-label, and
-   nothing in spellLinkTag has to know about it. */
-.tag.link .tag-copy.link-id::after {
+   nothing in the pill builders has to know about it. */
+.tag-copy.pill-id::after {
     content: "⧉";
     margin-left: 0.22em;
     font-size: 0.92em;
     opacity: 0.55;
 }
 
-.tag.link .tag-copy.link-id:hover::after {
+.tag-copy.pill-id:hover::after {
     opacity: 1;
-}
-
-.tag.link .tag-copy.link-id:hover {
-    color: var(--gold);
 }
 
 /* Area-gate chip (SpellCastingRequirements.RequiredAreasID): WHERE the spell

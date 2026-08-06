@@ -1340,7 +1340,7 @@ flowchart LR
         P1["fxChains · fxTextures · dissolves · dissolveTextures<br/>glows · shadowies · ghostMats · tints<br/>screens · screenTextures · morphs · morphDisplays<br/>shapeshifts · shapeshiftDisplays · summons<br/>vehicles · vehicleSeats"]
     end
     subgraph NAME["name tables"]
-        N1["files (fid → path) · animNames · effectNames<br/>auraNames · iconNames · modelCatNames<br/>targetNames · summonControlNames · missileMotions<br/>implicitTargetNames · implicitTargetBits · keybinds"]
+        N1["files (fid → path) · animNames · effectNames<br/>auraNames · iconNames · modelCatNames<br/>targetNames · summonControlNames · missileMotions<br/>implicitTargetNames · implicitTargetBits · keybinds<br/>soundKitNames (§3u — from a PINNED 8.3.0 build)"]
     end
     LINK --> IDX["data.ts<br/>forward + reverse Map per section"]
     PAY --> IDX
@@ -1445,6 +1445,61 @@ offering no button.
   `SpellFocusObject` to be legible; `RequiredAuraVision`, `MinFactionID` and `MinReputation` have **zero references** in
   TrinityCore's spell code, so they gate nothing; `FacingCasterFlags` is evaluated in `Spell::CheckRange`, a positional
   check, not a property of the spell.
+
+---
+
+### 3u. Sound-kit names — the one CROSS-VERSION source (`soundKitNames`, format 41)
+
+**SHIPPED (2026-08-06).** All ten packs carry the section, `data.ts` reads it, and the Sounds column draws the name as
+the SoundKit pill's **label**, moving the id into its own compact copy button (PILLS.md). An unnamed kit keeps the id as
+its label. Searchable through the existing `sound:` prefix.
+
+**THIS IS THE ONLY ROUTE THAT READS A TABLE FROM A BUILD OTHER THAN THE ONE BEING PACKED, and it has to be.**
+`SoundKitName` shipped 7.3.0 → **8.3.0** and in the Classic re-releases, and **no 9.x, 10.x, 11.x or 12.x build has it
+at any level** — so a modern pack cannot name its own kits. `build_data.SOUNDKITNAME_BUILD` pins **8.3.0.32218**, the
+last build that contains the file.
+
+```
+SoundKitName.ID   == SoundKit.ID     (from the pinned 8.3.0 build)
+SoundKitName.Name -> the pill's note segment + the sound: corpus
+```
+
+**Why joining an old table is sound, and the measurement that proves it:** kit ids are stable across builds. Of the
+84,317 kits present in both 7.3.5 and 9.2.7, **84,026 (99.65%) play a byte-identical `SoundKitEntry` file set** and only
+185 (0.22%) share no file at all — and those are re-recorded assets, not recycled ids.
+
+**Coverage is partial BY CONSTRUCTION and that is not a defect.** Kits added after 8.3.0 have no name in any build, so
+they are absent rather than invented — the pill then renders exactly as it did before format 41.
+
+| on 9.2.7                               | value                                                  |
+|----------------------------------------|--------------------------------------------------------|
+| distinct sound kits the app reaches    | 42,860                                                 |
+| **named by the pinned 8.3.0 table**    | **27,600 (64.4%)**                                     |
+| of all 686,330 sound rows              | 75.8%                                                  |
+| **spells with at least one named kit** | **104,511 — 87.9% of the 118,939 that have any sound** |
+
+**8.3.0 STRICTLY CONTAINS every other candidate**, so there is nothing to union it with: Legion 7.3.5 names 15,542 of
+the same kits, Wrath 3.4.3 is a subset of Legion, and `Epsilon_Merchant/SoundList.lua` stops at id 140,607 and is 99.69%
+string-identical to 8.3.0. `SoundKitChild` parent inheritance buys **one** kit. Full record, including the three wrong
+turns and why Wowhead cannot be used, is in docs/DECISIONS.md → *"Sound kit names — BfA 8.3.0 is the source"*.
+
+**RE-VERIFIED EXHAUSTIVELY 2026-08-06 — the search for a better source is CLOSED, do not re-run it.** Probed at the CASC
+level (`api/casc/1665033?version=…`, the check that actually settles it, since a wago CSV 404 can mean "no dbd layout"
+rather than "no file"):
+
+- **`8.3.0.32218` is the last build in existence with the file**, and the cutoff is exact — `8.3.0.32272`, the very next
+  PTR build, is already 0 bytes. Every later retail build through **12.0.7** is 0.
+- **No Shadowlands alpha or beta ever had it.** All fourteen earliest `9.0.1.x` beta builds are 0 — so the table died
+  mid-8.3, not at the expansion boundary.
+- **The Classic re-release lines do ship it** — newest per line: Wrath **3.4.3.58936** (401 KB), Cata **4.4.0.57244**
+  (668 KB), Era **1.15.2.55140**. Their ids reach **275,167**, far past 8.3.0's ceiling of 145,145, which looks like new
+  coverage and **is not**: measured against the kits 9.2.7 actually reaches, all four Classic sources together add
+  **ZERO** names 8.3.0 does not already have. The union is exactly 27,600.
+- **There is no second name table.** `soundkitname.db2` (fid 1665033) is the only matching path in the listfile, and
+  `soundkit_internal.db2` — the one promising-looking sibling — is a listfile-known path that CASC never serves.
+
+**The section is purely additive** — verified at format 41 by diffing the rebuilt 9.2.7 pack against its predecessor:
+**75 of 75 pre-existing sections byte-identical**, one section added, none removed, +3.5% gzipped.
 
 ---
 

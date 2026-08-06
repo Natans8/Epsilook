@@ -774,6 +774,10 @@ class Dossier:
                 ent["sounds"] = [self.file_ref(f) for f, in self.q(
                     'SELECT "FileDataID" FROM {V}."SoundKitEntry" WHERE "SoundKitID"=?',
                     k["Effect"])]
+                # Blizzard's own name for the kit, where one exists. Universal
+                # table (ref), because no 9.x+ build ships SoundKitName at all —
+                # see builddb.ref.sound_kit_name.
+                ent["sound_kit_name"] = self.sound_kit_name(k["Effect"])
             elif t == 6:  # SpellVisualAnim
                 for a in self.rows('SELECT * FROM {V}."SpellVisualAnim" WHERE "ID"=?',
                                    k["Effect"]):
@@ -935,6 +939,18 @@ class Dossier:
                                     ("Red", "Green", "Blue")],
             }
         return d
+
+    def sound_kit_name(self, kit_id: Any) -> str | None:
+        """Blizzard's name for a SoundKit, or None.
+
+        Sparse by nature: only kits named on or before build 8.3.0 have one, so
+        a miss is the normal case for Shadowlands-and-later content rather than
+        a gap to chase. Reads ref.sound_kit_name, which is universal.
+        """
+        if not kit_id or int(kit_id) <= 0:
+            return None
+        rows = self.q('SELECT name FROM ref.sound_kit_name WHERE sound_kit_id=?', int(kit_id))
+        return rows[0][0] if rows else None
 
     def _anim(self, a: Any) -> dict[str, Any] | None:
         if not a or int(a) < 0:

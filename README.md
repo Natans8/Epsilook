@@ -24,6 +24,9 @@ Full syntax lives behind the **?** button in the app. The short version:
   `6dr_draenei_statue_male01.m2`. `"quoted words"` are an exact phrase.
 - **Field tags** narrow a term to one column: `name:` `model:` `sound:`
   `anim:` `fx:` `mech:` `id:`. Tags AND together; a `-` prefix excludes.
+- **Sound kits carry Blizzard's own name** where the game has one — `sound:frostbolt` finds kits named
+  `SPELL_MA_Revamp_Frostbolt_Precast` as well as matching sound file names. About two thirds of kits are named; the rest
+  are newer than the last game build that shipped the name list, and show their id and files as before.
 - **Target-type icons** on models, sounds, animations, effects and mechanics say who the content plays on — caster,
   target, or the target location. A row that plays on several shows one icon each. Search them like category words:
   `model:"caster fire"`, `sound:target`, `anim:both`, `fx:"chain caster"`. `others` is the narrow one — content the
