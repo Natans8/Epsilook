@@ -756,6 +756,72 @@ def summarize(spell: ArcSpell) -> str:
     return "\n".join(lines)
 
 
+def timeline(spell: ArcSpell) -> str:
+    """Print the spell as a sequence of EVENTS in clock order, reverts included.
+
+    Rows are stored in authoring order, which is NOT time order -- a real export (`GhostArms`) runs
+    0, 1.2, 0, 0, 0, 0, 3, 3, 3, 3, and reading that as written tells you nothing about what the audience sees.
+    A revert is also invisible in the row list: it fires at ``delay + revertDelay``, an absolute time that appears
+    nowhere in the data.
+
+    So this resolves both, sorts by clock, and groups anything sharing an instant -- which is how you spot the two
+    things that are wrong far more often than a bad id: effects landing on one frame that were meant to be a beat
+    apart, and a rollback arriving in the middle of the spell rather than at the end.
+    """
+    catalog = load_catalog()
+
+    def label(action: ArcAction) -> str:
+        return catalog.get(action.actionType, {}).get("name", action.actionType)
+
+    events: list[tuple[float, int, str]] = []
+    for i, a in enumerate(spell.actions, start=1):
+        detail = f"{label(a)}  {a.vars!r}" if a.vars else label(a)
+        if a.selfOnly:
+            detail += "  (self)"
+        # sort key 0 before 1 so an action precedes a revert landing on the same instant
+        events.append((float(a.delay or 0), 0, f">>  row {i}  {detail}"))
+        if a.revertDelay is not None:
+            entry = catalog.get(a.actionType, {})
+            if not entry.get("revertable", True):
+                events.append((float(a.delay or 0), 1,
+                               f"xx  row {i}  revert DROPPED -- {a.actionType} declares none"))
+            else:
+                undo = entry.get("revert", "?").replace("@N@", a.vars or "?")
+                # Worth stating on every constant revert, but not worth shouting about: resetting a standstate is
+                # the normal way to end an anim. The loud warning lives in lint_spell, which knows which of these
+                # touch state the PLAYER customises (scale, native, speed) rather than state the spell set itself.
+                warn = "  [to default, not to prior]" if entry.get("revertResetsToDefault") else ""
+                events.append((float(a.delay or 0) + float(a.revertDelay), 1,
+                               f"<<  row {i}  revert {label(a)} -> .{undo}{warn}"))
+
+    lines = [f"{spell.fullName}  (/sf {spell.commID})"]
+    if spell.description:
+        lines.append(f"  {spell.description}")
+    if spell.breakOnMove:
+        lines.append("  breakOnMove: moving, jumping or sitting ends it early -- pending reverts fire at once")
+    lines.append("")
+
+    last: float | None = None
+    for time, _, text in sorted(events):
+        if last is not None and time != last:
+            gap = time - last
+            # The reading of a gap is in SKILL.md; the numbers are repeated here because this is where you look.
+            reads = ("layered" if gap <= 0.2 else "a beat" if gap <= 0.8 else "a separate event")
+            lines.append(f"        + {gap:g}s   ({reads})")
+        stamp = f"{time:6.2f}s" if time != last else " " * 7
+        lines.append(f"{stamp}  {text}")
+        last = time
+
+    total = max((t for t, _, _ in events), default=0.0)
+    lines.append("")
+    lines.append(f"  runs {total:g}s, {len(spell.actions)} rows, {sum(1 for _, k, _ in events if k)} reverts")
+    simultaneous = Counter(t for t, k, _ in events if k == 0)
+    crowded = [f"{t:g}s x{n}" for t, n in sorted(simultaneous.items()) if n > 2]
+    if crowded:
+        lines.append(f"  !! {', '.join(crowded)} -- that many at one instant reads as a flash, not a beat")
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Catalogue generation from the addon source.
 # ---------------------------------------------------------------------------
@@ -1221,6 +1287,9 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("categories", help="how a spell gets triggered, and what that lets it politely do")
 
+    p_time = sub.add_parser("timeline", help="read a spell as a sequence of events in clock order, reverts included")
+    p_time.add_argument("source", help="an export string, a path to a JSON spec, or '-' for stdin")
+
     p_actions = sub.add_parser("actions", help="list or search the action catalogue (core families by default)")
     p_actions.add_argument("query", nargs="?", default="")
     p_actions.add_argument("--all", action="store_true", help="include every family, integrations included")
@@ -1294,6 +1363,23 @@ def main(argv: list[str] | None = None) -> int:
         if not problems and not warnings:
             print(f"clean ({category}): {len(spell.actions)} actions, nothing to flag")
         return 1 if problems else 0
+
+    if args.cmd == "timeline":
+        text = sys.stdin.read().strip() if args.source == "-" else args.source
+        # An export string, a spec on disk, or a spec on stdin -- all three are things you have at the moment you
+        # want to read a spell, so accept all three rather than making the caller convert.
+        if not args.source == "-" and Path(args.source).exists():
+            spell = ArcSpell.from_table(_read_spec(args.source))
+        elif text.lstrip().startswith("{"):
+            spell = ArcSpell.from_table(json.loads(text))
+        else:
+            spell = ArcSpell.from_table(decode_spell(text))
+        if not spell.actions:
+            print("no actions found -- is this one spell? (a file of several needs one picked out first)",
+                  file=sys.stderr)
+            return 1
+        print(timeline(spell))
+        return 0
 
     if args.cmd == "categories":
         for name, meta in SPELL_CATEGORIES.items():

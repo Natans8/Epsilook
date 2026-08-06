@@ -185,6 +185,29 @@ EXTRA_TABLES = {
     # a real ArcSpell). Weapon-glow enchants are the RP-relevant ones: the
     # Effect_* / EffectArg_* columns carry the enchant TYPE and its payload.
     "SpellItemEnchantment": "names enchant ids — what `.enchant mainhand <id>` takes",
+    # ------------------------------------------------------- the raw-id arsenal
+    #
+    # ARCANUM ADDRESSES ASSETS BY RAW ID, AND EPSILOOK ONLY INDEXES THE ONES A
+    # SPELL REACHES. `.mod anim`, `.mod animkit` and Arcanum's own sound actions
+    # take any id in these tables whether or not a spell ever used it, so
+    # composing against "the full arsenal" needs the tables themselves.
+    #
+    # Measured 2026-08-06: 9.2.7 — the build Epsilon RUNS — cached SoundKitEntry
+    # but neither SoundKit nor AnimationData, while 10.2.7 and 11.2.7 had both.
+    # So the product version was the ONE version that could not answer
+    # "what sound kits exist" or "what is animation 403 called".
+    "SoundKit": "the kit rows behind SoundKitEntry — SoundType, volume, flags",
+    "AnimationData": "names animation ids; AnimKitSegment and the anim routes point here",
+    "Emotes": "`.mod anim <id>` takes an EMOTE id, and this is the only table that names one",
+    "EmotesTextSound": "emote -> voice line, per race/sex — why one emote is audible and another is not",
+    # SoundKitName was tried here on 2026-08-06 and REMOVED the same hour. It
+    # writes a 0-BYTE file on every 9.x/10.x/11.x build (the table stopped
+    # shipping after 8.3.0, exactly as DATA_ROUTES §3u records), and because
+    # fetch_extra_tables skips a destination that already exists, that empty
+    # file is permanent — a cache poisoned against a table that will never
+    # arrive. The Classic builds that DO ship it already get it through the
+    # normal CSV sweep, and 9.2.7's names come from the pinned 8.3.0 download
+    # the pack build makes. Nothing was missing; do not add it back.
     # SpellCastTimes, SpellDuration and SpellInterrupts USED to be listed here.
     # They are build_data.py TABLES now (the delivery line reads all three), so
     # the normal CSV sweep already caches them and repeating them here would
