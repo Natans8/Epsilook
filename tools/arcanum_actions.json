@@ -1,5 +1,5 @@
 {
-  "_comment": "Generated from EpsilonRP/PublicAddOns Actions/Data.lua by `python tools/arcanum.py regen-catalog <checkout>`. Script actions take a Lua function as their command, so only server actions carry a command string. `revertable` is whether the action declares a revert at all -- Execute.lua force-nulls revertDelay when it does not, so a revert on a non-revertable row is silently dropped. `doNotDelimit` means the input is NOT comma-split: without it, `a,b` runs the action once per value. `permission` is DERIVED FROM THE COMMAND WORD and is a prediction, not a measurement -- the addon carries no phase-permission field. `family` groups actions by what they are FOR; anything needing another addon is tagged 'integration', because whether it is available outranks what it does.",
+  "_comment": "Generated from EpsilonRP/PublicAddOns Actions/Data.lua by `python tools/arcanum.py regen-catalog <checkout>`. Script actions take a Lua function as their command, so only server actions carry a command string. `revertable` is whether the action declares a NON-NIL revert -- 87 of the 184 write `revert = nil` outright, usually beside a `revertAlternative` naming the manual teardown, and Execute.lua force-nulls revertDelay on those, so a revert on a non-revertable row is silently dropped. `doNotDelimit` means the input is NOT comma-split: without it, `a,b` runs the action once per value. `permission` is DERIVED FROM THE COMMAND WORD and is a prediction, not a measurement -- the addon carries no phase-permission field. `family` groups actions by what they are FOR; anything needing another addon is tagged 'integration', because whether it is available outranks what it does.",
   "actions": {
     "SpellCast": {
       "name": "Cast Spell",
@@ -159,7 +159,7 @@
       "command": "mod stand 30",
       "revertAlternative": "another emote action",
       "description": "Reset target's current animation to Standstate 30 (none).",
-      "revertable": true,
+      "revertable": false,
       "permission": "anyone",
       "family": "animation"
     },
@@ -169,7 +169,7 @@
       "command": "mod stand 0",
       "revertAlternative": "another emote action",
       "description": "Reset the Standstate of your character to 0 (none).",
-      "revertable": true,
+      "revertable": false,
       "permission": "anyone",
       "family": "animation"
     },
@@ -224,7 +224,7 @@
       "command": "demorph",
       "revertAlternative": "another morph/native action",
       "description": "Remove all morphs, including natives.",
-      "revertable": true,
+      "revertable": false,
       "permission": "anyone",
       "family": "appearance"
     },
@@ -234,7 +234,7 @@
       "command": "dismount",
       "revertAlternative": "another mount action",
       "description": "Dismounts.",
-      "revertable": true,
+      "revertable": false,
       "permission": "anyone",
       "family": "appearance"
     },
@@ -268,7 +268,7 @@
       "revertAlternative": "a separate unequip item action",
       "inputDescription": "Accepts multiple IDs/Names/Links, separated by commas, to equip multiple items at once.\n\nUse .look item, or mouse-over an item in your inventory for IDs.",
       "description": "Equip an Item by name or ID. Item must be in your inventory.\n\nName is a search in your inventory by keyword - using ID is recommended.",
-      "revertable": true,
+      "revertable": false,
       "family": "appearance"
     },
     "AddItem": {
@@ -279,7 +279,7 @@
       "revertAlternative": "a separate remove item action",
       "inputDescription": "Accepts multiple IDs/Links, separated by commas, to add multiple items at once.\n\nUse .look item, or mouse-over an item in your inventory for IDs.",
       "description": "Add an item to your inventory.\n\nYou may specify multiple items separated by commas, and may specify item count & bonusID per item as well.",
-      "revertable": true,
+      "revertable": false,
       "family": "items"
     },
     "RemoveItem": {
@@ -291,7 +291,7 @@
       "revertAlternative": "a separate add item action",
       "inputDescription": "Accepts multiple IDs/Links, separated by commas, to remove multiple items at once.\n\nUse .look item, or mouse-over an item in your inventory for IDs.",
       "description": "Remove an item from your inventory.\n\nYou may specify multiple items separated by commas, and may optionally specify item count as a negative number to remove that many of the item.",
-      "revertable": true,
+      "revertable": false,
       "permission": "member",
       "family": "items"
     },
@@ -304,7 +304,7 @@
       "inputDescription": "Items should be separated by commas, and formatted as:#FirstItemID [#Amount [#BonusIDs]], #SecondItemID [#Amount [#BonusIDs]], ..etc...\n\nAmount & BonusIDs are optional, but amount must be given if bonusIDs is given also.\n\nBy default, each item has an equal chance (aka weight) of being chosen. To change this, you may specify a weight by adding a number with a + in front after each items data, like so:#ItemID #Amount #BonusIDs +#weight. Note, weights may only be whole numbers (integers).\n\nWeight is optional and defaults to 1 if not given.\n\nWeights are normalized, so if they're all the same value they have equal chance of being used. For example: 1234+1, 4567+2, 7891+1. There is a total of 4 chances, with 1234 having 1/4 (25%) chance, 4567 having 2/4 (50%) chance, and 7891 having 1/4 (25%) chance).",
       "description": "Add a random item to your inventory from the given list.\n\nItems may be weighted to modify their chance at being chosen.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "items"
     },
     "RemoveAura": {
@@ -329,7 +329,7 @@
       "revertAlternative": "another aura/cast action",
       "description": "Remove all Auras.",
       "selfAble": true,
-      "revertable": true,
+      "revertable": false,
       "permission": "anyone",
       "family": "auras"
     },
@@ -340,7 +340,7 @@
       "revertAlternative": "a separate Equip Item action",
       "inputDescription": "Common IDs:\nHead: 1          Shoulders: 3\nShirt: 4           Chest: 5\nWaist: 6         Legs: 6\nFeet: 8            Wrist: 9\nHands: 10       Back: 15\nTabard: 19\nMain-hand: 16\nOff-hand: 17\n\nAccepts multiple slot ID's, separated by commas, to remove multiple slots at the same time.",
       "description": "Unequips an item by item slot.\n\nCommon IDs:\nHead: 1          Shoulders: 3\nShirt: 4          Chest: 5\nWaist: 6         Legs: 7\nFeet: 8           Wrist: 9\nHands: 10       Back: 15\nTabard: 19\nMain-hand: 16\nOff-hand: 17",
-      "revertable": true,
+      "revertable": false,
       "family": "appearance"
     },
     "TRP3Profile": {
@@ -350,7 +350,7 @@
       "inputDescription": "The name of the profile as it appears in Total RP's profile list.",
       "description": "Change the active Total RP profile to the profile with the specified name.",
       "dependency": "totalRP3",
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "TRP3StatusToggle": {
@@ -358,7 +358,7 @@
       "target": "script",
       "description": "Switch your Total RP 3 status to the opposite state.",
       "dependency": "totalRP3",
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "TRP3StatusIC": {
@@ -366,7 +366,7 @@
       "target": "script",
       "description": "Set your Total RP 3 status to IC.",
       "dependency": "totalRP3",
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "TRP3StatusOOC": {
@@ -374,7 +374,7 @@
       "target": "script",
       "description": "Set your Total RP 3 status to OOC.",
       "dependency": "totalRP3",
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Scale": {
@@ -541,7 +541,7 @@
       "example": "Use Sound ID 11466 to play Illidan's 'You are Not Prepared!' voice line to the entire phase.\n\nUse wowhead.com/sounds to find Sound IDs to use.",
       "inputDescription": "The sound ID to play to the phase.",
       "description": "Play a sound to the whole phase. Requires Phase Officer permissions.",
-      "revertable": true,
+      "revertable": false,
       "permission": "member",
       "family": "sound"
     },
@@ -626,7 +626,7 @@
       "description": "Any line that can be processed in a macro (any slash commands & macro flags), or any valid Lua script.\n\nYou can use this for pretty much ANYTHING, technically, including custom short Lua scripts.\nDoes not accept comma separated multi-actions.",
       "doNotDelimit": true,
       "doNotSanitizeNewLines": true,
-      "revertable": true,
+      "revertable": false,
       "family": "raw"
     },
     "Command": {
@@ -638,7 +638,7 @@
       "description": "Any other server command.\n\nType the full command you want in the input box.",
       "doNotDelimit": true,
       "convertLinks": true,
-      "revertable": true,
+      "revertable": false,
       "family": "raw"
     },
     "MogitEquip": {
@@ -648,7 +648,7 @@
       "inputDescription": "The Mogit Profile, and set name, just as if using the /moge chat command.",
       "description": "Equip a saved Mogit Wishlist set.\n\nMust specify the character name (profile) it's saved under first, then the set name.",
       "dependency": "MogIt",
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "EquipSet": {
@@ -658,7 +658,7 @@
       "revertAlternative": "a series of unequip actions",
       "inputDescription": "Set name from Equipment Manager (Blizzard's built in set manager).",
       "description": "Equip a saved set from Blizzard's Equipment Manager, by name.",
-      "revertable": true,
+      "revertable": false,
       "family": "appearance"
     },
     "ArcSpell": {
@@ -668,7 +668,7 @@
       "example": "From /sf MySpell, input just MySpell as this input.\nOr use MySpell:test:example to cast MySpell with the inputs 'test' and 'example'.",
       "inputDescription": "The ArcSpell ID (ArcID) used to cast the ArcSpell; add '+' followed by input strings, separated by : if you need to pass additional input into the spell.",
       "description": "Cast another Arcanum Spell from your Personal Vault.",
-      "revertable": true,
+      "revertable": false,
       "family": "flow"
     },
     "ArcSpellPhase": {
@@ -678,7 +678,7 @@
       "example": "From /sf MySpell, input just MySpell as this input.\nOr use MySpell:test:example to cast MySpell with the inputs 'test' and 'example'.",
       "inputDescription": "The ArcSpell ID (ArcID) used to cast the ArcSpell; add '+' followed by input strings, separated by : if you need to pass additional input into the spell.",
       "description": "Cast another Arcanum Spell from your Personal Vault.",
-      "revertable": true,
+      "revertable": false,
       "family": "flow"
     },
     "ArcSpellCastImport": {
@@ -688,7 +688,7 @@
       "example": "Right-Click an ArcSpell in your vault, then click 'Export'. Copy that code and paste it here.",
       "inputDescription": "The export/import code from exporting an ArcSpell in your vault.\n\nNote: ArcSpells exported are a snap-shot of that spell at that exact moment. Any edits you make to that spell later, will not be reflected in this export, and thus casting via import will not be updated either. You'd need to re-export the spell and update the input.",
       "description": "Cast another exported Arcanum Spell.",
-      "revertable": true,
+      "revertable": false,
       "family": "flow"
     },
     "ArcSaveFromPhase": {
@@ -699,7 +699,7 @@
       "inputDescription": "Syntax: The ArcSpell ID (ArcID) used to cast the ArcSpell, [print a 'New Spell Learned' message (true/false)]",
       "description": "Save an Arcanum Spell from the Phase Vault, with an optional message to let them know they learned a new ArcSpell!",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "flow"
     },
     "ArcImport": {
@@ -709,7 +709,7 @@
       "inputDescription": "ArcSpell Data = The exported string / import data for the ArcSpell. You can get this by right-clicking a spell in your vault and hitting 'Export'.\n\nLearned Message = true/false - If it should show a 'You learned the spell!' message.",
       "description": "Import an ArcSpell from an export, directly to your Personal Vault, with an optional message to let them know they learned a new ArcSpell!",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "flow"
     },
     "ArcCastbar": {
@@ -720,14 +720,14 @@
       "inputDescription": "Syntax: duration, [title, [iconPath/FileID, [channeled (true/false), [showIcon (true/false), [showShield (true/false)]]]]]\n\nDuration is the only required input. Comma delimited, use \"quotes\" around any text that has a comma.",
       "description": "Show a custom Arcanum Castbar with your own settings & duration.\n\nSyntax: duration, [title, [iconPath/FileID, [channeled (true/false), [showIcon (true/false), [showShield (true/false)]]]]]\n\nDuration is the only required input.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "ui"
     },
     "ArcStopSpells": {
       "name": "Stop ArcSpells",
       "target": "script",
       "description": "Stops all currently running ArcSpells - including this spell if called on a delay.\n\nUse it as the first action with a delay of 0 if you want to cancel any other running ArcSpells before you cast this spell.",
-      "revertable": true,
+      "revertable": false,
       "family": "flow"
     },
     "ArcStopThisSpell": {
@@ -738,7 +738,7 @@
       "inputDescription": "A Lua Script to test if the spell should be stopped.",
       "description": "Stops this spell's remaining actions only. Will always stop this spell's actions no matter if used on a delay or not. You may optionally provide a script as the input, and the spell will only be stopped if that script returns true.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "flow"
     },
     "ArcStopSpellByName": {
@@ -747,7 +747,7 @@
       "dataName": "ArcSpell ID",
       "inputDescription": "The ArcSpell ID (ArcID) of the ArcSpell you wish to stop all remaining actions for.",
       "description": "Stops another ArcSpell that's currently running, by ArcID.\n\nUse ARC:STOP('ArcID') in a script if you wish to only stop the spell if certain conditions are met.",
-      "revertable": true,
+      "revertable": false,
       "family": "flow"
     },
     "ARCSet": {
@@ -759,7 +759,7 @@
       "inputDescription": "Provide the variable name & the value to set it as, separated by a | character. Inputs are trimmed of leading & trailing spaces.",
       "description": "Set a Personal ARCVAR to a specific value.\n\nMy ARCVARs can be accessed via the table ARC.VAR, or via ARC:GET() in a macro script.\n\nPersonal ArcVars do not save between sessions.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "state"
     },
     "ARCTog": {
@@ -782,7 +782,7 @@
       "inputDescription": "Provide the variable name & the value to set it as, separated by a | character.",
       "description": "Set a Phase ARCVAR to a specific value.\n\nPhase ARCVARs can be accessed via the table ARC.PHASEVAR, or via ARC.PHASE:GET() in a macro script.\n\nPhase ArcVars are saved between sessions, but should not be considered secure as a user can manipulate them as well.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "state"
     },
     "ARCPhaseTog": {
@@ -804,7 +804,7 @@
       "inputDescription": "The text / link / URL to copy.",
       "description": "Open a dialog box to copy the given text (i.e., a URL).",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "arcanum"
     },
     "PrintMsg": {
@@ -814,7 +814,7 @@
       "inputDescription": "The text to print into the chatbox.",
       "description": "Prints a message in the chatbox, only for the person casting the spell.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "speech"
     },
     "RaidMsg": {
@@ -824,7 +824,7 @@
       "inputDescription": "The text to show as the raid warning.",
       "description": "Shows a custom Raid Warning message, only to the person casting the spell.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "speech"
     },
     "ErrorMsg": {
@@ -834,7 +834,7 @@
       "inputDescription": "The text to show as the UI Error Message (wrap in quotes \" \" if it contains a comma), along with any RGB (0-1 range). You may provide a voiceID to play also, or put it as 'nil' and then add a soundKitID to play a sound effect.",
       "description": "Shows a custom UI 'Error' message, only to the person casting the spell.\n\nThis is the same style message as 'You cannot do that.' etc.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "speech"
     },
     "HideMostUI": {
@@ -849,7 +849,7 @@
       "name": "Unhide/Show UI",
       "target": "script",
       "description": "Unhides/Shows the UI (just like ALT+Z, a 2nd time).",
-      "revertable": true,
+      "revertable": false,
       "family": "ui"
     },
     "FadeOutMainUI": {
@@ -910,7 +910,7 @@
       "inputDescription": "The text to show in the popup box.",
       "description": "Shows a pop-up box with a custom message.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "speech"
     },
     "BoxPromptCommand": {
@@ -921,7 +921,7 @@
       "inputDescription": "The text to show in the prompt message, Okay Button Text, Cancel Button Text, and the command to use; separated by commas.\nUse @input as the placeholder to be replaced by the user input.\n\nOkay and Cancel can be left blank and will default as 'Okay' and 'Cancel'.\nSet Cancel text as 'nil' to hide the Cancel button.",
       "description": "Prompts the user with an input box, then adds that input to the command given.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "prompts"
     },
     "BoxPromptScript": {
@@ -932,7 +932,7 @@
       "description": "Prompts the user with an input box, then adds that input to the script given.",
       "doNotDelimit": true,
       "doNotSanitizeNewLines": true,
-      "revertable": true,
+      "revertable": false,
       "family": "prompts"
     },
     "BoxPromptCommandNoInput": {
@@ -943,7 +943,7 @@
       "inputDescription": "The text to show in the prompt message, Okay Button Text, Cancel Button Text, and the command to use; separated by commas.\n\nOkay and Cancel can be left blank and will default as 'Okay' and 'Cancel'.\nSet Cancel text as 'nil' to hide the Cancel button.",
       "description": "Prompts the user with a pop-up confirmation dialogue to run the given command.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "prompts"
     },
     "BoxPromptScriptNoInput": {
@@ -954,7 +954,7 @@
       "description": "Prompts the user with a pop-up confirmation dialog to run the script.",
       "doNotDelimit": true,
       "doNotSanitizeNewLines": true,
-      "revertable": true,
+      "revertable": false,
       "family": "prompts"
     },
     "BoxPromptCommandChoice": {
@@ -964,7 +964,7 @@
       "inputDescription": "The text to show in the prompt message, Okay Button Text, Cancel Button Text, Command to use, and a list a values; separated by commas.\nUse @input as the placeholder to be replaced by the user input.\n\nOkay and Cancel can be left blank and will default as 'Okay' and 'Cancel'. Cancel can be set as 'nil' to hide the Cancel button.\nSet Okay AND Cancel text as 'nil' to hide both buttons & auto-run when an option is selected.\nAdd a * to the start of a VALUE to make that the default selected option.\n\n",
       "description": "Prompts the user with a dropdown of choices, then adds that choice as input to the command given.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "prompts"
     },
     "BoxPromptScriptChoice": {
@@ -975,7 +975,7 @@
       "description": "Prompts the user with an dialog box with a dropdown box of options, then adds their choice to the script given.",
       "doNotDelimit": true,
       "doNotSanitizeNewLines": true,
-      "revertable": true,
+      "revertable": false,
       "family": "prompts"
     },
     "ToggleWorldMap": {
@@ -985,7 +985,7 @@
       "inputDescription": "Optional: 'open' to open the map, 'close' to close the map. Leave blank to simply toggle.",
       "description": "Toggles the World Map open or closed.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "ui"
     },
     "OpenWorldMap": {
@@ -995,7 +995,7 @@
       "inputDescription": "Optional: a UiMapId to open the map to. If not given, opens to current zone.\n\nTo find a UiMapId, go to the map you want on the map, and type '/dump WorldMapFrame:GetMapID()' in chat (case sensitive).\n\nYou may also provide a Map ID or Area ID (from '.gps') by prefixing it with 'map:' or 'area:' (e.g., 'map:1737' or 'area:8709' for Dranosh Valley).\nThis is less accurate, as some MapIDs / AreaID's may contain multiple options, or are not able to be determined.",
       "description": "Opens the World Map, optionally to a specific UiMapId.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "ui"
     },
     "OpenSendMail": {
@@ -1005,7 +1005,7 @@
       "inputDescription": "the name of who to send the mail, the subject, and the body text.\n\nComma delimited, use \"quotes\" around any text that has a comma.",
       "description": "Open's the mail UI, and optionally pre-fills a given To: name, Subject, and Body Text if given.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "items"
     },
     "SendMail": {
@@ -1015,7 +1015,7 @@
       "inputDescription": "the name of who to send the mail, the subject, and the body text. All three are required.\n\nComma delimited, use \"quotes\" around any text that has a comma.",
       "description": "Send mail to another player directly, with a specified subject & body text.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "items"
     },
     "TalkingHead": {
@@ -1025,7 +1025,7 @@
       "inputDescription": "Syntax: message, title, displayID [, soundKitID, textureKit, chatType, timeout]\n\nComma delimited, use \"quotes\" around any text that has a comma.Only message, title, and displayID are required; leave an option blank to skip it.\n\nAvailable Texture Kits:",
       "description": "Displays a Talking Head frame with customizable options.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "speech"
     },
     "ShowBook": {
@@ -1044,7 +1044,7 @@
       "target": "script",
       "description": "Closes any currently open Book.",
       "dependency": "Epsilon_Book",
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "ShowPage": {
@@ -1088,7 +1088,7 @@
       "description": "Import a TRP3 Extended item to your TRP3 Extended database.",
       "dependency": "totalRP3_Extended",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "TRP3e_Item_AddToInventory": {
@@ -1098,7 +1098,7 @@
       "inputDescription": "The Generated ID of an item. You can get this ID from your TRP3 Extended Database, by mousing over an item, or right clicking item and clicking 'Copy ID'. You may provide multiple ID's, separated by commas, to add multiple items.",
       "description": "Add a TRP3 Extended item to your TRP3 Extended inventory.\n\nItems will be added to the first free inventory space in the main inventory, and must already exist in your TRP3 Extended Database.\n\nIf you need more control, you'll need to use the TRP3_API.inventory.addItem function in a Macro Script.",
       "dependency": "totalRP3_Extended",
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "TRP3e_Item_UseID": {
@@ -1109,7 +1109,7 @@
       "description": "Use a TRP3 Extended Item by it's object ID.",
       "dependency": "totalRP3_Extended",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "TRP3e_Cast_showCastingBar": {
@@ -1139,7 +1139,7 @@
       "dataName": "Location Key",
       "inputDescription": "The Key (Name) you want to recall to.",
       "description": "Recalls to a previously saved ARC Location.",
-      "revertable": true,
+      "revertable": false,
       "family": "teleport"
     },
     "WorldportCommand": {
@@ -1149,7 +1149,7 @@
       "dataName": "#x #y [#z [#mapid [#orientation]]]",
       "inputDescription": "The location data you would like to world port to. This matches the same format as the command, '.worldport'.",
       "description": "Worldport to the location data given.",
-      "revertable": true,
+      "revertable": false,
       "permission": "anyone",
       "family": "teleport"
     },
@@ -1161,7 +1161,7 @@
       "inputDescription": "The location name you would like to tele to. Use .lookup tele to find teleport location names.",
       "description": "Teleport to a given location.\n\nCommand: .tele",
       "convertLinks": true,
-      "revertable": true,
+      "revertable": false,
       "permission": "anyone",
       "family": "teleport"
     },
@@ -1173,7 +1173,7 @@
       "inputDescription": "The phase location name you would like to tele to. Use .phase tele list to find phase tele location names.",
       "description": "Teleport to a given phase location.\n\nCommand: .phase tele",
       "convertLinks": true,
-      "revertable": true,
+      "revertable": false,
       "permission": "member",
       "family": "teleport"
     },
@@ -1197,7 +1197,7 @@
       "inputDescription": "The name of the Quickcast Book & style name or ID.\n\nComma delimited, use \"quotes\" around any text that has a comma.",
       "description": "Change a Quickcast Book's Style to another style, either by using the style name or ID.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "arcanum"
     },
     "QCBookSwitchPage": {
@@ -1209,7 +1209,7 @@
       "inputDescription": "The name of the Quickcast Book & the page number.\n\nComma delimited, use \"quotes\" around any text that has a comma.",
       "description": "Switch a Quickcast Book to a specific page number.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "arcanum"
     },
     "QCBookNewBook": {
@@ -1220,7 +1220,7 @@
       "inputDescription": "The name for the Quickcast Book & style name/ID to use (optional).\n\nComma delimited, use \"quotes\" around any text that has a comma.",
       "description": "Create a new Quickcast Book, with an optional default style set.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "arcanum"
     },
     "QCBookNewPage": {
@@ -1231,7 +1231,7 @@
       "inputDescription": "The name of the Quickcast Book; Profile Name to use for dymanic profile, or nil to not use a profile; and a list of ArcSpell ID's to add as the default spells on the page (ignored if using a profile). If your book name, profile name, or any ArcIDs have spaces, enclose it in quotations.",
       "description": "Add a new page to a Quickcast Book, with optional default spells or dynamic profile assignment.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "arcanum"
     },
     "QCBookAddSpell": {
@@ -1242,7 +1242,7 @@
       "inputDescription": "The name of the Quickcast Book & the page number, followed by a list of spells to add.\n\nComma delimited, use \"quotes\" around any text that has a comma.",
       "description": "Add a spell by ArcSpell ID to a specific page in a Quickcast Book.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "arcanum"
     },
     "QCBookSetPosition": {
@@ -1251,7 +1251,7 @@
       "dataName": "Book Name",
       "inputDescription": "The name of the Quickcast Book",
       "description": "Sets the position of a Quickcast Book to the current Cursors Position",
-      "revertable": true,
+      "revertable": false,
       "family": "arcanum"
     },
     "RotateCameraLeftStart": {
@@ -1374,7 +1374,7 @@
       "name": "Restore Zoom",
       "target": "script",
       "description": "Saves the current Zoom Level. Can be used with a Restore Zoom action to return to the last saved Zoom level.",
-      "revertable": true,
+      "revertable": false,
       "family": "camera"
     },
     "MouselookModeStart": {
@@ -1394,7 +1394,7 @@
       "target": "script",
       "revertAlternative": "another rotate camera action",
       "description": "Stops All Camera Rotations, including Mouselook. ",
-      "revertable": true,
+      "revertable": false,
       "family": "camera"
     },
     "SpawnBlueprint": {
@@ -1420,7 +1420,7 @@
       "inputDescription": "#arcSpellID = The ArcSpell ID of the spell to put on cooldown\n\n#length = How long (in seconds) for the cooldown\n\n&phase = true if it should be a Phase Spell, leave blank for Personal Spell.\n\nIf your ArcSpell ID has spaces, enclose it in quotations.",
       "description": "Triggers a Cooldown on another ArcSpell. Useful for Sparks that are just pre-checks to then cast another ArcSpell.",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "flow"
     },
     "Kinesis_TempDisableAll": {
@@ -1495,7 +1495,7 @@
       "description": "Set Kinesis' Jump-To-Land Feature as Double Jump, Triple Jump, or Disabled.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_AutoLandDelay": {
@@ -1506,7 +1506,7 @@
       "inputDescription": "The number of seconds you are on the ground before disabling flight mode.\n\nSet to 0 to disable.",
       "description": "Set Kinesis' Auto-Land Delay Timer (in seconds). This is how long you are on the ground before automatically disabling flight. Set to 0 to disable.",
       "dependency": "Kinesis",
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_ToggleFlightSpells": {
@@ -1518,7 +1518,7 @@
       "description": "Enable or Disable triggering standard spells when you start Flying. Standard spells are applied using aura; if you need more control, consider using an ArcSpell.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_FlightArcEnabled": {
@@ -1530,7 +1530,7 @@
       "description": "Enable or Disable triggering ArcSpells when you start & stop Flying.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_FlightArcStart": {
@@ -1542,7 +1542,7 @@
       "description": "Set the ArcSpell that will be cast when you start Flying.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_FlightArcStop": {
@@ -1554,7 +1554,7 @@
       "description": "Set the ArcSpell that will be cast when you stop Flying.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_FlightSetSpells": {
@@ -1566,7 +1566,7 @@
       "description": "Set your Kinesis Flight Spells to the spells you specify.\n\nYour previous set of spells will be saved in a temporary backup Spell Set in the /kinesis menu.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_FlightLoadSpellSet": {
@@ -1578,7 +1578,7 @@
       "description": "Load a Flight Spell Set by name.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_SprintEnabled": {
@@ -1604,7 +1604,7 @@
       "description": "Set the speed to use when sprinting on the ground.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_SprintFly": {
@@ -1616,7 +1616,7 @@
       "description": "Set the speed to use when sprinting while flying.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_SprintSwim": {
@@ -1628,7 +1628,7 @@
       "description": "Set the speed to use when sprinting while swimming.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_SprintReturnOrig": {
@@ -1640,7 +1640,7 @@
       "description": "Toggles if your speed should return to the last speed you were at (Original Speed), or always return to speed 1, when you stop sprinting.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_SprintEmoteAll": {
@@ -1652,7 +1652,7 @@
       "description": "Toggles sending the Sprint Emote when you start sprinting for the various Move Types (Ground, Fly, Swim).",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_SprintEmoteText": {
@@ -1664,7 +1664,7 @@
       "description": "desc",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_SprintEmoteRate": {
@@ -1676,7 +1676,7 @@
       "description": "desc",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_SprintSpellAll": {
@@ -1688,7 +1688,7 @@
       "description": "Enable or Disable triggering standard spells when you start sprinting for the different Move Types (Ground, Fly, Swim). Standard spells are applied using aura; if you need more control, consider using an ArcSpell.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_SprintArcEnabled": {
@@ -1700,7 +1700,7 @@
       "description": "Enable or Disable triggering ArcSpells when you start & stop sprinting.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_SprintArcStart": {
@@ -1712,7 +1712,7 @@
       "description": "Set the ArcSpell that will be cast when you start sprinting.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_SprintArcStop": {
@@ -1724,7 +1724,7 @@
       "description": "Set the ArcSpell that will be cast when you stop sprinting.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_SprintSetSpells": {
@@ -1736,7 +1736,7 @@
       "description": "Set your Kinesis Sprint Spells to the spells you specify.\n\nYour previous set of spells will be saved in a temporary backup Spell Set in the /kinesis menu.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "Kinesis_SprintLoadSpellSet": {
@@ -1748,7 +1748,7 @@
       "description": "Load a Sprint Spell Set by name.",
       "dependency": "Kinesis",
       "doNotDelimit": true,
-      "revertable": true,
+      "revertable": false,
       "family": "integration"
     },
     "secCast": {
@@ -1762,7 +1762,7 @@
       "disabledWarning": "\nAction Unavailable (EPSI_RSP_MISSING)",
       "doNotDelimit": true,
       "requirement": "C_Epsilon.RunPrivileged",
-      "revertable": true,
+      "revertable": false,
       "family": "casting"
     },
     "secCastID": {
@@ -1838,7 +1838,7 @@
       "description": "Clears the selected target.",
       "disabledWarning": "\nAction Unavailable (EPSI_RSP_MISSING)",
       "requirement": "C_Epsilon.RunPrivileged",
-      "revertable": true,
+      "revertable": false,
       "family": "targeting"
     },
     "secTargLEnemy": {

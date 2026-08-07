@@ -536,9 +536,17 @@ SPELL_CATEGORIES: dict[str, dict[str, Any]] = {
     },
 }
 
-# Actions that put words on someone's screen. `speech` minus the two debug printers, which are for US, plus the
-# prompt family, which also interrupts.
-_CHAT_ACTIONS = {"SendSay", "SendYell", "SendEmote", "RaidMsg", "BoxMsg", "TalkingHead"}
+# Actions that put words in front of OTHER PEOPLE. Only these three broadcast: all three are `SendChatMessage`.
+#
+# ⛔ `RaidMsg`, `BoxMsg` and `TalkingHead` were in this set and DO NOT BELONG -- they are self-only UI, and the addon
+# labels the first two "(Self)" in its own action names. `TalkingHead` draws a local frame and, unless `chatType` is
+# `NONE`, ALSO does a local `print()` styled to look like a say/yell/whisper -- a fake chat line in your own log, sent
+# to nobody (`UI/TalkingHead/TalkingHead.lua`, `SCForgeTalkingHeadFrame_PlayCurrent`). Flagging them fired this rule
+# on the user's OWN `blessing_kure`, which is exactly the visual aid the category is meant to allow.
+_CHAT_ACTIONS = {"SendSay", "SendYell", "SendEmote"}
+
+# Self-only UI that merely LOOKS like chat. Not a warning -- recorded so the next reader does not re-add them above.
+_LOCAL_UI_ACTIONS = {"RaidMsg", "BoxMsg", "TalkingHead"}
 _DEBUG_PRINT_ACTIONS = {"PrintMsg", "ErrorMsg"}
 
 # ---------------------------------------------------------------------------
@@ -620,6 +628,10 @@ def lint_spell(spell: ArcSpell, category: str = "personal") -> list[str]:
         if action.actionType in _DEBUG_PRINT_ACTIONS:
             warnings.append(f"action {i}: {action.actionType} is a debug printer -- fine while testing, "
                             "noise in a spell you hand to someone else")
+        # Inert rather than invalid -- see the note in validate_spell.
+        if action.selfOnly and entry and not entry.get("selfAble"):
+            warnings.append(f"action {i}: selfOnly does nothing on {action.actionType} -- only a server-command "
+                            "action reads it (it appends ' self'). Harmless, but it is not doing what it looks like.")
 
         # Execute.lua force-nulls revertDelay when the action declares no revert, so this is dropped in silence.
         if action.revertDelay and not entry.get("revertable", True):
@@ -737,8 +749,10 @@ def validate_spell(spell: ArcSpell) -> list[str]:
             problems.append(f"action {i}: unknown actionType {action.actionType!r} (see: arcanum.py actions)")
         if action.delay is None or action.delay < 0:
             problems.append(f"action {i}: delay must be >= 0 (the addon drops rows with a negative delay)")
-        if entry and action.selfOnly and not entry.get("selfAble"):
-            problems.append(f"action {i}: {action.actionType} does not support selfOnly")
+        # NOT a problem: `selfOnly` is only READ in Execute.lua's server-command branch, where it appends " self" to
+        # the dot-command. A script action never consults it, so the field is inert, not rejected -- the addon saved
+        # and exported the real `MiniHS` with `selfOnly: true` on a `MacroText`. Validating it here refused to
+        # re-encode a working spell, which breaks decode -> edit -> encode. It is a lint note instead.
         if entry and entry.get("dataName") and not action.vars:
             problems.append(f"action {i}: {action.actionType} expects input ({entry['dataName']})")
         problems += _validate_conditions(action.conditions, f"action {i}")
@@ -1052,7 +1066,11 @@ def regen_catalog(checkout: Path) -> dict[str, Any]:
 
         # A revertDelay is FORCE-NULLED by Execute.lua when the action has no revert, so "can this roll itself back"
         # is a property worth stating outright rather than inferring from the presence of a string.
-        entry["revertable"] = bool(re.search(r"^\s*revert\s*=", body, re.M))
+        # ⛔ `revert = nil` IS WRITTEN OUT EXPLICITLY, on 87 of the 184 actions, usually paired with a
+        # `revertAlternative` naming the manual teardown instead. Testing only that a `revert =` LINE exists counted
+        # every one of those as revertable and put 170 here against a true 83 -- which silenced this rule exactly
+        # where it was needed, since a revertDelay on those rows is dropped without a word.
+        entry["revertable"] = bool(re.search(r"^\s*revert\s*=\s*(?!nil\b)\S", body, re.M))
         # A revert with no @N@ placeholder is a CONSTANT: it restores a server default, not the value the player
         # had before the spell ran. `mod scale 1` is the dangerous shape -- it does not undo the spell, it sets the
         # character to 1.0, and most players do not walk around at 1.0.
@@ -1069,8 +1087,10 @@ def regen_catalog(checkout: Path) -> dict[str, Any]:
         "_comment": "Generated from EpsilonRP/PublicAddOns Actions/Data.lua by "
                     "`python tools/arcanum.py regen-catalog <checkout>`. Script actions take a Lua function as their "
                     "command, so only server actions carry a command string. `revertable` is whether the action "
-                    "declares a revert at all -- Execute.lua force-nulls revertDelay when it does not, so a revert on "
-                    "a non-revertable row is silently dropped. `doNotDelimit` means the input is NOT comma-split: "
+                    "declares a NON-NIL revert -- 87 of the 184 write `revert = nil` outright, usually beside a "
+                    "`revertAlternative` naming the manual teardown, and Execute.lua force-nulls revertDelay on those, "
+                    "so a revert on a non-revertable row is silently dropped. `doNotDelimit` means the input is NOT "
+                    "comma-split: "
                     "without it, `a,b` runs the action once per value. `permission` is DERIVED FROM THE COMMAND WORD "
                     "and is a prediction, not a measurement -- the addon carries no phase-permission field. `family` "
                     "groups actions by what they are FOR; anything needing another addon is tagged 'integration', "
