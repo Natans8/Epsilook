@@ -3,7 +3,7 @@ import {scheduleSearch} from "./run";
 import {qInput, state} from "./state";
 import * as P from "../pills";
 import * as Search from "../search";
-import {$, el} from "../util";
+import {$, el} from "../dom";
 /* ------------------------------------------------------ autocomplete */
 
 let suggestIndex = -1;

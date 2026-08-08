@@ -16,7 +16,7 @@
  * after that, including correcting a stored id that no longer exists.
  */
 import {CFG} from "./config";
-import {$, el} from "./util";
+import {$, el} from "./dom";
 
 /** Storage key — the inline script in index.html reads the same one. */
 const THEME_KEY = "epsilook.theme";

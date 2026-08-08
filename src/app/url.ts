@@ -4,9 +4,9 @@ import {canonField, isChipField, serializeQuery} from "./query";
 import {cancelScheduledSearch, COUNT_SORTS} from "./run";
 import {COL_FIELDS, TRI_LABELS, hiddenFields, shortVersion, state} from "./state";
 import type {VersionEntry} from "../data";
-import type {Chip} from "./state";
+import type {Chip} from "../query";
 import * as Search from "../search";
-import {$, $$} from "../util";
+import {$, $$} from "../dom";
 // Copy a link to the exact current search. The URL is only updated
 // after the search debounce settles, so flush it first — otherwise a
 // share click right after typing could copy a stale query.

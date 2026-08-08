@@ -16,7 +16,7 @@ import * as Search from "../search";
 import * as Texture from "../texture";
 import * as Theme from "../theme";
 import {CFG} from "../config";
-import {$, el} from "../util";
+import {$, el} from "../dom";
 
 /* ------------------------------------------------------------- boot */
 

@@ -27,6 +27,7 @@ import type {FileEntry, MechanicRow, ScreenColors, SpellLink} from "../data";
 import {activeData, stripExt, wowheadUrl} from "./state";
 import type {Segment, SegmentOpts} from "../pills";
 import * as P from "../pills";
+import * as PR from "./pillrender";
 import * as Search from "../search";
 import {CFG} from "../config";
 import {fillTemplate, hexColor} from "../util";
@@ -72,7 +73,7 @@ export function maskOf(index: Map<number, Map<number, number>>, spellId: number,
    * clicking searches the whole category via the model field. */
 
 export function modelCatHeadTag(category: string, hit: boolean): HTMLElement {
-    return P.pill({
+    return PR.pill({
         cls: "model-head", hit, segments: [
             P.label(category, {
                 title: P.hintFor("model", category),
@@ -340,7 +341,7 @@ export function modelTag(fid: number, catName = "", mask = 0, src = -1, dst = -1
     // the sentinel's synthetic path IS its label, so both cases read it the
     // same way — only the tooltip differs (a slot name has no fid to report)
     const labelText = file.base ? stripExt(file.base) : `file #${fid}`;
-    return P.pill({
+    return PR.pill({
         cls: "model" + (synthetic ? " synthetic" : ""),
         // with "" for the category (the stale-pack flat list) this reduces to
         // the plain fileIsHit test
@@ -391,7 +392,7 @@ export interface ModelCatEntry {
 export function displayTag(e: ModelCatEntry, spellId: number): HTMLElement {
     const {fid, ref: displayId, targets: mask} = e;
     const file = fileOf(fid), base = file.name;
-    return P.pill({
+    return PR.pill({
         cls: "model",
         hit: modelFileIsHit(file, MODEL_CAT_DISPLAY_WORD),
         segments: [
@@ -439,7 +440,7 @@ export function itemTag(e: ModelCatEntry): HTMLElement {
 
     const itemHref = named && CFG.wowheadItemUrl
         ? wowheadUrl(CFG.wowheadItemUrl, {id: itemId}) : "";
-    return P.pill({
+    return PR.pill({
         cls: "model item" + (info.quality ? ` q-${info.quality}` : ""),
         hit: itemIsHit(e),
         segments: [
@@ -498,7 +499,7 @@ function itemIsHit(e: ModelCatEntry): boolean {
 
 export function soundTag(fid: number): HTMLElement {
     const file = fileOf(fid);
-    return P.pill({
+    return PR.pill({
         cls: "sound",
         hit: fileIsHit(file, "sound"),
         title: file.path || "(name unknown)",
@@ -529,7 +530,7 @@ export function kitTag(kitId: number, field: "soundkit" | "animkit", mask = 0): 
     // AnimKit and for the 35.6% of SoundKits added after 8.3.0, which is the
     // last build that ships a name for anything (see SOUNDKITNAME_BUILD).
     const name = sound ? activeData().soundKitName.get(kitId) : undefined;
-    return P.pill({
+    return PR.pill({
         cls: field,
         hit: kitIsHit(kitId, field) || (sound && kitNameIsHit(kitId)),
         segments: [
@@ -589,7 +590,7 @@ export function animSwapTag(src: number, dst: number): HTMLElement {
     const dstHit = replaceAnimHit(dst);
     // both halves are equally prominent labels (neither is "the qualifier"),
     // joined by an inert arrow — the replacement is as real as the original
-    return P.pill({
+    return PR.pill({
         cls: "anim",
         hit: srcHit || dstHit,
         segments: [
@@ -615,7 +616,7 @@ export function animTag(animId: number, groupWord = "", mask = 0,
                         boneset: string[] | null = null): HTMLElement {
     const d = activeData();
     const name = d.animNames[animId];
-    return P.pill({
+    return PR.pill({
         cls: "anim",
         hit: animIsHit(animId, groupWord),
         segments: [
@@ -670,7 +671,7 @@ export function mechanicTag(pill: MechanicPill): HTMLElement {
         search: P.quoted("mech", text),
         finds: "spells with this mechanic",
     });
-    return P.pill({
+    return PR.pill({
         cls: "mechanic" + (pill.aura ? " aura" : ""),
         hit: pill.rows.some(mechanicIsHit),
         segments: [
@@ -739,7 +740,7 @@ export function mechanicPills(rows: MechanicRow[]): MechanicPill[] {
 export function fxHeadTag(category: string, hit: boolean, mask = 0, field = "fx",
                           finds = `all spells with a ${category} effect`,
                           label = category): HTMLElement {
-    return P.pill({
+    return PR.pill({
         cls: "fx-head", hit, segments: [
             targetSeg(field, mask),
             P.label(label, {
@@ -762,7 +763,7 @@ export function fxTag(entry: { chainId: number; fid: number; color: number; src?
     const tinted = entry.color !== 0xffffff;
     const hex = hexColor(entry.color);
     const base = file.name;
-    return P.pill({
+    return PR.pill({
         cls: "fx",
         hit: fxChainIsHit(entry.chainId),
         segments: [
@@ -801,7 +802,7 @@ export function colorFxTag(category: string, color: number, hit: boolean, alpha?
     const colorData = {
         color: hex, colorInfo: category, alpha: alpha !== undefined && alpha >= 0 ? alpha : undefined,
     };
-    return P.pill({
+    return PR.pill({
         cls: "fx",
         hit,
         segments: [
@@ -827,7 +828,7 @@ export function colorFxTag(category: string, color: number, hit: boolean, alpha?
    * strength; transparency has no swatch. Clicking searches category + %. */
 export function percentFxTag(category: string, percent: number, hit: boolean): HTMLElement {
     const grey = Math.round(255 * (1 - percent / 200)); // 100% -> mid grey
-    return P.pill({
+    return PR.pill({
         cls: "fx",
         hit,
         segments: [
@@ -851,7 +852,7 @@ export function percentFxTag(category: string, percent: number, hit: boolean): H
    * copyable. Clicking finds every spell with a seat at the same point. */
 export function vehicleTag(attachment: string, seats: number, mask = 0): HTMLElement {
     const label = attachment || "seat";
-    return P.pill({
+    return PR.pill({
         cls: "fx",
         hit: vehicleIsHit(attachment, seats),
         segments: [
@@ -895,7 +896,7 @@ export function channelTag(side: string, type: number, count: number, mask = 0):
             : `Reveals ${count} invisibility spell${plural}`];
     // two divider-separated segments — (id | count), mirroring the model pill's
     // (name | attach) grammar. Both carry the same navigation.
-    return P.pill({
+    return PR.pill({
         cls: "fx" + (priceless ? " priceless" : ""),
         hit: channelIsHit(side, type),
         segments: [
@@ -967,7 +968,7 @@ export function speedTag(pill: { move: string; pct: number; amount: string; key:
     const detail = [`Movement speed ${pill.amount}`,
         changeMultiplier(pill.pct, "speed", "Brings movement to a stop"),
         SPEED_MOVEMENT_NOTES[pill.move] || ""];
-    return P.pill({
+    return PR.pill({
         cls: "fx",
         hit: speedIsHit(pill.key),
         segments: [
@@ -1004,7 +1005,7 @@ export function speedTag(pill: { move: string; pct: number; amount: string; key:
    * -999% on 9.2.7 really mean. The pill still shows the change, for the same
    * reason speed does — it is what the game stores and prints. */
 export function scaleTag(pill: { pct: number; amount: string }, mask = 0): HTMLElement {
-    return P.pill({
+    return PR.pill({
         cls: "fx",
         hit: scaleIsHit(pill.pct),
         segments: [
@@ -1036,7 +1037,7 @@ export function scaleTag(pill: { pct: number; amount: string }, mask = 0): HTMLE
    * ordinary press stays bare so the common case is uncluttered. */
 export function keybindTag(pill: { label: string; fn: string; ids: number[] },
                            mask = 0): HTMLElement {
-    return P.pill({
+    return PR.pill({
         cls: "fx",
         hit: pill.ids.some(keybindIsHit),
         segments: [
@@ -1093,7 +1094,7 @@ export function screenTag(screenId: number, mask = 0): HTMLElement {
     // CLAUDE.md. None of the candidate models matched in game closely enough
     // to be worth the complexity, so this shows the art and its color, and
     // claims nothing more.
-    return P.pill({
+    return PR.pill({
         cls: "fx",
         hit: screenIsHit(screenId),
         segments: [
@@ -1122,7 +1123,7 @@ export function dissolveTag(entry: { dissolveId: number; fid: number }, mask = 0
     const file = fileOf(entry.fid);
     const duration = d.dissolveDurations.get(entry.dissolveId) || 0;
     const base = file.name;
-    return P.pill({
+    return PR.pill({
         cls: "fx",
         hit: dissolveIsHit(entry.dissolveId),
         segments: [
@@ -1156,7 +1157,7 @@ export function shapeshiftTag(entry: { formId: number; displayId: number; fid: n
     const {formId, displayId, fid} = entry;
     const name = d.shapeshiftNames.get(formId) || "";
     const file = fileOf(fid), base = file.name;
-    return P.pill({
+    return PR.pill({
         cls: "fx",
         hit: shapeshiftIsHit(formId),
         segments: [
@@ -1187,7 +1188,7 @@ export function morphTag(entry: { creatureId: number; displayId: number; fid: nu
     const {creatureId, displayId, fid} = entry;
     const name = d.morphNames.get(creatureId) || "";
     const file = fileOf(fid), base = file.name;
-    return P.pill({
+    return PR.pill({
         cls: "fx",
         hit: morphIsHit(creatureId),
         segments: [
@@ -1248,7 +1249,7 @@ export function objectTag(objectId: number, mask = 0): HTMLElement {
     // display name (user's call, 2026-07-24 — the name form was a bad match
     // for how Epsilon's lookup actually behaves). No model, no button.
     const lookup = file.base || "";
-    return P.pill({
+    return PR.pill({
         cls: "fx",
         hit: objectIsHit(objectId),
         segments: [
@@ -1290,7 +1291,7 @@ export function mountTag(displayId: number, spellId: number): HTMLElement {
     const name = d.mountNames.get(displayId) || "";
     const fid = d.mountFids.get(displayId) || 0;
     const file = fileOf(fid), base = file.name;
-    return P.pill({
+    return PR.pill({
         cls: "model",
         hit: mountIsHit(displayId),
         segments: [
@@ -1355,7 +1356,7 @@ export function spellLinkTag(link: SpellLink, word: string, mask = 0): HTMLEleme
     // which, because a chip read out of context is ambiguous and the group head
     // scrolls out of view inside a clamped cell.
     const way = word === "triggers" ? "This spell reaches" : "Reached by";
-    return P.pill({
+    return PR.pill({
         cls: "mech link",
         hit,
         segments: [
@@ -1441,7 +1442,7 @@ export function areaTag(areaId: number): HTMLElement {
     const lookupName = name.replace(/[^\p{L}\p{N}]+/gu, " ").trim() || name;
     const root = d.areaRoots.get(areaId) || areaId;
     const mapId = d.areaMapIds.get(areaId);
-    return P.pill({
+    return PR.pill({
         cls: "mech area",
         hit: areaIsHit(areaId),
         segments: [
@@ -1464,7 +1465,7 @@ export function summonTag(entry: { creatureId: number; control: number }, mask =
     const {creatureId, control} = entry;
     const name = d.summonNames.get(creatureId) || "";
     const ctrl = d.summonControlNames[control] || "";
-    return P.pill({
+    return PR.pill({
         cls: "fx",
         hit: summonIsHit(creatureId, control),
         segments: [

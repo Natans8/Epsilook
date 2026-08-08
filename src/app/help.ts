@@ -2,7 +2,7 @@ import {ARGUMENT_WORDS, COUNT_TIP, fieldCategories} from "./autocomplete";
 import {state} from "./state";
 import * as P from "../pills";
 import * as Search from "../search";
-import {$, $$, el} from "../util";
+import {$, $$, el} from "../dom";
 /* ---------------------------------------------------- the help dialog
 
    * THE HELP IS AN ANATOMY DIAGRAM OF A QUERY. The app already draws one for a

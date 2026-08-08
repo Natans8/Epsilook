@@ -73,9 +73,11 @@ import {
 } from "./tags";
 import type {ModelCatEntry} from "./tags";
 import * as P from "../pills";
+import * as PR from "./pillrender";
 import * as Search from "../search";
 import {CFG} from "../config";
-import {$, $$, el, fillTemplate} from "../util";
+import {$, $$, el} from "../dom";
+import {fillTemplate} from "../util";
 
 /* --------------------------------------------------------- rendering */
 
@@ -128,7 +130,7 @@ export function renderMore(): void {
 /* One renderable unit of a cell: a loose pill, or a whole group (a head with
    * its items). `named` ranks it above the merely-matched (the query spelled its
    * category word — see hitsFirst). Whether it
-   * holds a search hit is NOT a field — it is read off `el` by P.holdsHit, so a
+   * holds a search hit is NOT a field — it is read off `el` by PR.holdsHit, so a
    * block cannot claim one thing while its pills show another. `named` is the
    * second rank and is a real field, because "the query spelled this category
    * word" is not something the DOM records. */
@@ -311,7 +313,7 @@ function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
     const eraIdx = d.spellEra.get(spellId);
     const xp = eraIdx === undefined ? null : d.expansions[eraIdx];
     const tdId = el("td", "c-id");
-    tdId.appendChild(P.pill({
+    tdId.appendChild(PR.pill({
         cls: "spellid",
         segments: [
             // the expansion leads, so the ids stay a straight column to read down
@@ -413,7 +415,7 @@ function commandStrip(spellId: number): HTMLElement {
         row.appendChild(b);
     }
     // the same favicon link the pills use, on the row's command strip
-    const wh = P.renderSegment(P.link(
+    const wh = PR.renderSegment(P.link(
         wowheadUrl(CFG.wowheadSpellUrl, {id: spellId}), "Open on Wowhead"));
     wh.classList.add("wh-cmd");
     row.appendChild(wh);
@@ -537,7 +539,7 @@ function modelsCell(spellId: number): HTMLElement {
     const mountIds = d.spellMounts.get(spellId) || [];
     if (!entries && !mountIds.length) {
         const pills = (d.spellModels.get(spellId) || []).map((fid) => modelTag(fid));
-        return tagCell("c-models", hitsFirst(pills, P.holdsHit));
+        return tagCell("c-models", hitsFirst(pills, PR.holdsHit));
     }
     const td = el("td", "c-models");
     const byCat = new Map<number, ModelCatEntry[]>();
@@ -731,7 +733,7 @@ function animationsCell(animKitIds: number[], looseAnimIds: number[],
    * e.g. anim:replace. */
 
 function animCatHeadTag(word: string, hit: boolean): HTMLElement {
-    return P.pill({
+    return PR.pill({
         cls: "animkit", hit, segments: [
             P.label(word, {
                 title: P.hintFor("anim", word),
@@ -747,7 +749,7 @@ function animCatHeadTag(word: string, hit: boolean): HTMLElement {
    * group and every item is rendered; the height-based clamp (layoutRow) hides
    * whatever overflows the row budget behind the cell's single "+N more".
    * Groups rendering ≤1 item for THIS row collapse to an inline pill — see
-   * P.group, which decides that for every column alike. */
+   * PR.group, which decides that for every column alike. */
 
 /* Render a cell's BLOCKS with search hits floated to the top.
    *
@@ -768,12 +770,12 @@ function animCatHeadTag(word: string, hit: boolean): HTMLElement {
    * its category word, not because some file name contained the same letters
    * (see hitsFirst). A block with no category word simply never sets it.
    *
-   * WHETHER A BLOCK HOLDS A HIT IS READ OFF THE PILLS IT BUILT (P.holdsHit),
+   * WHETHER A BLOCK HOLDS A HIT IS READ OFF THE PILLS IT BUILT (PR.holdsHit),
    * never re-derived here. Every pill and group head already sets its own `hit`
    * — including a segment's, which is the part a predicate beside the cell kept
    * missing — so the DOM is the one place both answers agree. */
 function renderBlocks(td: HTMLElement, blocks: CellBlock[]): void {
-    for (const b of hitsFirst(blocks, (x) => P.holdsHit(x.el), (x) => !!x.named)) {
+    for (const b of hitsFirst(blocks, (x) => PR.holdsHit(x.el), (x) => !!x.named)) {
         td.appendChild(b.el);
     }
 }
@@ -798,9 +800,9 @@ function groupBlock(spec: {
     hit?: boolean;
     named?: boolean;
 }): CellBlock {
-    const items = hitsFirst(spec.items, P.holdsHit);
-    const hit = !!spec.hit || items.some((it) => P.holdsHit(it));
-    return {named: spec.named, el: P.group({head: spec.head(hit), items})};
+    const items = hitsFirst(spec.items, PR.holdsHit);
+    const hit = !!spec.hit || items.some((it) => PR.holdsHit(it));
+    return {named: spec.named, el: PR.group({head: spec.head(hit), items})};
 }
 
 /* Effects cell: visual FX grouped by category — "chain" (beam/chain effects),
@@ -946,7 +948,7 @@ function effectCells(spellId: number): { fx: HTMLElement; mechBlocks: CellBlock[
         // `hit` is the category's OWN match, kept because a valueless category
         // (freeze, camo) has no entries for groupBlock to derive one from — its
         // head IS the pill. Item order is not decided here: groupBlock ranks the
-        // built pills by P.holdsHit, so each renderer's own hit is what counts.
+        // built pills by PR.holdsHit, so each renderer's own hit is what counts.
         cats.push({
             name, col, finds, label,
             hit: rows.some(isHit),
@@ -1344,7 +1346,7 @@ function effectCells(spellId: number): { fx: HTMLElement; mechBlocks: CellBlock[
     });
 
     // The area gate — where the spell REFUSES to cast. A group like every
-    // category here, which is what made the head carry the restriction: `P.group`
+    // category here, which is what made the head carry the restriction: `PR.group`
     // already collapses a one-item group inline, so the 65% of gated spells
     // naming a single area read `only in ( Suramar )` and the rest render a
     // strip, with no second renderer and no caller predicting which.

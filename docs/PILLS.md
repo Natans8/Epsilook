@@ -3,17 +3,25 @@
 Everything in a results column is a **pill**: a model file, a sound, a summoned creature, an invisibility channel. This
 is how to add another one, and the conventions to follow while doing it.
 
-Three files:
+Five files, and the line between the second and third is a LAYER boundary:
 
-| file                | holds                                                          |
-|---------------------|----------------------------------------------------------------|
-| `src/pills.ts`      | the segment library and the pill-type registry — the machinery |
-| `src/pilltypes.ts`  | one record per content type — the declarations                 |
-| `src/app/tags.ts`   | one renderer per pill type                                     |
-| `src/app/render.ts` | the cells that arrange them                                    |
+| file                    | holds                                                                      |
+|-------------------------|----------------------------------------------------------------------------|
+| `src/pills.ts`          | the segment library and the pill-type registry — the machinery, as DATA    |
+| `src/pilltypes.ts`      | one record per content type — the declarations                             |
+| —                       | *the data/query layer ends here; everything below builds DOM*              |
+| `src/app/pillrender.ts` | `renderSegment` / `pill` / `group` / `holdsHit` — segments become elements |
+| `src/app/tags.ts`       | one renderer per pill type                                                 |
+| `src/app/render.ts`     | the cells that arrange them                                                |
 
 `pills.ts` depends only on `config.ts` and never reaches into the app modules. That is deliberate: it lets `search.ts`
 read the type registry too, so matching a query is written once instead of once per file.
+
+**A `Segment` IS PLAIN DATA, AND `pillrender.ts` IS THE ONLY THING THAT TURNS IT INTO AN ELEMENT** (split out
+2026-08-08). `P.label(...)`, `P.copy(...)`, `P.targets(...)` and the rest are constructors that return objects; nothing
+is an `HTMLElement` until `PR.pill()` runs. That seam is what lets a headless caller — a CLI, a worker, a test — import
+`pills.ts` for the registry and the numeric grammar without loading a DOM, and it is enforced by `check_layers` in
+`tools/check.py` rather than by this paragraph. Build a segment in `pills.ts`; build an element in `pillrender.ts`.
 
 ---
 
@@ -67,7 +75,7 @@ sharper rule: *"it should be a sub-tag, like `attach` belongs in the model categ
   ask about the seconds the line prints — the type is keyed BY the time, so `numeric.of` reads the key. What makes that
   honest is that the line and the axis share one rounding function (`deliverySecs`), rather than the display formatting
   its number and the search rounding its own. **A number a surface SHOWS and a number it MATCHES must come from the same
-  call**; that is the same rule as `P.holdsHit` reading the class `pills.ts` writes.
+  call**; that is the same rule as `PR.holdsHit` reading the class `pills.ts` writes.
 - **AND IT LIGHTS LIKE A PILL, THROUGH THE PILL REGISTRY'S OWN MATCHER.** `hits.ts` exports `castTimeIsHit` /
   `channeledIsHit` / `instantIsHit` exactly as it does for every pill type, and `deliveryLine` calls them per segment —
   so `mech:"channeled >8"` golds the channel half of a cast-then-channel row and leaves `2 sec cast` plain. **The point
@@ -86,7 +94,7 @@ it, the ordering is not. See docs/DATA_ROUTES.md §3s-bis for the data behind th
 A pill is an **ordered list of segments**, written left to right exactly as it renders:
 
 ```js
-P.pill({
+PR.pill({
     cls: "model",                    // classes after "tag" — drives the tone
     hit: modelFileIsHit(file, cat),  // matched by the current query
     title: file.path,                // tooltip on the pill body
@@ -116,8 +124,10 @@ segments: [
 Each segment has:
 
 - a **kind** — its class, its role, which side carries a divider;
-- a **content** form — `text`, `svg`, `img` or `nodes`. Any kind takes any of them, so an icon-only variant of a text
-  segment needs no new kind;
+- a **content** form — `text`, `svg`, `img` or `mask`. Any kind takes any of them, so an icon-only variant of a text
+  segment needs no new kind. (`mask` is the target-type mask; it is the one content form the RENDERER expands, into one
+  glyph per bit, because glyphs are markup and a segment is data. It replaced a pre-built `nodes: Node[]` on
+  2026-08-08 — that field was the last DOM inside `pills.ts`.);
 - at most one **action** — `search`, `copy`, `href` or `play`. The action decides the element (button / anchor / inert
   span), composes the tooltip's closing line, and supplies the accessible name.
 
@@ -415,7 +425,7 @@ A group is a pill-shaped container of pills — a SoundKit and its files, an Ani
 and its effects:
 
 ```js
-P.group({head: fxHeadTag(word, hit, mask), items: pills})
+PR.group({head: fxHeadTag(word, hit, mask), items: pills})
 ```
 
 **The item count decides the shape, always.** A group holding **one item or none** renders as a single inline pill: the
@@ -475,7 +485,7 @@ same lesson as the `compact` flag before it.)
 This is unconditional on purpose. It was once opt-in, and only the two columns whose author added the flag passed it, so
 a SoundKit with one file and an AnimKit with one animation (56–98% of them, depending on the query) stretched across a
 full strip while an identically-sized fx category sat inline. A rule that describes the shape of a group cannot be
-something each caller remembers separately — if a future group needs a different shape rule, it belongs in `P.group`
+something each caller remembers separately — if a future group needs a different shape rule, it belongs in `PR.group`
 keyed on something the group itself knows, not in a flag at the call site.
 
 ## 4-bis. Search hits float to the top of a cell
@@ -497,7 +507,7 @@ Two reasons this is one shared helper and not per-cell:
 
 ### The rank is READ OFF THE PILL — never re-derived beside the cell
 
-**`P.holdsHit(el)` is the only answer to "does this hold a hit": the pill's own `.hit`, one segment's, or an item's
+**`PR.holdsHit(el)` is the only answer to "does this hold a hit": the pill's own `.hit`, one segment's, or an item's
 inside a group.** A block therefore has no `hit` field to disagree with what is on screen, and `groupBlock({items,
 head, hit?, named?})` builds a group's items *first* so both of its answers come from them — items ordered by which hold
 a hit, head told whether any of them does.

@@ -46,10 +46,10 @@ import {layoutRow, renderMore} from "./render";
 import {COUNT_SORTS, applyFiltersAndSort, runSearch, scheduleSearch} from "./run";
 import {toggleSound} from "./sound";
 import {COL_ORDER, TRI_LABELS, qInput, state} from "./state";
-import type {Chip} from "./state";
+import type {Chip} from "../query";
 import {ensureFieldsVisible, setHelp, shareLink, stateToUrl, urlForQuery} from "./url";
 import * as Export from "../export";
-import {$, $$, targetClosest} from "../util";
+import {$, $$, targetClosest} from "../dom";
 /* ------------------------------------------------------------ events */
 
 /**

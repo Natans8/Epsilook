@@ -84,6 +84,37 @@ FORMAT_CONSUMERS = (
     "docs/DATA_ROUTES.md",
 )
 
+# THE DATA/QUERY LAYER. These modules answer a query and know nothing about how
+# it is shown, which is what makes the two halves mutually replaceable: `data +
+# query + search + pilltypes` is a complete headless search engine, and the GUI
+# is one consumer of it rather than the thing it is welded to.
+#
+# The boundary held by accident until 2026-08-08 and was breached in two places
+# at once (pills.ts built DOM elements; the tokenizer sat behind app/state.ts's
+# top-level `document.getElementById`, so importing it threw). Both are fixed —
+# and this guard is what keeps them fixed, because the breach is INVISIBLE while
+# a browser is the only caller. Nothing fails; the layer just quietly stops
+# being liftable.
+DATA_MODULES = (
+    "src/data.ts",
+    "src/query.ts",
+    "src/search.ts",
+    "src/pills.ts",
+    "src/pilltypes.ts",
+    "src/config.ts",
+    "src/util.ts",
+)
+
+# Browser globals and DOM types. Matched as whole words on code with comments
+# and strings stripped — several of these words (`document`, `Element`) are
+# ordinary English and appear in the prose above them constantly.
+DOM_NAMES = (
+    "document", "window", "navigator", "localStorage", "sessionStorage",
+    "HTMLElement", "HTMLImageElement", "HTMLAnchorElement", "HTMLButtonElement",
+    "HTMLInputElement", "Element", "Node", "NodeList", "ParentNode", "Event",
+    "customElements", "requestAnimationFrame", "getComputedStyle",
+)
+
 # The JetBrains MCP endpoints. The inspection pass is a REQUIRED check
 # (CLAUDE.md > Checks) and its documented hazard is that a closed IDE makes it
 # silently PASS — so absence is a failure here rather than a shrug. Skipped in
@@ -359,6 +390,104 @@ def check_pack_sections(rep: Report) -> None:
         rep.ok("pack sections", f"all {len(sections)} read by data.ts")
 
 
+def _blank(text: str) -> str:
+    """A span replaced by spaces, keeping newlines so line numbers survive."""
+    return "".join(ch if ch == "\n" else " " for ch in text)
+
+
+def strip_ts_comments(src: str) -> str:
+    """TypeScript with comments blanked out, string literals INTACT.
+
+    The import scan needs the module specifier, which is a string — so it reads
+    this form. The DOM-name scan blanks strings too (see strip_ts_noise); doing
+    both in one pass is what silently disarmed two thirds of this guard when it
+    was first written.
+    """
+    out, i, n = [], 0, len(src)
+    while i < n:
+        c = src[i]
+        if c == "/" and i + 1 < n and src[i + 1] in "/*":
+            if src[i + 1] == "*":
+                end = src.find("*/", i + 2)
+                end = n if end < 0 else end + 2
+            else:
+                end = src.find("\n", i)
+                end = n if end < 0 else end
+            out.append(_blank(src[i:end]))
+            i = end
+        elif c in "\"'`":
+            j, quote = i + 1, c
+            while j < n and src[j] != quote:
+                j += 2 if src[j] == "\\" else 1
+            out.append(src[i:j + 1])
+            i = j + 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def strip_ts_noise(src: str) -> str:
+    """TypeScript with comments AND string/template literals blanked out.
+
+    Every name the DOM scan hunts for is also an ordinary English word, and
+    these modules are heavily commented — so scanning raw text would report
+    "document" out of a sentence about documentation, and `Element` out of
+    every doc comment that mentions one.
+    """
+    out, i, n = [], 0, len(src)
+    src = strip_ts_comments(src)
+    while i < n:
+        c = src[i]
+        if c in "\"'`":
+            j, quote = i + 1, c
+            while j < n and src[j] != quote:
+                j += 2 if src[j] == "\\" else 1
+            out.append(_blank(src[i:j + 1]))
+            i = j + 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def check_layers(rep: Report) -> None:
+    """The data/query layer must not reach into the GUI.
+
+    Two directions, both fatal to "mutually replaceable" and both silent:
+    importing anything from src/app/ (or src/dom.ts) welds the engine to this
+    app, and naming a DOM global welds it to a browser. Either one is invisible
+    while a page is the only caller — the code runs fine, it just stops being
+    liftable into a worker, a CLI or a test.
+    """
+    missing = [m for m in DATA_MODULES if not (ROOT / m).exists()]
+    if missing:
+        rep.fail("layer boundary", f"declared module absent: {', '.join(missing)}")
+        return
+
+    word = re.compile(r"\b(" + "|".join(DOM_NAMES) + r")\b")
+    imports = re.compile(r"""^\s*(?:import|export)\b[^;]*?from\s*["']([^"']+)["']""", re.M)
+    problems: list[str] = []
+    for mod in DATA_MODULES:
+        src = (ROOT / mod).read_text(encoding="utf-8")
+        for target in imports.findall(strip_ts_comments(src)):
+            stem = target.rsplit("/", 1)[-1]
+            if "app/" in target or stem == "dom":
+                problems.append(f"{mod} imports GUI module {target}")
+        for line_no, line in enumerate(strip_ts_noise(src).splitlines(), 1):
+            hit = word.search(line)
+            if hit:
+                problems.append(f"{mod}:{line_no} names DOM global `{hit.group(1)}`")
+
+    if problems:
+        for p in problems[:6]:
+            rep.fail("layer boundary", p)
+        if len(problems) > 6:
+            rep.fail("layer boundary", f"...and {len(problems) - 6} more")
+    else:
+        rep.ok("layer boundary", f"{len(DATA_MODULES)} data/query modules free of DOM + app imports")
+
+
 def check_arcanum(rep: Report) -> None:
     """tools/arcanum.py must still produce strings Arcanum can import.
 
@@ -469,6 +598,7 @@ def main() -> int:
     check_line_endings(rep)
     check_manifest(rep)
     check_pack_sections(rep)
+    check_layers(rep)
     check_arcanum(rep)
     check_inspectors(rep)
     check_docs(rep, args.base)

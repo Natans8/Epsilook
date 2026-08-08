@@ -111,17 +111,20 @@ Full syntax lives behind the **?** button in the app. The short version:
 src/                     the app, strict TypeScript — bundled into site/js/app.js by esbuild
   main.ts                the entry point: the app's wiring, stated in one place
   config.ts              copy-command templates and UI tunables
-  util.ts                leaf helpers shared by every module (DOM, templates)
+  util.ts                pure leaf helpers (templates, colours) — no DOM
+  dom.ts                 typed DOM shorthands ($, $$, el)
   theme.ts               the theme registry -> <html data-theme> + the picker
   data.ts                pack loading + index building; the pack and index types
   pills.ts               the segment library results are built from + the pill-type registry
+  query.ts               the query language: text <-> chips <-> tokens
   pilltypes.ts           one record per kind of content shown and searched
   search.ts              query parser + the FIELDS registry (one per prefix)
   texture.ts             .blp loading + the texture/colour hover previews
   export.ts              the results as CSV, JSON or a Discord code block
   app/                   the UI, one module per subsystem
     state.ts             the mutable UI state every other module reads
-    query.ts             chips <-> query text, and THE tokenizer
+    query.ts             the bar's half of the query language (the rest is src/query.ts)
+    pillrender.ts        segments -> DOM: the only place a pill becomes an element
     bar.ts               the chip search bar: sync, selection, undo
     autocomplete.ts      the suggestion list (field prefixes + category words)
     highlight.ts         bar syntax highlighting (the #qhl backdrop, capsules)

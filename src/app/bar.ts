@@ -4,10 +4,10 @@ import {highlightBar, syncHighlight} from "./highlight";
 import {serializeQuery, tagStr} from "./query";
 import {scheduleSearch} from "./run";
 import {DEFAULT_PLACEHOLDER, qInput, state} from "./state";
-import type {Chip} from "./state";
+import type {Chip} from "../query";
 import {ensureFieldVisible} from "./url";
 import * as Search from "../search";
-import {$, $$, el} from "../util";
+import {$, $$, el} from "../dom";
 /* ------------------------------------------------------- search bar */
 
 // The one entry point after any chips/pos/activeField mutation. Enforces

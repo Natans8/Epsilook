@@ -1,4 +1,4 @@
-import {$, el} from "../util";
+import {$, el} from "../dom";
 /* --------------------------------------------------------- clipboard */
 
 let toastTimer = 0;

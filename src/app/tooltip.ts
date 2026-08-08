@@ -25,7 +25,7 @@
  * own title keeps working.
  */
 import {KEY_LINE_RE, KEY_LINE_SEP} from "../pills";
-import {el, targetClosest} from "../util";
+import {el, targetClosest} from "../dom";
 
 /**
  * Surfaces whose hover belongs to something else. Both are exclusions of

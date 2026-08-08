@@ -1,4 +1,4 @@
-import {$} from "../util";
+import {$} from "../dom";
 import {recordBar} from "./bar";
 import {currentGroups, serializeQuery} from "./query";
 import {renderResults} from "./render";
@@ -95,11 +95,11 @@ const COLUMN_SECTIONS: Record<string, (d: SpellData) => Section[]> = {
     // lists, one line per row). Plus the five non-visual categories that
     // moved into this column, so the sort counts what the cell shows.
     mechanics: (d) => [d.spellMechanics, d.spellVehicles, d.spellInvisTypes,
-                       d.spellDetectTypes, d.spellKeybinds, d.spellSpeedMods],
+        d.spellDetectTypes, d.spellKeybinds, d.spellSpeedMods],
     fx: (d) => [d.spellFx, d.spellDissolves, d.spellGlows, d.spellShadowies,
-                d.spellGhostMats, d.spellTints, d.spellDesaturates, d.spellTransps,
-                d.spellFreezes, d.spellCamos, d.spellScreens, d.spellMorphs,
-                d.spellShapeshifts, d.spellSummons, d.spellObjects, d.spellScaleMods],
+        d.spellGhostMats, d.spellTints, d.spellDesaturates, d.spellTransps,
+        d.spellFreezes, d.spellCamos, d.spellScreens, d.spellMorphs,
+        d.spellShapeshifts, d.spellSummons, d.spellObjects, d.spellScaleMods],
 };
 
 // multi-value columns sort by how many entries a row shows there — the

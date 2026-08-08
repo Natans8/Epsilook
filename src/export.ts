@@ -18,7 +18,8 @@ import {CFG} from "./config";
 import {DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED} from "./data";
 import type {ScreenColors, SpellData} from "./data";
 import {ATTR_FLAGS} from "./pilltypes";
-import {el, hexColor} from "./util";
+import {el} from "./dom";
+import {hexColor} from "./util";
 
 /** The slice of app state this module reads. Deliberately narrow. */
 export interface ExportState {

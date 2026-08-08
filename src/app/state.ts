@@ -5,16 +5,7 @@ import {CFG} from "../config";
 import type {SpellData, VersionEntry} from "../data";
 import type {QueryGroup} from "../search";
 import {fillTemplate} from "../util";
-
-/**
- * One committed search-bar chip. field "all" = free text (rendered as
- * plain words, not boxed); not: true excludes matches instead.
- */
-export interface Chip {
-    field: string;
-    text: string;
-    not?: boolean;
-}
+import type {Chip} from "../query";
 
 /**
  * One highlight token of the last search: a positive group's word plus

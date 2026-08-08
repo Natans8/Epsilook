@@ -5,7 +5,8 @@ import type {SpellData} from "../data";
 import {qInput, state} from "./state";
 import * as P from "../pills";
 import * as Search from "../search";
-import {$, $$, el} from "../util";
+import {$, $$, el} from "../dom";
+
 /* ------------------------------------------------ bar syntax highlighting
 
    * THE BAR HIGHLIGHTS, IT DOES NOT RE-RENDER. Every character stays where it
@@ -111,7 +112,7 @@ const isComparison = (s: string) => P.isValue(s) && P.hasOperator(s);
  * alternation as one combination per branch, and each of these branches is
  * a value, so the whole token is one.
  */
-function valueRun(v: BarVocab, spans: {text: string, alts: string[]}[], i: number): number {
+function valueRun(v: BarVocab, spans: { text: string, alts: string[] }[], i: number): number {
     const word = spans[i].text;
     if (v.keywords.has(word)) return Search.keywordRun(spans, i);
     const next = spans[i + 1];
@@ -129,7 +130,7 @@ function valueRun(v: BarVocab, spans: {text: string, alts: string[]}[], i: numbe
  * handled by the caller — or attached to nothing, and marking it then would
  * claim a meaning it does not have.
  */
-function classifyAtom(v: BarVocab, word: string, lone: boolean = false): {cls: string, tip: string} {
+function classifyAtom(v: BarVocab, word: string, lone: boolean = false): { cls: string, tip: string } {
     const lower = word.trim().toLowerCase();
     if (v.words.has(lower)) return {cls: "bar-kw", tip: v.words.get(lower)!};
     if (lone && isComparison(lower) && v.valued.has(Search.COUNT_AXIS)) {

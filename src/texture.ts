@@ -22,7 +22,8 @@
  */
 import BLPFile from "./vendor/js-blp.js";
 import {CFG} from "./config";
-import {$, el, targetClosest, fillTemplate} from "./util";
+import {$, el, targetClosest} from "./dom";
+import {fillTemplate} from "./util";
 
 /** The pack textures are fetched against. Set by init(). */
 let versionId: () => string = () => "";
