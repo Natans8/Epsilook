@@ -1506,19 +1506,19 @@ rather than "no file"):
 ### 3v. Which expansion added a spell — the route with NO client column (`spells.eras` + `expansions`, format 42)
 
 **No table in any build records this.** `ItemSearchName.ExpansionID` exists but is items; `PlayerCondition`'s
-`Min/MaxExpansionLevel` are a gate, not provenance. So the answer is **derived by diffing client spell tables** —
-walk the expansions oldest-first, and the first one whose `Spell` table holds an ID is the one that introduced it.
+`Min/MaxExpansionLevel` are a gate, not provenance. So the answer is **derived by diffing client spell tables** — walk
+the expansions oldest-first, and the first one whose `Spell` table holds an ID is the one that introduced it.
 
 **The ladder is declared in `tools/expansions.py`, not here and not in the build.** One `Expansion(...)` row per rung
 carries everything that can differ: its ID sources, the words `xpac:` accepts, the Wowhead site for that era and any
-caveat. `build_data.py` only *reads* the committed result — **adding an expansion touches no frontend file and no
-build code.**
+caveat. `build_data.py` only *reads* the committed result — **adding an expansion touches no frontend file and no build
+code.**
 
-| source kind  | what it is                                        | used for                       |
-|--------------|---------------------------------------------------|--------------------------------|
-| `Archive(…)` | a build in the wow.tools DBC mirror               | Vanilla…MoP (original clients) |
-| `Pack(…)`    | a version Epsilook already ships                  | Legion…TWW                     |
-| `Vendored(…)`| a client table committed under `build/sources/`   | **Warlords only**              |
+| source kind   | what it is                                      | used for                       |
+|---------------|-------------------------------------------------|--------------------------------|
+| `Archive(…)`  | a build in the wow.tools DBC mirror             | Vanilla…MoP (original clients) |
+| `Pack(…)`     | a version Epsilook already ships                | Legion…TWW                     |
+| `Vendored(…)` | a client table committed under `build/sources/` | **Warlords only**              |
 
 **⛔ THE CLASSIC RE-RELEASES CANNOT DATE A SPELL, AND USING THEM WAS THE FIRST DESIGN.** They are modern rebuilds:
 Classic Era 1.15.8 holds **16,124 spells the real 1.12.1 client never had** (Jaccard **0.466**) — Season of Discovery
@@ -1535,8 +1535,8 @@ table the ladder reads out of a 517-file pack. It was validated against the mirr
 signature of a real retail client, and the measurement that bounds the whole PTR-vs-retail question at **one row**.
 
 **⛔ AND THE SPELL ID IS NOT A SUBSTITUTE — measured, not assumed.** Best-fit ID cut points disagree with the ladder on
-**19,154 of 276,332 spells (6.93%)**; Cata alone is 18.1% wrong. The bands genuinely overlap (Wrath p99 = 75,209 vs
-Cata p01 = 63,940). For the WoD/Legion split specifically, the best cut ANY threshold can achieve is **95.49%** —
+**19,154 of 276,332 spells (6.93%)**; Cata alone is 18.1% wrong. The bands genuinely overlap (Wrath p99 = 75,209 vs Cata
+p01 = 63,940). For the WoD/Legion split specifically, the best cut ANY threshold can achieve is **95.49%** —
 ~4,500 spells permanently misfiled — which is why the vendored client replaced it outright.
 
 **Wowhead is not a source either.** Every `"patch":` field on a spell page belongs to a *guide article*; the occasional
@@ -1544,11 +1544,11 @@ Cata p01 = 63,940). For the WoD/Legion split specifically, the best cut ANY thre
 
 **Shipped shape.** `spells.eras` is one index per spell, parallel to `spells.ids`, into the `expansions` section
 (`keys`/`labels`/`shorts`/`majors`/`aliases`/`wowhead`/`caveats`). **-1 = no rung claims it.** `majors` is the game
-major version, and it is there so the app can index `CFG.expansionArt` — the row draws the expansion's own inline
-art, **vendored under `site/img/expansions/` and never hotlinked**, rather than the frontend restating which art
-belongs to which expansion. (The game's own art does not work for this: `interface/icons/expansionicon_*` covers only
-the first six expansions, and the glue logos in `CFG.expansionLogos` are full "World of Warcraft" lockups that read
-identically at row height. See DECISIONS.md.) `meta.counts` carries one
+major version, and it is there so the app can index `CFG.expansionArt` — the row draws the expansion's own inline art,
+**vendored under `site/img/expansions/` and never hotlinked**, rather than the frontend restating which art belongs to
+which expansion. (The game's own art does not work for this: `interface/icons/expansionicon_*` covers only the first six
+expansions, and the glue logos in `CFG.expansionLogos` are full "World of Warcraft" lockups that read identically at row
+height. See DECISIONS.md.) `meta.counts` carries one
 `expansion.<key>` per rung plus `expansion.unknown`, and unlike the delivery counts **these DO partition the pack**.
 
 **9.2.7 (the product), read from the pack:** Vanilla 5,823 · TBC 14,581 · WotLK 16,599 · Cata 23,745 · MoP 15,304 ·
@@ -2012,6 +2012,6 @@ hotlinks sit on tolerated-hotlinking footing, not an affirmative license.
 | **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, object (§3m), seat, invis, detect, keybind, speed, scale — see §3a–3q; **chain/dissolve/ghost/barrage pills carry their M2 attachment point (§3h), -1 = "full body"**                                                                                                                                                                             |
 | **Not shown**    | `spells.schools` — SpellMisc.SchoolMask, gathered only (§3q)                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **Mechanics**    | one row per `SpellEffect`: `.Effect` + `.EffectAura` enums (names from WoWDBDefs) paired with that row's `.ImplicitTarget_0/_1` — §3l; plus **spell links** (`.EffectTriggerSpell` → another spell's row, both directions, §3r)                                                                                                                                                                                                                                  |
-| **Expansion**    | §3v — NO client column. Derived by diffing original era clients (`tools/expansions.py` → `build/expansion_ids.json.gz`); ships as `spells.eras` + `expansions`                                                                                                                                                                                                                                                                          |
+| **Expansion**    | §3v — NO client column. Derived by diffing original era clients (`tools/expansions.py` → `build/expansion_ids.json.gz`); ships as `spells.eras` + `expansions`                                                                                                                                                                                                                                                                                                   |
 | **Name search**  | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Target bits**  | `SpellVisualEvent.TargetType` on the kit edge (§2), resolved against `SpellEffect.ImplicitTarget` per phase (`StartEvent`) so a self-cast spell's "Target" reads as the caster, plus `Caster`/`HostileSpellVisualID` redirects that mark whatever they reach caster/target                                                                                                                                                                                       |
