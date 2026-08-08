@@ -534,14 +534,15 @@ export function kitTag(kitId: number, field: "soundkit" | "animkit", mask = 0): 
         hit: kitIsHit(kitId, field) || (sound && kitNameIsHit(kitId)),
         segments: [
             targetSeg(sound ? "sound" : "anim", mask),
-            // THE NAME IS THE IDENTITY WHERE THERE IS ONE (user's call,
-            // 2026-08-06). A named kit spends its label on the name and moves
-            // the id into the copy button — the shape spellLinkTag already
-            // uses, hence the shared .pill-id. An UNNAMED kit keeps the id as
-            // its label, because then the id is the only thing it has: the
-            // rule is "the id stops being printed TWICE", not "the id is
-            // hidden". There is deliberately no derived fallback name — see
-            // docs/DECISIONS.md, "No fallback name for an unnamed sound kit".
+            // THE NAME IS THE IDENTITY WHERE THERE IS ONE, AND THEN THE ID IS
+            // NOT PRINTED AT ALL (user's call, 2026-08-06, tightened 08-08).
+            // A named kit spends its label on the name and keeps only the bare
+            // copy button — the id is still one click away and still on that
+            // button's tooltip, but it is not competing with the name for the
+            // width. An UNNAMED kit keeps the id as its label, because then the
+            // id is the only thing it has. There is deliberately no derived
+            // fallback name — see docs/DECISIONS.md, "No fallback name for an
+            // unnamed sound kit".
             //
             // hit is per-SEGMENT, not inherited from the pill: the name golds
             // only when the NAME is what matched, so a kit found by id stays
@@ -552,7 +553,10 @@ export function kitTag(kitId: number, field: "soundkit" | "animkit", mask = 0): 
                     // ellipsises at 24rem and these run to 91 characters
                     title: name,
                     detail: [`${kind} ${kitId} — Blizzard's own name for it`],
-                    search: P.quoted("sound", name),
+                    // the `kit` keyword, not the bare name: clicking the name
+                    // asks for kits NAMED this, never a sound file that
+                    // happens to spell it
+                    search: P.quoted("sound", Search.keywordValue(Search.SOUNDKIT_WORD, name)),
                     finds: "spells using a sound kit with this name",
                     hit: kitNameIsHit(kitId),
                 })
@@ -561,9 +565,7 @@ export function kitTag(kitId: number, field: "soundkit" | "animkit", mask = 0): 
                     search: P.query(sound ? "sound" : "anim", kitId),
                     finds: `spells using this ${field}`,
                 }),
-            name
-                ? P.copy(String(kitId), `Copy ${kind} ID ${kitId}`, String(kitId), "pill-id")
-                : P.copy("⧉", `Copy ${kind} ID ${kitId}`, String(kitId)),
+            P.copy("⧉", `Copy ${kind} ID ${kitId}`, String(kitId)),
             P.cmd(sound ? "/" : ".mod",
                 sound ? CFG.soundKitCopyTemplate : CFG.animKitCopyTemplate, {id: kitId}),
             sound && P.link(wowheadUrl(CFG.wowheadSoundUrl, {id: kitId}),

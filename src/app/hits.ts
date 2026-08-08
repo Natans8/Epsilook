@@ -64,11 +64,19 @@ export function kitIsHit(kitId: number, field: string): boolean {
 
 // A sound kit's human name is searchable like a file name, so it has to be able
 // to light for the same reason. Kept beside kitIsHit rather than inside it
-// because only sound kits have names, and mirrors spellsBySoundKitName's test.
+// because only sound kits have names, and mirrors BOTH of the sound column's
+// name tests: the `kit` keyword where a chip wrote one — read through the
+// engine's own splitter and value test, so neither the arity nor the word-wise
+// match is spelled twice — and the chip's plain words otherwise.
 export function kitNameIsHit(kitId: number): boolean {
     const name = activeData().soundKitName.get(kitId)?.toLowerCase();
     if (!name) return false;
-    return anyGroup("sound", (ts) => ts.every((t) => name.includes(t.text)));
+    return anyGroup("sound", (ts) => {
+        const values = Search.splitKeyword(ts, Search.SOUNDKIT_WORD).values;
+        return values.length
+            ? Search.matchesNames(values, [name])
+            : ts.every((t) => name.includes(t.text));
+    });
 }
 
 // The expansion segment lights through the ENGINE'S own resolver, reading the

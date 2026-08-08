@@ -320,6 +320,21 @@ The registry decides **what a user can type**, so the choices there are product 
       is for; the corpus carries only what has no number.
     - **The 674 channels with no duration row get NO word, on purpose.** They keep a bare `channeled`. What they
       actually do in game is still open (docs/DECISIONS.md), and naming a group implies knowing what it is.
+- **A META KEYWORD IS EXEMPT FROM THE COLLISION RULE, AND `kit` IS THE CASE THAT SHOWS WHY (2026-08-08).** The first
+  bullet's measurement applies to CATEGORY words, which join their column's corpus — a meta keyword never does. It
+  CONSUMES the token after it, so `sound:"kit frostbolt"` asks the name half alone and the word `kit` is not searched
+  for at all; `sound:kit` (trailing, no value) falls back to a plain word search and answers 2,516, which is the
+  documented "a keyword with nothing after it is just a word" and not noise the keyword carries. **So measure a
+  candidate keyword for AMBIGUITY, not for hit count.**
+- **Two columns may spell one keyword the same when it means the same thing.** `kit` is the sound column's meta keyword
+  AND the anim column's head word for kit-borne animations. Both mean "the kit"; neither field can see the other's
+  vocabulary (`keywordsIn` and `fieldCategories` are per-field), so nothing has to be renamed to keep them apart. Two
+  constants, `SOUNDKIT_WORD` and `KIT_WORD`, because they are two grammars — the first takes a token, the second joins a
+  corpus.
+- **Reach for a keyword when the column has TWO name spaces and a bare word reads both.** That is the whole case for
+  `kit`: `sound:frostbolt` unions file paths with kit names by design and should keep doing so, but there was no way to
+  say "the KIT is called that" — which is exactly the question the pill's own label poses now that the name is its
+  identity.
 - **Words name kinds of content; values are typed, not suggested.**
   Autocomplete offers `attach`, never `Chest`; `equipped`, never
   `equipped off hand`. The suggestion list is a menu of what can be *asked*, not of the answers.
@@ -408,18 +423,21 @@ head leading, the lone item fused into it. With more, it becomes a full-width st
 an abstraction rather than markup — a group that is usually one-of-a-kind and occasionally many needs one renderer, not
 two, and no caller has to predict which it will be.
 
-### The SoundKit head is NAMED where it can be, and the id moves into the copy button (format 41)
+### The SoundKit head is NAMED where it can be, and then the id is not printed at all (format 41)
 
-`kitTag` gives a named sound kit **the name as its label** (`SPELL_MA_Revamp_Frostbolt_Precast`) and prints the id **as
-its own copy button** (`.pill-id`) instead of beside one. An **unnamed** kit is unchanged: the id is the label and the
-copy button stays the bare `⧉`.
+`kitTag` gives a named sound kit **the name as its label** (`SPELL_MA_Revamp_Frostbolt_Precast`) and **no printed id** —
+just the bare `⧉`, which copies the id and names it on its tooltip. An **unnamed** kit is unchanged: the id is the label
+and the copy button is the same bare `⧉`.
 
-**The rule is "the id stops being printed TWICE", not "the id is hidden"** (user's call, 2026-08-06). Once a pill has a
-better identity to show, a printed id next to a separate `⧉` spends width saying the same thing twice — so the two
-collapse into one control. Where there is no name, the id IS the identity and keeps the label.
+**A name replaces the id; it does not sit beside it** (user's call, 2026-08-06, tightened 2026-08-08). The first version
+printed the id **as** the copy button (`.pill-id`), on the rule "the id stops being printed TWICE". The user's call went
+one step further: where a kit has a real name, the id is not what the pill is FOR, and a number competing with a
+42-character identifier for the row's width costs more than it pays. The id stays one click and one hover away. Where
+there is no name, the id IS the identity and keeps the label.
 
-**`.pill-id` is shared with the spell-link chip**, which reached this shape first and used to own it as `.link-id`. It
-was generalised the moment there was a second caller, so the two cannot drift apart — one rule, one look.
+**`.pill-id` therefore has one caller again — the spell-link chip**, which reached that shape first (as `.link-id`) and
+whose id genuinely IS its key. The class stays generalised: it costs nothing and the next pill that wants a printed-id
+button should not have to re-derive it.
 
 **A missing name renders exactly as before format 41** — the segment is simply absent, never an empty or placeholder
 one, and **never a name derived from the kit's file paths**. That last part is a measured decision, not an oversight:
@@ -427,9 +445,15 @@ kits reuse files, so a file-derived name is confidently WRONG for about a third 
 list already rendered under the head for the rest. See docs/DECISIONS.md → *"No fallback name for an unnamed sound
 kit"*.
 
-**The name is searchable and it lights**, through `kitNameIsHit` in `hits.ts` rather than a test beside the renderer —
-so `sound:frostbolt` golds the name on kits it selected, and a kit found by id leaves it plain. This is the fx-column
-rule again: a surface that can light for a reason the search does not evaluate is already lying.
+**Clicking the name searches the `kit` KEYWORD, not the bare name** — `sound:"kit SPELL_MA_Revamp_Frostbolt_Precast"`,
+built through `Search.keywordValue` like every other keyword pill. A bare `sound:<name>` would also read the file half
+of the column, so the click would answer a wider question than the thing clicked. See the keyword's own entry under
+"Choosing the keyword".
+
+**The name lights** through `kitNameIsHit` in `hits.ts` rather than a test beside the renderer — and it reads the
+engine's own `splitKeyword` + `matchesNames`, so it golds under `sound:"kit frostbolt"` and under a plain
+`sound:frostbolt` alike, while a kit found by id stays plain. This is the fx-column rule again: a surface that can light
+for a reason the search does not evaluate is already lying.
 
 **Long names are handled by `.tag-label`'s existing 24rem ellipsis** — names run to 91 characters (median 42), so the
 full string goes on the tooltip, which is the same contract `.tag-motion` has.

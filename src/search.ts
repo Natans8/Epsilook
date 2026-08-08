@@ -231,6 +231,16 @@ export const META_KEYWORDS: Record<string, {
         hint: 'Body region — boneset head, boneset "upper body"',
         when: (d) => (d.bonesetNames || []).length > 0,
     },
+    // The SoundKit's own name. The sound column has TWO name spaces — file
+    // paths and kit names — and a bare word reads both by design; the keyword
+    // is the only way to say which one you meant. Absent from packs older than
+    // format 41 and, like every keyword, unsuggested where it would match
+    // nothing.
+    kit: {
+        fields: ["sound"],
+        hint: 'SoundKit name — kit frostbolt, kit "restoration impact"',
+        when: (d) => d.soundKitName.size > 0,
+    },
     motion: {
         fields: ["model"],
         hint: 'Missile flight path — motion parabola, motion "forward spin"',
@@ -256,6 +266,11 @@ export const ATTACH_WORD = "attach";
 export const BONESET_WORD = "boneset";
 export const MOTION_WORD = "motion";
 export const XPAC_WORD = "xpac";
+/* Spelled the same as the anim column's `kit` head word (KIT_WORD, below) and
+ * deliberately so — both mean "the kit", one in each column. They stay two
+ * constants because they are two grammars: this one takes the token after it,
+ * that one joins a corpus. Neither field can see the other's. */
+export const SOUNDKIT_WORD = "kit";
 
 /**
  * The keywords one field can carry, minus any the loaded pack has no data
@@ -534,8 +549,24 @@ function spellsByModel(tokens: QueryToken[], data: SpellData): Set<number> {
 }
 
 /**
- * Search sound kits by Blizzard's own name for them (pack section
+ * The spells of every named kit whose name answers `test` (pack section
  * `soundKitNames`, from the pinned 8.3.0 table).
+ *
+ * One walk, two ways in — the implicit half of a `sound:` search below, and
+ * the explicit `kit` keyword — so the two spellings of "named that" can only
+ * ever disagree about which names match, never about which spells follow.
+ */
+function spellsByKitName(data: SpellData, test: (nameL: string) => boolean): Set<number> {
+    const out = new Set<number>();
+    for (const [kitId, name] of data.soundKitName) {
+        if (!test(name.toLowerCase())) continue;
+        for (const s of data.soundKitSpells.get(kitId) || []) out.add(s);
+    }
+    return out;
+}
+
+/**
+ * Search sound kits by Blizzard's own name for them, from a chip's plain words.
  *
  * Unions with the file-name search rather than replacing it — the same way a
  * category word matches file names IN ADDITION to the category — so adding
@@ -544,17 +575,11 @@ function spellsByModel(tokens: QueryToken[], data: SpellData): Set<number> {
  * file-name half of the union already answers the targeted question.
  */
 function spellsBySoundKitName(tokens: QueryToken[], data: SpellData): Set<number> {
-    const out = new Set<number>();
-    if (!data.soundKitName.size) return out;
+    if (!data.soundKitName.size) return new Set<number>();
     const {text} = splitTargetTokens(tokens);
     const words = text.map((t) => t.text).filter(Boolean);
-    if (!words.length) return out;
-    for (const [kitId, name] of data.soundKitName) {
-        const nameL = name.toLowerCase();
-        if (!words.every((w) => nameL.includes(w))) continue;
-        for (const s of data.soundKitSpells.get(kitId) || []) out.add(s);
-    }
-    return out;
+    if (!words.length) return new Set<number>();
+    return spellsByKitName(data, (nameL) => words.every((w) => nameL.includes(w)));
 }
 
 /**
@@ -578,6 +603,39 @@ function spellsBySound(tokens: QueryToken[], data: SpellData): Set<number> {
             }
         }
     }
+    return out;
+}
+
+/**
+ * Search the sounds column: file names, an exact SoundKit id, and the kit's
+ * own name, unioned — one chip, every way a sound is named.
+ *
+ * `kit <name>` scopes to the NAME half alone, which is the one question the
+ * union cannot ask: THIS kit, by the name Blizzard gave it, never a file that
+ * happens to spell the same word. Whatever is left over stays an ordinary
+ * sound search and still has to match, so the two intersect — the same shape
+ * `boneset` has in the anim column, and the same one-token arity every meta
+ * keyword has.
+ */
+function spellsBySoundColumn(tokens: QueryToken[], data: SpellData): Set<number> {
+    const kit = splitKeyword(tokens, SOUNDKIT_WORD);
+    if (kit.values.length) {
+        const out = spellsByKitName(data, (nameL) => matchesNames(kit.values, [nameL]));
+        if (kit.text.length) {
+            // the leftover has no `kit` left in it, so this bottoms out
+            const rest = spellsBySoundColumn(kit.text, data);
+            for (const s of [...out]) if (!rest.has(s)) out.delete(s);
+        }
+        return out;
+    }
+    const out = spellsBySound(tokens, data);
+    // an all-numbers chip is also an exact SoundKit ID lookup (the old
+    // soundkit: field, folded in 2026-07-19) — several ids in one chip union,
+    // like the old orGroups behavior
+    if (tokens.every((t) => /^\d+$/.test(t.text))) {
+        for (const s of spellsByKitId(tokens, data.soundKitSpells)) out.add(s);
+    }
+    for (const s of spellsBySoundKitName(tokens, data)) out.add(s);
     return out;
 }
 
@@ -918,18 +976,9 @@ export const FIELDS: Record<string, SearchFieldSpec> = {
     },
     sound: {
         label: "Sound", tab: true,
-        hint: "sound file or SoundKit ID, e.g. felreaver or 86835", short: "sound file / kit ID",
-        // matches file names; an all-numbers chip is also an exact SoundKit ID
-        // lookup (the old soundkit: field, folded in 2026-07-19) — several ids
-        // in one chip union, like the old orGroups behavior
-        run: (tokens, data) => {
-            const out = spellsBySound(tokens, data);
-            if (tokens.every((t) => /^\d+$/.test(t.text))) {
-                for (const s of spellsByKitId(tokens, data.soundKitSpells)) out.add(s);
-            }
-            for (const s of spellsBySoundKitName(tokens, data)) out.add(s);
-            return out;
-        },
+        hint: "sound file, kit name or SoundKit ID, e.g. felreaver or 86835",
+        short: "sound file / kit",
+        run: (tokens, data) => spellsBySoundColumn(tokens, data),
     },
     anim: {
         label: "Animation", tab: true,
