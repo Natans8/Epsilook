@@ -51,7 +51,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -79,6 +79,26 @@ def load_local_enum(name: str) -> dict[int, Any]:
     """
     data = json.loads((ENUMS_DIR / f"{name}.json").read_text(encoding="utf-8"))
     return {int(k): v for k, v in data["values"].items()}
+
+
+EXPANSIONS_FILE = BUILD_DIR / "expansion_ids.json.gz"
+
+
+def load_expansions() -> tuple[list[dict[str, Any]], dict[int, int]]:
+    """The committed expansion ladder: (rungs oldest-first, {spell id -> rung}).
+
+    Which expansion introduced a spell is recorded by no client table, so it is
+    derived once by tools/expansions.py from the original era clients and
+    committed — see that script for the sources and their caveats. Frozen
+    historical data, so it is READ here and never re-derived, and a missing or
+    malformed file is a hard error exactly like load_local_enum.
+    """
+    with gzip.open(EXPANSIONS_FILE, "rt", encoding="utf-8") as f:
+        data = json.load(f)
+    rungs: list[dict[str, Any]] = data["ladder"]
+    index = {sid: i for i, rung in enumerate(rungs)
+             for sid in data["ids"][rung["key"]]}
+    return rungs, index
 
 
 def _enum_ids_where(mapping: dict[int, Any], handler: str) -> set[int]:
@@ -1232,7 +1252,8 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 41  # 41: soundKitNames — human names for sound kits (§3u)
+PACK_FORMAT = 42  # 42: spells.eras + expansions — which expansion added a spell (§3v)
+# 41: soundKitNames — human names for sound kits (§3u)
 # 40: spellAreas + areas — the area gate (§3t)
 # 35: spell -> spell links (SpellEffect.EffectTriggerSpell)
 # 34: missile flight paths (SpellMissileMotion) on missile model rows
@@ -3888,6 +3909,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     log("Assembling pack ...")
     spell_ids = sorted(spell_names)
     icon_names, spell_icons = build_icon_index(spell_ids, spell_icon_fid, fid_path)
+    expansion_rungs, expansion_of = load_expansions()
+    era_counts = Counter(expansion_of.get(s, -1) for s in spell_ids)
 
     spells = {
         "ids": spell_ids,
@@ -3901,6 +3924,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         # / 16 Frost / 32 Shadow / 64 Arcane). Gathered for a future search axis;
         # not read by the frontend yet.
         "schools": [spell_schools.get(s, 0) for s in spell_ids],
+        # Index into the "expansions" section — which expansion introduced this
+        # spell ID. -1 when no rung claims it, which means the ID postdates the
+        # newest rung; ships as a real value rather than a guess.
+        "eras": [expansion_of.get(s, -1) for s in spell_ids],
     }
 
     file_ids = sorted(referenced_fids)
@@ -4251,6 +4278,11 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 # be read straight out of the packs rather than estimated
                 **{f"spellAttrs.{handler}": len(ids)
                    for handler, ids in sorted(spell_attrs.items())},
+                # one count per expansion. These DO partition the pack, so they
+                # sum to it — `expansion.unknown` is the spells no rung claims.
+                **{f"expansion.{r['key']}": era_counts.get(i, 0)
+                   for i, r in enumerate(expansion_rungs)},
+                "expansion.unknown": era_counts.get(-1, 0),
                 # delivery: the three are NOT disjoint and deliberately do not
                 # sum to the pack — `casttime` and `channelled` overlap, and
                 # `instant` is everything listed in neither.
@@ -4270,6 +4302,23 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             },
         },
         "spells": spells,
+        # §3v the expansion ladder, oldest first — spells.eras indexes into it.
+        # Everything the app needs to render and search an expansion travels
+        # here rather than being restated in the frontend: the display short,
+        # the words `added:` accepts, the Wowhead site for that era ("" = no
+        # era site exists, so retail is the fallback) and any data caveat.
+        # Adding an expansion is a row in tools/expansions.py and nothing here.
+        "expansions": {
+            "keys": [r["key"] for r in expansion_rungs],
+            "labels": [r["label"] for r in expansion_rungs],
+            "shorts": [r["short"] for r in expansion_rungs],
+            # game major version — the app indexes CFG.expansionLogos with it, so
+            # the logo FileDataIDs stay a single list rather than a second one
+            "majors": [r["major"] for r in expansion_rungs],
+            "aliases": [r["aliases"] for r in expansion_rungs],
+            "wowhead": [r["wowhead"] for r in expansion_rungs],
+            "caveats": [r.get("caveat", "") for r in expansion_rungs],
+        },
         "iconNames": icon_names,
         "files": files,
         # cats tag how each model is used (attach/missile/area/trail/barrage);

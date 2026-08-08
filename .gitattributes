@@ -23,3 +23,8 @@ Dockerfile      text eol=lf
 # (true in this repo) from ever line-ending mangling a pack.
 *.gz binary
 site/data/**/*.gz filter=lfs diff=lfs merge=lfs -text
+
+# Vendored era client tables (build/sources/) — the expansion ladder's one
+# source that no public archive serves. Frozen, committed once, and small
+# enough not to want LFS; `binary` only keeps autocrlf away from them.
+*.7z binary

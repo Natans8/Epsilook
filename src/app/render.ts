@@ -23,6 +23,7 @@ import {
     tintIsHit,
     tokensFor,
     transpIsHit,
+    expansionIsHit,
     originIsHit,
     triggersIsHit,
     vehicleIsHit,
@@ -32,7 +33,8 @@ import {
 import {ATTR_FLAGS} from "../pilltypes";
 import {DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED, deliverySecs} from "../data";
 import {setStatus} from "./run";
-import type {DisplayRef, SpellData, SpellLink} from "../data";
+import type {DisplayRef, Expansion, SpellData, SpellLink} from "../data";
+import * as Texture from "../texture";
 import {activeData, state, wowheadUrl} from "./state";
 import {
     animSwapTag,
@@ -288,6 +290,11 @@ function deliveryLine(spellId: number): HTMLElement {
     return line;
 }
 
+/** The expansion's inline art — a self-hosted file under site/, so it is a plain
+ *  lazy <img> with nothing to decode and no request off-origin. Keyed by the
+ *  `major` the pack ships, so nothing here knows which expansion is which. */
+const eraArtSrc = (xp: Expansion): string => CFG.expansionArt?.[xp.major] ?? "";
+
 function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
     const d = activeData();
     const i = d.spellIndex.get(spellId)!;
@@ -296,14 +303,30 @@ function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
     // result index
     tr.appendChild(el("td", "c-idx", String(displayIndex + 1)));
 
-    // ID
+    // ID — a pill whose label is the id and whose one note is the expansion that
+    // introduced it, the same way an attachment point is a note on a model pill.
+    // The expansion is provenance, not payload, so it is a SUB-TAG of the
+    // identity rather than a line or a column of its own; the css keeps it out
+    // of the resting page and shows it on row hover or when it is a hit.
+    const eraIdx = d.spellEra.get(spellId);
+    const xp = eraIdx === undefined ? null : d.expansions[eraIdx];
     const tdId = el("td", "c-id");
-    const idBtn = el("button", "id-copy", String(spellId));
-    idBtn.type = "button";
-    idBtn.title = "Copy spell ID\nShift-click: copy wrapped in `backticks`";
-    idBtn.setAttribute("aria-label", `Copy spell ID ${spellId}`);
-    idBtn.dataset.copy = String(spellId);
-    tdId.appendChild(idBtn);
+    tdId.appendChild(P.pill({
+        cls: "spellid",
+        segments: [
+            // the expansion leads, so the ids stay a straight column to read down
+            xp && P.imageOf("note", {src: eraArtSrc(xp), alt: xp.short}, {
+                cls: "era",
+                hit: expansionIsHit(xp.index),
+                title: xp.caveat
+                    ? `Added in ${xp.label} — ${xp.caveat}`
+                    : `Added in ${xp.label}`,
+                search: `xpac:${xp.key}`,
+                finds: `spells added in ${xp.label}`,
+            }),
+            P.copy(String(spellId), `Copy spell ID ${spellId}`, String(spellId), "id-copy"),
+        ],
+    }));
     tr.appendChild(tdId);
 
     // Name — wowhead link (their widget adds the hover tooltip); the parts

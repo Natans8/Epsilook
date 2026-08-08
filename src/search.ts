@@ -59,6 +59,11 @@ export interface SearchFieldSpec {
     label: string;
     /** Whether the field gets a button in the tab strip. */
     tab: boolean;
+    /** Whether typing its prefix offers it in the suggestion list. Defaults to
+     *  `tab`, because a field with a button almost always wants both — but the
+     *  two are separate questions, and a field can be fully searchable and
+     *  suggested without claiming a slot in a row the user reads left to right. */
+    suggest?: boolean;
     /** Longer example hint shown in autocomplete. */
     hint?: string;
     /** Short placeholder text while the chip is being typed. */
@@ -820,6 +825,54 @@ function intersect(a: Set<number>, b: Set<number>): Set<number> {
 
 /* ------------------------------------------------------ field registry */
 
+/* ------------------------------------------------------- expansion */
+
+/**
+ * Resolve one `xpac:` token to the rung indexes it selects.
+ *
+ * THE VOCABULARY IS THE PACK'S OWN — key, short, label and aliases all ship in
+ * the `expansions` section — so an expansion becomes searchable the moment the
+ * build declares it, and no list here can fall behind one.
+ *
+ * The rung's index IS its value, which is what makes the comparisons free:
+ * `>legion` is an index test, not a second ordering table to keep in step.
+ * Matching is exact first, then substring on the key/label/short, so `burning`
+ * and `pandaria` land the same way a partial model name does elsewhere.
+ */
+export function expansionIndexes(text: string, data: SpellData): number[] {
+    const m = /^([<>]=?|=)?(.*)$/.exec(text.toLowerCase());
+    if (!m || !m[2]) return [];
+    const [, op = "=", word] = m;
+
+    const exact = data.expansions.find(
+        (x) => x.key === word || x.short.toLowerCase() === word
+            || x.label.toLowerCase() === word || x.aliases.includes(word));
+    const hit = exact ?? data.expansions.find(
+        (x) => x.key.includes(word) || x.label.toLowerCase().includes(word)
+            || x.short.toLowerCase().includes(word));
+    if (!hit) return [];
+
+    const i = hit.index;
+    return data.expansions.filter((x) =>
+        op === ">" ? x.index > i
+            : op === ">=" ? x.index >= i
+                : op === "<" ? x.index < i
+                    : op === "<=" ? x.index <= i
+                        : x.index === i).map((x) => x.index);
+}
+
+/** Spells introduced in any expansion the tokens select. Tokens UNION: the axis
+ *  is single-valued, so ANDing two expansions could only ever be empty. */
+function spellsByExpansion(tokens: QueryToken[], data: SpellData): Set<number> {
+    const out = new Set<number>();
+    for (const t of tokens) {
+        for (const i of expansionIndexes(t.text, data)) {
+            for (const s of data.eraSpells.get(i) ?? []) out.add(s);
+        }
+    }
+    return out;
+}
+
 export const FIELDS: Record<string, SearchFieldSpec> = {
     all: {
         label: "All", tab: false,
@@ -947,6 +1000,23 @@ export const FIELDS: Record<string, SearchFieldSpec> = {
             }
             return out;
         },
+    },
+    xpac: {
+        // Labelled "Expansion" so autocomplete answers to both the slang and
+        // the word — it matches on the key OR the label, so `xpac` and `exp`
+        // both surface this chip and neither spelling has to be an alias.
+        //
+        // NO TAB BUTTON. The expansion is reachable from every row already, by
+        // clicking the tag above the id; the field-button row is for the content
+        // columns and this is not one. `suggest` keeps it in the prefix
+        // autocomplete, which is the half that was actually wanted.
+        label: "Expansion", tab: false, suggest: true,
+        hint: "expansion it was added in, e.g. wotlk, >legion, <=mop",
+        short: "expansion",
+        // Two expansion chips UNION. A spell has exactly one, so ANDing them
+        // would always be empty — the same reason id: unions.
+        orGroups: true,
+        run: (tokens, data) => spellsByExpansion(tokens, data),
     },
     id: {
         label: "Spell ID", tab: true, orGroups: true,

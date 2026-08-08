@@ -71,6 +71,15 @@ export function kitNameIsHit(kitId: number): boolean {
     return anyGroup("sound", (ts) => ts.every((t) => name.includes(t.text)));
 }
 
+// The expansion segment lights through the ENGINE'S own resolver, so it can
+// only glow under a query that really selected its row — `xpac:>legion` golds a
+// BfA row and leaves a Cata one plain, and the comparison grammar never has to
+// be spelled twice. Same rule as the delivery line's segments.
+export function expansionIsHit(index: number): boolean {
+    return anyGroup("xpac", (ts) =>
+        ts.some((t) => Search.expansionIndexes(t.text, activeData()).includes(index)));
+}
+
 // anim pills can be hit through their group's category word too — the
 // headless groups carry one ("replace", "passenger"); kit groups pass "".
 // Mirrors spellsByAnim's token test.

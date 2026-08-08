@@ -1986,7 +1986,7 @@ main {
 }
 
 .c-id {
-    width: 5.5rem;
+    width: 6.25rem;
 }
 
 /* Carries the command strip under the name, so the floor is "one nowrap strip
@@ -2028,6 +2028,59 @@ main {
 
 .id-copy:hover {
     text-decoration: underline;
+}
+
+/* The ID cell's pill: the id itself, with the expansion that introduced it as a
+   sub-tag. The pill carries no family tone — identity is not a content family,
+   the same call the delivery line makes. */
+.tag.spellid {
+    align-items: center;
+    background: none;
+    border: 0;
+    display: flex;
+    gap: 5px;
+    padding: 0;
+}
+
+/* the id keeps the gold it had before it became a pill — the copy segment's
+   own colour is declared later than .id-copy, so this has to out-specify it */
+.tag.spellid > .id-copy {
+    color: var(--gold);
+    font-size: inherit;
+}
+
+/* The expansion sub-tag. HIDDEN AT REST and revealed on row hover, because
+   every spell has one: drawn always it would be 276,332 repetitions of a fact
+   nobody asked for, and it would be the widest thing in a column sized to a
+   6-digit number. It stays drawn when it is a HIT, so filtering by expansion
+   shows what it selected — the same "light up when it is what you asked for"
+   rule the pills and the delivery line follow. `.era` rides on the note kind's
+   own `.tag-attach` class, so it inherits that styling and overrides only the
+   placement. */
+.tag.spellid > .era {
+    max-width: none;
+    /* `hidden`, never `display: none` — the icon keeps reserving its slot, so
+       the ids do not jog sideways as the pointer crosses rows. */
+    visibility: hidden;
+}
+
+/* Sized by HEIGHT with the width free, because the set is deliberately mixed:
+   Vanilla and TBC are square-ish sigils, everything from Wrath on is a wordmark
+   at its own aspect. This is the wiki's own inline treatment. */
+.tag.spellid > .era img {
+    display: block;
+    height: 15px;
+    width: auto;
+}
+
+/* the note kind draws a left divider; this segment LEADS the pill */
+.tag.spellid > .era::before {
+    content: none;
+}
+
+tr:hover .tag.spellid > .era,
+.tag.spellid > .era.hit {
+    visibility: visible;
 }
 
 .spell-name {

@@ -68,6 +68,9 @@ export interface EpsilookConfig {
     soundVolume: number;
     texturePreviewUrl: string;
     texturePreviewMax: number;
+    /** Inline expansion art per MAJOR version — the marker beside a spell id.
+     *  Self-hosted paths under site/, never a hotlink. */
+    expansionArt: Record<number, string>;
     /** Expansion logo per build MAJOR version, e.g. 9 -> Shadowlands. */
     expansionLogos: Record<number, { name: string; fid: number }>;
     /** Rendered height of that logo, in CSS pixels. */
@@ -272,6 +275,35 @@ export const CFG: EpsilookConfig = {
     // interface/glues/common/glues-wow-*logo.blp id in the community listfile.
     // Verified against a real build for 3/7/9/10/11; the rest are read off the
     // listfile by name and will simply not render if an id is wrong.
+
+    // The small per-expansion art beside a spell id, keyed by major version the
+    // same way expansionLogos below is.
+    //
+    // VENDORED under site/img/expansions/ (~34 KB for all eleven), NOT hotlinked
+    // — the user's call, and it also keeps the table free of eleven third-party
+    // requests. The source is warcraft.wiki.gg's own `{{Xx-inline}}` templates,
+    // which is where this art is maintained; each file is that template's image
+    // at its native size. Extensions differ because the wiki's do (TBC is a
+    // .gif), which is why this maps to a PATH rather than deriving one.
+    //
+    // ⛔ The game's own art does NOT work here and both alternatives were tried:
+    // `interface/icons/expansionicon_*` exists for the first SIX expansions only
+    // (404 for Legion onward), and the glue logos in expansionLogos are full
+    // "World of Warcraft" lockups, so shrunk to row height they all read alike.
+    expansionArt: {
+        1: "img/expansions/vanilla.png",
+        2: "img/expansions/tbc.gif",
+        3: "img/expansions/wotlk.png",
+        4: "img/expansions/cata.png",
+        5: "img/expansions/mop.png",
+        6: "img/expansions/wod.png",
+        7: "img/expansions/legion.png",
+        8: "img/expansions/bfa.png",
+        9: "img/expansions/shadowlands.png",
+        10: "img/expansions/dragonflight.png",
+        11: "img/expansions/tww.png",
+    },
+
     expansionLogos: {
         1: {name: "Classic", fid: 538639},
         2: {name: "The Burning Crusade", fid: 131194},

@@ -99,6 +99,9 @@ export interface ExportRow {
     id: number;
     name: string;
     subtext: string;
+    /** The expansion that introduced the spell ID; absent when no rung claims
+     *  it, which is Classic-re-release content that reached no retail client. */
+    expansion?: string;
     /** Grouped by usage category; a stale pack without categories exports
      *  the old flat path list instead. */
     models?: ({ category: string; files: ExportModelFile[] } | string)[];
@@ -161,6 +164,10 @@ function exportRows(): ExportRow[] {
     return state.display.map((id) => {
         const i = d.spellIndex.get(id)!;
         const row: ExportRow = {id, name: d.names[i], subtext: d.subtexts[i]};
+        // Provenance rides with the ID, not with a column, so like delivery it
+        // is exported unconditionally — there is no column to hide it with.
+        const era = d.spellEra.get(id);
+        if (era !== undefined) row.expansion = d.expansions[era].label;
         // Delivery rides with the NAME, not with a column, so it is exported
         // unconditionally — there is no "delivery column" to hide it with.
         const dl = d.spellDelivery.get(id);
@@ -392,7 +399,7 @@ function exportCsv(): void {
         const s = String(v);
         return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
-    const header = ["ID", "Name", "Subtext"];
+    const header = ["ID", "Name", "Subtext", "Expansion"];
     if (!hc.models) header.push("Models");
     if (!hc.sounds) header.push("SoundKits", "Sounds");
     if (!hc.animations) header.push("AnimKits", "Animations");
@@ -406,7 +413,7 @@ function exportCsv(): void {
         (e.targets && e.targets.length ? `${e.path} [${e.targets.join("+")}]` : `${e.path}`);
     const lines = [header.join(",")];
     for (const r of exportRows()) {
-        const cols = [String(r.id), esc(r.name), esc(r.subtext)];
+        const cols = [String(r.id), esc(r.name), esc(r.subtext), esc(r.expansion ?? "")];
         if (!hc.models) {
             cols.push(esc((r.models ?? []).map((m) => (typeof m === "string"
                 ? m

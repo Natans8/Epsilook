@@ -257,7 +257,11 @@ export function renderSegment(seg: Segment): HTMLElement {
     if (seg.img) {
         const img = imgOnly ? node as HTMLImageElement
             : el("img", wrapped ? kind.cls : undefined);
-        img.src = seg.img.src;
+        // An EMPTY src is "not resolved yet", not "no image": assigning "" makes
+        // the browser re-request the page itself. The expansion logo renders
+        // this way — its art is decoded asynchronously and written in later —
+        // so leaving the attribute off keeps the alt text showing meanwhile.
+        if (seg.img.src) img.src = seg.img.src;
         img.alt = seg.img.alt || "";
         img.loading = "lazy";
         if (!imgOnly) node.appendChild(img);
@@ -501,6 +505,17 @@ export interface SegmentOpts {
     /** extra class on the segment element */
     cls?: string;
 }
+
+/**
+ * Any kind, with an IMAGE where its text would go — the documented "ten kinds ×
+ * four content forms" crossing, which until the expansion logo only existed for
+ * the `icon` kind's own helper. `alt` is what the segment reads as while the
+ * image is loading or if it never arrives, so it must be the real short name
+ * rather than "".
+ */
+export const imageOf = (kind: string, img: { src: string; alt?: string },
+                        opts: SegmentOpts = {}): Segment =>
+    ({...textSegment(kind, "", opts), text: undefined, img});
 
 /** The pill's name — its main clickable text. */
 export const label = (text: string, opts: SegmentOpts = {}): Segment =>

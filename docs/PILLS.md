@@ -30,6 +30,25 @@ present on some rows, absent on others, and a pill's whole job is to show you wh
 has an answer, even if the answer is `Instant`. Rendering 276,332 pills that say the same thing would be noise, and
 276,332 pills of *any* kind in the Mechanics column would bury the ones that mean something.
 
+**The expansion is the SECOND thing to pass that test, and it resolved as a SUB-TAG rather than a pill** (format 42).
+Every spell was introduced by exactly one expansion, so it is identity, not payload — but the user's framing is the
+sharper rule: *"it should be a sub-tag, like `attach` belongs in the model category"*. So **the spell id became a pill**
+(`.tag.spellid`) and the expansion is a `note` segment on it, exactly as an attachment point is a note on a model pill.
+
+- **It is the expansion's OWN LOGO, not text** — the game's `.blp` glue art, decoded in-browser through
+  `CFG.expansionLogos`, which is the same fid list and the same decoder the version panel uses. The pack ships each
+  rung's `major` and that is what indexes it, so the art is stated in one place. `alt` is the short name, so a slow or
+  failed decode still reads `WotLK`.
+- **HIDDEN AT REST.** Drawn always it would be 276,332 repetitions of a fact nobody asked for, in a column sized to a
+  6-digit number. It appears on **row hover**, and stays put when it is a **hit** — the same "light up when it is what
+  you asked for" rule the pills and the delivery line follow, and `expansionIsHit` answers through the ENGINE'S own
+  `expansionIndexes`, so `xpac:>legion` golds a BfA row and leaves a Cata one alone.
+- **No family tone.** Identity is not a content family, the same call the delivery line makes.
+- **The one case it renders nothing is real, not a bug**: 11,563 spells on the Classic Era pack reached no retail
+  client, so no expansion introduced them, and a blank is the honest answer.
+- **`P.imageOf(kind, img, opts)` was added for it** — the documented "any kind takes any content form" crossing, which
+  until then only existed for the `icon` kind's own helper.
+
 **Three consequences worth copying if this ever comes up again:**
 
 - **It lives in the Name cell** (`render.ts deliveryLine`), between the subtext and the command strip — beside the

@@ -53,9 +53,22 @@ export const ARGUMENT_WORDS = new Set([...Object.keys(Search.META_KEYWORDS), Sea
  */
 export function fieldCategories(field: string | null): { words: string[], titles: Record<string, string> } | null {
     const d = state.data;
+    if (!d || !field) return null;
+    // The expansion axis has a CLOSED vocabulary and it is the pack's own, so a
+    // new expansion autocompletes (and highlights, via the same call in
+    // highlight.ts) the day the build declares it — nothing is listed here.
+    // The canonical key is what is offered; the comparisons are in the hint.
+    if (field === "xpac") {
+        const words = d.expansions.map((x) => x.key);
+        const titles: Record<string, string> = {};
+        for (const x of d.expansions) {
+            titles[x.key] = x.caveat ? `${x.label} — ${x.caveat}` : x.label;
+        }
+        return {words, titles};
+    }
     // mech joins the list because the non-visual categories moved there —
     // its words come from the same registry, so nothing else needed saying
-    if (!d || !field || !["model", "sound", "anim", "fx", "mech"].includes(field)) return null;
+    if (!["model", "sound", "anim", "fx", "mech"].includes(field)) return null;
     const {words, titles} = P.keywordsFor(field, d);
     // the count axis, wherever the column has anything to count
     if (Search.COUNT_SOURCES[field]) {
@@ -92,7 +105,7 @@ export function updateSuggest(): void {
     // hidden columns don't suppress suggestions — an explicit field search
     // un-hides its column anyway (ensureFieldVisible)
     const matches = Object.entries(Search.FIELDS).filter(([key, f]) =>
-        f.tab && (key.startsWith(word) || f.label.toLowerCase().startsWith(word)));
+        (f.suggest ?? f.tab) && (key.startsWith(word) || f.label.toLowerCase().startsWith(word)));
     if (!matches.length) return hideSuggest();
 
     box.textContent = "";

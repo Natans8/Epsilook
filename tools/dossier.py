@@ -80,10 +80,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 import json
 import math
 import re
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 
@@ -147,6 +149,25 @@ def select_pack(wanted: str | None) -> dict[str, Any]:
 def wowhead_prefix(build_id: str) -> str:
     """Vanilla ids only resolve on Wowhead's Classic site (config.ts's rule)."""
     return "classic/" if build_id.split(".")[0] == "1" else ""
+
+
+@lru_cache(maxsize=1)
+def _expansion_ladder() -> tuple[list[dict[str, Any]], dict[int, int]]:
+    """The committed expansion ladder, or empty if it has not been generated."""
+    path = Path(__file__).resolve().parent.parent / "build" / "expansion_ids.json.gz"
+    if not path.exists():
+        return [], {}
+    with gzip.open(path, "rt", encoding="utf-8") as f:
+        data = json.load(f)
+    rungs = data["ladder"]
+    return rungs, {sid: i for i, r in enumerate(rungs) for sid in data["ids"][r["key"]]}
+
+
+def expansion_of(sid: int) -> str | None:
+    """The expansion that introduced a spell ID — the full label, or None."""
+    rungs, index = _expansion_ladder()
+    i = index.get(sid)
+    return rungs[i]["label"] if i is not None else None
 
 
 def delivery_secs(ms: int) -> str:
@@ -563,6 +584,12 @@ class Dossier:
         newest = checked[-1][1] if checked else None
         return {"first_seen": present[0] if present else None,
                 "versions": present,
+                # The AUTHORITATIVE answer to the same question. "first_seen"
+                # above is only the oldest pack we happen to ship and cache —
+                # for anything pre-Legion that is a Classic re-release, which is
+                # a modern rebuild and cannot date a spell. This one comes from
+                # the original era clients via build/expansion_ids.json.gz.
+                "expansion": expansion_of(sid),
                 "packs_checked": len(checked),
                 "packs_known": len(order),
                 "retired": bool(present) and newest is not None and newest not in present}
@@ -1115,6 +1142,8 @@ def show(d: dict[str, Any], full: bool = False) -> None:
     e = d["era"]
     era_note = "" if e["packs_checked"] == e["packs_known"] else \
         f" (only {e['packs_checked']} of {e['packs_known']} packs cached)"
+    if e.get("expansion"):
+        print(f"  added in {GOLD}{e['expansion']}{RESET}")
     print(f"  first seen {GOLD}{e['first_seen'] or '?'}{RESET}"
           f"  in {len(e['versions'])} packs{era_note}"
           + (f"  {GOLD}[RETIRED]{RESET}" if e["retired"] else ""))

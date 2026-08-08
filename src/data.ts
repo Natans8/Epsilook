@@ -55,6 +55,15 @@ export interface SpellPack {
         subtexts: string[];
         icons?: number[];
         altNames?: string[];
+        /** format 42+: index into `expansions`, -1 = no rung claims this ID. */
+        eras?: number[];
+    };
+    /** format 42+: the expansion ladder, oldest first. Everything needed to
+     *  render and search an expansion ships here rather than being restated in
+     *  the frontend, so adding one stays a build-side declaration. */
+    expansions?: {
+        keys: string[]; labels: string[]; shorts: string[]; majors: number[];
+        aliases: string[][]; wowhead: string[]; caveats: string[];
     };
     iconNames?: string[];
     /** FileDataID -> listfile path (all models, sounds and textures). */
@@ -422,6 +431,37 @@ export const DELIVERY_BREAKS_ON_MOVE = 1 << 1;
  */
 export const deliverySecs = (ms: number): number => Math.round(ms / 10) / 100;
 
+/**
+ * One rung of the expansion ladder. See `SpellData.expansions`.
+ *
+ * Every field is SHIPPED rather than restated here: the words `added:` accepts,
+ * the label the row shows and the Wowhead site for that era all come from the
+ * pack, so adding an expansion stays one declaration in tools/expansions.py and
+ * touches no frontend file.
+ */
+export interface Expansion {
+    /** Stable id, and the canonical `added:` value ("wotlk"). */
+    key: string;
+    /** Full name for tooltips ("Wrath of the Lich King"). */
+    label: string;
+    /** The text form ("WotLK") — tooltips, exports, and the fallback if the
+     *  expansion's logo art cannot be fetched or decoded. */
+    short: string;
+    /** Game major version. Indexes `CFG.expansionLogos`, so the logo file ids
+     *  stay one list shared with the version panel instead of two. */
+    major: number;
+    /** Extra words `added:` accepts — abbreviations, full names, the number. */
+    aliases: string[];
+    /** Wowhead site prefix for this era; "" when no era site exists, which is
+     *  every expansion from Warlords on — those fall back to retail. */
+    wowhead: string;
+    /** A restriction on how this rung was dated, "" when there is none. */
+    caveat: string;
+    /** Position in the ladder, oldest = 0. This IS the comparison order, so
+     *  `added:>legion` is an index test and needs no second table. */
+    index: number;
+}
+
 /** How one spell is delivered. See `SpellData.spellDelivery`. */
 export interface Delivery {
     /** Cast-bar length in ms; 0 = no cast bar. The "ranged weapon speed"
@@ -629,6 +669,15 @@ export interface SpellData {
      *  `spellAttrs.get("instant")` is a complement rather than a shipped list.
      *  NOT a partition: a spell can have both, and 3,148 on 9.2.7 do. */
     spellDelivery: Map<number, Delivery>;
+
+    /** The expansion ladder, oldest first (format 42+). Empty on an older pack,
+     *  which is what makes every consumer degrade to "no expansion known"
+     *  rather than break. */
+    expansions: Expansion[];
+    /** spell -> its rung's INDEX in `expansions`. Absent = no rung claims it. */
+    spellEra: Map<number, number>;
+    /** rung index -> its spells, so the search axis answers by lookup. */
+    eraSpells: Map<number, Set<number>>;
 
     /** The area gate (format 40+): spell -> the areas it may be cast in, and
      *  back. 65% of gated spells name exactly one area, which is why the pill
@@ -1364,6 +1413,34 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // making the two words numeric: the pill type's `of` reads the key, so
     // mech:"casttime >3" asks the same number the delivery line prints. Only
     // `instant` stays a set — it is the one delivery word with no number.
+    // The expansion ladder. Two indexes off one shipped column: spell -> rung
+    // for the row to print, rung -> spells for the search axis to answer by
+    // lookup instead of a scan. A pack older than format 42 leaves both empty,
+    // and every consumer reads that as "not known" rather than failing.
+    const expansions: Expansion[] = [];
+    const spellEra = new Map<number, number>();
+    const eraSpells = new Map<number, Set<number>>();
+    const xp = pack.expansions;
+    if (xp) {
+        for (let i = 0; i < xp.keys.length; i++) {
+            expansions.push({
+                key: xp.keys[i], label: xp.labels[i], short: xp.shorts[i],
+                major: xp.majors[i], aliases: xp.aliases[i],
+                wowhead: xp.wowhead[i], caveat: xp.caveats[i], index: i,
+            });
+            eraSpells.set(i, new Set<number>());
+        }
+        const eras = pack.spells.eras;
+        if (eras) {
+            for (let i = 0; i < pack.spells.ids.length; i++) {
+                const e = eras[i];
+                if (e < 0) continue;
+                spellEra.set(pack.spells.ids[i], e);
+                eraSpells.get(e)!.add(pack.spells.ids[i]);
+            }
+        }
+    }
+
     const spellDelivery = new Map<number, Delivery>();
     const castTimeSpells = new Map<number, number[]>();
     const channelSpells = new Map<number, number[]>();
@@ -2040,6 +2117,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellTransps, transpSpells, transpSearchL,
         spellFreezes, spellCamos, spellAttrs, spellDelivery,
         castTimeSpells, channelSpells, channelSearchL,
+        expansions, spellEra, eraSpells,
         spellAreas, areaSpells, areaNames, areaRoots, areaMapIds, areaSearchL,
         spellScreens, screenSpells, screenNames, screenColors, screenTextures, screenSearchL,
         spellVisualAnims, visualAnimSpells,
