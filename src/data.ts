@@ -832,7 +832,10 @@ export async function loadVersions(): Promise<VersionEntry[]> {
     // fresh deploy is picked up immediately instead of after cache expiry
     const resp = await fetch("data/versions.json", {cache: "no-cache"});
     if (!resp.ok) throw new Error(`versions.json: HTTP ${resp.status}`);
-    return resp.json();
+    // the cast is the honest form: a parsed body is unvalidated whatever the
+    // lib says. The DOM's json() hands back `any` and hid that; Node's hands
+    // back `unknown` and does not, which is how this surfaced.
+    return await resp.json() as VersionEntry[];
 }
 
 /**

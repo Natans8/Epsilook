@@ -1,0 +1,18 @@
+{
+  // The command-line UI is the same engine on a different RUNTIME, so it needs
+  // its own target: Node globals instead of the DOM. Everything else is
+  // inherited, which is the point - tools/query.ts imports src/ directly and
+  // must be held to exactly the same strictness as the code it calls.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": [
+      "ES2023"
+    ],
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "tools/query.ts"
+  ]
+}

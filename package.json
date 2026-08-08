@@ -6,12 +6,14 @@
   "scripts": {
     "build": "node tools/build.mjs",
     "dev": "node tools/build.mjs --serve",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "query": "node tools/build.mjs --cli && node tools/query.mjs"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
+    "@types/node": "^26.2.0",
     "esbuild": "^0.28.1",
     "typescript": "^7.0.2"
   }

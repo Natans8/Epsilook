@@ -567,10 +567,21 @@ def run_tool(rep: Report, name: str, cmd: list[str], detail: str = "") -> None:
 
 def check_toolchain(rep: Report) -> None:
     """tsc needs `npm install` once (typescript and esbuild are pinned
-    devDependencies); the build doubles as the module-graph guard."""
-    run_tool(rep, "tsc", ["npx", "tsc"], "strict, tsconfig.json")
+    devDependencies); the build doubles as the module-graph guard.
+
+    TWO tsc targets, because there are two runtimes on one engine. tsconfig.json
+    is the browser (DOM lib, `types: []` so Node globals stay out of src/);
+    tsconfig.tools.json is the command-line UI (Node types, no DOM). Checking
+    only the first would let tools/query.ts rot silently — and it is the proof
+    that the engine detaches, so it has to compile.
+    """
+    run_tool(rep, "tsc", ["npx", "tsc"], "strict, tsconfig.json (browser)")
+    run_tool(rep, "tsc (cli)", ["npx", "tsc", "-p", "tsconfig.tools.json"],
+             "strict, tsconfig.tools.json (node)")
     run_tool(rep, "bundle", ["npm", "run", "--silent", "build"],
              "esbuild src/main.ts -> site/js/app.js")
+    run_tool(rep, "cli bundle", ["node", "tools/build.mjs", "--cli"],
+             "esbuild tools/query.ts -> tools/query.mjs")
     run_tool(rep, "mypy", ["python", "-m", "mypy", "build/build_data.py", "tools"])
     run_tool(rep, "pyflakes", ["python", "-m", "pyflakes", "build/build_data.py", "tools"])
 

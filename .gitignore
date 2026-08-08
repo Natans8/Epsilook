@@ -5,6 +5,9 @@ build/cache/
 # fresh for every deploy, so the served JS is never committed
 site/js/
 
+# the CLI bundle esbuild emits from tools/query.ts (node tools/build.mjs --cli)
+tools/query.mjs
+
 node_modules/
 
 # IDE

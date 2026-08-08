@@ -63,15 +63,36 @@ function checkReachability(metafile) {
     }
 }
 
+/* The command-line UI (tools/query.ts) — a SECOND entry point on the same
+ * engine, bundled the same way. It lives outside src/ on purpose: everything
+ * under src/ must be reachable from src/main.ts (checkReachability above), and
+ * a second entry point is by definition not. Not minified — this one is read
+ * when it throws. */
+const cliOptions = {
+    entryPoints: [resolve(root, "tools/query.ts")],
+    outfile: resolve(root, "tools/query.mjs"),
+    bundle: true,
+    format: "esm",
+    platform: "node",
+    target: "node20",
+    logLevel: "warning",
+    external: ["fs"],
+};
+
 const {values} = parseArgs({
-    options: {serve: {type: "string", default: undefined}},
+    options: {
+        serve: {type: "string", default: undefined},
+        cli: {type: "boolean", default: false},
+    },
     // let --serve appear with no port
     tokens: false,
     allowNegative: false,
     args: process.argv.slice(2).map((a) => (a === "--serve" ? "--serve=8378" : a)),
 });
 
-if (values.serve !== undefined) {
+if (values.cli) {
+    await esbuild.build(cliOptions);
+} else if (values.serve !== undefined) {
     const port = Number(values.serve);
     const ctx = await esbuild.context(options);
     await ctx.serve({servedir: resolve(root, "site"), port, host: "127.0.0.1"});

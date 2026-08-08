@@ -20,6 +20,10 @@
     // vendored libs in src/vendor are plain JS with hand-written .d.ts
     // beside them; tsc reads the declarations, esbuild bundles the .js
     "allowJs": false,
+    // @types/node exists for tools/query.ts (see tsconfig.tools.json). Without
+    // this, tsc auto-includes it EVERYWHERE and `process.env` in an app module
+    // would typecheck - src/ ships to a browser and has no Node in it.
+    "types": [],
     "skipLibCheck": true
   },
   "include": [

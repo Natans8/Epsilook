@@ -121,6 +121,7 @@ src/                     the app, strict TypeScript — bundled into site/js/app
   search.ts              query parser + the FIELDS registry (one per prefix)
   texture.ts             .blp loading + the texture/colour hover previews
   export.ts              the results as CSV, JSON or a Discord code block
+tools/query.ts           the same engine as a command-line UI (npm run query)
   app/                   the UI, one module per subsystem
     state.ts             the mutable UI state every other module reads
     query.ts             the bar's half of the query language (the rest is src/query.ts)
@@ -357,6 +358,31 @@ and so stays out of `check.py`:
 ```
 python tools/docker_smoke.py                   # build the image, run it, prove it serves
 ```
+
+### Running queries without a browser
+
+The search engine is a layer of its own — `data.ts` + `query.ts` + `search.ts` know how to answer a query and nothing
+about how it is shown — so the same engine drives a shell:
+
+```bash
+npm run query -- 'fx:chain mech:channeled'
+```
+
+The query language is the app's own, because it *is* the app's own code: field prefixes, quoted phrases, `|`
+alternation, `-` exclusion and numeric comparisons all behave exactly as they do in the search bar. A result that
+differs between the two is a bug, not two implementations drifting apart — there is only one.
+
+```bash
+npm run query -- 'model:"attach chest"' --limit=5
+npm run query -- 'model:missile' --count
+npm run query -- 'anim:replace' --json | jq '.spellIds | length'
+npm run query -- --version=3.4.3 'fx:tint'
+```
+
+`--count` prints the number alone and `--json` the full result, both on stdout with every diagnostic on stderr, so
+either pipes cleanly. `--version=` picks a pack by id prefix or label (default: the pack marked `default`). Loading a
+pack costs about a second and the query itself a few tens of milliseconds, so it is one command per question rather than
+a session.
 
 ### Measuring what the app does
 
