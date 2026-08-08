@@ -59,11 +59,6 @@ export interface SearchFieldSpec {
     label: string;
     /** Whether the field gets a button in the tab strip. */
     tab: boolean;
-    /** Whether typing its prefix offers it in the suggestion list. Defaults to
-     *  `tab`, because a field with a button almost always wants both — but the
-     *  two are separate questions, and a field can be fully searchable and
-     *  suggested without claiming a slot in a row the user reads left to right. */
-    suggest?: boolean;
     /** Longer example hint shown in autocomplete. */
     hint?: string;
     /** Short placeholder text while the chip is being typed. */
@@ -1001,31 +996,32 @@ export const FIELDS: Record<string, SearchFieldSpec> = {
             return out;
         },
     },
-    xpac: {
-        // Labelled "Expansion" so autocomplete answers to both the slang and
-        // the word — it matches on the key OR the label, so `xpac` and `exp`
-        // both surface this chip and neither spelling has to be an alias.
-        //
-        // NO TAB BUTTON. The expansion is reachable from every row already, by
-        // clicking the tag above the id; the field-button row is for the content
-        // columns and this is not one. `suggest` keeps it in the prefix
-        // autocomplete, which is the half that was actually wanted.
-        label: "Expansion", tab: false, suggest: true,
-        hint: "expansion it was added in, e.g. wotlk, >legion, <=mop",
-        short: "expansion",
-        // Two expansion chips UNION. A spell has exactly one, so ANDing them
-        // would always be empty — the same reason id: unions.
-        orGroups: true,
-        run: (tokens, data) => spellsByExpansion(tokens, data),
-    },
     id: {
         label: "Spell ID", tab: true, orGroups: true,
-        hint: "exact spell ID, e.g. 133", short: "spell ID",
+        hint: "exact spell ID, or the expansion that added it — 133, wotlk, >legion",
+        short: "spell ID / expansion",
+        /**
+         * Exact ids, plus the EXPANSION that introduced them — which is an
+         * attribute OF the id, not a field of its own, exactly as `attach` is
+         * an attribute inside `model:`. That is why there is no `xpac:` prefix
+         * to autocomplete in the plain bar.
+         *
+         * A pure NUMBER is always a spell id and never an expansion: `id:5` is
+         * spell 5, not Mists. So the ladder's numeric aliases ("5") are
+         * deliberately unreachable here — the words and the comparisons are
+         * (`id:mop`, `id:>legion`, `id:<=wotlk`).
+         */
         run(tokens, data) {
             const out = new Set<number>();
             for (const t of tokens) {
-                const id = Number(t.text);
-                if (data.spellIndex.has(id)) out.add(id);
+                if (/^\d+$/.test(t.text)) {
+                    const id = Number(t.text);
+                    if (data.spellIndex.has(id)) out.add(id);
+                    continue;
+                }
+                for (const i of expansionIndexes(t.text, data)) {
+                    for (const s of data.eraSpells.get(i) ?? []) out.add(s);
+                }
             }
             return out;
         },

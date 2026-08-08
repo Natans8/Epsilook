@@ -4312,8 +4312,9 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "keys": [r["key"] for r in expansion_rungs],
             "labels": [r["label"] for r in expansion_rungs],
             "shorts": [r["short"] for r in expansion_rungs],
-            # game major version — the app indexes CFG.expansionLogos with it, so
-            # the logo FileDataIDs stay a single list rather than a second one
+            # game major version — the app indexes CFG.expansionArt with it (and
+            # CFG.expansionLogos for the version panel), so which art belongs to
+            # which expansion is named once in config and never here
             "majors": [r["major"] for r in expansion_rungs],
             "aliases": [r["aliases"] for r in expansion_rungs],
             "wowhead": [r["wowhead"] for r in expansion_rungs],

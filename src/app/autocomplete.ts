@@ -54,11 +54,12 @@ export const ARGUMENT_WORDS = new Set([...Object.keys(Search.META_KEYWORDS), Sea
 export function fieldCategories(field: string | null): { words: string[], titles: Record<string, string> } | null {
     const d = state.data;
     if (!d || !field) return null;
-    // The expansion axis has a CLOSED vocabulary and it is the pack's own, so a
-    // new expansion autocompletes (and highlights, via the same call in
-    // highlight.ts) the day the build declares it — nothing is listed here.
-    // The canonical key is what is offered; the comparisons are in the hint.
-    if (field === "xpac") {
+    // The ID field's words are the EXPANSIONS — an id's provenance is an
+    // attribute of the id, so it autocompletes inside `id:` rather than as a
+    // prefix of its own. The vocabulary is the pack's, so a new expansion
+    // autocompletes (and highlights, via the same call in highlight.ts) the day
+    // the build declares it. Numbers are left out on purpose: `id:5` is spell 5.
+    if (field === "id") {
         const words = d.expansions.map((x) => x.key);
         const titles: Record<string, string> = {};
         for (const x of d.expansions) {
@@ -105,7 +106,7 @@ export function updateSuggest(): void {
     // hidden columns don't suppress suggestions — an explicit field search
     // un-hides its column anyway (ensureFieldVisible)
     const matches = Object.entries(Search.FIELDS).filter(([key, f]) =>
-        (f.suggest ?? f.tab) && (key.startsWith(word) || f.label.toLowerCase().startsWith(word)));
+        f.tab && (key.startsWith(word) || f.label.toLowerCase().startsWith(word)));
     if (!matches.length) return hideSuggest();
 
     box.textContent = "";

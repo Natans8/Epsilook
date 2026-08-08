@@ -76,7 +76,7 @@ export function kitNameIsHit(kitId: number): boolean {
 // BfA row and leaves a Cata one plain, and the comparison grammar never has to
 // be spelled twice. Same rule as the delivery line's segments.
 export function expansionIsHit(index: number): boolean {
-    return anyGroup("xpac", (ts) =>
+    return anyGroup("id", (ts) =>
         ts.some((t) => Search.expansionIndexes(t.text, activeData()).includes(index)));
 }
 

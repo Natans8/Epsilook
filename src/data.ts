@@ -447,8 +447,9 @@ export interface Expansion {
     /** The text form ("WotLK") — tooltips, exports, and the fallback if the
      *  expansion's logo art cannot be fetched or decoded. */
     short: string;
-    /** Game major version. Indexes `CFG.expansionLogos`, so the logo file ids
-     *  stay one list shared with the version panel instead of two. */
+    /** Game major version. Indexes `CFG.expansionArt` for the row marker (and
+     *  `CFG.expansionLogos` for the version panel), so the art for an expansion
+     *  is named in config rather than restated per consumer. */
     major: number;
     /** Extra words `added:` accepts — abbreviations, full names, the number. */
     aliases: string[];

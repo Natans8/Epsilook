@@ -2038,7 +2038,7 @@ main {
     background: none;
     border: 0;
     display: flex;
-    gap: 5px;
+    gap: 3px;
     padding: 0;
 }
 
@@ -2058,10 +2058,23 @@ main {
    own `.tag-attach` class, so it inherits that styling and overrides only the
    placement. */
 .tag.spellid > .era {
+    /* The note kind is built to sit BETWEEN a label and a copy button, so it
+       arrives with chip padding and an ellipsis clamp. Here it is a prefix to
+       the id — one unit, not two — so all of that comes off. */
     max-width: none;
-    /* `hidden`, never `display: none` — the icon keeps reserving its slot, so
-       the ids do not jog sideways as the pointer crosses rows. */
-    visibility: hidden;
+    overflow: visible;
+    padding: 0;
+}
+
+/* The id's copy segment asks for a left divider, which is right when it trails
+   a label and wrong here: the expansion in front of it is an attribute of the
+   id, not a neighbouring control. (The icon's own divider is already handled —
+   `.tag > :first-child[data-sep="left"]` suppresses it for whatever leads.) */
+.tag.spellid > .id-copy {
+    border-left: 0;
+    /* the copy segment's own left padding is for sitting after a divider;
+       here it would just push the id off its expansion */
+    padding-left: 0;
 }
 
 /* Sized by HEIGHT with the width free, because the set is deliberately mixed:
@@ -2071,16 +2084,21 @@ main {
     display: block;
     height: 15px;
     width: auto;
+    /* Held just short of full so eleven wordmarks down a column read as a quiet
+       attribute of the ids rather than as eleven pieces of competing art. The
+       gold id stays the loudest thing in the cell, which is what it is for. */
+    opacity: 0.72;
 }
 
-/* the note kind draws a left divider; this segment LEADS the pill */
-.tag.spellid > .era::before {
-    content: none;
+.tag.spellid:hover > .era img {
+    opacity: 1;
 }
 
-tr:hover .tag.spellid > .era,
 .tag.spellid > .era.hit {
-    visibility: visible;
+    /* the segment's own `.tag-attach.hit` gold is for TEXT; an image cannot
+       take a colour, so a matched expansion is marked by lifting the art out
+       of its resting dimness instead */
+    opacity: 1;
 }
 
 .spell-name {

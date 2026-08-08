@@ -35,10 +35,13 @@ Every spell was introduced by exactly one expansion, so it is identity, not payl
 sharper rule: *"it should be a sub-tag, like `attach` belongs in the model category"*. So **the spell id became a pill**
 (`.tag.spellid`) and the expansion is a `note` segment on it, exactly as an attachment point is a note on a model pill.
 
-- **It is the expansion's OWN LOGO, not text** — the game's `.blp` glue art, decoded in-browser through
-  `CFG.expansionLogos`, which is the same fid list and the same decoder the version panel uses. The pack ships each
-  rung's `major` and that is what indexes it, so the art is stated in one place. `alt` is the short name, so a slow or
-  failed decode still reads `WotLK`.
+- **It is the expansion's OWN ART, not text** — the inline mark warcraft.wiki.gg uses for the same job, **vendored
+  under `site/img/expansions/`** (11 files, ~34 KB) and never hotlinked. The pack ships each rung's `major`, which
+  indexes `CFG.expansionArt`, so the art is named in one place. `alt` is the short name, so a failed load still reads
+  `WotLK`. Sized by HEIGHT with width free, because the set is mixed on purpose: Vanilla and TBC are square sigils,
+  Wrath onward are wordmarks at their own aspect. **Two other sources were tried and do not work** — the game ships
+  `expansionicon_*` for the first six expansions only, and its glue logos are "World of Warcraft" lockups that all
+  read alike when shrunk.
 - **HIDDEN AT REST.** Drawn always it would be 276,332 repetitions of a fact nobody asked for, in a column sized to a
   6-digit number. It appears on **row hover**, and stays put when it is a **hit** — the same "light up when it is what
   you asked for" rule the pills and the delivery line follow, and `expansionIsHit` answers through the ENGINE'S own

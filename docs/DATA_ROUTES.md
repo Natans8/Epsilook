@@ -1544,8 +1544,11 @@ Cata p01 = 63,940). For the WoD/Legion split specifically, the best cut ANY thre
 
 **Shipped shape.** `spells.eras` is one index per spell, parallel to `spells.ids`, into the `expansions` section
 (`keys`/`labels`/`shorts`/`majors`/`aliases`/`wowhead`/`caveats`). **-1 = no rung claims it.** `majors` is the game
-major version, and it is there so the app can index `CFG.expansionLogos` — the row draws the expansion's own glue-art
-logo, decoded by the same in-browser BLP decoder the version panel uses, rather than a second list of file ids. `meta.counts` carries one
+major version, and it is there so the app can index `CFG.expansionArt` — the row draws the expansion's own inline
+art, **vendored under `site/img/expansions/` and never hotlinked**, rather than the frontend restating which art
+belongs to which expansion. (The game's own art does not work for this: `interface/icons/expansionicon_*` covers only
+the first six expansions, and the glue logos in `CFG.expansionLogos` are full "World of Warcraft" lockups that read
+identically at row height. See DECISIONS.md.) `meta.counts` carries one
 `expansion.<key>` per rung plus `expansion.unknown`, and unlike the delivery counts **these DO partition the pack**.
 
 **9.2.7 (the product), read from the pack:** Vanilla 5,823 · TBC 14,581 · WotLK 16,599 · Cata 23,745 · MoP 15,304 ·

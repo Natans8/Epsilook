@@ -34,7 +34,6 @@ import {ATTR_FLAGS} from "../pilltypes";
 import {DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED, deliverySecs} from "../data";
 import {setStatus} from "./run";
 import type {DisplayRef, Expansion, SpellData, SpellLink} from "../data";
-import * as Texture from "../texture";
 import {activeData, state, wowheadUrl} from "./state";
 import {
     animSwapTag,
@@ -321,7 +320,7 @@ function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
                 title: xp.caveat
                     ? `Added in ${xp.label} — ${xp.caveat}`
                     : `Added in ${xp.label}`,
-                search: `xpac:${xp.key}`,
+                search: `id:${xp.key}`,
                 finds: `spells added in ${xp.label}`,
             }),
             P.copy(String(spellId), `Copy spell ID ${spellId}`, String(spellId), "id-copy"),

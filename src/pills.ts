@@ -257,10 +257,10 @@ export function renderSegment(seg: Segment): HTMLElement {
     if (seg.img) {
         const img = imgOnly ? node as HTMLImageElement
             : el("img", wrapped ? kind.cls : undefined);
-        // An EMPTY src is "not resolved yet", not "no image": assigning "" makes
-        // the browser re-request the page itself. The expansion logo renders
-        // this way — its art is decoded asynchronously and written in later —
-        // so leaving the attribute off keeps the alt text showing meanwhile.
+        // An EMPTY src is "no image yet", not "no image": assigning "" makes the
+        // browser re-request the PAGE. Leaving the attribute off instead lets a
+        // segment ship its alt text while its src is unknown — which is what an
+        // image segment with an unresolved source has to do.
         if (seg.img.src) img.src = seg.img.src;
         img.alt = seg.img.alt || "";
         img.loading = "lazy";
