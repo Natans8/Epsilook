@@ -23,15 +23,14 @@ Full syntax lives behind the **?** button in the app. The short version:
   order** — `6dr statue` finds
   `6dr_draenei_statue_male01.m2`. `"quoted words"` are an exact phrase.
 - **Field tags** narrow a term to one column: `name:` `model:` `sound:`
-  `anim:` `fx:` `mech:` `xpac:` `id:`. Tags AND together; a `-` prefix excludes.
-- **Every spell knows which expansion it came from.** Hover a row and its expansion's logo appears under the spell id;
-  click that to see only that expansion, or type it: `xpac:wotlk`, `xpac:legion`, `xpac:tbc`. Full names, abbreviations
-  and the expansion number all work, so `xpac:pandaria`, `xpac:mop` and `xpac:5` are the same question. Search by
-  expansion and the logo stays put on every row, so you can see what you picked.
-- **It compares, too**, which is the useful part: `xpac:>legion` is everything newer than Legion, `xpac:<=wotlk`
-  everything up to and including Wrath. Pair it with anything else — `xpac:<=wotlk fx:chain` finds old-school beams.
-  A handful of Classic-only spells (Season of Discovery and the like) never shipped in a retail expansion, so they
-  show no tag rather than a wrong one.
+  `anim:` `fx:` `mech:` `id:`. Tags AND together; a `-` prefix excludes.
+- **Every spell shows which expansion it came from** — its logo sits beside the spell id. Click it to see only that
+  expansion, or ask for one inside an `id:` tag: `id:"xpac wotlk"`, `id:"xpac legion"`. Full names, abbreviations and
+  the expansion number all work, so `id:"xpac pandaria"`, `id:"xpac mop"` and `id:"xpac 5"` are the same question.
+- **It compares, too**, which is the useful part: `id:"xpac >legion"` is everything newer than Legion,
+  `id:"xpac <=wotlk"` everything up to and including Wrath. Pair it with anything else —
+  `id:"xpac <=wotlk" fx:chain` finds old-school beams. A handful of Classic-only spells (Season of Discovery and the
+  like) never shipped in a retail expansion, so they show no logo rather than a wrong one.
 - **Sound kits carry Blizzard's own name** where the game has one — `sound:frostbolt` finds kits named
   `SPELL_MA_Revamp_Frostbolt_Precast` as well as matching sound file names. About two thirds of kits are named; the rest
   are newer than the last game build that shipped the name list, and show their id and files as before.

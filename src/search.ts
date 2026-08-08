@@ -236,6 +236,15 @@ export const META_KEYWORDS: Record<string, {
         hint: 'Missile flight path — motion parabola, motion "forward spin"',
         when: (d) => (d.missileMotionNames || []).length > 0,
     },
+    // The expansion that introduced the id. A keyword inside `id:` rather than
+    // a field of its own, for the same reason `attach` sits inside `model:`:
+    // it QUALIFIES what the column already names. Ordered, so its value takes
+    // the comparison grammar — xpac >legion, xpac <=mop.
+    xpac: {
+        fields: ["id"],
+        hint: "Expansion it was added in — xpac wotlk, xpac >legion, xpac <=mop",
+        when: (d) => d.expansions.length > 0,
+    },
 };
 
 /* The two meta keywords by name, for the code that has to spell one rather
@@ -246,6 +255,7 @@ export const META_KEYWORDS: Record<string, {
 export const ATTACH_WORD = "attach";
 export const BONESET_WORD = "boneset";
 export const MOTION_WORD = "motion";
+export const XPAC_WORD = "xpac";
 
 /**
  * The keywords one field can carry, minus any the loaded pack has no data
@@ -998,30 +1008,31 @@ export const FIELDS: Record<string, SearchFieldSpec> = {
     },
     id: {
         label: "Spell ID", tab: true, orGroups: true,
-        hint: "exact spell ID, or the expansion that added it — 133, wotlk, >legion",
-        short: "spell ID / expansion",
+        hint: 'exact spell ID, or xpac — 133, xpac legion, xpac ">wotlk"',
+        short: "spell ID",
         /**
-         * Exact ids, plus the EXPANSION that introduced them — which is an
-         * attribute OF the id, not a field of its own, exactly as `attach` is
-         * an attribute inside `model:`. That is why there is no `xpac:` prefix
-         * to autocomplete in the plain bar.
+         * Exact ids, plus `xpac <expansion>` — the expansion that introduced
+         * the id, written as a KEYWORD inside this chip exactly as `attach` is
+         * written inside `model:`. It qualifies what the column already names,
+         * so it is not a field of its own and no `xpac:` prefix exists.
          *
-         * A pure NUMBER is always a spell id and never an expansion: `id:5` is
-         * spell 5, not Mists. So the ladder's numeric aliases ("5") are
-         * deliberately unreachable here — the words and the comparisons are
-         * (`id:mop`, `id:>legion`, `id:<=wotlk`).
+         *   id:133   id:"xpac legion"   id:"xpac >wotlk"   id:"xpac <=mop"
+         *
+         * The keyword split is what keeps a bare number a SPELL ID — `id:5` is
+         * spell 5, never Mists — and it is the same `splitKeyword` the
+         * attachment and boneset axes use, so the form is learned once.
          */
         run(tokens, data) {
+            const {text, values} = splitKeyword(tokens, XPAC_WORD);
             const out = new Set<number>();
-            for (const t of tokens) {
-                if (/^\d+$/.test(t.text)) {
-                    const id = Number(t.text);
-                    if (data.spellIndex.has(id)) out.add(id);
-                    continue;
+            for (const v of values) {
+                for (const i of expansionIndexes(v, data)) {
+                    for (const sp of data.eraSpells.get(i) ?? []) out.add(sp);
                 }
-                for (const i of expansionIndexes(t.text, data)) {
-                    for (const s of data.eraSpells.get(i) ?? []) out.add(s);
-                }
+            }
+            for (const t of text) {
+                const id = Number(t.text);
+                if (data.spellIndex.has(id)) out.add(id);
             }
             return out;
         },

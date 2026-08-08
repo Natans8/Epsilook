@@ -54,18 +54,15 @@ export const ARGUMENT_WORDS = new Set([...Object.keys(Search.META_KEYWORDS), Sea
 export function fieldCategories(field: string | null): { words: string[], titles: Record<string, string> } | null {
     const d = state.data;
     if (!d || !field) return null;
-    // The ID field's words are the EXPANSIONS — an id's provenance is an
-    // attribute of the id, so it autocompletes inside `id:` rather than as a
-    // prefix of its own. The vocabulary is the pack's, so a new expansion
-    // autocompletes (and highlights, via the same call in highlight.ts) the day
-    // the build declares it. Numbers are left out on purpose: `id:5` is spell 5.
+    // `id:` has no CONTENT types — its words are just its meta keywords, which
+    // today is `xpac`. Read from the same registry as every other field's, so a
+    // keyword cannot come to be searchable and unsuggested. Target words are
+    // deliberately not appended: the id column draws no target icons.
     if (field === "id") {
-        const words = d.expansions.map((x) => x.key);
+        const words = Search.keywordsIn(field, d);
         const titles: Record<string, string> = {};
-        for (const x of d.expansions) {
-            titles[x.key] = x.caveat ? `${x.label} — ${x.caveat}` : x.label;
-        }
-        return {words, titles};
+        for (const w of words) titles[w] = Search.META_KEYWORDS[w].hint;
+        return words.length ? {words, titles} : null;
     }
     // mech joins the list because the non-visual categories moved there —
     // its words come from the same registry, so nothing else needed saying

@@ -73,6 +73,7 @@ import {
 } from "./tags";
 import type {ModelCatEntry} from "./tags";
 import * as P from "../pills";
+import * as Search from "../search";
 import {CFG} from "../config";
 import {$, $$, el, fillTemplate} from "../util";
 
@@ -320,7 +321,7 @@ function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
                 title: xp.caveat
                     ? `Added in ${xp.label} — ${xp.caveat}`
                     : `Added in ${xp.label}`,
-                search: `id:${xp.key}`,
+                search: P.quoted("id", Search.keywordValue(Search.XPAC_WORD, xp.key)),
                 finds: `spells added in ${xp.label}`,
             }),
             P.copy(String(spellId), `Copy spell ID ${spellId}`, String(spellId), "id-copy"),

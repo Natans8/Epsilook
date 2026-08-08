@@ -71,13 +71,15 @@ export function kitNameIsHit(kitId: number): boolean {
     return anyGroup("sound", (ts) => ts.every((t) => name.includes(t.text)));
 }
 
-// The expansion segment lights through the ENGINE'S own resolver, so it can
-// only glow under a query that really selected its row — `xpac:>legion` golds a
-// BfA row and leaves a Cata one plain, and the comparison grammar never has to
-// be spelled twice. Same rule as the delivery line's segments.
+// The expansion segment lights through the ENGINE'S own resolver, reading the
+// SAME `xpac` keyword split the id field selects with — so it can only glow
+// under a query that really selected its row (`id:"xpac >legion"` golds a BfA
+// row and leaves a Cata one plain), and the comparison grammar is never spelled
+// twice. Same rule as the delivery line's segments.
 export function expansionIsHit(index: number): boolean {
     return anyGroup("id", (ts) =>
-        ts.some((t) => Search.expansionIndexes(t.text, activeData()).includes(index)));
+        Search.splitKeyword(ts, Search.XPAC_WORD).values
+            .some((v) => Search.expansionIndexes(v, activeData()).includes(index)));
 }
 
 // anim pills can be hit through their group's category word too — the
