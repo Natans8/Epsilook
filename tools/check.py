@@ -42,6 +42,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from repo import BUMP_PATHS, ROOT, changed_under, git, have_ref, main_checkout
@@ -120,6 +121,10 @@ DOM_NAMES = (
 # silently PASS — so absence is a failure here rather than a shrug. Skipped in
 # CI, which has no IDE and is not where the pass is meant to happen.
 INSPECTORS = (("webstorm", 64542), ("pycharm", 64462))
+
+# How long a pack-freshness answer stays good. Blizzard patches weekly at
+# most, so a day is generous and keeps a normal working day to one request.
+FRESHNESS_CACHE_HOURS = 24
 
 RED, GREEN, YELLOW, DIM, RESET = "\033[31m", "\033[32m", "\033[33m", "\033[2m", "\033[0m"
 
@@ -515,6 +520,63 @@ def check_arcanum(rep: Report) -> None:
         rep.ok("arcanum codec", f"{len(arcanum.load_catalog())} actions, golden fixture decodes")
 
 
+def check_pack_freshness(rep: Report) -> None:
+    """A tracked game line must not have shipped a build past the pack we ship.
+
+    THIS IS THE CONSUMER FOR THE WEEKLY WORKFLOW'S ISSUE. That workflow can
+    only file one; nothing makes anyone read it, which is this repo's own
+    "prose cannot fire" failure with an issue tracker standing in for the prose.
+    Here it fires where work actually happens - the command everyone runs before
+    a commit.
+
+    WARN, NEVER FAIL, and the distinction is the whole design: Blizzard shipping
+    a hotfix is not a defect in the change being committed, and blocking an
+    unrelated commit on it would train people to pass --fast forever. It is a
+    nudge with a command attached.
+
+    Cached for CACHE_HOURS so a normal day costs one request, not one per run.
+    """
+    if os.environ.get("CI"):
+        rep.skip("pack freshness", "the weekly workflow owns this in CI")
+        return
+    try:
+        sys.path.insert(0, str(ROOT / "tools"))
+        from packs import ARCHIVE, FROZEN, PACKS, live_build, version_key
+    except ImportError as exc:  # pragma: no cover - packs.py is committed
+        rep.skip("pack freshness", f"tools/packs.py not importable ({exc})")
+        return
+
+    tracked = [p for p in PACKS if p.product not in (FROZEN, ARCHIVE)]
+    cache = ROOT / "build" / "cache" / "pack-freshness.json"
+    now = time.time()
+    if cache.exists() and now - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
+        try:
+            latest = json.loads(cache.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            latest = {}
+    else:
+        latest = {}
+        for pack in tracked:
+            build = live_build(pack.product)
+            if not build:  # offline, or Blizzard is having a moment
+                rep.skip("pack freshness", "could not reach Blizzard's version service")
+                return
+            latest[pack.product] = build
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(latest, indent=2), encoding="utf-8")
+
+    behind = [(p, latest[p.product]) for p in tracked
+              if p.product in latest
+              and version_key(latest[p.product]) > version_key(p.build)]
+    if behind:
+        rep.warn("pack freshness",
+                 "; ".join(f"{p.key} {p.build} -> {new}" for p, new in behind)
+                 + f"  (edit build= in tools/packs.py, then "
+                   f"python tools/rebuild.py {behind[0][0].key})")
+    else:
+        rep.ok("pack freshness", f"{len(tracked)} tracked line(s) current")
+
+
 def check_inspectors(rep: Report) -> None:
     """The IDE inspection servers must be REACHABLE, not merely intended.
 
@@ -616,6 +678,7 @@ def main() -> int:
     check_pack_sections(rep)
     check_layers(rep)
     check_arcanum(rep)
+    check_pack_freshness(rep)
     check_inspectors(rep)
     check_docs(rep, args.base)
 

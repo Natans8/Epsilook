@@ -143,6 +143,43 @@ def main() -> int:
 
     failures = 0
 
+    # 1b. wait for the MANIFEST to be the one we just built.
+    #
+    # ⚠ STEP 1 CANNOT SEE A DATA-ONLY DEPLOY, and reporting its absence as
+    # success is worse than not checking. The packs self-bust on a content hash,
+    # so rebuilding them changes no ?v= at all — the string step 1 waits for is
+    # already live the moment it is asked, it breaks out immediately, and every
+    # pack below is then compared against a CDN that has not caught up. That is
+    # exactly what happened on 2026-08-09: ten "FAIL ... bytes live" lines for a
+    # deploy that was fine and simply had not propagated.
+    #
+    # versions.json carries a content hash per pack, so it IS the oracle for
+    # this half, the same way index.html's ?v= is for the other.
+    local_manifest: list[dict] = json.loads(
+        (ROOT / "site" / "data" / "versions.json").read_text(encoding="utf-8"))
+    attempt = 0
+    while True:
+        attempt += 1
+        status, body, _ = get(args.site + "data/versions.json", int(time.time() * 1000))
+        try:
+            served_manifest = json.loads(body) if status == 200 else None
+        except json.JSONDecodeError:
+            served_manifest = None
+        if served_manifest == local_manifest:
+            print(f"{GREEN}live{RESET}  manifest matches "
+                  f"{DIM}({len(local_manifest)} packs, attempt {attempt}){RESET}")
+            break
+        if time.time() >= deadline:
+            stale = "unreadable" if served_manifest is None else "still the previous one"
+            if args.now:
+                print(f"{YELLOW}manifest {stale}{RESET} {DIM}(--now, did not wait){RESET}")
+            else:
+                print(f"{RED}timeout{RESET}  after {args.timeout}s the served manifest "
+                      f"is {stale}")
+            return 1
+        print(f"{DIM}  manifest not propagated yet, waiting ...{RESET}")
+        time.sleep(10)
+
     # 2. every versioned asset the live page references must resolve
     assets = sorted(set(ASSET_RE.findall(html)))
     for asset in assets:
@@ -153,17 +190,10 @@ def main() -> int:
     if not failures:
         print(f"{GREEN}ok{RESET}    {len(assets)} versioned assets resolve")
 
-    # 3. the packs: the manifest is the app's own index, so walk it
-    status, body, _ = get(args.site + "data/versions.json", int(time.time() * 1000))
-    if status != 200:
-        print(f"{RED}FAIL{RESET}  data/versions.json HTTP {status}")
-        return 1
-    try:
-        manifest = json.loads(body)
-    except json.JSONDecodeError as exc:
-        print(f"{RED}FAIL{RESET}  data/versions.json unparseable: {exc}")
-        return 1
-
+    # 3. the packs: the manifest is the app's own index, so walk it. 1b only
+    # breaks once the SERVED manifest equals this one, so iterating the local
+    # copy walks exactly what is live — and is a list rather than `Any | None`.
+    manifest = local_manifest
     for entry in manifest:
         url = args.site + entry["file"] + f"?v={entry['hash']}"
         status, _, headers = get(url, int(time.time() * 1000), head=True)
