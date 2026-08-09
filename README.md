@@ -243,12 +243,23 @@ with no Docker installed.
 ### Rebuilding the data
 
 ```
-python build/build_data.py --version 9.2.7.45745 --label "Shadowlands 9.2.7"
+python tools/rebuild.py shadowlands
 ```
 
-The label and the `--default` flag are arguments, not state, so a rebuild that omits them quietly renames the pack to
-its build id and drops the default. `python tools/rebuild.py 9.2.7` reads both back out of `versions.json` and passes
-them for you; with no argument it rebuilds every pack, and `--list` prints the commands without running them.
+Every shipped game version is declared in `tools/packs.py` — build id, label, which one is the default. That file is the
+input; `versions.json` is generated from it. Name a pack by its key (`vanilla`, `mop`, `midnight` …) or by a build
+prefix; with no argument it rebuilds all eleven, and `--list` prints the underlying commands without running them.
+
+**Updating a pack to a newer game build is one edit**: change that pack's `build=` string in `tools/packs.py` and rerun
+the command above. The label follows the build, and the pack being replaced is retired for you. To find out when that is
+due, `python tools/packs.py --check` asks Blizzard's own version service which build each line is currently on (a weekly
+GitHub Action does the same and opens an issue).
+
+The underlying script still takes its identity as arguments, if you want to drive it directly:
+
+```
+python build/build_data.py --version 9.2.7.45745 --label "Shadowlands 9.2.7"
+```
 
 Downloads (and caches under `build/cache/`) the game tables from
 [wago.tools](https://wago.tools), the community listfile, and the

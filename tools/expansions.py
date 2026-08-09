@@ -146,7 +146,7 @@ LADDER: list[Expansion] = [
         wowhead="classic",
         sources=(
             Source(Archive("Spell.1.12.1.5875 (Retail) de4b8b4c6f5aab7901f196030cc8aec7.dbc")),
-            Source(Pack("1.15.8"), PARALLEL,
+            Source(Pack("1.15.9"), PARALLEL,
                    "Classic Era is a modern rebuild — it carries thousands of "
                    "spells the 1.12.1 client never had, so it cannot date one"),
         ),
@@ -207,6 +207,8 @@ LADDER: list[Expansion] = [
               aliases=("df", "dragonflight", "10"), sources=(Source(Pack("10.2.7")),)),
     Expansion(key="tww", label="The War Within", short="TWW", major=11,
               aliases=("tww", "war within", "11"), sources=(Source(Pack("11.2.7")),)),
+    Expansion(key="midnight", label="Midnight", short="Midnight", major=12,
+              aliases=("mn", "midnight", "12"), sources=(Source(Pack("12.0.7")),)),
 ]
 
 

@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+"""THE PACK ROSTER — the one place a shipped game version is declared.
+
+    python tools/packs.py             # what we ship
+    python tools/packs.py --check     # ... and whether a newer build exists
+
+WHY IT EXISTS. A pack's identity (build id, label, default flag) used to be an
+ARGUMENT to build_data.py and nowhere else, recovered afterwards by reading
+site/data/versions.json — the file build_data.py itself WRITES. So the input was
+recovered from the output, and bumping a patch meant: run the build with a
+hand-typed label, then hand-delete the previous entry and its data directory,
+because write_pack() replaces by EXACT build id and a bump changes that id.
+Miss either step and the old pack ships forever beside the new one.
+
+Here the roster is the INPUT and versions.json is a pure projection of it:
+
+    bumping a patch version = editing ONE `build=` string below.
+
+Everything else follows — the label carries the patch number, tools/rebuild.py
+retires the pack the bump replaced, and `--check` says when a bump is due.
+
+⚠ THE BUILD IS PINNED ON PURPOSE, and "just build the newest" is the wrong
+shape however tempting. tools/rebuild.py --verify asserts that rebuilding an
+unchanged pack reproduces it byte for byte; resolving "newest" at build time
+would make that oracle fail every time Blizzard shipped a hotfix, and the packs
+would stop being reproducible artifacts. So: `--check` TELLS you, a human bumps.
+
+⛔ PICK THE PRODUCT, NOT THE BUILD NUMBER, AND NEVER THE CHINA LINE. Blizzard
+ships region-exclusive clients on their own product lines, and the one to avoid
+is `wow_classic_titan` — "Classic Titan Reforged", marked (China) on the wiki's
+own Template:Current builds, versioned 3.80.x so it does not even look like a
+WoW patch. Every product named below is global. Reference:
+https://warcraft.wiki.gg/wiki/Public_client_builds
+
+⚠ NEVER TAKE THE BUILD FROM THE WIKI. A patch page (e.g. Patch_1.15.9) lists the
+build the patch SHIPPED with — 68824 — while the line keeps hotfixing under the
+same patch number. Pinning that number ships a client dozens of hotfixes stale
+while looking perfectly correct. The split is: the wiki is the authority on
+which lines are PUBLIC and which is China-only, and Blizzard's version service
+(below) is the authority on the current build of one.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
+
+# BLIZZARD'S OWN VERSION SERVICE — Ribbit V2 over HTTPS, which is what Agent and
+# the game clients themselves use as of 2025. No key, no account, no scraping.
+#
+# ⚠ USE V2/HTTPS AND NOTHING ELSE, because three plausible-looking routes are
+# all wrong now (wowdev.wiki/Ribbit is the reference):
+#   * Ribbit V1 on TCP 1119 — DEPRECATED in 2025, and a raw TCP protocol rather
+#     than HTTP, so it is unreachable from a sandboxed or proxied network.
+#   * http://<region>.patch.battle.net:1119/<product>/versions — the legacy TACT
+#     HTTP system. It still answers, but only by PROXYING V2, so it is a hop
+#     with nothing to recommend it. Note it is also HTTP-only and on port 1119;
+#     plain https://us.patch.battle.net just hangs.
+#   * a per-product poll to discover new lines — the wiki says outright to use
+#     the summary file "instead of checking all individual products".
+SUMMARY_URL = "https://us.version.battle.net/v2/summary"
+VERSIONS_URL = "https://us.version.battle.net/v2/products/{product}/versions"
+UA = {"User-Agent": "Epsilook-build (github.com/Natans8/Epsilook)"}
+
+# Product lines that are NOT a shippable public client, and why. Anything the
+# summary publishes that is neither here nor tracked by a pack below is reported
+# by --check as an unrecognised line — which is how a NEW Classic line launching
+# gets noticed without anyone watching for it.
+#
+# ⛔ `wow_classic_titan` is the China-exclusive one ("Classic Titan Reforged",
+# versioned 3.80.x). It is a real, live, public client — it is excluded for
+# REGION, not for being a test realm, so it must never be pattern-matched away
+# with the internals below. See the module docstring.
+IGNORED_PRODUCTS = {
+    "wow_classic_titan": "China-exclusive (Titan Reforged)",
+    "wowt": "retail PTR",
+    "wowxptr": "retail PTR 2",
+    "wow_beta": "retail alpha/beta",
+    "wow_classic_ptr": "Classic PTR",
+    "wow_classic_beta": "Classic beta",
+    "wow_classic_era_ptr": "Classic Era PTR",
+    "wow_classic_era_beta": "Classic Era beta",
+    "wowz": "internal",
+}
+
+# ⚠ BLIZZARD'S OWN SUMMARY LISTS THE INTERNAL LINES TOO, and there are far more
+# of them than of real clients — 33 against 5 the day this was written. They are
+# vendor/dev/QA branches (`wowdev3` 12.0.5.66521, `wownev5` 5.5.4.69155,
+# `wowv3` 12.1.5.69199 ...); several carry builds AHEAD of live, so treating one
+# as a public line would "bump" a pack to a client nobody can download. Most
+# 404 on the versions endpoint even though summary lists them.
+#
+# This is the cost of the official source over a curated mirror, and it is worth
+# paying: the mirror simply omitted these, which also meant it would have
+# omitted a new PUBLIC line until someone added it.
+INTERNAL_PREFIXES = ("wowdev", "wownev", "wowv", "wowe", "wowlivetest")
+
+
+def is_internal(product: str) -> bool:
+    """A vendor/dev/QA branch rather than something a player can install."""
+    return any(product.startswith(prefix) for prefix in INTERNAL_PREFIXES)
+
+
+# `product` answers ONE question: where do I ask whether a newer build exists.
+#
+# FROZEN means "do not ask", and it is the answer for most of the roster —
+# NOT because those clients are unimportant but because their product line
+# MOVED ON. `wow_classic` is the progressing Classic line and is on MoP today,
+# so asking it about our WotLK 3.4.3 pack answers "5.5.4.69155", which is not a
+# newer WotLK at all. `wow` is on Midnight (12.x), so it would tell the same lie
+# about all five pinned retail packs. Only a pack whose line is still shipping
+# ITS patch may name a product; everything else is a historical artifact.
+FROZEN = "frozen"
+
+# Where the bytes come from. wago serves CASC-era builds only — its oldest of
+# any kind is 1.13.0.28211 — so a genuine pre-Cata client comes from the
+# wow.tools DBC mirror instead. See tools/expansions.py, which already reads it.
+WAGO = "wago"
+ARCHIVE = "archive"
+
+
+@dataclass(frozen=True)
+class Pack:
+    """One shipped game version. A patch bump edits `build` and nothing else."""
+
+    key: str  # stable short name; what you type on the CLI
+    name: str  # "Vanilla Classic" — the label is this plus the patch
+    product: str  # wago product line to check for updates, or FROZEN
+    build: str  # THE ONE FIELD A PATCH BUMP TOUCHES
+    default: bool = False  # the pack the app loads when the URL names none
+    hidden: bool = False  # resolvable by ?v= but kept out of the dropdown
+    source: str = WAGO  # WAGO or ARCHIVE — which downloader reads it
+
+    @property
+    def patch(self) -> str:
+        """`"1.15.9.69109"` -> `"1.15.9"`. The label's version half."""
+        return ".".join(self.build.split(".")[:3])
+
+    @property
+    def label(self) -> str:
+        """What the version dropdown shows. Derived, so a bump cannot desync it."""
+        return f"{self.name} {self.patch}"
+
+
+# ---------------------------------------------------------------- the roster
+#
+# Ordered oldest to newest, which is also the order versions.json sorts into.
+PACKS: tuple[Pack, ...] = (
+    # The three still shipping their own patch — these are the ones `--check`
+    # can actually answer for, and the only ones a routine bump touches.
+    Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.69109"),
+    Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.69110"),
+    Pack("mop", "MoP Classic", "wow_classic", "5.5.4.69155"),
+    Pack("midnight", "Midnight", "wow", "12.0.7.68974"),
+    # Lines that moved on, and pinned retail. Historical artifacts: their build
+    # is final, so FROZEN rather than a product that would answer about a
+    # different expansion entirely.
+    Pack("wotlk", "WotLK Classic", FROZEN, "3.4.3.58936"),
+    Pack("cata", "Cataclysm Classic", FROZEN, "4.4.2.60895"),
+    Pack("legion", "Legion", FROZEN, "7.3.5.26972"),
+    Pack("bfa", "Battle for Azeroth", FROZEN, "8.3.7.35662"),
+    Pack("shadowlands", "Shadowlands", FROZEN, "9.2.7.45745", default=True),
+    Pack("dragonflight", "Dragonflight", FROZEN, "10.2.7.55664"),
+    Pack("tww", "The War Within", FROZEN, "11.2.7.65299"),
+)
+
+# Exactly one default, and keys/builds are unique — a duplicate would make
+# `select()` ambiguous and silently rebuild the wrong pack.
+assert sum(p.default for p in PACKS) == 1, "exactly one pack must be the default"
+assert len({p.key for p in PACKS}) == len(PACKS), "duplicate pack key"
+assert len({p.build for p in PACKS}) == len(PACKS), "duplicate build id"
+
+
+def version_key(build: str) -> tuple[int, ...]:
+    """Componentwise, so 10.x sorts after 9.x rather than before it."""
+    return tuple(int(part) for part in build.split(".") if part.isdigit())
+
+
+def select(wanted: str | None) -> list[Pack]:
+    """All packs, or those matching a key or a build prefix."""
+    if not wanted:
+        return list(PACKS)
+    hits = [p for p in PACKS if p.key == wanted or p.build.startswith(wanted)]
+    if not hits:
+        known = ", ".join(f"{p.key} ({p.build})" for p in PACKS)
+        sys.exit(f"no pack matches {wanted!r}\nknown: {known}")
+    return hits
+
+
+def fetch_bpsv(url: str) -> list[dict[str, str]]:
+    """Fetch one BPSV document and return its rows as dicts. `[]` on failure.
+
+    BPSV is the pipe-separated format every TACT/Ribbit endpoint speaks: a
+    header naming the columns as `Name!TYPE:len`, a `## seqn = N` line, then the
+    rows. Both files this module reads share it, so it is parsed once here.
+
+        Region!STRING:0|BuildConfig!HEX:16|...|VersionsName!String:0|...
+        ## seqn = 3941253
+        us|96db...|d2a7...|68974|12.0.7.68974|5302...
+    """
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=UA),
+                                    timeout=60) as response:
+            body = response.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, OSError) as exc:
+        print(f"could not reach {url}: {exc}", file=sys.stderr)
+        return []
+
+    rows: list[dict[str, str]] = []
+    columns: list[str] = []
+    for line in body.splitlines():
+        if line.startswith("##") or not line.strip():
+            continue
+        fields = line.split("|")
+        if not columns:  # the header is always the first non-comment line
+            columns = [c.split("!")[0] for c in fields]
+            continue
+        rows.append(dict(zip(columns, fields)))
+    return rows
+
+
+def live_build(product: str) -> str:
+    """The build Blizzard is CURRENTLY serving for one product. "" if unknown.
+
+    Regions normally carry identical builds, but they do diverge during a
+    staggered rollout, so one is chosen rather than assumed unique: `us` first,
+    since that is the region Epsilon's audience patches against.
+    """
+    rows = fetch_bpsv(VERSIONS_URL.format(product=product))
+    if not rows:
+        return ""
+    chosen = next((r for r in rows if r.get("Region") == "us"), rows[0])
+    return chosen.get("VersionsName", "").strip()
+
+
+def wow_products() -> set[str]:
+    """Every WoW product line Blizzard currently publishes.
+
+    From the summary file, which the wiki names as the right way to spot a
+    change rather than polling each product. It lists every Blizzard game, so
+    it is filtered to the WoW family — a new Classic flavour appears here the
+    day it goes live, which is what makes --check self-detecting.
+    """
+    return {row["Product"] for row in fetch_bpsv(SUMMARY_URL)
+            if row.get("Product", "").startswith("wow")}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--check", action="store_true",
+                    help="ask wago whether a newer build exists for each pack")
+    args = ap.parse_args()
+
+    behind = 0
+    for pack in PACKS:
+        flags = " ".join(f for f, on in
+                         (("default", pack.default), ("hidden", pack.hidden)) if on)
+        line = f"{pack.key:<13} {pack.build:<16} {pack.label:<28} {flags}"
+        if args.check and pack.product not in (FROZEN, ARCHIVE):
+            available = live_build(pack.product)
+            if available and version_key(available) > version_key(pack.build):
+                behind += 1
+                line += f"  <- newer: {available}"
+            elif available:
+                line += "  up to date"
+            else:
+                line += "  (could not check)"
+        print(line.rstrip())
+
+    if args.check:
+        # A live line nobody declared. Either a new Classic flavour launched or
+        # Blizzard renamed a product — both need a human, and neither announces
+        # itself if --check only ever looks at what we already track.
+        published = wow_products()
+        tracked = {p.product for p in PACKS}
+        unknown = sorted(p for p in published - tracked - set(IGNORED_PRODUCTS)
+                         if not is_internal(p))
+        if unknown:
+            print("\nUNRECOGNISED product line(s) — new, renamed, or region-locked:")
+            for product in unknown:
+                print(f"  {product:<22} {live_build(product) or '?'}")
+            print("  Decide per line: add a Pack row, or an IGNORED_PRODUCTS reason.")
+            behind += len(unknown)
+
+    if args.check and behind:
+        print(f"\n{behind} item(s) need attention. Edit the `build=` string in "
+              f"tools/packs.py, then: python tools/rebuild.py <key>")
+    return 1 if (args.check and behind) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

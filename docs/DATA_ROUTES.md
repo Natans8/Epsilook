@@ -62,13 +62,28 @@ baked into the pack.
 
 ## 1. Sources
 
-| Source                      | URL shape                                         | Role                                                                                                                                |
-|-----------------------------|---------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| **wago.tools**              | `wago.tools/db2/{table}/csv?build={version}`      | The 34 client db2 tables. Version-pinned, so a pack always matches its build.                                                       |
-| **community listfile**      | `github.com/wowdev/wow-listfile` (latest release) | `FileDataID → path`. The only way a fid becomes `cfx_mage_fireball_missile.m2`. ~150 MB, streamed and filtered, never loaded whole. |
-| **TrinityCore TDB**         | GitHub release `.7z` per era                      | Two distinct roles — see below.                                                                                                     |
-| **anims.js**                | `wow.tools.local` raw                             | `AnimID → name` (Stand, SpellCastDirected, …).                                                                                      |
-| **WoWDBDefs `meta/enums/`** | raw master                                        | `SpellEffect.dbde` + `SpellEffectAura.dbde` — the authority on what a mechanic enum value means.                                    |
+| Source                      | URL shape                                         | Role                                                                                                                                                                         |
+|-----------------------------|---------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **wago.tools**              | `wago.tools/db2/{table}/csv?build={version}`      | The 34 client db2 tables. Version-pinned, so a pack always matches its build.                                                                                                |
+| **community listfile**      | `github.com/wowdev/wow-listfile` (latest release) | `FileDataID → path`. The only way a fid becomes `cfx_mage_fireball_missile.m2`. ~150 MB, streamed and filtered, never loaded whole. **Revalidated every build** — see below. |
+| **TrinityCore TDB**         | GitHub release `.7z` per era                      | Two distinct roles — see below.                                                                                                                                              |
+| **anims.js**                | `wow.tools.local` raw                             | `AnimID → name` (Stand, SpellCastDirected, …).                                                                                                                               |
+| **WoWDBDefs `meta/enums/`** | raw master                                        | `SpellEffect.dbde` + `SpellEffectAura.dbde` — the authority on what a mechanic enum value means.                                                                             |
+
+### The listfile is the one source that goes stale under a pack we already ship
+
+Every other source is pinned to a build, so a cached copy is correct forever. The listfile is not: it is a community
+effort that keeps *growing* for builds that shipped long ago, so a fid with no name last month may have one today. A
+plain "is it cached?" check therefore keeps serving an old answer indefinitely — and did. **The packs built on
+2026-08-08 used a listfile from 2026-07-14**, 25 days and ~670 KB of paths behind.
+
+So `fetch_sources()` **revalidates it on every build**: one call to the GitHub releases API, compare `tag_name` against
+the cached `listfile/release-tag.txt`, and re-download the 148 MB body only when the tag actually moved. If the API is
+unreachable the cached copy is used with a warning rather than failing the build — a slightly old listfile still
+produces a correct pack, it just names fewer files.
+
+**Every pack records the tag it was built against as `meta.listfileTag`**, which is what made the staleness above
+provable after the fact rather than a suspicion. All eleven currently read `202608081256`.
 
 ### TDB does two unrelated jobs
 
@@ -1569,20 +1584,29 @@ Ten builds ship, spanning 2004-era content to current retail. Going *backwards*
 is a different problem from going forwards: forwards is additive, backwards is mostly "the table does not exist yet."
 The five Classic re-release clients (Vanilla / TBC / WotLK / Cataclysm / MoP) complicate that — see below.
 
-### The ten packs
+### The eleven packs
 
-| Build        | Label                     |  Spells |    Pack | TDB release   | Absent tables |
-|--------------|---------------------------|--------:|--------:|---------------|--------------:|
-| 1.15.8.67156 | Vanilla Classic           |  31,248 |  0.7 MB | —             |             7 |
-| 2.5.6.68775  | TBC Classic               |  28,650 |  0.7 MB | —             |            14 |
-| 3.4.3.58936  | WotLK Classic             |  49,394 |  1.3 MB | TDB335.25101  |            11 |
-| 4.4.2.60895  | Cataclysm Classic         |  71,227 |  1.9 MB | —             |            11 |
-| 5.5.4.68716  | Mists of Pandaria Classic |  98,129 |  2.6 MB | —             |             6 |
-| 7.3.5.26972  | Legion                    | 179,382 |  5.0 MB | TDB735.00     |             4 |
-| 8.3.7.35662  | Battle for Azeroth        | 227,237 |  6.5 MB | TDB837.20101  |             1 |
-| 9.2.7.45745  | Shadowlands *(default)*   | 276,332 |  7.9 MB | TDB927.22111  |             0 |
-| 10.2.7.55664 | Dragonflight              | 327,092 |  9.5 MB | TDB1027.24051 |             0 |
-| 11.2.7.65299 | The War Within            | 375,895 | 11.1 MB | TDB1127.26011 |             0 |
+**Read from `meta` on the shipped packs, 2026-08-09 — never estimated.** Which builds we ship is declared in
+`tools/packs.py`; this table is what those declarations produced.
+
+| Build        | Label                   |  Spells |    Pack | TDB release   | Absent tables |
+|--------------|-------------------------|--------:|--------:|---------------|--------------:|
+| 1.15.9.69109 | Vanilla Classic         |  31,249 |  0.8 MB | —             |             9 |
+| 2.5.6.69110  | TBC Classic             |  28,687 |  0.8 MB | —             |            16 |
+| 3.4.3.58936  | WotLK Classic           |  49,394 |  1.4 MB | TDB335.25101  |            11 |
+| 4.4.2.60895  | Cataclysm Classic       |  71,227 |  2.0 MB | —             |            11 |
+| 5.5.4.69155  | MoP Classic             |  98,159 |  2.8 MB | —             |             6 |
+| 7.3.5.26972  | Legion                  | 179,382 |  5.5 MB | TDB735.00     |             6 |
+| 8.3.7.35662  | Battle for Azeroth      | 227,237 |  7.2 MB | TDB837.20101  |             1 |
+| 9.2.7.45745  | Shadowlands *(default)* | 276,332 |  8.7 MB | TDB927.22111  |             0 |
+| 10.2.7.55664 | Dragonflight            | 327,092 | 10.4 MB | TDB1027.24051 |             0 |
+| 11.2.7.65299 | The War Within          | 375,895 | 12.1 MB | TDB1127.26011 |             0 |
+| 12.0.7.68974 | Midnight                | 404,401 | 13.0 MB | —             |             0 |
+
+**Midnight has no TDB release and that is not a gap to fix** — TrinityCore has not published one for 12.x. The cost is
+the TDB's two roles (§1): morph *display* rows do not resolve (`morphs=4,286 (0 displays)`) and no hotfix overlay is
+applied. Everything sourced from client tables is unaffected. It resolves itself whenever a TDB1200-ish release appears;
+add it to `TDB_RELEASES` then.
 
 **All ten are at pack format 40** (the area gate, §3t — on top of format 39's delivery route with values, §3s-bis,
 format 38's attribute flags and first delivery partition, §3s, format 36's target masks on spell links, §3r, format 35's

@@ -1,0 +1,100 @@
+# Is any shipped pack behind its game's current build?
+#
+# THE POINT IS TO STOP A HUMAN HAVING TO REMEMBER. Three of the packs track a
+# line Blizzard is still patching (Classic Era, TBC Anniversary, MoP Classic,
+# and retail), so they go stale on Blizzard's schedule rather than ours. This
+# asks once a week and opens ONE issue when something is behind, editing that
+# same issue on later runs instead of filing a new one every week.
+#
+# It deliberately does NOT rebuild. A pack rebuild is ~50 MB of LFS and wants
+# the deterministic-build oracle (tools/rebuild.py --verify) plus a look at the
+# counts before it ships — a bot merging that unattended is how a bad pack goes
+# live. The issue is the nudge; a human runs the two commands it prints.
+name: pack updates
+
+on:
+  schedule:
+    # Mondays 06:00 UTC. Blizzard's weekly maintenance lands before this, so a
+    # patch that shipped during the week is caught on the next run.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false  # the roster is a .py file; the packs are not needed
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Ask wago for the current build of each tracked line
+        id: check
+        run: |
+          # --check exits non-zero when something needs attention, which is the
+          # right signal for a human running it and the wrong one here: the step
+          # must survive so the issue can be filed. `|| true` is deliberate.
+          python tools/packs.py --check > report.txt 2>&1 || true
+          cat report.txt
+          if grep -qE -- "<- newer:|UNRECOGNISED" report.txt; then
+            echo "behind=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "behind=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or update the tracking issue
+        if: steps.check.outputs.behind == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('report.txt', 'utf8');
+            const title = 'Data packs are behind their game builds';
+            const body = [
+              'A tracked game line has shipped a newer build than the pack we ship.',
+              '',
+              '```',
+              report.trim(),
+              '```',
+              '',
+              'To update: edit the `build=` string for that pack in `tools/packs.py`, then',
+              '',
+              '```bash',
+              'python tools/rebuild.py <key> && python tools/check.py',
+              '```',
+              '',
+              '`tools/rebuild.py` retires the pack the bump replaces, so there is nothing to delete by hand.',
+              '',
+              '_Raised by `.github/workflows/pack-updates.yml`; this issue is edited in place, not reopened._',
+            ].join('\n');
+
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'pack-updates',
+            });
+
+            if (existing.data.length) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['pack-updates'],
+              });
+            }

@@ -1508,17 +1508,42 @@ def fetch_sources(version: str, refresh: bool) -> tuple[Path, Path, Path | None]
 
     listfile_dir = CACHE_DIR / "listfile"
     listfile = listfile_dir / "community-listfile.csv"
+    tag_file = listfile_dir / "release-tag.txt"
     log("Listfile (wowdev/wow-listfile):")
-    if listfile.exists() and not refresh:
-        log(f"  cached   {listfile.name} ({listfile.stat().st_size:,} bytes)")
-    else:
+    # REVALIDATED ON EVERY BUILD, unlike every other source here. The listfile
+    # is the only one that keeps growing for builds we ALREADY ship: a fid that
+    # had no name last month may have one today, and a plain exists() check
+    # silently keeps serving the old answer. That is not hypothetical — packs
+    # were shipped on 2026-08-08 against a 2026-07-14 listfile.
+    #
+    # The release tag is the cheap oracle: one API call, and the 148 MB body is
+    # only re-fetched when the tag actually moved.
+    cached_tag = tag_file.read_text(encoding="utf-8").strip() if tag_file.exists() else ""
+    latest_tag, asset_url = "", ""
+    try:
         with urllib.request.urlopen(
                 urllib.request.Request(LISTFILE_RELEASE_API, headers={"User-Agent": "epsilook-build"}), timeout=60
         ) as resp:
             release = json.load(resp)
-        asset = next(a for a in release["assets"] if a["name"] == "community-listfile.csv")
-        download(asset["browser_download_url"], listfile, refresh=True)
-        (listfile_dir / "release-tag.txt").write_text(release["tag_name"])
+        latest_tag = release["tag_name"]
+        asset_url = next(a["browser_download_url"] for a in release["assets"]
+                         if a["name"] == "community-listfile.csv")
+    except (urllib.error.URLError, OSError, KeyError, StopIteration) as exc:
+        # Offline or rate-limited. A cached copy still builds a correct pack —
+        # just possibly missing the newest names — so say so and carry on.
+        if not listfile.exists():
+            raise
+        log(f"  WARNING  could not reach the release API ({exc}); "
+            f"using cached listfile (tag {cached_tag or 'unknown'})")
+
+    if latest_tag and (refresh or not listfile.exists() or cached_tag != latest_tag):
+        if cached_tag and cached_tag != latest_tag:
+            log(f"  stale    cached tag {cached_tag} -> {latest_tag}")
+        download(asset_url, listfile, refresh=True)
+        tag_file.write_text(latest_tag, encoding="utf-8")
+    elif latest_tag:
+        log(f"  current  {listfile.name} (tag {latest_tag}, "
+            f"{listfile.stat().st_size:,} bytes)")
 
     tdb_dir = fetch_tdb(version)
     return table_dir, listfile, tdb_dir

@@ -39,6 +39,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from packs import Pack, select
+
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build" / "build_data.py"
 DATA = ROOT / "site" / "data"
@@ -56,31 +58,59 @@ def git(*args: str) -> str:
     return out.stdout or ""
 
 
-def entries() -> list[dict]:
-    return json.loads(MANIFEST.read_text(encoding="utf-8"))
-
-
-def select(wanted: str | None) -> list[dict]:
-    """All packs, or the ones whose id starts with `wanted`."""
-    every = entries()
-    if not wanted:
-        return every
-    hits = [e for e in every if e["id"].startswith(wanted)]
-    if not hits:
-        known = ", ".join(e["id"] for e in every)
-        sys.exit(f"no pack id starts with {wanted!r}\nknown: {known}")
-    return hits
-
-
-def build_argv(entry: dict, refresh: bool) -> list[str]:
-    argv = [sys.executable, str(BUILD), "--version", entry["id"], "--label", entry["label"]]
-    if entry.get("default"):
+def build_argv(pack: Pack, refresh: bool) -> list[str]:
+    argv = [sys.executable, str(BUILD), "--version", pack.build, "--label", pack.label]
+    if pack.default:
         argv.append("--default")
-    if entry.get("hidden"):
+    if pack.hidden:
         argv.append("--hidden")
     if refresh:
         argv.append("--refresh")
     return argv
+
+
+def retire_superseded(built: list[Pack]) -> list[str]:
+    """Drop the packs the ones just built REPLACED, and say what went.
+
+    THIS IS THE STEP A PATCH BUMP USED TO LEAVE TO A HUMAN. write_pack()
+    replaces the manifest entry whose id matches EXACTLY, so bumping
+    1.15.8.67156 -> 1.15.9.69109 adds a second entry and keeps the first: two
+    Vanilla packs in the dropdown, the stale one still downloaded by anyone
+    holding its ?v= link, and ~5 MB of LFS kept alive for nothing.
+
+    ⚠ SCOPED TO WHAT WAS JUST BUILT, and that is not fussiness. "Delete anything
+    the roster does not name" reads as equivalent and silently destroys a
+    targeted rebuild: `rebuild.py vanilla` would also find the OLD tbc and mop
+    directories unnamed by the bumped roster and delete them, with no
+    replacement built — three packs gone to update one.
+
+    A pack line is identified by its major version, which is unique across the
+    roster (1 vanilla, 2 tbc, 3 wotlk, ... 12 midnight). So a directory is
+    superseded exactly when it shares a major with a pack that just built
+    successfully and is not that pack's own build.
+    """
+    majors = {pack.build.split(".")[0]: pack.build for pack in built}
+    gone = []
+
+    for directory in sorted(DATA.iterdir()):
+        if not directory.is_dir():
+            continue
+        major = directory.name.split(".")[0]
+        if major not in majors or directory.name == majors[major]:
+            continue
+        # git rm keeps the deletion staged and the LFS pointer in step. It fails
+        # for a pack that was never committed, and git() swallows that — so the
+        # rmtree below is the unconditional follow-up rather than an else branch.
+        git("rm", "-r", "--quiet", "--", f"site/data/{directory.name}")
+        shutil.rmtree(directory, ignore_errors=True)
+        gone.append(directory.name)
+
+    if gone and MANIFEST.exists():
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        kept = [e for e in manifest if e["id"] not in gone]
+        MANIFEST.write_text(json.dumps(kept, indent=2) + "\n", encoding="utf-8")
+
+    return gone
 
 
 def payload(path: Path) -> dict:
@@ -111,9 +141,9 @@ def describe_difference(before: dict, after: dict) -> list[str]:
     return notes
 
 
-def verify(entry: dict, refresh: bool) -> bool:
+def verify(pack: Pack, refresh: bool) -> bool:
     """Rebuild into a scratch copy, compare, restore. True when reproducible."""
-    pack_rel = f"site/{entry['file']}"
+    pack_rel = f"site/data/{pack.build}/spelldata.json.gz"
     pack_path = ROOT / pack_rel
 
     if git("status", "--porcelain", "--", pack_rel).strip():
@@ -130,8 +160,8 @@ def verify(entry: dict, refresh: bool) -> bool:
         before_bytes = keep.read_bytes()
         before = payload(keep)
 
-        print(f"{DIM}rebuilding {entry['id']} ...{RESET}")
-        proc = subprocess.run(build_argv(entry, refresh), cwd=ROOT, check=False)
+        print(f"{DIM}rebuilding {pack.build} ...{RESET}")
+        proc = subprocess.run(build_argv(pack, refresh), cwd=ROOT, check=False)
         if proc.returncode != 0:
             print(f"{RED}build failed{RESET} exit {proc.returncode}")
             return False
@@ -140,14 +170,14 @@ def verify(entry: dict, refresh: bool) -> bool:
         after = payload(pack_path)
 
         if after_bytes == before_bytes:
-            print(f"{GREEN}identical{RESET}  {entry['id']} reproduced byte for byte")
+            print(f"{GREEN}identical{RESET}  {pack.build} reproduced byte for byte")
             return True
         if after == before:
-            print(f"{GREEN}date only{RESET}  {entry['id']} is reproducible; only "
+            print(f"{GREEN}date only{RESET}  {pack.build} is reproducible; only "
                   f"meta.built moved {DIM}(restoring - do not commit this){RESET}")
             return True
         notes = describe_difference(before, after)
-        print(f"{YELLOW}CONTENT DIFFERS{RESET}  {entry['id']}: {'; '.join(notes) or 'values changed'}")
+        print(f"{YELLOW}CONTENT DIFFERS{RESET}  {pack.build}: {'; '.join(notes) or 'values changed'}")
         print(f"{DIM}  the sources or the build logic changed - inspect before trusting{RESET}")
         return False
     finally:
@@ -168,23 +198,29 @@ def main() -> int:
 
     chosen = select(args.version)
     if args.verify and not args.version:
-        chosen = [e for e in chosen if e.get("default")] or chosen[:1]
+        chosen = [p for p in chosen if p.default] or chosen[:1]
 
     if args.list:
-        for entry in chosen:
-            printable = " ".join(f'"{a}"' if " " in a else a for a in build_argv(entry, args.refresh)[1:])
+        for pack in chosen:
+            printable = " ".join(f'"{a}"' if " " in a else a for a in build_argv(pack, args.refresh)[1:])
             print(f"python {printable}")
         return 0
 
     if args.verify:
-        return 0 if all([verify(entry, args.refresh) for entry in chosen]) else 1
+        return 0 if all([verify(pack, args.refresh) for pack in chosen]) else 1
 
-    for i, entry in enumerate(chosen, 1):
-        print(f"{DIM}[{i}/{len(chosen)}] {entry['id']}  {entry['label']}{RESET}")
-        proc = subprocess.run(build_argv(entry, args.refresh), cwd=ROOT, check=False)
+    for i, pack in enumerate(chosen, 1):
+        print(f"{DIM}[{i}/{len(chosen)}] {pack.build}  {pack.label}{RESET}")
+        proc = subprocess.run(build_argv(pack, args.refresh), cwd=ROOT, check=False)
         if proc.returncode != 0:
-            print(f"{RED}build failed{RESET} {entry['id']} exit {proc.returncode}")
+            print(f"{RED}build failed{RESET} {pack.build} exit {proc.returncode}")
             return 1
+
+    # Only after every requested build SUCCEEDED. Retiring first would delete a
+    # shipped pack and then leave nothing in its place if the build then failed.
+    for name in retire_superseded(chosen):
+        print(f"{DIM}retired    site/data/{name} (no longer in the roster){RESET}")
+
     print(f"{GREEN}built {len(chosen)} pack(s){RESET}")
     return 0
 

@@ -308,6 +308,7 @@ export const CFG: EpsilookConfig = {
         9: "img/expansions/shadowlands.png",
         10: "img/expansions/dragonflight.png",
         11: "img/expansions/tww.png",
+        12: "img/expansions/midnight.png",
     },
 
     expansionLogos: {
