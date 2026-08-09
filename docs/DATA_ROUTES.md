@@ -70,7 +70,26 @@ baked into the pack.
 | **anims.js**                | `wow.tools.local` raw                             | `AnimID → name` (Stand, SpellCastDirected, …).                                                                                                                               |
 | **WoWDBDefs `meta/enums/`** | raw master                                        | `SpellEffect.dbde` + `SpellEffectAura.dbde` — the authority on what a mechanic enum value means.                                                                             |
 
-### The listfile is the one source that goes stale under a pack we already ship
+### Four sources go stale under packs we already ship — everything else is build-pinned
+
+A version-pinned db2 is correct forever once cached. **The listfile, the three WoWDBDefs enum lists and `anims.js` are
+not**: they are community-maintained documents that keep being corrected and extended for game builds that shipped long
+ago. `download()`'s "is it cached?" test is wrong for all of them, and was silently wrong for months.
+
+**The enum case is the sharper one because it changes what users can TYPE** — an enum name IS a search word, so a stale
+one is a word that does not exist and a correct one that finds nothing. Measured drift when this was fixed: one renamed
+value (`SpellEffect` 324, a typo correction upstream).
+
+`download_volatile()` handles the three `.dbde` files and `anims.js` — 7–42 KB each, so they are simply re-fetched every
+build, with the cached copy kept when the network is unavailable. The listfile is 148 MB and gets the tag-comparison
+treatment below instead.
+
+**The checked-in `build/enums/*.json` are a different matter and were verified current** (2026-08-09):
+`spell_attributes.json` is 449 contiguous bits with **zero** name mismatches against wowdev's
+`EnumeratedString#SpellMisc::Attributes`, and the WoWDBDefs-sourced ones lack no upstream value. Those are static by
+design — see `build/enums/README.md`.
+
+### The listfile is the largest of them, and gets a tag check rather than a re-fetch
 
 Every other source is pinned to a build, so a cached copy is correct forever. The listfile is not: it is a community
 effort that keeps *growing* for builds that shipped long ago, so a fid with no name last month may have one today. A

@@ -1310,6 +1310,38 @@ def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
     return True
 
 
+def download_volatile(url: str, dest: Path) -> None:
+    """Fetch a small source that CHANGES UNDER BUILDS WE ALREADY SHIP.
+
+    The same problem as the listfile, and the same reason `download()` is wrong
+    for it: a version-pinned table is correct forever once cached, but the enum
+    name lists and the animation names are community-maintained documents that
+    keep being corrected for game builds that shipped long ago. Cached-forever
+    means a correction never reaches us.
+
+    That is not hypothetical either — `SpellEffect` 324 was cached as
+    `LEARN_HOUSING_DECOUR` and fixed upstream to `LEARN_HOUSING_DECOR`, so every
+    pack shipped the misspelling and `mech:decor` found nothing.
+
+    These are 7-42 KB, so unlike the listfile there is nothing to be clever
+    about: re-fetch every build, and keep the cached copy when the network is
+    unavailable so an offline build still works with slightly older names.
+    """
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    request = urllib.request.Request(url, headers={"User-Agent": "epsilook-build"})
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            body = response.read()
+    except (urllib.error.URLError, OSError) as exc:
+        if not dest.exists():
+            raise
+        log(f"  WARNING  {dest.name}: {exc}; using cached copy")
+        return
+    changed = not dest.exists() or dest.read_bytes() != body
+    dest.write_bytes(body)
+    log(f"  {'updated ' if changed else 'current '} {dest.name} ({len(body):,} bytes)")
+
+
 def find_7z() -> str:
     """Locate the 7-Zip executable, or exit with an actionable message."""
     for cand in (shutil.which("7z"), r"C:\Program Files\7-Zip\7z.exe", "/usr/bin/7z"):
@@ -1500,11 +1532,12 @@ def fetch_sources(version: str, refresh: bool) -> tuple[Path, Path, Path | None]
              CACHE_DIR / SOUNDKITNAME_BUILD / "SoundKitName.csv", refresh)
 
     log("Animation names (wow.tools):")
-    download(ANIMS_JS_URL, CACHE_DIR / "anims.js", refresh)
+    download_volatile(ANIMS_JS_URL, CACHE_DIR / "anims.js")
 
     log("Enum names (wowdev/WoWDBDefs):")
     for name in ENUM_FILES:
-        download(WOWDBDEFS_ENUM_URL.format(name=name), CACHE_DIR / "enums" / f"{name}.dbde", refresh)
+        download_volatile(WOWDBDEFS_ENUM_URL.format(name=name),
+                          CACHE_DIR / "enums" / f"{name}.dbde")
 
     listfile_dir = CACHE_DIR / "listfile"
     listfile = listfile_dir / "community-listfile.csv"
