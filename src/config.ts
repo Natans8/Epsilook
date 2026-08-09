@@ -228,15 +228,21 @@ export const CFG: EpsilookConfig = {
     // URLs above) use the prefix for the active pack's MAJOR version; anything
     // unlisted falls back to retail (empty prefix).
     //
-    // ONLY /classic/ (Vanilla) and retail are permanent. The seasonal Classic
-    // sections (/tbc/, /wotlk/, /cata/, /mop-classic/) exist only while that
-    // Classic season runs and Wowhead redirects them to retail once it ends —
-    // so the mid-Classic clients deliberately point at retail rather than a
-    // section that will rot. To send a version to its own section, add a
-    // `major: "prefix/"` line here; to retire one, delete its line.
+    // EVERY Classic-era pack points at its own section (user's call, 2026-08-09:
+    // "?v=3.4.3 would all lead to the wotlk version of the wiki"). An earlier
+    // pass listed only Vanilla, reasoning that the seasonal sections rot when
+    // their season ends. They do — and Wowhead REDIRECTS them to retail when it
+    // happens, which is precisely where they would have pointed anyway. So the
+    // caution bought nothing and cost the correct link for the whole season.
+    //
+    // To send a version to its own section, add a `major: "prefix/"` line; to
+    // retire one, delete its line. 7+ is the retail era and takes no prefix.
     wowheadSitePrefix: {
-        1: "classic/", // Vanilla (classic.wowhead.com redirects here) — permanent
-        // 2 TBC / 3 WotLK / 4 Cata / 5 MoP / 7+ retail-era -> retail, no prefix
+        1: "classic/",     // Vanilla — permanent (classic.wowhead.com redirects here)
+        2: "tbc/",         // Burning Crusade Classic
+        3: "wotlk/",       // Wrath Classic
+        4: "cata/",        // Cataclysm Classic
+        5: "mop-classic/", // Mists Classic
     },
 
     // 3D preview: the "3d" link on each model tag opens the model in the
