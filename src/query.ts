@@ -127,9 +127,14 @@ const NUM_ALT = /^#?\d+$/;
    word with the whole comparison glued onto it. All three are built from the
    numeric grammar's own alphabet (pills.ts), so the tokenizer cannot come to
    read a different set of operators than the matcher accepts. */
-const LONE_OP = new RegExp(`^(${P.CMP_OPS})$`);
 const NUMBER = new RegExp(`^${P.NUM_SRC}$`);
-const GLUED_CMP = new RegExp(`^([a-z][a-z_]*)((?:${P.CMP_OPS})${P.NUM_SRC})$`);
+/* The operand may be a WORD as well as a number, because a meta keyword
+   compares against one (`xpac>legion`). Safe to split blind for the same
+   reason the numeric form is: no listfile path contains an operator at all,
+   and the only 6 spell names carrying a glued one are the `<INTERNAL>…`
+   family, which OPEN with `<` and so never match the leading-letter head. */
+const GLUED_CMP = new RegExp(
+    `^([a-z][a-z_]*)((?:${P.CMP_OPS})(?:${P.NUM_SRC}|[a-z][a-z0-9_]*))$`);
 
 /**
  * A token's ALTERNATIVES — the values any one of which satisfies it.
@@ -208,7 +213,7 @@ export function tokenSpans(text: string): TokenSpan[] {
         // LONE one: `c'thun -> phase 2` must keep its arrow, and 265 spell
         // names on 9.2.7 carry one of these characters as ordinary text.
         if (prev && !prev.quoted && !quoted
-            && LONE_OP.test(prev.text) && NUMBER.test(raw)) {
+            && P.isOperator(prev.text) && NUMBER.test(raw)) {
             prev.text += raw;
             prev.end = m.index + m[0].length;
             continue;

@@ -675,10 +675,13 @@ export interface SpellData {
      *  which is what makes every consumer degrade to "no expansion known"
      *  rather than break. */
     expansions: Expansion[];
-    /** spell -> its rung's INDEX in `expansions`. Absent = no rung claims it. */
-    spellEra: Map<number, number>;
+    /** Each spell's rung INDEX in `expansions`, parallel to `ids` like `names`
+     *  and `icons`. `-1` — the pack's own encoding — means no rung claims it,
+     *  and so does an out-of-range read on a pack that ships no ladder, which
+     *  is why `expansions[eras[i]]` degrades to undefined instead of throwing. */
+    eras: number[];
     /** rung index -> its spells, so the search axis answers by lookup. */
-    eraSpells: Map<number, Set<number>>;
+    eraSpells: number[][];
 
     /** The area gate (format 40+): spell -> the areas it may be cast in, and
      *  back. 65% of gated spells name exactly one area, which is why the pill
@@ -1422,8 +1425,10 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // lookup instead of a scan. A pack older than format 42 leaves both empty,
     // and every consumer reads that as "not known" rather than failing.
     const expansions: Expansion[] = [];
-    const spellEra = new Map<number, number>();
-    const eraSpells = new Map<number, Set<number>>();
+    const eraSpells: number[][] = [];
+    // the spell -> rung half ships ALREADY indexed like every other spell
+    // column, so it is kept as it arrived; only the reverse index is built.
+    const eras = pack.spells.eras ?? [];
     const xp = pack.expansions;
     if (xp) {
         for (let i = 0; i < xp.keys.length; i++) {
@@ -1432,16 +1437,11 @@ export function buildIndexes(pack: SpellPack): SpellData {
                 major: xp.majors[i], aliases: xp.aliases[i],
                 wowhead: xp.wowhead[i], caveat: xp.caveats[i], index: i,
             });
-            eraSpells.set(i, new Set<number>());
+            eraSpells.push([]);
         }
-        const eras = pack.spells.eras;
-        if (eras) {
-            for (let i = 0; i < pack.spells.ids.length; i++) {
-                const e = eras[i];
-                if (e < 0) continue;
-                spellEra.set(pack.spells.ids[i], e);
-                eraSpells.get(e)!.add(pack.spells.ids[i]);
-            }
+        for (let i = 0; i < pack.spells.ids.length; i++) {
+            const e = eras[i];
+            if (e >= 0) eraSpells[e].push(pack.spells.ids[i]);
         }
     }
 
@@ -2121,7 +2121,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellTransps, transpSpells, transpSearchL,
         spellFreezes, spellCamos, spellAttrs, spellDelivery,
         castTimeSpells, channelSpells, channelSearchL,
-        expansions, spellEra, eraSpells,
+        expansions, eras, eraSpells,
         spellAreas, areaSpells, areaNames, areaRoots, areaMapIds, areaSearchL,
         spellScreens, screenSpells, screenNames, screenColors, screenTextures, screenSearchL,
         spellVisualAnims, visualAnimSpells,

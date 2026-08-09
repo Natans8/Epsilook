@@ -167,8 +167,8 @@ function exportRows(): ExportRow[] {
         const row: ExportRow = {id, name: d.names[i], subtext: d.subtexts[i]};
         // Provenance rides with the ID, not with a column, so like delivery it
         // is exported unconditionally — there is no column to hide it with.
-        const era = d.spellEra.get(id);
-        if (era !== undefined) row.expansion = d.expansions[era].label;
+        const era = d.expansions[d.eras[i]];
+        if (era) row.expansion = era.label;
         // Delivery rides with the NAME, not with a column, so it is exported
         // unconditionally — there is no "delivery column" to hide it with.
         const dl = d.spellDelivery.get(id);

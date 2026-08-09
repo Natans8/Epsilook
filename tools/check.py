@@ -466,7 +466,12 @@ def check_layers(rep: Report) -> None:
         return
 
     word = re.compile(r"\b(" + "|".join(DOM_NAMES) + r")\b")
-    imports = re.compile(r"""^\s*(?:import|export)\b[^;]*?from\s*["']([^"']+)["']""", re.M)
+    # the `from` clause is OPTIONAL, because a side-effect import has none:
+    # `import "./app/boot";` pulls in the entire GUI and was invisible here
+    # until 2026-08-09 — the one violation shape this guard had never been
+    # tested against.
+    imports = re.compile(
+        r"""^\s*(?:import|export)\b\s*(?:[^;]*?from\s*)?["']([^"']+)["']""", re.M)
     problems: list[str] = []
     for mod in DATA_MODULES:
         src = (ROOT / mod).read_text(encoding="utf-8")

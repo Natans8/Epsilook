@@ -144,7 +144,7 @@ function splitCountTokens(tokens: QueryToken[], countable: boolean):
     // an argument of the word — a comparison, or the bare number that means "="
     const isValue = (t: QueryToken | undefined) => !!t && Pills.isValue(t.text);
     // a comparison that WROTE its operator, which only the shorthand needs
-    const isCmp = (t: QueryToken | undefined) => isValue(t) && Pills.hasOperator(t!.text);
+    const isCmp = (t: QueryToken | undefined) => !!t && Pills.isComparison(t.text);
     // the shorthand: one comparison, alone, with no word in front of it
     const lone = tokens.length === 1 && isCmp(tokens[0]);
     for (let i = 0; i < tokens.length; i++) {
@@ -322,15 +322,27 @@ export const matchesNames = (values: string[], namesL: string[]): boolean =>
 
 /**
  * How many tokens after `tokens[i]` the keyword there takes as its value:
- * ONE, or none when the keyword is the chip's last token (a keyword with
- * nothing after it is just a word, and searches as one).
+ * ONE, TWO when a comparison was written with air around its operator, or
+ * none when the keyword is the chip's last token (a keyword with nothing
+ * after it is just a word, and searches as one).
+ *
+ * THE TWO-TOKEN CASE IS THE TOKENIZER'S OWN PROMISE, HONOURED ONE LEVEL UP.
+ * `tokenSpans` already glues a lone operator to what follows — `seat >2`,
+ * `seat > 2` and `seat>2` are all one token — but only when the operand is a
+ * NUMBER, and an expansion's operand is a WORD. So `xpac >legion` worked and
+ * `xpac > legion` silently found nothing. Rejoining HERE rather than
+ * widening the tokenizer is deliberate: a lone `>` is meaningless after a
+ * keyword and can only be its operator, whereas in free text it is ordinary
+ * character data that 265 spell names on 9.2.7 carry.
  *
  * Trivial on purpose, and still a function: the bar's capsule is drawn from
  * this exact call, so what the highlighter covers and what the matcher
  * consumes cannot drift apart.
  */
 export const keywordRun = (tokens: { text: string }[], i: number): number =>
-    (tokens[i + 1] ? 1 : 0);
+    !tokens[i + 1] ? 0
+        : (Pills.isOperator(tokens[i + 1].text) && tokens[i + 2]) ? 2
+            : 1;
 
 /**
  * Split a chip's tokens into the plain ones and one keyword's values.
@@ -342,9 +354,12 @@ export function splitKeyword(tokens: QueryToken[], word: string):
     if (!META_KEYWORDS[word]) return {text: tokens, values: []};
     const text: QueryToken[] = [], values: string[] = [];
     for (let i = 0; i < tokens.length; i++) {
-        if (tokens[i].text === word && keywordRun(tokens, i)) {
-            values.push(tokens[i + 1].text);
-            i++;
+        const run = tokens[i].text === word ? keywordRun(tokens, i) : 0;
+        if (run) {
+            // a run of two is a spaced comparison, rejoined into the single
+            // value the matcher reads (`>` + `legion` -> `>legion`)
+            values.push(tokens.slice(i + 1, i + 1 + run).map((t) => t.text).join(""));
+            i += run;
             continue;
         }
         text.push(tokens[i]);
@@ -621,12 +636,10 @@ function spellsBySoundColumn(tokens: QueryToken[], data: SpellData): Set<number>
     const kit = splitKeyword(tokens, SOUNDKIT_WORD);
     if (kit.values.length) {
         const out = spellsByKitName(data, (nameL) => matchesNames(kit.values, [nameL]));
-        if (kit.text.length) {
-            // the leftover has no `kit` left in it, so this bottoms out
-            const rest = spellsBySoundColumn(kit.text, data);
-            for (const s of [...out]) if (!rest.has(s)) out.delete(s);
-        }
-        return out;
+        // the leftover has no `kit` left in it, so this bottoms out
+        return kit.text.length
+            ? intersect(out, spellsBySoundColumn(kit.text, data))
+            : out;
     }
     const out = spellsBySound(tokens, data);
     // an all-numbers chip is also an exact SoundKit ID lookup (the old
@@ -890,6 +903,12 @@ function intersect(a: Set<number>, b: Set<number>): Set<number> {
 
 /* ------------------------------------------------------- expansion */
 
+/** An `xpac` value: an optional comparison, then the rung's name. The operator
+ *  alphabet is the numeric grammar's own (pills.ts) rather than a second copy
+ *  — this axis compares words where that one compares numbers, and that is the
+ *  ONLY difference between them. */
+const XPAC_VALUE = new RegExp(`^(${Pills.CMP_OPS})?(.*)$`);
+
 /**
  * Resolve one `xpac:` token to the rung indexes it selects.
  *
@@ -903,7 +922,7 @@ function intersect(a: Set<number>, b: Set<number>): Set<number> {
  * and `pandaria` land the same way a partial model name does elsewhere.
  */
 export function expansionIndexes(text: string, data: SpellData): number[] {
-    const m = /^([<>]=?|=)?(.*)$/.exec(text.toLowerCase());
+    const m = XPAC_VALUE.exec(text.toLowerCase());
     if (!m || !m[2]) return [];
     const [, op = "=", word] = m;
 
@@ -924,13 +943,14 @@ export function expansionIndexes(text: string, data: SpellData): number[] {
                         : x.index === i).map((x) => x.index);
 }
 
-/** Spells introduced in any expansion the tokens select. Tokens UNION: the axis
- *  is single-valued, so ANDing two expansions could only ever be empty. */
-function spellsByExpansion(tokens: QueryToken[], data: SpellData): Set<number> {
+/** Spells introduced in any expansion these `xpac` values select. The values
+ *  UNION: the axis is single-valued, so ANDing two expansions could only ever
+ *  be empty. */
+function spellsByExpansion(values: string[], data: SpellData): Set<number> {
     const out = new Set<number>();
-    for (const t of tokens) {
-        for (const i of expansionIndexes(t.text, data)) {
-            for (const s of data.eraSpells.get(i) ?? []) out.add(s);
+    for (const v of values) {
+        for (const i of expansionIndexes(v, data)) {
+            for (const s of data.eraSpells[i] ?? []) out.add(s);
         }
     }
     return out;
@@ -1073,12 +1093,7 @@ export const FIELDS: Record<string, SearchFieldSpec> = {
          */
         run(tokens, data) {
             const {text, values} = splitKeyword(tokens, XPAC_WORD);
-            const out = new Set<number>();
-            for (const v of values) {
-                for (const i of expansionIndexes(v, data)) {
-                    for (const sp of data.eraSpells.get(i) ?? []) out.add(sp);
-                }
-            }
+            const out = spellsByExpansion(values, data);
             for (const t of text) {
                 const id = Number(t.text);
                 if (data.spellIndex.has(id)) out.add(id);

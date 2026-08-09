@@ -254,7 +254,11 @@ export function applyFiltersAndSort(): void {
         // so this degrades to the old behaviour instead of scrambling it.
         const words = state.tokens
             .map((t) => t.text)
-            .filter((s) => !P.hasOperator(s) && !/^#?\d+$/.test(s));
+            // a comparison and a bare number are not words and cannot rank.
+            // This asks isComparison, NOT hasOperator: a name may OPEN with an
+            // operator character (`<INTERNAL>…`), and the loose predicate threw
+            // those six spells out of their own relevance ranking.
+            .filter((s) => !P.isComparison(s) && !/^#?\d+$/.test(s));
         if (words.length) {
             Search.sortByRelevance(list, words.join(" "), d);
         } else {

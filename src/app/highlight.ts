@@ -95,17 +95,22 @@ function fieldVocab(field: string): BarVocab {
 }
 
 /** A comparison token that WROTE its operator (`>2`, `<=-50`). */
-const isComparison = (s: string) => P.isValue(s) && P.hasOperator(s);
+const isComparison = P.isComparison;
 
 /**
  * Does the span at `i` take the span after it as its value?
  *
- * Both kinds of value are ONE token, and one function answers for both, so
- * the bar draws a single capsule shape and the user is told a single rule.
- * A meta keyword takes whatever token follows (search.js owns that call, so
- * the capsule always covers exactly what the matcher consumed); a numeric
- * word takes the one VALUE after it — a comparison, or the bare number that
- * means `=` — which pills.js owns for the same reason.
+ * One function answers for both kinds, so the bar draws a single capsule
+ * shape and the user is told a single rule. A meta keyword takes whatever
+ * follows — usually one token, two when a comparison was spaced (`xpac >
+ * legion`), and search.ts owns that call so the capsule always covers
+ * exactly what the matcher consumed; a numeric word takes the one VALUE
+ * after it — a comparison, or the bare number that means `=` — which
+ * pills.ts owns for the same reason.
+ *
+ * The caller already draws a run of any length (it capsules from the
+ * keyword's start to the last span's end, "whatever lies between"), so the
+ * two-token case needed nothing there.
  *
  * "Is a value" is asked of every ALTERNATIVE, not of the raw text, so
  * `count >4|>9` capsules exactly like `count >4`: the engine runs an

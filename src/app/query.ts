@@ -9,7 +9,7 @@
 import {syncBar} from "./bar";
 import {qInput, state} from "./state";
 import {ensureFieldsVisible} from "./url";
-import {chipStr, parseQueryParts, tagStr, tokenizeQuery} from "../query";
+import {chipStr, groupsOf, parseQueryParts, tagStr} from "../query";
 import type {Chip} from "../query";
 import type {QueryGroup} from "../search";
 
@@ -58,13 +58,19 @@ export function loadQueryString(str: string): void {
 // spliced in at state.pos so mid-bar typing groups correctly. Words in a
 // group must match the same entity; groups AND together (not: true groups
 // exclude instead).
+//
+// The live input becomes a CHIP and the whole list goes through groupsOf, so
+// this module owns only the one thing it can: where the live text sits. What
+// a chip tokenizes to, and that an empty one is dropped, are the language's
+// rules and are stated once. Splicing chips rather than groups is also what
+// makes the index right — state.pos counts chips, so dropping the empties
+// first would shift it.
 export function currentGroups(): QueryGroup[] {
-    const toGroup = (field: string, text: string, not?: boolean): QueryGroup | null => {
-        const tokens = tokenizeQuery(text);
-        return tokens.length ? {field, tokens, not: !!not} : null;
-    };
-    const groups = state.chips.map((c) => toGroup(c.field, c.text, c.not));
-    const live = toGroup(state.activeField || "all", qInput.value, state.activeField ? state.activeNot : false);
-    if (live) groups.splice(Math.min(state.pos, groups.length), 0, live);
-    return groups.filter((g): g is QueryGroup => g !== null);
+    const chips = [...state.chips];
+    chips.splice(Math.min(state.pos, chips.length), 0, {
+        field: state.activeField || "all",
+        text: qInput.value,
+        not: state.activeField ? state.activeNot : false,
+    });
+    return groupsOf(chips);
 }

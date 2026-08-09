@@ -310,8 +310,7 @@ function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
     // The expansion is provenance, not payload, so it is a SUB-TAG of the
     // identity rather than a line or a column of its own; the css keeps it out
     // of the resting page and shows it on row hover or when it is a hit.
-    const eraIdx = d.spellEra.get(spellId);
-    const xp = eraIdx === undefined ? null : d.expansions[eraIdx];
+    const xp = d.expansions[d.eras[i]] ?? null;
     const tdId = el("td", "c-id");
     tdId.appendChild(PR.pill({
         cls: "spellid",

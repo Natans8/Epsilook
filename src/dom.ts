@@ -3,7 +3,8 @@
  * Split out of util.ts on 2026-08-08 so that the data/query layer can import
  * the pure helpers (fillTemplate, hexColor) without dragging `document` in
  * with them. util.ts is now DOM-free and lives in the data/query layer; this
- * file is GUI and is named in check.py's GUI_MODULES.
+ * file is GUI, and check.py's check_layers names it as a forbidden import
+ * TARGET — a data/query module that reaches for these fails the build.
  *
  * The bar for adding something here: it touches the DOM, it owns no app state,
  * and it depends on no other Epsilook module.

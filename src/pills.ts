@@ -595,6 +595,26 @@ export const isValue = (text: string): boolean => VALUE_RE.test(text);
 export const hasOperator = (text: string): boolean => /^[<>=]/.test(text);
 
 /**
+ * A comparison, fully: an operator AND the number it binds. This is the
+ * question almost every caller actually has, and `hasOperator` alone is a
+ * trap for the one asking it about arbitrary text — 6 spell names on 9.2.7
+ * OPEN with `<` (`<INTERNAL>Unlimited Potential: Cage`), so the loose form
+ * calls them comparisons. Two callers already paired the predicates by hand;
+ * the third (the relevance sort) forgot, and dropped those names from their
+ * own ranking. Pair it here instead, once.
+ */
+export const isComparison = (text: string): boolean =>
+    isValue(text) && hasOperator(text);
+
+/**
+ * An operator standing alone, its operand not yet attached. Both the
+ * tokenizer (rejoining `seat > 2`) and the keyword split (rejoining
+ * `xpac > legion`) ask this, and each used to build the regex itself.
+ */
+const OPERATOR_RE = new RegExp(`^(?:${CMP_OPS})$`);
+export const isOperator = (text: string): boolean => OPERATOR_RE.test(text);
+
+/**
  * A value token as a test on a number, or null when it is not one.
  *
  * A BARE number is the `=` case — an operator you did not have to type —

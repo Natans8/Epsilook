@@ -379,8 +379,11 @@ its own, so there is one comparison grammar and omitting the operator picks its 
 absolute value: the sign is meaningful on every axis that has one (`fx:"scale -50"` shrinks), and folding it away would
 leave no way to ask for one direction while `scale >0` and `scale <0` already say it.
 
-`bindNumeric` (pills.ts) is what makes that precise. It takes the ONE token after the word — the same arity a meta
-keyword has — out of the chip and asks the numeric axis instead, so the number never reaches the corpus.
+`bindNumeric` (pills.ts) is what makes that precise. It takes the ONE token after the word out of the chip and asks the
+numeric axis instead, so the number never reaches the corpus. One token is always enough here because the TOKENIZER has
+already glued a spaced operator to its number — `scale >50`, `scale > 50` and `scale>50` all arrive as `scale` + `>50`.
+A meta keyword is the one place that glue does not reach, since its operand can be a word rather than a number
+(`xpac > legion`); `keywordRun` (search.ts) rejoins that case itself, which is why a keyword's run is one token or two.
 `tokenMatches` tries the corpus first, so before this a bare `50` matched `+150%` as a substring long before it could be
 tested as a number (349 rows became 483 on 9.2.7).
 
