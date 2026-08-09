@@ -1,8 +1,24 @@
 #!/usr/bin/env python3
 """THE PACK ROSTER — the one place a shipped game version is declared.
 
-    python tools/packs.py             # what we ship
-    python tools/packs.py --check     # ... and whether a newer build exists
+    python tools/packs.py                   # what we ship
+    python tools/packs.py --check           # ... and whether a newer build exists
+    python tools/packs.py --bump vanilla    # take the current live build (EXPLICIT ONLY)
+
+⚠ "BEHIND" MEANS A NEW PATCH, NOT A NEW BUILD (the user's call). Blizzard
+reissues builds inside a patch constantly — hotfixes, regional respins — and
+chasing each would re-ship ~50 MB of LFS and eleven packs for data that did not
+meaningfully move. So 1.15.8 -> 1.15.9 is reported as something to do, while
+…69109 -> …69200 is reported as INFORMATION and nothing more. `--bump` is the
+door for acting on the second kind, and only a human opens it: nothing calls it,
+not `check.py` and not the weekly workflow.
+
+⚠ AND A NEWER BUILD IS NOT AUTOMATICALLY A BUILDABLE ONE. `--check` probes two
+things before you touch anything, because both change what the bump costs:
+whether **wago** has ingested the build (it lags Blizzard by hours to days, and
+a rebuild against a build it lacks 404s partway through every table) and whether
+a **TDB** release covers the patch (without one the build succeeds with morph
+displays empty and no hotfix overlay — Midnight ships exactly that way).
 
 WHY IT EXISTS. A pack's identity (build id, label, default flag) used to be an
 ARGUMENT to build_data.py and nowhere else, recovered afterwards by reading
@@ -43,10 +59,12 @@ which lines are PUBLIC and which is China-only, and Blizzard's version service
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 
 # BLIZZARD'S OWN VERSION SERVICE — Ribbit V2 over HTTPS, which is what Agent and
 # the game clients themselves use as of 2025. No key, no account, no scraping.
@@ -64,6 +82,10 @@ from dataclasses import dataclass
 SUMMARY_URL = "https://us.version.battle.net/v2/summary"
 VERSIONS_URL = "https://us.version.battle.net/v2/products/{product}/versions"
 UA = {"User-Agent": "Epsilook-build (github.com/Natans8/Epsilook)"}
+
+# The cheapest table build_data.py reads (a ~500-row index), used only to ask
+# whether wago can serve a build at all. Same URL shape as the real fetch.
+WAGO_PROBE_URL = "https://wago.tools/db2/SpellCastTimes/csv?build={build}"
 
 # Product lines that are NOT a shippable public client, and why. Anything the
 # summary publishes that is neither here nor tracked by a pack below is reported
@@ -179,6 +201,19 @@ def version_key(build: str) -> tuple[int, ...]:
     return tuple(int(part) for part in build.split(".") if part.isdigit())
 
 
+def patch_key(build: str) -> tuple[int, ...]:
+    """`"1.15.9.69109"` -> `(1, 15, 9)`. WHAT "BEHIND" IS MEASURED ON.
+
+    The user's call, and it governs the whole update routine: bump for a PATCH
+    (1.15.8 -> 1.15.9), never for a microbuild (…69109 -> …69200). Blizzard
+    reissues builds within a patch constantly — hotfixes, regional respins — and
+    chasing each one would mean re-shipping ~50 MB of LFS and eleven packs for
+    data that did not meaningfully move, while training everyone to ignore the
+    warning that said so.
+    """
+    return version_key(build)[:3]
+
+
 def select(wanted: str | None) -> list[Pack]:
     """All packs, or those matching a key or a build prefix."""
     if not wanted:
@@ -236,6 +271,123 @@ def live_build(product: str) -> str:
     return chosen.get("VersionsName", "").strip()
 
 
+def wago_has(build: str) -> bool | None:
+    """Has wago ingested this build yet? None when the question can't be asked.
+
+    BLIZZARD SHIPPING A BUILD AND WAGO CARRYING IT ARE DIFFERENT EVENTS, hours
+    to days apart, and only the second one makes a rebuild possible. Without
+    this, "a newer build exists" reads as "go bump it" — you edit the roster,
+    start a rebuild, and it 404s partway through every table.
+
+    Probed with the smallest table the build actually reads, through the exact
+    URL build_data.py will use, so a 200 here means that build is fetchable
+    rather than merely listed somewhere.
+    """
+    url = WAGO_PROBE_URL.format(build=build)
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=UA),
+                                    timeout=60) as response:
+            return response.status == 200
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return False
+        return None
+    except (urllib.error.URLError, OSError):
+        return None
+
+
+def tdb_tag(build: str) -> str:
+    """The TDB release tag covering this build's PATCH, or "".
+
+    Imported from build_data.py rather than restated — two copies of this
+    mapping would drift, and the whole point is to answer the same question the
+    build will answer. Matching is per patch (the user's call): a TDB tracks
+    9.2.7, not 9.2.7.45745, so a hotfix bump keeps its server-side data.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
+        from build_data import tdb_release
+    except ImportError:
+        return ""
+    return (tdb_release(build) or {}).get("tag", "")
+
+
+def availability(build: str) -> str:
+    """`"  [wago: yes, TDB: TDB927.22111]"` — can this build be built at all?
+
+    Answered BEFORE anyone edits the roster, because both answers change what
+    the bump costs. No wago means a rebuild 404s partway through; no TDB means
+    it succeeds with morph displays empty and hotfixes unapplied, which is a
+    real gap (Midnight ships that way) and much better known in advance than
+    discovered in a build log.
+    """
+    wago = wago_has(build)
+    wago_word = {True: "yes", False: "NOT YET", None: "unknown"}[wago]
+    tag = tdb_tag(build)
+    # ASCII only: this lands in a Windows console that is often cp1252, where a
+    # middot comes out as "?" and makes the line look corrupted.
+    return f"  [wago: {wago_word}, TDB: {tag or 'none'}]"
+
+
+def bump(keys: list[str]) -> int:
+    """Rewrite `build=` for the named packs to whatever Blizzard serves now.
+
+    ⛔ EXPLICIT ONLY, AND THAT IS THE POINT (the user's call). `--check` reports
+    a microbuild move as information and never as a reason to act; this is the
+    door for acting on it, and it opens only when a human names a pack. Nothing
+    calls it — not the weekly workflow, not check.py.
+
+    It edits THIS file, which is the whole reason a bump is one line: the roster
+    is the input, so rewriting the string here is the entire change.
+    """
+    source_path = Path(__file__).resolve()
+    source = source_path.read_text(encoding="utf-8")
+    changed = []
+
+    for key in keys:
+        pack = next((p for p in PACKS if p.key == key), None)
+        if pack is None:
+            print(f"no pack named {key!r}", file=sys.stderr)
+            return 1
+        if pack.product in (FROZEN, ARCHIVE):
+            print(f"{key} is {pack.product} — its line does not ship new builds",
+                  file=sys.stderr)
+            return 1
+
+        live = live_build(pack.product)
+        if not live:
+            print(f"{key}: could not reach Blizzard's version service", file=sys.stderr)
+            return 1
+        if live == pack.build:
+            print(f"{key:<13} already on {live}")
+            continue
+        if wago_has(live) is False:
+            print(f"{key:<13} {live} is not on wago yet — a rebuild would 404. "
+                  f"Not bumping.", file=sys.stderr)
+            return 1
+
+        # Anchored on this pack's own Pack(...) row, so a build string that
+        # happens to appear elsewhere in the file cannot be hit by accident.
+        pattern = re.compile(rf'(Pack\("{re.escape(key)}",[^)]*?")'
+                             rf'{re.escape(pack.build)}(")')
+        source, count = pattern.subn(rf"\g<1>{live}\g<2>", source, count=1)
+        if count != 1:
+            print(f"{key}: could not locate its build string in {source_path.name}",
+                  file=sys.stderr)
+            return 1
+        changed.append((key, pack.build, live, tdb_tag(live)))
+
+    if not changed:
+        return 0
+
+    source_path.write_text(source, encoding="utf-8")
+    for key, old, new, tag in changed:
+        print(f"{key:<13} {old} -> {new}   [TDB: {tag or 'none'}]")
+    print(f"\nedited {source_path.name}. Now: python tools/rebuild.py "
+          f"{' '.join(k for k, *_ in changed)}")
+    return 0
+
+
 def wow_products() -> set[str]:
     """Every WoW product line Blizzard currently publishes.
 
@@ -252,8 +404,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true",
-                    help="ask wago whether a newer build exists for each pack")
+                    help="ask Blizzard whether a newer build exists for each pack")
+    ap.add_argument("--bump", nargs="+", metavar="KEY",
+                    help="rewrite build= for these packs to the current live "
+                         "build (explicit only; nothing does this for you)")
     args = ap.parse_args()
+
+    if args.bump:
+        return bump(args.bump)
 
     behind = 0
     for pack in PACKS:
@@ -262,9 +420,13 @@ def main() -> int:
         line = f"{pack.key:<13} {pack.build:<16} {pack.label:<28} {flags}"
         if args.check and pack.product not in (FROZEN, ARCHIVE):
             available = live_build(pack.product)
-            if available and version_key(available) > version_key(pack.build):
+            if available and patch_key(available) > patch_key(pack.build):
                 behind += 1
-                line += f"  <- newer: {available}"
+                line += f"  <- NEW PATCH: {available}{availability(available)}"
+            elif available and available != pack.build:
+                # Same patch, different build: a hotfix or a regional respin.
+                # Reported so it is visible, never counted as behind.
+                line += f"  up to date  (live microbuild {available})"
             elif available:
                 line += "  up to date"
             else:

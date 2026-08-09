@@ -1474,6 +1474,28 @@ def distill_tdb_dump(sql_path: Path, want: dict[str, list[str]], out_dir: Path,
                 csv.writer(fh).writerow(keep)
 
 
+def tdb_release(version: str) -> dict | None:
+    """The TDB release for a build — matched on the PATCH, not the build id.
+
+    TDB_RELEASES is written with a full build id because that is the client the
+    release was cut against, but a TDB tracks a PATCH: TDB927 is the 9.2.7 world
+    data whatever the hotfix suffix says. Keying strictly on the build id makes
+    the mapping fall off the moment a pack is bumped — 3.4.3.58936 -> 3.4.3.x
+    would silently lose TDB335 and every morph name with it, reported by nothing
+    louder than one "no release mapped" line in a 200-line build log.
+
+    Exact match still wins, so a release can be pinned to one build if a patch
+    ever needs two.
+    """
+    if version in TDB_RELEASES:
+        return TDB_RELEASES[version]
+    patch = version.split(".")[:3]
+    for build, release in TDB_RELEASES.items():
+        if build.split(".")[:3] == patch:
+            return release
+    return None
+
+
 def fetch_tdb(version: str) -> Path | None:
     """Ensure the TDB tables for this version are distilled; return their dir.
 
@@ -1481,7 +1503,7 @@ def fetch_tdb(version: str) -> Path | None:
     once — afterwards only the small distilled CSVs (and the archive) stay
     in the cache. Returns None when no TDB release maps to this version.
     """
-    rel = TDB_RELEASES.get(version)
+    rel = tdb_release(version)
     if rel is None:
         log(f"TDB: no release mapped for {version} — morphs will not resolve, "
             f"hotfixes will not apply")
@@ -4264,7 +4286,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "built": time.strftime("%Y-%m-%d"),
             "listfileTag": (CACHE_DIR / "listfile" / "release-tag.txt").read_text().strip()
             if (CACHE_DIR / "listfile" / "release-tag.txt").exists() else "",
-            "tdbTag": TDB_RELEASES.get(version, {}).get("tag", "") if tdb_dir else "",
+            "tdbTag": (tdb_release(version) or {}).get("tag", "") if tdb_dir else "",
             # db2 tables this build predates; their pack sections are empty and
             # the features they power are unavailable for this version
             "absentTables": absent,

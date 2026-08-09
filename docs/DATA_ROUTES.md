@@ -104,6 +104,19 @@ produces a correct pack, it just names fewer files.
 **Every pack records the tag it was built against as `meta.listfileTag`**, which is what made the staleness above
 provable after the fact rather than a suspicion. All eleven currently read `202608081256`.
 
+### The TDB release is matched on the PATCH, not the build id
+
+`TDB_RELEASES` is written with a full build id because that is the client the release was cut against, but **a TDB
+tracks a patch**: TDB927 is the 9.2.7 world data whatever the hotfix suffix says. `tdb_release()` therefore tries an
+exact build match first and falls back to `major.minor.patch`.
+
+**Keyed strictly, the mapping fell off the moment a pack was bumped** — 3.4.3.58936 → 3.4.3.x would have lost TDB335 and
+every morph name with it, announced by nothing louder than one `no release mapped` line in a 200-line build log.
+Verified to change no pack currently shipped; it exists to protect the next bump.
+
+**`python tools/packs.py --check` reports TDB coverage for a candidate build before anyone edits the roster**, next to
+whether wago has ingested it — the two facts that decide whether a bump is possible and what it costs.
+
 ### TDB does two unrelated jobs
 
 ```mermaid

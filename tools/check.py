@@ -541,7 +541,7 @@ def check_pack_freshness(rep: Report) -> None:
         return
     try:
         sys.path.insert(0, str(ROOT / "tools"))
-        from packs import ARCHIVE, FROZEN, PACKS, live_build, version_key
+        from packs import ARCHIVE, FROZEN, PACKS, availability, live_build, patch_key
     except ImportError as exc:  # pragma: no cover - packs.py is committed
         rep.skip("pack freshness", f"tools/packs.py not importable ({exc})")
         return
@@ -565,14 +565,19 @@ def check_pack_freshness(rep: Report) -> None:
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(latest, indent=2), encoding="utf-8")
 
+    # PATCH, not build — the user's call. A microbuild moving is not a reason to
+    # re-ship eleven packs, and warning about one would make this noise.
     behind = [(p, latest[p.product]) for p in tracked
               if p.product in latest
-              and version_key(latest[p.product]) > version_key(p.build)]
+              and patch_key(latest[p.product]) > patch_key(p.build)]
     if behind:
+        # Only now is the availability probe worth its two requests: it answers
+        # whether the bump is even possible yet, before anyone edits the roster.
+        detail = "; ".join(f"{p.key} {p.patch} -> {new}{availability(new)}"
+                           for p, new in behind)
         rep.warn("pack freshness",
-                 "; ".join(f"{p.key} {p.build} -> {new}" for p, new in behind)
-                 + f"  (edit build= in tools/packs.py, then "
-                   f"python tools/rebuild.py {behind[0][0].key})")
+                 f"{detail}  (edit build= in tools/packs.py, then "
+                 f"python tools/rebuild.py {behind[0][0].key})")
     else:
         rep.ok("pack freshness", f"{len(tracked)} tracked line(s) current")
 
