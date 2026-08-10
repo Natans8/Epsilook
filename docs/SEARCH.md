@@ -14,6 +14,83 @@ stay, because they are the evidence; the deliberation around them does not.
 
 ---
 
+## §0 TERMINOLOGY — one name per concept, and this is the only place it is defined
+
+**The user's call, 2026-08-10: *"we use a lot of terms — pill, chip, keyword, datatype, scope — but it's not very
+consistent. Solidify the grammar, make it current and conventional, or invent new ones if there are gaps."***
+
+**⛔ THIS TABLE IS BINDING ON CODE, DOCS AND UI COPY.** `docs/TYPES.md`, `docs/PILLS.md` and the plan point HERE and do
+not redefine anything. A name used two ways is the same defect as a rule implemented twice.
+
+### The split that removes most of the confusion
+
+> **A CHIP is what you ASK. A PILL is what you GET.** Query side versus result side, and nothing is both.
+
+### Query — what the user types
+
+| term            | means                                                                                    | example                                |
+|-----------------|------------------------------------------------------------------------------------------|----------------------------------------|
+| **query**       | the whole string                                                                         | `model:fire -sound:ice`                |
+| **clause**      | one top-level unit, optionally negated. Clauses AND together                             | `-sound:ice`                           |
+| **tag**         | an axis bound to a value — **the user's own word, and the unit "tag closure" refers to** | `model:fire`                           |
+| **term**        | a bare value with no axis: a content match                                               | `fireball`                             |
+| **scope**       | `axis:{…}` — several clauses that must hold of **ONE ROW**                               | `model:{fire attach:chest}`            |
+| **value**       | what a tag binds to. Exactly one, always                                                 | `fire`, `(a\|b)`, `>4`, `"blood pool"` |
+| **value group** | alternatives as one value                                                                | `(chest\|head)`                        |
+| **phrase**      | a quoted LEAF — no delimiter is active inside                                            | `"Embody Hero: Illidan"`               |
+| **operator**    | `=` `<` `>` `<=` `>=` `-` `*` — meaning fixed by the grammar, body supplied by the type  | `>4`                                   |
+| **directive**   | a whole-query option, lifted out of the clause list by the parser. **Never a predicate** | `sort:`, `limit:`                      |
+
+### Schema — what we declare
+
+| term               | means                                                                       | replaces                                                      |
+|--------------------|-----------------------------------------------------------------------------|---------------------------------------------------------------|
+| **axis**           | **one searchable question.** The single unit of "a thing you can ask"       | ⛔ `field`, ⛔ `keyword`, ⛔ `meta keyword`, ⛔ `target word` |
+| **type**           | what a VALUE means: how it parses, compares, formats, draws                 | ⛔ `datatype`                                                 |
+| **unit**           | a scale symbol on a numeric type (`s`, `ms`, `%`)                           | —                                                             |
+| **column**         | a **source of rows**, and the results column that renders them              | ⛔ `field`                                                    |
+| **row**            | one record inside a column — an effect, a model entry, a sound entry        | —                                                             |
+| **row kind**       | which LEVEL of the data graph a row came from (effect · visual · kit event) | *(new — §4 needs it)*                                         |
+| **corpus**         | the searchable text of a row                                                | —                                                             |
+| **prefix form**    | an axis reached globally: `attach:chest`                                    | ⛔ `global door`                                              |
+| **scoped form**    | the same axis inside its column: `model:{attach:chest}`                     | ⛔ `in-column word`                                           |
+| **subject axis**   | meaningful ALONE, so it earns a prefix form                                 | *(new — L5.1)*                                                |
+| **qualifier axis** | only refines another predicate, so it is scoped-only                        | *(new — `target`)*                                            |
+
+### UI — what is on screen
+
+| term        | means                                                                             |
+|-------------|-----------------------------------------------------------------------------------|
+| **chip**    | one committed clause, rendered in the search bar. **One clause = one chip**       |
+| **capsule** | the highlighted axis name in the RAW input while typing, before it becomes a chip |
+| **pill**    | one rendered ROW in a results cell                                                |
+| **segment** | one part of a pill                                                                |
+| **tone**    | a pill's colour role                                                              |
+
+### ⛔ BANNED WORDS — each meant two things
+
+| banned                     | why                                                                                                                        | say instead               |
+|----------------------------|----------------------------------------------------------------------------------------------------------------------------|---------------------------|
+| **field**                  | meant an axis AND a results column, in one codebase. `FIELDS` is 1.0's central registry and the ambiguity is baked into it | **axis** or **column**    |
+| **keyword**                | meant "a meta keyword inside a field", which is simply an axis with a scoped form                                          | **axis**                  |
+| **datatype**               | drifted against **type**                                                                                                   | **type**                  |
+| **group**                  | meant a value group AND spell-level grouping, which no longer exists                                                       | **value group**           |
+| **tag** *(as a pill part)* | **1.0's CSS uses `.tag-attach` / `.tag-motion` for PILL segments, and `tag` now means a query unit**                       | **segment**, CSS `.seg-*` |
+
+**⚠ THE `tag` COLLISION IS A REAL RENAME AND IT LANDS IN PHASE 6**, when pills are rebuilt. Adopting the user's word for
+the query unit is right — it is short, they already say it, and "tag closure" is now a defined term — but it means the
+pill CSS must stop using it.
+
+### Worked sentence, using only defined words
+
+> A **query** holds three **clauses**. The second is a **tag** whose **axis** is `attach`, written in its **prefix
+> form**; its **value** is a **value group**. It renders as one **chip**. Matching **rows** in the `model` **column**
+> each draw a **pill**, whose first **segment** shows the attachment point.
+
+`fireball attach:(chest|head) -sound:ice`
+
+---
+
 ## L0 — FOLLOW CONVENTION. This law governs the other twelve
 
 **User's standing rule, 2026-08-10: *"follow convention and design patterns wherever possible."*** Before inventing a

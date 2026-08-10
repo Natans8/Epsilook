@@ -4,7 +4,12 @@
 what a value means; the two must never both describe a type. If you are adding a searchable number, a new unit, a new
 notation or a new UI affordance, this is the only file you need.
 
-**Status: DESIGN. Nothing built.** The build plan is `docs/PROCESS-LOG-search2.md` §4.
+**Status: DESIGN. Nothing built.**
+
+**⛔ TERMINOLOGY IS DEFINED ONCE, IN `docs/SEARCH.md` §0** — axis, type, column, row, tag, chip, pill, segment.
+This file never redefines a term; if one is missing there, add it there.
+
+ The build plan is `docs/PROCESS-LOG-search2.md` §4.
 
 ---
 
