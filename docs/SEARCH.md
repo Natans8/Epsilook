@@ -1259,6 +1259,61 @@ silently ignores what it does not understand (the failure §9.1 condemns); Lucen
 narrowing direction, but it hides the mistake behind a plausible zero — the same pathology as §9.1. A broken chip on
 screen cannot be missed; an empty result set can be mistaken for a real answer.
 
+### 4.9.5 TWO ARRIVAL PATHS — typing and pasting are not the same problem
+
+**The user's correction, 2026-08-10: *"there are 2 scenarios, when the user types a query and when the user pastes a
+query from outside, and our model should accommodate both."*** §4.9.1 assumed everything arrives keystroke by
+keystroke. A pasted query differs on four counts, and the same string can deserve a different verdict depending on how
+it got there.
+
+| | TYPING | PASTE / a shared URL |
+|---|---|---|
+| arrives | character by character | **all at once, and complete** |
+| `model:{fire` | **incomplete** — expected, silent | **malformed** — nothing more is coming |
+| characters | whatever the keyboard produced | **may have been substituted by the source** |
+| shape | always meant as a query | **may not be a query at all** |
+| auto-closing `"` `{` | a convenience as you type | a **repair**, and must be announced |
+
+#### (a) Typographic folding — measured safe
+
+Discord, browsers and word processors substitute characters. A query copied out of Discord arrives with `"` as `"` and
+`-` as `—`, and a parser that has not folded them sees garbage.
+
+**Measured on 9.2.7 so the fold cannot cause a miss: spell names contain ZERO curly double quotes, ZERO curly single
+quotes, ZERO non-breaking spaces and THREE en/em dashes.**
+
+    " " „ ‟   ->  "          ' ' ‛ ´  ->  '        – — ‒  ->  -
+    NBSP, thin space, zero-width  ->  space        ：(full-width)  ->  :
+
+**Fold the CORPUS as well as the query, exactly as case is folded.** That is what keeps the three em-dash spell names
+reachable by a typed hyphen instead of stranding them — a fold applied to only one side is a fold that loses data.
+
+#### (b) A paste may not be a query
+
+1.0 already knows this: `ID_CMD_PASTE` rewrites `.cast 12345` into `id:12345`, because people paste Epsilon commands.
+2.0 generalises it into a declared list of paste SHAPES, tried in order, falling through to "treat it as a query":
+
+| pasted | becomes |
+|---|---|
+| `.cast 12345`, `.aura 12345` | `id:12345` — 1.0 behaviour, kept |
+| several numbers, comma- or newline-separated | `id:1,2,3` — the numeric-list form (§2.4.3f) |
+| an Epsilook URL | its own query, restored verbatim |
+| a Wowhead `spell=133` URL | `id:133` |
+| anything else | parse as a query; if that fails, plain text |
+
+**Falling through to TEXT is what makes pasting a spell name work**, and it is the same decision as §4.9.2 #1 — an
+unknown prefix is text, because 12,477 names contain a colon.
+
+#### (c) The rule that keeps paste honest: VISIBLE and REVERSIBLE
+
+**A paste transformation must show what it did and must be undoable in one step.** 1.0 rewrites `.cast` silently; 2.0
+keeps the behaviour and drops the silence — the rewrite lands as chips the user can see, and ⌘/Ctrl+Z restores the raw
+text rather than stepping back through the parse.
+
+**And incompleteness is not forgiven on paste.** `model:{fire` typed is a pending state; pasted it is malformed, so it
+is repaired — the brace is closed — and the repair is **announced**, never silent. The distinction exists because
+nothing more is coming: the only reason to stay quiet while typing is that the next keystroke may fix it.
+
 ### 4.9.4 What this obliges
 
 - **The parser must return errors, not throw.** One invalid clause may not lose the other four, so parse is
@@ -1403,8 +1458,10 @@ implication or ∀.
   log says — architecturally inverted, on every keystroke, with `-model:{-caster}` answerable by no index at all.
 - **✅ ADDRESSED 2026-08-10 in §4.9**: the error model, incremental/prefix parse, and unknown-prefix behaviour — the
   last being decided by data (12,477 spell names contain a colon, so an unknown prefix must be TEXT, not an error).
-- **⛔ STILL MISSING**: case sensitivity, Unicode normalisation and curly quotes pasted from Discord, escaping beyond
-  `\"`, and a complexity budget. All four are real and none is architectural.
+- **✅ ALSO ADDRESSED (§4.9.5)**: curly quotes and typographic substitution from a paste — folded on BOTH sides like
+  case, and measured safe (0 curly quotes in spell names, 3 em dashes).
+- **⛔ STILL MISSING**: case sensitivity stated explicitly, full Unicode normalisation (NFC/NFD, accented locale
+  names), escaping beyond `\"`, and a complexity budget. None is architectural.
 
 **What survives untouched:** L1, L2, L4, L5, L7, L9, L11, the `Axis`/`Column` collapse, §4.1's storage measurement,
 §4.5's cardinality-decides-affordance finding, and the row model's closure of filtered `count`.
