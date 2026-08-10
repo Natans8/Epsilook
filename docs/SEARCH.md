@@ -305,6 +305,75 @@ defineKind({
     from:chest                        the union over every kind declaring a `from`
     attach:chest                      the union over `from` and `to` — 1.0's meaning, kept
 
+### ⭐ A KIND OPENS ITS OWN SCOPE — the object form (user, 2026-08-10)
+
+***"This is very convoluted syntax. How about a missile object has the OPTION to open a scope of its own… and there you
+get the properties autocompleted. Then we can define it better in the UI, as maybe its own composite type."***
+
+**Right, and the reason the flat form read badly is structural rather than cosmetic.** In `model:{missile from:chest}` a
+KIND WORD and a PROPERTY BIND sit side by side in one scope, so nothing in the text says `from` belongs to the missile
+rather than to the model row at large. **A kind that opens its own scope says it.**
+
+    missile:{from:chest to:"right hand" motion:parabola}     the object form  ✅
+    model:{missile from:chest}                               the flat form — ambiguous to read
+
+**THE RULE: a KIND is an axis that opens a scope over ITS OWN PROPERTIES.**
+
+- **The kind implies its column**, so `model:` is not repeated — `missile` is a model kind, `chain` an fx kind.
+- **Inside, ONLY that kind's declared properties are valid.** That is what makes autocomplete exact instead of offering
+  the column's whole vocabulary, and it turns a wrong property into a static error instead of a silent content term.
+- **The column scope survives for kind-agnostic questions.**
+
+```
+missile:*                    has any missile                (the kind as an existence test)
+missile:{from:chest}         a missile launched from the chest
+chain:{from:chest to:head}   a beam from the chest to the head
+model:*                      has any model row at all
+model:{target:caster}        any model row, kind-agnostic, playing on the caster
+```
+
+**⛔ THIS AMENDS THE DEPTH CAP (§2.4.3g), which said depth is fixed at 1 because a second scope has no referent.** The
+premise was right; the conclusion was too strong. **Depth is bounded by how deep the DATA nests, not by a constant.** A
+kind scope is depth 1 and every property today is a scalar, **so 1 remains the practical limit** — but the moment a
+property is itself an object (a missile's sound), `missile:{sound:{…}}` has a referent and is legal. **A brace is legal
+exactly where something has properties, and nowhere else.**
+
+**AND IT GIVES THE UI ITS UNIT — WITH NO NEW UI CONCEPT.** The user: *"we are doing a different UI solution for each
+type, with sliders and selectors and checkboxes; this is no exception, we can just get the properties listed."* So a
+kind's affordance is **the list of its properties, each drawn by its own type's `ui`** — a range for `motion`'s percent,
+a picker for an attachment point, a toggle for a flag. **Composition, not a special case**: `AxisType.ui`
+already decides the leaf, and a kind just lays them out. The bar renders `missile:{…}` as one card with labelled fields
+instead of a row of loose chips, and the help documents a missile in one place. PHASE 6 work — the syntax is what makes
+it possible.
+
+### THE WORKED EXAMPLE — the missile, the user's own (2026-08-10)
+
+***"For example missile has its file, source, destination, path and target."*** Mapping those five onto
+`SpellVisualMissile` shows the model working and how much is currently unreachable:
+
+| the user's word | the source                                    | app today                                              |
+|-----------------|-----------------------------------------------|--------------------------------------------------------|
+| **file**        | `SpellVisualEffectNameID` → the `.m2`         | ✅ searchable                                          |
+| **source**      | `Attachment`                                  | ✅ but **unioned with destination** — cannot say which |
+| **destination** | `DestinationAttachment`                       | ✅ same union                                          |
+| **path**        | `SpellMissileMotionID` → `SpellMissileMotion` | ✅ as `motion`                                         |
+| **target**      | the derived mask                              | ✅                                                     |
+
+```
+missile:{file:fire from:chest to:"right hand" motion:parabola target:target}
+```
+
+**⚠ THE TABLE HAS 22 COLUMNS AND THE APP READS ABOUT FOUR.** Unreached and RP-relevant: `CastOffset_0/1/2` and
+`ImpactOffset_0/1/2` (3-vectors — a shape the type system has no answer for yet), `FollowGroundHeight` /
+`FollowGroundApproach` / `FollowGroundDropSpeed`, `DecayTimeAfterImpact` (ms; the dbd comment says it defaults to 5000),
+`SoundEntriesID`, `AnimKitID`, `Flags`, `ClutterLevel`. **Each is one property line on the missile kind** — the
+extension contract meeting a real table.
+
+**⛔ ONE NAMING COLLISION, CAUGHT HERE: the user says "path" for the trajectory, and `path` is already a TYPE NAME**
+(asset file paths, TYPES §4). One word, two things — exactly what §0 bans. **Resolution: the property is `motion`**, the
+app's existing word and the source table's own (`SpellMissileMotion`); `path` stays the type. The user's *file* is a
+property whose value has type `path`.
+
 ### What this settles, all at once
 
 - **ROLES stop being a special case.** `from` and `to` are simply two properties that happen to share a type. There is
