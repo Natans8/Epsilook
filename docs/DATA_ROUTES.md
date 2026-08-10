@@ -1610,6 +1610,74 @@ reusing that id. Say "first appeared", never "was designed in".
 
 ---
 
+### 3x. What the spell SAYS it does — cooked description + encounter text (`spellText`, format 43)
+
+**`Spell.Description_lang` is a TEMPLATE, not text**, and 19,807 spells on 9.2.7 ship nothing but
+`$@spelldescNNN` — a redirect to another spell's. The client resolves it at tooltip time against the caster; Wowhead
+resolves it server-side for display. Neither result is searchable, which is the gap this fills.
+
+`build/spelltext.py` cooks a template into placeholder-free prose. **Its output is all the pack carries** — every table
+below exists only to be substituted away.
+
+| what                | source                                                                 | resolves        |
+|---------------------|------------------------------------------------------------------------|-----------------|
+| the templates       | `Spell.Description_lang`, `Spell.AuraDescription_lang`                 | the text itself |
+| named variables     | `SpellDescriptionVariables` ← `SpellXDescriptionVariables`             | `$<shield>`     |
+| effect amounts      | `SpellEffect.EffectBasePointsF` + `.Variance`                          | `$s1 $m1 $M1`   |
+| tick period, radius | `SpellEffect.EffectAuraPeriod`, `.EffectRadiusIndex_0` → `SpellRadius` | `$t1 $A1`       |
+| duration, range     | `SpellMisc` → `SpellDuration`, `SpellRange`                            | `$d $r`         |
+| stacks, procs       | `SpellAuraOptions`                                                     | `$u $n $h`      |
+| max targets         | `SpellTargetRestrictions`                                              | `$i $v`         |
+| encounter notes     | `JournalEncounterSection.BodyText_lang` (+ child sections)             | a second body   |
+
+**THE RULE IS "NEVER PRINT A NUMBER THIS DATA CANNOT JUSTIFY".** Caster-dependent terms (`$AP`, `$SP`, `$pri`,
+`$versadmg`, player level) and a zero base point are **elided**, leaving prose that still reads — *"Shields an ally for
+15 sec, absorbing damage"*, where Wowhead prints *"absorbing 0 damage"*. **An expression is all-or-nothing**: one
+unknown operand elides the whole `${…}`, because half an arithmetic expression is a wrong answer rather than a smaller
+one.
+
+**⚠ WOWHEAD IS AN ORACLE FOR THE PROSE AND NOT FOR THE NUMBERS.** Retail Wowhead renders every spell at the CURRENT
+retail patch, and scaling is re-tuned every expansion — its figure for a 9.2.7 spell uses a curve this pack does not
+(Chained Bolt: db2 5.19, Wowhead 427). There is no Wowhead for Shadowlands, so for nine of eleven packs no external
+numeric oracle exists. A structural diff is still worth running: on 58 sampled spells the prose matched **57**, and it
+is what caught two real bugs — `re.I` on `\|T.*?\|t` (case-significant; it matched from a stray CLOSING tag and ate the
+sentence) and reading `$?c1[A]?c2[B][default]` as an if/else when it is a **switch** (spell 342156 chains twelve).
+
+**Ships DEDUPED**, because a bare redirect cooks to its target's string: `spellText.descriptions` and
+`.encounters` each hold `{text, of}` — distinct strings with `""` at slot 0, and a per-spell index parallel to
+`spells.ids`. On 9.2.7 that is 129,051 → **79,330** distinct, worth 0.34 MB gz and a third of the browser's memory.
+
+**In plain search, and scoped by the `desc` keyword inside `name:`** (`name:"desc kneel"`,
+`name:(desc "blood pool")`). Plain inclusion was the user's call once the overlap was measured; the two canonical counts
+it moves are `fireball` 4,258 → **4,348** and `fire|frost` 25,560 → **32,148**, and no field-scoped count moves at all.
+See docs/DECISIONS.md. Drawn as one stacked-lines mark beside the spell name which lights on a hit; hovering shows both
+bodies with the matched runs marked. **Case-insensitivity is a parameter of the match** (`Search.foldedMatchers`), not a
+stored lowercase twin: a folded regex over the pool answers in 4 ms where a precomputed copy answers in 7 ms and costs ~
+9 MB of heap.
+
+**Per-build coverage** — read from the rebuilt packs, not estimated. Vanilla/TBC/WotLK have no `JournalEncounterSection`
+(declared in `OPTIONAL_TABLES`); Cata and MoP have the table but no spell-linked body text.
+
+| build  | spells  | with description | distinct | encounter notes |
+|--------|---------|------------------|----------|-----------------|
+| 1.15.9 | 31,249  | 17,577           | 14,130   | 0               |
+| 2.5.6  | 28,687  | 17,480           | 13,706   | 0               |
+| 3.4.3  | 49,394  | 30,925           | 23,433   | 0               |
+| 4.4.2  | 71,227  | 37,951           | 28,635   | 0               |
+| 5.5.4  | 98,159  | 48,733           | 35,310   | 0               |
+| 7.3.5  | 179,382 | 87,109           | 57,818   | 174             |
+| 8.3.7  | 227,237 | 107,842          | 67,767   | 292             |
+| 9.2.7  | 276,332 | 128,374          | 79,330   | 389             |
+| 10.2.7 | 327,092 | 150,949          | 91,447   | 528             |
+| 11.2.7 | 375,895 | 174,406          | 102,832  | 659             |
+| 12.0.7 | 404,401 | 187,564          | 109,065  | 713             |
+
+**⚠ `SpellAuraOptions` WAS ALREADY IN THE 9.2.7 CACHE**, left there by an exploration run, so the first build of this
+route worked on 9.2.7 and crashed on Vanilla. Same shape as the `UiMap` mistake at format 40 — `TABLES` and
+`OPTIONAL_TABLES` do different jobs and a table usually needs both.
+
+---
+
 ## 5. Version differences
 
 Ten builds ship, spanning 2004-era content to current retail. Going *backwards*

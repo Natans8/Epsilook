@@ -81,6 +81,28 @@ function textMatches(haystackL: string, tokens: QueryToken[]): boolean {
     return true;
 }
 
+/**
+ * The same substring match, but case-insensitive AT THE COMPARISON rather than
+ * by having been handed a pre-folded haystack.
+ *
+ * Every other corpus in the app ships a lowercase twin (namesL, fxSearchL,
+ * animNamesL …) because they are small and searched constantly. The cooked
+ * description corpus is neither: it is 7 MB, the largest thing in the pack,
+ * and only a `desc` keyword ever reads it. Measured on the real 9.2.7 pack, a
+ * folded regex over the deduped pool answers in 4 ms where a precomputed
+ * lowercase twin answers in 7 ms and costs ~9 MB of resident heap for the
+ * whole session — so folding at the comparison is both cheaper and faster,
+ * and the twin would be pure waste.
+ *
+ * Tokens are compiled ONCE per query, never per string: building a RegExp
+ * inside the scan is what would make this slow.
+ */
+export const foldedMatchers = (tokens: QueryToken[]): RegExp[] =>
+    tokens.map((t) => new RegExp(t.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+
+const matchesFolded = (haystack: string, res: RegExp[]): boolean =>
+    res.every((re) => re.test(haystack));
+
 /* --------------------------------------------------- numeric tokens */
 
 /* The numeric grammar — VALUE_RE, numericTest, hasOperator, matchNumeric —
@@ -246,6 +268,26 @@ export const META_KEYWORDS: Record<string, {
         hint: 'Missile flight path — motion parabola, motion "forward spin"',
         when: (d) => (d.missileMotionNames || []).length > 0,
     },
+    // What the spell SAYS it does — its cooked description plus the dungeon
+    // journal's note on it, searched as one body (§3x).
+    //
+    // A KEYWORD INSIDE `name:` RATHER THAN A FIELD OF ITS OWN, and deliberately
+    // not part of plain search. Measured on 9.2.7: folding descriptions into
+    // the default corpus grows a typical result by only ~10%, but the growth
+    // lands where it is least wanted — `fire` gains 5,336 rows on top of
+    // 20,899 — and `sortByRelevance` ranks on the NAME alone, so a description
+    // hit sits in the same bucket as a filename hit with nothing to sink it.
+    // The value is all in the specific query: `blood pool` finds 56 spells
+    // that overlap today's result set by ONE. Explicit until relevance grows a
+    // tier for it. Full evidence in docs/DECISIONS.md.
+    //
+    // Inside `name:` because it is the same question the column already asks —
+    // "what is this spell" — answered from its prose instead of its title.
+    desc: {
+        fields: ["name"],
+        hint: 'Its description text — desc kneel, desc "blood pool"',
+        when: (d) => d.descriptionText.length > 0,
+    },
     // The expansion that introduced the id. A keyword inside `id:` rather than
     // a field of its own, for the same reason `attach` sits inside `model:`:
     // it QUALIFIES what the column already names. Ordered, so its value takes
@@ -266,6 +308,8 @@ export const ATTACH_WORD = "attach";
 export const BONESET_WORD = "boneset";
 export const MOTION_WORD = "motion";
 export const XPAC_WORD = "xpac";
+/** The description keyword, inside `name:` — see FIELDS.name. */
+export const DESC_WORD = "desc";
 /* Spelled the same as the anim column's `kit` head word (KIT_WORD, below) and
  * deliberately so — both mean "the kit", one in each column. They stay two
  * constants because they are two grammars: this one takes the token after it,
@@ -662,6 +706,45 @@ function spellsByName(tokens: QueryToken[], data: SpellData): Set<number> {
     return out;
 }
 
+/**
+ * Which distinct strings in a deduped pool answer every value of the keyword?
+ *
+ * SCANNED POOL-FIRST, NOT SPELL-FIRST, and that is the whole reason the pack
+ * ships the text deduped: 276,332 spells share 79,331 descriptions, so testing
+ * the pool tests each string once instead of 3.5 times. The result is a bitmap
+ * over pool slots, which the caller turns into spells with one integer lookup
+ * each.
+ */
+function poolHits(pool: string[], values: string[]): Uint8Array {
+    const hit = new Uint8Array(pool.length);
+    // one value = one phrase; every value must match, so intersect per value
+    const per = values.map((v) => foldedMatchers(
+        v.split(" ").filter(Boolean).map((text) => ({text}) as QueryToken)));
+    for (let k = 1; k < pool.length; k++) {  // slot 0 is "" and matches nothing
+        hit[k] = per.every((res) => matchesFolded(pool[k], res)) ? 1 : 0;
+    }
+    return hit;
+}
+
+/**
+ * `name:"desc kneel"` — search what the spell SAYS it does (§3x).
+ *
+ * The description and the dungeon-journal note are two sources of one idea, so
+ * a value matching EITHER is a hit. They are separate pools because they are
+ * separately deduped, not because they are separate axes.
+ */
+function spellsByDescription(values: string[], data: SpellData): Set<number> {
+    const out = new Set<number>();
+    const {ids, descriptionText, descriptionOf, encounterText, encounterOf} = data;
+    if (!descriptionText.length) return out;  // pack older than format 43
+    const inDesc = poolHits(descriptionText, values);
+    const inEnc = poolHits(encounterText, values);
+    for (let i = 0; i < ids.length; i++) {
+        if (inDesc[descriptionOf[i]] || inEnc[encounterOf[i]]) out.add(ids[i]);
+    }
+    return out;
+}
+
 /* The two words that name where an animation came from. They head no pill —
  * a real AnimKit group is headed by its id and a loose animation has no head
  * at all — so unlike `replace` and `passenger` these are words for a shape
@@ -970,12 +1053,25 @@ export const FIELDS: Record<string, SearchFieldSpec> = {
         // corpus is enum names — SPELL_EFFECT_SCHOOL_DAMAGE, UNIT_TARGET_ENEMY
         // — so free text like "damage" or "enemy" would drag in most of the
         // game. It stays reachable only through an explicit mech: chip.
+        //
+        // DESCRIPTION TEXT **IS** HERE (user's call, 2026-08-10, reversing the
+        // same day's original scope). It was measured first and the numbers are
+        // in docs/DECISIONS.md: a typical query grows ~10%, and about half of
+        // what descriptions find is unreachable any other way — `blood pool`
+        // overlaps today's result set by ONE spell. The known cost is that
+        // `sortByRelevance` scores on the NAME alone, so a description-only hit
+        // ranks alongside a filename hit rather than below it; on a broad word
+        // like `fire` that is 5,336 extra rows with no ranking defence. The fix,
+        // when it is wanted, is a fourth relevance tier — not removing this.
         run(tokens, data) {
             const out = spellsByName(tokens, data);
             for (const s of spellsByModel(tokens, data)) out.add(s);
             for (const s of spellsBySound(tokens, data)) out.add(s);
             for (const s of spellsByAnim(tokens, data)) out.add(s);
             for (const s of spellsByFx(tokens, data)) out.add(s);
+            // one token = one term, all of which must appear — the same shape
+            // splitKeyword hands the `desc` keyword, so both doors agree
+            for (const s of spellsByDescription(tokens.map((t) => t.text), data)) out.add(s);
             // a pure number also hits the exact spell ID
             if (tokens.length === 1 && /^\d+$/.test(tokens[0].text)
                 && data.spellIndex.has(Number(tokens[0].text))) {
@@ -986,8 +1082,34 @@ export const FIELDS: Record<string, SearchFieldSpec> = {
     },
     name: {
         label: "Name", tab: true,
-        hint: "spell name, e.g. fire bolt", short: "spell name",
-        run: (tokens, data) => spellsByName(tokens, data),
+        hint: 'spell name, or desc — fire bolt, desc "blood pool"',
+        short: "spell name",
+        /**
+         * The name, plus `desc <text>` — what the spell SAYS it does, written
+         * as a KEYWORD inside this chip exactly as `xpac` is written inside
+         * `id:`. Both halves answer "what is this spell", one from its title
+         * and one from its prose, so they share a column rather than splitting
+         * into a `desc:` field of their own.
+         *
+         *   name:fireball   name:"desc kneel"   name:(fire "desc blood pool")
+         *
+         * ⚠ EACH HALF NARROWS THE OTHER, which is what putting it in the chip
+         * buys: `name:(bolt "desc chains")` is a spell CALLED bolt whose
+         * description mentions chains — one row, not two independent searches.
+         * A chip with only `desc` values has no name test to apply, so the
+         * description hits stand alone.
+         */
+        run(tokens, data) {
+            const {text, values} = splitKeyword(tokens, DESC_WORD);
+            if (!values.length) return spellsByName(text, data);
+            const out = spellsByDescription(values, data);
+            if (!text.length) return out;
+            const byName = spellsByName(text, data);
+            for (const s of out) {
+                if (!byName.has(s)) out.delete(s);
+            }
+            return out;
+        },
     },
     model: {
         label: "Model", tab: true,

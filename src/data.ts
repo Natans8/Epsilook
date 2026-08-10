@@ -58,6 +58,20 @@ export interface SpellPack {
         /** format 42+: index into `expansions`, -1 = no rung claims this ID. */
         eras?: number[];
     };
+    /**
+     * format 43+: what a spell SAYS it does, cooked to placeholder-free prose
+     * by build/spelltext.py — `descriptions` from Spell.Description_lang,
+     * `encounters` from the dungeon journal's note on a boss ability.
+     *
+     * DEDUPED, because 19,807 descriptions on 9.2.7 are a bare redirect to
+     * another spell's and cook to the identical string: `text` holds each
+     * distinct one once with "" at slot 0, and `of` indexes into it per spell,
+     * parallel to spells.ids.
+     */
+    spellText?: {
+        descriptions: { text: string[]; of: number[] };
+        encounters: { text: string[]; of: number[] };
+    };
     /** format 42+: the expansion ladder, oldest first. Everything needed to
      *  render and search an expansion ships here rather than being restated in
      *  the frontend, so adding one stays a build-side declaration. */
@@ -504,6 +518,26 @@ export interface SpellData {
     icons: string[];
     /** Lowercased "name subtext altnames" search corpus per spell. */
     namesL: string[];
+    /**
+     * §3x the cooked prose, kept DEDUPED exactly as the pack ships it: `*Text`
+     * holds each distinct string once (slot 0 = "") and `*Of` indexes into it
+     * per spell. Empty on a pack older than format 43, which is what makes the
+     * `desc` keyword offer itself only where it would find something.
+     *
+     * ⚠ THERE IS NO LOWERCASE COPY HERE, unlike namesL and every other search
+     * corpus in this file, and the difference is deliberate. Case-insensitivity
+     * is a PARAMETER of the match (Search.textMatches' `fold`) rather than a
+     * property of the stored text, because a second copy of 7 MB of prose costs
+     * ~9 MB of resident heap forever and buys nothing: measured on the real
+     * pack, a case-insensitive regex over the deduped pool answers a query in
+     * 4 ms against 7 ms for a precomputed copy. Keep it this way — the corpus
+     * that would benefit from pre-folding is a small one, and this is the
+     * largest in the app.
+     */
+    descriptionText: string[];
+    descriptionOf: number[];
+    encounterText: string[];
+    encounterOf: number[];
     /** Spell id -> index into the parallel arrays. */
     spellIndex: Map<number, number>;
     files: Map<number, FileEntry>;
@@ -911,6 +945,16 @@ export function buildIndexes(pack: SpellPack): SpellData {
         namesL[i] = [sp.names[i], sp.subtexts[i], alt]
             .filter(Boolean).join(" ").toLowerCase();
     }
+
+    // §3x the cooked prose. It ships deduped and STAYS deduped — nothing is
+    // expanded per spell and nothing is folded to lowercase, so the whole
+    // section costs the two arrays the pack already contains. A pack older
+    // than format 43 leaves them empty, and the keyword's `when` reads that.
+    const st = pack.spellText;
+    const descriptionText = st ? st.descriptions.text : [];
+    const descriptionOf = st ? st.descriptions.of : [];
+    const encounterText = st ? st.encounters.text : [];
+    const encounterOf = st ? st.encounters.of : [];
 
     // spell icon names ("" = none); older packs have no icon data
     const iconNames = pack.iconNames || [];
@@ -2102,7 +2146,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     return {
         meta: pack.meta,
         ids: sp.ids, names: sp.names, subtexts: sp.subtexts, icons,
-        namesL, spellIndex, files, hasSyntheticFiles,
+        namesL, descriptionText, descriptionOf, encounterText, encounterOf,
+        spellIndex, files, hasSyntheticFiles,
         spellModels, modelSpells, modelFids, attachmentNames,
         spellModelCats, modelCatSpells, modelCatFidSpells, modelCatNames,
         items, itemSearchL, itemSpells, itemCat, missileMotionNames,

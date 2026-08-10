@@ -57,6 +57,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TypeVar
 
+# Sibling module, stdlib-only like this one. The description templates are a
+# small language with its own grammar, so they get their own file rather than
+# another 400 lines here — and one that can be exercised on its own.
+from spelltext import DescriptionCooker, SpellValues
+
 T = TypeVar("T")
 
 BUILD_DIR = Path(__file__).resolve().parent
@@ -242,6 +247,33 @@ TABLES = [
     "ItemAppearance",
     "ItemDisplayInfo",
     "ModelFileData",
+    # ---- the description route (§3x). Spell.Description_lang is a TEMPLATE,
+    # not text, and these are the tables that fill it in. None of their values
+    # ship: build/spelltext.py substitutes them and the pack carries only the
+    # cooked prose.
+    #
+    # SpellRadius and SpellRange are index tables the effect/misc rows point at
+    # ($A1 yards, $r yards); SpellDescriptionVariables holds the named `$<var>`
+    # bodies and SpellXDescriptionVariables is the only bridge from a spell to
+    # one. SpellAuraOptions, SpellTargetRestrictions, SpellEffect, SpellMisc and
+    # SpellDuration were already downloaded for other routes.
+    "SpellRadius",
+    "SpellRange",
+    "SpellDescriptionVariables",
+    "SpellXDescriptionVariables",
+    "SpellTargetRestrictions",
+    # ⚠ SpellAuraOptions was in build/cache/9.2.7.45745/ ALREADY — left there by
+    # an exploration run — so the first build of this route worked here and
+    # crashed on Vanilla. Same shape as the UiMap mistake at format 40, caught
+    # this time only because a missing table is a hard error. It supplies $u
+    # (stack cap), $n (charges) and $h (proc chance).
+    "SpellAuraOptions",
+    # the dungeon journal's own note on a boss ability — a SECOND body of text
+    # per spell, searched under the same `desc` keyword. Only 389 spells on
+    # 9.2.7 carry one (a spell-linked section usually ships an EMPTY body and
+    # the client renders the spell's own description in its place), so this is
+    # a small, distinct signal rather than a second corpus.
+    "JournalEncounterSection",
 ]
 
 # ------------------------------------------------------- per-build source map
@@ -304,6 +336,18 @@ OPTIONAL_TABLES = {
     # no interrupts reads as "nothing known to break it"
     "SpellDuration": "the channel duration on the delivery line",
     "SpellInterrupts": "the 'breaks on move' half of the delivery line",
+    # The description route's optional halves (§3x). A missing table costs the
+    # feature nothing structural — spelltext.py elides a value it cannot look
+    # up exactly as it elides a caster-dependent one, so the prose still cooks,
+    # just without that number. Measured absences: SpellDescriptionVariables
+    # 404s on TBC, and the journal tables on Vanilla/TBC/WotLK.
+    "SpellRadius": "radii inside cooked descriptions ($A1 yards)",
+    "SpellRange": "ranges inside cooked descriptions ($r yards)",
+    "SpellDescriptionVariables": "the named $<var> bodies in descriptions",
+    "SpellXDescriptionVariables": "spell -> description-variable set",
+    "SpellTargetRestrictions": "max-target counts inside cooked descriptions",
+    "SpellAuraOptions": "stack caps and proc chances inside cooked descriptions",
+    "JournalEncounterSection": "dungeon-journal notes on a boss ability",
 }
 
 # THE TWO LISTS DO DIFFERENT JOBS AND A TABLE USUALLY NEEDS BOTH: TABLES is what
@@ -1252,7 +1296,8 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 42  # 42: spells.eras + expansions — which expansion added a spell (§3v)
+PACK_FORMAT = 43  # 43: spellText — cooked description + encounter prose (§3x)
+# 42: spells.eras + expansions — which expansion added a spell (§3v)
 # 41: soundKitNames — human names for sound kits (§3u)
 # 40: spellAreas + areas — the area gate (§3t)
 # 35: spell -> spell links (SpellEffect.EffectTriggerSpell)
@@ -1852,6 +1897,26 @@ def read_spell_names(table_dir: Path, tdb_dir: Path | None) -> tuple[dict[int, s
         if i in spell_names and sub:
             subtexts[i] = sub
     return spell_names, subtexts
+
+
+def read_description_templates(table_dir: Path) -> tuple[dict[int, str], dict[int, str]]:
+    """The RAW description and aura-description templates (§3x).
+
+    Deliberately NOT filtered against spell_names: a template routinely
+    redirects to a spell that has no name row of its own (`$@spelldesc159001`
+    on 158986), and dropping those would empty 491 descriptions that resolve
+    perfectly well. The filter belongs at the pack, not at the source.
+    """
+    descriptions: dict[int, str] = {}
+    aura_descriptions: dict[int, str] = {}
+    for sid, desc, aura in read_table(
+            table_dir, "Spell", ["ID", "Description_lang", "AuraDescription_lang"]):
+        i = to_int(sid)
+        if desc:
+            descriptions[i] = desc
+        if aura:
+            aura_descriptions[i] = aura
+    return descriptions, aura_descriptions
 
 
 def expand_redirects(
@@ -3355,6 +3420,136 @@ def read_spell_icons(
     return spell_icon_fid
 
 
+def read_spell_values(table_dir: Path) -> SpellValues:
+    """Every number a description template can ask for (§3x).
+
+    All six tables are already downloaded for other routes or declared optional,
+    and NONE of them reaches the pack: they exist only so build/spelltext.py can
+    substitute `$s1`, `$d`, `$A1` and friends before the text is shipped.
+
+    Base difficulty only. A spell may carry one row per DifficultyID, and the
+    tooltip a player reads is the base one — taking whichever row came last
+    would silently print Mythic numbers on a third of the raid corpus.
+    """
+    values = SpellValues()
+    radius = {to_int(i): to_amount(r) for i, r in
+              read_table(table_dir, "SpellRadius", ["ID", "Radius"])}
+    duration = {to_int(i): to_int(d) for i, d in
+                read_table(table_dir, "SpellDuration", ["ID", "Duration"])}
+    ranges = {to_int(i): to_amount(r) for i, r in
+              read_table(table_dir, "SpellRange", ["ID", "RangeMax_0"])}
+
+    for spell_id, diff, index, points, points_f, period, radius_id, chain, misc, variance in \
+            read_table(table_dir, "SpellEffect",
+                       ["SpellID", "DifficultyID", "EffectIndex", "EffectBasePoints",
+                        "EffectBasePointsF", "EffectAuraPeriod", "EffectRadiusIndex_0",
+                        "EffectChainTargets", "EffectMiscValue_0", "Variance"]):
+        if to_int(diff):
+            continue
+        s, i = to_int(spell_id), to_int(index) + 1  # templates count from 1
+        values.points.setdefault(s, {})[i] = to_amount(points, points_f)
+        if (v := to_amount(variance)):
+            values.variance.setdefault(s, {})[i] = v
+        if (p := to_int(period)):
+            values.period.setdefault(s, {})[i] = p
+        if (r := radius.get(to_int(radius_id))):
+            values.radius.setdefault(s, {})[i] = r
+        if (c := to_int(chain)):
+            values.chain_targets.setdefault(s, {})[i] = c
+        if (m := to_int(misc)):
+            values.misc_value.setdefault(s, {})[i] = m
+
+    for spell_id, diff, duration_id, range_id in read_table(
+            table_dir, "SpellMisc", ["SpellID", "DifficultyID", "DurationIndex", "RangeIndex"]):
+        if to_int(diff):
+            continue
+        s = to_int(spell_id)
+        if (d := duration.get(to_int(duration_id))) is not None:
+            values.duration[s] = d
+        if (r := ranges.get(to_int(range_id))):
+            values.range_max[s] = r
+
+    for spell_id, diff, stacks, charges, chance in read_table(
+            table_dir, "SpellAuraOptions",
+            ["SpellID", "DifficultyID", "CumulativeAura", "ProcCharges", "ProcChance"]):
+        if to_int(diff):
+            continue
+        s = to_int(spell_id)
+        for raw, into in ((stacks, values.max_stacks), (charges, values.charges),
+                          (chance, values.proc_chance)):
+            if (n := to_int(raw)):
+                into[s] = n
+
+    for spell_id, diff, targets, level in read_table(
+            table_dir, "SpellTargetRestrictions",
+            ["SpellID", "DifficultyID", "MaxTargets", "MaxTargetLevel"]):
+        if to_int(diff):
+            continue
+        s = to_int(spell_id)
+        for raw, into in ((targets, values.max_targets), (level, values.max_target_level)):
+            if (n := to_int(raw)):
+                into[s] = n
+    return values
+
+
+def read_description_variables(table_dir: Path) -> dict[int, dict[str, str]]:
+    """spell -> {variable name -> its template body}, for `$<shield>` (§3x).
+
+    A SpellDescriptionVariables row is a newline-separated list of `$name=body`
+    assignments shared by every spell pointing at it, and the body is itself a
+    template resolved in the SPELL's context — so this returns the bodies and
+    lets the cooker do the resolving.
+    """
+    bodies: dict[int, dict[str, str]] = {}
+    for set_id, text in read_table(table_dir, "SpellDescriptionVariables",
+                                   ["ID", "Variables"]):
+        one: dict[str, str] = {}
+        for line in re.split(r"[\r\n]+", text):
+            if (m := re.match(r"\s*\$(\w+)\s*=\s*(.*)$", line)):
+                one[m.group(1)] = m.group(2)
+        if one:
+            bodies[to_int(set_id)] = one
+    return {to_int(s): body
+            for s, set_id in read_table(table_dir, "SpellXDescriptionVariables",
+                                        ["SpellID", "SpellDescriptionVariablesID"])
+            if (body := bodies.get(to_int(set_id)))}
+
+
+def read_encounter_notes(table_dir: Path) -> dict[int, str]:
+    """spell -> the dungeon journal's note on it, still as a raw template (§3x).
+
+    ⚠ A SPELL-LINKED SECTION USUALLY HAS AN EMPTY BODY — 6,658 sections name a
+    spell on 9.2.7 and only 324 of them say anything, because the client
+    renders the spell's own description in that slot. The text that IS here is
+    the difficulty-specific note beside it ("In Mythic difficulty, …"), which
+    is real prose no other route carries. Child sections are folded in, so a
+    note written one level down is not lost.
+    """
+    sections: dict[str, tuple[str, str, str]] = {}
+    for sid, body, parent, spell in read_table(
+            table_dir, "JournalEncounterSection",
+            ["ID", "BodyText_lang", "ParentSectionID", "SpellID"]):
+        sections[sid] = (body, parent, spell)
+    children: dict[str, list[str]] = defaultdict(list)
+    for sid, (_b, parent, _s) in sections.items():
+        if to_int(parent):
+            children[parent].append(sid)
+
+    def gather(sid: str, depth: int = 0) -> list[str]:
+        body, _parent, _spell = sections[sid]
+        out = [body] if body.strip() else []
+        if depth < 4:  # the journal nests three deep; the cap is the cycle stop
+            for kid in sorted(children.get(sid, ())):
+                out += gather(kid, depth + 1)
+        return out
+
+    notes: dict[int, list[str]] = defaultdict(list)
+    for sid, (_body, _parent, spell) in sections.items():
+        if (s := to_int(spell)) and (parts := gather(sid)):
+            notes[s] += parts
+    return {s: "\n\n".join(parts) for s, parts in notes.items()}
+
+
 def read_spell_schools(table_dir: Path, spell_names: dict[int, str]) -> dict[int, int]:
     """Read spell -> SchoolMask from SpellMisc (base difficulty wins).
 
@@ -3895,6 +4090,28 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     delivery = read_spell_delivery(table_dir, spell_names)
     area_rows, area_info = derive_areas(table_dir)
 
+    # --- cook the description templates into prose (§3x) ------------------
+    # The five value tables and the two variable tables exist ONLY for this
+    # step; nothing they hold reaches the pack, only the substituted text.
+    log("Cooking spell descriptions ...")
+    raw_descriptions, raw_aura_descriptions = read_description_templates(table_dir)
+    cooker = DescriptionCooker(raw_descriptions, raw_aura_descriptions, spell_names,
+                               read_spell_values(table_dir),
+                               read_description_variables(table_dir))
+    # only spells the pack actually lists — a redirect TARGET need not be one
+    spell_descriptions = {
+        s: cooked for s, template in raw_descriptions.items()
+        if s in spell_names and (cooked := cooker.cook(s, template))
+    }
+    spell_encounter_notes = {
+        s: cooked for s, template in read_encounter_notes(table_dir).items()
+        if s in spell_names and (cooked := cooker.cook(s, template))
+    }
+    log(f"  {len(spell_descriptions):,} descriptions, "
+        f"{len(spell_encounter_notes):,} encounter notes "
+        f"({cooker.stats['resolved']:,} values resolved, "
+        f"{cooker.stats['elided']:,} elided)")
+
     # --- resolve the creature-display payloads ----------------------------
     # morphs: flatten to (creature, display, model fid) rows
     used_creatures = {c for cs in se.morphs.values() for c in cs}
@@ -4009,6 +4226,25 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         # newest rung; ships as a real value rather than a guess.
         "eras": [expansion_of.get(s, -1) for s in spell_ids],
     }
+
+    # --- the cooked text, DEDUPED (§3x) ------------------------------------
+    #
+    # Two parallel arrays per body of text: `*Text` holds each distinct string
+    # once and `*Of` indexes into it, with slot 0 always the empty string so a
+    # spell with no text costs one integer.
+    #
+    # ⚠ THE DEDUP IS NOT A MICRO-OPTIMISATION. 19,807 descriptions on 9.2.7 are
+    # a bare `$@spelldescNNN` redirect, so cooking them produces the SAME string
+    # as their target — 129,051 descriptions collapse to 79,352 distinct ones,
+    # which is 0.34 MB off the gzipped pack and, more to the point, 38% off what
+    # the browser has to hold once data.ts builds its lowercase search copy.
+    def text_block(by_spell: dict[int, str]) -> tuple[list[str], list[int]]:
+        pool: dict[str, int] = {"": 0}
+        index = [pool.setdefault(by_spell.get(s, ""), len(pool)) for s in spell_ids]
+        return list(pool), index  # dicts keep insertion order, so pool IS the array
+
+    description_text, description_of = text_block(spell_descriptions)
+    encounter_text, encounter_of = text_block(spell_encounter_notes)
 
     file_ids = sorted(referenced_fids)
     file_paths = [fid_path.get(f, "") for f in file_ids]
@@ -4293,6 +4529,13 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "counts": {
                 "spells": len(spell_ids),
                 "files": len(file_ids),
+                # §3x — spells with text, and the distinct strings behind them.
+                # The gap between the two IS the redirect population: a bare
+                # `$@spelldescNNN` cooks to the same prose as its target.
+                "spellDescriptions": len(spell_descriptions),
+                "descriptionTexts": len(description_text) - 1,  # slot 0 is ""
+                "spellEncounterNotes": len(spell_encounter_notes),
+                "encounterTexts": len(encounter_text) - 1,
                 "spellModels": len(model_rows),
                 "spellDisplayModels": sum(1 for r in model_rows if r[2] == MODEL_CAT_DISPLAY),
                 "spellItemModels": sum(1 for r in model_rows if r[2] == MODEL_CAT_ITEM),
@@ -4382,6 +4625,25 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             },
         },
         "spells": spells,
+        # §3x WHAT A SPELL SAYS IT DOES, cooked to placeholder-free prose by
+        # build/spelltext.py. Two bodies of text, one shape each: `text` holds
+        # the distinct strings (slot 0 is always "") and `of` indexes into it
+        # per spell, parallel to spells.ids.
+        #
+        # `descriptions` is Spell.Description_lang; `encounters` is the dungeon
+        # journal's separate note on a boss ability, which only a few hundred
+        # spells carry. Both answer the same `name:"desc …"` keyword — they are
+        # two sources of one idea, not two axes.
+        #
+        # ⚠ THE NUMBERS ARE THIS BUILD'S OWN and can disagree with retail
+        # Wowhead, which renders every spell at the current retail patch under
+        # that patch's scaling. A value the data cannot justify is ELIDED, never
+        # guessed, so prose here reads "Deals Frost damage" where the client
+        # would compute the figure at cast time.
+        "spellText": {
+            "descriptions": {"text": description_text, "of": description_of},
+            "encounters": {"text": encounter_text, "of": encounter_of},
+        },
         # §3v the expansion ladder, oldest first — spells.eras indexes into it.
         # Everything the app needs to render and search an expansion travels
         # here rather than being restated in the frontend: the display short,

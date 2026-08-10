@@ -17,93 +17,9 @@ the site serves one bundle. Currently shipping WoW **9.2.7.45745**, ~276k spells
 
 ## Using it
 
-Full syntax lives behind the **?** button in the app. The short version:
-
-- Plain words search names, models, sounds, animations and effects at once, matching **any part of a name in any
-  order** — `6dr statue` finds
-  `6dr_draenei_statue_male01.m2`. `"quoted words"` are an exact phrase.
-- **Field tags** narrow a term to one column: `name:` `model:` `sound:`
-  `anim:` `fx:` `mech:` `id:`. Tags AND together; a `-` prefix excludes.
-- **Every spell shows which expansion it came from** — its logo sits beside the spell id. Click it to see only that
-  expansion, or ask for one inside an `id:` tag: `id:"xpac wotlk"`, `id:"xpac legion"`. Full names, abbreviations and
-  the expansion number all work, so `id:"xpac pandaria"`, `id:"xpac mop"` and `id:"xpac 5"` are the same question.
-- **It compares, too**, which is the useful part: `id:"xpac >legion"` is everything newer than Legion,
-  `id:"xpac <=wotlk"` everything up to and including Wrath. Pair it with anything else —
-  `id:"xpac <=wotlk" fx:chain` finds old-school beams. A handful of Classic-only spells (Season of Discovery and the
-  like) never shipped in a retail expansion, so they show no logo rather than a wrong one.
-- **Sound kits carry Blizzard's own name** where the game has one — `sound:frostbolt` finds kits named
-  `SPELL_MA_Revamp_Frostbolt_Precast` as well as matching sound file names. Ask for the name alone with `kit`:
-  `sound:"kit frostbolt"` is kits *called* that, never a sound file that happens to spell it, and
-  `sound:(kit "revamp frostbolt")` takes both words in any order. Clicking a kit's name searches exactly that. About two
-  thirds of kits are named; the rest are newer than the last game build that shipped the name list, and show their id
-  and files as before.
-- **Target-type icons** on models, sounds, animations, effects and mechanics say who the content plays on — caster,
-  target, or the target location. A row that plays on several shows one icon each. Search them like category words:
-  `model:"caster fire"`, `sound:target`, `anim:both`, `fx:"chain caster"`. `others` is the narrow one — content the
-  caster never sees — and `target` finds it too.
-- `mech:` covers what an effect does *and* what it is aimed at, matched on the same effect:
-  `mech:"school_damage unit_target_enemy"` finds spells with one effect that is both, not spells that happen to have
-  each somewhere.
-- Some content has its own category word inside a column — `fx:object` for the GameObject a spell places
-  (`fx:"object campfire"`, with `.gobject spawn` and `.lookup object` on the pill), `model:mount` for the mount it puts
-  you on (`model:"mount stallion"`, with `.modify mount`), and `anim:replace` for animations it swaps out —
-  `Stand → StealthStand`
-  (`anim:"replace stealthstand"` finds spells that make you move like a stealthed rogue). `anim:kit` and `anim:loose`
-  say where an animation came from: a numbered AnimKit bundle, or the spell's visual kit playing it directly.
-- **How a spell is delivered is written under its name** — `1.8 sec cast · 30 sec channel · breaks on move`, or just
-  `Instant`. Every spell has one, which is why it is a line rather than a pill.
-- **And it is searchable**: `mech:instant` (no cast bar), `mech:casttime` (has one) and `mech:channeled` (held rather
-  than cast once). **A spell can be both `casttime` and `channeled`** — 3,148 of them cast first and then channel, like
-  Mind Control, so these are not three exclusive buckets. Two spellings to know: the word is `casttime`, not `cast`
-  (`on cast` is a spell-link word, so `cast` alone would match most of the game), and `channeled` has one `l`, matching
-  Wowhead and the game client.
-- **Both of those take a number, in seconds** — the same number the line shows you. `mech:"casttime 2"` is a two-second
-  cast, `mech:"casttime >3"` the slow ones, `mech:"channeled <=3"` the short channels, and `mech:"casttime 1.75"` works
-  because fractions do. Write them together to ask about both halves at once: `mech:"casttime >8" mech:"channeled >8"`
-  is the handful of spells with a long wind-up *and* a long hold. **The line highlights the part you asked about**, so
-  on a spell that casts and then channels you can see which half your number matched.
-- **A channel with no length has no number to compare** — it answers `mech:channeled` but no bound. For the ones whose
-  line reads `unlimited channel`, ask for them by that word: `mech:"channeled unlimited"`, or just `mech:unlimited`. (A
-  bare `channel` with no length at all is a smaller, murkier group and has no word of its own.)
-- **Some spells are findable only by a flag.** A handful of `SpellMisc` attribute bits are their own chips:
-  `anim:pose` holds the character's pose (the Permanent Feign Death and Cosmetic Dead poses — these have no model, sound
-  or animation of their own, so before this they could not be found at all), and in Mechanics `mech:unbreakable` (a
-  channel that persists while the caster moves and acts), `fx:tracking` (the caster stays facing the target),
-  `mech:unhindered` (a channel you can act during) and `mech:debuff` (shows in the red debuff frame). **Only flags
-  confirmed to work in Epsilon ship** — roughly half of those tested did not, so the wording describes what the server
-  actually does rather than what retail documents.
-- **Spells link to each other**, and the Mechanics column shows both directions: `mech:triggers` for what a spell casts,
-  ticks, procs or removes, `mech:origin` for what reaches it. Each chip is the other spell — its id copies, its icon
-  opens Wowhead, its name filters to that spell's own row, target icons say who the triggering effect is aimed at, and
-  the note says how they are joined (`on cast`, `periodically`, `removes`). Search either end by name, by mechanism or
-  by exact id: `mech:"triggers fireball"`, `mech:"origin periodically"`, `mech:"triggers 265714"`.
-- **Some spells only work in one place**, and the Mechanics column says so under an `only in` head: `mech:location`
-  finds every spell with an area gate, `mech:"location suramar"` the ones tied to a named place. This is a real
-  restriction rather than a note — Epsilon enforces it on `.cast`, unlike most conditions — so a spell that refuses to
-  fire may simply be somewhere else's. Each area links to its zone on Wowhead and copies `.lookup tele <area>` to get
-  there, plus a command to open its map. Two areas can share a name and still be different places, so a spell may
-  honestly list `Azsuna` twice.
-- **A word may be followed by its value**, space-separated, and that is the only value form in the language:
-  `model:"attach chest"` (where on the model it plays), `model:"motion parabola"` (the arc a projectile flies),
-  `anim:(boneset "upper body")` (which body region moves),
-  `mech:"seat >2"` (a numeric comparison), `fx:"scale 50"` (exactly +50%), `model:"count >4"` (`count` is the size of
-  the column itself — Models, Sounds and Animations each have one — and a lone `model:>4` is its shorthand). Every one
-  of these words autocompletes inside its column. **A value is always the one word that follows** — so a value with a
-  space in it goes in quotes, and `boneset head kneel` is the head region *and* a kneel animation. On a number, a plain
-  value is the `=` you did not have to type: `scale 50` is `scale =50`, and the sign is yours to keep (`fx:"scale -50"`
-  shrinks). The search bar draws the word and its value joined, so you can see where the value ends.
-- **`|` means either** — `model:fire|frost`, `fx:chain|dissolve`, with or without spaces around the bar;
-  `id:133,116` does the same between numbers.
-- The bar **colours what the grammar recognises** and explains it on hover. Nothing is ever marked wrong: anything it
-  leaves plain is an ordinary text search, which is exactly what it does.
-- **Click any tag in the results** to search for it — shift-click adds it to the search, ctrl-click excludes it.
-- **The Columns row is a scale model of the table**: each chip wears its own column's colour and sits where that column
-  does. Click one to show or hide the column (hidden ones also drop out of plain-word search and exports), drag it to
-  move the column, or use `Alt` + `←` `→` from the keyboard. The layout is remembered per browser and stays out of
-  shared links, so a link shows the recipient their own arrangement.
-- The search — filters included — always lives in the URL, so any result set is a shareable link. Append `&export=json`
-  or `&export=csv` to download it.
-- Pasting an Epsilon command works: `.cast 12345` becomes an `id:` search.
+**The syntax is documented in the app, behind the **?** button** — it is generated from the field and keyword
+registries, so it is always current. It is deliberately not restated here: a second copy drifts, and this file is the
+repo's map rather than the app's manual.
 
 ## How it works
 

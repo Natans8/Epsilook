@@ -103,6 +103,13 @@ export interface ExportRow {
     /** The expansion that introduced the spell ID; absent when no rung claims
      *  it, which is Classic-re-release content that reached no retail client. */
     expansion?: string;
+    /** §3x what the spell says it does, cooked to placeholder-free prose, and
+     *  the dungeon journal's separate note on it. Both ride with the NAME
+     *  rather than a column — like delivery and provenance, there is no
+     *  "description column" to hide them with — so both export whenever the
+     *  pack has them. */
+    description?: string;
+    encounterNote?: string;
     /** Grouped by usage category; a stale pack without categories exports
      *  the old flat path list instead. */
     models?: ({ category: string; files: ExportModelFile[] } | string)[];
@@ -169,6 +176,10 @@ function exportRows(): ExportRow[] {
         // is exported unconditionally — there is no column to hide it with.
         const era = d.expansions[d.eras[i]];
         if (era) row.expansion = era.label;
+        const desc = d.descriptionText[d.descriptionOf[i]];
+        if (desc) row.description = desc;
+        const note = d.encounterText[d.encounterOf[i]];
+        if (note) row.encounterNote = note;
         // Delivery rides with the NAME, not with a column, so it is exported
         // unconditionally — there is no "delivery column" to hide it with.
         const dl = d.spellDelivery.get(id);
@@ -400,7 +411,7 @@ function exportCsv(): void {
         const s = String(v);
         return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
-    const header = ["ID", "Name", "Subtext", "Expansion"];
+    const header = ["ID", "Name", "Subtext", "Expansion", "Description", "Encounter note"];
     if (!hc.models) header.push("Models");
     if (!hc.sounds) header.push("SoundKits", "Sounds");
     if (!hc.animations) header.push("AnimKits", "Animations");
@@ -414,7 +425,12 @@ function exportCsv(): void {
         (e.targets && e.targets.length ? `${e.path} [${e.targets.join("+")}]` : `${e.path}`);
     const lines = [header.join(",")];
     for (const r of exportRows()) {
-        const cols = [String(r.id), esc(r.name), esc(r.subtext), esc(r.expansion ?? "")];
+        const cols = [String(r.id), esc(r.name), esc(r.subtext), esc(r.expansion ?? ""),
+            // newlines survive `esc`'s quoting, but a spreadsheet renders a
+            // three-line cell in a row of one-line ones; the prose reads the
+            // same run together and the column stays scannable
+            esc((r.description ?? "").replace(/\n+/g, " ")),
+            esc((r.encounterNote ?? "").replace(/\n+/g, " "))];
         if (!hc.models) {
             cols.push(esc((r.models ?? []).map((m) => (typeof m === "string"
                 ? m

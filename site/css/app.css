@@ -1996,6 +1996,12 @@ main {
 .c-name {
     min-width: 17rem;
     max-width: 24rem;
+    /* the containing block for .desc-mark, which is pinned to the corner.
+       The gutter is reserved on EVERY row, not only the ones with a mark:
+       a long name must never run under the glyph, and a padding that came and
+       went with the mark would make the right edge ragged down the column. */
+    position: relative;
+    padding-right: 1.5rem;
 }
 
 /* matches .kit-files' line-height below, so a bare model pill (no kit
@@ -2123,6 +2129,39 @@ main {
     margin-right: 0.4rem;
     border: 1px solid rgba(var(--overlay-rgb), 0.14);
     background: rgba(var(--shadow-rgb), calc(0.3 * var(--shadow-strength)));
+}
+
+/* "This spell says what it does" — §3x.
+
+   PINNED TO THE CELL'S TOP-RIGHT CORNER, not trailed after the name (user,
+   2026-08-10). Following the link put it at a different x on every row, which
+   makes a column whose whole job is to be scanned something you have to hunt
+   down; a fixed corner reads as a column of its own without costing one.
+
+   Resting tone is --tag-btn, the token for "a small glyph living in a row",
+   and NOT --text-dim: DECISIONS.md records --text-dim over a hit wash as a
+   whole family of dark-theme contrast failures, and the cheap half of that fix
+   is a new element simply declining to opt in. */
+.desc-mark {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.45rem;
+    display: inline-flex;
+    color: var(--tag-btn);
+    cursor: help;
+}
+
+.desc-mark svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+}
+
+.desc-mark.hit {
+    color: var(--gold);
 }
 
 .spell-sub {
@@ -3483,6 +3522,16 @@ footer a {
 
 .tip-detail {
     color: var(--text);
+}
+
+/* The matched run inside a tooltip's prose. `mark`'s UA default is black on
+   yellow, which is unreadable on every one of the three palettes, so it is
+   fully restated rather than tinted. */
+#tip mark {
+    background: rgba(var(--gold-rgb), 0.22);
+    color: var(--text-strong);
+    border-radius: 2px;
+    padding: 0 1px;
 }
 
 .tip-keys {

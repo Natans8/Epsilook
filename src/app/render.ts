@@ -352,6 +352,11 @@ function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
     nameLink.appendChild(highlightMatches(d.names[i] || "(unnamed)"));
     nameDiv.appendChild(nameLink);
     tdName.appendChild(nameDiv);
+    // Pinned to the CELL, not appended after the name: trailing the link put it
+    // at a different x on every row, so the eye had to hunt for it down a
+    // column whose whole job is to be scanned. The corner is a fixed place.
+    const text = descriptionMark(i);
+    if (text) tdName.appendChild(text);
     if (d.subtexts[i]) tdName.appendChild(el("div", "spell-sub", d.subtexts[i]));
     tdName.appendChild(deliveryLine(spellId));
     tdName.appendChild(commandStrip(spellId));
@@ -424,6 +429,55 @@ function commandStrip(spellId: number): HTMLElement {
 /**
  * Highlight the query-matched parts of a spell name.
  */
+/**
+ * The stacked-lines mark beside a spell's name: "this one says what it does".
+ *
+ * ONE MARK, NOT TWO. A spell's description and the dungeon journal's note on
+ * it are two sources of the same idea and answer the same `desc` keyword, so
+ * two glyphs would be two names for one thing sitting a pixel apart. They stay
+ * distinguishable where it matters — inside the panel, as separate paragraphs.
+ *
+ * It lights when a `desc` value matched, exactly as a pill does, and it hands
+ * the matched terms to the tooltip so the panel can pick them out of the prose.
+ * That is the point of the whole surface: the row already told you it matched,
+ * and this says WHERE.
+ *
+ * Drawn as inline SVG rather than a texture: it is a UI glyph, not game art,
+ * so it inherits `currentColor` and needs no fetch, no cache and no decode.
+ */
+function descriptionMark(i: number): HTMLElement | null {
+    const d = activeData();
+    const desc = d.descriptionText[d.descriptionOf[i]] || "";
+    const note = d.encounterText[d.encounterOf[i]] || "";
+    if (!desc && !note) return null;
+
+    const marks = descTerms();
+    const span = el("span", "desc-mark" + (marks.length ? " hit" : ""));
+    span.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
+        + '<path d="M2.5 3.5h11M2.5 6.5h11M2.5 9.5h11M2.5 12.5h7"/></svg>';
+    // Both bodies in ONE panel, the journal note second and labelled: it is
+    // commentary ABOUT the ability, so it reads as a footnote to the
+    // description rather than as a rival to it.
+    span.title = [desc, note && `Dungeon journal: ${note}`].filter(Boolean).join("\n");
+    if (marks.length) span.dataset.tipHl = marks.join("\t");
+    return span;
+}
+
+/**
+ * The words a `desc` keyword is currently asking for, lowercased and split.
+ * Read from the live query through the SAME splitKeyword the matcher uses, so
+ * what the panel marks and what the search matched cannot drift apart.
+ */
+function descTerms(): string[] {
+    const out: string[] = [];
+    for (const v of Search.splitKeyword(tokensFor("name"), Search.DESC_WORD).values) {
+        for (const w of v.toLowerCase().split(" ")) {
+            if (w) out.push(w);
+        }
+    }
+    return out;
+}
+
 function highlightMatches(name: string): DocumentFragment {
     const frag = document.createDocumentFragment();
     const tokens = tokensFor("name").map((t) => t.text);

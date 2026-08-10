@@ -110,15 +110,54 @@ function split(text: string): { body: string[]; keys: [string, string][] } {
 }
 
 /**
+ * One line with every occurrence of every term wrapped in `<mark>`.
+ *
+ * Overlaps are merged rather than nested: two terms that touch ("blood" and
+ * "bloodpool") would otherwise open a second mark inside the first and paint
+ * the shared run twice as dark. Same merge the name column's highlighter does,
+ * and for the same reason — but built here over a DocumentFragment, because
+ * this text is prose the user never typed and must never reach innerHTML.
+ */
+function markUp(line: string, terms: string[]): DocumentFragment {
+    const low = line.toLowerCase();
+    const spans: [number, number][] = [];
+    for (const t of terms) {
+        for (let i = low.indexOf(t); i !== -1; i = low.indexOf(t, i + 1)) {
+            spans.push([i, i + t.length]);
+        }
+    }
+    spans.sort((a, b) => a[0] - b[0]);
+    const frag = document.createDocumentFragment();
+    let at = 0;
+    for (const [from, to] of spans) {
+        if (to <= at) continue;               // wholly inside the previous mark
+        const start = Math.max(from, at);     // overlapping: keep the new tail
+        if (start > at) frag.append(line.slice(at, start));
+        frag.append(el("mark", undefined, line.slice(start, to)));
+        at = to;
+    }
+    frag.append(line.slice(at));
+    return frag;
+}
+
+/**
  * Draw the panel. The gesture half becomes a real two-column map rather than
  * the run-on sentence `title` forced it to be — it always WAS a key→action
  * mapping, and a description list is what that is.
  */
 function fill(text: string): void {
     const {body, keys} = split(text);
+    // WHICH WORDS TO MARK IS THE ANCHOR'S TO SAY, not this module's. An anchor
+    // that wants its matched terms picked out lists them in `data-tip-hl`
+    // (tab-separated, already lowercased); everything else renders as before.
+    // Kept as an attribute rather than a second content channel so `title`
+    // stays the single source of the TEXT — see the header note.
+    const marks = (anchor?.dataset.tipHl || "").split("\t").filter(Boolean);
     panel!.textContent = "";
     body.forEach((line, i) => {
-        panel!.append(el("p", i === 0 ? "tip-what" : "tip-detail", line));
+        const p = el("p", i === 0 ? "tip-what" : "tip-detail");
+        p.append(marks.length ? markUp(line, marks) : document.createTextNode(line));
+        panel!.append(p);
     });
     if (!keys.length) return;
     const list = el("dl", "tip-keys");
