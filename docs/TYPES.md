@@ -654,72 +654,114 @@ a type — it is an axis with three notations, each of which has a real type.
 
 ---
 
-## 8. THE VALUE → TYPE ASSIGNMENT
+## 8. THE KIND CATALOGUE — every kind, its properties, and each property's type
 
-**Every searchable value in the app, and what it is.** ⚠ **Since L5.2, each row below is a PROPERTY of a KIND** (§0.5)
-— the `column` column names where that kind lives. Adding a row here is one property line plus a type.
+**⚠ REBUILT 2026-08-10 after `SEARCH.md` L5.2.** This was a flat "value → type" list, which the kind model supersedes:
+a type belongs to a **property**, a property belongs to a **kind**, and a kind belongs to a **column**. **This table is
+the PHASE 5 port order and the PHASE 2 declaration list.**
 
-### 8.1 Shipping today
+**How to read it:** each row is one `defineKind`. `target` appears on most kinds and is always the same `mask` type —
+listed only where it is known to carry one. **Properties in bold do not exist in 1.0** and are the reachable wins.
 
-| value                                                                                          | type        | unit | notations  | column          |
-|------------------------------------------------------------------------------------------------|-------------|------|------------|-----------------|
-| spell name                                                                                     | `text`      | —    | text       | name            |
-| spell description                                                                              | `text`      | —    | text       | name            |
-| icon name                                                                                      | `text`      | —    | text       | name            |
-| icon fid                                                                                       | `id`        | —    | id         | name            |
-| spell id                                                                                       | `id`        | —    | id         | id              |
-| expansion                                                                                      | `ordinal`   | —    | ordinal    | id              |
-| model file path                                                                                | `path`      | —    | path       | model           |
-| model category (missile, ground, trail, barrage, display, item, attached, mount, equipped)     | `enum`      | —    | enum       | model           |
-| attachment point                                                                               | `enum`      | —    | enum       | model, fx, mech |
-| motion (parabola, forward spin, …)                                                             | `enum`      | —    | enum       | model           |
-| sound file path                                                                                | `path`      | —    | path       | sound           |
-| sound-kit name **+ id**                                                                        | `text`+`id` | —    | **2 (§7)** | sound           |
-| animation name                                                                                 | `text`      | —    | text       | anim            |
-| anim-kit id                                                                                    | `id`        | —    | id         | anim            |
-| boneset                                                                                        | `enum`      | —    | enum       | anim            |
-| fx file path                                                                                   | `path`      | —    | path       | fx              |
-| fx category (chain, dissolve, glow, ghost, freeze, camo, tint, screen, …)                      | `enum`      | —    | enum       | fx              |
-| **scale**                                                                                      | `percent`   | `%`  | numeric    | fx              |
-| **speed**                                                                                      | `percent`   | `%`  | numeric    | fx/mech         |
-| **desaturate**                                                                                 | `percent`   | `%`  | numeric    | fx              |
-| **transparency**                                                                               | `percent`   | `%`  | numeric    | fx              |
-| **cast time**                                                                                  | `seconds`   | `s`  | numeric    | mech            |
-| **channel duration**                                                                           | `seconds`   | `s`  | numeric    | mech            |
-| **vehicle seats**                                                                              | `count`     | —    | numeric    | mech            |
-| effect / aura name                                                                             | `enum`      | —    | enum       | mech            |
-| implicit target name                                                                           | `enum`      | —    | enum       | mech            |
-| area name                                                                                      | `text`      | —    | text       | mech            |
-| linked spell (triggers / origin)                                                               | `id`+`text` | —    | **2 (§7)** | mech            |
-| morph / summon / object display                                                                | `id`+`text` | —    | **2 (§7)** | fx              |
-| target mask                                                                                    | `bitmask`   | —    | glyphs     | **all**         |
-| attribute bits (instant, casttime, channeled, unbreakable, debuff, tracking, pose, unhindered) | `flag`      | —    | —          | mech/fx/anim    |
-| freeze, camo                                                                                   | `flag`      | —    | —          | fx              |
-| **row count**                                                                                  | `count`     | —    | numeric    | **all**         |
+**⛔ PROVISIONAL WHERE MARKED `?`.** Confirm against `ref.column_info` in PHASE 5 before declaring. Do not name a
+property from an identifier (CLAUDE.md's standing rule).
 
-### 8.2 ⚠ THE ONE VALUE THAT MUST SPLIT
+### 8.1 `model` — what is drawn
 
-| 1.0                                               | measured                                                               | 2.0                                                          |
-|---------------------------------------------------|------------------------------------------------------------------------|--------------------------------------------------------------|
-| `invis` carries a channel id AND a detector count | `mech:"invis 13"` = 16 (channel) · `mech:"invis >0"` = 703 (detectors) | **two axes**: an `id` channel and a separately-named `count` |
+| kind | properties → type |
+|---|---|
+| **missile** | `file` path · `from` attachPoint · `to` attachPoint · `motion` enum · `target` mask · **`castOffset` vec3?** · **`impactOffset` vec3?** · **`decay` seconds?** |
+| **ground** | `file` path · `target` mask |
+| **trail** | `file` path · `target` mask |
+| **barrage** | `file` path · `attach` attachPoint · **`coneAngle` angle** (3 distinct values → picker) · **`range` length** (4 values) |
+| **attached** | `file` path · `attach` attachPoint · `target` mask · **`scale` scale?** |
+| **display** | `id` id · `name` text · `file` path |
+| **item** | `file` path · `itemId` id |
+| **mount** | `file` path · `name` text |
+| **equipped** | `slot` enum |
 
-Distinguished today by `operatorOnly: true` — so `invis 13` is channel 13 while `invis =13` is *thirteen detectors*:
-the same digits, the opposite question, told apart by a character that looks like punctuation. **That is the defect
-`operatorOnly` exists to paper over, and splitting the axis deletes both the flag and the ambiguity.**
+### 8.2 `sound` — what is heard
 
-### 8.3 Planned — each is one row here plus a build reader
+| kind | properties → type |
+|---|---|
+| **sound** | `file` path · `kit` **[id, text]** (multi-notation, §7) · `target` mask · **`type` enum?** (`SoundKit.SoundType`, designed and parked) |
 
-| value                                                | type         | unit  | source                         |
-|------------------------------------------------------|--------------|-------|--------------------------------|
-| spell range (incl. *unlimited*)                      | `length`     | `yd`  | `SpellRange` — **new source**  |
-| cooldown, GCD                                        | `seconds`    | `s`   | `SpellCooldowns` — new source  |
-| power cost                                           | `count`      | —     | `SpellPower` — new source      |
-| cone angle                                           | `angle`      | `deg` | `BarrageEffect.ConeAngle`      |
-| beam length, min distance                            | `length`     | `yd`  | `BeamEffect`                   |
-| collision height / width, hover height, mount height | `length`     | `yd`  | `CreatureModelData`            |
-| model scale                                          | `scale`      | `x`   | `CreatureModelData.ModelScale` |
-| anim segment speed                                   | `rate`       | `x`   | `AnimKitSegment.Speed`         |
-| tint colour                                          | **`colour`** | —     | ⛔ blocked on a semantic (§4)  |
+### 8.3 `anim` — how it moves
+
+| kind | properties → type |
+|---|---|
+| **replace** | `from` enum · `to` enum · `target` mask |
+| **passenger** | `enter` enum · `sit` enum · `exit` enum |
+| **kit** | `id` id · `anim` enum · `boneset` enum · **`speed` rate?** (`AnimKitSegment.Speed`) |
+| **loose** | `anim` enum · `boneset` enum |
+
+### 8.4 `fx` — what it looks like
+
+| kind | properties → type |
+|---|---|
+| **chain** | `texture` path · `from` attachPoint · `to` attachPoint · `tint` **colour (blocked, §4)** · `target` mask · **`length` length?** · **`minDistance` length?** |
+| **dissolve** | `attach` attachPoint · `target` mask |
+| **ghost** | `attach` attachPoint · `target` mask |
+| **glow** | `target` mask · **`colour` colour?** |
+| **tint** | `colour` **colour (blocked)** · `target` mask |
+| **screen** | `type` enum · `target` mask |
+| **scale** | `percent` percent · `target` mask |
+| **speed** | `percent` percent · `mode` enum (run/walk/fly/swim) · `target` mask |
+| **transparency** | `percent` percent · `target` mask |
+| **desaturate** | `percent` percent · `target` mask |
+| **freeze** | *(flag — no value)* · `target` mask |
+| **camo** | *(flag — no value)* · `target` mask |
+| **morph** | `display` **[id, text]** · `target` mask |
+| **summon** | `creature` **[id, text]** |
+| **object** | `object` **[id, text]** |
+| **shapeshift** | `form` enum |
+| **seat** | `count` count · `attach` attachPoint · **`passengerAttach` attachPoint** |
+| **invis** | `channel` id — **⚠ SPLIT, see 8.6** |
+| **detect** | `channel` id · `count` count — **the other half of the split** |
+
+### 8.5 `mech` · `name` · `id`
+
+| column | kind | properties → type |
+|---|---|---|
+| `mech` | **effect** | `enum` enum · `target` mask · **`misc0` int?** · **`misc1` int?** · **`amplitude` float?** · **`radius` length?** |
+| `mech` | **aura** | `enum` enum · `target` mask · **`stacks` count?** (`CumulativeAura`, route already added) |
+| `mech` | **casttime** | `seconds` seconds |
+| `mech` | **channeled** | `seconds` seconds *(sentinel: unlimited)* |
+| `mech` | **location** | `area` **[id, text]** |
+| `mech` | **triggers** | `spell` **[id, text]** |
+| `mech` | **origin** | `spell` **[id, text]** |
+| `mech` | *(planned)* **range** | `yards` length *(sentinel: unlimited)* — new source |
+| `mech` | *(planned)* **cooldown** | `seconds` seconds — new source |
+| `mech` | *(planned)* **cost** | `amount` count — new source |
+| `name` | **name** | `text` text |
+| `name` | **description** | `text` text |
+| `name` | **icon** | `name` text · `fid` id |
+| `id` | **id** | `value` id |
+| `id` | **expansion** | `rung` ordinal |
+
+### 8.6 ⚠ THE SPLITS AND RENAMES THIS TABLE FORCES
+
+| # | what | why |
+|---|---|---|
+| 1 | **`invis` becomes two kinds** — `invis{channel}` and `detect{channel,count}` | one word carried a channel id AND a detector count, told apart by whether an operator was typed (`operatorOnly`). Two quantities are two things (§4.2b) |
+| 2 | **`from` / `to` replace the unioned `attach`** on missile and chain | **2,014 of 2,997 beam rows have different source and destination attachments.** `attach` survives as the declared UNION |
+| 3 | **the model category word `attach` → `attached`** | it collides with the attachment keyword: `model:attach` is 16, `model:{attach:chest}` is 51,581. Gate G1 fails today |
+| 4 | **`ghost` was two registrations** (`fx:shadowy`, `fx:ghostmat`) under one word | one word, two kinds — decide whether they are one kind with a `material` property, or two words |
+| 5 | **`path` the type vs `path` the trajectory** | the property is `motion`; `path` stays the type |
+| 6 | **`.tag-*` CSS → `.seg-*`** | `tag` now means a query unit (§0) |
+
+### 8.7 ⭐ WHAT THE CATALOGUE REVEALS
+
+- **The `target` mask is on ~25 of ~35 kinds.** It is the most-shared property in the app, which is why it read like a
+  universal axis and why it is not one — it is a property most kinds happen to have.
+- **`float` is still unreachable everywhere.** Every bold entry above that is `angle`, `length`, `rate` or `scale` is a
+  float column the app has never exposed (TYPES §1: 320 of them).
+- **Multi-notation `[id, text]` appears SIX times** — sound kit, morph, summon, object, area, triggered spell. It is a
+  pattern, not a special case, and it is the same shape each time: a thing with an id and a name.
+- **Three kinds are pure flags** (`freeze`, `camo`, and the attribute bits), so `flag` earns its place as a type with
+  no value.
+- **⚠ `vec3` HAS NO TYPE YET.** `CastOffset_0/1/2` and `ImpactOffset_0/1/2` are 3-vectors. Either three properties, or
+  a new composite type. **Decide before touching missiles**; do not invent one speculatively.
 
 ---
 
@@ -727,6 +769,7 @@ the same digits, the opposite question, told apart by a character that looks lik
 
 | #       | question                                                                                                                       | why it matters                                                                   |
 |---------|--------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------|
+| **9.0** | **`vec3` has no type.** `CastOffset_0/1/2`, `ImpactOffset_0/1/2` — three properties, or one composite type? | blocks the missile kind (§8.7) |
 | **9.1** | **Arrays are unmodelled — 374 columns.** An array column is where the row model must choose one-row-vs-N                       | that choice sets every `count` on the column. **Decide in the spike**            |
 | **9.2** | **Case folding and Unicode normalisation are a per-type `equals`/`contains` contract**, filed elsewhere as "not architectural" | it IS architectural by this document's own definition. `locstring` is 20 columns |
 | **9.3** | `locstring` is declared storage but no type reads it as anything but `text`                                                    | i18n was parked; if revived it lands here                                        |
