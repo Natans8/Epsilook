@@ -208,7 +208,7 @@ which is the whole argument. Do not reintroduce them.
 a file path. **The axis says which** — through its declared type (§4). A bare number never acquires meaning by looking
 numeric.
 
-**GENERALISED (§4.2b): a type REALISES an operator for its domain; it never REDEFINES one.** `=` is "exactly this"
+**GENERALISED (TYPES §3): a type REALISES an operator for its domain; it never REDEFINES one.** `=` is "exactly this"
 everywhere — numeric equality on a number, the whole string on text. `<` is "earlier in this type's order", which is a
 number for `percent` and a rung of the expansion ladder for `ordinal`. **And a type may DECLINE an operator, which is a
 static error rather than a silent fallback** — `name:>m` must say "the name axis has no ordering", not substring-search
@@ -284,7 +284,7 @@ export const GRAMMAR = {
     or: "|",                           // a|b               OR at EVERY level (§2.4)
     numListSep: ",",                   // id:133,134        numbers only — see altsOf
     compare: ["<=", ">=", "<", ">", "="],   // `=` also anchors TEXT: name:=Fireball
-    range: "-",                        // scale:10-90       between values; §4.5
+    range: "-",                        // scale:10-90       between values; §4.1
     phrase: '"',                       // "a b"  — ALWAYS a phrase, never grouping
     escape: "\\",                      // \" inside a phrase (§2.4.4)
     scope: ["{", "}"],                 // model:{…} — ONE row satisfies it (§2.4.0)
@@ -315,7 +315,7 @@ export interface Axis {
     columns: string[] | "*";
 
     /** §4 — drives BOTH how a token matches and what the UI offers.
-     *  ⚠ ONE AXIS, ONE VALUE (§4.2b): if this axis's value cannot be written
+     *  ⚠ ONE AXIS, ONE VALUE (TYPES §3): if this axis's value cannot be written
      *  down with a single unit, it is two axes. `>` orders THIS value and
      *  nothing else; cardinality is always the separate `count` axis.
      *  ORDERED: the first type whose shape accepts the operand wins, so
@@ -323,7 +323,7 @@ export interface Axis {
      *  is offered only if EVERY listed type implements it. */
     types: AxisType[];
 
-    /** §4.4 — is the axis ALWAYS defined (possibly zero) or may it be absent?
+    /** TYPES §6.3 — is the axis ALWAYS defined (possibly zero) or may it be absent?
      *  ⚠ ON THE AXIS, NOT THE TYPE: `count` and `seat` share the `count` TYPE
      *  and disagree — every column has a cardinality, but only 358 spells on
      *  9.2.7 have a seat. `total: true` means `axis:*` is every spell, so the
@@ -339,7 +339,7 @@ export interface Axis {
     short: string;                      // the placeholder on an incomplete chip (§4.9.7)
 
     when?(d: SpellData): boolean;       // absent data = absent word, everywhere
-    domain?(d: SpellData): AxisDomain;  // §4.5 — robust bounds, computed at index time
+    domain?(d: SpellData): AxisDomain;  // TYPES §6.1 — robust bounds, computed at index time
 
     /** THE ROW PREDICATE (L3). The kernel owns the walk, the ∃ over rows,
      *  the set algebra and the negation. */
@@ -472,7 +472,7 @@ CONTAINING that, never names equal to it. Loading exactness onto the quote as we
 the rule forbids — and it is what 1.0 half-did by calling quoted spans "exact-phrase tokens".
 
 **`=` already owns exactness, so extending it to text is the SAME role on another type, not a second role.**
-`scale:=50` is already "exactly fifty" (§4.2, and `numericTest`'s `=` case in 1.0). Text simply joins:
+`scale:=50` is already "exactly fifty" (TYPES §2, and `numericTest`'s `=` case in 1.0). Text simply joins:
 
     name:Fireball        contains        380
     name:=Fireball       IS              239
@@ -699,7 +699,7 @@ PARTITION, and the scoped form has never been measured at all** (it cannot be �
 form's 9,575 also satisfies the scoped form; the question is how many of the 4,623 have a fire row that is *itself*
 not a missile. Nobody knows, because answering it requires the row model.
 
-**⭐ THEREFORE THIS NUMBER IS THE KERNEL PROTOTYPE'S FIRST ACCEPTANCE TEST** (process log §4.5 step 1, which already
+**⭐ THEREFORE THIS NUMBER IS THE KERNEL PROTOTYPE'S FIRST ACCEPTANCE TEST** (process log, PHASE 1, which already
 schedules a `Column.rows()` prototype for `model`). **If the scoped form comes back near 9,575, the row scope buys
 almost nothing and the whole brace apparatus must be re-costed before the rest is built.** That is a genuine gate, not a
 formality — the brace pays for the scope, the positive-anchor rule, the depth-1 cap, the incomplete/invalid dual and a
@@ -770,7 +770,7 @@ left to resolve:
     model:{attach:* -chest}         attached somewhere, "chest" not in the corpus — legal, rarely meant
 
 **Negation is never an axis's VALUE** — there is no "negated value", only a negated clause. `scale:-50` is therefore
-minus fifty, unambiguously, because `-` there sits in value position (§4.5).
+minus fifty, unambiguously, because `-` there sits in value position (§4.1).
 
 **(d) A scope may not name another column's axis.** `model:{sound:fire}` is a static error, not an empty result: the
 scope is a set of MODEL rows and a sound axis cannot read one. Universal axes (`count`, `target`) are the exception —
@@ -904,8 +904,8 @@ engine can still be extended.
 | **a syntax / delimiter change**     | one edit to `GRAMMAR`                                  | nothing else             |
 | **an operator**                     | `GRAMMAR` **+ a method on every type that accepts it** | ⚠ **the expensive one** |
 
-**Only the last row is costly, and that is deliberate** — an operator is a promise made to every type (§4.2b), so adding
-one is a language change and should feel like it. Everything above it is a declaration.
+**Only the last row is costly, and that is deliberate** — an operator is a promise made to every type (TYPES §3), so
+adding one is a language change and should feel like it. Everything above it is a declaration.
 
 **⛔ THE FOUR THINGS THAT WOULD BREAK THIS CONTRACT**, each of which 1.0 does somewhere:
 
@@ -913,8 +913,8 @@ one is a language change and should feel like it. Everything above it is a decla
    because `fieldCategories` and `help.ts` each held a literal field list).
 2. **A per-field or per-type `if` in the kernel.** The kernel's defining property is that it knows no field name and no
    type name; the moment it switches on one, every future addition edits it.
-3. **A type that adds its own operator** (§4.2b) — it becomes a dialect, and L1 is gone.
-4. **An axis whose value needs the word "or"** — unless the "or" is between two spellings of one subject (§4.2b).
+3. **A type that adds its own operator** (TYPES §3) — it becomes a dialect, and L1 is gone.
+4. **An axis whose value needs the word "or"** — unless the "or" is between two spellings of one subject (TYPES §3).
 
 **The concrete test to run before declaring the kernel done: add a throwaway axis over a `float` column nobody has
 touched — `BarrageEffect.ConeAngle` is the obvious candidate, 3 distinct values — and count the files edited.** If the
@@ -989,465 +989,29 @@ spell names. The hint tells the truth rather than implying precision the corpus 
 
 ---
 
-## 4. Axis TYPES — the same declaration drives matching and UI
+## 4. Axis TYPES → **`docs/TYPES.md`**
 
-**The user's call, 2026-08-10: *"keywords can have datatypes… a % keyword, an enum selection keyword, a string keyword
-an ID keyword, a mixed keyword, could behave differently in the UI."*** This is L9 and L11 meeting: the type says what a
-token means AND what the user is offered instead of having to type it.
+**The type system moved out of this file on 2026-08-10, and nothing about it is repeated here.** A type decides what a
+value MEANS, how an operator behaves on it, how it is written and how it is drawn — and `docs/TYPES.md` is the only
+place any of that is stated. It carries the type interface, the operator matrix, the full catalogue, units, domains,
+multi-notation axes, and the value→type assignment for every searchable thing in the app.
 
-### 4.1 TWO LAYERS. The source owns one of them
+**What stays LAW here, because it is about the language rather than about any type:**
 
-**Read the SOURCE's types, not our current pills** (user, 2026-08-10: *"You need to look at the source and what types
-they have there, and not only on our current data"*). Measured over every column of every table the build reads on 9.2.7
-(`ref.column_info`):
+- **L9** — a number's meaning is declared per axis, never inferred from its shape.
+- **The operator ABSTRACT meanings** — fixed by the grammar (§2.4.1). A type supplies a body; it may never supply a
+  different meaning, and an absent body DECLINES the operator as a static error rather than falling through.
+- **The clause-opening rule for `-`**, below, which decides tokenization before any type is consulted.
 
-| dbd type                                             | columns | notes                                        |
-|------------------------------------------------------|---------|----------------------------------------------|
-| `int` — widths 8 / 16 / 32 / 64, signed and unsigned | **909** | 25 are FK/relations, 7 carry a declared enum |
-| **`float`**                                          | **320** | **the app has no float axis at all today**   |
-| `locstring`                                          | 20      |                                              |
-| `string`                                             | 7       |                                              |
-| *(array columns)*                                    | **374** | a structural modifier over all of the above  |
+**⚠ ONE CONSEQUENCE OF THE SPLIT, and it is the reason for it:** a type is the answer to *"what is this value"*, and an
+axis is the answer to *"what can I ask"*. Keeping both in one file is what produced `mixed` — a "type" that was really
+an axis with three notations.
 
-**So the source declares FOUR base types**, and everything else is meaning we add. That gives the layering:
+### 4.1 `-` IS AN OPERATOR ONLY IN CLAUSE-OPENING POSITION
 
-- **STORAGE — the source's, not ours to choose.** `int(width, signed)` · `float` · `string` · `locstring`, plus the
-  structural modifiers *array*, *relation (FK)* and *declared enum*.
-- **SEMANTIC — ours, declared, extensible.** What the number MEANS, how it is queried, how it is formatted, what the UI
-  offers.
-
-**The 320 float columns are the proof this matters**, and they are exactly the future pills the user named:
-`CreatureModelData.CollisionHeight / CollisionWidth / HoverHeight / ModelScale / MountHeight`,
-`BarrageEffect.ConeAngle / Range`, `BeamEffect.FixedLength / SourceMinDistance`, `AnimKitSegment.Speed`. Heights,
-widths, radii, angles, lengths, rates — every one RP-relevant, none reachable.
-
-### 4.2 The type REGISTRY — a framework, not a closed list
-
-**User's requirement: *"we need many datatypes and a framework to define additional datatypes if needed."*** So types
-are REGISTERED, exactly as pill types are — adding one is a call, never an edit to a union.
-
-```ts
-/* Sketch. THE definition — including the operator contract, which is the
-   substance of this type — is in §4.2b, "Should operators be PROPERTIES of a
-   datatype?". Do not maintain two copies. */
-export interface AxisType {
-    name: string;                                  // "percent", "seconds", "length"
-    storage: "int" | "float" | "string" | "locstring" | null;  // §4.1; null = valueless
-    /* equals? compare? contains? glob? present?  — §4.2b.
-       An ABSENT method is how a type DECLINES that operator. */
-    format(value: unknown): string;                // how a pill prints it
-    ui: "text" | "number" | "range" | "picker" | "toggle" | "glyphs";
-    unit?: string;                                 // "%", "s", "yd", "°", "x"
-    step?: number;                                 // range / stepper granularity
-    sentinels?: Record<number, string>;            // -1 -> "unlimited"
-}
-
-export const AXIS_TYPES = new Map<string, AxisType>();
-
-export function defineAxisType(t: AxisType): void {
-    if (AXIS_TYPES.has(t.name)) throw new Error(`axis type "${t.name}" already defined`);
-    AXIS_TYPES.set(t.name, t);
-}
-```
-
-**The types registered today** — grounded in the storage layer above, not invented:
-
-| name          | storage   | examples                                   | matches                                     | UI                |
-|---------------|-----------|--------------------------------------------|---------------------------------------------|-------------------|
-| `text`        | string    | spell name, description, kit name          | substring + glob                            | text              |
-| `path`        | string    | model / sound files                        | substring + glob, **never anchored** (§3.2) | text              |
-| `enum`        | int       | effect / aura / implicit-target names      | exact → substring → glob                    | **value picker**  |
-| **`ordinal`** | int       | **expansion** — an enum WITH a total order | exact, plus `< > <= >= ..` on its ladder    | ordered picker    |
-| `id`          | int       | spell id, SoundKit id, icon fid            | **equality only, never substring**          | exact + copy      |
-| `bitmask`     | int       | target masks, attribute bits               | bit test **and combinations**               | **glyph toggles** |
-| `count`       | int       | `count`, vehicle seats                     | integer compare, ≥ 0                        | stepper           |
-| `seconds`     | int (ms)  | casttime, channeled                        | compare + `unlimited` sentinel              | number, `s`       |
-| `percent`     | int       | scale, speed, desaturate, transparency     | **signed** compare                          | range, `%`        |
-| `length`      | **float** | collision/hover height, beam length, range | compare                                     | range, `yd`       |
-| `scale`       | **float** | model scale, attached-effect scale         | compare                                     | range, `×`        |
-| `angle`       | **float** | cone angle                                 | compare                                     | range, `°`        |
-| `rate`        | **float** | anim segment speed, ambient multiplier     | compare                                     | range, `×`        |
-| `flag`        | —         | attribute bits, freeze, camo               | membership; **no value at all**             | toggle            |
-
-*(There is no `mixed` type. An axis reading several notations — the sound column's files ∪ kit names ∪ kit ids —
-declares `types: [path, text, id]`; see "One subject, several notations" above.)*
-
-### 4.2b OPERATORS ACROSS TYPES — a type IMPLEMENTS an operator, it never REDEFINES one
-
-**The user's question, 2026-08-10: *"should datatypes have defined operator overrides?"*** The answer is yes in a
-strictly limited sense, and stating the limit is the whole of it — unlimited overriding would destroy L4 (one word, one
-meaning) and L12 (a query reads as its own explanation) in a single stroke.
-
-**THE RULE, in three parts:**
-
-1. **Every operator has ONE ABSTRACT MEANING, fixed by the grammar and identical everywhere.**
-2. **A type REALISES that meaning for its own domain. It may not give the operator a different meaning.**
-3. **A type may DECLINE an operator — and declining is a STATIC ERROR, never a silent fallback.**
-
-The abstract meanings, which no type may vary:
-
-| operator             | abstract meaning                                        |
-|----------------------|---------------------------------------------------------|
-| `=`                  | **exactly this** — the whole value, not a part          |
-| `<` `>` `<=` `>=`    | **ordering** — earlier/later in this type's total order |
-| `-` (between values) | **an interval** in that same order                      |
-| `*`                  | **any value**                                           |
-| bare token           | **contains** — a partial match                          |
-
-So `=` on a number is numeric equality and on text is the whole string: **the same idea, two domains.** That is
-realisation. An operator meaning "greater than" on one type and "contains" on another would be redefinition, and is
-forbidden.
-
-**⚠ BUT THE OPERATOR TABLE ALONE DOES NOT MAKE THIS TRUE, and assuming it did was an error — see the section below.**
-"Greater" is only unambiguous once each axis has exactly ONE value to be greater than. An axis carrying two numbers
-makes `>` ambiguous no matter how carefully the operator is defined, which is what 1.0's `invis` does today.
-
-**Part 3 is the one that prevents a whole class of 1.0 bug.** `name:>m` today substring-searches for the literal
-`>m` — a silent nonsense answer. Under this rule the `text` type declines ordering and the bar says so. **This is the
-same distinction §2.4.3 (d) draws: L2's "answer, never fall through" is about absent DATA, not about nonsense.**
-
-#### Should operators be PROPERTIES of a datatype? Yes — as implementations, never as overrides
-
-**The user asked directly. The answer is yes, and it is not a preference: it is forced by the architecture.** The only
-alternative is a switch on type name inside the kernel — `if (type === "percent") … else if (type === "seconds") …` —
-which is exactly the branching the kernel exists not to have. **The kernel's defining property is that it knows no field
-name and no type name**, so operator behaviour has to live on the type or the design collapses.
-
-**But "override" is the wrong word, and the distinction is load-bearing:**
-
-|                    |                                                                                              |
-|--------------------|----------------------------------------------------------------------------------------------|
-| **override**       | a type may give an operator a DIFFERENT meaning — `>` is "greater" here and "contains" there | ⛔ forbidden: destroys L4 and L12 |
-| **implementation** | the contract is fixed by the grammar; the type supplies the BODY for its domain              | ✅ required |
-
-**This is the standard pattern for precisely this problem (L0)** — Rust's `Ord`/`PartialOrd`, Java's `Comparable`,
-Python's rich comparisons. A type never redefines what `<` MEANS; it supplies the ordering `<` consults.
-
-**The shape, and note that absence IS the decline** — no separate capability list to drift out of step (L11):
-
-```ts
-export interface AxisType {
-    name: string;
-    storage: "int" | "float" | "string" | "locstring" | null;
-
-    /* THE OPERATOR CONTRACT. Each is OPTIONAL, and an ABSENT method means the
-     * type DECLINES that operator — which the parser reports as a static error
-     * rather than falling through (§4.2b part 3). The contract is fixed here;
-     * only the bodies vary. */
-    equals?(value: unknown, operand: string): boolean;   // =        exactly this
-    compare?(value: unknown, operand: string): number;   // < > <= >= ..   a TOTAL order
-    contains?(value: unknown, operand: string): boolean; // bare     partial match
-    glob?(value: unknown, pattern: string): boolean;     // *        with a pattern
-    present?(value: unknown): boolean;                   // *        bare — has any value
-
-    /* presentation, not matching */
-    format(value: unknown): string;
-
-    ui: "text" | "number" | "range" | "picker" | "toggle" | "glyphs";
-    unit?: string;
-    step?: number;
-    sentinels?: Record<number, string>;
-}
-```
-
-**Reading the §4.2b matrix off this is mechanical**: `text` implements `equals`, `contains`, `glob`, `present` and omits
-`compare` — which is why `name:>m` is an error instead of a substring search for `>m`. `ordinal` is `enum` plus a
-`compare`. `flag` implements `present` alone.
-
-**⚠ THE ONE RULE THAT KEEPS IMPLEMENTATIONS FROM BECOMING OVERRIDES: `compare` must be a TOTAL ORDER** — transitive,
-antisymmetric, and consistent with `equals`. That is the contract a type promises when it implements it, and it is
-checkable. A `compare` that is not a real ordering is how `>` quietly starts meaning something else, which is the
-failure the user identified.
-
-#### ⭐ ONE AXIS, ONE VALUE — the rule that makes "one abstract meaning" true
-
-**The user pushed back on the claim above: *"Greater can mean a larger %, or it can mean by the count of occurrences of
-a pill per spell, or it can mean something else entirely in different datatypes."* They are right, and 1.0 proves it:**
-
-    mech:"invis 13"    16    the CHANNEL number 13
-    mech:"invis >0"   703    the DETECTOR COUNT — a different quantity entirely
-    mech:"invis =0"     2    a detector count of zero
-
-    mech:"seat 8"      19    eight seats
-    mech:"seat >2"     36    more than two seats  — same quantity, no ambiguity
-
-**On `invis`, `13` and `>0` are two different numbers on ONE axis**, and the only thing telling them apart is whether an
-operator was typed — `operatorOnly: true` in `pilltypes.ts`. So `invis 13` is channel 13 while `invis =13` would be
-*thirteen detectors*: the same digits, the opposite question, distinguished by a character that looks like punctuation.
-That is L12 (3) exactly, and it is shipped today.
-
-**SO THE FIX IS NOT AT THE OPERATOR LEVEL. It is: AN AXIS HAS EXACTLY ONE VALUE.**
-
-- **`>` always orders THE AXIS'S OWN VALUE.** What that value IS varies — a percent for `scale`, seconds for
-  `casttime`, seats for `seat` — and that is realisation (§4.2b), not redefinition.
-- **Cardinality is ALWAYS the separate `count` axis**, never an alternate reading of a comparison. "More than four scale
-  pills" is `fx:{scale:* count:>4}`; "a scale above four percent" is `fx:{scale:>4}`. Two questions, two spellings, no
-  shared operator.
-- **A concept carrying two numbers is TWO AXES.** `invis` carries a channel id and a counterpart count, so it becomes
-  two: the channel (an `id`, exact only) and the detector relationship, which is a cross-reference and needs its own
-  name. Whatever it is called, it is not a second number on `invis`.
-
-**This deletes `operatorOnly` entirely**, which existed to paper over exactly this. It served two jobs in 1.0 and 2.0
-removes the need for both: disambiguating two quantities on one axis (fixed by one-axis-one-value, above), and stopping
-a loose number being read numerically when the corpus might also match it (fixed by `:` binding — `speed:>70` binds
-explicitly, and a bare `70` inside a scope is unambiguously a content term).
-
-**The test to apply when declaring any axis: can I write down its single value and its unit?** If the answer needs the
-word "or", it is two axes.
-
-#### ⭐ ONE SUBJECT, SEVERAL NOTATIONS — and this is NOT a breach of the rule above
-
-**The user's reminder, 2026-08-10: *"some keywords support multiple types. Like `kit` can search both by soundkit name
-and soundkit ID."*** True, and it looks like a contradiction of one-axis-one-value until the two cases are separated:
-
-|                                  | example                                                | verdict                        |
-|----------------------------------|--------------------------------------------------------|--------------------------------|
-| **two QUANTITIES** on a word     | `invis` = a channel id **and** a detector count        | ⛔ **two axes.** Split it      |
-| **two NOTATIONS** of one subject | `kit` = a sound kit, written as its name **or** its id | ✅ **one axis, two notations** |
-
-**THE DISCRIMINATOR, and it is decidable rather than a matter of taste: when both readings match, do they select the
-SAME row?** `kit:85701` and `kit:SPELL_MA_Revamp_Frostbolt_Precast` name one kit. `invis:13` and `invis:>0` name
-unrelated populations. So the §4.2b test stands and gains a clause: **if you cannot write the value without "or", it is
-two axes — unless the "or" is between two SPELLINGS of one thing.**
-
-**THE RULES:**
-
-1. **An axis declares an ORDERED list of accepted types.** `types: AxisType[]`. Most axes declare exactly one.
-2. **Dispatch is by the SHAPE of the operand, and the declared order is the precedence** — the first type whose grammar
-   accepts the text wins. This does not breach L9: L9 forbids a number acquiring MEANING from its shape, and here both
-   readings denote the same subject, so nothing is inferred about meaning.
-3. **⚠ A COLLISION MUST BE MEASURED, NEVER ASSUMED ABSENT** — and where one exists, the losing notation keeps an
-   explicit door. It is never silently unreachable.
-4. **An operator is offered only if EVERY declared type implements it.** `kit:>5` is a static error, because `id` and
-   `text` both decline ordering (§4.2b) — so a multi-notation axis is the INTERSECTION of its types' capabilities, never
-   the union.
-
-**MEASURED for `kit` on the 8.3.0 name table — 84,351 kits: exactly THREE names are all digits**, and they are `"0"`,
-`"9"` and `"150"` — placeholder junk, and **not one of them equals its own id** (43783, 39078, 43207). So `kit:<number>`
-reads as the ID, the three are still reachable as `kit:="150"`, and nothing real is lost.
-
-**⛔ THIS DELETES THE `mixed` TYPE.** The table below used to carry `mixed` for "the sound column (files ∪ kit names ∪
-ids)" — vague, and the independent review correctly called it unrepresentable. It was never a type: it is an axis with
-three notations, each of which has a real type. **One less concept, and the thing it stood for is now expressible.**
-
-#### The matrix
-
-| type                                                | `=`              | `< > <= >=`                     | `-` range   | `*`                                        | bare (contains) |
-|-----------------------------------------------------|------------------|---------------------------------|-------------|--------------------------------------------|-----------------|
-| `text`                                              | whole string     | **decline**                     | **decline** | glob                                       | ✅              |
-| `path`                                              | whole path       | **decline**                     | **decline** | glob (weak — §3.2)                         | ✅              |
-| `enum`                                              | whole enum name  | **decline**                     | **decline** | glob                                       | ✅ on the name  |
-| **`ordinal`**                                       | the rung         | ✅ **its ladder**               | ✅          | has one                                    | ✅ on the name  |
-| `id`                                                | ✅ the only mode | **decline** — ids have no order | **decline** | any id                                     | ⛔ **never**    |
-| `bitmask`                                           | the exact mask   | **decline**                     | **decline** | any bit set                                | ⛔              |
-| `count`                                             | = n              | ✅                              | ✅          | answered, but a NO-OP — see `total` (§4.4) | ⛔              |
-| `seconds` `percent` `length` `scale` `angle` `rate` | = n              | ✅                              | ✅          | has a value                                | ⛔              |
-| `flag`                                              | **decline**      | **decline**                     | **decline** | presence                                   | ⛔              |
-
-**⭐ `ordinal` IS A NEW TYPE AND IT EXPLAINS WHY `xpac` FELT SPECIAL.** An expansion is an enum WITH a total order, so
-`id:{xpac:>legion}` is ordering — realised on the ladder rather than on a number. 1.0 handled this with a private second
-operator alphabet (`XPAC_VALUE`), which is exactly the duplication L1 forbids. Declaring `ordinal` puts it back under
-the one grammar: same operators, same precedence, a different domain to compare in.
-
-**The other candidates for `ordinal`, none built:** item quality (poor→legendary), spell school if it were ever ordered,
-a difficulty tier. Each would cost a declaration rather than a parser.
-
-**⚠ WHAT THIS FORBIDS, so it is not "discovered" later as a feature:** a type may not add an operator of its own, may
-not change precedence, and may not make an operator mean something the table above does not say. If a type needs a
-question the operators cannot ask, **it needs an AXIS, not an operator** — which is the same answer L1 gives to a field
-that wants its own grammar.
-
-### 4.2c UNIT SYMBOLS — a property of the TYPE, and it CONVERTS
-
-**The user's question, 2026-08-10: *"unit symbols. For example s/ms/m for time units, or % for percentage, or `#`
-prefix for hex."*** Units sit exactly where operators sit — declared by the type, never by a field (L1) — and the same
-three-part rule governs them: one abstract meaning, realised per domain, declined by absence.
-
-**THE SEVEN RULES:**
-
-1. **A unit is OPTIONAL. A bare number means the CANONICAL unit.** `scale:50` is fifty percent. The common case stays as
-   short as it is today, exactly as most queries contain no brace (§2.4.0).
-2. **⭐ A unit CONVERTS; it does not annotate.** `casttime:500ms` is half a second, and `casttime:500` is five hundred
-   seconds. That is what makes `ms` worth having rather than decoration — **9.2.7 has 31 sub-second cast times**, so the
-   query is real.
-3. **⭐ THE CANONICAL UNIT IS WHAT THE PILL PRINTS, NEVER WHAT THE PACK STORES.** `SpellCastTimes.Base` is milliseconds;
-   the delivery line prints seconds; therefore `casttime:2` is two seconds. Any other choice means a query cannot be
-   written by reading the screen, which is L12.
-4. **A unit NEVER selects an axis** — it only scales a value inside one. If `50%` and `50s` chose different axes, the
-   unit would be doing the axis's job, which one-axis-one-value forbids.
-5. **An unknown unit is an ERROR, never ignored and never dropped.** `scale:50s` says *scale takes a percentage* — §4.2b
-   part 3, taxonomy #4. Silently reading it as `50` is the fall-through L2 exists to ban.
-6. **A type that declines `compare` declines units.** `text` has neither, so `name:100%` is ordinary text. **This is why
-   the collisions cannot bite: 396 spell names contain `%` and 38 contain `#`, and none is in value position on a
-   numeric type.** Structural, and the same argument as the range dash (§4.5).
-7. **Every unit has an ASCII spelling; a prettier symbol is display-only.** `×` → `x`, `°` → `deg`, folded by the
-   existing typographic pass (§4.9.9a) rather than by new machinery. **Measured: ZERO spell names contain `×` or `°`.**
-
-**Units are PER-TYPE, so there is no global unit vocabulary to collide.** `m` may mean minutes on `seconds` and metres
-on `length` — an axis has exactly one type, so the two never meet. Declare a unit when the axis that needs it exists; do
-not pre-invent a table of them.
-
-**In a range, the unit may sit on either bound or both, and mixed scales convert:**
-
-    casttime:500ms-2s     legal, and the mixed spelling is the useful one
-    scale:10-90%          the unit on the last bound
-    scale:(-50%)-10%      §4.5's parenthesised negative, unchanged
-
-**⭐ UNITS AND `domain()` COMPOSE INTO THE WARNING TIER, which is the part that earns its keep.** `casttime:500` is legal
-and means 500 seconds — a value no spell has. `domain()` already knows the real spread (§4.5), so an out-of-domain
-number raises a WARNING whose fix is the unit conversion: *"did you mean 500ms?"* **That is a STRUCTURAL fix computed
-from the type**, not a spelling guess, so it does not breach the no-did-you-mean rule (§4.9.4).
-
-#### A RADIX IS NOT A UNIT — `#` is a different mechanism
-
-|           | changes                              | example         |
-|-----------|--------------------------------------|-----------------|
-| **unit**  | the SCALE of the value               | `500ms` ≠ `500` |
-| **radix** | how the DIGITS ARE READ — same value | `#FF` = `255`   |
-
-Both hang off the type parsing its own operand, but they must stay named apart or something that is really a notation
-gets declared as a unit and starts converting.
-
-**⛔ AND HEX IS BLOCKED ON A SEMANTIC, NOT ON SYNTAX.** Tints ship as packed `0xRRGGBB` (§ proc types 1/22/23), so
-`tint:#FF00AA` parses fine and is nearly useless: **nobody knows a tint's exact packed value**, and exact equality over
-16.7M values answers almost nothing. A colour axis needs nearest-colour distance or named buckets (`tint:red`), which is
-a design question, not a notation. **Register entry §9 #8 — do not ship `#` until the matching semantic is decided.**
-
-```text
-on AxisType, beside the operator contract — a FRAGMENT, not compilable source
-
-    unit?:  string                     the canonical symbol, for display: "%", "s", "yd"
-    units?: Record<string, number>     ASCII symbol -> factor to canonical. ABSENT = takes no unit
-    radix?: Record<string, number>     "#" -> 16. NOT a unit — same value, different digits
-```
-
-#### ⭐ THE BUILD-SIDE CONSEQUENCE — what `build_data.py` normalises, and what it must NOT
-
-**The user, 2026-08-10: *"obviously it also means that we'll be normalising data in `builddata.py`."*** Right, and the
-word needs pinning down, because the obvious reading is the expensive one.
-
-**THERE ARE TWO UNITS PER NUMERIC AXIS, and conflating them is the trap:**
-
-|                  | lives in                         | example                        |
-|------------------|----------------------------------|--------------------------------|
-| **STORAGE unit** | the pack — integral              | `casttime` in **milliseconds** |
-| **DISPLAY unit** | the pill, and a bare query value | `casttime` in **seconds**      |
-
-**⭐ THE QUERY CONVERTS DOWN INTO STORAGE; THE PACK IS NEVER CONVERTED UP INTO DISPLAY.** `casttime:1.5` becomes
-`1500` and compares as an integer. Three reasons, and the first is decisive:
-
-1. **Precision.** A cast time is a whole number of ms. Shipped as seconds it becomes `1.5`, `0.1`, `2.75` — and `=` on a
-   float that is not exact in binary is a silent wrong answer, which is the one failure §9.1 condemns above all others.
-   Comparing in the integer domain is exact by construction.
-2. **Size.** `1500` gzips better than `1.5` across 129k rows, and the pack is already 11.42 MB.
-3. **Debuggability.** A pack you can eyeball against wago.tools is worth keeping (the same argument that ranks a binary
-   container last in the pack-format queue).
-
-**SO WHAT THE BUILD ACTUALLY OWES IS CONSISTENCY AND A DECLARATION, NOT A RESCALING:**
-
-- **One column, one unit, identical on all eleven packs.** This is real work — the source is *not* internally
-  consistent, and a column that is ms on one build and s on another is exactly the silent per-version drift
-  `OPTIONAL_COLUMNS` exists to make declarative.
-- **The unit is DECLARED in the pack**, beside `meta.counts`, so `data.ts`, `export.ts` and `tools/dossier.py` read it
-  instead of each hardcoding `/1000`. That is the four-consumer drift the lifecycle doc is being written to prevent.
-- **⛔ IDENTITY COLUMNS ARE NEVER NORMALISED.** ids, fids, enum values, bitmasks and packed RGB are not quantities; they
-  ship exactly as the source has them. A "unit" on one of those is the radix confusion above.
-- **⚠ A SENTINEL MUST BE RECOGNISED BEFORE IT IS SCALED.** `SpellCastTimes.Base` has a min of **−1,000,000**; scaling
-  that to −1,000 s produces a plausible-looking number that will enter a range and a domain. Sentinels are classified
-  first and excluded from bounds — §4.5's robust-bounds rule, now confirmed on a second column.
-
-**This is a PACK FORMAT change and therefore a lifecycle job, not a search job** — build reader → declaration → format
-bump → `meta` → `data.ts` → axis → export → dossier → docs → battery. It is the first real customer of the rewritten
-PILLS.md, alongside `SpellRange`.
-
-### 4.3 `flag` is standalone, and tri-state is the GRAMMAR's job — not a type's
-
-**The user's correction, and it deletes something invented: *"if you don't care about the flag just don't type it? and
-if you don't want it put it in negative. If it's standalone then it's standalone completely."*** An earlier draft gave
-`flag` a "tri-state toggle" as a type property. That duplicated the grammar. **EVERY axis is already tri-state**, by L8,
-with no help from the type system:
-
-    (absent)               don't care
-    mech:unbreakable       require
-    -mech:unbreakable      exclude
-
-So `flag` is simply **an axis with no value** — nothing to parse, nothing to compare, nothing to format. The toggle in
-the UI writes one of the three states above; it is not a fourth thing.
-
-### 4.4 A word with no argument IS the existence test
-
-**User: *"some keywords should double as flags if they don't have an input."*** That is the wildcard rule (§3.3)
-arriving from the other side, so it costs no new machinery:
-
-    model:{attach:*}   ≡   attach:*   ≡   "has any attachment point"
-    name:{desc:*}      ≡   desc:*     ≡   "has a description"
-
-**⛔ NOTE THE `:*` — AN AXIS WITHOUT ONE IS NOT AN EXISTENCE TEST, IT IS CONTENT.** An earlier draft wrote this as
-`model:attach ≡ attach:*`, which was left over from the arity grammar and is now false: §2.4.1's reader's rule is that
-**a bare token is ALWAYS content**, so `model:attach` is a substring match on the model corpus — **measured at 16,
-against 51,581 for the attachment keyword.** Writing those two as equivalent would have shipped the exact
-same-word-two-mechanisms defect L4 exists to ban.
-
-**This still deletes a 1.0 oddity**: today a trailing keyword with nothing after it "stays in text" and degrades into a
-substring search *for its own name*, silently and never as an error.
-
-**⛔ IT DOES NOT APPLY TO EVERY AXIS, and the counter-example is the user's** (*"obviously not all keywords can be flags,
-a count flag would be meaningless"*). **`count:*` is a TAUTOLOGY** — every column has a cardinality, possibly zero, so
-"has any count" is true of every spell in the pack.
-
-**The discriminator is NULLABLE vs TOTAL, and the axis declares it:**
-
-|                                                       |                                                                                   | `axis:*` means                               |
-|-------------------------------------------------------|-----------------------------------------------------------------------------------|----------------------------------------------|
-| **nullable** — a spell or row may simply not have one | `attach`, `desc`, `icon`, `xpac`, `kit`, `motion`, `boneset`, `scale`, `casttime` | **has one at all.** The flag reading. Useful |
-| **total** — always defined, possibly zero             | `count`, and any derived measure                                                  | **everything.** True, and worthless          |
-
-For a total axis the wildcard is still **answered** rather than rejected — L2 forbids falling through, and "every spell"
-is the literally correct answer — but it is **never offered in autocomplete and the bar marks it as a no-op**, so the
-user sees why 276,332 rows came back instead of wondering. `total: true` on the axis is the whole declaration.
-
-**`count`'s global door is NOT an exception — see L5.** `count:>4` desugars, like every global prefix, to the union over
-each column carrying the axis, so it means "some column has more than four". That reads oddly, but for the same reason
-any wide union does — not because `count` is special. An earlier draft carved it out of L5 as "a door not worth walking
-through"; the virtual-tag rewrite removed the need for the carve-out, and the useful form is still the scoped one,
-`model:{count:>4}`.
-
-### 4.5 VALUE RANGES — the syntax is GitHub's, the domain is MEASURED
-
-Two halves that must agree: how you WRITE a range, and how the UI knows what range to DRAW.
-
-**⭐ THE SEPARATOR IS `-`, AND `..` IS DROPPED (user, 2026-08-10). Two earlier rejections of `-` were conditional on
-delimiter assignments that have since changed, and both are now obsolete:**
-
-| the old objection                                      | why it no longer holds                                                                                                                                                                                                                                    |
-|--------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| "a `-` between numbers collides with a NEGATIVE value" | **parens disambiguate it** — the user's original suggestion, rejected only because parens were the row scope at the time. They are the VALUE GROUP now (§2.4.0), and `(-50)` is a one-member group, already legal by the existing production. No new rule |
-| "17,557 spell names contain a hyphen"                  | **the type decides.** A range separator exists only on types implementing `compare` (§4.2b). `text` declines ordering, so in `name:anti-magic` the dash is data and there is no range reading to collide with                                             |
-
-    scale:10-90         between
-    scale:(-50)-10      a negative lower bound
-    scale:(-50)-(-10)   readable — unlike `-50--10`
-    scale:>=10          an open-ended range is written with the operator that means it (§3.3)
-    scale:<=90          NOT `scale:10-*` — `*` is existence or glob, never infinity
-    name:anti-magic     `text` has no `compare`, so the dash is ordinary data
-
-**⛔ A NEGATIVE BOUND IN A RANGE MUST BE PARENTHESISED.** `scale:-50-10` is technically deterministic — a leading `-`
-is a sign, one between values is a separator — but nobody can read it, and L12 is a law rather than a preference. It is
-an ERROR with the structural fix `scale:(-50)-10`.
-
-**This also retires `..` from a language that no longer needs two range spellings**, and `-` is what the user asked for
-in the first place: *"a dash between 2 tokens could mean range. Like 10-90. I think this would be more naturally
-readable."*
-
-**⚠ THE TRANSFERABLE LESSON: a rejection is only as durable as the assumptions under it.** `-` was rejected on three
-collisions and adopted an hour later, because two of the three assumptions had been dissolved by unrelated decisions in
-between. Re-check a closed question's premises before citing it, not just its verdict.
-
-##### `-` IS AN OPERATOR ONLY IN CLAUSE-OPENING POSITION
-
-Settling this here because it is the same question, and the independent review listed it as undefined. **`-` negates
-only when it OPENS a clause** — at the start of the query, after whitespace, or after `(`. Anywhere else it is ordinary
-character data or part of a value:
+**This is the one piece of §4 that is GRAMMAR rather than type, because it decides tokenization before any type is
+consulted.** `-` negates only when it OPENS a clause — at the start of the query, after whitespace, or after `{`.
+Anywhere else it is ordinary character data or part of a value:
 
     -model:fire      negation      — clause-opening
     model:anti-magic one token     — 17,557 names need this
@@ -1488,29 +1052,6 @@ export interface AxisDomain {
 }
 ```
 
-### 4.6 `flag` vs `bitmask` — they look alike and are not
-
-A `flag` is ONE bit on a SPELL, valueless, with no combinations: you have `unbreakable` or you do not. A `bitmask` is
-SEVERAL bits on a ROW, and the combinations are the entire point — from `build_data.py`,
-`caster 1 · target 2 · area 4 · not-caster 8 · missile-dest 16`, so `target` is the test `2|8`, `area` is `4|16`, and **
-`both` is `1 AND 2`, a question no single bit spells**. Per-row, because the same chain plays on the caster for one
-spell and the target for another.
-
-**This is also the answer to *"why do we need 3 keywords exactly instead of just `target caster`"*** (user's brief).
-Under L5 you get exactly that — `target:caster`, `target:area`, `target:both` — one keyword with named values, global.
-The five words stop being independent vocabulary scattered across four columns and become **one `mask` axis**;
-`model:caster` survives as its scoped form.
-
-Two consequences worth stating, because both remove existing hand-written UI:
-
-- **The filter row and the target icons stop being features** and become the rendered form of a `flag` and a `bitmask`
-  axis. One declaration, two surfaces, no second list (L11).
-- **`enum` axes become browsable**, which is the direct answer to *"I find myself way too often opening wago.tools when
-  Epsilook doesn't provide"* — the values exist in the pack already; nothing offers them. **`mech:unit_target_enemy`
-  already works today** (21,109 on 9.2.7); what is missing is anything that tells you the value exists.
-
----
-
 ## 4.9 BAD SYNTAX — the error model
 
 **The failure mode a design introduces is part of the design.** Ten subsections, because a search-as-you-type bar in a
@@ -1528,7 +1069,7 @@ error**.
 | **INVALID**    | cannot become valid by appending      | error, reported on the clause                          |
 
 `model:{fire` is incomplete — one `}` fixes it. `name:>m` is invalid — no suffix rescues it, because `text` declines
-`compare` (§4.2b). **An incremental parser that cannot tell these apart will shout at the user on every keystroke**,
+`compare` (TYPES §3). **An incremental parser that cannot tell these apart will shout at the user on every keystroke**,
 which is the failure mode that makes people turn off "search as you type".
 
 ### 4.9.2 The taxonomy, and one entry is NOT an error
@@ -1539,7 +1080,7 @@ which is the failure mode that makes people turn off "search as you type".
 | 2 | declined operator       | `name:>m`                                             | error: *the name axis has no ordering*                                                                                               |
 | 3 | foreign axis in a scope | `model:{sound:fire}`                                  | error: *a sound axis cannot read a model row* (§2.4.3d)                                                                              |
 | 4 | ill-typed value         | `scale:abc`                                           | error: *scale takes a percentage* — never a zero result                                                                              |
-| 5 | contradictory value     | `name:=Fire*`                                         | error: *exact and pattern cannot combine* (§4.2b)                                                                                    |
+| 5 | contradictory value     | `name:=Fire*`                                         | error: *exact and pattern cannot combine* (TYPES §3)                                                                                 |
 | 6 | structural              | unbalanced, or no positive anchor — **on PASTE only** | error (§4.9.9). ⚠ While typing or editing both are INCOMPLETE and silent (§4.9.8); `{}` is never here — it is an identity (§2.4.3e) |
 
 **⭐ #1 IS THE IMPORTANT ONE AND IT IS DATA THAT DECIDES IT. 12,477 spell names contain a colon** — *Embody Hero:
@@ -1609,7 +1150,7 @@ interface Diagnostic {
     name:=Fire*           fix: "drop the exact match"        -> name:Fire*
     model:{fire          fix: "close the scope"             -> model:{fire}
 
-Every one of those is derivable from the registry — the operator contract (§4.2b) says `text` has no `compare`, the
+Every one of those is derivable from the registry — the operator contract (TYPES §3) says `text` has no `compare`, the
 column says a sound axis cannot read a model row — so **a fix is computed, never authored**. That is L11: registering an
 axis must not require writing error strings anywhere.
 
@@ -1678,11 +1219,11 @@ standalone keywords, `-` can have a meaning, like negative numbers or local nega
 rules."*** 1.0's shortcut collides with two new meanings, and one collision is fatal.
 
 **THE FATAL ONE: if `-` at the start of a chip's VALUE flips the chip, then `scale:-50` cannot be typed at all.** The
-percent axes are signed and used — `fx:{scale:-50}` is 71 spells, `mech:{speed:<-50}` is 582 (§4.5). So the 1.0 shortcut
+percent axes are signed and used — `fx:{scale:-50}` is 71 spells, `mech:{speed:<-50}` is 582 (§4.1). So the 1.0 shortcut
 cannot survive in that position, and no context rule can rescue it: deciding by whether the axis accepts negatives would
 make one keystroke mean two things depending on hidden state, which is L12 (3).
 
-**THE RULE, and it is exactly the grammar's** (§4.5): **`-` is an OPERATOR where it opens a clause, and DATA everywhere
+**THE RULE, and it is exactly the grammar's** (§4.1): **`-` is an OPERATOR where it opens a clause, and DATA everywhere
 else.** The bar does not need a UI convention — it needs to know where the caret sits in the serialised text.
 
 | caret position                                | typing `-`                                                    | why                                                      |
@@ -2062,7 +1603,7 @@ gate.
 **FIXED — each is now the text above, not a note here:** the ∀ showcase was wrong (vacuously true of model-less spells,
 §2.4.2) · arity had no production and made the parse registry-DEPENDENT, so registering an axis could change a
 bookmarked query — deleted by binding with `:` (L6) · arity broke L8 inside a scope — same fix · bare `count` returned
-everything (§4.4, `total`) · `*` was two mechanisms (§3.3) · the error model, incremental parse and unknown-prefix
+everything (TYPES §6.3, `total`) · `*` was two mechanisms (§3.3) · the error model, incremental parse and unknown-prefix
 behaviour (§4.9) · typographic substitution (§4.9.9) · severities, computed fixes and recovery (§4.9.4).
 
 **⛔ STILL OPEN — the honest list, and the first two are the ones that can still move the architecture:**
@@ -2076,8 +1617,8 @@ behaviour (§4.9) · typographic substitution (§4.9.9) · severities, computed 
 | 5 | Unicode normalisation (NFC/NFD, accented locale names)                                                                                | not architectural                                                                               |
 | 6 | escaping beyond `\"`                                                                                                                  | not architectural                                                                               |
 
-**What survives untouched:** L1, L2, L4, L5, L7, L9, L11, the `Axis`/`Column` collapse, §4.1's storage measurement,
-§4.5's cardinality-decides-affordance finding, and the row model's closure of filtered `count`.
+**What survives untouched:** L1, L2, L4, L5, L7, L9, L11, the `Axis`/`Column` collapse, TYPES §1's storage measurement,
+TYPES §6.1's cardinality-decides-affordance finding, and the row model's closure of filtered `count`.
 
 ### 8.9.0 ⚠ THE FORWARD INDEX — the risk, and the escape hatch that must be designed BEFORE the port
 
@@ -2373,7 +1914,7 @@ each is stated precisely enough to be closed without re-deriving it.
 
 | #      | defect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | the fix                                                                                                                                                                                                                                                      |
 |--------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **D1** | **Tokenization is registry-dependent at VALUE level, and §2.4.1 claims it is not.** `name:anti-magic` is one token but `scale:10-90` is a range — the tokenizer must know the type to split it, and §4.2c's units do it again (`500ms-2s`). **§2.4.1's claim is true at CLAUSE level only** (where a `-` attaches), which is the weaker statement                                                                                                                                         | State the honest scope of the claim. Then: **changing an axis's type is a BREAKING LANGUAGE CHANGE** — promoting `xpac` from `enum` to `ordinal` silently re-reads `id:{xpac:legion-wotlk}` from a token to a range. It needs the query-version marker in D2 |
+| **D1** | **Tokenization is registry-dependent at VALUE level, and §2.4.1 claims it is not.** `name:anti-magic` is one token but `scale:10-90` is a range — the tokenizer must know the type to split it, and TYPES §5's units do it again (`500ms-2s`). **§2.4.1's claim is true at CLAUSE level only** (where a `-` attaches), which is the weaker statement                                                                                                                                      | State the honest scope of the claim. Then: **changing an axis's type is a BREAKING LANGUAGE CHANGE** — promoting `xpac` from `enum` to `ordinal` silently re-reads `id:{xpac:legion-wotlk}` from a token to a range. It needs the query-version marker in D2 |
 | **D2** | **1.0 URLs are silently REINTERPRETED, which is the one pathology §9.1 condemns.** Back-compat was waived for ALIASES (§8.6); it was never waived for meaning. `model:"attach chest"` was **51,581** and becomes a phrase search for the literal substring ≈ **0**                                                                                                                                                                                                                        | Add a query-format marker (`v=2`, or `q2=`). A query without it is **detected and refused with an explanation**, never silently re-read. Cheap, and it is the only thing standing between a shared link and a plausible wrong answer                         |
 | **D3** | **Relevance is unspecified beyond a per-axis tier.** L7 gives `tier?: number` and nothing else: no rule for a spell hitting three axes at three tiers, no tie-break, no within-tier score, no statement of stability. §8.5 deleted 1.0's name-only scoring and put nothing in its place                                                                                                                                                                                                   | Specify: the spell's tier is its BEST hit; ties break on a declared secondary; the sort must be stable. And say how the existing `sort=-<column>` coexists                                                                                                   |
 | **D4** | **The positive-anchor rule is defeatable and does not compose.** `model:{fire\|-missile}` has an anchor and means ∃row(fire ∨ ¬missile) — true of nearly everything. `model:{count:>4}` has NO row predicate at all yet is legal (§2.4.3a). `model:{}` has none either yet is legal (§2.4.3e)                                                                                                                                                                                             | Restate per DNF TERM inside the scope, not per scope. Then rule explicitly on whether `count` and the empty scope satisfy it — currently three sections disagree                                                                                             |
@@ -2382,10 +1923,10 @@ each is stated precisely enough to be closed without re-deriving it.
 ### 10.2 SERIOUS
 
 - **S-a. The quote acquires a SECOND role — notation selection.** §2.4.0 insists each delimiter means exactly one thing;
-  then §4.2b resolves the kit collision with `kit:="150"`, where the quote is what pushes the operand out of `id`'s
+  then TYPES §3 resolves the kit collision with `kit:="150"`, where the quote is what pushes the operand out of `id`'s
   shape into `text`'s. `kit:150` and `kit:"150"` select different kits and read identically aloud — L12 (3), in the
   section claiming to have deleted it.
-- **S-b. The notation-collision measurement has no enforcement.** §4.2b rule 3 says a collision *"MUST BE MEASURED,
+- **S-b. The notation-collision measurement has no enforcement.** TYPES §3 rule 3 says a collision *"MUST BE MEASURED,
   NEVER ASSUMED ABSENT"* but proposes no guard — unlike G1, which gets one. It is a one-time snapshot of one 8.3.0
   table, and a pack rebuild can introduce a digit-name collision that silently changes a bookmarked query. **Make it a
   build-time assertion in the same commit as the axis.** Also unspecified: which notation runs for `kit:*`, where there
@@ -2412,7 +1953,7 @@ each is stated precisely enough to be closed without re-deriving it.
 | **accessibility**      | No screen-reader semantics for a scope chip, a broken chip, or `ui: "glyphs"` toggles                                                                                                                                                                                                                                                                                  |
 | **URL length**         | §8.9.4 accepts *"an exponential DNF expansion"* as the price of dropping grouping, with no budget                                                                                                                                                                                                                                                                      |
 | **i18n**               | Filed as "not architectural". It **is**: `locstring` is a first-class storage type (20 columns, §4.1) and `text.equals`/`contains` must decide NFC/NFD and locale-aware case folding — a per-type operator contract, which is architectural by this document's own definition                                                                                          |
-| **case sensitivity**   | Stated only in §4.9.9 Tier 3 as a paste rule. It belongs in §4.2b as a per-type `equals`/`contains` contract                                                                                                                                                                                                                                                           |
+| **case sensitivity**   | Stated only in §4.9.9 Tier 3 as a paste rule. It belongs in TYPES §3 as a per-type `equals`/`contains` contract                                                                                                                                                                                                                                                        |
 
 ### 10.4 TWO USER CALLS THE REVIEW WANTS REOPENED
 
@@ -2422,7 +1963,7 @@ each is stated precisely enough to be closed without re-deriving it.
    to prevent: its named beneficiaries are people carrying **Lucene habits**, and Lucene's `field:(a b)` means AND over
    the **document**, not over one row — so they get the confident wrong guess, with no signal. It also forces parser
    backtracking and lets the editor auto-author the ambiguous state. **Cutting it is free.**
-2. **The units apparatus** (§4.2c). The reviewer would ship canonical units only — declared in the pack, displayed — and
-   revisit when a second unit has a customer, on the grounds that conversion serves 31 sub-second cast times and is the
-   second source of D1. **Counter-argument: `ms` is not the whole case** — `SpellRange`, cooldowns and durations are all
-   queued and all carry units, so the apparatus is being built one release early rather than speculatively.
+2. **The units apparatus** (TYPES §5). The reviewer would ship canonical units only — declared in the pack, displayed —
+   and revisit when a second unit has a customer, on the grounds that conversion serves 31 sub-second cast times and is
+   the second source of D1. **Counter-argument: `ms` is not the whole case** — `SpellRange`, cooldowns and durations are
+   all queued and all carry units, so the apparatus is being built one release early rather than speculatively.
