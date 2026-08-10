@@ -327,12 +327,24 @@ token means AND what the user is offered instead of having to type it.
 | `mask`     | the target words                                 | bit test                               | **the target glyphs, as toggles**         |
 | `mixed`    | the sound column (files ∪ kit names ∪ ids)       | union of its sub-axes                  | composite of the above                    |
 
+**`flag` vs `mask` — they look alike and are not.** A `flag` is ONE bit on a SPELL, valueless, with no combinations:
+you have `unbreakable` or you do not. A `mask` is SEVERAL bits on a ROW, and the combinations are the entire point —
+from `build_data.py`, `caster 1 · target 2 · area 4 · not-caster 8 · missile-dest 16`, so `target` is the test
+`2|8`, `area` is `4|16`, and **`both` is `1 AND 2`, a question no single bit spells**. Per-row because the same chain
+plays on the caster for one spell and the target for another. Different arity, different affordance, two types.
+
+**This is also the answer to *"why do we need 3 keywords exactly instead of just `target caster`"*** (user's brief).
+Under L5 you get exactly that — `target:caster`, `target:area`, `target:both` — one keyword with named values, global.
+The five words stop being independent vocabulary scattered across four columns and become **one `mask` axis**;
+`model:caster` survives as its scoped form.
+
 Two consequences worth stating, because both remove existing hand-written UI:
 
 - **The tri-state filter row and the target icons stop being features** and become the rendered form of a `flag` and a
   `mask` axis. One declaration, two surfaces, no second list (L11).
 - **`enum` axes become browsable**, which is the direct answer to *"I find myself way too often opening wago.tools when
-  Epsilook doesn't provide"* — the values exist in the pack already; nothing offers them.
+  Epsilook doesn't provide"* — the values exist in the pack already; nothing offers them. **`mech:unit_target_enemy`
+  already works today** (21,109 on 9.2.7); what is missing is anything that tells you the value exists.
 
 ---
 
