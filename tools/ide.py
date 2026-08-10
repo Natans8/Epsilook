@@ -98,9 +98,22 @@ class Ide:
             raw = response.read().decode("utf-8", "replace")
         if notify or not raw.strip():
             return None
-        if "data:" in raw:
-            raw = [ln[5:].strip() for ln in raw.splitlines() if ln.startswith("data:")][-1]
-        return json.loads(raw)
+        # An SSE reply carries the payload on `data:` lines and the LAST one is
+        # the answer. The guard used to be `if "data:" in raw`, which is true of
+        # any body that merely CONTAINS the string — including one whose data
+        # lines are absent or wrapped — and then `[-1]` on the empty list raised
+        # IndexError and lost the rest of the run (a known defect, hit again
+        # 2026-08-10 when whole-file reads made large replies common). Test what
+        # is actually being indexed, not a substring that suggests it.
+        lines = [ln[5:].strip() for ln in raw.splitlines() if ln.startswith("data:")]
+        if lines:
+            raw = lines[-1]
+        elif "data:" in raw:
+            return None  # an SSE frame carrying no data line: nothing to report
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return None
 
     def up(self) -> bool:
         try:
@@ -164,7 +177,16 @@ def run(ide: Ide, files: list[str], lint_only: bool) -> int:
     # to the first request after an out-of-IDE edit, and reformat_file does not
     # itself trigger the VFS refresh — so a reformat straight after an Edit can
     # write the old content back over it. Any other call refreshes first.
-    ide.tool("read_file", {"file_path": files[0], "projectPath": str(ROOT), "limit": 1})
+    #
+    # ⚠ ONE READ OF ONE FILE IS NOT ENOUGH, measured 2026-08-10: this used to
+    # read `limit: 1` of files[0] only, and a reformat of docs/SEARCH.md
+    # SILENTLY DELETED a freshly-added section — twice, reproducibly, with the
+    # file named on its own so it WAS files[0]. The refresh is per-file and a
+    # one-line read does not carry it. Read every file, whole. The cost is one
+    # call per file against silent data loss, which is not a trade worth making
+    # the other way.
+    for f in files:
+        ide.tool("read_file", {"file_path": f, "projectPath": str(ROOT)})
 
     if not lint_only:
         ide.tool("reformat_file", {"files": files, "projectPath": str(ROOT)})

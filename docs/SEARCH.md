@@ -60,7 +60,7 @@ Silence is a correct answer; substitution never is.
 
 Every token in one chip must be satisfied by the **same row**. Chips combine at the spell level, never inside a row.
 
-    model:"caster fireball"   one row that is both — not a caster row and a fireball row
+    model:(caster fireball)   one row that is both — not a caster row and a fireball row
     model:caster model:fire   two rows, either may satisfy either chip
 
 **Negation is the negation of the existential**, which is the conventional reading (Lucene nested queries, SQL `NOT
@@ -82,9 +82,9 @@ renamed** — not documented, not special-cased.
 
 A **global prefix** and an **in-column word**, always both, always the same semantics:
 
-    desc:kneel              ≡  name:"desc kneel"
+    desc:kneel              ≡  name:(desc kneel)
     attach:chest                any column, any row
-    model:"attach chest"        that model row only  (L3 binds it)
+    model:(attach chest)        that model row only  (L3 binds it)
 
 The global door asks "does this spell have it anywhere". The in-column door additionally binds to the row. Nothing is
 reachable through only one door.
@@ -97,7 +97,7 @@ reachable through only one door.
 **A word takes the single token after it.** A quoted phrase is one token. This is the frozen rule from 1.0 and it
 survives unchanged, including its rationale: an arity decided by the data cannot be seen or counted.
 
-    model:"attach chest"      model:(attach "right hand")      id:"xpac >legion"
+    model:(attach chest)      model:(attach "right hand")      id:(xpac >legion)
 
 ### L7 — Plain search is a DECLARED union, ranked
 
@@ -167,7 +167,7 @@ export const GRAMMAR = {
     compare: ["<=", ">=", "<", ">", "="],
     range: "..",                       // scale:10..50      GitHub convention (§4.5)
     phrase: '"',                       // "a b"  — ALWAYS a phrase, never grouping
-    escape: "\\",                      // \" inside a phrase (§2.4.3)
+    escape: "\\",                      // \" inside a phrase (§2.4.4)
     group: ["(", ")"],                 // grouping at EVERY level (§2.4)
     wildcard: "*",                     // §3.3
     countWord: "count",                // the universal cardinality axis (L1)
@@ -221,7 +221,70 @@ negation now nests, the quantifier distinction becomes sayable for the first tim
 **That last line closes expressibility register #4** — universal quantification, which had no conventional spelling and
 was going to need an invented word (`only`, `all:`). It needs neither: De Morgan and nesting already say it.
 
-#### 2.4.3 QUOTES MEAN ONE THING NOW, and that is a deletion
+##### LOCAL NEGATION — `-` binds to a CLAUSE at ANY depth
+
+There is no separate rule for this and there must not be one. `clause := "-"? (group | scoped | term)` already says
+negation attaches wherever a clause does, so it means the same thing at four depths and the DEPTH is what varies:
+
+| written | depth | reads |
+|---|---|---|
+| `-(model:arcane -model:fire)` | query | not this whole combination |
+| `-model:fire` | chip | no fire model row exists |
+| `model:(-fire)` | **row, on a term** | a model row that is not fire |
+| `model:(-attach:chest)` | **row, on a scoped axis** | a model row not attached at the chest |
+| `model:(fire -missile)` | row, mixed | a fire model row that is not a missile |
+
+**The prefix form works at every nesting level**, so an axis reached globally (`attach:chest`) is the same axis reached
+inside a row scope (`model:(-attach:chest)`). That is L5's two doors surviving nesting rather than breaking under it.
+
+**⚠ THE TRAP WORTH KNOWING, and it is not a bug: `-model:fire` and `model:(-fire)` differ on spells with NO models.**
+`-model:fire` is TRUE for them — nothing fires, nothing to exclude. `model:(-fire)` is FALSE — the existential needs a
+row to exist before it can be non-fire. Same word, two depths, two answers, both correct. The bar's highlighter must
+make the depth visible, because this is the one distinction a reader cannot recover from the words alone.
+
+#### 2.4.3 The edge cases the grammar MUST answer
+
+A recursive grammar creates combinations nobody typed on purpose. Each of these was found by walking the BNF against
+the laws; leaving any of them undefined is how 1.0 got its exceptions.
+
+**(a) `count` is a property of the SCOPE, not of a row.** It is the one axis that cannot be a row predicate — a row
+has no cardinality. Inside a scope it counts **the rows that satisfy the rest of that scope's predicate**:
+
+    model:(caster count >4)      more than four CASTER model rows       ← filtered count, §9 #3
+    model:"count >4"             more than four model rows in all
+    model:(count >4)             identical to the line above
+
+So the register's filtered-count entry is not a special case; it is what `count` already means once a scope exists.
+
+**(b) A group is ONE value, so arity (L6) survives nesting.** `attach` takes the single thing after it, and a
+parenthesised group is a single thing:
+
+    model:(attach chest)              one value
+    model:(attach (chest|head))       still one value — the group IS the token
+
+**(c) `-` prefixes a CLAUSE, and a word-form axis plus its argument is one clause.**
+
+    model:(-attach:chest)     ¬(attached at chest)      ← the clear form, prefer it
+    model:(-attach chest)     ¬(attached at chest)      ← same thing, word form
+    model:(attach -chest)     attach:* AND NOT "chest"  ← well-defined, and probably not what you meant
+
+The third line is legal and reads oddly, which is exactly why the highlighter must draw the capsule around what an
+axis actually consumed. **Negation is never an axis's argument** — there is no "negated value", only a negated clause.
+
+**(d) A scope may not name another column's axis.** `model:(sound:fire)` is a static error, not an empty result: the
+scope is a set of MODEL rows and a sound axis cannot read one. Universal axes (`count`, `target`) are the exception —
+they apply in every scope by definition (L1). Reject at parse time and say so in the bar; L2's "answer, never fall
+through" is about DATA, not about nonsense.
+
+**(e) An empty group `()` is a static error**, not an identity element. Nothing sensible reads it, and silently
+treating it as "everything" or "nothing" is the class of failure §9.1 is about.
+
+**(f) Two spellings of OR is one too many — `,` is retained ONLY for numbers.** `id:133,134` stays because a bare list
+of ids is how people paste them, and the rule is syntactic (every part a number), not per-field. Everywhere else `|` is
+the only OR. ⚠ This is a deliberate exception to L1 and the only one in the grammar; if it ever causes a question,
+delete it rather than growing it.
+
+#### 2.4.4 QUOTES MEAN ONE THING NOW, and that is a deletion
 
 **1.0 has two kinds of quote and it is a documented trap.** Inside a value they are phrase quotes; *around* a value they
 are grouping and get stripped. The app's own docs got it wrong once — `name:(fire "icon frost")` silently degrades,
@@ -242,7 +305,7 @@ and a phrase with a quote in it is now expressible at all: `name:"the \"real\" o
 
 Note the global door (L5) is the SHORTEST form for the common case, so most of these get shorter, not longer.
 
-#### 2.4.4 What one recursive grammar closes
+#### 2.4.5 What one recursive grammar closes
 
 | problem                               | was                                                          | now                                                       |
 |---------------------------------------|--------------------------------------------------------------|-----------------------------------------------------------|
@@ -272,7 +335,7 @@ export interface Axis {
 
     /** The two doors of L5. `word` omitted = the column's default axis. */
     prefix?: string;                    // desc:kneel
-    word?: string;                      // model:"attach chest"
+    word?: string;                      // model:(attach chest)
 
     /** Which column's rows it reads. "*" = universal: the kernel applies it to EVERY column. */
     column: string | "*";
@@ -695,7 +758,7 @@ Replaced by §5's vocabulary strip, which is generated and therefore cannot rot.
 
 ### 8.8 Quotes as a grouping device
 
-`model:"attach chest"` used quotes to group a keyword with its value; `"` now always means a phrase (§2.4.3). Grouping
+`model:"attach chest"` used quotes to group a keyword with its value; `"` now always means a phrase (§2.4.4). Grouping
 is `model:(attach chest)`, or the global door `attach:chest`.
 
 ---
