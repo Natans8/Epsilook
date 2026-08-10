@@ -1380,6 +1380,46 @@ shouting at itself.
 **⚠ TYPING ONLY. Auto-closing never applies to a paste** (§4.9.5) — a pasted string is complete by definition, so
 inserting a delimiter into it is a repair, and repairs are announced rather than silent.
 
+### 4.9.4d THE `-` KEYSTROKE — concrete rules, derived from the grammar not invented
+
+**The user, 2026-08-10: *"if you press minus when at the beginning of a chip, it will flip it. But if we implement
+standalone keywords, `-` can have a meaning, like negative numbers or local negation. I want you to define concrete
+rules."*** 1.0's shortcut collides with two new meanings, and one collision is fatal.
+
+**THE FATAL ONE: if `-` at the start of a chip's VALUE flips the chip, then `scale:-50` cannot be typed at all.** The
+percent axes are signed and used — `fx:{scale:-50}` is 71 spells, `mech:{speed:<-50}` is 582 (§4.5). So the 1.0
+shortcut cannot survive in that position, and no context rule can rescue it: deciding by whether the axis accepts
+negatives would make one keystroke mean two things depending on hidden state, which is L12 (3).
+
+**THE RULE, and it is exactly the grammar's** (§4.5): **`-` is an OPERATOR where it opens a clause, and DATA
+everywhere else.** The bar does not need a UI convention — it needs to know where the caret sits in the serialised
+text.
+
+| caret position | typing `-` | why |
+|---|---|---|
+| start of the bar, or after a space at depth 0 | **negates the next clause** | clause-opening |
+| **at a chip's LEFT EDGE**, before `axis:` | **flips that chip** — it becomes `-model:fire` | clause-opening, and this is where 1.0's gesture moves to |
+| immediately after `axis:` (value position) | **literal** — `scale:-50` is minus fifty | not clause-opening |
+| after a space INSIDE a scope `{…}` | **negates the next inner clause** — `model:{fire -missile}` | clause-opening at depth 1 |
+| immediately after `{` | negates, and the clause will fail the anchor rule (§2.4.2) | legal to TYPE, reported once it settles |
+| mid-word | **literal** — `anti-magic` is one token, 17,557 names need it | not clause-opening |
+
+**⭐ THE 1.0 GESTURE SURVIVES, ONE POSITION TO THE LEFT.** It used to fire at the start of the chip's VALUE; it now
+fires at the start of the CHIP. That is not a workaround — it is where the `-` actually goes in the text
+(`-model:fire`), so the keystroke lands exactly where the character it types would land.
+
+**And a deliberate affordance exists besides the keystroke**, because a caret position is a poor place to hide a
+toggle: the chip's field label is clickable to flip it, matching the field buttons' existing `+ Name −` shape. **The
+keystroke is for typists; the click is for everyone else**, and both write the same character.
+
+**⚠ ONE CONSEQUENCE TO ACCEPT: an empty chip takes the literal.** Caret in `model:‸`, typing `-` gives `model:-`, not a
+negated chip — value position, no exception. The chip edge is one arrow-key away and the label is clickable, so the
+cost is small and the alternative is a hidden-state rule.
+
+**Display versus syntax:** the bar renders negation as `−` (U+2212) on the chip, exactly as 1.0 does; the SYNTAX is
+always ASCII `-`. Typographic folding (§4.9.5, *Typographic folding*) maps a pasted `−`, en dash or em dash back to `-`, so a query copied
+out of the app pastes back into it.
+
 ### 4.9.5 TWO ARRIVAL PATHS — typing and pasting are not the same problem
 
 **The user's correction, 2026-08-10: *"there are 2 scenarios, when the user types a query and when the user pastes a
@@ -1403,7 +1443,7 @@ Discord, browsers and word processors substitute characters. A query copied out 
 **Measured on 9.2.7 so the fold cannot cause a miss: spell names contain ZERO curly double quotes, ZERO curly single
 quotes, ZERO non-breaking spaces and THREE en/em dashes.**
 
-    " " „ ‟   ->  "          ' ' ‛ ´  ->  '        – — ‒  ->  -
+    " " „ ‟   ->  "          ' ' ‛ ´  ->  '        – — ‒ − (U+2212)  ->  -
     NBSP, thin space, zero-width  ->  space        ：(full-width)  ->  :
 
 **Fold the CORPUS as well as the query, exactly as case is folded.** That is what keeps the three em-dash spell names
