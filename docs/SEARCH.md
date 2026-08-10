@@ -1199,6 +1199,76 @@ Two consequences worth stating, because both remove existing hand-written UI:
 
 ---
 
+## 4.9 BAD SYNTAX — the error model
+
+**Nothing in this document addressed this until 2026-08-10, and the independent review listed it as blocking: "the
+failure mode the design introduces has no specification." The user then asked the same question directly.**
+
+### 4.9.1 The distinction that shapes everything: INCOMPLETE is not INVALID
+
+**The bar is a search-as-you-type field.** Typing `model:{fire missile}` passes through
+`m`, `mo`, … `model:`, `model:{`, `model:{fire`, … — every one of which is a broken query and **none of which is an
+error**.
+
+| | test | response |
+|---|---|---|
+| **INCOMPLETE** | could still become valid by appending | **not an error.** Search the valid prefix, say nothing |
+| **INVALID** | cannot become valid by appending | error, reported on the clause |
+
+`model:{fire` is incomplete — one `}` fixes it. `name:>m` is invalid — no suffix rescues it, because `text` declines
+`compare` (§4.2b). **An incremental parser that cannot tell these apart will shout at the user on every keystroke**,
+which is the failure mode that makes people turn off "search as you type".
+
+### 4.9.2 The taxonomy, and one entry is NOT an error
+
+| # | kind | example | response |
+|---|---|---|---|
+| 1 | **unknown axis** | `foo:bar`, `Hero: Illidan` | ⚠ **NOT an error — literal text**, plus a hint. See below |
+| 2 | declined operator | `name:>m` | error: *the name axis has no ordering* |
+| 3 | foreign axis in a scope | `model:{sound:fire}` | error: *a sound axis cannot read a model row* (§2.4.3d) |
+| 4 | ill-typed value | `scale:abc` | error: *scale takes a percentage* — never a zero result |
+| 5 | contradictory value | `name:=Fire*` | error: *exact and pattern cannot combine* (§4.2b) |
+| 6 | structural | `{}` empty, `-model:{-fire}` no anchor | error (§2.4.3e, §2.4.2) |
+
+**⭐ #1 IS THE IMPORTANT ONE AND IT IS DATA THAT DECIDES IT. 12,477 spell names contain a colon** — *Embody Hero:
+Illidan*, *Power Converters: Summon Electromental*. If an unknown prefix were an error, **pasting a spell name would
+be a syntax error**, which is absurd for a spell search. So an unknown prefix is ordinary text, exactly as in 1.0.
+
+The cost is that `modle:fire` silently becomes a text search returning nothing. The mitigation is a **hint, not an
+error**: the axis list is right there, so offer *did you mean `model:`?* — cheap, and it cannot be wrong in a way that
+blocks anyone.
+
+### 4.9.3 What an erroring query DISPLAYS
+
+**The governing principle is §9.1's: a silently wrong result is worse than no result.** So an invalid clause is never
+silently dropped and never silently reinterpreted.
+
+**The chip UI gives a better answer than any of the conventions.** GitHub shows an error and no results; Google
+silently ignores what it does not understand (the failure §9.1 condemns); Lucene throws. Here:
+
+1. **The invalid clause renders as a BROKEN CHIP** — visibly, in place, with the reason on it. **The chip IS the error
+   message**, which is the same principle as §2.4.0's "the chip rendering is the parse".
+2. **The valid clauses still run.** A user with four good chips and one typo gets four chips' worth of results, not a
+   blank screen.
+3. **The result count says so** — *"1,204 spells · 1 clause ignored"*.
+4. **If every clause is invalid there is nothing to constrain**, so the result is the empty-query state — every spell
+   (§5). That is not dangerous, because it is the defined behaviour of an unconstrained query rather than a special
+   case invented for errors.
+
+**Why exclude rather than treat an invalid clause as unsatisfiable:** making it match nothing would be "safer" in the
+narrowing direction, but it hides the mistake behind a plausible zero — the same pathology as §9.1. A broken chip on
+screen cannot be missed; an empty result set can be mistaken for a real answer.
+
+### 4.9.4 What this obliges
+
+- **The parser must return errors, not throw.** One invalid clause may not lose the other four, so parse is
+  clause-local and every clause carries its own verdict.
+- **Every error names the CLAUSE and the reason** in the user's words, not the parser's. *"the name axis has no
+  ordering"*, never *"unexpected token at 14"*.
+- **`when?(d)` absence is NOT an error** (L2): an axis the loaded pack lacks yields an empty result with a note —
+  *"this pack has no descriptions"* — because that is missing DATA, not broken syntax. **The two must not be confused**,
+  and §2.4.3(d) already draws the same line.
+
 ## 5. The empty state
 
 **Decided 2026-08-10: an empty query shows EVERY spell, with a vocabulary strip above the results.** The examples panel
@@ -1331,8 +1401,10 @@ implication or ∀.
   which determines every `count` on that column.
 - **`Column.rows(d, spellId)` is a FORWARD index replacing inverted ones.** Not merely "unmeasured" as §5 of the process
   log says — architecturally inverted, on every keystroke, with `-model:{-caster}` answerable by no index at all.
-- Missing entirely: an error model, incremental/prefix parse for a search-as-you-type box, unknown-prefix behaviour,
-  case sensitivity, Unicode and curly quotes, escaping beyond `\"`, and a complexity budget.
+- **✅ ADDRESSED 2026-08-10 in §4.9**: the error model, incremental/prefix parse, and unknown-prefix behaviour — the
+  last being decided by data (12,477 spell names contain a colon, so an unknown prefix must be TEXT, not an error).
+- **⛔ STILL MISSING**: case sensitivity, Unicode normalisation and curly quotes pasted from Discord, escaping beyond
+  `\"`, and a complexity budget. All four are real and none is architectural.
 
 **What survives untouched:** L1, L2, L4, L5, L7, L9, L11, the `Axis`/`Column` collapse, §4.1's storage measurement,
 §4.5's cardinality-decides-affordance finding, and the row model's closure of filtered `count`.
