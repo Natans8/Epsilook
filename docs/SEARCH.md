@@ -60,8 +60,8 @@ Silence is a correct answer; substitution never is.
 
 Every token in one chip must be satisfied by the **same row**. Chips combine at the spell level, never inside a row.
 
-    model:(caster fireball)   one row that is both — not a caster row and a fireball row
-    model:caster model:fire   two rows, either may satisfy either chip
+    model:{target:caster fireball}   ONE row that is both — not a caster row and a fireball row
+    model:target:caster model:fire   two rows, either may satisfy either clause
 
 **Negation is the negation of the existential**, which is the conventional reading (Lucene nested queries, SQL `NOT
 EXISTS`) and the one every user expects: `-model:caster` is *"has no caster model row"*, never *"has a row that is not
@@ -90,10 +90,10 @@ carries the axis:**
 
     axis:value   ⟶   ⋁  column:(axis value)   for every column carrying `axis`
 
-    scale:50     ⟶   fx:(scale 50)                                        one column — the degenerate case
-    desc:kneel   ⟶   name:(desc kneel)
-    attach:chest ⟶   model:(attach chest) | fx:(attach chest) | mech:(attach chest)
-    count:>4     ⟶   model:(count >4) | sound:(count >4) | …
+    scale:50     ⟶   fx:{scale:50}                                        one column — the degenerate case
+    desc:kneel   ⟶   name:{desc:kneel}
+    attach:chest ⟶   model:{attach:chest} | fx:{attach:chest} | mech:{attach:chest}
+    count:>4     ⟶   model:{count:>4} | sound:{count:>4} | …
 
 **IT IS A REWRITE, NOT AN EQUIVALENCE, AND THAT IS THE WHOLE POINT.** The kernel has no notion of a "global axis" and
 never evaluates one — it sees scoped clauses only. So the two doors *cannot* disagree, in the strong sense that there is
@@ -103,7 +103,7 @@ nothing for them to disagree with. One evaluator, one code path (L11).
 
 - **`when?(d)` filters the expansion**, so an axis absent from this pack simply contributes no term, and a global form
   over columns that all lack it correctly yields nothing (L2 — answered, not fallen through).
-- **Negation needs no rule.** `-attach:chest` is the negated union, i.e. `-model:(attach chest) -fx:(attach chest) …`
+- **Negation needs no rule.** `-attach:chest` is the negated union, i.e. `-model:{attach:chest} -fx:{attach:chest} …`
   by De Morgan. Intuitive, and derived rather than stated.
 - **`count`'s global door stops being an exception.** An earlier draft called it "weak" and carved it out of this law.
   It is not special: `count:>4` is the union like everything else, and it reads oddly for the same reason any wide union
@@ -115,7 +115,7 @@ nothing for them to disagree with. One evaluator, one code path (L11).
 cannot reach: only a scope can conjoin the axis with other predicates **on the same row** (L3).
 
     scale:50               some fx row scales by 50
-    fx:(scale 50 chain)    ONE row that scales by 50 AND is a chain   ← unsayable globally
+    fx:{scale:50 chain}    ONE row that scales by 50 AND is a chain   ← unsayable globally
 
 So: `axis:value` is sugar; `column:(axis …)` is the general form. Every axis has the shortcut, and the shortcut is never
 the whole language.
@@ -156,19 +156,32 @@ single-column axis passes both trivially — which is why most axes qualify and 
 **⚠ ONE CONCRETE ACTION FALLS OUT, and it is a live 1.0 defect rather than a 2.0 design choice.** `attach` is registered
 BOTH as a model category word (`pilltypes.ts`, `modelCat("attach", …)`) and as the attachment keyword
 (`META_KEYWORDS.attach`) — so inside one column it already means two things: `model:attach` = 16 (substring) against
-`model:(attach chest)` = 51,581 (keyword). **G1 fails today.** The category word must lose the name — `attached`
+`model:{attach:chest}` = 51,581 (keyword). **G1 fails today.** The category word must lose the name — `attached`
 already exists as its twin and is the better noun — before `attach:` can be a global door.
 
 **G1 IS A GUARD, NOT A NOTE.** Per this project's own rule that prose cannot fire: `check.py` must fail when two axes
 declare the same word or prefix. That is the only one of the four a script can decide, and it is also the one that
 already broke.
 
-### L6 — Arity is fixed, visible and equal to one
+### L6 — An axis binds EXACTLY ONE value, and the colon says so
 
-**A word takes the single token after it.** A quoted phrase is one token. This is the frozen rule from 1.0 and it
-survives unchanged, including its rationale: an arity decided by the data cannot be seen or counted.
+**Every axis binds with `:`, at every level, to exactly one value** — where a phrase, a value group and a comparison
+are each one value. There is no rule to remember and nothing to count:
 
-    model:(attach chest)      model:(attach "right hand")      id:(xpac >legion)
+    attach:chest              model:{attach:"right hand"}      id:{xpac:>legion}
+    model:{attach:(chest|head) fire}                           name:="Blood Pool"
+
+**1.0's version of this law was "a word takes the single token after it", and it was doing a job the grammar should
+have done.** That version had no production behind it, so `model:(-attach chest)` and `model:(attach -chest)` shared a
+parse tree, negation bound by two different rules, and **the parser had to consult the axis registry to decide where a
+`-` attached** — meaning registering a new axis could silently change an existing bookmarked query. The independent
+review (§8.9) found all three. Binding with `:` deletes the cause rather than the symptoms.
+
+**The reader's rule, and nothing is looked up to apply it: a bare token is ALWAYS content; `axis:value` is ALWAYS an
+axis.** Both are visible in the text, which is L12.
+
+**The rationale that DOES survive from 1.0**: an arity decided by the data cannot be seen or counted. That is why
+variable arity stays forbidden — the colon simply makes it unrepresentable instead of merely against the rules.
 
 ### L7 — Plain search is a DECLARED union, ranked
 
@@ -200,6 +213,12 @@ which is the whole argument. Do not reintroduce them.
 `50` is a percent to `scale`, a channel to `invis`, a seat count to `seat`, a spell id to `triggers` and a substring to
 a file path. **The axis says which** — through its declared type (§4). A bare number never acquires meaning by looking
 numeric.
+
+**GENERALISED (§4.2b): a type REALISES an operator for its domain; it never REDEFINES one.** `=` is "exactly this"
+everywhere — numeric equality on a number, the whole string on text. `<` is "earlier in this type's order", which is a
+number for `percent` and a rung of the expansion ladder for `ordinal`. **And a type may DECLINE an operator, which is a
+static error rather than a silent fallback** — `name:>m` must say "the name axis has no ordering", not substring-search
+for the characters `>m` as 1.0 does.
 
 ### L10 — No display state may reach a result set
 
@@ -234,16 +253,16 @@ guess right about what it does. Concretely, four failures — any one of them is
 | form                                                     | verdict                                                                                         |
 |----------------------------------------------------------|-------------------------------------------------------------------------------------------------|
 | `desc:kneel`, `attach:chest`, `scale:50`                 | ✅ reads as it means                                                                            |
-| `model:(fire -missile)`                                  | ✅ "a fire model that isn't a missile"                                                          |
-| **`(model:fire model:arcane)` vs `model:(fire arcane)`** | ⛔ **FAILS (2).** One paren's POSITION changes the meaning and both read identically aloud      |
-| `model:attach` (16) vs `model:(attach chest)` (51,581)   | ⛔ **FAILS (3).** `attach` is a category word AND the keyword, in one column                    |
+| `model:{fire -missile}`                                  | ✅ "a fire model that isn't a missile"                                                          |
+| **`(model:fire model:arcane)` vs `model:{fire arcane}`** | ⛔ **FAILS (2).** One paren's POSITION changes the meaning and both read identically aloud      |
+| `model:attach` (16) vs `model:{attach:chest}` (51,581)   | ⛔ **FAILS (3).** `attach` is a category word AND the keyword, in one column                    |
 | `anim:kit` (31,291) vs `sound:kit` (2,516)               | ⛔ **FAILS (3)** globally — so `kit:` gets no global door                                       |
 | `replace:`, `loose:`                                     | ⛔ **FAILS (1).** Replace *what*? Meaningless outside their column                              |
 | `model:fire -model:missile`                              | 🟡 **withdrawn** — correct for "no missile anywhere"; the ambiguity is in the ENGLISH (§8.9.3b) |
-| `-model:(-caster)`                                       | ⛔ **FAILS (4).** Already deleted for being measured wrong                                      |
+| `-model:{-caster}`                                       | ⛔ **FAILS (4).** Already deleted for being measured wrong                                      |
 
 **Retroactively, this law is why three earlier decisions were right** — each was taken for a narrower reason and L12 is
-the general case: banning bare scope negation, deleting the ∀ double negative, and dropping `model:(attach -chest)`.
+the general case: banning bare scope negation, deleting the ∀ double negative, and making `-` bind by ONE rule (L6).
 
 **And it amends L5: a global prefix is EARNED, not automatic.** `prefix?` is optional in the `Axis` interface and the
 old L5 wording ("always both") contradicted it. The test is now stated: **an axis earns a global door when its word
@@ -273,11 +292,12 @@ export const GRAMMAR = {
     negate: "-",                       // -model:beer       universal convention
     or: "|",                           // a|b               OR at EVERY level (§2.4)
     numListSep: ",",                   // id:133,134        numbers only — see altsOf
-    compare: ["<=", ">=", "<", ">", "="],
+    compare: ["<=", ">=", "<", ">", "="],   // `=` also anchors TEXT: name:=Fireball
     range: "..",                       // scale:10..50      GitHub convention (§4.5)
     phrase: '"',                       // "a b"  — ALWAYS a phrase, never grouping
     escape: "\\",                      // \" inside a phrase (§2.4.4)
-    group: ["(", ")"],                 // grouping at EVERY level (§2.4)
+    scope: ["{", "}"],                 // model:{…} — ONE row satisfies it (§2.4.0)
+    vgroup: ["(", ")"],                // (a|b) — alternatives as one value
     wildcard: "*",                     // §3.3
     countWord: "count",                // the universal cardinality axis (L1)
 } as const;
@@ -333,8 +353,8 @@ what it does."* That requirement is what picks the assignment, and it reverses t
 | `" "` | **PHRASE** — a leaf; no delimiter is active inside | 315 |
 
     model:{fire missile}                 one model row matching both
-    model:{attach (chest|head) fire}     attached at chest OR head, and matching fire
-    model:{attach "right hand"}          a phrase as the keyword's value
+    model:{attach:(chest|head) fire}     attached at chest OR head, and matching fire
+    model:{attach:"right hand"}          a phrase as the keyword's value
     name:"Elixir (Greater)"              every delimiter is data inside a phrase
 
 **THREE REASONS BRACES BEAT PARENS FOR THE SCOPE, and the third is the one that actually decides it:**
@@ -355,6 +375,43 @@ fell into in 1.0.
 
 **Parens keep their 5,894 collisions harmlessly**, because a value group only appears INSIDE a scope. In top-level
 free text a paren is ordinary data, so `fireball (rank 2)` still searches literally.
+
+##### EXACT MATCH IS `=`, NOT A QUOTE — the roles stay unshared
+
+**The user asked whether the no-shared-roles rule covers the exact-match requirement. It did not, and that was a gap.**
+`"…"` groups words into ONE value with spaces preserved; **matching stays SUBSTRING**. `name:"blood pool"` finds names
+CONTAINING that, never names equal to it. Loading exactness onto the quote as well would be precisely the shared role
+the rule forbids — and it is what 1.0 half-did by calling quoted spans "exact-phrase tokens".
+
+**`=` already owns exactness, so extending it to text is the SAME role on another type, not a second role.**
+`scale:=50` is already "exactly fifty" (§4.2, and `numericTest`'s `=` case in 1.0). Text simply joins:
+
+    name:Fireball        contains        380
+    name:=Fireball       IS              239
+    name:="Blood Pool"   IS, multi-word    5    ← `=` anchors, `"` groups; each does one job
+    name:"Blood Pool"    contains         16
+
+**Measured on 9.2.7**, and `=` appears in only **72** spell names — nearly free, and reserved as an operator anyway.
+
+**Each delimiter keeps exactly one job, and they COMPOSE:**
+
+| token | job |
+|---|---|
+| `"…"` | group words into one value, spaces preserved |
+| `=` | anchor the match — the whole value, not a substring |
+| `{…}` | one row satisfies all of it |
+| `(…)` | alternatives as one value |
+| `*` | any value |
+
+**Per-type meaning, as L9 requires** — the type says what "exact" is: for `text` the whole string, for `enum` the whole
+enum name (which its exact-first ladder already does), for `id` always (equality is the only mode it has), and for
+`path` the whole path, which is legal but rarely what anyone wants.
+
+**⛔ `=` and `*` are mutually exclusive in one value.** `name:=Fire*` asks for an exact match to a pattern, which is a
+contradiction — a static error, not a silent winner. Same class as §2.4.3(d)/(e).
+
+**⚠ THIS DOES NOT REOPEN ANCHORING FOR PATHS (§3.2).** `=` matches the WHOLE value; it is not word-boundary anchoring,
+and it still cannot separate `bee` from `beer` inside `beecreature`. The bee/beer finding stands untouched.
 
 ##### ⚠ THE COROLLARY MATTERS MORE THAN THE DECISION — the user never SEES any of this
 
@@ -380,8 +437,8 @@ one this design actually imposes.
 **1. Parens nest, and they must.** Precedence is `-` > AND > `|` (§8.9.4 depends on it), so `|` is the LOOSEST operator.
 That means an alternation cannot be a keyword's argument without a group:
 
-    model:(attach chest|head)      =  (attach chest) OR head        ← precedence, and probably not meant
-    model:(attach (chest|head))    =  attached at chest OR head     ← the group IS the single token (L6)
+    model:{attach:chest|head}      =  (attach chest) OR head        ← precedence, and probably not meant
+    model:{attach:(chest|head)}    =  attached at chest OR head     ← the group IS the single token (L6)
 
 **2. A PHRASE IS A LEAF. No delimiter is active inside it.** Parens, pipes, dashes, stars and colons inside `"…"` are
 ordinary characters — which is what makes every awkward spell name searchable:
@@ -404,24 +461,50 @@ tokenizer simple and the highlighter honest.
 
 #### 2.4.1 The grammar
 
-Lucene's own BNF is the convention and it already says this — a clause is optionally field-prefixed and may itself be a
-parenthesised sub-query:
-
-    Clause ::= ["+","-"] [<TERM> ":"] ( <TERM> | "(" Query ")" )
-
-So:
-
 ```
-query    := clause ( clause | "|" clause )*        juxtaposition = AND, "|" = OR
-clause   := "-"? ( group | scoped | term )
-group    := "(" query ")"                          BOOLEAN group  — combines SPELLS
-scoped   := axis ":" "(" query ")"                 AXIS group     — combines within ONE ROW (L3)
-term     := axis ":" value | value
-value    := phrase | word | wildcard | comparison | range
-phrase   := '"' ( char | "\\" char )* '"'          always a phrase; never grouping
+query    := clause ( clause | "|" clause )*      juxtaposition = AND, "|" = OR
+clause   := "-"? ( scope | bind | term )
+
+scope    := axis ":" "{" inner "}"               ONE ROW of that column satisfies all of it (L3)
+inner    := iclause ( iclause | "|" iclause )*
+iclause  := "-"? ( bind | term )                 no scope inside a scope
+
+bind     := axis ":" value                       an axis and its value — at ANY level
+term     := value                                bare = a content match
+
+value    := phrase | word | number | comparison | range | wildcard | vgroup
+vgroup   := "(" value ( "|" value )* ")"         alternatives as ONE value
+phrase   := '"' ( char | "\\" char )* '"'          a LEAF: no delimiter is active inside
 ```
 
-**Precedence is the standard one: `-` > AND > `|`.** No invented precedence, no special cases.
+**Precedence: `-` > AND (juxtaposition) > `|`.** Standard, and §8.9.4's DNF result depends on it.
+
+##### ⭐ THERE IS NO ARITY RULE IN THIS GRAMMAR, AND THAT IS THE POINT
+
+**An axis always binds with `:`.** `attach:chest` globally, `model:{attach:chest}` inside a scope — the SAME
+production either way. So the old "a word takes the single token after it" (L6) **disappears from the grammar
+entirely**: `bind := axis ":" value` binds exactly one value by construction, and a `vgroup` or a `phrase` is one
+value.
+
+**This kills the independent review's worst structural finding.** §8.9 recorded that L6's arity had no production, so
+`model:(-attach chest)` and `model:(attach -chest)` shared a parse tree, negation bound by two rules, and **the parser
+needed the axis registry to decide where a `-` attached** — meaning registering an axis could change a bookmarked
+query. With `:` doing the binding, **the parse is registry-independent**: a token either carries a colon or it does
+not, and that is visible in the text (L12).
+
+**The rule a reader can hold: a bare token is ALWAYS content; `axis:value` is ALWAYS an axis.** Nothing is looked up
+to decide which.
+
+##### It also fixes the `caster` defect (L4) in the GRAMMAR rather than by renaming
+
+§7's flagship defect is that `caster` is a mask test in four columns and a substring on enum names in the fifth. Under
+this grammar the two are simply different forms:
+
+    target:caster            the mask bit — an axis binding
+    model:{target:caster}     …scoped to a model row
+    mech:caster              a CONTENT match on this column's enum names — a bare term
+
+One word, two spellings, no ambiguity and no rename required. **L4 is satisfied structurally.**
 
 #### 2.4.2 Where nesting SITS — the two scopes, and why they differ
 
@@ -430,15 +513,15 @@ This is the part that matters, and it falls straight out of L3:
 | written                     | scope       | means                                                              |
 |-----------------------------|-------------|--------------------------------------------------------------------|
 | `(model:fire model:arcane)` | **spells**  | a fire model row AND an arcane model row — possibly different rows |
-| `model:(fire arcane)`       | **one row** | a single model row matching both                                   |
+| `model:{fire arcane}`       | **one row** | a single model row matching both                                   |
 
 **The same operators, at two scopes.** Learn the algebra once; the field prefix says which scope you are in. And because
 negation now nests, the quantifier distinction becomes sayable for the first time:
 
     -model:fire        ¬∃row: fire        "has no fire model"
-    model:(-fire)       ∃row: ¬fire       "has a model that isn't fire"
-    model:* -model:(-caster)              "ALL model rows are caster"   ← full ∀
-    -model:(-caster)   ¬∃row: ¬caster     ⚠ WRONG ALONE — vacuously true of every
+    model:{-fire}       ∃row: ¬fire       "has a model that isn't fire"
+    model:* -model:{-caster}              "ALL model rows are caster"   ← full ∀
+    -model:{-caster}   ¬∃row: ¬caster     ⚠ WRONG ALONE — vacuously true of every
                                             spell with no models at all
 
 **That last line closes expressibility register #4** — universal quantification, which had no conventional spelling and
@@ -471,23 +554,23 @@ whole predicate.** Every scope needs a positive anchor.
 |-------------------------------|------------------|----------------------------------------|--------------------------------------|
 | `-(model:arcane -model:fire)` | query            | not this whole combination             | ✅                                   |
 | `-model:fire`                 | chip             | no fire model row exists               | ✅                                   |
-| `model:(fire -missile)`       | row, refining    | a fire model row that is not a missile | ✅                                   |
-| `model:(-fire)`               | row, bare        | —                                      | ⛔ **illegal**                       |
-| `model:(-attach:chest)`       | row, scoped axis | —                                      | ⛔ **illegal — use `-attach:chest`** |
+| `model:{fire -missile}`       | row, refining    | a fire model row that is not a missile | ✅                                   |
+| `model:{-fire}`               | row, bare        | —                                      | ⛔ **illegal**                       |
+| `model:{-attach:chest}`       | row, scoped axis | —                                      | ⛔ **illegal — use `-attach:chest`** |
 
-**⭐ BANNING THE BARE FORM DELETES THE TRAP ENTIRELY.** The confusing case was never `model:(fire -missile)`; it was that
-`-model:fire` and `model:(-fire)` disagree on spells with NO models — the first vacuously true, the second false. With a
+**⭐ BANNING THE BARE FORM DELETES THE TRAP ENTIRELY.** The confusing case was never `model:{fire -missile}`; it was that
+`-model:fire` and `model:{-fire}` disagree on spells with NO models — the first vacuously true, the second false. With a
 positive anchor required, **every scope must find a row before it can exclude anything**, so the vacuity has nowhere to
 appear and both readings become the obvious ones:
 
     -model:missile         "don't show me spells with missiles"        — no models? not excluded. obvious.
-    model:(fire -missile)  "show me fire models that aren't missiles"  — no models? no match. obvious.
+    model:{fire -missile}  "show me fire models that aren't missiles"  — no models? no match. obvious.
 
 **And it deletes three more problems at a stroke** — all four were separate findings of the independent review (§8.9):
 
-- the ∀ double-negative `-model:(-caster)` becomes unwritable, which is right: its showcase was WRONG (vacuously true of
+- the ∀ double-negative `-model:{-caster}` becomes unwritable, which is right: its showcase was WRONG (vacuously true of
   model-less spells), and the reviewer's judgement stands that no roleplayer would type it.
-- `model:(attach -chest)`'s baffling reading (`attach:* AND NOT "chest"`) goes with it.
+- `model:(attach -chest)`'s baffling reading goes with it — and L6's `:` binding now makes it unwritable.
 - **negated word-form axes disappear, so the parser stops needing the axis registry to place a `-`.** That was the
   review's finding #2/#3 and its worst structural consequence — registering an axis could change a bookmarked query.
 
@@ -504,28 +587,30 @@ laws; leaving any of them undefined is how 1.0 got its exceptions.
 **(a) `count` is a property of the SCOPE, not of a row.** It is the one axis that cannot be a row predicate — a row has
 no cardinality. Inside a scope it counts **the rows that satisfy the rest of that scope's predicate**:
 
-    model:(caster count >4)      more than four CASTER model rows       ← filtered count, §9 #3
-    model:(count >4)             more than four model rows in all
-    model:(count >4)             identical to the line above
+    model:{target:caster count:>4}   more than four CASTER model rows   ← filtered count, §9 #3
+    model:{count:>4}                 more than four model rows in all
+    count:>4                         the same, via the global door (L5)
 
 So the register's filtered-count entry is not a special case; it is what `count` already means once a scope exists.
 
-**(b) A group is ONE value, so arity (L6) survives nesting.** `attach` takes the single thing after it, and a
-parenthesised group is a single thing:
+**(b) A VALUE GROUP is one value.** `(a|b)` after a colon binds as a single value, so nesting never changes what an
+axis consumed:
 
-    model:(attach chest)              one value
-    model:(attach (chest|head))       still one value — the group IS the token
+    model:{attach:chest}              one value
+    model:{attach:(chest|head)}       still one value — the group IS the value
 
-**(c) `-` prefixes a CLAUSE, and a word-form axis plus its argument is one clause.**
+**(c) `-` prefixes a CLAUSE, and a bind is one clause.** With `:` doing the binding (L6) there is no word-form
+ambiguity left to resolve:
 
-    -attach:chest             ¬(attached at chest)      ← chip level, the only form
-    model:(attach chest -missile)   attached at the chest, not a missile  ← refining, legal
-    model:(-attach:chest)     ⛔ illegal — a scope needs a positive anchor (§2.4.2)
+    -attach:chest                   NOT attached at chest        ← the only form at clause level
+    model:{attach:chest -missile}   at the chest, not a missile  ← refining, legal
+    model:{-attach:chest}           ILLEGAL — a scope needs a positive anchor (§2.4.2)
+    model:{attach:* -chest}         attached somewhere, "chest" not in the corpus — legal, rarely meant
 
-The third line is legal and reads oddly, which is exactly why the highlighter must draw the capsule around what an axis
-actually consumed. **Negation is never an axis's argument** — there is no "negated value", only a negated clause.
+**Negation is never an axis's VALUE** — there is no "negated value", only a negated clause. `scale:-50` is therefore
+minus fifty, unambiguously, because `-` there sits in value position (§4.5).
 
-**(d) A scope may not name another column's axis.** `model:(sound:fire)` is a static error, not an empty result: the
+**(d) A scope may not name another column's axis.** `model:{sound:fire}` is a static error, not an empty result: the
 scope is a set of MODEL rows and a sound axis cannot read one. Universal axes (`count`, `target`) are the exception —
 they apply in every scope by definition (L1). Reject at parse time and say so in the bar; L2's "answer, never fall
 through" is about DATA, not about nonsense.
@@ -541,7 +626,7 @@ delete it rather than growing it.
 #### 2.4.4 QUOTES MEAN ONE THING NOW, and that is a deletion
 
 **1.0 has two kinds of quote and it is a documented trap.** Inside a value they are phrase quotes; *around* a value they
-are grouping and get stripped. The app's own docs got it wrong once — `name:(fire "icon frost")` silently degrades,
+are grouping and get stripped. The app's own docs got it wrong once — `name:{fire "icon:frost"}` silently degrades,
 because the inner quotes make `icon frost` a phrase, `splitKeyword` never sees the keyword, and the query returns 0 with
 no complaint.
 
@@ -551,9 +636,9 @@ delimiter, which is the whole of L1 applied to punctuation.
 The consequence is a real and deliberate syntax change — grouping that used to be written with quotes is now written
 with parens:
 
-    1.0:  model:"attach chest"          2.0:  model:(attach chest)   or   attach:chest
-    1.0:  name:"desc kneel"             2.0:  name:(desc kneel)      or   desc:kneel
-    1.0:  model:"fire missile"          2.0:  model:(fire missile)
+    1.0:  model:"attach chest"          2.0:  model:{attach:chest}   or   attach:chest
+    1.0:  name:"desc kneel"             2.0:  name:{desc:kneel}      or   desc:kneel
+    1.0:  model:"fire missile"          2.0:  model:{fire missile}
 
 and a phrase with a quote in it is now expressible at all: `name:"the \"real\" one"`.
 
@@ -564,8 +649,8 @@ Note the global door (L5) is the SHORTEST form for the common case, so most of t
 | problem                               | was                                                          | now                                                       |
 |---------------------------------------|--------------------------------------------------------------|-----------------------------------------------------------|
 | cross-field OR (§9 #1)                | **silently wrong** — `model:fire\|sound:fire` = `model:fire` | `model:fire \| sound:fire`                                |
-| row-level negation (§9 #2)            | `model:"fire -missile"` = 0, `-` a literal                   | `model:(fire -missile)`                                   |
-| ∀ quantification (§9 #4)              | unexpressible; needed an invented word                       | `-model:(-caster)`                                        |
+| row-level negation (§9 #2)            | `model:"fire -missile"` = 0, `-` a literal                   | `model:{fire -missile}`                                   |
+| ∀ quantification (§9 #4)              | unexpressible; needed an invented word                       | `-model:{-caster}`                                        |
 | arbitrary DNF                         | had to be hand-converted to CNF                              | `(model:fire model:arcane) \| (model:frost model:shadow)` |
 | implication — "arcane only with fire" | unexpressible                                                | `-(model:arcane -model:fire)`                             |
 
@@ -575,7 +660,7 @@ absence of an arbitrary restriction.
 ⚠ **The costs, stated rather than discovered later.** The chip bar is a flat sequence today and must learn to render
 NESTED groups — that is the real work, and it is a UI problem, not an engine one. The highlighter must show the parse,
 because a mis-parenthesised query is the one failure mode this grammar adds. And `|` no longer has a bare shorthand:
-`model:fire|frost` now parses as `model:fire OR frost`, so value alternation is written `model:(fire|frost)`.
+`model:fire|frost` now parses as `model:fire OR frost`, so value alternation is written `model:{fire|frost}`.
 
 ### 2.2 `Axis` — the single structure
 
@@ -589,7 +674,7 @@ export interface Axis {
 
     /** The two doors of L5. `word` omitted = the column's default axis. */
     prefix?: string;                    // desc:kneel
-    word?: string;                      // model:(attach chest)
+    word?: string;                      // model:{attach:chest}
 
     /** Which column's rows it reads. "*" = universal: the kernel applies it to EVERY column. */
     column: string | "*";
@@ -780,7 +865,8 @@ export function defineAxisType(t: AxisType): void {
 |-----------|-----------|--------------------------------------------------|---------------------------------------------|-------------------|
 | `text`    | string    | spell name, description, kit name                | substring + glob                            | text              |
 | `path`    | string    | model / sound files                              | substring + glob, **never anchored** (§3.2) | text              |
-| `enum`    | int       | effect / aura / implicit-target names, expansion | exact → substring → glob                    | **value picker**  |
+| `enum`    | int       | effect / aura / implicit-target names            | exact → substring → glob                    | **value picker**  |
+| **`ordinal`** | int   | **expansion** — an enum WITH a total order       | exact, plus `< > <= >= ..` on its ladder    | ordered picker    |
 | `id`      | int       | spell id, SoundKit id, icon fid                  | **equality only, never substring**          | exact + copy      |
 | `bitmask` | int       | target masks, attribute bits                     | bit test **and combinations**               | **glyph toggles** |
 | `count`   | int       | `count`, vehicle seats                           | integer compare, ≥ 0                        | stepper           |
@@ -792,6 +878,63 @@ export function defineAxisType(t: AxisType): void {
 | `rate`    | **float** | anim segment speed, ambient multiplier           | compare                                     | range, `×`        |
 | `flag`    | —         | attribute bits, freeze, camo                     | membership; **no value at all**             | toggle            |
 | `mixed`   | —         | the sound column (files ∪ kit names ∪ ids)       | union of its sub-axes                       | composite         |
+
+### 4.2b OPERATORS ACROSS TYPES — a type IMPLEMENTS an operator, it never REDEFINES one
+
+**The user's question, 2026-08-10: *"should datatypes have defined operator overrides?"*** The answer is yes in a
+strictly limited sense, and stating the limit is the whole of it — unlimited overriding would destroy L4 (one word,
+one meaning) and L12 (a query reads as its own explanation) in a single stroke.
+
+**THE RULE, in three parts:**
+
+1. **Every operator has ONE ABSTRACT MEANING, fixed by the grammar and identical everywhere.**
+2. **A type REALISES that meaning for its own domain. It may not give the operator a different meaning.**
+3. **A type may DECLINE an operator — and declining is a STATIC ERROR, never a silent fallback.**
+
+The abstract meanings, which no type may vary:
+
+| operator | abstract meaning |
+|---|---|
+| `=` | **exactly this** — the whole value, not a part |
+| `<` `>` `<=` `>=` | **ordering** — earlier/later in this type's total order |
+| `..` | **an interval** in that same order |
+| `*` | **any value** |
+| bare token | **contains** — a partial match |
+
+So `=` on a number is numeric equality and on text is the whole string: **the same idea, two domains.** That is
+realisation. An operator meaning "greater than" on one type and "contains" on another would be redefinition, and is
+forbidden.
+
+**Part 3 is the one that prevents a whole class of 1.0 bug.** `name:>m` today substring-searches for the literal
+`>m` — a silent nonsense answer. Under this rule the `text` type declines ordering and the bar says so. **This is the
+same distinction §2.4.3(d) draws: L2's "answer, never fall through" is about absent DATA, not about nonsense.**
+
+#### The matrix
+
+| type | `=` | `< > <= >=` | `..` | `*` | bare (contains) |
+|---|---|---|---|---|---|
+| `text` | whole string | **decline** | **decline** | glob | ✅ |
+| `path` | whole path | **decline** | **decline** | glob (weak — §3.2) | ✅ |
+| `enum` | whole enum name | **decline** | **decline** | glob | ✅ on the name |
+| **`ordinal`** | the rung | ✅ **its ladder** | ✅ | has one | ✅ on the name |
+| `id` | ✅ the only mode | **decline** — ids have no order | **decline** | any id | ⛔ **never** |
+| `bitmask` | the exact mask | **decline** | **decline** | any bit set | ⛔ |
+| `count` | = n | ✅ | ✅ | **decline** — total (§4.4) | ⛔ |
+| `seconds` `percent` `length` `scale` `angle` `rate` | = n | ✅ | ✅ | has a value | ⛔ |
+| `flag` | **decline** | **decline** | **decline** | presence | ⛔ |
+
+**⭐ `ordinal` IS A NEW TYPE AND IT EXPLAINS WHY `xpac` FELT SPECIAL.** An expansion is an enum WITH a total order, so
+`id:{xpac:>legion}` is ordering — realised on the ladder rather than on a number. 1.0 handled this with a private
+second operator alphabet (`XPAC_VALUE`), which is exactly the duplication L1 forbids. Declaring `ordinal` puts it back
+under the one grammar: same operators, same precedence, a different domain to compare in.
+
+**The other candidates for `ordinal`, none built:** item quality (poor→legendary), spell school if it were ever
+ordered, a difficulty tier. Each would cost a declaration rather than a parser.
+
+**⚠ WHAT THIS FORBIDS, so it is not "discovered" later as a feature:** a type may not add an operator of its own, may
+not change precedence, and may not make an operator mean something the table above does not say. If a type needs a
+question the operators cannot ask, **it needs an AXIS, not an operator** — which is the same answer L1 gives to a field
+that wants its own grammar.
 
 ### 4.3 `flag` is standalone, and tri-state is the GRAMMAR's job — not a type's
 
@@ -839,7 +982,7 @@ user sees why 276,332 rows came back instead of wondering. `total: true` on the 
 each column carrying the axis, so it means "some column has more than four". That reads oddly, but for the same reason
 any wide union does — not because `count` is special. An earlier draft carved it out of L5 as "a door not worth walking
 through"; the virtual-tag rewrite removed the need for the carve-out, and the useful form is still the scoped one,
-`model:(count >4)`.
+`model:{count:>4}`.
 
 ### 4.5 VALUE RANGES — the syntax is GitHub's, the domain is MEASURED
 
@@ -878,10 +1021,10 @@ what §2.4.4 removed from quotes; re-introducing it for numbers would undo that.
 
 **⭐ AND THE WHOLE QUESTION IS LOW-STAKES, BECAUSE A RANGE IS PURE SUGAR OVER TWO COMPARISONS THAT ALREADY WORK:**
 
-    fx:(scale >10)                2,170
-    fx:(scale <90)                2,803
-    fx:(scale >10 scale <90)      1,803    a true range, on ONE row
-    fx:(scale >-60 scale <-10)      229    negatives, and NO ambiguity
+    fx:{scale:>10}                2,170
+    fx:{scale:<90}                2,803
+    fx:{scale:>10 scale:<90}      1,803    a true range, on ONE row
+    fx:{scale:>-60 scale:<-10}      229    negatives, and NO ambiguity
 
 Two numeric words in one scope each bind their own argument (L6), so the row must satisfy both — that is the range, with
 no range token in sight. **And the operators make the role of `-` explicit**, which is why the verbose form has none of
@@ -1056,7 +1199,7 @@ Replaced by §5's vocabulary strip, which is generated and therefore cannot rot.
 ### 8.8 Quotes as a grouping device
 
 `model:"attach chest"` used quotes to group a keyword with its value; `"` now always means a phrase (§2.4.4). Grouping
-is `model:(attach chest)`, or the global door `attach:chest`.
+is `model:{attach:chest}`, or the global door `attach:chest`.
 
 ---
 
@@ -1074,12 +1217,12 @@ implication or ∀.
 
 **Findings I accept outright, fixed above or listed as debt:**
 
-- **The ∀ showcase was WRONG.** `-model:(-caster)` is vacuously true of every spell with no models — the exact trap
-  §2.4.2 states and then violated. Corrected to `model:* -model:(-caster)`. The same vacuity applies to §9 #5.
-- **L6's arity is NOT in the BNF.** There is no `word value` production, so `model:(-attach chest)` and
+- **The ∀ showcase was WRONG.** `-model:{-caster}` is vacuously true of every spell with no models — the exact trap
+  §2.4.2 states and then violated. Corrected to `model:* -model:{-caster}`. The same vacuity applies to §9 #5.
+- **L6's arity is NOT in the BNF.** There is no `word value` production, so `model:{-attach:chest}` and
   `model:(attach -chest)` have the same parse tree; the distinction lives in the axis registry as a post-parse
   re-association. So negation binds by **two** rules, not one, and the parse is registry-dependent.
-- **Arity breaks L8 inside a scope.** `model:(attach chest)` ≠ `model:(chest attach)`. Order-invariance is false.
+- **Arity breaks L8 inside a scope.** `model:{attach:chest}` ≠ `model:{chest attach}`. Order-invariance is false.
 - **Bare `count` returns everything** — L6 plus §4.4 make the lone word an existence test on a total axis.
 - **`*` is two mechanisms** (glob, and existence) coinciding on string storage — the shape L4 forbids. And on `path`
   axes the glob is a literal no-op, since §3.2 proves matching is unanchored substring.
@@ -1087,7 +1230,7 @@ implication or ∀.
 - **Arrays are unmodelled** — 374 columns, and an array column is exactly where the row model must decide one-row-vs-N,
   which determines every `count` on that column.
 - **`Column.rows(d, spellId)` is a FORWARD index replacing inverted ones.** Not merely "unmeasured" as §5 of the process
-  log says — architecturally inverted, on every keystroke, with `-model:(-caster)` answerable by no index at all.
+  log says — architecturally inverted, on every keystroke, with `-model:{-caster}` answerable by no index at all.
 - Missing entirely: an error model, incremental/prefix parse for a search-as-you-type box, unknown-prefix behaviour,
   case sensitivity, Unicode and curly quotes, escaping beyond `\"`, and a complexity budget.
 
@@ -1105,7 +1248,7 @@ fix.
 core of §2.4.**
 
     (model:fire model:arcane)   two rows, either may satisfy either term
-    model:(fire arcane)         ONE row that is both
+    model:{fire arcane}         ONE row that is both
 
 **They read identically aloud.** The only difference is whether the field prefix sits inside or outside the paren, and a
 reader who does not already know the rule cannot recover it. The independent review (§8.9) ranked this its #1
@@ -1120,7 +1263,7 @@ L12 (2) and (3) at once.
 |                                                  | what                                                                                      | cost                                                                                                                |
 |--------------------------------------------------|-------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
 | **A. Drop spell-level grouping** *(recommended)* | `(...)` appears ONLY after a field prefix, so parens have exactly ONE meaning — row scope | loses group negation, so the implication case (`-(model:arcane -model:fire)`) goes; **register #5 reverts to OPEN** |
-| **B. Different brackets**                        | `model:(row scope)` vs `[spell group]`                                                    | invents bracket semantics no established system uses — an L0 violation                                              |
+| **B. Different brackets**                        | `model:{row scope}` vs `[spell group]`                                                    | invents bracket semantics no established system uses — an L0 violation                                              |
 | **C. Keep both, mitigate with highlighting**     | as designed today                                                                         | the review judged highlighting insufficient, and L12 (2) is about the TEXT, not the rendering                       |
 
 **Recommendation: A.** It is the same cut the bounded-scope proposal already makes for independent reasons (process log
@@ -1142,17 +1285,17 @@ negation of a conjunction. Only those two are lost.
 
 | #  | scenario                                                 | reduced grammar                                              |                                       |
 |----|----------------------------------------------------------|--------------------------------------------------------------|---------------------------------------|
-| 1  | `count` universal — "number of spell effects, not speed" | `mech:(count >4)`                                            | ✅                                    |
+| 1  | `count` universal — "number of spell effects, not speed" | `mech:{count:>4}`                                            | ✅                                    |
 | 2  | bees without beerfest junk                               | `model:bee -model:beer` = 19                                 | ✅                                    |
 | 3  | "beer without bee junk"                                  | `model:beer` = 369, no operator needed                       | ✅                                    |
 | 4  | arcane in the description but NOT the name               | `desc:arcane -name:arcane` = 2,662                           | ✅                                    |
-| 5  | **(fire ∧ arcane) ∨ (frost ∧ arcane)**                   | factors: `model:arcane model:(fire\|frost)` = 177            | ✅                                    |
+| 5  | **(fire ∧ arcane) ∨ (frost ∧ arcane)**                   | factors: `model:arcane model:{fire\|frost}` = 177            | ✅                                    |
 | 6  | cross-field OR                                           | `model:fire \| sound:fire` — clauses, not a group            | ✅                                    |
-| 7  | row-level negation                                       | `model:(fire -missile)` — 33% correction (§2.4.2)            | ✅                                    |
-| 8  | filtered count                                           | `model:(caster count >4)`                                    | ✅                                    |
+| 7  | row-level negation                                       | `model:{fire -missile}` — 33% correction (§2.4.2)            | ✅                                    |
+| 8  | filtered count                                           | `model:{caster count:>4}`                                    | ✅                                    |
 | 9  | "has no model at all" / "everything"                     | `-model:*` / `*`                                             | ✅                                    |
 | 10 | attach / target reachable globally                       | `attach:chest`, `target:caster`                              | ✅                                    |
-| 11 | **implication — ROW level**                              | `-model:(arcane -fire)` — "no model row arcane-without-fire" | ✅ **survives**                       |
+| 11 | **implication — ROW level**                              | `-model:{arcane -fire}` — "no model row arcane-without-fire" | ✅ **survives**                       |
 | 12 | **implication — SPELL level**                            | `-model:arcane \| model:fire` = **270,978**                  | ✅ **survives — De Morgan, §8.9.4**   |
 | 13 | **arbitrary DNF**                                        | `model:fire model:arcane \| model:frost model:shadow`        | ✅ **survives — precedence, §8.9.4**  |
 | 14 | ∀ quantification                                         | —                                                            | ⛔ lost earlier (§2.4.2), register #4 |
@@ -1160,8 +1303,8 @@ negation of a conjunction. Only those two are lost.
 
 **THIRTEEN of fifteen survive** (corrected 2026-08-10 — see §8.9.4; two rows below were first recorded as lost and are
 not). Note #11: **the implication shape survives at ROW level**, because `-column:(…)` is an ordinary negated clause and
-needs no spell-level group. `-model:(arcane
--fire)` says "every arcane model row is also fire". Only the SPELL-level reading — an arcane row and a fire row being
+needs no spell-level group. `-model:{arcane
+-fire}` says "every arcane model row is also fire". Only the SPELL-level reading — an arcane row and a fire row being
 different rows — is gone.
 
 **#5 is the one to remember**, because it is the user's own first combination case and it never needed grouping: it
@@ -1181,7 +1324,7 @@ don't contain the word fire across any models?" One line, and it is the PLAIN fo
 | query                      | means                                     | 9.2.7       |
 |----------------------------|-------------------------------------------|-------------|
 | `model:arcane -model:fire` | has arcane; **no** model has fire         | **5,354**   |
-| `model:(arcane -fire)`     | one model FILE saying arcane and not fire | ~all arcane |
+| `model:{arcane -fire}`     | one model FILE saying arcane and not fire | ~all arcane |
 | `model:arcane model:fire`  | an arcane model **and** a fire model      | 152         |
 
 **⚠ CORRECTION TO §2.4.2 AND TO L12's TABLE.** Both said `model:fire -model:missile` "over-excludes by 33%" and filed it
@@ -1232,7 +1375,7 @@ spell-level grouping cost **no expressive power at all**.
     (model:fire | sound:fire) (model:ice | sound:ice)      ← needs grouping, or an exponential DNF expansion
 
 The common case of that is alternation inside ONE column, and it is already handled at value level by
-`model:(fire|frost)`. The residue is cross-column OR in more than one conjunct, which nobody has asked for.
+`model:{fire|frost}`. The residue is cross-column OR in more than one conjunct, which nobody has asked for.
 
 **So §8.9.1's option A is now strictly better than it looked when it was chosen:** parens keep exactly one meaning, L12
 is satisfied, and the expressive loss is nil rather than "two exotic shapes". **The trade is DNF verbosity against
@@ -1244,7 +1387,7 @@ left-to-right will misread `a b | c d`. The bar's highlighter has to show the OR
 
 #### 8.9.3 ⚠ WHEN ROW-LEVEL NEGATION HELPS, AND WHEN IT IS A TRAP
 
-**Asked by the user, 2026-08-10: would the implication be `model:arcane -model:(arcane -fire)`? It parses, and it
+**Asked by the user, 2026-08-10: would the implication be `model:arcane -model:{arcane -fire}`? It parses, and it
 returns almost nothing.** Measured over every `.m2` in the listfile:
 
     paths containing "arcane"              317
@@ -1252,7 +1395,7 @@ returns almost nothing.** Measured over every `.m2` in the listfile:
       ...that do not                       316
 
 At ROW level `arcane -fire` means ONE FILE PATH holding "arcane" and not "fire" — true of 316 of 317. So
-`-model:(arcane -fire)` excludes essentially every arcane spell, and the compound lands on the lone file that says both.
+`-model:{arcane -fire}` excludes essentially every arcane spell, and the compound lands on the lone file that says both.
 Valid, useless.
 
 **Three questions were hiding in one sentence, and only the middle one is actually lost:**
@@ -1261,7 +1404,7 @@ Valid, useless.
 |---------------------------------------------|---------------------------|-----------------------------------|
 | **A** arcane spells that ALSO have fire     | `model:arcane model:fire` | ✅ **152** — trivial, no negation |
 | **B** everything EXCEPT arcane-without-fire | —                         | ⛔ lost with spell grouping       |
-| **C** no arcane FILE lacking fire           | `-model:(arcane -fire)`   | ✅ legal, ≈ `-model:arcane` here  |
+| **C** no arcane FILE lacking fire           | `-model:{arcane -fire}`   | ✅ legal, ≈ `-model:arcane` here  |
 
 Note **B does not require arcane at all** — it filters everything — which is why it is a different shape from what the
 question wrote, and why losing it costs less than it first appears.
@@ -1271,8 +1414,8 @@ question wrote, and why losing it costs less than it first appears.
 > **Row-level negation helps when one term is a PROPERTY of the row and the other is its CONTENT. It is a trap when
 > both are content words that rarely co-occur in one row.**
 
-`model:(fire -missile)` works — the 33% correction of §2.4.2 — because `missile` is a CATEGORY carried by every model
-row, so every row can be tested against it. `model:(arcane -fire)` fails because both are path substrings and a path
+`model:{fire -missile}` works — the 33% correction of §2.4.2 — because `missile` is a CATEGORY carried by every model
+row, so every row can be tested against it. `model:{arcane -fire}` fails because both are path substrings and a path
 almost never carries both.
 
 **So the autocomplete and the help must steer the negated term toward category words, target words and attachment
@@ -1298,9 +1441,9 @@ than by four separate features.
 | # | the query you could not write                                               | 1.0                                                                        | 2.0                                                                                                                               |
 |---|-----------------------------------------------------------------------------|----------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
 | 1 | **cross-field OR** — "a fire model OR a fire sound"                         | **silently wrong** (§9.1)                                                  | ✅ `model:fire \| sound:fire` — §2.4                                                                                              |
-| 2 | **row-level negation** — "a fire model that is not a missile"               | `model:"fire -missile"` = 0, `-` a literal                                 | ✅ `model:(fire -missile)` — §2.4                                                                                                 |
+| 2 | **row-level negation** — "a fire model that is not a missile"               | `model:"fire -missile"` = 0, `-` a literal                                 | ✅ `model:{fire -missile}` — §2.4                                                                                                 |
 | 3 | **filtered count** — "more than 4 CASTER models"                            | `model:"caster count >4"` = 15,905 = has-a-caster-row ∧ >4 models *in all* | ✅ free from the row model (§9.2)                                                                                                 |
-| 4 | **∀ quantification** — "models that ALL play on the caster"                 | unexpressible                                                              | ⛔ **REOPENED** — the `-model:(-caster)` form was measured wrong and is now illegal (§2.4.2). Wants a word, not a double negative |
+| 4 | **∀ quantification** — "models that ALL play on the caster"                 | unexpressible                                                              | ⛔ **REOPENED** — the `-model:{-caster}` form was measured wrong and is now illegal (§2.4.2). Wants a word, not a double negative |
 | 5 | **implication**                                                             | unexpressible                                                              | ✅ `-model:arcane \| model:fire` = 270,978 — De Morgan, no grouping (§8.9.4)                                                      |
 | 6 | **arbitrary DNF**                                                           | hand-convert to CNF                                                        | ✅ AND binds tighter than `\|`, so a flat list IS DNF (§8.9.4)                                                                    |
 | 7 | **cross-column row correlation** — "a model and a sound on the SAME target" | unexpressible                                                              | ⛔ still open — §9.3                                                                                                              |
@@ -1353,7 +1496,7 @@ unexpressible, because the result looks plausible.
 
 CLAUDE.md's open items say filtered `count` needs "the four column matchers restructured into per-spell ENTRY
 ITERATORS". **`Column.rows()` IS that restructuring**, so it arrives as a side effect rather than its own pass: the
-kernel evaluates the chip's row predicate first and counts what survives, so `model:(caster count >4)` becomes "more
+kernel evaluates the chip's row predicate first and counts what survives, so `model:{caster count:>4}` becomes "more
 than four caster models" — the meaning the docs always claimed.
 
 ⚠ **Measure it on landing**: it moves `model:"caster count >4"` off 15,905.
