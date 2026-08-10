@@ -451,7 +451,15 @@ function descriptionMark(i: number): HTMLElement | null {
     const note = d.encounterText[d.encounterOf[i]] || "";
     if (!desc && !note) return null;
 
-    const marks = descTerms();
+    // LIT BY WHAT THE TEXT ACTUALLY CONTAINS, not by "a desc term exists".
+    // Plain search reaches descriptions too now, and a plain word matches five
+    // other corpora as well — so a row can be here because of its MODEL and
+    // have nothing to mark. Testing the prose is the only answer that is right
+    // for both doors, and it is what makes the mark mean "your word is in
+    // here" rather than "you used the keyword".
+    const terms = descTerms();
+    const hay = `${desc} ${note}`.toLowerCase();
+    const marks = terms.filter((t) => hay.includes(t));
     const span = el("span", "desc-mark" + (marks.length ? " hit" : ""));
     span.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
         + '<path d="M2.5 3.5h11M2.5 6.5h11M2.5 9.5h11M2.5 12.5h7"/></svg>';
@@ -464,8 +472,19 @@ function descriptionMark(i: number): HTMLElement | null {
 }
 
 /**
- * The words a `desc` keyword is currently asking for, lowercased and split.
- * Read from the live query through the SAME splitKeyword the matcher uses, so
+ * Every word the current query could have matched IN A DESCRIPTION.
+ *
+ * TWO DOORS REACH THIS TEXT AND BOTH HAVE TO BE READ. `name:"desc kneel"`
+ * arrives as a keyword value, and since descriptions joined `FIELDS.all` a
+ * bare `kneel` reaches them too — as an ordinary chipless token. Reading only
+ * the keyword left the mark dark and the panel unmarked for every plain
+ * search, which is the common case.
+ *
+ * A `name:`-SCOPED token is deliberately excluded: it searches the name alone,
+ * so marking it in the prose would claim a match the engine never made. Only
+ * `all` tokens and `desc` values can be here.
+ *
+ * The keyword half goes through the SAME splitKeyword the matcher uses, so
  * what the panel marks and what the search matched cannot drift apart.
  */
 function descTerms(): string[] {
@@ -474,6 +493,9 @@ function descTerms(): string[] {
         for (const w of v.toLowerCase().split(" ")) {
             if (w) out.push(w);
         }
+    }
+    for (const t of state.tokens) {
+        if (t.field === "all" && t.text) out.push(t.text.toLowerCase());
     }
     return out;
 }
