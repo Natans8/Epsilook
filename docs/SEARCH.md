@@ -1908,27 +1908,58 @@ it.** Park unless someone does.
 
 **All the user's calls except where marked. §10.1's table is struck through where a row is closed here.**
 
-### P0-a — `( )` does exactly TWO things, and only one is a meaning
+### P0-a — ⭐ A TAG CLOSES ON WHITESPACE OR `}`, WHICH LEAVES PARENS ALMOST NOTHING TO DO
 
-**The user's question: *"what exactly do parentheses do? Do they even have a meaning outside of boolean shenanigans and
-clearing negative numbers?"*** Walking every legal position, the answer is: **no, and that is fine** —
+**The user asked *"what exactly do parentheses do? Do they even have a meaning outside of boolean shenanigans and
+clearing negative numbers?"* — and their own follow-up answered it and simplified the language:**
 
-| job                                          | example                | is it a meaning?                                                                                                                                                    |
-|----------------------------------------------|------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **several alternatives become ONE value**    | `attach:(chest\|head)` | ✅ **yes** — needed because `\|` is the LOOSEST operator, so `attach:chest\|head` would parse as `(attach:chest) OR head` and the alternation would escape the bind |
-| **a leading `-` is a sign, not an operator** | `scale:(-50)-10`       | ⛔ disambiguation only                                                                                                                                              |
+> ***"Well it shouldn't. No whitespace or curly bracket — no tag closure."***
 
-**⭐ THE TEACHABLE STORY IS SYMMETRIC: BRACES GROUP CLAUSES, PARENS GROUP VALUES.** `{ }` = more than one condition on
-one row. `( )` = more than one value in one slot. Neither groups the other's thing, and there is no third bracket.
+**THE RULE: a bind's VALUE runs to the next WHITESPACE or `}`. Nothing else terminates it.**
 
-**The user's call on leniency, and it corrects the framing of §2.4.5: *"it is not a replacement for `{ }`, but it still
-counts as a single token."*** So `model:(fire missile)` is valid syntax — a paren pair always yields ONE value — and it
-is **not** a spelling of `model:{fire missile}`.
+    attach:chest|head       ONE value -- alternatives. No parens, no group, nothing to learn
+    attach:chest | head     THREE clauses -- bind, OR, bare term. The SPACE split them
+    model:fire|frost        one value: fire or frost
+    model:fire | sound:fire two clauses -- cross-column OR
 
-**⚠ ONE SUB-CASE STILL NEEDS ONE SENTENCE FROM THE USER: what does JUXTAPOSITION inside a value group mean?**
-`(chest|head)` is alternatives. `(fire missile)` has no separator, and two readings are open — **the whole group is one
-value matching both substrings**, or **it is a phrase**, which would collide with `"fire missile"`. Recorded rather than
-guessed. Everything else about parens is settled.
+**⛔ THIS REVERSES §2.4.5's note** that `model:fire|frost` parses as `model:fire OR frost` — a consequence of `|` being
+the loosest operator at every level, and the loosest-operator rule stops at the value boundary.
+
+**A VALUE ENDS AT:** whitespace at depth 0 of the value (not inside `"…"` or `(…)`) · a `}` closing the enclosing
+scope · end of input. Balanced pairs are part of the value.
+
+    name:"blood pool"                 the space is inside the quotes
+    name:"Embody Hero: Illidan"       the colon is data -- a phrase is a LEAF
+    model:{attach:"right hand" fire}  the value ends at the space AFTER the closing quote
+    model:{fire}                      the `}` closes the scope, so the value is `fire`
+
+**⚠ A CLOSER WITH TEXT GLUED TO IT IS REPAIRED, NOT CONCATENATED** (user: *"if there is no whitespace after a quote or
+bracket something went wrong, and it's reasonable for us to insert it honestly"*):
+
+| written | verdict |
+|---|---|
+| `model:(fire`&#124;`frost)bolt` | ✅ **deliberate** — the group holds alternatives, so it expands to `firebolt` OR `frostbolt`. Shell brace expansion, `echo {a,b}c` → `ac bc` |
+| `model:(fire)bolt` | ⚠ **WARNING** — no alternation, nothing to distribute, so it is a missing space |
+| `name:"blood pool"x` | ⚠ **WARNING** — a phrase has NO expansion semantics, so glued text can never mean anything |
+
+**MEASURED, because the worry was spell names: of 5,898 names containing `)`, only 112 have a non-space after it** —
+all `),` or `))` (*"Torch Toss (Shadow), Fast"*). **They are only reached through a QUOTED phrase where every character
+is literal**, so no real name constrains this. Same for the 315 names containing `"`.
+
+**The repair is ANNOUNCED with the repaired query, never silent** (§4.9.4's WARNING tier), **and it fires on
+SETTLE/PASTE, never per keystroke** — `name:"blood pool"` is a state you pass through on the way to
+`name:"blood pool" fire`.
+
+**⭐ SO PARENS NOW CARRY ALMOST NO MEANING OF THEIR OWN**, which was the user's instinct. Alternation-as-one-value is
+supplied by whitespace for free. What remains: brace expansion above, and reading a leading `-` as a sign
+(`scale:(-50)-10`). They stay legal; nothing requires them.
+
+**THE WHOLE STORY TO TEACH:** *a space ends a tag · braces hold more than one condition on one row · everything else is
+part of the value.*
+
+**⚠ THE COST: whitespace is now SEMANTICALLY SIGNIFICANT.** §4.9.9 Tier 1's "collapse whitespace runs silently" still
+holds for runs, but inserting or deleting a single space changes the parse — so the highlighter must show the tag
+boundary.
 
 ### P0-b — old URLs are allowed to break (user)
 
