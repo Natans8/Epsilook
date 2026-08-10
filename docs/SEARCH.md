@@ -882,8 +882,8 @@ tighter than `|` (§8.9.4). That is the argument for nesting: not five features,
 
 ⚠ **The costs, stated rather than discovered later.** The chip bar is a flat sequence today and must learn to render a
 row SCOPE — the real work, and a UI problem rather than an engine one. The highlighter must show the parse, because a
-mis-scoped query is the one failure mode this grammar adds. ⛔ And the note that once stood here — *"`|` no longer has a bare
-shorthand"* — is **REVERSED by P0-a**: a tag closes on whitespace, so `model:fire|frost` is one value with two
+mis-scoped query is the one failure mode this grammar adds. ⛔ And the note that once stood here — *"`|` no longer has a
+bare shorthand"* — is **REVERSED by P0-a**: a tag closes on whitespace, so `model:fire|frost` is one value with two
 alternatives and needs no bracket at all.
 
 ### 2.5 ⭐ THE EXTENSION CONTRACT — what each new thing is allowed to cost
