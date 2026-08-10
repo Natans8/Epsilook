@@ -3604,30 +3604,32 @@ footer a {
     display: none;
 }
 
-#tip.pinned.by-touch {
-    /* room for the button, so it never lands on the last line of prose */
-    padding-top: 2.1rem;
-}
-
+/* A CORNER CHIP, OUTSIDE THE CONTENT FLOW. Reserving a band at the top of the
+   panel for it cost a whole empty row with an × floating in it — the button
+   was pushing the prose down instead of sitting beside it. Hung off the corner
+   it takes no layout at all, and the disc + border is what keeps it legible
+   over whatever the panel happens to be sitting on. */
 #tip.pinned.by-touch .tip-close {
     position: absolute;
-    top: 0;
-    right: 0;
+    top: -14px;
+    right: -14px;
     display: grid;
     place-items: center;
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     padding: 0;
-    border: 0;
-    background: none;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--bg-panel);
     color: var(--text-dim);
-    font-size: 1.5rem;
+    font-size: 1.35rem;
     line-height: 1;
     cursor: pointer;
 }
 
 #tip.pinned.by-touch .tip-close:active {
     color: var(--text-strong);
+    border-color: var(--gold);
 }
 
 /* A SECTIONED tooltip — today only the description mark, which can carry three
