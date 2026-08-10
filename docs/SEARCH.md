@@ -293,7 +293,7 @@ export const GRAMMAR = {
     or: "|",                           // a|b               OR at EVERY level (§2.4)
     numListSep: ",",                   // id:133,134        numbers only — see altsOf
     compare: ["<=", ">=", "<", ">", "="],   // `=` also anchors TEXT: name:=Fireball
-    range: "..",                       // scale:10..50      GitHub convention (§4.5)
+    range: "-",                        // scale:10-90       between values; §4.5
     phrase: '"',                       // "a b"  — ALWAYS a phrase, never grouping
     escape: "\\",                      // \" inside a phrase (§2.4.4)
     scope: ["{", "}"],                 // model:{…} — ONE row satisfies it (§2.4.0)
@@ -431,6 +431,40 @@ So every L12 obligation collected in §8.9.3 and §8.9.4 — draw the OR split, 
 consumed — is a **typing-time** obligation. At rest it is the chip layout's job, and **a chip layout that cannot
 express a scope cannot render its own query.** That is a larger UI requirement than syntax highlighting, and it is the
 one this design actually imposes.
+
+##### LENIENT INPUT: `axis:(…)` is accepted as a scope; `axis:"…"` is NOT
+
+**The user, 2026-08-10: *"chips scoped by quotes and parentheses instead of curly brackets should be okey dokey if
+they don't conflict with anything, no? And we can silently replace them because they're not visible to the user at any
+point."*** The premise is right — a committed chip shows no delimiters, so the canonical form can be normalised to
+`{ }` without anyone seeing it. **The two candidates then differ completely, and only one is safe.**
+
+**✅ PARENS — accepted, and provably unambiguous.** The worry would be a clash with the value group, but check whether
+the two readings can ever BOTH parse and disagree:
+
+| written | as a VALUE GROUP | as a SCOPE | |
+|---|---|---|---|
+| `model:(fire\|frost)` | alternatives → content match | `fire OR frost` as terms → content match | **same answer** |
+| `model:(fire)` | one value | one term | **same answer** |
+| `model:(fire missile)` | ⛔ invalid — no separator | `fire AND missile` | only one parses |
+| `model:(attach:chest)` | ⛔ invalid — a colon is not a value | a bind | only one parses |
+
+**They never both parse into different meanings.** So the rule is a fallback, not a guess: *try value group; if it does
+not parse, read it as a scope* — and normalise to `{ }` on commit. That costs nothing in ambiguity and buys leniency
+for the two groups most likely to type it: people carrying 1.0 habits, and people carrying Lucene/Google habits.
+
+**⛔ QUOTES — refused, and this is the one real objection.** `model:"fire missile"` has a perfectly valid PHRASE
+reading (the literal substring `fire missile`, which matches almost nothing) that DIFFERS from the scope reading (a row
+matching both). **Both parse. They disagree. Nothing in the text says which.**
+
+That is exactly the trap §2.4.4 exists to delete — 1.0's two kinds of quote, the one that made
+`name:(fire "icon frost")` silently return 0. Re-admitting it as "leniency" would reintroduce the defect under a
+friendlier name, and it would break `name:"Blood Pool"`, which must stay a phrase.
+
+**And one correction to the premise, which is why this is a decision rather than a shrug:** the delimiters are
+invisible on a COMMITTED chip, but they are visible **while typing** and **in a shared URL**. So a silent replacement
+is safe on commit and would be a live rewrite of what the user is looking at if done a keystroke earlier. **Normalise
+at commit, never during.**
 
 ##### How they NEST — three rules, and a phrase is a LEAF
 
@@ -924,7 +958,7 @@ The abstract meanings, which no type may vary:
 |---|---|
 | `=` | **exactly this** — the whole value, not a part |
 | `<` `>` `<=` `>=` | **ordering** — earlier/later in this type's total order |
-| `..` | **an interval** in that same order |
+| `-` (between values) | **an interval** in that same order |
 | `*` | **any value** |
 | bare token | **contains** — a partial match |
 
@@ -1032,7 +1066,7 @@ word "or", it is two axes.
 
 #### The matrix
 
-| type | `=` | `< > <= >=` | `..` | `*` | bare (contains) |
+| type | `=` | `< > <= >=` | `-` range | `*` | bare (contains) |
 |---|---|---|---|---|---|
 | `text` | whole string | **decline** | **decline** | glob | ✅ |
 | `path` | whole path | **decline** | **decline** | glob (weak — §3.2) | ✅ |
@@ -1109,48 +1143,36 @@ through"; the virtual-tag rewrite removed the need for the carve-out, and the us
 
 Two halves that must agree: how you WRITE a range, and how the UI knows what range to DRAW.
 
-**The syntax is GitHub's `n..n`** (L0 — it is the family Epsilook sits in), and `*` as an open bound composes exactly
-with the wildcard rule already adopted in §3.3, so there is one meaning of `*` in the whole language:
+**⭐ THE SEPARATOR IS `-`, AND `..` IS DROPPED (user, 2026-08-10). Two earlier rejections of `-` were conditional on
+delimiter assignments that have since changed, and both are now obsolete:**
 
-    scale:10..50      between, inclusive
-    scale:10..*       ≡  scale:>=10
-    scale:*..50       ≡  scale:<=50
-    scale:*           any value at all — the existence reading (§4.4)
+| the old objection | why it no longer holds |
+|---|---|
+| "a `-` between numbers collides with a NEGATIVE value" | **parens disambiguate it** — the user's original suggestion, rejected only because parens were the row scope at the time. They are the VALUE GROUP now (§2.4.0), and `(-50)` is a one-member group, already legal by the existing production. No new rule |
+| "17,557 spell names contain a hyphen" | **the type decides.** A range separator exists only on types implementing `compare` (§4.2b). `text` declines ordering, so in `name:anti-magic` the dash is data and there is no range reading to collide with |
 
-Lucene's `[10 TO 50]` was the alternative and loses on both counts: it is the relevance family's spelling, and it costs
-two brackets and a keyword where `..` costs two dots.
+    scale:10-90         between
+    scale:(-50)-10      a negative lower bound
+    scale:(-50)-(-10)   readable — unlike `-50--10`
+    scale:10-*          ≡  scale:>=10          `*` keeps its one meaning (§3.3)
+    scale:*-90          ≡  scale:<=90
+    name:anti-magic     `text` has no `compare`, so the dash is ordinary data
 
-**⛔ `-` AS THE RANGE TOKEN WAS PROPOSED AND REJECTED ON MEASUREMENT (user, 2026-08-10).** `10-90` reads more naturally
-than `10..90` and that instinct is right, but `-` already carries three meanings in this data:
+**⛔ A NEGATIVE BOUND IN A RANGE MUST BE PARENTHESISED.** `scale:-50-10` is technically deterministic — a leading `-`
+is a sign, one between values is a separator — but nobody can read it, and L12 is a law rather than a preference. It is
+an ERROR with the structural fix `scale:(-50)-10`.
 
-| meaning               | evidence on 9.2.7                                                               |
-|-----------------------|---------------------------------------------------------------------------------|
-| negation              | `-model:fire`                                                                   |
-| a NEGATIVE VALUE      | `fx:"scale -50"` = 71 · `mech:"speed <-50"` = 582 — the percent axes are signed |
-| an ordinary character | **17,557 spell names** contain a hyphen (6.4%), plus 254 `.m2` paths            |
+**This also retires `..` from a language that no longer needs two range spellings**, and `-` is what the user asked for
+in the first place: *"a dash between 2 tokens could mean range. Like 10-90. I think this would be more naturally
+readable."*
 
-A fourth meaning makes `scale:-50-10` unreadable — −50 to 10, or −50 to −10 written `-50--10`, or a negation? **The role
-of the token becomes invisible, which is L12 (1).** With `..` both forms stay clean: `-50..10`, `-50..-10`.
-
-**And the readability concern is answered by the AFFORDANCE, not the token.** Per §4.5, a high-cardinality numeric axis
-is drawn as a SLIDER — the user drags and `10..90` is what gets serialised. The range token is machine-facing far more
-often than human-facing, which is exactly where a slightly technical spelling is affordable.
-
-**Parens were then proposed for the negative, "like in math" — and they are already spent.** `(` after a field prefix is
-a ROW SCOPE (§2.4.2), so `scale:(-50)` is a scoped clause, not a literal. One delimiter with two meanings is precisely
-what §2.4.4 removed from quotes; re-introducing it for numbers would undo that.
-
-**⭐ AND THE WHOLE QUESTION IS LOW-STAKES, BECAUSE A RANGE IS PURE SUGAR OVER TWO COMPARISONS THAT ALREADY WORK:**
-
-    fx:{scale:>10}                2,170
-    fx:{scale:<90}                2,803
-    fx:{scale:>10 scale:<90}      1,803    a true range, on ONE row
-    fx:{scale:>-60 scale:<-10}      229    negatives, and NO ambiguity
-
-Two numeric words in one scope each bind their own argument (L6), so the row must satisfy both — that is the range, with
-no range token in sight. **And the operators make the role of `-` explicit**, which is why the verbose form has none of
-the ambiguity the compact one would. `10..90` is shorthand for exactly this, the slider generates both, and nothing in
-the language depends on the shorthand existing.
+**⚠ HISTORY, kept because the reversal is instructive: `-` was proposed, REJECTED, and then ADOPTED within the same
+session.** The rejection rested on three collisions — negation, negative values, and 17,557 hyphenated spell names —
+and on parens being unavailable to disambiguate. **Every one of those was dissolved by decisions taken afterwards**:
+parens became the value group rather than the row scope (§2.4.0), and the operator contract (§4.2b) made the range
+separator exist only on types implementing `compare`, so a hyphen in a `text` value has no range reading to collide
+with. The lesson is not about dashes — **it is that a rejection is only as durable as the assumptions under it**, and
+two of mine expired within the hour.
 
 ##### `-` IS AN OPERATOR ONLY IN CLAUSE-OPENING POSITION
 
@@ -1488,17 +1510,17 @@ rule rather than being carved beside it.
 | `model:{attach:` | **incomplete bind, nested** | dropped → body is empty → **`model:*`** again |
 | `model:{attach:c` | bind, partial value | substring — "attached somewhere containing c". Meaningful |
 | `scale:>` | **operator, no operand** | dropped |
-| `scale:10..` | **range, no upper bound** | dropped → falls back to `scale:10`? **NO** — see below |
+| `scale:10-` | **range, no upper bound** | dropped → falls back to `scale:10`? **NO** — see below |
 | `name:=` | **exact, no value** | dropped |
 | `name:"fire` | **unclosed phrase** | NOT incomplete — 1.0's rule stands: the phrase runs to end of input |
 | `model:fire \|` | **dangling OR** | dropped → `model:fire`. 1.0 already skips separator-only tokens |
 | `model:fire -` | **dangling negation** | dropped |
 | `model:{fire ` | trailing space | no-op |
 
-**⚠ THE ONE THAT NEEDED A DECISION RATHER THAN THE RULE: `scale:10..`** — dropping the incomplete range would silently
+**⚠ THE ONE THAT NEEDED A DECISION RATHER THAN THE RULE: `scale:10-`** — dropping the incomplete range would silently
 demote it to `scale:10`, i.e. **exactly ten**, which is a different and plausible-looking answer. That is §9.1's
 pathology in miniature. So a half-written range **drops the whole bind** rather than degrading to its lower bound.
-*(The friendly alternative — reading `10..` as `10..*` — was rejected: it guesses, and the guess is invisible.)*
+*(The friendly alternative — reading `10-` as `10-*` — was rejected: it guesses, and the guess is invisible.)*
 
 #### Why dropping is safe here, when it would not be elsewhere
 
