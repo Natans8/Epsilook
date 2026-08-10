@@ -882,9 +882,9 @@ tighter than `|` (§8.9.4). That is the argument for nesting: not five features,
 
 ⚠ **The costs, stated rather than discovered later.** The chip bar is a flat sequence today and must learn to render a
 row SCOPE — the real work, and a UI problem rather than an engine one. The highlighter must show the parse, because a
-mis-scoped query is the one failure mode this grammar adds. And `|` no longer has a bare shorthand:
-`model:fire|frost` parses as `model:fire OR frost`, so value alternation is written `model:{fire|frost}` or
-`model:(fire|frost)`.
+mis-scoped query is the one failure mode this grammar adds. ⛔ And the note that once stood here — *"`|` no longer has a bare
+shorthand"* — is **REVERSED by P0-a**: a tag closes on whitespace, so `model:fire|frost` is one value with two
+alternatives and needs no bracket at all.
 
 ### 2.5 ⭐ THE EXTENSION CONTRACT — what each new thing is allowed to cost
 
@@ -1904,21 +1904,102 @@ it.** Park unless someone does.
 
 ---
 
+## 10.0 ⭐ PHASE 0 RESOLUTIONS — the blocking decisions, closed 2026-08-10
+
+**All the user's calls except where marked. §10.1's table is struck through where a row is closed here.**
+
+### P0-a — `( )` does exactly TWO things, and only one is a meaning
+
+**The user's question: *"what exactly do parentheses do? Do they even have a meaning outside of boolean shenanigans and
+clearing negative numbers?"*** Walking every legal position, the answer is: **no, and that is fine** —
+
+| job                                          | example                | is it a meaning?                                                                                                                                                    |
+|----------------------------------------------|------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **several alternatives become ONE value**    | `attach:(chest\|head)` | ✅ **yes** — needed because `\|` is the LOOSEST operator, so `attach:chest\|head` would parse as `(attach:chest) OR head` and the alternation would escape the bind |
+| **a leading `-` is a sign, not an operator** | `scale:(-50)-10`       | ⛔ disambiguation only                                                                                                                                              |
+
+**⭐ THE TEACHABLE STORY IS SYMMETRIC: BRACES GROUP CLAUSES, PARENS GROUP VALUES.** `{ }` = more than one condition on
+one row. `( )` = more than one value in one slot. Neither groups the other's thing, and there is no third bracket.
+
+**The user's call on leniency, and it corrects the framing of §2.4.5: *"it is not a replacement for `{ }`, but it still
+counts as a single token."*** So `model:(fire missile)` is valid syntax — a paren pair always yields ONE value — and it
+is **not** a spelling of `model:{fire missile}`.
+
+**⚠ ONE SUB-CASE STILL NEEDS ONE SENTENCE FROM THE USER: what does JUXTAPOSITION inside a value group mean?**
+`(chest|head)` is alternatives. `(fire missile)` has no separator, and two readings are open — **the whole group is one
+value matching both substrings**, or **it is a phrase**, which would collide with `"fire missile"`. Recorded rather than
+guessed. Everything else about parens is settled.
+
+### P0-b — old URLs are allowed to break (user)
+
+**No query-format marker.** `model:"attach chest"` was 51,581 and becomes ≈0 under the new quote rule, and a shared
+Discord link will silently answer a different question. **The user's call, consistent with *"the app is too young to
+worry about old links"*.** ⛔ **D2 is CLOSED as WONTFIX** — do not re-propose a version marker.
+
+**One consequence follows and is accepted with it:** with no marker, **D1's hazard has no mitigation either.** Changing
+an axis's TYPE (promoting `xpac` from `enum` to `ordinal`) silently re-reads an old query, and nothing detects it. That
+is the same trade, taken knowingly.
+
+### P0-c — D1: tokenization IS registry-dependent at VALUE level
+
+**§2.4.1's claim is true at CLAUSE level only** — where a `-` attaches, which is what the arity deletion fixed. It is
+**false at value level**, and two features make it so: a range separator exists only on types implementing `compare`
+(`name:anti-magic` is one token, `scale:10-90` is two bounds), and units require the type's table to split `500ms-2s`.
+
+**THE RULE: an axis's TYPE is part of the query contract.** Changing it is a breaking language change. With P0-b there
+is no marker to announce one, so the discipline is procedural: **a type change goes in the change notes.**
+
+### P0-d — D3: relevance is BEST-TIER-WINS, and it absorbs the enum ladder
+
+1. **A spell's rank is its BEST (lowest) matching tier**, not a sum. A name hit outranks a description hit, always.
+2. **Within a tier, exact beats prefix beats substring.** ⭐ **This is where 1.0's enum exact→substring "ladder" goes** —
+   it was never a fourth matching mode, it was ranking (TYPES §9.4). One mechanism, not two.
+3. **Ties break on spell id ascending**, so the sort is TOTAL and therefore stable — no library stability assumption.
+4. **`sort=-<column>` overrides relevance entirely** when set; relevance is the default, not a component.
+
+### P0-e — D4: the positive anchor binds PER DNF TERM
+
+**Not per scope.** `model:{fire|-missile}` was legal under the old wording and means ∃row (fire ∨ ¬missile) — true of
+nearly everything. **Every disjunct inside a scope needs its own positive anchor.**
+
+Two rulings the old wording left open:
+
+- **`count` SATISFIES the anchor.** `model:{count:>4}` is legal — it is a positive assertion about the row set, and
+  §2.4.3 (a) already makes `count` a scope-level predicate rather than a row one.
+- **`model:{}` is legal** and equals `model:*` (§2.4.3e). An empty conjunction has no disjunct to anchor, so the rule
+  does not apply to it — vacuous rather than violated.
+
+### P0-f — D5: recovery syncs on a CLAUSE THAT CANNOT BELONG TO THE SCOPE
+
+§4.9.4's "`axis:` at depth zero" is unimplementable — recovery happens *inside* an unclosed scope, so no depth-zero
+token exists to find. **The rule is: close the scope before the first `axis:` that is not a legal member of it** — i.e.
+an axis belonging to another column.
+
+**⚠ AND THE UNIVERSAL AXES ARE THE EXPLICIT CARVE-OUT, because they are legal in every scope:**
+
+    model:{fire sound:ice     ->  model:{fire} sound:ice     sound cannot read a model row
+    model:{fire count:>4      ->  model:{fire count:>4}      count is universal, so it BELONGS
+
+**Yes, this is registry-dependent** — and with P0-b that is accepted rather than mitigated. It is also the only recovery
+that does not destroy correctly-written input.
+
+---
+
 ## 10. KNOWN DEFECTS AND UNSPECIFIED BEHAVIOUR
 
 **From the second independent review, 2026-08-10.** Everything here is either a defect in this document or a decision
-nobody has taken. **⛔ NONE OF IT IS "DEBT" — the kernel must not be written until the BLOCKING rows are closed**, and
-each is stated precisely enough to be closed without re-deriving it.
+nobody has taken. **⛔ NONE OF IT IS "DEBT".** ✅ **All five BLOCKING rows were closed in PHASE 0 — see §10.0.** §10.2 and
+§10.3 remain open, and each is stated precisely enough to be closed without re-deriving it.
 
 ### 10.1 BLOCKING — resolve before any code
 
-| #      | defect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | the fix                                                                                                                                                                                                                                                      |
-|--------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **D1** | **Tokenization is registry-dependent at VALUE level, and §2.4.1 claims it is not.** `name:anti-magic` is one token but `scale:10-90` is a range — the tokenizer must know the type to split it, and TYPES §5's units do it again (`500ms-2s`). **§2.4.1's claim is true at CLAUSE level only** (where a `-` attaches), which is the weaker statement                                                                                                                                      | State the honest scope of the claim. Then: **changing an axis's type is a BREAKING LANGUAGE CHANGE** — promoting `xpac` from `enum` to `ordinal` silently re-reads `id:{xpac:legion-wotlk}` from a token to a range. It needs the query-version marker in D2 |
-| **D2** | **1.0 URLs are silently REINTERPRETED, which is the one pathology §9.1 condemns.** Back-compat was waived for ALIASES (§8.6); it was never waived for meaning. `model:"attach chest"` was **51,581** and becomes a phrase search for the literal substring ≈ **0**                                                                                                                                                                                                                        | Add a query-format marker (`v=2`, or `q2=`). A query without it is **detected and refused with an explanation**, never silently re-read. Cheap, and it is the only thing standing between a shared link and a plausible wrong answer                         |
-| **D3** | **Relevance is unspecified beyond a per-axis tier.** L7 gives `tier?: number` and nothing else: no rule for a spell hitting three axes at three tiers, no tie-break, no within-tier score, no statement of stability. §8.5 deleted 1.0's name-only scoring and put nothing in its place                                                                                                                                                                                                   | Specify: the spell's tier is its BEST hit; ties break on a declared secondary; the sort must be stable. And say how the existing `sort=-<column>` coexists                                                                                                   |
-| **D4** | **The positive-anchor rule is defeatable and does not compose.** `model:{fire\|-missile}` has an anchor and means ∃row(fire ∨ ¬missile) — true of nearly everything. `model:{count:>4}` has NO row predicate at all yet is legal (§2.4.3a). `model:{}` has none either yet is legal (§2.4.3e)                                                                                                                                                                                             | Restate per DNF TERM inside the scope, not per scope. Then rule explicitly on whether `count` and the empty scope satisfy it — currently three sections disagree                                                                                             |
-| **D5** | **The panic-mode recovery rule names a token that cannot occur where it is used.** §4.9.4 synchronises on *"`axis:` at depth zero"* — but recovery happens INSIDE an unclosed scope, i.e. at depth 1, so no such token exists. The rule that actually produces the worked example is *"the next `axis:` not legal in this scope"*, which is registry-dependent and misfires on universals: `model:{fire count:>4` and `model:{fire sound:ice` have the same shape and recover differently | Restate the sync token, and rule on `target:` / `count:` explicitly                                                                                                                                                                                          |
+| #                        | defect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | the fix                                                                                                                                                                                                                                                      |
+|--------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ~~D1~~ ✅ P0-c           | **Tokenization is registry-dependent at VALUE level, and §2.4.1 claims it is not.** `name:anti-magic` is one token but `scale:10-90` is a range — the tokenizer must know the type to split it, and TYPES §5's units do it again (`500ms-2s`). **§2.4.1's claim is true at CLAUSE level only** (where a `-` attaches), which is the weaker statement                                                                                                                                      | State the honest scope of the claim. Then: **changing an axis's type is a BREAKING LANGUAGE CHANGE** — promoting `xpac` from `enum` to `ordinal` silently re-reads `id:{xpac:legion-wotlk}` from a token to a range. It needs the query-version marker in D2 |
+| ~~D2~~ ⛔ WONTFIX (P0-b) | **1.0 URLs are silently REINTERPRETED, which is the one pathology §9.1 condemns.** Back-compat was waived for ALIASES (§8.6); it was never waived for meaning. `model:"attach chest"` was **51,581** and becomes a phrase search for the literal substring ≈ **0**                                                                                                                                                                                                                        | Add a query-format marker (`v=2`, or `q2=`). A query without it is **detected and refused with an explanation**, never silently re-read. Cheap, and it is the only thing standing between a shared link and a plausible wrong answer                         |
+| ~~D3~~ ✅ P0-d           | **Relevance is unspecified beyond a per-axis tier.** L7 gives `tier?: number` and nothing else: no rule for a spell hitting three axes at three tiers, no tie-break, no within-tier score, no statement of stability. §8.5 deleted 1.0's name-only scoring and put nothing in its place                                                                                                                                                                                                   | Specify: the spell's tier is its BEST hit; ties break on a declared secondary; the sort must be stable. And say how the existing `sort=-<column>` coexists                                                                                                   |
+| ~~D4~~ ✅ P0-e           | **The positive-anchor rule is defeatable and does not compose.** `model:{fire\|-missile}` has an anchor and means ∃row(fire ∨ ¬missile) — true of nearly everything. `model:{count:>4}` has NO row predicate at all yet is legal (§2.4.3a). `model:{}` has none either yet is legal (§2.4.3e)                                                                                                                                                                                             | Restate per DNF TERM inside the scope, not per scope. Then rule explicitly on whether `count` and the empty scope satisfy it — currently three sections disagree                                                                                             |
+| ~~D5~~ ✅ P0-f           | **The panic-mode recovery rule names a token that cannot occur where it is used.** §4.9.4 synchronises on *"`axis:` at depth zero"* — but recovery happens INSIDE an unclosed scope, i.e. at depth 1, so no such token exists. The rule that actually produces the worked example is *"the next `axis:` not legal in this scope"*, which is registry-dependent and misfires on universals: `model:{fire count:>4` and `model:{fire sound:ice` have the same shape and recover differently | Restate the sync token, and rule on `target:` / `count:` explicitly                                                                                                                                                                                          |
 
 ### 10.2 SERIOUS
 

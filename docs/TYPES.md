@@ -240,10 +240,9 @@ anchoring proposal has somewhere to be refused. See SEARCH.md §3.2.
 telling a user the value exists. An `enum` axis is browsable by construction, which is the direct answer to *"I find
 myself way too often opening wago.tools when Epsilook doesn't provide."*
 
-**⚠ ONE OPEN QUESTION (§9.4): the exact→substring→glob LADDER.** 1.0 matches an enum by trying exact first, then
-substring. The operator contract has no notion of a ladder — `equals`, `contains` and `glob` are selected by the
-operator in the TEXT. Either the ladder is a fourth mechanism and needs a name, or `enum` is `text` plus a picker.
-**Decide before porting the mech column.**
+**✅ RESOLVED — THERE IS NO LADDER (PHASE 0).** 1.0 matches an enum by trying exact first, then substring, and that
+looked like a fourth matching mode. It is not: **matching is `contains`, and "exact first" is RANKING.** So the ladder
+collapses into the relevance rule (SEARCH.md D3), and `enum` is `text` plus a picker plus a relevance tier.
 
 ---
 
@@ -382,27 +381,33 @@ Every column has a cardinality, possibly zero — so `count:*` is every spell. O
 ```ts
 /** The whole family, from one factory. Adding `yards` is one call. */
 const numeric = (o: {
-    name: string; storage: "int" | "float";
-    unit: string; units: UnitTable; signed?: boolean; sentinels?: Sentinels;
-}) => defineType<number>({
-    name: o.name,
-    storage: o.storage,
-    parse: parseNumber(o),        // handles sign, units, sentinels; null if not numeric
-    format: (n) => `${o.signed && n > 0 ? "+" : ""}${fmt(n)}${o.unit}`,
-    equals: (v, x) => v === x,
-    compare: (v, x) => v - x,     // a total order, trivially
-    present: () => true,
-    units: o.units,
-    ui: "range",
-});
+        name: string; storage: "int" | "float";
+        unit: string; units: UnitTable; signed?: boolean; sentinels?: Sentinels;
+    }) => defineType<number>({
+        name: o.name,
+        storage: o.storage,
+        parse: parseNumber(o),        // handles sign, units, sentinels; null if not numeric
+        format: (n) => `${o.signed && n > 0 ? "+" : ""}${fmt(n)}${o.unit}`,
+        equals: (v, x) => v === x,
+        compare: (v, x) => v - x,     // a total order, trivially
+        present: () => true,
+        units: o.units,
+        ui: "range",
+    });
 
-const seconds = numeric({ name: "seconds", storage: "int", unit: "s",
-                                 units: { s: 1, ms: 0.001, m: 60 },
-                                 sentinels: { [-1]: "unlimited" } });
-const percent = numeric({ name: "percent", storage: "int", unit: "%",
-                                 units: { "%": 1 }, signed: true });
-const angle   = numeric({ name: "angle",   storage: "float", unit: "deg",
-                                 units: { deg: 1, "°": 1 } });
+const seconds = numeric({
+    name: "seconds", storage: "int", unit: "s",
+    units: {s: 1, ms: 0.001, m: 60},
+    sentinels: {[-1]: "unlimited"}
+});
+const percent = numeric({
+    name: "percent", storage: "int", unit: "%",
+    units: {"%": 1}, signed: true
+});
+const angle = numeric({
+    name: "angle", storage: "float", unit: "deg",
+    units: {deg: 1, "°": 1}
+});
 ```
 
 **⚠ SENTINELS ARE CLASSIFIED BEFORE THEY ARE SCALED OR COMPARED.** `SpellCastTimes.Base` has a minimum of
@@ -422,6 +427,31 @@ decided, `#` is not registered as a radix anywhere. SEARCH.md §9 #8.
 ---
 
 ## 5. Units
+
+### 5.0 ⭐ WHICH UNITS CONVERT, AND WHY — only ONE type actually needs it
+
+**The user's call, 2026-08-10: *"don't convert yards, metres don't have a lot of meaning in WoW unfortunately. Make sure
+you keep in mind to which units you convert and why, what's logical here."*** Working that through per type is the whole
+answer, and it is much smaller than the machinery first suggested:
+
+| type      | canonical | converts?                                | why                                                                                                                                                                   |
+|-----------|-----------|------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `seconds` | `s`       | ✅ **`ms` · `s` · `m`**                  | the ONLY real case. WoW durations span 3 orders — 31 sub-second cast times, and cooldowns run to minutes                                                              |
+| `length`  | `yd`      | ⛔ **NEVER** — yards only                | **yards are WoW's native unit.** Metres are not a unit the game or its players think in; offering `m` would invite a conversion nobody wants and collide with minutes |
+| `percent` | `%`       | ⛔ dimensionless — nothing to convert to | `50%` and `50` are the same number                                                                                                                                    |
+| `angle`   | `deg`     | ⛔ degrees only                          | radians are developer-facing. A roleplayer says "a 60 degree cone"                                                                                                    |
+| `scale`   | `x`       | ⛔ a multiplier has no alternate unit    | `2x` is twice. There is no second way to say it                                                                                                                       |
+| `rate`    | `x`       | ⛔ same                                  |                                                                                                                                                                       |
+| `count`   | —         | ⛔ dimensionless                         |                                                                                                                                                                       |
+
+**⭐ SO CONVERSION IS A FEATURE OF `seconds` AND NOTHING ELSE TODAY.** Every other numeric type declares one canonical
+unit that is *displayed and accepted*, never converted. That is worth knowing before building the machinery: `units` is
+a general mechanism with exactly one current customer, and the honest reason to build it generally is that
+`SpellCooldowns` and durations are queued and are the same shape.
+
+**THE TEST FOR ADDING A UNIT: does the AUDIENCE use it?** Not "is it a valid conversion". Yards convert perfectly well
+to metres and the conversion is useless, because no Epsilon roleplayer has ever asked for a spell with an 18-metre
+range.
 
 ### 5.1 The seven rules
 
