@@ -78,16 +78,47 @@ renamed** — not documented, not special-cased.
 > Broke as: `caster` is a target-mask bit test in model/sound/anim/fx and a substring match on enum names in mech.
 > Same word, two unrelated mechanisms, five wildly different populations.
 
-### L5 — Every axis has exactly two doors
+### L5 — The global prefix is a VIRTUAL SCOPED TAG, desugared at parse time
 
-A **global prefix** and an **in-column word**, always both, always the same semantics:
+**The user's formulation, 2026-08-10, and it is better than the one this law had: *"plain keywords are shortcuts to
+scoped keywords, as if `scale:50` is treated like `fx:scale 50`, a virtual fx tag… not just an equivalent but as a
+virtual behaviour."*** The earlier wording described two doors with two descriptions — "anywhere" versus "binds to the
+row" — which is how two implementations come to exist and then drift.
 
-    desc:kneel              ≡  name:(desc kneel)
-    attach:chest                any column, any row
-    model:(attach chest)        that model row only  (L3 binds it)
+**THE RULE. A global prefix is REWRITTEN, before evaluation, into the union of its scoped forms over every column that
+carries the axis:**
 
-The global door asks "does this spell have it anywhere". The in-column door additionally binds to the row. Nothing is
-reachable through only one door.
+    axis:value   ⟶   ⋁  column:(axis value)   for every column carrying `axis`
+
+    scale:50     ⟶   fx:(scale 50)                                        one column — the degenerate case
+    desc:kneel   ⟶   name:(desc kneel)
+    attach:chest ⟶   model:(attach chest) | fx:(attach chest) | mech:(attach chest)
+    count:>4     ⟶   model:(count >4) | sound:(count >4) | …
+
+**IT IS A REWRITE, NOT AN EQUIVALENCE, AND THAT IS THE WHOLE POINT.** The kernel has no notion of a "global axis" and
+never evaluates one — it sees scoped clauses only. So the two doors *cannot* disagree, in the strong sense that there
+is nothing for them to disagree with. One evaluator, one code path (L11).
+
+**What follows for free:**
+
+- **`when?(d)` filters the expansion**, so an axis absent from this pack simply contributes no term, and a global form
+  over columns that all lack it correctly yields nothing (L2 — answered, not fallen through).
+- **Negation needs no rule.** `-attach:chest` is the negated union, i.e. `-model:(attach chest) -fx:(attach chest) …`
+  by De Morgan. Intuitive, and derived rather than stated.
+- **`count`'s global door stops being an exception.** An earlier draft called it "weak" and carved it out of this law.
+  It is not special: `count:>4` is the union like everything else, and it reads oddly for the same reason any wide
+  union does. One less exception.
+- **The bar can SHOW the expansion** — a global chip is a virtual scoped chip, so hovering or expanding it teaches the
+  scoped form. That is the answer to "the user has to hunt for the keywords": the shortcut is also the lesson.
+
+**⚠ THE TWO DOORS ARE NOT PEERS — the scoped form is strictly more expressive**, and this is the one thing the sugar
+cannot reach: only a scope can conjoin the axis with other predicates **on the same row** (L3).
+
+    scale:50               some fx row scales by 50
+    fx:(scale 50 chain)    ONE row that scales by 50 AND is a chain   ← unsayable globally
+
+So: `axis:value` is sugar; `column:(axis …)` is the general form. Every axis has the shortcut, and the shortcut is
+never the whole language.
 
 > Broke as: `desc`, `icon`, `attach`, `boneset`, `motion`, `xpac`, `kit` are all in-column only, so a user who knows
 > the concept cannot find the door.
@@ -614,11 +645,11 @@ For a total axis the wildcard is still **answered** rather than rejected — L2 
 is the literally correct answer — but it is **never offered in autocomplete and the bar marks it as a no-op**, so the
 user sees why 276,332 rows came back instead of wondering. `total: true` on the axis is the whole declaration.
 
-**Related weakness, stated rather than papered over: `count`'s GLOBAL door is weak.** L5 gives every axis a global
-prefix, but `count` is a universal *parameterised by column*, so `count:>4` can only mean "some column has more than
-four", which is a question nobody asks. Its real form is the in-column one, `model:(count >4)`. This is the one place
-L5's two-doors rule produces a door not worth walking through, and that is a property of `count` being a meta-axis
-rather than a flaw in the law.
+**`count`'s global door is NOT an exception — see L5.** `count:>4` desugars, like every global prefix, to the union
+over each column carrying the axis, so it means "some column has more than four". That reads oddly, but for the same
+reason any wide union does — not because `count` is special. An earlier draft carved it out of L5 as "a door not worth
+walking through"; the virtual-tag rewrite removed the need for the carve-out, and the useful form is still the scoped
+one, `model:(count >4)`.
 
 ### 4.5 VALUE RANGES — the syntax is GitHub's, the domain is MEASURED
 
