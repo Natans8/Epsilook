@@ -744,6 +744,49 @@ with the wildcard rule already adopted in §3.3, so there is one meaning of `*` 
 Lucene's `[10 TO 50]` was the alternative and loses on both counts: it is the relevance family's spelling, and it costs
 two brackets and a keyword where `..` costs two dots.
 
+**⛔ `-` AS THE RANGE TOKEN WAS PROPOSED AND REJECTED ON MEASUREMENT (user, 2026-08-10).** `10-90` reads more
+naturally than `10..90` and that instinct is right, but `-` already carries three meanings in this data:
+
+| meaning | evidence on 9.2.7 |
+|---|---|
+| negation | `-model:fire` |
+| a NEGATIVE VALUE | `fx:"scale -50"` = 71 · `mech:"speed <-50"` = 582 — the percent axes are signed |
+| an ordinary character | **17,557 spell names** contain a hyphen (6.4%), plus 254 `.m2` paths |
+
+A fourth meaning makes `scale:-50-10` unreadable — −50 to 10, or −50 to −10 written `-50--10`, or a negation? **The
+role of the token becomes invisible, which is L12 (1).** With `..` both forms stay clean: `-50..10`, `-50..-10`.
+
+**And the readability concern is answered by the AFFORDANCE, not the token.** Per §4.5, a high-cardinality numeric
+axis is drawn as a SLIDER — the user drags and `10..90` is what gets serialised. The range token is machine-facing far
+more often than human-facing, which is exactly where a slightly technical spelling is affordable.
+
+**Parens were then proposed for the negative, "like in math" — and they are already spent.** `(` after a field prefix
+is a ROW SCOPE (§2.4.2), so `scale:(-50)` is a scoped clause, not a literal. One delimiter with two meanings is
+precisely what §2.4.4 removed from quotes; re-introducing it for numbers would undo that.
+
+**⭐ AND THE WHOLE QUESTION IS LOW-STAKES, BECAUSE A RANGE IS PURE SUGAR OVER TWO COMPARISONS THAT ALREADY WORK:**
+
+    fx:(scale >10)                2,170
+    fx:(scale <90)                2,803
+    fx:(scale >10 scale <90)      1,803    a true range, on ONE row
+    fx:(scale >-60 scale <-10)      229    negatives, and NO ambiguity
+
+Two numeric words in one scope each bind their own argument (L6), so the row must satisfy both — that is the range,
+with no range token in sight. **And the operators make the role of `-` explicit**, which is why the verbose form has
+none of the ambiguity the compact one would. `10..90` is shorthand for exactly this, the slider generates both, and
+nothing in the language depends on the shorthand existing.
+
+##### `-` IS AN OPERATOR ONLY IN CLAUSE-OPENING POSITION
+
+Settling this here because it is the same question, and the independent review listed it as undefined. **`-` negates
+only when it OPENS a clause** — at the start of the query, after whitespace, or after `(`. Anywhere else it is
+ordinary character data or part of a value:
+
+    -model:fire      negation      — clause-opening
+    model:anti-magic one token     — 17,557 names need this
+    scale:-50        minus fifty   — value position, and the axis is signed
+    model:-fire      the literal "-fire"  — value position; matches nothing, but consistently nothing
+
 **The domain is DERIVED FROM THE LOADED PACK, never declared** — value sets differ per game version, so a hard-coded
 min/max would be wrong on ten packs out of eleven. `Axis.domain(d)` is computed at index time, exactly as `when?(d)`
 already gates a word by whether the pack has data for it.
