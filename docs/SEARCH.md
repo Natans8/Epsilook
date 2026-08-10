@@ -216,7 +216,9 @@ negation now nests, the quantifier distinction becomes sayable for the first tim
 
     -model:fire        ¬∃row: fire        "has no fire model"
     model:(-fire)       ∃row: ¬fire       "has a model that isn't fire"
-    -model:(-caster)   ¬∃row: ¬caster     "ALL model rows are caster"   ← full ∀, free
+    model:* -model:(-caster)              "ALL model rows are caster"   ← full ∀
+    -model:(-caster)   ¬∃row: ¬caster     ⚠ WRONG ALONE — vacuously true of every
+                                            spell with no models at all
 
 **That last line closes expressibility register #4** — universal quantification, which had no conventional spelling and
 was going to need an invented word (`only`, `all:`). It needs neither: De Morgan and nesting already say it.
@@ -251,7 +253,7 @@ the laws; leaving any of them undefined is how 1.0 got its exceptions.
 has no cardinality. Inside a scope it counts **the rows that satisfy the rest of that scope's predicate**:
 
     model:(caster count >4)      more than four CASTER model rows       ← filtered count, §9 #3
-    model:"count >4"             more than four model rows in all
+    model:(count >4)             more than four model rows in all
     model:(count >4)             identical to the line above
 
 So the register's filtered-count entry is not a special case; it is what `count` already means once a scope exists.
@@ -501,7 +503,7 @@ are REGISTERED, exactly as pill types are — adding one is a call, never an edi
 ```ts
 export interface AxisType {
     name: string;                                  // "percent", "seconds", "length"
-    storage: "int" | "float" | "string";           // §4.1 — what the source actually holds
+    storage: "int" | "float" | "string" | "locstring" | null;  // §4.1; null = valueless (flag)
     parse(token: string): TypeQuery | null;        // token -> a test, or null = not mine
     test(q: TypeQuery, value: unknown): boolean;
 
@@ -583,7 +585,7 @@ user sees why 276,332 rows came back instead of wondering. `total: true` on the 
 
 **Related weakness, stated rather than papered over: `count`'s GLOBAL door is weak.** L5 gives every axis a global
 prefix, but `count` is a universal *parameterised by column*, so `count:>4` can only mean "some column has more than
-four", which is a question nobody asks. Its real form is the in-column one, `model:"count >4"`. This is the one place
+four", which is a question nobody asks. Its real form is the in-column one, `model:(count >4)`. This is the one place
 L5's two-doors rule produces a door not worth walking through, and that is a property of `count` being a meta-axis
 rather than a flaw in the law.
 
@@ -763,6 +765,46 @@ is `model:(attach chest)`, or the global door `attach:chest`.
 
 ---
 
+## 8.9 ⚠ THE INDEPENDENT REVIEW — §2.4 IS UNDER CHALLENGE, DO NOT BUILD IT YET
+
+**2026-08-10. An agent with NO context on this app reviewed this document and its strongest objection lands.** It is
+recorded here rather than quietly absorbed, because it argues against the single largest thing in the file.
+
+**The objection: every measured defect in §7 is a LAW violation, and not one of them is an expressibility gap.** The
+laws, the axis registry, the two doors and the row model fix all nine — with the chip list kept FLAT. §2.4's recursive
+grammar is therefore paying structural costs (a chip bar that becomes a tree editor; a parser that depends on the axis
+registry, so registering an axis can change what a bookmarked query means) for capability nobody has been measured
+wanting. §9's own discipline is *measurement before feature*, and §9 contains no measurement of demand for DNF,
+implication or ∀.
+
+**Findings I accept outright, fixed above or listed as debt:**
+
+- **The ∀ showcase was WRONG.** `-model:(-caster)` is vacuously true of every spell with no models — the exact trap
+  §2.4.2 states and then violated. Corrected to `model:* -model:(-caster)`. The same vacuity applies to §9 #5.
+- **L6's arity is NOT in the BNF.** There is no `word value` production, so `model:(-attach chest)` and
+  `model:(attach -chest)` have the same parse tree; the distinction lives in the axis registry as a post-parse
+  re-association. So negation binds by **two** rules, not one, and the parse is registry-dependent.
+- **Arity breaks L8 inside a scope.** `model:(attach chest)` ≠ `model:(chest attach)`. Order-invariance is false.
+- **Bare `count` returns everything** — L6 plus §4.4 make the lone word an existence test on a total axis.
+- **`*` is two mechanisms** (glob, and existence) coinciding on string storage — the shape L4 forbids. And on `path`
+  axes the glob is a literal no-op, since §3.2 proves matching is unanchored substring.
+- **`Row.corpus` is one string**, so §8.1's promised category/corpus split and the `mixed` type are unrepresentable.
+- **Arrays are unmodelled** — 374 columns, and an array column is exactly where the row model must decide one-row-vs-N,
+  which determines every `count` on that column.
+- **`Column.rows(d, spellId)` is a FORWARD index replacing inverted ones.** Not merely "unmeasured" as §5 of the
+  process log says — architecturally inverted, on every keystroke, with `-model:(-caster)` answerable by no index at
+  all.
+- Missing entirely: an error model, incremental/prefix parse for a search-as-you-type box, unknown-prefix behaviour,
+  case sensitivity, Unicode and curly quotes, escaping beyond `\"`, and a complexity budget.
+
+**What survives untouched:** L1, L2, L4, L5, L7, L9, L11, the `Axis`/`Column` collapse, §4.1's storage measurement,
+§4.5's cardinality-decides-affordance finding, and the row model's closure of filtered `count`.
+
+**The pending call is in `docs/PROCESS-LOG-search2.md` §4.0** — it is a scope decision for the user, not a
+documentation fix.
+
+---
+
 ## 9. The expressibility register — KEEP HUNTING
 
 **Standing instruction from the user, 2026-08-10: *"I want to be on constant lookout for similar scenarios that cannot
@@ -805,7 +847,7 @@ unexpressible, because the result looks plausible.
 
 CLAUDE.md's open items say filtered `count` needs "the four column matchers restructured into per-spell ENTRY
 ITERATORS". **`Column.rows()` IS that restructuring**, so it arrives as a side effect rather than its own pass: the
-kernel evaluates the chip's row predicate first and counts what survives, so `model:"caster count >4"` becomes "more
+kernel evaluates the chip's row predicate first and counts what survives, so `model:(caster count >4)` becomes "more
 than four caster models" — the meaning the docs always claimed.
 
 ⚠ **Measure it on landing**: it moves `model:"caster count >4"` off 15,905.
