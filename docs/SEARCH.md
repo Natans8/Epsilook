@@ -223,26 +223,57 @@ negation now nests, the quantifier distinction becomes sayable for the first tim
 **That last line closes expressibility register #4** — universal quantification, which had no conventional spelling and
 was going to need an invented word (`only`, `all:`). It needs neither: De Morgan and nesting already say it.
 
-##### LOCAL NEGATION — `-` binds to a CLAUSE at ANY depth
+##### LOCAL NEGATION — THREE DEPTHS, and the fourth is BANNED
 
-There is no separate rule for this and there must not be one. `clause := "-"? (group | scoped | term)` already says
-negation attaches wherever a clause does, so it means the same thing at four depths and the DEPTH is what varies:
+**The user challenged this as "problematic and confusing" (2026-08-10) and was half right: the VALUE is real and
+measured, the CONFUSION was concentrated in one form, and that form is now illegal.**
 
-| written | depth | reads |
+**THE MEASUREMENT FIRST, because it is what justifies keeping any of it.** The flat, chip-level form silently
+OVER-EXCLUDES — it drops every spell that has an excluded row anywhere, even when a perfectly good matching row exists:
+
+| query | rows | |
 |---|---|---|
-| `-(model:arcane -model:fire)` | query | not this whole combination |
-| `-model:fire` | chip | no fire model row exists |
-| `model:(-fire)` | **row, on a term** | a model row that is not fire |
-| `model:(-attach:chest)` | **row, on a scoped axis** | a model row not attached at the chest |
-| `model:(fire -missile)` | row, mixed | a fire model row that is not a missile |
+| `model:fire` | 14,198 | |
+| `model:fire -model:missile` | 9,575 | the flat form |
+| `model:fire model:missile` | **4,623** | **33% of the result, silently dropped** |
+| `sound:cast` | 51,117 | |
+| `sound:cast -sound:impact` | 30,120 | |
+| `sound:cast sound:impact` | **20,997** | **41%** |
 
-**The prefix form works at every nesting level**, so an axis reached globally (`attach:chest`) is the same axis reached
-inside a row scope (`model:(-attach:chest)`). That is L5's two doors surviving nesting rather than breaking under it.
+So "fire models that aren't missiles" is answered WRONGLY by the flat form a third of the time. Local negation is not
+a power-user luxury; it is the correct reading of the query people actually type.
 
-**⚠ THE TRAP WORTH KNOWING, and it is not a bug: `-model:fire` and `model:(-fire)` differ on spells with NO models.**
-`-model:fire` is TRUE for them — nothing fires, nothing to exclude. `model:(-fire)` is FALSE — the existential needs a
-row to exist before it can be non-fire. Same word, two depths, two answers, both correct. The bar's highlighter must
-make the depth visible, because this is the one distinction a reader cannot recover from the words alone.
+**THE RULE, and it is a restriction rather than a generalisation: inside a scope, negation REFINES — it may not be the
+whole predicate.** Every scope needs a positive anchor.
+
+| written | depth | reads | |
+|---|---|---|---|
+| `-(model:arcane -model:fire)` | query | not this whole combination | ✅ |
+| `-model:fire` | chip | no fire model row exists | ✅ |
+| `model:(fire -missile)` | row, refining | a fire model row that is not a missile | ✅ |
+| `model:(-fire)` | row, bare | — | ⛔ **illegal** |
+| `model:(-attach:chest)` | row, scoped axis | — | ⛔ **illegal — use `-attach:chest`** |
+
+**⭐ BANNING THE BARE FORM DELETES THE TRAP ENTIRELY.** The confusing case was never `model:(fire -missile)`; it was
+that `-model:fire` and `model:(-fire)` disagree on spells with NO models — the first vacuously true, the second false.
+With a positive anchor required, **every scope must find a row before it can exclude anything**, so the vacuity has
+nowhere to appear and both readings become the obvious ones:
+
+    -model:missile         "don't show me spells with missiles"        — no models? not excluded. obvious.
+    model:(fire -missile)  "show me fire models that aren't missiles"  — no models? no match. obvious.
+
+**And it deletes three more problems at a stroke** — all four were separate findings of the independent review (§8.9):
+
+- the ∀ double-negative `-model:(-caster)` becomes unwritable, which is right: its showcase was WRONG (vacuously true
+  of model-less spells), and the reviewer's judgement stands that no roleplayer would type it.
+- `model:(attach -chest)`'s baffling reading (`attach:* AND NOT "chest"`) goes with it.
+- **negated word-form axes disappear, so the parser stops needing the axis registry to place a `-`.** That was the
+  review's finding #2/#3 and its worst structural consequence — registering an axis could change a bookmarked query.
+
+**What is LOST is a genuine capability and it is named honestly: universal quantification.** "All model rows are
+caster" is no longer sayable. It was sayable for one day, in a form that was measured wrong and that nobody would
+type. **Expressibility register #4 reverts to OPEN** and, if it is ever wanted, gets a word of its own rather than a
+double negative.
 
 #### 2.4.3 The edge cases the grammar MUST answer
 
@@ -266,9 +297,9 @@ parenthesised group is a single thing:
 
 **(c) `-` prefixes a CLAUSE, and a word-form axis plus its argument is one clause.**
 
-    model:(-attach:chest)     ¬(attached at chest)      ← the clear form, prefer it
-    model:(-attach chest)     ¬(attached at chest)      ← same thing, word form
-    model:(attach -chest)     attach:* AND NOT "chest"  ← well-defined, and probably not what you meant
+    -attach:chest             ¬(attached at chest)      ← chip level, the only form
+    model:(attach chest -missile)   attached at the chest, not a missile  ← refining, legal
+    model:(-attach:chest)     ⛔ illegal — a scope needs a positive anchor (§2.4.2)
 
 The third line is legal and reads oddly, which is exactly why the highlighter must draw the capsule around what an
 axis actually consumed. **Negation is never an axis's argument** — there is no "negated value", only a negated clause.
@@ -821,7 +852,7 @@ than by four separate features.
 | 1 | **cross-field OR** — "a fire model OR a fire sound" | **silently wrong** (§9.1) | ✅ `model:fire \| sound:fire` — §2.4 |
 | 2 | **row-level negation** — "a fire model that is not a missile" | `model:"fire -missile"` = 0, `-` a literal | ✅ `model:(fire -missile)` — §2.4 |
 | 3 | **filtered count** — "more than 4 CASTER models" | `model:"caster count >4"` = 15,905 = has-a-caster-row ∧ >4 models *in all* | ✅ free from the row model (§9.2) |
-| 4 | **∀ quantification** — "models that ALL play on the caster" | unexpressible; was going to need an invented word | ✅ `-model:(-caster)` — §2.4.2 |
+| 4 | **∀ quantification** — "models that ALL play on the caster" | unexpressible | ⛔ **REOPENED** — the `-model:(-caster)` form was measured wrong and is now illegal (§2.4.2). Wants a word, not a double negative |
 | 5 | **implication** — "arcane only if accompanied by fire" | unexpressible | ✅ `-(model:arcane -model:fire)` |
 | 6 | **arbitrary DNF** — "(fire ∧ arcane) ∨ (frost ∧ shadow)" | hand-convert to CNF; grows exponentially | ✅ written directly — §2.4 |
 | 7 | **cross-column row correlation** — "a model and a sound on the SAME target" | unexpressible | ⛔ still open — §9.3 |
