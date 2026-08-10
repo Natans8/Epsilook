@@ -143,15 +143,28 @@ single-column axis passes both trivially — which is why most axes qualify and 
 
 **Applied to today's vocabulary:**
 
-| axis                                                                   | G1                                                    | G2                                          | G3                                                     | G4                                        | verdict                 |
-|------------------------------------------------------------------------|-------------------------------------------------------|---------------------------------------------|--------------------------------------------------------|-------------------------------------------|-------------------------|
-| `desc`, `icon`, `xpac`, `scale`, `motion`, `speed`, `seat`, `location` | ✅                                                    | ✅                                          | ✅ single column                                       | ✅                                        | **global**              |
-| `target`                                                               | ✅                                                    | ✅                                          | ✅ one mask vocabulary in every column                 | ✅                                        | **global**              |
-| `attach`                                                               | ⛔ **collides with the `attach` model CATEGORY word** | ✅                                          | ✅ M2 attachment ids throughout                        | ✅                                        | **blocked on a rename** |
-| `count`                                                                | ✅                                                    | ✅                                          | ✅                                                     | ⛔ "some column has >4" is not a question | **scoped only**         |
-| `kit`                                                                  | ⛔ two axes claim it                                  | ✅                                          | ⛔ **AnimKit ID vs SoundKit NAME — different domains** | ⛔                                        | **scoped only**         |
-| `replace`, `loose`                                                     | ✅                                                    | ⛔ replace *what*?                          | —                                                      | —                                         | **scoped only**         |
-| `attached`, `missile`, `ground`, `trail`, `barrage`, `display`, `item` | ✅                                                    | ⛔ model categories; the column is the noun | —                                                      | —                                         | **scoped only**         |
+| axis                                                                   | G1                                                    | G2                                          | G3                                                     | G4                                                                    | verdict                 |
+|------------------------------------------------------------------------|-------------------------------------------------------|---------------------------------------------|--------------------------------------------------------|-----------------------------------------------------------------------|-------------------------|
+| `desc`, `icon`, `xpac`, `scale`, `motion`, `speed`, `seat`, `location` | ✅                                                    | ✅                                          | ✅ single column                                       | ✅                                                                    | **global**              |
+| `target`                                                               | ✅                                                    | ✅                                          | ✅ one mask vocabulary in every column                 | ⛔ **a QUALIFIER — "some row somewhere targets X" is not a question** | **scoped only**         |
+| `attach`                                                               | ⛔ **collides with the `attach` model CATEGORY word** | ✅                                          | ✅ M2 attachment ids throughout                        | ✅                                                                    | **blocked on a rename** |
+| `count`                                                                | ✅                                                    | ✅                                          | ✅                                                     | ⛔ "some column has >4" is not a question                             | **scoped only**         |
+| `kit`                                                                  | ⛔ two axes claim it                                  | ✅                                          | ⛔ **AnimKit ID vs SoundKit NAME — different domains** | ⛔                                                                    | **scoped only**         |
+| `replace`, `loose`                                                     | ✅                                                    | ⛔ replace *what*?                          | —                                                      | —                                                                     | **scoped only**         |
+| `attached`, `missile`, `ground`, `trail`, `barrage`, `display`, `item` | ✅                                                    | ⛔ model categories; the column is the noun | —                                                      | —                                                                     | **scoped only**         |
+
+**⭐ SUBJECT vs QUALIFIER — added 2026-08-10, and it is what G4 was reaching for.** An axis earns a global door only if
+you can name what you are looking for using it ALONE.
+
+|               | test                           | example                                            |
+|---------------|--------------------------------|----------------------------------------------------|
+| **SUBJECT**   | names a thing you want         | `attach:chest` is "a chest attachment" ✅          |
+| **QUALIFIER** | only refines another predicate | `target:caster` is "a caster target" — of WHAT? ⛔ |
+
+**`target` is the first QUALIFIER**, on the user's call: *"target is not a property of a spell… it's a property of an
+effect, or of a SpellVisualKitEvent."* It is reachable only scoped — `model:{target:caster}`, `mech:{JUMP_DEST
+target:target}` — because **the column is what says which kind of thing is doing the targeting.** A qualifier alone in a
+scope is legal but WARNED.
 
 **⚠ ONE CONCRETE ACTION FALLS OUT, and it is a live 1.0 defect rather than a 2.0 design choice.** `attach` is registered
 BOTH as a model category word (`pilltypes.ts`, `modelCat("attach", …)`) and as the attachment keyword
@@ -1936,15 +1949,15 @@ scope · end of input. Balanced pairs are part of the value.
 **⚠ A CLOSER WITH TEXT GLUED TO IT IS REPAIRED, NOT CONCATENATED** (user: *"if there is no whitespace after a quote or
 bracket something went wrong, and it's reasonable for us to insert it honestly"*):
 
-| written | verdict |
-|---|---|
+| written                         | verdict                                                                                                                                      |
+|---------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
 | `model:(fire`&#124;`frost)bolt` | ✅ **deliberate** — the group holds alternatives, so it expands to `firebolt` OR `frostbolt`. Shell brace expansion, `echo {a,b}c` → `ac bc` |
-| `model:(fire)bolt` | ⚠ **WARNING** — no alternation, nothing to distribute, so it is a missing space |
-| `name:"blood pool"x` | ⚠ **WARNING** — a phrase has NO expansion semantics, so glued text can never mean anything |
+| `model:(fire)bolt`              | ⚠ **WARNING** — no alternation, nothing to distribute, so it is a missing space                                                             |
+| `name:"blood pool"x`            | ⚠ **WARNING** — a phrase has NO expansion semantics, so glued text can never mean anything                                                  |
 
-**MEASURED, because the worry was spell names: of 5,898 names containing `)`, only 112 have a non-space after it** —
-all `),` or `))` (*"Torch Toss (Shadow), Fast"*). **They are only reached through a QUOTED phrase where every character
-is literal**, so no real name constrains this. Same for the 315 names containing `"`.
+**MEASURED, because the worry was spell names: of 5,898 names containing `)`, only 112 have a non-space after it** — all
+`),` or `))` (*"Torch Toss (Shadow), Fast"*). **They are only reached through a QUOTED phrase where every character is
+literal**, so no real name constrains this. Same for the 315 names containing `"`.
 
 **The repair is ANNOUNCED with the repaired query, never silent** (§4.9.4's WARNING tier), **and it fires on
 SETTLE/PASTE, never per keystroke** — `name:"blood pool"` is a state you pass through on the way to
