@@ -1414,11 +1414,53 @@ keystroke is for typists; the click is for everyone else**, and both write the s
 
 **⚠ ONE CONSEQUENCE TO ACCEPT: an empty chip takes the literal.** Caret in `model:‸`, typing `-` gives `model:-`, not a
 negated chip — value position, no exception. The chip edge is one arrow-key away and the label is clickable, so the
-cost is small and the alternative is a hidden-state rule.
+cost is small and the alternative is a hidden-state rule. **§4.9.4e is what makes that cheap**: the chip survives being
+arrowed out of, so stepping left to negate it costs a keystroke rather than the chip.
 
 **Display versus syntax:** the bar renders negation as `−` (U+2212) on the chip, exactly as 1.0 does; the SYNTAX is
 always ASCII `-`. Typographic folding (§4.9.5, *Typographic folding*) maps a pasted `−`, en dash or em dash back to `-`, so a query copied
 out of the app pastes back into it.
+
+### 4.9.4e THE BAR MUST HOLD WHAT THE USER TYPED — two 1.0 behaviours to change
+
+**The user, 2026-08-10: *"I don't mind if we can insert the minus BEFORE the chip, instead of inside. Right now it's
+impossible, and when you arrow out of an empty chip it deletes it, which is actually not very good because it removes
+stuff that the user already types."*** Both are real, both are the same failure — **the bar discards work it should be
+holding** — and both are small, because the mechanism is already there.
+
+#### (a) The gap before a chip is already a caret position — it just does not accept `-`
+
+`state.pos` IS the gap, and `renderBar` already places the input at it (`editPos = min(state.pos, chips.length)`), so
+the caret can already sit before any chip. Nothing new is needed:
+
+> **An empty input sitting immediately before chip N, receiving `-`, negates chip N.**
+
+That is §4.9.4d's clause-opening rule with no extra machinery — the character goes exactly where the grammar puts it
+(`-model:fire`). A literal `-` as free text is still reachable by quoting (`"-"`) or by typing it beside other text.
+
+#### (b) An empty chip must PERSIST — `bar.ts:222` is the whole of it
+
+Today `commitActiveChip` refuses an empty chip (`if (!text) return -1`), so `model:` never becomes a chip at all and
+navigating away loses it. **It was never deleted; it never existed** — which is worse, because the user watched
+themselves type it.
+
+> **An incomplete chip is committed, rendered, and kept. It contributes no constraint, raises no diagnostic
+> (incomplete is not invalid, §4.9.1), and is removed only by an explicit gesture.**
+
+- **Renders as incomplete** — dimmed, with the axis's `short` placeholder — so it does not read as a bug.
+- **Not serialised to the URL.** The URL carries the QUERY; the bar carries the EDITING STATE. A half-typed chip
+  contributes nothing, so it has nothing to serialise.
+- **Explicit removal only**: the `×`, or backspace at its left edge.
+
+#### ⭐ The principle, which is worth stating once because it generalises
+
+> **NAVIGATION IS NOT EDITING.** Arrowing, clicking elsewhere and blurring must never destroy a chip. Only an explicit
+> delete deletes.
+
+1.0 breaks this in the one place it is most costly — the moment just after the user has committed to a field and
+before they have chosen a value, which is exactly when they are most likely to look away and think. **The same rule
+protects the incomplete-scope case** (`model:{fire`), which §4.9.1 already says must stay silent while typing: silent
+is worthless if navigating away throws it out.
 
 ### 4.9.5 TWO ARRIVAL PATHS — typing and pasting are not the same problem
 
