@@ -164,6 +164,7 @@ export const GRAMMAR = {
     negate: "-",                       // -model:beer         universal convention
     alternate: ["|", ","],                // fire|frost   133,134
     compare: ["<=", ">=", "<", ">", "="],
+    range: "..",                     // scale:10..50        GitHub convention (§4.6)
     phrase: '"',                       // one token, spaces kept (L6)
     group: ["(", ")"],                // a value containing phrase quotes
     wildcard: "*",                       // §3
@@ -435,7 +436,56 @@ four", which is a question nobody asks. Its real form is the in-column one, `mod
 L5's two-doors rule produces a door not worth walking through, and that is a property of `count` being a meta-axis
 rather than a flaw in the law.
 
-### 4.5 `flag` vs `bitmask` — they look alike and are not
+### 4.5 VALUE RANGES — the syntax is GitHub's, the domain is MEASURED
+
+Two halves that must agree: how you WRITE a range, and how the UI knows what range to DRAW.
+
+**The syntax is GitHub's `n..n`** (L0 — it is the family Epsilook sits in), and `*` as an open bound composes exactly
+with the wildcard rule already adopted in §3.3, so there is one meaning of `*` in the whole language:
+
+    scale:10..50      between, inclusive
+    scale:10..*       ≡  scale:>=10
+    scale:*..50       ≡  scale:<=50
+    scale:*           any value at all — the existence reading (§4.4)
+
+Lucene's `[10 TO 50]` was the alternative and loses on both counts: it is the relevance family's spelling, and it costs
+two brackets and a keyword where `..` costs two dots.
+
+**The domain is DERIVED FROM THE LOADED PACK, never declared** — value sets differ per game version, so a hard-coded
+min/max would be wrong on ten packs out of eleven. `Axis.domain(d)` is computed at index time, exactly as `when?(d)`
+already gates a word by whether the pack has data for it.
+
+**⚠ AND THE RAW MIN/MAX IS NOT THE DOMAIN. Measured on 9.2.7:**
+
+| column                              | min             | max   | distinct | what a naive control would do          |
+|-------------------------------------|-----------------|-------|----------|----------------------------------------|
+| `CreatureModelData.CollisionHeight` | **−20,000,000** | 334.9 | 1,758    | a slider spanning 20 million, unusable |
+| `CreatureModelData.ModelScale`      | 0.03            | 7.0   | 41       | fine                                   |
+| `CreatureModelData.HoverHeight`     | 0               | 50    | 25       | fine                                   |
+| `BarrageEffect.ConeAngle`           | 27              | 60    | **3**    | a slider over three values             |
+| `BarrageEffect.Range`               | 10              | 60    | **4**    | a slider over four values              |
+
+Two rules follow, and both were invisible until the numbers were on screen:
+
+1. **Bounds must be ROBUST, not extremal.** Sentinels and garbage live in these columns (`−20000000` is not a height).
+   Take a percentile band, or exclude declared sentinels, and say on the control that it is clipped.
+2. **⭐ CARDINALITY DECIDES THE AFFORDANCE, NOT THE TYPE.** `ConeAngle` and `CollisionHeight` are both `float` and want
+   completely different controls: 3 distinct values is a **picker**, 1,758 is a **slider**. So `AxisType.ui` is a
+   DEFAULT that `domain()` may override — the type says what a value MEANS, the domain says how it is DRAWN.
+
+This is also why `domain()` returns the distinct values when they are few:
+
+```ts
+export interface AxisDomain {
+    lo: number;
+    hi: number;                 // robust bounds, sentinels excluded
+    step: number;
+    values?: (number | string)[];  // present when cardinality is low -> picker
+    clipped?: boolean;             // true when lo/hi hid outliers; the UI says so
+}
+```
+
+### 4.6 `flag` vs `bitmask` — they look alike and are not
 
 A `flag` is ONE bit on a SPELL, valueless, with no combinations: you have `unbreakable` or you do not. A `bitmask` is
 SEVERAL bits on a ROW, and the combinations are the entire point — from `build_data.py`,
