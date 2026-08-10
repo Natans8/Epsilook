@@ -615,8 +615,29 @@ scope is a set of MODEL rows and a sound axis cannot read one. Universal axes (`
 they apply in every scope by definition (L1). Reject at parse time and say so in the bar; L2's "answer, never fall
 through" is about DATA, not about nonsense.
 
-**(e) An empty group `()` is a static error**, not an identity element. Nothing sensible reads it, and silently treating
-it as "everything" or "nothing" is the class of failure §9.1 is about.
+**(e) EMPTY GROUPS ARE IDENTITIES, NOT ERRORS — corrected 2026-08-10 on the user's challenge** (*"can't `{}` just be
+ignored as a junk token?"*). An earlier draft called them a static error. That was wrong for a practical reason and an
+arithmetical one.
+
+**Practically: auto-closing braces (§6) mean the EDITOR produces `model:{}`** the instant the user types `model:{`.
+Erroring on a state the app itself just generated is hostile, and it is the §4.9.1 failure — shouting at a keystroke
+the next one will fix. 1.0 already has this instinct: `query.ts` skips separator-only tokens because *"it can never
+match, so it must not narrow the search to nothing either."*
+
+**Arithmetically, they are not junk — they have truth values, and the two brackets get OPPOSITE ones:**
+
+    model:{}          empty CONJUNCTION = true   ->  ∃row: true   ->  "has any model row"  ≡  model:*
+    model:{attach:()} empty DISJUNCTION = false  ->  matches nothing
+
+So `{}` needs no rule: the empty scope is satisfied by any row, which is exactly `*` (§3.3), and the two spellings
+agreeing is a consequence rather than a coincidence. **This is also a good live-preview**: typing `model:{` narrows to
+"spells with a model" straight away, which is where the user was heading.
+
+**`()` is the dual and matches nothing**, which is correct but unhelpful — so while TYPING it is incomplete and silent
+(§4.9.1), and on PASTE it is a reported error (§4.9.5), because there nothing more is coming.
+
+**A stray `{}` or `()` in top-level free text is neither** — it is ordinary character data, because those delimiters
+are only active where a value or clause is expected (§2.4.0). `fireball {2}` searches literally.
 
 **(f) Two spellings of OR is one too many — `,` is retained ONLY for numbers.** `id:133,134` stays because a bare list
 of ids is how people paste them, and the rule is syntactic (every part a number), not per-field. Everywhere else `|` is
@@ -1228,7 +1249,7 @@ which is the failure mode that makes people turn off "search as you type".
 | 3 | foreign axis in a scope | `model:{sound:fire}` | error: *a sound axis cannot read a model row* (§2.4.3d) |
 | 4 | ill-typed value | `scale:abc` | error: *scale takes a percentage* — never a zero result |
 | 5 | contradictory value | `name:=Fire*` | error: *exact and pattern cannot combine* (§4.2b) |
-| 6 | structural | `{}` empty, `-model:{-fire}` no anchor | error (§2.4.3e, §2.4.2) |
+| 6 | structural | `-model:{-fire}` no anchor; unbalanced on PASTE | error (§2.4.2, §4.9.5). ⚠ `{}` is NOT here — it is an identity (§2.4.3e) |
 
 **⭐ #1 IS THE IMPORTANT ONE AND IT IS DATA THAT DECIDES IT. 12,477 spell names contain a colon** — *Embody Hero:
 Illidan*, *Power Converters: Summon Electromental*. If an unknown prefix were an error, **pasting a spell name would
