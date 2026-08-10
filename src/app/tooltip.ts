@@ -251,8 +251,14 @@ function fill(text: string): void {
     }
     // Rendered unconditionally; the css reveals it only on a coarse pointer
     // AND only while pinned, because that is the one state with no other exit.
-    const close = el("button", "tip-close", "×");
+    const close = el("button", "tip-close");
     close.type = "button";
+    // AN SVG, NOT THE × CHARACTER. Its glyph sits high in the em box, so
+    // `place-items: center` centres the text box and the mark still reads
+    // off-centre in a round button. Two crossing lines are exact, and it
+    // matches the description mark, which is drawn the same way.
+    close.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
+        + '<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>';
     close.setAttribute("aria-label", "Close");
     panel!.append(close);
     if (!keys.length) return;

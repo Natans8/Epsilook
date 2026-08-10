@@ -3604,27 +3604,41 @@ footer a {
     display: none;
 }
 
-/* A CORNER CHIP, OUTSIDE THE CONTENT FLOW. Reserving a band at the top of the
-   panel for it cost a whole empty row with an × floating in it — the button
-   was pushing the prose down instead of sitting beside it. Hung off the corner
-   it takes no layout at all, and the disc + border is what keeps it legible
-   over whatever the panel happens to be sitting on. */
+/* The chip hangs 26px into the panel's top-right, so the FIRST block gets a
+   gutter and nothing else does. Padding the whole panel would indent every
+   line on a screen that has none to spare; padding the top left an empty row
+   with an x floating in it. Only the text the button actually covers moves. */
+#tip.pinned.by-touch > :first-child {
+    padding-right: 1.9rem;
+}
+
+/* INSIDE the corner, not hanging off it. Outside, the chip clipped at the
+   viewport edge — place() already parks the panel 8px from it, so a button
+   reaching 14px further sat half off a phone screen. Inside costs nothing
+   extra: the first block's gutter above is what it sits in. */
 #tip.pinned.by-touch .tip-close {
     position: absolute;
-    top: -14px;
-    right: -14px;
+    top: 2px;
+    right: 2px;
     display: grid;
     place-items: center;
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
     padding: 0;
     border: 1px solid var(--border);
     border-radius: 50%;
     background: var(--bg-panel);
     color: var(--text-dim);
-    font-size: 1.35rem;
-    line-height: 1;
     cursor: pointer;
+}
+
+#tip.pinned.by-touch .tip-close svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
 }
 
 #tip.pinned.by-touch .tip-close:active {
