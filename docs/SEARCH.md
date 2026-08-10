@@ -315,23 +315,112 @@ spell names. The hint tells the truth rather than implying precision the corpus 
 an ID keyword, a mixed keyword, could behave differently in the UI."*** This is L9 and L11 meeting: the type says what a
 token means AND what the user is offered instead of having to type it.
 
-| type       | examples                                         | matches                                | UI affordance                             |
-|------------|--------------------------------------------------|----------------------------------------|-------------------------------------------|
-| `text`     | model/sound file, spell name, description        | substring + glob                       | text input, autocomplete on the axis word |
-| `enum`     | effect / aura / implicit target names, expansion | exact, then substring, then glob       | **picker listing the enum's real values** |
-| `percent`  | scale, speed, desaturate, transparency           | signed numeric compare                 | **range control, `%` suffix, sign-aware** |
-| `duration` | casttime, channeled                              | numeric compare + `unlimited` sentinel | numeric input, `s` suffix                 |
-| `count`    | `count`, seat                                    | integer compare, ≥ 0                   | stepper                                   |
-| `id`       | spell id, SoundKit id, icon fid                  | **equality only, never substring**     | exact input + copy button                 |
-| `flag`     | attribute bits, freeze, camo                     | membership; valueless                  | **tri-state toggle**                      |
-| `mask`     | the target words                                 | bit test                               | **the target glyphs, as toggles**         |
-| `mixed`    | the sound column (files ∪ kit names ∪ ids)       | union of its sub-axes                  | composite of the above                    |
+### 4.1 TWO LAYERS. The source owns one of them
 
-**`flag` vs `mask` — they look alike and are not.** A `flag` is ONE bit on a SPELL, valueless, with no combinations:
-you have `unbreakable` or you do not. A `mask` is SEVERAL bits on a ROW, and the combinations are the entire point —
-from `build_data.py`, `caster 1 · target 2 · area 4 · not-caster 8 · missile-dest 16`, so `target` is the test
-`2|8`, `area` is `4|16`, and **`both` is `1 AND 2`, a question no single bit spells**. Per-row because the same chain
-plays on the caster for one spell and the target for another. Different arity, different affordance, two types.
+**Read the SOURCE's types, not our current pills** (user, 2026-08-10: *"You need to look at the source and what types
+they have there, and not only on our current data"*). Measured over every column of every table the build reads on 9.2.7
+(`ref.column_info`):
+
+| dbd type                                             | columns | notes                                        |
+|------------------------------------------------------|---------|----------------------------------------------|
+| `int` — widths 8 / 16 / 32 / 64, signed and unsigned | **909** | 25 are FK/relations, 7 carry a declared enum |
+| **`float`**                                          | **320** | **the app has no float axis at all today**   |
+| `locstring`                                          | 20      |                                              |
+| `string`                                             | 7       |                                              |
+| *(array columns)*                                    | **374** | a structural modifier over all of the above  |
+
+**So the source declares FOUR base types**, and everything else is meaning we add. That gives the layering:
+
+- **STORAGE — the source's, not ours to choose.** `int(width, signed)` · `float` · `string` · `locstring`, plus the
+  structural modifiers *array*, *relation (FK)* and *declared enum*.
+- **SEMANTIC — ours, declared, extensible.** What the number MEANS, how it is queried, how it is formatted, what the UI
+  offers.
+
+**The 320 float columns are the proof this matters**, and they are exactly the future pills the user named:
+`CreatureModelData.CollisionHeight / CollisionWidth / HoverHeight / ModelScale / MountHeight`,
+`BarrageEffect.ConeAngle / Range`, `BeamEffect.FixedLength / SourceMinDistance`, `AnimKitSegment.Speed`. Heights,
+widths, radii, angles, lengths, rates — every one RP-relevant, none reachable.
+
+### 4.2 The type REGISTRY — a framework, not a closed list
+
+**User's requirement: *"we need many datatypes and a framework to define additional datatypes if needed."*** So types
+are REGISTERED, exactly as pill types are — adding one is a call, never an edit to a union.
+
+```ts
+export interface AxisType {
+    name: string;                                  // "percent", "seconds", "length"
+    storage: "int" | "float" | "string";           // §4.1 — what the source actually holds
+    parse(token: string): TypeQuery | null;        // token -> a test, or null = not mine
+    test(q: TypeQuery, value: unknown): boolean;
+
+    format(value: unknown): string;                // how a pill prints it
+    ui: "text" | "number" | "range" | "picker" | "toggle" | "glyphs";
+    unit?: string;                                 // "%", "s", "yd", "°", "x"
+    step?: number;                                 // range / stepper granularity
+    sentinels?: Record<number, string>;            // -1 -> "unlimited"
+}
+
+export const AXIS_TYPES = new Map<string, AxisType>();
+
+export function defineAxisType(t: AxisType): void {
+    if (AXIS_TYPES.has(t.name)) throw new Error(`axis type "${t.name}" already defined`);
+    AXIS_TYPES.set(t.name, t);
+}
+```
+
+**The types registered today** — grounded in the storage layer above, not invented:
+
+| name      | storage   | examples                                         | matches                                     | UI                |
+|-----------|-----------|--------------------------------------------------|---------------------------------------------|-------------------|
+| `text`    | string    | spell name, description, kit name                | substring + glob                            | text              |
+| `path`    | string    | model / sound files                              | substring + glob, **never anchored** (§3.2) | text              |
+| `enum`    | int       | effect / aura / implicit-target names, expansion | exact → substring → glob                    | **value picker**  |
+| `id`      | int       | spell id, SoundKit id, icon fid                  | **equality only, never substring**          | exact + copy      |
+| `bitmask` | int       | target masks, attribute bits                     | bit test **and combinations**               | **glyph toggles** |
+| `count`   | int       | `count`, vehicle seats                           | integer compare, ≥ 0                        | stepper           |
+| `seconds` | int (ms)  | casttime, channeled                              | compare + `unlimited` sentinel              | number, `s`       |
+| `percent` | int       | scale, speed, desaturate, transparency           | **signed** compare                          | range, `%`        |
+| `length`  | **float** | collision/hover height, beam length, range       | compare                                     | range, `yd`       |
+| `scale`   | **float** | model scale, attached-effect scale               | compare                                     | range, `×`        |
+| `angle`   | **float** | cone angle                                       | compare                                     | range, `°`        |
+| `rate`    | **float** | anim segment speed, ambient multiplier           | compare                                     | range, `×`        |
+| `flag`    | —         | attribute bits, freeze, camo                     | membership; **no value at all**             | toggle            |
+| `mixed`   | —         | the sound column (files ∪ kit names ∪ ids)       | union of its sub-axes                       | composite         |
+
+### 4.3 `flag` is standalone, and tri-state is the GRAMMAR's job — not a type's
+
+**The user's correction, and it deletes something invented: *"if you don't care about the flag just don't type it? and
+if you don't want it put it in negative. If it's standalone then it's standalone completely."*** An earlier draft gave
+`flag` a "tri-state toggle" as a type property. That duplicated the grammar. **EVERY axis is already tri-state**, by L8,
+with no help from the type system:
+
+    (absent)               don't care
+    mech:unbreakable       require
+    -mech:unbreakable      exclude
+
+So `flag` is simply **an axis with no value** — nothing to parse, nothing to compare, nothing to format. The toggle in
+the UI writes one of the three states above; it is not a fourth thing.
+
+### 4.4 A word with no argument IS the existence test
+
+**User: *"some keywords should double as flags if they don't have an input."*** That is the wildcard rule (§3.3)
+arriving from the other side, so it costs no new machinery:
+
+    model:attach   ≡   attach:*   ≡   "has any attachment point"
+    name:desc      ≡   desc:*     ≡   "has a description"
+
+**This deletes a 1.0 oddity**: today a trailing keyword with nothing after it "stays in text" and degrades into a
+substring search *for its own name* — silently, and never as an error. ⚠ Measure per keyword when porting: some words
+(`attach`) are ALSO category words in their column today, so the current behaviour is not uniform and the deltas will
+not be either.
+
+### 4.5 `flag` vs `bitmask` — they look alike and are not
+
+A `flag` is ONE bit on a SPELL, valueless, with no combinations: you have `unbreakable` or you do not. A `bitmask` is
+SEVERAL bits on a ROW, and the combinations are the entire point — from `build_data.py`,
+`caster 1 · target 2 · area 4 · not-caster 8 · missile-dest 16`, so `target` is the test `2|8`, `area` is `4|16`, and **
+`both` is `1 AND 2`, a question no single bit spells**. Per-row, because the same chain plays on the caster for one
+spell and the target for another.
 
 **This is also the answer to *"why do we need 3 keywords exactly instead of just `target caster`"*** (user's brief).
 Under L5 you get exactly that — `target:caster`, `target:area`, `target:both` — one keyword with named values, global.
@@ -340,8 +429,8 @@ The five words stop being independent vocabulary scattered across four columns a
 
 Two consequences worth stating, because both remove existing hand-written UI:
 
-- **The tri-state filter row and the target icons stop being features** and become the rendered form of a `flag` and a
-  `mask` axis. One declaration, two surfaces, no second list (L11).
+- **The filter row and the target icons stop being features** and become the rendered form of a `flag` and a `bitmask`
+  axis. One declaration, two surfaces, no second list (L11).
 - **`enum` axes become browsable**, which is the direct answer to *"I find myself way too often opening wago.tools when
   Epsilook doesn't provide"* — the values exist in the pack already; nothing offers them. **`mech:unit_target_enemy`
   already works today** (21,109 on 9.2.7); what is missing is anything that tells you the value exists.
