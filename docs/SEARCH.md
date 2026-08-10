@@ -96,8 +96,8 @@ carries the axis:**
     count:>4     ⟶   model:(count >4) | sound:(count >4) | …
 
 **IT IS A REWRITE, NOT AN EQUIVALENCE, AND THAT IS THE WHOLE POINT.** The kernel has no notion of a "global axis" and
-never evaluates one — it sees scoped clauses only. So the two doors *cannot* disagree, in the strong sense that there
-is nothing for them to disagree with. One evaluator, one code path (L11).
+never evaluates one — it sees scoped clauses only. So the two doors *cannot* disagree, in the strong sense that there is
+nothing for them to disagree with. One evaluator, one code path (L11).
 
 **What follows for free:**
 
@@ -106,8 +106,8 @@ is nothing for them to disagree with. One evaluator, one code path (L11).
 - **Negation needs no rule.** `-attach:chest` is the negated union, i.e. `-model:(attach chest) -fx:(attach chest) …`
   by De Morgan. Intuitive, and derived rather than stated.
 - **`count`'s global door stops being an exception.** An earlier draft called it "weak" and carved it out of this law.
-  It is not special: `count:>4` is the union like everything else, and it reads oddly for the same reason any wide
-  union does. One less exception.
+  It is not special: `count:>4` is the union like everything else, and it reads oddly for the same reason any wide union
+  does. One less exception.
 - **The bar can SHOW the expansion** — a global chip is a virtual scoped chip, so hovering or expanding it teaches the
   scoped form. That is the answer to "the user has to hunt for the keywords": the shortcut is also the lesson.
 
@@ -117,8 +117,8 @@ cannot reach: only a scope can conjoin the axis with other predicates **on the s
     scale:50               some fx row scales by 50
     fx:(scale 50 chain)    ONE row that scales by 50 AND is a chain   ← unsayable globally
 
-So: `axis:value` is sugar; `column:(axis …)` is the general form. Every axis has the shortcut, and the shortcut is
-never the whole language.
+So: `axis:value` is sugar; `column:(axis …)` is the general form. Every axis has the shortcut, and the shortcut is never
+the whole language.
 
 > Broke as: `desc`, `icon`, `attach`, `boneset`, `motion`, `xpac`, `kit` are all in-column only, so a user who knows
 > the concept cannot find the door.
@@ -130,31 +130,31 @@ presence, not just semantics but also logic."*** So the test is not taste. **An 
 passes ALL FOUR**; failing any one leaves it reachable through its column, which is correct — for those, the column IS
 the meaning.
 
-| gate | question | kind |
-|---|---|---|
-| **G1 UNIQUE** | Does any other axis declare this word or prefix? | **mechanical — `check.py` can enforce it** |
-| **G2 SELF-NAMING** | Does the word name its subject with the column removed? | semantic (L12) |
-| **G3 ONE VALUE SPACE** | Across every column it spans, do its values mean the same thing and come from one domain? | **logical** |
-| **G4 MEANINGFUL UNION** | Is the desugared union over columns (L5) a question anyone asks? | **logical** |
+| gate                    | question                                                                                  | kind                                       |
+|-------------------------|-------------------------------------------------------------------------------------------|--------------------------------------------|
+| **G1 UNIQUE**           | Does any other axis declare this word or prefix?                                          | **mechanical — `check.py` can enforce it** |
+| **G2 SELF-NAMING**      | Does the word name its subject with the column removed?                                   | semantic (L12)                             |
+| **G3 ONE VALUE SPACE**  | Across every column it spans, do its values mean the same thing and come from one domain? | **logical**                                |
+| **G4 MEANINGFUL UNION** | Is the desugared union over columns (L5) a question anyone asks?                          | **logical**                                |
 
-**G3 and G4 are the logical half and they exist because L5 makes a global prefix a UNION.** A union is only coherent
-if the things unioned are the same KIND of thing (G3) and if asking about all of them at once is a question (G4). A
+**G3 and G4 are the logical half and they exist because L5 makes a global prefix a UNION.** A union is only coherent if
+the things unioned are the same KIND of thing (G3) and if asking about all of them at once is a question (G4). A
 single-column axis passes both trivially — which is why most axes qualify and the multi-column ones need checking.
 
 **Applied to today's vocabulary:**
 
-| axis | G1 | G2 | G3 | G4 | verdict |
-|---|---|---|---|---|---|
-| `desc`, `icon`, `xpac`, `scale`, `motion`, `speed`, `seat`, `location` | ✅ | ✅ | ✅ single column | ✅ | **global** |
-| `target` | ✅ | ✅ | ✅ one mask vocabulary in every column | ✅ | **global** |
-| `attach` | ⛔ **collides with the `attach` model CATEGORY word** | ✅ | ✅ M2 attachment ids throughout | ✅ | **blocked on a rename** |
-| `count` | ✅ | ✅ | ✅ | ⛔ "some column has >4" is not a question | **scoped only** |
-| `kit` | ⛔ two axes claim it | ✅ | ⛔ **AnimKit ID vs SoundKit NAME — different domains** | ⛔ | **scoped only** |
-| `replace`, `loose` | ✅ | ⛔ replace *what*? | — | — | **scoped only** |
-| `attached`, `missile`, `ground`, `trail`, `barrage`, `display`, `item` | ✅ | ⛔ model categories; the column is the noun | — | — | **scoped only** |
+| axis                                                                   | G1                                                    | G2                                          | G3                                                     | G4                                        | verdict                 |
+|------------------------------------------------------------------------|-------------------------------------------------------|---------------------------------------------|--------------------------------------------------------|-------------------------------------------|-------------------------|
+| `desc`, `icon`, `xpac`, `scale`, `motion`, `speed`, `seat`, `location` | ✅                                                    | ✅                                          | ✅ single column                                       | ✅                                        | **global**              |
+| `target`                                                               | ✅                                                    | ✅                                          | ✅ one mask vocabulary in every column                 | ✅                                        | **global**              |
+| `attach`                                                               | ⛔ **collides with the `attach` model CATEGORY word** | ✅                                          | ✅ M2 attachment ids throughout                        | ✅                                        | **blocked on a rename** |
+| `count`                                                                | ✅                                                    | ✅                                          | ✅                                                     | ⛔ "some column has >4" is not a question | **scoped only**         |
+| `kit`                                                                  | ⛔ two axes claim it                                  | ✅                                          | ⛔ **AnimKit ID vs SoundKit NAME — different domains** | ⛔                                        | **scoped only**         |
+| `replace`, `loose`                                                     | ✅                                                    | ⛔ replace *what*?                          | —                                                      | —                                         | **scoped only**         |
+| `attached`, `missile`, `ground`, `trail`, `barrage`, `display`, `item` | ✅                                                    | ⛔ model categories; the column is the noun | —                                                      | —                                         | **scoped only**         |
 
-**⚠ ONE CONCRETE ACTION FALLS OUT, and it is a live 1.0 defect rather than a 2.0 design choice.** `attach` is
-registered BOTH as a model category word (`pilltypes.ts`, `modelCat("attach", …)`) and as the attachment keyword
+**⚠ ONE CONCRETE ACTION FALLS OUT, and it is a live 1.0 defect rather than a 2.0 design choice.** `attach` is registered
+BOTH as a model category word (`pilltypes.ts`, `modelCat("attach", …)`) and as the attachment keyword
 (`META_KEYWORDS.attach`) — so inside one column it already means two things: `model:attach` = 16 (substring) against
 `model:(attach chest)` = 51,581 (keyword). **G1 fails today.** The category word must lose the name — `attached`
 already exists as its twin and is the better noun — before `attach:` can be a global door.
@@ -217,12 +217,12 @@ design is wrong.**
 
 ### L12 — A QUERY READS AS ITS OWN EXPLANATION
 
-**The user's rule, 2026-08-10: *"when a user reads the search bar, the logic should become immediately obvious. Seeing
-a bar should birth assumption about what it does."* And, when I first read it too narrowly: *"I'm not just talking
-about naming keywords. I'm exposing a larger issue: query readability."***
+**The user's rule, 2026-08-10: *"when a user reads the search bar, the logic should become immediately obvious. Seeing a
+bar should birth assumption about what it does."* And, when I first read it too narrowly: *"I'm not just talking about
+naming keywords. I'm exposing a larger issue: query readability."***
 
-**The test, and it applies to the WHOLE query, not to its vocabulary:** a reader who has never seen a form should
-still guess right about what it does. Concretely, four failures — any one of them is disqualifying:
+**The test, and it applies to the WHOLE query, not to its vocabulary:** a reader who has never seen a form should still
+guess right about what it does. Concretely, four failures — any one of them is disqualifying:
 
 1. **A token whose ROLE is invisible.** You cannot tell field from value from operator without knowing the registry.
 2. **A scope you cannot see.** You cannot tell what binds to what.
@@ -231,16 +231,16 @@ still guess right about what it does. Concretely, four failures — any one of t
 
 **⚠ APPLYING IT INDICTS THIS DOCUMENT, WHICH IS THE POINT — a law that condemns nothing is decoration.**
 
-| form | verdict |
-|---|---|
-| `desc:kneel`, `attach:chest`, `scale:50` | ✅ reads as it means |
-| `model:(fire -missile)` | ✅ "a fire model that isn't a missile" |
-| **`(model:fire model:arcane)` vs `model:(fire arcane)`** | ⛔ **FAILS (2).** One paren's POSITION changes the meaning and both read identically aloud |
-| `model:attach` (16) vs `model:(attach chest)` (51,581) | ⛔ **FAILS (3).** `attach` is a category word AND the keyword, in one column |
-| `anim:kit` (31,291) vs `sound:kit` (2,516) | ⛔ **FAILS (3)** globally — so `kit:` gets no global door |
-| `replace:`, `loose:` | ⛔ **FAILS (1).** Replace *what*? Meaningless outside their column |
-| `model:fire -model:missile` | 🟡 **withdrawn** — correct for "no missile anywhere"; the ambiguity is in the ENGLISH (§8.9.3b) |
-| `-model:(-caster)` | ⛔ **FAILS (4).** Already deleted for being measured wrong |
+| form                                                     | verdict                                                                                         |
+|----------------------------------------------------------|-------------------------------------------------------------------------------------------------|
+| `desc:kneel`, `attach:chest`, `scale:50`                 | ✅ reads as it means                                                                            |
+| `model:(fire -missile)`                                  | ✅ "a fire model that isn't a missile"                                                          |
+| **`(model:fire model:arcane)` vs `model:(fire arcane)`** | ⛔ **FAILS (2).** One paren's POSITION changes the meaning and both read identically aloud      |
+| `model:attach` (16) vs `model:(attach chest)` (51,581)   | ⛔ **FAILS (3).** `attach` is a category word AND the keyword, in one column                    |
+| `anim:kit` (31,291) vs `sound:kit` (2,516)               | ⛔ **FAILS (3)** globally — so `kit:` gets no global door                                       |
+| `replace:`, `loose:`                                     | ⛔ **FAILS (1).** Replace *what*? Meaningless outside their column                              |
+| `model:fire -model:missile`                              | 🟡 **withdrawn** — correct for "no missile anywhere"; the ambiguity is in the ENGLISH (§8.9.3b) |
+| `-model:(-caster)`                                       | ⛔ **FAILS (4).** Already deleted for being measured wrong                                      |
 
 **Retroactively, this law is why three earlier decisions were right** — each was taken for a narrower reason and L12 is
 the general case: banning bare scope negation, deleting the ∀ double negative, and dropping `model:(attach -chest)`.
@@ -289,6 +289,64 @@ export const GRAMMAR = {
 nesting and where it sits in our syntax."*** This section is the answer, and it is the single highest-leverage part of
 the design: **one recursive grammar closes FIVE separate expressibility problems** (§9) that were each about to get
 their own feature.
+
+#### 2.4.0 DELIMITERS, CHOSEN ON COLLISION DATA — and how they nest
+
+**The user, 2026-08-10: *"we're remaking the system from scratch, you can change the established roles of delimiters.
+And you haven't addressed the question of nested quotes/parentheses."*** Both fair. Delimiters are re-derived here from
+measurement rather than habit, and nesting is answered rather than assumed.
+
+**How often each character appears in the data it would have to coexist with** (9.2.7, 276,332 spell names, 133,699
+`.m2` paths):
+
+| char    | in spell names | in paths | role            | why                                                               |
+|---------|----------------|----------|-----------------|-------------------------------------------------------------------|
+| `*`     | **0**          | 0        | **wildcard**    | zero collisions anywhere — a free choice                          |
+| `{` `}` | **5**          | 0        | *(unused)*      | cleanest bracket by far, but see below                            |
+| `\|`    | 68             | 0        | **OR**          | low collision, and the Lucene/regex convention                    |
+| `"`     | 315            | 0        | **phrase**      | low collision + universal convention                              |
+| `(` `)` | 5,894          | 0        | **grouping**    | see the trade below                                               |
+| `[` `]` | 9,246          | 0        | *(unused)*      | **worse than parens** — kills the obvious alternative             |
+| `:`     | 12,477         | 0        | **axis prefix** | unavoidable; it is THE convention (Google, GitHub, Gmail, Lucene) |
+| `'`     | **14,819**     | 0        | *(unused)*      | the worst character in the set — never use it as a delimiter      |
+
+**⚠ THE ONE REAL TRADE: `(` collides with 5,894 spell names and `{` with 5.** On pure data, braces win by three orders
+of magnitude. Parens are kept anyway, for two reasons that outweigh it:
+
+1. **L0.** Every query language in the L0 table groups with parens. Braces read as "set" or "code block" and would have
+   to be taught.
+2. **⭐ DROPPING SPELL-LEVEL GROUPING (§8.9.1) ALREADY DEFUSED THE COLLISION.** `(` is only ever meaningful where a VALUE
+   or CLAUSE is expected — after `axis:`, after a keyword word, or after `|` inside a scope. **In top-level free text it
+   is an ordinary character**, so `fireball (rank 2)` searches literally and the 5,894 names are untouched.
+
+That is a second dividend of a decision taken for readability, and it is why the collision count does not decide this.
+
+##### How they NEST — three rules, and a phrase is a LEAF
+
+**1. Parens nest, and they must.** Precedence is `-` > AND > `|` (§8.9.4 depends on it), so `|` is the LOOSEST operator.
+That means an alternation cannot be a keyword's argument without a group:
+
+    model:(attach chest|head)      =  (attach chest) OR head        ← precedence, and probably not meant
+    model:(attach (chest|head))    =  attached at chest OR head     ← the group IS the single token (L6)
+
+**2. A PHRASE IS A LEAF. No delimiter is active inside it.** Parens, pipes, dashes, stars and colons inside `"…"` are
+ordinary characters — which is what makes every awkward spell name searchable:
+
+    name:"Embody Hero: Illidan"    the colon is data, not a prefix
+    name:"Elixir (Greater)"        the parens are data
+    model:"beam|chain"             the pipe is data
+
+**3. A quote inside a phrase is escaped `\"`.** Only 315 spell names contain a double quote, so this is rare by
+measurement — but it must exist, or those 315 are unsearchable as exact phrases:
+
+    name:"the \"real\" one"
+
+Doubling (`""`, the CSV convention) was the alternative and loses: it makes an empty phrase `""` and an escaped quote
+ambiguous at the start of a value.
+
+**What CANNOT nest: a phrase inside a phrase.** There is no such thing — rule 2 makes the inner quotes data, and rule 3
+is how you write one. So the nesting depth of quotes is always exactly one, which is the property that keeps the
+tokenizer simple and the highlighter honest.
 
 #### 2.4.1 The grammar
 
@@ -340,57 +398,57 @@ measured, the CONFUSION was concentrated in one form, and that form is now illeg
 **THE MEASUREMENT FIRST, because it is what justifies keeping any of it.** The flat, chip-level form silently
 OVER-EXCLUDES — it drops every spell that has an excluded row anywhere, even when a perfectly good matching row exists:
 
-| query | rows | |
-|---|---|---|
-| `model:fire` | 14,198 | |
-| `model:fire -model:missile` | 9,575 | the flat form |
-| `model:fire model:missile` | **4,623** | **33% of the result, silently dropped** |
-| `sound:cast` | 51,117 | |
-| `sound:cast -sound:impact` | 30,120 | |
-| `sound:cast sound:impact` | **20,997** | **41%** |
+| query                       | rows       |                                         |
+|-----------------------------|------------|-----------------------------------------|
+| `model:fire`                | 14,198     |                                         |
+| `model:fire -model:missile` | 9,575      | the flat form                           |
+| `model:fire model:missile`  | **4,623**  | **33% of the result, silently dropped** |
+| `sound:cast`                | 51,117     |                                         |
+| `sound:cast -sound:impact`  | 30,120     |                                         |
+| `sound:cast sound:impact`   | **20,997** | **41%**                                 |
 
-So "fire models that aren't missiles" is answered WRONGLY by the flat form a third of the time. Local negation is not
-a power-user luxury; it is the correct reading of the query people actually type.
+So "fire models that aren't missiles" is answered WRONGLY by the flat form a third of the time. Local negation is not a
+power-user luxury; it is the correct reading of the query people actually type.
 
 **THE RULE, and it is a restriction rather than a generalisation: inside a scope, negation REFINES — it may not be the
 whole predicate.** Every scope needs a positive anchor.
 
-| written | depth | reads | |
-|---|---|---|---|
-| `-(model:arcane -model:fire)` | query | not this whole combination | ✅ |
-| `-model:fire` | chip | no fire model row exists | ✅ |
-| `model:(fire -missile)` | row, refining | a fire model row that is not a missile | ✅ |
-| `model:(-fire)` | row, bare | — | ⛔ **illegal** |
-| `model:(-attach:chest)` | row, scoped axis | — | ⛔ **illegal — use `-attach:chest`** |
+| written                       | depth            | reads                                  |                                      |
+|-------------------------------|------------------|----------------------------------------|--------------------------------------|
+| `-(model:arcane -model:fire)` | query            | not this whole combination             | ✅                                   |
+| `-model:fire`                 | chip             | no fire model row exists               | ✅                                   |
+| `model:(fire -missile)`       | row, refining    | a fire model row that is not a missile | ✅                                   |
+| `model:(-fire)`               | row, bare        | —                                      | ⛔ **illegal**                       |
+| `model:(-attach:chest)`       | row, scoped axis | —                                      | ⛔ **illegal — use `-attach:chest`** |
 
-**⭐ BANNING THE BARE FORM DELETES THE TRAP ENTIRELY.** The confusing case was never `model:(fire -missile)`; it was
-that `-model:fire` and `model:(-fire)` disagree on spells with NO models — the first vacuously true, the second false.
-With a positive anchor required, **every scope must find a row before it can exclude anything**, so the vacuity has
-nowhere to appear and both readings become the obvious ones:
+**⭐ BANNING THE BARE FORM DELETES THE TRAP ENTIRELY.** The confusing case was never `model:(fire -missile)`; it was that
+`-model:fire` and `model:(-fire)` disagree on spells with NO models — the first vacuously true, the second false. With a
+positive anchor required, **every scope must find a row before it can exclude anything**, so the vacuity has nowhere to
+appear and both readings become the obvious ones:
 
     -model:missile         "don't show me spells with missiles"        — no models? not excluded. obvious.
     model:(fire -missile)  "show me fire models that aren't missiles"  — no models? no match. obvious.
 
 **And it deletes three more problems at a stroke** — all four were separate findings of the independent review (§8.9):
 
-- the ∀ double-negative `-model:(-caster)` becomes unwritable, which is right: its showcase was WRONG (vacuously true
-  of model-less spells), and the reviewer's judgement stands that no roleplayer would type it.
+- the ∀ double-negative `-model:(-caster)` becomes unwritable, which is right: its showcase was WRONG (vacuously true of
+  model-less spells), and the reviewer's judgement stands that no roleplayer would type it.
 - `model:(attach -chest)`'s baffling reading (`attach:* AND NOT "chest"`) goes with it.
 - **negated word-form axes disappear, so the parser stops needing the axis registry to place a `-`.** That was the
   review's finding #2/#3 and its worst structural consequence — registering an axis could change a bookmarked query.
 
-**What is LOST is a genuine capability and it is named honestly: universal quantification.** "All model rows are
-caster" is no longer sayable. It was sayable for one day, in a form that was measured wrong and that nobody would
-type. **Expressibility register #4 reverts to OPEN** and, if it is ever wanted, gets a word of its own rather than a
-double negative.
+**What is LOST is a genuine capability and it is named honestly: universal quantification.** "All model rows are caster"
+is no longer sayable. It was sayable for one day, in a form that was measured wrong and that nobody would type.
+**Expressibility register #4 reverts to OPEN** and, if it is ever wanted, gets a word of its own rather than a double
+negative.
 
 #### 2.4.3 The edge cases the grammar MUST answer
 
-A recursive grammar creates combinations nobody typed on purpose. Each of these was found by walking the BNF against
-the laws; leaving any of them undefined is how 1.0 got its exceptions.
+A recursive grammar creates combinations nobody typed on purpose. Each of these was found by walking the BNF against the
+laws; leaving any of them undefined is how 1.0 got its exceptions.
 
-**(a) `count` is a property of the SCOPE, not of a row.** It is the one axis that cannot be a row predicate — a row
-has no cardinality. Inside a scope it counts **the rows that satisfy the rest of that scope's predicate**:
+**(a) `count` is a property of the SCOPE, not of a row.** It is the one axis that cannot be a row predicate — a row has
+no cardinality. Inside a scope it counts **the rows that satisfy the rest of that scope's predicate**:
 
     model:(caster count >4)      more than four CASTER model rows       ← filtered count, §9 #3
     model:(count >4)             more than four model rows in all
@@ -410,16 +468,16 @@ parenthesised group is a single thing:
     model:(attach chest -missile)   attached at the chest, not a missile  ← refining, legal
     model:(-attach:chest)     ⛔ illegal — a scope needs a positive anchor (§2.4.2)
 
-The third line is legal and reads oddly, which is exactly why the highlighter must draw the capsule around what an
-axis actually consumed. **Negation is never an axis's argument** — there is no "negated value", only a negated clause.
+The third line is legal and reads oddly, which is exactly why the highlighter must draw the capsule around what an axis
+actually consumed. **Negation is never an axis's argument** — there is no "negated value", only a negated clause.
 
 **(d) A scope may not name another column's axis.** `model:(sound:fire)` is a static error, not an empty result: the
 scope is a set of MODEL rows and a sound axis cannot read one. Universal axes (`count`, `target`) are the exception —
 they apply in every scope by definition (L1). Reject at parse time and say so in the bar; L2's "answer, never fall
 through" is about DATA, not about nonsense.
 
-**(e) An empty group `()` is a static error**, not an identity element. Nothing sensible reads it, and silently
-treating it as "everything" or "nothing" is the class of failure §9.1 is about.
+**(e) An empty group `()` is a static error**, not an identity element. Nothing sensible reads it, and silently treating
+it as "everything" or "nothing" is the class of failure §9.1 is about.
 
 **(f) Two spellings of OR is one too many — `,` is retained ONLY for numbers.** `id:133,134` stays because a bare list
 of ids is how people paste them, and the rule is syntactic (every part a number), not per-field. Everywhere else `|` is
@@ -723,11 +781,11 @@ For a total axis the wildcard is still **answered** rather than rejected — L2 
 is the literally correct answer — but it is **never offered in autocomplete and the bar marks it as a no-op**, so the
 user sees why 276,332 rows came back instead of wondering. `total: true` on the axis is the whole declaration.
 
-**`count`'s global door is NOT an exception — see L5.** `count:>4` desugars, like every global prefix, to the union
-over each column carrying the axis, so it means "some column has more than four". That reads oddly, but for the same
-reason any wide union does — not because `count` is special. An earlier draft carved it out of L5 as "a door not worth
-walking through"; the virtual-tag rewrite removed the need for the carve-out, and the useful form is still the scoped
-one, `model:(count >4)`.
+**`count`'s global door is NOT an exception — see L5.** `count:>4` desugars, like every global prefix, to the union over
+each column carrying the axis, so it means "some column has more than four". That reads oddly, but for the same reason
+any wide union does — not because `count` is special. An earlier draft carved it out of L5 as "a door not worth walking
+through"; the virtual-tag rewrite removed the need for the carve-out, and the useful form is still the scoped one,
+`model:(count >4)`.
 
 ### 4.5 VALUE RANGES — the syntax is GitHub's, the domain is MEASURED
 
@@ -744,25 +802,25 @@ with the wildcard rule already adopted in §3.3, so there is one meaning of `*` 
 Lucene's `[10 TO 50]` was the alternative and loses on both counts: it is the relevance family's spelling, and it costs
 two brackets and a keyword where `..` costs two dots.
 
-**⛔ `-` AS THE RANGE TOKEN WAS PROPOSED AND REJECTED ON MEASUREMENT (user, 2026-08-10).** `10-90` reads more
-naturally than `10..90` and that instinct is right, but `-` already carries three meanings in this data:
+**⛔ `-` AS THE RANGE TOKEN WAS PROPOSED AND REJECTED ON MEASUREMENT (user, 2026-08-10).** `10-90` reads more naturally
+than `10..90` and that instinct is right, but `-` already carries three meanings in this data:
 
-| meaning | evidence on 9.2.7 |
-|---|---|
-| negation | `-model:fire` |
-| a NEGATIVE VALUE | `fx:"scale -50"` = 71 · `mech:"speed <-50"` = 582 — the percent axes are signed |
-| an ordinary character | **17,557 spell names** contain a hyphen (6.4%), plus 254 `.m2` paths |
+| meaning               | evidence on 9.2.7                                                               |
+|-----------------------|---------------------------------------------------------------------------------|
+| negation              | `-model:fire`                                                                   |
+| a NEGATIVE VALUE      | `fx:"scale -50"` = 71 · `mech:"speed <-50"` = 582 — the percent axes are signed |
+| an ordinary character | **17,557 spell names** contain a hyphen (6.4%), plus 254 `.m2` paths            |
 
-A fourth meaning makes `scale:-50-10` unreadable — −50 to 10, or −50 to −10 written `-50--10`, or a negation? **The
-role of the token becomes invisible, which is L12 (1).** With `..` both forms stay clean: `-50..10`, `-50..-10`.
+A fourth meaning makes `scale:-50-10` unreadable — −50 to 10, or −50 to −10 written `-50--10`, or a negation? **The role
+of the token becomes invisible, which is L12 (1).** With `..` both forms stay clean: `-50..10`, `-50..-10`.
 
-**And the readability concern is answered by the AFFORDANCE, not the token.** Per §4.5, a high-cardinality numeric
-axis is drawn as a SLIDER — the user drags and `10..90` is what gets serialised. The range token is machine-facing far
-more often than human-facing, which is exactly where a slightly technical spelling is affordable.
+**And the readability concern is answered by the AFFORDANCE, not the token.** Per §4.5, a high-cardinality numeric axis
+is drawn as a SLIDER — the user drags and `10..90` is what gets serialised. The range token is machine-facing far more
+often than human-facing, which is exactly where a slightly technical spelling is affordable.
 
-**Parens were then proposed for the negative, "like in math" — and they are already spent.** `(` after a field prefix
-is a ROW SCOPE (§2.4.2), so `scale:(-50)` is a scoped clause, not a literal. One delimiter with two meanings is
-precisely what §2.4.4 removed from quotes; re-introducing it for numbers would undo that.
+**Parens were then proposed for the negative, "like in math" — and they are already spent.** `(` after a field prefix is
+a ROW SCOPE (§2.4.2), so `scale:(-50)` is a scoped clause, not a literal. One delimiter with two meanings is precisely
+what §2.4.4 removed from quotes; re-introducing it for numbers would undo that.
 
 **⭐ AND THE WHOLE QUESTION IS LOW-STAKES, BECAUSE A RANGE IS PURE SUGAR OVER TWO COMPARISONS THAT ALREADY WORK:**
 
@@ -771,16 +829,16 @@ precisely what §2.4.4 removed from quotes; re-introducing it for numbers would 
     fx:(scale >10 scale <90)      1,803    a true range, on ONE row
     fx:(scale >-60 scale <-10)      229    negatives, and NO ambiguity
 
-Two numeric words in one scope each bind their own argument (L6), so the row must satisfy both — that is the range,
-with no range token in sight. **And the operators make the role of `-` explicit**, which is why the verbose form has
-none of the ambiguity the compact one would. `10..90` is shorthand for exactly this, the slider generates both, and
-nothing in the language depends on the shorthand existing.
+Two numeric words in one scope each bind their own argument (L6), so the row must satisfy both — that is the range, with
+no range token in sight. **And the operators make the role of `-` explicit**, which is why the verbose form has none of
+the ambiguity the compact one would. `10..90` is shorthand for exactly this, the slider generates both, and nothing in
+the language depends on the shorthand existing.
 
 ##### `-` IS AN OPERATOR ONLY IN CLAUSE-OPENING POSITION
 
 Settling this here because it is the same question, and the independent review listed it as undefined. **`-` negates
-only when it OPENS a clause** — at the start of the query, after whitespace, or after `(`. Anywhere else it is
-ordinary character data or part of a value:
+only when it OPENS a clause** — at the start of the query, after whitespace, or after `(`. Anywhere else it is ordinary
+character data or part of a value:
 
     -model:fire      negation      — clause-opening
     model:anti-magic one token     — 17,557 names need this
@@ -974,17 +1032,16 @@ implication or ∀.
 - **`Row.corpus` is one string**, so §8.1's promised category/corpus split and the `mixed` type are unrepresentable.
 - **Arrays are unmodelled** — 374 columns, and an array column is exactly where the row model must decide one-row-vs-N,
   which determines every `count` on that column.
-- **`Column.rows(d, spellId)` is a FORWARD index replacing inverted ones.** Not merely "unmeasured" as §5 of the
-  process log says — architecturally inverted, on every keystroke, with `-model:(-caster)` answerable by no index at
-  all.
+- **`Column.rows(d, spellId)` is a FORWARD index replacing inverted ones.** Not merely "unmeasured" as §5 of the process
+  log says — architecturally inverted, on every keystroke, with `-model:(-caster)` answerable by no index at all.
 - Missing entirely: an error model, incremental/prefix parse for a search-as-you-type box, unknown-prefix behaviour,
   case sensitivity, Unicode and curly quotes, escaping beyond `\"`, and a complexity budget.
 
 **What survives untouched:** L1, L2, L4, L5, L7, L9, L11, the `Axis`/`Column` collapse, §4.1's storage measurement,
 §4.5's cardinality-decides-affordance finding, and the row model's closure of filtered `count`.
 
-**The pending call is in `docs/PROCESS-LOG-search2.md` §4.0** — it is a scope decision for the user, not a
-documentation fix.
+**The pending call is in `docs/PROCESS-LOG-search2.md` §4.0** — it is a scope decision for the user, not a documentation
+fix.
 
 ---
 
@@ -996,21 +1053,21 @@ core of §2.4.**
     (model:fire model:arcane)   two rows, either may satisfy either term
     model:(fire arcane)         ONE row that is both
 
-**They read identically aloud.** The only difference is whether the field prefix sits inside or outside the paren, and
-a reader who does not already know the rule cannot recover it. The independent review (§8.9) ranked this its #1
+**They read identically aloud.** The only difference is whether the field prefix sits inside or outside the paren, and a
+reader who does not already know the rule cannot recover it. The independent review (§8.9) ranked this its #1
 learnability finding *before* L12 existed; the user's principle condemns it independently. Two paths, same verdict.
 
-**Worse, it is not stable under the UI we planned.** §6 proposes auto-closing parens — so whether you get a spell
-group or a row scope depends on whether you typed `(` before or after `model:`. A meaning that depends on typing
-ORDER fails L12 (2) and (3) at once.
+**Worse, it is not stable under the UI we planned.** §6 proposes auto-closing parens — so whether you get a spell group
+or a row scope depends on whether you typed `(` before or after `model:`. A meaning that depends on typing ORDER fails
+L12 (2) and (3) at once.
 
 **THE OPTIONS, honestly costed:**
 
-| | what | cost |
-|---|---|---|
+|                                                  | what                                                                                      | cost                                                                                                                |
+|--------------------------------------------------|-------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------|
 | **A. Drop spell-level grouping** *(recommended)* | `(...)` appears ONLY after a field prefix, so parens have exactly ONE meaning — row scope | loses group negation, so the implication case (`-(model:arcane -model:fire)`) goes; **register #5 reverts to OPEN** |
-| **B. Different brackets** | `model:(row scope)` vs `[spell group]` | invents bracket semantics no established system uses — an L0 violation |
-| **C. Keep both, mitigate with highlighting** | as designed today | the review judged highlighting insufficient, and L12 (2) is about the TEXT, not the rendering |
+| **B. Different brackets**                        | `model:(row scope)` vs `[spell group]`                                                    | invents bracket semantics no established system uses — an L0 violation                                              |
+| **C. Keep both, mitigate with highlighting**     | as designed today                                                                         | the review judged highlighting insufficient, and L12 (2) is about the TEXT, not the rendering                       |
 
 **Recommendation: A.** It is the same cut the bounded-scope proposal already makes for independent reasons (process log
 §4.0), it makes `(` mean one thing, and the capability it loses is one exotic query shape raised as a hypothetical. If
@@ -1029,26 +1086,27 @@ positive anchor required, and `-column:(…)` negating a whole scoped clause. **
 sound:fire` needs no parentheses — it is two clauses joined by `|`. What grouping bought was OR of CONJUNCTIONS, and
 negation of a conjunction. Only those two are lost.
 
-| # | scenario | reduced grammar | |
-|---|---|---|---|
-| 1 | `count` universal — "number of spell effects, not speed" | `mech:(count >4)` | ✅ |
-| 2 | bees without beerfest junk | `model:bee -model:beer` = 19 | ✅ |
-| 3 | "beer without bee junk" | `model:beer` = 369, no operator needed | ✅ |
-| 4 | arcane in the description but NOT the name | `desc:arcane -name:arcane` = 2,662 | ✅ |
-| 5 | **(fire ∧ arcane) ∨ (frost ∧ arcane)** | factors: `model:arcane model:(fire\|frost)` = 177 | ✅ |
-| 6 | cross-field OR | `model:fire \| sound:fire` — clauses, not a group | ✅ |
-| 7 | row-level negation | `model:(fire -missile)` — 33% correction (§2.4.2) | ✅ |
-| 8 | filtered count | `model:(caster count >4)` | ✅ |
-| 9 | "has no model at all" / "everything" | `-model:*` / `*` | ✅ |
-| 10 | attach / target reachable globally | `attach:chest`, `target:caster` | ✅ |
-| 11 | **implication — ROW level** | `-model:(arcane -fire)` — "no model row arcane-without-fire" | ✅ **survives** |
-| 12 | **implication — SPELL level** | `-model:arcane \| model:fire` = **270,978** | ✅ **survives — De Morgan, §8.9.4** |
-| 13 | **arbitrary DNF** | `model:fire model:arcane \| model:frost model:shadow` | ✅ **survives — precedence, §8.9.4** |
-| 14 | ∀ quantification | — | ⛔ lost earlier (§2.4.2), register #4 |
-| 15 | cross-column row correlation | — | ⛔ never had it, parked |
+| #  | scenario                                                 | reduced grammar                                              |                                       |
+|----|----------------------------------------------------------|--------------------------------------------------------------|---------------------------------------|
+| 1  | `count` universal — "number of spell effects, not speed" | `mech:(count >4)`                                            | ✅                                    |
+| 2  | bees without beerfest junk                               | `model:bee -model:beer` = 19                                 | ✅                                    |
+| 3  | "beer without bee junk"                                  | `model:beer` = 369, no operator needed                       | ✅                                    |
+| 4  | arcane in the description but NOT the name               | `desc:arcane -name:arcane` = 2,662                           | ✅                                    |
+| 5  | **(fire ∧ arcane) ∨ (frost ∧ arcane)**                   | factors: `model:arcane model:(fire\|frost)` = 177            | ✅                                    |
+| 6  | cross-field OR                                           | `model:fire \| sound:fire` — clauses, not a group            | ✅                                    |
+| 7  | row-level negation                                       | `model:(fire -missile)` — 33% correction (§2.4.2)            | ✅                                    |
+| 8  | filtered count                                           | `model:(caster count >4)`                                    | ✅                                    |
+| 9  | "has no model at all" / "everything"                     | `-model:*` / `*`                                             | ✅                                    |
+| 10 | attach / target reachable globally                       | `attach:chest`, `target:caster`                              | ✅                                    |
+| 11 | **implication — ROW level**                              | `-model:(arcane -fire)` — "no model row arcane-without-fire" | ✅ **survives**                       |
+| 12 | **implication — SPELL level**                            | `-model:arcane \| model:fire` = **270,978**                  | ✅ **survives — De Morgan, §8.9.4**   |
+| 13 | **arbitrary DNF**                                        | `model:fire model:arcane \| model:frost model:shadow`        | ✅ **survives — precedence, §8.9.4**  |
+| 14 | ∀ quantification                                         | —                                                            | ⛔ lost earlier (§2.4.2), register #4 |
+| 15 | cross-column row correlation                             | —                                                            | ⛔ never had it, parked               |
 
-**THIRTEEN of fifteen survive** (corrected 2026-08-10 — see §8.9.4; two rows below were first recorded as lost and are not). Note #11: **the implication shape survives at
-ROW level**, because `-column:(…)` is an ordinary negated clause and needs no spell-level group. `-model:(arcane
+**THIRTEEN of fifteen survive** (corrected 2026-08-10 — see §8.9.4; two rows below were first recorded as lost and are
+not). Note #11: **the implication shape survives at ROW level**, because `-column:(…)` is an ordinary negated clause and
+needs no spell-level group. `-model:(arcane
 -fire)` says "every arcane model row is also fire". Only the SPELL-level reading — an arcane row and a fire row being
 different rows — is gone.
 
@@ -1066,14 +1124,14 @@ don't contain the word fire across any models?" One line, and it is the PLAIN fo
 **Chip-level negation IS the across-all-rows reading.** `-model:fire` is `NOT EXISTS row: fire`, which is
 `FOR ALL rows: NOT fire` — so "not in any model" is precisely what it already says (L3).
 
-| query | means | 9.2.7 |
-|---|---|---|
-| `model:arcane -model:fire` | has arcane; **no** model has fire | **5,354** |
-| `model:(arcane -fire)` | one model FILE saying arcane and not fire | ~all arcane |
-| `model:arcane model:fire` | an arcane model **and** a fire model | 152 |
+| query                      | means                                     | 9.2.7       |
+|----------------------------|-------------------------------------------|-------------|
+| `model:arcane -model:fire` | has arcane; **no** model has fire         | **5,354**   |
+| `model:(arcane -fire)`     | one model FILE saying arcane and not fire | ~all arcane |
+| `model:arcane model:fire`  | an arcane model **and** a fire model      | 152         |
 
-**⚠ CORRECTION TO §2.4.2 AND TO L12's TABLE.** Both said `model:fire -model:missile` "over-excludes by 33%" and filed
-it as an L12 failure-of-kind-(4). **That was too strong and is withdrawn.** The flat form is not wrong: it correctly
+**⚠ CORRECTION TO §2.4.2 AND TO L12's TABLE.** Both said `model:fire -model:missile` "over-excludes by 33%" and filed it
+as an L12 failure-of-kind- (4). **That was too strong and is withdrawn.** The flat form is not wrong: it correctly
 answers *"no missile anywhere"*. The ambiguity lives in the ENGLISH — "fire but not missile" can mean *no missiles at
 all* or *a fire model that is not a missile* — and the two forms answer the two readings separately. **That is the
 system working.** The 33% is the size of the gap BETWEEN the two questions, not an error rate.
@@ -1081,15 +1139,15 @@ system working.** The 33% is the size of the gap BETWEEN the two questions, not 
 What survives of the original point: the two readings are close enough in English that a user may pick the wrong form,
 so the help must teach the pair together — and that is a teaching obligation, not a defect.
 
-**No `&` token.** AND stays implicit juxtaposition. An optional `&` would be a second spelling of one thing — the
-same wart as `,` beside `|` (§2.4.3(f)), which is already the grammar's one regretted exception. The readability
-problem that `|` creates is real but it is a RENDERING problem: the bar must draw the OR split (§8.9.4). Adding syntax
-so the text can explain itself is treating the symptom.
+**No `&` token.** AND stays implicit juxtaposition. An optional `&` would be a second spelling of one thing — the same
+wart as `,` beside `|` (§2.4.3 (f)), which is already the grammar's one regretted exception. The readability problem
+that `|` creates is real but it is a RENDERING problem: the bar must draw the OR split (§8.9.4). Adding syntax so the
+text can explain itself is treating the symptom.
 
 #### 8.9.4 ⭐ THE REDUCED GRAMMAR IS EXPRESSIVELY COMPLETE — grouping bought CONCISENESS, not power
 
-**The user asked: "would this be solvable with an implicit AND token?" It is, and the answer corrects §8.9.2 — two
-rows there were first recorded as lost and are not.**
+**The user asked: "would this be solvable with an implicit AND token?" It is, and the answer corrects §8.9.2 — two rows
+there were first recorded as lost and are not.**
 
 **Because AND is implicit juxtaposition and binds TIGHTER than `|`, the flat clause list already writes DNF:**
 
@@ -1122,8 +1180,8 @@ spell-level grouping cost **no expressive power at all**.
 The common case of that is alternation inside ONE column, and it is already handled at value level by
 `model:(fire|frost)`. The residue is cross-column OR in more than one conjunct, which nobody has asked for.
 
-**So §8.9.1's option A is now strictly better than it looked when it was chosen:** parens keep exactly one meaning,
-L12 is satisfied, and the expressive loss is nil rather than "two exotic shapes". **The trade is DNF verbosity against
+**So §8.9.1's option A is now strictly better than it looked when it was chosen:** parens keep exactly one meaning, L12
+is satisfied, and the expressive loss is nil rather than "two exotic shapes". **The trade is DNF verbosity against
 readability, and readability wins** — which is the same call L12 makes everywhere else.
 
 ⚠ **This makes PRECEDENCE load-bearing and it must be visible.** `-` > AND > `|` is standard, but a reader who assumes
@@ -1140,16 +1198,16 @@ returns almost nothing.** Measured over every `.m2` in the listfile:
       ...that do not                       316
 
 At ROW level `arcane -fire` means ONE FILE PATH holding "arcane" and not "fire" — true of 316 of 317. So
-`-model:(arcane -fire)` excludes essentially every arcane spell, and the compound lands on the lone file that says
-both. Valid, useless.
+`-model:(arcane -fire)` excludes essentially every arcane spell, and the compound lands on the lone file that says both.
+Valid, useless.
 
 **Three questions were hiding in one sentence, and only the middle one is actually lost:**
 
-| reading | query | |
-|---|---|---|
-| **A** arcane spells that ALSO have fire | `model:arcane model:fire` | ✅ **152** — trivial, no negation |
-| **B** everything EXCEPT arcane-without-fire | — | ⛔ lost with spell grouping |
-| **C** no arcane FILE lacking fire | `-model:(arcane -fire)` | ✅ legal, ≈ `-model:arcane` here |
+| reading                                     | query                     |                                   |
+|---------------------------------------------|---------------------------|-----------------------------------|
+| **A** arcane spells that ALSO have fire     | `model:arcane model:fire` | ✅ **152** — trivial, no negation |
+| **B** everything EXCEPT arcane-without-fire | —                         | ⛔ lost with spell grouping       |
+| **C** no arcane FILE lacking fire           | `-model:(arcane -fire)`   | ✅ legal, ≈ `-model:arcane` here  |
 
 Note **B does not require arcane at all** — it filters everything — which is why it is a different shape from what the
 question wrote, and why losing it costs less than it first appears.
@@ -1167,31 +1225,31 @@ almost never carries both.
 points — the row's properties — and away from a second content word.** That is a UI obligation created by a grammar
 rule, and it is exactly the kind of thing L12 exists to catch before it ships.
 
-**⚠ THIS PARAGRAPH WAS WRONG AND IS CORRECTED IN §8.9.4.** It first recorded the spell-level implication as lost.
-It is not: `-model:arcane | model:fire` = 270,978, by De Morgan, with no grouping. Register #5 stays ✅.
+**⚠ THIS PARAGRAPH WAS WRONG AND IS CORRECTED IN §8.9.4.** It first recorded the spell-level implication as lost. It is
+not: `-model:arcane | model:fire` = 270,978, by De Morgan, with no grouping. Register #5 stays ✅.
 
 ---
 
 ## 9. The expressibility register — KEEP HUNTING
 
 **Standing instruction from the user, 2026-08-10: *"I want to be on constant lookout for similar scenarios that cannot
-be satisfied by our current system."*** This section is where the real gaps are recorded, so the lookout produces a
-list instead of a feeling.
+be satisfied by our current system."*** This section is where the real gaps are recorded, so the lookout produces a list
+instead of a feeling.
 
 **The discipline: when a query cannot be written, add a row here with a MEASUREMENT before deciding whether to build
 anything.** It has already paid three ways — one entry turned out to be a silent BUG rather than a missing feature, one
 turned out to be a free consequence of the row model, and four were closed at a stroke by the recursive grammar rather
 than by four separate features.
 
-| # | the query you could not write | 1.0 | 2.0 |
-|---|---|---|---|
-| 1 | **cross-field OR** — "a fire model OR a fire sound" | **silently wrong** (§9.1) | ✅ `model:fire \| sound:fire` — §2.4 |
-| 2 | **row-level negation** — "a fire model that is not a missile" | `model:"fire -missile"` = 0, `-` a literal | ✅ `model:(fire -missile)` — §2.4 |
-| 3 | **filtered count** — "more than 4 CASTER models" | `model:"caster count >4"` = 15,905 = has-a-caster-row ∧ >4 models *in all* | ✅ free from the row model (§9.2) |
-| 4 | **∀ quantification** — "models that ALL play on the caster" | unexpressible | ⛔ **REOPENED** — the `-model:(-caster)` form was measured wrong and is now illegal (§2.4.2). Wants a word, not a double negative |
-| 5 | **implication** | unexpressible | ✅ `-model:arcane \| model:fire` = 270,978 — De Morgan, no grouping (§8.9.4) |
-| 6 | **arbitrary DNF** | hand-convert to CNF | ✅ AND binds tighter than `\|`, so a flat list IS DNF (§8.9.4) |
-| 7 | **cross-column row correlation** — "a model and a sound on the SAME target" | unexpressible | ⛔ still open — §9.3 |
+| # | the query you could not write                                               | 1.0                                                                        | 2.0                                                                                                                               |
+|---|-----------------------------------------------------------------------------|----------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| 1 | **cross-field OR** — "a fire model OR a fire sound"                         | **silently wrong** (§9.1)                                                  | ✅ `model:fire \| sound:fire` — §2.4                                                                                              |
+| 2 | **row-level negation** — "a fire model that is not a missile"               | `model:"fire -missile"` = 0, `-` a literal                                 | ✅ `model:(fire -missile)` — §2.4                                                                                                 |
+| 3 | **filtered count** — "more than 4 CASTER models"                            | `model:"caster count >4"` = 15,905 = has-a-caster-row ∧ >4 models *in all* | ✅ free from the row model (§9.2)                                                                                                 |
+| 4 | **∀ quantification** — "models that ALL play on the caster"                 | unexpressible                                                              | ⛔ **REOPENED** — the `-model:(-caster)` form was measured wrong and is now illegal (§2.4.2). Wants a word, not a double negative |
+| 5 | **implication**                                                             | unexpressible                                                              | ✅ `-model:arcane \| model:fire` = 270,978 — De Morgan, no grouping (§8.9.4)                                                      |
+| 6 | **arbitrary DNF**                                                           | hand-convert to CNF                                                        | ✅ AND binds tighter than `\|`, so a flat list IS DNF (§8.9.4)                                                                    |
+| 7 | **cross-column row correlation** — "a model and a sound on the SAME target" | unexpressible                                                              | ⛔ still open — §9.3                                                                                                              |
 
 **Note what 1–6 have in common: none needed a new word.** Five fell out of one recursive grammar and one out of the row
 model. That is the test a proposed feature should face first — *is this a missing capability, or a missing
@@ -1202,15 +1260,15 @@ generalisation?*
 **The user: *"attach lives also in sound and some effects."* Checked against `ref.column_info` on 9.2.7 — right about
 effects, and the gap is wider than the keyword admits.**
 
-| table | column | feeds | `attach:` reaches it? |
-|---|---|---|---|
-| `SpellVisualKitModelAttach` | `AttachmentID` | model | ✅ |
-| `SpellVisual` / `SpellVisualMissile` | `MissileAttachment`, `DestinationAttachment` | model | ✅ |
-| `BeamEffect` | `SourceAttachID`, `DestAttachID` | fx — chain | ✅ |
-| **`DissolveEffect`** | `AttachID` | fx — dissolve | ❌ **ships in the pack, unsearchable** |
-| **`ShadowyEffect`** | `AttachPos` | fx — ghost | ❌ **ships in the pack, unsearchable** |
-| **`BarrageEffect`** | `AttachmentPoint` | model — barrage | ❌ |
-| **`VehicleSeat`** | `AttachmentID`, `PassengerAttachmentID` | **mech** — seat | ❌ (names ship as `vehicleSeats.attachments`) |
+| table                                | column                                       | feeds           | `attach:` reaches it?                         |
+|--------------------------------------|----------------------------------------------|-----------------|-----------------------------------------------|
+| `SpellVisualKitModelAttach`          | `AttachmentID`                               | model           | ✅                                            |
+| `SpellVisual` / `SpellVisualMissile` | `MissileAttachment`, `DestinationAttachment` | model           | ✅                                            |
+| `BeamEffect`                         | `SourceAttachID`, `DestAttachID`             | fx — chain      | ✅                                            |
+| **`DissolveEffect`**                 | `AttachID`                                   | fx — dissolve   | ❌ **ships in the pack, unsearchable**        |
+| **`ShadowyEffect`**                  | `AttachPos`                                  | fx — ghost      | ❌ **ships in the pack, unsearchable**        |
+| **`BarrageEffect`**                  | `AttachmentPoint`                            | model — barrage | ❌                                            |
+| **`VehicleSeat`**                    | `AttachmentID`, `PassengerAttachmentID`      | **mech** — seat | ❌ (names ship as `vehicleSeats.attachments`) |
 
 `META_KEYWORDS.attach` declares `fields: ["model", "fx"]`, and inside `fx` the matcher walks `spellChainRows` ONLY. So
 dissolve and ghost carry their attach point in `data.ts` today (`attaches`, -1 = full body) with no way to ask about it.
@@ -1249,6 +1307,6 @@ than four caster models" — the meaning the docs always claimed.
 ### 9.3 Still open, and honestly costed
 
 **#7, cross-column row correlation.** "A model and a sound that play on the same target" needs rows from two different
-columns joined on a shared attribute — the one thing the row model does NOT give, because `Column.rows()` is
-per-column by construction. It would need a correlation key in `Row` and a join in the kernel. **Speculative: nobody
-has asked for it.** Park unless someone does.
+columns joined on a shared attribute — the one thing the row model does NOT give, because `Column.rows()` is per-column
+by construction. It would need a correlation key in `Row` and a join in the kernel. **Speculative: nobody has asked for
+it.** Park unless someone does.
