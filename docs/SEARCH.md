@@ -123,6 +123,46 @@ never the whole language.
 > Broke as: `desc`, `icon`, `attach`, `boneset`, `motion`, `xpac`, `kit` are all in-column only, so a user who knows
 > the concept cannot find the door.
 
+#### L5.1 — WHAT EARNS A GLOBAL DOOR. Four gates, and two of them are mechanical
+
+**User's requirement, 2026-08-10: *"set concrete requirements and rules what earns a keyword a right to plain scope
+presence, not just semantics but also logic."*** So the test is not taste. **An axis earns a global prefix only if it
+passes ALL FOUR**; failing any one leaves it reachable through its column, which is correct — for those, the column IS
+the meaning.
+
+| gate | question | kind |
+|---|---|---|
+| **G1 UNIQUE** | Does any other axis declare this word or prefix? | **mechanical — `check.py` can enforce it** |
+| **G2 SELF-NAMING** | Does the word name its subject with the column removed? | semantic (L12) |
+| **G3 ONE VALUE SPACE** | Across every column it spans, do its values mean the same thing and come from one domain? | **logical** |
+| **G4 MEANINGFUL UNION** | Is the desugared union over columns (L5) a question anyone asks? | **logical** |
+
+**G3 and G4 are the logical half and they exist because L5 makes a global prefix a UNION.** A union is only coherent
+if the things unioned are the same KIND of thing (G3) and if asking about all of them at once is a question (G4). A
+single-column axis passes both trivially — which is why most axes qualify and the multi-column ones need checking.
+
+**Applied to today's vocabulary:**
+
+| axis | G1 | G2 | G3 | G4 | verdict |
+|---|---|---|---|---|---|
+| `desc`, `icon`, `xpac`, `scale`, `motion`, `speed`, `seat`, `location` | ✅ | ✅ | ✅ single column | ✅ | **global** |
+| `target` | ✅ | ✅ | ✅ one mask vocabulary in every column | ✅ | **global** |
+| `attach` | ⛔ **collides with the `attach` model CATEGORY word** | ✅ | ✅ M2 attachment ids throughout | ✅ | **blocked on a rename** |
+| `count` | ✅ | ✅ | ✅ | ⛔ "some column has >4" is not a question | **scoped only** |
+| `kit` | ⛔ two axes claim it | ✅ | ⛔ **AnimKit ID vs SoundKit NAME — different domains** | ⛔ | **scoped only** |
+| `replace`, `loose` | ✅ | ⛔ replace *what*? | — | — | **scoped only** |
+| `attached`, `missile`, `ground`, `trail`, `barrage`, `display`, `item` | ✅ | ⛔ model categories; the column is the noun | — | — | **scoped only** |
+
+**⚠ ONE CONCRETE ACTION FALLS OUT, and it is a live 1.0 defect rather than a 2.0 design choice.** `attach` is
+registered BOTH as a model category word (`pilltypes.ts`, `modelCat("attach", …)`) and as the attachment keyword
+(`META_KEYWORDS.attach`) — so inside one column it already means two things: `model:attach` = 16 (substring) against
+`model:(attach chest)` = 51,581 (keyword). **G1 fails today.** The category word must lose the name — `attached`
+already exists as its twin and is the better noun — before `attach:` can be a global door.
+
+**G1 IS A GUARD, NOT A NOTE.** Per this project's own rule that prose cannot fire: `check.py` must fail when two axes
+declare the same word or prefix. That is the only one of the four a script can decide, and it is also the one that
+already broke.
+
 ### L6 — Arity is fixed, visible and equal to one
 
 **A word takes the single token after it.** A quoted phrase is one token. This is the frozen rule from 1.0 and it
@@ -933,7 +973,48 @@ ORDER fails L12 (2) and (3) at once.
 §4.0), it makes `(` mean one thing, and the capability it loses is one exotic query shape raised as a hypothetical. If
 implication is ever genuinely wanted, it returns as a NAMED form that reads — not as nested parentheses.
 
-**Do not build §2.4's spell-level group until this is settled.**
+**⭐ SETTLED 2026-08-10: option A. Spell-level grouping is DROPPED.** `(` appears only after a field prefix and has
+exactly one meaning — row scope. §8.9.2 reassesses every scenario against the reduced grammar.
+
+### 8.9.2 REASSESSMENT — every scenario against the reduced grammar
+
+**The reduced grammar is:** flat clause list, `|` between clauses, `-` on a clause, row scope `column:(…)` with a
+positive anchor required, and `-column:(…)` negating a whole scoped clause. **No spell-level group, no DNF, no
+`-( … )` over a bare list.**
+
+**⚠ FIRST, THE DISTINCTION THAT DECIDES MOST OF THIS: dropping GROUPING is not dropping OR.** `model:fire |
+sound:fire` needs no parentheses — it is two clauses joined by `|`. What grouping bought was OR of CONJUNCTIONS, and
+negation of a conjunction. Only those two are lost.
+
+| # | scenario | reduced grammar | |
+|---|---|---|---|
+| 1 | `count` universal — "number of spell effects, not speed" | `mech:(count >4)` | ✅ |
+| 2 | bees without beerfest junk | `model:bee -model:beer` = 19 | ✅ |
+| 3 | "beer without bee junk" | `model:beer` = 369, no operator needed | ✅ |
+| 4 | arcane in the description but NOT the name | `desc:arcane -name:arcane` = 2,662 | ✅ |
+| 5 | **(fire ∧ arcane) ∨ (frost ∧ arcane)** | factors: `model:arcane model:(fire\|frost)` = 177 | ✅ |
+| 6 | cross-field OR | `model:fire \| sound:fire` — clauses, not a group | ✅ |
+| 7 | row-level negation | `model:(fire -missile)` — 33% correction (§2.4.2) | ✅ |
+| 8 | filtered count | `model:(caster count >4)` | ✅ |
+| 9 | "has no model at all" / "everything" | `-model:*` / `*` | ✅ |
+| 10 | attach / target reachable globally | `attach:chest`, `target:caster` | ✅ |
+| 11 | **implication — ROW level** | `-model:(arcane -fire)` — "no model row arcane-without-fire" | ✅ **survives** |
+| 12 | **implication — SPELL level** | `-(model:arcane -model:fire)` | ⛔ **lost** |
+| 13 | **arbitrary DNF** — (a∧b) ∨ (c∧d), non-factoring | — | ⛔ **lost** |
+| 14 | ∀ quantification | — | ⛔ lost earlier (§2.4.2), register #4 |
+| 15 | cross-column row correlation | — | ⛔ never had it, parked |
+
+**Eleven of fifteen survive, and the two newly lost are both exotic.** Note #11: **the implication shape survives at
+ROW level**, because `-column:(…)` is an ordinary negated clause and needs no spell-level group. `-model:(arcane
+-fire)` says "every arcane model row is also fire". Only the SPELL-level reading — an arcane row and a fire row being
+different rows — is gone.
+
+**#5 is the one to remember**, because it is the user's own first combination case and it never needed grouping: it
+FACTORS. `(fire ∧ arcane) ∨ (frost ∧ arcane)` is `arcane ∧ (fire ∨ frost)`, and every DNF whose disjuncts share a term
+factors the same way. #13 is the residue — disjuncts sharing nothing — and nobody has asked for one.
+
+**Register #5 (implication) is therefore DOWNGRADED, not reopened**: the row reading ships, the spell reading is
+recorded as lost. If it is ever wanted it returns as a NAMED form that reads, per L12 — never as nested parens.
 
 ---
 
@@ -954,8 +1035,8 @@ than by four separate features.
 | 2 | **row-level negation** — "a fire model that is not a missile" | `model:"fire -missile"` = 0, `-` a literal | ✅ `model:(fire -missile)` — §2.4 |
 | 3 | **filtered count** — "more than 4 CASTER models" | `model:"caster count >4"` = 15,905 = has-a-caster-row ∧ >4 models *in all* | ✅ free from the row model (§9.2) |
 | 4 | **∀ quantification** — "models that ALL play on the caster" | unexpressible | ⛔ **REOPENED** — the `-model:(-caster)` form was measured wrong and is now illegal (§2.4.2). Wants a word, not a double negative |
-| 5 | **implication** — "arcane only if accompanied by fire" | unexpressible | ✅ `-(model:arcane -model:fire)` |
-| 6 | **arbitrary DNF** — "(fire ∧ arcane) ∨ (frost ∧ shadow)" | hand-convert to CNF; grows exponentially | ✅ written directly — §2.4 |
+| 5 | **implication** | unexpressible | 🟡 **ROW level only** — `-model:(arcane -fire)`. The spell-level reading died with spell grouping (§8.9.2) |
+| 6 | **arbitrary DNF** — non-factoring disjuncts | hand-convert to CNF | ⛔ **lost** with spell grouping. Note the common case FACTORS: `model:arcane model:(fire\|frost)` (§8.9.2 #5) |
 | 7 | **cross-column row correlation** — "a model and a sound on the SAME target" | unexpressible | ⛔ still open — §9.3 |
 
 **Note what 1–6 have in common: none needed a new word.** Five fell out of one recursive grammar and one out of the row
