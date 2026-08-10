@@ -239,7 +239,7 @@ still guess right about what it does. Concretely, four failures — any one of t
 | `model:attach` (16) vs `model:(attach chest)` (51,581) | ⛔ **FAILS (3).** `attach` is a category word AND the keyword, in one column |
 | `anim:kit` (31,291) vs `sound:kit` (2,516) | ⛔ **FAILS (3)** globally — so `kit:` gets no global door |
 | `replace:`, `loose:` | ⛔ **FAILS (1).** Replace *what*? Meaningless outside their column |
-| `model:fire -model:missile` | ⛔ **FAILS (4).** Reads "fire but not missile"; over-excludes 33% (§2.4.2) |
+| `model:fire -model:missile` | 🟡 **withdrawn** — correct for "no missile anywhere"; the ambiguity is in the ENGLISH (§8.9.3b) |
 | `-model:(-caster)` | ⛔ **FAILS (4).** Already deleted for being measured wrong |
 
 **Retroactively, this law is why three earlier decisions were right** — each was taken for a narrower reason and L12 is
@@ -1012,6 +1012,36 @@ different rows — is gone.
 **#5 is the one to remember**, because it is the user's own first combination case and it never needed grouping: it
 FACTORS. `(fire ∧ arcane) ∨ (frost ∧ arcane)` is `arcane ∧ (fire ∨ frost)`, and every DNF whose disjuncts share a term
 factors the same way. #13 is the residue — disjuncts sharing nothing — and nobody has asked for one.
+
+#### 8.9.3b THE TWO NEGATIONS ANSWER TWO DIFFERENT QUESTIONS — and an earlier claim here was too strong
+
+**Asked by the user, 2026-08-10: "how are we achieving ALL spells that contain across all models the word arcane but
+don't contain the word fire across any models?" One line, and it is the PLAIN form:**
+
+    model:arcane -model:fire        5,354
+
+**Chip-level negation IS the across-all-rows reading.** `-model:fire` is `NOT EXISTS row: fire`, which is
+`FOR ALL rows: NOT fire` — so "not in any model" is precisely what it already says (L3).
+
+| query | means | 9.2.7 |
+|---|---|---|
+| `model:arcane -model:fire` | has arcane; **no** model has fire | **5,354** |
+| `model:(arcane -fire)` | one model FILE saying arcane and not fire | ~all arcane |
+| `model:arcane model:fire` | an arcane model **and** a fire model | 152 |
+
+**⚠ CORRECTION TO §2.4.2 AND TO L12's TABLE.** Both said `model:fire -model:missile` "over-excludes by 33%" and filed
+it as an L12 failure-of-kind-(4). **That was too strong and is withdrawn.** The flat form is not wrong: it correctly
+answers *"no missile anywhere"*. The ambiguity lives in the ENGLISH — "fire but not missile" can mean *no missiles at
+all* or *a fire model that is not a missile* — and the two forms answer the two readings separately. **That is the
+system working.** The 33% is the size of the gap BETWEEN the two questions, not an error rate.
+
+What survives of the original point: the two readings are close enough in English that a user may pick the wrong form,
+so the help must teach the pair together — and that is a teaching obligation, not a defect.
+
+**No `&` token.** AND stays implicit juxtaposition. An optional `&` would be a second spelling of one thing — the
+same wart as `,` beside `|` (§2.4.3(f)), which is already the grammar's one regretted exception. The readability
+problem that `|` creates is real but it is a RENDERING problem: the bar must draw the OR split (§8.9.4). Adding syntax
+so the text can explain itself is treating the symptom.
 
 #### 8.9.4 ⭐ THE REDUCED GRAMMAR IS EXPRESSIVELY COMPLETE — grouping bought CONCISENESS, not power
 
