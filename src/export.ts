@@ -109,6 +109,7 @@ export interface ExportRow {
      *  "description column" to hide them with — so both export whenever the
      *  pack has them. */
     description?: string;
+    auraDescription?: string
     encounterNote?: string;
     /** §3y the art the spell wears — searchable since the icon became a
      *  control, so it exports like the two above and for the same reason: it
@@ -184,6 +185,8 @@ function exportRows(): ExportRow[] {
         if (era) row.expansion = era.label;
         const desc = d.descriptionText[d.descriptionOf[i]];
         if (desc) row.description = desc;
+        const auraDesc = d.auraText[d.auraOf[i]];
+        if (auraDesc) row.auraDescription = auraDesc;
         const note = d.encounterText[d.encounterOf[i]];
         if (note) row.encounterNote = note;
         if (d.icons[i]) {
@@ -424,7 +427,7 @@ function exportCsv(): void {
     // The icon's NAME only: a CSV cell is read by a person, the name is the
     // half they recognise, and the JSON export carries the id for anyone who
     // wants to resolve it.
-    const header = ["ID", "Name", "Subtext", "Expansion", "Description", "Encounter note", "Icon"];
+    const header = ["ID", "Name", "Subtext", "Expansion", "Description", "Aura description", "Encounter note", "Icon"];
     if (!hc.models) header.push("Models");
     if (!hc.sounds) header.push("SoundKits", "Sounds");
     if (!hc.animations) header.push("AnimKits", "Animations");
@@ -443,6 +446,7 @@ function exportCsv(): void {
             // three-line cell in a row of one-line ones; the prose reads the
             // same run together and the column stays scannable
             esc((r.description ?? "").replace(/\n+/g, " ")),
+            esc((r.auraDescription ?? "").replace(/\n+/g, " ")),
             esc((r.encounterNote ?? "").replace(/\n+/g, " ")),
             esc(r.icon?.name ?? "")];
         if (!hc.models) {

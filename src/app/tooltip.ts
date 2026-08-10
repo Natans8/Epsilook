@@ -145,6 +145,35 @@ function markUp(line: string, terms: string[]): DocumentFragment {
  * the run-on sentence `title` forced it to be — it always WAS a key→action
  * mapping, and a description list is what that is.
  */
+/**
+ * A line holding only this splits the body into LABELLED SECTIONS, and the
+ * first line of each section is its label.
+ *
+ * A record separator rather than a visible sentinel: `title` is still the
+ * source of the text, and if this panel never opens the browser's own tooltip
+ * shows the same string — an invisible control character degrades to a line
+ * break there, where `---` or `##` would degrade to litter.
+ *
+ * One section means NO label is drawn: a heading over the only thing in the
+ * box labels nothing, and the caller says so by sending no separator at all.
+ */
+export const SECTION = "\u001e";
+
+/** Body lines grouped into sections; `label` is unset when there is only one. */
+function sections(body: string[]): { label?: string; lines: string[] }[] {
+    const at = body.indexOf(SECTION);
+    if (at < 0) return [{lines: body}];
+    const out: { label?: string; lines: string[] }[] = [];
+    let start = 0;
+    for (let i = 0; i <= body.length; i++) {
+        if (i !== body.length && body[i] !== SECTION) continue;
+        const part = body.slice(start, i);
+        if (part.length) out.push({label: part[0], lines: part.slice(1)});
+        start = i + 1;
+    }
+    return out;
+}
+
 function fill(text: string): void {
     const {body, keys} = split(text);
     // WHICH WORDS TO MARK IS THE ANCHOR'S TO SAY, not this module's. An anchor
@@ -154,11 +183,22 @@ function fill(text: string): void {
     // stays the single source of the TEXT — see the header note.
     const marks = (anchor?.dataset.tipHl || "").split("\t").filter(Boolean);
     panel!.textContent = "";
-    body.forEach((line, i) => {
-        const p = el("p", i === 0 ? "tip-what" : "tip-detail");
-        p.append(marks.length ? markUp(line, marks) : document.createTextNode(line));
-        panel!.append(p);
-    });
+    // ⚠ `.tip-what` IS FOR THE FIRST LINE OF A ONE-SECTION TIP AND NOTHING
+    // ELSE. Every other tooltip in the app opens with "what this is" and then
+    // details it, so bolding line 0 is right there. A SECTIONED tip has no
+    // such line — its opening line is a label — and bolding it made the
+    // dungeon-journal note look like the spell's headline whenever the spell
+    // had no description of its own. The label carries the emphasis instead.
+    for (const part of sections(body)) {
+        const box = el("div", "tip-section");
+        if (part.label) box.append(el("p", "tip-label", part.label));
+        part.lines.forEach((line, i) => {
+            const p = el("p", !part.label && i === 0 ? "tip-what" : "tip-detail");
+            p.append(marks.length ? markUp(line, marks) : document.createTextNode(line));
+            box.append(p);
+        });
+        panel!.append(box);
+    }
     if (!keys.length) return;
     const list = el("dl", "tip-keys");
     for (const [key, action] of keys) {

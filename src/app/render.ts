@@ -75,6 +75,7 @@ import type {ModelCatEntry} from "./tags";
 import * as P from "../pills";
 import * as PR from "./pillrender";
 import * as Search from "../search";
+import * as Tip from "./tooltip";
 import {CFG} from "../config";
 import {$, $$, el} from "../dom";
 import {fillTemplate} from "../util";
@@ -345,12 +346,12 @@ function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
     if (icon) nameDiv.appendChild(icon);
     nameLink.appendChild(highlightMatches(d.names[i] || "(unnamed)"));
     nameDiv.appendChild(nameLink);
-    tdName.appendChild(nameDiv);
-    // Pinned to the CELL, not appended after the name: trailing the link put it
-    // at a different x on every row, so the eye had to hunt for it down a
-    // column whose whole job is to be scanned. The corner is a fixed place.
+    // Inside .spell-name, which is width-capped: the mark is pinned to that
+    // block's corner so it lands in the same place on every row AND whatever
+    // the column layout is (a <td> stretches; see the css).
     const text = descriptionMark(i);
-    if (text) tdName.appendChild(text);
+    if (text) nameDiv.appendChild(text);
+    tdName.appendChild(nameDiv);
     if (d.subtexts[i]) tdName.appendChild(el("div", "spell-sub", d.subtexts[i]));
     tdName.appendChild(deliveryLine(spellId));
     tdName.appendChild(commandStrip(spellId));
@@ -542,8 +543,9 @@ function iconMarks(name: string, fid: number): string[] {
 function descriptionMark(i: number): HTMLElement | null {
     const d = activeData();
     const desc = d.descriptionText[d.descriptionOf[i]] || "";
+    const aura = d.auraText[d.auraOf[i]] || "";
     const note = d.encounterText[d.encounterOf[i]] || "";
-    if (!desc && !note) return null;
+    if (!desc && !aura && !note) return null;
 
     // LIT BY WHAT THE TEXT ACTUALLY CONTAINS, not by "a desc term exists".
     // Plain search reaches descriptions too now, and a plain word matches five
@@ -552,15 +554,28 @@ function descriptionMark(i: number): HTMLElement | null {
     // for both doors, and it is what makes the mark mean "your word is in
     // here" rather than "you used the keyword".
     const terms = descTerms();
-    const hay = `${desc} ${note}`.toLowerCase();
+    const hay = `${desc} ${aura} ${note}`.toLowerCase();
     const marks = terms.filter((t) => hay.includes(t));
     const span = el("span", "desc-mark" + (marks.length ? " hit" : ""));
     span.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
         + '<path d="M2.5 3.5h11M2.5 6.5h11M2.5 9.5h11M2.5 12.5h7"/></svg>';
-    // Both bodies in ONE panel, the journal note second and labelled: it is
-    // commentary ABOUT the ability, so it reads as a footnote to the
-    // description rather than as a rival to it.
-    span.title = [desc, note && `Dungeon journal: ${note}`].filter(Boolean).join("\n");
+    // THREE VOICES, ONE PANEL, IN THE ORDER A CASTER MEETS THEM: what the cast
+    // does, what the state says while it holds, then the raid guide's note
+    // about it. Labelled only when there is more than one — a heading over the
+    // single thing in the box labels nothing — and joined with Tip.SECTION so
+    // the panel draws real sections instead of running the three together.
+    //
+    // ⚠ NOT `[a, b, c].filter(Boolean).join("\n")`, which is what shipped and
+    // was wrong: dropping an empty description promoted the NEXT body to line
+    // 0, and line 0 is what fill() renders bold as the tip's headline. A spell
+    // with only a journal note showed that note as its title.
+    const parts: [string, string][] = [];
+    if (desc) parts.push(["Spell description", desc]);
+    if (aura) parts.push(["Aura description", aura]);
+    if (note) parts.push(["Dungeon journal", note]);
+    span.title = parts.length === 1
+        ? parts[0][1]
+        : parts.map(([label, body]) => `${label}\n${body}`).join(`\n${Tip.SECTION}\n`);
     if (marks.length) span.dataset.tipHl = marks.join("\t");
     return span;
 }

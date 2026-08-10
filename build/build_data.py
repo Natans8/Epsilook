@@ -1169,6 +1169,7 @@ def link_kind_word(effect: int, aura: int,
             or effect_names.get(effect, "").lower().replace("_", " ")
             or f"effect {effect}")
 
+
 # ScreenEffect.Effect value whose Param_0 carries a fog tint (swirling fog).
 SCREEN_EFFECT_FOG = 3
 
@@ -1296,7 +1297,8 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 44  # 44: iconNames gains iconFids — the icon's own identity (§3y)
+PACK_FORMAT = 45  # 45: spellText.auras — what the BUFF says, beside what the cast says (§3x)
+# 44: iconNames gains iconFids — the icon's own identity (§3y)
 # 43: spellText — cooked description + encounter prose (§3x)
 # 42: spells.eras + expansions — which expansion added a spell (§3v)
 # 41: soundKitNames — human names for sound kits (§3u)
@@ -4120,11 +4122,20 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         s: cooked for s, template in raw_descriptions.items()
         if s in spell_names and (cooked := cooker.cook(s, template))
     }
+    # The AURA description is a genuinely different string: what the BUFF says
+    # while it is on you, against what the cast says it will do. 63,788 spells
+    # on 9.2.7 carry one, and it is the half that names the state a roleplayer
+    # is actually after ("Stunned.", "Fading.", "Firing at the target.").
+    spell_aura_text = {
+        s: cooked for s, template in raw_aura_descriptions.items()
+        if s in spell_names and (cooked := cooker.cook(s, template))
+    }
     spell_encounter_notes = {
         s: cooked for s, template in read_encounter_notes(table_dir).items()
         if s in spell_names and (cooked := cooker.cook(s, template))
     }
     log(f"  {len(spell_descriptions):,} descriptions, "
+        f"{len(spell_aura_text):,} aura texts, "
         f"{len(spell_encounter_notes):,} encounter notes "
         f"({cooker.stats['resolved']:,} values resolved, "
         f"{cooker.stats['elided']:,} elided)")
@@ -4265,6 +4276,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         return list(pool), index  # dicts keep insertion order, so pool IS the array
 
     description_text, description_of = text_block(spell_descriptions)
+    aura_text, aura_of = text_block(spell_aura_text)
     encounter_text, encounter_of = text_block(spell_encounter_notes)
 
     file_ids = sorted(referenced_fids)
@@ -4556,6 +4568,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellDescriptions": len(spell_descriptions),
                 "descriptionTexts": len(description_text) - 1,  # slot 0 is ""
                 "spellEncounterNotes": len(spell_encounter_notes),
+                "spellAuraTexts": len(spell_aura_text),
+                "auraTexts": len(aura_text) - 1,
                 "encounterTexts": len(encounter_text) - 1,
                 "spellModels": len(model_rows),
                 "spellDisplayModels": sum(1 for r in model_rows if r[2] == MODEL_CAT_DISPLAY),
@@ -4663,6 +4677,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         # would compute the figure at cast time.
         "spellText": {
             "descriptions": {"text": description_text, "of": description_of},
+            "auras": {"text": aura_text, "of": aura_of},
             "encounters": {"text": encounter_text, "of": encounter_of},
         },
         # §3v the expansion ladder, oldest first — spells.eras indexes into it.

@@ -1610,7 +1610,7 @@ reusing that id. Say "first appeared", never "was designed in".
 
 ---
 
-### 3x. What the spell SAYS it does — cooked description + encounter text (`spellText`, format 43)
+### 3x. What the spell SAYS it does — cooked description, aura text and encounter note (`spellText`, format 45)
 
 **`Spell.Description_lang` is a TEMPLATE, not text**, and 19,807 spells on 9.2.7 ship nothing but
 `$@spelldescNNN` — a redirect to another spell's. The client resolves it at tooltip time against the caster; Wowhead
@@ -1643,9 +1643,15 @@ numeric oracle exists. A structural diff is still worth running: on 58 sampled s
 is what caught two real bugs — `re.I` on `\|T.*?\|t` (case-significant; it matched from a stray CLOSING tag and ate the
 sentence) and reading `$?c1[A]?c2[B][default]` as an if/else when it is a **switch** (spell 342156 chains twelve).
 
-**Ships DEDUPED**, because a bare redirect cooks to its target's string: `spellText.descriptions` and
-`.encounters` each hold `{text, of}` — distinct strings with `""` at slot 0, and a per-spell index parallel to
-`spells.ids`. On 9.2.7 that is 129,051 → **79,330** distinct, worth 0.34 MB gz and a third of the browser's memory.
+**THREE BODIES, ONE IDEA.** `descriptions` is what the CAST does, `auras` (format 45) is what the STATE says while it
+holds — a different string and usually a terse fragment, "Stunned.", "Fading.", "Firing at the target." — and
+`encounters` is the dungeon journal's third-person note. All three answer the same `desc` keyword and the same plain
+search, because a user looking for a spell that stuns does not care which of the three said so. They are separate pools
+only because they dedupe separately.
+
+**Ships DEDUPED**, because a bare redirect cooks to its target's string. Each pool holds `{text, of}` — distinct strings
+with `""` at slot 0, and a per-spell index parallel to `spells.ids`. On 9.2.7: descriptions 129,051 → **79,330**
+distinct, aura texts 62,035 → **34,519**, encounter notes 389 → **336**.
 
 **In plain search, and scoped by the `desc` keyword inside `name:`** (`name:"desc kneel"`,
 `name:(desc "blood pool")`). Plain inclusion was the user's call once the overlap was measured; the two canonical counts

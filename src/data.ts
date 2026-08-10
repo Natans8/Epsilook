@@ -61,7 +61,8 @@ export interface SpellPack {
     /**
      * format 43+: what a spell SAYS it does, cooked to placeholder-free prose
      * by build/spelltext.py — `descriptions` from Spell.Description_lang,
-     * `encounters` from the dungeon journal's note on a boss ability.
+     * `auras` from the aura descriptions.
+     * `encounters` from the dungeon journal's note on a boss ability,
      *
      * DEDUPED, because 19,807 descriptions on 9.2.7 are a bare redirect to
      * another spell's and cook to the identical string: `text` holds each
@@ -70,6 +71,7 @@ export interface SpellPack {
      */
     spellText?: {
         descriptions: { text: string[]; of: number[] };
+        auras: { text: string[]; of: number[] };
         encounters: { text: string[]; of: number[] };
     };
     /** format 42+: the expansion ladder, oldest first. Everything needed to
@@ -556,6 +558,8 @@ export interface SpellData {
     descriptionOf: number[];
     encounterText: string[];
     encounterOf: number[];
+    auraText: string[];
+    auraOf: number[];
     /** Spell id -> index into the parallel arrays. */
     spellIndex: Map<number, number>;
     files: Map<number, FileEntry>;
@@ -973,6 +977,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const descriptionOf = st ? st.descriptions.of : [];
     const encounterText = st ? st.encounters.text : [];
     const encounterOf = st ? st.encounters.of : [];
+    const auraText = st ? st.auras.text : [];
+    const auraOf = st ? st.auras.of : [];
 
     // spell icon names ("" = none); older packs have no icon data. The pool
     // and its per-spell index are kept as well as the expansion — the pool is
@@ -2171,7 +2177,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         meta: pack.meta,
         ids: sp.ids, names: sp.names, subtexts: sp.subtexts, icons,
         iconNames, iconFids, iconOf,
-        namesL, descriptionText, descriptionOf, encounterText, encounterOf,
+        namesL, descriptionText, descriptionOf, auraText, auraOf, encounterText, encounterOf,
         spellIndex, files, hasSyntheticFiles,
         spellModels, modelSpells, modelFids, attachmentNames,
         spellModelCats, modelCatSpells, modelCatFidSpells, modelCatNames,

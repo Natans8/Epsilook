@@ -751,18 +751,19 @@ function poolHits(pool: string[], values: string[]): Uint8Array {
 /**
  * `name:"desc kneel"` — search what the spell SAYS it does (§3x).
  *
- * The description and the dungeon-journal note are two sources of one idea, so
+ * The spell and aura descriptions and the dungeon-journal note are two sources of one idea, so
  * a value matching EITHER is a hit. They are separate pools because they are
  * separately deduped, not because they are separate axes.
  */
 function spellsByDescription(values: string[], data: SpellData): Set<number> {
     const out = new Set<number>();
-    const {ids, descriptionText, descriptionOf, encounterText, encounterOf} = data;
+    const {ids, descriptionText, descriptionOf, auraText, auraOf, encounterText, encounterOf} = data;
     if (!descriptionText.length) return out;  // pack older than format 43
     const inDesc = poolHits(descriptionText, values);
+    const inAura = poolHits(auraText, values);
     const inEnc = poolHits(encounterText, values);
     for (let i = 0; i < ids.length; i++) {
-        if (inDesc[descriptionOf[i]] || inEnc[encounterOf[i]]) out.add(ids[i]);
+        if (inDesc[descriptionOf[i]] || inAura[auraOf[i]] || inEnc[encounterOf[i]]) out.add(ids[i]);
     }
     return out;
 }

@@ -1997,12 +1997,6 @@ main {
 .c-name {
     min-width: 17rem;
     max-width: 24rem;
-    /* the containing block for .desc-mark, which is pinned to the corner.
-       The gutter is reserved on EVERY row, not only the ones with a mark:
-       a long name must never run under the glyph, and a padding that came and
-       went with the mark would make the right edge ragged down the column. */
-    position: relative;
-    padding-right: 1.5rem;
 }
 
 /* matches .kit-files' line-height below, so a bare model pill (no kit
@@ -2111,6 +2105,19 @@ main {
 .spell-name {
     color: var(--text-strong);
     font-weight: 600;
+    /* THE POSITIONING CONTEXT FOR .desc-mark, and it is this block rather than
+       the cell on purpose. A <td> stretches to whatever the table gives it, so
+       anchoring to the cell sent the mark to the far right the moment every
+       other column was hidden and the name column took the whole width. This
+       block is width-capped, so the mark lands in the same place whatever the
+       column layout is — which was the point of pinning it at all.
+
+       The gutter is reserved on EVERY row, not only the ones with a mark: a
+       long name must never run under the glyph, and a padding that came and
+       went would make the right edge ragged down the column. */
+    position: relative;
+    max-width: 24rem;
+    padding-right: 1.5rem;
 }
 
 .spell-name-link {
@@ -2174,7 +2181,7 @@ main {
 
 /* "This spell says what it does" — §3x.
 
-   PINNED TO THE CELL'S TOP-RIGHT CORNER, not trailed after the name (user,
+   PINNED TO THE TOP-RIGHT OF .spell-name, not trailed after the link (user,
    2026-08-10). Following the link put it at a different x on every row, which
    makes a column whose whole job is to be scanned something you have to hunt
    down; a fixed corner reads as a column of its own without costing one.
@@ -2185,8 +2192,8 @@ main {
    is a new element simply declining to opt in. */
 .desc-mark {
     position: absolute;
-    top: 0.5rem;
-    right: 0.45rem;
+    top: 0.15rem;
+    right: 0;
     display: inline-flex;
     color: var(--tag-btn);
     cursor: help;
@@ -3563,6 +3570,38 @@ footer a {
 
 .tip-detail {
     color: var(--text);
+}
+
+/* A SECTIONED tooltip — today only the description mark, which can carry three
+   different voices about one spell (the cast, the state it applies, the raid
+   guide's note). The rule and the label do the separating: three paragraphs of
+   prose with nothing between them read as one rambling paragraph, which is
+   exactly how it shipped.
+
+   The rule sits BETWEEN sections only, so a single-section tip is untouched
+   and every other tooltip in the app renders exactly as it did. */
+.tip-section + .tip-section {
+    margin-top: 0.5rem;
+    padding-top: 0.45rem;
+    border-top: 1px solid var(--border);
+}
+
+/* Small, spaced and dim: it names the voice without competing with it. Sentence
+   case would read as prose and get skimmed as part of the body — the caps and
+   the tracking are what make it scan as a heading at 11px. */
+.tip-label {
+    margin-bottom: 0.15rem;
+    color: var(--text-dim);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+/* Prose runs long here, unlike the one-line tips this panel was built for. */
+#tip .tip-section .tip-detail {
+    max-width: 46ch;
+    line-height: 1.4;
 }
 
 /* The matched run inside a tooltip's prose. `mark`'s UA default is black on
