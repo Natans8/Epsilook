@@ -1289,32 +1289,38 @@ screen cannot be missed; an empty result set can be mistaken for a real answer.
 | severity | means | examples |
 |---|---|---|
 | **ERROR** | cannot run; the clause is excluded and drawn broken | `name:>m` (declined operator) · `model:{sound:fire}` (foreign axis) · `scale:abc` (ill-typed) · `name:=Fire*` |
-| **WARNING** | runs, and is probably not what was meant | `modle:fire` → unknown prefix running as TEXT · `model:bee*` → a glob on a path is a **no-op** (§3.2) · `model:{arcane -fire}` → row negation whose terms almost never co-occur (§8.9.3) · a clause that alone reduces the result to 0 |
+| **WARNING** | runs, and is probably not what was meant | `model:bee*` → a glob on a path is a **no-op** (§3.2) · `model:{arcane -fire}` → row negation whose terms almost never co-occur (§8.9.3) · a clause that alone reduces the result to 0 |
 | **NOTE** | correct, and worth saying | `model:{}` ≡ `model:*` "has any model" (§2.4.3e) · `count:>4` is the wide union (L5) |
 
 **The WARNING tier exists because this design keeps producing forms that are legal, evaluable and misleading** — and
 §9.1's whole thesis is that a plausible wrong answer beats no answer only in appearance. An error tier alone would have
 to either reject those (wrong: they are valid) or stay silent (wrong: they mislead).
 
-#### Every diagnostic carries a FIX, and the fix is a query rewrite
+#### A diagnostic may carry a STRUCTURAL fix — never a spelling one
+
+**⛔ NO "DID YOU MEAN" SUGGESTIONS ON AXIS NAMES (user's call, 2026-08-10).** An earlier draft offered `modle:fire` →
+`model:fire`. That is wrong twice over: **an unknown prefix is TEXT by decision** (§4.9.2 #1, forced by the 12,477
+spell names containing a colon), so `modle:fire` is a perfectly valid text search and there is nothing to correct —
+and guessing at spelling over a 276,332-name corpus is presumptuous noise. **Unknown prefixes are therefore not even
+warned about.**
 
 ```ts
 interface Diagnostic {
     severity: "error" | "warning" | "note";
     clause: number;                 // which chip — diagnostics are clause-local
     message: string;                // the user's words: "the name axis has no ordering"
-    fix?: { label: string; query: string };   // one click, applied to the whole query
+    fix?: { label: string; query: string };   // STRUCTURAL only
 }
 ```
 
-    modle:fire            fix: "did you mean model:?"        -> model:fire
     name:>m               fix: "search names containing m"   -> name:m
     model:{sound:fire}    fix: "make it its own clause"      -> model:* sound:fire
     name:=Fire*           fix: "drop the exact match"        -> name:Fire*
+    model:{fire          fix: "close the scope"             -> model:{fire}
 
-**This is the IDE quick-fix pattern and it is the convention (L0).** The registry already knows every axis, every
-type's operator contract (§4.2b) and every axis's domain (§4.5), so **the fix is derivable rather than hand-written per
-message** — which is L11: registering an axis must not require adding error strings anywhere.
+Every one of those is derivable from the registry — the operator contract (§4.2b) says `text` has no `compare`, the
+column says a sound axis cannot read a model row — so **a fix is computed, never authored**. That is L11: registering
+an axis must not require writing error strings anywhere.
 
 #### Can a query fail WHOLE? Essentially no — and the recovery rule is what makes that true
 
@@ -1343,6 +1349,36 @@ at all:
 1. **Resource limits** — a query past a declared length or nesting depth is refused as a whole, because evaluating it
    is the risk. That is the complexity budget the independent review asked for, and it belongs with the kernel.
 2. **No pack loaded** — nothing can be answered, which is a state rather than an error.
+
+### 4.9.4c AUTO-CLOSING — the editor works WITH you (the user's original ask)
+
+**From the opening brief: *"when you input a `"` or `(`, the app has to work with you, and insert a `"` or `)`,
+autoscoping in a sense, like in an IDE."*** This is the convenience meant by "autocomplete" here — **structural
+completion, not spelling correction** (§4.9.4b).
+
+**The behaviours, which are the IDE/browser convention and should not be invented (L0)** — VS Code, JetBrains and
+devtools consoles all do exactly this set:
+
+| you type | you get | note |
+|---|---|---|
+| `"` | `"‸"` | caret between |
+| `{` after `axis:` | `{‸}` | only where a scope is legal |
+| `(` in value position | `(‸)` | only where a value group is legal |
+| the closing char, with it already next | caret **steps over** it | never doubles a delimiter |
+| ⌫ on an empty pair | **both** characters go | `{‸}` deletes to nothing |
+| any opener, with text SELECTED | the selection is **wrapped** | `fire` + `"` → `"fire"` |
+
+**⭐ THE OPENER IS ONLY AUTO-CLOSED WHERE THE GRAMMAR ALLOWS IT.** `{` is a scope delimiter only after `axis:`
+(§2.4.0); in free text it is ordinary data, so `fireball {` must NOT auto-close — the user is typing a name. **The
+registry already knows which position it is in, so this is a parse question, not a keystroke question.** That is what
+makes it a convenience rather than a nuisance.
+
+**And it is why `{}` had to become an identity rather than an error (§2.4.3e):** auto-closing means the editor CREATES
+the empty pair on the way to a real one. `model:{‸}` is a state the app authored, so erroring on it would be the app
+shouting at itself.
+
+**⚠ TYPING ONLY. Auto-closing never applies to a paste** (§4.9.5) — a pasted string is complete by definition, so
+inserting a delimiter into it is a repair, and repairs are announced rather than silent.
 
 ### 4.9.5 TWO ARRIVAL PATHS — typing and pasting are not the same problem
 
