@@ -414,6 +414,27 @@ substring search *for its own name* — silently, and never as an error. ⚠ Mea
 (`attach`) are ALSO category words in their column today, so the current behaviour is not uniform and the deltas will
 not be either.
 
+**⛔ IT DOES NOT APPLY TO EVERY AXIS, and the counter-example is the user's** (*"obviously not all keywords can be flags,
+a count flag would be meaningless"*). **`count:*` is a TAUTOLOGY** — every column has a cardinality, possibly zero, so
+"has any count" is true of every spell in the pack.
+
+**The discriminator is NULLABLE vs TOTAL, and the axis declares it:**
+
+|                                                       |                                                                                   | `axis:*` means                               |
+|-------------------------------------------------------|-----------------------------------------------------------------------------------|----------------------------------------------|
+| **nullable** — a spell or row may simply not have one | `attach`, `desc`, `icon`, `xpac`, `kit`, `motion`, `boneset`, `scale`, `casttime` | **has one at all.** The flag reading. Useful |
+| **total** — always defined, possibly zero             | `count`, and any derived measure                                                  | **everything.** True, and worthless          |
+
+For a total axis the wildcard is still **answered** rather than rejected — L2 forbids falling through, and "every spell"
+is the literally correct answer — but it is **never offered in autocomplete and the bar marks it as a no-op**, so the
+user sees why 276,332 rows came back instead of wondering. `total: true` on the axis is the whole declaration.
+
+**Related weakness, stated rather than papered over: `count`'s GLOBAL door is weak.** L5 gives every axis a global
+prefix, but `count` is a universal *parameterised by column*, so `count:>4` can only mean "some column has more than
+four", which is a question nobody asks. Its real form is the in-column one, `model:"count >4"`. This is the one place
+L5's two-doors rule produces a door not worth walking through, and that is a property of `count` being a meta-axis
+rather than a flaw in the law.
+
 ### 4.5 `flag` vs `bitmask` — they look alike and are not
 
 A `flag` is ONE bit on a SPELL, valueless, with no combinations: you have `unbreakable` or you do not. A `bitmask` is
