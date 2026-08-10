@@ -198,12 +198,20 @@ function sharedRow(): HTMLElement {
  * A column with nothing to list is left out entirely rather than shown empty —
  * Sounds has no content types, only the shared words, and a row reading
  * "Sound:" followed by nothing says the pack is broken.
+ *
+ * ⚠ DRIVEN BY `FIELDS`, NOT BY A LIST WRITTEN HERE, and the list that used to
+ * be here is why this comment exists: it named the five payload columns, so
+ * `id:`'s `xpac` and `name:`'s `desc` were searchable and absent from the one
+ * document that teaches the language. A field with nothing to list is skipped
+ * by the `continue` below, which is the same test as before — the registry
+ * just decides membership now instead of a literal. Declaration order is the
+ * display order, which puts name first and id last.
  */
 function buildVocab(): void {
     const box = $("#help-vocab");
     if (!box || !state.data) return;
     box.textContent = "";
-    for (const field of ["model", "sound", "anim", "fx", "mech"]) {
+    for (const field of Object.keys(Search.FIELDS)) {
         const words = ownWords(field);
         if (!words.length) continue;
         const row = el("div", "vocab-row");

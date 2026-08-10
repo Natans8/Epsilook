@@ -110,6 +110,12 @@ export interface ExportRow {
      *  pack has them. */
     description?: string;
     encounterNote?: string;
+    /** §3y the art the spell wears — searchable since the icon became a
+     *  control, so it exports like the two above and for the same reason: it
+     *  rides with the NAME, and there is no icon column to hide it with.
+     *  `id` is the FileDataID, which is what wowhead.com/icon=<id> resolves;
+     *  absent on a pack older than format 44. */
+    icon?: { name: string; id?: number };
     /** Grouped by usage category; a stale pack without categories exports
      *  the old flat path list instead. */
     models?: ({ category: string; files: ExportModelFile[] } | string)[];
@@ -180,6 +186,10 @@ function exportRows(): ExportRow[] {
         if (desc) row.description = desc;
         const note = d.encounterText[d.encounterOf[i]];
         if (note) row.encounterNote = note;
+        if (d.icons[i]) {
+            const fid = d.iconFids[d.iconOf[i] - 1] || 0;
+            row.icon = {name: d.icons[i], ...(fid ? {id: fid} : {})};
+        }
         // Delivery rides with the NAME, not with a column, so it is exported
         // unconditionally — there is no "delivery column" to hide it with.
         const dl = d.spellDelivery.get(id);
@@ -411,7 +421,10 @@ function exportCsv(): void {
         const s = String(v);
         return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
-    const header = ["ID", "Name", "Subtext", "Expansion", "Description", "Encounter note"];
+    // The icon's NAME only: a CSV cell is read by a person, the name is the
+    // half they recognise, and the JSON export carries the id for anyone who
+    // wants to resolve it.
+    const header = ["ID", "Name", "Subtext", "Expansion", "Description", "Encounter note", "Icon"];
     if (!hc.models) header.push("Models");
     if (!hc.sounds) header.push("SoundKits", "Sounds");
     if (!hc.animations) header.push("AnimKits", "Animations");
@@ -430,7 +443,8 @@ function exportCsv(): void {
             // three-line cell in a row of one-line ones; the prose reads the
             // same run together and the column stays scannable
             esc((r.description ?? "").replace(/\n+/g, " ")),
-            esc((r.encounterNote ?? "").replace(/\n+/g, " "))];
+            esc((r.encounterNote ?? "").replace(/\n+/g, " ")),
+            esc(r.icon?.name ?? "")];
         if (!hc.models) {
             cols.push(esc((r.models ?? []).map((m) => (typeof m === "string"
                 ? m

@@ -1387,7 +1387,7 @@ flowchart LR
         P1["fxChains · fxTextures · dissolves · dissolveTextures<br/>glows · shadowies · ghostMats · tints<br/>screens · screenTextures · morphs · morphDisplays<br/>shapeshifts · shapeshiftDisplays · summons<br/>vehicles · vehicleSeats"]
     end
     subgraph NAME["name tables"]
-        N1["files (fid → path) · animNames · effectNames<br/>auraNames · iconNames · modelCatNames<br/>targetNames · summonControlNames · missileMotions<br/>implicitTargetNames · implicitTargetBits · keybinds<br/>soundKitNames (§3u — from a PINNED 8.3.0 build)"]
+        N1["files (fid → path) · animNames · effectNames<br/>auraNames · iconNames + iconFids (§3y) · modelCatNames<br/>targetNames · summonControlNames · missileMotions<br/>implicitTargetNames · implicitTargetBits · keybinds<br/>soundKitNames (§3u — from a PINNED 8.3.0 build)"]
     end
     LINK --> IDX["data.ts<br/>forward + reverse Map per section"]
     PAY --> IDX
@@ -1675,6 +1675,86 @@ stored lowercase twin: a folded regex over the pool answers in 4 ms where a prec
 **⚠ `SpellAuraOptions` WAS ALREADY IN THE 9.2.7 CACHE**, left there by an exploration run, so the first build of this
 route worked on 9.2.7 and crashed on Vanilla. Same shape as the `UiMap` mistake at format 40 — `TABLES` and
 `OPTIONAL_TABLES` do different jobs and a table usually needs both.
+
+---
+
+### 3y. The art the spell wears — icon name and FileDataID (`iconNames` + `iconFids`, format 44)
+
+**The route is unchanged and old; what is new at format 44 is the FID and the SEARCH.** The icon has been in the pack
+and drawn beside the name for a long time — `SpellMisc.SpellIconFileDataID` → the listfile → the base name, which is the
+key Wowhead's CDN serves art under. Format 44 ships the FileDataID alongside the deduped name table, and the app turned
+the picture into a control.
+
+```mermaid
+flowchart LR
+    SM["SpellMisc<br/>SpellIconFileDataID"] --> LF["community listfile<br/>fid → path"]
+    LF --> N["interface/icons/&lt;name&gt;.blp<br/>→ iconNames[k]"]
+    LF --> F["the fid itself<br/>→ iconFids[k]"]
+    N --> S["spells.icons[i] — 1-based, 0 = none"]
+    F --> WH["wowhead.com/icon=&lt;fid&gt;"]
+```
+
+**⭐ THE POINT OF THE AXIS IS REUSE, and it is what the name can never answer.** On 9.2.7, **272,900 spells wear 9,846
+distinct icons — 27.7 spells each**. Most spells borrow art rather than getting their own, so "everything that looks
+like this" groups spells no title search reaches. That is also why the pool is searched POOL-FIRST, exactly as §3x's
+prose is:
+9,846 tests instead of 272,900.
+
+**THE PATH IS A CONSTANT AND THE NAME IS THE WHOLE IDENTITY.** Measured across five packs from Vanilla to 11.2.7,
+**every** named spell icon lives in `interface/icons/` and no other folder ever appears — 1–2 fids per pack are absent
+from the listfile entirely, which is the only way to have no name. So the pack stores `spell_fire_flamebolt`, never the
+directory and never the `.blp` (user's call, 2026-08-10), and nothing is lost by it.
+
+**Searched two ways, and they are NOT the same door:**
+
+| written                     | matches               | why                                                       |
+|-----------------------------|-----------------------|-----------------------------------------------------------|
+| plain search (`FIELDS.all`) | the icon NAME only    | an icon name is a file name — the `fx:chain` rule, one up |
+| `name:"icon <word>"`        | the name, word-wise   | the scoped door: this icon and nothing else               |
+| `name:"icon <fid>"`         | the FileDataID, EXACT | keyword-only — see the trap below                         |
+
+**⛔ THE FID IS KEYWORD-ONLY, AND THAT ASYMMETRY IS DELIBERATE** (user's call, 2026-08-10). In plain search a lone number
+is ALREADY an exact spell-ID lookup, so letting it also mean "an icon fid" would turn `135812` from the one spell asked
+for into the 295 that share a picture. Inside `name:"icon 135812"` the keyword has said which id space the number lives
+in, so there is nothing to collide with. `spellsByIcon` takes a `byId` flag rather than existing twice.
+
+**The plain-search cost, measured on 9.2.7 and accepted:** of the 38-query canonical battery, **36 are unchanged and the
+two that move are the only two plain-search queries** — `fireball` 4,348 → **4,861** (+513) and `fire|frost` 32,148 →
+**38,357** (+6,209). Every scoped field is byte-identical, which is what says nothing leaked. It carries §3x's known
+weakness unchanged: `sortByRelevance` scores on the NAME alone, so an icon-only hit ranks beside a filename hit, and the
+fix when it is wanted is a further relevance tier rather than removing this.
+
+**⚠ THE FALLBACK ICON IS NOT FILTERED, AND THAT WAS DECIDED RATHER THAN OVERLOOKED** (user, 2026-08-10, reversing
+themselves mid-build — *"Still display it still match it"*). `trade_engineering` is worn by **101,981 of 272,900 spells
+on 9.2.7 — 37%** — against 1,236 for the next most common icon; it is Blizzard's placeholder for internal content
+(`OLD`/`TEST`/`DND` rows, teleports, script spells). The shape holds on every pack: the top icon takes 27–37% and the
+runner-up under 2%, spelled `trade_engineering` on nine packs and **`temp` on Vanilla and TBC** (22.8% / 25.6%). So
+`engineering` is a 102,306-spell plain search by design. A `PLACEHOLDER_ICONS` declaration was written and reverted —
+**do not re-propose it without re-reading this paragraph.**
+
+| pack   | spells with an icon | distinct icons | top icon            | share |
+|--------|---------------------|----------------|---------------------|-------|
+| 1.15.9 | 31,051              | 1,673          | `temp`              | 22.8% |
+| 2.5.6  | 28,678              | 1,531          | `temp`              | 25.6% |
+| 3.4.3  | 49,374              | 2,448          | `trade_engineering` | 27.1% |
+| 4.4.2  | 71,205              | 3,463          | `trade_engineering` | 32.6% |
+| 5.5.4  | 98,013              | 4,742          | `trade_engineering` | 34.3% |
+| 7.3.5  | 177,051             | 6,894          | `trade_engineering` | 36.8% |
+| 8.3.7  | 224,315             | 8,241          | `trade_engineering` | 36.8% |
+| 9.2.7  | 272,900             | 9,846          | `trade_engineering` | 37.4% |
+| 10.2.7 | 322,992             | 11,707         | `trade_engineering` | 37.0% |
+| 11.2.7 | 371,003             | 13,449         | `trade_engineering` | 36.6% |
+| 12.0.7 | 399,116             | 14,239         | `trade_engineering` | 36.5% |
+
+**Zero schema drift** — `SpellIconFileDataID` is on `SpellMisc` in every build back to Vanilla, so this needs no
+`OPTIONAL_COLUMNS` line. The fids cost **+6.5 KB gzipped** on 9.2.7 (11,442,772 → 11,449,292), which is the whole
+storage price of the id half.
+
+**Rendered as a BUTTON, not an image (`spellIcon` in `src/app/render.ts`).** It left the Wowhead anchor it used to sit
+inside — a button nested in an anchor is neither valid nor clickable — so hovering the ICON no longer raises Wowhead's
+game tooltip and hovering the NAME still does. That trade was authorised in advance. Its own tooltip carries the name,
+`Icon <fid>` and the gestures; the border goes gold when the query matched the icon, and the matched substring is marked
+in the panel via `data-tip-hl`, the same channel §3x's description mark uses.
 
 ---
 

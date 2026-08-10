@@ -1296,7 +1296,8 @@ def implicit_target_bits(version: str) -> dict[int, int]:
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 43  # 43: spellText — cooked description + encounter prose (§3x)
+PACK_FORMAT = 44  # 44: iconNames gains iconFids — the icon's own identity (§3y)
+# 43: spellText — cooked description + encounter prose (§3x)
 # 42: spells.eras + expansions — which expansion added a spell (§3v)
 # 41: soundKitNames — human names for sound kits (§3u)
 # 40: spellAreas + areas — the area gate (§3t)
@@ -4007,18 +4008,33 @@ def resolve_paths(listfile_path: Path, wanted: set[int]) -> dict[int, str]:
 
 def build_icon_index(
         spell_ids: list[int], spell_icon_fid: dict[int, int], fid_path: dict[int, str]
-) -> tuple[list[str], list[int]]:
+) -> tuple[list[str], list[int], list[int]]:
     """Build the deduped icon-name table and each spell's 1-based index into it.
 
     "interface/icons/xxx.blp" -> "xxx", which is the key Wowhead's CDN serves
     icons under (wow.zamimg.com/images/wow/icons/<size>/<xxx>.jpg). Index 0
     means the spell has no icon.
+
+    The FileDataID rides along in a third array parallel to the names (format
+    44), because it is the icon's IDENTITY where the name is only its label:
+    it is what `wowhead.com/icon=<fid>` resolves, so the app can link an icon
+    to its own page, and it is a number the user can paste back into a search.
+    Kept beside the name rather than replacing it — the name is what the CDN
+    URL is built from, and what a person recognises.
+
+    A NAME CAN OUTLIVE A FID: the same "xxx" resolves through several fids
+    across builds and, within one build, two fids can share a base name
+    (different folders). The first fid to claim a name wins, which matches how
+    the name table itself is deduped — the icon shown is the same picture
+    either way.
     """
     icon_names: list[str] = []
+    icon_fids: list[int] = []
     icon_index: dict[str, int] = {}
     spell_icons: list[int] = []
     for s in spell_ids:
-        path = fid_path.get(spell_icon_fid.get(s, 0), "")
+        fid = spell_icon_fid.get(s, 0)
+        path = fid_path.get(fid, "")
         name = (path.rsplit("/", 1)[-1].rsplit(".", 1)[0].lower()
                 if path.lower().startswith("interface/icons/") else "")
         if not name:
@@ -4028,8 +4044,9 @@ def build_icon_index(
         if i is None:
             i = icon_index[name] = len(icon_names)
             icon_names.append(name)
+            icon_fids.append(fid)
         spell_icons.append(i + 1)
-    return icon_names, spell_icons
+    return icon_names, icon_fids, spell_icons
 
 
 # ------------------------------------------------------------- the pack
@@ -4187,16 +4204,19 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     referenced_fids.update(f for e in used_objects if (f := gobjects.fid.get(e, 0)))
 
     # icon fids resolve through the same listfile pass but stay out of the
-    # pack's files table (they become iconNames instead)
-    icon_fids = set(spell_icon_fid.values())
+    # pack's files table (they become iconNames instead). Named for what the
+    # set IS -- the fids this pass has to find paths for -- because the pack's
+    # own `iconFids` array is built further down and the two are not the same
+    # thing: this one includes item inventory icons and is unordered.
+    wanted_icon_fids = set(spell_icon_fid.values())
     # item inventory icons resolve the same way (an item pill shows the icon the
     # game shows in the bag), so they join the one listfile pass
-    icon_fids |= {items.icon_fid.get(ref, 0)
-                  for pairs in vis.models.values()
-                  for (_f, c, _s, _d, ref, _m) in pairs
-                  if c == MODEL_CAT_ITEM and ref}
-    icon_fids.discard(0)
-    lookup_fids = referenced_fids | icon_fids
+    wanted_icon_fids |= {items.icon_fid.get(ref, 0)
+                         for pairs in vis.models.values()
+                         for (_f, c, _s, _d, ref, _m) in pairs
+                         if c == MODEL_CAT_ITEM and ref}
+    wanted_icon_fids.discard(0)
+    lookup_fids = referenced_fids | wanted_icon_fids
 
     log(f"Resolving {len(lookup_fids):,} referenced file ids against the listfile ...")
     fid_path = resolve_paths(listfile_path, lookup_fids)
@@ -4205,7 +4225,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     # --- assemble the pack ------------------------------------------------
     log("Assembling pack ...")
     spell_ids = sorted(spell_names)
-    icon_names, spell_icons = build_icon_index(spell_ids, spell_icon_fid, fid_path)
+    icon_names, icon_fids, spell_icons = build_icon_index(
+        spell_ids, spell_icon_fid, fid_path)
     expansion_rungs, expansion_of = load_expansions()
     era_counts = Counter(expansion_of.get(s, -1) for s in spell_ids)
 
@@ -4663,6 +4684,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "caveats": [r.get("caveat", "") for r in expansion_rungs],
         },
         "iconNames": icon_names,
+        # parallel to iconNames: the icon's FileDataID, which is what
+        # wowhead.com/icon=<fid> resolves and what `name:"icon <n>"` matches
+        # when the value is a number (§3y)
+        "iconFids": icon_fids,
         "files": files,
         # cats tag how each model is used (attach/missile/area/trail/barrage);
         # the same (spell, fid) can appear once per category it serves

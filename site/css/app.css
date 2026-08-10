@@ -431,6 +431,7 @@ input:focus-visible,
    neighbour (export/command buttons, in-pill glyph buttons) */
 #export button:focus-visible,
 .cmd:focus-visible,
+.icon-btn:focus-visible,
 .tag-copy:focus-visible,
 .tag-play:focus-visible,
 .tag-view:focus-visible {
@@ -2121,14 +2122,54 @@ main {
     color: var(--gold);
 }
 
+/* The spell's icon — §3y.
+
+   IT IS A CONTROL NOW, not decoration: icons are shared by 27.7 spells on
+   average, so "everything that looks like this" is a real question and the
+   picture is the obvious place to ask it. That is also why it had to leave the
+   Wowhead anchor it used to sit inside — see spellIcon() in render.ts.
+
+   THE FRAME IS ON THE BUTTON AND THE PICTURE IS ON THE IMG. Keeping them apart
+   is what lets the border change colour on hover and on a hit without the
+   image's box moving: a border-WIDTH that came and went would nudge the name
+   beside it, and a column of names that shifts on hover is worse than no
+   affordance at all. */
+.icon-btn {
+    display: inline-flex;
+    margin-right: 0.4rem;
+    padding: 0;
+    border: 1px solid rgba(var(--overlay-rgb), 0.14);
+    border-radius: 3px;
+    background: rgba(var(--shadow-rgb), calc(0.3 * var(--shadow-strength)));
+    vertical-align: -5px;
+    cursor: pointer;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* Hover says "this does something" and nothing more — it must NOT borrow the
+   gold a hit uses, or the two states become one and the border stops carrying
+   information the moment the pointer is anywhere near it. Brightening the same
+   overlay token is the quietest thing that still reads as a response. */
+.icon-btn:hover {
+    border-color: rgba(var(--overlay-rgb), 0.5);
+}
+
+/* A hit is gold plus a halo, so it is findable scanning DOWN a column of fifty
+   rows rather than only once you are already looking at it — the same job
+   .desc-mark.hit does, which can do it with colour alone because it sits in a
+   fixed corner. An icon sits at a different x on every row. */
+.icon-btn.hit,
+.icon-btn.hit:hover {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 1px var(--gold);
+}
+
 .spell-icon {
+    display: block;
     width: 20px;
     height: 20px;
-    border-radius: 3px;
-    vertical-align: -5px;
-    margin-right: 0.4rem;
-    border: 1px solid rgba(var(--overlay-rgb), 0.14);
-    background: rgba(var(--shadow-rgb), calc(0.3 * var(--shadow-strength)));
+    /* one inside the button's 3px, so the corners nest instead of clipping */
+    border-radius: 2px;
 }
 
 /* "This spell says what it does" — §3x.

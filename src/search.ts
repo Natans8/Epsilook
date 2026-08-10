@@ -288,6 +288,26 @@ export const META_KEYWORDS: Record<string, {
         hint: 'Its description text — desc kneel, desc "blood pool"',
         when: (d) => d.descriptionText.length > 0,
     },
+    // The art the game gives the spell (§3y): its icon's own file name — never
+    // the path, which is `interface/icons/` on every icon in every pack — or
+    // the FileDataID that names it on wowhead.com/icon=<fid>.
+    //
+    // INSIDE `name:` FOR THE SAME REASON `desc` IS — the name cell is where the
+    // icon is drawn, and both keywords answer "what is this spell" from
+    // something other than its title. The keyword is the SCOPED door;
+    // `FIELDS.all` reaches icon names too (user's call, 2026-08-10), exactly as
+    // it reaches descriptions, so the keyword is how you say "the icon, and
+    // only the icon" rather than the only way in.
+    //
+    // Its own vocabulary is exempt from the corpus-collision measurement, the
+    // way every meta keyword is: the word `icon` consumes the token after it
+    // rather than joining a corpus, so what matters is ambiguity, and there is
+    // none — no other field draws or names an icon.
+    icon: {
+        fields: ["name"],
+        hint: 'Its icon — icon frost, icon "fire flamebolt", icon 135812',
+        when: (d) => d.iconNames.length > 0,
+    },
     // The expansion that introduced the id. A keyword inside `id:` rather than
     // a field of its own, for the same reason `attach` sits inside `model:`:
     // it QUALIFIES what the column already names. Ordered, so its value takes
@@ -310,6 +330,8 @@ export const MOTION_WORD = "motion";
 export const XPAC_WORD = "xpac";
 /** The description keyword, inside `name:` — see FIELDS.name. */
 export const DESC_WORD = "desc";
+/** The icon keyword, inside `name:` — see FIELDS.name. */
+export const ICON_WORD = "icon";
 /* Spelled the same as the anim column's `kit` head word (KIT_WORD, below) and
  * deliberately so — both mean "the kit", one in each column. They stay two
  * constants because they are two grammars: this one takes the token after it,
@@ -745,6 +767,61 @@ function spellsByDescription(values: string[], data: SpellData): Set<number> {
     return out;
 }
 
+/**
+ * Does one icon answer one `icon` value?
+ *
+ * ⚠ THE ID HALF IS KEYWORD-ONLY, and that asymmetry is the point — it is the
+ * one thing this axis could not do uniformly (user's call, 2026-08-10). In
+ * `FIELDS.all` a lone number is ALREADY an exact spell-ID lookup, deliberately,
+ * so letting it also mean "an icon fid" would turn `135812` from the one spell
+ * you asked for into the 28 that happen to share a picture. Inside
+ * `name:"icon 135812"` there is nothing to collide with: the keyword has said
+ * which id space the number lives in.
+ *
+ * The name half is `nameHasValue` and runs on both doors, so every word of the
+ * value must appear somewhere in the name, in any order: icon names are
+ * underscore-jammed dev identifiers (`spell_fire_flamebolt`), and word-wise is
+ * what lets `icon "fire flamebolt"` reach one without the user having to spell
+ * the separator. The id half is EXACT — a fid is an identity, and a substring
+ * of one names nothing.
+ */
+const iconAnswers = (nameL: string, fid: number, value: string, byId: boolean): boolean =>
+    nameHasValue(nameL, value) || (byId && fid > 0 && String(fid) === value);
+
+/**
+ * `name:"icon frost"`, `name:"icon 135812"` — search the ART the game gives the
+ * spell (§3y).
+ *
+ * SCANNED POOL-FIRST, exactly as the description search is and for the same
+ * reason: 129,050 spells on 9.2.7 wear 9,849 distinct icons — 27.7 spells each
+ * — so testing the pool tests each name once instead of 28 times. That reuse is
+ * also the whole point of the axis: an icon groups spells that the NAME cannot,
+ * because most spells borrow art rather than getting their own.
+ *
+ * `byId` is the caller saying which door it is: true for the `icon` keyword,
+ * false for plain search — see `iconAnswers`. It is a parameter rather than two
+ * functions so the ONE matcher stays one matcher; what differs between the
+ * doors is a single term of the test, not the walk.
+ *
+ * `iconFids` is empty before format 44, which costs the id half and leaves the
+ * name half working — the degradation a stale cached pack should have.
+ */
+function spellsByIcon(values: string[], data: SpellData, byId: boolean): Set<number> {
+    const out = new Set<number>();
+    const {ids, iconNames, iconFids, iconOf} = data;
+    if (!iconNames.length) return out;
+    const hit = new Uint8Array(iconNames.length);
+    for (let k = 0; k < iconNames.length; k++) {
+        hit[k] = values.every(
+            (v) => iconAnswers(iconNames[k], iconFids[k] || 0, v, byId)) ? 1 : 0;
+    }
+    for (let i = 0; i < ids.length; i++) {
+        // iconOf is the pack's own 1-based index; 0 is "this spell has no icon"
+        if (iconOf[i] && hit[iconOf[i] - 1]) out.add(ids[i]);
+    }
+    return out;
+}
+
 /* The two words that name where an animation came from. They head no pill —
  * a real AnimKit group is headed by its id and a loose animation has no head
  * at all — so unlike `replace` and `passenger` these are words for a shape
@@ -1070,8 +1147,21 @@ export const FIELDS: Record<string, SearchFieldSpec> = {
             for (const s of spellsByAnim(tokens, data)) out.add(s);
             for (const s of spellsByFx(tokens, data)) out.add(s);
             // one token = one term, all of which must appear — the same shape
-            // splitKeyword hands the `desc` keyword, so both doors agree
+            // splitKeyword hands the `desc` and `icon` keywords, so every door
+            // to a corpus agrees about what a multi-word query means
             for (const s of spellsByDescription(tokens.map((t) => t.text), data)) out.add(s);
+            // ICON NAMES ARE HERE TOO (user's call, 2026-08-10), on the same
+            // footing as the four file corpora above: an icon name IS a file
+            // name, and `fx:chain` matching chain FILES is the rule this
+            // follows rather than an exception to it. It carries the known
+            // `desc` cost — sortByRelevance scores on the NAME alone, so an
+            // icon-only hit ranks beside a filename hit — and the same fix
+            // when it is wanted, which is a further relevance tier.
+            //
+            // NAMES ONLY (`byId: false`): the fid half is keyword-scoped, or it
+            // would take the exact-spell-ID lookup three lines below off a lone
+            // number. See iconAnswers.
+            for (const s of spellsByIcon(tokens.map((t) => t.text), data, false)) out.add(s);
             // a pure number also hits the exact spell ID
             if (tokens.length === 1 && /^\d+$/.test(tokens[0].text)
                 && data.spellIndex.has(Number(tokens[0].text))) {
@@ -1082,33 +1172,55 @@ export const FIELDS: Record<string, SearchFieldSpec> = {
     },
     name: {
         label: "Name", tab: true,
-        hint: 'spell name, or desc — fire bolt, desc "blood pool"',
+        hint: 'spell name, or desc / icon — fire bolt, desc "blood pool"',
         short: "spell name",
         /**
-         * The name, plus `desc <text>` — what the spell SAYS it does, written
-         * as a KEYWORD inside this chip exactly as `xpac` is written inside
-         * `id:`. Both halves answer "what is this spell", one from its title
-         * and one from its prose, so they share a column rather than splitting
-         * into a `desc:` field of their own.
+         * THREE WAYS TO SAY "WHAT IS THIS SPELL", sharing one column: its
+         * title, `desc <text>` for what it says it does (§3x), and
+         * `icon <name|fid>` for the art it wears (§3y). The last two are
+         * KEYWORDS inside this chip, exactly as `xpac` is written inside `id:`
+         * — each qualifies the question the column already asks rather than
+         * opening a field of its own.
          *
-         *   name:fireball   name:"desc kneel"   name:(fire "desc blood pool")
+         *   name:fireball   name:"desc kneel"   name:"icon frost"
+         *   name:(bolt icon frost)              name:"icon 135812"
          *
-         * ⚠ EACH HALF NARROWS THE OTHER, which is what putting it in the chip
-         * buys: `name:(bolt "desc chains")` is a spell CALLED bolt whose
-         * description mentions chains — one row, not two independent searches.
-         * A chip with only `desc` values has no name test to apply, so the
-         * description hits stand alone.
+         * ⚠ EVERY HALF NARROWS THE OTHERS, which is what putting them in the
+         * chip buys: `name:(bolt icon frost)` is a spell CALLED bolt wearing a
+         * frost icon — 327 rows on 9.2.7, not two independent searches. A chip
+         * with no plain words has no name test to apply, so the keyword hits
+         * stand alone.
+         *
+         * ⛔ THE QUOTES GO ROUND THE VALUE, NEVER ROUND KEYWORD-AND-VALUE, and
+         * getting that wrong is silent rather than an error. Each keyword takes
+         * exactly ONE token (the frozen one-token rule), so a multi-word value
+         * is `name:(icon "fire flamebolt")` — 563 rows. Written
+         * `name:(fire "icon frost")` the inner quotes make `icon frost` a
+         * single PHRASE token, `splitKeyword` never sees the keyword, and the
+         * whole thing degrades to a name search for a phrase no spell has: 0
+         * rows, no complaint. Measured, because the wrong form was in this
+         * comment first.
+         *
+         * Written as a fold rather than the old two-branch shape: a third half
+         * turned "if there are values, else" into a truth table, and the next
+         * keyword should cost one line here rather than another branch.
          */
         run(tokens, data) {
-            const {text, values} = splitKeyword(tokens, DESC_WORD);
-            if (!values.length) return spellsByName(text, data);
-            const out = spellsByDescription(values, data);
-            if (!text.length) return out;
-            const byName = spellsByName(text, data);
-            for (const s of out) {
-                if (!byName.has(s)) out.delete(s);
+            const icon = splitKeyword(tokens, ICON_WORD);
+            const desc = splitKeyword(icon.text, DESC_WORD);
+            const halves: Set<number>[] = [];
+            // `byId: true` — the keyword is what makes a number unambiguous
+            if (icon.values.length) halves.push(spellsByIcon(icon.values, data, true));
+            if (desc.values.length) halves.push(spellsByDescription(desc.values, data));
+            // The plain words are a test only when there ARE some: an empty
+            // `text` once the keywords have been taken out means the chip was
+            // nothing but keywords, not that it asked for every spell. With no
+            // keywords at all it runs anyway — that is the plain name search,
+            // empty tokens and all, exactly as it behaved before.
+            if (!halves.length || desc.text.length) {
+                halves.push(spellsByName(desc.text, data));
             }
-            return out;
+            return halves.reduce(intersect);
         },
     },
     model: {

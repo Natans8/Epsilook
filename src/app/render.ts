@@ -341,14 +341,8 @@ function buildRow(spellId: number, displayIndex: number): HTMLTableRowElement {
     nameLink.href = wowheadUrl(CFG.wowheadSpellUrl, {id: spellId});
     nameLink.target = "_blank";
     nameLink.rel = "noopener";
-    if (CFG.spellIconUrl && d.icons[i]) {
-        const icon = el("img", "spell-icon");
-        icon.src = fillTemplate(CFG.spellIconUrl, {icon: d.icons[i]});
-        icon.alt = "";
-        icon.loading = "lazy";
-        icon.addEventListener("error", () => icon.remove(), {once: true});
-        nameLink.appendChild(icon);
-    }
+    const icon = spellIcon(i);
+    if (icon) nameDiv.appendChild(icon);
     nameLink.appendChild(highlightMatches(d.names[i] || "(unnamed)"));
     nameDiv.appendChild(nameLink);
     tdName.appendChild(nameDiv);
@@ -424,6 +418,106 @@ function commandStrip(spellId: number): HTMLElement {
     wh.classList.add("wh-cmd");
     row.appendChild(wh);
     return row;
+}
+
+/**
+ * The spell's icon — a click-to-search button, not decoration (§3y).
+ *
+ * ⚠ IT LEFT THE WOWHEAD ANCHOR, and that is the whole structural change. The
+ * icon used to sit INSIDE `.spell-name-link`, which is what gave it Wowhead's
+ * own tooltip; a button nested in an anchor is neither valid nor clickable, so
+ * it had to come out. What that costs is exactly one thing, and the user ruled
+ * on it in advance: hovering the ICON no longer raises the game tooltip.
+ * Hovering the NAME still does, a few pixels away, so the row keeps it.
+ *
+ * What the icon gains is the question only it can ask. Icons are REUSED —
+ * 272,902 spells wear 9,847 of them on 9.2.7, 27.7 spells each — so "everything
+ * that looks like this" groups spells the name never could, and most spells
+ * borrow their art rather than getting their own.
+ *
+ * The label is the icon's own file name with no directory and no extension
+ * (user's call, 2026-08-10). Nothing is lost by that: measured across five
+ * packs from Vanilla to 11.2.7, every named spell icon is under
+ * `interface/icons/` and no other folder ever appears, so the path is a
+ * constant wrapper the name can be rebuilt from.
+ */
+function spellIcon(i: number): HTMLElement | null {
+    const d = activeData();
+    const name = d.icons[i];
+    if (!CFG.spellIconUrl || !name) return null;
+    const fid = d.iconFids[d.iconOf[i] - 1] || 0;  // 0 on a pack older than 44
+
+    const btn = el("button", "icon-btn");
+    btn.type = "button";
+    const marks = iconMarks(name, fid);
+    if (marks.length) btn.classList.add("hit");
+    btn.dataset.search = P.quoted("name", Search.keywordValue(Search.ICON_WORD, name));
+    // "what it is", then the detail, then the gestures — the same three-part
+    // shape every pill tooltip has, so tooltip.ts splits it correctly for free
+    btn.title = P.tip([
+        name,
+        fid && `Icon ${fid}`,
+        "Click: find spells with this icon",
+        "Shift-click: add to search · Ctrl-click: exclude",
+        "Middle-click: open in a new tab",
+    ]);
+    if (marks.length) btn.dataset.tipHl = marks.join("\t");
+
+    const img = el("img", "spell-icon");
+    img.src = fillTemplate(CFG.spellIconUrl, {icon: name});
+    // The button's own tooltip and accessible name carry the icon, so the
+    // image is presentational — a second reading of the same string would
+    // make a screen reader say it twice.
+    img.alt = "";
+    img.loading = "lazy";
+    // Wowhead's CDN 404s a few icons. Drop the whole button rather than the
+    // image alone: an empty bordered square that still offers a search reads
+    // as a broken control, and the row should look exactly as it did before.
+    img.addEventListener("error", () => btn.remove(), {once: true});
+    btn.appendChild(img);
+    return btn;
+}
+
+/**
+ * Which parts of this icon the query actually matched — for the border light
+ * and for the marks in its tooltip.
+ *
+ * TWO DOORS REACH THE ICON NAMES AND BOTH HAVE TO BE READ, exactly as they do
+ * for descriptions below: `name:"icon frost"` arrives as a keyword value, and
+ * since icon names joined `FIELDS.all` a bare `frost` reaches them too, as an
+ * ordinary chipless token. Reading only the keyword would leave the border dark
+ * for every plain search, which is the common case.
+ *
+ * A `name:`-SCOPED PLAIN token is deliberately excluded: it searches the title
+ * alone, so lighting the icon would claim a match the engine never made. Only
+ * `all` tokens and `icon` values can be here — the same rule, and the same
+ * reasoning, as `descTerms`.
+ *
+ * ⚠ AND THE TWO DOORS DO NOT MATCH THE SAME THINGS, so they cannot share a
+ * term list: the fid is answerable through the KEYWORD only, because a lone
+ * number in plain search is already an exact spell-ID lookup (see the engine's
+ * `iconAnswers`). Reading a plain `135812` here would light 28 icons for a
+ * query that returned one spell.
+ */
+function iconMarks(name: string, fid: number): string[] {
+    const marks: string[] = [];
+    const markName = (t: string) => {
+        if (t && name.includes(t)) marks.push(t);
+    };
+    for (const v of Search.splitKeyword(tokensFor("name"), Search.ICON_WORD).values) {
+        for (const w of v.toLowerCase().split(" ")) {
+            // "" is the fid's own signal that it matched: it lights the border
+            // and marks nothing, which is right for a term the label never
+            // shows. The id is exact, as it is in the engine.
+            if (w && fid > 0 && String(fid) === w) marks.push("");
+            else markName(w);
+        }
+    }
+    // plain search reaches the NAME half alone, so a bare number lights nothing
+    for (const t of state.tokens) {
+        if (t.field === "all") markName(t.text.toLowerCase());
+    }
+    return marks.filter((m, k) => marks.indexOf(m) === k);
 }
 
 /**

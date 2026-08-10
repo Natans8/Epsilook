@@ -80,6 +80,8 @@ export interface SpellPack {
         aliases: string[][]; wowhead: string[]; caveats: string[];
     };
     iconNames?: string[];
+    /** The icon's FileDataID, parallel to iconNames (format 44+). */
+    iconFids?: number[];
     /** FileDataID -> listfile path (all models, sounds and textures). */
     files: { fids: number[]; paths: string[] };
 
@@ -516,6 +518,22 @@ export interface SpellData {
     subtexts: string[];
     /** Icon name per spell ("" = none). */
     icons: string[];
+    /**
+     * §3y the icon pool, kept DEDUPED exactly as the pack ships it — 9,849
+     * distinct icons across 129,050 spells on 9.2.7, so `icons` above is 13×
+     * the same strings. `iconOf[i]` is a 1-BASED index into both arrays
+     * (0 = the spell has no icon), which is the pack's own encoding.
+     *
+     * Searched pool-first for the reason the description pool is (§3x): the
+     * `icon` keyword tests 9,849 names instead of 129,050, and the caller
+     * turns the answer back into spells with one integer lookup each.
+     *
+     * `iconFids` is empty on a pack older than format 44 — the names still
+     * work, and a numeric `icon` value simply finds nothing there.
+     */
+    iconNames: string[];
+    iconFids: number[];
+    iconOf: number[];
     /** Lowercased "name subtext altnames" search corpus per spell. */
     namesL: string[];
     /**
@@ -956,11 +974,17 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const encounterText = st ? st.encounters.text : [];
     const encounterOf = st ? st.encounters.of : [];
 
-    // spell icon names ("" = none); older packs have no icon data
+    // spell icon names ("" = none); older packs have no icon data. The pool
+    // and its per-spell index are kept as well as the expansion — the pool is
+    // what `name:"icon …"` searches (§3y), the expansion is what the row
+    // renders, and both are views of the same two arrays the pack ships.
     const iconNames = pack.iconNames || [];
+    const iconFids = pack.iconFids || [];
+    const iconOf: number[] = new Array(n);
     const icons: string[] = new Array(n);
     for (let i = 0; i < n; i++) {
         const idx = sp.icons ? sp.icons[i] : 0;
+        iconOf[i] = idx;
         icons[i] = idx ? iconNames[idx - 1] : "";
     }
 
@@ -2146,6 +2170,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     return {
         meta: pack.meta,
         ids: sp.ids, names: sp.names, subtexts: sp.subtexts, icons,
+        iconNames, iconFids, iconOf,
         namesL, descriptionText, descriptionOf, encounterText, encounterOf,
         spellIndex, files, hasSyntheticFiles,
         spellModels, modelSpells, modelFids, attachmentNames,

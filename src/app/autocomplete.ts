@@ -54,28 +54,35 @@ export const ARGUMENT_WORDS = new Set([...Object.keys(Search.META_KEYWORDS), Sea
 export function fieldCategories(field: string | null): { words: string[], titles: Record<string, string> } | null {
     const d = state.data;
     if (!d || !field) return null;
-    // `id:` has no CONTENT types — its words are just its meta keywords, which
-    // today is `xpac`. Read from the same registry as every other field's, so a
-    // keyword cannot come to be searchable and unsuggested. Target words are
-    // deliberately not appended: the id column draws no target icons.
-    if (field === "id") {
-        const words = Search.keywordsIn(field, d);
-        const titles: Record<string, string> = {};
-        for (const w of words) titles[w] = Search.META_KEYWORDS[w].hint;
-        return words.length ? {words, titles} : null;
+    const meta: Record<string, string> = {};
+    for (const w of Search.keywordsIn(field, d)) meta[w] = Search.META_KEYWORDS[w].hint;
+    /* A FIELD WITH NO CONTENT TYPES OFFERS EXACTLY ITS META KEYWORDS — `id:`
+     * has `xpac`, `name:` has `desc` and `icon`. Read from the same registry as
+     * every other field's, so a keyword cannot come to be searchable and
+     * unsuggested. Target words are deliberately not appended: neither column
+     * draws target icons.
+     *
+     * ⚠ THIS WAS `field === "id"` AND THE SPECIAL CASE WAS THE BUG. `name:`
+     * fell past it into the allowlist below and out the bottom, so `desc`
+     * shipped at format 43 searchable but absent from the help, the suggestion
+     * list and the bar's capsules — invisible unless you already knew it
+     * existed. Generalising the shape rather than adding `name` beside `id` is
+     * what stops the next keyword landing in the same hole. */
+    if (!["model", "sound", "anim", "fx", "mech"].includes(field)) {
+        const words = Object.keys(meta);
+        return words.length ? {words, titles: meta} : null;
     }
-    // mech joins the list because the non-visual categories moved there —
+    // mech is in the list because the non-visual categories moved there —
     // its words come from the same registry, so nothing else needed saying
-    if (!["model", "sound", "anim", "fx", "mech"].includes(field)) return null;
     const {words, titles} = P.keywordsFor(field, d);
     // the count axis, wherever the column has anything to count
     if (Search.COUNT_SOURCES[field]) {
         words.push(Search.COUNT_AXIS);
         titles[Search.COUNT_AXIS] = COUNT_TIP;
     }
-    for (const w of Search.keywordsIn(field, d)) {
+    for (const [w, hint] of Object.entries(meta)) {
         words.push(w);
-        titles[w] = Search.META_KEYWORDS[w].hint;
+        titles[w] = hint;
     }
     // every column that draws target icons can be filtered by them
     return {
