@@ -352,11 +352,37 @@ it possible.
 It does, and the useful reading is already what the app does today: **`model:fire` matches the FILE**, so
 `missile:fire` should keep meaning that.
 
-> **A kind declares ONE default property. `kind:value` is sugar for `kind:{defaultProp:value}`.**
+> **A bare token is resolved against the kind's properties by VOCABULARY MEMBERSHIP, falling back to a declared
+> default.**
+
+**⚠ A SINGLE DEFAULT IS NOT ENOUGH, and the user's follow-up is why: *"okay but `missile:chest` also has a meaning,
+no?"*** It does — `chest` is an attachment point, not a filename — so a rule that sent every bare token to `file`
+would answer the wrong question for every closed-vocabulary value.
+
+**THE RESOLUTION ORDER, and it is deterministic rather than a guess:**
+
+1. **Closed vocabularies first** — `enum`, `ordinal`, `bitmask`, `id`. These accept only their own members, so
+   `chest` matches an attachment point and `parabola` matches a motion.
+2. **Several properties of the SAME type both accept it → the UNION over them.** `missile:chest` binds `from` **and**
+   `to`, because both are attachment points — which is precisely what `attach:chest` has always meant.
+3. **Open types last** — `path` and `text` accept anything, so they can only ever be the fallback. That is the
+   `default` declaration, and it is what makes `missile:fire` the file.
+4. **Nothing accepts it and no open-type property exists → static error** naming the properties the kind does have.
+
+**⛔ NUMBERS NEVER DISPATCH BY SHAPE — L9 stands.** `missile:50` does not go hunting for a numeric property that might
+take a 50; it goes to the default or errors. **A word may reveal its property by being in a vocabulary; a number may
+not, because every numeric property would accept it.**
+
+**⭐ AND THE RESOLUTION IS SHOWN, NEVER HIDDEN.** `missile:chest` commits as a chip reading `missile · from|to: chest`,
+so the user sees which property answered. That is L12 satisfied by rendering, exactly as the two-scope distinction is —
+**a resolution the user cannot see would be the hidden-state failure this whole document bans.**
 
 | written                | means                                                                                     |
 |------------------------|-------------------------------------------------------------------------------------------|
-| `missile:fire`         | `missile:{file:fire}` — the declared default                                              |
+| `missile:fire`         | `missile:{file:fire}` — no vocabulary claims it, so the default answers                   |
+| `missile:chest`        | `missile:{from:chest\|to:chest}` — an attachment point, so BOTH role properties claim it |
+| `missile:parabola`     | `missile:{motion:parabola}` — a motion vocabulary member                                  |
+| `missile:50`           | the default — **numbers never dispatch by shape** (L9)                                    |
 | `missile:{from:chest}` | the full object form                                                                      |
 | `missile:*`            | has any missile (existence, §3.3)                                                         |
 | `missile:`             | **incomplete** — dropped while typing, no constraint (§4.9.8)                             |
@@ -364,6 +390,7 @@ It does, and the useful reading is already what the app does today: **`model:fir
 
 ```text
 defineKind({ id: "model.missile", word: "missile", default: "file", props: {...} });
+// `default` is the OPEN-TYPE fallback only. Vocabulary members resolve themselves.
 ```
 
 **⛔ A KIND WITH NO DECLARED DEFAULT MAKES `kind:value` A STATIC ERROR** that names the properties it does have —
