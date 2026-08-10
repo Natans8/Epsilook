@@ -999,12 +999,12 @@ negation of a conjunction. Only those two are lost.
 | 9 | "has no model at all" / "everything" | `-model:*` / `*` | ✅ |
 | 10 | attach / target reachable globally | `attach:chest`, `target:caster` | ✅ |
 | 11 | **implication — ROW level** | `-model:(arcane -fire)` — "no model row arcane-without-fire" | ✅ **survives** |
-| 12 | **implication — SPELL level** | `-(model:arcane -model:fire)` | ⛔ **lost** |
-| 13 | **arbitrary DNF** — (a∧b) ∨ (c∧d), non-factoring | — | ⛔ **lost** |
+| 12 | **implication — SPELL level** | `-model:arcane \| model:fire` = **270,978** | ✅ **survives — De Morgan, §8.9.4** |
+| 13 | **arbitrary DNF** | `model:fire model:arcane \| model:frost model:shadow` | ✅ **survives — precedence, §8.9.4** |
 | 14 | ∀ quantification | — | ⛔ lost earlier (§2.4.2), register #4 |
 | 15 | cross-column row correlation | — | ⛔ never had it, parked |
 
-**Eleven of fifteen survive, and the two newly lost are both exotic.** Note #11: **the implication shape survives at
+**THIRTEEN of fifteen survive** (corrected 2026-08-10 — see §8.9.4; two rows below were first recorded as lost and are not). Note #11: **the implication shape survives at
 ROW level**, because `-column:(…)` is an ordinary negated clause and needs no spell-level group. `-model:(arcane
 -fire)` says "every arcane model row is also fire". Only the SPELL-level reading — an arcane row and a fire row being
 different rows — is gone.
@@ -1012,6 +1012,50 @@ different rows — is gone.
 **#5 is the one to remember**, because it is the user's own first combination case and it never needed grouping: it
 FACTORS. `(fire ∧ arcane) ∨ (frost ∧ arcane)` is `arcane ∧ (fire ∨ frost)`, and every DNF whose disjuncts share a term
 factors the same way. #13 is the residue — disjuncts sharing nothing — and nobody has asked for one.
+
+#### 8.9.4 ⭐ THE REDUCED GRAMMAR IS EXPRESSIVELY COMPLETE — grouping bought CONCISENESS, not power
+
+**The user asked: "would this be solvable with an implicit AND token?" It is, and the answer corrects §8.9.2 — two
+rows there were first recorded as lost and are not.**
+
+**Because AND is implicit juxtaposition and binds TIGHTER than `|`, the flat clause list already writes DNF:**
+
+    model:fire model:arcane | model:frost model:shadow    =  (fire AND arcane) OR (frost AND shadow)
+
+No parentheses. And De Morgan pushes every negation down into the literals, so a negated conjunction needs no group
+either:
+
+    -(a b)                    =  -a | -b
+    -(model:arcane -model:fire)  =  -model:arcane | model:fire      ← the implication
+
+**VERIFIED BY SET ARITHMETIC on 9.2.7, not asserted:**
+
+    total spells                              276,332
+    model:arcane -model:fire  (to exclude)      5,354
+    implication = 276,332 - 5,354             270,978
+
+    -model:arcane                             270,826
+    model:fire                                 14,198
+    |NOT arcane OR fire| = 270,826 + 14,198 - 14,046 = 270,978      ← identical
+
+**THE GENERAL RESULT: every boolean formula has a DNF; a DNF is a flat list of AND-runs joined by `|`; negation
+distributes into the literals. So the reduced grammar can express any boolean combination of clauses.** Dropping
+spell-level grouping cost **no expressive power at all**.
+
+**What it DID cost is conciseness on CNF-shaped queries** — an AND of ORs where the ORs span different columns:
+
+    (model:fire | sound:fire) (model:ice | sound:ice)      ← needs grouping, or an exponential DNF expansion
+
+The common case of that is alternation inside ONE column, and it is already handled at value level by
+`model:(fire|frost)`. The residue is cross-column OR in more than one conjunct, which nobody has asked for.
+
+**So §8.9.1's option A is now strictly better than it looked when it was chosen:** parens keep exactly one meaning,
+L12 is satisfied, and the expressive loss is nil rather than "two exotic shapes". **The trade is DNF verbosity against
+readability, and readability wins** — which is the same call L12 makes everywhere else.
+
+⚠ **This makes PRECEDENCE load-bearing and it must be visible.** `-` > AND > `|` is standard, but a reader who assumes
+left-to-right will misread `a b | c d`. The bar's highlighter has to show the OR split, and `a | b c` — which is
+`a OR (b AND c)`, not `(a OR b) AND c` — is the one shape L12 will keep failing until it does.
 
 #### 8.9.3 ⚠ WHEN ROW-LEVEL NEGATION HELPS, AND WHEN IT IS A TRAP
 
@@ -1050,8 +1094,8 @@ almost never carries both.
 points — the row's properties — and away from a second content word.** That is a UI obligation created by a grammar
 rule, and it is exactly the kind of thing L12 exists to catch before it ships.
 
-**Register #5 (implication) is therefore DOWNGRADED, not reopened**: the row reading ships, the spell reading is
-recorded as lost. If it is ever wanted it returns as a NAMED form that reads, per L12 — never as nested parens.
+**⚠ THIS PARAGRAPH WAS WRONG AND IS CORRECTED IN §8.9.4.** It first recorded the spell-level implication as lost.
+It is not: `-model:arcane | model:fire` = 270,978, by De Morgan, with no grouping. Register #5 stays ✅.
 
 ---
 
@@ -1072,8 +1116,8 @@ than by four separate features.
 | 2 | **row-level negation** — "a fire model that is not a missile" | `model:"fire -missile"` = 0, `-` a literal | ✅ `model:(fire -missile)` — §2.4 |
 | 3 | **filtered count** — "more than 4 CASTER models" | `model:"caster count >4"` = 15,905 = has-a-caster-row ∧ >4 models *in all* | ✅ free from the row model (§9.2) |
 | 4 | **∀ quantification** — "models that ALL play on the caster" | unexpressible | ⛔ **REOPENED** — the `-model:(-caster)` form was measured wrong and is now illegal (§2.4.2). Wants a word, not a double negative |
-| 5 | **implication** | unexpressible | 🟡 **ROW level only** — `-model:(arcane -fire)`. The spell-level reading died with spell grouping (§8.9.2) |
-| 6 | **arbitrary DNF** — non-factoring disjuncts | hand-convert to CNF | ⛔ **lost** with spell grouping. Note the common case FACTORS: `model:arcane model:(fire\|frost)` (§8.9.2 #5) |
+| 5 | **implication** | unexpressible | ✅ `-model:arcane \| model:fire` = 270,978 — De Morgan, no grouping (§8.9.4) |
+| 6 | **arbitrary DNF** | hand-convert to CNF | ✅ AND binds tighter than `\|`, so a flat list IS DNF (§8.9.4) |
 | 7 | **cross-column row correlation** — "a model and a sound on the SAME target" | unexpressible | ⛔ still open — §9.3 |
 
 **Note what 1–6 have in common: none needed a new word.** Five fell out of one recursive grammar and one out of the row
