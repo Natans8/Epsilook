@@ -321,6 +321,60 @@ of magnitude. Parens are kept anyway, for two reasons that outweigh it:
 
 That is a second dividend of a decision taken for readability, and it is why the collision count does not decide this.
 
+##### ⭐ SETTLED: `{ }` IS THE ROW SCOPE, `( )` IS A VALUE GROUP — one meaning each
+
+**The user disliked parens for scoping, then opened the door: *"I don't mind { } though, but it should be VERY clear
+what it does."* That requirement is what picks the assignment, and it reverses the earlier recommendation.**
+
+| delimiter | job | collisions in 276,332 spell names |
+|---|---|---|
+| `{ }` | **ROW SCOPE** — these conditions hold of ONE row | **5** |
+| `( )` | **VALUE GROUP** — several alternatives as one value | 5,894, but see below |
+| `" "` | **PHRASE** — a leaf; no delimiter is active inside | 315 |
+
+    model:{fire missile}                 one model row matching both
+    model:{attach (chest|head) fire}     attached at chest OR head, and matching fire
+    model:{attach "right hand"}          a phrase as the keyword's value
+    name:"Elixir (Greater)"              every delimiter is data inside a phrase
+
+**THREE REASONS BRACES BEAT PARENS FOR THE SCOPE, and the third is the one that actually decides it:**
+
+1. **Collisions: 5 against 5,894.** Three orders of magnitude, measured.
+2. **Braces are semantically HONEST here.** In maths `{ }` is a SET and `( )` is precedence grouping. A row scope is a
+   set of conditions on one row — and since spell-level grouping was dropped (§8.9.1), **we no longer use grouping for
+   precedence at all**. Parens would name a job the language stopped having.
+3. **⭐ PARENS WOULD IMPORT THE WRONG INTUITION — the independent review's sharpest L0 point, which I under-weighted
+   first time.** Lucene's `field:(a b)` means `field:a AND field:b` **over the DOCUMENT**; Lucene has no rows, so its
+   parens cannot mean "one row satisfies both". Borrowing the familiar spelling for an unfamiliar meaning is **worse
+   than an unfamiliar spelling**, because prior knowledge actively misleads. An unfamiliar brace prompts learning; a
+   familiar paren prompts a confident wrong guess. That is L12 exactly.
+
+**And each delimiter now means EXACTLY ONE thing**, which is the user's "VERY clear" requirement satisfied
+structurally rather than by documentation. One symbol with two roles is what L12 (3) forbids — it is the trap quotes
+fell into in 1.0.
+
+**Parens keep their 5,894 collisions harmlessly**, because a value group only appears INSIDE a scope. In top-level
+free text a paren is ordinary data, so `fireball (rank 2)` still searches literally.
+
+##### ⚠ THE COROLLARY MATTERS MORE THAN THE DECISION — the user never SEES any of this
+
+*"The user doesn't actually see the chip scoping tokens, they aren't rendered."* A committed query is a row of CHIPS:
+`model:{fire missile}` renders as `Model │ fire missile`. **The delimiter lives in the URL and while typing, and
+nowhere else** — which is why it is chosen on parseability and honesty rather than on looks.
+
+**That corrects a claim made repeatedly above.** Several sections say "the highlighter must show the parse". True for
+only one of the two moments a query exists in:
+
+| moment | what is seen | what shows the structure |
+|---|---|---|
+| **committed** | chips | **the CHIP RENDERING is the parse** — no delimiters, structure is shape |
+| **while typing** | raw text in `#q` | **the highlighter** — the only thing between the user and a mis-parse |
+
+So every L12 obligation collected in §8.9.3 and §8.9.4 — draw the OR split, show negation depth, show what an axis
+consumed — is a **typing-time** obligation. At rest it is the chip layout's job, and **a chip layout that cannot
+express a scope cannot render its own query.** That is a larger UI requirement than syntax highlighting, and it is the
+one this design actually imposes.
+
 ##### How they NEST — three rules, and a phrase is a LEAF
 
 **1. Parens nest, and they must.** Precedence is `-` > AND > `|` (§8.9.4 depends on it), so `|` is the LOOSEST operator.
