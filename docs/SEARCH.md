@@ -253,6 +253,96 @@ already exists as its twin and is the better noun — before `attach:` can be a 
 declare the same word or prefix. That is the only one of the four a script can decide, and it is also the one that
 already broke.
 
+## L5.2 ⭐ A ROW HAS A KIND, A KIND HAS PROPERTIES — and that is what a pill was all along
+
+**The user, 2026-08-10, in two steps: *"that doesn't solve the target question at all, and attach has the same issue"*,
+then *"let's broaden this question: some axes have multiple properties."*** Both are the same gap, and broadening it is
+what makes it simple instead of a pile of special cases.
+
+### The gap, measured
+
+Scoping binds a clause to a ROW. It says nothing about **which property of that row** — and rows carry several,
+sometimes several of the same TYPE:
+
+| where                                | the properties that collide                                     | measured on 9.2.7                                                                   |
+|--------------------------------------|-----------------------------------------------------------------|-------------------------------------------------------------------------------------|
+| **`BeamEffect`** (a chain)           | `SourceAttachID` **and** `DestAttachID`                         | **2,014 of 2,997 rows differ — 67%.** 37 distinct sources, 34 distinct destinations |
+| `SpellVisual` / `SpellVisualMissile` | `MissileAttachment` **and** `DestinationAttachment`             | the route the build already reads                                                   |
+| `SpellEffect`                        | `ImplicitTarget_0` **and** `ImplicitTarget_1`                   | two slots on nearly every effect                                                    |
+| the target **mask**                  | `caster 1 · target 2 · area 4 · not-caster 8 · missile-dest 16` | **the bits ARE roles, pre-flattened**                                               |
+
+**So `attach:chest` on a chain means *"the chest is at one end, and I cannot tell you which"* — and two thirds of the
+time the two ends differ.** No amount of scoping fixes that, because both ends are on the same row.
+
+### ⭐ THE MODEL
+
+> **A COLUMN yields ROWS. A ROW has a KIND. A KIND declares its PROPERTIES. An AXIS asks about one property.**
+
+**A KIND is what 1.0 called a pill type, and it is the missing middle term.** `chain`, `missile`, `dissolve`,
+`JUMP_DEST`, `morph`, `seat` are kinds — nouns naming *what a row is*. `from`, `to`, `scale`, `target`, `texture` are
+properties — *what that thing has*.
+
+```text
+defineKind({
+    id:     "fx.chain",
+    column: "fx",
+    word:   "chain",                  // fx:chain tests the KIND
+    props: {
+        from:    { type: attachPoint, of: "SourceAttachID" },
+        to:      { type: attachPoint, of: "DestAttachID"   },
+        texture: { type: path,        of: "TextureFileID"  },
+        target:  { type: targetMask                        },
+    },
+    pill: { tone: "fx", segments: ["texture", "from", "to"] },
+});
+```
+
+**Everything falls out of that one declaration:**
+
+    fx:chain                          the KIND alone
+    fx:{chain from:chest}             the kind, constrained on one property
+    fx:{chain from:chest to:"right hand"}   a beam that STARTS at the chest and ENDS at the right hand
+    from:chest                        the union over every kind declaring a `from`
+    attach:chest                      the union over `from` and `to` — 1.0's meaning, kept
+
+### What this settles, all at once
+
+- **ROLES stop being a special case.** `from` and `to` are simply two properties that happen to share a type. There is
+  no "role" mechanism to build — **an axis whose value needs the word "or" to describe was always two axes**
+  (TYPES §4.2b), and this is that rule one level down.
+- **⭐ THE PILL AND THE AXIS STOP BEING TWO DECLARATIONS.** The build plan listed "declare the axis" and "declare the
+  pill" as separate steps; a kind is **one** declaration feeding search and render, which is the extension contract
+  actually delivered rather than promised.
+- **`target` becomes ordinary.** It is a property, declared by the kinds that have one. `mech:{JUMP_DEST target:target}`
+  asks the JUMP_DEST kind's target property. **Its scoped-only ruling stands** — *"some row somewhere targets the
+  caster"* is still not a question — but it is no longer a special class of axis, just a property most kinds share.
+- **The `mech` substring defect dies with it.** Today `mech:target` matches printed enum names
+  (`TARGET_UNIT_TARGET_ENEMY` contains the string) — L4's one-word-two-mechanisms defect. A declared property cannot be
+  matched by accident.
+- **Row GRANULARITY gets a definition instead of a judgement call.** A row is one instance of one kind. If two things
+  can be described separately, they are two rows.
+- **Multi-notation is just a property with two types** (`types: [id, text]`), needing no separate concept.
+
+### ⚠ WHAT IT COSTS, stated
+
+- **`Row` stops being a flat bag** (`corpus? mask? num? ref?`) and becomes `{ kind, props }`. That is a bigger change to
+  §2.3 than anything else this session, and **it lands in the PHASE 1 spike, not after it.**
+- **Every kind must be enumerated** — 1.0 has 32 pill types plus the effect/aura enums. That is a transcription job, and
+  it is the same list PHASE 5 has to port anyway.
+- **A property union needs a declared name** (`attach` over `from`/`to`), so unions are declarations too, not automatic.
+
+### The standing check when declaring anything
+
+> **Ask: can one row hold TWO of these? If yes, they are two properties — name them now.** A union added later is
+> cheap; splitting a property after people have bookmarked it is not.
+
+**Known and unsplit today:** beam source/dest · missile/destination attachment · implicit target 0/1. **Worth one query
+each before PHASE 5:** paired columns anywhere in `SpellVisualKitEffect`, and `SpellVisualKitModelAttach` where one kit
+attaches several models.
+
+**⛔ AND DO NOT NAME `ImplicitTarget_0` / `_1` FROM THE IDENTIFIERS.** They are two properties by this rule, but what
+each MEANS must come from the data or from `EpsilonRP/TrinityCore`, not from the number in the column name.
+
 ### L6 — An axis binds EXACTLY ONE value, and the colon says so
 
 **Every axis binds with `:`, at every level, to exactly one value** — where a phrase, a value group and a comparison are
@@ -460,10 +550,17 @@ export interface Column {
 }
 
 export interface Row {
-    mask?: number;                      // target bits — makes *.target universal for free
-    corpus?: string;                    // lowercase haystack
-    num?: Record<string, number>;       // named numeric axes on this row
-    ref?: number;                       // the id the row stands for
+    /** WHAT THIS ROW IS — a chain, a missile, a JUMP_DEST effect (L5.2).
+     *  The kind declares which properties the row carries, so nothing here
+     *  is generic-slot guesswork. */
+    kind: string;
+
+    /** The kind's declared properties, by name: from, to, scale, target,
+     *  texture... An axis asks about exactly ONE of these.
+     *  ⚠ REPLACES the old flat bag (mask/corpus/num/ref), which could not
+     *  express two properties of the SAME type on one row -- 67% of beam
+     *  rows have a different source and destination attachment. */
+    props: Record<string, unknown>;
 }
 ```
 
