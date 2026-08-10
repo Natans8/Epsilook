@@ -1641,7 +1641,36 @@ bar, and treating them alike would rewrite text the user meant literally.
 |---|---|
 | closing an unbalanced delimiter | at the next clause boundary (§4.9.4b), reported as a warning with the repaired query |
 | shape rewriting | `.cast 12345` → `id:12345`, a Wowhead URL → `id:133` (§4.9.5b) |
-| **1.0-syntax detection** | a phrase whose first word is a registered axis word — `model:"attach chest"` — almost certainly means the old grouping form. **Warn with the fix** `model:{attach:chest}`. This is the migration warning the independent review asked for, and it is structural, not spelling |
+| **1.0-syntax detection** | **measured, not lexical — see below.** A multi-word phrase whose SCOPE reading returns materially more is almost certainly the old grouping form. Warn with the fix. This is the migration warning the independent review asked for |
+
+##### The 1.0-phrase warning must be MEASURED, not lexical
+
+**Found by the user asking what happens to a pasted `model:"blood pool"`, 2026-08-10.** An earlier draft warned when a
+phrase OPENED with a registered axis word (`model:"attach chest"`). That rule is too narrow: it catches the keyword
+case and misses the ordinary one.
+
+    model:"blood pool"     1.0: blood AND pool in one row  ->  75 spells
+                           2.0: the literal substring "blood pool"
+
+Neither word is an axis word, so a lexical rule stays silent while the meaning changes underneath the user.
+
+**THE RULE: for a multi-word phrase clause, evaluate the SCOPE reading too, and warn when it returns materially more.**
+
+    model:"blood pool"   ->  phrase: few or none
+                             scope:  model:{blood pool} = 75
+                             warn, with `model:{blood pool}` as the one-click fix
+
+It costs one extra evaluation per multi-word phrase, only worth doing when the phrase clause is what collapsed the
+result — which is already a WARNING trigger (§4.9.4b). **And it is structural rather than a guess**: both numbers are
+computed, and the warning states them.
+
+**⚠ AND A PHRASE IS NOT USELESS ON A PATH AXIS — measured: 2,196 of 133,699 `.m2` paths contain a space** (1.6%). So
+`model:"blood pool"` is a legitimate, much narrower query, and the warning must SUGGEST the alternative rather than
+assume the user is wrong.
+
+**Nothing is normalised here.** `model:"blood pool"` is already canonical — a bind whose value is a phrase — and
+`model:{"blood pool"}` means the same thing, so rewriting one into the other would be churn without a semantic gain.
+**Leniency normalises SHAPE (§2.4.0, parens → braces); it never rewrites a form that is already correct.**
 
 ##### Tier 3 — NEVER
 
