@@ -346,6 +346,34 @@ already decides the leaf, and a kind just lays them out. The bar renders `missil
 instead of a row of loose chips, and the help documents a missile in one place. PHASE 6 work — the syntax is what makes
 it possible.
 
+#### ONE BARE TOKEN AFTER A KIND — the DEFAULT PROPERTY (user, 2026-08-10)
+
+***"If we input just one token that is not curly brackets after an object type, it should have a defined behaviour."***
+It does, and the useful reading is already what the app does today: **`model:fire` matches the FILE**, so
+`missile:fire` should keep meaning that.
+
+> **A kind declares ONE default property. `kind:value` is sugar for `kind:{defaultProp:value}`.**
+
+| written                | means                                                                                     |
+|------------------------|-------------------------------------------------------------------------------------------|
+| `missile:fire`         | `missile:{file:fire}` — the declared default                                              |
+| `missile:{from:chest}` | the full object form                                                                      |
+| `missile:*`            | has any missile (existence, §3.3)                                                         |
+| `missile:`             | **incomplete** — dropped while typing, no constraint (§4.9.8)                             |
+| `missile:>4`           | ⛔ **error** — `file` is a `path`, which declines ordering. The operator contract decides |
+
+```text
+defineKind({ id: "model.missile", word: "missile", default: "file", props: {...} });
+```
+
+**⛔ A KIND WITH NO DECLARED DEFAULT MAKES `kind:value` A STATIC ERROR** that names the properties it does have —
+*"a JUMP_DEST takes target, radius or amplitude"*. **It must not fall back to searching every property at once**: that
+is corpus bleed (§8.1), the one-word-two-mechanisms defect L4 exists to ban, and exactly how `mech:target` came to
+match printed enum names.
+
+**The default is a DECLARATION, so autocomplete can teach it** — offering `missile:` shows the default inline, and
+opening `missile:{` switches the suggestions to the full property list.
+
 ### THE WORKED EXAMPLE — the missile, the user's own (2026-08-10)
 
 ***"For example missile has its file, source, destination, path and target."*** Mapping those five onto
@@ -544,6 +572,12 @@ export const GRAMMAR = {
 ```
 
 ### 2.2 `Axis` — the single structure
+
+**⚠ RECONCILE WITH L5.2 IN PHASE 2.** This interface was written before kinds existed. It is still correct about what an
+axis DECLARES (doors, types, plain/tier, hint, `when?`, `domain?`), but **the primary declaration is now
+`defineKind`**, which declares a kind's properties and its pill in one record; `defineAxis` remains for column-level
+axes and for UNION axes such as `attach` over `from`/`to`. **Do not port this shape verbatim — merge the two, then
+delete whichever loses.**
 
 Everything that is a separate mechanism in 1.0 — a field's `run()`, a meta keyword, a target word, `count`, a pill
 type's corpus — is **one record shape**:
@@ -1062,7 +1096,8 @@ of ids is how people paste them, and the rule is syntactic (every part a number)
 the only OR. ⚠ This is a deliberate exception to L1 and the only one in the grammar; if it ever causes a question,
 delete it rather than growing it.
 
-**(g) ⭐ NESTED `{ }` — MAXIMUM SCOPE DEPTH IS EXACTLY 1, and that is a referent problem, not a restriction.**
+**(g) ⭐ NESTED `{ }` — DEPTH FOLLOWS THE DATA. ⚠ AMENDED BY L5.2: this section said depth is fixed at 1; the rule is now
+that a brace is legal exactly where something has PROPERTIES, which today means 1.**
 
 **A row scope binds its contents to ONE ROW. Inside it you are already at a row, so a second scope has nothing left to
 bind to.** Depth 2 is not unsupported — it has no meaning to support. Every job a nested brace might be reaching for is

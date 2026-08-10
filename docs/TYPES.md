@@ -6,10 +6,10 @@ notation or a new UI affordance, this is the only file you need.
 
 **Status: DESIGN. Nothing built.**
 
-**⛔ TERMINOLOGY IS DEFINED ONCE, IN `docs/SEARCH.md` §0** — axis, type, column, row, tag, chip, pill, segment.
-This file never redefines a term; if one is missing there, add it there.
+**⛔ TERMINOLOGY IS DEFINED ONCE, IN `docs/SEARCH.md` §0** — axis, type, column, row, tag, chip, pill, segment. This file
+never redefines a term; if one is missing there, add it there.
 
- The build plan is `docs/PROCESS-LOG-search2.md` §4.
+The build plan is `docs/PROCESS-LOG-search2.md` §4.
 
 ---
 
@@ -21,6 +21,54 @@ This file never redefines a term; if one is missing there, add it there.
 That ignorance is the whole design. An axis says *"cast time is measured in seconds"*; the `seconds` type says what a
 second is, how two of them compare, that `ms` is a thousandth of one, and that a number line is the right control. **The
 type never learns the word "casttime".**
+
+---
+
+## 0.5 ⭐ WHERE TYPES SIT NOW — kinds, properties, and what this file does NOT own
+
+**Added 2026-08-10, after `SEARCH.md` L5.2 introduced KINDS. Read this before the catalogue or the assignment table.**
+
+**The full chain, and each link is owned by exactly one document:**
+
+```text
+COLUMN  yields  ROWS                     SEARCH.md L5.2
+ROW     has a   KIND                     SEARCH.md L5.2   (a kind is what 1.0 called a pill type)
+KIND    has     PROPERTIES               SEARCH.md L5.2
+PROPERTY has a  TYPE                     ⭐ THIS FILE
+TYPE    decides meaning, operators,
+                units, format, affordance ⭐ THIS FILE
+```
+
+**So a type is now one link down from where this file first described it.** Nothing in the catalogue changes — a
+`percent` is still a `percent` — but the thing that HAS a type is a **property of a kind**, not "a searchable value"
+in the abstract.
+
+```text
+defineKind({
+    id: "model.missile", column: "model", word: "missile",
+    props: {
+        file:   { type: path },          // <- the TYPE is this file's business
+        from:   { type: attachPoint },   // <- two properties sharing one type is
+        to:     { type: attachPoint },   //    how roles are expressed (L5.2)
+        motion: { type: enumOf("SpellMissileMotion") },
+        target: { type: targetMask },
+    },
+});
+```
+
+**⚠ THREE CONSEQUENCES FOR THIS DOCUMENT, and they are why §8 was rewritten:**
+
+1. **"One axis, one value" is now enforced STRUCTURALLY.** A property holds one value by construction, so the `invis`
+   split (§8.2) stops being a rule to remember and becomes two property lines.
+2. **Multi-notation is a property with several types** — `types: [id, text]` on one property, unchanged from §7.
+3. **A kind's UI is COMPOSITION, not a new affordance.** The user, 2026-08-10: *"we are doing a different UI solution
+   for each type, with sliders and selectors and checkboxes; this is no exception, we can just get the properties
+   listed."* Each property draws with its own type's `ui`; the kind lays them out. **`AxisType.ui` still decides every
+   leaf, and there is no `ui: "composite"`.**
+
+**⛔ WHAT THIS FILE DOES NOT OWN, so nothing is stated twice:** kinds, properties, columns, rows and the query grammar
+are all `SEARCH.md`. **If you came here to add a searchable thing, you need a property on a kind (SEARCH.md L5.2) and
+a type for it (here).**
 
 ---
 
@@ -608,7 +656,8 @@ a type — it is an axis with three notations, each of which has a real type.
 
 ## 8. THE VALUE → TYPE ASSIGNMENT
 
-**Every searchable value in the app, and what it is.** Adding a row here is what "adding a searchable thing" means.
+**Every searchable value in the app, and what it is.** ⚠ **Since L5.2, each row below is a PROPERTY of a KIND** (§0.5)
+— the `column` column names where that kind lives. Adding a row here is one property line plus a type.
 
 ### 8.1 Shipping today
 
