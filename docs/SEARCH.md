@@ -679,7 +679,10 @@ export interface Axis {
     /** Which column's rows it reads. "*" = universal: the kernel applies it to EVERY column. */
     column: string | "*";
 
-    /** §4 — drives BOTH how a token matches and what the UI offers. */
+    /** §4 — drives BOTH how a token matches and what the UI offers.
+     *  ⚠ ONE AXIS, ONE VALUE (§4.2b): if this axis's value cannot be written
+     *  down with a single unit, it is two axes. `>` orders THIS value and
+     *  nothing else; cardinality is always the separate `count` axis. */
     type: AxisType;
 
     /** L6: tokens consumed after `word`. Always 0 or 1. */
@@ -905,9 +908,50 @@ So `=` on a number is numeric equality and on text is the whole string: **the sa
 realisation. An operator meaning "greater than" on one type and "contains" on another would be redefinition, and is
 forbidden.
 
+**⚠ BUT THE OPERATOR TABLE ALONE DOES NOT MAKE THIS TRUE, and assuming it did was an error — see the section below.**
+"Greater" is only unambiguous once each axis has exactly ONE value to be greater than. An axis carrying two numbers
+makes `>` ambiguous no matter how carefully the operator is defined, which is what 1.0's `invis` does today.
+
 **Part 3 is the one that prevents a whole class of 1.0 bug.** `name:>m` today substring-searches for the literal
 `>m` — a silent nonsense answer. Under this rule the `text` type declines ordering and the bar says so. **This is the
 same distinction §2.4.3(d) draws: L2's "answer, never fall through" is about absent DATA, not about nonsense.**
+
+#### ⭐ ONE AXIS, ONE VALUE — the rule that makes "one abstract meaning" true
+
+**The user pushed back on the claim above: *"Greater can mean a larger %, or it can mean by the count of occurrences
+of a pill per spell, or it can mean something else entirely in different datatypes."* They are right, and 1.0 proves
+it:**
+
+    mech:"invis 13"    16    the CHANNEL number 13
+    mech:"invis >0"   703    the DETECTOR COUNT — a different quantity entirely
+    mech:"invis =0"     2    a detector count of zero
+
+    mech:"seat 8"      19    eight seats
+    mech:"seat >2"     36    more than two seats  — same quantity, no ambiguity
+
+**On `invis`, `13` and `>0` are two different numbers on ONE axis**, and the only thing telling them apart is whether
+an operator was typed — `operatorOnly: true` in `pilltypes.ts`. So `invis 13` is channel 13 while `invis =13` would be
+*thirteen detectors*: the same digits, the opposite question, distinguished by a character that looks like punctuation.
+That is L12 (3) exactly, and it is shipped today.
+
+**SO THE FIX IS NOT AT THE OPERATOR LEVEL. It is: AN AXIS HAS EXACTLY ONE VALUE.**
+
+- **`>` always orders THE AXIS'S OWN VALUE.** What that value IS varies — a percent for `scale`, seconds for
+  `casttime`, seats for `seat` — and that is realisation (§4.2b), not redefinition.
+- **Cardinality is ALWAYS the separate `count` axis**, never an alternate reading of a comparison. "More than four
+  scale pills" is `fx:{scale:* count:>4}`; "a scale above four percent" is `fx:{scale:>4}`. Two questions, two
+  spellings, no shared operator.
+- **A concept carrying two numbers is TWO AXES.** `invis` carries a channel id and a counterpart count, so it becomes
+  two: the channel (an `id`, exact only) and the detector relationship, which is a cross-reference and needs its own
+  name. Whatever it is called, it is not a second number on `invis`.
+
+**This deletes `operatorOnly` entirely**, which existed to paper over exactly this. It served two jobs in 1.0 and 2.0
+removes the need for both: disambiguating two quantities on one axis (fixed by one-axis-one-value, above), and stopping
+a loose number being read numerically when the corpus might also match it (fixed by `:` binding — `speed:>70` binds
+explicitly, and a bare `70` inside a scope is unambiguously a content term).
+
+**The test to apply when declaring any axis: can I write down its single value and its unit?** If the answer needs the
+word "or", it is two axes.
 
 #### The matrix
 
