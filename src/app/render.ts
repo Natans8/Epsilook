@@ -556,7 +556,15 @@ function descriptionMark(i: number): HTMLElement | null {
     const terms = descTerms();
     const hay = `${desc} ${aura} ${note}`.toLowerCase();
     const marks = terms.filter((t) => hay.includes(t));
-    const span = el("span", "desc-mark" + (marks.length ? " hit" : ""));
+    // A BUTTON, not a span: it has to be tappable (there is no hover on a
+    // phone) and reachable by Tab. The pin attribute is what makes the tap
+    // hold the panel open — see tooltip.ts PIN_ATTR.
+    const span = el("button", "desc-mark" + (marks.length ? " hit" : ""));
+    span.type = "button";
+    span.setAttribute("data-tip-pin", "");
+    // prose: worth entering with the pointer, unlike a one-line pill tip
+    span.setAttribute("data-tip-hold", "");
+    span.setAttribute("aria-label", "What this spell says it does");
     span.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">'
         + '<path d="M2.5 3.5h11M2.5 6.5h11M2.5 9.5h11M2.5 12.5h7"/></svg>';
     // THREE VOICES, ONE PANEL, IN THE ORDER A CASTER MEETS THEM: what the cast

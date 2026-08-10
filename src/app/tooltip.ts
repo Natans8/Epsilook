@@ -48,10 +48,42 @@ const WARM_FOR = 400;
 const GAP = 6;
 const MARGIN = 8;
 
+/**
+ * An anchor carrying this opens its panel ON CLICK and KEEPS it open.
+ *
+ * ⚠ WITHOUT IT THERE IS NO TOOLTIP ON A PHONE AT ALL. Everything here is
+ * driven by hover and focus, and `pointerover` returns early for
+ * `pointerType === "touch"` because a touch has no hover to speak of — so a
+ * surface whose only content is a tooltip is simply invisible to half the
+ * audience. Hover is an enhancement; the tap is the actual affordance.
+ *
+ * It answers two other things at once, which is why it is a pin rather than a
+ * one-shot open: a panel you can hold still is one you can read a long
+ * description in, select text from, and screenshot.
+ */
+const PIN_ATTR = "data-tip-pin";
+
+/**
+ * An anchor carrying this has a panel worth moving the pointer INTO — prose
+ * long enough to read to the end, select or copy. Everything else closes the
+ * moment the pointer leaves it, which is what keeps a dense row navigable.
+ */
+const HOLD_ATTR = "data-tip-hold";
+
+/** How long a touch has to stay put before it counts as "hold to read". */
+const LONG_PRESS = 420;
+/** How far it may drift first — past this it is a scroll, not a press. */
+const PRESS_SLOP = 10;
+
 let panel: HTMLElement | null = null;
 let anchor: HTMLElement | null = null;
+/** Held open by a click, so hover leaving it must not take it away. */
+let pinned = false;
 let showTimer = 0;
 let hiddenAt = 0;
+/** Touch hold-to-read: the pending timer, and whether it already fired. */
+let pressTimer = 0;
+let longPressed = false;
 
 /**
  * Whether the panel can join the TOP LAYER.
@@ -68,6 +100,24 @@ let hiddenAt = 0;
  */
 const CAN_POPOVER = typeof HTMLElement !== "undefined"
     && typeof HTMLElement.prototype.showPopover === "function";
+
+/** The pinned flag and the class the close button keys off, set together. */
+function setPinned(on: boolean, byTouch = false): void {
+    pinned = on;
+    panel?.classList.toggle("pinned", on);
+    // ⚠ THE CLOSE BUTTON IS GATED ON THE GESTURE, NOT ON `pointer: coarse`.
+    // A finger has no way out of a pinned panel; a pointer has three (move
+    // away, click away, Escape). What decides that is which input pinned it —
+    // not what kind of device the browser thinks it is, which is a guess that
+    // gets hybrids wrong in both directions.
+    panel?.classList.toggle("by-touch", on && byTouch);
+}
+
+/** Release a pinned panel and close it. */
+function unpin(): void {
+    setPinned(false);
+    hide(true);
+}
 
 /** Is the panel on screen? Popover state and `hidden` answer differently. */
 const isOpen = (): boolean => !!panel
@@ -199,6 +249,12 @@ function fill(text: string): void {
         });
         panel!.append(box);
     }
+    // Rendered unconditionally; the css reveals it only on a coarse pointer
+    // AND only while pinned, because that is the one state with no other exit.
+    const close = el("button", "tip-close", "×");
+    close.type = "button";
+    close.setAttribute("aria-label", "Close");
+    panel!.append(close);
     if (!keys.length) return;
     const list = el("dl", "tip-keys");
     for (const [key, action] of keys) {
@@ -276,7 +332,8 @@ function show(node: HTMLElement, text: string): void {
     node.setAttribute("aria-describedby", "tip");
 }
 
-function hide(): void {
+function hide(force = false): void {
+    if (pinned && !force) return;
     clearTimeout(showTimer);
     if (!panel || !isOpen()) return;
     panel.classList.remove("show");
@@ -325,7 +382,25 @@ export function initTooltips(): void {
         // segments; only a pointer that has actually left the anchor closes it
         const to = e.relatedTarget;
         if (anchor && to instanceof Node && anchor.contains(to)) return;
+        // ...and moving into the panel is not leaving either — but ONLY for an
+        // anchor that says its panel is worth entering.
+        //
+        // ⚠ NOT UNIVERSAL, ON PURPOSE. WAI-ARIA's tooltip pattern does say a
+        // tooltip should survive being hovered, so that its content is
+        // reachable. But `place()` puts the panel directly BELOW a narrow
+        // anchor, which on a dense pill row is exactly where the pointer
+        // travels next — make every pill's tooltip sticky and the table
+        // becomes something you stumble through. A one-line pill has nothing
+        // to reach into; a description does. So the ones with prose opt in.
+        if (to instanceof Node && panel?.contains(to)
+            && anchor?.hasAttribute(HOLD_ATTR)) return;
         hide();
+    });
+    // leaving the panel closes it again, unless a tap pinned it
+    panel.addEventListener("pointerleave", () => hide());
+    // the close button is the ONLY way back out of a pinned panel on a phone
+    panel.addEventListener("click", (e) => {
+        if (e.target instanceof Element && e.target.closest(".tip-close")) unpin();
     });
 
     // keyboard parity: a tooltip nobody can reach by Tab is a tooltip half the
@@ -336,14 +411,78 @@ export function initTooltips(): void {
             open(node, true);
         } else if (anchor) hide();
     });
-    document.addEventListener("focusout", hide);
+    document.addEventListener("focusout", () => hide());
     document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") hide();
+        if (e.key === "Escape") unpin();
     });
 
-    // the panel is fixed, so anything that moves the anchor invalidates it
-    document.addEventListener("scroll", hide, {capture: true, passive: true});
-    window.addEventListener("resize", hide);
-    // a click has answered whatever the tooltip was explaining
-    document.addEventListener("pointerdown", hide, true);
+    // TAP / CLICK PINS. The same gesture unpins, and a click anywhere else
+    // dismisses — the shape every disclosure on the web already has, so there
+    // is nothing to learn.
+    document.addEventListener("click", (e) => {
+        // the tap that ENDED a long press is not a tap on the control
+        if (longPressed) {
+            longPressed = false;
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
+        const node = e.target instanceof Element
+            ? e.target.closest<HTMLElement>(`[${PIN_ATTR}]`) : null;
+        if (!node) {
+            if (pinned && !(e.target instanceof Node && panel?.contains(e.target))) unpin();
+            return;
+        }
+        if (pinned && anchor === node) {
+            unpin();
+            return;
+        }
+        setPinned(false);
+        open(node, true);
+        setPinned(isOpen());
+    });
+
+    // the panel is fixed, so anything that moves the anchor invalidates it —
+    // a pin cannot survive that either, because the box it points at has moved
+    document.addEventListener("scroll", () => hide(true), {capture: true, passive: true});
+    window.addEventListener("resize", () => hide(true));
+    // A click has answered whatever the tooltip was explaining — EXCEPT on a
+    // pinning anchor or inside the panel itself, where the pointerdown is the
+    // first half of the gesture that opens or reads it.
+    document.addEventListener("pointerdown", (e) => {
+        const inside = e.target instanceof Element
+            && (e.target.closest(`[${PIN_ATTR}]`) || panel?.contains(e.target));
+        if (!inside) {
+            setPinned(false);
+            hide(true);
+        }
+
+        // HOLD TO READ, on touch, on EVERY anchor. Tap keeps whatever it
+        // already did — a pill still searches — so this is the one gesture
+        // that can be universal without taking anything away. It is also the
+        // only way most tooltips are reachable at all on a phone.
+        clearTimeout(pressTimer);
+        longPressed = false;
+        if (e.pointerType !== "touch") return;
+        const node = candidate(e);
+        if (!node) return;
+        const from = {x: e.clientX, y: e.clientY};
+        const drift = (m: PointerEvent) =>
+            Math.hypot(m.clientX - from.x, m.clientY - from.y) > PRESS_SLOP;
+        const cancel = (m: Event) => {
+            if (m.type === "pointermove" && !drift(m as PointerEvent)) return;
+            clearTimeout(pressTimer);
+            document.removeEventListener("pointermove", cancel);
+            document.removeEventListener("pointerup", cancel);
+        };
+        document.addEventListener("pointermove", cancel);
+        document.addEventListener("pointerup", cancel);
+        pressTimer = window.setTimeout(() => {
+            cancel(new Event("pointerup"));
+            longPressed = true;
+            setPinned(false);
+            open(node, true);
+            setPinned(isOpen(), true);
+        }, LONG_PRESS);
+    }, true);
 }

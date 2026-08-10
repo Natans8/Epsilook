@@ -2195,8 +2195,29 @@ main {
     top: 0.15rem;
     right: 0;
     display: inline-flex;
+    /* a real <button>, so the browser's chrome has to be taken off it */
+    padding: 0;
+    border: 0;
+    background: none;
     color: var(--tag-btn);
-    cursor: help;
+    /* TAP TARGET. A 13px glyph is not a touch target, and on a phone the tap is
+       the ONLY way to reach the panel — hover does not exist there. The box is
+       grown with padding-box space rather than a bigger icon so the glyph keeps
+       its size and its corner. */
+    inset-block-start: 0;
+    padding: 0.35rem 0.3rem;
+    margin: -0.35rem -0.3rem 0 0;
+    cursor: pointer;
+}
+
+.desc-mark:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: -2px;
+    border-radius: 3px;
+}
+
+.desc-mark:hover {
+    color: var(--text-strong);
 }
 
 .desc-mark svg {
@@ -3570,6 +3591,43 @@ footer a {
 
 .tip-detail {
     color: var(--text);
+}
+
+/* THE PINNED PANEL'S WAY OUT, AND IT EXISTS ONLY WHERE IT IS NEEDED.
+   A pointer can leave a tooltip; a finger cannot, so a panel a tap pinned open
+   has no exit on a phone. Hidden by default and on any fine pointer — there it
+   would be clutter on every tooltip in the app.
+
+   44px is the tap target, not the glyph: the × is drawn at a readable size and
+   the box around it is what the thumb actually has to hit. */
+.tip-close {
+    display: none;
+}
+
+#tip.pinned.by-touch {
+    /* room for the button, so it never lands on the last line of prose */
+    padding-top: 2.1rem;
+}
+
+#tip.pinned.by-touch .tip-close {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-dim);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+#tip.pinned.by-touch .tip-close:active {
+    color: var(--text-strong);
 }
 
 /* A SECTIONED tooltip — today only the description mark, which can carry three
