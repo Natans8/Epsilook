@@ -841,17 +841,20 @@ widths, radii, angles, lengths, rates — every one RP-relevant, none reachable.
 are REGISTERED, exactly as pill types are — adding one is a call, never an edit to a union.
 
 ```ts
+/* Sketch. THE definition — including the operator contract, which is the
+   substance of this type — is in §4.2b, "Should operators be PROPERTIES of a
+   datatype?". Do not maintain two copies. */
 export interface AxisType {
     name: string;                                  // "percent", "seconds", "length"
-    storage: "int" | "float" | "string" | "locstring" | null;  // §4.1; null = valueless (flag)
-    parse(token: string): TypeQuery | null;        // token -> a test, or null = not mine
-    test(q: TypeQuery, value: unknown): boolean;
-
+    storage: "int" | "float" | "string" | "locstring" | null;  // §4.1; null = valueless
+    /* equals? compare? contains? glob? present?  — §4.2b.
+       An ABSENT method is how a type DECLINES that operator. */
     format(value: unknown): string;                // how a pill prints it
     ui: "text" | "number" | "range" | "picker" | "toggle" | "glyphs";
     unit?: string;                                 // "%", "s", "yd", "°", "x"
     step?: number;                                 // range / stepper granularity
     sentinels?: Record<number, string>;            // -1 -> "unlimited"
+    total?: boolean;                               // §4.4 — no meaningful `*`
 }
 
 export const AXIS_TYPES = new Map<string, AxisType>();
@@ -915,6 +918,59 @@ makes `>` ambiguous no matter how carefully the operator is defined, which is wh
 **Part 3 is the one that prevents a whole class of 1.0 bug.** `name:>m` today substring-searches for the literal
 `>m` — a silent nonsense answer. Under this rule the `text` type declines ordering and the bar says so. **This is the
 same distinction §2.4.3(d) draws: L2's "answer, never fall through" is about absent DATA, not about nonsense.**
+
+#### Should operators be PROPERTIES of a datatype? Yes — as implementations, never as overrides
+
+**The user asked directly. The answer is yes, and it is not a preference: it is forced by the architecture.** The only
+alternative is a switch on type name inside the kernel — `if (type === "percent") … else if (type === "seconds") …` —
+which is exactly the branching the kernel exists not to have. **The kernel's defining property is that it knows no
+field name and no type name**, so operator behaviour has to live on the type or the design collapses.
+
+**But "override" is the wrong word, and the distinction is load-bearing:**
+
+| | |
+|---|---|
+| **override** | a type may give an operator a DIFFERENT meaning — `>` is "greater" here and "contains" there | ⛔ forbidden: destroys L4 and L12 |
+| **implementation** | the contract is fixed by the grammar; the type supplies the BODY for its domain | ✅ required |
+
+**This is the standard pattern for precisely this problem (L0)** — Rust's `Ord`/`PartialOrd`, Java's `Comparable`,
+Python's rich comparisons. A type never redefines what `<` MEANS; it supplies the ordering `<` consults.
+
+**The shape, and note that absence IS the decline** — no separate capability list to drift out of step (L11):
+
+```ts
+export interface AxisType {
+    name: string;
+    storage: "int" | "float" | "string" | "locstring" | null;
+
+    /* THE OPERATOR CONTRACT. Each is OPTIONAL, and an ABSENT method means the
+     * type DECLINES that operator — which the parser reports as a static error
+     * rather than falling through (§4.2b part 3). The contract is fixed here;
+     * only the bodies vary. */
+    equals?(value: unknown, operand: string): boolean;   // =        exactly this
+    compare?(value: unknown, operand: string): number;   // < > <= >= ..   a TOTAL order
+    contains?(value: unknown, operand: string): boolean; // bare     partial match
+    glob?(value: unknown, pattern: string): boolean;     // *        with a pattern
+    present?(value: unknown): boolean;                   // *        bare — has any value
+
+    /* presentation, not matching */
+    format(value: unknown): string;
+    ui: "text" | "number" | "range" | "picker" | "toggle" | "glyphs";
+    unit?: string;
+    step?: number;
+    sentinels?: Record<number, string>;
+    total?: boolean;                                     // §4.4 — no meaningful `*`
+}
+```
+
+**Reading the §4.2b matrix off this is mechanical**: `text` implements `equals`, `contains`, `glob`, `present` and
+omits `compare` — which is why `name:>m` is an error instead of a substring search for `>m`. `ordinal` is `enum` plus
+a `compare`. `flag` implements `present` alone.
+
+**⚠ THE ONE RULE THAT KEEPS IMPLEMENTATIONS FROM BECOMING OVERRIDES: `compare` must be a TOTAL ORDER** — transitive,
+antisymmetric, and consistent with `equals`. That is the contract a type promises when it implements it, and it is
+checkable. A `compare` that is not a real ordering is how `>` quietly starts meaning something else, which is the
+failure the user identified.
 
 #### ⭐ ONE AXIS, ONE VALUE — the rule that makes "one abstract meaning" true
 
