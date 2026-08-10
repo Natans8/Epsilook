@@ -1249,7 +1249,7 @@ which is the failure mode that makes people turn off "search as you type".
 | 3 | foreign axis in a scope | `model:{sound:fire}` | error: *a sound axis cannot read a model row* (§2.4.3d) |
 | 4 | ill-typed value | `scale:abc` | error: *scale takes a percentage* — never a zero result |
 | 5 | contradictory value | `name:=Fire*` | error: *exact and pattern cannot combine* (§4.2b) |
-| 6 | structural | `-model:{-fire}` no anchor; unbalanced on PASTE | error (§2.4.2, §4.9.5). ⚠ `{}` is NOT here — it is an identity (§2.4.3e) |
+| 6 | structural | unbalanced, or no positive anchor — **on PASTE only** | error (§4.9.5). ⚠ While typing or editing both are INCOMPLETE and silent (§4.9.4f); `{}` is never here — it is an identity (§2.4.3e) |
 
 **⭐ #1 IS THE IMPORTANT ONE AND IT IS DATA THAT DECIDES IT. 12,477 spell names contain a colon** — *Embody Hero:
 Illidan*, *Power Converters: Summon Electromental*. If an unknown prefix were an error, **pasting a spell name would
@@ -1462,6 +1462,90 @@ before they have chosen a value, which is exactly when they are most likely to l
 protects the incomplete-scope case** (`model:{fire`), which §4.9.1 already says must stay silent while typing: silent
 is worthless if navigating away throws it out.
 
+### 4.9.4f INTERMEDIARY STATES — ONE rule, and `{}` stops being a special case
+
+**The user, 2026-08-10: *"stuff like model:{} has place as an intermediary. Look for other cases where we need to
+account for intermediaries."*** Walking the whole keystroke journey of `model:{attach:chest fire}` catalogues them, and
+they collapse into a single rule.
+
+#### ⭐ THE RULE
+
+> **Every INCOMPLETE sub-expression evaluates as if absent. The live query is always the largest well-formed subset of
+> what has been typed.**
+
+That is one sentence covering every row below, and **`model:{}` is not an exception to it** — dropping an incomplete
+scope body leaves an empty conjunction, which is `true`, which is `model:*` (§2.4.3e). The identity falls out of the
+rule rather than being carved beside it.
+
+#### The catalogue
+
+| typed | state | live meaning |
+|---|---|---|
+| `mod` | free text | plain search for "mod" — already useful |
+| `model:` | **incomplete bind** | dropped → no constraint |
+| `model:{` → autocloses | `model:{}` | empty conjunction = true → **`model:*`**, "has any model" |
+| `model:{at` | content term | substring — "at" in the row's corpus. Meaningful while partial |
+| `model:{attach:` | **incomplete bind, nested** | dropped → body is empty → **`model:*`** again |
+| `model:{attach:c` | bind, partial value | substring — "attached somewhere containing c". Meaningful |
+| `scale:>` | **operator, no operand** | dropped |
+| `scale:10..` | **range, no upper bound** | dropped → falls back to `scale:10`? **NO** — see below |
+| `name:=` | **exact, no value** | dropped |
+| `name:"fire` | **unclosed phrase** | NOT incomplete — 1.0's rule stands: the phrase runs to end of input |
+| `model:fire \|` | **dangling OR** | dropped → `model:fire`. 1.0 already skips separator-only tokens |
+| `model:fire -` | **dangling negation** | dropped |
+| `model:{fire ` | trailing space | no-op |
+
+**⚠ THE ONE THAT NEEDED A DECISION RATHER THAN THE RULE: `scale:10..`** — dropping the incomplete range would silently
+demote it to `scale:10`, i.e. **exactly ten**, which is a different and plausible-looking answer. That is §9.1's
+pathology in miniature. So a half-written range **drops the whole bind** rather than degrading to its lower bound.
+*(The friendly alternative — reading `10..` as `10..*` — was rejected: it guesses, and the guess is invisible.)*
+
+#### Why dropping is safe here, when it would not be elsewhere
+
+Dropping WIDENS the result — `model:fire sound:` shows more than the user will end up with. That is correct for a live
+preview: they are watching it narrow as they type. **And the mitigation is the same one the error model uses (§4.9.3):
+the incomplete chip is VISIBLE**, dimmed and placeholdered (§4.9.4e), so the widening always has a thing on screen
+explaining it.
+
+**What makes all of this cheap is auto-closing (§4.9.4c)**: with `{`, `(` and `"` closing themselves, the unbalanced
+states barely occur while typing at all. They arrive mainly by PASTE and by deleting a closer — which is exactly where
+§4.9.5 says a repair is announced rather than assumed.
+
+#### AND WHILE EDITING — a hole in the middle, not a prefix (user, 2026-08-10)
+
+**Typing produces a PREFIX of a query; editing produces a HOLE inside a complete one.** The rule above still governs,
+but the failure mode differs and one case was misclassified because of it.
+
+| edit | state | live meaning |
+|---|---|---|
+| delete `}` from `model:{fire}` | unclosed scope | closes at the next clause boundary (§4.9.4b) |
+| delete `chest` from `model:{attach:chest}` | incomplete bind | dropped → body empty → **`model:*`** |
+| delete `fire ` from `model:{fire -missile}` | **no positive anchor** | ⚠ **INCOMPLETE, not an error** — see below |
+| delete `{` from `model:{fire missile}` | restructure | `model:fire` + free text `missile}` — **meaning changes** |
+| delete `model:` from `model:fire` | restructure | `fire` becomes plain search |
+| undo / redo | any prior state | may be intermediary; no special case |
+| drag a chip | none | order never matters (L8), so reordering cannot produce one |
+
+**⭐ THE MISCLASSIFICATION: `model:{-missile}` IS NOT AN ERROR WHILE EDITING.** §2.4.3(c) and the §4.9.2 taxonomy list
+the missing positive anchor as a static error. But apply §4.9.1's own test — *could appending fix it?* — and the answer
+is yes: type one term and it is valid. **So it is INCOMPLETE, and must stay silent**, exactly like an unclosed brace.
+It becomes an ERROR only on PASTE, where nothing more is coming. Same dual, same reason.
+
+That test is worth applying to every rule that says "static error": **if a suffix rescues it, it is incomplete.**
+
+**⚠ THE GENUINELY DANGEROUS EDIT is a delimiter deletion that re-parses the REST of the query.** Deleting `{` from
+`model:{fire missile}` silently moves `missile` from a same-row constraint to free text — a different question, no
+error, plausible results. That is §9.1's pathology arriving through an edit instead of a typo.
+
+**The mitigation is the chip rendering, and this is the strongest argument yet for it (§2.4.0):** the scope chip
+visibly splits into a chip plus loose text. **A structural change the TEXT hides is a structural change the CHIPS
+show** — which is why the bar rendering the parse is a requirement rather than a nicety.
+
+**And editing differs from typing in one more way worth stating:** while typing, dropping an incomplete piece widens a
+result the user is still narrowing, which they expect. **While editing, it widens a result that was already working**
+— 152 rows becoming 276,332 on one keystroke. Honest, but jarring; the incomplete chip on screen is the only thing
+that explains it, so it must be unmissable rather than merely present.
+
 ### 4.9.5 TWO ARRIVAL PATHS — typing and pasting are not the same problem
 
 **The user's correction, 2026-08-10: *"there are 2 scenarios, when the user types a query and when the user pastes a
@@ -1506,6 +1590,49 @@ reachable by a typed hyphen instead of stranding them — a fold applied to only
 
 **Falling through to TEXT is what makes pasting a spell name work**, and it is the same decision as §4.9.2 #1 — an
 unknown prefix is text, because 12,477 names contain a colon.
+
+#### (b2) WHAT WE CHANGE ABOUT A PASTED QUERY — the exhaustive list
+
+**Asked directly by the user, 2026-08-10. Three tiers, and the tier is not negotiable per case.**
+
+**⚠ FIRST: THE PASTE TARGET DECIDES THE TREATMENT.** Pasting into a chip's VALUE is not the same as pasting into the
+bar, and treating them alike would rewrite text the user meant literally.
+
+| target | treatment |
+|---|---|
+| **the bar** (empty, or at a clause gap) | full treatment — fold, detect shape, parse |
+| **inside a chip's value** | **fold typography ONLY.** No shape detection, no parsing — `.cast 12345` pasted into a value is the literal text `.cast 12345` |
+| **over a selection** | by the target the selection sits in, same two rules |
+
+##### Tier 1 — SILENT, because meaning cannot change
+
+| | |
+|---|---|
+| typographic folding | `" " – — − ：` NBSP → ASCII. Measured safe: 0 curly quotes, 0 NBSP, 3 em dashes in 276,332 names |
+| trim leading/trailing whitespace | |
+| newlines → spaces | a multi-line Discord paste is one query |
+| collapse whitespace runs | **outside phrases only** — inside `"…"` spaces are data (`"blood  pool"`) |
+
+##### Tier 2 — ANNOUNCED, because meaning changed
+
+| | |
+|---|---|
+| closing an unbalanced delimiter | at the next clause boundary (§4.9.4b), reported as a warning with the repaired query |
+| shape rewriting | `.cast 12345` → `id:12345`, a Wowhead URL → `id:133` (§4.9.5b) |
+| **1.0-syntax detection** | a phrase whose first word is a registered axis word — `model:"attach chest"` — almost certainly means the old grouping form. **Warn with the fix** `model:{attach:chest}`. This is the migration warning the independent review asked for, and it is structural, not spelling |
+
+##### Tier 3 — NEVER
+
+- **No spelling correction** (§4.9.4b, the user's call).
+- **No reordering** of clauses — pointless under L8 and not ours to do.
+- **No deduplicating** repeated clauses. Harmless, and it is their query.
+- **No case rewriting.** Matching folds case; the TEXT stays as pasted.
+- **No dropping of invalid clauses.** They become broken chips (§4.9.3) — a paste must never quietly shrink.
+- **No adding constraints**, ever. Not a scope, not a default column, not a version pin.
+
+**The governing line: a paste may be NORMALISED silently and REPAIRED loudly, but never REINTERPRETED.** Tier 2 exists
+only because refusing to repair would be worse — an unbalanced paste is unusable — and everything in it is announced
+with its result shown.
 
 #### (c) The rule that keeps paste honest: VISIBLE and REVERSIBLE
 
@@ -1661,8 +1788,10 @@ implication or ∀.
   log says — architecturally inverted, on every keystroke, with `-model:{-caster}` answerable by no index at all.
 - **✅ ADDRESSED 2026-08-10 in §4.9**: the error model, incremental/prefix parse, and unknown-prefix behaviour — the
   last being decided by data (12,477 spell names contain a colon, so an unknown prefix must be TEXT, not an error).
-- **✅ ALSO ADDRESSED (§4.9.5)**: curly quotes and typographic substitution from a paste — folded on BOTH sides like
-  case, and measured safe (0 curly quotes in spell names, 3 em dashes).
+- **✅ ALSO ADDRESSED (§4.9.5)**: curly quotes and typographic substitution — folded on BOTH sides like case, measured
+  safe. Plus the exhaustive paste-transformation list (§4.9.5 b2) and **the 1.0-syntax migration warning the review
+  asked for**: a phrase opening with a registered axis word is almost certainly the old quote-grouping form, and it is
+  detectable structurally rather than by guessing.
 - **✅ AND (§4.9.4b)**: severities, per-diagnostic fixes, and error recovery — including the complexity budget, which
   turns out to be one of only two things that can legitimately refuse a whole query, neither of them syntax.
 - **⛔ STILL MISSING**: case sensitivity stated explicitly, full Unicode normalisation (NFC/NFD, accented locale
