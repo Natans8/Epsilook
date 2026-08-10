@@ -346,60 +346,40 @@ already decides the leaf, and a kind just lays them out. The bar renders `missil
 instead of a row of loose chips, and the help documents a missile in one place. PHASE 6 work — the syntax is what makes
 it possible.
 
-#### ONE BARE TOKEN AFTER A KIND — the DEFAULT PROPERTY (user, 2026-08-10)
+#### ONE BARE TOKEN AFTER A KIND — it searches ALL the properties (user, 2026-08-10)
 
-***"If we input just one token that is not curly brackets after an object type, it should have a defined behaviour."***
-It does, and the useful reading is already what the app does today: **`model:fire` matches the FILE**, so
-`missile:fire` should keep meaning that.
+***"If we input just one token that is not curly brackets after an object type, it should have a defined behaviour"*** —
+then, correcting a far more elaborate answer: ***"I meant more like search across multiple properties, like a scope has
+search across multiple axes."***
 
-> **A bare token is resolved against the kind's properties by VOCABULARY MEMBERSHIP, falling back to a declared
-> default.**
+> **`kind:value` matches if ANY of the kind's properties matches. It is the union over them.**
 
-**⚠ A SINGLE DEFAULT IS NOT ENOUGH, and the user's follow-up is why: *"okay but `missile:chest` also has a meaning,
-no?"*** It does — `chest` is an attachment point, not a filename — so a rule that sent every bare token to `file`
-would answer the wrong question for every closed-vocabulary value.
+That is the same thing a bare term already does one level up — inside `model:{…}` a bare word is tested against the
+row's content — so it is one rule applied consistently, not a new mechanism.
 
-**THE RESOLUTION ORDER, and it is deterministic rather than a guess:**
+| written              | means                                                                        |
+|----------------------|------------------------------------------------------------------------------|
+| `missile:chest`      | any property matches "chest" → in practice `from` or `to`                    |
+| `missile:fire`       | any property matches "fire" → in practice the file                           |
+| `missile:parabola`   | any property matches → in practice `motion`                                  |
+| `missile:{from:chest}` | **the precise form** — that property and no other                          |
+| `missile:*`          | has any missile (existence, §3.3)                                            |
+| `missile:`           | **incomplete** — dropped while typing (§4.9.8)                               |
 
-1. **Closed vocabularies first** — `enum`, `ordinal`, `bitmask`, `id`. These accept only their own members, so
-   `chest` matches an attachment point and `parabola` matches a motion.
-2. **Several properties of the SAME type both accept it → the UNION over them.** `missile:chest` binds `from` **and**
-   `to`, because both are attachment points — which is precisely what `attach:chest` has always meant.
-3. **Open types last** — `path` and `text` accept anything, so they can only ever be the fallback. That is the
-   `default` declaration, and it is what makes `missile:fire` the file.
-4. **Nothing accepts it and no open-type property exists → static error** naming the properties the kind does have.
+**⛔ AN EARLIER DRAFT BUILT A VOCABULARY-DISPATCH LADDER FOR THIS** — closed vocabularies first, open types last, a
+declared `default` for the fallback, numbers excluded. **All of it is deleted.** It was machinery invented to avoid an
+ambiguity that does not need avoiding, and it would have made one token's meaning depend on which vocabularies happened
+to contain it — hidden state, which is L12 (3).
 
-**⛔ NUMBERS NEVER DISPATCH BY SHAPE — L9 stands.** `missile:50` does not go hunting for a numeric property that might
-take a 50; it goes to the default or errors. **A word may reveal its property by being in a vocabulary; a number may
-not, because every numeric property would accept it.**
+**⚠ AND THIS IS NOT CORPUS BLEED (§8.1), THOUGH IT LOOKS LIKE IT.** The 1.0 defect is that `fx:glow` matches a category
+AND a file path **with no way to ask for one**. Here the precise form always exists — `missile:{from:chest}` — so the
+union is a convenience with an escape, not a trap.
 
-**⭐ AND THE RESOLUTION IS SHOWN, NEVER HIDDEN.** `missile:chest` commits as a chip reading `missile · from|to: chest`,
-so the user sees which property answered. That is L12 satisfied by rendering, exactly as the two-scope distinction is —
-**a resolution the user cannot see would be the hidden-state failure this whole document bans.**
+**⭐ THE GENERAL RULE WORTH CARRYING: a broad default is safe when a precise form exists, and a defect when it is the
+only form.** That is the whole difference between this and the thing §8.1 deletes.
 
-| written                | means                                                                                     |
-|------------------------|-------------------------------------------------------------------------------------------|
-| `missile:fire`         | `missile:{file:fire}` — no vocabulary claims it, so the default answers                   |
-| `missile:chest`        | `missile:{from:chest\|to:chest}` — an attachment point, so BOTH role properties claim it |
-| `missile:parabola`     | `missile:{motion:parabola}` — a motion vocabulary member                                  |
-| `missile:50`           | the default — **numbers never dispatch by shape** (L9)                                    |
-| `missile:{from:chest}` | the full object form                                                                      |
-| `missile:*`            | has any missile (existence, §3.3)                                                         |
-| `missile:`             | **incomplete** — dropped while typing, no constraint (§4.9.8)                             |
-| `missile:>4`           | ⛔ **error** — `file` is a `path`, which declines ordering. The operator contract decides |
-
-```text
-defineKind({ id: "model.missile", word: "missile", default: "file", props: {...} });
-// `default` is the OPEN-TYPE fallback only. Vocabulary members resolve themselves.
-```
-
-**⛔ A KIND WITH NO DECLARED DEFAULT MAKES `kind:value` A STATIC ERROR** that names the properties it does have —
-*"a JUMP_DEST takes target, radius or amplitude"*. **It must not fall back to searching every property at once**: that
-is corpus bleed (§8.1), the one-word-two-mechanisms defect L4 exists to ban, and exactly how `mech:target` came to
-match printed enum names.
-
-**The default is a DECLARATION, so autocomplete can teach it** — offering `missile:` shows the default inline, and
-opening `missile:{` switches the suggestions to the full property list.
+**What the UI owes it (L12): show what matched.** A committed `missile:chest` should render the property that answered,
+so the union never hides which one it was.
 
 ### THE WORKED EXAMPLE — the missile, the user's own (2026-08-10)
 
