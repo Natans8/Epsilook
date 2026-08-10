@@ -1280,6 +1280,70 @@ silently ignores what it does not understand (the failure §9.1 condemns); Lucen
 narrowing direction, but it hides the mistake behind a plausible zero — the same pathology as §9.1. A broken chip on
 screen cannot be missed; an empty result set can be mistaken for a real answer.
 
+### 4.9.4b SEVERITIES, FIXES, AND WHETHER A QUERY CAN FAIL WHOLE
+
+**Both asked by the user, 2026-08-10.**
+
+#### Three severities, because "legal but probably wrong" is a real category here
+
+| severity | means | examples |
+|---|---|---|
+| **ERROR** | cannot run; the clause is excluded and drawn broken | `name:>m` (declined operator) · `model:{sound:fire}` (foreign axis) · `scale:abc` (ill-typed) · `name:=Fire*` |
+| **WARNING** | runs, and is probably not what was meant | `modle:fire` → unknown prefix running as TEXT · `model:bee*` → a glob on a path is a **no-op** (§3.2) · `model:{arcane -fire}` → row negation whose terms almost never co-occur (§8.9.3) · a clause that alone reduces the result to 0 |
+| **NOTE** | correct, and worth saying | `model:{}` ≡ `model:*` "has any model" (§2.4.3e) · `count:>4` is the wide union (L5) |
+
+**The WARNING tier exists because this design keeps producing forms that are legal, evaluable and misleading** — and
+§9.1's whole thesis is that a plausible wrong answer beats no answer only in appearance. An error tier alone would have
+to either reject those (wrong: they are valid) or stay silent (wrong: they mislead).
+
+#### Every diagnostic carries a FIX, and the fix is a query rewrite
+
+```ts
+interface Diagnostic {
+    severity: "error" | "warning" | "note";
+    clause: number;                 // which chip — diagnostics are clause-local
+    message: string;                // the user's words: "the name axis has no ordering"
+    fix?: { label: string; query: string };   // one click, applied to the whole query
+}
+```
+
+    modle:fire            fix: "did you mean model:?"        -> model:fire
+    name:>m               fix: "search names containing m"   -> name:m
+    model:{sound:fire}    fix: "make it its own clause"      -> model:* sound:fire
+    name:=Fire*           fix: "drop the exact match"        -> name:Fire*
+
+**This is the IDE quick-fix pattern and it is the convention (L0).** The registry already knows every axis, every
+type's operator contract (§4.2b) and every axis's domain (§4.5), so **the fix is derivable rather than hand-written per
+message** — which is L11: registering an axis must not require adding error strings anywhere.
+
+#### Can a query fail WHOLE? Essentially no — and the recovery rule is what makes that true
+
+**Only one shape resists clause-local recovery: an unbalanced scope brace**, because it swallows everything after it.
+An unclosed quote has the same shape and 1.0 already answers it — the phrase runs to end of input.
+
+**⚠ BUT CLOSING AT END-OF-INPUT IS A TRAP:**
+
+    model:{fire sound:ice     ->   model:{fire sound:ice}
+                                          ^^^^^^^^^ a clause the user wrote CORRECTLY,
+                                          absorbed into the scope, now a foreign-axis error
+
+The repair destroys good input — §9.1's pathology caused by the recovery rather than the typo.
+
+**THE RULE: close an unclosed scope at the next CLAUSE BOUNDARY, not at end of input.**
+
+    model:{fire sound:ice     ->   model:{fire} sound:ice      both clauses valid
+
+This is panic-mode recovery to a synchronisation token, which is the standard parser answer; here the sync token is the
+start of a top-level clause (`axis:` at depth zero). **Choose the recovery that maximises well-formed clauses**, and
+report the inserted brace as a WARNING with the repaired query as its fix.
+
+**So there is no syntax that fails the whole query.** The two things that legitimately refuse everything are not syntax
+at all:
+
+1. **Resource limits** — a query past a declared length or nesting depth is refused as a whole, because evaluating it
+   is the risk. That is the complexity budget the independent review asked for, and it belongs with the kernel.
+2. **No pack loaded** — nothing can be answered, which is a state rather than an error.
+
 ### 4.9.5 TWO ARRIVAL PATHS — typing and pasting are not the same problem
 
 **The user's correction, 2026-08-10: *"there are 2 scenarios, when the user types a query and when the user pastes a
@@ -1481,8 +1545,10 @@ implication or ∀.
   last being decided by data (12,477 spell names contain a colon, so an unknown prefix must be TEXT, not an error).
 - **✅ ALSO ADDRESSED (§4.9.5)**: curly quotes and typographic substitution from a paste — folded on BOTH sides like
   case, and measured safe (0 curly quotes in spell names, 3 em dashes).
+- **✅ AND (§4.9.4b)**: severities, per-diagnostic fixes, and error recovery — including the complexity budget, which
+  turns out to be one of only two things that can legitimately refuse a whole query, neither of them syntax.
 - **⛔ STILL MISSING**: case sensitivity stated explicitly, full Unicode normalisation (NFC/NFD, accented locale
-  names), escaping beyond `\"`, and a complexity budget. None is architectural.
+  names), and escaping beyond `\"`. None is architectural.
 
 **What survives untouched:** L1, L2, L4, L5, L7, L9, L11, the `Axis`/`Column` collapse, §4.1's storage measurement,
 §4.5's cardinality-decides-affordance finding, and the row model's closure of filtered `count`.
