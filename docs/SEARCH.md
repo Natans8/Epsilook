@@ -1013,6 +1013,43 @@ different rows — is gone.
 FACTORS. `(fire ∧ arcane) ∨ (frost ∧ arcane)` is `arcane ∧ (fire ∨ frost)`, and every DNF whose disjuncts share a term
 factors the same way. #13 is the residue — disjuncts sharing nothing — and nobody has asked for one.
 
+#### 8.9.3 ⚠ WHEN ROW-LEVEL NEGATION HELPS, AND WHEN IT IS A TRAP
+
+**Asked by the user, 2026-08-10: would the implication be `model:arcane -model:(arcane -fire)`? It parses, and it
+returns almost nothing.** Measured over every `.m2` in the listfile:
+
+    paths containing "arcane"              317
+      ...that also contain "fire"            1
+      ...that do not                       316
+
+At ROW level `arcane -fire` means ONE FILE PATH holding "arcane" and not "fire" — true of 316 of 317. So
+`-model:(arcane -fire)` excludes essentially every arcane spell, and the compound lands on the lone file that says
+both. Valid, useless.
+
+**Three questions were hiding in one sentence, and only the middle one is actually lost:**
+
+| reading | query | |
+|---|---|---|
+| **A** arcane spells that ALSO have fire | `model:arcane model:fire` | ✅ **152** — trivial, no negation |
+| **B** everything EXCEPT arcane-without-fire | — | ⛔ lost with spell grouping |
+| **C** no arcane FILE lacking fire | `-model:(arcane -fire)` | ✅ legal, ≈ `-model:arcane` here |
+
+Note **B does not require arcane at all** — it filters everything — which is why it is a different shape from what the
+question wrote, and why losing it costs less than it first appears.
+
+**⭐ THE GENERAL RULE, and it is the most practically useful thing in this document:**
+
+> **Row-level negation helps when one term is a PROPERTY of the row and the other is its CONTENT. It is a trap when
+> both are content words that rarely co-occur in one row.**
+
+`model:(fire -missile)` works — the 33% correction of §2.4.2 — because `missile` is a CATEGORY carried by every model
+row, so every row can be tested against it. `model:(arcane -fire)` fails because both are path substrings and a path
+almost never carries both.
+
+**So the autocomplete and the help must steer the negated term toward category words, target words and attachment
+points — the row's properties — and away from a second content word.** That is a UI obligation created by a grammar
+rule, and it is exactly the kind of thing L12 exists to catch before it ships.
+
 **Register #5 (implication) is therefore DOWNGRADED, not reopened**: the row reading ships, the spell reading is
 recorded as lost. If it is ever wanted it returns as a NAMED form that reads, per L12 — never as nested parens.
 
