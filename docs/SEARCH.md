@@ -10,7 +10,7 @@ next axis is a declaration rather than an invention.
 
 ---
 
-## L0 — FOLLOW CONVENTION. This law governs the other eleven
+## L0 — FOLLOW CONVENTION. This law governs the other twelve
 
 **User's standing rule, 2026-08-10: *"follow convention and design patterns wherever possible."*** Before inventing a
 syntax, a semantic or a UI affordance, find out what the established systems do and adopt it. A user arriving at
@@ -37,7 +37,7 @@ in a search query is.
 
 ## 1. The laws
 
-Eleven, under L0. Each names the defect it prevents, and every one of those defects is real and measured on 9.2.7 — see
+Twelve, under L0. Each names the defect it prevents, and every one of those defects is real and measured on 9.2.7 — see
 §7.
 
 ### L1 — One grammar, above all columns
@@ -174,6 +174,44 @@ design is wrong.**
 
 > Broke as: `desc` shipped fully searchable and absent from the help, the suggestions and the capsules, because
 > `fieldCategories` gated them behind a literal field allowlist — with a second copy of that literal in `help.ts`.
+
+### L12 — A QUERY READS AS ITS OWN EXPLANATION
+
+**The user's rule, 2026-08-10: *"when a user reads the search bar, the logic should become immediately obvious. Seeing
+a bar should birth assumption about what it does."* And, when I first read it too narrowly: *"I'm not just talking
+about naming keywords. I'm exposing a larger issue: query readability."***
+
+**The test, and it applies to the WHOLE query, not to its vocabulary:** a reader who has never seen a form should
+still guess right about what it does. Concretely, four failures — any one of them is disqualifying:
+
+1. **A token whose ROLE is invisible.** You cannot tell field from value from operator without knowing the registry.
+2. **A scope you cannot see.** You cannot tell what binds to what.
+3. **A form that means two things depending on hidden state.**
+4. **A form that READS correctly and BEHAVES otherwise.** The worst kind, because nothing prompts you to check.
+
+**⚠ APPLYING IT INDICTS THIS DOCUMENT, WHICH IS THE POINT — a law that condemns nothing is decoration.**
+
+| form | verdict |
+|---|---|
+| `desc:kneel`, `attach:chest`, `scale:50` | ✅ reads as it means |
+| `model:(fire -missile)` | ✅ "a fire model that isn't a missile" |
+| **`(model:fire model:arcane)` vs `model:(fire arcane)`** | ⛔ **FAILS (2).** One paren's POSITION changes the meaning and both read identically aloud |
+| `model:attach` (16) vs `model:(attach chest)` (51,581) | ⛔ **FAILS (3).** `attach` is a category word AND the keyword, in one column |
+| `anim:kit` (31,291) vs `sound:kit` (2,516) | ⛔ **FAILS (3)** globally — so `kit:` gets no global door |
+| `replace:`, `loose:` | ⛔ **FAILS (1).** Replace *what*? Meaningless outside their column |
+| `model:fire -model:missile` | ⛔ **FAILS (4).** Reads "fire but not missile"; over-excludes 33% (§2.4.2) |
+| `-model:(-caster)` | ⛔ **FAILS (4).** Already deleted for being measured wrong |
+
+**Retroactively, this law is why three earlier decisions were right** — each was taken for a narrower reason and L12 is
+the general case: banning bare scope negation, deleting the ∀ double negative, and dropping `model:(attach -chest)`.
+
+**And it amends L5: a global prefix is EARNED, not automatic.** `prefix?` is optional in the `Axis` interface and the
+old L5 wording ("always both") contradicted it. The test is now stated: **an axis earns a global door when its word
+names its subject WITHOUT its column, and collides with no other axis's word.** `desc`, `attach`, `scale`, `icon`,
+`xpac` pass. `replace`, `loose`, `kit`, `attached` fail, and are reached only through their column — which is correct,
+because for those the column IS the meaning.
+
+**⛔ THE UNRESOLVED ONE IS THE TWO-SCOPE DISTINCTION**, and it is the core of §2.4. See §8.9.1.
 
 ---
 
@@ -864,6 +902,38 @@ implication or ∀.
 
 **The pending call is in `docs/PROCESS-LOG-search2.md` §4.0** — it is a scope decision for the user, not a
 documentation fix.
+
+---
+
+### 8.9.1 ⛔ L12 vs the two scopes — the open question this design now turns on
+
+**L12 says a query must read as its own explanation. The two-scope distinction fails it, and that distinction is the
+core of §2.4.**
+
+    (model:fire model:arcane)   two rows, either may satisfy either term
+    model:(fire arcane)         ONE row that is both
+
+**They read identically aloud.** The only difference is whether the field prefix sits inside or outside the paren, and
+a reader who does not already know the rule cannot recover it. The independent review (§8.9) ranked this its #1
+learnability finding *before* L12 existed; the user's principle condemns it independently. Two paths, same verdict.
+
+**Worse, it is not stable under the UI we planned.** §6 proposes auto-closing parens — so whether you get a spell
+group or a row scope depends on whether you typed `(` before or after `model:`. A meaning that depends on typing
+ORDER fails L12 (2) and (3) at once.
+
+**THE OPTIONS, honestly costed:**
+
+| | what | cost |
+|---|---|---|
+| **A. Drop spell-level grouping** *(recommended)* | `(...)` appears ONLY after a field prefix, so parens have exactly ONE meaning — row scope | loses group negation, so the implication case (`-(model:arcane -model:fire)`) goes; **register #5 reverts to OPEN** |
+| **B. Different brackets** | `model:(row scope)` vs `[spell group]` | invents bracket semantics no established system uses — an L0 violation |
+| **C. Keep both, mitigate with highlighting** | as designed today | the review judged highlighting insufficient, and L12 (2) is about the TEXT, not the rendering |
+
+**Recommendation: A.** It is the same cut the bounded-scope proposal already makes for independent reasons (process log
+§4.0), it makes `(` mean one thing, and the capability it loses is one exotic query shape raised as a hypothetical. If
+implication is ever genuinely wanted, it returns as a NAMED form that reads — not as nested parentheses.
+
+**Do not build §2.4's spell-level group until this is settled.**
 
 ---
 
