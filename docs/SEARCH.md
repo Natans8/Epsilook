@@ -861,6 +861,33 @@ than by four separate features.
 model. That is the test a proposed feature should face first — *is this a missing capability, or a missing
 generalisation?*
 
+### 9.0 `attach` UNDER-COVERS — the keyword reaches 2 columns, the DATA is in 4 (user, 2026-08-10)
+
+**The user: *"attach lives also in sound and some effects."* Checked against `ref.column_info` on 9.2.7 — right about
+effects, and the gap is wider than the keyword admits.**
+
+| table | column | feeds | `attach:` reaches it? |
+|---|---|---|---|
+| `SpellVisualKitModelAttach` | `AttachmentID` | model | ✅ |
+| `SpellVisual` / `SpellVisualMissile` | `MissileAttachment`, `DestinationAttachment` | model | ✅ |
+| `BeamEffect` | `SourceAttachID`, `DestAttachID` | fx — chain | ✅ |
+| **`DissolveEffect`** | `AttachID` | fx — dissolve | ❌ **ships in the pack, unsearchable** |
+| **`ShadowyEffect`** | `AttachPos` | fx — ghost | ❌ **ships in the pack, unsearchable** |
+| **`BarrageEffect`** | `AttachmentPoint` | model — barrage | ❌ |
+| **`VehicleSeat`** | `AttachmentID`, `PassengerAttachmentID` | **mech** — seat | ❌ (names ship as `vehicleSeats.attachments`) |
+
+`META_KEYWORDS.attach` declares `fields: ["model", "fx"]`, and inside `fx` the matcher walks `spellChainRows` ONLY. So
+dissolve and ghost carry their attach point in `data.ts` today (`attaches`, -1 = full body) with no way to ask about it.
+
+**⛔ SOUND IS THE EXCEPTION AND THE CLAIM DOES NOT HOLD THERE.** No sound table on 9.2.7 has an attachment column;
+`SpellVisualKitEffect.Effect = 5` is a `SoundKitID`, so a sound hangs off the visual KIT, not off a bone. Do not add a
+sound attach axis without new evidence.
+
+**This is the argument for the row model in one example.** The gap exists because `attach` is a hand-declared keyword
+with a hand-written field list and two hand-written walks. As a **universal row axis over `Row.src`/`Row.dst`** it
+reaches every column whose rows carry an attachment point automatically, and covering dissolve becomes filling in a
+field rather than editing a keyword. L1 and L11, doing the job they were written for.
+
 ### 9.1 Cross-field OR was a SILENT failure, not a missing feature
 
 ```
