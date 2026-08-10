@@ -160,17 +160,105 @@ kernel.ts    →  the evaluator — knows GRAMMAR and AXES, and no field name an
 
 ```ts
 export const GRAMMAR = {
-    fieldSep: ":",                       // model:fire          GitHub/Gmail convention
-    negate: "-",                       // -model:beer         universal convention
-    alternate: ["|", ","],                // fire|frost   133,134
+    fieldSep: ":",                     // model:fire        GitHub/Gmail convention
+    negate: "-",                       // -model:beer       universal convention
+    or: "|",                           // a|b               OR at EVERY level (§2.4)
+    numListSep: ",",                   // id:133,134        numbers only — see altsOf
     compare: ["<=", ">=", "<", ">", "="],
-    range: "..",                     // scale:10..50        GitHub convention (§4.6)
-    phrase: '"',                       // one token, spaces kept (L6)
-    group: ["(", ")"],                // a value containing phrase quotes
-    wildcard: "*",                       // §3
-    countWord: "count",                   // the universal cardinality axis (L1)
+    range: "..",                       // scale:10..50      GitHub convention (§4.5)
+    phrase: '"',                       // "a b"  — ALWAYS a phrase, never grouping
+    escape: "\\",                      // \" inside a phrase (§2.4.3)
+    group: ["(", ")"],                 // grouping at EVERY level (§2.4)
+    wildcard: "*",                     // §3.3
+    countWord: "count",                // the universal cardinality axis (L1)
 } as const;
 ```
+
+### 2.4 NESTING — one recursive grammar, two scopes
+
+**The user's instruction, 2026-08-10: *"I told you to reinvent the syntax, don't feel constrained… think a lot about
+nesting and where it sits in our syntax."*** This section is the answer, and it is the single highest-leverage part of
+the design: **one recursive grammar closes FIVE separate expressibility problems** (§9) that were each about to get
+their own feature.
+
+#### 2.4.1 The grammar
+
+Lucene's own BNF is the convention and it already says this — a clause is optionally field-prefixed and may itself be a
+parenthesised sub-query:
+
+    Clause ::= ["+","-"] [<TERM> ":"] ( <TERM> | "(" Query ")" )
+
+So:
+
+```
+query    := clause ( clause | "|" clause )*        juxtaposition = AND, "|" = OR
+clause   := "-"? ( group | scoped | term )
+group    := "(" query ")"                          BOOLEAN group  — combines SPELLS
+scoped   := axis ":" "(" query ")"                 AXIS group     — combines within ONE ROW (L3)
+term     := axis ":" value | value
+value    := phrase | word | wildcard | comparison | range
+phrase   := '"' ( char | "\\" char )* '"'          always a phrase; never grouping
+```
+
+**Precedence is the standard one: `-` > AND > `|`.** No invented precedence, no special cases.
+
+#### 2.4.2 Where nesting SITS — the two scopes, and why they differ
+
+This is the part that matters, and it falls straight out of L3:
+
+| written                     | scope       | means                                                              |
+|-----------------------------|-------------|--------------------------------------------------------------------|
+| `(model:fire model:arcane)` | **spells**  | a fire model row AND an arcane model row — possibly different rows |
+| `model:(fire arcane)`       | **one row** | a single model row matching both                                   |
+
+**The same operators, at two scopes.** Learn the algebra once; the field prefix says which scope you are in. And because
+negation now nests, the quantifier distinction becomes sayable for the first time:
+
+    -model:fire        ¬∃row: fire        "has no fire model"
+    model:(-fire)       ∃row: ¬fire       "has a model that isn't fire"
+    -model:(-caster)   ¬∃row: ¬caster     "ALL model rows are caster"   ← full ∀, free
+
+**That last line closes expressibility register #4** — universal quantification, which had no conventional spelling and
+was going to need an invented word (`only`, `all:`). It needs neither: De Morgan and nesting already say it.
+
+#### 2.4.3 QUOTES MEAN ONE THING NOW, and that is a deletion
+
+**1.0 has two kinds of quote and it is a documented trap.** Inside a value they are phrase quotes; *around* a value they
+are grouping and get stripped. The app's own docs got it wrong once — `name:(fire "icon frost")` silently degrades,
+because the inner quotes make `icon frost` a phrase, `splitKeyword` never sees the keyword, and the query returns 0 with
+no complaint.
+
+**2.0: `"` is ALWAYS a phrase. `()` is ALWAYS a group. `\"` is a literal quote inside a phrase.** One meaning per
+delimiter, which is the whole of L1 applied to punctuation.
+
+The consequence is a real and deliberate syntax change — grouping that used to be written with quotes is now written
+with parens:
+
+    1.0:  model:"attach chest"          2.0:  model:(attach chest)   or   attach:chest
+    1.0:  name:"desc kneel"             2.0:  name:(desc kneel)      or   desc:kneel
+    1.0:  model:"fire missile"          2.0:  model:(fire missile)
+
+and a phrase with a quote in it is now expressible at all: `name:"the \"real\" one"`.
+
+Note the global door (L5) is the SHORTEST form for the common case, so most of these get shorter, not longer.
+
+#### 2.4.4 What one recursive grammar closes
+
+| problem                               | was                                                          | now                                                       |
+|---------------------------------------|--------------------------------------------------------------|-----------------------------------------------------------|
+| cross-field OR (§9 #1)                | **silently wrong** — `model:fire\|sound:fire` = `model:fire` | `model:fire \| sound:fire`                                |
+| row-level negation (§9 #2)            | `model:"fire -missile"` = 0, `-` a literal                   | `model:(fire -missile)`                                   |
+| ∀ quantification (§9 #4)              | unexpressible; needed an invented word                       | `-model:(-caster)`                                        |
+| arbitrary DNF                         | had to be hand-converted to CNF                              | `(model:fire model:arcane) \| (model:frost model:shadow)` |
+| implication — "arcane only with fire" | unexpressible                                                | `-(model:arcane -model:fire)`                             |
+
+**Five problems, one grammar, no new vocabulary.** That is the argument for nesting: it is not five features, it is the
+absence of an arbitrary restriction.
+
+⚠ **The costs, stated rather than discovered later.** The chip bar is a flat sequence today and must learn to render
+NESTED groups — that is the real work, and it is a UI problem, not an engine one. The highlighter must show the parse,
+because a mis-parenthesised query is the one failure mode this grammar adds. And `|` no longer has a bare shorthand:
+`model:fire|frost` now parses as `model:fire OR frost`, so value alternation is written `model:(fire|frost)`.
 
 ### 2.2 `Axis` — the single structure
 
@@ -604,3 +692,64 @@ app is too young to worry about old links"*), and the app's standing norm on ren
 ### 8.7 The examples panel
 
 Replaced by §5's vocabulary strip, which is generated and therefore cannot rot.
+
+### 8.8 Quotes as a grouping device
+
+`model:"attach chest"` used quotes to group a keyword with its value; `"` now always means a phrase (§2.4.3). Grouping
+is `model:(attach chest)`, or the global door `attach:chest`.
+
+---
+
+## 9. The expressibility register — KEEP HUNTING
+
+**Standing instruction from the user, 2026-08-10: *"I want to be on constant lookout for similar scenarios that cannot
+be satisfied by our current system."*** This section is where the real gaps are recorded, so the lookout produces a
+list instead of a feeling.
+
+**The discipline: when a query cannot be written, add a row here with a MEASUREMENT before deciding whether to build
+anything.** It has already paid three ways — one entry turned out to be a silent BUG rather than a missing feature, one
+turned out to be a free consequence of the row model, and four were closed at a stroke by the recursive grammar rather
+than by four separate features.
+
+| # | the query you could not write | 1.0 | 2.0 |
+|---|---|---|---|
+| 1 | **cross-field OR** — "a fire model OR a fire sound" | **silently wrong** (§9.1) | ✅ `model:fire \| sound:fire` — §2.4 |
+| 2 | **row-level negation** — "a fire model that is not a missile" | `model:"fire -missile"` = 0, `-` a literal | ✅ `model:(fire -missile)` — §2.4 |
+| 3 | **filtered count** — "more than 4 CASTER models" | `model:"caster count >4"` = 15,905 = has-a-caster-row ∧ >4 models *in all* | ✅ free from the row model (§9.2) |
+| 4 | **∀ quantification** — "models that ALL play on the caster" | unexpressible; was going to need an invented word | ✅ `-model:(-caster)` — §2.4.2 |
+| 5 | **implication** — "arcane only if accompanied by fire" | unexpressible | ✅ `-(model:arcane -model:fire)` |
+| 6 | **arbitrary DNF** — "(fire ∧ arcane) ∨ (frost ∧ shadow)" | hand-convert to CNF; grows exponentially | ✅ written directly — §2.4 |
+| 7 | **cross-column row correlation** — "a model and a sound on the SAME target" | unexpressible | ⛔ still open — §9.3 |
+
+**Note what 1–6 have in common: none needed a new word.** Five fell out of one recursive grammar and one out of the row
+model. That is the test a proposed feature should face first — *is this a missing capability, or a missing
+generalisation?*
+
+### 9.1 Cross-field OR was a SILENT failure, not a missing feature
+
+```
+model:fire              14,198
+sound:fire              13,578
+model:fire|sound:fire   14,198     <- exactly model:fire
+```
+
+`parseQueryParts` leaves the pipe alone when a real field tag follows it, but the chip regex then swallows the lot:
+field `model`, text `fire|sound:fire`. The tokenizer splits that into alternatives `fire` and `sound:fire`, the second
+of which matches no file name — **so half the query is discarded with no error and no visual cue.** Worse than
+unexpressible, because the result looks plausible.
+
+### 9.2 The row model closes #3 for free — which is the argument for it
+
+CLAUDE.md's open items say filtered `count` needs "the four column matchers restructured into per-spell ENTRY
+ITERATORS". **`Column.rows()` IS that restructuring**, so it arrives as a side effect rather than its own pass: the
+kernel evaluates the chip's row predicate first and counts what survives, so `model:"caster count >4"` becomes "more
+than four caster models" — the meaning the docs always claimed.
+
+⚠ **Measure it on landing**: it moves `model:"caster count >4"` off 15,905.
+
+### 9.3 Still open, and honestly costed
+
+**#7, cross-column row correlation.** "A model and a sound that play on the same target" needs rows from two different
+columns joined on a shared attribute — the one thing the row model does NOT give, because `Column.rows()` is
+per-column by construction. It would need a correlation key in `Row` and a join in the kernel. **Speculative: nobody
+has asked for it.** Park unless someone does.
