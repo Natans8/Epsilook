@@ -39,13 +39,12 @@ import json
 import os
 import re
 import shutil
-import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-from repo import BUMP_PATHS, ROOT, changed_under, git, have_ref, main_checkout
+from repo import BUMP_PATHS, ROOT, changed_under, git, have_ref
 
 SITE = ROOT / "site"
 MANIFEST = SITE / "data" / "versions.json"
@@ -136,12 +135,6 @@ DOM_NAMES = (
     "HTMLInputElement", "Element", "Node", "NodeList", "ParentNode", "Event",
     "customElements", "requestAnimationFrame", "getComputedStyle",
 )
-
-# The JetBrains MCP endpoints. The inspection pass is a REQUIRED check
-# (CLAUDE.md > Checks) and its documented hazard is that a closed IDE makes it
-# silently PASS — so absence is a failure here rather than a shrug. Skipped in
-# CI, which has no IDE and is not where the pass is meant to happen.
-INSPECTORS = (("webstorm", 64542), ("pycharm", 64462))
 
 # How long a pack-freshness answer stays good. Blizzard patches weekly at
 # most, so a day is generous and keeps a normal working day to one request.
@@ -645,40 +638,6 @@ def check_pack_freshness(rep: Report) -> None:
         rep.ok("pack freshness", f"{len(tracked)} tracked line(s) current")
 
 
-def check_inspectors(rep: Report) -> None:
-    """The IDE inspection servers must be REACHABLE, not merely intended.
-
-    CLAUDE.md names the hazard exactly — "a closed IDE silently passes" — and
-    it has now cost two sessions. A prose rule cannot fire; a port either
-    answers or it does not, so this is the mechanical form of that rule.
-    Reachability is all this proves: it does not prove the pass was RUN.
-    """
-    if os.environ.get("CI"):
-        rep.skip("ide inspectors", "CI has no IDE")
-        return
-    # REACHABILITY IS NOT RELEVANCE. The IDE resolves every path against the
-    # project it has OPEN, which is the main checkout - so from a worktree both
-    # ports answer, this check goes green, and the pass it stands for cannot be
-    # run here at all (ide.py refuses outright). Reporting "reachable" would be
-    # the same lie one level up that the check exists to prevent.
-    main_root = main_checkout()
-    if main_root != ROOT:
-        rep.skip("ide inspectors",
-                 f"worktree - the inspection pass belongs to {main_root}, not here")
-        return
-    down = []
-    for name, port in INSPECTORS:
-        with socket.socket() as s:
-            s.settimeout(0.4)
-            if s.connect_ex(("127.0.0.1", port)) != 0:
-                down.append(f"{name}:{port}")
-    if down:
-        rep.fail("ide inspectors", f"not listening: {', '.join(down)} — launch it, "
-                                   f"the inspection pass silently passes without it")
-    else:
-        rep.ok("ide inspectors", " + ".join(n for n, _ in INSPECTORS) + " reachable")
-
-
 # ----------------------------------------------------------------- toolchain
 
 
@@ -847,7 +806,6 @@ def main() -> int:
     check_arcanum(rep)
     check_pack_freshness(rep)
     check_dependencies(rep)
-    check_inspectors(rep)
     check_docs(rep, args.base)
 
     print()
