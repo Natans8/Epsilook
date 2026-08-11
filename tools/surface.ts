@@ -10,15 +10,18 @@
  * operators changes what this prints, and a query that looks wrong here is wrong in the design rather than in code
  * nobody has written yet.
  *
- * Operators appear with the spelling a reader types, taken from the registry, so a change of symbol reaches this
- * output without an edit here.
+ * Example queries are printed in the shortest spelling the grammar allows: a kind with one property binds its value
+ * directly, a property with a door uses it, and only a property that needs naming appears in a scope. Operators
+ * appear with the spelling a reader types, taken from the registry, so a change of symbol reaches this output without
+ * an edit here.
  */
 import {COLUMNS} from "../src/search/columns";
 import type {Kind, Prop} from "../src/search/kinds";
 import {hintOf, KINDS, operatorsOf} from "../src/search/kinds";
 import type {Operator} from "../src/search/operators";
 import {CLAUSE_OPERATORS, OPERATORS} from "../src/search/operators";
-import {kindsOf} from "../src/search/schema";
+import {HEADS, kindsOf} from "../src/search/schema";
+import {flag} from "../src/search/value-types";
 
 /**
  * Two example operands per type, so a printed query reads as one a person would write.
@@ -41,7 +44,6 @@ const SAMPLE: Readonly<Record<string, readonly [string, string]>> = {
     colour: ["#ff00aa", "#00aaff"],
     bitmask: ["caster", "target"],
     offset: ["z=3", "x=1"],
-    flag: ["", ""],
 };
 
 /**
@@ -69,15 +71,41 @@ function spell(op: Operator, samples: readonly [string, string]): string | null 
     }
 }
 
+/** Whether a property is a flag: valueless, matched by its own word. */
+const isFlag = (prop: Prop): boolean => prop.types.length === 1 && prop.types[0] === flag;
+
+/**
+ * The shortest spelling that reaches one property, with a placeholder where the value goes.
+ *
+ * @param kind The property's kind.
+ * @param name The property name.
+ * @param prop The property.
+ * @returns A template whose `¤` marks the value position, or the whole query for a flag.
+ */
+function template(kind: Kind, name: string, prop: Prop): string {
+    if (isFlag(prop)) return `${kind.column.key}:${name}`;
+    if (prop.prefix !== undefined) return `${prop.prefix}:¤`;
+
+    const direct = kind.word === undefined ? kind.column.key : kind.global === true ? kind.word : null;
+    if (direct !== null) {
+        return Object.keys(kind.props).length === 1 ? `${direct}:¤` : `${direct}:{${name}:¤}`;
+    }
+    return `${kind.column.key}:{${kind.word} ${name}:¤}`;
+}
+
 /**
  * Every query a property allows, as text.
  *
- * @param head The word that reaches the property's kind.
+ * @param kind The property's kind.
  * @param name The property name.
  * @param prop The property.
  * @returns One line per accepted operator.
  */
-function queriesFor(head: string, name: string, prop: Prop): string[] {
+function queriesFor(kind: Kind, name: string, prop: Prop): string[] {
+    if (isFlag(prop)) {
+        return [template(kind, name, prop).padEnd(46) + "the word alone; present, excluded with -, or ignored"];
+    }
+    const shape = template(kind, name, prop);
     const sample = SAMPLE[prop.types[0].name] ?? ["value", "other"];
     const lines: string[] = [];
     for (const opName of operatorsOf(prop)) {
@@ -85,7 +113,7 @@ function queriesFor(head: string, name: string, prop: Prop): string[] {
         if (!op) continue;
         const written = spell(op, sample);
         if (written === null) continue;
-        lines.push(`${head}:{${name}:${written}}`.padEnd(42) + op.hint);
+        lines.push(shape.replace("¤", written).padEnd(46) + op.hint);
     }
     return lines;
 }
@@ -96,20 +124,49 @@ function queriesFor(head: string, name: string, prop: Prop): string[] {
  * @param kind The kind.
  */
 function showKind(kind: Kind): void {
-    const head = kind.word ?? kind.column.key;
+    const doors = [
+        kind.word === undefined ? `${kind.column.key}:` : `${kind.column.key}:${kind.word}`,
+        ...(kind.global === true ? [`${kind.word}:`] : []),
+    ];
+    console.log(`\n  ${(kind.word ?? kind.column.key).padEnd(14)}${kind.hint}`);
+    console.log(`    reached as ${doors.join("  ·  ")}`);
     const props = Object.entries(kind.props);
-    console.log(`\n  ${head}   ${kind.hint}`);
     if (props.length === 0) {
-        console.log(`    ${head}`.padEnd(44) + "present or absent; it carries no value");
+        console.log("    the word alone; present, excluded with -, or ignored");
         return;
     }
     for (const [name, prop] of props) {
         console.log(`    ${name} — ${hintOf(prop)}`);
         const types = prop.types.map((t) => t.name).join(" or ");
-        const plain = prop.plain ? `, read by plain search at tier ${String(prop.tier)}` : "";
-        console.log(`      ${types}${plain}`);
-        for (const line of queriesFor(head, name, prop)) console.log(`      ${line}`);
+        const words = Object.values(prop.sentinels ?? {});
+        const sentinels = words.length > 0 ? `; also ${words.join(", ")}, by name` : "";
+        const plain = prop.plain?.length
+            ? `; plain search reads ${prop.plain.map((t) => t.name).join(", ")} at tier ${String(prop.tier)}`
+            : "";
+        console.log(`      ${types}${sentinels}${plain}`);
+        for (const line of queriesFor(kind, name, prop)) console.log(`      ${line}`);
     }
+}
+
+/** Prints every top-level word, then the plain-search roster. */
+function showRosters(): void {
+    const words = [...HEADS.keys()].toSorted();
+    console.log(`\nTOP-LEVEL WORDS — every word that opens a tag (${String(words.length)})\n`);
+    console.log(`  ${words.join("  ")}`);
+
+    console.log("\nPLAIN SEARCH — what a bare word reaches, best tier first\n");
+    const rows: { tier: number; line: string }[] = [];
+    for (const kind of KINDS.values()) {
+        for (const [name, prop] of Object.entries(kind.props)) {
+            if (!prop.plain?.length) continue;
+            rows.push({
+                tier: prop.tier ?? 0,
+                line: `  tier ${String(prop.tier)}  ${`${kind.id}.${name}`.padEnd(28)}`
+                    + prop.plain.map((t) => t.name).join(", "),
+            });
+        }
+    }
+    for (const row of rows.toSorted((a, b) => a.tier - b.tier)) console.log(row.line);
 }
 
 function main(): void {
@@ -118,11 +175,7 @@ function main(): void {
     const wanted = args.filter((a) => !a.startsWith("--"));
 
     if (wordsOnly) {
-        for (const kind of KINDS.values()) {
-            const head = kind.word ?? kind.column.key;
-            for (const name of Object.keys(kind.props)) console.log(`${head}:{${name}:}`);
-            if (Object.keys(kind.props).length === 0) console.log(head);
-        }
+        for (const word of [...HEADS.keys()].toSorted()) console.log(word);
         return;
     }
 
@@ -130,13 +183,23 @@ function main(): void {
     for (const op of CLAUSE_OPERATORS) {
         console.log(`  ${(op.symbol ?? "(juxtaposition)").padEnd(18)}${op.name.padEnd(10)}${op.hint}`);
     }
+    if (wanted.length === 0) showRosters();
 
     for (const column of COLUMNS.values()) {
         if (wanted.length > 0 && !wanted.includes(column.key)) continue;
         const kinds = kindsOf(column);
         console.log(`\n\n${"=".repeat(78)}\n${column.label.toUpperCase()}  (${column.key})  —  ${column.hint}`);
         console.log(`${kinds.length} kind(s)${column.head === false ? ", reached only through its kinds" : ""}`);
-        for (const kind of kinds) showKind(kind);
+        const groups = new Map<string | undefined, Kind[]>();
+        for (const kind of kinds) {
+            const list = groups.get(kind.group) ?? [];
+            list.push(kind);
+            groups.set(kind.group, list);
+        }
+        for (const [group, members] of groups) {
+            if (group !== undefined) console.log(`\n  — ${group} —`);
+            for (const kind of members) showKind(kind);
+        }
     }
 }
 

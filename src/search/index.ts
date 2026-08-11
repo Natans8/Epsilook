@@ -16,7 +16,7 @@ export {
     OPERATORS, ORDERING, or, present, range,
 } from "./operators";
 
-export type {Notation, NumericSpec, Sentinels} from "./units";
+export type {BareClaim, Notation, NumericSpec, Sentinels} from "./units";
 export {formatNumber, parseNumber} from "./units";
 
 export {fold, squash} from "./text-normalization";
@@ -33,8 +33,8 @@ export {coverage, matcher, roleNames, setOrdinalLadder} from "./value-matching";
 export type {Column} from "./columns";
 export {COLUMNS, defineColumn} from "./columns";
 
-export type {Kind, Prop} from "./kinds";
-export {defineKind, hintOf, KINDS, operatorsOf, TIER} from "./kinds";
+export type {Kind, ParsedValue, Prop} from "./kinds";
+export {defineKind, formatValue, hintOf, KINDS, operatorsOf, parseValue, TIER} from "./kinds";
 
 export type {Head} from "./schema";
 export {buildSchema, HEADS, kindsOf, schemaProblems} from "./schema";

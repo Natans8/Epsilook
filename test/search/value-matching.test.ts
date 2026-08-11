@@ -199,6 +199,27 @@ describe("alternation", () => {
     });
 });
 
+describe("operand shape", () => {
+    it("refuses a range operand on every textual operator rather than matching everything", () => {
+        // A range reduced to an empty string would satisfy `contains` for every stored value, which is the worst
+        // possible reading of an operand the operator does not accept.
+        for (const op of ["contains", "exact", "glob"]) {
+            assert.equal(matcher(op, "text")!("Fireball", ["a", "b"]), false, op);
+        }
+        assert.equal(matcher("contains", "ordinal")!("Legion", ["a", "b"]), false);
+    });
+
+    it("refuses a range operand on roles and composites", () => {
+        assert.equal(matcher("exact", "bitmask")!(3, ["caster", "target"]), false);
+        assert.equal(matcher("exact", "offset")!("1,2,3", ["1", "2"]), false);
+    });
+
+    it("refuses a range operand on a single-value comparison", () => {
+        assert.equal(matcher("exact", "seconds")!(1500, [1000, 2000]), false);
+        assert.equal(matcher("lt", "seconds")!(1500, [1000, 2000]), false);
+    });
+});
+
 describe("coverage", () => {
     it("implements every operator every type accepts", () => {
         const missing: string[] = [];

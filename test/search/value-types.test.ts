@@ -24,7 +24,7 @@ const CANONICAL: [string, string[]][] = [
     ["bitmask", ["caster", "both"]],
     ["id", ["133", "0", "9007199254740991"]],
     ["count", ["0", "4", "128"]],
-    ["seconds", ["1.5s", "0s", "120s", "unlimited"]],
+    ["seconds", ["1.5s", "0s", "120s"]],
     ["percent", ["30%", "0%", "7.5%"]],
     ["percentChange", ["+30%", "-30%", "+0%"]],
     ["length", ["5yd", "0.5yd"]],
@@ -62,10 +62,14 @@ describe("the type registry", () => {
         }
     });
 
-    it("reads a bare fraction as a factor and a bare whole number as a proportion", () => {
-        // Nobody means half of one percent by 0.5, so a fractional percentage carries its symbol or its sign.
-        assert.equal(percentChange.parse!("0.5"), -50, "a bare fraction is a factor");
-        assert.equal(percentChange.parse!("50"), -50, "a bare whole number is a proportion");
+    it("splits a bare number at ten: a factor below, a proportion above", () => {
+        // Ten is the ceiling of the game's own scale command, so a bare number in command range means what the
+        // command means: scale:2 is double, exactly as .mod scale 2 is.
+        assert.equal(percentChange.parse!("2"), 100, "double, as the command reads it");
+        assert.equal(percentChange.parse!("10"), 900, "the command's ceiling still reads as a factor");
+        assert.equal(percentChange.parse!("0.5"), -50, "half");
+        assert.equal(percentChange.parse!("50"), -50, "above ten, a proportion of the original");
+        assert.equal(percentChange.parse!("150"), 50);
         assert.equal(percentChange.parse!("7.5%"), -92.5, "an explicit percentage is a proportion");
         assert.equal(percentChange.parse!("+7.5"), 7.5, "a signed one is a change");
     });

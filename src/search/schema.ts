@@ -2,7 +2,12 @@
  * @file Assembling the declarations into a schema, and refusing to run on a broken one.
  *
  * The columns, kinds and types are declared in their own files. Here they become a schema: one index the parser looks
- * a query word up in, and the checks that hold the declarations to their contract.
+ * a top-level query word up in, and the checks that hold the declarations to their contract.
+ *
+ * Words live in two namespaces. The top-level namespace holds column keys, the kind words declared global, and
+ * property prefixes — everything that may open a tag at the start of a clause. Each column additionally holds its own
+ * namespace of kind words, usable inside that column's scope; those may repeat across columns without colliding,
+ * because the column has already been named by the time one is read.
  *
  * The checks run at import time and throw. A uniqueness rule that lives only in a document is one that gets broken
  * silently, and the failure is invisible from the outside: two things reachable by one spelling means a query means
@@ -16,22 +21,16 @@ import {KINDS, operatorsOf} from "./kinds";
 import {TYPES} from "./value-types";
 
 /**
- * What a word before a colon resolves to.
+ * What a top-level word before a colon resolves to.
  *
- * A column key and a kind word are told apart by which declaration claimed the word, not by anything in the text.
- *
- * TODO: add the property prefix, the global door for a property shared by several kinds, once a union axis exists to
- * be reached through it.
+ * The roles are told apart by which declaration claimed the word, not by anything in the text.
  */
 export type Head =
     | { readonly role: "column"; readonly column: Column }
-    | { readonly role: "kind"; readonly kind: Kind };
+    | { readonly role: "kind"; readonly kind: Kind }
+    | { readonly role: "prop"; readonly kind: Kind; readonly name: string; readonly prop: Prop };
 
-/**
- * Every word that may appear before a colon, resolved.
- *
- * Column keys and kind words share this namespace because they share a position in the query text.
- */
+/** Every top-level word that may open a tag, resolved. */
 export const HEADS = new Map<string, Head>();
 
 /**
@@ -41,30 +40,58 @@ export const HEADS = new Map<string, Head>();
  */
 export function schemaProblems(): string[] {
     const problems: string[] = [];
-    const claimed = new Map<string, string>();
+    const topLevel = new Map<string, string>();
+    const perColumn = new Map<string, Map<string, string>>();
 
-    const claim = (word: string, by: string): void => {
-        const holder = claimed.get(word);
+    const claim = (words: Map<string, string>, word: string, by: string): void => {
+        const holder = words.get(word);
         if (holder !== undefined) {
             problems.push(`G1: "${word}" is claimed by both ${holder} and ${by}`);
             return;
         }
-        claimed.set(word, by);
+        words.set(word, by);
+    };
+    const columnWords = (key: string): Map<string, string> => {
+        const words = perColumn.get(key) ?? new Map<string, string>();
+        perColumn.set(key, words);
+        return words;
     };
 
     for (const column of COLUMNS.values()) {
-        if (column.head !== false) claim(column.key, `column ${column.key}`);
+        if (column.head !== false) claim(topLevel, column.key, `column ${column.key}`);
     }
+
+    // Chipless search answers a bare number as one identity, the spell's own id. A second plain notation that can
+    // only match by equality would give the same digits a second meaning, so the check collects them all and allows
+    // exactly one.
+    const identityDoors: string[] = [];
 
     for (const kind of KINDS.values()) {
         if (COLUMNS.get(kind.column.key) !== kind.column) {
             problems.push(`kind ${kind.id} names an unregistered column "${kind.column.key}"`);
         }
-        if (kind.word !== undefined) claim(kind.word, `kind ${kind.id}`);
+        if (kind.word !== undefined) {
+            claim(columnWords(kind.column.key), kind.word, `kind ${kind.id}`);
+            if (kind.global === true) claim(topLevel, kind.word, `kind ${kind.id}`);
+        } else if (kind.global === true) {
+            problems.push(`kind ${kind.id} is global but has no word to be global with`);
+        }
 
         for (const [name, prop] of Object.entries(kind.props)) {
-            problems.push(...propProblems(`${kind.id}.${name}`, prop));
+            const where = `${kind.id}.${name}`;
+            if (prop.prefix !== undefined) claim(topLevel, prop.prefix, `property ${where}`);
+            const identity = prop.plain?.some((type) =>
+                type.accepts.some((op) => op.name === "exact")
+                && !type.accepts.some((op) => op.name === "contains"));
+            if (identity === true) identityDoors.push(where);
+            problems.push(...propProblems(where, prop));
         }
+    }
+
+    if (identityDoors.length > 1) {
+        problems.push(
+            "chipless search reads more than one identity notation, so a bare number would mean "
+            + `several things: ${identityDoors.join(", ")}`);
     }
 
     return problems;
@@ -99,21 +126,35 @@ function propProblems(where: string, prop: Prop): string[] {
         problems.push(`${where} combines ${names}, which share no operator beyond presence`);
     }
 
+    const plain = prop.plain ?? [];
+    for (const type of plain) {
+        if (!prop.types.includes(type)) {
+            problems.push(`${where} reads "${type.name}" in chipless search but does not declare it`);
+        }
+    }
+
     // Chipless search is a ranked union. A contributing property with no tier ranks alongside every other, which puts
     // a description hit level with an exact name match and nothing to separate them.
-    if (prop.plain && prop.tier === undefined) {
+    if (plain.length > 0 && prop.tier === undefined) {
         problems.push(`${where} is plain but declares no relevance tier`);
     }
-    if (!prop.plain && prop.tier !== undefined) {
+    if (plain.length === 0 && prop.tier !== undefined) {
         problems.push(`${where} declares a relevance tier but is not plain`);
     }
 
-    // A plain term arrives as a bare token, so at least one notation must be able to answer one: `contains` for
-    // anything textual, `exact` for an id, which is how a lone number reaches an exact spell lookup without the engine
-    // special-casing it. A property that can only answer presence would join the union and silently match nothing.
-    if (prop.plain && !prop.types.some((type) =>
-        type.accepts.some((op) => op.name === "contains" || op.name === "exact"))) {
-        problems.push(`${where} is plain but no declared type can answer a bare token`);
+    // A plain term arrives as a bare token, so a contributing notation must be able to answer one: `contains` for
+    // anything textual, `exact` for the spell id. One that can only answer presence would join the union and silently
+    // match nothing.
+    for (const type of plain) {
+        if (!type.accepts.some((op) => op.name === "contains" || op.name === "exact")) {
+            problems.push(`${where} reads "${type.name}" in chipless search, which cannot answer a bare token`);
+        }
+    }
+
+    // A sentinel names a stored number, so it can only stand in for a quantity.
+    if (prop.sentinels !== undefined
+        && !prop.types.some((type) => type.storage === "int" || type.storage === "float")) {
+        problems.push(`${where} declares sentinels but no numeric notation to hold them`);
     }
 
     return problems;
@@ -138,7 +179,10 @@ export function buildSchema(): void {
         if (column.head !== false) HEADS.set(column.key, {role: "column", column});
     }
     for (const kind of KINDS.values()) {
-        if (kind.word !== undefined) HEADS.set(kind.word, {role: "kind", kind});
+        if (kind.word !== undefined && kind.global === true) HEADS.set(kind.word, {role: "kind", kind});
+        for (const [name, prop] of Object.entries(kind.props)) {
+            if (prop.prefix !== undefined) HEADS.set(prop.prefix, {role: "prop", kind, name, prop});
+        }
     }
 }
 

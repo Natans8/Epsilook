@@ -59,13 +59,22 @@ function define(operators: readonly string[], types: readonly string[], run: Mat
  * @param type Type name.
  * @returns The implementation, or `undefined` when this pair has none.
  *
+ * Composite types are matched by their shape rather than by name, so one declared after this module loads still
+ * matches; everything else is a named registration.
+ *
  * `undefined` means the pair is unimplemented, which is a defect rather than an answer. A type declining an operator
  * is expressed in its `accepts` list and is caught before evaluation; reaching this function with a pair that has no
  * implementation means the schema and this table disagree, and the caller must surface that rather than treat it as
  * "no match".
  */
 export function matcher(operator: string, type: string): Match | undefined {
-    return MATCHERS.get(`${operator}:${type}`);
+    const found = MATCHERS.get(`${operator}:${type}`);
+    if (found !== undefined) return found;
+    if (TYPES.get(type)?.ui === "fields") {
+        if (operator === "exact") return compositeExact;
+        if (operator === "present") return compositePresent;
+    }
+    return undefined;
 }
 
 /** Every (operator, type) pair with an implementation, sorted. */
@@ -82,9 +91,12 @@ const TEXTUAL = ["text", "path", "enum"];
  * Reads an operand as text.
  *
  * @param value A single operand, or a range's bounds.
- * @returns The text, or the empty string for a range, which no textual operator accepts.
+ * @returns The text, or `null` for a range, which no textual operator accepts.
+ *
+ * `null` rather than the empty string, because an empty string is not a refusal: `contains` matches every value
+ * against it, so a range reaching a textual operator would silently select everything instead of nothing.
  */
-const asText = (value: Operand): string => (Array.isArray(value) ? "" : String(value));
+const asText = (value: Operand): string | null => (Array.isArray(value) ? null : String(value));
 
 /**
  * Compiles a glob pattern to a regular expression anchored at both ends.
@@ -107,10 +119,19 @@ function globToRegExp(pattern: string): RegExp {
 // `exact` folds only, so `Fire Ball` and `Fireball` stay distinct: a reader who anchors a match is asking for the
 // whole value as written. `contains` and `glob` squash, so punctuation a reader may not remember does not have to be
 // reproduced.
-define(["exact"], TEXTUAL, (stored, operand) => fold(asText(stored)) === fold(asText(operand)));
-define(["contains"], TEXTUAL, (stored, operand) => squash(asText(stored)).includes(squash(asText(operand))));
-define(["glob"], TEXTUAL, (stored, operand) => globToRegExp(asText(operand)).test(squash(asText(stored))));
-define(["present"], TEXTUAL, (stored) => asText(stored).length > 0);
+define(["exact"], TEXTUAL, (stored, operand) => {
+    const wanted = asText(operand);
+    return wanted !== null && fold(String(stored)) === fold(wanted);
+});
+define(["contains"], TEXTUAL, (stored, operand) => {
+    const wanted = asText(operand);
+    return wanted !== null && squash(String(stored)).includes(squash(wanted));
+});
+define(["glob"], TEXTUAL, (stored, operand) => {
+    const wanted = asText(operand);
+    return wanted !== null && globToRegExp(wanted).test(squash(String(stored)));
+});
+define(["present"], TEXTUAL, (stored) => String(stored).length > 0);
 
 /* ----------------------------------------------------------------------- numbers */
 
@@ -200,7 +221,8 @@ const roleMatches = (mask: number, role: BitTest): boolean =>
     && (role.all === undefined || (mask & role.all) === role.all);
 
 define(["exact"], ["bitmask"], (stored, operand) => {
-    const role: BitTest | undefined = ROLES[fold(asText(operand))];
+    const wanted = asText(operand);
+    const role: BitTest | undefined = wanted === null ? undefined : ROLES[fold(wanted)];
     return role !== undefined && roleMatches(asNumber(stored), role);
 });
 define(["present"], ["bitmask"], (stored) => asNumber(stored) !== 0);
@@ -228,9 +250,12 @@ export function setOrdinalLadder(rungs: readonly string[]): void {
  * Finds a value's rank within the ladder.
  *
  * @param value A rung name.
- * @returns The rank, or -1 when the ladder does not contain it.
+ * @returns The rank, or -1 when the ladder does not contain it or the operand is not a single value.
  */
-const rank = (value: Operand): number => ladder.indexOf(fold(asText(value)));
+const rank = (value: Operand): number => {
+    const written = asText(value);
+    return written === null ? -1 : ladder.indexOf(fold(written));
+};
 
 /**
  * Compares two rungs, refusing rather than guessing when either is unknown.
@@ -251,11 +276,15 @@ define(["lt"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (
 define(["lte"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (o) => o <= 0));
 define(["gt"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (o) => o > 0));
 define(["gte"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (o) => o >= 0));
-define(["contains"], ["ordinal"], (stored, operand) =>
-    squash(asText(stored)).includes(squash(asText(operand))));
-define(["glob"], ["ordinal"], (stored, operand) =>
-    globToRegExp(asText(operand)).test(squash(asText(stored))));
-define(["present"], ["ordinal"], (stored) => asText(stored).length > 0);
+define(["contains"], ["ordinal"], (stored, operand) => {
+    const wanted = asText(operand);
+    return wanted !== null && squash(String(stored)).includes(squash(wanted));
+});
+define(["glob"], ["ordinal"], (stored, operand) => {
+    const wanted = asText(operand);
+    return wanted !== null && globToRegExp(wanted).test(squash(String(stored)));
+});
+define(["present"], ["ordinal"], (stored) => String(stored).length > 0);
 
 define(["range"], ["ordinal"], (stored, operand) => {
     if (!Array.isArray(operand) || operand.length !== 2) return false;
@@ -305,26 +334,24 @@ defineAnyOf(["bitmask"], "exact");
 /* -------------------------------------------------------------------- composites */
 
 /**
- * Types built from named members, whose stored value is their components in order.
- *
- * Read from the registry rather than listed by hand, so declaring a composite is the whole of adding one.
- */
-const COMPOSITE = [...TYPES.values()].filter((type) => type.ui === "fields").map((type) => type.name);
-
-/**
  * A composite is compared member by member, and a query may constrain fewer members than the value has.
  *
- * A blank component in the QUERY is one it does not ask about, which is the useful case: an offset is normally asked
+ * A blank component in the QUERY is one it does not ask about, which is the useful case: a point is normally asked
  * about one axis at a time. A blank component in the STORED value is one the row does not have, and it matches
  * nothing — otherwise an absent component would compare equal to a queried zero.
+ *
+ * Named functions rather than registrations, because the set of composite types is open: {@link matcher} resolves
+ * them by the type's shape, so a composite declared at any time is matched without an entry here.
  */
-define(["exact"], COMPOSITE, (stored, operand) => {
-    const want = asText(operand).split(",");
-    const have = asText(stored).split(",");
+const compositeExact: Match = (stored, operand) => {
+    const wanted = asText(operand);
+    if (wanted === null) return false;
+    const want = wanted.split(",");
+    const have = String(stored).split(",");
     return want.every((part, i) => {
         if (part.trim() === "") return true;
         const mine = have[i];
         return mine !== undefined && mine.trim() !== "" && Number(part) === Number(mine);
     });
-});
-define(["present"], COMPOSITE, (stored) => asText(stored).length > 0);
+};
+const compositePresent: Match = (stored) => String(stored).length > 0;

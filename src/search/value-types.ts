@@ -270,6 +270,9 @@ function numeric(spec: NumericSpec & {name: string; hint: string; ui?: Affordanc
  * Durations in this data span three orders of magnitude — cast times below a second, cooldowns running to minutes —
  * so the smaller and larger units are worth accepting. Both require their symbol, leaving a bare number to mean
  * seconds.
+ *
+ * Words such as `unlimited` and `instant` are not here: a stored value that is not a quantity is the axis's
+ * vocabulary, declared as a sentinel on the property.
  */
 export const seconds = numeric({
     name: "seconds",
@@ -279,8 +282,7 @@ export const seconds = numeric({
         {unit: "ms", factor: 1, bare: "never"},
         {unit: "m", factor: 60_000, bare: "never"},
     ],
-    sentinels: {[-1]: "unlimited"},
-    hint: "a duration in seconds, such as 1.5, 500ms, 2-5, or unlimited",
+    hint: "a duration in seconds, such as 1.5, 500ms, or 2-5",
 });
 
 /**
@@ -303,14 +305,14 @@ export const percent = numeric({
  * own description template for a size aura is `+$m1% Scale`, while its commands are written as a factor.
  *
  * - `+50%` — the change, signed. What a value is written as.
- * - `150%` — the same, as a proportion of the original. Offset by a hundred, since a hundred percent is no change.
  * - `x1.5` — the same, as a factor. Written before the number, and `1.5x` is accepted too.
+ * - `150%` — the same, as a proportion of the original. Offset by a hundred, since a hundred percent is no change.
  *
- * A bare number belongs to whichever notation can claim it: a whole number reads as a proportion and a fraction as a
- * factor, since nobody means half of one percent by `0.5`. A fractional percentage therefore carries its symbol or
- * its sign — `7.5%` or `+7.5`.
+ * A bare number splits at ten, the ceiling of the game's own scale command: up to ten it is a factor, so a number in
+ * command range means what the command means — `2` is double, exactly as `.mod scale 2` is — and above ten it is a
+ * proportion, so `150` is half again. A small percentage therefore carries its symbol or its sign: `7.5%` or `+7.5`.
  *
- * The change is what is stored and printed because these auras accumulate by ADDITION: two spells at +50% leave a
+ * The change is what is stored and printed because these auras accumulate by addition: two spells at +50% leave a
  * character at +100%, not at 2.25 times its size. Changes add, factors do not, so a factor is a way of writing one
  * value rather than the form the quantity composes in.
  */
@@ -319,11 +321,11 @@ export const percentChange = numeric({
     storage: "float",
     display: {unit: "%", factor: 1, sign: "required"},
     accepts: [
-        {unit: "%", factor: 1, offset: -100, sign: "refused", bare: "integer"},
         {unit: "x", aliases: ["×"], position: "before", factor: 100, offset: -100,
-            sign: "refused", bare: "fraction"},
+            sign: "refused", bare: {atMost: 10}},
+        {unit: "%", factor: 1, offset: -100, sign: "refused", bare: {above: 10}},
     ],
-    hint: "a change such as +50, or 150 as a proportion of the original, or x1.5 as a factor",
+    hint: "a change such as +50, a factor such as 2 or x1.5, or 150 as a proportion of the original",
 });
 
 /** A distance in yards, the unit the game and its players use. */
@@ -449,10 +451,11 @@ export function composite(spec: {
 }
 
 /**
- * A point in the world, relative to whatever the value belongs to.
+ * A point relative to whatever the value belongs to: where a missile launches or lands, where an attached model sits
+ * against its attachment point.
  *
- * TODO: attach to the missile kind's cast and impact offsets once the build ships those columns; they are three
- * separate fields in the game data and reach the pack as none today.
+ * TODO: attach to the missile kind's cast and impact offsets and the attached kind's offset once the build ships
+ * those columns; each is three separate fields in the game data and none reaches the pack today.
  */
 export const offset = composite({
     name: "offset",

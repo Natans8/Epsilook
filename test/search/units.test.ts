@@ -14,7 +14,6 @@ const secondsSpec = {
     storage: "int",
     display: {unit: "s", factor: 1000},
     accepts: [{unit: "ms", factor: 1, bare: "never"}, {unit: "m", factor: 60_000, bare: "never"}],
-    sentinels: {[-1]: "unlimited"},
 } as const;
 
 const percentSpec = {
@@ -73,16 +72,10 @@ describe("parseNumber", () => {
         assert.equal(seconds("-"), null);
     });
 
-    it("classifies a sentinel before reading any digit", () => {
-        assert.equal(seconds("unlimited"), -1);
-        assert.equal(seconds("UNLIMITED"), -1);     // Normalised, like every other operand.
-    });
-
-    it("makes a sentinel reachable by its name and never by its number", () => {
-        // Minus one stored means unlimited, while a typed -1 asks for minus one second and scales to -1000. The two
-        // cannot collide, which follows from converting down into storage rather than from a rule of its own.
+    it("scales a typed negative into storage, where a sentinel's stored number cannot be reached", () => {
+        // Minus one stored means unlimited on the axis that declares it, while a typed -1 asks for minus one second
+        // and scales to -1000. The two cannot collide, which follows from converting down into storage.
         assert.equal(seconds("-1"), -1000);
-        assert.notEqual(seconds("-1"), seconds("unlimited"));
     });
 
     it("throws when two notations could both accept one operand", () => {
@@ -96,6 +89,33 @@ describe("parseNumber", () => {
             }),
             /would both accept one operand/);
     });
+
+    it("splits the bare numbers between two notations at a declared threshold", () => {
+        // The factor of a hundred between the two scalings is what makes the split sound: a number small enough to be
+        // a factor is far too small to be a proportion anyone means.
+        const change = parseNumber({
+            storage: "float",
+            display: {unit: "+", factor: 1, sign: "required"},
+            accepts: [
+                {unit: "x", position: "before", factor: 100, offset: -100, sign: "refused", bare: {atMost: 10}},
+                {unit: "%", factor: 1, offset: -100, sign: "refused", bare: {above: 10}},
+            ],
+        });
+        assert.equal(change("2"), 100, "at or under the threshold, a factor");
+        assert.equal(change("10"), 900, "the threshold itself belongs to the factor");
+        assert.equal(change("11"), -89, "above it, a proportion");
+        assert.equal(change("0.5"), -50);
+    });
+
+    it("throws when two thresholds leave a bare number claimable by both", () => {
+        assert.throws(
+            () => parseNumber({
+                storage: "float",
+                display: {unit: "x", position: "before", factor: 100, bare: {atMost: 20}},
+                accepts: [{unit: "%", factor: 1, bare: {above: 10}}],
+            }),
+            /would both accept one operand/);
+    });
 });
 
 describe("formatNumber", () => {
@@ -106,11 +126,6 @@ describe("formatNumber", () => {
         assert.equal(seconds(1500), "1.5s");
         assert.equal(seconds(500), "0.5s");
         assert.equal(seconds(120_000), "120s");
-    });
-
-    it("prints a sentinel's word, before the division", () => {
-        // Otherwise minus one prints as -0.001s and the meaning is lost.
-        assert.equal(seconds(-1), "unlimited");
     });
 
     it("prints an explicit + only where the notation requires a sign", () => {

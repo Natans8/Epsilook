@@ -19,10 +19,20 @@
 import {fold} from "./text-normalization";
 
 /**
+ * Which numbers written without a symbol a notation claims.
+ *
+ * `"any"` claims them all and `"never"` claims none. The bounded forms split the number line at a threshold, so two
+ * notations that differ by a factor of a hundred can share the bare numbers between them: one takes everything up to
+ * the threshold inclusive, the other everything above it. The threshold is compared against the written magnitude,
+ * before any sign or scaling.
+ */
+export type BareClaim = "any" | "never" | { readonly atMost: number } | { readonly above: number };
+
+/**
  * One way of writing a quantity.
  *
  * Notations of one quantity are told apart by three things, in the order a reader notices them: which symbol is
- * written, whether a sign is written, and — for a number written with no symbol at all — whether it is whole.
+ * written, whether a sign is written, and — for a number written with no symbol at all — its size.
  */
 export interface Notation {
     /** The symbol written with the number. Empty for a notation that is only ever a bare number. */
@@ -54,21 +64,22 @@ export interface Notation {
     readonly sign?: "required" | "refused" | "optional";
 
     /**
-     * Which numbers written without the symbol this notation claims. Defaults to any of them.
+     * Which numbers written without the symbol this notation claims. Defaults to all of them.
      *
      * The last discriminator, and the one that makes a bare number unambiguous where two notations differ by a factor
-     * of a hundred. A bare fraction is read as a factor, since nobody means half of one percent by `0.5`, and a bare
-     * whole number as a proportion; a fractional percentage is therefore written with its symbol or its sign.
-     * `never` belongs to an alternate that would otherwise capture a bare number from the display notation.
+     * of a hundred: each claims one side of a declared threshold, so the size of the number says which notation it is
+     * written in. `never` belongs to an alternate that would otherwise capture a bare number from the display
+     * notation.
      */
-    readonly bare?: "any" | "integer" | "fraction" | "never";
+    readonly bare?: BareClaim;
 }
 
 /**
  * Stored values that are not quantities, and the word each one means.
  *
- * Reachable by name and never by number: typing the digits asks for that many display units, which scales to a
- * different stored value and matches nothing. The two cannot be confused even where the digits coincide.
+ * Declared on a property rather than on a type, because the word is the axis's vocabulary: a channel's stored -1
+ * means unlimited and a cast bar's stored 0 means instant, while the duration type they share knows neither word.
+ * A sentinel is classified before any scaling, so it can never be misread as that many display units.
  */
 export type Sentinels = Readonly<Record<number, string>>;
 
@@ -82,8 +93,6 @@ export interface NumericSpec {
 
     /** Further notations accepted on input and never written. */
     readonly accepts?: readonly Notation[];
-
-    readonly sentinels?: Sentinels;
 }
 
 /**
@@ -140,7 +149,13 @@ function sharesBare(a: Notation, b: Notation): boolean {
     const one = a.bare ?? "any";
     const other = b.bare ?? "any";
     if (one === "never" || other === "never") return false;
-    return one === "any" || other === "any" || one === other;
+    if (one === "any" || other === "any") return true;
+
+    // Two bounded claims are disjoint only when one takes everything up to a threshold and the other everything
+    // above one at least as large; two claims on the same side always share numbers.
+    if ("atMost" in one && "above" in other) return one.atMost > other.above;
+    if ("above" in one && "atMost" in other) return other.atMost > one.above;
+    return true;
 }
 
 /**
@@ -165,10 +180,11 @@ function readNotation(notation: Notation, storage: "int" | "float"): (text: stri
 
         if (symbol === "") {
             const bare = notation.bare ?? "any";
-            const whole = !digits.includes(".");
             if (bare === "never") return null;
-            if (bare === "integer" && !whole) return null;
-            if (bare === "fraction" && whole) return null;
+            if (typeof bare === "object") {
+                const size = Number(digits);
+                if ("atMost" in bare ? size > bare.atMost : size <= bare.above) return null;
+            }
         } else if (!accepted.includes(symbol)) {
             return null;
         }
@@ -207,15 +223,10 @@ export function parseNumber(spec: NumericSpec): (text: string) => number | null 
     }
 
     const readers = all.map((notation) => readNotation(notation, spec.storage));
-    const byName = new Map<string, number>();
-    for (const [value, word] of Object.entries(spec.sentinels ?? {})) byName.set(fold(word), Number(value));
 
     return (text: string): number | null => {
         const folded = fold(text.trim());
         if (folded.length === 0) return null;
-
-        const sentinel = byName.get(folded);
-        if (sentinel !== undefined) return sentinel;
 
         for (const read of readers) {
             const value = read(folded);
@@ -239,9 +250,6 @@ export function formatNumber(spec: NumericSpec): (value: number) => string {
     const {unit, factor, offset, sign, position} = spec.display;
 
     return (value: number): string => {
-        const word = spec.sentinels?.[value];
-        if (word !== undefined) return word;
-
         const shown = Number(((value - (offset ?? 0)) / factor).toFixed(PRECISION));
         // A sign is written where the notation requires one, so that zero round-trips; where it is merely allowed,
         // only a negative carries its own.
