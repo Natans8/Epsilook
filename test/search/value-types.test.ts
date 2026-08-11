@@ -11,8 +11,8 @@ import {describe, it} from "node:test";
 
 import {exact, ORDERING, present} from "../../src/search/operators";
 import {
-    angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, multiplier,
-    offset, ordinal, path, percent, percentChange, proportion, seconds, text, TYPES,
+    angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, offset,
+    ordinal, path, percent, percentChange, seconds, text, TYPES,
 } from "../../src/search/value-types";
 
 /** Canonical spellings. Every one is something `format` itself produces. */
@@ -27,10 +27,8 @@ const CANONICAL: [string, string[]][] = [
     ["seconds", ["1.5s", "0s", "120s", "unlimited"]],
     ["percent", ["30%", "0%", "7.5%"]],
     ["percentChange", ["+30%", "-30%", "+0%"]],
-    ["proportion", ["130%", "70%"]],
     ["length", ["5yd", "0.5yd"]],
     ["angle", ["60deg", "27.5deg"]],
-    ["multiplier", ["x2", "x0.5"]],
     ["colour", ["#ff00aa", "#000000"]],
     ["offset", ["0yd,0yd,1yd", "1.5yd,-2yd,0yd", ",,3yd"]],
 ];
@@ -38,17 +36,18 @@ const CANONICAL: [string, string[]][] = [
 describe("the type registry", () => {
     it("holds exactly the catalogue", () => {
         assert.deepEqual([...TYPES.keys()].toSorted(), [
-            "angle", "bitmask", "colour", "count", "enum", "flag", "id", "length", "multiplier",
-            "offset", "ordinal", "path", "percent", "percentChange", "proportion", "seconds", "text",
+            "angle", "bitmask", "colour", "count", "enum", "flag", "id", "length", "offset", "ordinal",
+            "path", "percent", "percentChange", "seconds", "text",
         ]);
     });
 
-    it("has one type for a bare factor, whatever the factor measures", () => {
-        // What a factor is applied to is a property's business, not a type's. It is named for the value rather than
-        // for a use, leaving `scale` free for the kind.
+    it("keeps a size change one type, not one per spelling", () => {
+        // A proportion and a factor are ways of WRITING a change, not different quantities: same storage, same
+        // operators, same meaning. Declaring one type per notation made a property list three that never differed.
         assert.equal(TYPES.has("scale"), false);
-        assert.equal(TYPES.has("rate"), false);
-        assert.equal(multiplier.format!(100), "x2");
+        assert.equal(TYPES.has("proportion"), false);
+        assert.equal(TYPES.has("multiplier"), false);
+        assert.equal(percentChange.notations?.length, 3);
     });
 
     it("spells one size or speed change three ways, all reaching the same stored value", () => {
@@ -56,17 +55,24 @@ describe("the type registry", () => {
         // character at +100%, not at 2.25 times its size.
         for (const [change, asProportion, asFactor, stored] of
             [["+50", "150", "x1.5", 50], ["-50", "50", "x0.5", -50], ["+0", "100", "x1", 0]] as const) {
-            assert.equal(percentChange.parse!(change), stored, change);
-            assert.equal(proportion.parse!(asProportion), stored, asProportion);
-            assert.equal(multiplier.parse!(asFactor), stored, asFactor);
+            for (const written of [change, asProportion, asFactor]) {
+                assert.equal(percentChange.parse!(written), stored, written);
+            }
+            assert.equal(percentChange.format!(stored), `${stored > 0 ? "+" : stored === 0 ? "+" : ""}${stored}%`);
         }
     });
 
-    it("tells the three notations apart by the shape of the operand, not by their order", () => {
-        // Each declines what the others read, so dispatch does not depend on which is declared first.
-        assert.equal(percentChange.parse!("150"), null, "a change must carry its sign");
-        assert.equal(proportion.parse!("+50"), null, "a proportion must not");
-        assert.equal(multiplier.parse!("-x1.5"), null, "nor a factor");
+    it("reads a bare fraction as a factor and a bare whole number as a proportion", () => {
+        // Nobody means half of one percent by 0.5, so a fractional percentage carries its symbol or its sign.
+        assert.equal(percentChange.parse!("0.5"), -50, "a bare fraction is a factor");
+        assert.equal(percentChange.parse!("50"), -50, "a bare whole number is a proportion");
+        assert.equal(percentChange.parse!("7.5%"), -92.5, "an explicit percentage is a proportion");
+        assert.equal(percentChange.parse!("+7.5"), 7.5, "a signed one is a change");
+    });
+
+    it("accepts a factor written either side of its number", () => {
+        assert.equal(percentChange.parse!("x1.5"), percentChange.parse!("1.5x"));
+        assert.equal(percentChange.parse!("×2"), 100);
     });
 
     it("keeps plain percent absolute, for a proportion of a whole", () => {
@@ -153,7 +159,7 @@ describe("the operator table", () => {
     });
 
     it("gives the numeric family equality, ordering and presence, never substring", () => {
-        for (const type of [count, seconds, percent, percentChange, proportion, length, angle, multiplier]) {
+        for (const type of [count, seconds, percent, percentChange, length, angle]) {
             assert.deepEqual(accepts(type),
                 ["anyOf", "exact", "gt", "gte", "lt", "lte", "present", "range"], type.name);
         }
@@ -277,13 +283,14 @@ describe("defineType", () => {
             /cannot parse or format one/);
     });
 
-    it("rejects units declared without an order", () => {
+    it("rejects notations declared without an order", () => {
         // Text accepts neither, which is what keeps a percent sign inside a spell name from behaving like a unit.
         assert.throws(
             () => defineType<string>({
                 name: "spurious", storage: "string", accepts: [exact, present],
-                parse: (s) => s, format: (s) => s, units: {"%": 1}, hint: "x", ui: "text",
+                parse: (s) => s, format: (s) => s,
+                notations: [{unit: "%", factor: 1}], hint: "x", ui: "text",
             }),
-            /declares units but does not accept an order/);
+            /declares notations but does not accept an order/);
     });
 });

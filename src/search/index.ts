@@ -16,15 +16,15 @@ export {
     OPERATORS, ORDERING, or, present, range,
 } from "./operators";
 
-export type {NumericSpec, Sentinels, UnitTable} from "./units";
+export type {Notation, NumericSpec, Sentinels} from "./units";
 export {formatNumber, parseNumber} from "./units";
 
 export {fold, squash} from "./text-normalization";
 
 export type {Affordance, AxisType, Storage, Value} from "./value-types";
 export {
-    angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, multiplier,
-    offset, ordinal, path, percent, seconds, text, TYPES,
+    angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, offset,
+    ordinal, path, percent, percentChange, seconds, text, TYPES,
 } from "./value-types";
 
 export type {Match, Operand} from "./value-matching";

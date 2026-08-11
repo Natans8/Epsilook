@@ -36,8 +36,6 @@ const SAMPLE: Readonly<Record<string, readonly [string, string]>> = {
     seconds: ["1.5", "3"],
     percent: ["30", "70"],
     percentChange: ["+50", "-30"],
-    proportion: ["150", "70"],
-    multiplier: ["x2", "x0.5"],
     length: ["40", "100"],
     angle: ["27", "60"],
     colour: ["#ff00aa", "#00aaff"],

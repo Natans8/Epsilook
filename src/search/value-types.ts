@@ -18,7 +18,7 @@
  */
 import type {Operator} from "./operators";
 import {anyOf, contains, exact, glob, OPERATORS, ORDERING, present} from "./operators";
-import type {NumericSpec, UnitTable} from "./units";
+import type {Notation, NumericSpec} from "./units";
 import {formatNumber, parseNumber} from "./units";
 
 /**
@@ -87,8 +87,13 @@ export interface AxisType<V extends Value = Value> {
     /** The operators this type accepts. An operator not listed here is declined. */
     readonly accepts: readonly Operator[];
 
-    /** Unit symbols and their factors, when the type takes units. */
-    readonly units?: UnitTable;
+    /**
+     * Every way this type's values may be written, the first being the one they are written AS.
+     *
+     * Present only on types that take a unit. Read by generated help and by the query surface, so the spellings a
+     * reader is offered come from the same declaration that parses them.
+     */
+    readonly notations?: readonly Notation[];
 
     /** One line describing the type to a reader, used by generated help and by diagnostics. */
     readonly hint: string;
@@ -122,10 +127,10 @@ export function defineType<V extends Value>(type: AxisType<V>): AxisType<V> {
             `type "${type.name}" accepts an operator that takes a value but cannot parse or format one`);
     }
 
-    // Units scale a quantity, and a quantity that cannot be ordered is not one. Without this, a unit could be
-    // declared on free text, where the percent sign in a spell name would start behaving like a unit.
-    if (type.units && !ORDERING.every((op) => type.accepts.includes(op))) {
-        throw new Error(`type "${type.name}" declares units but does not accept an order`);
+    // A notation scales a quantity, and a quantity that cannot be ordered is not one. Without this, a unit could be
+    // declared on free text, where the percent sign in a spell name would start behaving like one.
+    if (type.notations && !ORDERING.every((op) => type.accepts.includes(op))) {
+        throw new Error(`type "${type.name}" declares notations but does not accept an order`);
     }
 
     TYPES.set(type.name, type);
@@ -243,7 +248,7 @@ export const count = defineType<number>({
 /**
  * Builds one member of the numeric family.
  *
- * @param spec Storage, canonical unit, unit table and optional sentinels, plus the type's name and hint.
+ * @param spec Storage, the notations it reads and writes, and optional sentinels, plus the type's name and hint.
  * @returns The registered type.
  */
 function numeric(spec: NumericSpec & {name: string; hint: string; ui?: Affordance}): AxisType<number> {
@@ -253,23 +258,27 @@ function numeric(spec: NumericSpec & {name: string; hint: string; ui?: Affordanc
         parse: parseNumber(spec),
         format: formatNumber(spec),
         accepts: [exact, present, anyOf, ...ORDERING],
-        units: spec.units,
+        notations: [spec.display, ...(spec.accepts ?? [])],
         hint: spec.hint,
         ui: spec.ui ?? "range",
     });
 }
 
 /**
- * A duration. Stored in milliseconds and written in seconds.
+ * A duration, stored in milliseconds and written in seconds.
  *
- * The only type that converts between units, because durations in this data span three orders of magnitude: cast
- * times below a second, cooldowns running to minutes.
+ * Durations in this data span three orders of magnitude — cast times below a second, cooldowns running to minutes —
+ * so the smaller and larger units are worth accepting. Both require their symbol, leaving a bare number to mean
+ * seconds.
  */
 export const seconds = numeric({
     name: "seconds",
     storage: "int",
-    unit: "s",
-    units: {s: 1000, ms: 1, m: 60000},
+    display: {unit: "s", factor: 1000},
+    accepts: [
+        {unit: "ms", factor: 1, bare: "never"},
+        {unit: "m", factor: 60_000, bare: "never"},
+    ],
     sentinels: {[-1]: "unlimited"},
     hint: "a duration in seconds, such as 1.5, 500ms, 2-5, or unlimited",
 });
@@ -277,82 +286,51 @@ export const seconds = numeric({
 /**
  * A proportion of a whole: how transparent a model is, how much colour is drained from it.
  *
- * Absolute rather than relative, so `50` is half and there is no sign to write. Distinct from {@link percentChange},
- * which measures from a baseline of a hundred.
+ * Absolute rather than relative, so `50` is half and there is no baseline to measure from. Distinct from
+ * {@link percentChange}, which is a change measured from a hundred.
  */
 export const percent = numeric({
     name: "percent",
     storage: "float",
-    unit: "%",
-    units: {"%": 1},
+    display: {unit: "%", factor: 1},
     hint: "a percentage, such as 50 or 7.5, or a range like 10-90",
 });
 
-/* A size or speed change has three spellings of one quantity, and the data stores the CHANGE: a stored +50 is half
- * again as big, a stored -50 is half. The three types below are notations of that stored value, told apart by the
- * shape of the operand, so a reader may write whichever they think in.
- *
- * The game's own description template for a size aura is `+$m1% Scale`, and its own commands are written as a factor,
- * so neither notation can be called the unfamiliar one.
- *
- * The CHANGE is the stored and printed form because these auras accumulate by addition: two spells at +50% leave a
- * character at +100%, not at 2.25 times its size. Changes add, factors do not, so a factor is a way of writing one
- * value rather than the form the quantity composes in. */
-
 /**
- * A change from the original, written with an explicit sign: `+50%` is half again as big, `-30%` is a third smaller.
+ * A change in size or speed, stored as the change itself: `+50` is half again as big, `-50` is half.
  *
- * Requires the sign, which is what lets an unsigned operand fall through to {@link proportion} and mean the other
- * thing. Declared first, so it is the spelling a value is printed in.
+ * Three notations of one value, because a reader may think in any of them and the game itself uses more than one. Its
+ * own description template for a size aura is `+$m1% Scale`, while its commands are written as a factor.
+ *
+ * - `+50%` — the change, signed. What a value is written as.
+ * - `150%` — the same, as a proportion of the original. Offset by a hundred, since a hundred percent is no change.
+ * - `x1.5` — the same, as a factor. Written before the number, and `1.5x` is accepted too.
+ *
+ * A bare number belongs to whichever notation can claim it: a whole number reads as a proportion and a fraction as a
+ * factor, since nobody means half of one percent by `0.5`. A fractional percentage therefore carries its symbol or
+ * its sign — `7.5%` or `+7.5`.
+ *
+ * The change is what is stored and printed because these auras accumulate by ADDITION: two spells at +50% leave a
+ * character at +100%, not at 2.25 times its size. Changes add, factors do not, so a factor is a way of writing one
+ * value rather than the form the quantity composes in.
  */
 export const percentChange = numeric({
     name: "percentChange",
     storage: "float",
-    unit: "%",
-    units: {"%": 1},
-    signed: true,
-    sign: "required",
-    hint: "a change, written with a sign: +50 is half again as big, -30 is a third smaller",
-});
-
-/**
- * The same change written as a proportion of the original: `150%` is `+50%`, `70%` is `-30%`.
- *
- * The offset is what makes the two agree — a hundred percent is no change at all.
- */
-export const proportion = numeric({
-    name: "proportion",
-    storage: "float",
-    unit: "%",
-    units: {"%": 1},
-    offset: -100,
-    sign: "refused",
-    hint: "a proportion of the original, where 150 is half again as big and 50 is half",
-});
-
-/**
- * The same change written as a factor: `x1.5` is `+50%`, `x0.5` is `-50%`.
- *
- * The unit is written before the number, which is how a factor is normally read. `1.5x` is accepted too, since input
- * takes either position and only the printed form is fixed.
- */
-export const multiplier = numeric({
-    name: "multiplier",
-    storage: "float",
-    unit: "x",
-    units: {x: 100, "×": 100},
-    offset: -100,
-    sign: "refused",
-    unitPosition: "before",
-    hint: "a factor, where x2 is twice as big and x0.5 is half",
+    display: {unit: "%", factor: 1, sign: "required"},
+    accepts: [
+        {unit: "%", factor: 1, offset: -100, sign: "refused", bare: "integer"},
+        {unit: "x", aliases: ["×"], position: "before", factor: 100, offset: -100,
+            sign: "refused", bare: "fraction"},
+    ],
+    hint: "a change such as +50, or 150 as a proportion of the original, or x1.5 as a factor",
 });
 
 /** A distance in yards, the unit the game and its players use. */
 export const length = numeric({
     name: "length",
     storage: "float",
-    unit: "yd",
-    units: {yd: 1},
+    display: {unit: "yd", factor: 1},
     hint: "a distance in yards, such as 5 or 10-40",
 });
 
@@ -360,8 +338,7 @@ export const length = numeric({
 export const angle = numeric({
     name: "angle",
     storage: "float",
-    unit: "deg",
-    units: {deg: 1, "°": 1},
+    display: {unit: "deg", factor: 1, aliases: ["°"]},
     hint: "an angle in degrees, such as 60 or 27-60",
     ui: "dial",
 });

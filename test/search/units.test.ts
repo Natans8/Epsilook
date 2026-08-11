@@ -12,19 +12,17 @@ import {formatNumber, parseNumber} from "../../src/search/units";
 /** The shipped duration spec: stored in milliseconds, written in seconds. */
 const secondsSpec = {
     storage: "int",
-    unit: "s",
-    units: {s: 1000, ms: 1, m: 60000},
+    display: {unit: "s", factor: 1000},
+    accepts: [{unit: "ms", factor: 1, bare: "never"}, {unit: "m", factor: 60_000, bare: "never"}],
     sentinels: {[-1]: "unlimited"},
 } as const;
 
 const percentSpec = {
     storage: "int",
-    unit: "%",
-    units: {"%": 1},
-    signed: true,
+    display: {unit: "%", factor: 1, sign: "required"},
 } as const;
 
-const floatSpec = {storage: "float", unit: "yd", units: {yd: 1}} as const;
+const floatSpec = {storage: "float", display: {unit: "yd", factor: 1}} as const;
 
 describe("parseNumber", () => {
     const seconds = parseNumber(secondsSpec);
@@ -87,12 +85,16 @@ describe("parseNumber", () => {
         assert.notEqual(seconds("-1"), seconds("unlimited"));
     });
 
-    it("throws when a type's canonical unit is absent from its own table", () => {
-        // Otherwise every value scales by undefined and the property silently matches nothing. Checked at
-        // registration, so it cannot reach a reader.
+    it("throws when two notations could both accept one operand", () => {
+        // The same text would otherwise mean two things, decided by which notation happened to be declared first.
+        // Checked when the parser is built, so it cannot reach a reader.
         assert.throws(
-            () => parseNumber({storage: "int", unit: "s", units: {ms: 1}}),
-            /canonical unit "s", absent/);
+            () => parseNumber({
+                storage: "int",
+                display: {unit: "%", factor: 1},
+                accepts: [{unit: "%", factor: 1}],
+            }),
+            /would both accept one operand/);
     });
 });
 
@@ -111,12 +113,19 @@ describe("formatNumber", () => {
         assert.equal(seconds(-1), "unlimited");
     });
 
-    it("prints an explicit + only where the sign is the information", () => {
+    it("prints an explicit + only where the notation requires a sign", () => {
+        // Where a sign is required, zero carries one too, so that everything `format` writes is something `parse`
+        // accepts back.
         const percent = formatNumber(percentSpec);
         assert.equal(percent(30), "+30%");
         assert.equal(percent(-30), "-30%");
-        assert.equal(percent(0), "0%");
+        assert.equal(percent(0), "+0%");
         assert.equal(formatNumber(floatSpec)(5), "5yd");
+    });
+
+    it("writes the symbol on the side the notation declares", () => {
+        const factor = formatNumber({storage: "float", display: {unit: "x", factor: 1, position: "before"}});
+        assert.equal(factor(1.5), "x1.5");
     });
 
     it("rounds away binary artefacts a float column really holds", () => {
@@ -133,7 +142,7 @@ describe("the round trip", () => {
             for (const stored of [0, 1, -1, 5, 100, 1500, 60_000, -30]) {
                 const written = format(stored);
                 assert.equal(format(parse(written)!), written,
-                    `${spec.unit}: ${stored} formatted as ${written}`);
+                    `${spec.display.unit}: ${stored} formatted as ${written}`);
             }
         }
     });

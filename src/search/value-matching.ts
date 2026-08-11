@@ -115,8 +115,7 @@ define(["present"], TEXTUAL, (stored) => asText(stored).length > 0);
 /* ----------------------------------------------------------------------- numbers */
 
 /** Types whose stored value and operand are both numeric. */
-const NUMERIC = ["id", "count", "seconds", "percent", "percentChange", "proportion",
-    "length", "angle", "multiplier"];
+const NUMERIC = ["id", "count", "seconds", "percent", "percentChange", "length", "angle"];
 
 /**
  * Reads an operand as a number.

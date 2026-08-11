@@ -1,34 +1,74 @@
 /**
- * @file Reading and writing numeric values: units, sentinels, and the number grammar.
+ * @file Reading and writing numeric values: notations, units, and sentinels.
  *
- * Three rules govern everything here.
+ * A unit is not a suffix character. It is a NOTATION — one way of writing a quantity — carrying a symbol, the side of
+ * the number that symbol sits on, the scale it implies, the zero it measures from, and whether a sign is part of it.
+ * `x1.5`, `150%` and `+50%` are three notations of one stored value.
  *
- * A unit converts rather than annotates. `500ms` is half a second and `500` is five hundred seconds, because this
- * data contains cast times below a second alongside cooldowns measured in minutes.
+ * The two directions are not symmetric, which is why they are declared apart:
  *
- * A query converts down into storage; stored values are never converted up. Durations are whole milliseconds in the
- * data and whole milliseconds here, so equality compares integers rather than binary fractions.
+ * - READING is one-to-many. Several notations are accepted, and they must be mutually exclusive or the same text
+ *   would mean two things. `parseNumber` refuses to build a parser whose notations could collide.
+ * - WRITING is many-to-one. A stored value has exactly one spelling, so exactly one notation is marked for display.
  *
- * A sentinel is recognised before it is scaled. A stored -1 meaning "unlimited" is not minus one millisecond, so it
- * is matched by name at both ends before any arithmetic happens.
+ * Three rules hold across both. A unit converts rather than annotates, so `500ms` is half a second and `500` is five
+ * hundred seconds. A query converts down into storage and stored values are never converted up, so equality compares
+ * the integers the data holds rather than binary fractions. A sentinel is recognised before it is scaled, so a stored
+ * -1 meaning "unlimited" is never read as minus one millisecond.
  */
 import {fold} from "./text-normalization";
 
 /**
- * Unit symbol to the number of storage units one of it represents.
+ * One way of writing a quantity.
  *
- * Factors are into storage, not into the canonical unit, so parsing is a single multiplication. A duration stored in
- * milliseconds and written in seconds declares `{s: 1000, ms: 1}`, which also states the storage unit plainly.
- *
- * A prettier symbol is another key with the same factor, so nothing needs to know which spelling is display-only.
+ * Notations of one quantity are told apart by three things, in the order a reader notices them: which symbol is
+ * written, whether a sign is written, and — for a number written with no symbol at all — whether it is whole.
  */
-export type UnitTable = Readonly<Record<string, number>>;
+export interface Notation {
+    /** The symbol written with the number. Empty for a notation that is only ever a bare number. */
+    readonly unit: string;
+
+    /** Further spellings of the same symbol, accepted on input and never written. */
+    readonly aliases?: readonly string[];
+
+    /** Which side of the number the symbol is written on. Defaults to after it. */
+    readonly position?: "before" | "after";
+
+    /** Storage units per one unit of this notation. */
+    readonly factor: number;
+
+    /**
+     * Storage units added after scaling, for a notation measuring from a different zero.
+     *
+     * A size change is stored as the change itself, so a proportion of the original converts with an offset of -100:
+     * a hundred percent is no change at all.
+     */
+    readonly offset?: number;
+
+    /**
+     * Whether an explicit leading sign is part of this notation.
+     *
+     * The discriminator that lets two notations share a symbol: a signed percentage is a change, an unsigned one is a
+     * proportion. On the display notation it also decides whether a sign is written.
+     */
+    readonly sign?: "required" | "refused" | "optional";
+
+    /**
+     * Which numbers written without the symbol this notation claims. Defaults to any of them.
+     *
+     * The last discriminator, and the one that makes a bare number unambiguous where two notations differ by a factor
+     * of a hundred. A bare fraction is read as a factor, since nobody means half of one percent by `0.5`, and a bare
+     * whole number as a proportion; a fractional percentage is therefore written with its symbol or its sign.
+     * `never` belongs to an alternate that would otherwise capture a bare number from the display notation.
+     */
+    readonly bare?: "any" | "integer" | "fraction" | "never";
+}
 
 /**
  * Stored values that are not quantities, and the word each one means.
  *
- * Reachable by name and never by number: typing the sentinel's digits asks for that many display units, which scales
- * to a different stored value and matches nothing. The two cannot be confused even where the digits coincide.
+ * Reachable by name and never by number: typing the digits asks for that many display units, which scales to a
+ * different stored value and matches nothing. The two cannot be confused even where the digits coincide.
  */
 export type Sentinels = Readonly<Record<number, string>>;
 
@@ -36,84 +76,112 @@ export type Sentinels = Readonly<Record<number, string>>;
 export interface NumericSpec {
     /** `int` rounds after scaling, because the data holds integers and equality must be exact. */
     readonly storage: "int" | "float";
-    /** The unit a bare number means, and the one `format` writes. */
-    readonly unit: string;
-    readonly units: UnitTable;
-    /** Write a leading `+` on positive values, for quantities where the sign is the information. */
-    readonly signed?: boolean;
 
-    /**
-     * Storage units added after scaling, for a notation measured from a different zero.
-     *
-     * A size change is stored as the change itself, so a value written as a proportion of the original converts with
-     * an offset: `150%` and `1.5x` are both a change of `+50`. Without this the two notations would be compared
-     * against the stored value on different baselines.
-     */
-    readonly offset?: number;
+    /** The notation a value is written in. Accepted on input as well. */
+    readonly display: Notation;
 
-    /**
-     * Whether an explicit leading sign is required or refused.
-     *
-     * What lets two notations of one quantity be told apart by the shape of the operand: a signed operand is a
-     * change, an unsigned one is a proportion. Stated on both so each declines what the other reads, rather than
-     * relying on the order they happen to be tried in.
-     *
-     * Omitted where a sign is simply allowed.
-     */
-    readonly sign?: "required" | "refused";
-
-    /**
-     * Where `format` writes the unit. Defaults to after the number.
-     *
-     * Both positions are accepted on input whatever this says, in keeping with input being lenient and output being
-     * one form. A factor is conventionally written before the number, a measurement after it.
-     */
-    readonly unitPosition?: "before" | "after";
+    /** Further notations accepted on input and never written. */
+    readonly accepts?: readonly Notation[];
 
     readonly sentinels?: Sentinels;
 }
 
 /**
- * Decimal places kept when a stored value is divided into its display unit.
+ * Decimal places kept when a stored value is converted into its display notation.
  *
  * Enough to preserve any value this data holds, and few enough to absorb binary representation error: a float column
  * can hold 1.2000000000000002, which is noise rather than precision.
  */
 const PRECISION = 6;
 
-/** A signed decimal, with no exponent and no internal space, followed by an optional unit. */
-const NUMBER = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))(.*)$/;
+/** A sign, a decimal with no exponent, then an optional symbol. */
+const UNIT_AFTER = /^([+-]?)((?:\d+(?:\.\d+)?|\.\d+))(.*)$/;
 
-/** A sign, a unit written before the number, and the rest: `x2`, `-x1.5`. */
-const UNIT_FIRST = /^([+-]?)([^\d.+-]+)(.*)$/;
+/** A sign, a symbol, then the number: `x2`, `-x1.5`. */
+const UNIT_BEFORE = /^([+-]?)([^\d.]+)((?:\d+(?:\.\d+)?|\.\d+))$/;
 
 /**
- * Indexes a unit table by folded symbol.
+ * Every spelling a notation answers to, folded.
  *
- * @param units The type's unit table.
- * @returns The table keyed by folded symbol, so `MS` and `ms` are one unit.
+ * @param notation The notation.
+ * @returns Its symbol and aliases, with the empty symbol dropped.
  */
-function unitLookup(units: UnitTable): Map<string, number> {
-    const out = new Map<string, number>();
-    for (const [symbol, factor] of Object.entries(units)) out.set(fold(symbol), factor);
-    return out;
+function spellings(notation: Notation): string[] {
+    return [notation.unit, ...(notation.aliases ?? [])].filter((s) => s !== "").map(fold);
 }
 
 /**
- * Resolves the factor for a spec's canonical unit.
+ * Whether two notations could both accept one operand.
  *
- * @param spec The numeric spec.
- * @returns The number of storage units the canonical unit represents.
- * @throws If the canonical unit is missing from the spec's own table, which would otherwise scale every value by
- *   `undefined` and make the whole axis match nothing.
+ * Safe when no text satisfies both. A notation whose sign and bare form are both unconstrained is told apart by its
+ * symbol alone, so two such notations must not share one.
+ *
+ * @param a One notation.
+ * @param b Another.
+ * @returns Whether an operand exists that both would accept.
  */
-function canonicalFactor(spec: NumericSpec): number {
-    const factor: number | undefined = spec.units[spec.unit];
-    if (factor === undefined) {
-        throw new Error(
-            `numeric type declares canonical unit "${spec.unit}", absent from its own units table`);
-    }
-    return factor;
+function overlap(a: Notation, b: Notation): boolean {
+    const bySign = (a.sign === "required" && b.sign === "refused")
+        || (a.sign === "refused" && b.sign === "required");
+    if (bySign) return false;
+
+    const shareSymbol = spellings(a).some((s) => spellings(b).includes(s));
+    return shareSymbol || sharesBare(a, b);
+}
+
+/**
+ * Whether two notations both claim some number written without a symbol.
+ *
+ * @param a One notation.
+ * @param b Another.
+ * @returns Whether a bare number exists that both would accept.
+ */
+function sharesBare(a: Notation, b: Notation): boolean {
+    const one = a.bare ?? "any";
+    const other = b.bare ?? "any";
+    if (one === "never" || other === "never") return false;
+    return one === "any" || other === "any" || one === other;
+}
+
+/**
+ * Builds a reader for one notation.
+ *
+ * @param notation The notation.
+ * @param storage Whether the stored value is integral.
+ * @returns A function converting text to a stored value, or `null` when the text is not written in this notation.
+ */
+function readNotation(notation: Notation, storage: "int" | "float"): (text: string) => number | null {
+    const accepted = spellings(notation);
+    const before = notation.position === "before";
+
+    return (text: string): number | null => {
+        // A notation written before its number still accepts a bare one, which only the other pattern matches.
+        const led = before ? UNIT_BEFORE.exec(text) : null;
+        const parts = led ?? UNIT_AFTER.exec(text);
+        if (!parts) return null;
+
+        const [, sign, a, b] = parts;
+        const [digits, symbol] = led ? [b, a] : [a, b];
+
+        if (symbol === "") {
+            const bare = notation.bare ?? "any";
+            const whole = !digits.includes(".");
+            if (bare === "never") return null;
+            if (bare === "integer" && !whole) return null;
+            if (bare === "fraction" && whole) return null;
+        } else if (!accepted.includes(symbol)) {
+            return null;
+        }
+
+        if (notation.sign === "required" && sign === "") return null;
+        if (notation.sign === "refused" && sign !== "") return null;
+
+        const magnitude = Number(`${sign}${digits}`);
+        if (!Number.isFinite(magnitude)) return null;
+
+        const scaled = magnitude * notation.factor + (notation.offset ?? 0);
+        return storage === "int" ? Math.round(scaled) : scaled;
+    };
 }
 
 /**
@@ -121,17 +189,26 @@ function canonicalFactor(spec: NumericSpec): number {
  *
  * @param spec The numeric spec.
  * @returns A function converting query text to a stored value, or `null` when the text is not a number of this type.
+ * @throws If two of the spec's notations could accept one operand, which would make that text mean two things.
  *
  * `null` covers both "not numeric" and "carries a unit this type does not have". Both are the same answer to the
- * caller, which tries the property's next notation and produces a diagnostic only once every notation has refused.
+ * caller, which tries the property's next type and produces a diagnostic only once every one has refused.
  */
 export function parseNumber(spec: NumericSpec): (text: string) => number | null {
-    const canonical = canonicalFactor(spec);
-    const units = unitLookup(spec.units);
-    const byName = new Map<string, number>();
-    for (const [value, word] of Object.entries(spec.sentinels ?? {})) {
-        byName.set(fold(word), Number(value));
+    const all = [spec.display, ...(spec.accepts ?? [])];
+    for (let i = 0; i < all.length; i++) {
+        for (let j = i + 1; j < all.length; j++) {
+            if (overlap(all[i], all[j])) {
+                throw new Error(
+                    "numeric type has two notations that would both accept one operand: "
+                    + `"${all[i].unit}" and "${all[j].unit}"`);
+            }
+        }
     }
+
+    const readers = all.map((notation) => readNotation(notation, spec.storage));
+    const byName = new Map<string, number>();
+    for (const [value, word] of Object.entries(spec.sentinels ?? {})) byName.set(fold(word), Number(value));
 
     return (text: string): number | null => {
         const folded = fold(text.trim());
@@ -140,28 +217,11 @@ export function parseNumber(spec: NumericSpec): (text: string) => number | null 
         const sentinel = byName.get(folded);
         if (sentinel !== undefined) return sentinel;
 
-        // A unit may be written before the number as well as after it, so `x2` and `2x` are one factor. Only
-        // rearranged when the leading run is a unit this type actually has, which leaves any other text to be
-        // refused by the number pattern below.
-        const first = UNIT_FIRST.exec(folded);
-        const text2 = first && units.has(first[2]) ? `${first[1]}${first[3]}${first[2]}` : folded;
-
-        const match = NUMBER.exec(text2);
-        if (!match) return null;
-
-        const signed = /^[+-]/.test(match[1]);
-        if (spec.sign === "required" && !signed) return null;
-        if (spec.sign === "refused" && signed) return null;
-
-        const magnitude = Number(match[1]);
-        if (!Number.isFinite(magnitude)) return null;
-
-        const suffix = match[2];
-        const factor = suffix === "" ? canonical : units.get(suffix);
-        if (factor === undefined) return null;
-
-        const scaled = magnitude * factor + (spec.offset ?? 0);
-        return spec.storage === "int" ? Math.round(scaled) : scaled;
+        for (const read of readers) {
+            const value = read(folded);
+            if (value !== null) return value;
+        }
+        return null;
     };
 }
 
@@ -169,26 +229,25 @@ export function parseNumber(spec: NumericSpec): (text: string) => number | null 
  * Builds the formatter for one numeric type.
  *
  * @param spec The numeric spec.
- * @returns A function converting a stored value to its canonical spelling.
+ * @returns A function converting a stored value to its one spelling.
  *
- * The canonical spelling is what a pill prints, so a value read off the screen can be typed back into a query.
- * `format(parse(s)) === s` holds for every `s` this function produced; other spellings such as `50` or `500ms` parse
- * but are not canonical.
+ * That spelling is what a pill prints, so a value read off the screen can be typed back into a query.
+ * `format(parse(s)) === s` holds for every `s` this function produced; the other notations parse but are never
+ * written.
  */
 export function formatNumber(spec: NumericSpec): (value: number) => string {
-    const factor = canonicalFactor(spec);
+    const {unit, factor, offset, sign, position} = spec.display;
 
     return (value: number): string => {
         const word = spec.sentinels?.[value];
         if (word !== undefined) return word;
 
-        const shown = Number(((value - (spec.offset ?? 0)) / factor).toFixed(PRECISION));
-        // Zero takes a sign only where one is required, so that what `format` writes is always something `parse`
-        // accepts. Elsewhere `+0%` would be noise.
-        const plus = shown > 0 || (shown === 0 && spec.sign === "required");
-        const sign = spec.signed && plus ? "+" : "";
-        return spec.unitPosition === "before"
-            ? `${sign}${spec.unit}${shown}`
-            : `${sign}${shown}${spec.unit}`;
+        const shown = Number(((value - (offset ?? 0)) / factor).toFixed(PRECISION));
+        // A sign is written where the notation requires one, so that zero round-trips; where it is merely allowed,
+        // only a negative carries its own.
+        const plus = shown > 0 || (shown === 0 && sign === "required");
+        const written = sign === "required" && plus ? `+${shown}` : String(shown);
+
+        return position === "before" ? `${unit}${written}` : `${written}${unit}`;
     };
 }
