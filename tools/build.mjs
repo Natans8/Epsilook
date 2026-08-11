@@ -6,6 +6,8 @@
  *                                    dev server on site/ (default 8378) —
  *                                    esbuild rebuilds on every request, so a
  *                                    reload is always the current source
+ *   node tools/build.mjs --cli       the command-line entry points -> tools/*.mjs
+ *   node tools/build.mjs --test      the test suite -> test/.bundle/ (npm test)
  *
  * The build also guards the module graph: every .ts under src/ must be
  * reachable from the entry, or the build fails naming the orphan. That is the
@@ -39,6 +41,25 @@ const options = {
     external: ["fs"],
 };
 
+/* TREES THE BUNDLE IS NOT EXPECTED TO REACH, each with a reason and an end.
+ *
+ * The reachability guard below exists to catch a module that LOST its import —
+ * pilltypes falling out of main.ts would silently empty the pill registry. It
+ * is not meant to force half-built work into the shipping bundle.
+ *
+ *   src/search/   SEARCH 2.0, being written BESIDE the shipped engine (see
+ *                 docs/PLAN-search2.md §8 — 1.0 is deleted in ONE commit at
+ *                 PHASE 8, never edited in place). Nothing drives it yet, so
+ *                 importing it would ship dead code AND put a module that
+ *                 validates-and-throws at import time on the app's boot path,
+ *                 where a schema collision is a white screen rather than a
+ *                 failed check. `npx tsc` (both targets), `node --test` and
+ *                 tools/check.py all cover it instead.
+ *                 DELETE THIS ENTRY when PHASE 5 wires the engine into a
+ *                 surface; from then on the guard should apply normally.
+ */
+const UNREACHED = ["src/search/"];
+
 /** Every non-declaration .ts under src/, relative to the repo root. */
 function sourceFiles(dir = resolve(root, "src")) {
     const out = [];
@@ -54,7 +75,8 @@ function sourceFiles(dir = resolve(root, "src")) {
 /** Fail if a source file exists that the bundle never reached. */
 function checkReachability(metafile) {
     const bundled = new Set(Object.keys(metafile.inputs));
-    const orphans = sourceFiles().filter((f) => !bundled.has(f));
+    const orphans = sourceFiles().filter(
+        (f) => !bundled.has(f) && !UNREACHED.some((prefix) => f.startsWith(prefix)));
     if (orphans.length) {
         console.error(
             `error: ${orphans.length} source file(s) not reachable from src/main.ts` +
@@ -83,10 +105,50 @@ const cliOptions = CLI_ENTRIES.map((name) => ({
     external: ["fs"],
 }));
 
+/* THE TEST SUITE — bundled, for one blunt reason: Node's own TypeScript
+ * support strips TYPES but does not resolve EXTENSIONLESS imports, and every
+ * module in this repo writes `import {x} from "./y"`. Running `node --test`
+ * straight at src/ would therefore mean putting `.ts` on every import in the
+ * app, to make a test runner happy. Bundling costs one command and lets a test
+ * import ANY module in the repo exactly as the app does — which is the whole
+ * point of a suite meant to grow past search 2.0.
+ *
+ * One bundle per test file, structure preserved, so `node --test` still runs
+ * each file in its own process: that isolation is load-bearing, because the
+ * registries are module-level and a test that deliberately corrupts one must
+ * not reach the others. Source maps, so a failure points at the .ts line.
+ *
+ * Output is gitignored build output, exactly like site/js. */
+function testFiles(dir = resolve(root, "test")) {
+    const out = [];
+    for (const entry of readdirSync(dir, {withFileTypes: true})) {
+        const path = resolve(dir, entry.name);
+        if (entry.isDirectory()) {
+            if (entry.name !== ".bundle") out.push(...testFiles(path));
+        } else if (entry.name.endsWith(".test.ts")) out.push(path);
+    }
+    return out;
+}
+
+const testOptions = () => ({
+    entryPoints: testFiles(),
+    outdir: resolve(root, "test/.bundle"),
+    outbase: resolve(root, "test"),
+    outExtension: {".js": ".mjs"},
+    bundle: true,
+    format: "esm",
+    platform: "node",
+    target: "node22",
+    sourcemap: true,
+    logLevel: "warning",
+    external: ["fs"],
+});
+
 const {values} = parseArgs({
     options: {
         serve: {type: "string", default: undefined},
         cli: {type: "boolean", default: false},
+        test: {type: "boolean", default: false},
     },
     // let --serve appear with no port
     tokens: false,
@@ -94,7 +156,9 @@ const {values} = parseArgs({
     args: process.argv.slice(2).map((a) => (a === "--serve" ? "--serve=8378" : a)),
 });
 
-if (values.cli) {
+if (values.test) {
+    await esbuild.build(testOptions());
+} else if (values.cli) {
     await Promise.all(cliOptions.map((o) => esbuild.build(o)));
 } else if (values.serve !== undefined) {
     const port = Number(values.serve);

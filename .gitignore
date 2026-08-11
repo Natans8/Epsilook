@@ -9,6 +9,9 @@ site/js/
 tools/query.mjs
 tools/measure.mjs
 
+# the test bundles esbuild emits from test/*.test.ts (npm test builds them)
+test/.bundle/
+
 node_modules/
 
 # IDE

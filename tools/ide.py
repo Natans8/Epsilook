@@ -125,7 +125,21 @@ class Ide:
             return False
 
     def tool(self, name: str, arguments: dict):
-        out = self.call("tools/call", {"name": name, "arguments": arguments})
+        """One tool call. Returns None when the ENDPOINT failed, never raises.
+
+        ⚠ A DEAD SESSION USED TO KILL THE WHOLE RUN. The IDE answers HTTP 404
+        when its `mcp-session-id` has been dropped — which happens on its own
+        during a long pass, and JetBrains has a confirmed leak that makes it
+        likelier the more agent sessions a machine has had. Propagating that as
+        an exception lost every file after the one that hit it, exactly like
+        the IndexError this class already learned to swallow. A skipped file is
+        recoverable and visible; a lost pass is neither.
+        """
+        try:
+            out = self.call("tools/call", {"name": name, "arguments": arguments})
+        except (urllib.error.URLError, OSError) as exc:
+            print(f"  {RED}?{RESET} {self.name} refused {name}: {exc}")
+            return None
         content = ((out or {}).get("result", {}).get("content") or [{}])[0].get("text", "")
         try:
             return json.loads(content)
@@ -171,6 +185,49 @@ def changed_files(base: str) -> list[str]:
     return sorted({f.replace("\\", "/") for f in files if (ROOT / f).is_file()})
 
 
+def ide_sees(ide: Ide, path: str) -> tuple[bool, str]:
+    """Does the IDE hold the SAME bytes this repo has on disk?
+
+    ⭐ THE ANSWER USED TO BE THROWN AWAY, AND THAT WAS THE WHOLE BUG. `read_file`
+    was called purely for its side effect — it refreshes the VFS, where
+    `reformat_file` does not — and its reply was discarded. But the reply is the
+    only evidence available that the refresh WORKED, and there is nothing else:
+    the JetBrains MCP surface exposes no refresh, sync or reload tool at all
+    (checked against JetBrains' own tool list, 2026-08-11). So the reply is the
+    detector, and comparing it is free.
+
+    TWO FAILURES IT CATCHES, both of which otherwise report success:
+
+      EMPTY   the IDE cannot see the file. Measured today on a brand-new
+              directory (`src/search/`): 3,146 bytes on disk, `read_file`
+              returned "". A reformat of a file the IDE has never indexed does
+              nothing and returns `ok`; a lint of one returns no problems,
+              which by this repo's own convention READS AS CLEAN.
+      STALE   the IDE holds different content from disk — the shape that ate
+              two rewrites of docs/SEARCH.md on 2026-08-10, because
+              `reformat_file` writes the IDE's buffer back over the file.
+
+    The reply numbers every line (`L1: `, `L2: `...), so the prefixes come off
+    before comparing.
+    """
+    reply = ide.tool("read_file", {"file_path": path, "projectPath": str(ROOT)})
+    if not isinstance(reply, str) or reply == "":
+        return False, "the IDE cannot see this file — refresh it (File > Reload All from Disk)"
+
+    seen = [line.split(": ", 1)[-1] if line.startswith("L") else line
+            for line in reply.replace("\r\n", "\n").split("\n")]
+    disk = (ROOT / path).read_text(encoding="utf-8").replace("\r\n", "\n").split("\n")
+    # a trailing newline makes disk one element longer; that is not a difference
+    while seen and seen[-1] == "":
+        seen.pop()
+    while disk and disk[-1] == "":
+        disk.pop()
+
+    if len(seen) != len(disk):
+        return False, f"the IDE holds {len(seen)} lines, disk has {len(disk)} — its buffer is STALE"
+    return True, ""
+
+
 def run(ide: Ide, files: list[str], lint_only: bool) -> int:
     """Refresh, reformat, lint. Returns the number of problems reported."""
     # THE REFRESH IS LOAD-BEARING, NOT POLITENESS: the IDE serves a STALE buffer
@@ -185,16 +242,29 @@ def run(ide: Ide, files: list[str], lint_only: bool) -> int:
     # one-line read does not carry it. Read every file, whole. The cost is one
     # call per file against silent data loss, which is not a trade worth making
     # the other way.
+    #
+    # ⭐ AND THE REFRESH IS NOW VERIFIED RATHER THAN ASSUMED. A file the IDE
+    # disagrees with is DROPPED from the reformat: writing its buffer back is
+    # exactly the data loss above, and it is better to format nothing than to
+    # format over an edit.
+    problems = 0
+    safe: list[str] = []
     for f in files:
-        ide.tool("read_file", {"file_path": f, "projectPath": str(ROOT)})
+        ok, why = ide_sees(ide, f)
+        if ok:
+            safe.append(f)
+        else:
+            problems += 1
+            print(f"  {RED}SKIP{RESET} {f}  {why}")
 
-    if not lint_only:
-        ide.tool("reformat_file", {"files": files, "projectPath": str(ROOT)})
+    if not lint_only and safe:
+        ide.tool("reformat_file", {"files": safe, "projectPath": str(ROOT)})
+
+    files = safe
 
     # Batch in fives: a big batch comes back with `timedOut: true` and an EMPTY
     # problems array for the files it silently dropped, which reads exactly like
     # a pass. Small batches make that impossible.
-    problems = 0
     for start in range(0, len(files), 5):
         batch = files[start:start + 5]
         out = ide.tool("lint_files", {"files": batch, "projectPath": str(ROOT),

@@ -440,14 +440,18 @@ Every column has a cardinality, possibly zero — so `count:*` is every spell. O
 
 **One shape, six units. They differ only in what the number measures.**
 
-| type      | storage     | unit  | values                                                                    | signed  |
-|-----------|-------------|-------|---------------------------------------------------------------------------|---------|
-| `seconds` | `int` (ms)  | `s`   | cast time, channel duration; *planned:* cooldown, GCD, duration           | no      |
-| `percent` | `int`       | `%`   | scale, speed, desaturate, transparency                                    | **yes** |
-| `length`  | **`float`** | `yd`  | *planned:* collision height/width, hover height, beam length, spell range | no      |
-| `scale`   | **`float`** | `x`   | *planned:* model scale, attached-effect scale                             | no      |
-| `angle`   | **`float`** | `deg` | *planned:* cone angle                                                     | no      |
-| `rate`    | **`float`** | `x`   | *planned:* anim segment speed, ambient multiplier                         | no      |
+| type         | storage     | unit  | values                                                                     | signed  |
+|--------------|-------------|-------|----------------------------------------------------------------------------|---------|
+| `seconds`    | `int` (ms)  | `s`   | cast time, channel duration; *planned:* cooldown, GCD, duration            | no      |
+| `percent`    | `int`       | `%`   | scale, speed, desaturate, transparency                                     | **yes** |
+| `length`     | **`float`** | `yd`  | *planned:* collision height/width, hover height, beam length, spell range  | no      |
+| `angle`      | **`float`** | `deg` | *planned:* cone angle                                                      | no      |
+| `multiplier` | **`float`** | `x`   | *planned:* model scale, attached-effect scale, anim segment speed, ambient | no      |
+
+**⚠ FIVE, NOT SIX — `scale` AND `rate` WERE ONE TYPE WRITTEN TWICE, merged as `multiplier` in PHASE 2.** Their rows here
+were identical in every column a TYPE owns (float, unit `x`, no conversion, unsigned) and differed only in what they
+MEASURE, which §0 says out loud is none of a type's business. And `scale` collided with the fx `scale` KIND (§8.4),
+which SEARCH.md §0 bans. `multiplier` names what the value is — `2x` is twice — and leaves `scale` to the kind.
 
 ```ts
 /** The whole family, from one factory. Adding `yards` is one call. */
@@ -468,7 +472,7 @@ const numeric = (o: {
 
 const seconds = numeric({
     name: "seconds", storage: "int", unit: "s",
-    units: {s: 1, ms: 0.001, m: 60},
+    units: {s: 1000, ms: 1, m: 60000},          // <- INTO STORAGE, see below
     sentinels: {[-1]: "unlimited"}
 });
 const percent = numeric({
@@ -480,6 +484,15 @@ const angle = numeric({
     units: {deg: 1, "°": 1}
 });
 ```
+
+**⚠ A UNIT'S FACTOR IS INTO STORAGE UNITS, NOT INTO THE CANONICAL UNIT** (settled in PHASE 2, `src/search/units.ts`). An
+earlier draft wrote `seconds` as `{s: 1, ms: 0.001, m: 60}` — factors relative to SECONDS — which then needs a second
+conversion into the pack's milliseconds, i.e. one fact written twice with a unit boundary between them. Declared into
+storage, `parseNumber` is a single multiplication and the table says out loud that the pack stores ms.
+
+**⭐ AND A SENTINEL IS REACHABLE BY ITS NAME AND NEVER BY ITS NUMBER**, which falls out of that rather than needing a
+rule: typing `channeled:-1` asks for minus one SECOND, which scales to −1000 storage units and matches nothing, while
+the sentinel is −1 stored. So `unlimited` is a word, and the digits cannot collide with it.
 
 **⚠ SENTINELS ARE CLASSIFIED BEFORE THEY ARE SCALED OR COMPARED.** `SpellCastTimes.Base` has a minimum of
 **−1,000,000**; `CreatureModelData.CollisionHeight` has **−20,000,000**. Neither is a duration or a height. A sentinel
@@ -653,7 +666,13 @@ the whole declaration.**
 1. Dispatch is by the SHAPE of the operand; the declared order is the precedence.
 2. **An operator is offered only if EVERY declared type implements it** — a multi-notation axis is the INTERSECTION of
    its types' capabilities, never the union. So `kit:>5` is a static error, because `id` and `text` both decline
-   ordering.
+   ordering. **⚠ THAT RULE GOVERNS WHAT THE UI OFFERS, NOT WHAT MATCHES** (clarified in PHASE 2, where reading it the
+   other way would have deleted a shipped feature). MATCHING is decided by DISPATCH: the operand picks a type by its
+   shape, and that type answers. So on `kit` a bare word still substring-matches the NAME — `sound:"kit frostbolt"` is
+   69 real spells today — because the word dispatches to `text`, which accepts `contains`, while `id` declining
+   `contains` is what keeps a 6-digit number an EQUALITY test. Intersecting up front would have made a bare token
+   unusable on all six
+   `[id, text]` properties.
 3. **⚠ A COLLISION MUST BE MEASURED, AND THE MEASUREMENT MUST BE ENFORCED.**
 
 **Measured for `kit` — 84,351 names on the 8.3.0 table: exactly THREE are all digits** (`"0"`, `"9"`, `"150"`),
@@ -687,6 +706,12 @@ listed only where it is known to carry one. **Properties in bold do not exist in
 **⛔ PROVISIONAL WHERE MARKED `?`.** Confirm against `ref.column_info` in PHASE 5 before declaring. Do not name a
 property from an identifier (CLAUDE.md's standing rule).
 
+**⭐ THE CATALOGUE IS NOW CODE: `src/search/kinds.ts` (PHASE 2). This table is the DESIGN; that file is what runs, and
+where the two disagree the file is right** — it is validated at import time, tested, and it declares only what the pack
+can answer today. **Four transcription errors in the tables below were found by declaring them**, and are corrected in
+place: the four kinds §8.4 puts in `fx` that the shipped app puts in `mech`, the `keybind` kind §8.4 omits entirely,
+`location`'s notation, and §8.7's `flag` sentence. Read them as a caution about this table rather than about the app.
+
 ### 8.1 `model` — what is drawn
 
 | kind         | properties → type                                                                                                                                              |
@@ -718,6 +743,12 @@ property from an identifier (CLAUDE.md's standing rule).
 
 ### 8.4 `fx` — what it looks like
 
+**⚠ FOUR OF THE ROWS BELOW BELONG TO `mech`, AND `keybind` IS MISSING ALTOGETHER — corrected in PHASE 2 against the
+shipped registry, which is the oracle for where a kind lives.** `seat`, `invis`, `detect` and `speed` all carry
+`field: "mech"` in `src/pilltypes.ts`, which also states the rule out loud: *fx is what the spell LOOKS like, mech is
+what it DOES.* A vehicle seat, an invisibility channel and a movement-speed change render nothing. They are listed here
+for continuity and are declared under `mech` in `src/search/kinds.ts`.
+
 | kind             | properties → type                                                                                                                                           |
 |------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **chain**        | `texture` path · `from` attachPoint · `to` attachPoint · `tint` **colour (blocked, §4)** · `target` mask · **`length` length?** · **`minDistance` length?** |
@@ -748,7 +779,7 @@ property from an identifier (CLAUDE.md's standing rule).
 | `mech` | **aura**                 | `enum` enum · `target` mask · **`stacks` count?** (`CumulativeAura`, route already added)                         |
 | `mech` | **casttime**             | `seconds` seconds                                                                                                 |
 | `mech` | **channeled**            | `seconds` seconds *(sentinel: unlimited)*                                                                         |
-| `mech` | **location**             | `area` **[id, text]**                                                                                             |
+| `mech` | **location**             | `area` text — **NOT `[id, text]`**: an area id is a number nobody has a way to know                               |
 | `mech` | **triggers**             | `spell` **[id, text]**                                                                                            |
 | `mech` | **origin**               | `spell` **[id, text]**                                                                                            |
 | `mech` | *(planned)* **range**    | `yards` length *(sentinel: unlimited)* — new source                                                               |
@@ -779,8 +810,10 @@ property from an identifier (CLAUDE.md's standing rule).
   float column the app has never exposed (TYPES §1: 320 of them).
 - **Multi-notation `[id, text]` appears SIX times** — sound kit, morph, summon, object, area, triggered spell. It is a
   pattern, not a special case, and it is the same shape each time: a thing with an id and a name.
-- **Three kinds are pure flags** (`freeze`, `camo`, and the attribute bits), so `flag` earns its place as a type with no
-  value.
+- **⚠ THREE KINDS ARE PURE FLAGS** (`freeze`, `camo`, and the attribute bits) — but that is NOT what makes `flag` earn
+  its place, and this bullet used to say it was. Under L5.2 VALUELESSNESS LIVES ON THE KIND: such a kind simply declares
+  no properties, and its existence is the whole answer. The `flag` TYPE is for a valueless PROPERTY, which is a
+  different level and has no customer yet. Both are correct; conflating them is what this bullet did.
 - **⚠ `vec3` HAS NO TYPE YET.** `CastOffset_0/1/2` and `ImpactOffset_0/1/2` are 3-vectors. Either three properties, or a
   new composite type. **Decide before touching missiles**; do not invent one speculatively.
 

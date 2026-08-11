@@ -106,6 +106,29 @@ DATA_MODULES = (
     "src/util.ts",
 )
 
+# THE SECOND SEAM — search 2.0's BACKEND boundary (docs/PLAN-search2.md §3.1).
+#
+# The DOM seam above keeps the engine liftable out of a browser. This one keeps
+# the MATCHING LOGIC liftable out of JavaScript, which is the user's own
+# requirement: "if we decide to switch to SQL one day, or to a server-side API,
+# the logic doesn't have to change."
+#
+# It only holds while the core cannot learn WHICH backend it has. One
+# convenience import of `Row` into a kernel signature and every future backend
+# inherits an in-memory row model it has no way to produce — and, exactly like
+# the DOM breach, nothing would fail: the code runs fine, it just stops being
+# portable. The plan asked for this guard in the same phase as the core,
+# because "a seam without a guard is a preference".
+#
+# Everything under src/search/ EXCEPT src/search/backend/ is the core.
+SEARCH_CORE = "src/search/"
+SEARCH_BACKEND = "src/search/backend/"
+
+# Names that are an in-memory backend's business and no one else's. `Row` is
+# the whole point: it is how ONE implementation happens to work, and a SQL
+# backend would never mention it.
+BACKEND_NAMES = ("Row", "rows", "candidates")
+
 # Browser globals and DOM types. Matched as whole words on code with comments
 # and strings stripped — several of these words (`document`, `Element`) are
 # ordinary English and appear in the prose above them constantly.
@@ -497,6 +520,47 @@ def check_layers(rep: Report) -> None:
     else:
         rep.ok("layer boundary", f"{len(DATA_MODULES)} data/query modules free of DOM + app imports")
 
+    check_backend_seam(rep, imports)
+
+
+def check_backend_seam(rep: Report, imports: re.Pattern[str]) -> None:
+    """Search 2.0's declarative core must not learn which backend it has.
+
+    Two directions again, and both silent. Importing anything from
+    src/search/backend/ picks an implementation on the core's behalf; NAMING
+    `Row` (or `rows`/`candidates`) puts one implementation's data model into a
+    contract every other backend would then have to satisfy — N round trips for
+    SQL, absurd for HTTP.
+
+    Skipped rather than failed while the tree is absent, so this check does not
+    become the reason a checkout without search 2.0 cannot commit.
+    """
+    core = sorted(p for p in (ROOT / SEARCH_CORE).glob("*.ts")) if (ROOT / SEARCH_CORE).is_dir() else []
+    if not core:
+        rep.skip("backend seam", f"{SEARCH_CORE} not present yet")
+        return
+
+    word = re.compile(r"\b(" + "|".join(BACKEND_NAMES) + r")\b")
+    problems: list[str] = []
+    for mod in core:
+        name = mod.relative_to(ROOT).as_posix()
+        src = mod.read_text(encoding="utf-8")
+        for target in imports.findall(strip_ts_comments(src)):
+            if "backend/" in target:
+                problems.append(f"{name} imports backend module {target}")
+        for line_no, line in enumerate(strip_ts_noise(src).splitlines(), 1):
+            hit = word.search(line)
+            if hit:
+                problems.append(f"{name}:{line_no} names backend concept `{hit.group(1)}`")
+
+    if problems:
+        for p in problems[:6]:
+            rep.fail("backend seam", p)
+        if len(problems) > 6:
+            rep.fail("backend seam", f"...and {len(problems) - 6} more")
+    else:
+        rep.ok("backend seam", f"{len(core)} core modules free of backend imports + Row")
+
 
 def check_arcanum(rep: Report) -> None:
     """tools/arcanum.py must still produce strings Arcanum can import.
@@ -674,9 +738,15 @@ def check_toolchain(rep: Report) -> None:
 
     TWO tsc targets, because there are two runtimes on one engine. tsconfig.json
     is the browser (DOM lib, `types: []` so Node globals stay out of src/);
-    tsconfig.tools.json is the command-line entry points (Node types, no DOM).
-    Checking only the first would let them rot silently — and tools/query.ts is
-    the proof that the engine detaches, so it has to compile.
+    tsconfig.tools.json is everything that runs on NODE — the command-line entry
+    points and the test suite (Node types, no DOM). Checking only the first
+    would let them rot silently — and tools/query.ts is the proof that the
+    engine detaches, so it has to compile.
+
+    The tests run here rather than in a habit anyone has to remember, so there
+    is one definition of "does this pass" and CI runs the same one. `npm test`
+    bundles them first: Node strips TYPES but does not resolve extensionless
+    imports, and every module in this repo writes `from "./y"`.
 
     A new entry point has to be listed in BOTH tools/build.mjs and
     tsconfig.tools.json; check_cli_entries below is what makes forgetting one
@@ -689,6 +759,7 @@ def check_toolchain(rep: Report) -> None:
              "esbuild src/main.ts -> site/js/app.js")
     run_tool(rep, "cli bundle", ["node", "tools/build.mjs", "--cli"],
              "esbuild tools/*.ts -> tools/*.mjs (query, measure)")
+    run_tool(rep, "tests", ["npm", "test", "--silent"], "node --test over test/*.test.ts")
     run_tool(rep, "mypy", ["python", "-m", "mypy", "build/build_data.py", "tools"])
     run_tool(rep, "pyflakes", ["python", "-m", "pyflakes", "build/build_data.py", "tools"])
 
