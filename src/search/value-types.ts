@@ -251,7 +251,7 @@ export const count = defineType<number>({
  * @param spec Storage, the notations it reads and writes, and optional sentinels, plus the type's name and hint.
  * @returns The registered type.
  */
-function numeric(spec: NumericSpec & {name: string; hint: string; ui?: Affordance}): AxisType<number> {
+function numeric(spec: NumericSpec & { name: string; hint: string; ui?: Affordance }): AxisType<number> {
     return defineType<number>({
         name: spec.name,
         storage: spec.storage,
@@ -321,8 +321,10 @@ export const percentChange = numeric({
     storage: "float",
     display: {unit: "%", factor: 1, sign: "required"},
     accepts: [
-        {unit: "x", aliases: ["×"], position: "before", factor: 100, offset: -100,
-            sign: "refused", bare: {atMost: 10}},
+        {
+            unit: "x", aliases: ["×"], position: "before", factor: 100, offset: -100,
+            sign: "refused", bare: {atMost: 10}
+        },
         {unit: "%", factor: 1, offset: -100, sign: "refused", bare: {above: 10}},
     ],
     hint: "a change such as +50, a factor such as 2 or x1.5, or 150 as a proportion of the original",
