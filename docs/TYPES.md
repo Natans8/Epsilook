@@ -656,6 +656,8 @@ a type — it is an axis with three notations, each of which has a real type.
 
 ## 8. THE KIND CATALOGUE — every kind, its properties, and each property's type
 
+**Navigating this file:** `§` references are **grep keys, not links** — search the number (`2.4.3`, `L5.2`, `8.6`) to jump. Every key is a heading or a bold label in this file unless it names another document (`TYPES §3`).
+
 **⚠ REBUILT 2026-08-10 after `SEARCH.md` L5.2.** This was a flat "value → type" list, which the kind model supersedes:
 a type belongs to a **property**, a property belongs to a **kind**, and a kind belongs to a **column**. **This table is
 the PHASE 5 port order and the PHASE 2 declaration list.**
@@ -743,7 +745,7 @@ property from an identifier (CLAUDE.md's standing rule).
 
 | # | what | why |
 |---|---|---|
-| 1 | **`invis` becomes two kinds** — `invis{channel}` and `detect{channel,count}` | one word carried a channel id AND a detector count, told apart by whether an operator was typed (`operatorOnly`). Two quantities are two things (§4.2b) |
+| 1 | **`invis` becomes two kinds** — `invis{channel}` and `detect{channel,count}` | one word carried a channel id AND a detector count, told apart by whether an operator was typed (`operatorOnly`). Two quantities are two things (TYPES §3) |
 | 2 | **`from` / `to` replace the unioned `attach`** on missile and chain | **2,014 of 2,997 beam rows have different source and destination attachments.** `attach` survives as the declared UNION |
 | 3 | **the model category word `attach` → `attached`** | it collides with the attachment keyword: `model:attach` is 16, `model:{attach:chest}` is 51,581. Gate G1 fails today |
 | 4 | **`ghost` was two registrations** (`fx:shadowy`, `fx:ghostmat`) under one word | one word, two kinds — decide whether they are one kind with a `material` property, or two words |

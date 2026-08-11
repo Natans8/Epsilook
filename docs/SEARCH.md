@@ -332,7 +332,7 @@ model:*                      has any model row at all
 model:{target:caster}        any model row, kind-agnostic, playing on the caster
 ```
 
-**⛔ THIS AMENDS THE DEPTH CAP (§2.4.3g), which said depth is fixed at 1 because a second scope has no referent.** The
+**⛔ THIS AMENDS THE DEPTH CAP (§2.4.3(g)), which said depth is fixed at 1 because a second scope has no referent.** The
 premise was right; the conclusion was too strong. **Depth is bounded by how deep the DATA nests, not by a constant.** A
 kind scope is depth 1 and every property today is a scalar, **so 1 remains the practical limit** — but the moment a
 property is itself an object (a missile's sound), `missile:{sound:{…}}` has a referent and is legal. **A brace is legal
@@ -347,6 +347,8 @@ instead of a row of loose chips, and the help documents a missile in one place. 
 it possible.
 
 #### ONE BARE TOKEN AFTER A KIND — it searches ALL the properties (user, 2026-08-10)
+
+**Navigating this file:** `§` references are **grep keys, not links** — search the number (`2.4.3`, `L5.2`, `8.6`) to jump. Every key is a heading or a bold label in this file unless it names another document (`TYPES §3`).
 
 ***"If we input just one token that is not curly brackets after an object type, it should have a defined behaviour"*** —
 then, correcting a far more elaborate answer: ***"I meant more like search across multiple properties, like a scope has
@@ -413,7 +415,7 @@ property whose value has type `path`.
 
 - **ROLES stop being a special case.** `from` and `to` are simply two properties that happen to share a type. There is
   no "role" mechanism to build — **an axis whose value needs the word "or" to describe was always two axes**
-  (TYPES §4.2b), and this is that rule one level down.
+  (TYPES TYPES §3), and this is that rule one level down.
 - **⭐ THE PILL AND THE AXIS STOP BEING TWO DECLARATIONS.** The build plan listed "declare the axis" and "declare the
   pill" as separate steps; a kind is **one** declaration feeding search and render, which is the extension contract
   actually delivered rather than promised.
@@ -536,7 +538,7 @@ guess right about what it does. Concretely, four failures — any one of them is
 | `model:attach` (16) vs `model:{attach:chest}` (51,581)   | ⛔ **FAILS (3).** `attach` is a category word AND the keyword, in one column                    |
 | `anim:kit` (31,291) vs `sound:kit` (2,516)               | ⛔ **FAILS (3)** globally — so `kit:` gets no global door                                       |
 | `replace:`, `loose:`                                     | ⛔ **FAILS (1).** Replace *what*? Meaningless outside their column                              |
-| `model:fire -model:missile`                              | 🟡 **withdrawn** — correct for "no missile anywhere"; the ambiguity is in the ENGLISH (§8.9.3b) |
+| `model:fire -model:missile`                              | 🟡 **withdrawn** — correct for "no missile anywhere"; the ambiguity is in the ENGLISH (§8.9.3) |
 | `-model:{-caster}`                                       | ⛔ **FAILS (4).** Already deleted for being measured wrong                                      |
 
 **Three earlier decisions are its special cases**, each taken for a narrower reason: banning bare scope negation,
@@ -636,7 +638,7 @@ export interface Axis {
     test(row: Row, q: AxisQuery, d: SpellData): boolean;
 
     /** ⚠ THE SECOND CALLBACK, and it exists because `count` cannot be a row
-     *  predicate — a row has no cardinality (§2.4.3a). Declaring it here is
+     *  predicate — a row has no cardinality (§2.4.3(a)). Declaring it here is
      *  what keeps `count` an AXIS instead of a kernel special case, which
      *  §2.5's forbidden-thing #2 would otherwise make it. An axis declares
      *  `test` OR `testRows`, never both. */
@@ -916,7 +918,7 @@ clause   := "-"? ( scope | bind | term )
 
 scope    := axis ":" "{" inner "}"               ONE ROW of that column satisfies all of it (L3)
 inner    := iclause ( iclause | "|" iclause )*
-iclause  := "-"? ( bind | term )                 NO scope here: depth is capped at 1 (§2.4.3g)
+iclause  := "-"? ( bind | term )                 NO scope here: depth is capped at 1 (§2.4.3(g))
 
 bind     := axis ":" value                       an axis and its value — at ANY level
 term     := value                                bare = a content match
@@ -1043,7 +1045,7 @@ negative.
 A recursive grammar creates combinations nobody typed on purpose. Each of these was found by walking the BNF against the
 laws; leaving any of them undefined is how 1.0 got its exceptions.
 
-**(a) `count` is a property of the SCOPE, not of a row.** It is the one axis that cannot be a row predicate — a row has
+**2.4.3(a) `count` is a property of the SCOPE, not of a row.** It is the one axis that cannot be a row predicate — a row has
 no cardinality. Inside a scope it counts **the rows that satisfy the rest of that scope's predicate**:
 
     model:{target:caster count:>4}   more than four CASTER model rows   ← filtered count, §9 #3
@@ -1052,13 +1054,13 @@ no cardinality. Inside a scope it counts **the rows that satisfy the rest of tha
 
 So the register's filtered-count entry is not a special case; it is what `count` already means once a scope exists.
 
-**(b) A VALUE GROUP is one value.** `(a|b)` after a colon binds as a single value, so nesting never changes what an axis
+**2.4.3(b) A VALUE GROUP is one value.** `(a|b)` after a colon binds as a single value, so nesting never changes what an axis
 consumed:
 
     model:{attach:chest}              one value
     model:{attach:(chest|head)}       still one value — the group IS the value
 
-**(c) `-` prefixes a CLAUSE, and a bind is one clause.** With `:` doing the binding (L6) there is no word-form ambiguity
+**2.4.3(c) `-` prefixes a CLAUSE, and a bind is one clause.** With `:` doing the binding (L6) there is no word-form ambiguity
 left to resolve:
 
     -attach:chest                   NOT attached at chest        ← the only form at clause level
@@ -1069,12 +1071,12 @@ left to resolve:
 **Negation is never an axis's VALUE** — there is no "negated value", only a negated clause. `scale:-50` is therefore
 minus fifty, unambiguously, because `-` there sits in value position (§4.1).
 
-**(d) A scope may not name another column's axis.** `model:{sound:fire}` is a static error, not an empty result: the
+**2.4.3(d) A scope may not name another column's axis.** `model:{sound:fire}` is a static error, not an empty result: the
 scope is a set of MODEL rows and a sound axis cannot read one. Universal axes (`count`, `target`) are the exception —
 they apply in every scope by definition (L1). Reject at parse time and say so in the bar; L2's "answer, never fall
 through" is about DATA, not about nonsense.
 
-**(e) EMPTY GROUPS ARE IDENTITIES, NOT ERRORS — corrected 2026-08-10 on the user's challenge** (*"can't `{}` just be
+**2.4.3(e) EMPTY GROUPS ARE IDENTITIES, NOT ERRORS — corrected 2026-08-10 on the user's challenge** (*"can't `{}` just be
 ignored as a junk token?"*). An earlier draft called them a static error. That was wrong for a practical reason and an
 arithmetical one.
 
@@ -1098,12 +1100,12 @@ agreeing is a consequence rather than a coincidence. **This is also a good live-
 **A stray `{}` or `()` in top-level free text is neither** — it is ordinary character data, because those delimiters are
 only active where a value or clause is expected (§2.4.0). `fireball {2}` searches literally.
 
-**(f) Two spellings of OR is one too many — `,` is retained ONLY for numbers.** `id:133,134` stays because a bare list
+**2.4.3(f) Two spellings of OR is one too many — `,` is retained ONLY for numbers.** `id:133,134` stays because a bare list
 of ids is how people paste them, and the rule is syntactic (every part a number), not per-field. Everywhere else `|` is
 the only OR. ⚠ This is a deliberate exception to L1 and the only one in the grammar; if it ever causes a question,
 delete it rather than growing it.
 
-**(g) ⭐ NESTED `{ }` — DEPTH FOLLOWS THE DATA. ⚠ AMENDED BY L5.2: this section said depth is fixed at 1; the rule is now
+**2.4.3(g) ⭐ NESTED `{ }` — DEPTH FOLLOWS THE DATA. ⚠ AMENDED BY L5.2: this section said depth is fixed at 1; the rule is now
 that a brace is legal exactly where something has PROPERTIES, which today means 1.**
 
 **A row scope binds its contents to ONE ROW. Inside it you are already at a row, so a second scope has nothing left to
@@ -1376,10 +1378,10 @@ which is the failure mode that makes people turn off "search as you type".
 |---|-------------------------|-------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
 | 1 | **unknown axis**        | `foo:bar`, `Hero: Illidan`                            | ⚠ **NOT an error — literal text**, plus a hint. See below                                                                           |
 | 2 | declined operator       | `name:>m`                                             | error: *the name axis has no ordering*                                                                                               |
-| 3 | foreign axis in a scope | `model:{sound:fire}`                                  | error: *a sound axis cannot read a model row* (§2.4.3d)                                                                              |
+| 3 | foreign axis in a scope | `model:{sound:fire}`                                  | error: *a sound axis cannot read a model row* (§2.4.3(d))                                                                              |
 | 4 | ill-typed value         | `scale:abc`                                           | error: *scale takes a percentage* — never a zero result                                                                              |
 | 5 | contradictory value     | `name:=Fire*`                                         | error: *exact and pattern cannot combine* (TYPES §3)                                                                                 |
-| 6 | structural              | unbalanced, or no positive anchor — **on PASTE only** | error (§4.9.9). ⚠ While typing or editing both are INCOMPLETE and silent (§4.9.8); `{}` is never here — it is an identity (§2.4.3e) |
+| 6 | structural              | unbalanced, or no positive anchor — **on PASTE only** | error (§4.9.9). ⚠ While typing or editing both are INCOMPLETE and silent (§4.9.8); `{}` is never here — it is an identity (§2.4.3(e)) |
 
 **⭐ #1 IS THE IMPORTANT ONE AND IT IS DATA THAT DECIDES IT. 12,477 spell names contain a colon** — *Embody Hero:
 Illidan*, *Power Converters: Summon Electromental*. If an unknown prefix were an error, **pasting a spell name would be
@@ -1420,7 +1422,7 @@ screen cannot be missed; an empty result set can be mistaken for a real answer.
 |-------------|-----------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **ERROR**   | cannot run; the clause is excluded and drawn broken | `name:>m` (declined operator) · `model:{sound:fire}` (foreign axis) · `scale:abc` (ill-typed) · `name:=Fire*`                                                                          |
 | **WARNING** | runs, and is probably not what was meant            | `model:bee*` → a glob on a path is a **no-op** (§3.2) · `model:{arcane -fire}` → row negation whose terms almost never co-occur (§8.9.3) · a clause that alone reduces the result to 0 |
-| **NOTE**    | correct, and worth saying                           | `model:{}` ≡ `model:*` "has any model" (§2.4.3e) · `count:>4` is the wide union (L5)                                                                                                   |
+| **NOTE**    | correct, and worth saying                           | `model:{}` ≡ `model:*` "has any model" (§2.4.3(e)) · `count:>4` is the wide union (L5)                                                                                                   |
 
 **The WARNING tier exists because this design keeps producing forms that are legal, evaluable and misleading** — and
 §9.1's whole thesis is that a plausible wrong answer beats no answer only in appearance. An error tier alone would have
@@ -1503,7 +1505,7 @@ devtools consoles all do exactly this set:
 registry already knows which position it is in, so this is a parse question, not a keystroke question.** That is what
 makes it a convenience rather than a nuisance.
 
-**And it is why `{}` had to become an identity rather than an error (§2.4.3e):** auto-closing means the editor CREATES
+**And it is why `{}` had to become an identity rather than an error (§2.4.3(e)):** auto-closing means the editor CREATES
 the empty pair on the way to a real one. `model:{‸}` is a state the app authored, so erroring on it would be the app
 shouting at itself.
 
@@ -1603,7 +1605,7 @@ they collapse into a single rule.
 > what has been typed.**
 
 That is one sentence covering every row below, and **`model:{}` is not an exception to it** — dropping an incomplete
-scope body leaves an empty conjunction, which is `true`, which is `model:*` (§2.4.3e). The identity falls out of the
+scope body leaves an empty conjunction, which is `true`, which is `model:*` (§2.4.3(e)). The identity falls out of the
 rule rather than being carved beside it.
 
 #### The catalogue
@@ -1712,7 +1714,7 @@ reachable by a typed hyphen instead of stranding them — a fold applied to only
 | pasted                                       | becomes                                      |
 |----------------------------------------------|----------------------------------------------|
 | `.cast 12345`, `.aura 12345`                 | `id:12345` — 1.0 behaviour, kept             |
-| several numbers, comma- or newline-separated | `id:1,2,3` — the numeric-list form (§2.4.3f) |
+| several numbers, comma- or newline-separated | `id:1,2,3` — the numeric-list form (§2.4.3(f)) |
 | an Epsilook URL                              | its own query, restored verbatim             |
 | a Wowhead `spell=133` URL                    | `id:133`                                     |
 | anything else                                | parse as a query; if that fails, plain text  |
@@ -1747,7 +1749,7 @@ bar, and treating them alike would rewrite text the user meant literally.
 |                                 |                                                                                     |
 |---------------------------------|-------------------------------------------------------------------------------------|
 | closing an unbalanced delimiter | at the next clause boundary (§4.9.4), reported as a warning with the repaired query |
-| shape rewriting                 | `.cast 12345` → `id:12345`, a Wowhead URL → `id:133` (§4.9.9b)                      |
+| shape rewriting                 | `.cast 12345` → `id:12345`, a Wowhead URL → `id:133` (§4.9.9)                      |
 
 ##### Tier 3 — NEVER
 
@@ -2295,7 +2297,7 @@ Two rulings the old wording left open:
 
 - **`count` SATISFIES the anchor.** `model:{count:>4}` is legal — it is a positive assertion about the row set, and
   §2.4.3 (a) already makes `count` a scope-level predicate rather than a row one.
-- **`model:{}` is legal** and equals `model:*` (§2.4.3e). An empty conjunction has no disjunct to anchor, so the rule
+- **`model:{}` is legal** and equals `model:*` (§2.4.3(e)). An empty conjunction has no disjunct to anchor, so the rule
   does not apply to it — vacuous rather than violated.
 
 ### P0-f — D5: recovery syncs on a CLAUSE THAT CANNOT BELONG TO THE SCOPE
@@ -2327,7 +2329,7 @@ nobody has taken. **⛔ NONE OF IT IS "DEBT".** ✅ **All five BLOCKING rows wer
 | ~~D1~~ ✅ P0-c           | **Tokenization is registry-dependent at VALUE level, and §2.4.1 claims it is not.** `name:anti-magic` is one token but `scale:10-90` is a range — the tokenizer must know the type to split it, and TYPES §5's units do it again (`500ms-2s`). **§2.4.1's claim is true at CLAUSE level only** (where a `-` attaches), which is the weaker statement                                                                                                                                      | State the honest scope of the claim. Then: **changing an axis's type is a BREAKING LANGUAGE CHANGE** — promoting `xpac` from `enum` to `ordinal` silently re-reads `id:{xpac:legion-wotlk}` from a token to a range. It needs the query-version marker in D2 |
 | ~~D2~~ ⛔ WONTFIX (P0-b) | **1.0 URLs are silently REINTERPRETED, which is the one pathology §9.1 condemns.** Back-compat was waived for ALIASES (§8.6); it was never waived for meaning. `model:"attach chest"` was **51,581** and becomes a phrase search for the literal substring ≈ **0**                                                                                                                                                                                                                        | Add a query-format marker (`v=2`, or `q2=`). A query without it is **detected and refused with an explanation**, never silently re-read. Cheap, and it is the only thing standing between a shared link and a plausible wrong answer                         |
 | ~~D3~~ ✅ P0-d           | **Relevance is unspecified beyond a per-axis tier.** L7 gives `tier?: number` and nothing else: no rule for a spell hitting three axes at three tiers, no tie-break, no within-tier score, no statement of stability. §8.5 deleted 1.0's name-only scoring and put nothing in its place                                                                                                                                                                                                   | Specify: the spell's tier is its BEST hit; ties break on a declared secondary; the sort must be stable. And say how the existing `sort=-<column>` coexists                                                                                                   |
-| ~~D4~~ ✅ P0-e           | **The positive-anchor rule is defeatable and does not compose.** `model:{fire\|-missile}` has an anchor and means ∃row(fire ∨ ¬missile) — true of nearly everything. `model:{count:>4}` has NO row predicate at all yet is legal (§2.4.3a). `model:{}` has none either yet is legal (§2.4.3e)                                                                                                                                                                                             | Restate per DNF TERM inside the scope, not per scope. Then rule explicitly on whether `count` and the empty scope satisfy it — currently three sections disagree                                                                                             |
+| ~~D4~~ ✅ P0-e           | **The positive-anchor rule is defeatable and does not compose.** `model:{fire\|-missile}` has an anchor and means ∃row(fire ∨ ¬missile) — true of nearly everything. `model:{count:>4}` has NO row predicate at all yet is legal (§2.4.3(a)). `model:{}` has none either yet is legal (§2.4.3(e))                                                                                                                                                                                             | Restate per DNF TERM inside the scope, not per scope. Then rule explicitly on whether `count` and the empty scope satisfy it — currently three sections disagree                                                                                             |
 | ~~D5~~ ✅ P0-f           | **The panic-mode recovery rule names a token that cannot occur where it is used.** §4.9.4 synchronises on *"`axis:` at depth zero"* — but recovery happens INSIDE an unclosed scope, i.e. at depth 1, so no such token exists. The rule that actually produces the worked example is *"the next `axis:` not legal in this scope"*, which is registry-dependent and misfires on universals: `model:{fire count:>4` and `model:{fire sound:ice` have the same shape and recover differently | Restate the sync token, and rule on `target:` / `count:` explicitly                                                                                                                                                                                          |
 
 ### 10.2 SERIOUS
