@@ -3,78 +3,78 @@
     "id": "1.15.9.69109",
     "label": "Vanilla Classic 1.15.9",
     "file": "data/1.15.9.69109/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "7bf9403e1b"
+    "built": "2026-08-11",
+    "hash": "c39bfe85ea"
   },
   {
     "id": "2.5.6.69110",
     "label": "TBC Classic 2.5.6",
     "file": "data/2.5.6.69110/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "431b14da58"
+    "built": "2026-08-11",
+    "hash": "dee8325948"
   },
   {
     "id": "3.4.3.58936",
     "label": "WotLK Classic 3.4.3",
     "file": "data/3.4.3.58936/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "991efbe36a"
+    "built": "2026-08-11",
+    "hash": "e8ce15f58c"
   },
   {
     "id": "4.4.2.60895",
     "label": "Cataclysm Classic 4.4.2",
     "file": "data/4.4.2.60895/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "2387301bfa"
+    "built": "2026-08-11",
+    "hash": "1eecddaeaa"
   },
   {
     "id": "5.5.4.69155",
     "label": "MoP Classic 5.5.4",
     "file": "data/5.5.4.69155/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "8ca7bcd9a0"
+    "built": "2026-08-11",
+    "hash": "9b9227b3b3"
   },
   {
     "id": "7.3.5.26972",
     "label": "Legion 7.3.5",
     "file": "data/7.3.5.26972/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "daed4d6adb"
+    "built": "2026-08-11",
+    "hash": "9a7346d318"
   },
   {
     "id": "8.3.7.35662",
     "label": "Battle for Azeroth 8.3.7",
     "file": "data/8.3.7.35662/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "b0012e0c66"
+    "built": "2026-08-11",
+    "hash": "361b070adf"
   },
   {
     "id": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "beb7773b1b",
+    "built": "2026-08-11",
+    "hash": "c10540c745",
     "default": true
   },
   {
     "id": "10.2.7.55664",
     "label": "Dragonflight 10.2.7",
     "file": "data/10.2.7.55664/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "db7595b68e"
+    "built": "2026-08-11",
+    "hash": "d7b6f8cca7"
   },
   {
     "id": "11.2.7.65299",
     "label": "The War Within 11.2.7",
     "file": "data/11.2.7.65299/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "a2c130fba1"
+    "built": "2026-08-11",
+    "hash": "5a9985b055"
   },
   {
     "id": "12.0.7.68974",
     "label": "Midnight 12.0.7",
     "file": "data/12.0.7.68974/spelldata.json.gz",
-    "built": "2026-08-10",
-    "hash": "a25b98515f"
+    "built": "2026-08-11",
+    "hash": "04deb0e724"
   }
 ]

@@ -637,15 +637,50 @@ def run_tool(rep: Report, name: str, cmd: list[str], detail: str = "") -> None:
         print(f"        {DIM}... {len(output) - 12} more lines{RESET}")
 
 
+def check_cli_entries(rep: Report) -> None:
+    """Every command-line entry point is BUNDLED and TYPECHECKED, not one or
+    the other.
+
+    A CLI entry has to be named twice — `CLI_ENTRIES` in tools/build.mjs so
+    esbuild emits it, and `include` in tsconfig.tools.json so tsc reads it —
+    and neither file notices the other's omission. Missing from the tsconfig,
+    the tool still bundles and still runs, so it type-checks only by accident
+    and rots the first time src/ changes under it; missing from build.mjs, the
+    npm script runs a stale .mjs or none at all.
+
+    A guard rather than a comment, per this repo's own rule: prose cannot fire.
+    """
+    build = (ROOT / "tools" / "build.mjs").read_text(encoding="utf-8")
+    tsconf = (ROOT / "tsconfig.tools.json").read_text(encoding="utf-8")
+    m = re.search(r"CLI_ENTRIES\s*=\s*\[(.*?)]", build, re.S)
+    if not m:
+        rep.fail("cli entries", "no CLI_ENTRIES list in tools/build.mjs")
+        return
+    bundled = set(re.findall(r"[\"']([\w.-]+)[\"']", m.group(1)))
+    typed = {p.rsplit("/", 1)[-1].removesuffix(".ts")
+             for p in re.findall(r"[\"'](tools/[\w.-]+\.ts)[\"']", tsconf)}
+    problems = [f"{n}: bundled, not in tsconfig.tools.json" for n in sorted(bundled - typed)]
+    problems += [f"{n}: typechecked, not in CLI_ENTRIES" for n in sorted(typed - bundled)]
+    if problems:
+        rep.fail("cli entries", "; ".join(problems))
+    else:
+        rep.ok("cli entries", f"{len(bundled)} bundled and typechecked: "
+                              f"{', '.join(sorted(bundled))}")
+
+
 def check_toolchain(rep: Report) -> None:
     """tsc needs `npm install` once (typescript and esbuild are pinned
     devDependencies); the build doubles as the module-graph guard.
 
     TWO tsc targets, because there are two runtimes on one engine. tsconfig.json
     is the browser (DOM lib, `types: []` so Node globals stay out of src/);
-    tsconfig.tools.json is the command-line UI (Node types, no DOM). Checking
-    only the first would let tools/query.ts rot silently — and it is the proof
-    that the engine detaches, so it has to compile.
+    tsconfig.tools.json is the command-line entry points (Node types, no DOM).
+    Checking only the first would let them rot silently — and tools/query.ts is
+    the proof that the engine detaches, so it has to compile.
+
+    A new entry point has to be listed in BOTH tools/build.mjs and
+    tsconfig.tools.json; check_cli_entries below is what makes forgetting one
+    of them fail rather than pass.
     """
     run_tool(rep, "tsc", ["npx", "tsc"], "strict, tsconfig.json (browser)")
     run_tool(rep, "tsc (cli)", ["npx", "tsc", "-p", "tsconfig.tools.json"],
@@ -653,7 +688,7 @@ def check_toolchain(rep: Report) -> None:
     run_tool(rep, "bundle", ["npm", "run", "--silent", "build"],
              "esbuild src/main.ts -> site/js/app.js")
     run_tool(rep, "cli bundle", ["node", "tools/build.mjs", "--cli"],
-             "esbuild tools/query.ts -> tools/query.mjs")
+             "esbuild tools/*.ts -> tools/*.mjs (query, measure)")
     run_tool(rep, "mypy", ["python", "-m", "mypy", "build/build_data.py", "tools"])
     run_tool(rep, "pyflakes", ["python", "-m", "pyflakes", "build/build_data.py", "tools"])
 
@@ -682,6 +717,7 @@ def main() -> int:
     check_manifest(rep)
     check_pack_sections(rep)
     check_layers(rep)
+    check_cli_entries(rep)
     check_arcanum(rep)
     check_pack_freshness(rep)
     check_inspectors(rep)

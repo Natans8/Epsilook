@@ -13,6 +13,7 @@
     ]
   },
   "include": [
-    "tools/query.ts"
+    "tools/query.ts",
+    "tools/measure.ts"
   ]
 }

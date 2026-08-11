@@ -1295,9 +1295,87 @@ def implicit_target_bits(version: str) -> dict[int, int]:
             if (b := implicit_target_bit(name))}
 
 
+# ── §3z numeric domains ──────────────────────────────────────────────────
+# What a control has to know in order to draw itself, MEASURED PER PACK and
+# shipped in meta beside the counts.
+#
+# ⛔ IT IS MEASURED, NEVER DECLARED. Value sets differ per game version, so a
+# min/max read off 9.2.7 is wrong on the other ten — and the app would have to
+# re-derive them over ~276k spells on every page load to get them honestly.
+# The build already holds the values, so it pays that cost once for everyone.
+#
+# ⚠ MIN AND MAX ARE THE LEAST USEFUL TWO OF THESE. Each of the others exists
+# because some decision needs it and nothing else supplies it:
+#   step       the smallest gap between adjacent values. A slider stepping by
+#              1 over a column whose values are all multiples of 5 offers four
+#              dead positions out of every five
+#   p1 / p99   ROBUST bounds. Sentinels and garbage live in these columns, so
+#              a control spans these and says `clipped` when it hid something
+#   mode       how much of the column is one DEFAULT value. A column that is
+#              90% zero is a different proposition from one that varies, and
+#              no other number here would say so
+#   distinct   decides the affordance: a handful of values wants a picker, a
+#              thousand wants a slider — and both can be the same type
+#   signed     whether `-` in value position can be a sign at all
+NUMERIC_PICKER_MAX = 24
+
+
+def numeric_domain(values: Iterable[float],
+                   sentinels: Iterable[float] = ()) -> dict[str, Any] | None:
+    """Everything derivable about one numeric axis's values in this pack.
+
+    `sentinels` are markers rather than quantities — a channel's -1 means "no
+    limit", not minus a millisecond — and are counted out before any bound is
+    taken, because one of them at either end silently ruins every bound.
+
+    Returns None when the axis has no values here, which is how a pack that
+    lacks the data ends up with no entry rather than a fake empty one.
+    """
+    skip = set(sentinels)
+    raw = list(values)
+    if not raw:
+        return None
+    vals = sorted(v for v in raw if v not in skip)
+    if not vals:
+        return None
+    uniq = sorted(set(vals))
+    mode, mode_n = Counter(vals).most_common(1)[0]
+
+    def at(q: float) -> float:
+        return vals[min(len(vals) - 1, int(len(vals) * q))]
+
+    lo, hi, p1, p99 = vals[0], vals[-1], at(0.01), at(0.99)
+    dom: dict[str, Any] = {
+        "n": len(vals),
+        "min": lo,
+        "max": hi,
+        "distinct": len(uniq),
+        "mean": round(sum(vals) / len(vals), 4),
+        "median": at(0.5),
+        "p1": p1,
+        "p99": p99,
+        "clipped": p1 != lo or p99 != hi,
+        # rounded because these are floats: the gap between 25.2 and 25.4 comes
+        # out of binary as 0.19999999999999996, and a control offering that as
+        # its step is arithmetic noise leaking into the UI
+        "step": round(min((b - a for a, b in zip(uniq, uniq[1:])), default=0), 6),
+        "mode": mode,
+        "modeShare": round(mode_n / len(vals), 4),
+        "signed": lo < 0,
+        "sentinels": len(raw) - len(vals),
+        "ui": "picker" if len(uniq) <= NUMERIC_PICKER_MAX else "range",
+    }
+    if len(uniq) <= NUMERIC_PICKER_MAX:
+        # the picker's actual options, so the control is GENERATED rather than
+        # hand-listed anywhere app-side
+        dom["values"] = uniq
+    return dom
+
+
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 45  # 45: spellText.auras — what the BUFF says, beside what the cast says (§3x)
+PACK_FORMAT = 46  # 46: meta.domains — what a numeric control needs, measured per pack (§3z)
+# 45: spellText.auras — what the BUFF says, beside what the cast says (§3x)
 # 44: iconNames gains iconFids — the icon's own identity (§3y)
 # 43: spellText — cooked description + encounter prose (§3x)
 # 42: spells.eras + expansions — which expansion added a spell (§3v)
@@ -4658,6 +4736,31 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "screens": len(screen_ids),
                 "icons": len(icon_names),
             },
+            # §3z what every numeric axis's values look like IN THIS PACK, so
+            # a control can be drawn without the app re-deriving it per load.
+            # ⭐ ADDING AN AXIS IS ONE ROW HERE and nothing else — that is the
+            # whole point of the table, and the reason the shape is uniform.
+            "domains": {k: v for k, v in (
+                ("scale", numeric_domain(r[1] for r in scale_rows)),
+                ("speed", numeric_domain(r[2] for r in speed_rows)),
+                ("transparency", numeric_domain(r[1] for r in transp_pairs)),
+                ("desaturate", numeric_domain(r[1] for r in desat_pairs)),
+                # castMs 0 means "no cast bar", which is an absence rather than
+                # a zero-second cast, so it is not part of the domain
+                ("casttime", numeric_domain(r[1] for r in delivery if r[1] > 0)),
+                # durMs -1 = unlimited (a marker), 0 = no duration row at all
+                ("channel", numeric_domain((r[2] for r in delivery if r[2] != 0),
+                                           sentinels=(-1,))),
+                ("seat", numeric_domain(Counter(r[0] for r in vehicle_seat_rows).values())),
+                ("invis", numeric_domain(r[1] for r in invis_rows)),
+                # the universal `count` axis, one domain per column: how many
+                # rows a spell carries there. What a "count > 4" control spans
+                ("count.model", numeric_domain(Counter(r[0] for r in model_rows).values())),
+                ("count.sound", numeric_domain(Counter(r[0] for r in sound_rows).values())),
+                ("count.anim", numeric_domain(Counter(r[0] for r in anim_rows).values())),
+                ("count.fx", numeric_domain(Counter(r[0] for r in fx_rows).values())),
+                ("count.mech", numeric_domain(Counter(r[0] for r in mechanic_rows).values())),
+            ) if v is not None},
         },
         "spells": spells,
         # §3x WHAT A SPELL SAYS IT DOES, cooked to placeholder-free prose by

@@ -1975,18 +1975,27 @@ expensive**, because it forces a full walk to prove absence. The risk is real; t
    than four model rows).
 2. **Plain search is the common case and it is the widest.** L7 makes chipless search `AXES.filter(a => a.plain)`, so
    one character sweeps names, the 79,330-row description corpus, every path corpus and icon names — all of them.
-3. **⚠ THE INTERMEDIATE STATES ARE THE EXPENSIVE ONES.** §4.9.8 evaluates the largest well-formed subset, so
-   `model:{attach:` is live as `model:*`. **The widest query is the one the user spends most of their keystrokes in.**
+3. **⛔ STRUCK 2026-08-11 — THIS SAID "THE INTERMEDIATE STATES ARE THE EXPENSIVE ONES… the widest query is the one the
+   user spends most of their keystrokes in." MEASURED, IT IS BACKWARDS.** A wide query matches on the FIRST corpus it
+   tries and stops; a selective one must prove absence across every row of every column. On 9.2.7, plain search through
+   the forward walk: **`f` (185,353 matches) = 70 ms · `fireball` (4,861 matches) = 185 ms.** The names-only line is
+   flat at ~13 ms throughout, which is what proves the cost is the row walk that only runs when the name misses.
+   **So the expensive keystroke is the LAST one, not the first** — and that is worse, because it is the state the user
+   stops in and reads. Same shape as the negation correction above; the forward index makes *absence* expensive, and a
+   selective query is mostly absence.
 4. **`id:133` degrades from a hash lookup to a 276,332-spell scan** — the app's single most common query shape, and
    §4.9.9 (b) routes three more paste forms into it.
 
-**THE ESCAPE HATCH, and it is a DECLARATION so it does not breach §2.5:**
+**⛔ COST #1 IS MEASURED AND IT IS NOT REAL. PHASE 1, 2026-08-11: a non-allocating visitor came in at 179.3 ms against
+179.5 ms for a `Row[]`-returning source — allocation is FREE at this scale.** V8's young generation absorbs a million
+short-lived objects that die immediately; the cost is the number of rows VISITED and nothing else. **So `forEachRow` is
+deleted from the design as a premature optimisation** — it complicated `Column` for no measurable gain. `rows()` stays.
+(And L5.2's `{kind, props}` costs ~4% over a flat bag, which is noise: the row SHAPE question is settled in its favour.)
+
+**THE ESCAPE HATCH THAT IS REAL, and it is a DECLARATION so it does not breach §2.5:**
 
 ```text
 on Column, beside rows() — a FRAGMENT, not compilable source
-
-    forEachRow(d, spellId, visit: (r: Row) => boolean): void
-        non-allocating; visit returns false to stop early
 
     candidates?(d: SpellData, q: AxisQuery): Iterable<number> | null
         an inverted-index seed set, or null to fall back to the full walk
@@ -1997,9 +2006,14 @@ on Column, beside rows() — a FRAGMENT, not compilable source
 when it returns null. **This is the conventional shape** (L0: Lucene's `DocIdSetIterator`, Postgres choosing index scan
 or seq scan), and it is the same move `size?()` already makes for `count`.
 
-**⛔ AND A BUDGET, BECAUSE §2.5's TEST MEASURES FILES EDITED AND NOTHING MEASURES TIME.** Before the kernel is called
-done: **a stated p95 milliseconds-per-keystroke target on 9.2.7, measured on the plain-search path**, which is both the
-commonest and the widest. A design with no latency number cannot fail a latency test.
+**⛔ AND THERE IS NO BUDGET — the user's call, 2026-08-11: *"we don't have a hard performance requirement."*** An earlier
+version of this paragraph demanded one, then set one. Both were wrong: nobody has ever complained about 1.0's speed, so
+a threshold would be invented here and policed here. **`npm run measure -- --only=bench` prints every registered engine
+over the same keystrokes and a human reads the ratio** — the 2.0 kernel registers beside 1.0 in `tools/measure.ts`, and
+a regression is a finding to explain rather than a gate.
+
+**⚠ MEASURE ON THE LARGEST PACK, NOT THE DEFAULT ONE.** Midnight 12.0.7 carries 404,401 spells against 9.2.7's 276,332,
+and 1.0's p95 goes 48 → 74 ms across that gap. 9.2.7 is the product; it is not the worst case.
 
 ---
 
@@ -2401,7 +2415,7 @@ nobody has taken. **⛔ NONE OF IT IS "DEBT".** ✅ **All five BLOCKING rows wer
 |                        |                                                                                                                                                                                                                                                                                                                                                                        |
 |------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **testing**            | The 40-query battery is a review ritual, not a test suite. The document makes at least six machine-checkable algebraic claims — L8 commutativity · De Morgan (§8.9.4) · `model:{}` ≡ `model:*` · `model:{fire}` ≡ `model:fire` · §2.4.5's "same answer" column · the incomplete/invalid classifier — and schedules **zero** property tests, parser fixtures or fuzzing |
-| **performance budget** | §8.9.0 now demands one. There is still no number                                                                                                                                                                                                                                                                                                                       |
+| ~~performance budget~~ | ⛔ **CLOSED — there is deliberately no budget** (user, 2026-08-11). `npm run measure` reports; nobody sets a threshold                                                                                                                                                                                                                                                                                                                       |
 | **mobile input**       | `{ } \| " *` are all buried on mobile keyboards, §4.9.6's `-` model is caret-position-dependent (unusable on touch), and auto-closing interacts with IME. **The audience is roleplayers, many on phones**                                                                                                                                                              |
 | **accessibility**      | No screen-reader semantics for a scope chip, a broken chip, or `ui: "glyphs"` toggles                                                                                                                                                                                                                                                                                  |
 | **URL length**         | §8.9.4 accepts *"an exponential DNF expansion"* as the price of dropping grouping, with no budget                                                                                                                                                                                                                                                                      |

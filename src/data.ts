@@ -39,11 +39,47 @@ export interface VersionEntry {
  * formats — buildIndexes guards each so a stale cached pack (or an old
  * format on disk) still loads.
  */
+/**
+ * §3z what one numeric axis's values look like in ONE pack — measured by the
+ * build (`numeric_domain` in build_data.py), never declared here.
+ *
+ * It is shipped rather than derived at load because deriving it honestly means
+ * sorting up to ~276k values per axis on every page load, and because the
+ * build sees columns the pack does not ship. `min`/`max` are the least useful
+ * two: `step` is what a control moves by, `p1`/`p99` are the bounds it should
+ * actually span, and `modeShare` says how much of the column is one default.
+ */
+export interface PackDomain {
+    n: number;
+    min: number;
+    max: number;
+    distinct: number;
+    mean: number;
+    median: number;
+    p1: number;
+    p99: number;
+    /** true when p1/p99 hid an outlier — the control must say so. */
+    clipped: boolean;
+    step: number;
+    mode: number;
+    modeShare: number;
+    signed: boolean;
+    /** Values excluded as markers rather than quantities (a channel's -1). */
+    sentinels: number;
+    /** ⭐ CARDINALITY decides this, not the type: a handful of values wants a
+     *  picker, a thousand wants a slider, and both can be the same type. */
+    ui: "picker" | "range";
+    /** The picker's options, present exactly when `ui` is "picker". */
+    values?: number[];
+}
+
 export interface SpellPack {
     meta: {
         listfileTag: string;
         built: string;
         counts: { spells: number; [k: string]: number };
+        /** Absent on a pack older than format 46. */
+        domains?: Record<string, PackDomain>;
         [k: string]: unknown;
     };
     /** Core spell columns; altNames (format 19+) = SpellOverrideName texts,
