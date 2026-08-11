@@ -142,12 +142,12 @@ const ENGINES: Engine[] = [
 const WORDS = ["fireball", "arcane", "kneel", "blood pool"];
 
 const keystrokes = (w: string): string[] => {
-    const out: string[] = [];
+    const rowsOut: string[] = [];
     for (let k = 1; k <= w.length; k++) {
         const p = w.slice(0, k).trim();
-        if (p) out.push(p);
+        if (p) rowsOut.push(p);
     }
-    return out;
+    return rowsOut;
 };
 
 interface Bench {

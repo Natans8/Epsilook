@@ -1,0 +1,277 @@
+/**
+ * @file Applying one operator to one stored value.
+ *
+ * This is the narrowest matching step in the system, and the name says which one: a VALUE is compared against an
+ * operand. Deciding whether a ROW satisfies a clause, and whether a SPELL satisfies a query, is the kernel's work and
+ * happens above this file.
+ *
+ * The rule set lives in {@link ../value-types value-types.ts} as data: each type lists the operators it accepts. The
+ * implementations live here. Keeping the two apart means the accepted-operator table can be read, validated and
+ * rendered into help text without running any of these functions, and it is what lets a type decline an operator as a
+ * declaration rather than as a missing method.
+ *
+ * Every function here is pure and synchronous.
+ */
+import {fold, squash} from "./text-normalization";
+import type {Value} from "./value-types";
+
+/**
+ * An operand as the kernel supplies it: a single value, or the two bounds of a range.
+ */
+export type Operand = Value | readonly [Value, Value];
+
+/**
+ * Tests one stored value against one operand.
+ *
+ * The stored value and the operand are not always the same shape. A bitmask is stored as an integer and typed as the
+ * name of a role; an ordinal is stored as a label and compared by its rank. Resolving that is this layer's job,
+ * because it is the only layer that holds both the vocabulary and the data.
+ *
+ * @param stored The value carried by the row being tested.
+ * @param operand The value from the query.
+ * @returns Whether the row's value satisfies the operator.
+ */
+export type Match = (stored: Value, operand: Operand) => boolean;
+
+const MATCHERS = new Map<string, Match>();
+
+/**
+ * Registers one implementation for each (operator, type) pair in the cross product.
+ *
+ * @param operators Abstract operator names.
+ * @param types Type names the implementation is valid for.
+ * @param run The implementation.
+ */
+function define(operators: readonly string[], types: readonly string[], run: Match): void {
+    for (const operator of operators) {
+        for (const type of types) MATCHERS.set(`${operator}:${type}`, run);
+    }
+}
+
+/**
+ * Looks up the implementation for one operator applied to one type.
+ *
+ * @param operator Abstract operator name.
+ * @param type Type name.
+ * @returns The implementation, or `undefined` when this pair has none.
+ *
+ * `undefined` means the pair is unimplemented, which is a defect rather than an answer. A type declining an operator
+ * is expressed in its `accepts` list and is caught before evaluation; reaching this function with a pair that has no
+ * implementation means the schema and this table disagree, and the caller must surface that rather than treat it as
+ * "no match".
+ */
+export function matcher(operator: string, type: string): Match | undefined {
+    return MATCHERS.get(`${operator}:${type}`);
+}
+
+/** Every (operator, type) pair with an implementation, sorted. */
+export function coverage(): string[] {
+    return [...MATCHERS.keys()].toSorted();
+}
+
+/* -------------------------------------------------------------------------- text */
+
+/** Types whose stored value and operand are both free text. */
+const TEXTUAL = ["text", "path", "enum"];
+
+/**
+ * Reads an operand as text.
+ *
+ * @param value A single operand, or a range's bounds.
+ * @returns The text, or the empty string for a range, which no textual operator accepts.
+ */
+const asText = (value: Operand): string => (Array.isArray(value) ? "" : String(value));
+
+/**
+ * Compiles a glob pattern to a regular expression anchored at both ends.
+ *
+ * `*` is the only metacharacter; everything else is escaped, including the punctuation asset paths are full of.
+ *
+ * @param pattern A glob, already normalised.
+ * @returns A regular expression matching the whole string.
+ */
+function globToRegExp(pattern: string): RegExp {
+    const source = pattern
+        .split("*")
+        // Each literal run is normalised on its own, so the star survives. Normalising the whole pattern first
+        // would strip it along with the punctuation and turn a pattern into a plain string.
+        .map((part) => squash(part).replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`))
+        .join(".*");
+    return new RegExp(`^${source}$`);
+}
+
+// `exact` folds only, so `Fire Ball` and `Fireball` stay distinct: a reader who anchors a match is asking for the
+// whole value as written. `contains` and `glob` squash, so punctuation a reader may not remember does not have to be
+// reproduced.
+define(["exact"], TEXTUAL, (stored, operand) => fold(asText(stored)) === fold(asText(operand)));
+define(["contains"], TEXTUAL, (stored, operand) => squash(asText(stored)).includes(squash(asText(operand))));
+define(["glob"], TEXTUAL, (stored, operand) => globToRegExp(asText(operand)).test(squash(asText(stored))));
+define(["present"], TEXTUAL, (stored) => asText(stored).length > 0);
+
+/* ----------------------------------------------------------------------- numbers */
+
+/** Types whose stored value and operand are both numeric. */
+const NUMERIC = ["id", "count", "seconds", "percent", "length", "angle", "multiplier"];
+
+/**
+ * Reads an operand as a number.
+ *
+ * @param value A single operand, or a range's bounds.
+ * @returns The number, or NaN for a range, which fails every single-operand comparison.
+ */
+const asNumber = (value: Operand): number => {
+    if (Array.isArray(value)) return Number.NaN;
+    return typeof value === "number" ? value : Number(value);
+};
+
+define(["exact"], NUMERIC, (stored, operand) => asNumber(stored) === asNumber(operand));
+define(["lt"], NUMERIC, (stored, operand) => asNumber(stored) < asNumber(operand));
+define(["lte"], NUMERIC, (stored, operand) => asNumber(stored) <= asNumber(operand));
+define(["gt"], NUMERIC, (stored, operand) => asNumber(stored) > asNumber(operand));
+define(["gte"], NUMERIC, (stored, operand) => asNumber(stored) >= asNumber(operand));
+define(["present"], NUMERIC, () => true);
+
+// Bounds are compared after sorting, so `90-10` selects the same values as `10-90`. The grammar cannot tell the two
+// apart, and returning nothing for one of them would be a query that reads correctly and behaves otherwise.
+define(["range"], NUMERIC, (stored, operand) => {
+    if (!Array.isArray(operand)) return false;
+    const [low, high] = operand.map(asNumber);
+    const value = asNumber(stored);
+    return value >= Math.min(low, high) && value <= Math.max(low, high);
+});
+
+/* ----------------------------------------------------------------------- colours */
+
+// A colour is stored packed as 0xRRGGBB and compared channel by channel, so that "near enough" is expressible.
+// Exact equality over sixteen million values answers almost nothing on its own.
+
+/** How far apart two colours may be, per channel, and still count as the same colour. */
+const COLOUR_TOLERANCE = 24;
+
+const channels = (packed: number): [number, number, number] =>
+    [(packed >> 16) & 0xff, (packed >> 8) & 0xff, packed & 0xff];
+
+define(["exact"], ["colour"], (stored, operand) => asNumber(stored) === asNumber(operand));
+define(["present"], ["colour"], () => true);
+define(["contains"], ["colour"], (stored, operand) => {
+    const [r1, g1, b1] = channels(asNumber(stored));
+    const [r2, g2, b2] = channels(asNumber(operand));
+    return Math.abs(r1 - r2) <= COLOUR_TOLERANCE
+        && Math.abs(g1 - g2) <= COLOUR_TOLERANCE
+        && Math.abs(b1 - b2) <= COLOUR_TOLERANCE;
+});
+
+/* ---------------------------------------------------------------------- bitmasks */
+
+/**
+ * A named role, expressed as a test over the bits a row carries.
+ *
+ * `any` matches when at least one of its bits is set; `all` matches only when every one is. Both are needed: a target
+ * role spans two bits that mean the same thing from a reader's point of view, while "plays on caster and target
+ * together" is a conjunction that no single bit spells.
+ */
+interface BitTest {
+    readonly any?: number;
+    readonly all?: number;
+}
+
+/** The bits the build assigns to each role, and the roles a reader can name. */
+const ROLE_BITS = {caster: 1, target: 2, area: 4, notCaster: 8, missileDest: 16} as const;
+
+const ROLES: Readonly<Record<string, BitTest>> = {
+    caster: {any: ROLE_BITS.caster},
+    target: {any: ROLE_BITS.target | ROLE_BITS.notCaster},
+    area: {any: ROLE_BITS.area | ROLE_BITS.missileDest},
+    others: {any: ROLE_BITS.notCaster},
+    both: {all: ROLE_BITS.caster | ROLE_BITS.target},
+};
+
+/** The role names a query may use. */
+export function roleNames(): string[] {
+    return Object.keys(ROLES).toSorted();
+}
+
+const roleMatches = (mask: number, role: BitTest): boolean =>
+    (role.any === undefined || (mask & role.any) !== 0)
+    && (role.all === undefined || (mask & role.all) === role.all);
+
+define(["exact"], ["bitmask"], (stored, operand) => {
+    const role: BitTest | undefined = ROLES[fold(asText(operand))];
+    return role !== undefined && roleMatches(asNumber(stored), role);
+});
+define(["present"], ["bitmask"], (stored) => asNumber(stored) !== 0);
+
+/* ---------------------------------------------------------------------- ordinals */
+
+/**
+ * The ordered vocabulary an ordinal compares within, lowest rank first.
+ *
+ * Supplied by whatever loads the data, because the vocabulary is data: the expansion ladder differs between game
+ * versions, and hard-coding it here would be a second copy of the list the build already produces.
+ */
+let ladder: readonly string[] = [];
+
+/**
+ * Sets the ordered vocabulary used by ordinal comparison.
+ *
+ * @param rungs The vocabulary, lowest rank first. Compared case-insensitively.
+ */
+export function setOrdinalLadder(rungs: readonly string[]): void {
+    ladder = rungs.map(fold);
+}
+
+/**
+ * Finds a value's rank within the ladder.
+ *
+ * @param value A rung name.
+ * @returns The rank, or -1 when the ladder does not contain it.
+ */
+const rank = (value: Operand): number => ladder.indexOf(fold(asText(value)));
+
+/**
+ * Compares two rungs, refusing rather than guessing when either is unknown.
+ *
+ * @param stored The row's rung.
+ * @param operand The query's rung.
+ * @param accept Decides the result from the sign of the comparison.
+ * @returns Whether the comparison holds, and `false` when either rung is unknown to the ladder.
+ */
+function compareRungs(stored: Value, operand: Operand, accept: (order: number) => boolean): boolean {
+    const a = rank(stored);
+    const b = rank(operand);
+    return a >= 0 && b >= 0 && accept(a - b);
+}
+
+define(["exact"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (o) => o === 0));
+define(["lt"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (o) => o < 0));
+define(["lte"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (o) => o <= 0));
+define(["gt"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (o) => o > 0));
+define(["gte"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (o) => o >= 0));
+define(["contains"], ["ordinal"], (stored, operand) =>
+    squash(asText(stored)).includes(squash(asText(operand))));
+define(["glob"], ["ordinal"], (stored, operand) =>
+    globToRegExp(asText(operand)).test(squash(asText(stored))));
+define(["present"], ["ordinal"], (stored) => asText(stored).length > 0);
+
+define(["range"], ["ordinal"], (stored, operand) => {
+    if (!Array.isArray(operand)) return false;
+    const [low, high] = operand.map(rank);
+    const value = rank(stored);
+    return value >= 0 && low >= 0 && high >= 0
+        && value >= Math.min(low, high) && value <= Math.max(low, high);
+});
+
+/* -------------------------------------------------------------------- composites */
+
+/**
+ * A composite is compared component by component, and a query may constrain fewer components than the value has.
+ *
+ * `1,2,3` matches only that point; `1` matches any composite whose first component is 1. Partial constraint is the
+ * useful case: an offset is usually asked about one axis at a time.
+ */
+define(["exact"], ["vector"], (stored, operand) => {
+    const want = asText(operand).split(",");
+    const have = asText(stored).split(",");
+    return want.every((part, i) => part.trim() === "" || part.trim() === have[i]?.trim());
+});
+define(["present"], ["vector"], (stored) => asText(stored).length > 0);

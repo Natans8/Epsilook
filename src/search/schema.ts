@@ -17,7 +17,7 @@ import type {Column} from "./columns";
 import {COLUMNS} from "./columns";
 import type {Kind, Prop} from "./kinds";
 import {KINDS} from "./kinds";
-import {TYPES} from "./types";
+import {TYPES} from "./value-types";
 
 /**
  * What a word before a colon resolves to.
@@ -56,7 +56,9 @@ export function schemaProblems(): string[] {
         claimed.set(word, by);
     };
 
-    for (const column of COLUMNS.values()) claim(column.key, `column ${column.key}`);
+    for (const column of COLUMNS.values()) {
+        if (column.head !== false) claim(column.key, `column ${column.key}`);
+    }
 
     for (const kind of KINDS.values()) {
         if (COLUMNS.get(kind.column.key) !== kind.column) {
@@ -124,7 +126,9 @@ export function buildSchema(): void {
     }
 
     HEADS.clear();
-    for (const column of COLUMNS.values()) HEADS.set(column.key, {role: "column", column});
+    for (const column of COLUMNS.values()) {
+        if (column.head !== false) HEADS.set(column.key, {role: "column", column});
+    }
     for (const kind of KINDS.values()) {
         if (kind.word !== undefined) HEADS.set(kind.word, {role: "kind", kind});
     }

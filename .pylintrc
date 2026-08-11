@@ -1,0 +1,50 @@
+# Pylint configuration. Run through uv:
+#
+#     uv tool run pylint build/build_data.py tools
+#
+# tools/check.py runs it with --errors-only, so an ERROR blocks a commit while
+# style findings stay advisory. mypy and pyflakes run alongside; pylint is here
+# for what those two do not see -- unreachable branches, wrong argument counts,
+# misuse of a class's own API.
+
+[MAIN]
+py-version = 3.12
+jobs = 0
+
+[FORMAT]
+# Matches the width used by the markdown and TypeScript sources.
+max-line-length = 120
+
+[MESSAGES CONTROL]
+disable =
+    # Size and complexity metrics. These measure existing structure rather than
+    # correctness, and the build script is deliberately one long linear
+    # pipeline; splitting it to satisfy a counter would make it harder to read.
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    too-many-instance-attributes,
+    too-many-arguments,
+    too-many-positional-arguments,
+    too-many-return-statements,
+    too-many-public-methods,
+    too-few-public-methods,
+    too-many-lines,
+    duplicate-code,
+
+    # Import-inside-function is used deliberately, to keep an optional
+    # dependency optional and to break an import cycle in the check scripts.
+    import-outside-toplevel,
+
+    # Docstring coverage on existing modules is a backlog rather than a gate.
+    # docs/CODE_STYLE.md requires documentation on anything newly written or
+    # touched; this stops that requirement from failing unrelated commits.
+    missing-function-docstring,
+    missing-class-docstring,
+    missing-module-docstring,
+
+[BASIC]
+good-names = i, j, k, n, x, y, z, id, db, fd, ok, rep, _
+
+[DESIGN]
+max-args = 8

@@ -13,7 +13,7 @@ import {
 
 describe("the operator registry", () => {
     it("registers every declared operator under its abstract name", () => {
-        const names = [...OPERATORS.keys()].sort();
+        const names = [...OPERATORS.keys()].toSorted();
         assert.deepEqual(names, [
             "contains", "exact", "glob", "gt", "gte", "lt", "lte", "present", "range",
         ]);

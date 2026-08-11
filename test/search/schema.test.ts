@@ -14,8 +14,8 @@ import {COLUMNS} from "../../src/search/columns";
 import {KINDS, operatorsOf} from "../../src/search/kinds";
 import {defineKind} from "../../src/search/kinds";
 import {buildSchema, HEADS, kindsOf, schemaProblems} from "../../src/search/schema";
-import {TYPES} from "../../src/search/types";
-import {id, text} from "../../src/search/types";
+import {TYPES} from "../../src/search/value-types";
+import {id, text} from "../../src/search/value-types";
 import {modelColumn} from "../../src/search/columns";
 
 describe("the shipped schema", () => {
@@ -28,7 +28,7 @@ describe("the shipped schema", () => {
         // DECLARED union of the axes that opt in rather than a pseudo-field
         // holding seven hand-written calls (SEARCH.md §8.4).
         assert.deepEqual([...COLUMNS.keys()],
-            ["name", "id", "model", "sound", "anim", "fx", "mech"]);
+            ["text", "id", "model", "sound", "anim", "fx", "mech"]);
     });
 
     it("names every kind `column.word`, so an id cannot drift from its word", () => {
@@ -37,11 +37,12 @@ describe("the shipped schema", () => {
         }
     });
 
-    it("resolves every column key and every kind word to exactly one head", () => {
+    it("resolves every kind word and every column that offers a head", () => {
         const words = [...KINDS.values()].filter((k) => k.word !== undefined).length;
-        assert.equal(HEADS.size, COLUMNS.size + words);
+        const heads = [...COLUMNS.values()].filter((c) => c.head !== false).length;
+        assert.equal(HEADS.size, heads + words);
         for (const column of COLUMNS.values()) {
-            assert.equal(HEADS.get(column.key)?.role, "column");
+            if (column.head !== false) assert.equal(HEADS.get(column.key)?.role, "column");
         }
     });
 
@@ -53,14 +54,13 @@ describe("the shipped schema", () => {
             "`attach` must stay free for the attachment UNION axis (PHASE 5)");
     });
 
-    it("keeps the column head and its kinds distinct, which is why `title` exists", () => {
-        // `name:` is the COLUMN — title, description and icon together, which
-        // is what 1.0's `name:` does. A kind ALSO called `name` would make one
-        // spelling mean two questions depending on which head won: L12 (3).
-        assert.equal(HEADS.get("name")?.role, "column");
-        assert.equal(HEADS.get("title")?.role, "kind");
-        assert.deepEqual(kindsOf(COLUMNS.get("name")!).map((k) => k.word),
-            ["title", "desc", "icon"]);
+    it("lets the text column decline a head so its kinds own the obvious words", () => {
+        // Every spell has a name, so a head over the whole column would select
+        // everything. The word is better spent on the kind a reader means.
+        assert.equal(HEADS.has("text"), false);
+        assert.equal(HEADS.get("name")?.role, "kind");
+        assert.deepEqual(kindsOf(COLUMNS.get("text")!).map((k) => k.word),
+            ["name", "desc", "icon"]);
     });
 
     it("leaves a column's same-named kind word-less, for the same reason", () => {
@@ -99,7 +99,7 @@ describe("the shipped schema", () => {
         // 2,014 of 2,997 BeamEffect rows have a different source and
         // destination attachment, so a unioned `attach` cannot say which end.
         assert.deepEqual(Object.keys(KINDS.get("fx.chain")!.props),
-            ["texture", "from", "to", "target"]);
+            ["texture", "from", "to", "colour", "target"]);
         assert.deepEqual(Object.keys(KINDS.get("model.missile")!.props),
             ["file", "from", "to", "motion", "target"]);
     });
@@ -147,13 +147,13 @@ describe("operatorsOf — the multi-notation intersection", () => {
         // depended on which notation the operand happened to look like.
         const kit = KINDS.get("sound.sound")!.props.kit;
         assert.deepEqual(kit.types.map((t) => t.name), ["id", "text"]);
-        assert.deepEqual(operatorsOf(kit).sort(), ["exact", "present"]);
+        assert.deepEqual(operatorsOf(kit).toSorted(), ["exact", "present"]);
     });
 
     it("leaves a single-type property with everything that type accepts", () => {
-        assert.deepEqual(operatorsOf({types: [text]}).sort(),
+        assert.deepEqual(operatorsOf({types: [text]}).toSorted(),
             ["contains", "exact", "glob", "present"]);
-        assert.deepEqual(operatorsOf({types: [id]}).sort(), ["exact", "present"]);
+        assert.deepEqual(operatorsOf({types: [id]}).toSorted(), ["exact", "present"]);
     });
 });
 

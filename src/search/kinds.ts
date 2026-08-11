@@ -1,63 +1,30 @@
-/* SEARCH 2.0 — L3 schema. THE KIND CATALOGUE.
+/**
+ * @file The kind catalogue: what a row can be, and what each kind carries.
  *
- *     A COLUMN yields ROWS. A ROW has a KIND. A KIND declares its PROPERTIES.
- *     An AXIS asks about one property.
+ * A column yields rows; a row has a kind; a kind declares properties; a property has a type. A kind is a noun naming
+ * what a row IS -- a chain, a missile, a morph -- and its properties are what that thing HAS.
  *
- * A KIND is what 1.0 called a pill type, and it is the missing middle term.
- * `chain`, `missile`, `dissolve`, `morph`, `seat` are kinds — nouns naming
- * WHAT A ROW IS. `from`, `to`, `scale`, `target`, `texture` are properties —
- * what that thing HAS.
+ * Naming both ends of a pair matters. A beam carries a source attachment and a destination attachment, and they
+ * differ on two thirds of the rows that have them, so a single unioned attachment cannot say which end a reader
+ * meant. Two properties sharing one type is the whole mechanism; there is no separate notion of a role.
  *
- * ⭐ WHY THE MIDDLE TERM HAD TO EXIST, MEASURED: `BeamEffect` carries a
- * `SourceAttachID` AND a `DestAttachID`, and **2,014 of 2,997 rows have
- * different ones — 67%**. So 1.0's `attach:chest` on a chain means *"the chest
- * is at one end, and I cannot tell you which"*. No amount of scoping fixes it,
- * because both ends are on the same row. Two properties sharing one type is
- * the whole answer, and it needs no "role" mechanism (SEARCH.md L5.2).
+ * One declaration feeds every surface: matching, autocomplete, generated help, the query bar, and the rendered pill.
  *
- * ⭐ ONE DECLARATION, EVERY SURFACE. Search, autocomplete, the help row, the
- * bar capsule, the hit highlight, the filter affordance and the export column
- * all read this record. The build plan used to list "declare the axis" and
- * "declare the pill" as two steps; a kind is ONE (L11).
- *
- * ═══════════════════════════════════════════════════════════════════════
- * WHAT IS DECLARED HERE AND WHAT IS DELIBERATELY ABSENT
- * ═══════════════════════════════════════════════════════════════════════
- *
- * ⛔ THE RULE THIS FILE FOLLOWS: A PROPERTY IS DECLARED ONLY WHERE THE PACK
- * CAN ANSWER IT TODAY. TYPES §8 marks many properties `?` (provisional) or
- * bold (does not exist in 1.0), and several of those are float columns the
- * build has never read — `BarrageEffect.ConeAngle`, `AnimKitSegment.Speed`,
- * `CastOffset_0/1/2`, `DecayTimeAfterImpact`. Declaring them would put an axis
- * in the autocomplete that returns nothing forever, which is worse than not
- * having it: the user cannot tell "no spells match" from "this does not work".
- * Each is ONE LINE when its row source lands, which is the extension contract
- * doing its job rather than a shortcut being taken.
- *
- * ⚠ NO `prefix` ON A PROPERTY YET. Under L5.2 a KIND word is already global —
- * a kind belongs to exactly one column, so there is no union to justify and
- * `missile:{from:chest}` needs no `model:`. What a property prefix would buy
- * is a UNION axis across kinds (`attach` over `from` and `to`, `target` over
- * everything), and a union needs the row sources to mean anything. PHASE 5.
- *
- * ⚠ NO `when` YET. SEARCH.md §2.2 sketches `when?(d: SpellData): boolean` —
- * absent data, absent word, everywhere. It gates on what the loaded pack
- * CONTAINS, which is the row source's world and not the schema's; and the
- * sketch's signature takes a `SpellData`, which the declarative core must not
- * import (PLAN §3.1). PHASE 5 decides its shape against a real pack.
+ * A property is declared only where the data can answer it. An axis that returns nothing forever is worse than an
+ * absent one, because a reader cannot tell "no spells match" from "this does not work". Adding a property once its
+ * data lands is one line.
  */
 import type {Column} from "./columns";
-import {animColumn, fxColumn, idColumn, mechColumn, modelColumn, nameColumn, soundColumn} from "./columns";
-import type {AxisType} from "./types";
-import {bitmask, count, enumeration, id, ordinal, percent, path, seconds, text} from "./types";
+import {animColumn, fxColumn, idColumn, mechColumn, modelColumn, textColumn, soundColumn} from "./columns";
+import type {AxisType} from "./value-types";
+import {
+    bitmask, colour, count, enumeration, id, length, multiplier, ordinal, path, percent, seconds, text,
+} from "./value-types";
 
 /**
- * L7's relevance tiers — BEST TIER WINS, and only the ORDER matters.
+ * Relevance tiers for chipless search. Only the order matters: the best tier a spell matched in decides its rank.
  *
- * 1.0 ranks chipless search on the spell NAME alone, so a description-only hit
- * sits in the same bucket as an exact name match with nothing to sink it. That
- * is the known cost of shipping descriptions and icons into plain search, and
- * these tiers are the fix.
+ * Without tiers a description-only hit ranks alongside an exact name match, with nothing to separate them.
  */
 export const TIER = {
     /** the spell's own title */
@@ -73,51 +40,40 @@ export const TIER = {
 /** One property of one kind. */
 export interface Prop {
     /**
-     * ORDERED (TYPES §7): the first type whose `parse` accepts the operand
-     * wins, so a thing with an id and a name declares `[id, text]`. Most
-     * properties declare exactly one.
+     * The notations this property accepts, in order. The first whose `parse` accepts an operand wins, so a thing
+     * with both a name and an id declares `[id, text]`.
      *
-     * ⚠ AN OPERATOR IS OFFERED ONLY IF EVERY LISTED TYPE ACCEPTS IT — the
-     * INTERSECTION, never the union (TYPES §7 rule 2). `kit:>5` is a static
-     * error because `id` and `text` both decline ordering. That rule governs
-     * what the UI OFFERS; what MATCHES is decided by dispatch — see `named`.
+     * A control offers only the operators every notation accepts, since an operator only one notation could answer
+     * would behave differently depending on what the operand happened to look like. Matching is decided separately,
+     * by dispatch: a bare word on an `[id, text]` property still matches the name, because the word dispatches to
+     * `text`.
      */
     readonly types: readonly AxisType[];
 
-    /** L7: does chipless search read it, and how hard does it rank? */
+    /** Whether chipless search reads this property, and how hard it ranks. */
     readonly plain?: boolean;
     readonly tier?: number;
 
-    /** L11. Absent falls back to the first type's own hint, which is usually
-     *  the honest answer — `from` on a missile IS "an attachment point". */
+    /** One line describing the property. Falls back to the first type's hint when absent. */
     readonly hint?: string;
 }
 
 export interface Kind {
-    /** Stable identity, `column.word`. Never shown; it is what an export
-     *  column, a saved query and a bug report can agree on. */
+    /** Stable identity, formed as `column.word`. Never shown to a reader. */
     readonly id: string;
 
-    /** A REFERENCE, not a key: a typo is then a compile error rather than a
-     *  kind that silently belongs to no column. */
+    /** The column this kind's rows appear in. A reference rather than a key, so a typo fails to compile. */
     readonly column: Column;
 
     /**
-     * The word a query writes. `missile:{from:chest}`, `fx:chain`.
+     * The word a query writes, as in `missile:{from:chest}` or `fx:chain`.
      *
-     * ⭐ A KIND WORD IS GLOBAL BY CONSTRUCTION, because a kind belongs to
-     * exactly one column — there is nothing to union and no column to repeat.
-     * ⚠ THIS SUPERSEDES L5.1's "scoped only" VERDICTS for the model/anim/fx
-     * category words (`missile`, `ground`, `replace`, `loose`, `attached`…),
-     * which were written before L5.2 gave a kind its own scope the same day.
-     * G1 uniqueness still governs, and is enforced in `schema.ts`.
-     *
-     * OMITTED = reachable only through its column's head, which is right when
-     * the word would be the column's own (`id`, `name`).
+     * A kind word is reachable on its own because a kind belongs to exactly one column, so there is nothing to
+     * disambiguate. Omitted when the column's own head already reaches this kind unambiguously.
      */
     readonly word?: string;
 
-    /** L11: one line, in the user's terms. */
+    /** One line describing the kind to a reader. */
     readonly hint: string;
 
     readonly props: Readonly<Record<string, Prop>>;
@@ -137,13 +93,10 @@ export function defineKind(kind: Kind): Kind {
 }
 
 /**
- * The operators a property actually offers: the INTERSECTION of its types'
- * (TYPES §7 rule 2).
+ * The operators a property offers a reader.
  *
- * Derived rather than declared, because it is a consequence and not a choice —
- * a multi-notation property that offered an operator only one of its notations
- * could answer would give a different result depending on which notation the
- * operand happened to look like, which is L12 (3).
+ * @param prop The property.
+ * @returns The operator names every one of the property's notations accepts.
  */
 export function operatorsOf(prop: Prop): string[] {
     const [first, ...rest] = prop.types;
@@ -152,76 +105,48 @@ export function operatorsOf(prop: Prop): string[] {
         .map((op) => op.name);
 }
 
-/* Shorthands. `p([path])` is noise at this length; a named helper per shape is
- * not, because the SHAPE is the information — a plain property, a searchable
- * corpus, a thing with a name and an id. */
+/** A property with no role in chipless search. */
 const of = (...types: readonly AxisType[]): Prop => ({types});
+/** A property chipless search reads, at the given relevance tier. */
 const corpus = (tier: number, ...types: readonly AxisType[]): Prop =>
     ({types, plain: true, tier});
 /**
- * A thing with both a NAME and an ID — six properties are this shape
- * (TYPES §8.7): sound kit, morph display, summon creature, gameobject, area,
- * triggered spell. It is a pattern, not a special case.
+ * A property naming something that has both a name and an id: a sound kit, a summoned creature, a triggered spell.
  *
- * ID FIRST, so digits dispatch to the id and words fall through to the text.
- * That is the measured rule, not a preference: putting a 6-digit id into a
- * substring CORPUS was tried and reverted, because `mech:"speed 70"` went from
- * 76 to 85 and `mech:"invis 13"` from 11 to 47. An id answers by EQUALITY.
+ * The id is tried first, so digits select by identity and words fall through to the name. Putting an id into a
+ * substring corpus instead makes six-digit numbers match unrelated rows.
  *
- * ⚠ AND THE INTERSECTION RULE (TYPES §7 rule 2) IS ABOUT WHAT THE UI OFFERS,
- * NOT ABOUT WHAT MATCHES. `operatorsOf` gives [exact, present] here because
- * `id` declines substring — so autocomplete must not offer `>` — while a bare
- * word still matches the NAME, because dispatch picks `text` for it and `text`
- * accepts `contains`. Reading rule 2 as a matching rule would delete
- * `sound:"kit frostbolt"`, which is 69 real spells today.
- *
- * Omit the tier to keep it out of chipless search.
+ * @param tier The relevance tier for chipless search, or omitted to keep the property out of it.
+ * @returns The property declaration.
  */
 const named = (tier?: number): Prop =>
     (tier === undefined ? {types: [id, text]} : {types: [id, text], plain: true, tier});
 
-/** WHO IT PLAYS ON. The most-shared property in the app — TYPES §8.7 counts it
- *  on ~25 of ~35 kinds, which is why it read like a universal axis and why it
- *  is not one: it is a property most kinds happen to have. Declared only where
- *  1.0 has a mask to answer from. */
+/** Which participants a row plays on. */
 const target = (): Prop => ({
     types: [bitmask],
     hint: "who it plays on — caster, target, both, area, others",
 });
 
-/** An M2 attachment point. `from`/`to` where a row has two ends, `attach`
- *  where it has one — and naming them apart is the 67% finding above. */
+/** A point on a model that something attaches to. */
 const attachPoint = (hint: string): Prop => ({types: [enumeration], hint});
 
-/* ══════════════════════════════════════════════════════ name ══════════
- *
- * ⚠ THE KIND IS `title`, NOT `name`, AND THAT IS A NEW WORD. `name:` is the
- * COLUMN, and a column head searches every kind in it — title, description and
- * icon — which is exactly what 1.0's `name:` does. So a kind also called
- * `name` would make one spelling mean two different questions depending on
- * which head won, and that is L12 (3). Naming the kind `title` keeps the
- * column head behaving as it always has AND makes the title-only question
- * sayable for the first time, which 1.0 cannot express at all.
- */
-
-export const title = defineKind({
-    id: "name.title", column: nameColumn, word: "title",
-    hint: "the spell's own name, and nothing else",
+/** A spell's own name. */
+export const name = defineKind({
+    id: "text.name", column: textColumn, word: "name",
+    hint: "the spell's name",
     props: {text: corpus(TIER.title, text)},
 });
 
 export const description = defineKind({
-    id: "name.desc", column: nameColumn, word: "desc",
+    id: "text.desc", column: textColumn, word: "desc",
     hint: "what the spell says it does — its in-game description",
     props: {text: corpus(TIER.description, text)},
 });
 
-/* THE ICON'S fid IS DELIBERATELY NOT `plain`. Plain search already spends a
- * lone number on an exact SPELL-ID lookup, and letting the fid join would take
- * `135812` from one spell to 295. Reachable as `icon:135812`, where the head
- * says which number is meant. (§3y — the rule is per-axis, not a house rule.) */
+/** The art on a spell's button. The file id is not read by chipless search, where a lone number means a spell id. */
 export const icon = defineKind({
-    id: "name.icon", column: nameColumn, word: "icon",
+    id: "text.icon", column: textColumn, word: "icon",
     hint: "the art on the spell's button — 272,900 spells share 9,846 icons",
     props: {
         name: corpus(TIER.asset, text),
@@ -229,36 +154,20 @@ export const icon = defineKind({
     },
 });
 
-/* ══════════════════════════════════════════════════════ id ════════════ */
-
-/* NO `word`: the column head IS the spelling (`id:133`), and a kind also
- * called `id` would be the same collision `title` avoids one column over. */
+/** A spell's own number. Reached through the column head; the kind needs no separate word. */
 export const spellId = defineKind({
     id: "id.id", column: idColumn,
     hint: "the spell's own number — what .cast takes",
     props: {value: corpus(TIER.id, id)},
 });
 
-/* ⭐ `ordinal` EXISTS FOR THIS ONE KIND, and it is what makes `xpac` ordinary.
- * 1.0 handles it with a private second operator alphabet (`XPAC_VALUE`) —
- * exactly the duplication L1 forbids. The ladder itself ships in the pack
- * (`pack.expansions`, oldest first), so the ORDER is data and not a constant
- * here; see the `ordinal` card in types.ts. */
 export const expansion = defineKind({
     id: "id.xpac", column: idColumn, word: "xpac",
     hint: "the expansion that introduced it — legion, >wotlk, <=mop",
     props: {rung: of(ordinal)},
 });
 
-/* ══════════════════════════════════════════════════════ model ═════════
- *
- * ⚠ THE CATEGORY WORD IS `attached`, NOT `attach` — and this is a live 1.0
- * DEFECT rather than a 2.0 choice. 1.0 registers `attach` BOTH as a model
- * category word and as the attachment keyword, so inside one column it already
- * means two things: `model:attach` is 16 (substring) against
- * `model:{attach:chest}` at 51,581 (keyword). Gate G1 fails today. `attached`
- * already exists in 1.0 as its twin and is the better noun. TYPES §8.6 (3).
- */
+/* Models: what a spell draws. */
 
 export const missile = defineKind({
     id: "model.missile", column: modelColumn, word: "missile",
@@ -338,8 +247,7 @@ export const mount = defineKind({
     },
 });
 
-/* The equipped-weapon markers. Not a model file in the graph — the slot IS the
- * information — so the slot is an enum and there is no path to search. */
+/** A weapon the caster already carries, identified by its slot rather than by a model file. */
 export const equipped = defineKind({
     id: "model.equipped", column: modelColumn, word: "equipped",
     hint: "a weapon the caster already has — main hand, off hand, ranged or ammo",
@@ -349,24 +257,9 @@ export const equipped = defineKind({
     },
 });
 
-/* ══════════════════════════════════════════════════════ sound ═════════ */
+/* Sounds: what a spell plays. */
 
-/* ⭐ `kit` IS THE CANONICAL MULTI-NOTATION PROPERTY (TYPES §7): one kit, two
- * spellings. The discriminator is decidable — `kit:85701` and
- * `kit:SPELL_MA_Revamp_Frostbolt_Precast` name the SAME row, where `invis:13`
- * and `invis:>0` name unrelated populations, which is why one is two notations
- * and the other is two axes.
- *
- * MEASURED: of 84,351 kit names on the 8.3.0 table, exactly THREE are all
- * digits ("0", "9", "150"), all placeholder junk, and NOT ONE equals its own
- * id. So a number reads as the id and nothing real is lost — and `check.py`
- * must keep asserting that, because a pack rebuild could introduce a collision
- * and silently change a bookmarked query. */
-/* NO `word`, LIKE `id.id` AND FOR THE SAME REASON: `sound:` is the COLUMN, and
- * a kind also called `sound` would make one spelling mean two questions. The
- * column has exactly one kind, so the head is unambiguous and nothing is lost.
- * ⭐ THE G1 GUARD CAUGHT THIS ONE — it was declared with `word: "sound"` and
- * the schema refused to build. */
+/** A sound file, and the kit it belongs to. Reached through the column head. */
 export const sound = defineKind({
     id: "sound.sound", column: soundColumn,
     hint: "a sound file the spell plays",
@@ -377,7 +270,7 @@ export const sound = defineKind({
     },
 });
 
-/* ══════════════════════════════════════════════════════ anim ══════════ */
+/* Animations: how a character moves. */
 
 export const replace = defineKind({
     id: "anim.replace", column: animColumn, word: "replace",
@@ -420,24 +313,14 @@ export const loose = defineKind({
     },
 });
 
-/* The RP body-pose library, and the reason the attribute-flag feature exists:
- * these spells have no distinguishing model, sound or animation, so before the
- * flag they were unfindable. Permanent Feign Death, Cosmetic Dead Hanging. */
+/** Holds a character's pose by suppressing the spell's own animation. */
 export const pose = defineKind({
     id: "anim.pose", column: animColumn, word: "pose",
     hint: "holds the character's pose — the spell suppresses its own animation",
     props: {},
 });
 
-/* ══════════════════════════════════════════════════════ fx ════════════ */
-
-/* ⚠ `tint` HAS NO COLOUR PROPERTY, AND THAT IS THE `colour` TYPE BEING
- * BLOCKED RATHER THAN AN OVERSIGHT (TYPES §4). Tints ship as packed 0xRRGGBB,
- * nobody knows a tint's exact packed value, and exact equality over 16.7M
- * values is not a question anyone asks. `fx:tint` still works as an existence
- * test; the colour becomes searchable when a MATCHING SEMANTIC is decided —
- * nearest-colour distance, or named buckets. The same holds for `chain`'s tint
- * and `glow`'s colour. */
+/* Effects: what a spell looks like. */
 
 export const chain = defineKind({
     id: "fx.chain", column: fxColumn, word: "chain",
@@ -446,6 +329,7 @@ export const chain = defineKind({
         texture: corpus(TIER.asset, path),
         from: attachPoint("where the beam starts"),
         to: attachPoint("where the beam ends"),
+        colour: {types: [colour], hint: "the beam's tint"},
         target: target(),
     },
 });
@@ -460,32 +344,44 @@ export const dissolve = defineKind({
     },
 });
 
-/* ⚠ ONE WORD, TWO SOURCES, AND THE MERGE IS AN OPEN QUESTION (TYPES §8.6 (4)).
- * 1.0 registers `ghost` TWICE — `fx:shadowy` (ShadowyEffect rows) and
- * `fx:ghostmat` (Type-22 material recolours) — under one word. G1 forbids two
- * kinds claiming one word, so they are ONE kind here. Whether they should
- * instead be one kind with a `material` property telling them apart, or two
- * words, changes what a user can ASK and is therefore the user's call, not a
- * transcription decision. Declared as the union until they rule. */
-export const ghost = defineKind({
-    id: "fx.ghost", column: fxColumn, word: "ghost",
-    hint: "a ghostly recolour — translucent shadow materials",
+/** A translucent shadow overlay. */
+export const shadowy = defineKind({
+    id: "fx.shadowy", column: fxColumn, word: "shadowy",
+    hint: "a translucent shadow pass over the model",
     props: {
         attach: attachPoint("where on the body it plays"),
         target: target(),
     },
 });
 
+/** A material recolour that renders the model as a ghost. */
+export const ghost = defineKind({
+    id: "fx.ghost", column: fxColumn, word: "ghost",
+    hint: "a ghost material swapped onto the model",
+    props: {
+        attach: attachPoint("where on the body it plays"),
+        target: target(),
+    },
+});
+
+/** An edge glow or rim light around the model. */
 export const glow = defineKind({
     id: "fx.glow", column: fxColumn, word: "glow",
     hint: "an edge glow or rim light around the model",
-    props: {target: target()},
+    props: {
+        colour: {types: [colour], hint: "the glow colour"},
+        target: target(),
+    },
 });
 
+/** A colour wash over the model. */
 export const tint = defineKind({
     id: "fx.tint", column: fxColumn, word: "tint",
     hint: "a colour wash over the model",
-    props: {},
+    props: {
+        colour: {types: [colour], hint: "the colour applied"},
+        target: target(),
+    },
 });
 
 export const screen = defineKind({
@@ -521,15 +417,15 @@ export const gameObject = defineKind({
     props: {object: named(TIER.asset), target: target()},
 });
 
-/* THE SIGNED-PERCENT FAMILY. The percent IS the row's identity, so it is the
- * property rather than a modifier on one, and the sign carries the meaning:
- * +30% and -30% are opposite effects. */
 
 export const scale = defineKind({
     id: "fx.scale", column: fxColumn, word: "scale",
     hint: "a size change the aura applies",
     props: {
-        percent: {types: [percent], hint: "how much bigger or smaller — 30, -30, 10-90"},
+        amount: {
+            types: [percent, multiplier],
+            hint: "how much bigger or smaller, as a percentage such as 30 or -30, or a multiplier such as 2x",
+        },
         target: target(),
     },
 });
@@ -558,39 +454,20 @@ export const camo = defineKind({
     props: {},
 });
 
-/* IT IS THE CASTER'S FACING, NOT THE BEAM (the user's correction, and the
- * canonical example of not describing a mechanism from its name): the caster
- * stays turned toward the target for the whole channel. The beam merely
- * follows from that. fx rather than mech because a character being turned is
- * what the spell LOOKS like. */
+/** The caster stays turned toward the target for the whole channel. */
 export const tracking = defineKind({
     id: "fx.tracking", column: fxColumn, word: "tracking",
     hint: "caster stays facing the target for the whole channel",
     props: {},
 });
 
-/* ══════════════════════════════════════════════════════ mech ══════════
- *
- * ⚠ FOUR KINDS SIT HERE THAT TYPES §8.4 PUTS UNDER `fx`, AND THE SHIPPED APP
- * IS RIGHT: `seat`, `invis`, `detect` and `speed` all carry `field: "mech"` in
- * 1.0's registry, which also states the rule out loud — *fx is what the spell
- * LOOKS like, mech is what it DOES*. A vehicle seat, an invisibility channel
- * and a movement-speed change render nothing. §8.4 also omits `keybind`
- * entirely. Transcription slips in the doc, corrected here and recorded.
- */
+/* Mechanics: what a spell does. A row here renders nothing; anything visible belongs to the effects column. */
 
 export const effect = defineKind({
     id: "mech.effect", column: mechColumn, word: "effect",
     hint: "one of the spell's effects — what it actually does",
     props: {
         name: {types: [enumeration], hint: "the effect's name — SCHOOL_DAMAGE, JUMP_DEST"},
-        /* ⚠ THE MASK IS NOT IN THE PACK TODAY — the PHASE 1 spike derived it,
-         * and measured `mech:{JUMP_DEST target:target}` at 758 against 1.0's
-         * 362. The extra ~400 are the L4 fix: `target` typed as a MASK instead
-         * of substring-matching the enum name `TARGET_DEST_TARGET_BACK`, which
-         * merely CONTAINS "target". PHASE 5 owes the derivation in the row
-         * source (or a pack field). Declared because it is measured, not
-         * because it is hoped for. */
         target: target(),
     },
 });
@@ -616,17 +493,14 @@ export const channeled = defineKind({
     props: {seconds: of(seconds)},
 });
 
-/* NO id NOTATION, UNLIKE THE LINK KINDS BELOW. An area id is a number nobody
- * has a way to know — it is not `.cast`'s argument the way a spell id is — so
- * there is no id-shaped question to answer and the vocabulary stays words. */
+/** Where a spell refuses to cast. Named by area, since an area id is not a number a reader would know. */
 export const location = defineKind({
     id: "mech.location", column: mechColumn, word: "location",
     hint: "where the spell refuses to cast — Epsilon enforces this gate on .cast",
     props: {area: of(text)},
 });
 
-/* TWO KINDS, ONE EDGE SET, because direction is the first thing you want to
- * ask. `triggers` is what this spell reaches, `origin` what reaches it. */
+/* Spell-to-spell links, one kind per direction. */
 export const triggers = defineKind({
     id: "mech.triggers", column: mechColumn, word: "triggers",
     hint: "another spell this one casts, ticks, procs or removes",
@@ -639,6 +513,13 @@ export const origin = defineKind({
     props: {spell: named()},
 });
 
+/** How far a spell reaches. */
+export const range = defineKind({
+    id: "mech.range", column: mechColumn, word: "range",
+    hint: "how far the spell reaches, in yards",
+    props: {yards: {types: [length], hint: "the maximum distance, or unlimited"}},
+});
+
 export const seat = defineKind({
     id: "mech.seat", column: mechColumn, word: "seat",
     hint: "a seat of the vehicle the caster becomes",
@@ -648,11 +529,7 @@ export const seat = defineKind({
     },
 });
 
-/* ⚠ TWO KINDS, NOT ONE — TYPES §8.6 (1). 1.0's single `invis` word carries a
- * channel id AND a detector count, told apart by whether an operator was
- * typed (`operatorOnly`). Two QUANTITIES on one word is two axes, and the
- * discriminator is decidable: `invis:13` and `invis:>0` name unrelated
- * populations, where two NOTATIONS of one subject would name the same row. */
+/* Invisibility has two sides: what hides in a channel, and what can see into it. */
 export const invis = defineKind({
     id: "mech.invis", column: mechColumn, word: "invis",
     hint: "the invisibility channel the aura hides in",
@@ -678,27 +555,18 @@ export const speed = defineKind({
     id: "mech.speed", column: mechColumn, word: "speed",
     hint: "a movement-speed change — run, mounted, swim, flight or all at once",
     props: {
-        percent: {types: [percent], hint: "how much faster or slower — 70, -50"},
-        mode: {types: [enumeration], hint: "which movement — run, walk, fly, swim"},
+        amount: {
+            types: [percent, multiplier],
+            hint: "how much faster or slower, as a percentage such as 70 or -50, or a multiplier such as 2x",
+        },
+        mode: {types: [enumeration], hint: "which movement: run, walk, fly or swim"},
         target: target(),
     },
 });
 
-/* THE ATTRIBUTE BITS. Valueless: membership IS the payload, so the kind has no
- * properties at all and its existence is the whole answer.
+/* Attribute bits. Membership is the whole payload, so these kinds carry no properties.
  *
- * ⚠ THE WORDING DESCRIBES WHAT EPSILON DOES, not what retail documents.
- * Roughly half the flags tested did not survive contact with Epsilon, so every
- * one below was confirmed in game by the user before it shipped and the
- * phrasing is theirs (docs/DECISIONS.md → EPSILON BEHAVIOUR). Do not
- * "improve" it from a wiki.
- *
- * ⚠ AND `flag` THE TYPE IS NOT USED BY ANY OF THEM, WHICH IS A DOC CORRECTION
- * RATHER THAN A GAP. TYPES §8.7 reads "three kinds are pure flags, so `flag`
- * earns its place as a type with no value" — but under L5.2 valuelessness
- * lives on the KIND (no properties), not on a property that has no value. The
- * type is right and its customer is a future valueless PROPERTY; the two are
- * different levels and §8.7 conflates them. */
+ * The wording describes what these flags do on Epsilon, which is not always what retail documents. */
 
 export const instant = defineKind({
     id: "mech.instant", column: mechColumn, word: "instant",
@@ -724,24 +592,3 @@ export const debuff = defineKind({
     props: {},
 });
 
-/* ⛔ NOT DECLARED, AND EACH FOR A STATED REASON — so the next session does not
- * spend a pass rediscovering them:
- *
- *   the `range` kind      a NEW SOURCE (`SpellRange`): build reader + TABLES
- *                         entry + pack section + format bump + eleven packs.
- *                         `unlimited` is a sentinel exactly like a channel's.
- *   `cooldown`, `cost`    the same, from `SpellCooldowns` and `SpellPower`.
- *                         All three are on wago at 9.2.7 and none is fetched.
- *   missile offsets       `CastOffset_0/1/2` are a 3-VECTOR, and the type
- *                         system has no answer for one yet (TYPES §9.0). Three
- *                         properties, or one composite type — decide before
- *                         touching missiles, do not invent one speculatively.
- *   `coneAngle`, `range`  float columns on `BarrageEffect` the build has never
- *   on barrage            read. 3 and 4 distinct values — the throwaway-axis
- *                         test of PHASE 5 uses exactly this.
- *   anim kit `speed`      `AnimKitSegment.Speed`, same: a float not in the pack.
- *   aura `stacks`         `SpellAuraOptions.CumulativeAura` IS downloaded, but
- *                         it is not in the pack; 7,750 spells genuinely stack.
- *   `type` on sound       `SoundKit.SoundType` — designed, parked, and waiting
- *                         on the user for examples rather than on work.
- */

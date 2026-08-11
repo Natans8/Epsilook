@@ -2,14 +2,15 @@
   "name": "epsilook",
   "private": true,
   "type": "module",
-  "description": "Search WoW spells by how they look and sound — a companion for Epsilon WoW. Static site; src/ is TypeScript bundled into site/js/ by esbuild.",
+  "description": "Search WoW spells by how they look and sound \u2014 a companion for Epsilon WoW. Static site; src/ is TypeScript bundled into site/js/ by esbuild.",
   "scripts": {
     "build": "node tools/build.mjs",
     "dev": "node tools/build.mjs --serve",
     "typecheck": "tsc --noEmit",
     "test": "node tools/build.mjs --test && node --enable-source-maps --test \"test/.bundle/**/*.test.mjs\"",
     "query": "node tools/build.mjs --cli && node tools/query.mjs",
-    "measure": "node tools/build.mjs --cli && node tools/measure.mjs"
+    "measure": "node tools/build.mjs --cli && node tools/measure.mjs",
+    "lint": "oxlint --type-aware"
   },
   "engines": {
     "node": ">=22"
@@ -17,6 +18,8 @@
   "devDependencies": {
     "@types/node": "^26.2.0",
     "esbuild": "^0.28.1",
+    "oxlint": "^1.78.0",
+    "oxlint-tsgolint": "^7.0.2001",
     "typescript": "^7.0.2"
   }
 }

@@ -1,0 +1,88 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "oxc",
+    "promise",
+    "jsdoc"
+  ],
+  "env": {
+    "es2024": true,
+    "browser": true
+  },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn"
+  },
+  "rules": {
+    "eqeqeq": [
+      "error",
+      "always"
+    ],
+    "no-var": "error",
+    "prefer-const": "error",
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-explicit-any": "error",
+    "unicorn/prefer-node-protocol": "error",
+    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/no-unnecessary-type-assertion": "off",
+    "typescript/restrict-template-expressions": "off",
+    "typescript/no-unsafe-assignment": "off",
+    "typescript/no-unsafe-member-access": "off",
+    "typescript/no-unsafe-call": "off",
+    "typescript/no-unsafe-argument": "off",
+    "typescript/no-unsafe-return": "off"
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/search/**/*.ts",
+        "test/**/*.ts"
+      ],
+      "rules": {
+        "typescript/explicit-function-return-type": "error",
+        "typescript/no-non-null-assertion": "error",
+        "typescript/prefer-nullish-coalescing": "error",
+        "jsdoc/check-tag-names": "error",
+        "jsdoc/require-param-description": "error",
+        "jsdoc/require-returns-description": "error",
+        "jsdoc/empty-tags": "error",
+        "typescript/no-unsafe-type-assertion": "error",
+        "typescript/no-unnecessary-type-assertion": "error",
+        "typescript/restrict-template-expressions": "error",
+        "typescript/no-unsafe-assignment": "error",
+        "typescript/no-unsafe-member-access": "error",
+        "typescript/no-unsafe-call": "error",
+        "typescript/no-unsafe-argument": "error",
+        "typescript/no-unsafe-return": "error"
+      }
+    },
+    {
+      "files": [
+        "test/**/*.ts"
+      ],
+      "rules": {
+        "typescript/no-non-null-assertion": "off",
+        "typescript/explicit-function-return-type": "off",
+        "typescript/unbound-method": "off",
+        "unicorn/consistent-function-scoping": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/no-unsafe-type-assertion": "off"
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "site/js",
+    "site/dev",
+    "test/.bundle",
+    "src/vendor",
+    "tools/*.mjs",
+    "node_modules"
+  ]
+}

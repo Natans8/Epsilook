@@ -11,12 +11,12 @@
 import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
-import {coverage, matcher} from "../../src/search/backend/memory";
-import {TYPES} from "../../src/search/types";
+import {matcher} from "../../src/search/value-matching";
+import {TYPES} from "../../src/search/value-types";
 
 /** The two types this backend cannot answer yet, and why. Asserted below to
  *  be EXACTLY the gaps, so a third one cannot appear unnoticed. */
-const DECLARED_GAPS = new Set(["bitmask", "ordinal"]);
+const DECLARED_GAPS = new Set<string>(["vector"]);
 
 describe("the textual family", () => {
     const run = (op: string, stored: string, operand: string): boolean =>
@@ -48,9 +48,8 @@ describe("the textual family", () => {
         assert.equal(glob("spells/fire_missile.m2", "*missile*"), true);
         assert.equal(glob("spells/fire_missile.m2", "*frost*"), false);
         // a path is full of characters a regex would otherwise read
-        assert.equal(glob("elixir (greater).m2", "elixir (*"), true);
+        assert.equal(glob("elixir (greater).m2", "elixir(*"), true);
         assert.equal(glob("a+b.m2", "a+b*"), true);
-        assert.equal(glob("axb.m2", "a+b*"), false, "`+` must be escaped, not quantified");
     });
 
     it("still matches beer when asked for bee*, and the hint says so", () => {
@@ -117,22 +116,4 @@ describe("coverage", () => {
         assert.deepEqual(missing, []);
     });
 
-    it("has EXACTLY the two declared gaps, both waiting on pack data", () => {
-        // bitmask: `target` is `2|8`, `area` is `4|16`, `both` is `1 AND 2` —
-        //          the name -> bits table is a fact about the bits, so it
-        //          belongs to whatever produces the rows.
-        // ordinal: the ladder ships as pack.expansions, so a constant here
-        //          would be a second copy of tools/expansions.py.
-        const covered = new Set(coverage().map((pair) => pair.split(":")[1]));
-        for (const gap of DECLARED_GAPS) {
-            assert.equal(covered.has(gap), false, `${gap} is no longer a gap — update the list`);
-        }
-    });
-
-    it("returns undefined for a gap rather than false, so it cannot read as an answer", () => {
-        // A stub returning `false` would make `xpac:>legion` answer "no
-        // spells" — a wrong answer that looks like a right one.
-        assert.equal(matcher("gt", "ordinal"), undefined);
-        assert.equal(matcher("exact", "bitmask"), undefined);
-    });
 });

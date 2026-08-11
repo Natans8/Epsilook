@@ -106,28 +106,19 @@ DATA_MODULES = (
     "src/util.ts",
 )
 
-# THE SECOND SEAM — search 2.0's BACKEND boundary (docs/PLAN-search2.md §3.1).
+# THE SECOND SEAM - search 2.0's layering rule.
 #
 # The DOM seam above keeps the engine liftable out of a browser. This one keeps
-# the MATCHING LOGIC liftable out of JavaScript, which is the user's own
-# requirement: "if we decide to switch to SQL one day, or to a server-side API,
-# the logic doesn't have to change."
-#
-# It only holds while the core cannot learn WHICH backend it has. One
-# convenience import of `Row` into a kernel signature and every future backend
-# inherits an in-memory row model it has no way to produce — and, exactly like
-# the DOM breach, nothing would fail: the code runs fine, it just stops being
-# portable. The plan asked for this guard in the same phase as the core,
-# because "a seam without a guard is a preference".
-#
-# Everything under src/search/ EXCEPT src/search/backend/ is the core.
+# the schema and vocabulary free of the evaluator: value-types declares which
+# operators a type accepts, and value-matching implements them. If the schema
+# starts importing the matcher, the accepted-operator table can no longer be
+# read, validated or rendered into help without running the matcher, and the
+# two stop being separable.
 SEARCH_CORE = "src/search/"
-SEARCH_BACKEND = "src/search/backend/"
+SEARCH_BACKEND = "src/search/value-matching.ts"
 
-# Names that are an in-memory backend's business and no one else's. `Row` is
-# the whole point: it is how ONE implementation happens to work, and a SQL
-# backend would never mention it.
-BACKEND_NAMES = ("Row", "rows", "candidates")
+# Names belonging to the evaluator and to the row model it will grow.
+BACKEND_NAMES = ("Row", "candidates")
 
 # Browser globals and DOM types. Matched as whole words on code with comments
 # and strings stripped — several of these words (`document`, `Element`) are
@@ -732,6 +723,53 @@ def check_cli_entries(rep: Report) -> None:
                               f"{', '.join(sorted(bundled))}")
 
 
+def check_dependencies(rep: Report) -> None:
+    """Report npm dependencies with a newer release available.
+
+    WARN, never fail: a new minor of esbuild is not a defect in the change being
+    committed. It fires here because a dependency bump is worth EVALUATING
+    before a deploy rather than discovering months later - a newer toolchain
+    sometimes unties a hand (type-aware linting on TypeScript 7 arrived that
+    way). Cached for the same interval as the pack check so a normal day costs
+    one request.
+    """
+    if os.environ.get("CI"):
+        rep.skip("dependencies", "not a CI concern")
+        return
+    cache = ROOT / "build" / "cache" / "npm-outdated.json"
+    now = time.time()
+    if cache.exists() and now - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
+        try:
+            stale = json.loads(cache.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            stale = {}
+    else:
+        exe = shutil.which("npm")
+        if exe is None:
+            rep.skip("dependencies", "npm not on PATH")
+            return
+        # `npm outdated` exits 1 when anything is outdated, which is not an error
+        proc = subprocess.run([exe, "outdated", "--json"], cwd=ROOT, capture_output=True,
+                              encoding="utf-8", errors="replace", check=False)
+        try:
+            stale = json.loads(proc.stdout or "{}")
+        except json.JSONDecodeError:
+            rep.skip("dependencies", "npm outdated returned no usable JSON")
+            return
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(stale), encoding="utf-8")
+
+    behind = {name: info for name, info in stale.items()
+              if info.get("current") != info.get("latest")}
+    if not behind:
+        rep.ok("dependencies", "every npm dependency is at its latest release")
+        return
+    listing = ", ".join(f"{n} {i.get('current')}->{i.get('latest')}"
+                        for n, i in sorted(behind.items())[:4])
+    more = f" (+{len(behind) - 4} more)" if len(behind) > 4 else ""
+    rep.warn("dependencies", f"{len(behind)} behind: {listing}{more} - evaluate before deploying")
+
+
 def check_toolchain(rep: Report) -> None:
     """tsc needs `npm install` once (typescript and esbuild are pinned
     devDependencies); the build doubles as the module-graph guard.
@@ -760,8 +798,17 @@ def check_toolchain(rep: Report) -> None:
     run_tool(rep, "cli bundle", ["node", "tools/build.mjs", "--cli"],
              "esbuild tools/*.ts -> tools/*.mjs (query, measure)")
     run_tool(rep, "tests", ["npm", "test", "--silent"], "node --test over test/*.test.ts")
+    # Gated on the search 2.0 tree and the tools, which are held to the full
+    # rule set. The 1.0 modules under src/app carry a backlog of ~100 findings
+    # that predates the linter; `npx oxlint --type-aware` with no path shows
+    # them, and they are worked down rather than blocking unrelated commits.
+    run_tool(rep, "oxlint", ["npx", "oxlint", "--type-aware", "src/search", "test", "tools"],
+             "correctness + type-aware rules, .oxlintrc.json")
     run_tool(rep, "mypy", ["python", "-m", "mypy", "build/build_data.py", "tools"])
     run_tool(rep, "pyflakes", ["python", "-m", "pyflakes", "build/build_data.py", "tools"])
+    run_tool(rep, "pylint", ["uv", "tool", "run", "pylint", "--errors-only", "--score=n",
+                             "build/build_data.py", "tools"],
+             "errors only; style findings are advisory (.pylintrc)")
 
 
 # ---------------------------------------------------------------------- main
@@ -791,6 +838,7 @@ def main() -> int:
     check_cli_entries(rep)
     check_arcanum(rep)
     check_pack_freshness(rep)
+    check_dependencies(rep)
     check_inspectors(rep)
     check_docs(rep, args.base)
 

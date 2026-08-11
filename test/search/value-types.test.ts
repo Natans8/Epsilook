@@ -17,7 +17,7 @@ import {exact, ORDERING, present} from "../../src/search/operators";
 import {
     angle, bitmask, count, defineType, enumeration, flag, id, length, multiplier, ordinal, path,
     percent, seconds, text, TYPES,
-} from "../../src/search/types";
+} from "../../src/search/value-types";
 
 /** Canonical spellings — every one is something `format` itself produces. */
 const CANONICAL: [string, string[]][] = [
@@ -33,18 +33,16 @@ const CANONICAL: [string, string[]][] = [
     ["length", ["5yd", "0.5yd"]],
     ["angle", ["60deg", "27.5deg"]],
     ["multiplier", ["2x", "0.5x"]],
+    ["colour", ["#ff00aa", "#000000"]],
+    ["vector", ["0,0,1", "1.5,-2,0"]],
 ];
 
 describe("the type registry", () => {
-    it("holds exactly the catalogue, and `colour` is deliberately absent", () => {
-        // TYPES §4: a colour type is blocked on a MATCHING SEMANTIC, not on a
-        // notation — nobody knows a tint's exact packed value, so equality
-        // over 16.7M values answers nothing. Absent, not stubbed.
-        assert.deepEqual([...TYPES.keys()].sort(), [
-            "angle", "bitmask", "count", "enum", "flag", "id", "length", "multiplier",
-            "ordinal", "path", "percent", "seconds", "text",
+    it("holds exactly the catalogue", () => {
+        assert.deepEqual([...TYPES.keys()].toSorted(), [
+            "angle", "bitmask", "colour", "count", "enum", "flag", "id", "length", "multiplier",
+            "ordinal", "path", "percent", "seconds", "text", "vector",
         ]);
-        assert.equal(TYPES.has("colour"), false);
     });
 
     it("merges TYPES §4's `scale` and `rate` into `multiplier`", () => {
@@ -102,7 +100,7 @@ describe("the round-trip invariant", () => {
 
 describe("TYPES §3.1 — the operator matrix", () => {
     const accepts = (type: { accepts: readonly { name: string }[] }): string[] =>
-        type.accepts.map((op) => op.name).sort();
+        type.accepts.map((op) => op.name).toSorted();
 
     it("gives the textual family exact / contains / glob / present and NO ordering", () => {
         // `text` declining `compare` is load-bearing: it is what makes
@@ -192,7 +190,7 @@ describe("defineType", () => {
             /cannot parse or format one/);
     });
 
-    it("FIRES on units without an order (TYPES §5.1 rule 6)", () => {
+    it("FIRES on units declared without an order", () => {
         // `text` has neither, which is precisely why the 396 spell names
         // containing `%` cannot collide with a percentage. Declaring units on
         // an unordered type would reopen that.
@@ -201,6 +199,6 @@ describe("defineType", () => {
                 name: "spurious", storage: "string", accepts: [exact, present],
                 parse: (s) => s, format: (s) => s, units: {"%": 1}, hint: "x", ui: "text",
             }),
-            /declares units but declines ordering/);
+            /declares units but does not accept an order/);
     });
 });

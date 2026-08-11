@@ -792,6 +792,8 @@ def _validate_conditions(table: ConditionTable | None, where: str) -> list[str]:
 
 def spell_from_spec(spec: dict[str, Any]) -> ArcSpell:
     actions = [ArcAction(**a) for a in spec.get("actions", [])]
+    # pylint: disable=no-member  -- ArcSpell is a dataclass; astroid does not
+    # infer __dataclass_fields__ on it.
     known = {f for f in ArcSpell.__dataclass_fields__ if f != "actions"}
     # `category` is ours, not the addon's: it drives lint_spell and is never encoded into the export.
     unknown = set(spec) - known - {"actions", "category"}

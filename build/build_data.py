@@ -2877,11 +2877,14 @@ def read_anim_replacements(
 # no constructor change.
 def _by_spell() -> Any:
     """A defaultdict(set) field default."""
+    # pylint: disable=invalid-field-call  -- the result IS used as a dataclass
+    # field, in SpellEffectRows below; pylint cannot follow the indirection.
     return field(default_factory=lambda: defaultdict(set))
 
 
 def _mask() -> Any:
     """A defaultdict(int) field default, for OR-accumulated target masks."""
+    # pylint: disable=invalid-field-call  -- see _by_spell above.
     return field(default_factory=lambda: defaultdict(int))
 
 
