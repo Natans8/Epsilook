@@ -1,48 +1,44 @@
-/* SEARCH 2.0 — L3 schema. ASSEMBLY AND THE GATES.
+/**
+ * @file Assembling the declarations into a schema, and refusing to run on a broken one.
  *
- * The columns and the kinds are declared in their own files; this is where the
- * declarations become a SCHEMA — one head index the parser can look a word up
- * in, and the checks that make sure two declarations never claim the same
- * word.
+ * The columns, kinds and types are declared in their own files. Here they become a schema: one index the parser looks
+ * a query word up in, and the checks that hold the declarations to their contract.
  *
- * ⭐ IT RUNS AT IMPORT TIME AND IT THROWS. Per this repo's own standing rule
- * that PROSE CANNOT FIRE: a uniqueness rule written in a document is a rule
- * that gets broken, and 1.0 broke this exact one — `attach` is registered both
- * as a model category word and as the attachment keyword, so `model:attach` is
- * 16 and `model:{attach:chest}` is 51,581. Nothing warned, because nothing
- * could. Here a collision cannot survive `import`: the app, the CLI, the
- * tests and `tools/check.py` all fail identically and immediately.
+ * The checks run at import time and throw. A uniqueness rule that lives only in a document is one that gets broken
+ * silently, and the failure is invisible from the outside: two things reachable by one spelling means a query means
+ * different things depending on which declaration was registered first. Throwing at import makes the application, the
+ * command line tools, the tests and the repository checks all fail identically and immediately.
  */
 import type {Column} from "./columns";
 import {COLUMNS} from "./columns";
 import type {Kind, Prop} from "./kinds";
-import {KINDS} from "./kinds";
+import {KINDS, operatorsOf} from "./kinds";
 import {TYPES} from "./value-types";
 
 /**
  * What a word before a colon resolves to.
  *
- * TWO ROLES, because SEARCH.md §2.4.1's `head := column | kind | axis` has
- * three and the third does not exist yet: a property is reachable inside its
- * kind's scope (`missile:{from:chest}`), and a property PREFIX — the global
- * door for a union axis such as `attach` over `from`/`to` — is PHASE 5.
+ * A column key and a kind word are told apart by which declaration claimed the word, not by anything in the text.
+ *
+ * TODO: add the property prefix, the global door for a property shared by several kinds, once a union axis exists to
+ * be reached through it.
  */
 export type Head =
     | { readonly role: "column"; readonly column: Column }
     | { readonly role: "kind"; readonly kind: Kind };
 
 /**
- * G1 — THE UNIQUENESS GATE, and the only one of L5.1's four a script can
- * decide.
+ * Every word that may appear before a colon, resolved.
  *
- * Every word that may appear before a colon, resolved. A column key and a kind
- * word share this namespace because they share the position in the text, and
- * two things reachable by one spelling is L12 (3) — a form that means two
- * things depending on hidden state.
+ * Column keys and kind words share this namespace because they share a position in the query text.
  */
 export const HEADS = new Map<string, Head>();
 
-/** Everything wrong with the declarations, in declaration order. */
+/**
+ * Checks every declaration against its contract.
+ *
+ * @returns One line per problem, in declaration order, or an empty array when the schema is sound.
+ */
 export function schemaProblems(): string[] {
     const problems: string[] = [];
     const claimed = new Map<string, string>();
@@ -74,11 +70,19 @@ export function schemaProblems(): string[] {
     return problems;
 }
 
+/**
+ * Checks one property against its contract.
+ *
+ * @param where The property's path, for the message.
+ * @param prop The property.
+ * @returns One line per problem.
+ */
 function propProblems(where: string, prop: Prop): string[] {
     const problems: string[] = [];
 
     if (prop.types.length === 0) {
         problems.push(`${where} declares no type`);
+        return problems;
     }
     for (const type of prop.types) {
         if (TYPES.get(type.name) !== type) {
@@ -86,10 +90,17 @@ function propProblems(where: string, prop: Prop): string[] {
         }
     }
 
-    /* L7 — plain search is a DECLARED union, RANKED. A contributing axis with
-     * no tier is exactly 1.0's defect: `FIELDS.all` reads seven corpora and
-     * ranks on the name alone, so a description-only hit sits in the same
-     * bucket as an exact name match with nothing to sink it. */
+    // A control offers only the operators every notation accepts. Presence alone is a legitimate property when one
+    // type declares it, since a flag is nothing but presence, but several notations sharing only presence means each
+    // was declared to be matched and none of them can be: the property can be asked whether it has a value and never
+    // which one.
+    if (prop.types.length > 1 && !operatorsOf(prop).some((op) => op !== "present")) {
+        const names = prop.types.map((type) => type.name).join(" + ");
+        problems.push(`${where} combines ${names}, which share no operator beyond presence`);
+    }
+
+    // Chipless search is a ranked union. A contributing property with no tier ranks alongside every other, which puts
+    // a description hit level with an exact name match and nothing to separate them.
     if (prop.plain && prop.tier === undefined) {
         problems.push(`${where} is plain but declares no relevance tier`);
     }
@@ -97,12 +108,9 @@ function propProblems(where: string, prop: Prop): string[] {
         problems.push(`${where} declares a relevance tier but is not plain`);
     }
 
-    /* A PLAIN TERM IS A BARE TOKEN, so at least one of the property's types
-     * must be able to answer one. `contains` for anything textual, `exact` for
-     * an id — which is how a lone number in chipless search reaches the exact
-     * spell-ID lookup without a special case in the engine. A property whose
-     * only type is `flag` (presence alone) could never match a typed word, and
-     * declaring it plain would put it in the union silently answering nothing. */
+    // A plain term arrives as a bare token, so at least one notation must be able to answer one: `contains` for
+    // anything textual, `exact` for an id, which is how a lone number reaches an exact spell lookup without the engine
+    // special-casing it. A property that can only answer presence would join the union and silently match nothing.
     if (prop.plain && !prop.types.some((type) =>
         type.accepts.some((op) => op.name === "contains" || op.name === "exact"))) {
         problems.push(`${where} is plain but no declared type can answer a bare token`);
@@ -112,12 +120,12 @@ function propProblems(where: string, prop: Prop): string[] {
 }
 
 /**
- * Build `HEADS`, or throw naming everything wrong.
+ * Validates the declarations and builds {@link HEADS}.
  *
- * Called at import time below. Exported so a test can prove the gate FIRES
- * rather than merely that it passes — a guard nobody has seen fail is not
- * known to work, which is how `check_layers` came to miss the side-effect
- * import shape for a year.
+ * Called at import time. Exported so a test can prove the checks fire rather than only that they pass: a guard nobody
+ * has seen fail is not known to work.
+ *
+ * @throws If any declaration breaks its contract, naming every problem found.
  */
 export function buildSchema(): void {
     const problems = schemaProblems();
@@ -134,7 +142,12 @@ export function buildSchema(): void {
     }
 }
 
-/** Every kind that belongs to one column, in declaration order. */
+/**
+ * The kinds belonging to one column.
+ *
+ * @param column The column.
+ * @returns Its kinds, in declaration order.
+ */
 export function kindsOf(column: Column): Kind[] {
     return [...KINDS.values()].filter((kind) => kind.column === column);
 }

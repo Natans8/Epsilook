@@ -64,12 +64,13 @@ LFS_POINTER_MAGIC = b"version https://git-lfs.github.com/spec/v1"
 LFS_OID_RE = re.compile(rb"oid sha256:([0-9a-f]{64})")
 
 # warn-only: a change on the left usually means the doc on the right is stale.
-# The triggers are CLAUDE.md's own, restated where they can fire on their own.
+#
+# Only TRACKED docs can appear here. The design documents are kept outside the
+# repository, so git never reports them as changed and a trigger naming one
+# would warn on every run until it was ignored.
 DOC_TRIGGERS = (
     (("build/build_data.py",), "docs/DATA_ROUTES.md"),
-    (("src/pills.ts", "src/pilltypes.ts"), "docs/PILLS.md"),
     (("src/config.ts",), "README.md"),
-    (("tools/builddb.py",), "docs/DB_SCHEMA.md"),
 )
 
 # A PACK FORMAT BUMP MEANS THE PACK'S SHAPE CHANGED, and these consume that
@@ -115,10 +116,16 @@ DATA_MODULES = (
 # read, validated or rendered into help without running the matcher, and the
 # two stop being separable.
 SEARCH_CORE = "src/search/"
-SEARCH_BACKEND = "src/search/value-matching.ts"
+SEARCH_MATCHER = "value-matching"
 
-# Names belonging to the evaluator and to the row model it will grow.
-BACKEND_NAMES = ("Row", "candidates")
+# index.ts is the public surface and re-exports both halves on purpose, so it
+# is the one module in the directory the seam does not apply to.
+SEARCH_SURFACE = "index"
+
+# Names belonging to the evaluator and to the row model it will grow. Naming one
+# in the schema puts a single evaluator's data model into a contract every other
+# one would then have to satisfy.
+MATCHER_NAMES = ("Row", "candidates")
 
 # Browser globals and DOM types. Matched as whole words on code with comments
 # and strings stripped — several of these words (`document`, `Element`) are
@@ -511,46 +518,47 @@ def check_layers(rep: Report) -> None:
     else:
         rep.ok("layer boundary", f"{len(DATA_MODULES)} data/query modules free of DOM + app imports")
 
-    check_backend_seam(rep, imports)
+    check_matcher_seam(rep, imports)
 
 
-def check_backend_seam(rep: Report, imports: re.Pattern[str]) -> None:
-    """Search 2.0's declarative core must not learn which backend it has.
+def check_matcher_seam(rep: Report, imports: re.Pattern[str]) -> None:
+    """The declarative half of search must not depend on the matching half.
 
-    Two directions again, and both silent. Importing anything from
-    src/search/backend/ picks an implementation on the core's behalf; NAMING
-    `Row` (or `rows`/`candidates`) puts one implementation's data model into a
-    contract every other backend would then have to satisfy — N round trips for
-    SQL, absurd for HTTP.
+    Two directions, both silent. Importing value-matching means the
+    accepted-operator table can no longer be read, validated or rendered into
+    help without running the matcher. Naming `Row` or `candidates` puts one
+    evaluator's data model into a contract the declarations should not know
+    about.
 
     Skipped rather than failed while the tree is absent, so this check does not
-    become the reason a checkout without search 2.0 cannot commit.
+    become the reason a checkout without it cannot commit.
     """
-    core = sorted(p for p in (ROOT / SEARCH_CORE).glob("*.ts")) if (ROOT / SEARCH_CORE).is_dir() else []
+    core = [p for p in sorted((ROOT / SEARCH_CORE).glob("*.ts"))
+            if p.stem not in (SEARCH_MATCHER, SEARCH_SURFACE)] if (ROOT / SEARCH_CORE).is_dir() else []
     if not core:
-        rep.skip("backend seam", f"{SEARCH_CORE} not present yet")
+        rep.skip("matcher seam", f"{SEARCH_CORE} not present yet")
         return
 
-    word = re.compile(r"\b(" + "|".join(BACKEND_NAMES) + r")\b")
+    word = re.compile(r"\b(" + "|".join(MATCHER_NAMES) + r")\b")
     problems: list[str] = []
     for mod in core:
         name = mod.relative_to(ROOT).as_posix()
         src = mod.read_text(encoding="utf-8")
         for target in imports.findall(strip_ts_comments(src)):
-            if "backend/" in target:
-                problems.append(f"{name} imports backend module {target}")
+            if target.rsplit("/", 1)[-1] == SEARCH_MATCHER:
+                problems.append(f"{name} imports {target}")
         for line_no, line in enumerate(strip_ts_noise(src).splitlines(), 1):
             hit = word.search(line)
             if hit:
-                problems.append(f"{name}:{line_no} names backend concept `{hit.group(1)}`")
+                problems.append(f"{name}:{line_no} names evaluator concept `{hit.group(1)}`")
 
     if problems:
         for p in problems[:6]:
-            rep.fail("backend seam", p)
+            rep.fail("matcher seam", p)
         if len(problems) > 6:
-            rep.fail("backend seam", f"...and {len(problems) - 6} more")
+            rep.fail("matcher seam", f"...and {len(problems) - 6} more")
     else:
-        rep.ok("backend seam", f"{len(core)} core modules free of backend imports + Row")
+        rep.ok("matcher seam", f"{len(core)} declaring modules free of the matcher")
 
 
 def check_arcanum(rep: Report) -> None:

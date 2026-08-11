@@ -5,7 +5,7 @@
  * operand. Deciding whether a ROW satisfies a clause, and whether a SPELL satisfies a query, is the kernel's work and
  * happens above this file.
  *
- * The rule set lives in {@link ../value-types value-types.ts} as data: each type lists the operators it accepts. The
+ * The rule set lives in {@link ./value-types!} as data: each type lists the operators it accepts. The
  * implementations live here. Keeping the two apart means the accepted-operator table can be read, validated and
  * rendered into help text without running any of these functions, and it is what lets a type decline an operator as a
  * declaration rather than as a missing method.
@@ -14,6 +14,7 @@
  */
 import {fold, squash} from "./text-normalization";
 import type {Value} from "./value-types";
+import {TYPES} from "./value-types";
 
 /**
  * An operand as the kernel supplies it: a single value, or the two bounds of a range.
@@ -264,14 +265,26 @@ define(["range"], ["ordinal"], (stored, operand) => {
 /* -------------------------------------------------------------------- composites */
 
 /**
- * A composite is compared component by component, and a query may constrain fewer components than the value has.
+ * Types built from named members, whose stored value is their components in order.
  *
- * `1,2,3` matches only that point; `1` matches any composite whose first component is 1. Partial constraint is the
- * useful case: an offset is usually asked about one axis at a time.
+ * Read from the registry rather than listed by hand, so declaring a composite is the whole of adding one.
  */
-define(["exact"], ["vector"], (stored, operand) => {
+const COMPOSITE = [...TYPES.values()].filter((type) => type.ui === "fields").map((type) => type.name);
+
+/**
+ * A composite is compared member by member, and a query may constrain fewer members than the value has.
+ *
+ * A blank component in the QUERY is one it does not ask about, which is the useful case: an offset is normally asked
+ * about one axis at a time. A blank component in the STORED value is one the row does not have, and it matches
+ * nothing — otherwise an absent component would compare equal to a queried zero.
+ */
+define(["exact"], COMPOSITE, (stored, operand) => {
     const want = asText(operand).split(",");
     const have = asText(stored).split(",");
-    return want.every((part, i) => part.trim() === "" || part.trim() === have[i]?.trim());
+    return want.every((part, i) => {
+        if (part.trim() === "") return true;
+        const mine = have[i];
+        return mine !== undefined && mine.trim() !== "" && Number(part) === Number(mine);
+    });
 });
-define(["present"], ["vector"], (stored) => asText(stored).length > 0);
+define(["present"], COMPOSITE, (stored) => asText(stored).length > 0);

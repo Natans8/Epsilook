@@ -1,65 +1,60 @@
-/* THE IN-MEMORY BACKEND's operator table — the bodies PLAN §3.2b moved off the
- * types.
+/**
+ * @file Applying one operator to one stored value.
  *
- * ⭐ THE HIGHEST-VALUE TEST HERE IS THE LAST ONE: every (operator, type) pair
- * a type ACCEPTS must either have an implementation or be a declared, reasoned
- * gap. Without it, `types.ts` and this file drift silently — a type gains an
- * operator, the backend never learns, and the query answers "no spells" rather
- * than answering at all. That is the exact failure mode the whole rewrite
- * exists to delete.
+ * The coverage test at the end is the one that earns its keep. Every (operator, type) pair a type accepts must have an
+ * implementation here; without that assertion the accepted-operator table and this one drift apart silently, and a
+ * type that gains an operator answers "nothing matches" rather than answering at all.
  */
 import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
-import {matcher} from "../../src/search/value-matching";
+import {matcher, roleNames, setOrdinalLadder} from "../../src/search/value-matching";
 import {TYPES} from "../../src/search/value-types";
-
-/** The two types this backend cannot answer yet, and why. Asserted below to
- *  be EXACTLY the gaps, so a third one cannot appear unnoticed. */
-const DECLARED_GAPS = new Set<string>(["vector"]);
 
 describe("the textual family", () => {
     const run = (op: string, stored: string, operand: string): boolean =>
         matcher(op, "text")!(stored, operand);
 
-    it("matches `contains` unanchored, which the corpus forces", () => {
+    it("matches a bare token anywhere in the value", () => {
         assert.equal(run("contains", "Fireball", "fire"), true);
         assert.equal(run("contains", "Fireball", "ball"), true);
         assert.equal(run("contains", "Fireball", "frost"), false);
     });
 
-    it("folds both sides, so case and typography cannot strand a spell", () => {
-        // SEARCH.md §4.9.9a: fold the CORPUS as well as the query. Three spell
-        // names on 9.2.7 carry an em dash; folding one side only would make
-        // them unreachable by a typed hyphen instead of more reachable.
+    it("normalises both sides, so case and typography cannot strand a value", () => {
+        // Normalising the query alone would make a name carrying an em dash unreachable by a typed hyphen rather than
+        // more reachable.
         assert.equal(run("contains", "FIREBALL", "fire"), true);
         assert.equal(run("exact", "Anti—Magic", "anti-magic"), true);
     });
 
-    it("matches `exact` against the WHOLE value, never a part", () => {
+    it("ignores punctuation when matching part of a value", () => {
+        assert.equal(run("contains", "Anti-Magic Shell", "antimagic"), true);
+        assert.equal(run("contains", "Anti-Magic Shell", "magicshell"), true);
+    });
+
+    it("keeps exact matching against the whole value, never a part", () => {
         assert.equal(run("exact", "Fireball", "Fireball"), true);
         assert.equal(run("exact", "Fireball", "fire"), false);
     });
 
-    it("globs with `*` as the ONLY metacharacter", () => {
+    it("treats a star as the only metacharacter in a pattern", () => {
         const glob = (stored: string, pattern: string): boolean =>
             matcher("glob", "path")!(stored, pattern);
         assert.equal(glob("spells/fire_missile.m2", "spells/fire*"), true);
         assert.equal(glob("spells/fire_missile.m2", "*missile*"), true);
         assert.equal(glob("spells/fire_missile.m2", "*frost*"), false);
-        // a path is full of characters a regex would otherwise read
+        // A path is full of characters a regular expression would otherwise read as syntax.
         assert.equal(glob("elixir (greater).m2", "elixir(*"), true);
         assert.equal(glob("a+b.m2", "a+b*"), true);
     });
 
-    it("still matches beer when asked for bee*, and the hint says so", () => {
-        // SEARCH.md §3.2: asset paths run words together, so there is no
-        // boundary to anchor to. Measured, not assumed — and the reason the
-        // ordered `+` operator was deleted.
+    it("still matches beer when asked for bee", () => {
+        // Asset paths run words together, so there is no boundary to anchor a pattern to.
         assert.equal(matcher("glob", "path")!("beerfest_keg01.m2", "bee*"), true);
     });
 
-    it("reads `present` as having any text at all", () => {
+    it("reads presence as having any text at all", () => {
         assert.equal(matcher("present", "text")!("Fireball", "*"), true);
         assert.equal(matcher("present", "text")!("", "*"), false);
     });
@@ -69,7 +64,7 @@ describe("the numeric family", () => {
     const run = (op: string, stored: number, operand: number): boolean =>
         matcher(op, "seconds")!(stored, operand);
 
-    it("compares in storage units, where the pack holds integers", () => {
+    it("compares in storage units, where the data holds integers", () => {
         assert.equal(run("exact", 1500, 1500), true);
         assert.equal(run("lt", 1500, 2000), true);
         assert.equal(run("lte", 1500, 1500), true);
@@ -86,34 +81,110 @@ describe("the numeric family", () => {
         assert.equal(range(9, [10, 90]), false);
     });
 
-    it("sorts the bounds, so `90-10` means what `10-90` means", () => {
-        // The grammar cannot tell them apart — `-` between two values is a
-        // range whichever way round they are — and a silently empty result
-        // would be L12 (4): a form that reads correctly and behaves otherwise.
+    it("sorts the bounds, so a descending range means what an ascending one means", () => {
+        // A hyphen between two values is a range whichever way round they are, so the grammar cannot tell them apart.
+        // Returning nothing for one of them would be a query that reads correctly and behaves otherwise.
         const range = matcher("range", "percent")!;
         assert.equal(range(50, [90, 10]), true);
     });
 
-    it("treats `present` as true, because an absent property never gets here", () => {
+    it("treats presence as true, because an absent property never reaches a matcher", () => {
         assert.equal(matcher("present", "count")!(0, "*"), true);
     });
 });
 
+describe("colours", () => {
+    const near = matcher("contains", "colour")!;
+
+    it("matches a nearby shade for a bare colour", () => {
+        assert.equal(near(0xff0000, 0xf50505), true);
+        assert.equal(near(0xff0000, 0x00ff00), false);
+    });
+
+    it("keeps exact matching exact", () => {
+        const same = matcher("exact", "colour")!;
+        assert.equal(same(0xff00aa, 0xff00aa), true);
+        assert.equal(same(0xff00aa, 0xff00ab), false);
+    });
+});
+
+describe("target roles", () => {
+    const plays = (mask: number, role: string): boolean => matcher("exact", "bitmask")!(mask, role);
+
+    it("names the roles a query may use", () => {
+        assert.deepEqual(roleNames(), ["area", "both", "caster", "others", "target"]);
+    });
+
+    it("reads a role that spans two bits as either of them", () => {
+        assert.equal(plays(2, "target"), true);
+        assert.equal(plays(8, "target"), true);
+        assert.equal(plays(1, "target"), false);
+    });
+
+    it("reads `both` as a conjunction no single bit spells", () => {
+        assert.equal(plays(1 | 2, "both"), true);
+        assert.equal(plays(1, "both"), false);
+        assert.equal(plays(2, "both"), false);
+    });
+
+    it("refuses a role name it does not know rather than matching everything", () => {
+        assert.equal(plays(255, "everyone"), false);
+    });
+});
+
+describe("ordinals", () => {
+    it("compares by rank once a ladder is supplied", () => {
+        setOrdinalLadder(["Classic", "Burning Crusade", "Wrath of the Lich King", "Legion"]);
+        assert.equal(matcher("gt", "ordinal")!("Legion", "Classic"), true);
+        assert.equal(matcher("lt", "ordinal")!("Classic", "Legion"), true);
+        assert.equal(matcher("range", "ordinal")!("Burning Crusade", ["Classic", "Legion"]), true);
+    });
+
+    it("refuses a rung the ladder does not hold rather than guessing its place", () => {
+        setOrdinalLadder(["Classic", "Legion"]);
+        assert.equal(matcher("gt", "ordinal")!("Midnight", "Classic"), false);
+        assert.equal(matcher("gt", "ordinal")!("Legion", "Midnight"), false);
+    });
+});
+
+describe("composites", () => {
+    const same = matcher("exact", "offset")!;
+
+    it("matches every member a query states", () => {
+        assert.equal(same("1,2,3", "1,2,3"), true);
+        assert.equal(same("1,2,3", "1,2,4"), false);
+    });
+
+    it("ignores a member a query leaves blank", () => {
+        assert.equal(same("1,2,3", "1"), true);
+        assert.equal(same("1,2,3", ",,3"), true);
+        assert.equal(same("1,2,3", ",,4"), false);
+    });
+
+    it("compares members numerically, so trailing zeroes do not decide a match", () => {
+        assert.equal(same("1.5,0,0", "1.50,,"), true);
+    });
+
+    it("never matches a component the stored value does not have", () => {
+        // A blank stored component means the row has no value there. Comparing it numerically would read it as zero,
+        // so a query for x=0 would select every row missing an x.
+        assert.equal(same(",,3", "0"), false);
+        assert.equal(same(",,3", ",,3"), true);
+    });
+});
+
 describe("coverage", () => {
-    it("implements every operator every type accepts, or declares the gap", () => {
+    it("implements every operator every type accepts", () => {
         const missing: string[] = [];
         for (const type of TYPES.values()) {
             for (const operator of type.accepts) {
                 if (matcher(operator.name, type.name)) continue;
-                if (DECLARED_GAPS.has(type.name)) continue;
-                // `flag` accepts only `present`, and a flag has no value: its
-                // whole answer is whether the ROW exists, which is the
-                // kernel's question and never reaches a matcher.
+                // A flag carries no value: its whole answer is whether the row exists at all, which the kernel decides
+                // without consulting a matcher.
                 if (type.name === "flag") continue;
                 missing.push(`${operator.name}:${type.name}`);
             }
         }
         assert.deepEqual(missing, []);
     });
-
 });

@@ -13,6 +13,17 @@
  * A property is declared only where the data can answer it. An axis that returns nothing forever is worse than an
  * absent one, because a reader cannot tell "no spells match" from "this does not work". Adding a property once its
  * data lands is one line.
+ *
+ * Properties are declared in the order a reader meets them, and that order is preserved: a kind's subject comes first,
+ * then what qualifies it, then who it plays on. Surfaces that present properties in sequence read the declaration
+ * rather than holding a second list.
+ *
+ * A kind does not name the game table or column its rows come from. Which source feeds a property varies between game
+ * versions, which is why the build resolves it by declaration rather than in code; naming one source here would put a
+ * per-version exception into the schema. A kind says what a row IS, and the row builder says where it came from.
+ *
+ * TODO: declare the pill, the incomplete-chip placeholder and the per-property global prefix once the renderer, the
+ * query bar and the union-axis door exist to read them.
  */
 import type {Column} from "./columns";
 import {animColumn, fxColumn, idColumn, mechColumn, modelColumn, textColumn, soundColumn} from "./columns";
@@ -27,13 +38,13 @@ import {
  * Without tiers a description-only hit ranks alongside an exact name match, with nothing to separate them.
  */
 export const TIER = {
-    /** the spell's own title */
-    title: 0,
-    /** its id, typed exactly */
+    /** The spell's own name. */
+    name: 0,
+    /** Its id, typed exactly. */
     id: 1,
-    /** an asset it uses — a model, a sound, an animation, an icon */
+    /** An asset it uses: a model, a sound, an animation, an icon. */
     asset: 2,
-    /** what it SAYS it does */
+    /** What it says it does. */
     description: 3,
 } as const;
 
@@ -54,7 +65,12 @@ export interface Prop {
     readonly plain?: boolean;
     readonly tier?: number;
 
-    /** One line describing the property. Falls back to the first type's hint when absent. */
+    /**
+     * One line describing the property, where the type's own hint is not specific enough.
+     *
+     * Absent means the first type's hint is used, which is the right text whenever the property adds nothing to what
+     * the type already says. Read it with {@link hintOf} rather than the field.
+     */
     readonly hint?: string;
 }
 
@@ -105,6 +121,16 @@ export function operatorsOf(prop: Prop): string[] {
         .map((op) => op.name);
 }
 
+/**
+ * The line describing a property to a reader.
+ *
+ * @param prop The property.
+ * @returns The property's own hint, or its first type's when it declares none.
+ */
+export function hintOf(prop: Prop): string {
+    return prop.hint ?? prop.types[0].hint;
+}
+
 /** A property with no role in chipless search. */
 const of = (...types: readonly AxisType[]): Prop => ({types});
 /** A property chipless search reads, at the given relevance tier. */
@@ -135,7 +161,7 @@ const attachPoint = (hint: string): Prop => ({types: [enumeration], hint});
 export const name = defineKind({
     id: "text.name", column: textColumn, word: "name",
     hint: "the spell's name",
-    props: {text: corpus(TIER.title, text)},
+    props: {text: corpus(TIER.name, text)},
 });
 
 export const description = defineKind({

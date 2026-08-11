@@ -19,7 +19,7 @@
  * This is notation, not arity: `present` takes no operand, and `contains` has no symbol to count operands around.
  */
 export type OperatorForm =
-    /** The symbol opens the value: `=Fireball`, `>4`, `<=mop`. */
+/** The symbol opens the value: `=Fireball`, `>4`, `<=mop`. */
     | "prefix"
     /** The symbol separates two operands: `10-90`, `500ms-2s`. */
     | "infix"

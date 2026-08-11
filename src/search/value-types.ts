@@ -11,7 +11,7 @@
  * even when its matching rules resemble another's.
  *
  * Each type lists the operators it accepts as data; the implementations live in
- * {@link ./value-matching value-matching.ts}. An operator missing from `accepts` is declined, and a declined operator
+ * {@link ./value-matching!}. An operator missing from `accepts` is declined, and a declined operator
  * is reported to the reader as an error rather than silently matching nothing.
  *
  * Adding a type is one `defineType` call. Nothing else in the system changes.
@@ -69,7 +69,7 @@ export interface AxisType<V extends Value = Value> {
      *
      * Absent when the type has no values at all.
      */
-    parse?(text: string): V | null;
+    parse?(this: void, text: string): V | null;
 
     /**
      * Converts a value to the text that represents it.
@@ -82,7 +82,7 @@ export interface AxisType<V extends Value = Value> {
      *
      * Absent when the type has no values at all.
      */
-    format?(value: V): string;
+    format?(this: void, value: V): string;
 
     /** The operators this type accepts. An operator not listed here is declined. */
     readonly accepts: readonly Operator[];
@@ -202,6 +202,18 @@ export const ordinal = defineType<string>({
 /* -------------------------------------------------------------------------- numbers */
 
 /**
+ * Reads a whole, non-negative number.
+ *
+ * @param written One operand, as typed.
+ * @returns The number, or `null` when the operand is not one, including when it is too large to survive a round trip.
+ */
+function wholeNumber(written: string): number | null {
+    if (!/^\d+$/.test(written)) return null;
+    const n = Number(written);
+    return Number.isSafeInteger(n) ? n : null;
+}
+
+/**
  * An identity: a spell id, a sound kit id, an icon file id.
  *
  * Accepts equality only. Ids have no order a reader means anything by, and matching part of an id is how a six-digit
@@ -210,12 +222,7 @@ export const ordinal = defineType<string>({
 export const id = defineType<number>({
     name: "id",
     storage: "int",
-    parse: (s) => {
-        if (!/^\d+$/.test(s)) return null;
-        const n = Number(s);
-        // Beyond the safe integer range the value no longer survives a round trip, so it is not an id of ours.
-        return Number.isSafeInteger(n) ? n : null;
-    },
+    parse: wholeNumber,
     format: (n) => String(n),
     accepts: [exact, present],
     hint: "the exact id, matched whole",
@@ -226,11 +233,7 @@ export const id = defineType<number>({
 export const count = defineType<number>({
     name: "count",
     storage: "int",
-    parse: (s) => {
-        if (!/^\d+$/.test(s)) return null;
-        const n = Number(s);
-        return Number.isSafeInteger(n) ? n : null;
-    },
+    parse: wholeNumber,
     format: (n) => String(n),
     accepts: [exact, present, ...ORDERING],
     hint: "how many, as a whole number or a comparison such as >4",
@@ -344,20 +347,95 @@ export const colour = defineType<number>({
 });
 
 /**
- * A fixed-length tuple of numbers, such as a position or an offset.
+ * Builds a type whose value has several named members, each with a type of its own.
  *
- * Carried as its canonical text so that a value stays a JSON scalar. A query may constrain fewer components than the
- * value has, leaving the rest blank: `1,,3` asks about the first and third only. The control presents one numeric
- * field per component.
+ * A composite is one measurement taken together rather than several separate ones: a missile's cast offset is a
+ * single point, not three unrelated distances, so it is one property a reader constrains rather than three they must
+ * combine. That is what separates it from a kind, whose properties describe different aspects of a row.
+ *
+ * Parsing and formatting delegate to the members, so a member's units, sentinels and notation work inside a composite
+ * exactly as they do alone. The value is carried as comma-separated storage numbers to keep it a JSON scalar; a blank
+ * component is one the query does not constrain, so `z=3` and `,,3` both ask only about the third member.
+ *
+ * The control is a field set, one control per member, each drawn by the member's own type.
+ *
+ * @param spec The type's name and hint, and its members in the order they are written.
+ * @returns The registered type.
+ * @throws If a member's type has no value to read or write, which leaves that component unreachable.
  */
-export const vector = defineType<string>({
-    name: "vector",
-    storage: "float",
-    parse: (s) => (/^-?[\d.]*(,-?[\d.]*)+$/.test(s.trim()) ? s.trim() : null),
-    format: (v) => v,
-    accepts: [exact, present],
-    hint: "components separated by commas, such as 0,0,1; leave one blank to ignore it",
-    ui: "fields",
+export function composite(spec: {
+    name: string;
+    members: Readonly<Record<string, AxisType<number>>>;
+    hint: string;
+}): AxisType<string> {
+    const members = Object.entries(spec.members).map(([name, type]) => {
+        if (!type.parse || !type.format) {
+            throw new Error(
+                `composite "${spec.name}" member "${name}" has type "${type.name}", which carries no value`);
+        }
+        return {name, parse: type.parse, format: type.format};
+    });
+
+    return defineType<string>({
+        name: spec.name,
+        storage: "float",
+        parse: (s) => {
+            const parts = s.split(",");
+            if (parts.length > members.length) return null;
+
+            const slots: (string | null)[] = members.map(() => null);
+            let seenNamed = false;
+
+            for (const [i, part] of parts.entries()) {
+                const written = part.trim();
+                if (written === "") continue;
+
+                const named = /^(\w+)\s*=\s*(.*)$/.exec(written);
+                // Positional components are read by position, so one after a named component has no position left to
+                // mean. The same rule as a function call, and for the same reason.
+                if (named) seenNamed = true;
+                else if (seenNamed) return null;
+
+                const at = named
+                    ? members.findIndex((member) => member.name.toLowerCase() === named[1].toLowerCase())
+                    : i;
+                // An unknown member, or one already given a value: both would otherwise be discarded in silence.
+                if (at < 0 || slots[at] !== null) return null;
+
+                const value = members[at].parse(named ? named[2] : written);
+                if (value === null) return null;
+                slots[at] = String(value);
+            }
+
+            return slots.some((slot) => slot !== null)
+                ? slots.map((slot) => slot ?? "").join(",")
+                : null;
+        },
+        // A component with no member to format it is passed through as written. Stored values come from the game data,
+        // where a later version adding a component should degrade to showing it rather than failing to render.
+        format: (value) => value
+            .split(",")
+            .map((slot, i) => {
+                const member = members[i];
+                return slot === "" || member === undefined ? slot : member.format(Number(slot));
+            })
+            .join(","),
+        accepts: [exact, present],
+        hint: spec.hint,
+        ui: "fields",
+    });
+}
+
+/**
+ * A point in the world, relative to whatever the value belongs to.
+ *
+ * TODO: attach to the missile kind's cast and impact offsets once the build ships those columns; they are three
+ * separate fields in the game data and reach the pack as none today.
+ */
+export const offset = composite({
+    name: "offset",
+    members: {x: length, y: length, z: length},
+    hint: "a point as x,y,z in yards; name one member such as z=3, or leave a component blank to ignore it",
 });
 
 /**
