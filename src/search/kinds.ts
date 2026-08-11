@@ -29,7 +29,8 @@ import type {Column} from "./columns";
 import {animColumn, fxColumn, idColumn, mechColumn, modelColumn, textColumn, soundColumn} from "./columns";
 import type {AxisType} from "./value-types";
 import {
-    bitmask, colour, count, enumeration, id, length, multiplier, ordinal, path, percent, seconds, text,
+    bitmask, colour, count, enumeration, id, length, multiplier, ordinal, path, percent, percentChange,
+    proportion, seconds, text,
 } from "./value-types";
 
 /**
@@ -457,8 +458,8 @@ export const scale = defineKind({
     hint: "a size change the aura applies",
     props: {
         amount: {
-            types: [percent, multiplier],
-            hint: "how much bigger or smaller, as a percentage such as 30 or -30, or a multiplier such as 2x",
+            types: [percentChange, proportion, multiplier],
+            hint: "how much bigger or smaller: +50, or 150 as a proportion of the original, or x1.5",
         },
         target: target(),
     },
@@ -590,8 +591,8 @@ export const speed = defineKind({
     hint: "a movement-speed change — run, mounted, swim, flight or all at once",
     props: {
         amount: {
-            types: [percent, multiplier],
-            hint: "how much faster or slower, as a percentage such as 70 or -50, or a multiplier such as 2x",
+            types: [percentChange, proportion, multiplier],
+            hint: "how much faster or slower: +70, or 170 as a proportion of the original, or x1.7",
         },
         mode: {types: [enumeration], hint: "which movement: run, walk, fly or swim"},
         target: target(),

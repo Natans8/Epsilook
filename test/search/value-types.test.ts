@@ -12,7 +12,7 @@ import {describe, it} from "node:test";
 import {exact, ORDERING, present} from "../../src/search/operators";
 import {
     angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, multiplier,
-    offset, ordinal, path, percent, seconds, text, TYPES,
+    offset, ordinal, path, percent, percentChange, proportion, seconds, text, TYPES,
 } from "../../src/search/value-types";
 
 /** Canonical spellings. Every one is something `format` itself produces. */
@@ -25,10 +25,12 @@ const CANONICAL: [string, string[]][] = [
     ["id", ["133", "0", "9007199254740991"]],
     ["count", ["0", "4", "128"]],
     ["seconds", ["1.5s", "0s", "120s", "unlimited"]],
-    ["percent", ["+30%", "-30%", "0%"]],
+    ["percent", ["30%", "0%", "7.5%"]],
+    ["percentChange", ["+30%", "-30%", "+0%"]],
+    ["proportion", ["130%", "70%"]],
     ["length", ["5yd", "0.5yd"]],
     ["angle", ["60deg", "27.5deg"]],
-    ["multiplier", ["2x", "0.5x"]],
+    ["multiplier", ["x2", "x0.5"]],
     ["colour", ["#ff00aa", "#000000"]],
     ["offset", ["0yd,0yd,1yd", "1.5yd,-2yd,0yd", ",,3yd"]],
 ];
@@ -37,16 +39,41 @@ describe("the type registry", () => {
     it("holds exactly the catalogue", () => {
         assert.deepEqual([...TYPES.keys()].toSorted(), [
             "angle", "bitmask", "colour", "count", "enum", "flag", "id", "length", "multiplier",
-            "offset", "ordinal", "path", "percent", "seconds", "text",
+            "offset", "ordinal", "path", "percent", "percentChange", "proportion", "seconds", "text",
         ]);
     });
 
     it("has one type for a bare factor, whatever the factor measures", () => {
-        // What a multiplier is applied to is a property's business, not a type's, so a size factor and a playback
-        // factor are one type. It is named for the value rather than for a use, leaving `scale` free for the kind.
+        // What a factor is applied to is a property's business, not a type's. It is named for the value rather than
+        // for a use, leaving `scale` free for the kind.
         assert.equal(TYPES.has("scale"), false);
         assert.equal(TYPES.has("rate"), false);
-        assert.equal(multiplier.format!(2), "2x");
+        assert.equal(multiplier.format!(100), "x2");
+    });
+
+    it("spells one size or speed change three ways, all reaching the same stored value", () => {
+        // The data stores the CHANGE, because these auras accumulate by addition: two spells at +50% leave a
+        // character at +100%, not at 2.25 times its size.
+        for (const [change, asProportion, asFactor, stored] of
+            [["+50", "150", "x1.5", 50], ["-50", "50", "x0.5", -50], ["+0", "100", "x1", 0]] as const) {
+            assert.equal(percentChange.parse!(change), stored, change);
+            assert.equal(proportion.parse!(asProportion), stored, asProportion);
+            assert.equal(multiplier.parse!(asFactor), stored, asFactor);
+        }
+    });
+
+    it("tells the three notations apart by the shape of the operand, not by their order", () => {
+        // Each declines what the others read, so dispatch does not depend on which is declared first.
+        assert.equal(percentChange.parse!("150"), null, "a change must carry its sign");
+        assert.equal(proportion.parse!("+50"), null, "a proportion must not");
+        assert.equal(multiplier.parse!("-x1.5"), null, "nor a factor");
+    });
+
+    it("keeps plain percent absolute, for a proportion of a whole", () => {
+        // Transparency and desaturation are not measured from a baseline of a hundred, so they take no sign and no
+        // offset: 50 is half.
+        assert.equal(percent.parse!("50"), 50);
+        assert.equal(percent.format!(50), "50%");
     });
 
     it("gives every type a hint, because diagnostics and help are built from it", () => {
@@ -126,7 +153,7 @@ describe("the operator table", () => {
     });
 
     it("gives the numeric family equality, ordering and presence, never substring", () => {
-        for (const type of [count, seconds, percent, length, angle, multiplier]) {
+        for (const type of [count, seconds, percent, percentChange, proportion, length, angle, multiplier]) {
             assert.deepEqual(accepts(type),
                 ["anyOf", "exact", "gt", "gte", "lt", "lte", "present", "range"], type.name);
         }

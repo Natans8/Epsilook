@@ -41,6 +41,35 @@ export interface NumericSpec {
     readonly units: UnitTable;
     /** Write a leading `+` on positive values, for quantities where the sign is the information. */
     readonly signed?: boolean;
+
+    /**
+     * Storage units added after scaling, for a notation measured from a different zero.
+     *
+     * A size change is stored as the change itself, so a value written as a proportion of the original converts with
+     * an offset: `150%` and `1.5x` are both a change of `+50`. Without this the two notations would be compared
+     * against the stored value on different baselines.
+     */
+    readonly offset?: number;
+
+    /**
+     * Whether an explicit leading sign is required or refused.
+     *
+     * What lets two notations of one quantity be told apart by the shape of the operand: a signed operand is a
+     * change, an unsigned one is a proportion. Stated on both so each declines what the other reads, rather than
+     * relying on the order they happen to be tried in.
+     *
+     * Omitted where a sign is simply allowed.
+     */
+    readonly sign?: "required" | "refused";
+
+    /**
+     * Where `format` writes the unit. Defaults to after the number.
+     *
+     * Both positions are accepted on input whatever this says, in keeping with input being lenient and output being
+     * one form. A factor is conventionally written before the number, a measurement after it.
+     */
+    readonly unitPosition?: "before" | "after";
+
     readonly sentinels?: Sentinels;
 }
 
@@ -52,8 +81,11 @@ export interface NumericSpec {
  */
 const PRECISION = 6;
 
-/** A signed decimal, with no exponent and no internal space. */
+/** A signed decimal, with no exponent and no internal space, followed by an optional unit. */
 const NUMBER = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))(.*)$/;
+
+/** A sign, a unit written before the number, and the rest: `x2`, `-x1.5`. */
+const UNIT_FIRST = /^([+-]?)([^\d.+-]+)(.*)$/;
 
 /**
  * Indexes a unit table by folded symbol.
@@ -108,8 +140,18 @@ export function parseNumber(spec: NumericSpec): (text: string) => number | null 
         const sentinel = byName.get(folded);
         if (sentinel !== undefined) return sentinel;
 
-        const match = NUMBER.exec(folded);
+        // A unit may be written before the number as well as after it, so `x2` and `2x` are one factor. Only
+        // rearranged when the leading run is a unit this type actually has, which leaves any other text to be
+        // refused by the number pattern below.
+        const first = UNIT_FIRST.exec(folded);
+        const text2 = first && units.has(first[2]) ? `${first[1]}${first[3]}${first[2]}` : folded;
+
+        const match = NUMBER.exec(text2);
         if (!match) return null;
+
+        const signed = /^[+-]/.test(match[1]);
+        if (spec.sign === "required" && !signed) return null;
+        if (spec.sign === "refused" && signed) return null;
 
         const magnitude = Number(match[1]);
         if (!Number.isFinite(magnitude)) return null;
@@ -118,7 +160,7 @@ export function parseNumber(spec: NumericSpec): (text: string) => number | null 
         const factor = suffix === "" ? canonical : units.get(suffix);
         if (factor === undefined) return null;
 
-        const scaled = magnitude * factor;
+        const scaled = magnitude * factor + (spec.offset ?? 0);
         return spec.storage === "int" ? Math.round(scaled) : scaled;
     };
 }
@@ -140,8 +182,13 @@ export function formatNumber(spec: NumericSpec): (value: number) => string {
         const word = spec.sentinels?.[value];
         if (word !== undefined) return word;
 
-        const shown = Number((value / factor).toFixed(PRECISION));
-        const sign = spec.signed && shown > 0 ? "+" : "";
-        return `${sign}${shown}${spec.unit}`;
+        const shown = Number(((value - (spec.offset ?? 0)) / factor).toFixed(PRECISION));
+        // Zero takes a sign only where one is required, so that what `format` writes is always something `parse`
+        // accepts. Elsewhere `+0%` would be noise.
+        const plus = shown > 0 || (shown === 0 && spec.sign === "required");
+        const sign = spec.signed && plus ? "+" : "";
+        return spec.unitPosition === "before"
+            ? `${sign}${spec.unit}${shown}`
+            : `${sign}${shown}${spec.unit}`;
     };
 }

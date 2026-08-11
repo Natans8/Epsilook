@@ -275,33 +275,76 @@ export const seconds = numeric({
 });
 
 /**
- * A proportional change, signed.
+ * A proportion of a whole: how transparent a model is, how much colour is drained from it.
  *
- * The default notation for size and speed, because that is how the game presents them and how Epsilon's own commands
- * are written. The sign carries meaning: an aura at +30% and one at -30% are opposite effects, so a formatted value
- * always states it.
+ * Absolute rather than relative, so `50` is half and there is no sign to write. Distinct from {@link percentChange},
+ * which measures from a baseline of a hundred.
  */
 export const percent = numeric({
     name: "percent",
-    storage: "int",
+    storage: "float",
+    unit: "%",
+    units: {"%": 1},
+    hint: "a percentage, such as 50 or 7.5, or a range like 10-90",
+});
+
+/* A size or speed change has three spellings of one quantity, and the data stores the CHANGE: a stored +50 is half
+ * again as big, a stored -50 is half. The three types below are notations of that stored value, told apart by the
+ * shape of the operand, so a reader may write whichever they think in.
+ *
+ * The game's own description template for a size aura is `+$m1% Scale`, and its own commands are written as a factor,
+ * so neither notation can be called the unfamiliar one.
+ *
+ * The CHANGE is the stored and printed form because these auras accumulate by addition: two spells at +50% leave a
+ * character at +100%, not at 2.25 times its size. Changes add, factors do not, so a factor is a way of writing one
+ * value rather than the form the quantity composes in. */
+
+/**
+ * A change from the original, written with an explicit sign: `+50%` is half again as big, `-30%` is a third smaller.
+ *
+ * Requires the sign, which is what lets an unsigned operand fall through to {@link proportion} and mean the other
+ * thing. Declared first, so it is the spelling a value is printed in.
+ */
+export const percentChange = numeric({
+    name: "percentChange",
+    storage: "float",
     unit: "%",
     units: {"%": 1},
     signed: true,
-    hint: "a percentage, such as 50, +30, -30, or a range like 10-90",
+    sign: "required",
+    hint: "a change, written with a sign: +50 is half again as big, -30 is a third smaller",
 });
 
 /**
- * A bare factor, offered alongside {@link percent} wherever a reader thinks in multiples rather than percentages.
+ * The same change written as a proportion of the original: `150%` is `+50%`, `70%` is `-30%`.
  *
- * Never the default. Where both notations apply, percent is tried first, so an unqualified number is read the way the
- * game states it and `2x` selects this notation explicitly.
+ * The offset is what makes the two agree — a hundred percent is no change at all.
+ */
+export const proportion = numeric({
+    name: "proportion",
+    storage: "float",
+    unit: "%",
+    units: {"%": 1},
+    offset: -100,
+    sign: "refused",
+    hint: "a proportion of the original, where 150 is half again as big and 50 is half",
+});
+
+/**
+ * The same change written as a factor: `x1.5` is `+50%`, `x0.5` is `-50%`.
+ *
+ * The unit is written before the number, which is how a factor is normally read. `1.5x` is accepted too, since input
+ * takes either position and only the printed form is fixed.
  */
 export const multiplier = numeric({
     name: "multiplier",
     storage: "float",
     unit: "x",
-    units: {x: 1, "×": 1},
-    hint: "a multiplier, where 2 is twice and 0.5 is half",
+    units: {x: 100, "×": 100},
+    offset: -100,
+    sign: "refused",
+    unitPosition: "before",
+    hint: "a factor, where x2 is twice as big and x0.5 is half",
 });
 
 /** A distance in yards, the unit the game and its players use. */
