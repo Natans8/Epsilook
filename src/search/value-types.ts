@@ -17,7 +17,7 @@
  * Adding a type is one `defineType` call. Nothing else in the system changes.
  */
 import type {Operator} from "./operators";
-import {contains, exact, glob, OPERATORS, ORDERING, present} from "./operators";
+import {anyOf, contains, exact, glob, OPERATORS, ORDERING, present} from "./operators";
 import type {NumericSpec, UnitTable} from "./units";
 import {formatNumber, parseNumber} from "./units";
 
@@ -140,7 +140,7 @@ export const text = defineType<string>({
     storage: "string",
     parse: (s) => s,
     format: (s) => s,
-    accepts: [exact, contains, glob, present],
+    accepts: [exact, contains, glob, present, anyOf],
     hint: "words, matched anywhere in the text unless anchored with =",
     ui: "text",
 });
@@ -158,7 +158,7 @@ export const path = defineType<string>({
     storage: "string",
     parse: (s) => s,
     format: (s) => s,
-    accepts: [exact, contains, glob, present],
+    accepts: [exact, contains, glob, present, anyOf],
     hint: "part of a file path; file names run words together, so bee also finds beer",
     ui: "text",
 });
@@ -177,7 +177,7 @@ export const enumeration = defineType<string>({
     storage: "int",
     parse: (s) => s,
     format: (s) => s,
-    accepts: [exact, contains, glob, present],
+    accepts: [exact, contains, glob, present, anyOf],
     hint: "one of a fixed list of names; pick one, or type part of it",
     ui: "picker",
 });
@@ -194,7 +194,7 @@ export const ordinal = defineType<string>({
     storage: "int",
     parse: (s) => s,
     format: (s) => s,
-    accepts: [exact, contains, glob, present, ...ORDERING],
+    accepts: [exact, contains, glob, present, anyOf, ...ORDERING],
     hint: "a rung on a ladder; name one, or compare with < and >",
     ui: "picker",
 });
@@ -224,7 +224,7 @@ export const id = defineType<number>({
     storage: "int",
     parse: wholeNumber,
     format: (n) => String(n),
-    accepts: [exact, present],
+    accepts: [exact, present, anyOf],
     hint: "the exact id, matched whole",
     ui: "number",
 });
@@ -235,7 +235,7 @@ export const count = defineType<number>({
     storage: "int",
     parse: wholeNumber,
     format: (n) => String(n),
-    accepts: [exact, present, ...ORDERING],
+    accepts: [exact, present, anyOf, ...ORDERING],
     hint: "how many, as a whole number or a comparison such as >4",
     ui: "number",
 });
@@ -252,7 +252,7 @@ function numeric(spec: NumericSpec & {name: string; hint: string; ui?: Affordanc
         storage: spec.storage,
         parse: parseNumber(spec),
         format: formatNumber(spec),
-        accepts: [exact, present, ...ORDERING],
+        accepts: [exact, present, anyOf, ...ORDERING],
         units: spec.units,
         hint: spec.hint,
         ui: spec.ui ?? "range",
@@ -341,7 +341,7 @@ export const colour = defineType<number>({
         return hex ? Number.parseInt(hex[1], 16) : null;
     },
     format: (packed) => `#${packed.toString(16).padStart(6, "0")}`,
-    accepts: [exact, contains, present],
+    accepts: [exact, contains, present, anyOf],
     hint: "a colour as #rrggbb; a bare colour matches nearby shades too",
     ui: "colour",
 });
@@ -420,6 +420,8 @@ export function composite(spec: {
                 return slot === "" || member === undefined ? slot : member.format(Number(slot));
             })
             .join(","),
+        // A composite declines alternation: its own components are comma-separated, so a group of alternatives
+        // inside one would need a second level of delimiter to be read unambiguously.
         accepts: [exact, present],
         hint: spec.hint,
         ui: "fields",
@@ -450,7 +452,7 @@ export const bitmask = defineType<string>({
     storage: "int",
     parse: (s) => s,
     format: (s) => s,
-    accepts: [exact, present],
+    accepts: [exact, present, anyOf],
     hint: "who it plays on: caster, target, both, area or others",
     ui: "glyphs",
 });

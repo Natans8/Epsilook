@@ -8,6 +8,7 @@ site/js/
 # the CLI bundles esbuild emits from tools/*.ts (node tools/build.mjs --cli)
 tools/query.mjs
 tools/measure.mjs
+tools/surface.mjs
 
 # the test bundles esbuild emits from test/*.test.ts (npm test builds them)
 test/.bundle/

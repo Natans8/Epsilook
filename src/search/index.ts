@@ -10,9 +10,10 @@
  * TODO: export `parse`, `run` and `describe` once the grammar, the evaluator and the chip renderer exist.
  */
 
-export type {Operator, OperatorForm} from "./operators";
+export type {Operator, OperatorForm, OperatorLevel} from "./operators";
 export {
-    contains, defineOperator, exact, glob, gt, gte, lt, lte, OPERATORS, ORDERING, present, range,
+    and, anyOf, CLAUSE_OPERATORS, contains, defineOperator, exact, glob, gt, gte, lt, lte, not,
+    OPERATORS, ORDERING, or, present, range,
 } from "./operators";
 
 export type {NumericSpec, Sentinels, UnitTable} from "./units";

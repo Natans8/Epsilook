@@ -10,7 +10,8 @@
     "test": "node tools/build.mjs --test && node --enable-source-maps --test \"test/.bundle/**/*.test.mjs\"",
     "query": "node tools/build.mjs --cli && node tools/query.mjs",
     "measure": "node tools/build.mjs --cli && node tools/measure.mjs",
-    "lint": "oxlint --type-aware"
+    "lint": "oxlint --type-aware",
+    "surface": "node tools/build.mjs --cli && node tools/surface.mjs"
   },
   "engines": {
     "node": ">=22"

@@ -14,6 +14,18 @@
  */
 
 /**
+ * What an operator combines.
+ *
+ * A value operator asks a question of one stored value, and a type declares which of them it answers. A clause
+ * operator combines whole clauses and is the same for every type, so no type declares it.
+ *
+ * Established query languages draw this line and keep both categories in one vocabulary: comparison against logical
+ * operators in document stores, predicates against connectives in SQL, field lookups against query-object composition
+ * in ORMs. Naming both here means generated help and autocomplete enumerate the language from one place.
+ */
+export type OperatorLevel = "value" | "clause";
+
+/**
  * How the parser recognises an operator in the query text.
  *
  * This is notation, not arity: `present` takes no operand, and `contains` has no symbol to count operands around.
@@ -30,7 +42,7 @@ export type OperatorForm =
     /** No symbol; the default reading of a plain token: `fire`. */
     | "bare";
 
-/** One question a query can ask of a value. */
+/** One question a query can ask. */
 export interface Operator {
     /**
      * The abstract operation, and the key used by a type's `accepts` list and by the matcher table.
@@ -39,10 +51,21 @@ export interface Operator {
      */
     readonly name: string;
 
-    /** How the operator is written, or `null` when it has no spelling because a bare token implies it. */
+    /** The symbol, or `null` when the operator has no spelling because juxtaposition implies it. */
     readonly symbol: string | null;
 
     readonly form: OperatorForm;
+
+    /** What the operator combines. Only a value operator may appear in a type's `accepts` list. */
+    readonly level: OperatorLevel;
+
+    /**
+     * Binding strength, for clause operators only.
+     *
+     * Negation binds tightest, then conjunction, then alternation, which is the ladder every language with these
+     * three uses. Value operators never compose with one another, so they carry no precedence.
+     */
+    readonly precedence?: number;
 
     /** One line describing the operator to a user, used by generated help and by diagnostics. */
     readonly hint: string;
@@ -61,13 +84,19 @@ export const OPERATORS = new Map<string, Operator>();
 export function defineOperator(op: Operator): Operator {
     if (OPERATORS.has(op.name)) throw new Error(`operator "${op.name}" already defined`);
 
-    // A symbol may be shared across positions but not within one. `glob` and `present` are both `*`, told apart by
-    // whether the star stands alone; two operators sharing both symbol and position would leave the parser choosing
-    // arbitrarily between them.
+    if (op.level === "value" && op.precedence !== undefined) {
+        throw new Error(`operator "${op.name}" is a value operator and cannot carry a precedence`);
+    }
+
+    // A symbol may be shared, but not by two operators the parser would have to choose between in one position at one
+    // level. `glob` and `present` are both `*`, told apart by whether the star stands alone; `anyOf` and `or` are both
+    // `|`, told apart by whether it sits inside a value group.
     for (const other of OPERATORS.values()) {
-        if (op.symbol !== null && other.symbol === op.symbol && other.form === op.form) {
+        if (op.symbol !== null && other.symbol === op.symbol
+            && other.form === op.form && other.level === op.level) {
             throw new Error(
-                `operator "${op.name}" claims "${op.symbol}" as a ${op.form}, already used by "${other.name}"`);
+                `operator "${op.name}" claims "${op.symbol}" as a ${op.level}-level ${op.form}, `
+                + `already used by "${other.name}"`);
         }
     }
 
@@ -76,36 +105,38 @@ export function defineOperator(op: Operator): Operator {
     return frozen;
 }
 
-// Value operators do not compose with one another, so they carry no precedence. The precedence ladder that does
-// exist -- negation, conjunction, alternation -- applies to clauses and belongs to the grammar.
+/* ------------------------------------------------------------------ value operators
+ *
+ * Each asks a question of one stored value. A type declares which of them it answers.
+ */
 
 /** Matches the whole value rather than any part of it. Written `=`. */
 export const exact = defineOperator({
-    name: "exact", symbol: "=", form: "prefix",
+    name: "exact", symbol: "=", form: "prefix", level: "value",
     hint: "exactly this, matching the whole value",
 });
 
 /** Ordered comparison, strictly below the operand. Written `<`. */
 export const lt = defineOperator({
-    name: "lt", symbol: "<", form: "prefix",
+    name: "lt", symbol: "<", form: "prefix", level: "value",
     hint: "less than",
 });
 
 /** Ordered comparison, at or below the operand. Written `<=`. */
 export const lte = defineOperator({
-    name: "lte", symbol: "<=", form: "prefix",
+    name: "lte", symbol: "<=", form: "prefix", level: "value",
     hint: "at most",
 });
 
 /** Ordered comparison, strictly above the operand. Written `>`. */
 export const gt = defineOperator({
-    name: "gt", symbol: ">", form: "prefix",
+    name: "gt", symbol: ">", form: "prefix", level: "value",
     hint: "more than",
 });
 
 /** Ordered comparison, at or above the operand. Written `>=`. */
 export const gte = defineOperator({
-    name: "gte", symbol: ">=", form: "prefix",
+    name: "gte", symbol: ">=", form: "prefix", level: "value",
     hint: "at least",
 });
 
@@ -116,7 +147,7 @@ export const gte = defineOperator({
  * between two values it can only be a range.
  */
 export const range = defineOperator({
-    name: "range", symbol: "-", form: "infix",
+    name: "range", symbol: "-", form: "infix", level: "value",
     hint: "between these two, inclusive",
 });
 
@@ -127,20 +158,57 @@ export const range = defineOperator({
  * to and substring matching is what the corpus permits.
  */
 export const contains = defineOperator({
-    name: "contains", symbol: null, form: "bare",
+    name: "contains", symbol: null, form: "bare", level: "value",
     hint: "contains this",
 });
 
 /** Pattern match where `*` stands for any run of characters. Written inside a token, as `bee*`. */
 export const glob = defineOperator({
-    name: "glob", symbol: "*", form: "embedded",
+    name: "glob", symbol: "*", form: "embedded", level: "value",
     hint: "a pattern, where * stands for any run of characters",
 });
 
 /** Tests that the property has a value at all. Written as a lone `*`. */
 export const present = defineOperator({
-    name: "present", symbol: "*", form: "whole",
+    name: "present", symbol: "*", form: "whole", level: "value",
     hint: "has any value at all",
+});
+
+/**
+ * Any one of several values, written as a group: `(chest|head)`.
+ *
+ * The `in` lookup of an ORM or document store, under a name that is not a reserved word. It is one operator rather
+ * than a parse-time expansion into several clauses so that a control offering a multiple choice produces a single
+ * term, which the query bar can then draw as one chip instead of re-collapsing several.
+ */
+export const anyOf = defineOperator({
+    name: "anyOf", symbol: "|", form: "infix", level: "value",
+    hint: "any one of these",
+});
+
+/* ----------------------------------------------------------------- clause operators
+ *
+ * Each combines whole clauses and means the same thing whatever the clause asks about, so no type declares them.
+ * Precedence is the ladder every language with these three uses: negation binds tightest, then conjunction, then
+ * alternation.
+ */
+
+/** Excludes what the clause selects. Written `-` before a clause. */
+export const not = defineOperator({
+    name: "not", symbol: "-", form: "prefix", level: "clause", precedence: 3,
+    hint: "not this",
+});
+
+/** Both clauses must hold. Written as juxtaposition, with no symbol of its own. */
+export const and = defineOperator({
+    name: "and", symbol: null, form: "bare", level: "clause", precedence: 2,
+    hint: "both of these",
+});
+
+/** Either clause may hold. Written `|` between clauses. */
+export const or = defineOperator({
+    name: "or", symbol: "|", form: "infix", level: "clause", precedence: 1,
+    hint: "either of these",
 });
 
 /**
@@ -149,3 +217,6 @@ export const present = defineOperator({
  * A type accepting these asserts that its order is transitive, antisymmetric and consistent with `exact`.
  */
 export const ORDERING: readonly Operator[] = Object.freeze([lt, lte, gt, gte, range]);
+
+/** Every operator that combines clauses, tightest-binding first. */
+export const CLAUSE_OPERATORS: readonly Operator[] = Object.freeze([not, and, or]);

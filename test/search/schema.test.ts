@@ -149,13 +149,13 @@ describe("operatorsOf", () => {
         // look like.
         const kit = KINDS.get("sound.sound")!.props.kit;
         assert.deepEqual(kit.types.map((t) => t.name), ["id", "text"]);
-        assert.deepEqual(operatorsOf(kit).toSorted(), ["exact", "present"]);
+        assert.deepEqual(operatorsOf(kit).toSorted(), ["anyOf", "exact", "present"]);
     });
 
     it("leaves a single-type property with everything that type accepts", () => {
         assert.deepEqual(operatorsOf({types: [text]}).toSorted(),
-            ["contains", "exact", "glob", "present"]);
-        assert.deepEqual(operatorsOf({types: [id]}).toSorted(), ["exact", "present"]);
+            ["anyOf", "contains", "exact", "glob", "present"]);
+        assert.deepEqual(operatorsOf({types: [id]}).toSorted(), ["anyOf", "exact", "present"]);
     });
 });
 

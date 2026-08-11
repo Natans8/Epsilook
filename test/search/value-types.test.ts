@@ -99,23 +99,23 @@ describe("the operator table", () => {
         // Declining comparison is load-bearing: it is what keeps `name:anti-magic` a single token instead of a range,
         // and what turns `name:>m` into an error rather than a substring search for the characters.
         for (const type of [text, path, enumeration]) {
-            assert.deepEqual(accepts(type), ["contains", "exact", "glob", "present"], type.name);
+            assert.deepEqual(accepts(type), ["anyOf", "contains", "exact", "glob", "present"], type.name);
         }
     });
 
     it("gives an ordinal everything an enum has, plus the ordering", () => {
         assert.deepEqual(accepts(ordinal),
-            ["contains", "exact", "glob", "gt", "gte", "lt", "lte", "present", "range"]);
+            ["anyOf", "contains", "exact", "glob", "gt", "gte", "lt", "lte", "present", "range"]);
     });
 
     it("gives an id equality only, with no ordering, substring or glob", () => {
         // One spell id is not "before" another in any sense a reader means, and matching part of an id is how a
         // six-digit number comes to select hundreds of rows instead of one.
-        assert.deepEqual(accepts(id), ["exact", "present"]);
+        assert.deepEqual(accepts(id), ["anyOf", "exact", "present"]);
     });
 
     it("gives a bitmask equality only, so part of a role name never matches", () => {
-        assert.deepEqual(accepts(bitmask), ["exact", "present"]);
+        assert.deepEqual(accepts(bitmask), ["anyOf", "exact", "present"]);
     });
 
     it("gives a flag presence only, and no value at all", () => {
@@ -128,17 +128,19 @@ describe("the operator table", () => {
     it("gives the numeric family equality, ordering and presence, never substring", () => {
         for (const type of [count, seconds, percent, length, angle, multiplier]) {
             assert.deepEqual(accepts(type),
-                ["exact", "gt", "gte", "lt", "lte", "present", "range"], type.name);
+                ["anyOf", "exact", "gt", "gte", "lt", "lte", "present", "range"], type.name);
         }
     });
 
     it("gives a colour approximate matching but no ordering", () => {
         // A bare colour asks "about this shade", which is the question a reader has; ordering three channels at once
         // has no meaning.
-        assert.deepEqual(accepts(colour), ["contains", "exact", "present"]);
+        assert.deepEqual(accepts(colour), ["anyOf", "contains", "exact", "present"]);
     });
 
     it("gives a composite equality and presence only", () => {
+        // Alternation is declined: a composite's own components are comma-separated, so a group of alternatives
+        // inside one would need a second level of delimiter to read unambiguously.
         assert.deepEqual(accepts(offset), ["exact", "present"]);
     });
 
@@ -232,7 +234,7 @@ describe("defineType", () => {
 
     it("rejects an operator the registry has never heard of", () => {
         // A typo in `accepts` would otherwise leave the type silently declining the operator it meant to accept.
-        const impostor = {name: "near", symbol: "~", form: "prefix", hint: "x"} as const;
+        const impostor = {name: "near", symbol: "~", form: "prefix", level: "value", hint: "x"} as const;
         assert.throws(
             () => defineType({
                 name: "spurious", storage: "string", accepts: [impostor], hint: "x", ui: "text",

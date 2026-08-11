@@ -173,6 +173,32 @@ describe("composites", () => {
     });
 });
 
+describe("alternation", () => {
+    it("selects what each alternative selects, on anything textual", () => {
+        // A group of alternatives means the same as writing the alternatives separately, so each one gets the reading
+        // a bare token already has.
+        const any = matcher("anyOf", "text")!;
+        assert.equal(any("Fireball", ["fire", "frost"]), true);
+        assert.equal(any("Frostbolt", ["fire", "frost"]), true);
+        assert.equal(any("Arcane Blast", ["fire", "frost"]), false);
+    });
+
+    it("compares numerically where a bare token is an equality test", () => {
+        const any = matcher("anyOf", "id")!;
+        assert.equal(any(133, [133, 116]), true);
+        assert.equal(any(999, [133, 116]), false);
+    });
+
+    it("reads a lone operand as a list of one", () => {
+        assert.equal(matcher("anyOf", "text")!("Fireball", "fire"), true);
+    });
+
+    it("names roles, so a target can be either of two", () => {
+        assert.equal(matcher("anyOf", "bitmask")!(4, ["caster", "area"]), true);
+        assert.equal(matcher("anyOf", "bitmask")!(2, ["caster", "area"]), false);
+    });
+});
+
 describe("coverage", () => {
     it("implements every operator every type accepts", () => {
         const missing: string[] = [];

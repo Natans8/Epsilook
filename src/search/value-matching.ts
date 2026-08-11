@@ -17,9 +17,12 @@ import type {Value} from "./value-types";
 import {TYPES} from "./value-types";
 
 /**
- * An operand as the kernel supplies it: a single value, or the two bounds of a range.
+ * An operand as the kernel supplies it: one value, or several.
+ *
+ * Several means the two bounds of a range, or the alternatives of a group. Which one is decided by the operator, so
+ * the shape does not have to distinguish them.
  */
-export type Operand = Value | readonly [Value, Value];
+export type Operand = Value | readonly Value[];
 
 /**
  * Tests one stored value against one operand.
@@ -135,7 +138,7 @@ define(["present"], NUMERIC, () => true);
 // Bounds are compared after sorting, so `90-10` selects the same values as `10-90`. The grammar cannot tell the two
 // apart, and returning nothing for one of them would be a query that reads correctly and behaves otherwise.
 define(["range"], NUMERIC, (stored, operand) => {
-    if (!Array.isArray(operand)) return false;
+    if (!Array.isArray(operand) || operand.length !== 2) return false;
     const [low, high] = operand.map(asNumber);
     const value = asNumber(stored);
     return value >= Math.min(low, high) && value <= Math.max(low, high);
@@ -255,12 +258,49 @@ define(["glob"], ["ordinal"], (stored, operand) =>
 define(["present"], ["ordinal"], (stored) => asText(stored).length > 0);
 
 define(["range"], ["ordinal"], (stored, operand) => {
-    if (!Array.isArray(operand)) return false;
+    if (!Array.isArray(operand) || operand.length !== 2) return false;
     const [low, high] = operand.map(rank);
     const value = rank(stored);
     return value >= 0 && low >= 0 && high >= 0
         && value >= Math.min(low, high) && value <= Math.max(low, high);
 });
+
+/* ---------------------------------------------------------------------- anyOf */
+
+/**
+ * Reads an operand as a list of alternatives.
+ *
+ * @param value One value, or several.
+ * @returns The alternatives, with a single value read as a list of one.
+ */
+const alternatives = (value: Operand): readonly Value[] =>
+    // Narrowed on the scalar side: `Array.isArray` does not narrow a readonly array, so testing for one leaves the
+    // other branch no better typed than it started.
+    (typeof value === "string" || typeof value === "number") ? [value] : value;
+
+/**
+ * Registers alternation for a family, as a disjunction over the reading a bare token already has there.
+ *
+ * `(fire|frost)` therefore selects what `fire` and `frost` each select, which is what makes a group of alternatives
+ * mean the same as writing the alternatives separately.
+ *
+ * @param types Type names the implementation is valid for.
+ * @param operator The operator whose reading each alternative gets.
+ */
+function defineAnyOf(types: readonly string[], operator: string): void {
+    define(["anyOf"], types, (stored, operand) => {
+        const one = matcher(operator, types[0]);
+        return one !== undefined && alternatives(operand).some((value) => one(stored, value));
+    });
+}
+
+// A bare token is a substring match on anything textual and an equality test everywhere else, so alternation follows
+// the same split rather than inventing a third reading.
+defineAnyOf(TEXTUAL, "contains");
+defineAnyOf(["ordinal"], "contains");
+defineAnyOf(["colour"], "contains");
+defineAnyOf(NUMERIC, "exact");
+defineAnyOf(["bitmask"], "exact");
 
 /* -------------------------------------------------------------------- composites */
 

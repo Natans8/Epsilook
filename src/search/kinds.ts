@@ -142,11 +142,19 @@ const corpus = (tier: number, ...types: readonly AxisType[]): Prop =>
  * The id is tried first, so digits select by identity and words fall through to the name. Putting an id into a
  * substring corpus instead makes six-digit numbers match unrelated rows.
  *
+ * The hint is stated here rather than inherited: falling back to the first type would describe the property as an id
+ * alone, which is the notation a reader is least likely to have.
+ *
+ * @param what The thing being named, as it appears in the hint.
  * @param tier The relevance tier for chipless search, or omitted to keep the property out of it.
  * @returns The property declaration.
  */
-const named = (tier?: number): Prop =>
-    (tier === undefined ? {types: [id, text]} : {types: [id, text], plain: true, tier});
+const named = (what: string, tier?: number): Prop => {
+    const hint = `the ${what}, by name or by id`;
+    return tier === undefined
+        ? {types: [id, text], hint}
+        : {types: [id, text], plain: true, tier, hint};
+};
 
 /** Which participants a row plays on. */
 const target = (): Prop => ({
@@ -291,7 +299,7 @@ export const sound = defineKind({
     hint: "a sound file the spell plays",
     props: {
         file: corpus(TIER.asset, path),
-        kit: named(TIER.asset),
+        kit: named("sound kit", TIER.asset),
         target: target(),
     },
 });
@@ -428,19 +436,19 @@ export const shapeshift = defineKind({
 export const morph = defineKind({
     id: "fx.morph", column: fxColumn, word: "morph",
     hint: "a morph or transform aura — the caster becomes something else",
-    props: {display: named(TIER.asset), target: target()},
+    props: {display: named("creature display", TIER.asset), target: target()},
 });
 
 export const summon = defineKind({
     id: "fx.summon", column: fxColumn, word: "summon",
     hint: "a creature the spell summons",
-    props: {creature: named(TIER.asset), target: target()},
+    props: {creature: named("summoned creature", TIER.asset), target: target()},
 });
 
 export const gameObject = defineKind({
     id: "fx.object", column: fxColumn, word: "object",
     hint: "a gameobject the spell places — campfire, portal, banner, chest",
-    props: {object: named(TIER.asset), target: target()},
+    props: {object: named("gameobject", TIER.asset), target: target()},
 });
 
 
@@ -530,13 +538,13 @@ export const location = defineKind({
 export const triggers = defineKind({
     id: "mech.triggers", column: mechColumn, word: "triggers",
     hint: "another spell this one casts, ticks, procs or removes",
-    props: {spell: named()},
+    props: {spell: named("spell it triggers")},
 });
 
 export const origin = defineKind({
     id: "mech.origin", column: mechColumn, word: "origin",
     hint: "a spell that casts, ticks, procs or removes this one",
-    props: {spell: named()},
+    props: {spell: named("spell that triggers it")},
 });
 
 /** How far a spell reaches. */
