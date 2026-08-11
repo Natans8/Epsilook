@@ -582,11 +582,9 @@ export const GRAMMAR = {
 
 ### 2.2 `Axis` — the single structure
 
-**⚠ RECONCILE WITH L5.2 IN PHASE 2.** This interface was written before kinds existed. It is still correct about what an
-axis DECLARES (doors, types, plain/tier, hint, `when?`, `domain?`), but **the primary declaration is now
-`defineKind`**, which declares a kind's properties and its pill in one record; `defineAxis` remains for column-level
-axes and for UNION axes such as `attach` over `from`/`to`. **Do not port this shape verbatim — merge the two, then
-delete whichever loses.**
+**⭐ MERGED WITH L5.2, 2026-08-10.** `defineKind` is the primary declaration — it declares a kind's PROPERTIES and its
+pill in one record, and each property carries the fields an axis used to. `defineAxis` survives for the two things that
+are not properties of a single kind: a **column-level** axis, and a **union** axis such as `attach` over `from`/`to`.
 
 Everything that is a separate mechanism in 1.0 — a field's `run()`, a meta keyword, a target word, `count`, a pill
 type's corpus — is **one record shape**:
@@ -645,6 +643,33 @@ export interface Axis {
     testRows?(rows: Row[], q: AxisQuery, d: SpellData): boolean;
 }
 ```
+
+#### `Kind` — the primary declaration (L5.2)
+
+```text
+defineKind({
+    id:     "model.missile",
+    column: "model",
+    word:   "missile",              // missile:{...} and missile:value
+    props: {
+        file:   { type: path,        of: "SpellVisualEffectNameID" },
+        from:   { type: attachPoint, of: "Attachment"              },
+        to:     { type: attachPoint, of: "DestinationAttachment"   },
+        motion: { type: motionEnum,  of: "SpellMissileMotionID"    },
+        target: { type: targetMask                                  },
+    },
+    when?:  (d) => ...,             // absent data = absent kind, everywhere
+    pill:   { tone: "model", segments: ["file", "from", "to", "motion"] },
+});
+```
+
+**A PROPERTY carries what an axis used to** — `type`/`types` (TYPES §7), `prefix?` if it earns a global door (L5.1),
+`plain`/`tier` (L7), `hint`, `short`, `domain?` (TYPES §6.1). **The kind supplies `column`, `when?` and the pill**, so
+none of that is repeated per property.
+
+**⛔ ONE DECLARATION, EVERY SURFACE.** Search, autocomplete, the help row, the bar capsule, the hit-highlight, the
+filter affordance and the export column all read this record. **If a surface needs a second list, the design is wrong**
+(L11) — and the plan's separate "declare the axis" and "declare the pill" steps collapsed into this one.
 
 ### 2.3 `Column` — rows, and nothing else
 
@@ -914,19 +939,35 @@ tokenizer simple and the highlighter honest.
 
 ```
 query    := clause ( clause | "|" clause )*      juxtaposition = AND, "|" = OR
+
 clause   := "-"? ( scope | bind | term )
-
-scope    := axis ":" "{" inner "}"               ONE ROW of that column satisfies all of it (L3)
-inner    := iclause ( iclause | "|" iclause )*
-iclause  := "-"? ( bind | term )                 NO scope here: depth is capped at 1 (§2.4.3(g))
-
-bind     := axis ":" value                       an axis and its value — at ANY level
+scope    := head ":" "{" inner "}"               ONE ROW satisfies all of it (L3)
+bind     := head ":" value                       a head and its single value
 term     := value                                bare = a content match
+
+head     := column | kind | axis                 WHAT it is about:
+                                                   column -> any row of that column
+                                                   kind   -> a row of that kind, and ONLY its
+                                                             properties are legal inside (L5.2)
+                                                   axis   -> one property
+
+inner    := iclause ( iclause | "|" iclause )*
+iclause  := "-"? ( bind | term )                 no scope here TODAY: a brace is legal exactly
+                                                 where something has PROPERTIES, and every
+                                                 property is currently a scalar (L5.2)
 
 value    := phrase | word | number | comparison | range | wildcard | vgroup
 vgroup   := "(" value ( "|" value )* ")"         alternatives as ONE value
-phrase   := '"' ( char | "\\" char )* '"'          a LEAF: no delimiter is active inside
+phrase   := quoted text                          a LEAF: no delimiter is active inside
 ```
+
+**⭐ A VALUE ENDS AT WHITESPACE, AND THE BNF ABOVE CANNOT SHOW IT.** `value` is LEXICAL, not syntactic: it runs to the
+next whitespace at depth 0 of the value, or to the `}` closing the enclosing scope (P0-a). So `model:fire|frost` is ONE
+value with two alternatives while `model:fire | frost` is three clauses — **the tokenizer decides that before the
+parser sees anything.**
+
+**AND `kind:value` IS THE UNION OVER THAT KIND'S PROPERTIES**, the same thing `term` does one level up.
+`missile:chest` matches whichever property claims it; `missile:{from:chest}` names one.
 
 **Precedence: `-` > AND (juxtaposition) > `|`.** Standard, and §8.9.4's DNF result depends on it.
 
