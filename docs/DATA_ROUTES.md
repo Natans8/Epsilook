@@ -1412,31 +1412,31 @@ Every section read is guarded (`if (pack.X)`) so an older-format pack degrades r
 
 Not a route: derived facts the build already holds, shipped so nothing downstream has to re-derive them.
 
-| key                         | what                                                                        |
-|-----------------------------|-----------------------------------------------------------------------------|
-| `format`                    | the pack's shape version, so a stale cached pack is recognisable app-side   |
-| `version` · `label`         | the build id and its human name                                             |
-| `built` · `listfileTag` · `tdbTag` | provenance — the day, the listfile release and the TDB behind this pack |
-| `absentTables`              | db2 tables this build PREDATES; §5's per-version drift is generated from it |
-| `counts`                    | 96 per-section row counts; §5's numbers are read from here, never estimated |
-| **`domains`**               | **§3z below** — what each numeric axis's values look like in THIS pack      |
+| key                                | what                                                                        |
+|------------------------------------|-----------------------------------------------------------------------------|
+| `format`                           | the pack's shape version, so a stale cached pack is recognisable app-side   |
+| `version` · `label`                | the build id and its human name                                             |
+| `built` · `listfileTag` · `tdbTag` | provenance — the day, the listfile release and the TDB behind this pack     |
+| `absentTables`                     | db2 tables this build PREDATES; §5's per-version drift is generated from it |
+| `counts`                           | 96 per-section row counts; §5's numbers are read from here, never estimated |
+| **`domains`**                      | **§3z below** — what each numeric axis's values look like in THIS pack      |
 
 #### §3z Numeric domains (`meta.domains`, format 46)
 
 **One entry per numeric axis, written by `numeric_domain()` in `build_data.py`.** `{n, min, max, distinct, mean,
 median, p1, p99, clipped, step, mode, modeShare, signed, sentinels, ui, values?}`.
 
-**⛔ MEASURED PER PACK, NEVER DECLARED.** Value sets differ per game version, so a min/max read off 9.2.7 is wrong on
-the other ten — and deriving them honestly app-side means sorting up to ~276k values per axis on **every page load**.
-The build already holds the values, so it pays that cost once for everyone. This is the same argument, and the same
-home, as `counts`.
+**⛔ MEASURED PER PACK, NEVER DECLARED.** Value sets differ per game version, so a min/max read off 9.2.7 is wrong on the
+other ten — and deriving them honestly app-side means sorting up to ~276k values per axis on **every page load**. The
+build already holds the values, so it pays that cost once for everyone. This is the same argument, and the same home, as
+`counts`.
 
 **⚠ `min` AND `max` ARE THE LEAST USEFUL TWO.** Each of the others exists because a decision needs it and nothing else
 supplies it: **`step`** is what a control moves by (the gap between adjacent values — a slider stepping by 1 over a
-column of multiples of 5 offers four dead positions in five) · **`p1`/`p99`** are the ROBUST bounds it should span,
-with `clipped` saying an outlier was hidden · **`mode`/`modeShare`** say how much of the column is one DEFAULT value,
-which no other number reveals · **`distinct`** decides the affordance, because cardinality does that and not the type
-(3 distinct values want a picker, 1,758 want a slider, and both can be the same `float`) · **`values`** is the picker's
+column of multiples of 5 offers four dead positions in five) · **`p1`/`p99`** are the ROBUST bounds it should span, with
+`clipped` saying an outlier was hidden · **`mode`/`modeShare`** say how much of the column is one DEFAULT value, which
+no other number reveals · **`distinct`** decides the affordance, because cardinality does that and not the type (3
+distinct values want a picker, 1,758 want a slider, and both can be the same `float`) · **`values`** is the picker's
 actual option list, present exactly when `ui` is `picker`, so the control is generated rather than hand-listed.
 
 **Sentinels are counted out before any bound is taken** — a channel's `-1` means "no limit", not minus a millisecond,
