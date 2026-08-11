@@ -67,8 +67,8 @@ defineKind({
    leaf, and there is no `ui: "composite"`.**
 
 **⛔ WHAT THIS FILE DOES NOT OWN, so nothing is stated twice:** kinds, properties, columns, rows and the query grammar
-are all `SEARCH.md`. **If you came here to add a searchable thing, you need a property on a kind (SEARCH.md L5.2) and
-a type for it (here).**
+are all `SEARCH.md`. **If you came here to add a searchable thing, you need a property on a kind (SEARCH.md L5.2) and a
+type for it (here).**
 
 ---
 
@@ -182,7 +182,25 @@ export function defineType<V>(t: AxisType<V>): AxisType<V> {
 
 **⛔ WHAT A TYPE MAY NOT DO**, so it is not discovered later as a feature: add an operator of its own, change precedence,
 or make an operator mean something §3's table does not say. **If a type needs a question the operators cannot ask, it
-needs an AXIS, not an operator.**
+needs an AXIS, not an operator.** The operator VOCABULARY may still grow — `defineOperator` is a registry — but only the
+language grows it, never a type.
+
+**⚠ AMENDED 2026-08-11 BY PLAN §3.2b — THE METHODS ABOVE ARE NOT THE CONTRACT.** A JS method body is a promise that the
+executor is JavaScript in this process, which is exactly what implementation independence forbids: the same query has to
+be answerable by SQL or by a web service. So the split is:
+
+| what                                  | where it lives                                 | shape            |
+|---------------------------------------|------------------------------------------------|------------------|
+| **which operators this type accepts** | the type declaration — the CONTRACT            | **data**, a list |
+| **what `contains` DOES to a `path`**  | `backend/memory.ts`, keyed by (operator, type) | a function       |
+| the same, for a database              | `backend/sql.ts` — `LIKE '%x%'`                | SQL              |
+
+**An operator absent from `accepts` is DECLINED** — a static error in the user's words, never a silent fallback — which
+is the same null-object rule as before, now expressed as data rather than as a missing method. `name:>m` still says *"
+the name axis has no ordering"*, and now says it without asking JavaScript.
+
+**The bodies in §4's catalogue below are therefore the IN-MEMORY BACKEND's implementation**, shown beside each type
+because that is where they are easiest to read — not because the type owns them.
 
 ---
 
@@ -656,7 +674,8 @@ a type — it is an axis with three notations, each of which has a real type.
 
 ## 8. THE KIND CATALOGUE — every kind, its properties, and each property's type
 
-**Navigating this file:** `§` references are **grep keys, not links** — search the number (`2.4.3`, `L5.2`, `8.6`) to jump. Every key is a heading or a bold label in this file unless it names another document (`TYPES §3`).
+**Navigating this file:** `§` references are **grep keys, not links** — search the number (`2.4.3`, `L5.2`, `8.6`) to
+jump. Every key is a heading or a bold label in this file unless it names another document (`TYPES §3`).
 
 **⚠ REBUILT 2026-08-10 after `SEARCH.md` L5.2.** This was a flat "value → type" list, which the kind model supersedes:
 a type belongs to a **property**, a property belongs to a **kind**, and a kind belongs to a **column**. **This table is
@@ -670,87 +689,87 @@ property from an identifier (CLAUDE.md's standing rule).
 
 ### 8.1 `model` — what is drawn
 
-| kind | properties → type |
-|---|---|
-| **missile** | `file` path · `from` attachPoint · `to` attachPoint · `motion` enum · `target` mask · **`castOffset` vec3?** · **`impactOffset` vec3?** · **`decay` seconds?** |
-| **ground** | `file` path · `target` mask |
-| **trail** | `file` path · `target` mask |
-| **barrage** | `file` path · `attach` attachPoint · **`coneAngle` angle** (3 distinct values → picker) · **`range` length** (4 values) |
-| **attached** | `file` path · `attach` attachPoint · `target` mask · **`scale` scale?** |
-| **display** | `id` id · `name` text · `file` path |
-| **item** | `file` path · `itemId` id |
-| **mount** | `file` path · `name` text |
-| **equipped** | `slot` enum |
+| kind         | properties → type                                                                                                                                              |
+|--------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **missile**  | `file` path · `from` attachPoint · `to` attachPoint · `motion` enum · `target` mask · **`castOffset` vec3?** · **`impactOffset` vec3?** · **`decay` seconds?** |
+| **ground**   | `file` path · `target` mask                                                                                                                                    |
+| **trail**    | `file` path · `target` mask                                                                                                                                    |
+| **barrage**  | `file` path · `attach` attachPoint · **`coneAngle` angle** (3 distinct values → picker) · **`range` length** (4 values)                                        |
+| **attached** | `file` path · `attach` attachPoint · `target` mask · **`scale` scale?**                                                                                        |
+| **display**  | `id` id · `name` text · `file` path                                                                                                                            |
+| **item**     | `file` path · `itemId` id                                                                                                                                      |
+| **mount**    | `file` path · `name` text                                                                                                                                      |
+| **equipped** | `slot` enum                                                                                                                                                    |
 
 ### 8.2 `sound` — what is heard
 
-| kind | properties → type |
-|---|---|
+| kind      | properties → type                                                                                                                      |
+|-----------|----------------------------------------------------------------------------------------------------------------------------------------|
 | **sound** | `file` path · `kit` **[id, text]** (multi-notation, §7) · `target` mask · **`type` enum?** (`SoundKit.SoundType`, designed and parked) |
 
 ### 8.3 `anim` — how it moves
 
-| kind | properties → type |
-|---|---|
-| **replace** | `from` enum · `to` enum · `target` mask |
-| **passenger** | `enter` enum · `sit` enum · `exit` enum |
-| **kit** | `id` id · `anim` enum · `boneset` enum · **`speed` rate?** (`AnimKitSegment.Speed`) |
-| **loose** | `anim` enum · `boneset` enum |
+| kind          | properties → type                                                                   |
+|---------------|-------------------------------------------------------------------------------------|
+| **replace**   | `from` enum · `to` enum · `target` mask                                             |
+| **passenger** | `enter` enum · `sit` enum · `exit` enum                                             |
+| **kit**       | `id` id · `anim` enum · `boneset` enum · **`speed` rate?** (`AnimKitSegment.Speed`) |
+| **loose**     | `anim` enum · `boneset` enum                                                        |
 
 ### 8.4 `fx` — what it looks like
 
-| kind | properties → type |
-|---|---|
-| **chain** | `texture` path · `from` attachPoint · `to` attachPoint · `tint` **colour (blocked, §4)** · `target` mask · **`length` length?** · **`minDistance` length?** |
-| **dissolve** | `attach` attachPoint · `target` mask |
-| **ghost** | `attach` attachPoint · `target` mask |
-| **glow** | `target` mask · **`colour` colour?** |
-| **tint** | `colour` **colour (blocked)** · `target` mask |
-| **screen** | `type` enum · `target` mask |
-| **scale** | `percent` percent · `target` mask |
-| **speed** | `percent` percent · `mode` enum (run/walk/fly/swim) · `target` mask |
-| **transparency** | `percent` percent · `target` mask |
-| **desaturate** | `percent` percent · `target` mask |
-| **freeze** | *(flag — no value)* · `target` mask |
-| **camo** | *(flag — no value)* · `target` mask |
-| **morph** | `display` **[id, text]** · `target` mask |
-| **summon** | `creature` **[id, text]** |
-| **object** | `object` **[id, text]** |
-| **shapeshift** | `form` enum |
-| **seat** | `count` count · `attach` attachPoint · **`passengerAttach` attachPoint** |
-| **invis** | `channel` id — **⚠ SPLIT, see 8.6** |
-| **detect** | `channel` id · `count` count — **the other half of the split** |
+| kind             | properties → type                                                                                                                                           |
+|------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **chain**        | `texture` path · `from` attachPoint · `to` attachPoint · `tint` **colour (blocked, §4)** · `target` mask · **`length` length?** · **`minDistance` length?** |
+| **dissolve**     | `attach` attachPoint · `target` mask                                                                                                                        |
+| **ghost**        | `attach` attachPoint · `target` mask                                                                                                                        |
+| **glow**         | `target` mask · **`colour` colour?**                                                                                                                        |
+| **tint**         | `colour` **colour (blocked)** · `target` mask                                                                                                               |
+| **screen**       | `type` enum · `target` mask                                                                                                                                 |
+| **scale**        | `percent` percent · `target` mask                                                                                                                           |
+| **speed**        | `percent` percent · `mode` enum (run/walk/fly/swim) · `target` mask                                                                                         |
+| **transparency** | `percent` percent · `target` mask                                                                                                                           |
+| **desaturate**   | `percent` percent · `target` mask                                                                                                                           |
+| **freeze**       | *(flag — no value)* · `target` mask                                                                                                                         |
+| **camo**         | *(flag — no value)* · `target` mask                                                                                                                         |
+| **morph**        | `display` **[id, text]** · `target` mask                                                                                                                    |
+| **summon**       | `creature` **[id, text]**                                                                                                                                   |
+| **object**       | `object` **[id, text]**                                                                                                                                     |
+| **shapeshift**   | `form` enum                                                                                                                                                 |
+| **seat**         | `count` count · `attach` attachPoint · **`passengerAttach` attachPoint**                                                                                    |
+| **invis**        | `channel` id — **⚠ SPLIT, see 8.6**                                                                                                                        |
+| **detect**       | `channel` id · `count` count — **the other half of the split**                                                                                              |
 
 ### 8.5 `mech` · `name` · `id`
 
-| column | kind | properties → type |
-|---|---|---|
-| `mech` | **effect** | `enum` enum · `target` mask · **`misc0` int?** · **`misc1` int?** · **`amplitude` float?** · **`radius` length?** |
-| `mech` | **aura** | `enum` enum · `target` mask · **`stacks` count?** (`CumulativeAura`, route already added) |
-| `mech` | **casttime** | `seconds` seconds |
-| `mech` | **channeled** | `seconds` seconds *(sentinel: unlimited)* |
-| `mech` | **location** | `area` **[id, text]** |
-| `mech` | **triggers** | `spell` **[id, text]** |
-| `mech` | **origin** | `spell` **[id, text]** |
-| `mech` | *(planned)* **range** | `yards` length *(sentinel: unlimited)* — new source |
-| `mech` | *(planned)* **cooldown** | `seconds` seconds — new source |
-| `mech` | *(planned)* **cost** | `amount` count — new source |
-| `name` | **name** | `text` text |
-| `name` | **description** | `text` text |
-| `name` | **icon** | `name` text · `fid` id |
-| `id` | **id** | `value` id |
-| `id` | **expansion** | `rung` ordinal |
+| column | kind                     | properties → type                                                                                                 |
+|--------|--------------------------|-------------------------------------------------------------------------------------------------------------------|
+| `mech` | **effect**               | `enum` enum · `target` mask · **`misc0` int?** · **`misc1` int?** · **`amplitude` float?** · **`radius` length?** |
+| `mech` | **aura**                 | `enum` enum · `target` mask · **`stacks` count?** (`CumulativeAura`, route already added)                         |
+| `mech` | **casttime**             | `seconds` seconds                                                                                                 |
+| `mech` | **channeled**            | `seconds` seconds *(sentinel: unlimited)*                                                                         |
+| `mech` | **location**             | `area` **[id, text]**                                                                                             |
+| `mech` | **triggers**             | `spell` **[id, text]**                                                                                            |
+| `mech` | **origin**               | `spell` **[id, text]**                                                                                            |
+| `mech` | *(planned)* **range**    | `yards` length *(sentinel: unlimited)* — new source                                                               |
+| `mech` | *(planned)* **cooldown** | `seconds` seconds — new source                                                                                    |
+| `mech` | *(planned)* **cost**     | `amount` count — new source                                                                                       |
+| `name` | **name**                 | `text` text                                                                                                       |
+| `name` | **description**          | `text` text                                                                                                       |
+| `name` | **icon**                 | `name` text · `fid` id                                                                                            |
+| `id`   | **id**                   | `value` id                                                                                                        |
+| `id`   | **expansion**            | `rung` ordinal                                                                                                    |
 
 ### 8.6 ⚠ THE SPLITS AND RENAMES THIS TABLE FORCES
 
-| # | what | why |
-|---|---|---|
-| 1 | **`invis` becomes two kinds** — `invis{channel}` and `detect{channel,count}` | one word carried a channel id AND a detector count, told apart by whether an operator was typed (`operatorOnly`). Two quantities are two things (TYPES §3) |
-| 2 | **`from` / `to` replace the unioned `attach`** on missile and chain | **2,014 of 2,997 beam rows have different source and destination attachments.** `attach` survives as the declared UNION |
-| 3 | **the model category word `attach` → `attached`** | it collides with the attachment keyword: `model:attach` is 16, `model:{attach:chest}` is 51,581. Gate G1 fails today |
-| 4 | **`ghost` was two registrations** (`fx:shadowy`, `fx:ghostmat`) under one word | one word, two kinds — decide whether they are one kind with a `material` property, or two words |
-| 5 | **`path` the type vs `path` the trajectory** | the property is `motion`; `path` stays the type |
-| 6 | **`.tag-*` CSS → `.seg-*`** | `tag` now means a query unit (§0) |
+| # | what                                                                           | why                                                                                                                                                        |
+|---|--------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1 | **`invis` becomes two kinds** — `invis{channel}` and `detect{channel,count}`   | one word carried a channel id AND a detector count, told apart by whether an operator was typed (`operatorOnly`). Two quantities are two things (TYPES §3) |
+| 2 | **`from` / `to` replace the unioned `attach`** on missile and chain            | **2,014 of 2,997 beam rows have different source and destination attachments.** `attach` survives as the declared UNION                                    |
+| 3 | **the model category word `attach` → `attached`**                              | it collides with the attachment keyword: `model:attach` is 16, `model:{attach:chest}` is 51,581. Gate G1 fails today                                       |
+| 4 | **`ghost` was two registrations** (`fx:shadowy`, `fx:ghostmat`) under one word | one word, two kinds — decide whether they are one kind with a `material` property, or two words                                                            |
+| 5 | **`path` the type vs `path` the trajectory**                                   | the property is `motion`; `path` stays the type                                                                                                            |
+| 6 | **`.tag-*` CSS → `.seg-*`**                                                    | `tag` now means a query unit (§0)                                                                                                                          |
 
 ### 8.7 ⭐ WHAT THE CATALOGUE REVEALS
 
@@ -760,10 +779,10 @@ property from an identifier (CLAUDE.md's standing rule).
   float column the app has never exposed (TYPES §1: 320 of them).
 - **Multi-notation `[id, text]` appears SIX times** — sound kit, morph, summon, object, area, triggered spell. It is a
   pattern, not a special case, and it is the same shape each time: a thing with an id and a name.
-- **Three kinds are pure flags** (`freeze`, `camo`, and the attribute bits), so `flag` earns its place as a type with
-  no value.
-- **⚠ `vec3` HAS NO TYPE YET.** `CastOffset_0/1/2` and `ImpactOffset_0/1/2` are 3-vectors. Either three properties, or
-  a new composite type. **Decide before touching missiles**; do not invent one speculatively.
+- **Three kinds are pure flags** (`freeze`, `camo`, and the attribute bits), so `flag` earns its place as a type with no
+  value.
+- **⚠ `vec3` HAS NO TYPE YET.** `CastOffset_0/1/2` and `ImpactOffset_0/1/2` are 3-vectors. Either three properties, or a
+  new composite type. **Decide before touching missiles**; do not invent one speculatively.
 
 ---
 
@@ -771,7 +790,7 @@ property from an identifier (CLAUDE.md's standing rule).
 
 | #       | question                                                                                                                       | why it matters                                                                   |
 |---------|--------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------|
-| **9.0** | **`vec3` has no type.** `CastOffset_0/1/2`, `ImpactOffset_0/1/2` — three properties, or one composite type? | blocks the missile kind (§8.7) |
+| **9.0** | **`vec3` has no type.** `CastOffset_0/1/2`, `ImpactOffset_0/1/2` — three properties, or one composite type?                    | blocks the missile kind (§8.7)                                                   |
 | **9.1** | **Arrays are unmodelled — 374 columns.** An array column is where the row model must choose one-row-vs-N                       | that choice sets every `count` on the column. **Decide in the spike**            |
 | **9.2** | **Case folding and Unicode normalisation are a per-type `equals`/`contains` contract**, filed elsewhere as "not architectural" | it IS architectural by this document's own definition. `locstring` is 20 columns |
 | **9.3** | `locstring` is declared storage but no type reads it as anything but `text`                                                    | i18n was parked; if revived it lands here                                        |

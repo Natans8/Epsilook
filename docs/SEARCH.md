@@ -332,7 +332,7 @@ model:*                      has any model row at all
 model:{target:caster}        any model row, kind-agnostic, playing on the caster
 ```
 
-**⛔ THIS AMENDS THE DEPTH CAP (§2.4.3(g)), which said depth is fixed at 1 because a second scope has no referent.** The
+**⛔ THIS AMENDS THE DEPTH CAP (§2.4.3 (g)), which said depth is fixed at 1 because a second scope has no referent.** The
 premise was right; the conclusion was too strong. **Depth is bounded by how deep the DATA nests, not by a constant.** A
 kind scope is depth 1 and every property today is a scalar, **so 1 remains the practical limit** — but the moment a
 property is itself an object (a missile's sound), `missile:{sound:{…}}` has a referent and is legal. **A brace is legal
@@ -348,7 +348,8 @@ it possible.
 
 #### ONE BARE TOKEN AFTER A KIND — it searches ALL the properties (user, 2026-08-10)
 
-**Navigating this file:** `§` references are **grep keys, not links** — search the number (`2.4.3`, `L5.2`, `8.6`) to jump. Every key is a heading or a bold label in this file unless it names another document (`TYPES §3`).
+**Navigating this file:** `§` references are **grep keys, not links** — search the number (`2.4.3`, `L5.2`, `8.6`) to
+jump. Every key is a heading or a bold label in this file unless it names another document (`TYPES §3`).
 
 ***"If we input just one token that is not curly brackets after an object type, it should have a defined behaviour"*** —
 then, correcting a far more elaborate answer: ***"I meant more like search across multiple properties, like a scope has
@@ -359,14 +360,14 @@ search across multiple axes."***
 That is the same thing a bare term already does one level up — inside `model:{…}` a bare word is tested against the
 row's content — so it is one rule applied consistently, not a new mechanism.
 
-| written              | means                                                                        |
-|----------------------|------------------------------------------------------------------------------|
-| `missile:chest`      | any property matches "chest" → in practice `from` or `to`                    |
-| `missile:fire`       | any property matches "fire" → in practice the file                           |
-| `missile:parabola`   | any property matches → in practice `motion`                                  |
-| `missile:{from:chest}` | **the precise form** — that property and no other                          |
-| `missile:*`          | has any missile (existence, §3.3)                                            |
-| `missile:`           | **incomplete** — dropped while typing (§4.9.8)                               |
+| written                | means                                                     |
+|------------------------|-----------------------------------------------------------|
+| `missile:chest`        | any property matches "chest" → in practice `from` or `to` |
+| `missile:fire`         | any property matches "fire" → in practice the file        |
+| `missile:parabola`     | any property matches → in practice `motion`               |
+| `missile:{from:chest}` | **the precise form** — that property and no other         |
+| `missile:*`            | has any missile (existence, §3.3)                         |
+| `missile:`             | **incomplete** — dropped while typing (§4.9.8)            |
 
 **⛔ AN EARLIER DRAFT BUILT A VOCABULARY-DISPATCH LADDER FOR THIS** — closed vocabularies first, open types last, a
 declared `default` for the fallback, numbers excluded. **All of it is deleted.** It was machinery invented to avoid an
@@ -530,16 +531,16 @@ guess right about what it does. Concretely, four failures — any one of them is
 
 **Applied to this document's own forms — a law that condemns nothing is decoration:**
 
-| form                                                     | verdict                                                                                         |
-|----------------------------------------------------------|-------------------------------------------------------------------------------------------------|
-| `desc:kneel`, `attach:chest`, `scale:50`                 | ✅ reads as it means                                                                            |
-| `model:{fire -missile}`                                  | ✅ "a fire model that isn't a missile"                                                          |
-| **`(model:fire model:arcane)` vs `model:{fire arcane}`** | ⛔ **FAILS (2).** One paren's POSITION changes the meaning and both read identically aloud      |
-| `model:attach` (16) vs `model:{attach:chest}` (51,581)   | ⛔ **FAILS (3).** `attach` is a category word AND the keyword, in one column                    |
-| `anim:kit` (31,291) vs `sound:kit` (2,516)               | ⛔ **FAILS (3)** globally — so `kit:` gets no global door                                       |
-| `replace:`, `loose:`                                     | ⛔ **FAILS (1).** Replace *what*? Meaningless outside their column                              |
+| form                                                     | verdict                                                                                        |
+|----------------------------------------------------------|------------------------------------------------------------------------------------------------|
+| `desc:kneel`, `attach:chest`, `scale:50`                 | ✅ reads as it means                                                                           |
+| `model:{fire -missile}`                                  | ✅ "a fire model that isn't a missile"                                                         |
+| **`(model:fire model:arcane)` vs `model:{fire arcane}`** | ⛔ **FAILS (2).** One paren's POSITION changes the meaning and both read identically aloud     |
+| `model:attach` (16) vs `model:{attach:chest}` (51,581)   | ⛔ **FAILS (3).** `attach` is a category word AND the keyword, in one column                   |
+| `anim:kit` (31,291) vs `sound:kit` (2,516)               | ⛔ **FAILS (3)** globally — so `kit:` gets no global door                                      |
+| `replace:`, `loose:`                                     | ⛔ **FAILS (1).** Replace *what*? Meaningless outside their column                             |
 | `model:fire -model:missile`                              | 🟡 **withdrawn** — correct for "no missile anywhere"; the ambiguity is in the ENGLISH (§8.9.3) |
-| `-model:{-caster}`                                       | ⛔ **FAILS (4).** Already deleted for being measured wrong                                      |
+| `-model:{-caster}`                                       | ⛔ **FAILS (4).** Already deleted for being measured wrong                                     |
 
 **Three earlier decisions are its special cases**, each taken for a narrower reason: banning bare scope negation,
 deleting the ∀ double negative, and making `-` bind by one rule (L6). **The fourth is spell-level grouping, which this
@@ -569,6 +570,9 @@ export const GRAMMAR = {
     negate: "-",                       // -model:beer       universal convention
     or: "|",                           // a|b               OR at EVERY level (§2.4)
     numListSep: ",",                   // id:133,134        numbers only — see altsOf
+    // ⚠ THESE THREE LISTS BECOME THE OPERATOR REGISTRY (PLAN §3.4). Left here
+    // as the current spelling; adding an operator must be ONE declaration, and
+    // a literal array beside a registry is that declaration written twice.
     compare: ["<=", ">=", "<", ">", "="],   // `=` also anchors TEXT: name:=Fireball
     range: "-",                        // scale:10-90       between values; §4.1
     phrase: '"',                       // "a b"  — ALWAYS a phrase, never grouping
@@ -667,8 +671,8 @@ defineKind({
 `plain`/`tier` (L7), `hint`, `short`, `domain?` (TYPES §6.1). **The kind supplies `column`, `when?` and the pill**, so
 none of that is repeated per property.
 
-**⛔ ONE DECLARATION, EVERY SURFACE.** Search, autocomplete, the help row, the bar capsule, the hit-highlight, the
-filter affordance and the export column all read this record. **If a surface needs a second list, the design is wrong**
+**⛔ ONE DECLARATION, EVERY SURFACE.** Search, autocomplete, the help row, the bar capsule, the hit-highlight, the filter
+affordance and the export column all read this record. **If a surface needs a second list, the design is wrong**
 (L11) — and the plan's separate "declare the axis" and "declare the pill" steps collapsed into this one.
 
 ### 2.3 `Column` — rows, and nothing else
@@ -963,8 +967,8 @@ phrase   := quoted text                          a LEAF: no delimiter is active 
 
 **⭐ A VALUE ENDS AT WHITESPACE, AND THE BNF ABOVE CANNOT SHOW IT.** `value` is LEXICAL, not syntactic: it runs to the
 next whitespace at depth 0 of the value, or to the `}` closing the enclosing scope (P0-a). So `model:fire|frost` is ONE
-value with two alternatives while `model:fire | frost` is three clauses — **the tokenizer decides that before the
-parser sees anything.**
+value with two alternatives while `model:fire | frost` is three clauses — **the tokenizer decides that before the parser
+sees anything.**
 
 **AND `kind:value` IS THE UNION OVER THAT KIND'S PROPERTIES**, the same thing `term` does one level up.
 `missile:chest` matches whichever property claims it; `missile:{from:chest}` names one.
@@ -1086,8 +1090,8 @@ negative.
 A recursive grammar creates combinations nobody typed on purpose. Each of these was found by walking the BNF against the
 laws; leaving any of them undefined is how 1.0 got its exceptions.
 
-**2.4.3(a) `count` is a property of the SCOPE, not of a row.** It is the one axis that cannot be a row predicate — a row has
-no cardinality. Inside a scope it counts **the rows that satisfy the rest of that scope's predicate**:
+**2.4.3 (a) `count` is a property of the SCOPE, not of a row.** It is the one axis that cannot be a row predicate — a
+row has no cardinality. Inside a scope it counts **the rows that satisfy the rest of that scope's predicate**:
 
     model:{target:caster count:>4}   more than four CASTER model rows   ← filtered count, §9 #3
     model:{count:>4}                 more than four model rows in all
@@ -1095,14 +1099,14 @@ no cardinality. Inside a scope it counts **the rows that satisfy the rest of tha
 
 So the register's filtered-count entry is not a special case; it is what `count` already means once a scope exists.
 
-**2.4.3(b) A VALUE GROUP is one value.** `(a|b)` after a colon binds as a single value, so nesting never changes what an axis
-consumed:
+**2.4.3 (b) A VALUE GROUP is one value.** `(a|b)` after a colon binds as a single value, so nesting never changes what
+an axis consumed:
 
     model:{attach:chest}              one value
     model:{attach:(chest|head)}       still one value — the group IS the value
 
-**2.4.3(c) `-` prefixes a CLAUSE, and a bind is one clause.** With `:` doing the binding (L6) there is no word-form ambiguity
-left to resolve:
+**2.4.3 (c) `-` prefixes a CLAUSE, and a bind is one clause.** With `:` doing the binding (L6) there is no word-form
+ambiguity left to resolve:
 
     -attach:chest                   NOT attached at chest        ← the only form at clause level
     model:{attach:chest -missile}   at the chest, not a missile  ← refining, legal
@@ -1112,14 +1116,14 @@ left to resolve:
 **Negation is never an axis's VALUE** — there is no "negated value", only a negated clause. `scale:-50` is therefore
 minus fifty, unambiguously, because `-` there sits in value position (§4.1).
 
-**2.4.3(d) A scope may not name another column's axis.** `model:{sound:fire}` is a static error, not an empty result: the
-scope is a set of MODEL rows and a sound axis cannot read one. Universal axes (`count`, `target`) are the exception —
-they apply in every scope by definition (L1). Reject at parse time and say so in the bar; L2's "answer, never fall
-through" is about DATA, not about nonsense.
+**2.4.3 (d) A scope may not name another column's axis.** `model:{sound:fire}` is a static error, not an empty result:
+the scope is a set of MODEL rows and a sound axis cannot read one. Universal axes (`count`, `target`) are the
+exception — they apply in every scope by definition (L1). Reject at parse time and say so in the bar; L2's "answer,
+never fall through" is about DATA, not about nonsense.
 
-**2.4.3(e) EMPTY GROUPS ARE IDENTITIES, NOT ERRORS — corrected 2026-08-10 on the user's challenge** (*"can't `{}` just be
-ignored as a junk token?"*). An earlier draft called them a static error. That was wrong for a practical reason and an
-arithmetical one.
+**2.4.3 (e) EMPTY GROUPS ARE IDENTITIES, NOT ERRORS — corrected 2026-08-10 on the user's challenge** (*"can't `{}` just
+be ignored as a junk token?"*). An earlier draft called them a static error. That was wrong for a practical reason and
+an arithmetical one.
 
 **Practically: auto-closing braces (§6) mean the EDITOR produces `model:{}`** the instant the user types `model:{`.
 Erroring on a state the app itself just generated is hostile, and it is the §4.9.1 failure — shouting at a keystroke the
@@ -1141,13 +1145,13 @@ agreeing is a consequence rather than a coincidence. **This is also a good live-
 **A stray `{}` or `()` in top-level free text is neither** — it is ordinary character data, because those delimiters are
 only active where a value or clause is expected (§2.4.0). `fireball {2}` searches literally.
 
-**2.4.3(f) Two spellings of OR is one too many — `,` is retained ONLY for numbers.** `id:133,134` stays because a bare list
-of ids is how people paste them, and the rule is syntactic (every part a number), not per-field. Everywhere else `|` is
-the only OR. ⚠ This is a deliberate exception to L1 and the only one in the grammar; if it ever causes a question,
-delete it rather than growing it.
+**2.4.3 (f) Two spellings of OR is one too many — `,` is retained ONLY for numbers.** `id:133,134` stays because a bare
+list of ids is how people paste them, and the rule is syntactic (every part a number), not per-field. Everywhere else
+`|` is the only OR. ⚠ This is a deliberate exception to L1 and the only one in the grammar; if it ever causes a
+question, delete it rather than growing it.
 
-**2.4.3(g) ⭐ NESTED `{ }` — DEPTH FOLLOWS THE DATA. ⚠ AMENDED BY L5.2: this section said depth is fixed at 1; the rule is now
-that a brace is legal exactly where something has PROPERTIES, which today means 1.**
+**2.4.3 (g) ⭐ NESTED `{ }` — DEPTH FOLLOWS THE DATA. ⚠ AMENDED BY L5.2: this section said depth is fixed at 1; the rule
+is now that a brace is legal exactly where something has PROPERTIES, which today means 1.**
 
 **A row scope binds its contents to ONE ROW. Inside it you are already at a row, so a second scope has nothing left to
 bind to.** Depth 2 is not unsupported — it has no meaning to support. Every job a nested brace might be reaching for is
@@ -1340,8 +1344,12 @@ multi-notation axes, and the value→type assignment for every searchable thing 
 **What stays LAW here, because it is about the language rather than about any type:**
 
 - **L9** — a number's meaning is declared per axis, never inferred from its shape.
-- **The operator ABSTRACT meanings** — fixed by the grammar (§2.4.1). A type supplies a body; it may never supply a
-  different meaning, and an absent body DECLINES the operator as a static error rather than falling through.
+- **The operator ABSTRACT meanings** — fixed by the grammar (§2.4.1). A type may never supply a different meaning, and
+  an operator it does not accept is DECLINED as a static error rather than falling through. **⚠ "FIXED" MEANS FIXED ONCE
+  DECLARED, NOT A CLOSED SET** (clarified 2026-08-11, because §2.1 and PLAN §3.4 read as contradicting each other).
+  Operators are a REGISTRY — `defineOperator` — and §2.1's literal arrays are that registry written a second time; the
+  arrays are what goes. **A type declares which operators it ACCEPTS as data; the BODIES live in a backend** (PLAN
+  §3.2b), because a method name is a promise that the executor is JavaScript.
 - **The clause-opening rule for `-`**, below, which decides tokenization before any type is consulted.
 
 **⚠ ONE CONSEQUENCE OF THE SPLIT, and it is the reason for it:** a type is the answer to *"what is this value"*, and an
@@ -1415,13 +1423,13 @@ which is the failure mode that makes people turn off "search as you type".
 
 ### 4.9.2 The taxonomy, and one entry is NOT an error
 
-| # | kind                    | example                                               | response                                                                                                                             |
-|---|-------------------------|-------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| 1 | **unknown axis**        | `foo:bar`, `Hero: Illidan`                            | ⚠ **NOT an error — literal text**, plus a hint. See below                                                                           |
-| 2 | declined operator       | `name:>m`                                             | error: *the name axis has no ordering*                                                                                               |
+| # | kind                    | example                                               | response                                                                                                                               |
+|---|-------------------------|-------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| 1 | **unknown axis**        | `foo:bar`, `Hero: Illidan`                            | ⚠ **NOT an error — literal text**, plus a hint. See below                                                                             |
+| 2 | declined operator       | `name:>m`                                             | error: *the name axis has no ordering*                                                                                                 |
 | 3 | foreign axis in a scope | `model:{sound:fire}`                                  | error: *a sound axis cannot read a model row* (§2.4.3(d))                                                                              |
-| 4 | ill-typed value         | `scale:abc`                                           | error: *scale takes a percentage* — never a zero result                                                                              |
-| 5 | contradictory value     | `name:=Fire*`                                         | error: *exact and pattern cannot combine* (TYPES §3)                                                                                 |
+| 4 | ill-typed value         | `scale:abc`                                           | error: *scale takes a percentage* — never a zero result                                                                                |
+| 5 | contradictory value     | `name:=Fire*`                                         | error: *exact and pattern cannot combine* (TYPES §3)                                                                                   |
 | 6 | structural              | unbalanced, or no positive anchor — **on PASTE only** | error (§4.9.9). ⚠ While typing or editing both are INCOMPLETE and silent (§4.9.8); `{}` is never here — it is an identity (§2.4.3(e)) |
 
 **⭐ #1 IS THE IMPORTANT ONE AND IT IS DATA THAT DECIDES IT. 12,477 spell names contain a colon** — *Embody Hero:
@@ -1463,7 +1471,7 @@ screen cannot be missed; an empty result set can be mistaken for a real answer.
 |-------------|-----------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **ERROR**   | cannot run; the clause is excluded and drawn broken | `name:>m` (declined operator) · `model:{sound:fire}` (foreign axis) · `scale:abc` (ill-typed) · `name:=Fire*`                                                                          |
 | **WARNING** | runs, and is probably not what was meant            | `model:bee*` → a glob on a path is a **no-op** (§3.2) · `model:{arcane -fire}` → row negation whose terms almost never co-occur (§8.9.3) · a clause that alone reduces the result to 0 |
-| **NOTE**    | correct, and worth saying                           | `model:{}` ≡ `model:*` "has any model" (§2.4.3(e)) · `count:>4` is the wide union (L5)                                                                                                   |
+| **NOTE**    | correct, and worth saying                           | `model:{}` ≡ `model:*` "has any model" (§2.4.3(e)) · `count:>4` is the wide union (L5)                                                                                                 |
 
 **The WARNING tier exists because this design keeps producing forms that are legal, evaluable and misleading** — and
 §9.1's whole thesis is that a plausible wrong answer beats no answer only in appearance. An error tier alone would have
@@ -1546,9 +1554,9 @@ devtools consoles all do exactly this set:
 registry already knows which position it is in, so this is a parse question, not a keystroke question.** That is what
 makes it a convenience rather than a nuisance.
 
-**And it is why `{}` had to become an identity rather than an error (§2.4.3(e)):** auto-closing means the editor CREATES
-the empty pair on the way to a real one. `model:{‸}` is a state the app authored, so erroring on it would be the app
-shouting at itself.
+**And it is why `{}` had to become an identity rather than an error (§2.4.3 (e)):** auto-closing means the editor
+CREATES the empty pair on the way to a real one. `model:{‸}` is a state the app authored, so erroring on it would be the
+app shouting at itself.
 
 **⚠ TYPING ONLY. Auto-closing never applies to a paste** (§4.9.9) — a pasted string is complete by definition, so
 inserting a delimiter into it is a repair, and repairs are announced rather than silent.
@@ -1646,7 +1654,7 @@ they collapse into a single rule.
 > what has been typed.**
 
 That is one sentence covering every row below, and **`model:{}` is not an exception to it** — dropping an incomplete
-scope body leaves an empty conjunction, which is `true`, which is `model:*` (§2.4.3(e)). The identity falls out of the
+scope body leaves an empty conjunction, which is `true`, which is `model:*` (§2.4.3 (e)). The identity falls out of the
 rule rather than being carved beside it.
 
 #### The catalogue
@@ -1752,13 +1760,13 @@ reachable by a typed hyphen instead of stranding them — a fold applied to only
 1.0 already knows this: `ID_CMD_PASTE` rewrites `.cast 12345` into `id:12345`, because people paste Epsilon commands.
 2.0 generalises it into a declared list of paste SHAPES, tried in order, falling through to "treat it as a query":
 
-| pasted                                       | becomes                                      |
-|----------------------------------------------|----------------------------------------------|
-| `.cast 12345`, `.aura 12345`                 | `id:12345` — 1.0 behaviour, kept             |
+| pasted                                       | becomes                                        |
+|----------------------------------------------|------------------------------------------------|
+| `.cast 12345`, `.aura 12345`                 | `id:12345` — 1.0 behaviour, kept               |
 | several numbers, comma- or newline-separated | `id:1,2,3` — the numeric-list form (§2.4.3(f)) |
-| an Epsilook URL                              | its own query, restored verbatim             |
-| a Wowhead `spell=133` URL                    | `id:133`                                     |
-| anything else                                | parse as a query; if that fails, plain text  |
+| an Epsilook URL                              | its own query, restored verbatim               |
+| a Wowhead `spell=133` URL                    | `id:133`                                       |
+| anything else                                | parse as a query; if that fails, plain text    |
 
 **Falling through to TEXT is what makes pasting a spell name work**, and it is the same decision as §4.9.2 #1 — an
 unknown prefix is text, because 12,477 names contain a colon.
@@ -1790,7 +1798,7 @@ bar, and treating them alike would rewrite text the user meant literally.
 |                                 |                                                                                     |
 |---------------------------------|-------------------------------------------------------------------------------------|
 | closing an unbalanced delimiter | at the next clause boundary (§4.9.4), reported as a warning with the repaired query |
-| shape rewriting                 | `.cast 12345` → `id:12345`, a Wowhead URL → `id:133` (§4.9.9)                      |
+| shape rewriting                 | `.cast 12345` → `id:12345`, a Wowhead URL → `id:133` (§4.9.9)                       |
 
 ##### Tier 3 — NEVER
 
@@ -1979,9 +1987,9 @@ expensive**, because it forces a full walk to prove absence. The risk is real; t
    user spends most of their keystrokes in." MEASURED, IT IS BACKWARDS.** A wide query matches on the FIRST corpus it
    tries and stops; a selective one must prove absence across every row of every column. On 9.2.7, plain search through
    the forward walk: **`f` (185,353 matches) = 70 ms · `fireball` (4,861 matches) = 185 ms.** The names-only line is
-   flat at ~13 ms throughout, which is what proves the cost is the row walk that only runs when the name misses.
-   **So the expensive keystroke is the LAST one, not the first** — and that is worse, because it is the state the user
-   stops in and reads. Same shape as the negation correction above; the forward index makes *absence* expensive, and a
+   flat at ~13 ms throughout, which is what proves the cost is the row walk that only runs when the name misses. **So
+   the expensive keystroke is the LAST one, not the first** — and that is worse, because it is the state the user stops
+   in and reads. Same shape as the negation correction above; the forward index makes *absence* expensive, and a
    selective query is mostly absence.
 4. **`id:133` degrades from a hash lookup to a 276,332-spell scan** — the app's single most common query shape, and
    §4.9.9 (b) routes three more paste forms into it.
@@ -2352,7 +2360,7 @@ Two rulings the old wording left open:
 
 - **`count` SATISFIES the anchor.** `model:{count:>4}` is legal — it is a positive assertion about the row set, and
   §2.4.3 (a) already makes `count` a scope-level predicate rather than a row one.
-- **`model:{}` is legal** and equals `model:*` (§2.4.3(e)). An empty conjunction has no disjunct to anchor, so the rule
+- **`model:{}` is legal** and equals `model:*` (§2.4.3 (e)). An empty conjunction has no disjunct to anchor, so the rule
   does not apply to it — vacuous rather than violated.
 
 ### P0-f — D5: recovery syncs on a CLAUSE THAT CANNOT BELONG TO THE SCOPE
@@ -2384,7 +2392,7 @@ nobody has taken. **⛔ NONE OF IT IS "DEBT".** ✅ **All five BLOCKING rows wer
 | ~~D1~~ ✅ P0-c           | **Tokenization is registry-dependent at VALUE level, and §2.4.1 claims it is not.** `name:anti-magic` is one token but `scale:10-90` is a range — the tokenizer must know the type to split it, and TYPES §5's units do it again (`500ms-2s`). **§2.4.1's claim is true at CLAUSE level only** (where a `-` attaches), which is the weaker statement                                                                                                                                      | State the honest scope of the claim. Then: **changing an axis's type is a BREAKING LANGUAGE CHANGE** — promoting `xpac` from `enum` to `ordinal` silently re-reads `id:{xpac:legion-wotlk}` from a token to a range. It needs the query-version marker in D2 |
 | ~~D2~~ ⛔ WONTFIX (P0-b) | **1.0 URLs are silently REINTERPRETED, which is the one pathology §9.1 condemns.** Back-compat was waived for ALIASES (§8.6); it was never waived for meaning. `model:"attach chest"` was **51,581** and becomes a phrase search for the literal substring ≈ **0**                                                                                                                                                                                                                        | Add a query-format marker (`v=2`, or `q2=`). A query without it is **detected and refused with an explanation**, never silently re-read. Cheap, and it is the only thing standing between a shared link and a plausible wrong answer                         |
 | ~~D3~~ ✅ P0-d           | **Relevance is unspecified beyond a per-axis tier.** L7 gives `tier?: number` and nothing else: no rule for a spell hitting three axes at three tiers, no tie-break, no within-tier score, no statement of stability. §8.5 deleted 1.0's name-only scoring and put nothing in its place                                                                                                                                                                                                   | Specify: the spell's tier is its BEST hit; ties break on a declared secondary; the sort must be stable. And say how the existing `sort=-<column>` coexists                                                                                                   |
-| ~~D4~~ ✅ P0-e           | **The positive-anchor rule is defeatable and does not compose.** `model:{fire\|-missile}` has an anchor and means ∃row(fire ∨ ¬missile) — true of nearly everything. `model:{count:>4}` has NO row predicate at all yet is legal (§2.4.3(a)). `model:{}` has none either yet is legal (§2.4.3(e))                                                                                                                                                                                             | Restate per DNF TERM inside the scope, not per scope. Then rule explicitly on whether `count` and the empty scope satisfy it — currently three sections disagree                                                                                             |
+| ~~D4~~ ✅ P0-e           | **The positive-anchor rule is defeatable and does not compose.** `model:{fire\|-missile}` has an anchor and means ∃row(fire ∨ ¬missile) — true of nearly everything. `model:{count:>4}` has NO row predicate at all yet is legal (§2.4.3(a)). `model:{}` has none either yet is legal (§2.4.3(e))                                                                                                                                                                                         | Restate per DNF TERM inside the scope, not per scope. Then rule explicitly on whether `count` and the empty scope satisfy it — currently three sections disagree                                                                                             |
 | ~~D5~~ ✅ P0-f           | **The panic-mode recovery rule names a token that cannot occur where it is used.** §4.9.4 synchronises on *"`axis:` at depth zero"* — but recovery happens INSIDE an unclosed scope, i.e. at depth 1, so no such token exists. The rule that actually produces the worked example is *"the next `axis:` not legal in this scope"*, which is registry-dependent and misfires on universals: `model:{fire count:>4` and `model:{fire sound:ice` have the same shape and recover differently | Restate the sync token, and rule on `target:` / `count:` explicitly                                                                                                                                                                                          |
 
 ### 10.2 SERIOUS
@@ -2415,7 +2423,7 @@ nobody has taken. **⛔ NONE OF IT IS "DEBT".** ✅ **All five BLOCKING rows wer
 |                        |                                                                                                                                                                                                                                                                                                                                                                        |
 |------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **testing**            | The 40-query battery is a review ritual, not a test suite. The document makes at least six machine-checkable algebraic claims — L8 commutativity · De Morgan (§8.9.4) · `model:{}` ≡ `model:*` · `model:{fire}` ≡ `model:fire` · §2.4.5's "same answer" column · the incomplete/invalid classifier — and schedules **zero** property tests, parser fixtures or fuzzing |
-| ~~performance budget~~ | ⛔ **CLOSED — there is deliberately no budget** (user, 2026-08-11). `npm run measure` reports; nobody sets a threshold                                                                                                                                                                                                                                                                                                                       |
+| ~~performance budget~~ | ⛔ **CLOSED — there is deliberately no budget** (user, 2026-08-11). `npm run measure` reports; nobody sets a threshold                                                                                                                                                                                                                                                 |
 | **mobile input**       | `{ } \| " *` are all buried on mobile keyboards, §4.9.6's `-` model is caret-position-dependent (unusable on touch), and auto-closing interacts with IME. **The audience is roleplayers, many on phones**                                                                                                                                                              |
 | **accessibility**      | No screen-reader semantics for a scope chip, a broken chip, or `ui: "glyphs"` toggles                                                                                                                                                                                                                                                                                  |
 | **URL length**         | §8.9.4 accepts *"an exponential DNF expansion"* as the price of dropping grouping, with no budget                                                                                                                                                                                                                                                                      |
