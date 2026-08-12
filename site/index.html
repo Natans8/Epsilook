@@ -32,8 +32,8 @@
     <!-- the address-bar tint follows `autoTheme` in src/config.ts: dark's --bg and
          moonwell's (the light default) --bg. Browsers use the first theme-color
          whose media matches, so one of the two scoped tags always wins there;
-         the unscoped gold tag after them is aimed at embed crawlers, which do
-         not evaluate media queries, and is unreachable by browsers. -->
+         embed crawlers take the unscoped gold tag after them — Discord tints
+         the embed strip with it — and browsers never reach it. -->
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e1116">
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#dedfe9">
     <meta name="theme-color" content="#ffd100">
