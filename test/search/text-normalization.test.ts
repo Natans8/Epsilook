@@ -37,8 +37,17 @@ describe("fold", () => {
 
     it("folds regional spellings to the spelling the game data uses", () => {
         assert.equal(fold("colour"), "color");
-        assert.equal(fold("Colourless Aura"), "colorless aura");
         assert.equal(fold("color"), "color");
+        assert.equal(fold("Armour of the Fallen"), "armor of the fallen");
+    });
+
+    it("folds inflections as their own pairs, on word boundaries only", () => {
+        // The table is generated from VarCon, so colours and coloured are entries of their own rather than the
+        // product of a substring rule — which is what lets the match demand word boundaries and never rewrite a
+        // fragment inside an unrelated word.
+        assert.equal(fold("colours"), "colors");
+        assert.equal(fold("Grey Colours"), "gray colors");
+        assert.equal(fold("cursecolour"), "cursecolour");
     });
 
     it("keeps spacing and punctuation, so a phrase means what it shows", () => {
@@ -57,7 +66,9 @@ describe("squash", () => {
         assert.equal(squash("火球术"), "火球术");
     });
 
-    it("carries the spelling fold, so colour finds color in partial matches too", () => {
-        assert.ok(squash("colorlessvoid").includes(squash("Colourless")));
+    it("carries the spelling fold, so armour finds armor in partial matches too", () => {
+        // The pair must be one the generated table kept — the table is intersected with the default pack's
+        // corpus, and armor is a word that corpus will never lose.
+        assert.ok(squash("platearmorheavy").includes(squash("Armour")));
     });
 });

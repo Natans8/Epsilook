@@ -15,6 +15,8 @@
  *   punctuation.
  */
 
+import {SPELLING_FOLDS} from "./spelling-folds";
+
 /**
  * Characters that carry the same meaning as a plainer character.
  *
@@ -38,17 +40,18 @@ const SUBSTITUTIONS: readonly (readonly [RegExp, string])[] = [
 ];
 
 /**
- * Regional spellings folded to the spelling the game data uses.
+ * Regional spellings folded to the spelling the game data uses, whole words only.
  *
  * The game is written in American English, so its data says color where a reader may equally type colour. Folding
- * the pair — on both sides, like everything here — makes either spelling reach data written in either.
+ * the pair — on both sides, like everything here — makes either spelling reach data written in either. The pairs
+ * come generated from VarCon via {@link ./spelling-folds!SPELLING_FOLDS}; inflections are their own pairs, which
+ * is why the match is word-bounded rather than substring.
  *
  * These change the text's length, so they belong to {@link fold} and never to {@link foldTypography}, whose
  * one-character-to-one-character contract the parser depends on. Match-time only.
  */
-const SPELLINGS: readonly (readonly [RegExp, string])[] = [
-    [/colour/g, "color"],
-];
+const SPELLING_MAP = new Map(SPELLING_FOLDS);
+const SPELLING = new RegExp(`\\b(?:${SPELLING_FOLDS.map(([variant]) => variant).join("|")})\\b`, "g");
 
 /** Anything that is not a letter or a digit, in any script. */
 const NON_ALPHANUMERIC = /[^\p{L}\p{N}]+/gu;
@@ -83,9 +86,8 @@ export function foldTypography(text: string): string {
  * @returns The normalised form, for comparing whole values.
  */
 export function fold(text: string): string {
-    let out = foldTypography(text.normalize("NFC").toLowerCase());
-    for (const [pattern, replacement] of SPELLINGS) out = out.replace(pattern, replacement);
-    return out;
+    return foldTypography(text.normalize("NFC").toLowerCase())
+        .replace(SPELLING, (word) => SPELLING_MAP.get(word) ?? word);
 }
 
 /**
