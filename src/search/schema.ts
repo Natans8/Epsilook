@@ -9,6 +9,10 @@
  * namespace of kind words, usable inside that column's scope; those may repeat across columns without colliding,
  * because the column has already been named by the time one is read.
  *
+ * An alias occupies its principal word's namespaces and resolves to the same declaration, so the checks treat the
+ * two identically: an alias can collide and shadow exactly as a word can. Only resolution knows aliases exist —
+ * every visible surface prints the principal spelling.
+ *
  * The checks run at import time and throw. A uniqueness rule that lives only in a document is one that gets broken
  * silently, and the failure is invisible from the outside: two things reachable by one spelling means a query means
  * different things depending on which declaration was registered first. Throwing at import makes the application, the
@@ -58,7 +62,20 @@ export function schemaProblems(): string[] {
     };
 
     for (const column of COLUMNS.values()) {
-        if (column.head !== false) claim(topLevel, column.key, `column ${column.key}`);
+        if (column.head === false) {
+            if (column.aliases !== undefined) {
+                problems.push(`column ${column.key} declares aliases but no head for them to reach`);
+            }
+            continue;
+        }
+        claim(topLevel, column.key, `column ${column.key}`);
+        for (const alias of column.aliases ?? []) {
+            if (alias === column.key) {
+                problems.push(`column ${column.key} lists its own key as an alias`);
+                continue;
+            }
+            claim(topLevel, alias, `column ${column.key}`);
+        }
     }
 
     // Chipless search answers a bare number as one identity, the spell's own id. A second plain notation that can
@@ -73,12 +90,31 @@ export function schemaProblems(): string[] {
         if (kind.word !== undefined) {
             claim(columnWords(kind.column.key), kind.word, `kind ${kind.id}`);
             if (kind.global === true) claim(topLevel, kind.word, `kind ${kind.id}`);
-        } else if (kind.global === true) {
-            problems.push(`kind ${kind.id} is global but has no word to be global with`);
+            for (const alias of kind.aliases ?? []) {
+                if (alias === kind.word) {
+                    problems.push(`kind ${kind.id} lists its own word as an alias`);
+                    continue;
+                }
+                claim(columnWords(kind.column.key), alias, `kind ${kind.id}`);
+                if (kind.global === true) claim(topLevel, alias, `kind ${kind.id}`);
+            }
+        } else {
+            if (kind.global === true) problems.push(`kind ${kind.id} is global but has no word to be global with`);
+            if (kind.aliases !== undefined) problems.push(`kind ${kind.id} declares aliases but no word for them to spell`);
         }
 
+        const propWords = new Map<string, string>();
         for (const [name, prop] of Object.entries(kind.props)) {
             const where = `${kind.id}.${name}`;
+            claim(propWords, name, `property ${where}`);
+            for (const alias of prop.aliases ?? []) {
+                if (alias === name) {
+                    problems.push(`property ${where} lists its own name as an alias`);
+                    continue;
+                }
+                claim(propWords, alias, `property ${where}`);
+                if (prop.prefix !== undefined) claim(topLevel, alias, `property ${where}`);
+            }
             if (prop.prefix !== undefined) claim(topLevel, prop.prefix, `property ${where}`);
             const identity = prop.plain?.some((type) =>
                 type.accepts.some((op) => op.name === "exact")
@@ -93,9 +129,11 @@ export function schemaProblems(): string[] {
     // sits. Checked after every claim above, so declaration order cannot decide whether it fires.
     for (const kind of KINDS.values()) {
         if (kind.word === undefined || kind.global === true) continue;
-        const holder = topLevel.get(kind.word);
-        if (holder !== undefined && holder !== `kind ${kind.id}`) {
-            problems.push(`"${kind.word}" of kind ${kind.id} shadows the top-level word of ${holder}`);
+        for (const word of [kind.word, ...(kind.aliases ?? [])]) {
+            const holder = topLevel.get(word);
+            if (holder !== undefined && holder !== `kind ${kind.id}`) {
+                problems.push(`"${word}" of kind ${kind.id} shadows the top-level word of ${holder}`);
+            }
         }
     }
 
@@ -187,12 +225,20 @@ export function buildSchema(): void {
 
     HEADS.clear();
     for (const column of COLUMNS.values()) {
-        if (column.head !== false) HEADS.set(column.key, {role: "column", column});
+        if (column.head === false) continue;
+        for (const word of [column.key, ...(column.aliases ?? [])]) {
+            HEADS.set(word, {role: "column", column});
+        }
     }
     for (const kind of KINDS.values()) {
-        if (kind.word !== undefined && kind.global === true) HEADS.set(kind.word, {role: "kind", kind});
+        if (kind.word !== undefined && kind.global === true) {
+            for (const word of [kind.word, ...(kind.aliases ?? [])]) HEADS.set(word, {role: "kind", kind});
+        }
         for (const [name, prop] of Object.entries(kind.props)) {
-            if (prop.prefix !== undefined) HEADS.set(prop.prefix, {role: "prop", kind, name, prop});
+            if (prop.prefix === undefined) continue;
+            for (const word of [prop.prefix, ...(prop.aliases ?? [])]) {
+                HEADS.set(word, {role: "prop", kind, name, prop});
+            }
         }
     }
 }

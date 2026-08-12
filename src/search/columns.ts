@@ -21,6 +21,15 @@ export interface Column {
      * the key free and the words to its kinds. Every current column keeps it.
      */
     readonly head?: boolean;
+
+    /**
+     * Alternative spellings of the key, resolved wherever the key is a head. Resolution only: results headers, help
+     * and chips always print the key.
+     *
+     * Plain data so the list can grow without a mechanism change — variant spellings today, localised words if a
+     * locale vocabulary ever ships.
+     */
+    readonly aliases?: readonly string[];
 }
 
 export const COLUMNS = new Map<string, Column>();

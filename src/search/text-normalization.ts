@@ -37,14 +37,44 @@ const SUBSTITUTIONS: readonly (readonly [RegExp, string])[] = [
     [/：/g, ":"],
 ];
 
+/**
+ * Regional spellings folded to the spelling the game data uses.
+ *
+ * The game is written in American English, so its data says color where a reader may equally type colour. Folding
+ * the pair — on both sides, like everything here — makes either spelling reach data written in either.
+ *
+ * These change the text's length, so they belong to {@link fold} and never to {@link foldTypography}, whose
+ * one-character-to-one-character contract the parser depends on. Match-time only.
+ */
+const SPELLINGS: readonly (readonly [RegExp, string])[] = [
+    [/colour/g, "color"],
+];
+
 /** Anything that is not a letter or a digit, in any script. */
 const NON_ALPHANUMERIC = /[^\p{L}\p{N}]+/gu;
 
 /**
- * Returns text with letter case and invisible typographic variation removed.
+ * Returns text with the typographic substitutions applied and nothing else.
+ *
+ * Every substitution replaces one character with one character, so each position in the result lines up with the same
+ * position in the input. The parser depends on that: it reads the substituted text while reporting every span against
+ * the text as typed.
+ *
+ * @param text Text as typed or pasted.
+ * @returns The same text with substituted characters restored to their plain forms.
+ */
+export function foldTypography(text: string): string {
+    let out = text;
+    for (const [pattern, replacement] of SUBSTITUTIONS) out = out.replace(pattern, replacement);
+    return out;
+}
+
+/**
+ * Returns text with letter case, invisible typographic variation and regional spellings removed.
  *
  * Structure is preserved: spacing, punctuation and word order are untouched, so a phrase still means the sequence of
- * characters it appears to mean.
+ * characters it appears to mean. Length may change — a folded regional spelling is shorter — so positions in the
+ * result do not line up with the input; {@link foldTypography} is the position-preserving subset.
  *
  * Case folding is locale-independent by design. A locale-aware fold would make the same query return different
  * results for a Turkish reader, whose dotless i lowercases differently.
@@ -53,8 +83,8 @@ const NON_ALPHANUMERIC = /[^\p{L}\p{N}]+/gu;
  * @returns The normalised form, for comparing whole values.
  */
 export function fold(text: string): string {
-    let out = text.normalize("NFC").toLowerCase();
-    for (const [pattern, replacement] of SUBSTITUTIONS) out = out.replace(pattern, replacement);
+    let out = foldTypography(text.normalize("NFC").toLowerCase());
+    for (const [pattern, replacement] of SPELLINGS) out = out.replace(pattern, replacement);
     return out;
 }
 

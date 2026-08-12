@@ -97,6 +97,16 @@ export interface Prop {
     readonly prefix?: string;
 
     /**
+     * Alternative spellings of this property's words: its name inside the kind's scope, and its prefix door where
+     * one is declared. An alias is a way in, never a second identity — chips, help and autocomplete print the
+     * principal spelling.
+     *
+     * Plain data so the list can grow without a mechanism change — variant spellings today, localised words if a
+     * locale vocabulary ever ships.
+     */
+    readonly aliases?: readonly string[];
+
+    /**
      * Stored values that are not quantities, and the word each one means: a channel's -1 is `unlimited`, a cast
      * bar's 0 is `instant`.
      *
@@ -112,6 +122,15 @@ export interface Prop {
      * the type already says. Read it with {@link hintOf} rather than the field.
      */
     readonly hint?: string;
+
+    /**
+     * Whether this property only refines another predicate rather than naming a subject of its own.
+     *
+     * A target is the first: "plays on the caster" says nothing about what kind of row is doing the playing. A scope
+     * whose only positive constraint is a qualifier is legal but weak, so the parser warns on it instead of refusing
+     * it.
+     */
+    readonly qualifier?: boolean;
 }
 
 export interface Kind {
@@ -127,6 +146,16 @@ export interface Kind {
      * Omitted when the column's own head already reaches this kind unambiguously.
      */
     readonly word?: string;
+
+    /**
+     * Alternative spellings of {@link word}, legal exactly where the word is: inside the column, and at the top
+     * level when the kind is global. An alias is a way in, never a second identity — chips, help and autocomplete
+     * print the word.
+     *
+     * Plain data so the list can grow without a mechanism change — variant spellings today, localised words if a
+     * locale vocabulary ever ships.
+     */
+    readonly aliases?: readonly string[];
 
     /**
      * Whether the word is also a top-level head, so `missile:{from:chest}` works without naming the column.
@@ -254,6 +283,7 @@ const named = (what: string, tier?: number): Prop => {
 const target = (): Prop => ({
     types: [bitmask],
     hint: "who it plays on — caster, target, both, area, others",
+    qualifier: true,
 });
 
 /** A point on a model that something attaches to. */
