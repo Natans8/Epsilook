@@ -89,6 +89,14 @@ export function coverage(): string[] {
 const TEXTUAL = ["text", "path", "enum"];
 
 /**
+ * The types whose bare reading is a substring test over stored text — the family for which a longer operand asks a
+ * narrower question, which is what simplification's subsumption reasoning turns on. Ordinals join the textual three
+ * because their `contains` is the same squash-substring test over the stored rung name. Declared here, beside the
+ * matcher registrations that make it true.
+ */
+export const SUBSTRING_TYPES: readonly string[] = Object.freeze([...TEXTUAL, "ordinal"]);
+
+/**
  * Reads an operand as text.
  *
  * @param value A single operand, or a range's bounds.

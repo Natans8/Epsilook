@@ -273,6 +273,28 @@ function normalised(parsed: Parsed): string {
 }
 
 /**
+ * One clause's folded canonical text — the identity {@link equivalent} compares clauses by — or null when the
+ * clause holds nothing evaluable. Two clauses with one key ask the same question, whatever their spelling.
+ *
+ * @param clause The clause.
+ * @returns Its folded canonical text, or null.
+ */
+export function clauseKey(clause: Clause): string | null {
+    return clauseText(clause, "folded");
+}
+
+/**
+ * One scope term's folded canonical text, the term-level counterpart of {@link clauseKey}, or null for a term with
+ * nothing evaluable to write.
+ *
+ * @param term The term.
+ * @returns Its folded canonical text, or null.
+ */
+export function termKey(term: ScopeTerm): string | null {
+    return termText(term, "folded");
+}
+
+/**
  * Whether two parses ask the same evaluable question.
  *
  * Equivalence is up to everything the language says does not matter: clause order, group order, delimiter, notation

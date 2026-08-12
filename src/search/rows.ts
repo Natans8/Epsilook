@@ -166,15 +166,15 @@ export function matchProp(
                 return value !== undefined && runMatch("present", type, value, "");
             });
         case "range": {
-            const lo = resolve(prop, expr.lo, notations);
-            const hi = resolve(prop, expr.hi, notations);
+            const lo = resolveOperand(prop, expr.lo, notations);
+            const hi = resolveOperand(prop, expr.hi, notations);
             if (lo === null || hi === null || lo.type !== hi.type) return false;
             const value = storedFor(prop, stored, lo.type);
             return value !== undefined && runMatch("range", lo.type, value, [lo.value, hi.value]);
         }
         default: {
             if ("text" in expr.operand && matchesFlagWord(name, prop, stored, expr)) return true;
-            const operand = resolve(prop, expr.operand, notations);
+            const operand = resolveOperand(prop, expr.operand, notations);
             if (operand === null) return false;
             const op = bareReading(expr.op, operand.type);
             if (!operand.type.accepts.some((accepted) => accepted.name === op)) return false;
@@ -207,12 +207,15 @@ function matchesFlagWord(
  * Dispatch is the parser's rule applied at evaluation time, where several properties each read the same text: the
  * sentinel words answer first, then the first notation whose `parse` accepts the text wins.
  *
+ * Exported for simplification, which must reason over exactly the dispatch evaluation performs — a second reading
+ * of the rule would drift from this one.
+ *
  * @param prop The property.
  * @param operand The operand.
- * @param notations The notations the dispatch may read.
+ * @param notations The notations the dispatch may read, defaulting to all of the property's.
  * @returns The value and its notation, or `null` when nothing accepts the operand.
  */
-function resolve(
+export function resolveOperand(
     prop: Prop, operand: ParsedOperand, notations: readonly AxisType[],
 ): { readonly type: AxisType; readonly value: Value } | null {
     if ("type" in operand) {
