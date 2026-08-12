@@ -103,7 +103,8 @@ export interface Prop {
      * are: every spelling reads, one spelling writes per surface. The name is what compact surfaces write — chips,
      * capsules, `format()` — and the full name is what naming surfaces write: help headings, control labels,
      * tooltips. It resolves wherever the name does: inside the kind's scope, and at the prefix door where one is
-     * declared.
+     * declared. Absent means the name is not a shortcut and names itself — read it with {@link propNameOf} rather
+     * than the field.
      */
     readonly full?: string;
 
@@ -161,7 +162,8 @@ export interface Kind {
      * are: every spelling reads, one spelling writes per surface. The word is what compact surfaces write — chips,
      * capsules, `format()` — and the full name is what naming surfaces write: help headings, control labels,
      * tooltips. It resolves exactly where the word does: inside the column, and at the top level when the kind is
-     * global.
+     * global. Absent means the word is not a shortcut and names itself — read it with {@link nameOf} rather than
+     * the field.
      */
     readonly full?: string;
 
@@ -224,6 +226,40 @@ export function operatorsOf(prop: Prop): string[] {
  */
 export function hintOf(prop: Prop): string {
     return prop.hint ?? prop.types[0].hint;
+}
+
+/**
+ * The spelling compact surfaces write for a kind — chips, capsules, `format()`.
+ *
+ * @param kind The kind.
+ * @returns Its word, or its column's key where it declares none and the column head is how it is reached.
+ */
+export function wordOf(kind: Kind): string {
+    return kind.word ?? kind.column.key;
+}
+
+/**
+ * The spelling naming surfaces write for a kind — help headings, control labels, tooltips.
+ *
+ * The default is defined here, not at each surface: an absent `full` means the word is not a shortcut and names
+ * itself. Read it with this rather than the field, as {@link hintOf} reads hints.
+ *
+ * @param kind The kind.
+ * @returns Its full name, or {@link wordOf} where it declares none.
+ */
+export function nameOf(kind: Kind): string {
+    return kind.full ?? wordOf(kind);
+}
+
+/**
+ * The spelling naming surfaces write for a property.
+ *
+ * @param name The property's own name — its key in the kind's declaration.
+ * @param prop The property.
+ * @returns Its full name, or the name itself where it declares none.
+ */
+export function propNameOf(name: string, prop: Prop): string {
+    return prop.full ?? name;
 }
 
 /** One operand resolved against a property: the value, and the notation that accepted it. */
