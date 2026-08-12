@@ -62,7 +62,7 @@ from build_data import (AURA_OVERRIDE_NAME, CACHE_DIR, DATA_DIR, OPTIONAL_TABLES
                         read_description_variables, read_encounter_notes,
                         read_spell_names, read_spell_values, read_table, tdb_release,
                         to_int)
-from spelltext import RUSSIAN, DescriptionCooker, TextLocale
+from spelltext import ENGLISH, RUSSIAN, DescriptionCooker, TextLocale
 
 # The overlay's own format, independent of the base PACK_FORMAT: the two evolve
 # for different reasons (a new base section is only an overlay change when it
@@ -72,7 +72,15 @@ LOCALE_FORMAT = 1
 # Locale code -> the prose wording the cooker needs for it. Adding a language
 # the game ships is one entry here (plus a TextLocale in spelltext.py when its
 # plural rules differ from an existing one).
+#
+# enUS is the locale the base pack itself is read in, so its overlay is empty
+# by construction: every string equals the English it is diffed against. It is
+# declared so the roster names every locale the app can be asked for rather
+# than every locale except the default one, and an empty overlay is the
+# machinery's own check — a non-zero count here means the base pack and the
+# locale route disagree about the same strings.
 LOCALES: dict[str, TextLocale] = {
+    "enUS": ENGLISH,
     "ruRU": RUSSIAN,
 }
 

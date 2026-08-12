@@ -1460,6 +1460,11 @@ in another locale, and **only where the translation exists and differs from the 
 — wago serves the English string for untranslated rows, so "same as English" and "not translated" are one case and the
 app-side fallback (keep the base string) is right for both. No ids the base does not have, no visuals, no numbers.
 
+**enUS ships too, and it is EMPTY — 283 bytes, all twelve counts zero, by construction.** It is the locale the base pack
+is itself read in, so every string equals the English it is diffed against. It is declared so the roster names every
+locale the app can be asked for rather than every locale except the default one, and its emptiness is the machinery's
+own check: a non-zero count there means the base pack and the `&locale=` route disagree about the same strings.
+
 | overlay section                                              | source                                                                                                                        |
 |--------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
 | `spellNames` / `spellSubtexts` / `spellAltNames`             | wago `_lang` columns — the same CSV route with `&locale=`                                                                     |
