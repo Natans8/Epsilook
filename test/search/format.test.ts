@@ -69,6 +69,36 @@ describe("formatQuery", () => {
     });
 });
 
+describe("the written tier", () => {
+    const written = (query: string): string => formatQuery(parse(query), "written");
+
+    it("upholds the notation the reader chose where canonical converges it", () => {
+        assert.equal(written("scale:x1.5"), "scale:=x1.5");
+        assert.equal(canonical("scale:x1.5"), "scale:=+50%");
+        assert.equal(written("cast:500ms"), "cast:=500ms");
+        assert.equal(written("cast:10-*"), "cast:>=10");
+        assert.equal(written("scale:x2-50"), "scale:x2-50");
+    });
+
+    it("still converges structure: delimiters and anchors spell canonically around the upheld value", () => {
+        assert.equal(written("model:(fire missile)"), "model:{fire missile}");
+        assert.equal(written("cast:instant"), "cast:instant");
+        assert.equal(written("cast:0"), "cast:=0");
+    });
+
+    it("is idempotent: the written form of a written form is itself", () => {
+        for (const query of ["scale:x1.5", "cast:500ms", "scale:x2-50", "cast:10-*"]) {
+            const once = written(query);
+            assert.equal(formatQuery(parse(once), "written"), once, query);
+        }
+    });
+
+    it("never reaches equivalence, which compares through the folded canonical", () => {
+        assert.ok(same("scale:x1.5", "scale:+50"));
+        assert.ok(same("cast:500ms", "cast:0.5"));
+    });
+});
+
 describe("equivalent", () => {
     it("clause order never matters, and neither does group order", () => {
         assert.ok(same("model:fire -model:missile", "-model:missile model:fire"));

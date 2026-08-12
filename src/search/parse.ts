@@ -74,10 +74,14 @@ export interface Diagnostic {
  * A typed operand appears where a property's notation accepted the text, so `+50` on a size change arrives as the
  * stored `50`. Text remains where several properties will each apply their own reading, or where the match folds the
  * text at evaluation time.
+ *
+ * `written` is the operand text the reader actually typed, kept so a rendering surface can echo the spelling they
+ * chose — `x1.5` stays `x1.5` — where the canonical form would converge it. Absent on an operand built
+ * programmatically, which has no written spelling to uphold; equivalence never reads it.
  */
 export type ParsedOperand =
     | { readonly text: string }
-    | { readonly type: string; readonly value: Value };
+    | { readonly type: string; readonly value: Value; readonly written?: string };
 
 /** One value expression: an operator from the registry applied to its operands. */
 export type ValueExpr =
@@ -1342,13 +1346,13 @@ class Parser {
             const pv = parseValue(prop, t);
             if (pv === null) return illTyped(word, prop);
             const op = accepts(pv.type, "contains") ? "contains" as const : "exact" as const;
-            return done({op, operand: {type: pv.type.name, value: pv.value}});
+            return done({op, operand: {type: pv.type.name, value: pv.value, written: t}});
         };
         const openBound = (bound: string, op: "gte" | "lte"): Interp | null => {
             for (const type of prop.types) {
                 if (!accepts(type, "range") || !accepts(type, op) || !type.parse) continue;
                 const value = type.parse(bound);
-                if (value !== null) return done({op, operand: {type: type.name, value}});
+                if (value !== null) return done({op, operand: {type: type.name, value, written: bound}});
             }
             return null;
         };
@@ -1362,8 +1366,8 @@ class Parser {
                 if (pair !== null && pair !== undefined) {
                     return done({
                         op: "range",
-                        lo: {type: type.name, value: pair[0]},
-                        hi: {type: type.name, value: pair[1]},
+                        lo: {type: type.name, value: pair[0], written: lo},
+                        hi: {type: type.name, value: pair[1], written: hi},
                     });
                 }
                 if (!type.parse) continue;
@@ -1372,8 +1376,8 @@ class Parser {
                 if (a !== null && b !== null) {
                     return done({
                         op: "range",
-                        lo: {type: type.name, value: a},
-                        hi: {type: type.name, value: b},
+                        lo: {type: type.name, value: a, written: lo},
+                        hi: {type: type.name, value: b, written: hi},
                     });
                 }
             }
@@ -1383,7 +1387,10 @@ class Parser {
             operator: (op, operand, opts): Interp => {
                 if (opts.phrase === true) {
                     const read = stringReading(operand, op.name);
-                    if (read !== null) return done(this.opExpr(op.name, {type: read.type.name, value: read.value}));
+                    if (read !== null) {
+                        return done(this.opExpr(op.name,
+                            {type: read.type.name, value: read.value, written: operand}));
+                    }
                     // A quoted operand is a string. Sentinel words are strings; a quantity is not, so an operator
                     // applied to a quoted number is refused rather than read as the number it looks like.
                     if (refusesQuote(operand)) return quotedQuantity(word, prop);
@@ -1391,7 +1398,7 @@ class Parser {
                 const pv = parseValue(prop, operand);
                 if (pv === null) return illTyped(word, prop);
                 if (!accepts(pv.type, op.name)) return declined(word, op);
-                return done(this.opExpr(op.name, {type: pv.type.name, value: pv.value}));
+                return done(this.opExpr(op.name, {type: pv.type.name, value: pv.value, written: operand}));
             },
             range: (t): Interp | null => {
                 if (!prop.types.some((type) => accepts(type, "range"))) return null;
@@ -1432,7 +1439,9 @@ class Parser {
             },
             phrase: (t): Interp => {
                 const read = stringReading(t, "contains");
-                if (read !== null) return done({op: "contains", operand: {type: read.type.name, value: read.value}});
+                if (read !== null) {
+                    return done({op: "contains", operand: {type: read.type.name, value: read.value, written: t}});
+                }
                 // A phrase is a string value. Word vocabularies — sentinels, roles, rungs — are strings, so
                 // quoting one of their words is harmless; a quantity has no string reading, and refusing says
                 // what the quotes did rather than silently reading the number they wrap.
@@ -1463,7 +1472,7 @@ class Parser {
             if (!countFallback || !COMPARABLE.has(op.name)) return null;
             const value = countType.parse?.(operand);
             if (value === null || value === undefined) return null;
-            return {r: "count", value: this.opExpr(op.name, {type: countType.name, value})};
+            return {r: "count", value: this.opExpr(op.name, {type: countType.name, value, written: operand})};
         };
         return {
             operator: (op, operand, opts): Interp => {
@@ -1568,7 +1577,7 @@ class Parser {
                 // A quoted operand is a string, so it can neither be the count question nor carry a live wildcard.
                 const value = opts.phrase !== true && COMPARABLE.has(op.name) ? countType.parse?.(operand) : null;
                 if (value !== null && value !== undefined) {
-                    return {r: "count", value: this.opExpr(op.name, {type: countType.name, value})};
+                    return {r: "count", value: this.opExpr(op.name, {type: countType.name, value, written: operand})};
                 }
                 if (op.name === "exact") {
                     if (opts.phrase !== true && operand.includes(GRAMMAR.wildcard)) {

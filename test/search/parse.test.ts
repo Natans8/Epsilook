@@ -141,14 +141,14 @@ describe("binds and their values", () => {
     it("a bare value on a text axis is a substring, = anchors it", () => {
         assert.equal(valueOf(ok("name:Fireball")).op, "contains");
         assert.deepEqual(valueOf(ok("name:=Fireball")),
-            {op: "exact", operand: {type: "text", value: "Fireball"}});
+            {op: "exact", operand: {type: "text", value: "Fireball", written: "Fireball"}});
     });
 
     it("= anchors a phrase: IS versus contains", () => {
         assert.deepEqual(valueOf(ok('name:="Blood Pool"')),
-            {op: "exact", operand: {type: "text", value: "Blood Pool"}});
+            {op: "exact", operand: {type: "text", value: "Blood Pool", written: "Blood Pool"}});
         assert.deepEqual(valueOf(ok('name:"Blood Pool"')),
-            {op: "contains", operand: {type: "text", value: "Blood Pool"}});
+            {op: "contains", operand: {type: "text", value: "Blood Pool", written: "Blood Pool"}});
     });
 
     it("a comma list of numbers is alternation", () => {
@@ -158,13 +158,16 @@ describe("binds and their values", () => {
 
     it("an ordinal compares on its ladder", () => {
         const value = valueOf(ok("xpac:>legion"));
-        assert.deepEqual(value, {op: "gt", operand: {type: "ordinal", value: "legion"}});
+        assert.deepEqual(value, {op: "gt", operand: {type: "ordinal", value: "legion", written: "legion"}});
     });
 
     it("a minus in value position is a sign, not negation", () => {
         const clause = one("scale:-50");
         assert.equal(clause.not, false);
-        assert.deepEqual(valueOf(clause.ask as Ask), {op: "exact", operand: {type: "percentChange", value: -50}});
+        assert.deepEqual(valueOf(clause.ask as Ask), {
+            op: "exact",
+            operand: {type: "percentChange", value: -50, written: "-50"}
+        });
     });
 
     it("parens shelter a negative range bound", () => {
@@ -172,67 +175,91 @@ describe("binds and their values", () => {
     });
 
     it("units convert into storage: seconds store milliseconds", () => {
-        assert.deepEqual(valueOf(ok("cast:500ms")), {op: "exact", operand: {type: "seconds", value: 500}});
-        assert.deepEqual(valueOf(ok("cast:1.5")), {op: "exact", operand: {type: "seconds", value: 1500}});
+        assert.deepEqual(valueOf(ok("cast:500ms")), {
+            op: "exact",
+            operand: {type: "seconds", value: 500, written: "500ms"}
+        });
+        assert.deepEqual(valueOf(ok("cast:1.5")), {
+            op: "exact",
+            operand: {type: "seconds", value: 1500, written: "1.5"}
+        });
         assert.equal(valueOf(ok("cast:2-5")).op, "range");
     });
 
     it("open ranges desugar to comparisons at parse time", () => {
-        assert.deepEqual(valueOf(ok("cast:10-*")), {op: "gte", operand: {type: "seconds", value: 10_000}});
-        assert.deepEqual(valueOf(ok("cast:*-10")), {op: "lte", operand: {type: "seconds", value: 10_000}});
+        assert.deepEqual(valueOf(ok("cast:10-*")), {
+            op: "gte",
+            operand: {type: "seconds", value: 10_000, written: "10"}
+        });
+        assert.deepEqual(valueOf(ok("cast:*-10")), {
+            op: "lte",
+            operand: {type: "seconds", value: 10_000, written: "10"}
+        });
     });
 
     it("a trailing dash is the open lower bound, and a note names the reading", () => {
         const parsed = parse("cast:10-");
         assert.deepEqual(valueOf(parsed.clauses[0].ask as Ask),
-            {op: "gte", operand: {type: "seconds", value: 10_000}});
+            {op: "gte", operand: {type: "seconds", value: 10_000, written: "10"}});
         assert.equal(notes(parsed).length, 1);
     });
 
     it("a sentinel is reachable by its word and never by its number", () => {
-        assert.deepEqual(valueOf(ok("cast:instant")), {op: "exact", operand: {type: "seconds", value: 0}});
-        assert.deepEqual(valueOf(ok("channel:unlimited")), {op: "exact", operand: {type: "seconds", value: -1}});
+        assert.deepEqual(valueOf(ok("cast:instant")), {
+            op: "exact",
+            operand: {type: "seconds", value: 0, written: "instant"}
+        });
+        assert.deepEqual(valueOf(ok("channel:unlimited")), {
+            op: "exact",
+            operand: {type: "seconds", value: -1, written: "unlimited"}
+        });
     });
 
     it("a bare number on the scale axis splits at ten: 2 is double, 50 a proportion", () => {
-        assert.deepEqual(valueOf(ok("scale:2")), {op: "exact", operand: {type: "percentChange", value: 100}});
-        assert.deepEqual(valueOf(ok("scale:50")), {op: "exact", operand: {type: "percentChange", value: -50}});
+        assert.deepEqual(valueOf(ok("scale:2")), {
+            op: "exact",
+            operand: {type: "percentChange", value: 100, written: "2"}
+        });
+        assert.deepEqual(valueOf(ok("scale:50")), {
+            op: "exact",
+            operand: {type: "percentChange", value: -50, written: "50"}
+        });
     });
 
     it("a range's bare bounds read in ONE notation, the larger bound classifying the pair", () => {
         const range = (q: string): unknown => valueOf(ok(q));
         assert.deepEqual(range("scale:10-90"), {
             op: "range",
-            lo: {type: "percentChange", value: -90},
-            hi: {type: "percentChange", value: -10},
+            lo: {type: "percentChange", value: -90, written: "10"},
+            hi: {type: "percentChange", value: -10, written: "90"},
         });
         assert.deepEqual(range("scale:2-5"), {
             op: "range",
-            lo: {type: "percentChange", value: 100},
-            hi: {type: "percentChange", value: 400},
+            lo: {type: "percentChange", value: 100, written: "2"},
+            hi: {type: "percentChange", value: 400, written: "5"},
         });
         assert.deepEqual(range("scale:8-12"), {
             op: "range",
-            lo: {type: "percentChange", value: -92},
-            hi: {type: "percentChange", value: -88},
+            lo: {type: "percentChange", value: -92, written: "8"},
+            hi: {type: "percentChange", value: -88, written: "12"},
         });
         assert.deepEqual(range("scale:(-50)-10"), {
             op: "range",
-            lo: {type: "percentChange", value: -50},
-            hi: {type: "percentChange", value: 10},
+            lo: {type: "percentChange", value: -50, written: "-50"},
+            hi: {type: "percentChange", value: 10, written: "10"},
         });
     });
 
     it("a written unit is what it says: symbol bounds keep their own notations", () => {
         assert.deepEqual(valueOf(ok("scale:x2-x5")), {
             op: "range",
-            lo: {type: "percentChange", value: 100},
-            hi: {type: "percentChange", value: 400},
+            lo: {type: "percentChange", value: 100, written: "x2"},
+            hi: {type: "percentChange", value: 400, written: "x5"},
         });
         assert.deepEqual(valueOf(ok("scale:x2-50")), {
             op: "range",
-            lo: {type: "percentChange", value: 100},
-            hi: {type: "percentChange", value: -50},
+            lo: {type: "percentChange", value: 100, written: "x2"},
+            hi: {type: "percentChange", value: -50, written: "50"},
         });
     });
 
@@ -275,16 +302,16 @@ describe("binds and their values", () => {
 describe("the quote law: a phrase is one literal string value", () => {
     it("a phrase is a leaf — colons, parens and pipes inside are data", () => {
         assert.deepEqual(valueOf(ok('name:"Embody Hero: Illidan"')),
-            {op: "contains", operand: {type: "text", value: "Embody Hero: Illidan"}});
+            {op: "contains", operand: {type: "text", value: "Embody Hero: Illidan", written: "Embody Hero: Illidan"}});
         assert.deepEqual(valueOf(ok('name:"Elixir (Greater)"')),
-            {op: "contains", operand: {type: "text", value: "Elixir (Greater)"}});
+            {op: "contains", operand: {type: "text", value: "Elixir (Greater)", written: "Elixir (Greater)"}});
         assert.deepEqual(valueOf(ok('model:"beam|chain"')),
             {op: "contains", operand: {text: "beam|chain"}});
     });
 
     it("an escaped quote is a literal quote", () => {
         assert.deepEqual(valueOf(ok(String.raw`name:"the \"real\" one"`)),
-            {op: "contains", operand: {type: "text", value: 'the "real" one'}});
+            {op: "contains", operand: {type: "text", value: 'the "real" one', written: 'the "real" one'}});
     });
 
     it("quotes never group clauses: a quoted pair stays a phrase", () => {
@@ -313,7 +340,10 @@ describe("the quote law: a phrase is one literal string value", () => {
     });
 
     it("the anchor does not change that: scale:=50 is a value, scale:=\"50\" is refused", () => {
-        assert.deepEqual(valueOf(ok("scale:=50")), {op: "exact", operand: {type: "percentChange", value: -50}});
+        assert.deepEqual(valueOf(ok("scale:=50")), {
+            op: "exact",
+            operand: {type: "percentChange", value: -50, written: "50"}
+        });
         const [error] = invalid('scale:="50"');
         assert.equal(error.fix?.query, "scale:=50");
     });
@@ -325,33 +355,42 @@ describe("the quote law: a phrase is one literal string value", () => {
     });
 
     it("sentinel words are strings, so quoting one is harmless", () => {
-        assert.deepEqual(valueOf(ok('cast:"instant"')), {op: "exact", operand: {type: "seconds", value: 0}});
+        assert.deepEqual(valueOf(ok('cast:"instant"')), {
+            op: "exact",
+            operand: {type: "seconds", value: 0, written: "instant"}
+        });
     });
 
     it("role words are strings, so a quoted role reads as the role", () => {
         const [term] = termsOf(ok('model:{target:"caster"}'));
         assert.equal(term.state, "ok");
         assert.ok(term.ask !== null && term.ask.on === "props");
-        assert.deepEqual(term.ask.value, {op: "exact", operand: {type: "bitmask", value: "caster"}});
+        assert.deepEqual(term.ask.value, {op: "exact", operand: {type: "bitmask", value: "caster", written: "caster"}});
     });
 
     it("a quoted colour name carries the colour, not the letters", () => {
         const [term] = termsOf(ok('fx:{tint:"red"}'));
         assert.ok(term.ask !== null && term.ask.on === "props");
-        assert.deepEqual(term.ask.value, {op: "contains", operand: {type: "colour", value: 0xff_00_00}});
+        assert.deepEqual(term.ask.value, {
+            op: "contains",
+            operand: {type: "colour", value: 0xff_00_00, written: "red"}
+        });
     });
 
     it("on a name-or-id property, digits are the id and quoted digits are the name", () => {
         const [byId] = termsOf(ok("sound:{kit:150}"));
         assert.ok(byId.ask !== null && byId.ask.on === "props");
-        assert.deepEqual(byId.ask.value, {op: "exact", operand: {type: "id", value: 150}});
+        assert.deepEqual(byId.ask.value, {op: "exact", operand: {type: "id", value: 150, written: "150"}});
         const [byName] = termsOf(ok('sound:{kit:"150"}'));
         assert.ok(byName.ask !== null && byName.ask.on === "props");
-        assert.deepEqual(byName.ask.value, {op: "contains", operand: {type: "text", value: "150"}});
+        assert.deepEqual(byName.ask.value, {op: "contains", operand: {type: "text", value: "150", written: "150"}});
     });
 
     it("an unclosed phrase runs to the end of input", () => {
-        assert.deepEqual(valueOf(ok('name:"fire')), {op: "contains", operand: {type: "text", value: "fire"}});
+        assert.deepEqual(valueOf(ok('name:"fire')), {
+            op: "contains",
+            operand: {type: "text", value: "fire", written: "fire"}
+        });
     });
 
     it("a quoted number is a string to the count question too", () => {
@@ -369,11 +408,20 @@ describe("the quote law: a phrase is one literal string value", () => {
     });
 
     it("the single quote is a letter — 14,819 of 276,332 names on 9.2.7 carry one", () => {
-        assert.deepEqual(valueOf(ok("name:al'ar")), {op: "contains", operand: {type: "text", value: "al'ar"}});
+        assert.deepEqual(valueOf(ok("name:al'ar")), {
+            op: "contains",
+            operand: {type: "text", value: "al'ar", written: "al'ar"}
+        });
         // A typographic apostrophe folds to the plain one, so a pasted name still matches.
-        assert.deepEqual(valueOf(ok("name:al’ar")), {op: "contains", operand: {type: "text", value: "al'ar"}});
+        assert.deepEqual(valueOf(ok("name:al’ar")), {
+            op: "contains",
+            operand: {type: "text", value: "al'ar", written: "al'ar"}
+        });
         // And so does the backtick, the chat-era stand-in — zero names carry one, so nothing is stranded.
-        assert.deepEqual(valueOf(ok("name:zul`jin")), {op: "contains", operand: {type: "text", value: "zul'jin"}});
+        assert.deepEqual(valueOf(ok("name:zul`jin")), {
+            op: "contains",
+            operand: {type: "text", value: "zul'jin", written: "zul'jin"}
+        });
     });
 });
 
@@ -383,14 +431,14 @@ describe("the implied colon: a comparison straight after a head", () => {
         const [spelled] = termsOf(parse("model:<=4").clauses[0].ask as Ask);
         assert.deepEqual(glued.ask, spelled.ask);
         assert.deepEqual(valueOf(ok("scale>50")), valueOf(ok("scale:>50")));
-        assert.deepEqual(valueOf(ok("cast<2")), {op: "lt", operand: {type: "seconds", value: 2000}});
+        assert.deepEqual(valueOf(ok("cast<2")), {op: "lt", operand: {type: "seconds", value: 2000, written: "2"}});
         assert.deepEqual(valueOf(ok("name=Fireball")), valueOf(ok("name:=Fireball")));
     });
 
     it("works inside a scope too", () => {
         const [term] = termsOf(ok("model:{count<=4}"));
         assert.ok(term.ask !== null && term.ask.on === "count");
-        assert.deepEqual(term.ask.value, {op: "lte", operand: {type: "count", value: 4}});
+        assert.deepEqual(term.ask.value, {op: "lte", operand: {type: "count", value: 4, written: "4"}});
     });
 
     it("an unknown word keeps its comparison as ordinary text", () => {
@@ -560,7 +608,7 @@ describe("the count desugar", () => {
         const parsed = parse("model:>4");
         const [term] = termsOf(parsed.clauses[0].ask as Ask);
         assert.ok(term.ask !== null && term.ask.on === "count");
-        assert.deepEqual(term.ask.value, {op: "gt", operand: {type: "count", value: 4}});
+        assert.deepEqual(term.ask.value, {op: "gt", operand: {type: "count", value: 4, written: "4"}});
         assert.equal(notes(parsed).length, 1);
     });
 
@@ -581,11 +629,14 @@ describe("the count desugar", () => {
     });
 
     it("a kind's numeric subject outranks the count default", () => {
-        assert.deepEqual(valueOf(ok("scale:>50")), {op: "gt", operand: {type: "percentChange", value: -50}});
+        assert.deepEqual(valueOf(ok("scale:>50")), {
+            op: "gt",
+            operand: {type: "percentChange", value: -50, written: "50"}
+        });
         const seats = valueOf(ok("seats:>2"));
-        assert.deepEqual(seats, {op: "gt", operand: {type: "count", value: 2}});
+        assert.deepEqual(seats, {op: "gt", operand: {type: "count", value: 2, written: "2"}});
         assert.equal((ok("seats:>2") as KindAsk).test?.is, "props");
-        assert.deepEqual(valueOf(ok("cast:>2")), {op: "gt", operand: {type: "seconds", value: 2000}});
+        assert.deepEqual(valueOf(ok("cast:>2")), {op: "gt", operand: {type: "seconds", value: 2000, written: "2"}});
     });
 });
 
@@ -627,7 +678,10 @@ describe("alternative spellings", () => {
         assert.equal(term.ask.kind, KINDS.get("fx.camo"));
         const [colour] = termsOf(ok("chain:{color:red}"));
         assert.ok(colour.ask !== null && colour.ask.on === "props");
-        assert.deepEqual(colour.ask.value, {op: "contains", operand: {type: "colour", value: 0xff_00_00}});
+        assert.deepEqual(colour.ask.value, {
+            op: "contains",
+            operand: {type: "colour", value: 0xff_00_00, written: "red"}
+        });
     });
 });
 
@@ -640,7 +694,7 @@ describe("typography and non-Latin text", () => {
 
     it("a Cyrillic term parses with its case intact — folding is the matcher's job, on both sides", () => {
         const bound = valueOf(ok("name:Огненный"));
-        assert.deepEqual(bound, {op: "contains", operand: {type: "text", value: "Огненный"}});
+        assert.deepEqual(bound, {op: "contains", operand: {type: "text", value: "Огненный", written: "Огненный"}});
         assert.equal(fold("Огненный"), "огненный");
         assert.deepEqual(valueOf(ok("Огненный")), {op: "contains", operand: {text: "Огненный"}});
     });

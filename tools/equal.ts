@@ -3,9 +3,9 @@
  *   npm run equal -- 'model:fire -model:missile' '-model:missile model:fire'
  *   npm run equal -- 'model:(fire missile)' 'model:{fire missile}'
  *
- * Prints each query's canonical form and the verdict. Exit code 0 means equivalent, 1 different, 2 usage —
- * scriptable, like any comparison tool. Equivalence is up to everything the language says does not matter:
- * clause order, group order, and delimiter or notation spellings.
+ * Prints each query's canonical form — and its written form where that differs — then the verdict. Exit code 0
+ * means equivalent, 1 different, 2 usage — scriptable, like any comparison tool. Equivalence is up to everything
+ * the language says does not matter: clause order, group order, letter case, and delimiter or notation spellings.
  */
 import {equivalent, formatQuery, parse} from "../src/search/index";
 
@@ -21,7 +21,10 @@ if (positionals.length !== 2) {
 const [a, b] = positionals.map((query) => parse(query));
 for (const [query, parsed] of [[positionals[0], a], [positionals[1], b]] as const) {
     const broken = parsed.diagnostics.filter((d) => d.severity === "error");
-    console.error(`${JSON.stringify(query)} -> ${JSON.stringify(formatQuery(parsed))}`
+    const canonical = formatQuery(parsed);
+    const written = formatQuery(parsed, "written");
+    console.error(`${JSON.stringify(query)} -> ${JSON.stringify(canonical)}`
+        + (written === canonical ? "" : `  (written: ${JSON.stringify(written)})`)
         + (broken.length > 0 ? `  (${broken.length} error(s); comparing what remains)` : ""));
 }
 
