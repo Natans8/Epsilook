@@ -207,6 +207,15 @@ describe("the operator table", () => {
         }
     });
 
+    it("keeps count answering every operator a column-head comparison can spell", () => {
+        // A lone comparison at a column head is the count question — `model:>4` desugars to `model:{count:>4}` at
+        // parse time — so whatever operator that spelling carries lands on this type. Each one must stay accepted,
+        // or the desugar would turn the spelling into a declined-operator error.
+        for (const op of ["exact", ...ORDERING.map((o) => o.name)]) {
+            assert.ok(accepts(count).includes(op), op);
+        }
+    });
+
     it("gives a colour approximate matching but no ordering", () => {
         // A bare colour asks "about this shade", which is the question a reader has; ordering three channels at once
         // has no meaning.
