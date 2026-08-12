@@ -62,29 +62,34 @@ export const idColumn = defineColumn({
 export const modelColumn = defineColumn({
     key: "model",
     label: "Models",
+    aliases: ["models"],
     hint: "the 3D models a spell draws — missiles, ground effects, attachments",
 });
 
 export const soundColumn = defineColumn({
     key: "sound",
     label: "Sounds",
+    aliases: ["sounds"],
     hint: "the sound files a spell plays, and the kits they come from",
 });
 
 export const animColumn = defineColumn({
     key: "anim",
     label: "Animations",
+    aliases: ["animation", "animations"],
     hint: "how the character moves — replacements, kits, loose animations",
 });
 
 export const fxColumn = defineColumn({
     key: "fx",
     label: "Effects",
+    aliases: ["effects"],
     hint: "what the spell looks like — beams, glows, tints, morphs, size changes",
 });
 
 export const mechColumn = defineColumn({
     key: "mech",
     label: "Mechanics",
+    aliases: ["mechanics"],
     hint: "what the spell does — effects, auras, timing, links and gates",
 });

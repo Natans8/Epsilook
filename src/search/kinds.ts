@@ -298,7 +298,7 @@ export const name = defineKind({
 });
 
 export const description = defineKind({
-    column: spellColumn, word: "desc", global: true,
+    column: spellColumn, word: "desc", global: true, aliases: ["description"],
     hint: "what the spell says it does — its in-game description",
     props: {text: corpus(TIER.description, text)},
 });
@@ -356,7 +356,7 @@ export const spellId = defineKind({
 });
 
 export const expansion = defineKind({
-    column: idColumn, word: "xpac", global: true,
+    column: idColumn, word: "xpac", global: true, aliases: ["expansion"],
     hint: "the expansion that introduced it — legion, >wotlk, <=mop",
     props: {rung: of(ordinal)},
 });
@@ -426,7 +426,7 @@ export const item = defineKind({
     hint: "an in-game item's model, held by the caster",
     props: {
         file: corpus(TIER.asset, path),
-        itemId: {types: [id], hint: "the item's own id"},
+        id: {types: [id], hint: "the item's own id"},
         target: target(),
     },
 });
@@ -538,7 +538,7 @@ export const chain = defineKind({
         texture: corpus(TIER.asset, path),
         from: attachPoint("where the beam starts"),
         to: attachPoint("where the beam ends"),
-        colour: {types: [colour], hint: "the beam's tint"},
+        colour: {types: [colour], aliases: ["color"], hint: "the beam's tint"},
         target: target(),
     },
 });
@@ -583,7 +583,7 @@ export const glow = defineKind({
     column: fxColumn, word: "glow", group: "overlay",
     hint: "an edge glow or rim light around the model",
     props: {
-        colour: {types: [colour], hint: "the glow colour"},
+        colour: {types: [colour], aliases: ["color"], hint: "the glow colour"},
         target: target(),
     },
 });
@@ -593,7 +593,7 @@ export const tint = defineKind({
     column: fxColumn, word: "tint", group: "overlay",
     hint: "a colour wash over the model",
     props: {
-        colour: {types: [colour], hint: "the colour applied"},
+        colour: {types: [colour], aliases: ["color"], hint: "the colour applied"},
         target: target(),
     },
 });
@@ -617,7 +617,7 @@ export const freeze = defineKind({
 });
 
 export const camo = defineKind({
-    column: fxColumn, word: "camo", group: "overlay",
+    column: fxColumn, word: "camo", group: "overlay", aliases: ["camouflage"],
     hint: "a camouflage or cloaking effect",
     props: {},
 });
@@ -653,7 +653,7 @@ export const summon = defineKind({
 });
 
 export const gameObject = defineKind({
-    column: fxColumn, word: "object", group: "spawn",
+    column: fxColumn, word: "object", group: "spawn", aliases: ["gameobject"],
     hint: "a gameobject the spell places — campfire, portal, banner, chest",
     props: {object: named("gameobject", TIER.asset), target: target()},
 });
@@ -717,7 +717,7 @@ export const location = defineKind({
 
 /* Invisibility has two sides: what hides in a channel, and what can see into it. */
 export const invis = defineKind({
-    column: mechColumn, word: "invis", group: "stealth",
+    column: mechColumn, word: "invis", group: "stealth", aliases: ["invisibility"],
     hint: "the invisibility channel the aura hides in",
     props: {channel: {types: [id], hint: "the channel's number"}},
 });

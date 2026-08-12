@@ -9,9 +9,11 @@
 import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
-import {COLUMNS, modelColumn} from "../../src/search/columns";
-import {defineKind, formatValue, hintOf, KINDS, operatorsOf, parseValue} from "../../src/search/kinds";
-import {buildSchema, HEADS, kindsOf, schemaProblems} from "../../src/search/schema";
+import {COLUMNS, fxColumn, modelColumn} from "../../src/search/columns";
+import {
+    camo, chain, defineKind, description, expansion, formatValue, hintOf, KINDS, operatorsOf, parseValue,
+} from "../../src/search/kinds";
+import {buildSchema, HEADS, kindIn, kindsOf, propIn, schemaProblems} from "../../src/search/schema";
 import {flag, id, path, text, TYPES} from "../../src/search/value-types";
 
 describe("the shipped schema", () => {
@@ -49,6 +51,34 @@ describe("the shipped schema", () => {
         for (const column of COLUMNS.values()) {
             if (column.head !== false) assert.equal(HEADS.get(column.key)?.role, "column");
         }
+    });
+
+    it("resolves a kind alias inside its column, exactly where the word is", () => {
+        // The scoped counterpart of the HEADS alias test: `fx:camouflage` asks what `fx:camo` asks.
+        assert.equal(kindIn(fxColumn, "camo"), camo);
+        assert.equal(kindIn(fxColumn, "camouflage"), camo);
+        assert.equal(kindIn(fxColumn, "no-such-kind"), undefined);
+        // A wordless kind has no word for an alias to spell, so its column key never resolves as a scoped word.
+        assert.equal(kindIn(fxColumn, "fx"), undefined);
+    });
+
+    it("resolves a property alias to the principal name, which is what every printing surface carries", () => {
+        assert.equal(propIn(chain, "colour"), "colour");
+        assert.equal(propIn(chain, "color"), "colour");
+        assert.equal(propIn(chain, "no-such-prop"), undefined);
+    });
+
+    it("resolves the declared variant spellings at the top level", () => {
+        // The alias is a way in, never a second identity: both spellings reach the one declaration.
+        const kindAt = (word: string): unknown => {
+            const head = HEADS.get(word);
+            return head?.role === "kind" ? head.kind : undefined;
+        };
+        assert.equal(kindAt("desc"), description);
+        assert.equal(kindAt("description"), description);
+        assert.equal(kindAt("expansion"), expansion);
+        assert.equal(HEADS.get("animation")?.role, "column");
+        assert.equal(HEADS.get("mechanics")?.role, "column");
     });
 
     it("keeps most kind words off the top level, where the column is the noun", () => {
@@ -396,6 +426,25 @@ describe("the declaration checks", () => {
         });
         assert.equal(problems.length, 1);
         assert.match(problems[0], /"chain" of kind model\.fresh shadows the top-level word of kind fx\.chain/);
+    });
+
+    it("fires when the fold rewrites a declared word whose folded form no alias catches", () => {
+        // Input words arrive folded, and the fold rewrites regional spellings — a declared `armour` can never
+        // arrive as itself. The guard is what keeps the British house spellings honest about needing their alias.
+        const problems = problemsWith({
+            column: modelColumn, word: "armour",
+            hint: "a deliberately unreachable word, for the check", props: {},
+        });
+        assert.equal(problems.length, 1);
+        assert.match(problems[0], /"armour" of kind model\.armour is unreachable: input folds to "armor"/);
+    });
+
+    it("accepts the same word once its folded form is an alias of the same declaration", () => {
+        const problems = problemsWith({
+            column: modelColumn, word: "armour", aliases: ["armor"],
+            hint: "the alias that keeps the word reachable, for the check", props: {},
+        });
+        assert.deepEqual(problems, []);
     });
 
     it("fires on an alias that repeats its own word, and on aliases with no word to spell", () => {

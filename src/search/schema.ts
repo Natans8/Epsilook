@@ -22,6 +22,7 @@ import type {Column} from "./columns";
 import {COLUMNS} from "./columns";
 import type {Kind, Prop} from "./kinds";
 import {KINDS, operatorsOf} from "./kinds";
+import {fold} from "./text-normalization";
 import {TYPES} from "./value-types";
 
 /**
@@ -82,6 +83,7 @@ export function schemaProblems(): string[] {
     // only match by equality would give the same digits a second meaning, so the check collects them all and allows
     // exactly one.
     const identityDoors: string[] = [];
+    const propNamespaces: Map<string, string>[] = [];
 
     for (const kind of KINDS.values()) {
         if (COLUMNS.get(kind.column.key) !== kind.column) {
@@ -104,6 +106,7 @@ export function schemaProblems(): string[] {
         }
 
         const propWords = new Map<string, string>();
+        propNamespaces.push(propWords);
         for (const [name, prop] of Object.entries(kind.props)) {
             const where = `${kind.id}.${name}`;
             claim(propWords, name, `property ${where}`);
@@ -123,6 +126,21 @@ export function schemaProblems(): string[] {
             problems.push(...propProblems(where, prop));
         }
     }
+
+    // Input words arrive folded, and the fold rewrites regional spellings — so a declared word the fold changes can
+    // never arrive as itself. It stays reachable only when its folded form is claimed by the same declaration, which
+    // is what an alias is for.
+    const reachable = (words: Map<string, string>): void => {
+        for (const [word, by] of words) {
+            const folded = fold(word);
+            if (folded !== word && words.get(folded) !== by) {
+                problems.push(`"${word}" of ${by} is unreachable: input folds to "${folded}" — declare that as an alias`);
+            }
+        }
+    };
+    reachable(topLevel);
+    for (const words of perColumn.values()) reachable(words);
+    for (const words of propNamespaces) reachable(words);
 
     // A scoped word may repeat across columns, because the column has been named by the time one is read — but it
     // may not shadow a top-level word, or the same spelling would ask two different questions depending on where it
@@ -251,6 +269,38 @@ export function buildSchema(): void {
  */
 export function kindsOf(column: Column): Kind[] {
     return [...KINDS.values()].filter((kind) => kind.column === column);
+}
+
+/**
+ * Resolves a word inside a column's scope to the kind it names, by its word or any alias.
+ *
+ * The scoped counterpart of {@link HEADS}: the uniqueness checks guarantee at most one kind answers, and a wordless
+ * kind is never a match, because it has no word for an alias to spell.
+ *
+ * @param column The column whose scope the word was read in.
+ * @param word The word, already folded.
+ * @returns The kind, or `undefined` when the column has none by that spelling.
+ */
+export function kindIn(column: Column, word: string): Kind | undefined {
+    for (const kind of KINDS.values()) {
+        if (kind.column !== column || kind.word === undefined) continue;
+        if (kind.word === word || (kind.aliases?.includes(word) ?? false)) return kind;
+    }
+    return undefined;
+}
+
+/**
+ * Resolves a word inside a kind's scope to the property it names, by its name or any alias.
+ *
+ * @param kind The kind whose scope the word was read in.
+ * @param word The word, already folded.
+ * @returns The property's principal name — what a reference and every printing surface carry — or `undefined`.
+ */
+export function propIn(kind: Kind, word: string): string | undefined {
+    for (const [name, prop] of Object.entries(kind.props)) {
+        if (name === word || (prop.aliases?.includes(word) ?? false)) return name;
+    }
+    return undefined;
 }
 
 buildSchema();

@@ -20,6 +20,7 @@ import type {Kind, Prop} from "../src/search/kinds";
 import {hintOf, KINDS, operatorsOf} from "../src/search/kinds";
 import type {Operator} from "../src/search/operators";
 import {CLAUSE_OPERATORS, OPERATORS} from "../src/search/operators";
+import type {Head} from "../src/search/schema";
 import {HEADS, kindsOf} from "../src/search/schema";
 import {flag} from "../src/search/value-types";
 
@@ -148,11 +149,31 @@ function showKind(kind: Kind): void {
     }
 }
 
+/** The spelling a head prints — an alias resolves here, and every visible surface shows this one. */
+function principalOf(head: Head): string {
+    if (head.role === "column") return head.column.key;
+    if (head.role === "kind") return head.kind.word ?? head.kind.column.key;
+    return head.prop.prefix ?? head.name;
+}
+
 /** Prints every top-level word, then the plain-search roster. */
 function showRosters(): void {
-    const words = [...HEADS.keys()].toSorted();
+    // The roster counts words, not spellings: an alias is a way in, not a new question, so it is listed apart.
+    const isPrincipal = (word: string): boolean => {
+        const head = HEADS.get(word);
+        return head !== undefined && principalOf(head) === word;
+    };
+    const words = [...HEADS.keys()].filter(isPrincipal).toSorted();
+    const aliases = [...HEADS.keys()].filter((word) => !isPrincipal(word)).toSorted();
     console.log(`\nTOP-LEVEL WORDS — every word that opens a tag (${String(words.length)})\n`);
     console.log(`  ${words.join("  ")}`);
+    if (aliases.length > 0) {
+        const spelt = aliases.map((word) => {
+            const head = HEADS.get(word);
+            return head === undefined ? word : `${word} → ${principalOf(head)}`;
+        });
+        console.log(`\n  also spelled:  ${spelt.join("  ")}`);
+    }
 
     console.log("\nPLAIN SEARCH — what a bare word reaches, best tier first\n");
     const rows: { tier: number; line: string }[] = [];
