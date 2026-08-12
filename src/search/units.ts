@@ -237,6 +237,56 @@ export function parseNumber(spec: NumericSpec): (text: string) => number | null 
 }
 
 /**
+ * A notation with its per-number discriminators lifted, for reading a range's bounds as one notation: the
+ * bare-number threshold opens, and a required sign becomes optional — `(-50)-10` means two changes, not a change
+ * and a factor. A refused sign stays refused, because it is the notation's identity rather than a classifier.
+ */
+function relaxed(notation: Notation): Notation {
+    const bare = typeof notation.bare === "object" ? "any" : notation.bare;
+    const sign = notation.sign === "required" ? "optional" : notation.sign;
+    return {...notation, bare, sign};
+}
+
+/**
+ * Builds the pair reader for one numeric type: a range's two bounds read in ONE notation.
+ *
+ * A lone bare number is classified by its size, but a range's bounds must agree — `10-90` read independently would
+ * be a factor and a proportion, an inverted nonsense range. So the bounds read together: a notation that accepts
+ * both as declared wins outright, and where only the bare-number threshold splits them, the larger-magnitude bound
+ * classifies the pair — the threshold classifies sizes, so the range's furthest point speaks for it. A bound that
+ * carries its symbol is never reinterpreted: a written unit is what it says, and a pair no single notation can
+ * read returns `null` for the caller to read bound by bound.
+ *
+ * @param spec The numeric spec.
+ * @returns A function reading two bound texts to two stored values, or `null`.
+ */
+export function parseNumberPair(spec: NumericSpec): (lo: string, hi: string) => readonly [number, number] | null {
+    const all = [spec.display, ...(spec.accepts ?? [])];
+    const strict = all.map((notation) => readNotation(notation, spec.storage));
+    const lifted = all.map((notation) => readNotation(relaxed(notation), spec.storage));
+
+    return (lo: string, hi: string): readonly [number, number] | null => {
+        const l = fold(lo.trim());
+        const h = fold(hi.trim());
+        if (l === "" || h === "") return null;
+
+        for (const read of strict) {
+            const a = read(l);
+            const b = read(h);
+            if (a !== null && b !== null) return [a, b];
+        }
+
+        const larger = Math.abs(Number(l)) >= Math.abs(Number(h)) ? l : h;
+        for (let i = 0; i < all.length; i++) {
+            const a = lifted[i](l);
+            const b = lifted[i](h);
+            if (a !== null && b !== null && strict[i](larger) !== null) return [a, b];
+        }
+        return null;
+    };
+}
+
+/**
  * Builds the formatter for one numeric type.
  *
  * @param spec The numeric spec.

@@ -21,7 +21,7 @@ import type {Operator} from "./operators";
 import {anyOf, contains, exact, glob, OPERATORS, ORDERING, present, regex} from "./operators";
 import {fold, squash} from "./text-normalization";
 import type {Notation, NumericSpec} from "./units";
-import {formatNumber, parseNumber} from "./units";
+import {formatNumber, parseNumber, parseNumberPair} from "./units";
 
 /**
  * What a parsed value may be.
@@ -105,6 +105,13 @@ export interface AxisType<V extends Value = Value> {
      * string, so a quantity refuses one while a worded type reads it. Implied by declaring notations.
      */
     readonly quantity?: boolean;
+
+    /**
+     * Reads a range's two bounds as one coherent notation — `10-90` must not read half factor, half proportion.
+     * Declared by types with more than one way to write a bare number; a `null` sends the caller to `parse`,
+     * bound by bound, which is the right reading when a bound carries its own symbol.
+     */
+    parsePair?(this: void, lo: string, hi: string): readonly [V, V] | null;
 
     readonly ui: Affordance;
 }
@@ -294,6 +301,7 @@ function numeric(spec: NumericSpec & { name: string; hint: string; ui?: Affordan
         name: spec.name,
         storage: spec.storage,
         parse: parseNumber(spec),
+        parsePair: parseNumberPair(spec),
         format: formatNumber(spec),
         accepts: [exact, present, anyOf, ...ORDERING],
         notations: [spec.display, ...(spec.accepts ?? [])],

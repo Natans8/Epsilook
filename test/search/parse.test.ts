@@ -199,6 +199,43 @@ describe("binds and their values", () => {
         assert.deepEqual(valueOf(ok("scale:50")), {op: "exact", operand: {type: "percentChange", value: -50}});
     });
 
+    it("a range's bare bounds read in ONE notation, the larger bound classifying the pair", () => {
+        const range = (q: string): unknown => valueOf(ok(q));
+        assert.deepEqual(range("scale:10-90"), {
+            op: "range",
+            lo: {type: "percentChange", value: -90},
+            hi: {type: "percentChange", value: -10},
+        });
+        assert.deepEqual(range("scale:2-5"), {
+            op: "range",
+            lo: {type: "percentChange", value: 100},
+            hi: {type: "percentChange", value: 400},
+        });
+        assert.deepEqual(range("scale:8-12"), {
+            op: "range",
+            lo: {type: "percentChange", value: -92},
+            hi: {type: "percentChange", value: -88},
+        });
+        assert.deepEqual(range("scale:(-50)-10"), {
+            op: "range",
+            lo: {type: "percentChange", value: -50},
+            hi: {type: "percentChange", value: 10},
+        });
+    });
+
+    it("a written unit is what it says: symbol bounds keep their own notations", () => {
+        assert.deepEqual(valueOf(ok("scale:x2-x5")), {
+            op: "range",
+            lo: {type: "percentChange", value: 100},
+            hi: {type: "percentChange", value: 400},
+        });
+        assert.deepEqual(valueOf(ok("scale:x2-50")), {
+            op: "range",
+            lo: {type: "percentChange", value: 100},
+            hi: {type: "percentChange", value: -50},
+        });
+    });
+
     it("exact and a pattern cannot combine, and the fix drops the anchor", () => {
         const [error] = invalid("name:=Fire*");
         assert.match(error.message, /exact and a pattern/);

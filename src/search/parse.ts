@@ -1298,7 +1298,17 @@ class Parser {
             if (lo === GRAMMAR.wildcard && hi !== GRAMMAR.wildcard) return openBound(hi, "lte");
             if (hi === GRAMMAR.wildcard && lo !== GRAMMAR.wildcard) return openBound(lo, "gte");
             for (const type of prop.types) {
-                if (!accepts(type, "range") || !type.parse) continue;
+                if (!accepts(type, "range")) continue;
+                // Bounds written without units read together, in one notation — never half factor, half proportion.
+                const pair = type.parsePair?.(lo, hi);
+                if (pair !== null && pair !== undefined) {
+                    return done({
+                        op: "range",
+                        lo: {type: type.name, value: pair[0]},
+                        hi: {type: type.name, value: pair[1]},
+                    });
+                }
+                if (!type.parse) continue;
                 const a = type.parse(lo);
                 const b = type.parse(hi);
                 if (a !== null && b !== null) {
