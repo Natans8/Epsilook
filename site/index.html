@@ -41,7 +41,7 @@
           href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
     <!-- bump ?v= on every deploy that touches the css or the bundle's sources,
          or browsers keep stale copies (python tools/bump.py does both spots) -->
-    <link rel="stylesheet" href="css/app.css?v=20260812g">
+    <link rel="stylesheet" href="css/app.css?v=20260812h">
     <script>
         // Replay the stored theme before the first paint, so a light theme
         // never flashes dark. Only that: the picker, the default and the
@@ -366,8 +366,8 @@
                     </th>
                     <th data-sort="name" class="c-name" aria-sort="none">
                         <button type="button"
-                                title="The spell's name, with the Epsilon commands for it underneath&#10;Click: sort by name">
-                            Name <span class="arrow"></span></button>
+                                title="The spell itself — name, how it casts, and the Epsilon commands for it&#10;Click: sort by name">
+                            Spell <span class="arrow"></span></button>
                     </th>
                     <th data-sort="models" class="c-models" aria-sort="none">
                         <button type="button"
@@ -456,6 +456,6 @@
 <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
 <!-- the whole app: esbuild bundles src/**/*.ts into this one file
      (tools/build.mjs) — module order lives in the import graph now -->
-<script src="js/app.js?v=20260812g"></script>
+<script src="js/app.js?v=20260812h"></script>
 </body>
 </html>

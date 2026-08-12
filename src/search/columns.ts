@@ -1,10 +1,9 @@
 /**
  * @file The result columns, and the words that reach them in a query.
  *
- * A column is a source of rows and the results column that renders them. Where a column is a useful thing to ask
- * about as a whole -- "has any model row" -- its key is also a query head. Where it is not, the column declines the
- * head and its kinds own the words instead, which is why a spell's name is reached as `name:` rather than through
- * something invented to avoid a collision.
+ * A column is a source of rows and the results column that renders them. Its key is also a query head, reaching
+ * every row in the column at once; a kind's own word is the narrower door, which is why a spell's name is reached
+ * as `name:` rather than through something invented to avoid a collision.
  */
 
 export interface Column {
@@ -18,8 +17,8 @@ export interface Column {
     /**
      * Whether the key is also a query head, reaching every row in the column.
      *
-     * Defaults to true. Declined where asking about the column as a whole is not a question anyone has: every spell
-     * has a name, so `name:*` would select everything, and the word is better spent on the kind.
+     * Defaults to true. A column may decline where asking about it as a whole is not a question anyone has, leaving
+     * the key free and the words to its kinds. Every current column keeps it.
      */
     readonly head?: boolean;
 }
@@ -34,12 +33,14 @@ export function defineColumn(column: Column): Column {
 }
 
 
-/** A spell's name, description and icon. Declines a head: its kinds own `name`, `desc` and `icon`. */
-export const textColumn = defineColumn({
-    key: "text",
-    label: "Name",
-    hint: "what the spell is called, what it says it does, and its icon",
-    head: false,
+/**
+ * The spell itself: its name, description, icon, and how it goes off. The head is total — every spell has a name —
+ * so it is answered when asked and never offered; the kinds' words are how a reader actually arrives.
+ */
+export const spellColumn = defineColumn({
+    key: "spell",
+    label: "Spell",
+    hint: "the spell itself — its name, what it says it does, its icon, and how it casts",
 });
 
 /** A spell's number and the expansion it arrived in. */

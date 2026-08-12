@@ -23,10 +23,10 @@ describe("the shipped schema", () => {
         // Chipless search is a ranked union of the properties that opt in, derived from the declarations, so it is not
         // a column and has no rows of its own.
         assert.deepEqual([...COLUMNS.keys()],
-            ["text", "id", "model", "sound", "anim", "fx", "mech"]);
+            ["spell", "id", "model", "sound", "anim", "fx", "mech"]);
     });
 
-    it("names every kind `column.word`, so an id cannot drift from its word", () => {
+    it("derives every kind id as `column.word`, so an id cannot exist apart from its word", () => {
         for (const kind of KINDS.values()) {
             assert.equal(kind.id, `${kind.column.key}.${kind.word ?? kind.column.key}`);
         }
@@ -59,13 +59,13 @@ describe("the shipped schema", () => {
             "`attach` must stay free for the attachment property to claim");
     });
 
-    it("lets the text column decline a head so its kinds own the obvious words", () => {
-        // Every spell has a name, so a head over the whole column would select everything. The word is better spent on
-        // the kind a reader means.
-        assert.equal(HEADS.has("text"), false);
+    it("gives the spell column a head, while its kinds keep the obvious words", () => {
+        // `spell:*` is total — every spell has a name — so the head is answered when asked, never offered. The kinds'
+        // words stay the doors a reader actually types.
+        assert.equal(HEADS.get("spell")?.role, "column");
         assert.equal(HEADS.get("name")?.role, "kind");
-        assert.deepEqual(kindsOf(COLUMNS.get("text")!).map((k) => k.word),
-            ["name", "desc", "icon"]);
+        assert.deepEqual(kindsOf(COLUMNS.get("spell")!).map((k) => k.word),
+            ["name", "desc", "icon", "delivery"]);
     });
 
     it("leaves a column's same-named kind word-less, for the same reason", () => {
@@ -85,16 +85,17 @@ describe("the shipped schema", () => {
         }
     });
 
-    it("declares delivery as one kind, whose valueless pieces are flag properties", () => {
+    it("declares delivery as one spell-column kind, whose valueless pieces are flag properties", () => {
         // The pack ships delivery as one record per spell, and the pieces qualify each other: a channel's length,
-        // whether moving breaks it, whether the caster can act during it.
-        for (const old of ["casttime", "channeled", "instant", "unbreakable", "unhindered"]) {
-            assert.equal(KINDS.has(`mech.${old}`), false, `${old} should be part of mech.delivery`);
+        // whether moving breaks it, whether the caster can act during it. It lives in the spell column because the
+        // app draws it under the spell's name, and there is no instant flag: `cast:instant` is the one spelling.
+        for (const old of ["delivery", "casttime", "channeled", "instant", "unbreakable", "unhindered"]) {
+            assert.equal(KINDS.has(`mech.${old}`), false, `${old} should be part of spell.delivery`);
         }
-        const props = KINDS.get("mech.delivery")!.props;
+        const props = KINDS.get("spell.delivery")!.props;
         assert.deepEqual(Object.keys(props),
-            ["cast", "channel", "instant", "breaksmove", "unbreakable", "unhindered"]);
-        for (const name of ["instant", "breaksmove", "unbreakable", "unhindered"]) {
+            ["cast", "channel", "breaksmove", "unbreakable", "unhindered"]);
+        for (const name of ["breaksmove", "unbreakable", "unhindered"]) {
             assert.deepEqual(props[name].types, [flag], name);
         }
         assert.equal(HEADS.get("cast")?.role, "prop");
@@ -166,7 +167,7 @@ describe("the shipped schema", () => {
     it("reads only the name half of a named thing in chipless search", () => {
         const kit = KINDS.get("sound.sound")!.props.kit;
         assert.deepEqual(kit.plain, [text]);
-        assert.equal(KINDS.get("text.icon")!.props.fid.plain, undefined);
+        assert.equal(KINDS.get("spell.icon")!.props.fid.plain, undefined);
     });
 
     it("records which types no property uses yet", () => {
@@ -208,7 +209,7 @@ describe("operatorsOf", () => {
 });
 
 describe("parseValue and formatValue", () => {
-    const delivery = () => KINDS.get("mech.delivery")!;
+    const delivery = () => KINDS.get("spell.delivery")!;
 
     it("reads a sentinel word before any notation, so it cannot be misread as a quantity", () => {
         assert.deepEqual(parseValue(delivery().props.channel, "unlimited"),
@@ -273,7 +274,7 @@ describe("the declaration checks", () => {
 
     it("fires when a global kind claims a word another global declaration has", () => {
         const problems = problemsWith({
-            id: "model.chain", column: modelColumn, word: "chain", global: true,
+            column: modelColumn, word: "chain", global: true,
             hint: "a deliberate collision, for the check", props: {},
         });
         assert.equal(problems.length, 1);
@@ -285,7 +286,7 @@ describe("the declaration checks", () => {
         // The column has already been named by the time a scoped word is read, so `model:dissolve` and `fx:dissolve`
         // could only ever mean their own column's kind. Only the top-level namespace is shared.
         const problems = problemsWith({
-            id: "model.dissolve", column: modelColumn, word: "dissolve",
+            column: modelColumn, word: "dissolve",
             hint: "a deliberate reuse, for the check", props: {},
         });
         assert.deepEqual(problems, []);
@@ -295,7 +296,7 @@ describe("the declaration checks", () => {
         // `chain` opens a tag at the top level, so a column-scoped kind of the same name would make one spelling ask
         // two different questions depending on where it sits.
         const problems = problemsWith({
-            id: "model.chain", column: modelColumn, word: "chain",
+            column: modelColumn, word: "chain",
             hint: "a deliberate shadow, for the check", props: {},
         });
         assert.equal(problems.length, 1);
@@ -305,7 +306,7 @@ describe("the declaration checks", () => {
     it("fires when a global kind claims a column's key", () => {
         // Both appear at the start of a clause, so both are a head and they share one namespace.
         const problems = problemsWith({
-            id: "model.sound", column: modelColumn, word: "sound", global: true,
+            column: modelColumn, word: "sound", global: true,
             hint: "a deliberate collision, for the check", props: {},
         });
         assert.match(problems[0], /"sound" is claimed by both column sound/);
@@ -313,16 +314,16 @@ describe("the declaration checks", () => {
 
     it("fires when a property prefix claims a word another property holds", () => {
         const problems = problemsWith({
-            id: "model.timed", column: modelColumn, word: "timed",
+            column: modelColumn, word: "timed",
             hint: "a deliberate collision, for the check",
             props: {bar: {types: [text], prefix: "cast"}},
         });
-        assert.match(problems[0], /"cast" is claimed by both property mech\.delivery\.cast/);
+        assert.match(problems[0], /"cast" is claimed by both property spell\.delivery\.cast/);
     });
 
     it("fires on a global kind with no word to be global with", () => {
         const problems = problemsWith({
-            id: "model.model", column: modelColumn, global: true,
+            column: modelColumn, global: true,
             hint: "a deliberately wordless global kind", props: {},
         });
         assert.match(problems[0], /is global but has no word/);
@@ -330,7 +331,7 @@ describe("the declaration checks", () => {
 
     it("fires when chipless search reads a notation the property does not declare", () => {
         const problems = problemsWith({
-            id: "model.leaky", column: modelColumn, word: "leaky",
+            column: modelColumn, word: "leaky",
             hint: "a deliberately inconsistent property",
             props: {file: {types: [path], plain: [text], tier: 2}},
         });
@@ -341,7 +342,7 @@ describe("the declaration checks", () => {
         // A bare number in chipless search means the spell's own id; a second identity door would give the same
         // digits a second answer.
         const problems = problemsWith({
-            id: "model.numbered", column: modelColumn, word: "numbered",
+            column: modelColumn, word: "numbered",
             hint: "a deliberate second identity door",
             props: {ref: {types: [id], plain: [id], tier: 1}},
         });
@@ -352,7 +353,7 @@ describe("the declaration checks", () => {
 
     it("throws on a broken schema rather than building a partial one", () => {
         const clash = defineKind({
-            id: "model.chain", column: modelColumn, word: "chain", global: true,
+            column: modelColumn, word: "chain", global: true,
             hint: "a deliberate collision, for the check", props: {},
         });
         try {
@@ -363,19 +364,11 @@ describe("the declaration checks", () => {
         }
     });
 
-    it("fires on a kind id that does not match its column and word", () => {
-        assert.throws(
-            () => defineKind({
-                id: "wrong.name", column: modelColumn, word: "spurious", hint: "x", props: {},
-            }),
-            /should be named "model\.spurious"/);
-    });
-
     it("fires on notations that share no operator beyond presence", () => {
         // Both were declared to be matched and neither can be: a flag answers only whether a value exists, so pairing
         // it with a notation that matches text leaves a property nothing can ask about its value.
         const problems = problemsWith({
-            id: "model.unusable", column: modelColumn, word: "unusable",
+            column: modelColumn, word: "unusable",
             hint: "a deliberately unusable property",
             props: {both: {types: [flag, text]}},
         });
@@ -385,7 +378,7 @@ describe("the declaration checks", () => {
 
     it("allows a lone type that offers only presence, which is what a flag is", () => {
         const problems = problemsWith({
-            id: "model.marker", column: modelColumn, word: "marker",
+            column: modelColumn, word: "marker",
             hint: "a valueless property", props: {bit: {types: [flag]}},
         });
         assert.deepEqual(problems, []);
@@ -393,7 +386,7 @@ describe("the declaration checks", () => {
 
     it("fires on a property with no type at all", () => {
         const problems = problemsWith({
-            id: "model.typeless", column: modelColumn, word: "typeless",
+            column: modelColumn, word: "typeless",
             hint: "a deliberately typeless property",
             props: {nothing: {types: []}},
         });
@@ -403,7 +396,7 @@ describe("the declaration checks", () => {
     it("fires on a plain notation that cannot answer a bare token", () => {
         // A flag answers presence only, so joining the chipless union would put it there matching nothing.
         const problems = problemsWith({
-            id: "model.unsearchable", column: modelColumn, word: "unsearchable",
+            column: modelColumn, word: "unsearchable",
             hint: "a deliberately unsearchable property",
             props: {bit: {types: [flag], plain: [flag], tier: 0}},
         });
@@ -414,7 +407,7 @@ describe("the declaration checks", () => {
     it("fires on sentinels with no numeric notation to hold them", () => {
         // A sentinel names a stored number, so a property of pure text has nowhere to store one.
         const problems = problemsWith({
-            id: "model.worded", column: modelColumn, word: "worded",
+            column: modelColumn, word: "worded",
             hint: "a deliberately misplaced sentinel",
             props: {label: {types: [text], sentinels: {0: "none"}}},
         });
@@ -423,12 +416,12 @@ describe("the declaration checks", () => {
 
     it("fires when plain and tier disagree in either direction", () => {
         assert.match(problemsWith({
-            id: "model.untiered", column: modelColumn, word: "untiered",
+            column: modelColumn, word: "untiered",
             hint: "plain without a tier", props: {file: {types: [path], plain: [path]}},
         })[0], /is plain but declares no relevance tier/);
 
         assert.match(problemsWith({
-            id: "model.stray", column: modelColumn, word: "stray",
+            column: modelColumn, word: "stray",
             hint: "a tier without plain", props: {file: {types: [path], tier: 2}},
         })[0], /declares a relevance tier but is not plain/);
     });

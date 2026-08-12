@@ -39,7 +39,7 @@
  * TODO: declare the pill and the incomplete-chip placeholder once the renderer and the query bar exist to read them.
  */
 import type {Column} from "./columns";
-import {animColumn, fxColumn, idColumn, mechColumn, modelColumn, textColumn, soundColumn} from "./columns";
+import {animColumn, fxColumn, idColumn, mechColumn, modelColumn, spellColumn, soundColumn} from "./columns";
 import {fold} from "./text-normalization";
 import type {Sentinels} from "./units";
 import type {AxisType, Value} from "./value-types";
@@ -115,7 +115,7 @@ export interface Prop {
 }
 
 export interface Kind {
-    /** Stable identity, formed as `column.word`. Never shown to a reader. */
+    /** Stable identity, derived by {@link defineKind} as `column.word`. Never declared, never shown to a reader. */
     readonly id: string;
 
     /** The column this kind's rows appear in. A reference rather than a key, so a typo fails to compile. */
@@ -153,12 +153,9 @@ export interface Kind {
 /** Every declared kind, by id. */
 export const KINDS = new Map<string, Kind>();
 
-export function defineKind(kind: Kind): Kind {
+export function defineKind(spec: Omit<Kind, "id">): Kind {
+    const kind: Kind = {...spec, id: `${spec.column.key}.${spec.word ?? spec.column.key}`};
     if (KINDS.has(kind.id)) throw new Error(`kind "${kind.id}" already defined`);
-    const expected = `${kind.column.key}.${kind.word ?? kind.column.key}`;
-    if (kind.id !== expected) {
-        throw new Error(`kind "${kind.id}" should be named "${expected}" — id is column.word`);
-    }
     KINDS.set(kind.id, kind);
     return kind;
 }
@@ -262,23 +259,23 @@ const target = (): Prop => ({
 /** A point on a model that something attaches to. */
 const attachPoint = (hint: string): Prop => ({types: [enumeration], hint});
 
-/* Names: what a spell is called, says and shows. The column declines a head, so these three words are top-level. */
+/* The spell itself: what it is called, says and shows, and how it goes off. Name, desc and icon are top-level words. */
 
 export const name = defineKind({
-    id: "text.name", column: textColumn, word: "name", global: true,
+    column: spellColumn, word: "name", global: true,
     hint: "the spell's name",
     props: {text: corpus(TIER.name, text)},
 });
 
 export const description = defineKind({
-    id: "text.desc", column: textColumn, word: "desc", global: true,
+    column: spellColumn, word: "desc", global: true,
     hint: "what the spell says it does — its in-game description",
     props: {text: corpus(TIER.description, text)},
 });
 
 /** The art on a spell's button. The file id stays out of chipless search, where a lone number means a spell id. */
 export const icon = defineKind({
-    id: "text.icon", column: textColumn, word: "icon", global: true,
+    column: spellColumn, word: "icon", global: true,
     hint: "the art on the spell's button — 272,900 spells share 9,846 icons",
     props: {
         name: corpus(TIER.asset, text),
@@ -286,17 +283,47 @@ export const icon = defineKind({
     },
 });
 
+/**
+ * How the spell goes off. One row per spell: at once, behind a cast bar, as a channel, or both bar and channel.
+ *
+ * One kind rather than five, because the pack ships delivery as one record and the pieces qualify each other: a
+ * channel's duration, whether moving breaks it, whether the caster can act during it. The valueless pieces are flag
+ * properties — the flag type's first customers — and a set flag contributes its own word to the row's matchable
+ * content, so `spell:breaksmove` and `spell:unbreakable` stay plain words. The two lengths carry the doors a reader
+ * types: `cast:>2`, `channel:unlimited` — and `cast:instant` is the one spelling for a spell with no bar at all.
+ */
+export const delivery = defineKind({
+    column: spellColumn, word: "delivery",
+    hint: "how the spell goes off — at once, behind a cast bar, or as a channel",
+    props: {
+        cast: {
+            types: [seconds], prefix: "cast", sentinels: {0: "instant"},
+            hint: "the cast bar's length in seconds, or instant for no bar at all"
+        },
+        channel: {
+            types: [seconds], prefix: "channel", sentinels: {[-1]: "unlimited"},
+            hint: "the channel's length in seconds, or unlimited"
+        },
+        breaksmove: {types: [flag], hint: "the cast or channel breaks if the caster moves"},
+        unbreakable: {types: [flag], hint: "the channel persists — moving and acting do not break it"},
+        unhindered: {
+            types: [flag],
+            hint: "the caster can act during the channel (the usual interrupts still break it)"
+        },
+    },
+});
+
 /* Identity: the spell's number, and when it arrived. */
 
 /** A spell's own number. Reached through the column head; the kind needs no separate word. */
 export const spellId = defineKind({
-    id: "id.id", column: idColumn,
+    column: idColumn,
     hint: "the spell's own number — what .cast takes",
     props: {value: corpus(TIER.id, id)},
 });
 
 export const expansion = defineKind({
-    id: "id.xpac", column: idColumn, word: "xpac", global: true,
+    column: idColumn, word: "xpac", global: true,
     hint: "the expansion that introduced it — legion, >wotlk, <=mop",
     props: {rung: of(ordinal)},
 });
@@ -304,7 +331,7 @@ export const expansion = defineKind({
 /* Models: what a spell draws. */
 
 export const missile = defineKind({
-    id: "model.missile", column: modelColumn, word: "missile", global: true, group: "projectile",
+    column: modelColumn, word: "missile", global: true, group: "projectile",
     hint: "a projectile model in flight",
     props: {
         file: corpus(TIER.asset, path),
@@ -319,7 +346,7 @@ export const missile = defineKind({
 });
 
 export const barrage = defineKind({
-    id: "model.barrage", column: modelColumn, word: "barrage", group: "projectile",
+    column: modelColumn, word: "barrage", group: "projectile",
     hint: "a volley of models fired at once",
     props: {
         file: corpus(TIER.asset, path),
@@ -329,13 +356,13 @@ export const barrage = defineKind({
 });
 
 export const ground = defineKind({
-    id: "model.ground", column: modelColumn, word: "ground", group: "world",
+    column: modelColumn, word: "ground", group: "world",
     hint: "a ground or area model laid on the world",
     props: {file: corpus(TIER.asset, path), target: target()},
 });
 
 export const attached = defineKind({
-    id: "model.attached", column: modelColumn, word: "attached", group: "worn",
+    column: modelColumn, word: "attached", group: "worn",
     hint: "a model stuck to the caster or the target",
     props: {
         file: corpus(TIER.asset, path),
@@ -345,13 +372,13 @@ export const attached = defineKind({
 });
 
 export const trail = defineKind({
-    id: "model.trail", column: modelColumn, word: "trail", group: "worn",
+    column: modelColumn, word: "trail", group: "worn",
     hint: "a weapon trail that follows a swing",
     props: {file: corpus(TIER.asset, path), target: target()},
 });
 
 export const display = defineKind({
-    id: "model.display", column: modelColumn, word: "display", group: "worn",
+    column: modelColumn, word: "display", group: "worn",
     hint: "a creature display model attached to the caster or target",
     props: {
         id: {types: [id], hint: "the CreatureDisplayInfo id"},
@@ -362,7 +389,7 @@ export const display = defineKind({
 });
 
 export const item = defineKind({
-    id: "model.item", column: modelColumn, word: "item", group: "worn",
+    column: modelColumn, word: "item", group: "worn",
     hint: "an in-game item's model, held by the caster",
     props: {
         file: corpus(TIER.asset, path),
@@ -373,7 +400,7 @@ export const item = defineKind({
 
 /** A weapon the caster already carries, identified by its slot rather than by a model file. */
 export const equipped = defineKind({
-    id: "model.equipped", column: modelColumn, word: "equipped", group: "worn",
+    column: modelColumn, word: "equipped", group: "worn",
     hint: "a weapon the caster already has — main hand, off hand, ranged or ammo",
     props: {
         slot: {types: [enumeration], hint: "which slot — main hand, off hand, ranged, ammo"},
@@ -382,7 +409,7 @@ export const equipped = defineKind({
 });
 
 export const mount = defineKind({
-    id: "model.mount", column: modelColumn, word: "mount", group: "ridden",
+    column: modelColumn, word: "mount", group: "ridden",
     hint: "the mount the spell puts you on",
     props: {
         name: corpus(TIER.asset, text),
@@ -395,7 +422,7 @@ export const mount = defineKind({
 
 /** A sound file, and the kit it belongs to. Reached through the column head. */
 export const sound = defineKind({
-    id: "sound.sound", column: soundColumn,
+    column: soundColumn,
     hint: "a sound file the spell plays",
     props: {
         file: corpus(TIER.asset, path),
@@ -407,7 +434,7 @@ export const sound = defineKind({
 /* Animations: how a character moves. */
 
 export const animKit = defineKind({
-    id: "anim.kit", column: animColumn, word: "kit", group: "played",
+    column: animColumn, word: "kit", group: "played",
     hint: "an animation played through an AnimKit — the numbered bundles",
     props: {
         id: {types: [id], hint: "the AnimKit's own id"},
@@ -418,7 +445,7 @@ export const animKit = defineKind({
 });
 
 export const loose = defineKind({
-    id: "anim.loose", column: animColumn, word: "loose", group: "played",
+    column: animColumn, word: "loose", group: "played",
     hint: "an animation the spell's visual kit plays directly, in no AnimKit",
     props: {
         anim: corpus(TIER.asset, enumeration),
@@ -428,7 +455,7 @@ export const loose = defineKind({
 });
 
 export const replace = defineKind({
-    id: "anim.replace", column: animColumn, word: "replace", group: "replaced",
+    column: animColumn, word: "replace", group: "replaced",
     hint: "an animation the spell swaps for another — Stand becomes StealthStand",
     props: {
         from: {
@@ -445,13 +472,13 @@ export const replace = defineKind({
 
 /** Holds a character's pose by suppressing the spell's own animation. */
 export const pose = defineKind({
-    id: "anim.pose", column: animColumn, word: "pose", group: "replaced",
+    column: animColumn, word: "pose", group: "replaced",
     hint: "holds the character's pose — the spell suppresses its own animation",
     props: {},
 });
 
 export const passenger = defineKind({
-    id: "anim.passenger", column: animColumn, word: "passenger", group: "vehicle",
+    column: animColumn, word: "passenger", group: "vehicle",
     hint: "what a rider plays entering, sitting in and leaving a seat",
     props: {
         enter: {
@@ -472,7 +499,7 @@ export const passenger = defineKind({
 /* Effects: what a spell looks like. */
 
 export const chain = defineKind({
-    id: "fx.chain", column: fxColumn, word: "chain", global: true, group: "beam",
+    column: fxColumn, word: "chain", global: true, group: "beam",
     hint: "a chain or beam effect held between two points",
     props: {
         texture: corpus(TIER.asset, path),
@@ -484,7 +511,7 @@ export const chain = defineKind({
 });
 
 export const dissolve = defineKind({
-    id: "fx.dissolve", column: fxColumn, word: "dissolve", group: "overlay",
+    column: fxColumn, word: "dissolve", group: "overlay",
     hint: "a dissolve or materialise effect",
     props: {
         attach: attachPoint("where on the body it plays"),
@@ -500,7 +527,7 @@ export const dissolve = defineKind({
  * a reader can see.
  */
 export const shadowy = defineKind({
-    id: "fx.shadowy", column: fxColumn, word: "shadowy", group: "overlay",
+    column: fxColumn, word: "shadowy", group: "overlay",
     hint: "a translucent shadow pass over the model",
     props: {
         attach: attachPoint("where on the body it plays"),
@@ -510,7 +537,7 @@ export const shadowy = defineKind({
 
 /** A material recolour that renders the model as a ghost. */
 export const ghost = defineKind({
-    id: "fx.ghost", column: fxColumn, word: "ghost", group: "overlay",
+    column: fxColumn, word: "ghost", group: "overlay",
     hint: "a ghost material swapped onto the model",
     props: {
         attach: attachPoint("where on the body it plays"),
@@ -520,7 +547,7 @@ export const ghost = defineKind({
 
 /** An edge glow or rim light around the model. */
 export const glow = defineKind({
-    id: "fx.glow", column: fxColumn, word: "glow", group: "overlay",
+    column: fxColumn, word: "glow", group: "overlay",
     hint: "an edge glow or rim light around the model",
     props: {
         colour: {types: [colour], hint: "the glow colour"},
@@ -530,7 +557,7 @@ export const glow = defineKind({
 
 /** A colour wash over the model. */
 export const tint = defineKind({
-    id: "fx.tint", column: fxColumn, word: "tint", group: "overlay",
+    column: fxColumn, word: "tint", group: "overlay",
     hint: "a colour wash over the model",
     props: {
         colour: {types: [colour], hint: "the colour applied"},
@@ -539,43 +566,43 @@ export const tint = defineKind({
 });
 
 export const transparency = defineKind({
-    id: "fx.transparency", column: fxColumn, word: "transparency", group: "overlay",
+    column: fxColumn, word: "transparency", group: "overlay",
     hint: "how see-through the model becomes",
     props: {percent: of(percent)},
 });
 
 export const desaturate = defineKind({
-    id: "fx.desaturate", column: fxColumn, word: "desaturate", group: "overlay",
+    column: fxColumn, word: "desaturate", group: "overlay",
     hint: "how much colour is drained from the model",
     props: {percent: of(percent)},
 });
 
 export const freeze = defineKind({
-    id: "fx.freeze", column: fxColumn, word: "freeze", group: "overlay",
+    column: fxColumn, word: "freeze", group: "overlay",
     hint: "freezes or petrifies the model in place",
     props: {},
 });
 
 export const camo = defineKind({
-    id: "fx.camo", column: fxColumn, word: "camo", group: "overlay",
+    column: fxColumn, word: "camo", group: "overlay",
     hint: "a camouflage or cloaking effect",
     props: {},
 });
 
 export const morph = defineKind({
-    id: "fx.morph", column: fxColumn, word: "morph", global: true, group: "transform",
+    column: fxColumn, word: "morph", global: true, group: "transform",
     hint: "a morph or transform aura — the caster becomes something else",
     props: {display: named("creature display", TIER.asset), target: target()},
 });
 
 export const shapeshift = defineKind({
-    id: "fx.shapeshift", column: fxColumn, word: "shapeshift", group: "transform",
+    column: fxColumn, word: "shapeshift", group: "transform",
     hint: "a shapeshift form the caster takes",
     props: {form: corpus(TIER.asset, enumeration)},
 });
 
 export const scale = defineKind({
-    id: "fx.scale", column: fxColumn, word: "scale", global: true, group: "transform",
+    column: fxColumn, word: "scale", global: true, group: "transform",
     hint: "a size change the aura applies",
     props: {
         amount: {
@@ -587,20 +614,20 @@ export const scale = defineKind({
 });
 
 export const summon = defineKind({
-    id: "fx.summon", column: fxColumn, word: "summon", global: true, group: "spawn",
+    column: fxColumn, word: "summon", global: true, group: "spawn",
     hint: "a creature the spell summons",
     props: {creature: named("summoned creature", TIER.asset), target: target()},
 });
 
 export const gameObject = defineKind({
-    id: "fx.object", column: fxColumn, word: "object", group: "spawn",
+    column: fxColumn, word: "object", group: "spawn",
     hint: "a gameobject the spell places — campfire, portal, banner, chest",
     props: {object: named("gameobject", TIER.asset), target: target()},
 });
 
 /** A full-screen effect. Searched by its textures; the effect-type words are not part of the vocabulary. */
 export const screen = defineKind({
-    id: "fx.screen", column: fxColumn, word: "screen", group: "screen",
+    column: fxColumn, word: "screen", group: "screen",
     hint: "a full-screen tint or overlay while the aura holds",
     props: {
         texture: corpus(TIER.asset, path),
@@ -610,7 +637,7 @@ export const screen = defineKind({
 
 /** The caster stays turned toward the target for the whole channel. */
 export const tracking = defineKind({
-    id: "fx.tracking", column: fxColumn, word: "tracking", group: "behaviour",
+    column: fxColumn, word: "tracking", group: "behaviour",
     hint: "caster stays facing the target for the whole channel",
     props: {},
 });
@@ -618,7 +645,7 @@ export const tracking = defineKind({
 /* Mechanics: what a spell does. A row here renders nothing; anything visible belongs to the effects column. */
 
 export const effect = defineKind({
-    id: "mech.effect", column: mechColumn, word: "effect", group: "action",
+    column: mechColumn, word: "effect", group: "action",
     hint: "one of the spell's effects — what it actually does",
     props: {
         name: {types: [enumeration], hint: "the effect's name — SCHOOL_DAMAGE, JUMP_DEST"},
@@ -627,7 +654,7 @@ export const effect = defineKind({
 });
 
 export const aura = defineKind({
-    id: "mech.aura", column: mechColumn, word: "aura", group: "action",
+    column: mechColumn, word: "aura", group: "action",
     hint: "an aura the spell applies — what it does while it holds",
     props: {
         name: {types: [enumeration], hint: "the aura's name — MOD_SCALE, MOD_INVISIBILITY"},
@@ -635,66 +662,35 @@ export const aura = defineKind({
     },
 });
 
-/**
- * How the spell goes off. One row per spell: at once, behind a cast bar, as a channel, or both bar and channel.
- *
- * One kind rather than five, because the pack ships delivery as one record and the pieces qualify each other: a
- * channel's duration, whether moving breaks it, whether the caster can act during it. The valueless pieces are flag
- * properties — the flag type's first customers — and a set flag contributes its own word to the row's matchable
- * content, so `mech:instant` and `mech:unbreakable` stay plain words. The two lengths carry the doors a reader
- * types: `cast:>2`, `channel:unlimited`.
- */
-export const delivery = defineKind({
-    id: "mech.delivery", column: mechColumn, word: "delivery", group: "delivery",
-    hint: "how the spell goes off — at once, behind a cast bar, or as a channel",
-    props: {
-        cast: {
-            types: [seconds], prefix: "cast", sentinels: {0: "instant"},
-            hint: "the cast bar's length in seconds, or instant for no bar at all"
-        },
-        channel: {
-            types: [seconds], prefix: "channel", sentinels: {[-1]: "unlimited"},
-            hint: "the channel's length in seconds, or unlimited"
-        },
-        instant: {types: [flag], hint: "goes off at once — no cast bar, no channel"},
-        breaksmove: {types: [flag], hint: "the cast or channel breaks if the caster moves"},
-        unbreakable: {types: [flag], hint: "the channel persists — moving and acting do not break it"},
-        unhindered: {
-            types: [flag],
-            hint: "the caster can act during the channel (the usual interrupts still break it)"
-        },
-    },
-});
-
 /* Spell-to-spell links, one kind per direction. */
 export const triggers = defineKind({
-    id: "mech.triggers", column: mechColumn, word: "triggers", global: true, group: "link",
+    column: mechColumn, word: "triggers", global: true, group: "link",
     hint: "another spell this one casts, ticks, procs or removes",
     props: {spell: named("spell it triggers")},
 });
 
 export const origin = defineKind({
-    id: "mech.origin", column: mechColumn, word: "origin", global: true, group: "link",
+    column: mechColumn, word: "origin", global: true, group: "link",
     hint: "a spell that casts, ticks, procs or removes this one",
     props: {spell: named("spell that triggers it")},
 });
 
 /** Where a spell refuses to cast. Named by area, since an area id is not a number a reader would know. */
 export const location = defineKind({
-    id: "mech.location", column: mechColumn, word: "location", global: true, group: "gate",
+    column: mechColumn, word: "location", global: true, group: "gate",
     hint: "where the spell refuses to cast — Epsilon enforces this gate on .cast",
     props: {area: of(text)},
 });
 
 /* Invisibility has two sides: what hides in a channel, and what can see into it. */
 export const invis = defineKind({
-    id: "mech.invis", column: mechColumn, word: "invis", group: "stealth",
+    column: mechColumn, word: "invis", group: "stealth",
     hint: "the invisibility channel the aura hides in",
     props: {channel: {types: [id], hint: "the channel's number"}},
 });
 
 export const detect = defineKind({
-    id: "mech.detect", column: mechColumn, word: "detect", group: "stealth",
+    column: mechColumn, word: "detect", group: "stealth",
     hint: "sees an invisibility channel",
     props: {
         channel: {types: [id], hint: "the channel it can see"},
@@ -703,7 +699,7 @@ export const detect = defineKind({
 });
 
 export const seat = defineKind({
-    id: "mech.seat", column: mechColumn, word: "seat", global: true, group: "vehicle",
+    column: mechColumn, word: "seat", global: true, group: "vehicle",
     hint: "a seat of the vehicle the caster becomes",
     props: {
         count: {types: [count], hint: "how many seats the vehicle has"},
@@ -712,7 +708,7 @@ export const seat = defineKind({
 });
 
 export const speed = defineKind({
-    id: "mech.speed", column: mechColumn, word: "speed", global: true, group: "movement",
+    column: mechColumn, word: "speed", global: true, group: "movement",
     hint: "a movement-speed change — run, mounted, swim, flight or all at once",
     props: {
         amount: {
@@ -725,13 +721,13 @@ export const speed = defineKind({
 });
 
 export const keybind = defineKind({
-    id: "mech.keybind", column: mechColumn, word: "keybind", group: "interface",
+    column: mechColumn, word: "keybind", group: "interface",
     hint: "a key that casts a spell while the aura holds",
     props: {key: of(text)},
 });
 
 export const debuff = defineKind({
-    id: "mech.debuff", column: mechColumn, word: "debuff", group: "interface",
+    column: mechColumn, word: "debuff", group: "interface",
     hint: "aura that shows in the red debuff frame",
     props: {},
 });
