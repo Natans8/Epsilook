@@ -309,6 +309,14 @@ describe("what each type refuses to parse", () => {
         assert.equal(text.parse!("133"), "133");
         assert.equal(path.parse!(">m"), ">m");
     });
+
+    it("folds a value to the declared casing on format, and only there", () => {
+        // The path corpus is all-lowercase (33,199 of 33,199 on 9.2.7), so that is how a path reads back.
+        assert.equal(path.format!("Spells/FEL_FIRE.M2"), "spells/fel_fire.m2");
+        assert.equal(path.parse!("Spells/FEL_FIRE.M2"), "Spells/FEL_FIRE.M2");
+        // Text declares no casing: name corpora are mixed-case, so a value keeps the case it was written with.
+        assert.equal(text.format!("Fireball"), "Fireball");
+    });
 });
 
 describe("defineType", () => {
@@ -334,6 +342,14 @@ describe("defineType", () => {
                 name: "spurious", storage: "string", accepts: [exact], hint: "x", ui: "text",
             }),
             /cannot parse or format one/);
+    });
+
+    it("rejects a casing on a type with no value to case", () => {
+        assert.throws(
+            () => defineType({
+                name: "spurious", storage: null, casing: "lower", accepts: [present], hint: "x", ui: "toggle",
+            }),
+            /carries no value to case/);
     });
 
     it("rejects notations declared without an order", () => {

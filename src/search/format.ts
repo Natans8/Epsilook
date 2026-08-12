@@ -52,16 +52,30 @@ function readingOf(operand: { text: string } | { type: string; value: Value }): 
 }
 
 /**
+ * Whether text is written as the display canonical or folded to lowercase for comparison.
+ *
+ * Case never distinguishes two queries — matching folds it — so {@link equivalent} compares the folded spelling
+ * while {@link formatQuery} keeps the case a value was written or stored with. Regex operands are the one
+ * exception: folding a pattern flips character classes (`\D` to `\d`), so patterns compare as written and rely on
+ * their own case-insensitive matching.
+ */
+type Casing = "display" | "folded";
+
+/**
  * Writes one operand: the text as carried, or the stored value in its property's spelling.
  *
  * @param operand The operand from a {@link ValueExpr}.
  * @param at The property the value belongs to, when the ask names one — it holds the sentinel words.
+ * @param casing Whether the text is folded for comparison.
  * @returns The canonical text.
  */
-function operandText(operand: { text: string } | { type: string; value: Value }, at?: PropRef): string {
-    if ("text" in operand) return operand.text;
-    if (at !== undefined) return formatValue(propOf(at), operand.value);
-    return TYPES.get(operand.type)?.format?.(operand.value) ?? String(operand.value);
+function operandText(
+    operand: { text: string } | { type: string; value: Value }, at?: PropRef, casing: Casing = "display",
+): string {
+    const text = "text" in operand ? operand.text
+        : at !== undefined ? formatValue(propOf(at), operand.value)
+            : TYPES.get(operand.type)?.format?.(operand.value) ?? String(operand.value);
+    return casing === "folded" ? text.toLowerCase() : text;
 }
 
 /** The phrase spelling of a text, its own escape and quote characters escaped. */
@@ -99,23 +113,25 @@ const COMPARISONS = {lt, lte, gt, gte} as const;
  *
  * @param value The expression.
  * @param at The property it binds, when known.
+ * @param casing Whether text operands are folded for comparison.
  * @returns The canonical text of the value, including any operator symbol.
  */
-function valueText(value: ValueExpr, at?: PropRef): string {
+function valueText(value: ValueExpr, at?: PropRef, casing: Casing = "display"): string {
     switch (value.op) {
         case "present":
             return GRAMMAR.wildcard;
         case "contains":
-            return bareOrPhrase(operandText(value.operand, at), readingOf(value.operand));
+            return bareOrPhrase(operandText(value.operand, at, casing), readingOf(value.operand));
         case "glob":
-            return operandText(value.operand, at);
+            return operandText(value.operand, at, casing);
         case "regex": {
+            // Never folded: lowering a pattern flips character classes, and matching is case-insensitive anyway.
             const pattern = operandText(value.operand, at)
                 .replaceAll(GRAMMAR.regex, `${GRAMMAR.escape}${GRAMMAR.regex}`);
             return `${GRAMMAR.regex}${pattern}${GRAMMAR.regex}`;
         }
         case "exact": {
-            const text = operandText(value.operand, at);
+            const text = operandText(value.operand, at, casing);
             // A bare sentinel word already means the exact ask, so the anchor adds nothing to it.
             if (at !== undefined && sentinelOf(propOf(at), text) !== null) return text;
             return `${spelling(exact)}${bareOrPhrase(text, readingOf(value.operand))}`;
@@ -124,12 +140,12 @@ function valueText(value: ValueExpr, at?: PropRef): string {
         case "lte":
         case "gt":
         case "gte":
-            return `${spelling(COMPARISONS[value.op])}${operandText(value.operand, at)}`;
+            return `${spelling(COMPARISONS[value.op])}${operandText(value.operand, at, casing)}`;
         case "range":
-            return `${bound(operandText(value.lo, at))}${GRAMMAR.range}${operandText(value.hi, at)}`;
+            return `${bound(operandText(value.lo, at, casing))}${GRAMMAR.range}${operandText(value.hi, at, casing)}`;
         case "anyOf":
             // Grouped: at a bind, a glued phrase alternative would otherwise split at its own quote.
-            return `${GRAMMAR.group.open}${value.alternatives.map((alt) => valueText(alt, at)).join(GRAMMAR.or)}${GRAMMAR.group.close}`;
+            return `${GRAMMAR.group.open}${value.alternatives.map((alt) => valueText(alt, at, casing)).join(GRAMMAR.or)}${GRAMMAR.group.close}`;
     }
     // The switch is exhaustive, narrowing `value` to never: a new variant fails to compile here until it has a
     // spelling, which is the only thing keeping this module the parser's inverse.
@@ -140,57 +156,60 @@ function valueText(value: ValueExpr, at?: PropRef): string {
  * A scope term's content value. Alternation glues — `fire|frost` — because a term never reads a parenthesised
  * group; the grouped spelling belongs to bind values, where {@link valueText} writes it.
  */
-function termValueText(value: ValueExpr): string {
-    if (value.op === "anyOf") return value.alternatives.map((alt) => valueText(alt)).join(GRAMMAR.or);
-    return valueText(value);
+function termValueText(value: ValueExpr, casing: Casing): string {
+    if (value.op === "anyOf") {
+        return value.alternatives.map((alt) => valueText(alt, undefined, casing)).join(GRAMMAR.or);
+    }
+    return valueText(value, undefined, casing);
 }
 
 /** The word a scope term is written with, or null for a term with nothing evaluable to write. */
-function termText(term: ScopeTerm): string | null {
+function termText(term: ScopeTerm, casing: Casing): string | null {
     if (term.state !== "ok" || term.ask === null) return null;
     const negate = term.not ? GRAMMAR.negate : "";
     const ask = term.ask;
-    if (ask.on === "content") return `${negate}${termValueText(ask.value)}`;
+    if (ask.on === "content") return `${negate}${termValueText(ask.value, casing)}`;
     if (ask.on === "kindWord") return `${negate}${wordOf(ask.kind)}`;
-    if (ask.on === "count") return `${negate}${GRAMMAR.countWord}${GRAMMAR.bind}${valueText(ask.value)}`;
+    if (ask.on === "count") return `${negate}${GRAMMAR.countWord}${GRAMMAR.bind}${valueText(ask.value, undefined, casing)}`;
     const ref = ask.props[0];
-    return `${negate}${ref.prop}${GRAMMAR.bind}${valueText(ask.value, ref)}`;
+    return `${negate}${ref.prop}${GRAMMAR.bind}${valueText(ask.value, ref, casing)}`;
 }
 
 /**
  * Writes one clause, or null when the clause holds nothing evaluable.
  *
  * @param clause The clause.
+ * @param casing Whether text operands are folded for comparison.
  * @returns Its canonical text.
  */
-function clauseText(clause: Clause): string | null {
+function clauseText(clause: Clause, casing: Casing): string | null {
     if (clause.state !== "ok" || clause.ask === null) return null;
     const negate = clause.not ? GRAMMAR.negate : "";
-    const body = askText(clause.ask);
+    const body = askText(clause.ask, casing);
     return body === null ? null : `${negate}${body}`;
 }
 
-function askText(ask: Ask): string | null {
-    if (ask.on === "plain") return valueText(ask.value);
+function askText(ask: Ask, casing: Casing): string | null {
+    if (ask.on === "plain") return valueText(ask.value, undefined, casing);
     if (ask.on === "prop") {
         const door = doorOf(ask.ref.prop, propOf(ask.ref));
-        return ask.value === null ? null : `${door}${GRAMMAR.bind}${valueText(ask.value, ask.ref)}`;
+        return ask.value === null ? null : `${door}${GRAMMAR.bind}${valueText(ask.value, ask.ref, casing)}`;
     }
 
     const head = ask.on === "column" ? ask.column.key : wordOf(ask.kind);
     const test = ask.test;
     if (test === null) return null;
     if (test.is === "exists") return `${head}${GRAMMAR.bind}${GRAMMAR.wildcard}`;
-    if (test.is === "content") return `${head}${GRAMMAR.bind}${valueText(test.value)}`;
+    if (test.is === "content") return `${head}${GRAMMAR.bind}${valueText(test.value, undefined, casing)}`;
     if (test.is === "props") {
         const ref = test.props[0];
         // The value re-reads through the head's own dispatch, so the property name needs no spelling here.
-        return `${head}${GRAMMAR.bind}${valueText(test.value, ref)}`;
+        return `${head}${GRAMMAR.bind}${valueText(test.value, ref, casing)}`;
     }
 
     const runs = test.terms
         .map((run) => run
-            .map((term) => ({term, text: termText(term)}))
+            .map((term) => ({term, text: termText(term, casing)}))
             .filter((pair): pair is { term: ScopeTerm; text: string } => pair.text !== null))
         .filter((run) => run.length > 0);
     const flat = runs.flat();
@@ -214,14 +233,14 @@ function askText(ask: Ask): string | null {
  * @returns The canonical text of its evaluable query — incomplete and invalid clauses are not part of it.
  */
 export function formatQuery(parsed: Parsed): string {
-    return clauseTexts(parsed).map((group) => group.join(" ")).join(` ${GRAMMAR.or} `);
+    return clauseTexts(parsed, "display").map((group) => group.join(" ")).join(` ${GRAMMAR.or} `);
 }
 
 /** Every evaluable clause's canonical text, grouped as the parse groups them; empty groups are dropped. */
-function clauseTexts(parsed: Parsed): string[][] {
+function clauseTexts(parsed: Parsed, casing: Casing): string[][] {
     return parsed.groups
         .map((group) => group
-            .map((index) => clauseText(parsed.clauses[index]))
+            .map((index) => clauseText(parsed.clauses[index], casing))
             .filter((text): text is string => text !== null))
         .filter((group) => group.length > 0);
 }
@@ -229,12 +248,13 @@ function clauseTexts(parsed: Parsed): string[][] {
 /**
  * One string per parse that two equivalent queries share.
  *
- * Every clause reduces to its canonical spelling — the same convergence {@link formatQuery} performs — so delimiter
- * and notation differences vanish there. Clause order never matters and neither does group order, so both sort;
- * what remains is the multiset of canonical clauses per alternation group.
+ * Every clause reduces to its canonical spelling — the same convergence {@link formatQuery} performs, folded per
+ * {@link Casing} because matching folds case too — so delimiter, notation and case differences vanish there. Clause
+ * order never matters and neither does group order, so both sort; what remains is the multiset of canonical clauses
+ * per alternation group.
  */
 function normalised(parsed: Parsed): string {
-    return clauseTexts(parsed)
+    return clauseTexts(parsed, "folded")
         .map((group) => group.toSorted().join(" "))
         .toSorted()
         .join(` ${GRAMMAR.or} `);
@@ -243,9 +263,11 @@ function normalised(parsed: Parsed): string {
 /**
  * Whether two parses ask the same evaluable question.
  *
- * Equivalence is up to everything the language says does not matter: clause order, group order, delimiter and
- * notation spellings, and anything an incomplete or invalid clause failed to say. `model:{fire}` is equivalent to
- * `model:fire`; `model:fire model:missile` is not equivalent to `model:{fire missile}` — two rows against one.
+ * Equivalence is up to everything the language says does not matter: clause order, group order, delimiter, notation
+ * and letter-case spellings, and anything an incomplete or invalid clause failed to say. `model:{fire}` is
+ * equivalent to `model:fire` and to `model:FIRE`; `model:fire model:missile` is not equivalent to
+ * `model:{fire missile}` — two rows against one. Regex patterns are the one case-sensitive spelling, per
+ * {@link Casing}.
  *
  * @param a One parse.
  * @param b Another.

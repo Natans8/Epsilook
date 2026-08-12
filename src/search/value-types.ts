@@ -107,6 +107,15 @@ export interface AxisType<V extends Value = Value> {
     readonly quantity?: boolean;
 
     /**
+     * The letter case the corpus is written in, where it has one.
+     *
+     * {@link format} folds values to it, so a value always reads back in the case the data actually carries.
+     * Absent means the corpus is mixed-case and a value keeps the case it was written with — matching is
+     * case-insensitive either way; this only decides the spelling.
+     */
+    readonly casing?: "upper" | "lower";
+
+    /**
      * Reads a range's two bounds as one coherent notation — `10-90` must not read half factor, half proportion.
      * Declared by types with more than one way to write a bare number; a `null` sends the caller to `parse`,
      * bound by bound, which is the right reading when a bound carries its own symbol.
@@ -151,6 +160,18 @@ export function defineType<V extends Value>(type: AxisType<V>): AxisType<V> {
         throw new Error(`type "${type.name}" declares notations but not that it is a quantity`);
     }
 
+    // The casing is applied here, once, so a declaration is one field and every format call obeys it.
+    if (type.casing !== undefined) {
+        const format = type.format;
+        if (format === undefined) {
+            throw new Error(`type "${type.name}" declares a casing but carries no value to case`);
+        }
+        const cased: (written: string) => string = type.casing === "lower"
+            ? (written) => written.toLowerCase()
+            : (written) => written.toUpperCase();
+        type = {...type, format: (value): string => cased(format(value))};
+    }
+
     TYPES.set(type.name, type);
     return type;
 }
@@ -181,6 +202,7 @@ export const path = defineType<string>({
     storage: "string",
     parse: (s) => s,
     format: (s) => s,
+    casing: "lower",
     accepts: [exact, contains, glob, present, anyOf, regex],
     hint: "part of a file path; file names run words together, so bee also finds beer",
     ui: "text",

@@ -98,6 +98,25 @@ describe("equivalent", () => {
         assert.ok(!same('name:"fi*re"', "name:fi*re"));
     });
 
+    it("never separates on letter case, which matching folds", () => {
+        assert.ok(same("model:fire", "model:FIRE"));
+        assert.ok(same("name:Fireball", "name:fireball"));
+        assert.ok(same('name:"Blood Pool"', 'name:"blood pool"'));
+        assert.ok(same("name:=Fireball", "name:=FIREBALL"));
+        assert.ok(same("model:{Fire missile}", "model:{fire missile}"));
+        assert.ok(same("name:fire*ball", "name:FIRE*BALL"));
+    });
+
+    it("keeps regex patterns case-sensitive: folding one would flip its character classes", () => {
+        assert.ok(same("name:/^Fire/", "name:/^Fire/"));
+        assert.ok(!same(String.raw`name:/\D/`, String.raw`name:/\d/`));
+    });
+
+    it("keeps the written case in the display canonical: only comparison folds", () => {
+        assert.equal(canonical("name:Fireball"), "name:Fireball");
+        assert.equal(canonical("model:FIRE"), "model:FIRE");
+    });
+
     it("round-trips: a query is equivalent to its own canonical form", () => {
         for (const query of [
             "model:{attach:(chest|head) fire}", "frost scale:50-* cast:instant", "name:/^fire/",
