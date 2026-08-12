@@ -35,6 +35,8 @@ export type OperatorForm =
     | "prefix"
     /** The symbol separates two operands: `10-90`, `500ms-2s`. */
     | "infix"
+    /** The symbol wraps the value on both sides: `/fire/`. */
+    | "circumfix"
     /** The symbol is the entire value: `*`. */
     | "whole"
     /** The symbol appears within a token: `bee*`, `unit_target_*`. */
@@ -166,6 +168,18 @@ export const contains = defineOperator({
 export const glob = defineOperator({
     name: "glob", symbol: "*", form: "embedded", level: "value",
     hint: "a pattern, where * stands for any run of characters",
+});
+
+/**
+ * Pattern match by regular expression, written between slashes: `name:/^fire/`.
+ *
+ * The superuser door, with the family conventions: slash delimiters, string values only — a type whose values are
+ * quantities declines it — and case-insensitive always. It tests the stored text as written rather than the folded
+ * form, because character classes are the whole point of reaching for one.
+ */
+export const regex = defineOperator({
+    name: "regex", symbol: "/", form: "circumfix", level: "value",
+    hint: "a regular expression between slashes, matched case-insensitively",
 });
 
 /** Tests that the property has a value at all. Written as a lone `*`. */

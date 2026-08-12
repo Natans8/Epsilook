@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node tools/build.mjs --test && node --enable-source-maps --test \"test/.bundle/**/*.test.mjs\"",
     "query": "node tools/build.mjs --cli && node tools/query.mjs",
+    "parse": "node tools/build.mjs --cli && node tools/parse.mjs",
+    "equal": "node tools/build.mjs --cli && node tools/equal.mjs",
     "measure": "node tools/build.mjs --cli && node tools/measure.mjs",
     "lint": "oxlint --type-aware",
     "surface": "node tools/build.mjs --cli && node tools/surface.mjs"
@@ -20,7 +22,7 @@
   "devDependencies": {
     "@types/color-name": "^2.0.0",
     "@types/node": "^26.2.0",
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "oxlint": "^1.78.0",
     "oxlint-tsgolint": "^7.0.2001",
     "typescript": "^7.0.2",

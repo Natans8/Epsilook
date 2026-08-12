@@ -29,8 +29,12 @@ import {SPELLING_FOLDS} from "./spelling-folds";
 const SUBSTITUTIONS: readonly (readonly [RegExp, string])[] = [
     /** Typographic double quotes to the plain quote that delimits a phrase. */
     [/[“”„‟]/g, '"'],
-    /** Typographic single quotes and the acute accent to a plain apostrophe. */
-    [/[‘’‛´]/g, "'"],
+    /**
+     * Typographic single quotes and both stray accents to a plain apostrophe. The grave accent (backtick) is a
+     * chat-era stand-in for one — zero names carry it while 14,819 carry the apostrophe, so folding cannot strand
+     * data (measured on 9.2.7).
+     */
+    [/[‘’‛´`]/g, "'"],
     /** En dash, em dash, figure dash and the minus sign to a plain hyphen. */
     [/[–—‒−]/g, "-"],
     /** Every non-breaking, thin and zero-width space to a plain space. */

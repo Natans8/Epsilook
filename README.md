@@ -38,6 +38,8 @@ src/                     the app, strict TypeScript — bundled into site/js/app
   texture.ts             .blp loading + the texture/colour hover previews
   export.ts              the results as CSV, JSON or a Discord code block
 tools/query.ts           the same engine as a command-line UI (npm run query)
+tools/parse.ts           the search 2.0 parser as JSON (npm run parse -- '<query>')
+tools/equal.ts           search 2.0 query equivalence (npm run equal -- '<a>' '<b>')
   app/                   the UI, one module per subsystem
     state.ts             the mutable UI state every other module reads
     query.ts             the bar's half of the query language (the rest is src/query.ts)

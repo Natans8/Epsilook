@@ -60,6 +60,32 @@ describe("the textual family", () => {
     });
 });
 
+describe("regular expressions", () => {
+    const run = (stored: string, pattern: string): boolean => matcher("regex", "text")!(stored, pattern);
+
+    it("matches case-insensitively, which is the family convention", () => {
+        assert.equal(run("Fireball", "^fire"), true);
+        assert.equal(run("Fireball", "BALL$"), true);
+    });
+
+    it("runs against the stored text as written — punctuation is not squashed away", () => {
+        assert.equal(run("Anti-Magic Shell", "anti-magic"), true);
+        assert.equal(run("Anti-Magic Shell", "antimagic"), false);
+        assert.equal(run("Zul'jin", "zul'jin"), true);
+    });
+
+    it("answers false for a pattern that does not compile, and stays false when asked again", () => {
+        assert.equal(run("Fireball", "fire("), false);
+        assert.equal(run("Fireball", "fire("), false);
+    });
+
+    it("answers false for an operand that is not text", () => {
+        assert.equal(matcher("regex", "path")!("spells/fire.m2", "fire"), true);
+        const range = matcher("regex", "text")!;
+        assert.equal(range("Fireball", ["a", "z"]), false);
+    });
+});
+
 describe("the numeric family", () => {
     const run = (op: string, stored: number, operand: number): boolean =>
         matcher(op, "seconds")!(stored, operand);

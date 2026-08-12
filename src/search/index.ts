@@ -7,7 +7,7 @@
  * Importing this validates the schema and throws if two declarations claim the same word, so a collision cannot
  * survive an import in the application, the command line tools or the tests.
  *
- * TODO: export `parse`, `run` and `describe` once the grammar, the evaluator and the chip renderer exist.
+ * TODO: export `run` and `describe` once the evaluator and the chip renderer exist.
  */
 
 export type {Operator, OperatorForm, OperatorLevel} from "./operators";
@@ -37,7 +37,19 @@ export type {Column} from "./columns";
 export {COLUMNS, defineColumn} from "./columns";
 
 export type {Kind, ParsedValue, Prop} from "./kinds";
-export {defineKind, formatValue, hintOf, KINDS, operatorsOf, parseValue, TIER} from "./kinds";
+export {
+    defineKind, formatValue, hintOf, KINDS, nameOf, operatorsOf, parseValue, propNameOf, TIER, wordOf,
+} from "./kinds";
 
 export type {Head} from "./schema";
-export {buildSchema, HEADS, kindsOf, schemaProblems} from "./schema";
+export {buildSchema, HEADS, kindIn, kindsOf, propIn, schemaProblems} from "./schema";
+
+export {GRAMMAR, PREFIX_OPERATORS} from "./grammar";
+
+export type {
+    Ask, Clause, ClauseState, Diagnostic, Fix, ParsedOperand, ParseMode, Parsed, PropRef, RowTest,
+    ScopeAsk, ScopeTerm, Severity, Span, ValueExpr,
+} from "./parse";
+export {parse} from "./parse";
+
+export {equivalent, formatQuery} from "./format";

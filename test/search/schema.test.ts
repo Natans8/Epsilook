@@ -243,7 +243,7 @@ describe("operatorsOf", () => {
 
     it("leaves a single-type property with everything that type accepts", () => {
         assert.deepEqual(operatorsOf({types: [text]}).toSorted(),
-            ["anyOf", "contains", "exact", "glob", "present"]);
+            ["anyOf", "contains", "exact", "glob", "present", "regex"]);
         assert.deepEqual(operatorsOf({types: [id]}).toSorted(), ["anyOf", "exact", "present"]);
     });
 });

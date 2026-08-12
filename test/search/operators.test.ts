@@ -16,7 +16,7 @@ describe("the operator registry", () => {
         const names = [...OPERATORS.keys()].toSorted();
         assert.deepEqual(names, [
             "and", "anyOf", "contains", "exact", "glob", "gt", "gte", "lt", "lte", "not", "or",
-            "present", "range",
+            "present", "range", "regex",
         ]);
     });
 
@@ -28,7 +28,7 @@ describe("the operator registry", () => {
             [...OPERATORS.values()].filter((op) => op.level === level).map((op) => op.name).toSorted();
         assert.deepEqual(byLevel("clause"), ["and", "not", "or"]);
         assert.deepEqual(byLevel("value"),
-            ["anyOf", "contains", "exact", "glob", "gt", "gte", "lt", "lte", "present", "range"]);
+            ["anyOf", "contains", "exact", "glob", "gt", "gte", "lt", "lte", "present", "range", "regex"]);
     });
 
     it("gives only clause operators a precedence, tightest first", () => {

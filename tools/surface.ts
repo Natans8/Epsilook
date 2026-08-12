@@ -67,6 +67,8 @@ function spell(op: Operator, samples: readonly [string, string]): string | null 
             return `${one}*`;
         case "bare":
             return one;
+        case "circumfix":
+            return `${op.symbol}pattern${op.symbol}`;
         default:
             return null;
     }

@@ -18,7 +18,7 @@
  */
 import {COLOUR_NAMES} from "./colour-names";
 import type {Operator} from "./operators";
-import {anyOf, contains, exact, glob, OPERATORS, ORDERING, present} from "./operators";
+import {anyOf, contains, exact, glob, OPERATORS, ORDERING, present, regex} from "./operators";
 import {fold, squash} from "./text-normalization";
 import type {Notation, NumericSpec} from "./units";
 import {formatNumber, parseNumber} from "./units";
@@ -100,6 +100,12 @@ export interface AxisType<V extends Value = Value> {
     /** One line describing the type to a reader, used by generated help and by diagnostics. */
     readonly hint: string;
 
+    /**
+     * Whether this type's values are numerals rather than words. The quote law reads it: a quoted operand is a
+     * string, so a quantity refuses one while a worded type reads it. Implied by declaring notations.
+     */
+    readonly quantity?: boolean;
+
     readonly ui: Affordance;
 }
 
@@ -135,8 +141,9 @@ export function defineType<V extends Value>(type: AxisType<V>): AxisType<V> {
         throw new Error(`type "${type.name}" declares notations but does not accept an order`);
     }
 
-    TYPES.set(type.name, type);
-    return type;
+    const declared = type.notations !== undefined ? {...type, quantity: true} : type;
+    TYPES.set(declared.name, declared);
+    return declared;
 }
 
 /* ---------------------------------------------------------------------------- text */
@@ -147,7 +154,7 @@ export const text = defineType<string>({
     storage: "string",
     parse: (s) => s,
     format: (s) => s,
-    accepts: [exact, contains, glob, present, anyOf],
+    accepts: [exact, contains, glob, present, anyOf, regex],
     hint: "words, matched anywhere in the text unless anchored with =",
     ui: "text",
 });
@@ -165,7 +172,7 @@ export const path = defineType<string>({
     storage: "string",
     parse: (s) => s,
     format: (s) => s,
-    accepts: [exact, contains, glob, present, anyOf],
+    accepts: [exact, contains, glob, present, anyOf, regex],
     hint: "part of a file path; file names run words together, so bee also finds beer",
     ui: "text",
 });
@@ -260,6 +267,7 @@ export const id = defineType<number>({
     format: (n) => String(n),
     accepts: [exact, present, anyOf],
     hint: "the exact id, matched whole",
+    quantity: true,
     ui: "number",
 });
 
@@ -271,6 +279,7 @@ export const count = defineType<number>({
     format: (n) => String(n),
     accepts: [exact, present, anyOf, ...ORDERING],
     hint: "how many, as a whole number or a comparison such as >4",
+    quantity: true,
     ui: "number",
 });
 

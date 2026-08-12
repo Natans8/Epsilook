@@ -172,10 +172,12 @@ describe("the operator table", () => {
 
     it("gives the textual family exact, contains, glob and present, with no ordering", () => {
         // Declining comparison is load-bearing: it is what keeps `name:anti-magic` a single token instead of a range,
-        // and what turns `name:>m` into an error rather than a substring search for the characters.
-        for (const type of [text, path, enumeration]) {
-            assert.deepEqual(accepts(type), ["anyOf", "contains", "exact", "glob", "present"], type.name);
+        // and what turns `name:>m` into an error rather than a substring search for the characters. Free text and
+        // paths additionally take a regular expression; an enum's closed vocabulary does not need one.
+        for (const type of [text, path]) {
+            assert.deepEqual(accepts(type), ["anyOf", "contains", "exact", "glob", "present", "regex"], type.name);
         }
+        assert.deepEqual(accepts(enumeration), ["anyOf", "contains", "exact", "glob", "present"]);
     });
 
     it("gives an ordinal everything an enum has, plus the ordering", () => {

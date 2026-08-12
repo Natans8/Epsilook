@@ -12,6 +12,7 @@
  *
  * Every function here is pure and synchronous.
  */
+import {compilePattern} from "./patterns";
 import {fold, squash} from "./text-normalization";
 import type {Value} from "./value-types";
 import {ordinalRungs, TYPES} from "./value-types";
@@ -132,6 +133,15 @@ define(["glob"], TEXTUAL, (stored, operand) => {
     return wanted !== null && globToRegExp(wanted).test(squash(String(stored)));
 });
 define(["present"], TEXTUAL, (stored) => String(stored).length > 0);
+
+// A regex runs against the stored text as written — no folding, no squashing — because character-level control is
+// what a reader reaches for one to get. Case-insensitivity comes from the flag, not from folding.
+define(["regex"], ["text", "path"], (stored, operand) => {
+    const wanted = asText(operand);
+    if (wanted === null) return false;
+    const pattern = compilePattern(wanted);
+    return typeof pattern !== "string" && pattern.test(String(stored));
+});
 
 /* ----------------------------------------------------------------------- numbers */
 

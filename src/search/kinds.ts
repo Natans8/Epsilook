@@ -269,6 +269,20 @@ export interface ParsedValue {
 }
 
 /**
+ * Reads one operand as a sentinel word, the one rule for every reader: folded, ignoring surrounding space.
+ *
+ * @param prop The property whose sentinels answer.
+ * @param written One operand, as typed.
+ * @returns The sentinel's stored value, or `null` when the operand names none.
+ */
+export function sentinelOf(prop: Prop, written: string): ParsedValue | null {
+    for (const [stored, word] of Object.entries(prop.sentinels ?? {})) {
+        if (fold(written.trim()) === fold(word)) return {type: prop.types[0], value: Number(stored)};
+    }
+    return null;
+}
+
+/**
  * Reads one operand as a property's value.
  *
  * Sentinel words are read first, so a stored value that is not a quantity is reachable by its name and can never be
@@ -280,9 +294,8 @@ export interface ParsedValue {
  * @returns The value and the notation that read it, or `null` when nothing accepted the operand.
  */
 export function parseValue(prop: Prop, written: string): ParsedValue | null {
-    for (const [stored, word] of Object.entries(prop.sentinels ?? {})) {
-        if (fold(written.trim()) === fold(word)) return {type: prop.types[0], value: Number(stored)};
-    }
+    const sentinel = sentinelOf(prop, written);
+    if (sentinel !== null) return sentinel;
     for (const type of prop.types) {
         const value = type.parse?.(written);
         if (value !== null && value !== undefined) return {type, value};

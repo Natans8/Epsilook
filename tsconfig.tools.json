@@ -16,6 +16,8 @@
     "tools/query.ts",
     "tools/measure.ts",
     "tools/surface.ts",
+    "tools/parse.ts",
+    "tools/equal.ts",
     // The test suite is the same engine on the same runtime — Node, no DOM —
     // so it belongs to this target rather than to a third one. A directory
     // rather than a file list: tests are added constantly, and a test that
