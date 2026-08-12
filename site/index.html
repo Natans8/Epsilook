@@ -9,9 +9,10 @@
     <!-- the app writes ?v= and ?q= into the URL as you search, so shared links
          are all variants of one page — point search engines at the bare one -->
     <link rel="canonical" href="https://natans8.github.io/Epsilook/">
-    <!-- link previews (Discord, Slack, Twitter). No og:image yet: it must be a
-         raster at an absolute URL, and the site owns no bitmap art. Adding one
-         1200x630 png here and in og:image/twitter:image upgrades every embed.
+    <!-- link previews (Discord, Slack, Twitter). Discord reads og:* only and
+         ignores twitter:*; the image must be a raster at an absolute URL.
+         img/embed.png is a 2400x1260 card composed from the app's own rendered
+         UI (real cells, live CSS).
          NOT `<meta name="color-scheme">` — same UA-default mechanism as the
          `color-scheme` property the theme layer deliberately dropped. -->
     <meta property="og:type" content="website">
@@ -19,12 +20,22 @@
     <meta property="og:url" content="https://natans8.github.io/Epsilook/">
     <meta property="og:title" content="Epsilook — WoW Spell Visual Search">
     <meta property="og:description"
-          content="Find spells by how they look and sound — search World of Warcraft spells by name, model, sound, animation or visual effect, and copy the Epsilon command.">
-    <meta name="twitter:card" content="summary">
+          content="Find spells by how they look and sound — models, sounds, animations, morphs and visual effects across 11 game versions, with the Epsilon command one click away. For everything .lookup can't find.">
+    <meta property="og:image" content="https://natans8.github.io/Epsilook/img/embed.png">
+    <meta property="og:image:width" content="2400">
+    <meta property="og:image:height" content="1260">
+    <meta property="og:image:alt"
+          content="The Epsilook search bar above three spell rows showcasing model, sound and effect pills">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://natans8.github.io/Epsilook/img/embed.png">
     <!-- the address-bar tint follows `autoTheme` in src/config.ts: dark's --bg and
-         moonwell's (the light default) --bg -->
+         moonwell's (the light default) --bg. Browsers use the first theme-color
+         whose media matches, so one of the two scoped tags always wins there;
+         the unscoped gold tag after them is for embed crawlers (Discord tints
+         the embed strip with it) and is unreachable by browsers. -->
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e1116">
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#dedfe9">
+    <meta name="theme-color" content="#ffd100">
     <link rel="icon"
           href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AE%3C/text%3E%3C/svg%3E">
     <!-- bump ?v= on every deploy that touches the css or the bundle's sources,
