@@ -34,42 +34,45 @@ describe("the shipped schema", () => {
         }
     });
 
-    it("resolves the columns, the global kind words, the property prefixes and their aliases, and nothing else", () => {
+    it("resolves the columns, the global kind words, the property prefixes and their spellings, and nothing else", () => {
         // A top-level word is earned, so the head index holds exactly what the declarations grant: every other kind
-        // word is reachable inside its own column and nowhere shorter. An alias occupies its word's namespaces, so
-        // each one is a head exactly where its word is.
+        // word is reachable inside its own column and nowhere shorter. A full name or synonym occupies its word's
+        // namespaces, so each one is a head exactly where its word is.
+        const ways = (full: string | undefined, synonyms: readonly string[] | undefined): number =>
+            (full === undefined ? 0 : 1) + (synonyms?.length ?? 0);
         const globalKinds = [...KINDS.values()].filter((k) => k.global === true);
         const globals = globalKinds.length
-            + globalKinds.reduce((n, k) => n + (k.aliases?.length ?? 0), 0);
+            + globalKinds.reduce((n, k) => n + ways(k.full, k.synonyms), 0);
         const prefixed = [...KINDS.values()]
             .flatMap((k) => Object.values(k.props))
             .filter((p) => p.prefix !== undefined);
-        const prefixes = prefixed.length + prefixed.reduce((n, p) => n + (p.aliases?.length ?? 0), 0);
+        const prefixes = prefixed.length + prefixed.reduce((n, p) => n + ways(p.full, p.synonyms), 0);
         const headColumns = [...COLUMNS.values()].filter((c) => c.head !== false);
-        const heads = headColumns.length + headColumns.reduce((n, c) => n + (c.aliases?.length ?? 0), 0);
+        const heads = headColumns.length + headColumns.reduce((n, c) => n + (c.synonyms?.length ?? 0), 0);
         assert.equal(HEADS.size, heads + globals + prefixes);
         for (const column of COLUMNS.values()) {
             if (column.head !== false) assert.equal(HEADS.get(column.key)?.role, "column");
         }
     });
 
-    it("resolves a kind alias inside its column, exactly where the word is", () => {
-        // The scoped counterpart of the HEADS alias test: `fx:camouflage` asks what `fx:camo` asks.
+    it("resolves a kind's full name inside its column, exactly where the word is", () => {
+        // The scoped counterpart of the HEADS spelling test: `fx:camouflage` asks what `fx:camo` asks.
         assert.equal(kindIn(fxColumn, "camo"), camo);
         assert.equal(kindIn(fxColumn, "camouflage"), camo);
         assert.equal(kindIn(fxColumn, "no-such-kind"), undefined);
-        // A wordless kind has no word for an alias to spell, so its column key never resolves as a scoped word.
+        // A wordless kind has no word for the other spellings to respell, so its column key never resolves as a
+        // scoped word.
         assert.equal(kindIn(fxColumn, "fx"), undefined);
     });
 
-    it("resolves a property alias to the principal name, which is what every printing surface carries", () => {
+    it("resolves a property synonym to the property's own name, which is what every compact surface carries", () => {
         assert.equal(propIn(chain, "colour"), "colour");
         assert.equal(propIn(chain, "color"), "colour");
         assert.equal(propIn(chain, "no-such-prop"), undefined);
     });
 
-    it("resolves the declared variant spellings at the top level", () => {
-        // The alias is a way in, never a second identity: both spellings reach the one declaration.
+    it("resolves the declared full names and synonyms at the top level", () => {
+        // Every spelling reads; one spelling writes per surface. Both ways in reach the one declaration.
         const kindAt = (word: string): unknown => {
             const head = HEADS.get(word);
             return head?.role === "kind" ? head.kind : undefined;
@@ -388,12 +391,12 @@ describe("the declaration checks", () => {
         assert.match(problems[0], /model\.numbered\.ref/);
     });
 
-    it("resolves an alias to the same declaration as its word, in any script", () => {
-        // An alias is a way in, never a second identity. The Cyrillic case pins the localisation route: a locale
+    it("resolves a synonym to the same declaration as its word, in any script", () => {
+        // A synonym is a way in, never a second identity. The Cyrillic case pins the localisation route: a locale
         // vocabulary is more rows in the same lists, resolved through the same lookup.
         const aliased = defineKind({
-            column: modelColumn, word: "projectile", global: true, aliases: ["missiletest", "снаряд"],
-            hint: "a deliberately aliased kind, for the check", props: {},
+            column: modelColumn, word: "projectile", global: true, synonyms: ["missiletest", "снаряд"],
+            hint: "a deliberately respelled kind, for the check", props: {},
         });
         try {
             buildSchema();
@@ -409,20 +412,20 @@ describe("the declaration checks", () => {
         }
     });
 
-    it("fires when an alias claims a word another declaration holds", () => {
-        // An alias occupies its word's namespaces, so it collides exactly as a word would.
+    it("fires when a synonym claims a word another declaration holds", () => {
+        // A synonym occupies its word's namespaces, so it collides exactly as a word would.
         const problems = problemsWith({
-            column: modelColumn, word: "fresh", global: true, aliases: ["chain"],
-            hint: "a deliberate alias collision, for the check", props: {},
+            column: modelColumn, word: "fresh", global: true, synonyms: ["chain"],
+            hint: "a deliberate synonym collision, for the check", props: {},
         });
         assert.equal(problems.length, 1);
         assert.match(problems[0], /G1: "chain" is claimed by both kind fx\.chain and kind model\.fresh/);
     });
 
-    it("fires when a scoped alias shadows a top-level word", () => {
+    it("fires when a scoped full name shadows a top-level word", () => {
         const problems = problemsWith({
-            column: modelColumn, word: "fresh", aliases: ["chain"],
-            hint: "a deliberate alias shadow, for the check", props: {},
+            column: modelColumn, word: "fresh", full: "chain",
+            hint: "a deliberate full-name shadow, for the check", props: {},
         });
         assert.equal(problems.length, 1);
         assert.match(problems[0], /"chain" of kind model\.fresh shadows the top-level word of kind fx\.chain/);
@@ -439,33 +442,38 @@ describe("the declaration checks", () => {
         assert.match(problems[0], /"armour" of kind model\.armour is unreachable: input folds to "armor"/);
     });
 
-    it("accepts the same word once its folded form is an alias of the same declaration", () => {
+    it("accepts the same word once its folded form is a synonym of the same declaration", () => {
         const problems = problemsWith({
-            column: modelColumn, word: "armour", aliases: ["armor"],
-            hint: "the alias that keeps the word reachable, for the check", props: {},
+            column: modelColumn, word: "armour", synonyms: ["armor"],
+            hint: "the synonym that keeps the word reachable, for the check", props: {},
         });
         assert.deepEqual(problems, []);
     });
 
-    it("fires on an alias that repeats its own word, and on aliases with no word to spell", () => {
+    it("fires on a spelling that repeats its own word, and on spellings with no word to respell", () => {
         assert.match(problemsWith({
-            column: modelColumn, word: "fresh", aliases: ["fresh"],
-            hint: "a deliberately redundant alias", props: {},
-        })[0], /lists its own word as an alias/);
+            column: modelColumn, word: "fresh", synonyms: ["fresh"],
+            hint: "a deliberately redundant synonym", props: {},
+        })[0], /respells its own word "fresh"/);
 
         assert.match(problemsWith({
-            column: modelColumn, aliases: ["orphaned"],
-            hint: "deliberately wordless aliases", props: {},
-        })[0], /declares aliases but no word for them to spell/);
+            column: modelColumn, word: "fresh", full: "fresh",
+            hint: "a deliberately redundant full name", props: {},
+        })[0], /respells its own word "fresh"/);
+
+        assert.match(problemsWith({
+            column: modelColumn, synonyms: ["orphaned"],
+            hint: "deliberately wordless synonyms", props: {},
+        })[0], /declares alternative spellings but no word for them to spell/);
     });
 
-    it("fires when a property alias collides inside its kind, and claims the top level only with a prefix", () => {
+    it("fires when a property synonym collides inside its kind, and claims the top level only with a prefix", () => {
         const problems = problemsWith({
             column: modelColumn, word: "fresh",
-            hint: "a deliberate in-kind alias collision",
+            hint: "a deliberate in-kind synonym collision",
             props: {
                 first: {types: [text]},
-                second: {types: [text], aliases: ["first"]},
+                second: {types: [text], synonyms: ["first"]},
             },
         });
         assert.equal(problems.length, 1);

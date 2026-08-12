@@ -97,14 +97,21 @@ export interface Prop {
     readonly prefix?: string;
 
     /**
-     * Alternative spellings of this property's words: its name inside the kind's scope, and its prefix door where
-     * one is declared. An alias is a way in, never a second identity — chips, help and autocomplete print the
-     * principal spelling.
+     * The unabbreviated name, where the property's name is a shortcut for a longer word.
      *
-     * Plain data so the list can grow without a mechanism change — variant spellings today, localised words if a
-     * locale vocabulary ever ships.
+     * Reading and writing are declared apart because they are not symmetric, exactly as a numeric type's notations
+     * are: every spelling reads, one spelling writes per surface. The name is what compact surfaces write — chips,
+     * capsules, `format()` — and the full name is what naming surfaces write: help headings, control labels,
+     * tooltips. It resolves wherever the name does: inside the kind's scope, and at the prefix door where one is
+     * declared.
      */
-    readonly aliases?: readonly string[];
+    readonly full?: string;
+
+    /**
+     * Equal alternative spellings of the property's words: regional variants, plurals, localised words if a locale
+     * vocabulary ever ships. Ways in only — read wherever the name is, written nowhere.
+     */
+    readonly synonyms?: readonly string[];
 
     /**
      * Stored values that are not quantities, and the word each one means: a channel's -1 is `unlimited`, a cast
@@ -148,14 +155,21 @@ export interface Kind {
     readonly word?: string;
 
     /**
-     * Alternative spellings of {@link word}, legal exactly where the word is: inside the column, and at the top
-     * level when the kind is global. An alias is a way in, never a second identity — chips, help and autocomplete
-     * print the word.
+     * The unabbreviated name, where {@link word} is a shortcut for a longer word: `desc` is short for `description`.
      *
-     * Plain data so the list can grow without a mechanism change — variant spellings today, localised words if a
-     * locale vocabulary ever ships.
+     * Reading and writing are declared apart because they are not symmetric, exactly as a numeric type's notations
+     * are: every spelling reads, one spelling writes per surface. The word is what compact surfaces write — chips,
+     * capsules, `format()` — and the full name is what naming surfaces write: help headings, control labels,
+     * tooltips. It resolves exactly where the word does: inside the column, and at the top level when the kind is
+     * global.
      */
-    readonly aliases?: readonly string[];
+    readonly full?: string;
+
+    /**
+     * Equal alternative spellings of {@link word}: regional variants, plurals, localised words if a locale
+     * vocabulary ever ships. Ways in only — read wherever the word is, written nowhere.
+     */
+    readonly synonyms?: readonly string[];
 
     /**
      * Whether the word is also a top-level head, so `missile:{from:chest}` works without naming the column.
@@ -298,7 +312,7 @@ export const name = defineKind({
 });
 
 export const description = defineKind({
-    column: spellColumn, word: "desc", global: true, aliases: ["description"],
+    column: spellColumn, word: "desc", global: true, full: "description",
     hint: "what the spell says it does — its in-game description",
     props: {text: corpus(TIER.description, text)},
 });
@@ -356,7 +370,7 @@ export const spellId = defineKind({
 });
 
 export const expansion = defineKind({
-    column: idColumn, word: "xpac", global: true, aliases: ["expansion"],
+    column: idColumn, word: "xpac", global: true, full: "expansion",
     hint: "the expansion that introduced it — legion, >wotlk, <=mop",
     props: {rung: of(ordinal)},
 });
@@ -538,7 +552,7 @@ export const chain = defineKind({
         texture: corpus(TIER.asset, path),
         from: attachPoint("where the beam starts"),
         to: attachPoint("where the beam ends"),
-        colour: {types: [colour], aliases: ["color"], hint: "the beam's tint"},
+        colour: {types: [colour], synonyms: ["color"], hint: "the beam's tint"},
         target: target(),
     },
 });
@@ -583,7 +597,7 @@ export const glow = defineKind({
     column: fxColumn, word: "glow", group: "overlay",
     hint: "an edge glow or rim light around the model",
     props: {
-        colour: {types: [colour], aliases: ["color"], hint: "the glow colour"},
+        colour: {types: [colour], synonyms: ["color"], hint: "the glow colour"},
         target: target(),
     },
 });
@@ -593,7 +607,7 @@ export const tint = defineKind({
     column: fxColumn, word: "tint", group: "overlay",
     hint: "a colour wash over the model",
     props: {
-        colour: {types: [colour], aliases: ["color"], hint: "the colour applied"},
+        colour: {types: [colour], synonyms: ["color"], hint: "the colour applied"},
         target: target(),
     },
 });
@@ -617,7 +631,7 @@ export const freeze = defineKind({
 });
 
 export const camo = defineKind({
-    column: fxColumn, word: "camo", group: "overlay", aliases: ["camouflage"],
+    column: fxColumn, word: "camo", group: "overlay", full: "camouflage",
     hint: "a camouflage or cloaking effect",
     props: {},
 });
@@ -653,7 +667,7 @@ export const summon = defineKind({
 });
 
 export const gameObject = defineKind({
-    column: fxColumn, word: "object", group: "spawn", aliases: ["gameobject"],
+    column: fxColumn, word: "object", group: "spawn", full: "gameobject",
     hint: "a gameobject the spell places — campfire, portal, banner, chest",
     props: {object: named("gameobject", TIER.asset), target: target()},
 });
@@ -717,7 +731,7 @@ export const location = defineKind({
 
 /* Invisibility has two sides: what hides in a channel, and what can see into it. */
 export const invis = defineKind({
-    column: mechColumn, word: "invis", group: "stealth", aliases: ["invisibility"],
+    column: mechColumn, word: "invis", group: "stealth", full: "invisibility",
     hint: "the invisibility channel the aura hides in",
     props: {channel: {types: [id], hint: "the channel's number"}},
 });

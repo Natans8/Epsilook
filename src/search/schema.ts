@@ -9,9 +9,12 @@
  * namespace of kind words, usable inside that column's scope; those may repeat across columns without colliding,
  * because the column has already been named by the time one is read.
  *
- * An alias occupies its principal word's namespaces and resolves to the same declaration, so the checks treat the
- * two identically: an alias can collide and shadow exactly as a word can. Only resolution knows aliases exist —
- * every visible surface prints the principal spelling.
+ * A word may carry alternative spellings, and reading and writing are declared apart because they are not
+ * symmetric — exactly as a numeric type's notations are. Every spelling reads: the word, its full name where the
+ * word is a shortcut (`desc` for `description`), and its synonyms (regional variants, plurals, localised words).
+ * One spelling writes per surface: compact surfaces print the word, naming surfaces print the full name. Each
+ * alternative spelling occupies the word's namespaces and resolves to the same declaration, so the checks treat
+ * them identically: it can collide and shadow exactly as the word can.
  *
  * The checks run at import time and throw. A uniqueness rule that lives only in a document is one that gets broken
  * silently, and the failure is invisible from the outside: two things reachable by one spelling means a query means
@@ -37,6 +40,11 @@ export type Head =
 
 /** Every top-level word that may open a tag, resolved. */
 export const HEADS = new Map<string, Head>();
+
+/** The alternative spellings a declaration reads besides its own word: its full name, then its synonyms. */
+function alternates(full: string | undefined, synonyms: readonly string[] | undefined): string[] {
+    return [...(full === undefined ? [] : [full]), ...(synonyms ?? [])];
+}
 
 /**
  * Checks every declaration against its contract.
@@ -64,18 +72,18 @@ export function schemaProblems(): string[] {
 
     for (const column of COLUMNS.values()) {
         if (column.head === false) {
-            if (column.aliases !== undefined) {
-                problems.push(`column ${column.key} declares aliases but no head for them to reach`);
+            if (column.synonyms !== undefined) {
+                problems.push(`column ${column.key} declares synonyms but no head for them to reach`);
             }
             continue;
         }
         claim(topLevel, column.key, `column ${column.key}`);
-        for (const alias of column.aliases ?? []) {
-            if (alias === column.key) {
-                problems.push(`column ${column.key} lists its own key as an alias`);
+        for (const synonym of column.synonyms ?? []) {
+            if (synonym === column.key) {
+                problems.push(`column ${column.key} lists its own key as a synonym`);
                 continue;
             }
-            claim(topLevel, alias, `column ${column.key}`);
+            claim(topLevel, synonym, `column ${column.key}`);
         }
     }
 
@@ -92,17 +100,19 @@ export function schemaProblems(): string[] {
         if (kind.word !== undefined) {
             claim(columnWords(kind.column.key), kind.word, `kind ${kind.id}`);
             if (kind.global === true) claim(topLevel, kind.word, `kind ${kind.id}`);
-            for (const alias of kind.aliases ?? []) {
-                if (alias === kind.word) {
-                    problems.push(`kind ${kind.id} lists its own word as an alias`);
+            for (const spelling of alternates(kind.full, kind.synonyms)) {
+                if (spelling === kind.word) {
+                    problems.push(`kind ${kind.id} respells its own word "${spelling}"`);
                     continue;
                 }
-                claim(columnWords(kind.column.key), alias, `kind ${kind.id}`);
-                if (kind.global === true) claim(topLevel, alias, `kind ${kind.id}`);
+                claim(columnWords(kind.column.key), spelling, `kind ${kind.id}`);
+                if (kind.global === true) claim(topLevel, spelling, `kind ${kind.id}`);
             }
         } else {
             if (kind.global === true) problems.push(`kind ${kind.id} is global but has no word to be global with`);
-            if (kind.aliases !== undefined) problems.push(`kind ${kind.id} declares aliases but no word for them to spell`);
+            if (kind.full !== undefined || kind.synonyms !== undefined) {
+                problems.push(`kind ${kind.id} declares alternative spellings but no word for them to spell`);
+            }
         }
 
         const propWords = new Map<string, string>();
@@ -110,13 +120,13 @@ export function schemaProblems(): string[] {
         for (const [name, prop] of Object.entries(kind.props)) {
             const where = `${kind.id}.${name}`;
             claim(propWords, name, `property ${where}`);
-            for (const alias of prop.aliases ?? []) {
-                if (alias === name) {
-                    problems.push(`property ${where} lists its own name as an alias`);
+            for (const spelling of alternates(prop.full, prop.synonyms)) {
+                if (spelling === name) {
+                    problems.push(`property ${where} respells its own name "${spelling}"`);
                     continue;
                 }
-                claim(propWords, alias, `property ${where}`);
-                if (prop.prefix !== undefined) claim(topLevel, alias, `property ${where}`);
+                claim(propWords, spelling, `property ${where}`);
+                if (prop.prefix !== undefined) claim(topLevel, spelling, `property ${where}`);
             }
             if (prop.prefix !== undefined) claim(topLevel, prop.prefix, `property ${where}`);
             const identity = prop.plain?.some((type) =>
@@ -129,12 +139,12 @@ export function schemaProblems(): string[] {
 
     // Input words arrive folded, and the fold rewrites regional spellings — so a declared word the fold changes can
     // never arrive as itself. It stays reachable only when its folded form is claimed by the same declaration, which
-    // is what an alias is for.
+    // is what a synonym is for.
     const reachable = (words: Map<string, string>): void => {
         for (const [word, by] of words) {
             const folded = fold(word);
             if (folded !== word && words.get(folded) !== by) {
-                problems.push(`"${word}" of ${by} is unreachable: input folds to "${folded}" — declare that as an alias`);
+                problems.push(`"${word}" of ${by} is unreachable: input folds to "${folded}" — declare that as a synonym`);
             }
         }
     };
@@ -147,7 +157,7 @@ export function schemaProblems(): string[] {
     // sits. Checked after every claim above, so declaration order cannot decide whether it fires.
     for (const kind of KINDS.values()) {
         if (kind.word === undefined || kind.global === true) continue;
-        for (const word of [kind.word, ...(kind.aliases ?? [])]) {
+        for (const word of [kind.word, ...alternates(kind.full, kind.synonyms)]) {
             const holder = topLevel.get(word);
             if (holder !== undefined && holder !== `kind ${kind.id}`) {
                 problems.push(`"${word}" of kind ${kind.id} shadows the top-level word of ${holder}`);
@@ -244,17 +254,19 @@ export function buildSchema(): void {
     HEADS.clear();
     for (const column of COLUMNS.values()) {
         if (column.head === false) continue;
-        for (const word of [column.key, ...(column.aliases ?? [])]) {
+        for (const word of [column.key, ...(column.synonyms ?? [])]) {
             HEADS.set(word, {role: "column", column});
         }
     }
     for (const kind of KINDS.values()) {
         if (kind.word !== undefined && kind.global === true) {
-            for (const word of [kind.word, ...(kind.aliases ?? [])]) HEADS.set(word, {role: "kind", kind});
+            for (const word of [kind.word, ...alternates(kind.full, kind.synonyms)]) {
+                HEADS.set(word, {role: "kind", kind});
+            }
         }
         for (const [name, prop] of Object.entries(kind.props)) {
             if (prop.prefix === undefined) continue;
-            for (const word of [prop.prefix, ...(prop.aliases ?? [])]) {
+            for (const word of [prop.prefix, ...alternates(prop.full, prop.synonyms)]) {
                 HEADS.set(word, {role: "prop", kind, name, prop});
             }
         }
@@ -272,10 +284,10 @@ export function kindsOf(column: Column): Kind[] {
 }
 
 /**
- * Resolves a word inside a column's scope to the kind it names, by its word or any alias.
+ * Resolves a word inside a column's scope to the kind it names, by its word, its full name or any synonym.
  *
  * The scoped counterpart of {@link HEADS}: the uniqueness checks guarantee at most one kind answers, and a wordless
- * kind is never a match, because it has no word for an alias to spell.
+ * kind is never a match, because it has no word for the other spellings to respell.
  *
  * @param column The column whose scope the word was read in.
  * @param word The word, already folded.
@@ -284,21 +296,21 @@ export function kindsOf(column: Column): Kind[] {
 export function kindIn(column: Column, word: string): Kind | undefined {
     for (const kind of KINDS.values()) {
         if (kind.column !== column || kind.word === undefined) continue;
-        if (kind.word === word || (kind.aliases?.includes(word) ?? false)) return kind;
+        if (kind.word === word || kind.full === word || (kind.synonyms?.includes(word) ?? false)) return kind;
     }
     return undefined;
 }
 
 /**
- * Resolves a word inside a kind's scope to the property it names, by its name or any alias.
+ * Resolves a word inside a kind's scope to the property it names, by its name, its full name or any synonym.
  *
  * @param kind The kind whose scope the word was read in.
  * @param word The word, already folded.
- * @returns The property's principal name — what a reference and every printing surface carry — or `undefined`.
+ * @returns The property's own name — what a reference and every compact surface carry — or `undefined`.
  */
 export function propIn(kind: Kind, word: string): string | undefined {
     for (const [name, prop] of Object.entries(kind.props)) {
-        if (name === word || (prop.aliases?.includes(word) ?? false)) return name;
+        if (name === word || prop.full === word || (prop.synonyms?.includes(word) ?? false)) return name;
     }
     return undefined;
 }

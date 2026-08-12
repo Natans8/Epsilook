@@ -149,31 +149,43 @@ function showKind(kind: Kind): void {
     }
 }
 
-/** The spelling a head prints — an alias resolves here, and every visible surface shows this one. */
+/** The word a head writes on compact surfaces — every other spelling resolves here. */
 function principalOf(head: Head): string {
     if (head.role === "column") return head.column.key;
     if (head.role === "kind") return head.kind.word ?? head.kind.column.key;
     return head.prop.prefix ?? head.name;
 }
 
+/** The unabbreviated name a head writes on naming surfaces, where its word is a shortcut. */
+function fullOf(head: Head): string | undefined {
+    if (head.role === "column") return undefined;
+    return head.role === "kind" ? head.kind.full : head.prop.full;
+}
+
 /** Prints every top-level word, then the plain-search roster. */
 function showRosters(): void {
-    // The roster counts words, not spellings: an alias is a way in, not a new question, so it is listed apart.
+    // The roster counts words, not spellings: a full name or synonym is a way in, not a new question, so each is
+    // listed apart — full names as what naming surfaces write, synonyms as input-only.
     const isPrincipal = (word: string): boolean => {
         const head = HEADS.get(word);
         return head !== undefined && principalOf(head) === word;
     };
+    const others = [...HEADS.keys()].filter((word) => !isPrincipal(word)).toSorted();
     const words = [...HEADS.keys()].filter(isPrincipal).toSorted();
-    const aliases = [...HEADS.keys()].filter((word) => !isPrincipal(word)).toSorted();
     console.log(`\nTOP-LEVEL WORDS — every word that opens a tag (${String(words.length)})\n`);
     console.log(`  ${words.join("  ")}`);
-    if (aliases.length > 0) {
-        const spelt = aliases.map((word) => {
-            const head = HEADS.get(word);
-            return head === undefined ? word : `${word} → ${principalOf(head)}`;
-        });
-        console.log(`\n  also spelled:  ${spelt.join("  ")}`);
+    const spelt = (word: string): string => {
+        const head = HEADS.get(word);
+        return head === undefined ? word : `${word} → ${principalOf(head)}`;
+    };
+    const fulls: string[] = [];
+    const synonyms: string[] = [];
+    for (const word of others) {
+        const head = HEADS.get(word);
+        (head !== undefined && fullOf(head) === word ? fulls : synonyms).push(word);
     }
+    if (fulls.length > 0) console.log(`\n  full names:    ${fulls.map(spelt).join("  ")}`);
+    if (synonyms.length > 0) console.log(`  synonyms:      ${synonyms.map(spelt).join("  ")}`);
 
     console.log("\nPLAIN SEARCH — what a bare word reaches, best tier first\n");
     const rows: { tier: number; line: string }[] = [];

@@ -23,13 +23,14 @@ export interface Column {
     readonly head?: boolean;
 
     /**
-     * Alternative spellings of the key, resolved wherever the key is a head. Resolution only: results headers, help
-     * and chips always print the key.
+     * Equal alternative spellings of the key, resolved wherever the key is a head: plurals, full words, localised
+     * words if a locale vocabulary ever ships. Ways in only — every rendering surface writes the key or the label.
      *
-     * Plain data so the list can grow without a mechanism change — variant spellings today, localised words if a
-     * locale vocabulary ever ships.
+     * Reading and writing are declared apart because they are not symmetric, exactly as a numeric type's notations
+     * are: every spelling reads, one spelling writes per surface. A column's two writing roles already exist — the
+     * key is its compact form and the label its name — so unlike a kind or a property it needs no `full` field.
      */
-    readonly aliases?: readonly string[];
+    readonly synonyms?: readonly string[];
 }
 
 export const COLUMNS = new Map<string, Column>();
@@ -62,34 +63,34 @@ export const idColumn = defineColumn({
 export const modelColumn = defineColumn({
     key: "model",
     label: "Models",
-    aliases: ["models"],
+    synonyms: ["models"],
     hint: "the 3D models a spell draws — missiles, ground effects, attachments",
 });
 
 export const soundColumn = defineColumn({
     key: "sound",
     label: "Sounds",
-    aliases: ["sounds"],
+    synonyms: ["sounds"],
     hint: "the sound files a spell plays, and the kits they come from",
 });
 
 export const animColumn = defineColumn({
     key: "anim",
     label: "Animations",
-    aliases: ["animation", "animations"],
+    synonyms: ["animation", "animations"],
     hint: "how the character moves — replacements, kits, loose animations",
 });
 
 export const fxColumn = defineColumn({
     key: "fx",
     label: "Effects",
-    aliases: ["effects"],
+    synonyms: ["effects"],
     hint: "what the spell looks like — beams, glows, tints, morphs, size changes",
 });
 
 export const mechColumn = defineColumn({
     key: "mech",
     label: "Mechanics",
-    aliases: ["mechanics"],
+    synonyms: ["mechanics"],
     hint: "what the spell does — effects, auras, timing, links and gates",
 });
