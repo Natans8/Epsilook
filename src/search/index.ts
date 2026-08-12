@@ -7,7 +7,7 @@
  * Importing this validates the schema and throws if two declarations claim the same word, so a collision cannot
  * survive an import in the application, the command line tools or the tests.
  *
- * TODO: export `run` and `describe` once the evaluator and the chip renderer exist.
+ * TODO: export `describe` once the chip renderer exists.
  */
 
 export type {Operator, OperatorForm, OperatorLevel} from "./operators";
@@ -53,3 +53,8 @@ export type {
 export {parse, propOf} from "./parse";
 
 export {equivalent, formatQuery} from "./format";
+
+export type {Dataset, Row, RowAsk, RowSource, Stored} from "./rows";
+export {contentMatches, matchProp, plainMatches, propRefMatches, rowMatches} from "./rows";
+
+export {askMatches, run} from "./kernel";

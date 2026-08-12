@@ -237,6 +237,11 @@ define(["exact"], ["bitmask"], (stored, operand) => {
 });
 define(["present"], ["bitmask"], (stored) => asNumber(stored) !== 0);
 
+/* ------------------------------------------------------------------------- flags */
+
+// A flag stores no value: a row carries the property exactly when the flag is set, so reaching this test is the test.
+define(["present"], ["flag"], () => true);
+
 /* ---------------------------------------------------------------------- ordinals */
 
 /**

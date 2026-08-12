@@ -115,7 +115,10 @@ DATA_MODULES = (
 # read, validated or rendered into help without running the matcher, and the
 # two stop being separable.
 SEARCH_CORE = "src/search/"
-SEARCH_MATCHER = "value-matching"
+
+# The matching half: the modules below the evaluation seam. Everything else in
+# the directory is declarative and must not import them.
+SEARCH_MATCHER = ("value-matching", "rows", "kernel")
 
 # index.ts is the public surface and re-exports both halves on purpose, so it
 # is the one module in the directory the seam does not apply to.
@@ -517,7 +520,7 @@ def check_layers(rep: Report) -> None:
 def check_matcher_seam(rep: Report, imports: re.Pattern[str]) -> None:
     """The declarative half of search must not depend on the matching half.
 
-    Two directions, both silent. Importing value-matching means the
+    Two directions, both silent. Importing an evaluation module means the
     accepted-operator table can no longer be read, validated or rendered into
     help without running the matcher. Naming `Row` or `candidates` puts one
     evaluator's data model into a contract the declarations should not know
@@ -527,7 +530,7 @@ def check_matcher_seam(rep: Report, imports: re.Pattern[str]) -> None:
     become the reason a checkout without it cannot commit.
     """
     core = [p for p in sorted((ROOT / SEARCH_CORE).glob("*.ts"))
-            if p.stem not in (SEARCH_MATCHER, SEARCH_SURFACE)] if (ROOT / SEARCH_CORE).is_dir() else []
+            if p.stem not in (*SEARCH_MATCHER, SEARCH_SURFACE)] if (ROOT / SEARCH_CORE).is_dir() else []
     if not core:
         rep.skip("matcher seam", f"{SEARCH_CORE} not present yet")
         return
@@ -538,7 +541,7 @@ def check_matcher_seam(rep: Report, imports: re.Pattern[str]) -> None:
         name = mod.relative_to(ROOT).as_posix()
         src = mod.read_text(encoding="utf-8")
         for target in imports.findall(strip_ts_comments(src)):
-            if target.rsplit("/", 1)[-1] == SEARCH_MATCHER:
+            if target.rsplit("/", 1)[-1] in SEARCH_MATCHER:
                 problems.append(f"{name} imports {target}")
         for line_no, line in enumerate(strip_ts_noise(src).splitlines(), 1):
             hit = word.search(line)
