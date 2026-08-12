@@ -18,7 +18,7 @@
 #     it can fetch anything else.
 #
 # POSIX sh, no coreutils: it runs on the ubuntu runner and in a busybox alpine
-# stage. `wc -c` rather than `stat` for the same reason.
+# stage. `wc -c` and `od` rather than `stat` or `file` for the same reason.
 #
 # Used by .github/workflows/pages.yml and by the Dockerfile's `site` stage, so
 # the two deploys cannot disagree about what a servable site is.
@@ -27,8 +27,11 @@ set -eu
 
 root=${1:-site}
 
-# An LFS pointer is ~130 bytes; the smallest real pack is ~720 KB. Anything in
-# between is not a judgement call, it is a stub.
+# A pointer is caught by its CONTENT, not its size: a locale overlay is
+# legitimately tiny (an enUS one is 283 bytes, since it diffs English against
+# English), so "small" stopped meaning "stub" the moment overlays existed.
+# The size floor still applies to a BASE pack, where ~720 KB is the smallest
+# real one and anything under this is a stub rather than a judgement call.
 MIN_PACK_BYTES=100000
 
 fail=0
@@ -40,6 +43,11 @@ bad() {
 }
 
 size_of() { wc -c <"$1" | tr -d ' '; }
+
+# The first two bytes, as hex. A real gzip is 1f8b; an LFS pointer is a text
+# file starting "version https://git-lfs..." (7665), which is what a checkout
+# that never smudged leaves behind.
+magic_of() { od -An -tx1 -N2 <"$1" 2>/dev/null | tr -d ' \n'; }
 
 if [ ! -d "$root" ]; then
     printf 'FAIL   %s is not a directory\n' "$root" >&2
@@ -77,13 +85,31 @@ else
 fi
 
 packs=0
+overlays=0
 for pack in "$root"/data/*/*.gz; do
     [ -e "$pack" ] || break
-    packs=$((packs + 1))
     bytes=$(size_of "$pack")
     name=${pack#"$root"/}
-    if [ "$bytes" -lt "$MIN_PACK_BYTES" ]; then
-        bad "$name is $bytes bytes — an unresolved LFS pointer, not a pack (git lfs pull)"
+    # spelldata.json.gz is a base pack; spelldata.<locale>.json.gz is an
+    # overlay on one, and only the base carries a meaningful size floor.
+    case "${pack##*/}" in
+        spelldata.json.gz) is_base=1 ;;
+        *) is_base=0 ;;
+    esac
+    if [ "$is_base" -eq 1 ]; then
+        packs=$((packs + 1))
+    else
+        overlays=$((overlays + 1))
+    fi
+
+    if [ "$(magic_of "$pack")" != "1f8b" ]; then
+        if head -c 23 <"$pack" 2>/dev/null | grep -q 'version https://git-lfs'; then
+            bad "$name is an unresolved LFS pointer, not gzip (git lfs pull)"
+        else
+            bad "$name is $bytes bytes and does not start with the gzip magic — corrupt"
+        fi
+    elif [ "$is_base" -eq 1 ] && [ "$bytes" -lt "$MIN_PACK_BYTES" ]; then
+        bad "$name is $bytes bytes — truncated, not a pack"
     else
         note "$name  $bytes bytes"
     fi
@@ -98,4 +124,4 @@ if [ "$fail" -ne 0 ]; then
     exit 1
 fi
 
-printf '\n%s is servable — %s packs\n' "$root" "$packs"
+printf '\n%s is servable — %s packs, %s locale overlays\n' "$root" "$packs" "$overlays"

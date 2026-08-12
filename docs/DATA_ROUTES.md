@@ -1460,10 +1460,27 @@ in another locale, and **only where the translation exists and differs from the 
 — wago serves the English string for untranslated rows, so "same as English" and "not translated" are one case and the
 app-side fallback (keep the base string) is right for both. No ids the base does not have, no visuals, no numbers.
 
-**enUS ships too, and it is EMPTY — 283 bytes, all twelve counts zero, by construction.** It is the locale the base pack
+**enUS ships too, and it is EMPTY — 292 bytes, all twelve counts zero, by construction.** It is the locale the base pack
 is itself read in, so every string equals the English it is diffed against. It is declared so the roster names every
 locale the app can be asked for rather than every locale except the default one, and its emptiness is the machinery's
 own check: a non-zero count there means the base pack and the `&locale=` route disagree about the same strings.
+
+**`meta.sparse` says which kind of overlay a file is, and `--full` builds the other one.** Sparseness is the DEFAULT and
+not a premise: `--full` drops the differs-from-English test and writes every string the locale has, for an overlay that
+is the sole source of its strings rather than an annotation on the base pack. Measured on 9.2.7 enUS: **276,327 names,
+128,374 descriptions, 62,035 auras, 5.3 MB gzipped** — the description count is exactly the base pack's own §3x
+coverage, which is what makes it a standalone equivalent rather than an approximation.
+
+⚠ **A full enUS is short one route, and only that one: `creatureNames` and `objectNames` come back 0.** The TDB
+`*_locale` tables carry only NON-English rows — English lives in `creature_template.name` / `gameobject_template.name`
+itself — so an English overlay reading the locale tables finds nothing to read. ruRU gets 18,059 and 424 from the same
+call. If a full English overlay is ever the sole source, those two names come from the base TDB tables instead; every
+other section already stands alone.
+
+⛔ **enGB is NOT a second English: on 9.2.7 it is byte-identical to enUS across all three text columns** — 276,332 spell
+names, 129,050 descriptions and 63,788 aura descriptions, **zero differences in every one**. The client's British
+locale carries no separate strings, so there is no in-game source of `colour` / `armour` spellings and the VarCon fold
+(`tools/spellings.py`) is the only route to them. Do not build an enGB overlay expecting content.
 
 | overlay section                                              | source                                                                                                                        |
 |--------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|

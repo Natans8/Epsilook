@@ -198,34 +198,40 @@ def load_base_pack(pack_id: str) -> dict:
 
 
 def sparse_names(ids: list[int], english: list[str],
-                 translated: dict[int, str]) -> dict[str, list]:
+                 translated: dict[int, str], full: bool = False) -> dict[str, list]:
     """{ids, names} for the entries whose translation exists and differs.
 
     Everything else is omitted on purpose: wago serves the English string for
     untranslated rows, so "same as English" and "not translated" are one case,
     and the app's fallback (keep the base string) is right for both.
+
+    `full` drops the comparison and keeps every string the locale has, for an
+    overlay that must stand alone rather than annotate the base pack.
     """
     out_ids, out_names = [], []
     for i, en in zip(ids, english):
         tr = translated.get(i, "")
-        if tr and tr != en:
+        if tr and (full or tr != en):
             out_ids.append(i)
             out_names.append(tr)
     return {"ids": out_ids, "names": out_names}
 
 
 def sparse_text_block(base_ids: list[int], english_text: list[str],
-                      english_of: list[int], translated: dict[int, str]) -> dict[str, list]:
+                      english_of: list[int], translated: dict[int, str],
+                      full: bool = False) -> dict[str, list]:
     """{ids, text, of} for cooked prose that exists and differs from English.
 
     Same dedup as the base pack's spellText: redirect chains cook many spells
     to one identical string, so `text` pools the distinct strings and `of`
     indexes into it, parallel to `ids`.
+
+    `full` keeps every cooked string, as in sparse_names.
     """
     en_of = dict(zip(base_ids, english_of))
     kept: dict[int, str] = {}
     for s, tr in translated.items():
-        if tr and tr != english_text[en_of.get(s, 0)]:
+        if tr and (full or tr != english_text[en_of.get(s, 0)]):
             kept[s] = tr
     out_ids = sorted(kept)
     pool: dict[str, int] = {}
@@ -234,8 +240,14 @@ def sparse_text_block(base_ids: list[int], english_text: list[str],
 
 
 def build_locale_pack(version: str, pack_id: str, locale: str,
-                      text_locale: TextLocale, refresh: bool) -> dict:
-    """Read the localized sources and assemble the overlay dict."""
+                      text_locale: TextLocale, refresh: bool,
+                      full: bool = False) -> dict:
+    """Read the localized sources and assemble the overlay dict.
+
+    `full` writes every string the locale has instead of only those differing
+    from the base pack's English, for an overlay that is the sole source of
+    its strings rather than an annotation on the base.
+    """
     t0 = time.time()
     table_dir = CACHE_DIR / version
     if not (table_dir / "Spell.csv").exists():
@@ -250,8 +262,8 @@ def build_locale_pack(version: str, pack_id: str, locale: str,
     # --- spell names / subtexts / alt names --------------------------------
     log("Reading localized spell names ...")
     loc_names, loc_subtexts = read_spell_names(loc_dir, None)
-    spell_names = sparse_names(base_ids, base["spells"]["names"], loc_names)
-    spell_subtexts = sparse_names(base_ids, base["spells"]["subtexts"], loc_subtexts)
+    spell_names = sparse_names(base_ids, base["spells"]["names"], loc_names, full)
+    spell_subtexts = sparse_names(base_ids, base["spells"]["subtexts"], loc_subtexts, full)
 
     override_names = {to_int(oid): name for oid, name in read_table(
         loc_dir, "SpellOverrideName", ["ID", "OverrideName_lang"])}
@@ -260,7 +272,7 @@ def build_locale_pack(version: str, pack_id: str, locale: str,
         if (text := " ".join(w for i in sorted(set(ids))
                              if (w := override_names.get(i, ""))))
     }
-    spell_altnames = sparse_names(base_ids, base["spells"]["altNames"], loc_altnames)
+    spell_altnames = sparse_names(base_ids, base["spells"]["altNames"], loc_altnames, full)
 
     # --- cooked prose ------------------------------------------------------
     # The templates, the named-variable bodies and the spell names spliced in
@@ -289,22 +301,22 @@ def build_locale_pack(version: str, pack_id: str, locale: str,
     spell_text = {
         "descriptions": sparse_text_block(
             base_ids, bt["descriptions"]["text"], bt["descriptions"]["of"],
-            loc_descriptions),
+            loc_descriptions, full),
         "auras": sparse_text_block(
-            base_ids, bt["auras"]["text"], bt["auras"]["of"], loc_auras),
+            base_ids, bt["auras"]["text"], bt["auras"]["of"], loc_auras, full),
         "encounters": sparse_text_block(
-            base_ids, bt["encounters"]["text"], bt["encounters"]["of"], loc_notes),
+            base_ids, bt["encounters"]["text"], bt["encounters"]["of"], loc_notes, full),
     }
 
     # --- the id-keyed name payloads ----------------------------------------
     log("Reading localized payload names ...")
     loc_areas = {to_int(a): name for a, name in read_table(
         loc_dir, "AreaTable", ["ID", "AreaName_lang"])}
-    area_names = sparse_names(base["areas"]["ids"], base["areas"]["names"], loc_areas)
+    area_names = sparse_names(base["areas"]["ids"], base["areas"]["names"], loc_areas, full)
 
     loc_items = {to_int(i): name for i, name in read_table(
         loc_dir, "ItemSearchName", ["ID", "Display_lang"]) if name}
-    item_names = sparse_names(base["items"]["ids"], base["items"]["names"], loc_items)
+    item_names = sparse_names(base["items"]["ids"], base["items"]["names"], loc_items, full)
 
     # mount names key on the DISPLAY id, like the base section: the (locale-
     # independent) MountXDisplay hop is re-read from the base pack's cache,
@@ -320,13 +332,13 @@ def build_locale_pack(version: str, pack_id: str, locale: str,
             for did in mount_displays.get(to_int(mid), ()):
                 loc_mounts.setdefault(did, name.strip())
     mounts = base["mounts"]
-    mount_names = sparse_names(mounts["displayIds"], mounts["names"], loc_mounts)
+    mount_names = sparse_names(mounts["displayIds"], mounts["names"], loc_mounts, full)
     mount_names = {"displayIds": mount_names["ids"], "names": mount_names["names"]}
 
     loc_forms = {to_int(f): name for f, name in read_table(
         loc_dir, "SpellShapeshiftForm", ["ID", "Name_lang"])}
     shapeshift_names = sparse_names(
-        base["shapeshifts"]["ids"], base["shapeshifts"]["names"], loc_forms)
+        base["shapeshifts"]["ids"], base["shapeshifts"]["names"], loc_forms, full)
 
     # --- TDB names: creatures (morphs + summons share them) and objects ----
     loc_creatures = read_tdb_locale_names(tdb_dir, "creature_template_locale", locale)
@@ -334,11 +346,11 @@ def build_locale_pack(version: str, pack_id: str, locale: str,
     base_creatures.update(zip(base["summons"]["creatureIds"], base["summons"]["names"]))
     creature_ids = sorted(base_creatures)
     creature_names = sparse_names(
-        creature_ids, [base_creatures[c] for c in creature_ids], loc_creatures)
+        creature_ids, [base_creatures[c] for c in creature_ids], loc_creatures, full)
 
     loc_objects = read_tdb_locale_names(tdb_dir, "gameobject_template_locale", locale)
     object_names = sparse_names(
-        base["objects"]["ids"], base["objects"]["names"], loc_objects)
+        base["objects"]["ids"], base["objects"]["names"], loc_objects, full)
 
     counts = {
         "spellNames": len(spell_names["ids"]),
@@ -359,6 +371,7 @@ def build_locale_pack(version: str, pack_id: str, locale: str,
             "format": PACK_FORMAT,
             "localeFormat": LOCALE_FORMAT,
             "locale": locale,
+            "sparse": not full,
             "base": pack_id,
             "built": date.today().isoformat(),
             "counts": counts,
@@ -405,11 +418,14 @@ def main() -> None:
                                  "(default: the version)")
     ap.add_argument("--refresh", action="store_true",
                     help="re-download localized sources even if cached")
+    ap.add_argument("--full", action="store_true",
+                    help="write every string the locale has, not only those "
+                         "differing from the base pack's English")
     args = ap.parse_args()
 
     pack_id = args.id or args.version
     pack = build_locale_pack(args.version, pack_id, args.locale,
-                             LOCALES[args.locale], args.refresh)
+                             LOCALES[args.locale], args.refresh, args.full)
     write_locale_pack(pack, pack_id, args.locale)
 
 
