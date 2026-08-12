@@ -5,12 +5,12 @@
  *   npm run battery -- --seedcheck      re-run 2.0 with candidates() disabled and flag any answer that moves
  *   npm run battery -- --json           machine-readable, for diffing two runs
  *
- * Each probe is a PAIR: the 1.0 query from the canonical battery (OPERATIONS.md §6) and its 2.0 translation,
- * because the languages differ by design — a 1.0 phrase like `model:"attach chest"` is a keyword-and-value, while a
- * 2.0 quoted value is a string. Where the translation cannot say the same thing, the note names the gap.
+ * Each probe is a PAIR: the 1.0 query from the canonical battery and its 2.0 translation, because the languages
+ * differ by design — a 1.0 phrase like `model:"attach chest"` is a keyword-and-value, while a 2.0 quoted value is a
+ * string. Where the translation cannot say the same thing, the note names the gap.
  *
- * Every count that moves must be EXPLAINED from the pack before it is accepted; an unexplained delta is the failure
- * (the user's rule: we're reinventing it, not fixing it). The notes carry the standing explanations.
+ * Every count that moves must be EXPLAINED from the pack before it is accepted; an unexplained delta is the
+ * failure. The notes carry the standing explanations.
  *
  * --seedcheck is the soundness half: a candidates() seed may only change the COST of a query, so the same query with
  * the seed disabled must return the identical set. A mismatch is a broken seed, and it prints loudly.

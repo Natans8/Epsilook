@@ -1,20 +1,22 @@
 /**
  * @file The pack-backed {@link Dataset}: search 2.0's row model, read out of the shipped pack.
  *
- * This is the bridge PHASE 4 runs on and PHASE 5 retires: it reshapes 1.0's loaded indexes ({@link SpellData}) into
- * the rows the kernel evaluates, so the battery and the bench can run the real pack through `run()` before the pack
- * itself ships rows. Once the pack is row-shaped, `rows()` becomes a read and this file's reshaping half goes away.
+ * A temporary bridge: it reshapes 1.0's loaded indexes ({@link SpellData}) into the rows the kernel evaluates, so
+ * the battery and the bench can run the real pack through `run()` before the pack itself ships rows. Once it does,
+ * `rows()` becomes a read and the reshaping half of this file goes away.
  *
  * It lives in tools/ for the reason tools/query.ts does: everything under src/ must be reachable from src/main.ts,
  * and nothing in the app drives the 2.0 engine yet.
  *
- * Three deliberate gaps, each waiting on data the pack does not carry today rather than on code here:
+ * Deliberate gaps, each waiting on data the pack does not carry in the needed shape rather than on code here:
  *
- * - A passenger row carries no animation: the pack ships the rider's anims as one flat set, and the kind's
- *   enter/sit/exit properties need the role the build currently drops.
+ * - A passenger row carries no animation: the pack ships the rider's anims as one flat set, without the roles the
+ *   kind's enter/sit/exit properties need.
  * - An item row has no name property to put the item's name in, so `model:{item sickle}` selects by path only.
  * - An alternative name (SpellOverrideName) reaches 1.0's corpus but no 2.0 row: SpellData folds it into `namesL`
  *   and keeps no per-spell list to build a row from.
+ * - A shadowy or ghost row carries no colour, and a summon row no control word: their kinds declare no property
+ *   for them yet, though the pack ships both.
  */
 import type {SpellData, SpellPack, VersionEntry} from "../src/data";
 import {buildIndexes, DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED} from "../src/data";
@@ -30,16 +32,16 @@ import {
 import type {Kind} from "../src/search/kinds";
 import {
     animKit, attached, aura, barrage, camo, chain, debuff, delivery, description, desaturate, detect, display,
-    dissolve, effect, equipped, expansion, freeze, gameObject, ghost, glow, ground, icon, invis, item, keybind, loose,
-    location, missile, morph, mount, name as nameKind, origin, passenger, pose, replace, scale, screen, seats,
-    shadowy, shapeshift, sound as soundKind, speed, spellId as spellIdKind, summon, tint, tracking, trail,
+    dissolve, effect, equipped, expansion, freeze, gameObject, ghost, glow, ground, icon, invis, item, keybind,
+    KINDS, location, loose, missile, morph, mount, name as nameKind, origin, passenger, pose, replace, scale, screen,
+    seats, shadowy, shapeshift, sound as soundKind, speed, spellId as spellIdKind, summon, tint, tracking, trail,
     transparency, triggers,
 } from "../src/search/kinds";
 import type {Ask, RowTest, ScopeTerm, ValueExpr} from "../src/search/parse";
 import type {Dataset, Row, Stored} from "../src/search/rows";
 import {COLOUR_NAMES} from "../src/search/colour-names";
 import {fold, squash} from "../src/search/text-normalization";
-import {setOrdinalLadder, TARGET_ROLES} from "../src/search/value-types";
+import {colour as colourType, id as idType, setOrdinalLadder, TARGET_ROLES} from "../src/search/value-types";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -115,13 +117,20 @@ function idRows(d: SpellData, i: number): Row[] {
     return rows;
 }
 
-/** The model categories the pack numbers, resolved to kinds once. The unnamed category is the plain attached model. */
+/**
+ * The model categories the pack numbers, resolved to kinds once. The unnamed category is the plain attached model.
+ *
+ * @throws If a category word matches no kind — a new pack category or a renamed kind word must fail loudly, because
+ *   the silent alternative is rows evaluating under the wrong kind.
+ */
 function catKinds(d: SpellData): Map<number, Kind> {
     const byWord = new Map<string, Kind>(
         [missile, ground, trail, barrage, display, item].map((kind) => [kind.word ?? "", kind]));
     const out = new Map<number, Kind>();
     for (const [cat, word] of Object.entries(d.modelCatNames)) {
-        out.set(Number(cat), word === "" ? attached : (byWord.get(word) ?? attached));
+        const kind = word === "" ? attached : byWord.get(word);
+        if (!kind) throw new Error(`no model kind for pack category "${word}"`);
+        out.set(Number(cat), kind);
     }
     return out;
 }
@@ -378,7 +387,7 @@ function probeVocab(vocabs: readonly Vocab[], token: string, into: Set<number>):
  * Everything `candidates()` probes, built once per dataset.
  *
  * The vocabularies are what make a seed cheap: scanning 33k file paths or 79k deduped descriptions is two orders of
- * magnitude less work than materialising every spell's rows — the PHASE 1b measurement this implements. Every
+ * magnitude less work than materialising every spell's rows — the measured case for narrowing before walking. Every
  * haystack is squashed with the matcher's own `squash`, because a seed built under a different normalisation than
  * the verifier's would silently lose answers.
  */
@@ -404,7 +413,7 @@ interface Inverted {
     readonly colourKinds: ReadonlyMap<Column, readonly Kind[]>;
 }
 
-function invert(d: SpellData): Inverted {
+function invert(d: SpellData, cats: Map<number, Kind>): Inverted {
     const index = (spell: number): number => d.spellIndex.get(spell) ?? -1;
     const indexes = (spellIds: Iterable<number>): number[] =>
         [...spellIds].map(index).filter((at) => at >= 0);
@@ -425,7 +434,6 @@ function invert(d: SpellData): Inverted {
         for (const spellId of spellIds) mark(column, kind, spellId);
     };
 
-    const cats = catKinds(d);
     for (const [spellId, entries] of d.spellModelCats) {
         for (const e of entries) {
             const kind = cats.get(e.cat) ?? attached;
@@ -490,14 +498,21 @@ function invert(d: SpellData): Inverted {
             if (sq) into.push({sq, spells: indexes(spellIds)});
         }
     };
+    /** One corpus map — key to 1.0 search haystack — joined with its parallel key-to-spells map. */
+    const corpusVocab = <K, >(into: Vocab[], corpora: ReadonlyMap<K, string>,
+                              spells: ReadonlyMap<K, Iterable<number>>): void => {
+        vocab(into, [...corpora].map(([key, corpus]): [string, Iterable<number>] =>
+            [corpus, spells.get(key) ?? []]));
+    };
+
     const modelVocab: Vocab[] = [];
     vocab(modelVocab, d.modelFids.map((fid) =>
         [d.files.get(fid)?.path ?? "", d.modelSpells.get(fid) ?? []]));
-    vocab(modelVocab, [...d.itemSearchL].map(([itemId, corpus]): [string, Iterable<number>] =>
-        [corpus, d.itemSpells.get(itemId) ?? []]));
-    vocab(modelVocab, [...d.mountSearchL].map(([dsp, corpus]): [string, Iterable<number>] =>
-        [corpus, d.mountSpells.get(dsp) ?? []]));
-    // Attachment points and motions are enum props, so a content term reaches them; index them by one walk.
+    corpusVocab(modelVocab, d.itemSearchL, d.itemSpells);
+    corpusVocab(modelVocab, d.mountSearchL, d.mountSpells);
+    // Attachment points and motions are enum props, so a content term reaches them, and a display/item ref is an
+    // identity a whole number names; all three index in the same walk.
+    const modelRefs = new Map<number, Set<number>>();
     {
         const byAttach = new Map<string, Set<number>>();
         const byMotion = new Map<string, Set<number>>();
@@ -506,6 +521,7 @@ function invert(d: SpellData): Inverted {
                 if (e.src >= 0 && d.attachmentNames[e.src]) addTo(byAttach, d.attachmentNames[e.src], spellId);
                 if (e.dst >= 0 && d.attachmentNames[e.dst]) addTo(byAttach, d.attachmentNames[e.dst], spellId);
                 if (e.motion) addTo(byMotion, e.motion, spellId);
+                if (e.ref) addTo(modelRefs, e.ref, spellId);
             }
         }
         vocab(modelVocab, byAttach);
@@ -515,8 +531,7 @@ function invert(d: SpellData): Inverted {
     const soundVocab: Vocab[] = [];
     vocab(soundVocab, d.soundFids.map((fid) =>
         [d.files.get(fid)?.path ?? "", d.soundSpells.get(fid) ?? []]));
-    vocab(soundVocab, [...d.soundKitName].map(([kitId, kitName]): [string, Iterable<number>] =>
-        [kitName, d.soundKitSpells.get(kitId) ?? []]));
+    corpusVocab(soundVocab, d.soundKitName, d.soundKitSpells);
 
     const animVocab: Vocab[] = [];
     vocab(animVocab, d.animNames.map((animName, animId): [string, Iterable<number>] => [animName, [
@@ -540,28 +555,28 @@ function invert(d: SpellData): Inverted {
     })()]));
 
     const mechVocab: Vocab[] = [];
-    vocab(mechVocab, [...d.effectNames].map(([effectId, effectName]): [string, Iterable<number>] =>
-        [effectName, effectIdSpells(d, effectId)]));
-    vocab(mechVocab, [...d.auraNames].map(([auraId, auraName]): [string, Iterable<number>] =>
-        [auraName, auraIdSpells(d, auraId)]));
-    vocab(mechVocab, [...d.implicitTargetNames].map(([, targetName]): [string, Iterable<number>] =>
-        [targetName, []]));
-    vocab(mechVocab, [...d.triggersSearchL].map(([other, corpus]): [string, Iterable<number>] =>
-        [corpus, d.triggersSpells.get(other) ?? []]));
-    vocab(mechVocab, [...d.originSearchL].map(([other, corpus]): [string, Iterable<number>] =>
-        [corpus, d.originSpells.get(other) ?? []]));
-    vocab(mechVocab, [...d.areaSearchL].map(([areaId, corpus]): [string, Iterable<number>] =>
-        [corpus, d.areaSpells.get(areaId) ?? []]));
-    vocab(mechVocab, [...d.speedSearchL].map(([key, corpus]): [string, Iterable<number>] =>
-        [corpus, d.speedSpells.get(key) ?? []]));
-    vocab(mechVocab, [...d.vehicleSearchL].map(([v, corpus]): [string, Iterable<number>] =>
-        [corpus, d.vehicleSpells.get(v) ?? []]));
-    vocab(mechVocab, [...d.keybindSearchL].map(([o, corpus]): [string, Iterable<number>] =>
-        [corpus, d.keybindSpells.get(o) ?? []]));
+    // One pass over the flat mechanic arrays builds both reverse maps; a per-name scan would visit them once per
+    // enum entry — hundreds of full sweeps of ~372k rows.
+    {
+        const effectSpells = new Map<number, Set<number>>();
+        const auraSpells = new Map<number, Set<number>>();
+        const {spellIds, effects, auras} = d.mechanicCols;
+        for (let k = 0; k < spellIds.length; k++) {
+            if (effects[k]) addTo(effectSpells, effects[k], spellIds[k]);
+            if (auras[k]) addTo(auraSpells, auras[k], spellIds[k]);
+        }
+        corpusVocab(mechVocab, d.effectNames, effectSpells);
+        corpusVocab(mechVocab, d.auraNames, auraSpells);
+    }
+    corpusVocab(mechVocab, d.triggersSearchL, d.triggersSpells);
+    corpusVocab(mechVocab, d.originSearchL, d.originSpells);
+    corpusVocab(mechVocab, d.areaSearchL, d.areaSpells);
+    corpusVocab(mechVocab, d.speedSearchL, d.speedSpells);
+    corpusVocab(mechVocab, d.vehicleSearchL, d.vehicleSpells);
+    corpusVocab(mechVocab, d.keybindSearchL, d.keybindSpells);
 
     const fxVocab: Vocab[] = [];
-    vocab(fxVocab, [...d.fxSearchL].map(([c, corpus]): [string, Iterable<number>] =>
-        [corpus, d.fxSpells.get(c) ?? []]));
+    corpusVocab(fxVocab, d.fxSearchL, d.fxSpells);
     // The chain corpus carries hue and textures but not the beam's attach pair, which is a pair of enum props here.
     {
         const byAttach = new Map<string, Set<number>>();
@@ -575,20 +590,13 @@ function invert(d: SpellData): Inverted {
         }
         vocab(fxVocab, byAttach);
     }
-    vocab(fxVocab, [...d.shadowySearchL].map(([sh, corpus]): [string, Iterable<number>] =>
-        [corpus, d.shadowySpells.get(sh) ?? []]));
-    vocab(fxVocab, [...d.dissolveSearchL].map(([dis, corpus]): [string, Iterable<number>] =>
-        [corpus, d.dissolveSpells.get(dis) ?? []]));
-    vocab(fxVocab, [...d.screenSearchL].map(([sc, corpus]): [string, Iterable<number>] =>
-        [corpus, d.screenSpells.get(sc) ?? []]));
-    vocab(fxVocab, [...d.morphSearchL].map(([c, corpus]): [string, Iterable<number>] =>
-        [corpus, d.morphSpells.get(c) ?? []]));
-    vocab(fxVocab, [...d.shapeshiftSearchL].map(([f, corpus]): [string, Iterable<number>] =>
-        [corpus, d.shapeshiftSpells.get(f) ?? []]));
-    vocab(fxVocab, [...d.summonPairSearchL].map(([key, corpus]): [string, Iterable<number>] =>
-        [corpus, d.summonPairSpells.get(key) ?? []]));
-    vocab(fxVocab, [...d.objectSearchL].map(([obj, corpus]): [string, Iterable<number>] =>
-        [corpus, d.objectSpells.get(obj) ?? []]));
+    corpusVocab(fxVocab, d.shadowySearchL, d.shadowySpells);
+    corpusVocab(fxVocab, d.dissolveSearchL, d.dissolveSpells);
+    corpusVocab(fxVocab, d.screenSearchL, d.screenSpells);
+    corpusVocab(fxVocab, d.morphSearchL, d.morphSpells);
+    corpusVocab(fxVocab, d.shapeshiftSearchL, d.shapeshiftSpells);
+    corpusVocab(fxVocab, d.summonPairSearchL, d.summonPairSpells);
+    corpusVocab(fxVocab, d.objectSearchL, d.objectSpells);
 
     // Plain search reads only the props declared plain, a subset of each column's content, so the union of the
     // content vocabularies is a sound plain seed.
@@ -598,13 +606,7 @@ function invert(d: SpellData): Inverted {
      * notation before text, so a sound seed must answer by identity as well as by substring. The count-typed props
      * (seats, detect) answer with their kind's whole presence: small sets, and a count has no index. */
     const digits = new Map<Column, (n: number) => Iterable<number>[]>();
-    digits.set(modelColumn, (n) => {
-        const out: Iterable<number>[] = [];
-        for (const [spellId, entries] of d.spellModelCats) {
-            if (entries.some((e) => e.ref === n)) out.push([index(spellId)]);
-        }
-        return out;
-    });
+    digits.set(modelColumn, (n) => [indexes(modelRefs.get(n) ?? [])]);
     digits.set(soundColumn, (n) => [indexes(d.soundKitSpells.get(n) ?? [])]);
     digits.set(animColumn, (n) => [indexes(d.animKitSpells.get(n) ?? [])]);
     digits.set(mechColumn, (n) => [
@@ -621,34 +623,26 @@ function invert(d: SpellData): Inverted {
             .map(([, spellIds]) => indexes(spellIds)),
     ]);
 
-    const numericKinds = new Map<Column, readonly Kind[]>([
-        [mechColumn, [invis, detect, seats, speed]],
-        [fxColumn, [scale, transparency, desaturate]],
-    ]);
-    const colourKinds = new Map<Column, readonly Kind[]>([
-        [fxColumn, [chain, glow, tint]],
-    ]);
+    /* Which kinds a numeric-looking or colour token could match, derived from the declarations rather than listed:
+     * a hand list would go quietly stale the day a kind gains such a property, and a stale list here is an
+     * undersized seed. The id type is excluded — identity is exact, and the `digits` lookups above answer it. */
+    const numericKinds = new Map<Column, Kind[]>();
+    const colourKinds = new Map<Column, Kind[]>();
+    for (const kind of KINDS.values()) {
+        const types = Object.values(kind.props).flatMap((prop) => prop.types);
+        if (types.some((type) => type.quantity === true && type !== idType)) {
+            numericKinds.set(kind.column, [...(numericKinds.get(kind.column) ?? []), kind]);
+        }
+        if (types.includes(colourType)) {
+            colourKinds.set(kind.column, [...(colourKinds.get(kind.column) ?? []), kind]);
+        }
+    }
 
     const content = new Map<Column, readonly Vocab[]>([
         [modelColumn, modelVocab], [soundColumn, soundVocab], [animColumn, animVocab],
         [mechColumn, mechVocab], [fxColumn, fxVocab],
     ]);
     return {presence, kindPresence, namesSq, pools, iconsSq, plainVocab, content, digits, numericKinds, colourKinds};
-}
-
-/** Spells whose mechanic rows carry one effect id, read off the flat pack arrays. */
-function effectIdSpells(d: SpellData, effectId: number): number[] {
-    const {spellIds, effects} = d.mechanicCols;
-    const out: number[] = [];
-    for (let k = 0; k < spellIds.length; k++) if (effects[k] === effectId) out.push(spellIds[k]);
-    return out;
-}
-
-function auraIdSpells(d: SpellData, auraId: number): number[] {
-    const {spellIds, auras} = d.mechanicCols;
-    const out: number[] = [];
-    for (let k = 0; k < spellIds.length; k++) if (auras[k] === auraId) out.push(spellIds[k]);
-    return out;
 }
 
 /**
@@ -697,6 +691,8 @@ function probeTokens(expr: ValueExpr): string[] | null {
  * @returns The dataset, with row sources for all seven columns and an inverted `candidates()`.
  */
 export function packDataset(d: SpellData): Dataset {
+    // The ordinal ladder is module-level state, so the last dataset built owns it: a caller holding two datasets at
+    // once must not interleave ordinal queries across them. Every current caller builds and queries one at a time.
     setOrdinalLadder(d.expansions.map((xp) => [xp.key, ...xp.aliases].join(" ")));
     const cats = catKinds(d);
     const builders = new Map<Column, (i: number) => Row[]>([
@@ -710,7 +706,7 @@ export function packDataset(d: SpellData): Dataset {
     ]);
 
     let inverted: Inverted | null = null;
-    const invertedSide = (): Inverted => (inverted ??= invert(d));
+    const invertedSide = (): Inverted => (inverted ??= invert(d, cats));
 
     const plainSeed = (value: ValueExpr): Set<number> | null => {
         const tokens = probeTokens(value);
