@@ -5324,9 +5324,13 @@ def version_key(version: str) -> tuple[int, ...]:
     return tuple(int(p) if p.isdigit() else 0 for p in version.split("."))
 
 
-def write_pack(pack: dict, version: str, label: str, hidden: bool = False,
+def write_pack(pack: dict, pack_id: str, label: str, hidden: bool = False,
                is_default: bool = False) -> None:
     """Write the gzipped pack and refresh the versions.json manifest.
+
+    `pack_id` is the pack's identity — its data directory, its manifest id and
+    its `?v=` value. It is normally the build id, and differs only for a pack
+    that shares its patch with another (a PTR line level with live).
 
     `hidden` marks the entry as reachable only by an explicit ?v= URL: the app
     keeps it out of the version dropdown and never treats it as the default,
@@ -5337,7 +5341,7 @@ def write_pack(pack: dict, version: str, label: str, hidden: bool = False,
     the flag exists: the newest build is not necessarily the one to serve
     first. Marking one entry clears the flag on all the others.
     """
-    out_dir = DATA_DIR / version
+    out_dir = DATA_DIR / pack_id
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "spelldata.json.gz"
 
@@ -5356,15 +5360,15 @@ def write_pack(pack: dict, version: str, label: str, hidden: bool = False,
     manifest_path = DATA_DIR / "versions.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else []
     entry = {
-        "id": version,
+        "id": pack_id,
         "label": label,
-        "file": f"data/{version}/spelldata.json.gz",
+        "file": f"data/{pack_id}/spelldata.json.gz",
         "built": pack["meta"]["built"],
         "hash": pack_hash,
     }
     if hidden:
         entry["hidden"] = True
-    manifest = [e for e in manifest if e["id"] != version]
+    manifest = [e for e in manifest if e["id"] != pack_id]
     if is_default:
         entry["default"] = True
         for e in manifest:  # exactly one entry may carry the flag
@@ -5379,6 +5383,9 @@ def main() -> None:
     """Fetch the sources for one game version, build its pack, write it out."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", required=True, help="game build, e.g. 9.2.7.45745")
+    ap.add_argument("--id", help="pack identity — its data directory, manifest id and "
+                                 "?v= value (default: the version). Only a pack sharing "
+                                 "its patch with another needs one, e.g. 12.1.0-ptr.69273")
     ap.add_argument("--label", help='display label, e.g. "Shadowlands 9.2.7" (default: the version)')
     ap.add_argument("--refresh", action="store_true", help="re-download sources even if cached")
     ap.add_argument("--hidden", action="store_true",
@@ -5392,7 +5399,8 @@ def main() -> None:
     label = args.label or args.version
     table_dir, listfile, tdb_dir = fetch_sources(args.version, args.refresh)
     pack = build_pack(args.version, label, table_dir, listfile, tdb_dir)
-    write_pack(pack, args.version, label, hidden=args.hidden, is_default=args.is_default)
+    write_pack(pack, args.id or args.version, label,
+               hidden=args.hidden, is_default=args.is_default)
 
 
 if __name__ == "__main__":

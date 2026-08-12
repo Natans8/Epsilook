@@ -155,11 +155,27 @@ class Pack:
     default: bool = False  # the pack the app loads when the URL names none
     hidden: bool = False  # resolvable by ?v= but kept out of the dropdown
     source: str = WAGO  # WAGO or ARCHIVE — which downloader reads it
+    tag: str = ""  # marks a pack whose PATCH another pack also ships (see `id`)
 
     @property
     def patch(self) -> str:
         """`"1.15.9.69109"` -> `"1.15.9"`. The label's version half."""
         return ".".join(self.build.split(".")[:3])
+
+    @property
+    def id(self) -> str:
+        """The pack's identity: its data directory, manifest id and `?v=` value.
+
+        Normally the build id. A `tag` marks it — `12.1.0-ptr.69273` — and that
+        is not decoration: the app's clean URL is the PATCH (`?v=12.1.0`), so
+        two packs sharing a patch resolve to one another. A PTR line sits on the
+        live patch whenever it has not moved ahead yet, which is exactly when it
+        is most confusable, so the tag rides in the patch segment permanently
+        rather than appearing and vanishing with each divergence.
+        """
+        if not self.tag:
+            return self.build
+        return f"{self.patch}-{self.tag}.{self.build.split('.')[3]}"
 
     @property
     def label(self) -> str:
@@ -176,7 +192,17 @@ PACKS: tuple[Pack, ...] = (
     Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.69109"),
     Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.69110"),
     Pack("mop", "MoP Classic", "wow_classic", "5.5.4.69155"),
-    Pack("midnight", "Midnight", "wow", "12.0.7.68974"),
+    Pack("midnight", "Midnight", "wow", "12.1.0.69273"),
+    # The retail test line. It runs AHEAD of live most of the time and level
+    # with it the rest, so it is tagged rather than told apart by its build —
+    # see Pack.id. Its links go to Wowhead's own /ptr/ section.
+    #
+    # ⚠ WHILE IT IS LEVEL WITH LIVE the two builds are the same bytes, so the
+    # shipped manifest points this entry at midnight's pack file by hand rather
+    # than carrying a second copy. Rebuilding it writes its own directory back;
+    # re-point `file` (and `hash`) in site/data/versions.json, or leave the
+    # duplicate once the lines diverge and the data genuinely differs.
+    Pack("midnight-ptr", "Midnight PTR", "wowt", "12.1.0.69273", tag="ptr"),
     # Lines that moved on, and pinned retail. Historical artifacts: their build
     # is final, so FROZEN rather than a product that would answer about a
     # different expansion entirely.
@@ -193,7 +219,7 @@ PACKS: tuple[Pack, ...] = (
 # `select()` ambiguous and silently rebuild the wrong pack.
 assert sum(p.default for p in PACKS) == 1, "exactly one pack must be the default"
 assert len({p.key for p in PACKS}) == len(PACKS), "duplicate pack key"
-assert len({p.build for p in PACKS}) == len(PACKS), "duplicate build id"
+assert len({p.id for p in PACKS}) == len(PACKS), "duplicate pack id"
 
 
 def version_key(build: str) -> tuple[int, ...]:
@@ -218,9 +244,9 @@ def select(wanted: str | None) -> list[Pack]:
     """All packs, or those matching a key or a build prefix."""
     if not wanted:
         return list(PACKS)
-    hits = [p for p in PACKS if p.key == wanted or p.build.startswith(wanted)]
+    hits = [p for p in PACKS if p.key == wanted or p.id.startswith(wanted)]
     if not hits:
-        known = ", ".join(f"{p.key} ({p.build})" for p in PACKS)
+        known = ", ".join(f"{p.key} ({p.id})" for p in PACKS)
         sys.exit(f"no pack matches {wanted!r}\nknown: {known}")
     return hits
 
@@ -417,7 +443,7 @@ def main() -> int:
     for pack in PACKS:
         flags = " ".join(f for f, on in
                          (("default", pack.default), ("hidden", pack.hidden)) if on)
-        line = f"{pack.key:<13} {pack.build:<16} {pack.label:<28} {flags}"
+        line = f"{pack.key:<14} {pack.id:<17} {pack.label:<28} {flags}"
         if args.check and pack.product not in (FROZEN, ARCHIVE):
             available = live_build(pack.product)
             if available and patch_key(available) > patch_key(pack.build):

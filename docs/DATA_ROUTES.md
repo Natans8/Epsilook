@@ -1807,35 +1807,46 @@ in the panel via `data-tip-hl`, the same channel §3x's description mark uses.
 
 ## 5. Version differences
 
-Ten builds ship, spanning 2004-era content to current retail. Going *backwards*
+Eleven builds ship across twelve packs, spanning 2004-era content to current retail. Going *backwards*
 is a different problem from going forwards: forwards is additive, backwards is mostly "the table does not exist yet."
 The five Classic re-release clients (Vanilla / TBC / WotLK / Cataclysm / MoP) complicate that — see below.
 
-### The eleven packs
+### The twelve packs
 
-**Read from `meta` on the shipped packs, 2026-08-09 — never estimated.** Which builds we ship is declared in
+**Read from `meta` on the shipped packs, 2026-08-12 — never estimated.** Which builds we ship is declared in
 `tools/packs.py`; this table is what those declarations produced.
 
-| Build        | Label                   |  Spells |    Pack | TDB release   | Absent tables |
-|--------------|-------------------------|--------:|--------:|---------------|--------------:|
-| 1.15.9.69109 | Vanilla Classic         |  31,249 |  0.8 MB | —             |             9 |
-| 2.5.6.69110  | TBC Classic             |  28,687 |  0.8 MB | —             |            16 |
-| 3.4.3.58936  | WotLK Classic           |  49,394 |  1.4 MB | TDB335.25101  |            11 |
-| 4.4.2.60895  | Cataclysm Classic       |  71,227 |  2.0 MB | —             |            11 |
-| 5.5.4.69155  | MoP Classic             |  98,159 |  2.8 MB | —             |             6 |
-| 7.3.5.26972  | Legion                  | 179,382 |  5.5 MB | TDB735.00     |             6 |
-| 8.3.7.35662  | Battle for Azeroth      | 227,237 |  7.2 MB | TDB837.20101  |             1 |
-| 9.2.7.45745  | Shadowlands *(default)* | 276,332 |  8.7 MB | TDB927.22111  |             0 |
-| 10.2.7.55664 | Dragonflight            | 327,092 | 10.4 MB | TDB1027.24051 |             0 |
-| 11.2.7.65299 | The War Within          | 375,895 | 12.1 MB | TDB1127.26011 |             0 |
-| 12.0.7.68974 | Midnight                | 404,401 | 13.0 MB | —             |             0 |
+| Pack id          | Label                   |  Spells |    Pack | TDB release   | Absent tables |
+|------------------|-------------------------|--------:|--------:|---------------|--------------:|
+| 1.15.9.69109     | Vanilla Classic         |  31,249 |  1.2 MB | —             |            10 |
+| 2.5.6.69110      | TBC Classic             |  28,687 |  1.2 MB | —             |            19 |
+| 3.4.3.58936      | WotLK Classic           |  49,394 |  2.1 MB | TDB335.25101  |            12 |
+| 4.4.2.60895      | Cataclysm Classic       |  71,227 |  3.0 MB | —             |            11 |
+| 5.5.4.69155      | MoP Classic             |  98,159 |  4.2 MB | —             |             6 |
+| 7.3.5.26972      | Legion                  | 179,382 |  7.8 MB | TDB735.00     |             6 |
+| 8.3.7.35662      | Battle for Azeroth      | 227,237 | 10.0 MB | TDB837.20101  |             1 |
+| 9.2.7.45745      | Shadowlands *(default)* | 276,332 | 12.2 MB | TDB927.22111  |             0 |
+| 10.2.7.55664     | Dragonflight            | 327,092 | 14.5 MB | TDB1027.24051 |             0 |
+| 11.2.7.65299     | The War Within          | 375,895 | 16.8 MB | TDB1127.26011 |             0 |
+| 12.1.0.69273     | Midnight                | 413,885 | 18.5 MB | —             |             0 |
+| 12.1.0-ptr.69273 | Midnight PTR            | 413,885 | 18.5 MB | —             |             0 |
+
+**A PACK ID IS NORMALLY THE BUILD ID, AND `-ptr` IS THE ONE EXCEPTION.** The app's clean URL is the PATCH (`?v=12.1.0`),
+so two packs on one patch would resolve to each other — and a test line sits on the live patch whenever it has not moved
+ahead yet. `Pack.tag` in `tools/packs.py` puts the marker in the patch segment (`12.1.0-ptr.69273`), which also keys the
+Wowhead section (`CFG.wowheadSitePrefix.ptr` → `/ptr/`, where the major alone cannot tell a test line from the client it
+tests). `build_data.py` takes it as `--id`, separately from the `--version` it downloads.
+
+**While the PTR is level with live the two builds are the same bytes**, so the shipped manifest points the PTR entry at
+Midnight's pack file rather than carrying a second 18.5 MB copy. Rebuilding it writes its own directory back — re-point
+`file`/`hash` by hand, or keep the duplicate once the lines diverge and the data genuinely differs.
 
 **Midnight has no TDB release and that is not a gap to fix** — TrinityCore has not published one for 12.x. The cost is
 the TDB's two roles (§1): morph *display* rows do not resolve (`morphs=4,286 (0 displays)`) and no hotfix overlay is
 applied. Everything sourced from client tables is unaffected. It resolves itself whenever a TDB1200-ish release appears;
 add it to `TDB_RELEASES` then.
 
-**All ten are at pack format 40** (the area gate, §3t — on top of format 39's delivery route with values, §3s-bis,
+**All of them are at pack format 46** (the area gate, §3t — on top of format 39's delivery route with values, §3s-bis,
 format 38's attribute flags and first delivery partition, §3s, format 36's target masks on spell links, §3r, format 35's
 spell-link route, and format 34's missile flight paths).
 

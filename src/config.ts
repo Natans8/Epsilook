@@ -60,9 +60,10 @@ export interface EpsilookConfig {
     wowheadItemUrl: string;
     wowheadObjectUrl: string;
     wowheadObjectTypes: number[];
-    /** Wowhead site path prefix keyed by game major version ("classic/" for 1);
-     *  unlisted versions fall back to retail (empty prefix). */
-    wowheadSitePrefix: Record<number, string>;
+    /** Wowhead site path prefix keyed by game major version ("classic/" for 1),
+     *  or by a tagged pack's tag ("ptr"); unlisted keys fall back to retail
+     *  (empty prefix). */
+    wowheadSitePrefix: Record<string, string>;
     modelViewerUrl: string;
     soundPlayUrl: string;
     soundVolume: number;
@@ -235,6 +236,11 @@ export const CFG: EpsilookConfig = {
     // happens, which is precisely where they would have pointed anyway. So the
     // caution bought nothing and cost the correct link for the whole season.
     //
+    // Keyed by the pack's MAJOR version, except that a pack carrying a tag in
+    // its id (12.1.0-ptr.69273) is keyed by the tag instead — a test line sits
+    // on the same major as the live client it tests, so the major cannot tell
+    // them apart while the section they belong to differs.
+    //
     // To send a version to its own section, add a `major: "prefix/"` line; to
     // retire one, delete its line. 7+ is the retail era and takes no prefix.
     wowheadSitePrefix: {
@@ -243,6 +249,7 @@ export const CFG: EpsilookConfig = {
         3: "wotlk/",       // Wrath Classic
         4: "cata/",        // Cataclysm Classic
         5: "mop-classic/", // Mists Classic
+        ptr: "ptr/",       // the retail PTR (Wowhead's own name for the section)
     },
 
     // 3D preview: the "3d" link on each model tag opens the model in the

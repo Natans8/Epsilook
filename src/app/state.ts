@@ -154,14 +154,17 @@ export const versionLabel = (entry: VersionEntry): string =>
 export const stripExt = (name: string): string => name.replace(/\.[^.]+$/, "");
 
 /**
- * Wowhead site path prefix for the active pack's game version — "classic/"
- * for Vanilla, "" (retail) for everything else. Only /classic/ and retail
- * are permanent Wowhead sections, so any unmapped version falls back to
- * retail (see CFG.wowheadSitePrefix).
+ * Wowhead site path prefix for the active pack — "classic/" for Vanilla,
+ * "ptr/" for a PTR pack, "" (retail) for everything else. A pack id may carry
+ * a tag in its patch segment (12.1.0-ptr.69273), which wins over the major:
+ * a test line shares the live client's major but not its Wowhead section.
+ * Anything unmapped falls back to retail (see CFG.wowheadSitePrefix).
  */
 const wowheadPrefix = (): string => {
-    const major = state.version ? parseInt(state.version.id, 10) : 0;
-    return (CFG.wowheadSitePrefix && CFG.wowheadSitePrefix[major]) || "";
+    const id = state.version?.id ?? "";
+    const tag = /^\d+\.\d+\.\d+-([a-z0-9]+)\./.exec(id)?.[1];
+    const table = CFG.wowheadSitePrefix ?? {};
+    return (tag && table[tag]) || table[parseInt(id, 10)] || "";
 };
 
 /**

@@ -39,7 +39,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from packs import Pack, select
+from packs import PACKS, Pack, select
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build" / "build_data.py"
@@ -60,6 +60,8 @@ def git(*args: str) -> str:
 
 def build_argv(pack: Pack, refresh: bool) -> list[str]:
     argv = [sys.executable, str(BUILD), "--version", pack.build, "--label", pack.label]
+    if pack.id != pack.build:
+        argv += ["--id", pack.id]
     if pack.default:
         argv.append("--default")
     if pack.hidden:
@@ -84,19 +86,19 @@ def retire_superseded(built: list[Pack]) -> list[str]:
     directories unnamed by the bumped roster and delete them, with no
     replacement built — three packs gone to update one.
 
-    A pack line is identified by its major version, which is unique across the
-    roster (1 vanilla, 2 tbc, 3 wotlk, ... 12 midnight). So a directory is
-    superseded exactly when it shares a major with a pack that just built
-    successfully and is not that pack's own build.
+    A pack line is identified by its major version. So a directory is superseded
+    when it shares a major with a pack that just built successfully — unless the
+    roster still names it, which is what keeps a second pack on the same major
+    (retail and its PTR) from retiring its sibling the moment either rebuilds.
     """
-    majors = {pack.build.split(".")[0]: pack.build for pack in built}
+    majors = {pack.id.split(".")[0] for pack in built}
+    current = {pack.id for pack in PACKS}
     gone = []
 
     for directory in sorted(DATA.iterdir()):
         if not directory.is_dir():
             continue
-        major = directory.name.split(".")[0]
-        if major not in majors or directory.name == majors[major]:
+        if directory.name.split(".")[0] not in majors or directory.name in current:
             continue
         # git rm keeps the deletion staged and the LFS pointer in step. It fails
         # for a pack that was never committed, and git() swallows that — so the
@@ -143,7 +145,7 @@ def describe_difference(before: dict, after: dict) -> list[str]:
 
 def verify(pack: Pack, refresh: bool) -> bool:
     """Rebuild into a scratch copy, compare, restore. True when reproducible."""
-    pack_rel = f"site/data/{pack.build}/spelldata.json.gz"
+    pack_rel = f"site/data/{pack.id}/spelldata.json.gz"
     pack_path = ROOT / pack_rel
 
     if git("status", "--porcelain", "--", pack_rel).strip():
@@ -160,7 +162,7 @@ def verify(pack: Pack, refresh: bool) -> bool:
         before_bytes = keep.read_bytes()
         before = payload(keep)
 
-        print(f"{DIM}rebuilding {pack.build} ...{RESET}")
+        print(f"{DIM}rebuilding {pack.id} ...{RESET}")
         proc = subprocess.run(build_argv(pack, refresh), cwd=ROOT, check=False)
         if proc.returncode != 0:
             print(f"{RED}build failed{RESET} exit {proc.returncode}")
@@ -170,14 +172,14 @@ def verify(pack: Pack, refresh: bool) -> bool:
         after = payload(pack_path)
 
         if after_bytes == before_bytes:
-            print(f"{GREEN}identical{RESET}  {pack.build} reproduced byte for byte")
+            print(f"{GREEN}identical{RESET}  {pack.id} reproduced byte for byte")
             return True
         if after == before:
-            print(f"{GREEN}date only{RESET}  {pack.build} is reproducible; only "
+            print(f"{GREEN}date only{RESET}  {pack.id} is reproducible; only "
                   f"meta.built moved {DIM}(restoring - do not commit this){RESET}")
             return True
         notes = describe_difference(before, after)
-        print(f"{YELLOW}CONTENT DIFFERS{RESET}  {pack.build}: {'; '.join(notes) or 'values changed'}")
+        print(f"{YELLOW}CONTENT DIFFERS{RESET}  {pack.id}: {'; '.join(notes) or 'values changed'}")
         print(f"{DIM}  the sources or the build logic changed - inspect before trusting{RESET}")
         return False
     finally:
@@ -210,10 +212,10 @@ def main() -> int:
         return 0 if all([verify(pack, args.refresh) for pack in chosen]) else 1
 
     for i, pack in enumerate(chosen, 1):
-        print(f"{DIM}[{i}/{len(chosen)}] {pack.build}  {pack.label}{RESET}")
+        print(f"{DIM}[{i}/{len(chosen)}] {pack.id}  {pack.label}{RESET}")
         proc = subprocess.run(build_argv(pack, args.refresh), cwd=ROOT, check=False)
         if proc.returncode != 0:
-            print(f"{RED}build failed{RESET} {pack.build} exit {proc.returncode}")
+            print(f"{RED}build failed{RESET} {pack.id} exit {proc.returncode}")
             return 1
 
     # Only after every requested build SUCCEEDED. Retiring first would delete a
