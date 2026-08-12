@@ -50,6 +50,6 @@ export type {
     Ask, Clause, ClauseState, Diagnostic, Fix, ParsedOperand, ParseMode, Parsed, PropRef, RowTest,
     ScopeAsk, ScopeTerm, Severity, Span, ValueExpr,
 } from "./parse";
-export {parse} from "./parse";
+export {parse, propOf} from "./parse";
 
 export {equivalent, formatQuery} from "./format";

@@ -15,6 +15,16 @@
 const PATTERNS = new Map<string, RegExp | string>();
 
 /**
+ * Escapes text for literal use inside a regular expression, including inside a character class.
+ *
+ * @param text The literal text.
+ * @returns The text with every metacharacter escaped.
+ */
+export function escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\/-]/g, String.raw`\$&`);
+}
+
+/**
  * Compiles a pattern's source, memoised.
  *
  * @param source A regular expression's source, as written between the slashes.

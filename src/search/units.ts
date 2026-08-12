@@ -104,10 +104,10 @@ export interface NumericSpec {
 const PRECISION = 6;
 
 /** A sign, a decimal with no exponent, then an optional symbol. */
-const UNIT_AFTER = /^([+-]?)((?:\d+(?:\.\d+)?|\.\d+))(.*)$/;
+const UNIT_AFTER = /^([+-]?)(\d+(?:\.\d+)?|\.\d+)(.*)$/;
 
 /** A sign, a symbol, then the number: `x2`, `-x1.5`. */
-const UNIT_BEFORE = /^([+-]?)([^\d.]+)((?:\d+(?:\.\d+)?|\.\d+))$/;
+const UNIT_BEFORE = /^([+-]?)([^\d.]+)(\d+(?:\.\d+)?|\.\d+)$/;
 
 /**
  * Every spelling a notation answers to, folded.
@@ -201,6 +201,16 @@ function readNotation(notation: Notation, storage: "int" | "float"): (text: stri
 }
 
 /**
+ * Every notation of a spec, the display one first — the order dispatch tries them in.
+ *
+ * @param spec The numeric spec.
+ * @returns Its notations.
+ */
+export function notationsOf(spec: NumericSpec): Notation[] {
+    return [spec.display, ...(spec.accepts ?? [])];
+}
+
+/**
  * Builds the parser for one numeric type.
  *
  * @param spec The numeric spec.
@@ -211,7 +221,7 @@ function readNotation(notation: Notation, storage: "int" | "float"): (text: stri
  * caller, which tries the property's next type and produces a diagnostic only once every one has refused.
  */
 export function parseNumber(spec: NumericSpec): (text: string) => number | null {
-    const all = [spec.display, ...(spec.accepts ?? [])];
+    const all = notationsOf(spec);
     for (let i = 0; i < all.length; i++) {
         for (let j = i + 1; j < all.length; j++) {
             if (overlap(all[i], all[j])) {
@@ -261,26 +271,27 @@ function relaxed(notation: Notation): Notation {
  * @returns A function reading two bound texts to two stored values, or `null`.
  */
 export function parseNumberPair(spec: NumericSpec): (lo: string, hi: string) => readonly [number, number] | null {
-    const all = [spec.display, ...(spec.accepts ?? [])];
-    const strict = all.map((notation) => readNotation(notation, spec.storage));
-    const lifted = all.map((notation) => readNotation(relaxed(notation), spec.storage));
+    const readers = notationsOf(spec).map((notation) => ({
+        strict: readNotation(notation, spec.storage),
+        lifted: readNotation(relaxed(notation), spec.storage),
+    }));
 
     return (lo: string, hi: string): readonly [number, number] | null => {
         const l = fold(lo.trim());
         const h = fold(hi.trim());
         if (l === "" || h === "") return null;
 
-        for (const read of strict) {
-            const a = read(l);
-            const b = read(h);
+        for (const read of readers) {
+            const a = read.strict(l);
+            const b = read.strict(h);
             if (a !== null && b !== null) return [a, b];
         }
 
         const larger = Math.abs(Number(l)) >= Math.abs(Number(h)) ? l : h;
-        for (let i = 0; i < all.length; i++) {
-            const a = lifted[i](l);
-            const b = lifted[i](h);
-            if (a !== null && b !== null && strict[i](larger) !== null) return [a, b];
+        for (const read of readers) {
+            const a = read.lifted(l);
+            const b = read.lifted(h);
+            if (a !== null && b !== null && read.strict(larger) !== null) return [a, b];
         }
         return null;
     };

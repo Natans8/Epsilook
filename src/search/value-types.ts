@@ -21,7 +21,7 @@ import type {Operator} from "./operators";
 import {anyOf, contains, exact, glob, OPERATORS, ORDERING, present, regex} from "./operators";
 import {fold, squash} from "./text-normalization";
 import type {Notation, NumericSpec} from "./units";
-import {formatNumber, parseNumber, parseNumberPair} from "./units";
+import {formatNumber, notationsOf, parseNumber, parseNumberPair} from "./units";
 
 /**
  * What a parsed value may be.
@@ -102,7 +102,7 @@ export interface AxisType<V extends Value = Value> {
 
     /**
      * Whether this type's values are numerals rather than words. The quote law reads it: a quoted operand is a
-     * string, so a quantity refuses one while a worded type reads it. Implied by declaring notations.
+     * string, so a quantity refuses one while a worded type reads it. Required by declaring notations.
      */
     readonly quantity?: boolean;
 
@@ -147,10 +147,12 @@ export function defineType<V extends Value>(type: AxisType<V>): AxisType<V> {
     if (type.notations && !ORDERING.every((op) => type.accepts.includes(op))) {
         throw new Error(`type "${type.name}" declares notations but does not accept an order`);
     }
+    if (type.notations && type.quantity !== true) {
+        throw new Error(`type "${type.name}" declares notations but not that it is a quantity`);
+    }
 
-    const declared = type.notations !== undefined ? {...type, quantity: true} : type;
-    TYPES.set(declared.name, declared);
-    return declared;
+    TYPES.set(type.name, type);
+    return type;
 }
 
 /* ---------------------------------------------------------------------------- text */
@@ -304,8 +306,9 @@ function numeric(spec: NumericSpec & { name: string; hint: string; ui?: Affordan
         parsePair: parseNumberPair(spec),
         format: formatNumber(spec),
         accepts: [exact, present, anyOf, ...ORDERING],
-        notations: [spec.display, ...(spec.accepts ?? [])],
+        notations: notationsOf(spec),
         hint: spec.hint,
+        quantity: true,
         ui: spec.ui ?? "range",
     });
 }

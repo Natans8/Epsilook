@@ -24,15 +24,16 @@
  */
 import type {Column} from "./columns";
 import {GRAMMAR, PREFIX_OPERATORS} from "./grammar";
-import type {Kind, Prop} from "./kinds";
-import {hintOf, parseValue, sentinelOf, wordOf} from "./kinds";
+import type {Kind, ParsedValue, Prop} from "./kinds";
+import {doorOf, hintOf, parseValue, sentinelOf, wordOf} from "./kinds";
 import type {Operator} from "./operators";
+import {ORDERING} from "./operators";
 import type {Head} from "./schema";
 import {HEADS, kindIn, kindsOf, propIn} from "./schema";
-import {compilePattern} from "./patterns";
+import {compilePattern, escapeRegExp} from "./patterns";
 import {fold, foldTypography} from "./text-normalization";
 import type {AxisType, Value} from "./value-types";
-import {count as countType} from "./value-types";
+import {count as countType, path as pathType} from "./value-types";
 
 /** A character range in the query text, end exclusive. Spans survive typographic folding, which is one-to-one. */
 export interface Span {
@@ -119,7 +120,6 @@ export interface ScopeTerm {
 export type RowTest =
     | { readonly is: "exists" }
     | { readonly is: "content"; readonly value: ValueExpr }
-    | { readonly is: "kindWord"; readonly kind: Kind }
     | { readonly is: "props"; readonly props: readonly PropRef[]; readonly value: ValueExpr }
     | { readonly is: "scope"; readonly terms: ReadonlyArray<readonly ScopeTerm[]> };
 
@@ -194,7 +194,7 @@ const COMPARISON_STARTS: ReadonlySet<string> = new Set(
     PREFIX_OPERATORS.flatMap((op) => (typeof op.symbol === "string" ? [op.symbol[0]] : [])));
 
 /** A run of numbers separated by the list character: the one shape a comma is structural in. */
-const NUMBER_LIST = /^\d+(,\d+)+$/;
+const NUMBER_LIST = new RegExp(String.raw`^\d+(${escapeRegExp(GRAMMAR.numberList)}\d+)+$`);
 
 const isWs = (c: string): boolean => /\s/.test(c);
 
@@ -263,8 +263,25 @@ interface Pending {
     readonly fix?: Fix;
 }
 
-const ORDERING_NAMES = new Set(["lt", "lte", "gt", "gte", "range"]);
-const COMPARABLE = new Set(["exact", "lt", "lte", "gt", "gte"]);
+/** The operators that require an order, by name — the ones whose refusal message says "no ordering". */
+const ORDERING_NAMES: ReadonlySet<string> = new Set(ORDERING.map((op) => op.name));
+
+/** The comparisons written before a value, by name — the operators the count desugar answers. */
+const COMPARABLE: ReadonlySet<string> = new Set(PREFIX_OPERATORS.map((op) => op.name));
+
+/**
+ * The prefix operators the expression tree can shape.
+ *
+ * A prefix operator outside this set would be recognised by the scanner — the grammar derives its spellings from the
+ * registry — pass every acceptance check, and then have no {@link ValueExpr} variant to become. Declaring one
+ * therefore starts by extending the union; until then the declaration fails here, at import, where it was made.
+ */
+const EXPRESSIBLE_PREFIX: ReadonlySet<string> = new Set(["exact", "lt", "lte", "gt", "gte"]);
+for (const op of PREFIX_OPERATORS) {
+    if (!EXPRESSIBLE_PREFIX.has(op.name)) {
+        throw new Error(`prefix operator "${op.name}" has no shape in the expression tree`);
+    }
+}
 
 const accepts = (type: AxisType, opName: string): boolean =>
     type.accepts.some((op) => op.name === opName);
@@ -272,7 +289,13 @@ const accepts = (type: AxisType, opName: string): boolean =>
 /** The synthetic property behind the count word, so cardinality reads operands like any numeric axis. */
 const COUNT_PROP: Prop = {types: [countType]};
 
-const propOf = (ref: PropRef): Prop => ref.kind.props[ref.prop];
+/**
+ * The property a {@link PropRef} names.
+ *
+ * @param ref The reference.
+ * @returns The property record.
+ */
+export const propOf = (ref: PropRef): Prop => ref.kind.props[ref.prop];
 
 /**
  * Whether a type's values are quantities rather than strings.
@@ -297,6 +320,20 @@ function patternProblem(pattern: string): string | null {
     const compiled = compilePattern(pattern);
     return typeof compiled === "string" ? compiled : null;
 }
+
+/**
+ * The pattern's compile failure as an interpretation, or null when it compiles.
+ *
+ * Rescuable, because a pattern is broken on most keystrokes of the way to being written.
+ */
+function badPattern(pattern: string): Interp | null {
+    const problem = patternProblem(pattern);
+    if (problem === null) return null;
+    return {r: "fail", rescuable: true, message: `not a valid pattern: ${problem}`};
+}
+
+/** Whether any of the types is the path type, whose glued names make patterns weak — the warning turns on this. */
+const pathTyped = (types: readonly AxisType[]): boolean => types.includes(pathType);
 
 /**
  * Reads a phrase opened at `at`: a leaf — nothing inside is active — whose escape restores a literal quote. Every
@@ -478,9 +515,7 @@ class Parser {
 
         // A word followed by a colon is a head when the schema knows it; otherwise the whole token is ordinary text.
         // A comparison straight after a head word implies the colon: `model<=4` is `model:<=4`.
-        let j = i;
-        while (j < limit && !isWs(this.text[j]) && !HEAD_ENDS.has(this.text[j])
-        && !COMPARISON_STARTS.has(this.text[j])) j++;
+        const j = this.wordEnd(i, limit);
         if (j > i) {
             const head = HEADS.get(fold(this.text.slice(i, j)));
             if (head !== undefined) {
@@ -489,6 +524,17 @@ class Parser {
             }
         }
         return this.term(start, not, i, limit);
+    }
+
+    /**
+     * Scans past the run that could be a head word: to whitespace, a structural character, or a comparison — the
+     * one rule the implied colon turns on, shared by the top level and the scope body.
+     */
+    private wordEnd(i: number, limit: number): number {
+        let j = i;
+        while (j < limit && !isWs(this.text[j]) && !HEAD_ENDS.has(this.text[j])
+        && !COMPARISON_STARTS.has(this.text[j])) j++;
+        return j;
     }
 
     /** Parses a bare term: plain search over everything declared plain. */
@@ -504,9 +550,10 @@ class Parser {
 
     /** Re-emits segments split off a glued token as terms of their own. A single segment sheds no extras. */
     private emitExtras(extras: readonly Seg[]): void {
+        const ctx = this.topCtx();
         for (const seg of extras) {
             const pend: Pending[] = [];
-            const {main} = this.interpretSegs([seg], this.topCtx(), pend);
+            const {main} = this.interpretSegs([seg], ctx, pend);
             this.pushInterp({start: seg.start, end: seg.end}, false, null, main, pend, seg);
         }
     }
@@ -555,8 +602,8 @@ class Parser {
 
     private headWord(head: Head): string {
         if (head.role === "column") return head.column.key;
-        if (head.role === "kind") return head.kind.word ?? head.kind.column.key;
-        return head.prop.prefix ?? head.name;
+        if (head.role === "kind") return wordOf(head.kind);
+        return doorOf(head.name, head.prop);
     }
 
     private incompleteAsk(head: Head): Ask {
@@ -569,7 +616,7 @@ class Parser {
     private noteCountDesugar(head: Head, main: Interp, segs: readonly Seg[], pend: Pending[]): void {
         if (main.r !== "count") return;
         const label = head.role === "column" ? head.column.label.toLowerCase()
-            : head.role === "kind" ? (head.kind.word ?? head.kind.column.key) : "";
+            : head.role === "kind" ? wordOf(head.kind) : "";
         const raw = this.text.slice(segs[0].start, segs[segs.length - 1].end);
         pend.push({severity: "note", message: `${this.headWord(head)}:${raw} counts ${label} rows`});
     }
@@ -795,9 +842,11 @@ class Parser {
             const allQualifier = positives.every((t) => t.ask?.on === "props"
                 && t.ask.props.every((ref) => propOf(ref).qualifier));
             if (allQualifier) {
+                const first = positives[0].ask;
+                const name = first !== null && first.on === "props" ? first.props[0].prop : "";
                 pend.push({
                     severity: "warning",
-                    message: "a target only says who a row plays on — add what the row is",
+                    message: `a ${name} only says who a row plays on — add what the row is`,
                 });
             }
         }
@@ -826,10 +875,7 @@ class Parser {
     private innerItem(head: ScopeHead, termStart: number, termNot: boolean, i: number, bodyEnd: number,
                       run: ScopeTerm[], pend: Pending[]):
         { kind: "done"; next: number } | { kind: "foreign"; span: Span; message: string } {
-        let j = i;
-        while (j < bodyEnd && !isWs(this.text[j]) && !HEAD_ENDS.has(this.text[j])
-        && !COMPARISON_STARTS.has(this.text[j])) j++;
-
+        const j = this.wordEnd(i, bodyEnd);
         const sep = j < bodyEnd ? this.text[j] : "";
         if (j > i && (sep === GRAMMAR.bind || COMPARISON_STARTS.has(sep))) {
             const word = fold(this.text.slice(i, j));
@@ -861,10 +907,7 @@ class Parser {
 
         const {segs, end} = this.scanToken(i, bodyEnd, {inScope: true, groups: false});
         if (segs.length === 0) return {kind: "done", next: i + 1};
-        const ctx = head.role === "kind"
-            ? this.kindCtx(head.kind, true, pend)
-            : this.columnCtx(head.column, pend);
-        const {main, extras} = this.interpretSegs(segs, ctx, pend);
+        const {main, extras} = this.interpretSegs(segs, this.ctxFor(head, pend), pend);
         this.pushScopeTerm(run, {start: termStart, end: segs[segs.length - 1].end}, termNot, main, pend,
             this.text.slice(i, end));
         this.scopeExtras(head, extras, run, pend);
@@ -873,9 +916,8 @@ class Parser {
 
     /** Segments split off a glued inner token become content terms of the same scope. */
     private scopeExtras(head: ScopeHead, extras: readonly Seg[], run: ScopeTerm[], pend: Pending[]): void {
-        const ctx = head.role === "kind"
-            ? this.kindCtx(head.kind, true, pend)
-            : this.columnCtx(head.column, pend);
+        if (extras.length === 0) return;
+        const ctx = this.ctxFor(head, pend);
         for (const seg of extras) {
             const {main} = this.interpretSegs([seg], ctx, pend);
             this.pushScopeTerm(run, {start: seg.start, end: seg.end}, false, main, pend, seg.text);
@@ -1161,13 +1203,13 @@ class Parser {
             }
         }
 
-        if (segs.length >= 2 && segs.every((s) => (s.form === "bare" || s.form === "group") && s.closed)
-            && segs.some((s) => s.form === "group" && this.splitAlternatives(s.text).length >= 2)) {
+        if (segs.length >= 2 && segs.every((s) => (s.form === "bare" || s.form === "group") && s.closed)) {
             const lists = segs.map((s) => s.form === "bare"
                 ? s.text.split(GRAMMAR.or).filter((p) => p !== "")
                 : this.splitAlternatives(s.text));
             const size = lists.reduce((n, list) => n * Math.max(list.length, 1), 1);
-            if (lists.every((list) => list.length > 0) && size <= 64) {
+            if (segs.some((s, at) => s.form === "group" && lists[at].length >= 2)
+                && lists.every((list) => list.length > 0) && size <= 64) {
                 let combos = [""];
                 for (const list of lists) combos = combos.flatMap((c) => list.map((part) => c + part));
                 return {main: combineAlternatives(combos.map((c) => this.alternative(c, ctx, false))), extras: []};
@@ -1224,9 +1266,7 @@ class Parser {
 
     /** Splits glued alternation, then reads each alternative. */
     private bareAlternatives(t: string, ctx: ValueCtx): Interp {
-        const parts = t.split(GRAMMAR.or);
-        if (parts.length === 1) return this.alternative(t, ctx, true);
-        const real = parts.filter((p) => p !== "");
+        const real = t.split(GRAMMAR.or).filter((p) => p !== "");
         if (real.length === 0) return {r: "empty", why: "names no value"};
         if (real.length === 1) return this.alternative(real[0], ctx, true);
         return combineAlternatives(real.map((p) => this.alternative(p, ctx, false)));
@@ -1280,6 +1320,24 @@ class Parser {
     private typedCtx(prop: Prop, word: string, pend: Pending[], done: (value: ValueExpr) => Interp): ValueCtx {
         /** Whether the quoted text is one of the property's sentinel words, which are strings and stay reachable. */
         const isSentinel = (t: string): boolean => sentinelOf(prop, t) !== null;
+        /** The string reading of a quoted operand: the first textual type answering `opName` that parses it. */
+        const stringReading = (t: string, opName: string): ParsedValue | null => {
+            for (const type of prop.types) {
+                if (quantity(type) || !accepts(type, "contains") || !accepts(type, opName)) continue;
+                const value = type.parse?.(t);
+                if (value !== null && value !== undefined) return {type, value};
+            }
+            return null;
+        };
+        /**
+         * The quote law's refusal: a quoted operand that is neither a sentinel word nor readable as anything but a
+         * quantity is refused, because a quantity has no string reading.
+         */
+        const refusesQuote = (t: string): boolean => {
+            if (isSentinel(t)) return false;
+            const pv = parseValue(prop, t);
+            return pv !== null ? quantity(pv.type) : prop.types.some(quantity);
+        };
         const bareValue = (t: string): Interp => {
             const pv = parseValue(prop, t);
             if (pv === null) return illTyped(word, prop);
@@ -1324,19 +1382,11 @@ class Parser {
         return {
             operator: (op, operand, opts): Interp => {
                 if (opts.phrase === true) {
-                    for (const type of prop.types) {
-                        if (quantity(type) || !accepts(type, "contains") || !accepts(type, op.name)) continue;
-                        const value = type.parse?.(operand);
-                        if (value !== null && value !== undefined) {
-                            return done(this.opExpr(op.name, {type: type.name, value}));
-                        }
-                    }
+                    const read = stringReading(operand, op.name);
+                    if (read !== null) return done(this.opExpr(op.name, {type: read.type.name, value: read.value}));
                     // A quoted operand is a string. Sentinel words are strings; a quantity is not, so an operator
                     // applied to a quoted number is refused rather than read as the number it looks like.
-                    if (!isSentinel(operand)) {
-                        const pv = parseValue(prop, operand);
-                        if (pv !== null ? quantity(pv.type) : prop.types.some(quantity)) return quotedQuantity(word, prop);
-                    }
+                    if (refusesQuote(operand)) return quotedQuantity(word, prop);
                 }
                 const pv = parseValue(prop, operand);
                 if (pv === null) return illTyped(word, prop);
@@ -1370,7 +1420,7 @@ class Parser {
                     // Rescuable: `*-` is a keystroke away from the open range `*-10`, which is no pattern at all.
                     return {r: "fail", rescuable: true, message: `the ${word} axis has no patterns`};
                 }
-                if (globbing.name === "path") warnPathGlob(pend);
+                if (pathTyped([globbing])) warnPathGlob(pend);
                 return done({op: "glob", operand: {text: pattern}});
             },
             bare: bareValue,
@@ -1378,28 +1428,15 @@ class Parser {
                 if (!prop.types.some((type) => accepts(type, "regex"))) {
                     return {r: "fail", message: `the ${word} axis cannot run one — ${NO_REGEX}`};
                 }
-                const problem = patternProblem(pattern);
-                if (problem !== null) {
-                    // Rescuable: a pattern is broken on most keystrokes of the way to being written.
-                    return {r: "fail", rescuable: true, message: `not a valid pattern: ${problem}`};
-                }
-                return done({op: "regex", operand: {text: pattern}});
+                return badPattern(pattern) ?? done({op: "regex", operand: {text: pattern}});
             },
             phrase: (t): Interp => {
-                for (const type of prop.types) {
-                    if (quantity(type) || !accepts(type, "contains")) continue;
-                    const value = type.parse?.(t);
-                    if (value !== null && value !== undefined) {
-                        return done({op: "contains", operand: {type: type.name, value}});
-                    }
-                }
+                const read = stringReading(t, "contains");
+                if (read !== null) return done({op: "contains", operand: {type: read.type.name, value: read.value}});
                 // A phrase is a string value. Word vocabularies — sentinels, roles, rungs — are strings, so
                 // quoting one of their words is harmless; a quantity has no string reading, and refusing says
                 // what the quotes did rather than silently reading the number they wrap.
-                if (isSentinel(t)) return bareValue(t);
-                const pv = parseValue(prop, t);
-                if (pv !== null && !quantity(pv.type)) return bareValue(t);
-                if (pv !== null || prop.types.some(quantity)) return quotedQuantity(word, prop);
+                if (refusesQuote(t)) return quotedQuantity(word, prop);
                 return bareValue(t);
             },
             star: (): Interp => done({op: "present"}),
@@ -1409,7 +1446,8 @@ class Parser {
     private opExpr(op: string, operand: ParsedOperand): ValueExpr {
         if (op === "exact") return {op: "exact", operand};
         if (op === "lt" || op === "lte" || op === "gt" || op === "gte") return {op, operand};
-        return {op: "contains", operand};
+        // Unreachable: every prefix operator is checked against EXPRESSIBLE_PREFIX at import.
+        throw new Error(`operator "${op}" has no expression shape`);
     }
 
     /**
@@ -1429,18 +1467,19 @@ class Parser {
         };
         return {
             operator: (op, operand, opts): Interp => {
+                let claimed = false;
                 for (const ref of refs) {
-                    const prop = propOf(ref);
-                    const pv = parseValue(prop, operand);
-                    if (pv !== null && accepts(pv.type, op.name)) {
+                    const pv = parseValue(propOf(ref), operand);
+                    if (pv === null) continue;
+                    claimed = true;
+                    if (accepts(pv.type, op.name)) {
                         return this.propCtx([ref], word, pend).operator(op, operand, opts);
                     }
                 }
                 // A quoted operand is a string, which the count question refuses like any quantity.
                 const counted = opts.phrase === true ? null : countValue(op, operand);
                 if (counted !== null) return counted;
-                const someParse = refs.some((ref) => parseValue(propOf(ref), operand) !== null);
-                if (someParse) return declined(word, op);
+                if (claimed) return declined(word, op);
                 return illTyped(word, subject);
             },
             range: (t): Interp | null => {
@@ -1464,9 +1503,7 @@ class Parser {
                 if (globbing.length === 0) {
                     return {r: "fail", rescuable: true, message: `the ${word} axis has no patterns`};
                 }
-                if (globbing.some((ref) => propOf(ref).types.some((type) => type.name === "path"))) {
-                    warnPathGlob(pend);
-                }
+                if (globbing.some((ref) => pathTyped(propOf(ref).types))) warnPathGlob(pend);
                 return {r: "props", props: globbing, value: {op: "glob", operand: {text: pattern}}};
             },
             bare: (t): Interp => {
@@ -1482,9 +1519,8 @@ class Parser {
                 if (takers.length === 0) {
                     return {r: "fail", message: `the ${word} axis cannot run one — ${NO_REGEX}`};
                 }
-                const problem = patternProblem(pattern);
-                if (problem !== null) return {r: "fail", rescuable: true, message: `not a valid pattern: ${problem}`};
-                return {r: "props", props: takers, value: {op: "regex", operand: {text: pattern}}};
+                return badPattern(pattern)
+                    ?? {r: "props", props: takers, value: {op: "regex", operand: {text: pattern}}};
             },
             phrase: (t): Interp => {
                 const textual = refs.filter((ref) => propOf(ref).types.some((type) => {
@@ -1549,8 +1585,7 @@ class Parser {
             range: (t): Interp | null => this.countCtx(pend).range(t),
             rangeParts: (lo, hi): Interp | null => this.countCtx(pend).rangeParts(lo, hi),
             glob: (pattern): Interp => {
-                if (kinds.some((k) => Object.values(k.props).some((p) =>
-                    p.types.some((type) => type.name === "path")))) {
+                if (kinds.some((k) => Object.values(k.props).some((p) => pathTyped(p.types)))) {
                     warnPathGlob(pend);
                 }
                 return content({op: "glob", operand: {text: pattern}});
@@ -1563,11 +1598,7 @@ class Parser {
                 return content({op: "contains", operand: {text: t}});
             },
             phrase: (t): Interp => content({op: "contains", operand: {text: t}}),
-            regex: (pattern): Interp => {
-                const problem = patternProblem(pattern);
-                if (problem !== null) return {r: "fail", rescuable: true, message: `not a valid pattern: ${problem}`};
-                return content({op: "regex", operand: {text: pattern}});
-            },
+            regex: (pattern): Interp => badPattern(pattern) ?? content({op: "regex", operand: {text: pattern}}),
             star: (): Interp => ({r: "exists"}),
         };
     }
@@ -1666,37 +1697,19 @@ class Parser {
             }]],
         });
 
+        const testFor = (i: typeof interp): RowTest => {
+            if (i.r === "content") return {is: "content", value: i.value};
+            if (i.r === "props") return {is: "props", props: i.props, value: i.value};
+            if (i.r === "count") return countScope(i.value);
+            return {is: "exists"};
+        };
+
         if (head.role === "column") {
-            if (interp.r === "content") return {
-                on: "column",
-                column: head.column,
-                test: {is: "content", value: interp.value}
-            };
+            // A kind word answers as the kind it names, not as its column.
             if (interp.r === "kindWord") return {on: "kind", kind: interp.kind, test: {is: "exists"}};
-            if (interp.r === "count") return {on: "column", column: head.column, test: countScope(interp.value)};
-            if (interp.r === "props") {
-                return {
-                    on: "column",
-                    column: head.column,
-                    test: {is: "props", props: interp.props, value: interp.value}
-                };
-            }
-            return {on: "column", column: head.column, test: {is: "exists"}};
+            return {on: "column", column: head.column, test: testFor(interp)};
         }
-        if (head.role === "kind") {
-            if (interp.r === "props") return {
-                on: "kind",
-                kind: head.kind,
-                test: {is: "props", props: interp.props, value: interp.value}
-            };
-            if (interp.r === "count") return {on: "kind", kind: head.kind, test: countScope(interp.value)};
-            if (interp.r === "content") return {
-                on: "kind",
-                kind: head.kind,
-                test: {is: "content", value: interp.value}
-            };
-            return {on: "kind", kind: head.kind, test: {is: "exists"}};
-        }
+        if (head.role === "kind") return {on: "kind", kind: head.kind, test: testFor(interp)};
         const ref: PropRef = {kind: head.kind, prop: head.name};
         if (interp.r === "kindWord" || interp.r === "exists") return {on: "prop", ref, value: {op: "present"}};
         return {on: "prop", ref, value: interp.value};

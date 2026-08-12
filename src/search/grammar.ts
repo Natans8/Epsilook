@@ -9,13 +9,13 @@ import type {Operator} from "./operators";
 import {not, OPERATORS, or, present, range, regex} from "./operators";
 
 /**
- * The spelling an operator is written with.
+ * The spelling an operator is written with, for every module that writes syntax — this table and the formatter.
  *
  * @param op The operator.
  * @returns Its symbol.
  * @throws If the operator declares no symbol, which would leave the grammar a role with no character to play it.
  */
-function spelling(op: Operator): string {
+export function spelling(op: Operator): string {
     if (op.symbol === null) throw new Error(`operator "${op.name}" has no spelling`);
     return op.symbol;
 }

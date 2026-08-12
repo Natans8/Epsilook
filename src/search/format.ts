@@ -10,20 +10,31 @@
  * would run: the same subset the groups hold. That is what a chip bar commits, a URL carries and a JSON door would
  * echo.
  */
-import {GRAMMAR} from "./grammar";
-import {formatValue, sentinelOf, wordOf} from "./kinds";
+import {GRAMMAR, PREFIX_OPERATORS, spelling} from "./grammar";
+import {doorOf, formatValue, sentinelOf, wordOf} from "./kinds";
+import {exact, gt, gte, lt, lte} from "./operators";
 import type {Ask, Clause, Parsed, PropRef, ScopeTerm, ValueExpr} from "./parse";
+import {propOf} from "./parse";
+import {escapeRegExp} from "./patterns";
 import {TYPES} from "./value-types";
 import type {Value} from "./value-types";
 
 /** Characters that would change a bare value's reading, whatever its position or type. */
-const NEEDS_PHRASE = /[\s"{}()|*:]/;
+const NEEDS_PHRASE = new RegExp(`[\\s${escapeRegExp([
+    GRAMMAR.phrase, GRAMMAR.scope.open, GRAMMAR.scope.close,
+    GRAMMAR.group.open, GRAMMAR.group.close, GRAMMAR.or, GRAMMAR.wildcard, GRAMMAR.bind,
+].join(""))}]`);
 
 /** Leading characters that would open an operator, a pattern or a negation instead of text. */
-const OPENS_STRUCTURE = /^[=<>/-]/;
+const OPENS_STRUCTURE = new RegExp(`^[${escapeRegExp([...new Set([
+    ...PREFIX_OPERATORS.map((op) => spelling(op)[0]), GRAMMAR.regex, GRAMMAR.negate,
+])].join(""))}]`);
 
 /** Digit shapes that could re-read as a number, a number list or a range rather than text. */
-const NUMBER_SHAPED = /^\d[\d,.-]*$/;
+const NUMBER_SHAPED = new RegExp(String.raw`^\d[\d.${escapeRegExp(GRAMMAR.numberList + GRAMMAR.range)}]*$`);
+
+/** Characters mid-value that force the quotes even on a number-shaped text: the list and range separators. */
+const NUMBER_STRUCTURE = new RegExp(`[${escapeRegExp(GRAMMAR.numberList + GRAMMAR.range)}]`);
 
 /**
  * How a written value re-reads, which decides how much quoting keeps it itself:
@@ -49,7 +60,7 @@ function readingOf(operand: { text: string } | { type: string; value: Value }): 
  */
 function operandText(operand: { text: string } | { type: string; value: Value }, at?: PropRef): string {
     if ("text" in operand) return operand.text;
-    if (at !== undefined) return formatValue(at.kind.props[at.prop], operand.value);
+    if (at !== undefined) return formatValue(propOf(at), operand.value);
     return TYPES.get(operand.type)?.format?.(operand.value) ?? String(operand.value);
 }
 
@@ -71,7 +82,7 @@ function bareOrPhrase(text: string, reading: Reading): string {
     if (text === "" || NEEDS_PHRASE.test(text)) return phrased(text);
     if (reading === "quantity") return text;
     if (OPENS_STRUCTURE.test(text)) return phrased(text);
-    if (NUMBER_SHAPED.test(text) && (reading === "worded" || /[,-]/.test(text))) return phrased(text);
+    if (NUMBER_SHAPED.test(text) && (reading === "worded" || NUMBER_STRUCTURE.test(text))) return phrased(text);
     return text;
 }
 
@@ -79,6 +90,9 @@ function bareOrPhrase(text: string, reading: Reading): string {
 function bound(text: string): string {
     return text.startsWith(GRAMMAR.negate) ? `${GRAMMAR.group.open}${text}${GRAMMAR.group.close}` : text;
 }
+
+/** The ordered comparisons by their expression name, for reading each spelling from the registry. */
+const COMPARISONS = {lt, lte, gt, gte} as const;
 
 /**
  * Writes one value expression in its canonical spelling.
@@ -103,24 +117,23 @@ function valueText(value: ValueExpr, at?: PropRef): string {
         case "exact": {
             const text = operandText(value.operand, at);
             // A bare sentinel word already means the exact ask, so the anchor adds nothing to it.
-            if (at !== undefined && sentinelOf(at.kind.props[at.prop], text) !== null) return text;
-            return `=${bareOrPhrase(text, readingOf(value.operand))}`;
+            if (at !== undefined && sentinelOf(propOf(at), text) !== null) return text;
+            return `${spelling(exact)}${bareOrPhrase(text, readingOf(value.operand))}`;
         }
         case "lt":
-            return `<${operandText(value.operand, at)}`;
         case "lte":
-            return `<=${operandText(value.operand, at)}`;
         case "gt":
-            return `>${operandText(value.operand, at)}`;
         case "gte":
-            return `>=${operandText(value.operand, at)}`;
+            return `${spelling(COMPARISONS[value.op])}${operandText(value.operand, at)}`;
         case "range":
             return `${bound(operandText(value.lo, at))}${GRAMMAR.range}${operandText(value.hi, at)}`;
         case "anyOf":
-        default:
             // Grouped: at a bind, a glued phrase alternative would otherwise split at its own quote.
             return `${GRAMMAR.group.open}${value.alternatives.map((alt) => valueText(alt, at)).join(GRAMMAR.or)}${GRAMMAR.group.close}`;
     }
+    // The switch is exhaustive, narrowing `value` to never: a new variant fails to compile here until it has a
+    // spelling, which is the only thing keeping this module the parser's inverse.
+    return value;
 }
 
 /**
@@ -160,8 +173,7 @@ function clauseText(clause: Clause): string | null {
 function askText(ask: Ask): string | null {
     if (ask.on === "plain") return valueText(ask.value);
     if (ask.on === "prop") {
-        const prop = ask.ref.kind.props[ask.ref.prop];
-        const door = prop.prefix ?? ask.ref.prop;
+        const door = doorOf(ask.ref.prop, propOf(ask.ref));
         return ask.value === null ? null : `${door}${GRAMMAR.bind}${valueText(ask.value, ask.ref)}`;
     }
 
@@ -170,7 +182,6 @@ function askText(ask: Ask): string | null {
     if (test === null) return null;
     if (test.is === "exists") return `${head}${GRAMMAR.bind}${GRAMMAR.wildcard}`;
     if (test.is === "content") return `${head}${GRAMMAR.bind}${valueText(test.value)}`;
-    if (test.is === "kindWord") return `${head}${GRAMMAR.bind}${wordOf(test.kind)}`;
     if (test.is === "props") {
         const ref = test.props[0];
         // The value re-reads through the head's own dispatch, so the property name needs no spelling here.
@@ -178,21 +189,21 @@ function askText(ask: Ask): string | null {
     }
 
     const runs = test.terms
-        .map((run) => run.map(termText).filter((t): t is string => t !== null))
+        .map((run) => run
+            .map((term) => ({term, text: termText(term)}))
+            .filter((pair): pair is { term: ScopeTerm; text: string } => pair.text !== null))
         .filter((run) => run.length > 0);
     const flat = runs.flat();
     if (flat.length === 0) return `${head}${GRAMMAR.bind}${GRAMMAR.wildcard}`;
     // A single positive term needs no brace — a scope of one clause is that clause — except a bind, whose word
     // means something different (or nothing) outside its scope.
-    if (runs.length === 1 && flat.length === 1) {
-        const only = runs[0][0];
-        const single = test.terms.flat().find((t) => t.state === "ok" && t.ask !== null);
-        if (single !== undefined && !single.not
-            && (single.ask?.on === "content" || single.ask?.on === "kindWord")) {
-            return `${head}${GRAMMAR.bind}${only}`;
+    if (flat.length === 1) {
+        const {term, text} = flat[0];
+        if (!term.not && (term.ask?.on === "content" || term.ask?.on === "kindWord")) {
+            return `${head}${GRAMMAR.bind}${text}`;
         }
     }
-    const body = runs.map((run) => run.join(" ")).join(` ${GRAMMAR.or} `);
+    const body = runs.map((run) => run.map((pair) => pair.text).join(" ")).join(` ${GRAMMAR.or} `);
     return `${head}${GRAMMAR.bind}${GRAMMAR.scope.open}${body}${GRAMMAR.scope.close}`;
 }
 
@@ -203,12 +214,16 @@ function askText(ask: Ask): string | null {
  * @returns The canonical text of its evaluable query — incomplete and invalid clauses are not part of it.
  */
 export function formatQuery(parsed: Parsed): string {
-    const groups = parsed.groups
+    return clauseTexts(parsed).map((group) => group.join(" ")).join(` ${GRAMMAR.or} `);
+}
+
+/** Every evaluable clause's canonical text, grouped as the parse groups them; empty groups are dropped. */
+function clauseTexts(parsed: Parsed): string[][] {
+    return parsed.groups
         .map((group) => group
             .map((index) => clauseText(parsed.clauses[index]))
             .filter((text): text is string => text !== null))
         .filter((group) => group.length > 0);
-    return groups.map((group) => group.join(" ")).join(` ${GRAMMAR.or} `);
 }
 
 /**
@@ -219,14 +234,10 @@ export function formatQuery(parsed: Parsed): string {
  * what remains is the multiset of canonical clauses per alternation group.
  */
 function normalised(parsed: Parsed): string {
-    const groups = parsed.groups
-        .map((group) => group
-            .map((index) => clauseText(parsed.clauses[index]))
-            .filter((text): text is string => text !== null)
-            .toSorted()
-            .join(" "))
-        .filter((group) => group.length > 0);
-    return groups.toSorted().join(` ${GRAMMAR.or} `);
+    return clauseTexts(parsed)
+        .map((group) => group.toSorted().join(" "))
+        .toSorted()
+        .join(` ${GRAMMAR.or} `);
 }
 
 /**

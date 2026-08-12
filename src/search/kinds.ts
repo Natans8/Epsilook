@@ -262,6 +262,17 @@ export function propNameOf(name: string, prop: Prop): string {
     return prop.full ?? name;
 }
 
+/**
+ * The spelling a property's top-level door is written with.
+ *
+ * @param name The property's own name — its key in the kind's declaration.
+ * @param prop The property.
+ * @returns Its prefix, or the name itself where it declares none.
+ */
+export function doorOf(name: string, prop: Prop): string {
+    return prop.prefix ?? name;
+}
+
 /** One operand resolved against a property: the value, and the notation that accepted it. */
 export interface ParsedValue {
     readonly type: AxisType;
@@ -276,8 +287,9 @@ export interface ParsedValue {
  * @returns The sentinel's stored value, or `null` when the operand names none.
  */
 export function sentinelOf(prop: Prop, written: string): ParsedValue | null {
+    const folded = fold(written.trim());
     for (const [stored, word] of Object.entries(prop.sentinels ?? {})) {
-        if (fold(written.trim()) === fold(word)) return {type: prop.types[0], value: Number(stored)};
+        if (folded === fold(word)) return {type: prop.types[0], value: Number(stored)};
     }
     return null;
 }

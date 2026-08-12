@@ -1478,8 +1478,8 @@ call. If a full English overlay is ever the sole source, those two names come fr
 other section already stands alone.
 
 ⛔ **enGB is NOT a second English: on 9.2.7 it is byte-identical to enUS across all three text columns** — 276,332 spell
-names, 129,050 descriptions and 63,788 aura descriptions, **zero differences in every one**. The client's British
-locale carries no separate strings, so there is no in-game source of `colour` / `armour` spellings and the VarCon fold
+names, 129,050 descriptions and 63,788 aura descriptions, **zero differences in every one**. The client's British locale
+carries no separate strings, so there is no in-game source of `colour` / `armour` spellings and the VarCon fold
 (`tools/spellings.py`) is the only route to them. Do not build an enGB overlay expecting content.
 
 | overlay section                                              | source                                                                                                                        |
