@@ -24,11 +24,14 @@ export {fold, squash} from "./text-normalization";
 export type {Affordance, AxisType, Storage, Value} from "./value-types";
 export {
     angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, offset,
-    ordinal, path, percent, percentChange, seconds, text, TYPES,
+    ordinal, ordinalRungs, path, percent, percentChange, seconds, setOrdinalLadder, TARGET_ROLES, text,
+    TYPES,
 } from "./value-types";
 
+export {COLOUR_NAMES} from "./colour-names";
+
 export type {Match, Operand} from "./value-matching";
-export {coverage, matcher, roleNames, setOrdinalLadder} from "./value-matching";
+export {coverage, matcher, roleNames} from "./value-matching";
 
 export type {Column} from "./columns";
 export {COLUMNS, defineColumn} from "./columns";

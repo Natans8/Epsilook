@@ -282,13 +282,24 @@ describe("the declaration checks", () => {
     });
 
     it("lets two columns reuse a word that stays inside them", () => {
-        // The column has already been named by the time a scoped word is read, so `model:chain` and `fx:chain` could
-        // only ever mean their own column's kind. Only the top-level namespace is shared.
+        // The column has already been named by the time a scoped word is read, so `model:dissolve` and `fx:dissolve`
+        // could only ever mean their own column's kind. Only the top-level namespace is shared.
         const problems = problemsWith({
-            id: "model.chain", column: modelColumn, word: "chain",
+            id: "model.dissolve", column: modelColumn, word: "dissolve",
             hint: "a deliberate reuse, for the check", props: {},
         });
         assert.deepEqual(problems, []);
+    });
+
+    it("fires when a scoped word shadows a top-level one", () => {
+        // `chain` opens a tag at the top level, so a column-scoped kind of the same name would make one spelling ask
+        // two different questions depending on where it sits.
+        const problems = problemsWith({
+            id: "model.chain", column: modelColumn, word: "chain",
+            hint: "a deliberate shadow, for the check", props: {},
+        });
+        assert.equal(problems.length, 1);
+        assert.match(problems[0], /"chain" of kind model\.chain shadows the top-level word of kind fx\.chain/);
     });
 
     it("fires when a global kind claims a column's key", () => {

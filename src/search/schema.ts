@@ -88,6 +88,17 @@ export function schemaProblems(): string[] {
         }
     }
 
+    // A scoped word may repeat across columns, because the column has been named by the time one is read — but it
+    // may not shadow a top-level word, or the same spelling would ask two different questions depending on where it
+    // sits. Checked after every claim above, so declaration order cannot decide whether it fires.
+    for (const kind of KINDS.values()) {
+        if (kind.word === undefined || kind.global === true) continue;
+        const holder = topLevel.get(kind.word);
+        if (holder !== undefined && holder !== `kind ${kind.id}`) {
+            problems.push(`"${kind.word}" of kind ${kind.id} shadows the top-level word of ${holder}`);
+        }
+    }
+
     if (identityDoors.length > 1) {
         problems.push(
             "chipless search reads more than one identity notation, so a bare number would mean "

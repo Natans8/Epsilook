@@ -8,8 +8,8 @@
 import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
-import {matcher, roleNames, setOrdinalLadder} from "../../src/search/value-matching";
-import {TYPES} from "../../src/search/value-types";
+import {matcher, roleNames} from "../../src/search/value-matching";
+import {setOrdinalLadder, TARGET_ROLES, TYPES} from "../../src/search/value-types";
 
 describe("the textual family", () => {
     const run = (op: string, stored: string, operand: string): boolean =>
@@ -115,6 +115,12 @@ describe("target roles", () => {
         assert.deepEqual(roleNames(), ["area", "both", "caster", "others", "target"]);
     });
 
+    it("realises exactly the vocabulary the type declares", () => {
+        // The names live on the declaration side so parsing can refuse a stranger; the bits live here. This is the
+        // seam between them, held together by assertion rather than by memory.
+        assert.deepEqual(roleNames(), [...TARGET_ROLES]);
+    });
+
     it("reads a role that spans two bits as either of them", () => {
         assert.equal(plays(2, "target"), true);
         assert.equal(plays(8, "target"), true);
@@ -144,6 +150,13 @@ describe("ordinals", () => {
         setOrdinalLadder(["Classic", "Legion"]);
         assert.equal(matcher("gt", "ordinal")!("Midnight", "Classic"), false);
         assert.equal(matcher("gt", "ordinal")!("Legion", "Midnight"), false);
+    });
+
+    it("ranks a partial rung as the rung containing it", () => {
+        // A comparison against part of a name means the rung the reader identified: xpac:>leg is Legion.
+        setOrdinalLadder(["Classic", "Burning Crusade", "Legion"]);
+        assert.equal(matcher("gt", "ordinal")!("Legion", "burning"), true);
+        assert.equal(matcher("exact", "ordinal")!("Legion", "leg"), true);
     });
 });
 

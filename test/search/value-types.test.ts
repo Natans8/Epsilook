@@ -12,7 +12,7 @@ import {describe, it} from "node:test";
 import {exact, ORDERING, present} from "../../src/search/operators";
 import {
     angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, offset,
-    ordinal, path, percent, percentChange, seconds, text, TYPES,
+    ordinal, path, percent, percentChange, seconds, setOrdinalLadder, TARGET_ROLES, text, TYPES,
 } from "../../src/search/value-types";
 
 /** Canonical spellings. Every one is something `format` itself produces. */
@@ -84,6 +84,44 @@ describe("the type registry", () => {
         // offset: 50 is half.
         assert.equal(percent.parse!("50"), 50);
         assert.equal(percent.format!(50), "50%");
+    });
+
+    it("refuses a sign on an absolute percentage", () => {
+        // A proportion has no direction, so a signed operand is refused rather than parsed into a value that means
+        // nothing for a transparency.
+        assert.equal(percent.parse!("-50"), null);
+        assert.equal(percent.parse!("+50"), null);
+    });
+
+    it("reads a colour by its CSS name as well as by hex", () => {
+        // The vocabulary is the web's own named-colour list, vendored verbatim, so a reader types the name they
+        // already know and the nearness matching makes it mean "about this colour".
+        assert.equal(colour.parse!("red"), 0xff0000);
+        assert.equal(colour.parse!("REBECCAPURPLE"), 0x663399);
+        assert.equal(colour.parse!("grey"), colour.parse!("gray"));
+        assert.equal(colour.format!(colour.parse!("red")!), "#ff0000");
+    });
+
+    it("refuses a role name the target mask does not have", () => {
+        // The roles are a closed vocabulary, so a mistyped one is a diagnostic rather than a silently empty result.
+        assert.equal(bitmask.parse!("caster"), "caster");
+        assert.equal(bitmask.parse!("CASTER"), "caster");
+        assert.equal(bitmask.parse!("everyone"), null);
+        assert.deepEqual([...TARGET_ROLES].toSorted(), [...TARGET_ROLES]);
+    });
+
+    it("refuses an ordinal no loaded rung contains, and accepts anything when no ladder is loaded", () => {
+        // The ladder is pack data: once loaded, the pack defines the vocabulary and an unknown expansion is refused
+        // at parse; with nothing loaded there is nothing to refuse against.
+        setOrdinalLadder(["Classic", "Legion"]);
+        try {
+            assert.equal(ordinal.parse!("Legion"), "Legion");
+            assert.equal(ordinal.parse!("leg"), "leg", "a partial rung still parses");
+            assert.equal(ordinal.parse!("Midnight"), null);
+        } finally {
+            setOrdinalLadder([]);
+        }
+        assert.equal(ordinal.parse!("Midnight"), "Midnight");
     });
 
     it("gives every type a hint, because diagnostics and help are built from it", () => {
@@ -233,10 +271,10 @@ describe("what each type refuses to parse", () => {
         assert.equal(id.parse!("99999999999999999999"), null);
     });
 
-    it("makes a colour reject anything that is not a hex triplet", () => {
-        assert.equal(colour.parse!("red"), null);
+    it("makes a colour reject anything that is neither a hex triplet nor a known name", () => {
         assert.equal(colour.parse!("#fff"), null);
         assert.equal(colour.parse!("#ff00gg"), null);
+        assert.equal(colour.parse!("notacolour"), null);
     });
 
     it("makes a composite reject more members than it has, or an unknown member name", () => {

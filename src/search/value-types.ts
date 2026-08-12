@@ -16,8 +16,10 @@
  *
  * Adding a type is one `defineType` call. Nothing else in the system changes.
  */
+import {COLOUR_NAMES} from "./colour-names";
 import type {Operator} from "./operators";
 import {anyOf, contains, exact, glob, OPERATORS, ORDERING, present} from "./operators";
+import {fold, squash} from "./text-normalization";
 import type {Notation, NumericSpec} from "./units";
 import {formatNumber, parseNumber} from "./units";
 
@@ -188,16 +190,43 @@ export const enumeration = defineType<string>({
 });
 
 /**
+ * The ordered vocabulary ordinal values live in, lowest rank first.
+ *
+ * A declaration-side slot for data the pack supplies: the set of expansions differs between game versions, so the
+ * ladder is loaded, never hard-coded. Parsing and matching both read it — the parser to refuse a rung the loaded
+ * pack does not have, the matcher to compare by rank — which keeps the vocabulary one fact in one place while no
+ * function crosses the seam.
+ */
+let ladder: readonly string[] = [];
+
+/**
+ * Sets the ordered vocabulary ordinal values are parsed and compared within.
+ *
+ * @param rungs The vocabulary, lowest rank first. Compared case-insensitively.
+ */
+export function setOrdinalLadder(rungs: readonly string[]): void {
+    ladder = rungs.map(fold);
+}
+
+/** The loaded ordinal vocabulary, lowest rank first, folded. Empty when no data has been loaded. */
+export function ordinalRungs(): readonly string[] {
+    return ladder;
+}
+
+/**
  * A named value from an ordered set, such as the expansion a spell was introduced in.
  *
- * Differs from {@link enumeration} only in accepting comparison and ranges. The order itself is data: the vocabulary
- * is supplied to the evaluator by whatever loads the game data, because the set of expansions differs between game
- * versions.
+ * Differs from {@link enumeration} only in accepting comparison and ranges. Once a ladder is loaded, an operand no
+ * rung contains is refused at parse, so an unknown expansion is a diagnostic rather than a silent empty result; with
+ * no ladder loaded there is nothing to refuse against, and any text is accepted.
  */
 export const ordinal = defineType<string>({
     name: "ordinal",
     storage: "int",
-    parse: (s) => s,
+    parse: (s) => {
+        if (ladder.length === 0) return s;
+        return ladder.some((rung) => squash(rung).includes(squash(s))) ? s : null;
+    },
     format: (s) => s,
     accepts: [exact, contains, glob, present, anyOf, ...ORDERING],
     hint: "a rung on a ladder; name one, or compare with < and >",
@@ -288,13 +317,14 @@ export const seconds = numeric({
 /**
  * A proportion of a whole: how transparent a model is, how much colour is drained from it.
  *
- * Absolute rather than relative, so `50` is half and there is no baseline to measure from. Distinct from
- * {@link percentChange}, which is a change measured from a hundred.
+ * Absolute rather than relative, so `50` is half and there is no baseline to measure from — which is also why a sign
+ * is refused: a proportion has no direction, and accepting `-50` would parse a value that means nothing here.
+ * Distinct from {@link percentChange}, which is a change measured from a hundred and carries its sign.
  */
 export const percent = numeric({
     name: "percent",
     storage: "float",
-    display: {unit: "%", factor: 1},
+    display: {unit: "%", factor: 1, sign: "refused"},
     hint: "a percentage, such as 50 or 7.5, or a range like 10-90",
 });
 
@@ -352,21 +382,24 @@ export const angle = numeric({
 /**
  * A colour, stored packed as 0xRRGGBB.
  *
- * Written as a hex triplet and edited with a colour picker, which is the only practical way to choose one: nobody
- * knows a tint's packed value, so the control is what makes the axis usable. A bare token matches approximately, by
- * channel distance, because "about this colour" is the question a reader actually has; `=` matches the exact value
- * for a reader who copied one.
+ * Written as a hex triplet or as a CSS colour name, and edited with a colour picker, which is the only practical way
+ * to choose one: nobody knows a tint's packed value, so the control is what makes the axis usable. A bare token
+ * matches approximately, by channel distance, because "about this colour" is the question a reader actually has —
+ * which is also what makes a name useful, since nobody's tint is exactly pure red; `=` matches the exact value for a
+ * reader who copied one. Names are read and never written: a stored colour prints as its hex triplet.
  */
 export const colour = defineType<number>({
     name: "colour",
     storage: "int",
     parse: (s) => {
-        const hex = /^#?([0-9a-f]{6})$/i.exec(s.trim());
-        return hex ? Number.parseInt(hex[1], 16) : null;
+        const written = s.trim();
+        const hex = /^#?([0-9a-f]{6})$/i.exec(written);
+        if (hex) return Number.parseInt(hex[1], 16);
+        return COLOUR_NAMES[fold(written)] ?? null;
     },
     format: (packed) => `#${packed.toString(16).padStart(6, "0")}`,
     accepts: [exact, contains, present, anyOf],
-    hint: "a colour as #rrggbb; a bare colour matches nearby shades too",
+    hint: "a colour as #rrggbb or a name such as red; a bare colour matches nearby shades too",
     ui: "colour",
 });
 
@@ -466,16 +499,26 @@ export const offset = composite({
 });
 
 /**
+ * The role names a target mask answers to. The type's own vocabulary, so parsing can refuse a word that is not one;
+ * which bits realise each role is the evaluator's mapping, and a test holds the two lists together.
+ */
+export const TARGET_ROLES: readonly string[] = Object.freeze(["area", "both", "caster", "others", "target"]);
+
+/**
  * Several bits on one row, where the reader names a role rather than a number.
  *
- * The roles are `caster`, `target`, `area`, `others` and `both`. They are not one bit each: a target spans two bits
- * that mean the same thing to a reader, and `both` is a conjunction no single bit spells. The mapping is held by the
+ * The roles are not one bit each: a target spans two bits that mean the same thing to a reader, and `both` is a
+ * conjunction no single bit spells. The names are this type's closed vocabulary and anything else is refused at
+ * parse, so a mistyped role is a diagnostic rather than a silently empty result; the bit mapping is held by the
  * evaluator, which is the layer that sees the stored integers.
  */
 export const bitmask = defineType<string>({
     name: "bitmask",
     storage: "int",
-    parse: (s) => s,
+    parse: (s) => {
+        const role = fold(s.trim());
+        return TARGET_ROLES.includes(role) ? role : null;
+    },
     format: (s) => s,
     accepts: [exact, present, anyOf],
     hint: "who it plays on: caster, target, both, area or others",

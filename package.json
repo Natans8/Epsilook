@@ -2,7 +2,7 @@
   "name": "epsilook",
   "private": true,
   "type": "module",
-  "description": "Search WoW spells by how they look and sound \u2014 a companion for Epsilon WoW. Static site; src/ is TypeScript bundled into site/js/ by esbuild.",
+  "description": "Search WoW spells by how they look and sound — a companion for Epsilon WoW. Static site; src/ is TypeScript bundled into site/js/ by esbuild.",
   "scripts": {
     "build": "node tools/build.mjs",
     "dev": "node tools/build.mjs --serve",

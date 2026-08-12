@@ -14,7 +14,7 @@
  */
 import {fold, squash} from "./text-normalization";
 import type {Value} from "./value-types";
-import {TYPES} from "./value-types";
+import {ordinalRungs, TYPES} from "./value-types";
 
 /**
  * An operand as the kernel supplies it: one value, or several.
@@ -230,31 +230,22 @@ define(["present"], ["bitmask"], (stored) => asNumber(stored) !== 0);
 /* ---------------------------------------------------------------------- ordinals */
 
 /**
- * The ordered vocabulary an ordinal compares within, lowest rank first.
+ * Finds a value's rank within the loaded ladder ({@link ordinalRungs} — declaration-side data, supplied per pack).
  *
- * Supplied by whatever loads the data, because the vocabulary is data: the expansion ladder differs between game
- * versions, and hard-coding it here would be a second copy of the list the build already produces.
- */
-let ladder: readonly string[] = [];
-
-/**
- * Sets the ordered vocabulary used by ordinal comparison.
+ * A whole rung name ranks exactly; anything else ranks as the first rung containing it, so a comparison against a
+ * partial name means the rung the reader identified. Stored values are always whole names, so only operands take the
+ * fallback.
  *
- * @param rungs The vocabulary, lowest rank first. Compared case-insensitively.
- */
-export function setOrdinalLadder(rungs: readonly string[]): void {
-    ladder = rungs.map(fold);
-}
-
-/**
- * Finds a value's rank within the ladder.
- *
- * @param value A rung name.
- * @returns The rank, or -1 when the ladder does not contain it or the operand is not a single value.
+ * @param value A rung name, whole or partial.
+ * @returns The rank, or -1 when no rung matches or the operand is not a single value.
  */
 const rank = (value: Operand): number => {
     const written = asText(value);
-    return written === null ? -1 : ladder.indexOf(fold(written));
+    if (written === null) return -1;
+    const ladder = ordinalRungs();
+    const exactRank = ladder.indexOf(fold(written));
+    if (exactRank >= 0) return exactRank;
+    return ladder.findIndex((rung) => squash(rung).includes(squash(written)));
 };
 
 /**
