@@ -576,6 +576,41 @@ def check_arcanum(rep: Report) -> None:
         rep.ok("arcanum codec", f"{len(arcanum.load_catalog())} actions, golden fixture decodes")
 
 
+def check_cache(rep: Report) -> None:
+    """Warn-only: build/cache holds downloads no pack in the roster needs.
+
+    THE CACHE IS THE ONE THING HERE THAT GROWS WITHOUT ANYONE SEEING IT. A patch
+    bump strands the previous build's tables - ~300 MB for a retail line - and
+    they are gitignored, so no diff, no status line and no deploy ever mentions
+    them. tools/rebuild.py sweeps after every build, which covers the machine
+    that did the bump; this covers every other one, and the case where a roster
+    edit landed without a rebuild.
+
+    WARN, NEVER FAIL: disk that could be reclaimed is not a defect in the change
+    being committed, and a gitignored directory is not part of what CI sees.
+    """
+    if os.environ.get("CI"):
+        rep.skip("cache rotation", "build/cache is not present in CI")
+        return
+    try:
+        sys.path.insert(0, str(ROOT / "tools"))
+        from packs import stale_cache
+    except ImportError as exc:  # pragma: no cover - packs.py is committed
+        rep.skip("cache rotation", f"tools/packs.py not importable ({exc})")
+        return
+
+    stale = stale_cache()
+    if not stale:
+        rep.ok("cache rotation", "build/cache holds only what the roster needs")
+        return
+    total = sum(size for _, size in stale)
+    names = ", ".join(directory.name for directory, _ in stale[:3])
+    more = f" +{len(stale) - 3} more" if len(stale) > 3 else ""
+    rep.warn("cache rotation",
+             f"{len(stale)} unused build cache(s), {total / 1e6:,.0f} MB "
+             f"({names}{more}) - python tools/rebuild.py --prune-cache")
+
+
 def check_pack_freshness(rep: Report) -> None:
     """A tracked game line must not have shipped a build past the pack we ship.
 
@@ -837,6 +872,7 @@ def main() -> int:
     check_license_scope(rep)
     check_arcanum(rep)
     check_pack_freshness(rep)
+    check_cache(rep)
     check_dependencies(rep)
     check_docs(rep, args.base)
 

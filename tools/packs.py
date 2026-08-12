@@ -98,7 +98,6 @@ WAGO_PROBE_URL = "https://wago.tools/db2/SpellCastTimes/csv?build={build}"
 # with the internals below. See the module docstring.
 IGNORED_PRODUCTS = {
     "wow_classic_titan": "China-exclusive (Titan Reforged)",
-    "wowt": "retail PTR",
     "wowxptr": "retail PTR 2",
     "wow_beta": "retail alpha/beta",
     "wow_classic_ptr": "Classic PTR",
@@ -221,6 +220,79 @@ assert sum(p.default for p in PACKS) == 1, "exactly one pack must be the default
 assert len({p.key for p in PACKS}) == len(PACKS), "duplicate pack key"
 assert len({p.id for p in PACKS}) == len(PACKS), "duplicate pack id"
 
+CACHE = Path(__file__).resolve().parent.parent / "build" / "cache"
+
+# A per-build download cache directory, e.g. `build/cache/9.2.7.45745`. Anything
+# else under build/cache/ is shared or long-lived (dbd, enums, expansions,
+# listfile, the DuckDB file) and is never a rotation candidate.
+BUILD_DIR_RE = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
+TDB_DIR_RE = re.compile(r"^tdb-(.+)$")
+
+
+def builds() -> list[str]:
+    """Every build the roster names, deduplicated and in roster order.
+
+    A BUILD is not a pack: two packs can ship one build (retail and its PTR
+    while the test line is level with live). Anything keyed on the game data
+    rather than on what the app serves — the download cache, the exploration
+    database — wants this rather than the pack list.
+    """
+    seen: dict[str, None] = {}
+    for pack in PACKS:
+        seen.setdefault(pack.build, None)
+    return list(seen)
+
+
+def _build_data():
+    """build/build_data.py as a module, or None. It is not on the path by default."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
+        import build_data
+    except ImportError:
+        return None
+    return build_data
+
+
+def stale_cache() -> list[tuple[Path, int]]:
+    """Cache directories no pack in the roster needs, newest-first by size.
+
+    ⚠ THE CACHE DOES NOT ROTATE ON ITS OWN, AND NOTHING USED TO NOTICE. Every
+    patch bump leaves the previous build's tables behind — 300 MB for a retail
+    one — and the pack directory it fed is retired the same day, so the bytes
+    sit there unreferenced and invisible. Seven such directories had accumulated
+    to ~427 MB before anyone looked. Hence a function rather than a habit:
+    tools/rebuild.py sweeps after every successful build and tools/check.py
+    reports what is left, so neither depends on a human remembering.
+
+    ⛔ A BUILD NO PACK NAMES IS NOT AUTOMATICALLY STALE. build_data.py pins
+    SoundKitName to a frozen 8.3.0 build (see SOUNDKITNAME_BUILD) that no Pack
+    row mentions and re-downloading it costs 5 MB for nothing, so the pinned
+    builds are read from the builder rather than assumed absent. TDB dumps are
+    keyed by RELEASE TAG and shared between packs, so they are matched through
+    the same mapping the build uses instead of by name.
+    """
+    if not CACHE.is_dir():
+        return []
+    module = _build_data()
+    keep = set(builds())
+    if module is not None:
+        keep.add(getattr(module, "SOUNDKITNAME_BUILD", ""))
+    keep_tdb = {tdb_tag(build) for build in builds()} - {""}
+
+    stale = []
+    for directory in sorted(CACHE.iterdir()):
+        if not directory.is_dir():
+            continue
+        tdb = TDB_DIR_RE.match(directory.name)
+        if tdb:
+            if module is None or tdb.group(1) in keep_tdb:
+                continue  # unknown mapping: keep, rather than guess it away
+        elif not BUILD_DIR_RE.match(directory.name) or directory.name in keep:
+            continue
+        size = sum(f.stat().st_size for f in directory.rglob("*") if f.is_file())
+        stale.append((directory, size))
+    return sorted(stale, key=lambda item: -item[1])
+
 
 def version_key(build: str) -> tuple[int, ...]:
     """Componentwise, so 10.x sorts after 9.x rather than before it."""
@@ -330,12 +402,10 @@ def tdb_tag(build: str) -> str:
     build will answer. Matching is per patch (the user's call): a TDB tracks
     9.2.7, not 9.2.7.45745, so a hotfix bump keeps its server-side data.
     """
-    try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
-        from build_data import tdb_release
-    except ImportError:
+    module = _build_data()
+    if module is None:
         return ""
-    return (tdb_release(build) or {}).get("tag", "")
+    return (module.tdb_release(build) or {}).get("tag", "")
 
 
 def availability(build: str) -> str:

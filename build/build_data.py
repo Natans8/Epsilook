@@ -421,6 +421,18 @@ TDB_RELEASES = {
         "world": "TDB_full_world_1127.26011_2026_01_14.sql",
         "hotfixes": "TDB_full_hotfixes_1127.26011_2026_01_14.sql",
     },
+    # Midnight: TrinityCore's master branch dump. Its 1200 names the 12.0 client
+    # it was cut against, while the pack ships 12.1.0 — so unlike the entries
+    # above this one is keyed to a patch it does not exactly match, and the
+    # patch fallback in tdb_release() will not reach it on a 12.1 build. It is
+    # named here on the 3.4.3 precedent: creature entries carry across a minor
+    # patch, and the alternative is no morph display names at all for retail.
+    "12.1.0.69273": {
+        "tag": "TDB1200.26021",
+        "asset": "TDB_full_1200.26021_2026_02_06.7z",
+        "world": "TDB_full_world_1200.26021_2026_02_06.sql",
+        "hotfixes": "TDB_full_hotfixes_1200.26021_2026_02_06.sql",
+    },
     "8.3.7.35662": {
         "tag": "TDB837.20101",
         "asset": "TDB_full_837.20101_2020_10_20.7z",
@@ -5374,7 +5386,11 @@ def write_pack(pack: dict, pack_id: str, label: str, hidden: bool = False,
         for e in manifest:  # exactly one entry may carry the flag
             e.pop("default", None)
     manifest = manifest + [entry]
-    manifest.sort(key=lambda e: version_key(e["id"]))
+    # A tagged pack id (12.1.0-ptr.69273) keys identically to the build it
+    # shadows, so without a tie-break the dropdown order would depend on which
+    # of the two was rebuilt last. The plain build comes first; the test line
+    # reads as a variant of it rather than as a separate rung.
+    manifest.sort(key=lambda e: (version_key(e["id"]), "-" in e["id"], e["id"]))
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     log(f"Updated {manifest_path}")
 

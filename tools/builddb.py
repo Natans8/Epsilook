@@ -67,6 +67,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 
 import dbd  # noqa: E402  (path set above)
+from packs import PACKS, builds  # noqa: E402  (path set above)
 
 try:
     # The `type: ignore` is REQUIRED, not cosmetic: tools/check.py type-checks
@@ -99,7 +100,6 @@ CACHE = ROOT / "build" / "cache"
 DBD_CACHE = CACHE / "dbd"
 ENUM_CACHE = CACHE / "enums"
 DB_PATH = CACHE / "epsilook.duckdb"
-VERSIONS_JSON = ROOT / "site" / "data" / "versions.json"
 
 WAGO_CSV_URL = "https://wago.tools/db2/{table}/csv?build={version}"
 DBDE_URL = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/meta/enums/{name}.dbde"
@@ -956,16 +956,23 @@ def main() -> int:
     parser.add_argument("--db", default=str(DB_PATH), help=f"output (default {DB_PATH})")
     args = parser.parse_args()
 
-    if not VERSIONS_JSON.exists():
-        log(f"missing {VERSIONS_JSON} — nothing to build")
-        return 1
-    manifest = json.loads(VERSIONS_JSON.read_text(encoding="utf-8"))
+    # ONE SCHEMA PER BUILD, NOT PER PACK. The roster is the input (it is what
+    # build_data.py is driven from), and two packs can ship one build — a test
+    # line is level with live until it moves ahead, and versions.json would
+    # therefore ask for the same tables twice under a schema name that is not a
+    # game version. What this database is FOR is the game data, so the
+    # distinction the app makes between those packs does not exist here.
+    manifest: list[dict[str, Any]] = [
+        {"id": build,
+         "label": next(p.label for p in PACKS if p.build == build),
+         "default": any(p.default for p in PACKS if p.build == build)}
+        for build in builds()]
 
     # TDB tags come from build_data.py so the mapping is not written down twice.
     try:
         import build_data
         for entry in manifest:
-            release = build_data.TDB_RELEASES.get(entry["id"])
+            release = build_data.tdb_release(entry["id"])
             entry["tdb_tag"] = release.get("tag") if release else None
     except (ImportError, AttributeError):
         for entry in manifest:

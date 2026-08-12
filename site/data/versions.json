@@ -75,13 +75,13 @@
     "label": "Midnight 12.1.0",
     "file": "data/12.1.0.69273/spelldata.json.gz",
     "built": "2026-08-12",
-    "hash": "c2ca840b81"
+    "hash": "ff35083e21"
   },
   {
     "id": "12.1.0-ptr.69273",
     "label": "Midnight PTR 12.1.0",
     "file": "data/12.1.0.69273/spelldata.json.gz",
     "built": "2026-08-12",
-    "hash": "c2ca840b81"
+    "hash": "ff35083e21"
   }
 ]

@@ -39,7 +39,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from packs import PACKS, Pack, select
+from packs import PACKS, Pack, select, stale_cache
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build" / "build_data.py"
@@ -113,6 +113,26 @@ def retire_superseded(built: list[Pack]) -> list[str]:
         MANIFEST.write_text(json.dumps(kept, indent=2) + "\n", encoding="utf-8")
 
     return gone
+
+
+def prune_cache() -> int:
+    """Delete the download caches no pack in the roster needs. Bytes freed.
+
+    THE OTHER HALF OF retire_superseded, AND IT RUNS ON THE SAME EVENT. A bump
+    retires the pack the new one replaced; the build directory that fed it is
+    just as dead, and it is far larger — a retail build's tables are ~300 MB
+    against an 18 MB pack. Sweeping here means the cache rotates as a
+    consequence of the work rather than as a chore nobody is reminded of.
+
+    Which directories qualify is packs.stale_cache()'s decision, so the pinned
+    and shared ones are spared by one rule rather than by two lists.
+    """
+    freed = 0
+    for directory, size in stale_cache():
+        shutil.rmtree(directory, ignore_errors=True)
+        print(f"{DIM}pruned     build/cache/{directory.name} ({size / 1e6:,.0f} MB){RESET}")
+        freed += size
+    return freed
 
 
 def payload(path: Path) -> dict:
@@ -196,7 +216,16 @@ def main() -> int:
                     help="deterministic-build oracle: rebuild, compare, restore")
     ap.add_argument("--refresh", action="store_true", help="re-download sources even if cached")
     ap.add_argument("--list", action="store_true", help="print the commands, run nothing")
+    ap.add_argument("--prune-cache", action="store_true",
+                    help="delete the download caches no pack needs, and stop "
+                         "(a rebuild does this for you)")
     args = ap.parse_args()
+
+    if args.prune_cache:
+        freed = prune_cache()
+        print(f"{GREEN}freed {freed / 1e6:,.0f} MB{RESET}" if freed
+              else f"{GREEN}cache is current{RESET}")
+        return 0
 
     chosen = select(args.version)
     if args.verify and not args.version:
@@ -222,8 +251,10 @@ def main() -> int:
     # shipped pack and then leave nothing in its place if the build then failed.
     for name in retire_superseded(chosen):
         print(f"{DIM}retired    site/data/{name} (no longer in the roster){RESET}")
+    freed = prune_cache()
 
-    print(f"{GREEN}built {len(chosen)} pack(s){RESET}")
+    note = f", freed {freed / 1e6:,.0f} MB of cache" if freed else ""
+    print(f"{GREEN}built {len(chosen)} pack(s){RESET}{note}")
     return 0
 
 

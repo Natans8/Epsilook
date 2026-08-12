@@ -1828,8 +1828,8 @@ The five Classic re-release clients (Vanilla / TBC / WotLK / Cataclysm / MoP) co
 | 9.2.7.45745      | Shadowlands *(default)* | 276,332 | 12.2 MB | TDB927.22111  |             0 |
 | 10.2.7.55664     | Dragonflight            | 327,092 | 14.5 MB | TDB1027.24051 |             0 |
 | 11.2.7.65299     | The War Within          | 375,895 | 16.8 MB | TDB1127.26011 |             0 |
-| 12.1.0.69273     | Midnight                | 413,885 | 18.5 MB | —             |             0 |
-| 12.1.0-ptr.69273 | Midnight PTR            | 413,885 | 18.5 MB | —             |             0 |
+| 12.1.0.69273     | Midnight                | 413,890 | 18.7 MB | TDB1200.26021 |             0 |
+| 12.1.0-ptr.69273 | Midnight PTR            | 413,890 | 18.7 MB | TDB1200.26021 |             0 |
 
 **A PACK ID IS NORMALLY THE BUILD ID, AND `-ptr` IS THE ONE EXCEPTION.** The app's clean URL is the PATCH (`?v=12.1.0`),
 so two packs on one patch would resolve to each other — and a test line sits on the live patch whenever it has not moved
@@ -1841,10 +1841,14 @@ tests). `build_data.py` takes it as `--id`, separately from the `--version` it d
 Midnight's pack file rather than carrying a second 18.5 MB copy. Rebuilding it writes its own directory back — re-point
 `file`/`hash` by hand, or keep the duplicate once the lines diverge and the data genuinely differs.
 
-**Midnight has no TDB release and that is not a gap to fix** — TrinityCore has not published one for 12.x. The cost is
-the TDB's two roles (§1): morph *display* rows do not resolve (`morphs=4,286 (0 displays)`) and no hotfix overlay is
-applied. Everything sourced from client tables is unaffected. It resolves itself whenever a TDB1200-ish release appears;
-add it to `TDB_RELEASES` then.
+**Midnight HAS a TDB now — `TDB1200.26021`, wired 2026-08-12, and it took morph displays from 0 to 4,635.** The entry
+used to say no 12.x release existed; TrinityCore published one and the hotfix overlay applies with it.
+
+**⚠ IT IS THE ONE MAPPING THAT IS NOT AN EXACT PATCH MATCH.** The dump names the 12.0 client it was cut against while
+the pack ships 12.1.0, so `tdb_release()`'s patch fallback does not reach it and the entry is keyed on the build
+itself — meaning **a 12.x patch bump silently drops it**, announced by one `no release mapped` line in the build log.
+Re-key it when Midnight bumps. It is named across the gap on the 3.4.3 precedent: creature entries carry across a minor
+patch, and the alternative is no morph display names for retail at all.
 
 **All of them are at pack format 46** (the area gate, §3t — on top of format 39's delivery route with values, §3s-bis,
 format 38's attribute flags and first delivery partition, §3s, format 36's target masks on spell links, §3r, format 35's
