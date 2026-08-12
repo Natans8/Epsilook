@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
+import io
 import json
 import os
 import re
@@ -45,6 +46,14 @@ import time
 from pathlib import Path
 
 from repo import BUMP_PATHS, ROOT, changed_under, git, have_ref
+
+# A piped stdout on Windows is cp1252, and a failure detail quotes whatever the
+# failing tool printed (node --test opens every line with U+25B6). A report
+# that dies on its own detail hides the failure it exists to show, so degrade
+# unencodable characters instead of raising.
+for _stream in (sys.stdout, sys.stderr):
+    if isinstance(_stream, io.TextIOWrapper):
+        _stream.reconfigure(errors="replace")
 
 SITE = ROOT / "site"
 MANIFEST = SITE / "data" / "versions.json"
