@@ -11,6 +11,7 @@ tools/measure.mjs
 tools/parse.mjs
 tools/equal.mjs
 tools/surface.mjs
+tools/battery.mjs
 
 # the test bundles esbuild emits from test/*.test.ts (npm test builds them)
 test/.bundle/

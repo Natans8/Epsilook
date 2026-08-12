@@ -40,6 +40,10 @@ import type {PackDomain, SpellData, SpellPack, VersionEntry} from "../src/data";
 import {groupsOf, parseQueryParts} from "../src/query";
 import {searchGroups} from "../src/search";
 import "../src/pilltypes";     // side effect: registers every pill type
+import {run as runKernel} from "../src/search/kernel";
+import {parse} from "../src/search/parse";
+import type {Dataset} from "../src/search/rows";
+import {packDataset} from "./dataset";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -124,10 +128,23 @@ interface Engine {
     run(d: SpellData, query: string): number;
 }
 
+/* The 2.0 dataset is built once per pack and reused across keystrokes — the same lifetime the app would give it —
+ * so the bench times evaluation, not index construction. Construction is reported by the battery tool instead. */
+const datasets = new WeakMap<SpellData, Dataset>();
+const dataset = (d: SpellData): Dataset => {
+    let ds = datasets.get(d);
+    if (!ds) datasets.set(d, ds = packDataset(d));
+    return ds;
+};
+
 const ENGINES: Engine[] = [
     {
         name: "1.0 searchGroups",
         run: (d, q) => searchGroups(groupsOf(parseQueryParts(q)), d).spellIds.length,
+    },
+    {
+        name: "2.0 kernel",
+        run: (d, q) => runKernel(parse(q), dataset(d)).size,
     },
 ];
 

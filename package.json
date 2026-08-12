@@ -13,6 +13,7 @@
     "parse": "node tools/build.mjs --cli && node tools/parse.mjs",
     "equal": "node tools/build.mjs --cli && node tools/equal.mjs",
     "measure": "node tools/build.mjs --cli && node tools/measure.mjs",
+    "battery": "node tools/build.mjs --cli && node tools/battery.mjs",
     "lint": "oxlint --type-aware",
     "surface": "node tools/build.mjs --cli && node tools/surface.mjs"
   },
