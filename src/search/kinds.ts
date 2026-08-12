@@ -291,9 +291,12 @@ export const icon = defineKind({
  * properties — the flag type's first customers — and a set flag contributes its own word to the row's matchable
  * content, so `spell:breaksmove` and `spell:unbreakable` stay plain words. The two lengths carry the doors a reader
  * types: `cast:>2`, `channel:unlimited` — and `cast:instant` is the one spelling for a spell with no bar at all.
+ *
+ * Wordless: the doors and the flag words carry every real question, and a word selecting "spells with a delivery
+ * row" would select nearly everything, so none is spent.
  */
 export const delivery = defineKind({
-    column: spellColumn, word: "delivery",
+    column: spellColumn,
     hint: "how the spell goes off — at once, behind a cast bar, or as a channel",
     props: {
         cast: {
@@ -698,9 +701,9 @@ export const detect = defineKind({
     },
 });
 
-export const seat = defineKind({
-    column: mechColumn, word: "seat", global: true, group: "vehicle",
-    hint: "a seat of the vehicle the caster becomes",
+export const seats = defineKind({
+    column: mechColumn, word: "seats", global: true, group: "vehicle",
+    hint: "the seats of the vehicle the caster becomes",
     props: {
         count: {types: [count], hint: "how many seats the vehicle has"},
         attach: attachPoint("where the seat sits on the vehicle"),
@@ -721,13 +724,13 @@ export const speed = defineKind({
 });
 
 export const keybind = defineKind({
-    column: mechColumn, word: "keybind", group: "interface",
+    column: mechColumn, word: "keybind", group: "ui",
     hint: "a key that casts a spell while the aura holds",
     props: {key: of(text)},
 });
 
 export const debuff = defineKind({
-    column: mechColumn, word: "debuff", group: "interface",
+    column: mechColumn, word: "debuff", group: "ui",
     hint: "aura that shows in the red debuff frame",
     props: {},
 });

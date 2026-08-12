@@ -65,13 +65,15 @@ describe("the shipped schema", () => {
         assert.equal(HEADS.get("spell")?.role, "column");
         assert.equal(HEADS.get("name")?.role, "kind");
         assert.deepEqual(kindsOf(COLUMNS.get("spell")!).map((k) => k.word),
-            ["name", "desc", "icon", "delivery"]);
+            ["name", "desc", "icon", undefined]);
     });
 
     it("leaves a column's same-named kind word-less, for the same reason", () => {
         // `id:133` and `sound:cast` are column heads. A kind spelled `id` or `sound` would be the same collision one
-        // level down: reachable and unambiguous, so it needs no word of its own.
-        for (const [kind, column] of [["id.id", "id"], ["sound.sound", "sound"]] as const) {
+        // level down: reachable and unambiguous, so it needs no word of its own. Delivery is wordless for the
+        // adjacent reason: its doors and flag words carry every real question, and a word selecting "spells with a
+        // delivery row" would select nearly everything.
+        for (const [kind, column] of [["id.id", "id"], ["sound.sound", "sound"], ["spell.spell", "spell"]] as const) {
             assert.equal(KINDS.get(kind)?.word, undefined);
             assert.equal(HEADS.get(column)?.role, "column");
         }
@@ -80,7 +82,7 @@ describe("the shipped schema", () => {
     it("puts seat, invis, detect, speed and keybind in mech rather than fx", () => {
         // A vehicle seat, an invisibility channel and a movement-speed change render nothing. The fx column is what a
         // spell looks like; mech is what it does.
-        for (const word of ["seat", "invis", "detect", "speed", "keybind"]) {
+        for (const word of ["seats", "invis", "detect", "speed", "keybind"]) {
             assert.equal(KINDS.get(`mech.${word}`)?.column.key, "mech", word);
         }
     });
@@ -90,9 +92,9 @@ describe("the shipped schema", () => {
         // whether moving breaks it, whether the caster can act during it. It lives in the spell column because the
         // app draws it under the spell's name, and there is no instant flag: `cast:instant` is the one spelling.
         for (const old of ["delivery", "casttime", "channeled", "instant", "unbreakable", "unhindered"]) {
-            assert.equal(KINDS.has(`mech.${old}`), false, `${old} should be part of spell.delivery`);
+            assert.equal(KINDS.has(`mech.${old}`), false, `${old} should be part of spell.spell`);
         }
-        const props = KINDS.get("spell.delivery")!.props;
+        const props = KINDS.get("spell.spell")!.props;
         assert.deepEqual(Object.keys(props),
             ["cast", "channel", "breaksmove", "unbreakable", "unhindered"]);
         for (const name of ["breaksmove", "unbreakable", "unhindered"]) {
@@ -209,7 +211,7 @@ describe("operatorsOf", () => {
 });
 
 describe("parseValue and formatValue", () => {
-    const delivery = () => KINDS.get("spell.delivery")!;
+    const delivery = () => KINDS.get("spell.spell")!;
 
     it("reads a sentinel word before any notation, so it cannot be misread as a quantity", () => {
         assert.deepEqual(parseValue(delivery().props.channel, "unlimited"),
@@ -318,7 +320,7 @@ describe("the declaration checks", () => {
             hint: "a deliberate collision, for the check",
             props: {bar: {types: [text], prefix: "cast"}},
         });
-        assert.match(problems[0], /"cast" is claimed by both property spell\.delivery\.cast/);
+        assert.match(problems[0], /"cast" is claimed by both property spell\.spell\.cast/);
     });
 
     it("fires on a global kind with no word to be global with", () => {
