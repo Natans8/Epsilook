@@ -15,6 +15,12 @@
 !tools/build.mjs
 !tools/verify_site.sh
 
+# The image asserts org.opencontainers.image.licenses, so the text has to be in
+# the context for the runtime stage to convey it. An allowlist means a licence
+# file is invisible to the build until it is named here.
+!LICENSE
+!NOTICE
+
 # site/js is gitignored BUILD OUTPUT. Excluding it after re-including site/ is
 # what guarantees the image's bundle comes from the Dockerfile's own esbuild
 # run and never from whatever a local `npm run dev` last left on disk.

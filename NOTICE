@@ -1,0 +1,79 @@
+Epsilook — licensing notice
+Copyright (C) 2026 Nataari <https://github.com/Natans8>
+
+This distribution contains material under several licences, from several owners. A single licence over the
+whole tree would over-claim: part of what Epsilook ships is redistributed under someone else's terms, and
+part of it is not ours to license at all.
+
+
+1. COVERED BY THE AGPL — the work Epsilook's author wrote
+
+       src/            tools/          build/          test/
+       docker/         site/css/       site/dev/       site/index.html
+       site/404.html   README.md       and the repository's configuration files
+
+   Licensed under the GNU Affero General Public License, version 3 or (at your option) any later version.
+   Full text in LICENSE.
+
+   site/js/ is build output generated from src/ and carries the same terms. It is not the Corresponding
+   Source: src/ is, and it is in this repository.
+
+
+2. THIRD-PARTY CODE — redistributed under its own licence, not ours to relicense
+
+       src/vendor/bufo.js     Bufo    — Kruithne <kruithne@gmail.com> — MIT
+       src/vendor/js-blp.js   js-blp  — Kruithne <kruithne@gmail.com> — MIT
+       color-name (npm)       colorjs/color-name — MIT — bundled into site/js/
+
+   The MIT licence requires its copyright and permission notice to travel with redistributions. For the two
+   vendored files that notice is the header in each file, kept intact. For color-name the notice must reach
+   the BUNDLE, because the bundle is what visitors are served — see section 5.
+
+
+3. NOT LICENSED BY US — redistributed, not owned
+
+   site/data/**
+       Game data packs derived from World of Warcraft client tables (via wago.tools), the community
+       listfile, and TrinityCore's TDB releases. World of Warcraft and its data are the property of
+       Blizzard Entertainment. No copyright is claimed over this material and none is granted by the
+       AGPL above; it is redistributed here for non-commercial fan use only.
+
+   site/img/expansions/**
+       Expansion marks taken from Warcraft Wiki <https://warcraft.wiki.gg>, whose content is licensed
+       CC BY-SA 4.0. These files remain under CC BY-SA 4.0 — attribution as given here, and share-alike
+       for anyone who modifies them. They are not covered by the AGPL. The underlying expansion marks
+       are trademarks of Blizzard Entertainment.
+
+   Distributing these alongside the AGPL-licensed work does not place them under the AGPL, and does not
+   place the AGPL work under their terms.
+
+
+4. AUTHORSHIP
+
+   Epsilook is written by a software engineer working with AI assistance: its author designs the system,
+   directs and reviews the work, revises what comes back, and writes parts of it directly.
+
+   Copyright protects works of human authorship, and material produced without human creative control may
+   not be protectable in every country this is distributed in. What is claimed here is the human
+   contribution — the code its author wrote, the revision of what they did not, and the selection,
+   arrangement and design of the work as a whole. Where some portion turns out not to be protectable, the
+   licence simply has nothing to bite on for that portion, and the terms above stand for everything else.
+
+   This is stated rather than left implicit because a licence that quietly overstates what it can enforce
+   is the same defect as one that claims someone else's assets.
+
+
+5. MAINTAINING THIS FILE
+
+   The lists above are load-bearing. The AGPL applies to what section 1 names, so a new asset or data
+   directory that nobody records here gets silently claimed by a licence with no right to it — and a new
+   bundled dependency whose notice never reaches site/js/ is an MIT compliance gap that no test will show.
+
+   In the same change that adds it, record here:
+
+       - a new directory under site/                    → section 1 or section 3
+       - a file vendored into src/vendor/               → section 2, and keep its header intact
+       - a runtime dependency that reaches the bundle   → section 2, and check the bundle carries its notice
+
+   tools/check.py enforces the first of those (check_license_scope): every directory under site/ must be
+   named in this file. The other two are judgement and stay with whoever makes the change.

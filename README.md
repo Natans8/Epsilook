@@ -377,3 +377,13 @@ and decode it in-page with the vendored [js-blp](https://github.com/Kruithne/js-
 
 Epsilook is a fan tool, not affiliated with Blizzard, Wowhead or Epsilon. World of Warcraft and its data are property of
 Blizzard Entertainment.
+
+## Licence
+
+The code is **AGPL-3.0-or-later** — see [LICENSE](LICENSE).
+
+It does not cover everything in the tree. The data packs under `site/data/` are derived from Blizzard's client tables
+and are redistributed for non-commercial fan use under no claim of ours; the expansion marks under `site/img/` come from
+[Warcraft Wiki](https://warcraft.wiki.gg) and stay under CC BY-SA 4.0; and `src/vendor/` holds third-party MIT code.
+[NOTICE](NOTICE) is the map of which is which, and `tools/check.py` fails if a directory reaches `site/` without being
+recorded there.

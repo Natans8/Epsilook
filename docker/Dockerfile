@@ -69,16 +69,25 @@ RUN --mount=type=bind,source=tools/verify_site.sh,target=/verify_site.sh \
 # here means the docker workflow needs docker/setup-qemu-action back.
 FROM nginx:${NGINX_VERSION} AS runtime
 
-# No image.licenses label: the repo declares no licence, and a label is not the
-# place to invent one. Add a LICENSE file first if that should change.
-# docker/metadata-action overwrites title/description/source on the published
-# image anyway (from the repo's own metadata); these are for a local build.
+# image.licenses names the CODE licence only. The image also carries the data
+# packs and the expansion marks, which are redistributed rather than owned and
+# are NOT AGPL - a single SPDX expression cannot say that, so NOTICE is the map
+# and this label is the summary. docker/metadata-action overwrites
+# title/description/source on the published image anyway (from the repo's own
+# metadata); these are for a local build.
 LABEL org.opencontainers.image.title="Epsilook" \
       org.opencontainers.image.description="Search WoW spells by how they look and sound — a companion for Epsilon WoW" \
-      org.opencontainers.image.source="https://github.com/Natans8/Epsilook"
+      org.opencontainers.image.source="https://github.com/Natans8/Epsilook" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=docroot /docroot /usr/share/nginx/html
+
+# The label above only NAMES the licence; an image is a conveyance of the work,
+# so the text has to travel with it. Outside the document root on purpose: this
+# is for whoever receives the image, while a visitor's route to the source is
+# the repository link in the page footer.
+COPY LICENSE NOTICE /usr/share/doc/epsilook/
 
 EXPOSE 80
 

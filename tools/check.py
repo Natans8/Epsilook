@@ -690,6 +690,37 @@ def check_cli_entries(rep: Report) -> None:
                               f"{', '.join(sorted(bundled))}")
 
 
+def check_license_scope(rep: Report) -> None:
+    """Every directory under site/ is classified in NOTICE.
+
+    NOTICE splits this tree by who owns what: the AGPL in LICENSE covers the
+    code, while the data packs and the expansion marks are only redistributed -
+    the first under no claim at all, the second under CC BY-SA. A directory
+    that reaches site/ without being recorded there falls under the AGPL by
+    default, which is the one failure a licence must not have. Nothing breaks
+    and no test goes red; the repository simply starts asserting terms over
+    material it has no right to grant.
+
+    Directories, not files: the lists record provenance, and a new file inside
+    an already-classified directory inherits the provenance of the one it
+    joins. The two obligations NOTICE also carries - a vendored file keeping
+    its header, and a bundled dependency's notice reaching site/js/ - are
+    judgement rather than arithmetic and stay with whoever makes the change.
+    """
+    notice = ROOT / "NOTICE"
+    if not notice.exists():
+        rep.fail("license scope", "no NOTICE file to classify site/ against")
+        return
+    text = notice.read_text(encoding="utf-8")
+    names = sorted(p.name for p in SITE.iterdir() if p.is_dir())
+    missing = [n for n in names if f"site/{n}" not in text]
+    if missing:
+        rep.fail("license scope",
+                 "under site/ but unclassified in NOTICE: " + ", ".join(f"site/{n}" for n in missing))
+    else:
+        rep.ok("license scope", f"{len(names)} site/ directories classified: {', '.join(names)}")
+
+
 def check_dependencies(rep: Report) -> None:
     """Report npm dependencies with a newer release available.
 
@@ -803,6 +834,7 @@ def main() -> int:
     check_pack_sections(rep)
     check_layers(rep)
     check_cli_entries(rep)
+    check_license_scope(rep)
     check_arcanum(rep)
     check_pack_freshness(rep)
     check_dependencies(rep)
