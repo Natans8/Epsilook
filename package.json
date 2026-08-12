@@ -17,10 +17,14 @@
     "node": ">=22"
   },
   "devDependencies": {
+    "@types/color-name": "^2.0.0",
     "@types/node": "^26.2.0",
     "esbuild": "^0.28.1",
     "oxlint": "^1.78.0",
     "oxlint-tsgolint": "^7.0.2001",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "color-name": "^2.1.1"
   }
 }
