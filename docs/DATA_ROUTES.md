@@ -1449,6 +1449,40 @@ column. **Adding one is a single row in the `"domains"` dict in `build_data.py`.
 Read it with **`npm run measure`** (`tools/measure.ts`), which prints domains and row counts for every pack and times
 the search engine over the same keystrokes.
 
+### 4b. The locale overlay — translated strings as a sparse add-on (`spelldata.<locale>.json.gz`, locale format 1)
+
+**Built by `build/locale_data.py`, one file per (base pack, locale), written BESIDE the base pack it belongs to. ruRU on
+9.2.7 is the first. ⚠ NOT LOADED BY THE APP YET — the overlay exists ahead of its integration**, so today it is a
+prepared artifact, not a route the app reads.
+
+An overlay is an ADD-ON, never a second pack: it carries only the user-facing strings the game itself localizes, re-read
+in another locale, and **only where the translation exists and differs from the English the base pack ships**
+— wago serves the English string for untranslated rows, so "same as English" and "not translated" are one case and the
+app-side fallback (keep the base string) is right for both. No ids the base does not have, no visuals, no numbers.
+
+| overlay section                                              | source                                                                                                                        |
+|--------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| `spellNames` / `spellSubtexts` / `spellAltNames`             | wago `_lang` columns — the same CSV route with `&locale=`                                                                     |
+| `spellText` (descriptions / auras / encounters)              | cooked by `build/spelltext.py` from the locale's templates                                                                    |
+| `areaNames` · `itemNames` · `mountNames` · `shapeshiftNames` | wago `_lang` columns                                                                                                          |
+| `creatureNames` (morphs + summons) · `objectNames`           | TDB `creature_template_locale` / `gameobject_template_locale`, distilled from the world dump already cached for the base pack |
+
+Deliberately NOT covered: asset file paths (the client never localizes them), sound-kit / missile-motion / boneset names
+(developer identifiers), enum-name vocabularies (the app's search language), and the app's own labels.
+
+**Descriptions cook through the SAME `DescriptionCooker` as the base pack's**, with a `TextLocale` supplying the two
+things the cooker itself words: duration units ("8 sec" / "8 сек") and plural-form picking — Russian declension markers
+(`|4минуту:минуты:минут;`) carry three forms (one / few / many) where English carries two, so the form list is
+variable-length and the picking rule belongs to the locale. Every numeric lookup reads the base pack's own table cache;
+values do not localize. Measured on 9.2.7 ruRU: 217,895 names, 127,530 descriptions, 61,366 aura texts, zero residual
+`$` or `|` — the same cleanliness bar as §3x.
+
+`meta.localeFormat` versions the overlay's own shape, independent of the base `PACK_FORMAT` (a new base section is only
+an overlay change when it carries localizable text); `meta.base` names the pack id it diffs against, which is why **a
+rebuilt base wants its overlays rebuilt after it**. All builds serve all locales on the wago route (no per-version
+drift — measured 2026-07-29); the four TDB-less Classic packs simply get no creature/object translations, exactly as
+their base packs fall back to raw ids.
+
 ### 3t. The area gate — WHERE a spell may be cast (`spellAreas` + `areas`, format 40)
 
 **SHIPPED AND LIVE (2026-08-05).** All ten packs carry both sections, `data.ts` reads them, and the Mechanics column

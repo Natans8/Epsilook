@@ -128,8 +128,11 @@ _JGF_RE = re.compile(r"\$\d*j\d*[gf]")
 # `$z` is the player's hearth location and `$g male:female;` their gender —
 # both real, neither ours to know.
 _GENDER_RE = re.compile(r"\$[gG]([^:;]*):([^;]*);")
-_PLURAL_RE = re.compile(r"\$[lL]([^:;]*):([^;]*);")
-_BAR_PLURAL_RE = re.compile(r"\|4([^:;]*):([^;]*);")
+# One capture of the whole form list (2 in English, up to 3 in Russian —
+# one/few/many); the picker splits on ":" and asks the locale which form the
+# number in front of it takes.
+_PLURAL_RE = re.compile(r"\$[lL]([^;]*:[^;]*);")
+_BAR_PLURAL_RE = re.compile(r"\|4([^;]*:[^;]*);")
 
 # `$/10;s2`, `$*2;23478s1` and `$45548/5;s1` — a divisor or multiplier glued to
 # the code it scales. THE SCALED CODE CARRIES NO `$` OF ITS OWN, which is why
@@ -239,7 +242,60 @@ def _amount(v: float) -> str:
     return str(round(v)) if v >= 1 else f"{v:.2f}".rstrip("0").rstrip(".")
 
 
-def format_duration(ms: int) -> str:
+@dataclass(frozen=True)
+class TextLocale:
+    """Locale-dependent wording for cooked prose.
+
+    The template language is the same in every locale; what differs is the
+    wording the cooker itself supplies — duration units ("2 hours" / "2 ч")
+    and how a plural marker picks among its forms. English `$lpoint:points;`
+    carries two forms; Russian's `|4минуту:минуты:минут;` carries three
+    (one / few / many), so the form list is variable-length and the picking
+    rule belongs to the locale.
+    """
+    seconds: tuple[str, ...] = ("sec",)
+    minutes: tuple[str, ...] = ("min",)
+    hours: tuple[str, ...] = ("hour", "hours")
+    days: tuple[str, ...] = ("day", "days")
+
+    def plural_index(self, n: float | None, nforms: int) -> int:
+        """Index into a plural marker's form list for quantity `n`.
+
+        `None` means the number was elided — the plural is then the form that
+        reads as a general statement, which is the last one in every locale
+        this supports. English: exactly 1 is singular, everything else plural.
+        """
+        return 0 if n == 1 and nforms > 1 else nforms - 1
+
+
+class _RussianTextLocale(TextLocale):
+    def plural_index(self, n: float | None, nforms: int) -> int:
+        """Russian one/few/many: 1 → one, 2-4 → few, 5+ and 11-14 → many.
+
+        A fractional quantity takes the few form ("1.5 секунды"), matching how
+        the client words it. Two-form markers clamp few onto the last form.
+        """
+        if n is None:
+            return nforms - 1
+        if n != int(n):
+            return min(1, nforms - 1)
+        tail = int(n) % 100
+        if 11 <= tail <= 14:
+            return nforms - 1
+        tail %= 10
+        if tail == 1:
+            return 0
+        if 2 <= tail <= 4:
+            return min(1, nforms - 1)
+        return nforms - 1
+
+
+ENGLISH = TextLocale()
+RUSSIAN = _RussianTextLocale(seconds=("сек",), minutes=("мин",),
+                             hours=("ч",), days=("дн.",))
+
+
+def format_duration(ms: int, locale: TextLocale = ENGLISH) -> str:
     """Milliseconds as the client words them — "8 sec", "1 min", "2 hours".
 
     A negative or absurd duration is the game's "no limit" sentinel, which the
@@ -248,16 +304,18 @@ def format_duration(ms: int) -> str:
     """
     if ms <= 0 or ms >= 0x7FFFFFF0:
         return ""
+
+    def word(value: float, forms: tuple[str, ...]) -> str:
+        return f"{_num(value)} {forms[locale.plural_index(value, len(forms))]}"
+
     sec = ms / 1000
     if sec < 60:
-        return f"{_num(sec)} sec"
+        return word(sec, locale.seconds)
     if sec < 3600:
-        return f"{_num(sec / 60)} min"
+        return word(sec / 60, locale.minutes)
     if sec < 86400:
-        h = sec / 3600
-        return f"{_num(h)} hour" + ("s" if h != 1 else "")
-    d = sec / 86400
-    return f"{_num(d)} day" + ("s" if d != 1 else "")
+        return word(sec / 3600, locale.hours)
+    return word(sec / 86400, locale.days)
 
 
 class DescriptionCooker:
@@ -270,12 +328,14 @@ class DescriptionCooker:
 
     def __init__(self, descriptions: dict[int, str], aura_descriptions: dict[int, str],
                  names: dict[int, str], values: SpellValues,
-                 variables: dict[int, dict[str, str]]):
+                 variables: dict[int, dict[str, str]],
+                 locale: TextLocale = ENGLISH):
         self.descriptions = descriptions
         self.aura_descriptions = aura_descriptions
         self.names = names
         self.values = values
         self.variables = variables  # spell -> {name -> template}
+        self.locale = locale
         self.stats = {"elided": 0, "resolved": 0}
 
     # ------------------------------------------------------------ public
@@ -475,7 +535,7 @@ class DescriptionCooker:
         text = self._apply_scales(text, spell)
         text = _CODE_RE.sub(lambda m: self._value(m, spell), text)
         # plurals last: the number they have to agree with only exists now
-        text = _resolve_plurals(text)
+        text = _resolve_plurals(text, self.locale)
         return text.replace("$", "")
 
     def _apply_scales(self, text: str, spell: int, numeric: bool = False) -> str:
@@ -544,7 +604,7 @@ class DescriptionCooker:
             if ms is None:
                 self.stats["elided"] += 1
                 return ""
-            out = _num(ms / 1000) if numeric else format_duration(ms)
+            out = _num(ms / 1000) if numeric else format_duration(ms, self.locale)
             self.stats["resolved" if out else "elided"] += 1
             return out
         if got is None or got == 0:
@@ -587,11 +647,11 @@ def _balanced(text: str, start: int, open_ch: str = "[", close_ch: str = "]"
     return None, start
 
 
-def _resolve_plurals(text: str) -> str:
-    """`$lpoint:points;` — singular when the number before it is exactly 1.
+def _resolve_plurals(text: str, locale: TextLocale = ENGLISH) -> str:
+    """`$lpoint:points;` — the form agreeing with the number in front of it.
 
-    With the number elided there is nothing to agree with, and the plural is
-    the form that reads as a general statement ("combo points"), so it wins.
+    With the number elided there is nothing to agree with, and the last form
+    is the one that reads as a general statement ("combo points"), so it wins.
     """
 
     def pick(m: re.Match[str]) -> str:
@@ -599,8 +659,9 @@ def _resolve_plurals(text: str) -> str:
         # before: the client agrees with the quantity, and a noun sits between
         # them as often as not — "Awards $s3 combo $lpoint:points;".
         before = re.findall(r"\d+(?:\.\d+)?", text[max(0, m.start() - 60):m.start()])
-        singular = bool(before) and float(before[-1]) == 1
-        return m.group(1) if singular else m.group(2)
+        n = float(before[-1]) if before else None
+        forms = m.group(1).split(":")
+        return forms[locale.plural_index(n, len(forms))]
 
     text = _PLURAL_RE.sub(pick, text)
     return _BAR_PLURAL_RE.sub(pick, text)
