@@ -9,7 +9,7 @@
 import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
-import {i18n, t} from "../../src/i18n";
+import {i18n, t} from "../../src/i18n/index";
 import {resources} from "../../src/i18n/resources";
 
 describe("the string registry", () => {

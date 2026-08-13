@@ -11,39 +11,39 @@
  * TODO: export `describe` once the chip renderer exists.
  */
 
-export type {Operator, OperatorForm, OperatorLevel} from "./operators";
+export type {Operator, OperatorForm, OperatorLevel} from "./vocabulary/operators";
 export {
     and, anyOf, CLAUSE_OPERATORS, contains, defineOperator, exact, glob, gt, gte, lt, lte, not,
     OPERATORS, ORDERING, or, present, range,
-} from "./operators";
+} from "./vocabulary/operators";
 
-export type {BareClaim, Notation, NumericSpec, Sentinels} from "./units";
-export {formatNumber, parseNumber} from "./units";
+export type {BareClaim, Notation, NumericSpec, Sentinels} from "./vocabulary/units";
+export {formatNumber, parseNumber} from "./vocabulary/units";
 
-export {fold, squash} from "./text-normalization";
+export {fold, squash} from "./text/normalize";
 
-export type {Affordance, AxisType, Storage, Value} from "./value-types";
+export type {Affordance, AxisType, Storage, Value} from "./vocabulary/value-types";
 export {
     angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, offset,
     ordinal, ordinalRungs, path, percent, percentChange, seconds, setOrdinalLadder, TARGET_ROLES, text,
     TYPES,
-} from "./value-types";
+} from "./vocabulary/value-types";
 
-export {COLOUR_NAMES} from "./colour-names";
+export {COLOUR_NAMES} from "./vocabulary/colour-names";
 
-export type {Match, Operand} from "./value-matching";
-export {coverage, matcher, roleNames} from "./value-matching";
+export type {Match, Operand} from "./evaluate/value-matching";
+export {coverage, matcher, roleNames} from "./evaluate/value-matching";
 
-export type {Column} from "./columns";
+export type {Column} from "./schema/columns";
 export {
     animColumn, COLUMNS, defineColumn, fxColumn, idColumn, mechColumn, modelColumn, soundColumn, spellColumn,
-} from "./columns";
+} from "./schema/columns";
 
-export type {Kind, ParsedValue, Prop} from "./kinds";
+export type {Kind, ParsedValue, Prop} from "./schema/kinds";
 export {
     defineKind, doorOf, formatValue, hintOf, KINDS, nameOf, operatorsOf, parseValue, propNameOf, sentinelOf, TIER,
     wordOf,
-} from "./kinds";
+} from "./schema/kinds";
 
 /**
  * The declared kinds, by their declaration names, for a caller that needs a particular one rather than the registry.
@@ -52,30 +52,30 @@ export {
  * `sound`, `item`, `mount` — and flattening them here would both bury the rest of the surface and collide with the
  * value types, whose names are the nouns of the language.
  */
-export * as catalogue from "./catalogue";
+export * as catalogue from "./schema/catalogue";
 
-export type {Head} from "./schema";
-export {buildSchema, HEADS, kindIn, kindsOf, propIn, schemaProblems} from "./schema";
+export type {Head} from "./schema/schema";
+export {buildSchema, HEADS, kindIn, kindsOf, propIn, schemaProblems} from "./schema/schema";
 
-export {GRAMMAR, PREFIX_OPERATORS} from "./grammar";
+export {GRAMMAR, PREFIX_OPERATORS} from "./language/grammar";
 
 export type {
     Ask, Clause, ClauseState, Diagnostic, Fix, Parsed, ParsedOperand, ParseMode, PropRef, RowTest,
     ScopeAsk, ScopeTerm, Severity, Span, ValueExpr,
-} from "./ast";
-export {anyOfExpr, COUNT_PROP, propOf} from "./ast";
+} from "./language/ast";
+export {anyOfExpr, COUNT_PROP, propOf} from "./language/ast";
 
-export {parse} from "./parse";
+export {parse} from "./language/parse";
 
-export {formatQuery, queryKey} from "./format";
+export {formatQuery, queryKey} from "./language/format";
 
-export type {Boundary, Rule, RuleExample, RuleTier} from "./rules";
-export {KEPT, RULES} from "./rules";
+export type {Boundary, Rule, RuleExample, RuleTier} from "./rewrite/rules";
+export {KEPT, RULES} from "./rewrite/rules";
 
-export type {Simplified, Suggestion} from "./simplify";
-export {equivalent, simplify, suggestions} from "./simplify";
+export type {Simplified, Suggestion} from "./rewrite/simplify";
+export {equivalent, simplify, suggestions} from "./rewrite/simplify";
 
-export type {Dataset, Row, RowAsk, RowSource, Stored} from "./rows";
-export {contentMatches, matchProp, plainMatches, propRefMatches, rowMatches} from "./rows";
+export type {Dataset, Row, RowAsk, RowSource, Stored} from "./evaluate/rows";
+export {contentMatches, matchProp, plainMatches, propRefMatches, rowMatches} from "./evaluate/rows";
 
-export {askMatches, run} from "./kernel";
+export {askMatches, run} from "./evaluate/kernel";

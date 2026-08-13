@@ -16,7 +16,7 @@
  * loses its import would otherwise vanish from the bundle silently.
  */
 import * as esbuild from "esbuild";
-import {readdirSync} from "node:fs";
+import {readdirSync, rmSync} from "node:fs";
 import {relative, resolve, sep} from "node:path";
 import {parseArgs} from "node:util";
 
@@ -161,6 +161,10 @@ const {values} = parseArgs({
 });
 
 if (values.test) {
+    // The bundle directory is emptied first, because esbuild only writes — it never removes. A test file that is
+    // deleted or moved leaves its last build behind, and `node --test` keeps running it against a source that is
+    // gone: `test/search/backend-memory.test.ts` was deleted in b462cff and its 32 tests went on passing for days.
+    rmSync(resolve(root, "test/.bundle"), {recursive: true, force: true});
     await esbuild.build(testOptions());
 } else if (values.cli) {
     await Promise.all(cliOptions.map((o) => esbuild.build(o)));

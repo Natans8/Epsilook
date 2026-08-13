@@ -8,16 +8,16 @@
  */
 import {strict as assert} from "node:assert";
 
-import {run} from "../../src/search/kernel";
+import {run} from "../../src/search/evaluate/kernel";
 import {
     attached, chain, delivery, description, effect, expansion, missile, name as nameKind, scale,
     sound as soundKind, spellId, tint,
-} from "../../src/search/catalogue";
-import type {Kind} from "../../src/search/kinds";
-import {parse} from "../../src/search/parse";
-import type {Parsed} from "../../src/search/ast";
-import type {Dataset, Row, RowSource, Stored} from "../../src/search/rows";
-import {setOrdinalLadder} from "../../src/search/value-types";
+} from "../../src/search/schema/catalogue";
+import type {Kind} from "../../src/search/schema/kinds";
+import {parse} from "../../src/search/language/parse";
+import type {Parsed} from "../../src/search/language/ast";
+import type {Dataset, Row, RowSource, Stored} from "../../src/search/evaluate/rows";
+import {setOrdinalLadder} from "../../src/search/vocabulary/value-types";
 
 setOrdinalLadder(["classic", "tbc", "wotlk", "cata", "legion", "bfa"]);
 

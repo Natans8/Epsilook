@@ -125,12 +125,21 @@ DATA_MODULES = (
 # two stop being separable.
 SEARCH_CORE = "src/search/"
 
-# The matching half: the modules below the evaluation seam. Everything else in
-# the directory is declarative and must not import them. The simplifier lives
-# below the seam by law: implication is grounded in running the registered
-# matchers, never in a second copy of any matching rule, so its whole set of
-# modules sits here with the evaluator.
-SEARCH_MATCHER = ("value-matching", "rows", "kernel", "implication", "rules", "simplify", "tree")
+# The seam is a DIRECTORY boundary rather than a list of module names, so a new
+# module lands on the correct side by where it is put. The list this replaced
+# had to be edited by hand for every new file, and its hole was silent: an
+# evaluating module nobody remembered to list counted as declarative, and the
+# declarations could then import it with this check saying nothing.
+#
+# Below the seam: the evaluator, and the rewriter — whose implication oracle is
+# grounded in running the registered matchers, never in a second copy of any
+# matching rule.
+SEARCH_EVALUATING = ("evaluate", "rewrite")
+
+# Above it: everything that only declares. `index.ts` sits at the root and is
+# the one module the seam does not apply to, because re-exporting both halves is
+# its whole job.
+SEARCH_DECLARING = ("text", "vocabulary", "schema", "language")
 
 # index.ts is the public surface and re-exports both halves on purpose, so it
 # is the one module in the directory the seam does not apply to.
@@ -541,10 +550,15 @@ def check_matcher_seam(rep: Report, imports: re.Pattern[str]) -> None:
     Skipped rather than failed while the tree is absent, so this check does not
     become the reason a checkout without it cannot commit.
     """
-    core = [p for p in sorted((ROOT / SEARCH_CORE).glob("*.ts"))
-            if p.stem not in (*SEARCH_MATCHER, SEARCH_SURFACE)] if (ROOT / SEARCH_CORE).is_dir() else []
+    root = ROOT / SEARCH_CORE
+    core = sorted(p for layer in SEARCH_DECLARING for p in (root / layer).rglob("*.ts")) if root.is_dir() else []
     if not core:
         rep.skip("matcher seam", f"{SEARCH_CORE} not present yet")
+        return
+
+    stray = [p.relative_to(ROOT).as_posix() for p in root.glob("*.ts") if p.stem != SEARCH_SURFACE]
+    if stray:
+        rep.fail("matcher seam", f"module outside every layer, so no side of the seam claims it: {stray[0]}")
         return
 
     word = re.compile(r"\b(" + "|".join(MATCHER_NAMES) + r")\b")
@@ -553,7 +567,8 @@ def check_matcher_seam(rep: Report, imports: re.Pattern[str]) -> None:
         name = mod.relative_to(ROOT).as_posix()
         src = mod.read_text(encoding="utf-8")
         for target in imports.findall(strip_ts_comments(src)):
-            if target.rsplit("/", 1)[-1] in SEARCH_MATCHER:
+            # A relative specifier names the layer it reaches into, so the side of the seam is in the path itself.
+            if any(f"/{layer}/" in f"/{target}" for layer in SEARCH_EVALUATING):
                 problems.append(f"{name} imports {target}")
         for line_no, line in enumerate(strip_ts_noise(src).splitlines(), 1):
             hit = word.search(line)
@@ -566,7 +581,8 @@ def check_matcher_seam(rep: Report, imports: re.Pattern[str]) -> None:
         if len(problems) > 6:
             rep.fail("matcher seam", f"...and {len(problems) - 6} more")
     else:
-        rep.ok("matcher seam", f"{len(core)} declaring modules free of the matcher")
+        rep.ok("matcher seam",
+               f"{len(core)} modules in {'/, '.join(SEARCH_DECLARING)}/ free of {'/, '.join(SEARCH_EVALUATING)}/")
 
 
 def check_arcanum(rep: Report) -> None:

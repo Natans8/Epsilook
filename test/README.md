@@ -15,14 +15,15 @@ app solo after the subscription ends; **the tests are the handover**.
 
 ## Writing one
 
-Put it beside the thing it tests, mirroring `src/`: `src/search/types.ts` → `test/search/types.test.ts`. Import the
-module exactly as the app does — extensionless — because the file is bundled before it runs:
+Put it beside the thing it tests, mirroring `src/` **including its directories**: `src/search/vocabulary/units.ts` →
+`test/search/vocabulary/units.test.ts`. Import the module exactly as the app does — extensionless — because the file
+is bundled before it runs:
 
 ```ts
 import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
-import {seconds} from "../../src/search/types";
+import {seconds} from "../../../src/search/vocabulary/value-types";
 
 describe("seconds", () => {
     it("converts a unit rather than annotating it", () => {
@@ -30,6 +31,10 @@ describe("seconds", () => {
     });
 });
 ```
+
+**`test/.bundle/` is emptied on every build.** esbuild only writes, so a deleted or moved test file used to leave its
+last build behind and `node --test` went on running it: `backend-memory.test.ts` was deleted in `b462cff` and its 32
+tests kept passing for days, inflating every count reported since. `tools/build.mjs` clears the directory first.
 
 **Each file runs in its own process.** That isolation is load-bearing, not incidental: the registries (`TYPES`,
 `KINDS`, `COLUMNS`, `OPERATORS`) are module-level, so a test that deliberately corrupts one — proving a guard fires —
