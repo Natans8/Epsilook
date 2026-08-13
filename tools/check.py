@@ -869,11 +869,11 @@ def check_toolchain(rep: Report) -> None:
     run_tool(rep, "oxlint", ["npx", "oxlint", "--type-aware", "src/search", "test", "tools"],
              "correctness + type-aware rules, .oxlintrc.json")
     run_tool(rep, "mypy", ["python", "-m", "mypy", "build/build_data.py",
-                           "build/locale_data.py", "tools"])
+                           "build/locale_data.py", "build/pack", "tools"])
     run_tool(rep, "pyflakes", ["python", "-m", "pyflakes", "build/build_data.py",
-                               "build/locale_data.py", "tools"])
+                               "build/locale_data.py", "build/pack", "tools"])
     run_tool(rep, "pylint", ["uv", "tool", "run", "pylint", "--errors-only", "--score=n",
-                             "build/build_data.py", "build/locale_data.py", "tools"],
+                             "build/build_data.py", "build/locale_data.py", "build/pack", "tools"],
              "errors only; style findings are advisory (.pylintrc)")
 
 
