@@ -828,34 +828,38 @@ describe("the operator-glued inner bind", () => {
     });
 });
 
-describe("whitespace bridging in final text", () => {
+describe("whitespace bridging inside a scope", () => {
     /** The ask with spans stripped, for comparing a spaced spelling's structure against its glued twin. */
     const shape = (query: string): unknown =>
         JSON.parse(JSON.stringify(ok(query), (key: string, value: unknown) => (key === "span" ? undefined : value)));
 
-    it("reads a bind's colon or operator across any amount of whitespace", () => {
+    it("reads an operator across any amount of whitespace, but only inside the braces", () => {
         assert.deepEqual(shape("model:{count > 5}"), shape("model:{count>5}"));
-        assert.deepEqual(shape("model:{attach : chest}"), shape("model:{attach:chest}"));
-        assert.deepEqual(shape("model: fire"), shape("model:fire"));
-        assert.deepEqual(shape("model : fire"), shape("model:fire"));
-        assert.deepEqual(shape("cast > 2s"), shape("cast>2s"));
-        assert.deepEqual(shape("model:count < 5"), shape("model:count<5"));
-        assert.deepEqual(shape("model: {fire missile}"), shape("model:{fire missile}"));
+        assert.deepEqual(shape("model:{count >5}"), shape("model:{count>5}"));
+        assert.deepEqual(shape("model:{count> 5}"), shape("model:{count>5}"));
+        assert.deepEqual(shape("spell:{cast > 2s}"), shape("spell:{cast>2s}"));
     });
 
-    it("never bridges into a clause of its own: a bar, a negation, or another head's bind", () => {
-        const stolen = parse("model: sound:fire");
-        assert.equal(stolen.clauses.length, 2);
-        assert.equal(stolen.clauses[0].state, "invalid");
-        assert.equal(stolen.clauses[1].state, "ok");
-        const negated = parse("model: -fire");
-        assert.equal(negated.clauses.length, 2);
-        assert.ok(negated.clauses[1].not);
+    it("never bridges a colon: whitespace tolerance does not extend to it", () => {
+        const spaced = parse("model:{attach : chest}");
+        const terms = termsOf(spaced.clauses[0].ask as Ask);
+        assert.ok(terms.every((t) => t.ask?.on !== "props"), "the spaced colon must not bind");
+        const bound = parse("model: fire");
+        assert.equal(bound.clauses.length, 2);
+        assert.equal(bound.clauses[0].state, "invalid");
     });
 
-    it("does not bridge while typing, where the next word may be a term still being written", () => {
-        const typing = parse("model: fire", {mode: "typing"});
-        assert.equal(typing.clauses.length, 2);
-        assert.equal(typing.clauses[0].state, "incomplete");
+    it("never bridges at the top level, where whitespace separates clauses", () => {
+        const spaced = parse("cast > 2s");
+        assert.equal(spaced.clauses.length, 3);
+        const braceless = parse("model:count < 5").clauses[0].ask;
+        assert.ok(braceless !== null);
+        assert.deepEqual(valueOf(braceless), {op: "contains", operand: {text: "count"}});
+    });
+
+    it("does not bridge while typing, where the next character may change the word", () => {
+        const typing = parse("model:{count > 5}", {mode: "typing"});
+        const terms = termsOf(typing.clauses[0].ask as Ask);
+        assert.ok(terms.every((t) => t.ask?.on !== "count"), "typing keeps whitespace as the separator");
     });
 });
