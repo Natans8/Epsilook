@@ -649,14 +649,16 @@ def check_build_layers(rep: Report) -> None:
 
     Tests are exempt from both rules and deliberately so: a test's job is often
     to assert that two layers agree, and it is not part of the graph the rules
-    protect.
+    protect. `conftest.py` is exempt for the same reason - it is where a test
+    builds the source a placeless layer is not allowed to name.
 
     Skipped rather than failed while the package is absent, so this check does
     not become the reason a checkout without it cannot commit.
     """
     root = ROOT / BUILD_PACKAGE
     modules = sorted(p for p in root.rglob("*.py")
-                     if not p.name.endswith("_test.py")) if root.is_dir() else []
+                     if not p.name.endswith("_test.py")
+                     and p.name != "conftest.py") if root.is_dir() else []
     if not modules:
         rep.skip("build layers", f"{BUILD_PACKAGE} not present yet")
         return
