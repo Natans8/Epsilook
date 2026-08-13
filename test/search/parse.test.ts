@@ -805,3 +805,25 @@ describe("totality", () => {
         assert.deepEqual(parse(""), {clauses: [], groups: [], diagnostics: []});
     });
 });
+
+describe("the operator-glued inner bind", () => {
+    /** The ask with spans stripped, for comparing a braceless spelling's structure against its braced twin. */
+    const shape = (query: string): unknown =>
+        JSON.parse(JSON.stringify(ok(query), (key: string, value: unknown) => (key === "span" ? undefined : value)));
+
+    it("reads a resolved word glued to an operator as the one-term scope the braces spell", () => {
+        assert.deepEqual(shape("model:count<5"), shape("model:{count<5}"));
+        assert.deepEqual(shape("model:file=foo"), shape("model:{file=foo}"));
+        assert.deepEqual(shape("spell:cast>2s"), shape("spell:{cast>2s}"));
+        assert.deepEqual(shape("missile:from=chest"), shape("missile:{from=chest}"));
+    });
+
+    it("keeps the content reading for a word the head does not resolve", () => {
+        assert.deepEqual(valueOf(ok("model:up=down")), {op: "contains", operand: {text: "up=down"}});
+    });
+
+    it("keeps the content reading for a foreign word, and for the colon-glued shape", () => {
+        assert.deepEqual(valueOf(ok("model:cast=5")), {op: "contains", operand: {text: "cast=5"}});
+        assert.deepEqual(valueOf(ok("sound:kit:150")), {op: "contains", operand: {text: "kit:150"}});
+    });
+});

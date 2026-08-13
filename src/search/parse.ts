@@ -578,6 +578,11 @@ class Parser {
             return this.scope(start, not, head, vpos, limit);
         }
 
+        if (head.role !== "prop") {
+            const glued = this.innerGlue(start, not, head, vpos, limit);
+            if (glued !== null) return glued;
+        }
+
         const {segs, end} = this.scanToken(vpos, limit, {inScope: false, groups: true});
         const only = segs.length === 1 ? segs[0] : undefined;
         if (only !== undefined && only.form === "group" && head.role !== "prop" && this.scopeShaped(only.text)) {
@@ -592,6 +597,42 @@ class Parser {
         this.noteCountDesugar(head, main, segs, pend);
         this.pushInterp({start, end: segs.length > 0 ? segs[segs.length - 1 - extras.length].end : end}, not, head,
             main, pend, segs[0]);
+        this.emitExtras(extras);
+        return end;
+    }
+
+    /**
+     * A glued inner bind straight after the head's colon: `model:count<5`, `model:file=foo`.
+     *
+     * The lenient reading lands on the very structure the braced spelling parses to — a one-term row scope —
+     * through the same word resolution the scope body uses, so the two spellings cannot drift. Only an OPERATOR
+     * binds the word: the colon-glued shape (`sound:kit:150`) deliberately keeps its content reading, because a
+     * second colon in a value has never been given a meaning. Only a word the head resolves binds; an unknown or
+     * foreign word keeps its content reading, and a quoted value remains the escape for text that happens to
+     * carry an operator.
+     */
+    private innerGlue(start: number, not: boolean, head: ScopeHead, vpos: number, limit: number): number | null {
+        const j = this.wordEnd(vpos, limit);
+        if (j <= vpos || j >= limit) return null;
+        if (!COMPARISON_STARTS.has(this.text[j])) return null;
+        const pend: Pending[] = [];
+        const bind = this.innerBind(head, fold(this.text.slice(vpos, j)), pend);
+        if (bind === null || bind.kind === "foreign") return null;
+        const {segs, end} = this.scanToken(j, limit, {inScope: false, groups: true});
+        if (segs.length === 0) return null;
+        const {main, extras} = this.interpretSegs(segs, bind.ctx, pend);
+        if (main.r === "fail" || main.r === "empty") {
+            this.pushInterp({start, end: segs[segs.length - 1 - extras.length].end}, not, head, main, pend, segs[0]);
+            this.emitExtras(extras);
+            return end;
+        }
+        const last = segs[segs.length - 1 - extras.length].end;
+        const term: ScopeTerm = {span: {start: vpos, end: last}, not: false, state: "ok", ask: this.scopeAsk(main)};
+        const test: RowTest = {is: "scope", terms: [[term]]};
+        const ask: Ask = head.role === "column"
+            ? {on: "column", column: head.column, test}
+            : {on: "kind", kind: head.kind, test};
+        this.push({start, end: last}, not, "ok", ask, pend);
         this.emitExtras(extras);
         return end;
     }
