@@ -14,13 +14,28 @@ import diagnostics from "../locales/en/diagnostics.json";
 import rules from "../locales/en/rules.json";
 import tooltips from "../locales/en/tooltips.json";
 import ui from "../locales/en/ui.json";
+import ruDiagnostics from "../locales/ru/diagnostics.json";
+import ruRules from "../locales/ru/rules.json";
+import ruTooltips from "../locales/ru/tooltips.json";
+import ruUi from "../locales/ru/ui.json";
 
 /** The namespace an unprefixed key resolves in. Every call in this repository writes the prefix out. */
 export const defaultNS = "ui";
 
-/** Every catalog of every bundled locale. English is the source language and always complete. */
+/**
+ * Every catalog of every bundled locale. English is the source language and always complete.
+ *
+ * Russian is registered with empty catalogs: a locale is declared here before it is written, so that the fallback
+ * path is exercised rather than assumed, and so the translation tooling has a second column to fill. Every key
+ * therefore resolves to its English string until the Russian one is supplied, which is i18next's per-key fallback
+ * rather than a whole-catalog switch - a half-translated locale shows its translated keys and nothing breaks.
+ *
+ * Only the source language types the keys, in the augmentation below. A translation that is missing a key is a
+ * legitimate state, so requiring the shapes to match would make an in-progress locale a compile error.
+ */
 export const resources = {
     en: {diagnostics, rules, tooltips, ui},
+    ru: {diagnostics: ruDiagnostics, rules: ruRules, tooltips: ruTooltips, ui: ruUi},
 } as const;
 
 declare module "i18next" {
