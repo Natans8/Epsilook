@@ -167,6 +167,28 @@ def test_a_table_the_build_predates_stays_empty(tmp_path: Path) -> None:
     assert rows(tables, "ID", "Name") == []
 
 
+def test_two_spellings_of_one_id_are_one_row(tmp_path: Path) -> None:
+    """⛔ The two sources are different exporters.
+
+    Values travel as text, but a row id spelled `11` on one side and `11.0` on
+    the other must still be the same ROW -- otherwise the revision misses, and
+    because unmatched revisions are added rather than dropped, it surfaces as a
+    second row carrying the same logical id.
+    """
+    base, source = tmp_path / "base", tmp_path / "source"
+    base.mkdir()
+    source.mkdir()
+    (base / "Spell.csv").write_text(BASE, encoding="utf-8", newline="")
+    (source / "spell.csv").write_text("Id,Label,Verified\n11.0,Revised,900\n",
+                                      encoding="utf-8", newline="")
+    tables = OverlaidTables(CsvTables(base),
+                            {"Spell": Overlay("spell", {"ID": "Id", "Name": "Label"},
+                                              stamp="Verified")},
+                            CsvTables(source), BUILD)
+    assert by_id(tables, "Name") == {"10": "Fireball", "11": "Revised",
+                                     "12": "Blink"}
+
+
 def test_the_key_must_be_mapped() -> None:
     """Without it there is nothing to join on, and a typo would silently make
     every row an addition."""

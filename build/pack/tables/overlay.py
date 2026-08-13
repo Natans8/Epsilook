@@ -31,6 +31,28 @@ from dataclasses import dataclass, field
 from .provider import Tables
 
 
+def join_key(text: str) -> str:
+    """One row id, in a spelling both sources can be compared on.
+
+    ⛔ THE JOIN IS THE ONE PLACE TEXT-IN-TEXT-OUT IS NOT ENOUGH. Values travel
+    as the source's own text, which is what keeps two providers producing the
+    same pack -- but the base and the overlay are different exporters, and two
+    spellings of the same NUMBER must still name the same row. A row id that
+    arrives as `2` on one side and `2.0` or ` 2` on the other would otherwise
+    miss its match and, because unmatched revisions are added rather than
+    dropped, surface as a second row carrying the same logical id.
+
+    So numeric keys compare numerically and anything else compares as trimmed
+    text. This is deliberately narrower than parsing the VALUES: it decides
+    only which rows are the same row.
+    """
+    trimmed = text.strip()
+    try:
+        return str(int(float(trimmed)))
+    except ValueError:
+        return trimmed
+
+
 @dataclass(frozen=True)
 class Overlay:
     """How one base table is revised by a second source.
@@ -142,7 +164,8 @@ class OverlaidTables:
             values = dict(zip(wanted, row))
             if overlay.stamp and not self._applies(values[overlay.stamp]):
                 continue
-            out[values[overlay.key]] = {column: values[column] for column in supplied}
+            out[join_key(values[overlay.key])] = {column: values[column]
+                                                  for column in supplied}
         return out
 
     def rows(self, table: str, columns: Sequence[str]) -> Iterator[tuple[str, ...]]:
@@ -177,11 +200,12 @@ class OverlaidTables:
 
         seen: set[str] = set()
         for row in self.base.rows(table, keyed):
-            revision = revisions.get(row[at_key])
+            key = join_key(row[at_key])
+            revision = revisions.get(key)
             if revision is None:
                 yield row[:width]
                 continue
-            seen.add(row[at_key])
+            seen.add(key)
             yield tuple(revision.get(column, value)
                         for column, value in zip(wanted, row))
 
