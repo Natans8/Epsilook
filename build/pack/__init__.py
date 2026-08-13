@@ -11,13 +11,18 @@ layers closer to ``sources/``, plus the package-root vocabulary modules):
     encode/   per-column layouts the sections declare
     emit/     module files, the manifest, hashes, locale placement
 
+Beside them sit the package-root vocabulary modules -- ``drift``, ``targets``,
+``progress``, ``build`` -- which any layer may import and which import no
+layer.
+
 Two rules keep the layers honest:
 
 - Imports flow toward ``sources/`` only. An emitter reads the registry, never
   a route; a route never sees an emitter.
-- Nothing above ``tables/`` names a file path or a URL. Every byte enters
-  through a ``Tables`` implementation, which is what makes the source
-  swappable.
+- ``routes/``, ``derive/``, ``model/`` and ``encode/`` name no file path and
+  no URL. Every byte enters through a ``Tables`` implementation and leaves
+  through ``emit/``, which is what makes the source swappable and the artifact
+  reshapeable without touching a route.
 
 ``docs/DATA_ROUTES.md`` documents what each route means; this package moves
 code, not meaning.

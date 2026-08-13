@@ -45,236 +45,44 @@ import hashlib
 import io
 import json
 import re
-import shutil
-import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TypeVar
 
-# Sibling module, stdlib-only like this one. The description templates are a
-# small language with its own grammar, so they get their own file rather than
-# another 400 lines here — and one that can be exercised on its own.
+# The layered build being written beside this module. Acquisition has already
+# moved: everything below reads from the cache this returns, and names no URL.
+from pack.drift import (CREATURE_DISPLAY_SOURCES, OPTIONAL_COLUMNS, OPTIONAL_TABLES,
+                        SPELL_NAME_SOURCES)
+from pack.progress import log
+from pack.sources import (SOUNDKITNAME_BUILD, TABLES, fetch_sources,
+                          load_expansions, load_local_enum, read_anim_names,
+                          read_enum_names)
+from pack.sources.cache import CACHE_DIR
+from pack.sources.enums import enum_id_where, enum_ids_where
+from pack.sources.tdb import tdb_release
+from pack.targets import (NO_TARGET, TARGET_AREA, TARGET_CASTER, TARGET_MISSILE_DEST,
+                          TARGET_NOT_CASTER, TARGET_TARGET, VISUAL_REDIRECTS)
+
+# Sibling module. The description templates are a small language with its own
+# grammar, so they get their own file rather than another 400 lines here — and
+# one that can be exercised on its own.
 from spelltext import DescriptionCooker, SpellValues
 
 T = TypeVar("T")
 
-BUILD_DIR = Path(__file__).resolve().parent
-ROOT_DIR = BUILD_DIR.parent
-CACHE_DIR = BUILD_DIR / "cache"
-DATA_DIR = ROOT_DIR / "site" / "data"
-ENUMS_DIR = BUILD_DIR / "enums"
+DATA_DIR = Path(__file__).resolve().parents[1] / "site" / "data"
 
 
-def load_local_enum(name: str) -> dict[int, Any]:
-    """Load a checked-in build/enums/<name>.json enum into {value: payload}.
-
-    These are the external game/client enums the build depends on (M2
-    attachment points, procedural-effect types, the kit EffectType dispatch,
-    ...) — cached as parseable files with source attribution instead of
-    hardcoded, so the one place they live is greppable, offline and editable.
-    The payload is whatever the file holds: a name string, an int, or a
-    per-value metadata dict. See enums/README.md for the format. A missing or
-    malformed file is a hard error, the same discipline as read_enum_names.
-    """
-    data = json.loads((ENUMS_DIR / f"{name}.json").read_text(encoding="utf-8"))
-    return {int(k): v for k, v in data["values"].items()}
 
 
-EXPANSIONS_FILE = BUILD_DIR / "expansion_ids.json.gz"
 
 
-def load_expansions() -> tuple[list[dict[str, Any]], dict[int, int]]:
-    """The committed expansion ladder: (rungs oldest-first, {spell id -> rung}).
-
-    Which expansion introduced a spell is recorded by no client table, so it is
-    derived once by tools/expansions.py from the original era clients and
-    committed — see that script for the sources and their caveats. Frozen
-    historical data, so it is READ here and never re-derived, and a missing or
-    malformed file is a hard error exactly like load_local_enum.
-    """
-    with gzip.open(EXPANSIONS_FILE, "rt", encoding="utf-8") as f:
-        data = json.load(f)
-    rungs: list[dict[str, Any]] = data["ladder"]
-    index = {sid: i for i, rung in enumerate(rungs)
-             for sid in data["ids"][rung["key"]]}
-    return rungs, index
-
-
-def _enum_ids_where(mapping: dict[int, Any], handler: str) -> set[int]:
-    """The enum values whose metadata dict carries handler == <handler>."""
-    return {k for k, v in mapping.items()
-            if isinstance(v, dict) and v.get("handler") == handler}
-
-
-def _enum_id_where(mapping: dict[int, Any], handler: str) -> int:
-    """The one enum value with handler == <handler> (errors unless exactly one)."""
-    ids = _enum_ids_where(mapping, handler)
-    if len(ids) != 1:
-        sys.exit(f"error: enums expected exactly one value for handler "
-                 f"'{handler}', got {sorted(ids)}")
-    return next(iter(ids))
-
-
-WAGO_CSV_URL = "https://wago.tools/db2/{table}/csv?build={version}"
 LISTFILE_RELEASE_API = "https://api.github.com/repos/wowdev/wow-listfile/releases/latest"
 
-# THE ONE CROSS-VERSION SOURCE: sound-kit names come from a build that is not
-# the one being packed, because no build we ship has them.
-#
-# `SoundKitName` shipped 7.3.0 -> 8.3.0 and in the Classic re-releases, and
-# 8.3.0.32218 is the LAST build that contains the file at all — verified at the
-# CASC level (dbfilesclient/soundkitname.db2, fid 1665033, is 5,263,340 bytes
-# there and 0 bytes in every later build, against a working soundkit.db2
-# control). It did not move to another table: it is one of only five tables
-# defined for 8.3 and for no 9.x build. So a modern pack can only be named by
-# joining an old table, which is sound because kit IDs are stable across builds
-# (99.65% of kits present on two builds play a byte-identical file set).
-#
-# 8.3.0 strictly contains the Legion, Wrath and Epsilon-addon name sets, so it
-# is the only one worth fetching. Full record: docs/DECISIONS.md ->
-# "Sound kit names — BfA 8.3.0 is the source".
-SOUNDKITNAME_BUILD = "8.3.0.32218"
-
-TABLES = [
-    "SpellName",
-    "Spell",
-    "SpellXSpellVisual",
-    "SpellVisual",
-    "SpellVisualMissile",
-    # missile flight paths (§3, Models column): SpellVisualMissile.SpellMissileMotionID
-    # names the arc a projectile travels — "Parabola (High)", "Boomerang",
-    # "Mage - Fire - Fireball". Only ID + Name are kept; the Lua-ish ScriptBody
-    # is the bulk of the table and nothing renders it. Present on every build.
-    "SpellMissileMotion",
-    "SpellVisualEvent",
-    "SpellVisualKitEffect",
-    "SpellVisualKitModelAttach",
-    "SpellVisualEffectName",
-    "SpellVisualAnim",
-    "AnimKitSegment",
-    # bonesets (§3): which body region an AnimKit segment animates. A segment's
-    # AnimKitConfigID -> AnimKitConfigBoneSet -> AnimKitBoneSet.Name ("Upper
-    # Body", "Head", "Right Hand", ...). Present on every build.
-    "AnimKitBoneSet",
-    "AnimKitConfigBoneSet",
-    # anim-replacement sets (aura 312, §3): AnimReplacement holds the
-    # (Src -> Dst AnimationData) swaps, keyed by ParentAnimReplacementSetID
-    "AnimReplacement",
-    "SoundKitEntry",
-    "SpellEffect",
-    "SummonProperties",
-    "SpellMisc",
-    # SpellMisc.CastingTimeIndex -> Base (ms). Base 0 is what makes a spell
-    # instant, which is half of the delivery question (§3s-bis); the other half
-    # is the IsChannelled bit. Ships on every build back to Vanilla.
-    "SpellCastTimes",
-    # SpellMisc.DurationIndex -> Duration (ms), the OTHER half of the delivery
-    # line: how long a channel holds. A 314-row index table. Duration < 0 (and
-    # the INT_MAX-ish rows) mean NO LIMIT — 5,717 of 9.2.7's 14,223 channels,
-    # which is the case a roleplayer actually wants ("a beam that holds").
-    "SpellDuration",
-    # What breaks a cast / an aura / a channel. Its own table, which is why the
-    # 449-bit attribute sweep never surfaced it. THE THREE COLUMNS DO NOT SHARE
-    # AN ENUM: InterruptFlags uses SpellInterrupts::InterruptFlags (bit 0 =
-    # Movement), while AuraInterruptFlags and ChannelInterruptFlags use
-    # SpellInterruptFlags, where movement is bit 3 (MovingCancels). Assuming
-    # they matched put two wrong numbers in the queue once already.
-    "SpellInterrupts",
-    # WHERE a spell may be cast (§3t). RequiredAreasID is one of only TWO gates
-    # Epsilon enforces on `.cast` — verified in game 2026-08-05, against five
-    # families that it does NOT enforce (see docs/DECISIONS.md). The rule that
-    # picked it: its check has no bypass guard. 12,381 spells on 9.2.7, 65% of
-    # them gated to a single area.
-    #
-    # The other columns of this table are deliberately unused. RequiresSpellFocus
-    # also binds but needs SpellFocusObject to be legible; RequiredAuraVision,
-    # MinFactionID and MinReputation have ZERO references in TrinityCore's spell
-    # code, so they gate nothing; FacingCasterFlags is a range check.
-    "SpellCastingRequirements",
-    "AreaGroupMember",
-    "AreaTable",
-    # The area pill's map button. BOTH LISTS ARE REQUIRED and they do different
-    # jobs: this one is what gets DOWNLOADED, OPTIONAL_TABLES only says a 404 is
-    # allowed. Declaring them optional alone left them un-fetched on every build,
-    # and 9.2.7 kept working purely because an exploration run had left its CSVs
-    # in the cache — so the button worked here and nowhere else, and would have
-    # died here too on a clean checkout.
-    "UiMap",
-    "UiMapAssignment",
-    "SpellChainEffects",
-    "SpellProceduralEffect",
-    "BeamEffect",
-    "SpellEffectEmission",
-    "SpellVisualKitAreaModel",
-    "WeaponTrail",
-    "BarrageEffect",
-    "DissolveEffect",
-    "TextureBlendSet",
-    "EdgeGlowEffect",
-    "ShadowyEffect",
-    "SpellVisualScreenEffect",
-    "ScreenEffect",
-    "FullScreenEffect",
-    "CreatureDisplayInfo",
-    "CreatureModelData",
-    "SpellShapeshiftForm",
-    "SpellOverrideName",
-    "Vehicle",
-    "VehicleSeat",
-    # mounts (§3, Models column): Mount.db2 is keyed by the mount-granting spell
-    # (SourceSpellID); MountXDisplay maps the mount to its CreatureDisplayID(s),
-    # which resolve to a model through the same creature chain morphs use.
-    "Mount",
-    "MountXDisplay",
-    # gameobject spawners (§3, Effects column): resolves a gameobject_template
-    # displayId (from the TDB world dump) to a model FileDataID -> listfile name
-    "GameObjectDisplayInfo",
-    # aura 406 (KEYBOUND_OVERRIDE, §3i): which key casts which spell
-    "SpellKeyboundOverride",
-    # the item route (SpellVisualEffectName Type 1, §3c). ItemSearchName carries
-    # the display name AND OverallQualityID; the appearance chain resolves the
-    # model and the inventory icon. ItemSparse is deliberately NOT here: it is
-    # 36 MB against ItemSearchName's 6 MB and was measured to add exactly zero
-    # names over it for the items this route reaches.
-    "ItemSearchName",
-    "ItemModifiedAppearance",
-    "ItemAppearance",
-    "ItemDisplayInfo",
-    "ModelFileData",
-    # ---- the description route (§3x). Spell.Description_lang is a TEMPLATE,
-    # not text, and these are the tables that fill it in. None of their values
-    # ship: build/spelltext.py substitutes them and the pack carries only the
-    # cooked prose.
-    #
-    # SpellRadius and SpellRange are index tables the effect/misc rows point at
-    # ($A1 yards, $r yards); SpellDescriptionVariables holds the named `$<var>`
-    # bodies and SpellXDescriptionVariables is the only bridge from a spell to
-    # one. SpellAuraOptions, SpellTargetRestrictions, SpellEffect, SpellMisc and
-    # SpellDuration were already downloaded for other routes.
-    "SpellRadius",
-    "SpellRange",
-    "SpellDescriptionVariables",
-    "SpellXDescriptionVariables",
-    "SpellTargetRestrictions",
-    # ⚠ SpellAuraOptions was in build/cache/9.2.7.45745/ ALREADY — left there by
-    # an exploration run — so the first build of this route worked here and
-    # crashed on Vanilla. Same shape as the UiMap mistake at format 40, caught
-    # this time only because a missing table is a hard error. It supplies $u
-    # (stack cap), $n (charges) and $h (proc chance).
-    "SpellAuraOptions",
-    # the dungeon journal's own note on a boss ability — a SECOND body of text
-    # per spell, searched under the same `desc` keyword. Only 389 spells on
-    # 9.2.7 carry one (a spell-linked section usually ships an EMPTY body and
-    # the client renders the spell's own description in its place), so this is
-    # a small, distinct signal rather than a second corpus.
-    "JournalEncounterSection",
-]
 
 # ------------------------------------------------------- per-build source map
 #
@@ -297,58 +105,6 @@ TABLES = [
 # version, run the build and let it tell you what is missing — then decide,
 # per item, whether it belongs here or is a genuine bug.
 
-# table -> the user-facing feature that switches off when the build predates it
-OPTIONAL_TABLES = {
-    "SpellName": "spell names (pre-BfA they live on Spell itself)",
-    # The two map tables are the area pill's OPTIONAL half: without them the
-    # pill still names its areas and still links Wowhead, it just offers no
-    # `/run OpenWorldMap(id)` button. Confirmed present on 9.2.7; the other nine
-    # are undeclared rather than checked, and this is the declaration path
-    # exactly so a Classic build lacking them is not a blocker.
-    "UiMap": "zone map ids for the area pill's map command",
-    "UiMapAssignment": "AreaID -> UiMapID, the only bridge from an area to a map",
-    "BeamEffect": "the BeamEffect route into chain/beam fx",
-    "SpellEffectEmission": "area-emitter models",
-    "SpellVisualKitAreaModel": "area models",
-    "WeaponTrail": "weapon-trail models",
-    "BarrageEffect": "barrage models",
-    "DissolveEffect": "the dissolve fx category",
-    "TextureBlendSet": "dissolve materials + screen mask textures",
-    "EdgeGlowEffect": "the glow fx category",
-    "ShadowyEffect": "the ghost/shadowy fx category",
-    "SpellVisualScreenEffect": "the kit route into screen fx",
-    "ScreenEffect": "the screen fx category",
-    "FullScreenEffect": "screen fx colour grading + overlay textures",
-    "AnimReplacement": "anim-replacement sets (aura 312)",
-    "SpellShapeshiftForm": "the shapeshift fx category",
-    "SpellOverrideName": "override names in the search corpus",
-    "SummonProperties": "summon control words (guardian/pet/...)",
-    "Vehicle": "the vehicle fx category",
-    "VehicleSeat": "vehicle seat attachments and passenger animations",
-    "Mount": "the mount model pills",
-    "MountXDisplay": "mount -> display id resolution",
-    "GameObjectDisplayInfo": "gameobject model files (names still resolve)",
-    # arrives in MoP (5.0.1); 404s on Vanilla/TBC/WotLK/Cata
-    "SpellKeyboundOverride": "the keybind fx category (aura 406)",
-    # both confirmed present on all ten builds as of 2026-08-05; declared
-    # optional anyway so a build that predates one loses only that half of the
-    # delivery line rather than failing — no duration reads as "no limit shown",
-    # no interrupts reads as "nothing known to break it"
-    "SpellDuration": "the channel duration on the delivery line",
-    "SpellInterrupts": "the 'breaks on move' half of the delivery line",
-    # The description route's optional halves (§3x). A missing table costs the
-    # feature nothing structural — spelltext.py elides a value it cannot look
-    # up exactly as it elides a caster-dependent one, so the prose still cooks,
-    # just without that number. Measured absences: SpellDescriptionVariables
-    # 404s on TBC, and the journal tables on Vanilla/TBC/WotLK.
-    "SpellRadius": "radii inside cooked descriptions ($A1 yards)",
-    "SpellRange": "ranges inside cooked descriptions ($r yards)",
-    "SpellDescriptionVariables": "the named $<var> bodies in descriptions",
-    "SpellXDescriptionVariables": "spell -> description-variable set",
-    "SpellTargetRestrictions": "max-target counts inside cooked descriptions",
-    "SpellAuraOptions": "stack caps and proc chances inside cooked descriptions",
-    "JournalEncounterSection": "dungeon-journal notes on a boss ability",
-}
 
 # THE TWO LISTS DO DIFFERENT JOBS AND A TABLE USUALLY NEEDS BOTH: TABLES is what
 # fetch_sources DOWNLOADS, OPTIONAL_TABLES only says a 404 on one is allowed.
@@ -361,231 +117,25 @@ assert not set(OPTIONAL_TABLES) - set(TABLES), (
     f"OPTIONAL_TABLES entries missing from TABLES (never downloaded): "
     f"{sorted(set(OPTIONAL_TABLES) - set(TABLES))}")
 
-# (table, column) -> the value to use on builds that lack the column
-OPTIONAL_COLUMNS = {
-    # the raid missile-set variant arrived after Legion; 0 = "no raid set",
-    # which is exactly how a present-but-unset row already reads
-    ("SpellVisual", "RaidSpellVisualMissileSetID"): "0",
-    # the reduced-camera-movement variant is missing on Legion and BfA only
-    # (present either side of them); 0 = "no variant", same as an unset row
-    ("SpellVisual", "ReducedUnexpectedCameraMovementSpellVisualID"): "0",
-    # Legion's FullScreenEffect has the colour grade but no overlay art yet
-    ("FullScreenEffect", "OverlayTextureFileDataID"): "0",
-    # An effect's amount (the movement-speed percent, among much else) is
-    # exported under two spellings and EVERY build has exactly one of them
-    # populated — so both are declared optional and read in order, int first.
-    # The int column is the real one wherever it exists (through Legion); the
-    # float replaced it in BfA. The overlap builds are the trap: Vanilla, TBC
-    # and MoP export BOTH, and there the float is vestigial — 46 of 40,249 rows
-    # nonzero on Vanilla, and zero on 771 of 783 speed rows — so preferring the
-    # float would silently blank those packs.
-    ("SpellEffect", "EffectBasePoints"): "",
-    ("SpellEffect", "EffectBasePointsF"): "",
-    # effect attach points (§3): the Classic re-release clients carry the effect
-    # tables but not their attach column (irregularly — Vanilla's DissolveEffect
-    # has AttachID, TBC's does not). -1 is exactly a present-but-unset row: the
-    # whole body, "full body", which is what an effect with no anchor animates.
-    ("ShadowyEffect", "AttachPos"): "-1",
-    ("DissolveEffect", "AttachID"): "-1",
-    ("BarrageEffect", "AttachmentPoint"): "-1",
-}
 
-# Spell names moved: SpellName.db2 was split out of Spell.db2 in BfA, so Legion
-# and earlier carry the name on Spell itself. First candidate whose table this
-# build actually has wins. (Both spellings are "ID" + a localised name column,
-# so the reader downstream is identical.)
-SPELL_NAME_SOURCES = [
-    ("SpellName", ["ID", "Name_lang"]),
-    ("Spell", ["ID", "Name_lang"]),
-]
 
-# TrinityCore TDB release per game version (server-side world DB + hotfixes).
-# "hotfixes" is optional — the 3.3.5 branch ships a world-only dump, and
-# hotfixes are a modern-client concept anyway.
-TDB_RELEASES = {
-    "9.2.7.45745": {
-        "tag": "TDB927.22111",
-        "asset": "TDB_full_927.22111_2022_11_20.7z",
-        "world": "TDB_full_world_927.22111_2022_11_20.sql",
-        "hotfixes": "TDB_full_hotfixes_927.22111_2022_11_20.sql",
-    },
-    "10.2.7.55664": {
-        "tag": "TDB1027.24051",
-        "asset": "TDB_full_1027.24051_2024_05_11.7z",
-        "world": "TDB_full_world_1027.24051_2024_05_11.sql",
-        "hotfixes": "TDB_full_hotfixes_1027.24051_2024_05_11.sql",
-    },
-    "11.2.7.65299": {
-        "tag": "TDB1127.26011",
-        "asset": "TDB_full_1127.26011_2026_01_14.7z",
-        "world": "TDB_full_world_1127.26011_2026_01_14.sql",
-        "hotfixes": "TDB_full_hotfixes_1127.26011_2026_01_14.sql",
-    },
-    # Midnight: TrinityCore's master branch dump. Its 1200 names the 12.0 client
-    # it was cut against, while the pack ships 12.1.0 — so unlike the entries
-    # above this one is keyed to a patch it does not exactly match, and the
-    # patch fallback in tdb_release() will not reach it on a 12.1 build. It is
-    # named here on the 3.4.3 precedent: creature entries carry across a minor
-    # patch, and the alternative is no morph display names at all for retail.
-    "12.1.0.69273": {
-        "tag": "TDB1200.26021",
-        "asset": "TDB_full_1200.26021_2026_02_06.7z",
-        "world": "TDB_full_world_1200.26021_2026_02_06.sql",
-        "hotfixes": "TDB_full_hotfixes_1200.26021_2026_02_06.sql",
-    },
-    "8.3.7.35662": {
-        "tag": "TDB837.20101",
-        "asset": "TDB_full_837.20101_2020_10_20.7z",
-        "world": "TDB_full_world_837.20101_2020_10_20.sql",
-        "hotfixes": "TDB_full_hotfixes_837.20101_2020_10_20.sql",
-    },
-    # Legion: the 2018 archive nests both dumps in a folder and drops the
-    # "full_" infix from the inner file names.
-    "7.3.5.26972": {
-        "tag": "TDB735.00",
-        "asset": "TDB_full_735.00_2018_02_19.7z",
-        "world": "TDB_full_735.00_2018_02_19/TDB_world_735.00_2018_02_19.sql",
-        "hotfixes": "TDB_full_735.00_2018_02_19/TDB_hotfixes_735.00_2018_02_19.sql",
-    },
-    # WotLK Classic: TrinityCore's 3.3.5 branch ships a WORLD-ONLY dump (no
-    # hotfixes key). It targets original 3.3.5a rather than the 3.4.x Classic
-    # client, but it is the only source of creature name/display data for the
-    # era and the creature entries are overwhelmingly shared.
-    "3.4.3.58936": {
-        "tag": "TDB335.25101",
-        "asset": "TDB_full_world_335.25101_2025_10_21.7z",
-        "world": "TDB_full_world_335.25101_2025_10_21.sql",
-    },
-}
-TDB_ASSET_URL = "https://github.com/TrinityCore/TrinityCore/releases/download/{tag}/{asset}"
 
-# The bits a target mask can carry. Named up here because VISUAL_REDIRECTS
-# (below) needs them before TARGET_BITS — which maps SpellVisualEvent.TargetType
-# onto these same bits, and is where the scheme is explained in full.
-NO_TARGET = 0
-TARGET_CASTER, TARGET_TARGET, TARGET_AREA = 1, 2, 4
-TARGET_NOT_CASTER, TARGET_MISSILE_DEST = 8, 16
 
-# SpellVisual columns that point at ANOTHER SpellVisual the client swaps in for
-# this one -> the extra target bit everything reached through that redirect
-# carries. The redirected-to visual is usually reachable no other way (on 9.2.7
-# only 37 of 228 caster targets and 30 of 257 hostile targets also appear in
-# SpellXSpellVisual), so following these is what makes that content visible at
-# all — it is not a re-labelling of rows we already show.
-#
-# Only the first two carry a "who sees this" meaning. Low-violence and
-# reduced-camera-movement are CLIENT SETTING variants — nobody casts them at
-# anyone — so they declare NO_TARGET rather than being forced into a bit.
-# Adding a future redirect column is one line here and nothing else.
-VISUAL_REDIRECTS = {
-    "CasterSpellVisualID": TARGET_CASTER,  # what the caster themself sees
-    "HostileSpellVisualID": TARGET_TARGET,  # what a hostile target sees
-    "LowViolenceSpellVisualID": NO_TARGET,
-    "ReducedUnexpectedCameraMovementSpellVisualID": NO_TARGET,
-}
 
-# Tables distilled out of the TDB SQL dumps into cached CSVs, with the
-# columns we keep. world tables are complete (server-only data); hotfixes
-# tables hold ONLY the rows Blizzard hotfixed post-ship — applied on top of
-# the wago rows by row ID (TDB is preferred wherever it has data).
-#
-# NOTE widening a column list here does NOT invalidate the distilled CSV (the
-# cache check is existence-only) — delete build/cache/tdb-*/ to re-distill.
-TDB_TABLES = {
-    "world": {
-        "creature_template": ["entry", "name",
-                              "modelid1", "modelid2", "modelid3", "modelid4"],
-        "creature_template_model": ["CreatureID", "Idx", "CreatureDisplayID", "Probability"],
-        # gameobject spawners (§3, Effects column): a spawn effect's misc0 is a
-        # gameobject_template ENTRY. The client GameObjects.db2 is world-placed
-        # doodads keyed differently (0% overlap), so name + displayId only live
-        # here — which is why gameobject names/models resolve on TDB packs and
-        # degrade to id-only on the TDB-less Classic clients, like creatures.
-        # `type` is the GAMEOBJECT_TYPE enum (3 CHEST, 5 GENERIC, 10 GOOBER, ...).
-        # Read to gate the Wowhead object link: Wowhead indexes only some types.
-        "gameobject_template": ["entry", "name", "displayId", "type"],
-    },
-    "hotfixes": {
-        "spell_name": ["ID", "Name"],
-        "spell_x_spell_visual": ["ID", "SpellID", "SpellVisualID"],
-        # MissileAttachment/MissileDestinationAttachment must be overlaid too:
-        # a hotfixed row replaces the wago row wholesale, so omitting them
-        # would silently blank the launch/impact attachments on those visuals.
-        # The redirect columns (VISUAL_REDIRECTS) and AnimEventSoundID are here
-        # for exactly the same reason.
-        "spell_visual": ["ID", "SpellVisualMissileSetID", "RaidSpellVisualMissileSetID",
-                         "MissileAttachment", "MissileDestinationAttachment",
-                         "AnimEventSoundID", *VISUAL_REDIRECTS],
-        # SpellMissileMotionID and the two attachments are here for the
-        # wholesale-replace reason above: a hotfixed missile row that omitted
-        # them would blank the flight path and the launch/impact points.
-        "spell_visual_missile": ["ID", "SpellVisualMissileSetID", "SpellVisualEffectNameID",
-                                 "SoundEntriesID", "AnimKitID", "SpellMissileMotionID",
-                                 "Attachment", "DestinationAttachment"],
-        "spell_visual_effect_name": ["ID", "ModelFileDataID"],
-        # EffectBasePoints joins the overlay for the wholesale-replace reason
-        # above: it is the movement-speed percent. All four dumps that ship
-        # hotfixes at all spell it the int way, even TDB1127 whose client
-        # exports only the float. EffectTriggerSpell is here for the same
-        # wholesale-replace reason — a hotfixed row omitting it would blank the
-        # spell-link edge (§3r). Unlike the misc/target columns it is spelled
-        # the SAME on both sides, verified against TDB927's hotfix schema.
-        "spell_effect": ["ID", "SpellID", "Effect", "EffectAura", "EffectMiscValue1",
-                         "EffectMiscValue2", "ImplicitTarget1", "ImplicitTarget2",
-                         "EffectBasePoints", "EffectTriggerSpell"],
-        "spell_misc": ["ID", "SpellID", "DifficultyID", "SpellIconFileDataID"],
-        "creature_display_info": ["ID", "ModelID"],
-        "creature_model_data": ["ID", "FileDataID"],
-    },
-}
-
-# The same three kinds of drift exist on the TrinityCore side, since a TDB
-# release tracks the server schema of its era. Declared separately from the
-# wago-side maps above because the table names live in a different namespace.
-TDB_OPTIONAL_TABLES = {
-    # split out of creature_template's modelid1..4 columns after the Legion era
-    "creature_template_model": "creature displays (legacy dumps keep them on creature_template)",
-}
-TDB_OPTIONAL_COLUMNS = {
-    # the legacy spelling: present on Legion-era dumps, gone once the
-    # creature_template_model table took over
-    ("creature_template", "modelid1"): "0",
-    ("creature_template", "modelid2"): "0",
-    ("creature_template", "modelid3"): "0",
-    ("creature_template", "modelid4"): "0",
-}
-
-# Creature -> display id moved on the TrinityCore side too: Legion-era world
-# dumps keep up to four display ids as modelid1..4 ON creature_template, later
-# releases split them into their own table. Whichever the release has wins.
-CREATURE_DISPLAY_SOURCES = [
-    ("creature_template_model", ["CreatureID", "Idx", "CreatureDisplayID"]),
-    ("creature_template", ["entry", "modelid1", "modelid2", "modelid3", "modelid4"]),
-]
-
-# Animation names indexed by AnimID (Stand=0, ...), maintained by wow.tools
-ANIMS_JS_URL = "https://raw.githubusercontent.com/Marlamin/wow.tools.local/main/wwwroot/js/anims.js"
-
-# Enum value names from WoWDBDefs meta/enums — the authority on what db2
-# enum values mean ("ID NAME" lines; see read_enum_names for the format).
-# SpellEffect = names for SpellEffect.Effect (SPELL_EFFECT_* without the
-# prefix), SpellEffectAura = names for SpellEffect.EffectAura (SPELL_AURA_*).
-WOWDBDEFS_ENUM_URL = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/meta/enums/{name}.dbde"
-ENUM_FILES = ["SpellEffect", "SpellEffectAura", "Target"]
 
 # SpellVisualKitEffect.EffectType values (what the kit effect points at) —
 # the full enum + dispatch tags live in enums/spell_visual_kit_effect_types.json.
 _KIT_EFFECT_TYPES = load_local_enum("spell_visual_kit_effect_types")
-EFFECT_TYPE_PROC = _enum_id_where(_KIT_EFFECT_TYPES, "proc")  # SpellProceduralEffect.ID
-EFFECT_TYPE_SOUND = _enum_id_where(_KIT_EFFECT_TYPES, "sound")  # SoundKitID
-EFFECT_TYPE_ANIM = _enum_id_where(_KIT_EFFECT_TYPES, "anim")  # SpellVisualAnim.ID
-EFFECT_TYPE_SHADOWY = _enum_id_where(_KIT_EFFECT_TYPES, "shadowy")  # ShadowyEffect.ID
-EFFECT_TYPE_EMISSION = _enum_id_where(_KIT_EFFECT_TYPES, "emission")  # SpellEffectEmission.ID
-EFFECT_TYPE_DISSOLVE = _enum_id_where(_KIT_EFFECT_TYPES, "dissolve")  # DissolveEffect.ID
-EFFECT_TYPE_EDGE_GLOW = _enum_id_where(_KIT_EFFECT_TYPES, "edge_glow")  # EdgeGlowEffect.ID
-EFFECT_TYPE_BEAM = _enum_id_where(_KIT_EFFECT_TYPES, "beam")  # BeamEffect.ID
-EFFECT_TYPE_BARRAGE = _enum_id_where(_KIT_EFFECT_TYPES, "barrage")  # BarrageEffect.ID
-EFFECT_TYPE_SCREEN = _enum_id_where(_KIT_EFFECT_TYPES, "screen")  # SpellVisualScreenEffect.ID
+EFFECT_TYPE_PROC = enum_id_where(_KIT_EFFECT_TYPES, "proc")  # SpellProceduralEffect.ID
+EFFECT_TYPE_SOUND = enum_id_where(_KIT_EFFECT_TYPES, "sound")  # SoundKitID
+EFFECT_TYPE_ANIM = enum_id_where(_KIT_EFFECT_TYPES, "anim")  # SpellVisualAnim.ID
+EFFECT_TYPE_SHADOWY = enum_id_where(_KIT_EFFECT_TYPES, "shadowy")  # ShadowyEffect.ID
+EFFECT_TYPE_EMISSION = enum_id_where(_KIT_EFFECT_TYPES, "emission")  # SpellEffectEmission.ID
+EFFECT_TYPE_DISSOLVE = enum_id_where(_KIT_EFFECT_TYPES, "dissolve")  # DissolveEffect.ID
+EFFECT_TYPE_EDGE_GLOW = enum_id_where(_KIT_EFFECT_TYPES, "edge_glow")  # EdgeGlowEffect.ID
+EFFECT_TYPE_BEAM = enum_id_where(_KIT_EFFECT_TYPES, "beam")  # BeamEffect.ID
+EFFECT_TYPE_BARRAGE = enum_id_where(_KIT_EFFECT_TYPES, "barrage")  # BarrageEffect.ID
+EFFECT_TYPE_SCREEN = enum_id_where(_KIT_EFFECT_TYPES, "screen")  # SpellVisualScreenEffect.ID
 
 # SpellEffect.EffectAura value whose EffectMiscValue_0 is a ScreenEffect ID —
 # the main road to screen effects (~2.3k spells; the kit route via
@@ -597,9 +147,9 @@ AURA_SCREEN_EFFECT = 260
 # enums/spell_procedural_effect_types.json (and DATA_ROUTES.md section 3b).
 # Which Value_N column carries the payload differs per type.
 _PROC_TYPES = load_local_enum("spell_procedural_effect_types")
-PROC_TYPE_TINT = _enum_id_where(_PROC_TYPES, "tint")  # Value_0 = packed-RGB tint (multiply)
-PROC_TYPES_CHAIN = _enum_ids_where(_PROC_TYPES, "chain")  # Value_0 = SpellChainEffects ID
-PROC_TYPE_STANDWALK = _enum_id_where(_PROC_TYPES, "standwalk")  # Value_0..2 = AnimationData IDs
+PROC_TYPE_TINT = enum_id_where(_PROC_TYPES, "tint")  # Value_0 = packed-RGB tint (multiply)
+PROC_TYPES_CHAIN = enum_ids_where(_PROC_TYPES, "chain")  # Value_0 = SpellChainEffects ID
+PROC_TYPE_STANDWALK = enum_id_where(_PROC_TYPES, "standwalk")  # Value_0..2 = AnimationData IDs
 # proc Type 7 is animation replacement expressed through fixed engine slots: its
 # Value_0/1/2 are what the character plays INSTEAD of Stand/Walk/Run. So it is
 # the same mechanic as the aura-312 AnimReplacementSet (§3o), just narrower —
@@ -608,14 +158,14 @@ PROC_TYPE_STANDWALK = _enum_id_where(_PROC_TYPES, "standwalk")  # Value_0..2 = A
 # Value_3 is dropped: it has no base slot and the decode notes it is near-always
 # junk (see the proc decode in CLAUDE.md).
 PROC_STANDWALK_SLOTS = (0, 4, 5)  # base AnimID each of Value_0/1/2 replaces
-PROC_TYPE_AREAMODEL = _enum_id_where(_PROC_TYPES, "areamodel")  # Value_0 = SpellVisualKitAreaModel ID
-PROC_TYPE_FREEZE = _enum_id_where(_PROC_TYPES, "freeze")  # valueless freeze/petrify state
-PROC_TYPE_TRANSPARENCY = _enum_id_where(_PROC_TYPES, "transparency")  # Value_0 = alpha 0..1
-PROC_TYPE_CAMO = _enum_id_where(_PROC_TYPES, "camo")  # valueless camouflage/cloak state
-PROC_TYPE_DESATURATE = _enum_id_where(_PROC_TYPES, "desaturate")  # Value_2 = strength 0..1 (no color)
-PROC_TYPE_GHOST_MAT = _enum_id_where(_PROC_TYPES, "ghost_mat")  # Value_3 = packed-RGB recolor -> ghost
-PROC_TYPE_TINT_MAT = _enum_id_where(_PROC_TYPES, "tint_mat")  # Value_3 = packed-RGB recolor -> tint
-PROC_TYPE_WEAPONTRAIL = _enum_id_where(_PROC_TYPES, "weapontrail")  # Value_0 = WeaponTrail.db2 ID
+PROC_TYPE_AREAMODEL = enum_id_where(_PROC_TYPES, "areamodel")  # Value_0 = SpellVisualKitAreaModel ID
+PROC_TYPE_FREEZE = enum_id_where(_PROC_TYPES, "freeze")  # valueless freeze/petrify state
+PROC_TYPE_TRANSPARENCY = enum_id_where(_PROC_TYPES, "transparency")  # Value_0 = alpha 0..1
+PROC_TYPE_CAMO = enum_id_where(_PROC_TYPES, "camo")  # valueless camouflage/cloak state
+PROC_TYPE_DESATURATE = enum_id_where(_PROC_TYPES, "desaturate")  # Value_2 = strength 0..1 (no color)
+PROC_TYPE_GHOST_MAT = enum_id_where(_PROC_TYPES, "ghost_mat")  # Value_3 = packed-RGB recolor -> ghost
+PROC_TYPE_TINT_MAT = enum_id_where(_PROC_TYPES, "tint_mat")  # Value_3 = packed-RGB recolor -> tint
+PROC_TYPE_WEAPONTRAIL = enum_id_where(_PROC_TYPES, "weapontrail")  # Value_0 = WeaponTrail.db2 ID
 
 # model categories: every (spell, model) row is tagged with how the model is
 # used — the Models column groups by these short user-facing words
@@ -632,8 +182,8 @@ MODEL_CAT_ITEM = 6  # SpellVisualEffectName Type 1 (an Item::ID's model)
 # 0 = FileDataID, 1 = Item (GenericID = Item::ID), 2 = CreatureDisplayInfo
 # (GenericID = display); 3-10 = the caster's equipped weapon by slot (below).
 _EFFECT_NAME_TYPES = load_local_enum("spell_visual_effect_name_types")
-EFFECT_NAME_TYPE_DISPLAY = _enum_id_where(_EFFECT_NAME_TYPES, "display")
-EFFECT_NAME_TYPE_ITEM = _enum_id_where(_EFFECT_NAME_TYPES, "item")
+EFFECT_NAME_TYPE_DISPLAY = enum_id_where(_EFFECT_NAME_TYPES, "display")
+EFFECT_NAME_TYPE_ITEM = enum_id_where(_EFFECT_NAME_TYPES, "item")
 
 # Item.OverallQualityID -> the quality word its pill label is coloured by
 # (ItemQuality; the classic poor/common/uncommon/rare/epic/legendary ramp). The
@@ -1410,349 +960,6 @@ PACK_FORMAT = 46  # 46: meta.domains — what a numeric control needs, measured 
 csv.field_size_limit(10_000_000)
 
 
-def log(msg: str) -> None:
-    """Print a build progress line (unbuffered — builds are watched live)."""
-    print(msg, flush=True)
-
-
-# ---------------------------------------------------------------- downloads
-
-def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
-             optional: bool = False) -> bool:
-    """Download url to dest unless it is already cached (or refresh is set).
-
-    Returns False when an `optional` source is absent (HTTP 404) — that is how
-    a build that predates a db2 table reports it, and the caller treats the
-    corresponding feature as switched off. Any other error still raises.
-    """
-    if dest.exists() and dest.stat().st_size > 0 and not refresh:
-        log(f"  cached   {dest.name} ({dest.stat().st_size:,} bytes)")
-        return True
-    log(f"  fetching {url}")
-    req = urllib.request.Request(url, headers={"User-Agent": "epsilook-build", **(headers or {})})
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(dest.suffix + ".part")
-    try:
-        with urllib.request.urlopen(req, timeout=600) as resp, open(tmp, "wb") as out:
-            while chunk := resp.read(1 << 20):
-                out.write(chunk)
-    except urllib.error.HTTPError as e:
-        tmp.unlink(missing_ok=True)
-        if optional and e.code == 404:
-            dest.unlink(missing_ok=True)  # a stale pack's table must not linger
-            log(f"  absent   {dest.name} (this build predates the table)")
-            return False
-        raise
-    tmp.replace(dest)
-    log(f"  saved    {dest.name} ({dest.stat().st_size:,} bytes)")
-    return True
-
-
-def download_volatile(url: str, dest: Path) -> None:
-    """Fetch a small source that CHANGES UNDER BUILDS WE ALREADY SHIP.
-
-    The same problem as the listfile, and the same reason `download()` is wrong
-    for it: a version-pinned table is correct forever once cached, but the enum
-    name lists and the animation names are community-maintained documents that
-    keep being corrected for game builds that shipped long ago. Cached-forever
-    means a correction never reaches us.
-
-    That is not hypothetical either — `SpellEffect` 324 was cached as
-    `LEARN_HOUSING_DECOUR` and fixed upstream to `LEARN_HOUSING_DECOR`, so every
-    pack shipped the misspelling and `mech:decor` found nothing.
-
-    These are 7-42 KB, so unlike the listfile there is nothing to be clever
-    about: re-fetch every build, and keep the cached copy when the network is
-    unavailable so an offline build still works with slightly older names.
-    """
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    request = urllib.request.Request(url, headers={"User-Agent": "epsilook-build"})
-    try:
-        with urllib.request.urlopen(request, timeout=120) as response:
-            body = response.read()
-    except (urllib.error.URLError, OSError) as exc:
-        if not dest.exists():
-            raise
-        log(f"  WARNING  {dest.name}: {exc}; using cached copy")
-        return
-    changed = not dest.exists() or dest.read_bytes() != body
-    dest.write_bytes(body)
-    log(f"  {'updated ' if changed else 'current '} {dest.name} ({len(body):,} bytes)")
-
-
-def find_7z() -> str:
-    """Locate the 7-Zip executable, or exit with an actionable message."""
-    for cand in (shutil.which("7z"), r"C:\Program Files\7-Zip\7z.exe", "/usr/bin/7z"):
-        if cand and Path(cand).exists():
-            return cand
-    sys.exit("error: 7-Zip (7z) is required to extract the TDB archive — install it "
-             "or place the extracted .sql files in the cache tdb dir yourself")
-
-
-def iter_insert_rows(line: str) -> Iterator[list[str]]:
-    r"""Yield value tuples (lists of raw strings) from one INSERT ... VALUES line.
-
-    A backslash is decoded as "take the next character literally", which is
-    right for \\ and \' and wrong for mysqldump's control escapes: \n, \r, \t,
-    \0 and \Z each yield their bare letter instead of the character they stand
-    for.
-
-    TODO: decode the control escapes. Only creature_template_locale carries
-    any (53 \n in the 9.2.7 world dump, all currently read as the letter n), so
-    the fix changes locale bytes and must land as its own change with the
-    locale overlays rebuilt against it. The tables behind the English pack
-    carry only \" and \', both already correct.
-    """
-    i = line.find("VALUES")
-    if i < 0:
-        return
-    i += len("VALUES")
-    n = len(line)
-    while i < n:
-        while i < n and line[i] != "(":
-            i += 1
-        if i >= n:
-            return
-        i += 1
-        row, val, in_str = [], [], False
-        while i < n:
-            c = line[i]
-            if in_str:
-                if c == "\\":
-                    val.append(line[i + 1])
-                    i += 2
-                    continue
-                if c == "'":
-                    if i + 1 < n and line[i + 1] == "'":
-                        val.append("'")
-                        i += 2
-                        continue
-                    in_str = False
-                    i += 1
-                    continue
-                val.append(c)
-                i += 1
-                continue
-            if c == "'":
-                in_str = True
-                i += 1
-                continue
-            if c == ",":
-                row.append("".join(val).strip())
-                val = []
-                i += 1
-                continue
-            if c == ")":
-                row.append("".join(val).strip())
-                i += 1
-                yield row
-                break
-            val.append(c)
-            i += 1
-
-
-def tdb_column_index(table: str, column: str, schema: list[str]) -> int | None:
-    """Position of a column in a TDB table, or None if it is a legacy spelling.
-
-    None means "declared in TDB_OPTIONAL_COLUMNS and not in this release" —
-    the distiller writes the declared default instead.
-    """
-    if column in schema:
-        return schema.index(column)
-    if (table, column) in TDB_OPTIONAL_COLUMNS:
-        return None
-    sys.exit(f"error: TDB table {table} has no column {column!r} and it is not "
-             f"declared in TDB_OPTIONAL_COLUMNS; schema = {schema}")
-
-
-def distill_tdb_dump(sql_path: Path, want: dict[str, list[str]], out_dir: Path,
-                     required: bool = True) -> None:
-    """Extract the wanted tables/columns from a TDB SQL dump into CSVs.
-
-    A table may legitimately have no INSERT (hotfixes only carry hotfixed
-    rows) — it still gets a header-only CSV so readers can stream it. With
-    `required` false a table missing from the dump entirely is tolerated too:
-    older hotfix dumps predate some of the tables we overlay.
-    """
-    schemas: dict[str, list[str]] = {}
-    writers: dict[str, tuple] = {}
-    handles = []
-    with open(sql_path, encoding="utf-8", errors="replace") as f:
-        for line in f:
-            if line.startswith("CREATE TABLE `"):
-                table = line.split("`")[1]
-                if table not in want:
-                    continue
-                cols = []
-                for defline in f:
-                    defline = defline.strip()
-                    if defline.startswith("`"):
-                        cols.append(defline.split("`")[1])
-                    else:
-                        break
-                schemas[table] = cols
-            elif line.startswith("INSERT INTO `"):
-                table = line.split("`")[1]
-                if table not in want:
-                    continue
-                if table not in writers:
-                    keep = want[table]
-                    idx = [tdb_column_index(table, c, schemas[table]) for c in keep]
-                    fh = open(out_dir / f"{table}.csv", "w", newline="", encoding="utf-8")
-                    handles.append(fh)
-                    w = csv.writer(fh)
-                    w.writerow(keep)
-                    writers[table] = (w, idx, len(schemas[table]))
-                w, idx, ncols = writers[table]
-                for row in iter_insert_rows(line):
-                    if len(row) != ncols:
-                        sys.exit(f"error: {table} row has {len(row)} values, schema has {ncols}")
-                    w.writerow([row[i] if i is not None
-                                else TDB_OPTIONAL_COLUMNS[(table, c)]
-                                for i, c in zip(idx, want[table])])
-    for fh in handles:
-        fh.close()
-    for table, keep in want.items():
-        if table not in schemas:
-            if required and table not in TDB_OPTIONAL_TABLES:
-                sys.exit(f"error: table {table} not found in {sql_path.name}")
-            why = TDB_OPTIONAL_TABLES.get(table, "no overrides")
-            log(f"    {table}: absent from this dump — {why}")
-            continue
-        if table not in writers:  # zero hotfixed rows — emit header only
-            with open(out_dir / f"{table}.csv", "w", newline="", encoding="utf-8") as fh:
-                csv.writer(fh).writerow(keep)
-
-
-def tdb_release(version: str) -> dict | None:
-    """The TDB release for a build — matched on the PATCH, not the build id.
-
-    TDB_RELEASES is written with a full build id because that is the client the
-    release was cut against, but a TDB tracks a PATCH: TDB927 is the 9.2.7 world
-    data whatever the hotfix suffix says. Keying strictly on the build id makes
-    the mapping fall off the moment a pack is bumped — 3.4.3.58936 -> 3.4.3.x
-    would silently lose TDB335 and every morph name with it, reported by nothing
-    louder than one "no release mapped" line in a 200-line build log.
-
-    Exact match still wins, so a release can be pinned to one build if a patch
-    ever needs two.
-    """
-    if version in TDB_RELEASES:
-        return TDB_RELEASES[version]
-    patch = version.split(".")[:3]
-    for build, release in TDB_RELEASES.items():
-        if build.split(".")[:3] == patch:
-            return release
-    return None
-
-
-def fetch_tdb(version: str) -> Path | None:
-    """Ensure the TDB tables for this version are distilled; return their dir.
-
-    The 117 MB archive is downloaded and the 700 MB SQL dumps parsed exactly
-    once — afterwards only the small distilled CSVs (and the archive) stay
-    in the cache. Returns None when no TDB release maps to this version.
-    """
-    rel = tdb_release(version)
-    if rel is None:
-        log(f"TDB: no release mapped for {version} — morphs will not resolve, "
-            f"hotfixes will not apply")
-        return None
-    tdb_dir = CACHE_DIR / f"tdb-{rel['tag']}"
-    # a release may ship world only (the 3.3.5 branch does), so only the kinds
-    # this release actually has count towards "already distilled"
-    kinds = [k for k in ("world", "hotfixes") if k in rel]
-    wanted_csvs = [t for k in kinds for t in TDB_TABLES[k]]
-    if all((tdb_dir / f"{t}.csv").exists() for t in wanted_csvs):
-        log(f"TDB ({rel['tag']}): cached ({len(wanted_csvs)} distilled tables)")
-        return tdb_dir
-    if "hotfixes" not in rel:
-        log(f"TDB ({rel['tag']}): world-only release — no hotfix overrides for this build")
-    tdb_dir.mkdir(parents=True, exist_ok=True)
-    archive = tdb_dir / rel["asset"]
-    download(TDB_ASSET_URL.format(**rel), archive, refresh=False)
-    dumps = {kind: tdb_dir / rel[kind] for kind in kinds}
-    if not all(p.exists() for p in dumps.values()):
-        log(f"  extracting {archive.name} ...")
-        r = subprocess.run([find_7z(), "x", "-y", f"-o{tdb_dir}", str(archive)],
-                           capture_output=True, text=True)
-        if r.returncode != 0:
-            sys.exit(f"error: 7z extraction failed: {r.stderr[-500:]}")
-    for kind, sql_path in dumps.items():
-        log(f"  distilling {sql_path.name} ...")
-        # world tables are the only source of creature names/displays, so a
-        # missing one is fatal; hotfixes are an overlay, and older dumps
-        # legitimately predate some of the tables we look for
-        distill_tdb_dump(sql_path, TDB_TABLES[kind], tdb_dir, required=(kind == "world"))
-        sql_path.unlink()  # the archive stays; the 460 MB text does not
-    return tdb_dir
-
-
-def fetch_sources(version: str, refresh: bool) -> tuple[Path, Path, Path | None]:
-    """Ensure all table CSVs and the listfile are cached; return their dirs."""
-    table_dir = CACHE_DIR / version
-    log(f"Tables (wago.tools, build {version}):")
-    for table in TABLES:
-        download(WAGO_CSV_URL.format(table=table, version=version),
-                 table_dir / f"{table}.csv", refresh,
-                 optional=table in OPTIONAL_TABLES)
-
-    # Pinned to another build on purpose — see SOUNDKITNAME_BUILD. Cached under
-    # that build's own directory, so read_table() reads it with no new code.
-    log(f"Sound-kit names (wago.tools, pinned build {SOUNDKITNAME_BUILD}):")
-    download(WAGO_CSV_URL.format(table="SoundKitName", version=SOUNDKITNAME_BUILD),
-             CACHE_DIR / SOUNDKITNAME_BUILD / "SoundKitName.csv", refresh)
-
-    log("Animation names (wow.tools):")
-    download_volatile(ANIMS_JS_URL, CACHE_DIR / "anims.js")
-
-    log("Enum names (wowdev/WoWDBDefs):")
-    for name in ENUM_FILES:
-        download_volatile(WOWDBDEFS_ENUM_URL.format(name=name),
-                          CACHE_DIR / "enums" / f"{name}.dbde")
-
-    listfile_dir = CACHE_DIR / "listfile"
-    listfile = listfile_dir / "community-listfile.csv"
-    tag_file = listfile_dir / "release-tag.txt"
-    log("Listfile (wowdev/wow-listfile):")
-    # REVALIDATED ON EVERY BUILD, unlike every other source here. The listfile
-    # is the only one that keeps growing for builds we ALREADY ship: a fid that
-    # had no name last month may have one today, and a plain exists() check
-    # silently keeps serving the old answer. That is not hypothetical — packs
-    # were shipped on 2026-08-08 against a 2026-07-14 listfile.
-    #
-    # The release tag is the cheap oracle: one API call, and the 148 MB body is
-    # only re-fetched when the tag actually moved.
-    cached_tag = tag_file.read_text(encoding="utf-8").strip() if tag_file.exists() else ""
-    latest_tag, asset_url = "", ""
-    try:
-        with urllib.request.urlopen(
-                urllib.request.Request(LISTFILE_RELEASE_API, headers={"User-Agent": "epsilook-build"}), timeout=60
-        ) as resp:
-            release = json.load(resp)
-        latest_tag = release["tag_name"]
-        asset_url = next(a["browser_download_url"] for a in release["assets"]
-                         if a["name"] == "community-listfile.csv")
-    except (urllib.error.URLError, OSError, KeyError, StopIteration) as exc:
-        # Offline or rate-limited. A cached copy still builds a correct pack —
-        # just possibly missing the newest names — so say so and carry on.
-        if not listfile.exists():
-            raise
-        log(f"  WARNING  could not reach the release API ({exc}); "
-            f"using cached listfile (tag {cached_tag or 'unknown'})")
-
-    if latest_tag and (refresh or not listfile.exists() or cached_tag != latest_tag):
-        if cached_tag and cached_tag != latest_tag:
-            log(f"  stale    cached tag {cached_tag} -> {latest_tag}")
-        download(asset_url, listfile, refresh=True)
-        tag_file.write_text(latest_tag, encoding="utf-8")
-    elif latest_tag:
-        log(f"  current  {listfile.name} (tag {latest_tag}, "
-            f"{listfile.stat().st_size:,} bytes)")
-
-    tdb_dir = fetch_tdb(version)
-    return table_dir, listfile, tdb_dir
-
 
 # ------------------------------------------------------------------ parsing
 
@@ -1926,46 +1133,6 @@ def color_rows(
     ids = sorted({r for rs in spell_map.values() for r in rs})
     return pairs, ids, [hue_words(colors_of(r)) for r in ids]
 
-
-def read_anim_names() -> list[str]:
-    """Parse the animationNames JS array (index = AnimID)."""
-    src = (CACHE_DIR / "anims.js").read_text(encoding="utf-8")
-    names = re.findall(r'"([^"]*)"', src)
-    if len(names) < 1000 or names[0] != "Stand":
-        sys.exit("error: anims.js did not parse as expected")
-    return names
-
-
-def read_enum_names(name: str, version: str) -> dict[int, str]:
-    """Parse a WoWDBDefs meta/enums .dbde file into {value: NAME}.
-
-    Format: one "ID NAME" per line, optionally "// comment" suffixed. Some
-    lines carry a "(BUILD a-b, c-d)" guard restricting which game builds the
-    name applies to. Lines with no name (or junk like "==") are skipped —
-    the app falls back to showing the raw id.
-    """
-    ver = tuple(int(p) for p in version.split("."))
-    names: dict[int, str] = {}
-    for line in (CACHE_DIR / "enums" / f"{name}.dbde").read_text(encoding="utf-8").splitlines():
-        line = line.split("//", 1)[0].strip()
-        if line.startswith("(BUILD "):
-            guard, _, line = line[len("(BUILD "):].partition(")")
-            line = line.strip()
-
-            def in_range(rng: str) -> bool:
-                lo, _, hi = rng.strip().partition("-")
-                lo_t = tuple(int(p) for p in lo.split("."))
-                hi_t = tuple(int(p) for p in hi.split(".")) if hi else lo_t
-                return lo_t <= ver <= hi_t
-
-            if not any(in_range(r) for r in guard.split(",")):
-                continue
-        m = re.fullmatch(r"(\d+) ([A-Z][A-Z0-9_]*)", line)
-        if m:
-            names[int(m.group(1))] = m.group(2)
-    if len(names) < 100:
-        sys.exit(f"error: enums/{name}.dbde did not parse as expected ({len(names)} names)")
-    return names
 
 
 # ----------------------------------------------------------------- readers
@@ -3268,7 +2435,10 @@ def read_creature_models(table_dir: Path, tdb_dir: Path | None) -> CreatureModel
     displays: dict[int, list[tuple[int, int]]] = defaultdict(list)
     if tdb_dir is not None:
         for entry, name in read_table(tdb_dir, "creature_template", ["entry", "name"]):
-            names[to_int(entry)] = name
+            # Trimmed here rather than in the reader: the dump is decoded
+            # faithfully, and a display name is the one thing that wants its
+            # stray whitespace gone. 30 of 160,883 rows on the 9.2.7 dump.
+            names[to_int(entry)] = name.strip()
         # whichever shape this TDB release stores displays in — see
         # CREATURE_DISPLAY_SOURCES for why there are two
         source = next(((t, cols) for t, cols in CREATURE_DISPLAY_SOURCES
@@ -3869,7 +3039,7 @@ def _moving_cancels_bit(enum_name: str) -> int:
     three columns of one table shared an enum has already reported the channel
     population 4.4x too low once.
     """
-    bits = _enum_ids_where(load_local_enum(enum_name), "moving")
+    bits = enum_ids_where(load_local_enum(enum_name), "moving")
     if len(bits) != 1:
         sys.exit(f"error: {enum_name}.json must tag exactly one bit handler=moving, found {sorted(bits)}")
     return next(iter(bits))
@@ -5425,8 +4595,8 @@ def main() -> None:
     args = ap.parse_args()
 
     label = args.label or args.version
-    table_dir, listfile, tdb_dir = fetch_sources(args.version, args.refresh)
-    pack = build_pack(args.version, label, table_dir, listfile, tdb_dir)
+    sources = fetch_sources(args.version, args.refresh)
+    pack = build_pack(args.version, label, sources.tables, sources.listfile, sources.tdb)
     write_pack(pack, args.id or args.version, label,
                hidden=args.hidden, is_default=args.is_default)
 

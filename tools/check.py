@@ -33,6 +33,7 @@ things to look at, not things to fix before pushing.
 from __future__ import annotations
 
 import argparse
+import ast
 import gzip
 import hashlib
 import io
@@ -77,7 +78,7 @@ LFS_OID_RE = re.compile(rb"oid sha256:([0-9a-f]{64})")
 # repository, so git never reports them as changed and a trigger naming one
 # would warn on every run until it was ignored.
 DOC_TRIGGERS = (
-    (("build/build_data.py",), "docs/DATA_ROUTES.md"),
+    (("build/build_data.py", "build/pack"), "docs/DATA_ROUTES.md"),
     (("src/config.ts",), "README.md"),
 )
 
@@ -159,6 +160,33 @@ DOM_NAMES = (
     "HTMLInputElement", "Element", "Node", "NodeList", "ParentNode", "Event",
     "customElements", "requestAnimationFrame", "getComputedStyle",
 )
+
+# THE THIRD SEAM - the data build's layering rule.
+#
+# The pack build reads game tables, interprets them and writes an artifact. Each
+# of those is a layer, and the value of the split is that a layer can be
+# replaced without the others noticing: a different table source, a different
+# artifact shape. That only holds while imports flow one way, so the order here
+# IS the rule - a layer may import the layers below it and nothing above.
+BUILD_PACKAGE = "build/pack"
+BUILD_LAYERS = ("sources", "tables", "routes", "derive", "model", "encode", "emit")
+
+# The layers that must not touch the filesystem or the network. Acquisition owns
+# the input side and emission owns the output side; everything between them is
+# handed its bytes and hands its results on, which is what makes the source
+# swappable and the artifact reshapeable without editing a route.
+BUILD_PLACELESS = ("routes", "derive", "model", "encode")
+
+# Names that mean "I am reaching for a file or a URL". Matched as parsed
+# identifiers rather than as text, so a word in a comment or a docstring is not
+# a violation - several of these are ordinary English.
+PLACE_NAMES = ("Path", "open", "urlopen", "urllib", "requests", "listdir", "glob")
+
+# Every Python path the checkers read, named once so mypy, pyflakes and pylint
+# cannot drift on what they cover. The versions they run at are pinned by
+# uv.lock rather than by whatever the machine happens to have installed, which
+# is why all three go through `uv run`.
+PYTHON_SOURCES = ("build/build_data.py", "build/locale_data.py", "build/pack", "tools")
 
 # How long a pack-freshness answer stays good. Blizzard patches weekly at
 # most, so a day is generous and keeps a normal working day to one request.
@@ -585,6 +613,100 @@ def check_matcher_seam(rep: Report, imports: re.Pattern[str]) -> None:
                f"{len(core)} modules in {'/, '.join(SEARCH_DECLARING)}/ free of {'/, '.join(SEARCH_EVALUATING)}/")
 
 
+def build_layer_of(module: str) -> str | None:
+    """Which build layer a dotted module name belongs to, or None for the
+    package-root vocabulary that every layer may read."""
+    parts = module.split(".")
+    return parts[1] if len(parts) > 1 and parts[1] in BUILD_LAYERS else None
+
+
+def imported_modules(tree: ast.Module, package: str) -> list[str]:
+    """Every module an AST imports, with relative specifiers resolved absolute.
+
+    `package` is the importing module's PACKAGE, not the module itself - which
+    is what a relative specifier counts dots from. One dot means that package,
+    each further dot one level out.
+    """
+    out: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            out += [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            if not node.level:
+                out.append(node.module or "")
+                continue
+            parts = package.split(".")
+            base = parts[:len(parts) - node.level + 1]
+            out.append(".".join([*base, node.module] if node.module else base))
+    return out
+
+
+def check_build_layers(rep: Report) -> None:
+    """The data build's layers must only depend downward, and only the ends of
+    the pipeline may touch a file or a URL.
+
+    Both directions are silent. A route importing an emitter welds the reading
+    of a game table to one artifact shape, so the pack cannot be reshaped
+    without editing routes; a route opening a file welds it to one source, so
+    the provider seam stops being real the moment anything reads around it.
+    Neither breaks a build - the code runs fine, it just quietly stops being
+    the thing the split was for.
+
+    Tests are exempt from both rules and deliberately so: a test's job is often
+    to assert that two layers agree, and it is not part of the graph the rules
+    protect.
+
+    Skipped rather than failed while the package is absent, so this check does
+    not become the reason a checkout without it cannot commit.
+    """
+    root = ROOT / BUILD_PACKAGE
+    modules = sorted(p for p in root.rglob("*.py")
+                     if not p.name.endswith("_test.py")) if root.is_dir() else []
+    if not modules:
+        rep.skip("build layers", f"{BUILD_PACKAGE} not present yet")
+        return
+
+    problems: list[str] = []
+    for path in modules:
+        relative = path.relative_to(root.parent).with_suffix("")
+        # A module's package is its directory; an __init__ IS its package.
+        package = ".".join(relative.parts[:-1])
+        dotted = package if relative.name == "__init__" else ".".join(relative.parts)
+        layer = build_layer_of(dotted)
+        name = path.relative_to(ROOT).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=name)
+
+        for target in imported_modules(tree, dotted if relative.name == "__init__" else package):
+            reached = build_layer_of(target)
+            if reached is None or reached == layer:
+                continue
+            if layer is None:
+                problems.append(f"{name} is package-root vocabulary but imports {reached}/")
+            elif BUILD_LAYERS.index(reached) > BUILD_LAYERS.index(layer):
+                problems.append(f"{name} imports upward, into {reached}/")
+
+        if layer not in BUILD_PLACELESS:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and node.id in PLACE_NAMES:
+                problems.append(f"{name}:{node.lineno} reaches for a file: `{node.id}`")
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str) \
+                    and node.value.startswith(("http://", "https://")):
+                problems.append(f"{name}:{node.lineno} names a URL")
+
+    if problems:
+        for problem in problems[:6]:
+            rep.fail("build layers", problem)
+        if len(problems) > 6:
+            rep.fail("build layers", f"...and {len(problems) - 6} more")
+    else:
+        placeless = sum(1 for p in modules if build_layer_of(
+            ".".join(p.relative_to(root.parent).with_suffix("").parts)) in BUILD_PLACELESS)
+        rep.ok("build layers",
+               f"{len(modules)} modules import downward only; {placeless} in "
+               f"{'/, '.join(BUILD_PLACELESS)}/ free of paths and URLs")
+
+
 def check_arcanum(rep: Report) -> None:
     """tools/arcanum.py must still produce strings Arcanum can import.
 
@@ -868,13 +990,13 @@ def check_toolchain(rep: Report) -> None:
     # them, and they are worked down rather than blocking unrelated commits.
     run_tool(rep, "oxlint", ["npx", "oxlint", "--type-aware", "src/search", "test", "tools"],
              "correctness + type-aware rules, .oxlintrc.json")
-    run_tool(rep, "mypy", ["python", "-m", "mypy", "build/build_data.py",
-                           "build/locale_data.py", "build/pack", "tools"])
-    run_tool(rep, "pyflakes", ["python", "-m", "pyflakes", "build/build_data.py",
-                               "build/locale_data.py", "build/pack", "tools"])
-    run_tool(rep, "pylint", ["uv", "tool", "run", "pylint", "--errors-only", "--score=n",
-                             "build/build_data.py", "build/locale_data.py", "build/pack", "tools"],
+    run_tool(rep, "mypy", ["uv", "run", "mypy", *PYTHON_SOURCES])
+    run_tool(rep, "pyflakes", ["uv", "run", "pyflakes", *PYTHON_SOURCES])
+    run_tool(rep, "pylint", ["uv", "run", "pylint", "--errors-only", "--score=n",
+                             *PYTHON_SOURCES],
              "errors only; style findings are advisory (.pylintrc)")
+    run_tool(rep, "pytest", ["uv", "run", "pytest"],
+             "build/pack/**/*_test.py, beside the code they test")
 
 
 # ---------------------------------------------------------------------- main
@@ -901,6 +1023,7 @@ def main() -> int:
     check_manifest(rep)
     check_pack_sections(rep)
     check_layers(rep)
+    check_build_layers(rep)
     check_cli_entries(rep)
     check_license_scope(rep)
     check_arcanum(rep)

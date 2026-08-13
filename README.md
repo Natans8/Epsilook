@@ -67,8 +67,16 @@ site/                    the site — published to GitHub Pages by .github/workf
   js/                    BUILD OUTPUT, gitignored: app.js and its sourcemap
   dev/oracle.js          console measurement helpers — a dev tool, never bundled
   data/<version>/        one gzipped data pack per game version
-build/                   the pack generator
-  build_data.py          regenerates the packs (Python 3, stdlib only)
+build/                   the pack generator (Python 3)
+  build_data.py          regenerates the packs
+  pack/                  the build as layers, each one replaceable on its own
+    sources/             acquire: URLs, the cache, archives, the TrinityCore dumps
+    tables/              the provider seam every reader reads through
+    routes/              the readers: tables in, typed bundles out
+    derive/              the graph walk and every cross-route derivation
+    model/               the section registry
+    encode/              how a column is laid out
+    emit/                module files, the manifest, hashes
 tools/                   every routine that would otherwise be a thing to remember
   build.mjs              the esbuild build: bundle, dev server, module-graph guard
   check.py               every check, plus the invariants that fail silently
@@ -276,10 +284,15 @@ The underlying checks, if you want them individually:
 ```
 npx tsc                                        # the app: strict TypeScript, no implicit any
 npm run build                                  # the bundle, plus the module-graph guard
-python -m mypy build/build_data.py tools       # Python: fully annotated
-python -m pyflakes build/build_data.py tools
-python tools/ide.py                            # the JetBrains inspections + formatting
+npm test                                       # the TypeScript suite, node --test
+uv run mypy build tools                        # Python: fully annotated
+uv run pyflakes build tools
+uv run pylint --errors-only build tools
+uv run pytest                                  # the Python suite, beside build/pack
 ```
+
+The Python toolchain is pinned by `pyproject.toml` and `uv.lock`, so a checker's version is a fact of the repository
+rather than of whoever's machine ran it. `uv run` installs what it needs on first use.
 
 Touching the `docker/Dockerfile`, `docker/nginx.conf` or anything they copy adds one more, which needs Docker running
 and so stays out of `check.py`:

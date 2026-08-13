@@ -35,8 +35,6 @@ tables are distilled on first use. Numeric tables are re-read from the base
 pack's own cache; the base pack itself supplies the English strings the
 overlay diffs against, so a rebuilt base wants its overlays rebuilt after it.
 
-Stdlib only, like build_data.py.
-
 Usage:
     python build/locale_data.py --version 9.2.7.45745 --locale ruRU
 """
@@ -48,7 +46,6 @@ import gzip
 import hashlib
 import io
 import json
-import subprocess
 import sys
 import time
 from datetime import date
@@ -56,12 +53,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from build_data import (AURA_OVERRIDE_NAME, CACHE_DIR, DATA_DIR, OPTIONAL_TABLES,
-                        PACK_FORMAT, TDB_ASSET_URL, WAGO_CSV_URL, distill_tdb_dump,
-                        download, find_7z, log, read_description_templates,
-                        read_description_variables, read_encounter_notes,
-                        read_spell_names, read_spell_values, read_table, tdb_release,
-                        to_int)
+from build_data import (AURA_OVERRIDE_NAME, DATA_DIR, PACK_FORMAT,
+                        read_description_templates, read_description_variables,
+                        read_encounter_notes, read_spell_names, read_spell_values,
+                        read_table, to_int)
+from pack.drift import OPTIONAL_TABLES
+from pack.progress import log
+from pack.sources.archive import read_member
+from pack.sources.cache import CACHE_DIR, download
+from pack.sources.tdb import TDB_ASSET_URL, distill_dump, tdb_release
+from pack.sources.wago import WAGO_CSV_URL
 from spelltext import ENGLISH, RUSSIAN, DescriptionCooker, TextLocale
 
 # The overlay's own format, independent of the base PACK_FORMAT: the two evolve
@@ -145,17 +146,10 @@ def ensure_tdb_locale_tables(version: str) -> Path | None:
     tdb_dir.mkdir(parents=True, exist_ok=True)
     archive = tdb_dir / rel["asset"]
     download(TDB_ASSET_URL.format(**rel), archive, refresh=False)
-    sql_path = tdb_dir / rel["world"]
-    if not sql_path.exists():
-        log(f"  extracting {rel['world']} from {archive.name} ...")
-        r = subprocess.run([find_7z(), "x", "-y", f"-o{tdb_dir}", str(archive),
-                            rel["world"]], capture_output=True, text=True)
-        if r.returncode != 0:
-            sys.exit(f"error: 7z extraction failed: {r.stderr[-500:]}")
-    log(f"  distilling locale tables from {sql_path.name} ...")
+    log(f"  distilling locale tables from {rel['world']} ...")
     # not `required`: a world dump may legitimately predate a locale table
-    distill_tdb_dump(sql_path, TDB_LOCALE_TABLES, tdb_dir, required=False)
-    sql_path.unlink()  # the archive stays; the 460 MB text does not
+    with read_member(archive, rel["world"]) as lines:
+        distill_dump(lines, rel["world"], TDB_LOCALE_TABLES, tdb_dir, required=False)
     return tdb_dir
 
 
@@ -166,6 +160,7 @@ def read_tdb_locale_names(tdb_dir: Path | None, table: str, locale: str) -> dict
     name_col = TDB_LOCALE_TABLES[table][2]
     out: dict[int, str] = {}
     for entry, loc, name in read_table(tdb_dir, table, ["entry", "locale", name_col]):
+        name = name.strip()  # a display name, trimmed; the dump itself is not
         if loc == locale and name and name != "NULL":
             out[to_int(entry)] = name
     return out

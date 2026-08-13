@@ -19,6 +19,9 @@ test/.bundle/
 
 node_modules/
 
+# the Python environment uv builds from pyproject.toml + uv.lock
+.venv/
+
 # IDE
 .idea/
 .vscode/

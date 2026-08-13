@@ -1,0 +1,84 @@
+"""The download cache, and the two ways a source is fetched into it.
+
+Two policies, and the difference between them is not size but whether the
+source can change under a build that already shipped. A version-pinned table
+is correct forever once cached; a community-maintained name list is not.
+"""
+
+from __future__ import annotations
+
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+from ..progress import log
+
+BUILD_DIR = Path(__file__).resolve().parents[2]
+"""The build directory: the root every cached and checked-in source hangs off."""
+
+CACHE_DIR = BUILD_DIR / "cache"
+"""Where every downloaded source lands. Swept per game build by the roster."""
+
+
+def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
+             optional: bool = False) -> bool:
+    """Download url to dest unless it is already cached (or refresh is set).
+
+    Returns False when an `optional` source is absent (HTTP 404) — that is how
+    a build that predates a db2 table reports it, and the caller treats the
+    corresponding feature as switched off. Any other error still raises.
+    """
+    if dest.exists() and dest.stat().st_size > 0 and not refresh:
+        log(f"  cached   {dest.name} ({dest.stat().st_size:,} bytes)")
+        return True
+    log(f"  fetching {url}")
+    req = urllib.request.Request(url, headers={"User-Agent": "epsilook-build", **(headers or {})})
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(dest.suffix + ".part")
+    try:
+        with urllib.request.urlopen(req, timeout=600) as resp, open(tmp, "wb") as out:
+            while chunk := resp.read(1 << 20):
+                out.write(chunk)
+    except urllib.error.HTTPError as e:
+        tmp.unlink(missing_ok=True)
+        if optional and e.code == 404:
+            dest.unlink(missing_ok=True)  # a stale pack's table must not linger
+            log(f"  absent   {dest.name} (this build predates the table)")
+            return False
+        raise
+    tmp.replace(dest)
+    log(f"  saved    {dest.name} ({dest.stat().st_size:,} bytes)")
+    return True
+
+
+def download_volatile(url: str, dest: Path) -> None:
+    """Fetch a small source that CHANGES UNDER BUILDS WE ALREADY SHIP.
+
+    The same problem as the listfile, and the same reason `download()` is wrong
+    for it: a version-pinned table is correct forever once cached, but the enum
+    name lists and the animation names are community-maintained documents that
+    keep being corrected for game builds that shipped long ago. Cached-forever
+    means a correction never reaches us.
+
+    That is not hypothetical either — `SpellEffect` 324 was cached as
+    `LEARN_HOUSING_DECOUR` and fixed upstream to `LEARN_HOUSING_DECOR`, so every
+    pack shipped the misspelling and `mech:decor` found nothing.
+
+    These are 7-42 KB, so unlike the listfile there is nothing to be clever
+    about: re-fetch every build, and keep the cached copy when the network is
+    unavailable so an offline build still works with slightly older names.
+    """
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    request = urllib.request.Request(url, headers={"User-Agent": "epsilook-build"})
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            body = response.read()
+    except (urllib.error.URLError, OSError) as exc:
+        if not dest.exists():
+            raise
+        log(f"  WARNING  {dest.name}: {exc}; using cached copy")
+        return
+    changed = not dest.exists() or dest.read_bytes() != body
+    dest.write_bytes(body)
+    log(f"  {'updated ' if changed else 'current '} {dest.name} ({len(body):,} bytes)")
+

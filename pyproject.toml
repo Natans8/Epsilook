@@ -1,0 +1,34 @@
+[project]
+name = "epsilook-build"
+version = "0"
+description = "The Epsilook data build and the repository checks that run over it."
+requires-python = ">=3.12"
+dependencies = [
+    # The DDL half of reading a mysqldump file. The row scanner is hand-written
+    # because nothing on the market reads a dump, but a CREATE TABLE is a real
+    # grammar and the column order it yields is what keeps every distilled CSV
+    # aligned -- worth a parser rather than a pattern.
+    "sqlglot",
+]
+
+# Nothing here is installed as a package: the build runs from the checkout and
+# the entry points are plain scripts. This file exists so the Python toolchain
+# is PINNED rather than ambient -- uv.lock is what makes a checker's version a
+# fact of the repository instead of a fact of whoever's machine ran it.
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "mypy",
+    "pyflakes",
+    "pylint",
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+# Tests live beside the code they test, as `<module>_test.py`, so a layer's
+# tests move with the layer. `build/pack` is the whole search path: the other
+# Python in the tree is the builder being replaced and the tools around it.
+testpaths = ["build/pack"]
+addopts = "--quiet --no-header"

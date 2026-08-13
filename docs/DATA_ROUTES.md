@@ -141,6 +141,13 @@ applied on top of wago by row ID for
 
 A version with no TDB entry still builds — morphs stay unresolved, hotfixes don't apply, and the build logs both.
 
+**How the dumps are read.** Each dump is piped out of the archive with `7z x -so` and scanned as it streams, so the
+~700 MB of SQL never reaches the filesystem; only the distilled CSVs and the archive stay in the cache. A
+`CREATE TABLE` is parsed with `sqlglot` for its column order — an `INSERT` names no columns, so that order is the only
+thing keeping a row's values aligned — and the rows themselves go through a hand-written scanner, because no
+maintained library reads a mysqldump file. That scanner decodes MySQL's full escape table; a name's own leading and
+trailing spaces survive it, and the routes that show a name as a name trim it there.
+
 ---
 
 ## 2. The visual graph spine
