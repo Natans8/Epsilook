@@ -61,7 +61,6 @@ def hue_words(colors: tuple[int, ...]) -> str:
     a searcher looking for either should find it, so both words ship. Negative
     entries are "no colour here" sentinels and name nothing.
     """
-    words = dict.fromkeys(
-        word for color in colors if color >= 0
-        for word in (hue_word(*unpack_rgb(color)),) if word)
+    words = dict.fromkeys(word for color in colors if color >= 0
+                          if (word := hue_word(*unpack_rgb(color))))
     return " ".join(words)

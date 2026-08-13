@@ -84,34 +84,31 @@ def expand_redirects(seeds: set[int],
 def read_visual_graph(tables: Tables) -> VisualGraph:
     """Read both hops of the visual graph, redirects expanded.
 
-    Both `SpellXSpellVisual` and `SpellVisual` are keyed by ROW ID first, so a
-    revised row replaces its original before any edge is derived -- a revision
-    can re-point a spell at a different visual, and deriving edges first would
-    keep the old one alongside the new.
+    Both tables stream. Reading them into a dict keyed by row id first would be
+    the shape the builder this replaces needed -- there, revisions arrived in a
+    SECOND pass and had to overwrite the original by id before any edge was
+    derived, or a re-pointed spell would keep the old visual alongside the new.
+    The provider merges revisions in-stream now, so the row id has no reader
+    left and 300,000 buffered rows have no purpose.
     """
-    edges: dict[int, tuple[int, int]] = {}
-    for row_id, spell_id, visual_id in tables.rows(
-            "SpellXSpellVisual", ["ID", "SpellID", "SpellVisualID"]):
-        edges[to_int(row_id)] = (to_int(spell_id), to_int(visual_id))
     direct: dict[int, set[int]] = defaultdict(set)
-    for spell, visual in edges.values():
+    for spell_id, visual_id in tables.rows("SpellXSpellVisual",
+                                           ["SpellID", "SpellVisualID"]):
+        spell, visual = to_int(spell_id), to_int(visual_id)
         if spell and visual:
             direct[spell].add(visual)
-
-    columns = ["ID", "AnimEventSoundID", *VISUAL_REDIRECTS]
-    rows: dict[int, tuple[int, ...]] = {}
-    for row_id, *values in tables.rows("SpellVisual", columns):
-        rows[to_int(row_id)] = tuple(to_int(value) for value in values)
 
     bits = list(VISUAL_REDIRECTS.values())
     redirects: dict[int, list[tuple[int, int]]] = {}
     graph = VisualGraph()
-    for visual, (sound, *targets) in rows.items():
+    for row_id, sound_id, *target_ids in tables.rows(
+            "SpellVisual", ["ID", "AnimEventSoundID", *VISUAL_REDIRECTS]):
+        visual, sound = to_int(row_id), to_int(sound_id)
         if sound:
             graph.visual_sounds[visual] = sound
         # A visual naming ITSELF is dropped here rather than in the expansion:
         # it is a no-op redirect, and one exists on 9.2.7.
-        hops = [(target, bit) for target, bit in zip(targets, bits)
+        hops = [(target, bit) for target, bit in zip(map(to_int, target_ids), bits)
                 if target and target != visual]
         if hops:
             redirects[visual] = hops

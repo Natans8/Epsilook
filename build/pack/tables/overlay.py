@@ -47,6 +47,8 @@ def join_key(text: str) -> str:
     only which rows are the same row.
     """
     trimmed = text.strip()
+    if trimmed.isascii() and trimmed.isdigit():
+        return trimmed.lstrip("0") or "0"  # the overwhelmingly common shape
     try:
         return str(int(float(trimmed)))
     except ValueError:
@@ -145,8 +147,13 @@ class OverlaidTables:
             return False
 
     def _revisions(self, source: Tables, overlay: Overlay,
-                   columns: Sequence[str]) -> dict[str, dict[str, str]]:
-        """The overlay's rows for one table, keyed by the base's key value.
+                   columns: Sequence[str]) -> dict[str, tuple[str, dict[str, str]]]:
+        """The overlay's rows for one table, keyed by the joinable key value.
+
+        Each entry is the key's OWN text alongside the columns it supplies. The
+        joinable form is a dictionary key and never a value: a row the base does
+        not have has to come out spelling its id the way its source spelled it,
+        or one table would yield two spellings of the same column.
 
         Only the OVERLAY is buffered, never the base: a revision set is a few
         hundred rows against millions, and holding the small side is what lets
@@ -154,18 +161,16 @@ class OverlaidTables:
         """
         supplied = [column for column in columns
                     if column in overlay.columns and column != overlay.key]
-        wanted = [overlay.key, *supplied, *([overlay.stamp] if overlay.stamp else [])]
         asked = [overlay.columns[column] for column in (overlay.key, *supplied)]
         if overlay.stamp:
             asked.append(overlay.stamp)
 
-        out: dict[str, dict[str, str]] = {}
+        out: dict[str, tuple[str, dict[str, str]]] = {}
         for row in source.rows(overlay.table, asked):
-            values = dict(zip(wanted, row))
-            if overlay.stamp and not self._applies(values[overlay.stamp]):
+            if overlay.stamp and not self._applies(row[-1]):
                 continue
-            out[join_key(values[overlay.key])] = {column: values[column]
-                                                  for column in supplied}
+            # zip stops at `supplied`, which drops the stamp without naming it
+            out[join_key(row[0])] = (row[0], dict(zip(supplied, row[1:])))
         return out
 
     def rows(self, table: str, columns: Sequence[str]) -> Iterator[tuple[str, ...]]:
@@ -193,6 +198,15 @@ class OverlaidTables:
             return
 
         revisions = self._revisions(source, overlay, columns)
+        if not revisions:
+            # The ordinary case for several tables rather than a rare one: an
+            # overlay ships only the rows it revised, and a release that revised
+            # none of a table -- or predates it -- still leaves a header-only
+            # file behind. Without this every base row would pay for a join that
+            # cannot match anything.
+            yield from self.base.rows(table, columns)
+            return
+
         wanted = list(columns)
         keyed = wanted if overlay.key in wanted else [*wanted, overlay.key]
         at_key = keyed.index(overlay.key)
@@ -201,17 +215,16 @@ class OverlaidTables:
         seen: set[str] = set()
         for row in self.base.rows(table, keyed):
             key = join_key(row[at_key])
-            revision = revisions.get(key)
-            if revision is None:
+            found = revisions.get(key)
+            if found is None:
                 yield row[:width]
                 continue
             seen.add(key)
-            yield tuple(revision.get(column, value)
+            yield tuple(found[1].get(column, value)
                         for column, value in zip(wanted, row))
 
-        for key, revision in revisions.items():
+        for key, (spelling, revision) in revisions.items():
             if key in seen:
                 continue
-            added = dict(revision)
-            added[overlay.key] = key
+            added = {**revision, overlay.key: spelling}
             yield tuple(added.get(column, "") for column in wanted)

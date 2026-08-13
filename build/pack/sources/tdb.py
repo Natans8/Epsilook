@@ -373,14 +373,6 @@ def fetch_tdb(version: str) -> Path | None:
     # a release may ship world only (the 3.3.5 branch does), so only the kinds
     # this release actually has count towards "already distilled"
     kinds = [k for k in ("world", "hotfixes") if k in rel]
-    # The two kinds are separate namespaces distilled into ONE directory, so a
-    # name in both would collide: the second column list would win, the cached
-    # file's header would never match it, and every build would re-distil 700 MB
-    # of SQL to produce the same disagreement again.
-    shared = set(TDB_TABLES["world"]) & set(TDB_TABLES["hotfixes"])
-    if shared:
-        sys.exit(f"error: {sorted(shared)} declared as both a world and a hotfixes "
-                 f"table; they distil into one directory and cannot share a name")
     wanted = {t: c for k in kinds for t, c in TDB_TABLES[k].items()}
     if distilled(tdb_dir, wanted):
         log(f"TDB ({rel['tag']}): cached ({len(wanted)} distilled tables)")

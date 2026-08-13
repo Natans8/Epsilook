@@ -75,7 +75,7 @@ def read_variables(tables: Tables) -> dict[int, dict[str, str]]:
     bodies: dict[int, dict[str, str]] = {}
     for set_id, text in tables.rows("SpellDescriptionVariables", ["ID", "Variables"]):
         assignments = {match.group(1): match.group(2)
-                       for line in re.split(r"[\r\n]+", text)
+                       for line in text.splitlines()
                        if (match := ASSIGNMENT.match(line))}
         if assignments:
             bodies[to_int(set_id)] = assignments
@@ -108,12 +108,16 @@ def read_encounter_notes(tables: Tables) -> dict[int, str]:
     for section_id, (_, parent, _spell) in sections.items():
         if to_int(parent):
             children[parent].append(section_id)
+    # Sorted once. A subtree is walked again for every ancestor that names a
+    # spell, so sorting inside the recursion re-sorts the same list each visit.
+    for siblings in children.values():
+        siblings.sort()
 
     def gather(section_id: str, depth: int = 0) -> list[str]:
         body, _parent, _spell = sections[section_id]
         out = [body] if body.strip() else []
         if depth < JOURNAL_DEPTH:
-            for child in sorted(children.get(section_id, ())):
+            for child in children.get(section_id, ()):
                 out += gather(child, depth + 1)
         return out
 

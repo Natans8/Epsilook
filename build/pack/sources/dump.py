@@ -89,8 +89,12 @@ def parse_create_table(statement: str) -> list[Column]:
     the only place the dump ever states it.
     """
     parsed = sqlglot.parse_one(statement, dialect="mysql")
-    return [Column(column.name,
-                   str(column.kind.this).removeprefix("DType.") if column.kind else "")
+    # `.this.name` is the enum member's own name. Formatting the member and
+    # stripping its class prefix would work today and rot silently: a rename
+    # upstream would leave every kind unrecognised, `lossy` false, and the
+    # overlay quietly supplying the rounded value the declaration exists to
+    # refuse.
+    return [Column(column.name, column.kind.this.name if column.kind else "")
             for column in parsed.find_all(expressions.ColumnDef)]
 
 
