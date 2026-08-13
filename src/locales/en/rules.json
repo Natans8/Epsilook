@@ -1,0 +1,69 @@
+{
+  "law": {
+    "R1": "a conjunction never asks one question twice, at either level",
+    "R2": "an alternation never offers one alternative twice",
+    "R3": "a conjunction keeps the stronger ask; the dual keeps the stronger negation",
+    "R4": "an alternation absorbs an alternative that restates another with extra conditions",
+    "R5": "an ask conjoined with a negation it implies selects nothing; a dead alternative is dropped, at both levels",
+    "R6": "an ask alternated with a negation implied by it constrains nothing: the whole query is the empty query",
+    "R7": "alternatives identical but for one positive same-shape clause fold to one clause of alternatives",
+    "R8": "a group of alternatives never offers one alternative twice",
+    "R9": "alternation keeps the weaker alternative; overlapping intervals fuse when one leaf spells the union",
+    "R10": "a range to itself is exact; bounds print low-first",
+    "R11": "bounds on one subject fuse to a range and an empty meet is a contradiction — inside one row always, and across clauses on a kind that declares a spell holds at most one of its rows",
+    "R12": "a scope of one positive term is that term",
+    "R13": "the same ask through its shortest head: a property's own door, where the short spelling re-reads as the same structure",
+    "R14": "an empty conjunction is true: a scope with nothing in it asks only for existence",
+    "R15": "the column-form count desugar is the canonical spelling of a lone count term",
+    "R16": "a bare kind-existence ask spells through its column: readability overrules raw length",
+    "R16f": "the kind-exists ask spells through its column, closing the re-parse gap of a kind with no top-level word",
+    "R17": "counts speak existence at the edges: a count collapsing to zero is \"no such row\", one covering everything from one is \"some such row\" — rewritten, not inferred",
+    "R18": "a prefix operator binds on its own: the canonical spelling of every operator bind drops the colon"
+  },
+  "boundary": {
+    "B1": {
+      "keeps": "model:fire model:frost never becomes model:{fire frost}",
+      "why": "a scope binds one row; two clauses are two existentials — a spell with a fire model and a separate frost model satisfies the pair and not the scope"
+    },
+    "B2": {
+      "keeps": "no unprompted rewriting anywhere",
+      "why": "simplification is a button the user presses; no surface rewrites a query on its own"
+    },
+    "B3": {
+      "keeps": "x1.5, +50%, 150% — the value's spelling",
+      "why": "simplify touches structure only; the written tier survives it"
+    },
+    "B4": {
+      "keeps": "-model:fire | -model:frost stays two groups",
+      "why": "a disjunction of negations has no one-clause spelling; alternation folding folds positives only"
+    },
+    "B5": {
+      "keeps": "regex and glob bodies",
+      "why": "identical-only matching; no pattern algebra — except that a glob's literal runs soundly feed substring reasoning"
+    },
+    "B6": {
+      "keeps": "a counted scope never implies existence",
+      "why": "zero is a count a spell without rows satisfies; counts sit out of subsumption except count against count over one identical run — the edges where a count is an existence fact are rewrites, not inferences"
+    },
+    "B7": {
+      "keeps": "scale:>=+10% scale:<=+50% stays two clauses at the top level",
+      "why": "two clauses are two existentials — a spell with one small and one large scale row satisfies the pair and no single range — so bounds fuse across clauses only on a kind that declares a spell holds at most one of its rows, the declaration that makes the two clauses one row"
+    },
+    "B8": {
+      "keeps": "a query whose every alternative is contradictory, as written, with a note",
+      "why": "the language has no \"matches nothing\" literal, and the empty query means everything"
+    },
+    "B9": {
+      "keeps": "no corpus reasoning",
+      "why": "what one pack happens to contain is a fact about that pack, never about the query"
+    },
+    "B10": {
+      "keeps": "the query's clause structure, out of reach of prime-implicant minimisers",
+      "why": "minimisers work over independent variables; these atoms carry implication structure — substrings, intervals, bit roles — a truth table cannot see, and shallow alternation over a handful of clauses gains nothing from them"
+    },
+    "B11": {
+      "keeps": "anything implication cannot certify",
+      "why": "undecided means untouched: flag-word properties, mixed notations, cross-shape asks, ordinal rungs across different operands"
+    }
+  }
+}

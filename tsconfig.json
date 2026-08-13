@@ -17,6 +17,9 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "noFallthroughCasesInSwitch": true,
+    // the string registry imports its locale catalogs (src/locales/) as JSON;
+    // esbuild bundles them natively, this flag lets tsc type them
+    "resolveJsonModule": true,
     // vendored libs in src/vendor are plain JS with hand-written .d.ts
     // beside them; tsc reads the declarations, esbuild bundles the .js
     "allowJs": false,

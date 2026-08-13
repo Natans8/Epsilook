@@ -1,0 +1,11 @@
+{
+  "column": {
+    "spell": "Spell",
+    "id": "ID",
+    "model": "Models",
+    "sound": "Sounds",
+    "anim": "Animations",
+    "fx": "Effects",
+    "mech": "Mechanics"
+  }
+}

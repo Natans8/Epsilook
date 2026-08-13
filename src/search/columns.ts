@@ -5,6 +5,7 @@
  * every row in the column at once; a kind's own word is the narrower door, which is why a spell's name is reached
  * as `name:` rather than through something invented to avoid a collision.
  */
+import {t} from "../i18n";
 
 export interface Column {
     /** What a query writes before the colon: `model:{...}`. */
@@ -49,48 +50,48 @@ export function defineColumn(column: Column): Column {
  */
 export const spellColumn = defineColumn({
     key: "spell",
-    label: "Spell",
-    hint: "the spell itself — its name, what it says it does, its icon, and how it casts",
+    label: t("ui:column.spell"),
+    hint: t("tooltips:column.spell"),
 });
 
 /** A spell's number and the expansion it arrived in. */
 export const idColumn = defineColumn({
     key: "id",
-    label: "ID",
-    hint: "the spell's own number, and the expansion that introduced it",
+    label: t("ui:column.id"),
+    hint: t("tooltips:column.id"),
 });
 
 export const modelColumn = defineColumn({
     key: "model",
-    label: "Models",
+    label: t("ui:column.model"),
     synonyms: ["models"],
-    hint: "the 3D models a spell draws — missiles, ground effects, attachments",
+    hint: t("tooltips:column.model"),
 });
 
 export const soundColumn = defineColumn({
     key: "sound",
-    label: "Sounds",
+    label: t("ui:column.sound"),
     synonyms: ["sounds"],
-    hint: "the sound files a spell plays, and the kits they come from",
+    hint: t("tooltips:column.sound"),
 });
 
 export const animColumn = defineColumn({
     key: "anim",
-    label: "Animations",
+    label: t("ui:column.anim"),
     synonyms: ["animation", "animations"],
-    hint: "how the character moves — replacements, kits, loose animations",
+    hint: t("tooltips:column.anim"),
 });
 
 export const fxColumn = defineColumn({
     key: "fx",
-    label: "Effects",
+    label: t("ui:column.fx"),
     synonyms: ["effects"],
-    hint: "what the spell looks like — beams, glows, tints, morphs, size changes",
+    hint: t("tooltips:column.fx"),
 });
 
 export const mechColumn = defineColumn({
     key: "mech",
-    label: "Mechanics",
+    label: t("ui:column.mech"),
     synonyms: ["mechanics"],
-    hint: "what the spell does — effects, auras, timing, links and gates",
+    hint: t("tooltips:column.mech"),
 });

@@ -12,6 +12,7 @@
  * Adding an operator is one `defineOperator` call plus an implementation for every type that accepts it. A type may
  * decline, and declining is reported to the user as a static error rather than silently matching nothing.
  */
+import {t} from "../i18n";
 
 /**
  * What an operator combines.
@@ -115,31 +116,31 @@ export function defineOperator(op: Operator): Operator {
 /** Matches the whole value rather than any part of it. Written `=`. */
 export const exact = defineOperator({
     name: "exact", symbol: "=", form: "prefix", level: "value",
-    hint: "exactly this, matching the whole value",
+    hint: t("tooltips:operator.exact"),
 });
 
 /** Ordered comparison, strictly below the operand. Written `<`. */
 export const lt = defineOperator({
     name: "lt", symbol: "<", form: "prefix", level: "value",
-    hint: "less than",
+    hint: t("tooltips:operator.lt"),
 });
 
 /** Ordered comparison, at or below the operand. Written `<=`. */
 export const lte = defineOperator({
     name: "lte", symbol: "<=", form: "prefix", level: "value",
-    hint: "at most",
+    hint: t("tooltips:operator.lte"),
 });
 
 /** Ordered comparison, strictly above the operand. Written `>`. */
 export const gt = defineOperator({
     name: "gt", symbol: ">", form: "prefix", level: "value",
-    hint: "more than",
+    hint: t("tooltips:operator.gt"),
 });
 
 /** Ordered comparison, at or above the operand. Written `>=`. */
 export const gte = defineOperator({
     name: "gte", symbol: ">=", form: "prefix", level: "value",
-    hint: "at least",
+    hint: t("tooltips:operator.gte"),
 });
 
 /**
@@ -150,7 +151,7 @@ export const gte = defineOperator({
  */
 export const range = defineOperator({
     name: "range", symbol: "-", form: "infix", level: "value",
-    hint: "between these two, inclusive",
+    hint: t("tooltips:operator.range"),
 });
 
 /**
@@ -161,13 +162,13 @@ export const range = defineOperator({
  */
 export const contains = defineOperator({
     name: "contains", symbol: null, form: "bare", level: "value",
-    hint: "contains this",
+    hint: t("tooltips:operator.contains"),
 });
 
 /** Pattern match where `*` stands for any run of characters. Written inside a token, as `bee*`. */
 export const glob = defineOperator({
     name: "glob", symbol: "*", form: "embedded", level: "value",
-    hint: "a pattern, where * stands for any run of characters",
+    hint: t("tooltips:operator.glob"),
 });
 
 /**
@@ -179,13 +180,13 @@ export const glob = defineOperator({
  */
 export const regex = defineOperator({
     name: "regex", symbol: "/", form: "circumfix", level: "value",
-    hint: "a regular expression between slashes, matched case-insensitively",
+    hint: t("tooltips:operator.regex"),
 });
 
 /** Tests that the property has a value at all. Written as a lone `*`. */
 export const present = defineOperator({
     name: "present", symbol: "*", form: "whole", level: "value",
-    hint: "has any value at all",
+    hint: t("tooltips:operator.present"),
 });
 
 /**
@@ -197,7 +198,7 @@ export const present = defineOperator({
  */
 export const anyOf = defineOperator({
     name: "anyOf", symbol: "|", form: "infix", level: "value",
-    hint: "any one of these",
+    hint: t("tooltips:operator.anyOf"),
 });
 
 /* ----------------------------------------------------------------- clause operators
@@ -210,19 +211,19 @@ export const anyOf = defineOperator({
 /** Excludes what the clause selects. Written `-` before a clause. */
 export const not = defineOperator({
     name: "not", symbol: "-", form: "prefix", level: "clause", precedence: 3,
-    hint: "not this",
+    hint: t("tooltips:operator.not"),
 });
 
 /** Both clauses must hold. Written as juxtaposition, with no symbol of its own. */
 export const and = defineOperator({
     name: "and", symbol: null, form: "bare", level: "clause", precedence: 2,
-    hint: "both of these",
+    hint: t("tooltips:operator.and"),
 });
 
 /** Either clause may hold. Written `|` between clauses. */
 export const or = defineOperator({
     name: "or", symbol: "|", form: "infix", level: "clause", precedence: 1,
-    hint: "either of these",
+    hint: t("tooltips:operator.or"),
 });
 
 /**

@@ -1,0 +1,302 @@
+{
+  "column": {
+    "spell": "the spell itself — its name, what it says it does, its icon, and how it casts",
+    "id": "the spell's own number, and the expansion that introduced it",
+    "model": "the 3D models a spell draws — missiles, ground effects, attachments",
+    "sound": "the sound files a spell plays, and the kits they come from",
+    "anim": "how the character moves — replacements, kits, loose animations",
+    "fx": "what the spell looks like — beams, glows, tints, morphs, size changes",
+    "mech": "what the spell does — effects, auras, timing, links and gates"
+  },
+  "operator": {
+    "exact": "exactly this, matching the whole value",
+    "lt": "less than",
+    "lte": "at most",
+    "gt": "more than",
+    "gte": "at least",
+    "range": "between these two, inclusive",
+    "contains": "contains this",
+    "glob": "a pattern, where * stands for any run of characters",
+    "regex": "a regular expression between slashes, matched case-insensitively",
+    "present": "has any value at all",
+    "anyOf": "any one of these",
+    "not": "not this",
+    "and": "both of these",
+    "or": "either of these"
+  },
+  "type": {
+    "text": "words, matched anywhere in the text unless anchored with =",
+    "path": "part of a file path; file names run words together, so bee also finds beer",
+    "enum": "one of a fixed list of names; pick one, or type part of it",
+    "ordinal": "a rung on a ladder; name one, or compare with < and >",
+    "id": "the exact id, matched whole",
+    "count": "how many, as a whole number or a comparison such as >4",
+    "seconds": "a duration in seconds, such as 1.5, 500ms, or 2-5",
+    "percent": "a percentage, such as 50 or 7.5, or a range like 10-90",
+    "percentChange": "a change such as +50, a factor such as 2 or x1.5, or 150 as a proportion of the original",
+    "length": "a distance in yards, such as 5 or 10-40",
+    "angle": "an angle in degrees, such as 60 or 27-60",
+    "colour": "a colour as #rrggbb or a name such as red; a bare colour matches nearby shades too",
+    "offset": "a point as x,y,z in yards; name one member such as z=3, or leave a component blank to ignore it",
+    "bitmask": "who it plays on: caster, target, both, area or others",
+    "flag": "either the spell has it or it does not"
+  },
+  "target": "who it plays on — caster, target, both, area, others",
+  "kind": {
+    "name": {
+      "hint": "the spell's name"
+    },
+    "description": {
+      "hint": "what the spell says it does — its in-game description"
+    },
+    "icon": {
+      "hint": "the art on the spell's button — 272,900 spells share 9,846 icons",
+      "props": {
+        "fid": "the icon's file id — the number the ⧉ copies"
+      }
+    },
+    "delivery": {
+      "hint": "how the spell goes off — at once, behind a cast bar, or as a channel",
+      "props": {
+        "cast": "the cast bar's length in seconds, or instant for no bar at all",
+        "channel": "the channel's length in seconds, or unlimited",
+        "breaksmove": "the cast or channel breaks if the caster moves",
+        "unbreakable": "the channel persists — moving and acting do not break it",
+        "unhindered": "the caster can act during the channel (the usual interrupts still break it)"
+      }
+    },
+    "spellId": {
+      "hint": "the spell's own number — what .cast takes"
+    },
+    "expansion": {
+      "hint": "the expansion that introduced it — legion, >wotlk, <=mop"
+    },
+    "missile": {
+      "hint": "a projectile model in flight",
+      "props": {
+        "from": "where the missile launches from",
+        "to": "where the missile lands",
+        "motion": "the trajectory it flies — parabola, forward spin, follow ground"
+      }
+    },
+    "barrage": {
+      "hint": "a volley of models fired at once",
+      "props": {
+        "attach": "where the volley is fired from"
+      }
+    },
+    "ground": {
+      "hint": "a ground or area model laid on the world"
+    },
+    "attached": {
+      "hint": "a model stuck to the caster or the target",
+      "props": {
+        "attach": "where on the body it sits"
+      }
+    },
+    "trail": {
+      "hint": "a weapon trail that follows a swing"
+    },
+    "display": {
+      "hint": "a creature display model attached to the caster or target",
+      "props": {
+        "id": "the CreatureDisplayInfo id"
+      }
+    },
+    "item": {
+      "hint": "an in-game item's model, held by the caster",
+      "props": {
+        "id": "the item's own id"
+      }
+    },
+    "equipped": {
+      "hint": "a weapon the caster already has — main hand, off hand, ranged or ammo",
+      "props": {
+        "slot": "which slot — main hand, off hand, ranged, ammo"
+      }
+    },
+    "mount": {
+      "hint": "the mount the spell puts you on"
+    },
+    "sound": {
+      "hint": "a sound file the spell plays",
+      "props": {
+        "kit": "the sound kit, by name or by id"
+      }
+    },
+    "animKit": {
+      "hint": "an animation played through an AnimKit — the numbered bundles",
+      "props": {
+        "id": "the AnimKit's own id",
+        "boneset": "which bones it drives — head, spine, arms"
+      }
+    },
+    "loose": {
+      "hint": "an animation the spell's visual kit plays directly, in no AnimKit",
+      "props": {
+        "boneset": "which bones it drives — head, spine, arms"
+      }
+    },
+    "replace": {
+      "hint": "an animation the spell swaps for another — Stand becomes StealthStand",
+      "props": {
+        "from": "the animation being replaced",
+        "to": "what it is replaced with"
+      }
+    },
+    "pose": {
+      "hint": "holds the character's pose — the spell suppresses its own animation"
+    },
+    "passenger": {
+      "hint": "what a rider plays entering, sitting in and leaving a seat",
+      "props": {
+        "enter": "the animation played climbing in",
+        "sit": "the animation held in the seat",
+        "exit": "the animation played climbing out"
+      }
+    },
+    "chain": {
+      "hint": "a chain or beam effect held between two points",
+      "props": {
+        "from": "where the beam starts",
+        "to": "where the beam ends",
+        "colour": "the beam's tint"
+      }
+    },
+    "dissolve": {
+      "hint": "a dissolve or materialise effect",
+      "props": {
+        "attach": "where on the body it plays"
+      }
+    },
+    "shadowy": {
+      "hint": "a translucent shadow pass over the model",
+      "props": {
+        "attach": "where on the body it plays"
+      }
+    },
+    "ghost": {
+      "hint": "a ghost material swapped onto the model",
+      "props": {
+        "attach": "where on the body it plays"
+      }
+    },
+    "glow": {
+      "hint": "an edge glow or rim light around the model",
+      "props": {
+        "colour": "the glow colour"
+      }
+    },
+    "tint": {
+      "hint": "a colour wash over the model",
+      "props": {
+        "colour": "the colour applied"
+      }
+    },
+    "transparency": {
+      "hint": "how see-through the model becomes"
+    },
+    "desaturate": {
+      "hint": "how much colour is drained from the model"
+    },
+    "freeze": {
+      "hint": "freezes or petrifies the model in place"
+    },
+    "camo": {
+      "hint": "a camouflage or cloaking effect"
+    },
+    "morph": {
+      "hint": "a morph or transform aura — the caster becomes something else",
+      "props": {
+        "display": "the creature display, by name or by id"
+      }
+    },
+    "shapeshift": {
+      "hint": "a shapeshift form the caster takes"
+    },
+    "scale": {
+      "hint": "a size change the aura applies",
+      "props": {
+        "amount": "how much bigger or smaller: +50, x1.5 or 2 as a factor, 150 as a proportion"
+      }
+    },
+    "summon": {
+      "hint": "a creature the spell summons",
+      "props": {
+        "creature": "the summoned creature, by name or by id"
+      }
+    },
+    "gameObject": {
+      "hint": "a gameobject the spell places — campfire, portal, banner, chest",
+      "props": {
+        "object": "the gameobject, by name or by id"
+      }
+    },
+    "screen": {
+      "hint": "a full-screen tint or overlay while the aura holds"
+    },
+    "tracking": {
+      "hint": "caster stays facing the target for the whole channel"
+    },
+    "effect": {
+      "hint": "one of the spell's effects — what it actually does",
+      "props": {
+        "name": "the effect's name — SCHOOL_DAMAGE, JUMP_DEST"
+      }
+    },
+    "aura": {
+      "hint": "an aura the spell applies — what it does while it holds",
+      "props": {
+        "name": "the aura's name — MOD_SCALE, MOD_INVISIBILITY"
+      }
+    },
+    "triggers": {
+      "hint": "another spell this one casts, ticks, procs or removes",
+      "props": {
+        "spell": "the spell it triggers, by name or by id"
+      }
+    },
+    "origin": {
+      "hint": "a spell that casts, ticks, procs or removes this one",
+      "props": {
+        "spell": "the spell that triggers it, by name or by id"
+      }
+    },
+    "location": {
+      "hint": "where the spell refuses to cast — Epsilon enforces this gate on .cast"
+    },
+    "invis": {
+      "hint": "the invisibility channel the aura hides in",
+      "props": {
+        "channel": "the channel's number"
+      }
+    },
+    "detect": {
+      "hint": "sees an invisibility channel",
+      "props": {
+        "channel": "the channel it can see",
+        "count": "how many spells hide in that channel"
+      }
+    },
+    "seats": {
+      "hint": "the seats of the vehicle the caster becomes",
+      "props": {
+        "count": "how many seats the vehicle has",
+        "attach": "where the seat sits on the vehicle"
+      }
+    },
+    "speed": {
+      "hint": "a movement-speed change — run, mounted, swim, flight or all at once",
+      "props": {
+        "amount": "how much faster or slower: +70, x1.7 or 2 as a factor, 170 as a proportion",
+        "mode": "which movement: run, walk, fly or swim"
+      }
+    },
+    "keybind": {
+      "hint": "a key that casts a spell while the aura holds"
+    },
+    "debuff": {
+      "hint": "aura that shows in the red debuff frame"
+    }
+  }
+}

@@ -32,6 +32,9 @@
  * fixpoint at once. And {@link equivalent} lives here rather than beside the formatter because equivalence reads
  * through simplification: two queries ask the same question exactly when their simplified canonical forms agree.
  */
+// The instance rather than the bare `t`, because several closures here take a parameter named `t` and would shadow
+// the import.
+import {i18n} from "../i18n";
 import type {Column} from "./columns";
 import {clauseKey, formatQuery, queryKey, termKey, unbracedTerm} from "./format";
 import type {Kind, Prop} from "./kinds";
@@ -736,7 +739,7 @@ function mapLits(tree: Tree, rewrite: (lit: Lit) => Lit | null): Tree | null {
 }
 
 /** What a rule tells the reader about a query whose every alternative is dead. */
-const ALL_DEAD = "every alternative of this query contradicts itself; it is returned as written";
+const ALL_DEAD = i18n.t("diagnostics:simplify.allDead");
 
 /** What a scope rewrite may say about one clause's runs. */
 type ScopeRewrite =
@@ -1006,8 +1009,7 @@ function everything(tree: Tree, ctx: Ctx): Tree | null {
     for (const p of singles.filter((lit) => !lit.not)) {
         for (const n of singles.filter((lit) => lit.not)) {
             if (impliesAsk(n.ask, p.ask)) {
-                ctx.note("this query matches every spell — one alternative selects whatever the other excludes — "
-                    + "so its simplest form is the empty query");
+                ctx.note(i18n.t("diagnostics:simplify.matchesEverything"));
                 return [];
             }
         }
@@ -1455,20 +1457,19 @@ function countEdge(lit: Lit): Lit | null {
 export const RULES: readonly Rule[] = Object.freeze([
     {
         id: "R14", name: "empty-scope", tier: "simplify",
-        law: "an empty conjunction is true: a scope with nothing in it asks only for existence",
+        law: i18n.t("rules:law.R14"),
         examples: [{from: "model:{}", to: "model:*"}],
         apply: emptyScope,
     },
     {
         id: "R10", name: "flat-range", tier: "simplify",
-        law: "a range to itself is exact; bounds print low-first",
+        law: i18n.t("rules:law.R10"),
         examples: [{from: "cast:2s-2s", to: "cast=2s"}, {from: "cast:5s-2s", to: "cast:2s-5s"}],
         apply: flatRange,
     },
     {
         id: "R17", name: "count-existence", tier: "simplify",
-        law: "counts speak existence at the edges: a count collapsing to zero is \"no such row\", one covering "
-            + "everything from one is \"some such row\" — rewritten, not inferred",
+        law: i18n.t("rules:law.R17"),
         examples: [
             {from: "-model:*", to: "model=0"},
             {from: "model:{count:<1}", to: "model=0"},
@@ -1481,8 +1482,7 @@ export const RULES: readonly Rule[] = Object.freeze([
     },
     {
         id: "R11", name: "merge-bounds", tier: "simplify",
-        law: "bounds on one subject fuse to a range and an empty meet is a contradiction — inside one row always, "
-            + "and across clauses on a kind that declares a spell holds at most one of its rows",
+        law: i18n.t("rules:law.R11"),
         examples: [
             {from: "spell:{cast:>=2s cast:<=5s}", to: "cast:2s-5s"},
             {from: "cast>=2s cast<=5s", to: "cast:2s-5s"},
@@ -1492,38 +1492,37 @@ export const RULES: readonly Rule[] = Object.freeze([
     },
     {
         id: "R16", name: "kind-through-column", tier: "simplify",
-        law: "a bare kind-existence ask spells through its column: readability overrules raw length",
+        law: i18n.t("rules:law.R16"),
         examples: [{from: "model:{missile}", to: "model:missile"}, {from: "missile:*", to: "model:missile"}],
         apply: kindThroughColumn,
     },
     {
         id: "R12", name: "unwrap-scope", tier: "simplify",
-        law: "a scope of one positive term is that term",
+        law: i18n.t("rules:law.R12"),
         examples: [{from: "model:{fire}", to: "model:fire"}],
         apply: unwrapScope,
     },
     {
         id: "R13", name: "shortest-door", tier: "simplify",
-        law: "the same ask through its shortest head: a property's own door, where the short spelling re-reads as "
-            + "the same structure",
+        law: i18n.t("rules:law.R13"),
         examples: [{from: "fx:{scale:+50%}", to: "scale=+50%"}, {from: "spell:{cast:2s}", to: "cast=2s"}],
         apply: shortestDoor,
     },
     {
         id: "R1", name: "duplicate-clause", tier: "simplify",
-        law: "a conjunction never asks one question twice, at either level",
+        law: i18n.t("rules:law.R1"),
         examples: [{from: "model:fire model:fire", to: "model:fire"}],
         apply: duplicateClause,
     },
     {
         id: "R8", name: "duplicate-alternative", tier: "simplify",
-        law: "a group of alternatives never offers one alternative twice",
+        law: i18n.t("rules:law.R8"),
         examples: [{from: "model:(fire|fire)", to: "model:fire"}],
         apply: duplicateAlternative,
     },
     {
         id: "R3", name: "implied-clause", tier: "simplify",
-        law: "a conjunction keeps the stronger ask; the dual keeps the stronger negation",
+        law: i18n.t("rules:law.R3"),
         examples: [
             {from: "model:fire model:fireball", to: "model:fireball"},
             {from: "-model:fire -model:fireball", to: "-model:fire"},
@@ -1534,14 +1533,13 @@ export const RULES: readonly Rule[] = Object.freeze([
     },
     {
         id: "R9", name: "implied-alternative", tier: "simplify",
-        law: "alternation keeps the weaker alternative; overlapping intervals fuse when one leaf spells the union",
+        law: i18n.t("rules:law.R9"),
         examples: [{from: "model:(fire|fireball)", to: "model:fire"}, {from: "cast:(<2s|<5s)", to: "cast<5s"}],
         apply: impliedAlternative,
     },
     {
         id: "R5", name: "contradiction", tier: "simplify",
-        law: "an ask conjoined with a negation it implies selects nothing; a dead alternative is dropped, at both "
-            + "levels",
+        law: i18n.t("rules:law.R5"),
         examples: [
             {from: "model:fireball -model:fire | name:frost", to: "name:frost"},
             {from: "model:{fire -fire | missile}", to: "model:missile"},
@@ -1550,19 +1548,19 @@ export const RULES: readonly Rule[] = Object.freeze([
     },
     {
         id: "R2", name: "duplicate-group", tier: "simplify",
-        law: "an alternation never offers one alternative twice",
+        law: i18n.t("rules:law.R2"),
         examples: [{from: "model:fire | model:fire", to: "model:fire"}],
         apply: duplicateGroup,
     },
     {
         id: "R4", name: "implied-group", tier: "simplify",
-        law: "an alternation absorbs an alternative that restates another with extra conditions",
+        law: i18n.t("rules:law.R4"),
         examples: [{from: "name:frost | name:frost model:missile", to: "name:frost"}],
         apply: impliedGroup,
     },
     {
         id: "R7", name: "fold-alternation", tier: "simplify",
-        law: "alternatives identical but for one positive same-shape clause fold to one clause of alternatives",
+        law: i18n.t("rules:law.R7"),
         examples: [
             {from: "model:fire | model:frost", to: "model:(fire|frost)"},
             {from: "model:fire name:bolt | model:frost name:bolt", to: "model:(fire|frost) name:bolt"},
@@ -1571,24 +1569,23 @@ export const RULES: readonly Rule[] = Object.freeze([
     },
     {
         id: "R6", name: "everything", tier: "simplify",
-        law: "an ask alternated with a negation implied by it constrains nothing: the whole query is the empty query",
+        law: i18n.t("rules:law.R6"),
         examples: [{from: "model:fire | -model:fire", to: ""}],
         apply: everything,
     },
     {
         id: "R15", name: "count-collapse", tier: "format",
-        law: "the column-form count desugar is the canonical spelling of a lone count term",
+        law: i18n.t("rules:law.R15"),
         examples: [{from: "model:{count:<4}", to: "model<4"}, {from: "model:{count:=3}", to: "model=3"}],
     },
     {
         id: "R16f", name: "kind-through-column (spelling)", tier: "format",
-        law: "the kind-exists ask spells through its column, closing the re-parse gap of a kind with no top-level "
-            + "word",
+        law: i18n.t("rules:law.R16f"),
         examples: [{from: "missile:*", to: "model:missile"}],
     },
     {
         id: "R18", name: "operator-replaces-colon", tier: "format",
-        law: "a prefix operator binds on its own: the canonical spelling of every operator bind drops the colon",
+        law: i18n.t("rules:law.R18"),
         examples: [
             {from: "cast:>2s", to: "cast>2s"},
             {from: "name:=fireball", to: "name=fireball"},
@@ -1601,67 +1598,58 @@ export const RULES: readonly Rule[] = Object.freeze([
 export const KEPT: readonly Boundary[] = Object.freeze([
     {
         id: "B1", name: "rows-stay-apart",
-        keeps: "model:fire model:frost never becomes model:{fire frost}",
-        why: "a scope binds one row; two clauses are two existentials — a spell with a fire model and a separate "
-            + "frost model satisfies the pair and not the scope",
+        keeps: i18n.t("rules:boundary.B1.keeps"),
+        why: i18n.t("rules:boundary.B1.why"),
     },
     {
         id: "B2", name: "explicit-only",
-        keeps: "no unprompted rewriting anywhere",
-        why: "simplification is a button the user presses; no surface rewrites a query on its own",
+        keeps: i18n.t("rules:boundary.B2.keeps"),
+        why: i18n.t("rules:boundary.B2.why"),
     },
     {
         id: "B3", name: "notation-upheld",
-        keeps: "x1.5, +50%, 150% — the value's spelling",
-        why: "simplify touches structure only; the written tier survives it",
+        keeps: i18n.t("rules:boundary.B3.keeps"),
+        why: i18n.t("rules:boundary.B3.why"),
     },
     {
         id: "B4", name: "no-demorgan",
-        keeps: "-model:fire | -model:frost stays two groups",
-        why: "a disjunction of negations has no one-clause spelling; alternation folding folds positives only",
+        keeps: i18n.t("rules:boundary.B4.keeps"),
+        why: i18n.t("rules:boundary.B4.why"),
     },
     {
         id: "B5", name: "patterns-opaque",
-        keeps: "regex and glob bodies",
-        why: "identical-only matching; no pattern algebra — except that a glob's literal runs soundly feed "
-            + "substring reasoning",
+        keeps: i18n.t("rules:boundary.B5.keeps"),
+        why: i18n.t("rules:boundary.B5.why"),
     },
     {
         id: "B6", name: "count-not-existence",
-        keeps: "a counted scope never implies existence",
-        why: "zero is a count a spell without rows satisfies; counts sit out of subsumption except count against "
-            + "count over one identical run — the edges where a count is an existence fact are rewrites, not "
-            + "inferences",
+        keeps: i18n.t("rules:boundary.B6.keeps"),
+        why: i18n.t("rules:boundary.B6.why"),
     },
     {
         id: "B7", name: "existentials-stay-apart",
-        keeps: "scale:>=+10% scale:<=+50% stays two clauses at the top level",
-        why: "two clauses are two existentials — a spell with one small and one large scale row satisfies the pair "
-            + "and no single range — so bounds fuse across clauses only on a kind that declares a spell holds at "
-            + "most one of its rows, the declaration that makes the two clauses one row",
+        keeps: i18n.t("rules:boundary.B7.keeps"),
+        why: i18n.t("rules:boundary.B7.why"),
     },
     {
         id: "B8", name: "unsat-unspelled",
-        keeps: "a query whose every alternative is contradictory, as written, with a note",
-        why: "the language has no \"matches nothing\" literal, and the empty query means everything",
+        keeps: i18n.t("rules:boundary.B8.keeps"),
+        why: i18n.t("rules:boundary.B8.why"),
     },
     {
         id: "B9", name: "every-dataset",
-        keeps: "no corpus reasoning",
-        why: "what one pack happens to contain is a fact about that pack, never about the query",
+        keeps: i18n.t("rules:boundary.B9.keeps"),
+        why: i18n.t("rules:boundary.B9.why"),
     },
     {
         id: "B10", name: "no-truth-tables",
-        keeps: "the query's clause structure, out of reach of prime-implicant minimisers",
-        why: "minimisers work over independent variables; these atoms carry implication structure — substrings, "
-            + "intervals, bit roles — a truth table cannot see, and shallow alternation over a handful of clauses "
-            + "gains nothing from them",
+        keeps: i18n.t("rules:boundary.B10.keeps"),
+        why: i18n.t("rules:boundary.B10.why"),
     },
     {
         id: "B11", name: "conservative",
-        keeps: "anything implication cannot certify",
-        why: "undecided means untouched: flag-word properties, mixed notations, cross-shape asks, ordinal rungs "
-            + "across different operands",
+        keeps: i18n.t("rules:boundary.B11.keeps"),
+        why: i18n.t("rules:boundary.B11.why"),
     },
 ]);
 

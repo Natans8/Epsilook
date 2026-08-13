@@ -31,6 +31,7 @@
     "varcon": "^1.0.1"
   },
   "dependencies": {
-    "color-name": "^2.1.1"
+    "color-name": "^2.1.1",
+    "i18next": "^26.3.6"
   }
 }

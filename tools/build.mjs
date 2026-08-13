@@ -57,8 +57,12 @@ const options = {
  *                 tools/check.py all cover it instead.
  *                 DELETE THIS ENTRY when PHASE 5 wires the engine into a
  *                 surface; from then on the guard should apply normally.
+ *
+ *   src/i18n/     The string registry. Its only importers today live in
+ *                 src/search/, so it is unreached exactly as long as that tree
+ *                 is. DELETE THIS ENTRY together with the one above.
  */
-const UNREACHED = ["src/search/"];
+const UNREACHED = ["src/search/", "src/i18n/"];
 
 /** Every non-declaration .ts under src/, relative to the repo root. */
 function sourceFiles(dir = resolve(root, "src")) {

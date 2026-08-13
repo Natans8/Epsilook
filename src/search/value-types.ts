@@ -16,6 +16,7 @@
  *
  * Adding a type is one `defineType` call. Nothing else in the system changes.
  */
+import {t} from "../i18n";
 import {COLOUR_NAMES} from "./colour-names";
 import type {Operator} from "./operators";
 import {anyOf, contains, exact, glob, OPERATORS, ORDERING, present, regex} from "./operators";
@@ -185,7 +186,7 @@ export const text = defineType<string>({
     parse: (s) => s,
     format: (s) => s,
     accepts: [exact, contains, glob, present, anyOf, regex],
-    hint: "words, matched anywhere in the text unless anchored with =",
+    hint: t("tooltips:type.text"),
     ui: "text",
 });
 
@@ -204,7 +205,7 @@ export const path = defineType<string>({
     format: (s) => s,
     casing: "lower",
     accepts: [exact, contains, glob, present, anyOf, regex],
-    hint: "part of a file path; file names run words together, so bee also finds beer",
+    hint: t("tooltips:type.path"),
     ui: "text",
 });
 
@@ -223,7 +224,7 @@ export const enumeration = defineType<string>({
     parse: (s) => s,
     format: (s) => s,
     accepts: [exact, contains, glob, present, anyOf],
-    hint: "one of a fixed list of names; pick one, or type part of it",
+    hint: t("tooltips:type.enum"),
     ui: "picker",
 });
 
@@ -267,7 +268,7 @@ export const ordinal = defineType<string>({
     },
     format: (s) => s,
     accepts: [exact, contains, glob, present, anyOf, ...ORDERING],
-    hint: "a rung on a ladder; name one, or compare with < and >",
+    hint: t("tooltips:type.ordinal"),
     ui: "picker",
 });
 
@@ -297,7 +298,7 @@ export const id = defineType<number>({
     parse: wholeNumber,
     format: (n) => String(n),
     accepts: [exact, present, anyOf],
-    hint: "the exact id, matched whole",
+    hint: t("tooltips:type.id"),
     quantity: true,
     ui: "number",
 });
@@ -309,7 +310,7 @@ export const count = defineType<number>({
     parse: wholeNumber,
     format: (n) => String(n),
     accepts: [exact, present, anyOf, ...ORDERING],
-    hint: "how many, as a whole number or a comparison such as >4",
+    hint: t("tooltips:type.count"),
     quantity: true,
     ui: "number",
 });
@@ -353,7 +354,7 @@ export const seconds = numeric({
         {unit: "ms", factor: 1, bare: "never"},
         {unit: "m", factor: 60_000, bare: "never"},
     ],
-    hint: "a duration in seconds, such as 1.5, 500ms, or 2-5",
+    hint: t("tooltips:type.seconds"),
 });
 
 /**
@@ -367,7 +368,7 @@ export const percent = numeric({
     name: "percent",
     storage: "float",
     display: {unit: "%", factor: 1, sign: "refused"},
-    hint: "a percentage, such as 50 or 7.5, or a range like 10-90",
+    hint: t("tooltips:type.percent"),
 });
 
 /**
@@ -399,7 +400,7 @@ export const percentChange = numeric({
         },
         {unit: "%", factor: 1, offset: -100, sign: "refused", bare: {above: 10}},
     ],
-    hint: "a change such as +50, a factor such as 2 or x1.5, or 150 as a proportion of the original",
+    hint: t("tooltips:type.percentChange"),
 });
 
 /** A distance in yards, the unit the game and its players use. */
@@ -407,7 +408,7 @@ export const length = numeric({
     name: "length",
     storage: "float",
     display: {unit: "yd", factor: 1},
-    hint: "a distance in yards, such as 5 or 10-40",
+    hint: t("tooltips:type.length"),
 });
 
 /** An angle in degrees, edited with a dial rather than a slider because it wraps. */
@@ -415,7 +416,7 @@ export const angle = numeric({
     name: "angle",
     storage: "float",
     display: {unit: "deg", factor: 1, aliases: ["°"]},
-    hint: "an angle in degrees, such as 60 or 27-60",
+    hint: t("tooltips:type.angle"),
     ui: "dial",
 });
 
@@ -441,7 +442,7 @@ export const colour = defineType<number>({
     },
     format: (packed) => `#${packed.toString(16).padStart(6, "0")}`,
     accepts: [exact, contains, present, anyOf],
-    hint: "a colour as #rrggbb or a name such as red; a bare colour matches nearby shades too",
+    hint: t("tooltips:type.colour"),
     ui: "colour",
 });
 
@@ -537,7 +538,7 @@ export function composite(spec: {
 export const offset = composite({
     name: "offset",
     members: {x: length, y: length, z: length},
-    hint: "a point as x,y,z in yards; name one member such as z=3, or leave a component blank to ignore it",
+    hint: t("tooltips:type.offset"),
 });
 
 /**
@@ -563,7 +564,7 @@ export const bitmask = defineType<string>({
     },
     format: (s) => s,
     accepts: [exact, present, anyOf],
-    hint: "who it plays on: caster, target, both, area or others",
+    hint: t("tooltips:type.bitmask"),
     ui: "glyphs",
 });
 
@@ -577,6 +578,6 @@ export const flag = defineType<never>({
     name: "flag",
     storage: null,
     accepts: [present],
-    hint: "either the spell has it or it does not",
+    hint: t("tooltips:type.flag"),
     ui: "toggle",
 });

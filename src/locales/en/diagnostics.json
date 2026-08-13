@@ -1,0 +1,64 @@
+{
+  "clause": {
+    "negatesNothing": "\"{{symbol}}\" negates nothing",
+    "empty": "{{what}} {{why}}",
+    "emptySubject": "the value",
+    "emptyIgnored": "\"{{word}}\" {{why}} and was ignored"
+  },
+  "why": {
+    "noValue": "names no value",
+    "nothingToCompare": "compares against nothing",
+    "emptyGroup": "is an empty group, which matches nothing"
+  },
+  "bind": {
+    "noValue": "{{word}}: names no value",
+    "noValueIgnored": "{{word}}: names no value and was ignored",
+    "valueNotScope": "{{word}}: takes a value, not a scope",
+    "countsRows": "{{head}}:{{value}} counts {{label}} rows"
+  },
+  "axis": {
+    "noOrdering": "the {{word}} axis has no ordering",
+    "cannotAnswer": "the {{word}} axis cannot answer {{operator}}",
+    "takes": "{{word}} takes {{hint}}",
+    "takesQuoted": "{{word}} takes {{hint}} — a quoted value is text",
+    "noPatterns": "the {{word}} axis has no patterns",
+    "noRegex": "the {{word}} axis cannot run one — regular expressions run on text and file paths only"
+  },
+  "pattern": {
+    "invalid": "not a valid pattern: {{problem}}",
+    "pathWeak": "a pattern on a file path rarely helps — path names run words together",
+    "unclosed": "the pattern was not closed — it ends at whitespace, so a space is written \\s"
+  },
+  "value": {
+    "differentQuestions": "these alternatives ask different questions",
+    "glued": "two values are glued together — a space is missing",
+    "groupUnclosed": "the group was not closed",
+    "exactPattern": "exact and a pattern cannot combine",
+    "anchorPattern": "{{symbol}} and a pattern cannot combine",
+    "trailingRange": "{{written}} reads as at least {{bound}} — the same as {{wildcard}} for the upper bound"
+  },
+  "scope": {
+    "innerBindScope": "an axis inside a scope takes a value, not a scope",
+    "nested": "a scope cannot hold another scope",
+    "emptyMeansAny": "{{word}}:{} means any {{word}} row — the same as {{word}}:*",
+    "unclosedBeforeNext": "the scope was not closed — closed it before the next clause",
+    "unclosedAtEnd": "the scope was not closed — closed it at the end",
+    "needsPositive": "a scope needs a positive term — negation only refines",
+    "contentNegation": "both sides are content words, which rarely share one row — negate a kind word or a property instead",
+    "qualifierAlone": "a {{name}} only says who a row plays on — add what the row is",
+    "spaceAfterClose": "missing space after {{symbol}}",
+    "foreignProperty": "{{kind}} has no \"{{word}}\" property",
+    "foreignAxis": "a {{word}} axis cannot read a {{column}} row"
+  },
+  "fix": {
+    "closeScope": "close the scope",
+    "ownClause": "make it its own clause",
+    "insertSpace": "insert the space",
+    "withoutSymbol": "search for it without {{symbol}}",
+    "dropQuotes": "drop the quotes"
+  },
+  "simplify": {
+    "allDead": "every alternative of this query contradicts itself; it is returned as written",
+    "matchesEverything": "this query matches every spell — one alternative selects whatever the other excludes — so its simplest form is the empty query"
+  }
+}

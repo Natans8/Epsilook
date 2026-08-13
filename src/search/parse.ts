@@ -22,6 +22,9 @@
  * evaluated by layers that had no part in parsing it — the query-object convention of Django's Q objects and
  * Lucene's Query classes.
  */
+// The instance rather than the bare `t`, because several value-reading closures here take a parameter named `t`
+// and would shadow the import.
+import {i18n} from "../i18n";
 import type {Column} from "./columns";
 import {GRAMMAR, PREFIX_OPERATORS} from "./grammar";
 import type {Kind, ParsedValue, Prop} from "./kinds";
@@ -344,7 +347,7 @@ function patternProblem(pattern: string): string | null {
 function badPattern(pattern: string): Interp | null {
     const problem = patternProblem(pattern);
     if (problem === null) return null;
-    return {r: "fail", rescuable: true, message: `not a valid pattern: ${problem}`};
+    return {r: "fail", rescuable: true, message: i18n.t("diagnostics:pattern.invalid", {problem})};
 }
 
 /** Whether any of the types is the path type, whose glued names make patterns weak — the warning turns on this. */
@@ -376,9 +379,6 @@ function scanPhrase(text: string, at: number, limit: number): Seg {
     return {form: "phrase", text: out, start: at, end: i, closed};
 }
 
-/** The message a regex gets on an axis with nothing textual to run it over. */
-const NO_REGEX = "regular expressions run on text and file paths only";
-
 /** The content interpretation of a value expression, the shape plain search and column content share. */
 const content = (value: ValueExpr): Interp => ({r: "content", value});
 
@@ -387,28 +387,28 @@ function declined(word: string, op: Operator): Interp {
     return {
         r: "fail",
         message: ORDERING_NAMES.has(op.name)
-            ? `the ${word} axis has no ordering`
-            : `the ${word} axis cannot answer ${op.symbol ?? op.name}`,
+            ? i18n.t("diagnostics:axis.noOrdering", {word})
+            : i18n.t("diagnostics:axis.cannotAnswer", {word, operator: op.symbol ?? op.name}),
         fixDrop: op.symbol ?? undefined,
     };
 }
 
 /** The refusal for an operand the axis cannot read; rescuable, because the next keystroke may finish a word. */
 function illTyped(word: string, prop: Prop): Interp {
-    return {r: "fail", rescuable: true, message: `${word} takes ${hintOf(prop)}`};
+    return {r: "fail", rescuable: true, message: i18n.t("diagnostics:axis.takes", {word, hint: hintOf(prop)})};
 }
 
 /** The refusal for a quoted quantity, with the drop-the-quotes fix. */
 function quotedQuantity(word: string, prop: Prop): Interp {
     return {
         r: "fail", rescuable: true, fixQuotes: true,
-        message: `${word} takes ${hintOf(prop)} — a quoted value is text`,
+        message: i18n.t("diagnostics:axis.takesQuoted", {word, hint: hintOf(prop)}),
     };
 }
 
 /** A pattern on a file path is honest but weak, and the warning says why — once per clause. */
 function warnPathGlob(pend: Pending[]): void {
-    const message = "a pattern on a file path rarely helps — path names run words together";
+    const message = i18n.t("diagnostics:pattern.pathWeak");
     if (!pend.some((p) => p.message === message)) pend.push({severity: "warning", message});
 }
 
@@ -422,7 +422,7 @@ function combineAlternatives(parts: readonly Interp[]): Interp {
     const failed = parts.find((p) => p.r === "fail");
     if (failed !== undefined) return failed;
     const real = parts.filter((p) => p.r !== "empty");
-    if (real.length === 0) return {r: "empty", why: "names no value"};
+    if (real.length === 0) return {r: "empty", why: i18n.t("diagnostics:why.noValue")};
     if (real.length === 1) return real[0];
 
     if (real.every((p) => p.r === "content")) {
@@ -440,7 +440,7 @@ function combineAlternatives(parts: readonly Interp[]): Interp {
     if (real.every((p) => p.r === "count")) {
         return {r: "count", value: anyOfExpr(real.map((p) => (p as { value: ValueExpr }).value))};
     }
-    return {r: "fail", message: "these alternatives ask different questions"};
+    return {r: "fail", message: i18n.t("diagnostics:value.differentQuestions")};
 }
 
 /* ------------------------------------------------------------------ the parser */
@@ -519,7 +519,10 @@ class Parser {
             const next = i + 1 < limit ? this.text[i + 1] : "";
             if (next === "" || isWs(next) || next === GRAMMAR.or) {
                 const pend: Pending[] = this.mode === "final"
-                    ? [{severity: "error", message: `"${GRAMMAR.negate}" negates nothing`}]
+                    ? [{
+                        severity: "error",
+                        message: i18n.t("diagnostics:clause.negatesNothing", {symbol: GRAMMAR.negate})
+                    }]
                     : [];
                 this.push({start, end: i + 1}, true, this.mode === "final" ? "invalid" : "incomplete", null, pend);
                 return i + 1;
@@ -679,7 +682,7 @@ class Parser {
         const ask = this.incompleteAsk(head);
         if (this.mode === "final") {
             this.push({start, end: vpos}, not, "invalid", ask,
-                [{severity: "error", message: `${word}: names no value`}]);
+                [{severity: "error", message: i18n.t("diagnostics:bind.noValue", {word})}]);
         } else {
             this.push({start, end: vpos}, not, "incomplete", ask, []);
         }
@@ -704,7 +707,10 @@ class Parser {
         const label = head.role === "column" ? head.column.label.toLowerCase()
             : head.role === "kind" ? wordOf(head.kind) : "";
         const raw = this.text.slice(segs[0].start, segs[segs.length - 1].end);
-        pend.push({severity: "note", message: `${this.headWord(head)}:${raw} counts ${label} rows`});
+        pend.push({
+            severity: "note",
+            message: i18n.t("diagnostics:bind.countsRows", {head: this.headWord(head), value: raw, label}),
+        });
     }
 
     /* -------------------------------------------------------------- scopes */
@@ -715,7 +721,7 @@ class Parser {
     }, brace: number, limit: number): number {
         const end = this.skipBraces(brace, limit);
         this.push({start, end}, not, "invalid", this.incompleteAsk(head),
-            [{severity: "error", message: `${this.headWord(head)}: takes a value, not a scope`}]);
+            [{severity: "error", message: i18n.t("diagnostics:bind.valueNotScope", {word: this.headWord(head)})}]);
         return end;
     }
 
@@ -761,8 +767,8 @@ class Parser {
             // no suffix can give it one. Invalid immediately, even while typing.
             const end = this.skipBraces(brace, limit);
             const message = this.text[innerBrace - 1] === GRAMMAR.bind
-                ? "an axis inside a scope takes a value, not a scope"
-                : "a scope cannot hold another scope";
+                ? i18n.t("diagnostics:scope.innerBindScope")
+                : i18n.t("diagnostics:scope.nested");
             this.push({start, end}, not, "invalid", this.incompleteAsk(head),
                 [{severity: "error", message}]);
             return end;
@@ -849,7 +855,7 @@ class Parser {
         // scope is really written as empty.
         if (emptyBody && (closed || this.mode === "final")) {
             const word = this.headWord(head);
-            pend.push({severity: "note", message: `${word}:{} means any ${word} row — the same as ${word}:*`});
+            pend.push({severity: "note", message: i18n.t("diagnostics:scope.emptyMeansAny", {word})});
         }
         this.scopeWarnings(terms, pend);
 
@@ -860,9 +866,9 @@ class Parser {
             pend.push({
                 severity: "warning",
                 message: resumeAt >= 0
-                    ? "the scope was not closed — closed it before the next clause"
-                    : "the scope was not closed — closed it at the end",
-                fix: {label: "close the scope", query: repaired},
+                    ? i18n.t("diagnostics:scope.unclosedBeforeNext")
+                    : i18n.t("diagnostics:scope.unclosedAtEnd"),
+                fix: {label: i18n.t("diagnostics:fix.closeScope"), query: repaired},
             });
         }
 
@@ -882,7 +888,7 @@ class Parser {
         const negate = not ? GRAMMAR.negate : "";
         const bind = this.text.slice(bindSpan.start, bindSpan.end);
         const replacement = `${negate}${this.headWord(head)}:${GRAMMAR.wildcard} ${bind}`;
-        return {label: "make it its own clause", query: this.splice(start, after, replacement)};
+        return {label: i18n.t("diagnostics:fix.ownClause"), query: this.splice(start, after, replacement)};
     }
 
     /**
@@ -901,7 +907,7 @@ class Parser {
                 continue;
             }
             if (this.mode === "final") {
-                pend.push({severity: "error", message: "a scope needs a positive term — negation only refines"});
+                pend.push({severity: "error", message: i18n.t("diagnostics:scope.needsPositive")});
                 return null;
             }
             out.push(run.map((t): ScopeTerm => ({span: t.span, not: t.not, state: "incomplete", ask: t.ask})));
@@ -918,11 +924,7 @@ class Parser {
 
             const negatedContent = ok.find((t) => t.not && t.ask?.on === "content");
             if (negatedContent !== undefined && positives.every((t) => t.ask?.on === "content")) {
-                pend.push({
-                    severity: "warning",
-                    message: "both sides are content words, which rarely share one row — "
-                        + "negate a kind word or a property instead",
-                });
+                pend.push({severity: "warning", message: i18n.t("diagnostics:scope.contentNegation")});
             }
 
             const allQualifier = positives.every((t) => t.ask?.on === "props"
@@ -930,10 +932,7 @@ class Parser {
             if (allQualifier) {
                 const first = positives[0].ask;
                 const name = first !== null && first.on === "props" ? first.props[0].prop : "";
-                pend.push({
-                    severity: "warning",
-                    message: `a ${name} only says who a row plays on — add what the row is`,
-                });
+                pend.push({severity: "warning", message: i18n.t("diagnostics:scope.qualifierAlone", {name})});
             }
         }
     }
@@ -946,8 +945,8 @@ class Parser {
             this.diagnostics.push({
                 severity: "warning",
                 clause: this.clauses.length - 1,
-                message: `missing space after ${GRAMMAR.scope.close}`,
-                fix: {label: "insert the space", query: this.splice(after, after, " ")},
+                message: i18n.t("diagnostics:scope.spaceAfterClose", {symbol: GRAMMAR.scope.close}),
+                fix: {label: i18n.t("diagnostics:fix.insertSpace"), query: this.splice(after, after, " ")},
             });
         }
     }
@@ -984,7 +983,7 @@ class Parser {
                 if (segs.length === 0) {
                     // An inner bind with no value: nothing to constrain the row with yet.
                     if (this.mode === "final") {
-                        pend.push({severity: "warning", message: `${word}: names no value and was ignored`});
+                        pend.push({severity: "warning", message: i18n.t("diagnostics:bind.noValueIgnored", {word})});
                     }
                     run.push({span: {start: termStart, end: vpos}, not: termNot, state: "incomplete", ask: null});
                     return {kind: "done", next: vpos};
@@ -1030,7 +1029,10 @@ class Parser {
         if (interp.r === "empty") {
             // In final text nothing more is coming, so the unsayable term is an error, not a quiet drop.
             if (this.mode === "final") {
-                pend.push({severity: "error", message: `"${word}" ${interp.why} and was ignored`});
+                pend.push({
+                    severity: "error",
+                    message: i18n.t("diagnostics:clause.emptyIgnored", {word, why: interp.why})
+                });
             }
             run.push({span, not, state: "incomplete", ask: null});
             return;
@@ -1064,7 +1066,7 @@ class Parser {
             }
             if (word === GRAMMAR.countWord) return {kind: "ctx", ctx: this.countCtx(pend)};
             const kindWord = wordOf(kind);
-            return {kind: "foreign", message: `${kindWord} has no "${word}" property`};
+            return {kind: "foreign", message: i18n.t("diagnostics:scope.foreignProperty", {kind: kindWord, word})};
         }
 
         const column = head.column;
@@ -1082,7 +1084,7 @@ class Parser {
         if (refs.length > 0) return {kind: "ctx", ctx: this.propCtx(refs, word, pend)};
 
         if (HEADS.has(word)) {
-            return {kind: "foreign", message: `a ${word} axis cannot read a ${column.key} row`};
+            return {kind: "foreign", message: i18n.t("diagnostics:scope.foreignAxis", {word, column: column.key})};
         }
         return null;
     }
@@ -1252,7 +1254,7 @@ class Parser {
      * in final text and silent per keystroke.
      */
     private interpretSegs(segs: readonly Seg[], ctx: ValueCtx, pend: Pending[]): { main: Interp; extras: Seg[] } {
-        if (segs.length === 0) return {main: {r: "empty", why: "names no value"}, extras: []};
+        if (segs.length === 0) return {main: {r: "empty", why: i18n.t("diagnostics:why.noValue")}, extras: []};
 
         const first = segs[0];
         if (segs.length >= 2 && first.form === "bare") {
@@ -1262,7 +1264,7 @@ class Parser {
                 // An anchor has nothing to anchor in a pattern, which carries its own anchors.
                 const main: Interp = {
                     r: "fail",
-                    message: `${op.symbol} and a pattern cannot combine`,
+                    message: i18n.t("diagnostics:value.anchorPattern", {symbol: op.symbol}),
                     fixDrop: op.symbol ?? undefined,
                 };
                 return this.withGlueRepair(main, segs.slice(2), pend);
@@ -1324,8 +1326,8 @@ class Parser {
             const at = extras[0].start;
             pend.push({
                 severity: "warning",
-                message: "two values are glued together — a space is missing",
-                fix: {label: "insert the space", query: this.splice(at, at, " ")},
+                message: i18n.t("diagnostics:value.glued"),
+                fix: {label: i18n.t("diagnostics:fix.insertSpace"), query: this.splice(at, at, " ")},
             });
         }
         return {main, extras: [...extras]};
@@ -1337,17 +1339,17 @@ class Parser {
             if (!seg.closed && this.mode === "final") {
                 pend.push({
                     severity: "warning",
-                    message: String.raw`the pattern was not closed — it ends at whitespace, so a space is written \s`,
+                    message: i18n.t("diagnostics:pattern.unclosed"),
                 });
             }
             return ctx.regex(seg.text);
         }
         if (seg.form === "group") {
             if (!seg.closed && this.mode === "final") {
-                pend.push({severity: "warning", message: "the group was not closed"});
+                pend.push({severity: "warning", message: i18n.t("diagnostics:value.groupUnclosed")});
             }
             const alts = this.splitAlternatives(seg.text);
-            if (alts.length === 0) return {r: "empty", why: "is an empty group, which matches nothing"};
+            if (alts.length === 0) return {r: "empty", why: i18n.t("diagnostics:why.emptyGroup")};
             const parts = alts.map((alt) => this.groupAlternative(alt, ctx, alts.length === 1));
             return combineAlternatives(parts);
         }
@@ -1366,7 +1368,7 @@ class Parser {
     /** Splits glued alternation, then reads each alternative. */
     private bareAlternatives(t: string, ctx: ValueCtx): Interp {
         const real = t.split(GRAMMAR.or).filter((p) => p !== "");
-        if (real.length === 0) return {r: "empty", why: "names no value"};
+        if (real.length === 0) return {r: "empty", why: i18n.t("diagnostics:why.noValue")};
         if (real.length === 1) return this.alternative(real[0], ctx, true);
         return combineAlternatives(real.map((p) => this.alternative(p, ctx, false)));
     }
@@ -1376,7 +1378,7 @@ class Parser {
      * in that order, so that `<=` is an operator before `<` is and a comma list is numbers before it is text.
      */
     private alternative(t: string, ctx: ValueCtx, alone: boolean): Interp {
-        if (t === "") return {r: "empty", why: "names no value"};
+        if (t === "") return {r: "empty", why: i18n.t("diagnostics:why.noValue")};
         if (t === GRAMMAR.wildcard) return ctx.star();
         if (NUMBER_LIST.test(t)) {
             return combineAlternatives(t.split(GRAMMAR.numberList).map((n) => ctx.bare(n, false)));
@@ -1385,9 +1387,9 @@ class Parser {
             const sym = op.symbol;
             if (sym === null || !t.startsWith(sym)) continue;
             const operand = t.slice(sym.length);
-            if (operand === "") return {r: "empty", why: "compares against nothing"};
+            if (operand === "") return {r: "empty", why: i18n.t("diagnostics:why.nothingToCompare")};
             if (op.name === "exact" && operand.includes(GRAMMAR.wildcard)) {
-                return {r: "fail", message: "exact and a pattern cannot combine", fixDrop: sym};
+                return {r: "fail", message: i18n.t("diagnostics:value.exactPattern"), fixDrop: sym};
             }
             return ctx.operator(op, operand, {whole: t});
         }
@@ -1503,7 +1505,8 @@ class Parser {
                         // The trailing shorthand is the one open form whose reading is not on the page.
                         pend.push({
                             severity: "note",
-                            message: `${t} reads as at least ${t.slice(0, -1)} — the same as ${GRAMMAR.wildcard} for the upper bound`,
+                            message: i18n.t("diagnostics:value.trailingRange",
+                                {written: t, bound: t.slice(0, -1), wildcard: GRAMMAR.wildcard}),
                         });
                         return open;
                     }
@@ -1520,7 +1523,7 @@ class Parser {
                 const globbing = prop.types.find((type) => accepts(type, "glob"));
                 if (globbing === undefined) {
                     // Rescuable: `*-` is a keystroke away from the open range `*-10`, which is no pattern at all.
-                    return {r: "fail", rescuable: true, message: `the ${word} axis has no patterns`};
+                    return {r: "fail", rescuable: true, message: i18n.t("diagnostics:axis.noPatterns", {word})};
                 }
                 if (pathTyped([globbing])) warnPathGlob(pend);
                 return done({op: "glob", operand: {text: pattern}});
@@ -1528,7 +1531,7 @@ class Parser {
             bare: bareValue,
             regex: (pattern): Interp => {
                 if (!prop.types.some((type) => accepts(type, "regex"))) {
-                    return {r: "fail", message: `the ${word} axis cannot run one — ${NO_REGEX}`};
+                    return {r: "fail", message: i18n.t("diagnostics:axis.noRegex", {word})};
                 }
                 return badPattern(pattern) ?? done({op: "regex", operand: {text: pattern}});
             },
@@ -1605,7 +1608,7 @@ class Parser {
             glob: (pattern): Interp => {
                 const globbing = refs.filter((ref) => propOf(ref).types.some((type) => accepts(type, "glob")));
                 if (globbing.length === 0) {
-                    return {r: "fail", rescuable: true, message: `the ${word} axis has no patterns`};
+                    return {r: "fail", rescuable: true, message: i18n.t("diagnostics:axis.noPatterns", {word})};
                 }
                 if (globbing.some((ref) => pathTyped(propOf(ref).types))) warnPathGlob(pend);
                 return {r: "props", props: globbing, value: {op: "glob", operand: {text: pattern}}};
@@ -1621,7 +1624,7 @@ class Parser {
             regex: (pattern): Interp => {
                 const takers = refs.filter((ref) => propOf(ref).types.some((type) => accepts(type, "regex")));
                 if (takers.length === 0) {
-                    return {r: "fail", message: `the ${word} axis cannot run one — ${NO_REGEX}`};
+                    return {r: "fail", message: i18n.t("diagnostics:axis.noRegex", {word})};
                 }
                 return badPattern(pattern)
                     ?? {r: "props", props: takers, value: {op: "regex", operand: {text: pattern}}};
@@ -1678,7 +1681,7 @@ class Parser {
                     if (opts.phrase !== true && operand.includes(GRAMMAR.wildcard)) {
                         return {
                             r: "fail",
-                            message: "exact and a pattern cannot combine",
+                            message: i18n.t("diagnostics:value.exactPattern"),
                             fixDrop: op.symbol ?? undefined
                         };
                     }
@@ -1750,9 +1753,12 @@ class Parser {
         if (interp.r === "empty") {
             const ask = head === null ? null : this.incompleteAsk(head);
             if (this.mode === "final") {
-                const what = head === null ? "the value" : `${this.headWord(head)}:`;
+                const what = head === null ? i18n.t("diagnostics:clause.emptySubject") : `${this.headWord(head)}:`;
                 this.push(span, not, "invalid", ask,
-                    [...pend, {severity: "error", message: `${what} ${interp.why}`}]);
+                    [...pend, {
+                        severity: "error",
+                        message: i18n.t("diagnostics:clause.empty", {what, why: interp.why})
+                    }]);
             } else {
                 this.push(span, not, "incomplete", ask, pend);
             }
@@ -1775,7 +1781,10 @@ class Parser {
         const at = raw.indexOf(symbol);
         if (at < 0) return undefined;
         const repaired = raw.slice(0, at) + raw.slice(at + symbol.length);
-        return {label: `search for it without ${symbol}`, query: this.splice(span.start, span.end, repaired)};
+        return {
+            label: i18n.t("diagnostics:fix.withoutSymbol", {symbol}),
+            query: this.splice(span.start, span.end, repaired)
+        };
     }
 
     /** The quoted-quantity fix: the same clause with the quotes removed, so the number reads as itself. */
@@ -1783,7 +1792,7 @@ class Parser {
         const raw = this.text.slice(span.start, span.end);
         if (!raw.includes(GRAMMAR.phrase)) return undefined;
         const repaired = raw.replaceAll(GRAMMAR.phrase, "");
-        return {label: "drop the quotes", query: this.splice(span.start, span.end, repaired)};
+        return {label: i18n.t("diagnostics:fix.dropQuotes"), query: this.splice(span.start, span.end, repaired)};
     }
 
     private askFor(head: Head | null, interp: Exclude<Interp, { r: "fail" } | { r: "empty" }>, firstSeg: Seg): Ask {
