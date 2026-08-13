@@ -24,11 +24,22 @@ def _tables(tmp_path: Path) -> BuildTables:
 
     Written as text rather than as rows so a test reads like the CSV the build
     actually meets, quoting and empty cells included.
-    """
 
-    def build(**csvs: str) -> CsvTables:
+    Each call gets its OWN directory, so a test can build the two sources a
+    route is handed -- the client tables and the server dump -- without the
+    second overwriting the first. `absent` and `defaults` carry that source's
+    own drift declarations, which is what lets a dump be served under the
+    server-side ones rather than the client's.
+    """
+    sources = iter(range(1000))
+
+    def build(*, absent: dict[str, str] | None = None,
+              defaults: dict[tuple[str, str], str] | None = None,
+              **csvs: str) -> CsvTables:
+        directory = tmp_path / f"source{next(sources)}"
+        directory.mkdir()
         for table, text in csvs.items():
-            (tmp_path / f"{table}.csv").write_text(text, encoding="utf-8", newline="")
-        return CsvTables(tmp_path)
+            (directory / f"{table}.csv").write_text(text, encoding="utf-8", newline="")
+        return CsvTables(directory, absent_tables=absent, defaults=defaults)
 
     return build

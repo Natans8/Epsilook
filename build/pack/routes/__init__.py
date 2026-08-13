@@ -19,14 +19,27 @@ is read.
 
 from __future__ import annotations
 
+from .creatures import CreatureModels, read_creature_models
+from .items import ItemModels, read_item_models
+from .missiles import VisualMissiles, read_missile_motions, read_missiles
+from .models import ModelSources, read_model_sources
 from .names import SpellNames, read_override_names, read_spell_names
 from .text import SpellText, read_spell_text
 from .visuals import VisualGraph, read_visual_graph
 
 __all__ = [
+    "CreatureModels",
+    "ItemModels",
+    "ModelSources",
     "SpellNames",
     "SpellText",
     "VisualGraph",
+    "VisualMissiles",
+    "read_creature_models",
+    "read_item_models",
+    "read_missile_motions",
+    "read_missiles",
+    "read_model_sources",
     "read_override_names",
     "read_spell_names",
     "read_spell_text",
