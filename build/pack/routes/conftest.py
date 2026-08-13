@@ -8,6 +8,7 @@ than a stand-in that agrees with the route by construction.
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Callable
 from pathlib import Path
 
@@ -31,7 +32,7 @@ def _tables(tmp_path: Path) -> BuildTables:
     own drift declarations, which is what lets a dump be served under the
     server-side ones rather than the client's.
     """
-    sources = iter(range(1000))
+    sources = itertools.count()
 
     def build(*, absent: dict[str, str] | None = None,
               defaults: dict[tuple[str, str], str] | None = None,

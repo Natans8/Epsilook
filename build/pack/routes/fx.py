@@ -248,11 +248,16 @@ def read_fx_payloads(tables: Tables) -> FxPayloads:
 def expand_chain(chains: dict[int, tuple], chain_id: int, into: set[int]) -> None:
     """Add a chain and every chain it nests to `into`.
 
-    Guarded on membership rather than on depth, so a chain that nests itself --
-    or a pair that nest each other -- terminates instead of recursing forever.
+    A worklist rather than the recursion it looks like it wants to be, for the
+    same two reasons the visual redirects are one: the graph may contain a
+    cycle, and its depth is the data's to choose rather than ours. Membership
+    in `into` is both the cycle stop and the visited set, so this terminates
+    whatever shape the nesting takes and never grows the Python stack with it.
     """
-    if chain_id in into or chain_id not in chains:
-        return
-    into.add(chain_id)
-    for nested in chains[chain_id][5]:
-        expand_chain(chains, nested, into)
+    queue = [chain_id]
+    while queue:
+        current = queue.pop()
+        if current in into or current not in chains:
+            continue
+        into.add(current)
+        queue.extend(chains[current][5])

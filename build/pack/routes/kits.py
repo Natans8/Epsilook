@@ -52,6 +52,12 @@ class KitEffects:
     Every field is kit -> the payload ids it references, so the per-spell walk
     is a union over the kits a spell reaches rather than a second dispatch.
     Freezes and camos are valueless, so kit membership is the whole payload.
+
+    ⛔ A KIT IS ABSENT FROM A BUCKET IT CONTRIBUTED NOTHING TO, so read these
+    with `.get(kit, ())` rather than by subscript. They are plain dicts on
+    purpose: a bucket that answers every key by inserting an empty set into
+    itself grows as it is read, which makes "which kits play a sound" depend on
+    what was asked earlier.
     """
 
     models: dict[int, set[AttachModel]] = field(default_factory=dict)
@@ -159,15 +165,15 @@ def _add_procedure(kits: KitEffects, kit: int, procedure: int,
     """Route one procedure reference to whichever buckets it landed in.
 
     Membership tests rather than a second decode: the procedure route already
-    read the Type, and a row can only ever be in one value bucket. A chain is
-    added unconditionally because a procedure that names none resolves to 0,
-    which expands to nothing.
+    read the Type, and a row can only ever be in one value bucket.
 
     ⛔ A procedure-route chain has NO BEAM ROW, so it carries no attachment
     pair. Giving it one would claim two anchor points the data never named.
     """
-    add_chains(fx.chains, procs.chain.get(procedure, 0),
-               NO_ATTACHMENT, NO_ATTACHMENT, kits.chains.setdefault(kit, set()))
+    chain = procs.chain.get(procedure, 0)
+    if chain:
+        add_chains(fx.chains, chain, NO_ATTACHMENT, NO_ATTACHMENT,
+                   kits.chains.setdefault(kit, set()))
     for bucket, into in ((procs.tints, kits.tints),
                          (procs.ghost_mats, kits.ghost_mats),
                          (procs.desats, kits.desats),

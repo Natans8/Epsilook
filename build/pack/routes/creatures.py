@@ -13,7 +13,6 @@ Type-2 effect names all end at a `CreatureDisplayID` and all resolve it here.
 
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass, field
 
 from ..drift import CREATURE_DISPLAY_SOURCES
@@ -73,12 +72,12 @@ def read_creature_displays(world: Tables, into: dict[int, list[tuple[int, int]]]
     table, columns = source
     if len(columns) == 3:
         for creature, slot, display in world.rows(table, columns):
-            into[to_int(creature)].append((to_int(slot), to_int(display)))
+            into.setdefault(to_int(creature), []).append((to_int(slot), to_int(display)))
         return
     for creature, *legacy in world.rows(table, columns):
         for position, display_id in enumerate(to_int(value) for value in legacy):
             if display_id:
-                into[to_int(creature)].append((position, display_id))
+                into.setdefault(to_int(creature), []).append((position, display_id))
 
 
 def read_creature_models(tables: Tables, world: Tables | None) -> CreatureModels:
@@ -95,7 +94,7 @@ def read_creature_models(tables: Tables, world: Tables | None) -> CreatureModels
             # faithfully: a display name is the one thing that wants its stray
             # whitespace gone.
             creatures.names[to_int(entry)] = name.strip()
-        displays: dict[int, list[tuple[int, int]]] = defaultdict(list)
+        displays: dict[int, list[tuple[int, int]]] = {}
         read_creature_displays(world, displays)
         creatures.displays = {creature: sorted(rows)
                               for creature, rows in displays.items()}

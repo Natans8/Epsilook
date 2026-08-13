@@ -136,6 +136,15 @@ def test_a_form_keeps_its_displays_in_slot_order(tables: BuildTables) -> None:
     assert forms.displays[3] == [50, 51]
 
 
+def test_a_build_predating_the_form_table_ships_no_forms(
+        tables: BuildTables) -> None:
+    """⛔ Declared optional, so the shapeshift category switches itself off.
+    Reading the header to learn the array's shape must not be what turns a
+    survivable absence into a failed build."""
+    forms = read_shapeshift_forms(tables())
+    assert (forms.names, forms.displays) == ({}, {})
+
+
 def test_a_form_display_array_may_have_collapsed_to_a_scalar(
         tables: BuildTables) -> None:
     """A later build narrowed the array; the header states which spelling this

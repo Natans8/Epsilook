@@ -140,10 +140,11 @@ def read_proc_effects(tables: Tables, models: ModelSources) -> ProcEffects:
             # the same replacement group as the animation-replacement aura: the
             # same mechanic expressed through fixed engine slots rather than a
             # set. A value of 0 leaves its slot alone and is skipped per slot.
-            pairs = tuple((base, to_int_from_float(value))
-                          for base, value in zip(PROC_STANDWALK_SLOTS,
-                                                 (first, second, third))
-                          if to_int_from_float(value) > 0)
+            pairs = tuple(
+                (base, replacement) for base, replacement in zip(
+                    PROC_STANDWALK_SLOTS,
+                    (to_int_from_float(value) for value in (first, second, third)))
+                if replacement > 0)
             if pairs:
                 procs.anims[proc_id] = pairs
     return procs

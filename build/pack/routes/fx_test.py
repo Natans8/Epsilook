@@ -80,6 +80,26 @@ def test_a_blend_set_keeps_slot_order_and_drops_repeats(
         1: (100, 101), 2: (200,)}
 
 
+def test_a_build_predating_the_blend_set_table_reads_nothing(
+        tables: BuildTables) -> None:
+    """⛔ Asking what shape an array field takes must not be what decides
+    whether the build survives: the table is declared optional, so a build that
+    predates it loses its dissolve materials and screen masks rather than
+    failing."""
+    assert read_blend_sets(tables()) == {}
+
+
+def test_a_build_predating_the_fx_tables_yields_no_payloads(
+        tables: BuildTables) -> None:
+    """Every one of them is declared optional, so the categories switch
+    themselves off together."""
+    payloads = read_fx_payloads(tables(
+        SpellChainEffects=SPELL_CHAIN_EFFECTS, BeamEffect=BEAM_EFFECT))
+    assert payloads.dissolves == {}
+    assert payloads.glows == {}
+    assert payloads.screens == {}
+
+
 def test_a_dissolve_carries_its_blend_sets_textures(tables: BuildTables) -> None:
     assert payloads(tables).dissolves[10] == (1.5, (100, 101), 5)
 

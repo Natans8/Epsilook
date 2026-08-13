@@ -59,7 +59,17 @@ CREATURES = CreatureModels(display_model={50: 900}, model_fid={900: 8100})
 ITEMS = ItemModels(model_fid={700: 8200})
 
 
-def sources(tables: BuildTables, named=lambda fid: fid != 6666):
+def all_named(files: set[int]) -> set[int]:
+    """Every file id names a real asset."""
+    return files
+
+
+def none_named(files: set[int]) -> set[int]:
+    """File id 6666 is the Classic placeholder and names nothing."""
+    return {file for file in files if file != 6666}
+
+
+def sources(tables: BuildTables, named=none_named):
     return read_model_sources(
         tables(SpellVisualEffectName=SPELL_VISUAL_EFFECT_NAME,
                SpellVisualKitModelAttach=SPELL_VISUAL_KIT_MODEL_ATTACH,
@@ -116,7 +126,7 @@ def test_an_unnamed_weapon_file_is_dropped_to_its_sentinel(
 def test_a_named_file_on_a_weapon_row_is_left_alone(tables: BuildTables) -> None:
     """The drop is about files that name nothing, not about weapon rows."""
     fid, _, _ = read_effect_names(
-        tables(SpellVisualEffectName=SPELL_VISUAL_EFFECT_NAME), lambda _: True)
+        tables(SpellVisualEffectName=SPELL_VISUAL_EFFECT_NAME), all_named)
     assert fid[5] == 6666
 
 
@@ -125,8 +135,7 @@ def test_a_plain_row_sharing_the_placeholder_file_keeps_its_model(
     """Only weapon rows are touched. A Type-0 row naming the same file id is an
     ordinary model and stays one."""
     text = SPELL_VISUAL_EFFECT_NAME + "7,6666,0,0\n"
-    fid, _, _ = read_effect_names(tables(SpellVisualEffectName=text),
-                                  lambda fid_: fid_ != 6666)
+    fid, _, _ = read_effect_names(tables(SpellVisualEffectName=text), none_named)
     assert fid[5] == 0
     assert fid[7] == 6666
 

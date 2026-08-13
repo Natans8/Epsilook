@@ -148,10 +148,8 @@ class ModelSources:
     """Kit -> the anim kits the attached model plays."""
 
 
-def read_effect_names(tables: Tables,
-                      named: Callable[[int], bool]) -> tuple[dict[int, int],
-                                                             dict[int, int],
-                                                             dict[int, int]]:
+def read_effect_names(tables: Tables, named: Callable[[set[int]], set[int]]
+                      ) -> tuple[dict[int, int], dict[int, int], dict[int, int]]:
     """`SpellVisualEffectName` as its three columns: file, type, and generic id.
 
     The Type says HOW to reach the model -- a file directly, an item id, a
@@ -162,8 +160,12 @@ def read_effect_names(tables: Tables,
     leave an unnamed file id on their weapon rows, which is not a model anyone
     can render. Rewriting it to 0 at the one place the column is read leaves
     every route downstream to take the "no file -> sentinel" branch it already
-    has. `named` answers whether a file id names a real asset; a route cannot
-    resolve a path itself, so the question is asked of the caller.
+    has.
+
+    `named` takes the whole candidate set and returns the subset that names a
+    real asset. A route cannot resolve a path itself, so the question is asked
+    of the caller -- and it is asked ONCE, in bulk, because the only thing that
+    can answer it is a pass over an index far larger than this table.
 
     Only weapon rows are touched: a plain row naming the same file id keeps its
     ordinary model.
@@ -178,20 +180,22 @@ def read_effect_names(tables: Tables,
         types[identifier] = to_int(type_id)
         generic[identifier] = to_int(generic_id)
 
-    placeholders = {file for name_id, file in fid.items()
-                    if file and types.get(name_id, 0) in EFFECT_NAME_TYPE_WEAPON
-                    and not named(file)}
-    for effect_name, file in list(fid.items()):
-        if file in placeholders and types.get(effect_name, 0) in EFFECT_NAME_TYPE_WEAPON:
-            fid[effect_name] = 0
+    weapon_files = {file for name_id, file in fid.items()
+                    if file and types.get(name_id, 0) in EFFECT_NAME_TYPE_WEAPON}
+    placeholders = weapon_files - named(weapon_files) if weapon_files else set()
+    if placeholders:
+        for effect_name, file in list(fid.items()):
+            if file in placeholders \
+                    and types.get(effect_name, 0) in EFFECT_NAME_TYPE_WEAPON:
+                fid[effect_name] = 0
     return fid, types, generic
 
 
 def read_model_sources(tables: Tables, creatures: CreatureModels, items: ItemModels,
-                       named: Callable[[int], bool]) -> ModelSources:
+                       named: Callable[[set[int]], set[int]]) -> ModelSources:
     """Read every table that ends in a model file.
 
-    `named` says whether a file id names a real asset -- see
+    `named` narrows a set of file ids to the ones that name a real asset -- see
     `read_effect_names`, the one place it is consulted.
     """
     fid, types, generic = read_effect_names(tables, named)
