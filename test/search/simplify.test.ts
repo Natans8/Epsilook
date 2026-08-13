@@ -157,6 +157,18 @@ describe("standalone suggestions", () => {
         assert.deepEqual(suggestions(parsed("model:fire cast:2s-5s")), []);
     });
 
+    it("a clause still in its parse shape does not block unrelated standalone rules", () => {
+        // model:{fire} parses as a scope of one content term, which formats braceless: an unrewritten clause of
+        // that shape must not trip the round-trip guard for rules acting elsewhere in the tree.
+        const ids = suggestions(parsed("model:{fire} model:fire cast:5s-2s")).map((offer) => offer.rule.id);
+        assert.ok(ids.includes("R1"), ids.join(" "));
+        assert.ok(ids.includes("R10"), ids.join(" "));
+    });
+
+    it("a rewrite that changes no spelling is not offered", () => {
+        assert.deepEqual(suggestions(parsed("model:{fire}")), []);
+    });
+
     it("each suggestion is answer-equal to the input", () => {
         const input = parsed("model:{fire} model:fire cast:5s-2s | name:frost | name:frost");
         for (const offer of suggestions(input)) {

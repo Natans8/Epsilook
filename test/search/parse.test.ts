@@ -827,3 +827,35 @@ describe("the operator-glued inner bind", () => {
         assert.deepEqual(valueOf(ok("sound:kit:150")), {op: "contains", operand: {text: "kit:150"}});
     });
 });
+
+describe("whitespace bridging in final text", () => {
+    /** The ask with spans stripped, for comparing a spaced spelling's structure against its glued twin. */
+    const shape = (query: string): unknown =>
+        JSON.parse(JSON.stringify(ok(query), (key: string, value: unknown) => (key === "span" ? undefined : value)));
+
+    it("reads a bind's colon or operator across any amount of whitespace", () => {
+        assert.deepEqual(shape("model:{count > 5}"), shape("model:{count>5}"));
+        assert.deepEqual(shape("model:{attach : chest}"), shape("model:{attach:chest}"));
+        assert.deepEqual(shape("model: fire"), shape("model:fire"));
+        assert.deepEqual(shape("model : fire"), shape("model:fire"));
+        assert.deepEqual(shape("cast > 2s"), shape("cast>2s"));
+        assert.deepEqual(shape("model:count < 5"), shape("model:count<5"));
+        assert.deepEqual(shape("model: {fire missile}"), shape("model:{fire missile}"));
+    });
+
+    it("never bridges into a clause of its own: a bar, a negation, or another head's bind", () => {
+        const stolen = parse("model: sound:fire");
+        assert.equal(stolen.clauses.length, 2);
+        assert.equal(stolen.clauses[0].state, "invalid");
+        assert.equal(stolen.clauses[1].state, "ok");
+        const negated = parse("model: -fire");
+        assert.equal(negated.clauses.length, 2);
+        assert.ok(negated.clauses[1].not);
+    });
+
+    it("does not bridge while typing, where the next word may be a term still being written", () => {
+        const typing = parse("model: fire", {mode: "typing"});
+        assert.equal(typing.clauses.length, 2);
+        assert.equal(typing.clauses[0].state, "incomplete");
+    });
+});

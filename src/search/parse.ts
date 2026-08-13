@@ -523,13 +523,16 @@ class Parser {
         }
 
         // A word followed by a colon is a head when the schema knows it; otherwise the whole token is ordinary text.
-        // A comparison straight after a head word implies the colon: `model<=4` is `model:<=4`.
+        // A comparison straight after a head word implies the colon: `model<=4` is `model:<=4`. In final text the
+        // colon or comparison also reads across whitespace — `cast >= 2s` — because a known head beside a bare
+        // operator has exactly one sensible reading.
         const j = this.wordEnd(i, limit);
         if (j > i) {
             const head = HEADS.get(fold(this.text.slice(i, j)));
             if (head !== undefined) {
-                if (this.text[j] === GRAMMAR.bind) return this.bound(start, not, head, j + 1, limit);
-                if (COMPARISON_STARTS.has(this.text[j])) return this.bound(start, not, head, j, limit);
+                const k = this.mode === "final" ? this.skipWs(j, limit) : j;
+                if (this.text[k] === GRAMMAR.bind) return this.bound(start, not, head, k + 1, limit);
+                if (k < limit && COMPARISON_STARTS.has(this.text[k])) return this.bound(start, not, head, k, limit);
             }
         }
         return this.term(start, not, i, limit);
@@ -567,8 +570,53 @@ class Parser {
         }
     }
 
+    /** The first position at or after `i` holding a non-whitespace character, capped at `limit`. */
+    private skipWs(i: number, limit: number): number {
+        let j = i;
+        while (j < limit && isWs(this.text[j])) j++;
+        return j;
+    }
+
+    /** Whether the token at `i` opens a head bind of its own — a clause a whitespace bridge must not consume. */
+    private headBindAhead(i: number, limit: number): boolean {
+        const j = this.wordEnd(i, limit);
+        if (j <= i || HEADS.get(fold(this.text.slice(i, j))) === undefined) return false;
+        return this.text[j] === GRAMMAR.bind || (j < limit && COMPARISON_STARTS.has(this.text[j]));
+    }
+
+    /**
+     * Scans the value token at `vpos`, bridging one whitespace gap between a lone operator and its operand —
+     * `count > 5` reads as `count>5` — in final text only, so keystroke states keep their quiet incompleteness.
+     */
+    private valueToken(vpos: number, limit: number, opts: { inScope: boolean; groups: boolean }):
+        { segs: Seg[]; end: number } {
+        const first = this.scanToken(vpos, limit, opts);
+        if (this.mode !== "final" || first.segs.length !== 1) return first;
+        const [only] = first.segs;
+        if (only.form !== "bare" || !PREFIX_OPERATORS.some((op) => op.symbol === only.text)) return first;
+        const k = this.skipWs(first.end, limit);
+        if (k === first.end || k >= limit) return first;
+        const c = this.text[k];
+        if (c === GRAMMAR.or || c === GRAMMAR.negate || c === GRAMMAR.scope.close || c === GRAMMAR.scope.open) {
+            return first;
+        }
+        const operand = this.scanToken(k, limit, opts);
+        if (operand.segs.length === 0) return first;
+        return {segs: [...first.segs, ...operand.segs], end: operand.end};
+    }
+
     /** Parses `head:` and whatever follows the colon. */
-    private bound(start: number, not: boolean, head: Head, vpos: number, limit: number): number {
+    private bound(start: number, not: boolean, head: Head, at: number, limit: number): number {
+        let vpos = at;
+        if (this.mode === "final") {
+            // The value reads across the gap — `model: fire` — unless what follows is a clause of its own:
+            // an alternation bar, a negation, or another head's bind.
+            const k = this.skipWs(at, limit);
+            if (k > at && k < limit && this.text[k] !== GRAMMAR.or && this.text[k] !== GRAMMAR.negate
+                && !this.headBindAhead(k, limit)) {
+                vpos = k;
+            }
+        }
         const c = vpos < limit ? this.text[vpos] : "";
         if (c === "" || isWs(c) || c === GRAMMAR.scope.close) {
             return this.emptyBind(start, not, head, vpos);
@@ -583,7 +631,7 @@ class Parser {
             if (glued !== null) return glued;
         }
 
-        const {segs, end} = this.scanToken(vpos, limit, {inScope: false, groups: true});
+        const {segs, end} = this.valueToken(vpos, limit, {inScope: false, groups: true});
         const only = segs.length === 1 ? segs[0] : undefined;
         if (only !== undefined && only.form === "group" && head.role !== "prop" && this.scopeShaped(only.text)) {
             // Lenient input: a parenthesised scope is accepted and read as one, since the two readings never both
@@ -613,12 +661,13 @@ class Parser {
      */
     private innerGlue(start: number, not: boolean, head: ScopeHead, vpos: number, limit: number): number | null {
         const j = this.wordEnd(vpos, limit);
-        if (j <= vpos || j >= limit) return null;
-        if (!COMPARISON_STARTS.has(this.text[j])) return null;
+        if (j <= vpos) return null;
+        const opAt = this.mode === "final" ? this.skipWs(j, limit) : j;
+        if (opAt >= limit || !COMPARISON_STARTS.has(this.text[opAt])) return null;
         const pend: Pending[] = [];
         const bind = this.innerBind(head, fold(this.text.slice(vpos, j)), pend);
         if (bind === null || bind.kind === "foreign") return null;
-        const {segs, end} = this.scanToken(j, limit, {inScope: false, groups: true});
+        const {segs, end} = this.valueToken(opAt, limit, {inScope: false, groups: true});
         if (segs.length === 0) return null;
         const {main, extras} = this.interpretSegs(segs, bind.ctx, pend);
         if (main.r === "fail" || main.r === "empty") {
@@ -926,18 +975,23 @@ class Parser {
                       run: ScopeTerm[], pend: Pending[]):
         { kind: "done"; next: number } | { kind: "foreign"; span: Span; message: string } {
         const j = this.wordEnd(i, bodyEnd);
-        const sep = j < bodyEnd ? this.text[j] : "";
+        // In final text the bind's colon or comparison reads across whitespace — `{count > 5}` — because inside a
+        // scope a resolved word beside a bare operator has exactly one sensible reading.
+        const sepAt = this.mode === "final" && j > i ? this.skipWs(j, bodyEnd) : j;
+        const sep = sepAt < bodyEnd ? this.text[sepAt] : "";
         if (j > i && (sep === GRAMMAR.bind || COMPARISON_STARTS.has(sep))) {
             const word = fold(this.text.slice(i, j));
             const bind = this.innerBind(head, word, pend);
             if (bind !== null) {
                 // The implied colon works inside a scope too: `model:{count<=4}`.
-                const vpos = sep === GRAMMAR.bind ? j + 1 : j;
+                const vpos = sep === GRAMMAR.bind
+                    ? (this.mode === "final" ? this.skipWs(sepAt + 1, bodyEnd) : sepAt + 1)
+                    : sepAt;
                 if (bind.kind === "foreign") {
                     const tokenEnd = this.scanToken(vpos, bodyEnd, {inScope: true, groups: true}).end;
                     return {kind: "foreign", span: {start: termStart, end: tokenEnd}, message: bind.message};
                 }
-                const {segs, end} = this.scanToken(vpos, bodyEnd, {inScope: true, groups: true});
+                const {segs, end} = this.valueToken(vpos, bodyEnd, {inScope: true, groups: true});
                 if (segs.length === 0) {
                     // An inner bind with no value: nothing to constrain the row with yet.
                     if (this.mode === "final") {
@@ -1229,6 +1283,14 @@ class Parser {
                     ? ctx.operator(op, operand.text, {whole: first.text + operand.text, phrase: true})
                     : combineAlternatives(this.splitAlternatives(operand.text)
                         .map((alt) => ctx.operator(op, alt, {whole: first.text + alt})));
+                return this.withGlueRepair(main, segs.slice(2), pend);
+            }
+            if (op !== undefined && operand.form === "bare") {
+                // Adjacent bare segments never come from one token — only the whitespace bridge produces them —
+                // so this is the spaced spelling of the glued operator form.
+                const parts = operand.text.split(GRAMMAR.or).filter((part) => part !== "");
+                const main = combineAlternatives((parts.length > 0 ? parts : [operand.text])
+                    .map((alt) => ctx.operator(op, alt, {whole: first.text + alt})));
                 return this.withGlueRepair(main, segs.slice(2), pend);
             }
         }

@@ -226,8 +226,25 @@ function testShape(test: RowTest | null): unknown {
     return {is: test.is, terms: sortedShapes(test.terms.map((run) => sortedShapes(run.map(termShape))))};
 }
 
+/**
+ * The ask an ask's own spelling re-reads as: a single-run scope unwraps exactly as the formatter spells it.
+ *
+ * Shapes must compare modulo this unwrapping, because the two structures are one question with one spelling —
+ * `model:{fire}` formats braceless and re-parses as the content test — and a guard that separated them would
+ * reject any rewrite of a tree that happens to still carry the scope-shaped parse of that spelling elsewhere.
+ */
+function spelledAsk(ask: Ask): Ask {
+    if (ask.on !== "column" && ask.on !== "kind") return ask;
+    const test = ask.test;
+    if (test === null || test.is !== "scope" || test.terms.length !== 1) return ask;
+    const rows = test.terms[0].filter((t) => t.state === "ok" && t.ask !== null);
+    if (rows.length === 0) return {...ask, test: {is: "exists"}};
+    return unscopedAsk(ask, rows);
+}
+
 /** A JSON-ready shape for one clause's ask. */
-function askShape(ask: Ask): unknown {
+function askShape(raw: Ask): unknown {
+    const ask = spelledAsk(raw);
     if (ask.on === "plain") return {on: ask.on, value: valueShape(ask.value)};
     if (ask.on === "column") return {on: ask.on, column: ask.column.key, test: testShape(ask.test)};
     if (ask.on === "kind") return {on: ask.on, kind: ask.kind.id, test: testShape(ask.test)};
@@ -1662,20 +1679,25 @@ export interface Suggestion {
  *
  * Each rule runs alone, to its own fixpoint, over the query as written — never over another rule's output — so a
  * surface can offer each as an independent one-click suggestion. {@link simplify} is not these suggestions
- * replayed: there the rules feed each other, and an accepted rewrite exposes what the next rule acts on.
+ * replayed: there the rules feed each other, and an accepted rewrite exposes what the next rule acts on. A rewrite
+ * that changes the tree but not the query's canonical spelling is a convergence with nothing to show, so it is
+ * not offered.
  *
  * @param parsed A parse, from {@link ./parse!parse}.
- * @returns One suggestion per rule that rewrites the query, in {@link RULES} order.
+ * @returns One suggestion per rule that changes the query's spelling, in {@link RULES} order.
  */
 export function suggestions(parsed: Parsed): readonly Suggestion[] {
     const tree = treeOf(parsed);
+    const before = queryKey(toParsed(tree));
     const offers: Suggestion[] = [];
     for (const rule of RULES) {
         if (rule.apply === undefined) continue;
         const notes = new Set<string>();
         const result = fixpoint(tree, [rule], {note: (text) => notes.add(text)});
         if (result.applied.length === 0) continue;
-        offers.push({rule, parsed: toParsed(result.tree), notes: [...notes]});
+        const after = toParsed(result.tree);
+        if (queryKey(after) === before) continue;
+        offers.push({rule, parsed: after, notes: [...notes]});
     }
     return offers;
 }
