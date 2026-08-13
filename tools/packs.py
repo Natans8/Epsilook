@@ -66,7 +66,9 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from repo import CACHE
+from repo import CACHE, survive_console_encoding
+
+survive_console_encoding()
 
 # BLIZZARD'S OWN VERSION SERVICE — Ribbit V2 over HTTPS, which is what Agent and
 # the game clients themselves use as of 2025. No key, no account, no scraping.

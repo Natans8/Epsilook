@@ -36,7 +36,6 @@ import argparse
 import ast
 import gzip
 import hashlib
-import io
 import json
 import os
 import re
@@ -46,15 +45,12 @@ import sys
 import time
 from pathlib import Path
 
-from repo import BUMP_PATHS, CACHE, ROOT, changed_under, git, have_ref
+from repo import (BUMP_PATHS, CACHE, ROOT, changed_under, git, have_ref,
+                  survive_console_encoding)
 
-# A piped stdout on Windows is cp1252, and a failure detail quotes whatever the
-# failing tool printed (node --test opens every line with U+25B6). A report
-# that dies on its own detail hides the failure it exists to show, so degrade
-# unencodable characters instead of raising.
-for _stream in (sys.stdout, sys.stderr):
-    if isinstance(_stream, io.TextIOWrapper):
-        _stream.reconfigure(errors="replace")
+# A failure detail quotes whatever the failing tool printed, and node --test
+# opens every line with U+25B6.
+survive_console_encoding()
 
 SITE = ROOT / "site"
 MANIFEST = SITE / "data" / "versions.json"
@@ -707,6 +703,33 @@ def check_build_layers(rep: Report) -> None:
                f"{'/, '.join(BUILD_PLACELESS)}/ free of paths and URLs")
 
 
+def check_cache_declaration(rep: Report) -> None:
+    """The build and its tooling must agree on where the cache is.
+
+    The path is declared twice on purpose: `tools/repo.py` for the scripts, and
+    `build/pack/sources/cache.py` for the build, which runs on a different path
+    root and must not import from `tools/`. Two declarations of one fact drift,
+    and this one drifts silently in every direction that matters -- the build
+    fills one directory while rebuild.py sweeps another, check_cache reports a
+    rotation that never happens, and listfile.py reads a listfile nothing
+    refreshed. Nothing fails; the two halves just stop sharing a cache.
+    """
+    if not (ROOT / "build" / "pack" / "sources" / "cache.py").exists():
+        rep.skip("cache declaration", "build/pack/sources/cache.py not present yet")
+        return
+    try:
+        sys.path.insert(0, str(ROOT / "build"))
+        from pack.sources.cache import CACHE_DIR as theirs  # pylint: disable=import-outside-toplevel
+    except ImportError as exc:
+        rep.fail("cache declaration", f"could not read the build's declaration: {exc}")
+        return
+    if theirs.resolve() != CACHE.resolve():
+        rep.fail("cache declaration",
+                 f"the build caches in {theirs}, the tools in {CACHE}")
+    else:
+        rep.ok("cache declaration", f"build and tools agree on {CACHE.name}/")
+
+
 def check_arcanum(rep: Report) -> None:
     """tools/arcanum.py must still produce strings Arcanum can import.
 
@@ -1023,6 +1046,7 @@ def main() -> int:
     check_manifest(rep)
     check_pack_sections(rep)
     check_layers(rep)
+    check_cache_declaration(rep)
     check_build_layers(rep)
     check_cli_entries(rep)
     check_license_scope(rep)

@@ -4,7 +4,7 @@ VarCon (Variant Conversion Info, part of the SCOWL/aspell wordlist project, http
 maps American, British and Canadian forms of the same word, inflections included. This script reads it from the
 pinned `varcon` npm package, keeps the well-attested American/British SPELLING pairs, intersects them with the
 vocabulary of the default pack's searchable text (names, descriptions, file paths, area names), and writes the
-survivors to src/search/spelling-folds.ts.
+survivors to src/search/text/spelling-folds.ts.
 
 The spelling-versus-vocabulary distinction is the SOURCE's, not this script's: VarCon ships vocabulary
 correspondences (different words for one thing) in a separate voc.tab, which this script never reads, so nothing
@@ -31,7 +31,7 @@ from repo import CACHE
 
 ROOT = Path(__file__).resolve().parents[1]
 VARCON = ROOT / "node_modules" / "varcon" / "varcon.txt"
-OUT = ROOT / "src" / "search" / "spelling-folds.ts"
+OUT = ROOT / "src" / "search" / "text" / "spelling-folds.ts"
 DB = CACHE / "epsilook.duckdb"
 
 # A variant is kept only under a bare category tag (or the equal-variants dot): the v/V/-/x suffixes mark forms a

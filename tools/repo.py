@@ -13,8 +13,26 @@ nothing to do.
 """
 from __future__ import annotations
 
+import io
 import subprocess
+import sys
 from pathlib import Path
+
+
+def survive_console_encoding() -> None:
+    """Degrade characters the console cannot encode instead of dying on them.
+
+    A piped stdout on Windows is cp1252, and these tools print warning signs,
+    arrows and box drawing. Without this a report dies on its own detail --
+    argparse cannot even print `--help` when the epilog holds one -- and the
+    traceback hides whatever the tool was trying to say.
+
+    Called by each entry point rather than on import, because a library import
+    should not reach into the caller's streams.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(errors="replace")
 
 ROOT = Path(__file__).resolve().parent.parent
 
