@@ -54,7 +54,7 @@ survive_console_encoding()
 
 try:
     import duckdb  # type: ignore[import-not-found]
-    import pyarrow  # type: ignore[import-not-found]
+    import pyarrow  # type: ignore[import-untyped]
 except ImportError:  # pragma: no cover - a development-tool dependency
     sys.exit(
         "tools/packdb.py needs DuckDB and PyArrow, which pyproject.toml declares:\n"
