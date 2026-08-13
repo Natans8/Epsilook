@@ -268,7 +268,7 @@ KIT_EFFECT_TYPES = [
     (20, "SpellVisualKitPicker", "absent from the data"),
 ]
 
-# CLAUDE.md "Proc type decode" — SpellProceduralEffect.Type is the client's
+# DATA_ROUTES.md section 3b — SpellProceduralEffect.Type is the client's
 # character-procedure index, and it selects WHICH Value_n column is the payload.
 PROC_TYPES = [
     (0, "Value_0", "chain", "-> SpellChainEffects (variant of 26)"),

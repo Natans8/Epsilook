@@ -594,8 +594,8 @@ AURA_SCREEN_EFFECT = 260
 
 # SpellProceduralEffect.Type values. Type IS the client character-procedure
 # index (m_characterProcedure) — the full decode + dispatch tags live in
-# enums/spell_procedural_effect_types.json (and the "Proc type decode" section
-# in CLAUDE.md). Which Value_N column carries the payload differs per type.
+# enums/spell_procedural_effect_types.json (and DATA_ROUTES.md section 3b).
+# Which Value_N column carries the payload differs per type.
 _PROC_TYPES = load_local_enum("spell_procedural_effect_types")
 PROC_TYPE_TINT = _enum_id_where(_PROC_TYPES, "tint")  # Value_0 = packed-RGB tint (multiply)
 PROC_TYPES_CHAIN = _enum_ids_where(_PROC_TYPES, "chain")  # Value_0 = SpellChainEffects ID
@@ -2408,7 +2408,7 @@ class ProcEffects:
 
     Type IS the client character-procedure index, so it selects both the
     handler and which Value column carries the payload — the full decode
-    lives in the "Proc type decode" section of CLAUDE.md. Each proc id lands
+    lives in DATA_ROUTES.md section 3b. Each proc id lands
     in the bucket its type feeds, and the kit walk dispatches a kit's proc
     references by looking the id up in each.
     """

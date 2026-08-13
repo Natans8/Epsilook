@@ -313,8 +313,47 @@ payload. This is the second fan-out.
 | 27        | `Value_0` → WeaponTrail             | **model** (`trail`)                     |
 
 Colors are `0xRRGGBB`; `INT_MIN` is the "unset" sentinel. The types not surfaced (2–6, 8, 10, 13, 15–17, 19–20, 24–25,
-28–34) are renderer or gameplay state, or too rare to be worth a pill. The full decode with evidence is in CLAUDE.md →
-*Proc type decode*.
+28–34) are renderer or gameplay state, or too rare to be worth a pill.
+
+#### The full decode
+
+`Type` is the client "character procedure" index (`m_characterProcedure`), documented on wowdev.wiki/DB/SpellVisualKit —
+not on the SpellProceduralEffect page, and not in WoWDBDefs. It is one continuous append-only enum; WotLK stops at 17.
+Decoded and verified against 9.2.7 by FK joins and spell-name semantics.
+
+| Type       | Meaning                                                                                          |
+|------------|--------------------------------------------------------------------------------------------------|
+| 0, 12, 26  | **Chain** — `Value_0` → SpellChainEffects. 26 is main beams, 12/0 variants                       |
+| 1          | **Color/tint** — `Value_0` packed RGB, multiply                                                  |
+| 2          | Scale                                                                                            |
+| 3, 5       | Color payload (purpose unconfirmed)                                                              |
+| 4          | Emissive color                                                                                   |
+| 6          | Eclipse overlay                                                                                  |
+| 7          | **Stand/Walk anim** — `Value_0/1/2` → AnimationData; `Value_2` is RUN and IS meaningful          |
+| 8          | Weapon Trail (old)                                                                               |
+| 9          | **Blizzard/AreaModel** — `Value_0` → SpellVisualKitAreaModel                                     |
+| 10         | Fishing Line                                                                                     |
+| 11         | **Freeze**                                                                                       |
+| 13         | Gore/blood [undocumented]                                                                        |
+| 14         | **SetAlphaMod / transparency** — `Value_0` alpha                                                 |
+| 15         | DoFade                                                                                           |
+| 16         | AddMountTransition                                                                               |
+| 17         | **AddItemVisual** — `Value_1` Item ID                                                            |
+| 18         | **AddCamouflage**                                                                                |
+| 19         | AddHeadLook                                                                                      |
+| 20         | AddTimeRate                                                                                      |
+| 21         | **CustomMaterial/desaturate** — `Value_2` strength, ~94% colorless                               |
+| 22, 23     | **CustomMaterial recolor** — `Value_3` packed RGB; 22 translucent shadow materials, 23 tint      |
+| 24         | PlayAllAttachedMirrored                                                                          |
+| 25         | Mirror Image / ItemVisual                                                                        |
+| 27         | **Weapon Trail modern** — `Value_0` → WeaponTrail.db2 ID → FileDataID                            |
+| 28, 32, 34 | Rare, undecoded                                                                                  |
+| 29         | LOD enforce [undocumented]                                                                       |
+| 30         | Cast/strike anim override [undocumented]                                                         |
+| 31         | Legion artifact hidden proc, all-zero [undocumented]                                             |
+| 33         | Desaturate aura, 2 dead spells [undocumented]                                                    |
+
+Type 7 merges with aura 312 into the `replace` group (§3o). Revisit candidates: 13 (blood color) and 17 (item visuals).
 
 ### 3c. The six model routes
 
