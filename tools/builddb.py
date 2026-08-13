@@ -67,7 +67,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 
 import dbd  # noqa: E402  (path set above)
-from packs import PACKS, builds  # noqa: E402  (path set above)
+from packs import PACKS, builds, schema_name  # noqa: E402  (path set above)
 
 from repo import CACHE
 
@@ -372,16 +372,6 @@ def fetch(url: str, dest: Path, refresh: bool = False, timeout: int = 120) -> bo
 
 # --------------------------------------------------------------- schema naming
 
-def schema_for(build_id: str) -> str:
-    """`"9.2.7.45745"` -> `"v9_2_7"`. The build number lives in ref.game_build.
-
-    Major.minor.patch is unique across the ten packs, and a schema you have to
-    type needs to be short.
-    """
-    parts = build_id.split(".")[:3]
-    return "v" + "_".join(parts)
-
-
 def sql_type(column: dbd.Column | None, width: dbd.BuildColumn | None) -> str | None:
     """Map a WoWDBDefs declaration to a DuckDB type. None = let DuckDB infer."""
     if column is None:
@@ -471,7 +461,7 @@ def load_csv_table(con: "duckdb.DuckDBPyConnection", schema: str, table: str,
 def build_version(con: "duckdb.DuckDBPyConnection", build_id: str,
                   catalog: list[tuple], refresh_dbd: bool) -> tuple[int, int, int]:
     """Load every CSV in one version's cache directory into its own schema."""
-    schema = schema_for(build_id)
+    schema = schema_name(build_id)
     build = dbd.parse_build(build_id)
     source = CACHE / build_id
     if build is None or not source.is_dir():
@@ -536,7 +526,7 @@ def load_tdb(con: "duckdb.DuckDBPyConnection", build_id: str, tdb_tag: str | Non
     directory = CACHE / f"tdb-{tdb_tag}"
     if not directory.is_dir():
         return 0
-    schema = schema_for(build_id)
+    schema = schema_name(build_id)
     loaded = 0
     tdb_csvs = sorted(directory.glob("*.csv"))
     for path in progress(tdb_csvs, f"  {schema} tdb", "table", len(tdb_csvs), nested=True):
@@ -754,7 +744,7 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
     for entry in manifest:
         parsed = dbd.parse_build(entry["id"]) or (0, 0, 0, 0)
         con.execute("INSERT INTO ref.game_build VALUES (?,?,?,?,?,?,?,?,?)",
-                    [schema_for(entry["id"]), entry["id"], entry.get("label"),
+                    [schema_name(entry["id"]), entry["id"], entry.get("label"),
                      *parsed, bool(entry.get("default")), entry.get("tdb_tag")])
 
 
@@ -992,7 +982,7 @@ def main() -> int:
             directory = CACHE / entry["id"]
             csvs = len(list(directory.glob("*.csv"))) if directory.is_dir() else 0
             mark = "*" if entry in selected else " "
-            log(f" {mark} {schema_for(entry['id']):<9} {entry['id']:<14} "
+            log(f" {mark} {schema_name(entry['id']):<9} {entry['id']:<14} "
                 f"{csvs:>3} csv  tdb={entry['tdb_tag'] or '-'}  {entry.get('label', '')}")
         return 0
 
@@ -1015,12 +1005,12 @@ def main() -> int:
     total_tables = total_rows = total_views = 0
     for entry in progress(selected, "versions", "pack", len(selected)):
         build_id = entry["id"]
-        log(f"\n{schema_for(build_id)}  ({entry.get('label', build_id)})")
+        log(f"\n{schema_name(build_id)}  ({entry.get('label', build_id)})")
         fetch_extra_tables(build_id)
         tables, rows, fallbacks = build_version(
             con, build_id, catalog, args.refresh_dbd)
         tdb = load_tdb(con, build_id, entry.get("tdb_tag"))
-        views = build_views(con, schema_for(build_id))
+        views = build_views(con, schema_name(build_id))
         total_tables += tables + tdb
         total_rows += rows
         total_views += views

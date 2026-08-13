@@ -47,8 +47,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from packs import select
-from repo import CACHE, ROOT, survive_console_encoding
+from packs import schema_name, select
+from repo import (CACHE, DIM, GREEN, RESET, ROOT, YELLOW, log,
+                  survive_console_encoding)
 
 survive_console_encoding()
 
@@ -64,24 +65,10 @@ except ImportError:  # pragma: no cover - a development-tool dependency
 DATA = ROOT / "site" / "data"
 DB_PATH = CACHE / "epsilook-packs.duckdb"
 
-RED, GREEN, YELLOW, DIM, RESET = "\033[31m", "\033[32m", "\033[33m", "\033[2m", "\033[0m"
 
 # DuckDB column types by the Python type a pack actually carries. A pack holds
 # no floats outside meta, but a section is free to grow one.
 SQL_TYPE = {bool: "BOOLEAN", int: "BIGINT", float: "DOUBLE", str: "VARCHAR"}
-
-
-def log(message: str) -> None:
-    print(message, flush=True)
-
-
-def schema_of(pack_id: str) -> str:
-    """`9.2.7.45745` -> `v9_2_7`, the same spelling the source mirror uses.
-
-    The build suffix is dropped: a schema names a PATCH, and carrying the
-    hotfix number would rename every schema on a bump for no gain.
-    """
-    return "v" + "_".join(pack_id.split(".")[:3]).replace("-", "_")
 
 
 def column_type(values: list[Any]) -> str:
@@ -144,7 +131,7 @@ def load_pack(connection: Any, pack_id: str, path: Path) -> tuple[int, int]:
     whole pack in ONE nested row, so each of the ~62 sections re-scans the
     entire artifact to project itself.
     """
-    schema = schema_of(pack_id)
+    schema = schema_name(pack_id)
     connection.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
     connection.execute(f'CREATE SCHEMA "{schema}"')
 
@@ -185,7 +172,7 @@ def main() -> int:
 
     if args.list:
         for pack, path in chosen:
-            log(f"  {schema_of(pack.id):<10} {pack.id:<22} {path.stat().st_size / 1e6:>6.1f} MB  {pack.label}")
+            log(f"  {schema_name(pack.id):<10} {pack.id:<22} {path.stat().st_size / 1e6:>6.1f} MB  {pack.label}")
         return 0
 
     Path(args.db).parent.mkdir(parents=True, exist_ok=True)
@@ -198,7 +185,7 @@ def main() -> int:
             tables, rows = load_pack(connection, pack.id, path)
             total_tables += tables
             total_rows += rows
-            log(f"  {schema_of(pack.id):<10} {tables:>3} tables  {rows:>10,} rows"
+            log(f"  {schema_name(pack.id):<10} {tables:>3} tables  {rows:>10,} rows"
                 f"  [{time.time() - started:.1f}s]")
     finally:
         connection.close()

@@ -31,7 +31,7 @@ import datetime as dt
 import re
 import sys
 
-from repo import BUMP_PATHS, ROOT, changed_under, git
+from repo import BUMP_PATHS, DIM, GREEN, RESET, ROOT, YELLOW, changed_under, git
 
 SITE = ROOT / "site"
 
@@ -41,7 +41,6 @@ SITE = ROOT / "site"
 ASSET_RE = re.compile(r'((?:href|src)="[^"]*?(?:css|js)/[^"?/]+\?v=)([0-9a-z]+)(")')
 PARSE_RE = re.compile(r"^(\d{8})([a-z]*)$")
 
-GREEN, YELLOW, DIM, RESET = "\033[32m", "\033[33m", "\033[2m", "\033[0m"
 
 
 def versions_in(html: str) -> set[str]:

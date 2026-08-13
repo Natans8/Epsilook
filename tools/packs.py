@@ -147,6 +147,16 @@ WAGO = "wago"
 ARCHIVE = "archive"
 
 
+def schema_name(pack_id: str) -> str:
+    """The database schema a pack's tables live in, from its id.
+
+    A free function as well as a `Pack` property, because both databases also
+    name schemas for builds that are not roster rows -- the pinned sound-kit
+    build among them.
+    """
+    return "v" + "_".join(pack_id.split(".")[:3]).replace("-", "_")
+
+
 @dataclass(frozen=True)
 class Pack:
     """One shipped game version. A patch bump edits `build` and nothing else."""
@@ -164,6 +174,22 @@ class Pack:
     def patch(self) -> str:
         """`"1.15.9.69109"` -> `"1.15.9"`. The label's version half."""
         return ".".join(self.build.split(".")[:3])
+
+    @property
+    def schema(self) -> str:
+        """`"9.2.7.45745"` -> `"v9_2_7"`. The pack's schema in either database.
+
+        Derived from the roster row rather than spelled out per database, so
+        the SOURCE mirror and the PACK mirror cannot disagree about where a
+        build lives -- which is the only thing that lets the two be joined.
+        They did disagree: one turned `12.1.0-ptr` into `v12_1_0-ptr`, a
+        hyphen no unquoted SQL identifier may carry.
+
+        Major.minor.patch, because it is unique across the roster and a schema
+        you have to type needs to be short. The build number lives in
+        `ref.game_build`.
+        """
+        return schema_name(self.id)
 
     @property
     def id(self) -> str:

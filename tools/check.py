@@ -45,8 +45,8 @@ import sys
 import time
 from pathlib import Path
 
-from repo import (BUMP_PATHS, CACHE, ROOT, changed_under, git, have_ref,
-                  survive_console_encoding)
+from repo import (BUMP_PATHS, CACHE, DIM, GREEN, RED, RESET, ROOT, YELLOW,
+                  changed_under, git, have_ref, survive_console_encoding)
 
 # A failure detail quotes whatever the failing tool printed, and node --test
 # opens every line with U+25B6.
@@ -188,7 +188,6 @@ PYTHON_SOURCES = ("build/build_data.py", "build/locale_data.py", "build/pack", "
 # most, so a day is generous and keeps a normal working day to one request.
 FRESHNESS_CACHE_HOURS = 24
 
-RED, GREEN, YELLOW, DIM, RESET = "\033[31m", "\033[32m", "\033[33m", "\033[2m", "\033[0m"
 
 
 class Report:

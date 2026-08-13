@@ -32,14 +32,13 @@ from pathlib import Path
 
 from packs import select
 
-from repo import CACHE
+from repo import CACHE, DIM, GREEN, RESET, YELLOW
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "site" / "data"
 LISTFILE = CACHE / "listfile" / "community-listfile.csv"
 TAG_FILE = CACHE / "listfile" / "release-tag.txt"
 
-RED, GREEN, YELLOW, DIM, RESET = "\033[31m", "\033[32m", "\033[33m", "\033[2m", "\033[0m"
 
 
 def pack_files(path: Path) -> tuple[dict[int, str], str]:

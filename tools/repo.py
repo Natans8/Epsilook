@@ -19,6 +19,21 @@ import sys
 from pathlib import Path
 
 
+# ANSI colours, named once. Every tool here reports the same three outcomes --
+# fine, worth a look, wrong -- and five of them had defined this line for
+# themselves, which is five places for one palette to drift.
+RED, GREEN, YELLOW, DIM, RESET = "\033[31m", "\033[32m", "\033[33m", "\033[2m", "\033[0m"
+
+
+def log(message: str) -> None:
+    """Print one line of progress, flushed.
+
+    Flushed because these tools take minutes and are watched while they run:
+    a buffered line arrives after the thing it describes has finished.
+    """
+    print(message, flush=True)
+
+
 def survive_console_encoding() -> None:
     """Degrade characters the console cannot encode instead of dying on them.
 

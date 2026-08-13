@@ -28,6 +28,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from repo import DIM, GREEN, RED, RESET, YELLOW
+
 ROOT = Path(__file__).resolve().parent.parent
 INDEX = ROOT / "site" / "index.html"
 SITE = "https://natans8.github.io/Epsilook/"
@@ -35,7 +37,6 @@ SITE = "https://natans8.github.io/Epsilook/"
 ASSET_RE = re.compile(r'(?:href|src)="((?:css|js)/[^"?]+\?v=[0-9a-z]+)"')
 VERSION_RE = re.compile(r'(?:href|src)="(?:css|js)/[^"?]+\?v=([0-9a-z]+)"')
 
-RED, GREEN, YELLOW, DIM, RESET = "\033[31m", "\033[32m", "\033[33m", "\033[2m", "\033[0m"
 
 
 def bust(url: str, token: int) -> str:
