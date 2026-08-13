@@ -74,6 +74,7 @@ tools/                   every routine that would otherwise be a thing to rememb
   check.py               every check, plus the invariants that fail silently
   bump.py                move the ?v= cache-buster (both spots)
   rebuild.py             rebuild packs with their own labels; --verify the build
+  listfile.py            would a newer community listfile change any shipped pack?
   verify_live.py         wait for Pages, then check what it actually serves
   verify_site.sh         is this assembled document root actually servable?
   docker_smoke.py        build the image, run it, prove it serves the site
