@@ -11,7 +11,8 @@ import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
 import {formatQuery} from "../../src/search/format";
-import {equivalent, KEPT, RULES, simplify, suggestions} from "../../src/search/simplify";
+import {KEPT, RULES} from "../../src/search/rules";
+import {equivalent, simplify, suggestions} from "../../src/search/simplify";
 
 import {answers, complement, EVERY, parsed} from "./world";
 

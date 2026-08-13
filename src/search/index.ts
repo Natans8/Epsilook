@@ -67,8 +67,11 @@ export {parse, propOf} from "./parse";
 
 export {formatQuery, queryKey} from "./format";
 
-export type {Boundary, Rule, RuleExample, RuleTier, Simplified, Suggestion} from "./simplify";
-export {equivalent, KEPT, RULES, simplify, suggestions} from "./simplify";
+export type {Boundary, Rule, RuleExample, RuleTier} from "./rules";
+export {KEPT, RULES} from "./rules";
+
+export type {Simplified, Suggestion} from "./simplify";
+export {equivalent, simplify, suggestions} from "./simplify";
 
 export type {Dataset, Row, RowAsk, RowSource, Stored} from "./rows";
 export {contentMatches, matchProp, plainMatches, propRefMatches, rowMatches} from "./rows";
