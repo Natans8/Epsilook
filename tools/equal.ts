@@ -9,9 +9,10 @@
  */
 import {equivalent, formatQuery, parse} from "../src/search/index";
 
-// A query may itself start with a dash — negation is language syntax — so there are no flags here at all:
-// both arguments are queries, whatever they start with, and a leading "--" separator is tolerated.
-const positionals = process.argv.slice(2).filter((arg, i) => !(i === 0 && arg === "--"));
+import {cliArgs} from "./args";
+
+// Both arguments are queries, whatever they start with, so this CLI declares no flags at all.
+const {positionals} = cliArgs([]);
 
 if (positionals.length !== 2) {
     console.error("usage: npm run equal -- '<query>' '<query>'");

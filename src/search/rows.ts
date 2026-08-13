@@ -196,9 +196,20 @@ function matchesFlagWord(
 ): boolean {
     if (!prop.types.includes(flag) || stored === undefined) return false;
     if (!text.accepts.some((accepted) => accepted.name === expr.op)) return false;
-    const written = "text" in expr.operand ? expr.operand.text : String(expr.operand.value);
     const words = [name, ...(prop.full === undefined ? [] : [prop.full]), ...(prop.synonyms ?? [])];
-    return words.some((word) => runMatch(expr.op, text, word, written));
+    return words.some((word) => runMatch(expr.op, text, word, textOf(expr.operand)));
+}
+
+/**
+ * An operand as plain text: carried text as itself, a typed value through its default string form.
+ *
+ * This is the reading a textual matcher takes, shared so nothing restates it beside the dispatch it feeds.
+ *
+ * @param operand The operand.
+ * @returns Its text.
+ */
+export function textOf(operand: ParsedOperand): string {
+    return "text" in operand ? operand.text : String(operand.value);
 }
 
 /**
@@ -212,7 +223,7 @@ function matchesFlagWord(
  *
  * @param prop The property.
  * @param operand The operand.
- * @param notations The notations the dispatch may read, defaulting to all of the property's.
+ * @param notations The notations the dispatch may read — a caller passes the property's own for full dispatch.
  * @returns The value and its notation, or `null` when nothing accepts the operand.
  */
 export function resolveOperand(

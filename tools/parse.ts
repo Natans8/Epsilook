@@ -11,13 +11,10 @@
  */
 import {parse} from "../src/search/index";
 
-// A query may itself start with a dash — negation is language syntax — so flags stop at the first
-// non-flag argument and everything after is the query, the way grep and git treat their operands.
-const args = process.argv.slice(2);
-const flagCount = args.findIndex((arg) => arg !== "--typing" && arg !== "--compact");
-const flags = args.slice(0, flagCount < 0 ? args.length : flagCount);
-const positionals = args.slice(flags.length).filter((arg, i) => !(i === 0 && arg === "--"));
-const values = {typing: flags.includes("--typing"), compact: flags.includes("--compact")};
+import {cliArgs} from "./args";
+
+const {flags, positionals} = cliArgs(["--typing", "--compact"]);
+const values = {typing: flags.has("--typing"), compact: flags.has("--compact")};
 
 if (positionals.length === 0) {
     console.error("usage: npm run parse -- [--typing] [--compact] '<query>'");

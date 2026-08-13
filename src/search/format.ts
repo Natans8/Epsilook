@@ -209,6 +209,32 @@ function clauseText(clause: Clause, tier: Spelling): string | null {
     return body === null ? null : `${negate}${body}`;
 }
 
+/**
+ * The lone positive term a scope's spelling promotes out of the braces, or null when the braces stay.
+ *
+ * A scope of one evaluable term is that term, so its spelling drops the braces — for a content or kind word, whose
+ * text means the same on either side of them, and for a count whose value opens with an operator, where the
+ * promoted spelling is the column-form desugar inverted and re-reads as this same scope. Every other bound word
+ * stays braced: outside its scope it would mean something different, or nothing.
+ *
+ * Exported for the simplifier, whose unwrapping rewrites and round-trip guard must agree with the formatter on
+ * exactly which scopes shed their braces — both read the decision here. The decision is tier-independent: which
+ * characters open a value never depends on the value's own spelling.
+ *
+ * @param terms A scope test's runs.
+ * @returns The term the spelling promotes, or null.
+ */
+export function unbracedTerm(terms: ReadonlyArray<readonly ScopeTerm[]>): ScopeTerm | null {
+    const flat = terms.flat().filter((t) => t.state === "ok" && t.ask !== null);
+    if (flat.length !== 1 || flat[0].not) return null;
+    const [term] = flat;
+    const ask = term.ask;
+    if (ask === null) return null;
+    if (ask.on === "content" || ask.on === "kindWord") return term;
+    if (ask.on === "count" && OPENS_OPERATOR.test(valueText(ask.value))) return term;
+    return null;
+}
+
 function askText(ask: Ask, tier: Spelling): string | null {
     if (ask.on === "plain") return valueText(ask.value, undefined, tier);
     if (ask.on === "prop") {
@@ -237,21 +263,12 @@ function askText(ask: Ask, tier: Spelling): string | null {
             .map((term) => ({term, text: termText(term, tier)}))
             .filter((pair): pair is { term: ScopeTerm; text: string } => pair.text !== null))
         .filter((run) => run.length > 0);
-    const flat = runs.flat();
-    if (flat.length === 0) return exists;
-    // A single positive term needs no brace — a scope of one clause is that clause — except a bind, whose word
-    // means something different (or nothing) outside its scope.
-    if (flat.length === 1) {
-        const {term, text} = flat[0];
-        if (!term.not && (term.ask?.on === "content" || term.ask?.on === "kindWord")) {
-            return `${head}${GRAMMAR.bind}${text}`;
-        }
-        // The one bind that does escape its scope: a lone count opened by an operator binds through the head
-        // itself — the column-form desugar, inverted.
-        if (!term.not && term.ask?.on === "count") {
-            const value = valueText(term.ask.value, undefined, tier);
-            if (OPENS_OPERATOR.test(value)) return `${head}${value}`;
-        }
+    if (runs.length === 0) return exists;
+    const lone = unbracedTerm(test.terms);
+    if (lone !== null && lone.ask !== null) {
+        if (lone.ask.on === "count") return `${head}${valueText(lone.ask.value, undefined, tier)}`;
+        const text = termText(lone, tier);
+        if (text !== null) return `${head}${GRAMMAR.bind}${text}`;
     }
     const body = runs.map((run) => run.map((pair) => pair.text).join(" ")).join(` ${GRAMMAR.or} `);
     return `${head}${GRAMMAR.bind}${GRAMMAR.scope.open}${body}${GRAMMAR.scope.close}`;

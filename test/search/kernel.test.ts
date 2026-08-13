@@ -8,21 +8,12 @@
 import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
-import {run} from "../../src/search/kernel";
-import {parse} from "../../src/search/parse";
-import type {Ask, Parsed} from "../../src/search/parse";
+import type {Ask} from "../../src/search/parse";
 import type {Dataset} from "../../src/search/rows";
 
-import {complement, DATA, EVERY} from "./world";
+import {answers, complement, DATA, EVERY, parsed} from "./world";
 
-function parsed(query: string): Parsed {
-    const result = parse(query);
-    const errors = result.diagnostics.filter((d) => d.severity === "error");
-    assert.deepEqual(errors, [], `query "${query}" should parse cleanly`);
-    return result;
-}
-
-const ids = (query: string, data: Dataset = DATA): number[] => [...run(parsed(query), data)].toSorted((a, b) => a - b);
+const ids = (query: string, data: Dataset = DATA): number[] => answers(parsed(query), data);
 
 describe("the walk", () => {
     it("answers a column content term over every row of the column", () => {

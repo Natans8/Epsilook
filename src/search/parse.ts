@@ -315,7 +315,13 @@ export const propOf = (ref: PropRef): Prop => ref.kind.props[ref.prop];
  */
 const quantity = (type: AxisType): boolean => type.quantity === true;
 
-const anyOfExpr = (alternatives: readonly ValueExpr[]): ValueExpr => ({op: "anyOf", alternatives});
+/**
+ * A group of alternatives as one expression.
+ *
+ * Exported for simplification, which builds alternative groups when folding clauses — the one expression node it
+ * constructs that is not already in the tree it rewrites.
+ */
+export const anyOfExpr = (alternatives: readonly ValueExpr[]): ValueExpr => ({op: "anyOf", alternatives});
 
 /**
  * Why a pattern will not compile, or null when it will.
@@ -1261,19 +1267,17 @@ class Parser {
                 };
                 return this.withGlueRepair(main, segs.slice(2), pend);
             }
-            if (op !== undefined && operand.form !== "bare") {
-                const main = operand.form === "phrase"
+            if (op !== undefined) {
+                // A bare operand reaches here only through the whitespace bridge — adjacent bare segments never
+                // come from one token — so it is the spaced spelling of the glued operator form, and its
+                // alternatives split at the separator the glued form would have.
+                const bareParts = operand.text.split(GRAMMAR.or).filter((part) => part !== "");
+                const alternatives = operand.form === "phrase" ? null
+                    : operand.form === "bare" ? (bareParts.length > 0 ? bareParts : [operand.text])
+                        : this.splitAlternatives(operand.text);
+                const main = alternatives === null
                     ? ctx.operator(op, operand.text, {whole: first.text + operand.text, phrase: true})
-                    : combineAlternatives(this.splitAlternatives(operand.text)
-                        .map((alt) => ctx.operator(op, alt, {whole: first.text + alt})));
-                return this.withGlueRepair(main, segs.slice(2), pend);
-            }
-            if (op !== undefined && operand.form === "bare") {
-                // Adjacent bare segments never come from one token — only the whitespace bridge produces them —
-                // so this is the spaced spelling of the glued operator form.
-                const parts = operand.text.split(GRAMMAR.or).filter((part) => part !== "");
-                const main = combineAlternatives((parts.length > 0 ? parts : [operand.text])
-                    .map((alt) => ctx.operator(op, alt, {whole: first.text + alt})));
+                    : combineAlternatives(alternatives.map((alt) => ctx.operator(op, alt, {whole: first.text + alt})));
                 return this.withGlueRepair(main, segs.slice(2), pend);
             }
         }

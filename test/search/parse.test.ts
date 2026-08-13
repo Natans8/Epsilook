@@ -59,6 +59,10 @@ const valueOf = (ask: Ask): ValueExpr => {
     return test.value;
 };
 
+/** The ask with spans stripped, for comparing one spelling's structure against another's. */
+const shape = (query: string): unknown =>
+    JSON.parse(JSON.stringify(ok(query), (key: string, value: unknown) => (key === "span" ? undefined : value)));
+
 /* ------------------------------------------------------------------ tier 2: the documented language */
 
 describe("clauses and alternation", () => {
@@ -807,10 +811,6 @@ describe("totality", () => {
 });
 
 describe("the operator-glued inner bind", () => {
-    /** The ask with spans stripped, for comparing a braceless spelling's structure against its braced twin. */
-    const shape = (query: string): unknown =>
-        JSON.parse(JSON.stringify(ok(query), (key: string, value: unknown) => (key === "span" ? undefined : value)));
-
     it("reads a resolved word glued to an operator as the one-term scope the braces spell", () => {
         assert.deepEqual(shape("model:count<5"), shape("model:{count<5}"));
         assert.deepEqual(shape("model:file=foo"), shape("model:{file=foo}"));
@@ -829,10 +829,6 @@ describe("the operator-glued inner bind", () => {
 });
 
 describe("whitespace bridging inside a scope", () => {
-    /** The ask with spans stripped, for comparing a spaced spelling's structure against its glued twin. */
-    const shape = (query: string): unknown =>
-        JSON.parse(JSON.stringify(ok(query), (key: string, value: unknown) => (key === "span" ? undefined : value)));
-
     it("reads an operator across any amount of whitespace, but only inside the braces", () => {
         assert.deepEqual(shape("model:{count > 5}"), shape("model:{count>5}"));
         assert.deepEqual(shape("model:{count >5}"), shape("model:{count>5}"));

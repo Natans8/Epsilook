@@ -234,6 +234,15 @@ export function roleNames(): string[] {
     return Object.keys(ROLES).toSorted();
 }
 
+/**
+ * One past the largest mask the roles can tell apart: every subset of the declared role bits lies below it.
+ *
+ * A bit outside every role's test cannot change any role's answer, so exhausting the masks below this bound decides
+ * any role-to-role question — which is how simplification proves one role implies another without a second copy of
+ * the role table. Derived from the declarations, so a new role bit widens it by itself.
+ */
+export const ROLE_MASK_LIMIT: number = Object.values(ROLE_BITS).reduce((all, bit) => all | bit, 0) + 1;
+
 const roleMatches = (mask: number, role: BitTest): boolean =>
     (role.any === undefined || (mask & role.any) !== 0)
     && (role.all === undefined || (mask & role.all) === role.all);

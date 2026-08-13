@@ -6,11 +6,16 @@
  * break is not being tested. The kernel proves its walk here and the simplifier proves its rewrites answer-equal
  * here, against the same spells, so a rule the kernel would expose cannot hide from the simplifier's fixtures.
  */
+import {strict as assert} from "node:assert";
+
+import {run} from "../../src/search/kernel";
 import {
     attached, chain, delivery, description, effect, expansion, missile, name as nameKind, scale,
     sound as soundKind, spellId, tint,
 } from "../../src/search/kinds";
 import type {Kind} from "../../src/search/kinds";
+import {parse} from "../../src/search/parse";
+import type {Parsed} from "../../src/search/parse";
 import type {Dataset, Row, RowSource, Stored} from "../../src/search/rows";
 import {setOrdinalLadder} from "../../src/search/value-types";
 
@@ -130,3 +135,18 @@ export const EVERY: readonly number[] = WORLD.map((_, index) => index);
 /** The spells NOT in the given set. */
 export const complement = (spells: readonly number[]): number[] =>
     EVERY.filter((index) => !spells.includes(index));
+
+/**
+ * Parses a fixture query, asserting it parses cleanly — a broken fixture should fail its test loudly rather than
+ * quietly select nothing.
+ */
+export function parsed(query: string): Parsed {
+    const result = parse(query);
+    const errors = result.diagnostics.filter((d) => d.severity === "error");
+    assert.deepEqual(errors, [], `query "${query}" should parse cleanly`);
+    return result;
+}
+
+/** The spells a parse selects, sorted. */
+export const answers = (p: Parsed, data: Dataset = DATA): number[] =>
+    [...run(p, data)].toSorted((a, b) => a - b);

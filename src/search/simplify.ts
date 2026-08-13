@@ -33,17 +33,17 @@
  * through simplification: two queries ask the same question exactly when their simplified canonical forms agree.
  */
 import type {Column} from "./columns";
-import {clauseKey, formatQuery, queryKey, termKey} from "./format";
+import {clauseKey, formatQuery, queryKey, termKey, unbracedTerm} from "./format";
 import type {Kind, Prop} from "./kinds";
 import {sentinelOf} from "./kinds";
 import type {
     Ask, Clause, Parsed, ParsedOperand, PropRef, RowTest, ScopeAsk, ScopeTerm, Span, ValueExpr,
 } from "./parse";
-import {COUNT_PROP, parse, propOf} from "./parse";
-import {resolveOperand} from "./rows";
+import {anyOfExpr, COUNT_PROP, parse, propOf} from "./parse";
+import {resolveOperand, textOf} from "./rows";
 import {kindsOf} from "./schema";
 import type {AxisType} from "./value-types";
-import {matcher, SUBSTRING_TYPES} from "./value-matching";
+import {matcher, ROLE_MASK_LIMIT, SUBSTRING_TYPES} from "./value-matching";
 
 /* ----------------------------------------------------------------- the public surface */
 
@@ -163,15 +163,22 @@ function keyOfLit(lit: Lit): string | null {
     return clauseKey({span: NOWHERE, not: lit.not, state: "ok", ask: lit.ask});
 }
 
-/** A term's identity, the scope-level counterpart of {@link keyOfLit}. */
-function keyOfTerm(t: ScopeTerm): string | null {
-    return termKey(t);
-}
-
 /** The identity of an ask's positive reading, for the oracle's cheap first answer. */
 function keyOfAsk(ask: Ask): string | null {
     return keyOfLit({not: false, ask});
 }
+
+/**
+ * A member's identity signed with its polarity, unkeyable members marked by a sentinel — the encoding every
+ * alternation-level comparison reads, so the sign characters and the sentinel live once.
+ */
+const signedKey = (not: boolean, key: string | null): string => `${not ? "-" : "+"}${key ?? "\u0000"}`;
+
+/** Every clause's signed identity, in group order. */
+const litKeys = (group: readonly Lit[]): string[] => group.map((lit) => signedKey(lit.not, keyOfLit(lit)));
+
+/** Every term's signed identity, in run order. */
+const termKeys = (run: readonly ScopeTerm[]): string[] => run.map((t) => signedKey(t.not, termKey(t)));
 
 /* ------------------------------------------------------------------- structural identity
  *
@@ -227,19 +234,22 @@ function testShape(test: RowTest | null): unknown {
 }
 
 /**
- * The ask an ask's own spelling re-reads as: a single-run scope unwraps exactly as the formatter spells it.
+ * The ask an ask's own spelling re-reads as: a scope that sheds its braces — {@link unbracedTerm}, the decision
+ * shared with the formatter — unwraps exactly as it spells, and a scope with nothing evaluable spells existence.
  *
  * Shapes must compare modulo this unwrapping, because the two structures are one question with one spelling —
  * `model:{fire}` formats braceless and re-parses as the content test — and a guard that separated them would
  * reject any rewrite of a tree that happens to still carry the scope-shaped parse of that spelling elsewhere.
+ * A promoted count needs nothing here: its braceless spelling re-parses back to the same one-term scope.
  */
 function spelledAsk(ask: Ask): Ask {
     if (ask.on !== "column" && ask.on !== "kind") return ask;
     const test = ask.test;
-    if (test === null || test.is !== "scope" || test.terms.length !== 1) return ask;
-    const rows = test.terms[0].filter((t) => t.state === "ok" && t.ask !== null);
-    if (rows.length === 0) return {...ask, test: {is: "exists"}};
-    return unscopedAsk(ask, rows);
+    if (test === null || test.is !== "scope") return ask;
+    if (test.terms.flat().every((t) => t.state !== "ok" || t.ask === null)) return {...ask, test: {is: "exists"}};
+    const lone = unbracedTerm(test.terms);
+    if (lone === null || lone.ask?.on === "count") return ask;
+    return unwrappedAsk(ask, lone);
 }
 
 /** A JSON-ready shape for one clause's ask. */
@@ -274,11 +284,6 @@ function scopeKinds(ask: Ask): readonly Kind[] {
     if (ask.on === "kind") return [ask.kind];
     if (ask.on === "prop") return [ask.ref.kind];
     return [];
-}
-
-/** The written text of an operand, for running a textual matcher over it. */
-function textOf(operand: ParsedOperand): string {
-    return "text" in operand ? operand.text : String(operand.value);
 }
 
 /** A closed-or-open numeric interval, with the notation that read its bounds. */
@@ -344,6 +349,16 @@ function subInterval(a: Interval, b: Interval): boolean {
     return loHolds && hiHolds;
 }
 
+/** Whether interval `a` ends before interval `b` begins, openness respected. */
+function endsBelow(a: Interval, b: Interval): boolean {
+    return a.hi < b.lo || (a.hi === b.lo && (a.hiOpen || b.loOpen));
+}
+
+/** Whether two intervals share no point. */
+function disjoint(a: Interval, b: Interval): boolean {
+    return endsBelow(a, b) || endsBelow(b, a);
+}
+
 /** Whether a number lies inside an interval. */
 function inInterval(iv: Interval, n: number): boolean {
     return (n > iv.lo || (n === iv.lo && !iv.loOpen)) && (n < iv.hi || (n === iv.hi && !iv.hiOpen));
@@ -355,26 +370,21 @@ function closedInterval(iv: Interval): boolean {
 }
 
 /**
- * Every mask the bit-role exhaustion tests. Roles are bit tests over a small universe; testing every mask up to
- * this bound decides role-to-role implication from the matcher itself, with no second copy of the role table.
- * Generous on purpose — the cost is a thousand boolean tests, and a role bit above it would only ever make the
- * oracle more conservative, never wrong, because implication over a subuniverse is checked on fewer witnesses...
- * so the bound must stay above every role bit. The registered roles use five bits; this allows ten.
+ * Role-to-role implication on a bitmask property, decided by exhausting every distinguishable mask through the
+ * matcher — {@link ROLE_MASK_LIMIT} bounds them from the role declarations — with no second copy of the role table.
  */
-const BIT_UNIVERSE = 1 << 10;
-
-/** Role-to-role implication on a bitmask property, decided by exhausting the bit universe through the matcher. */
 function impliesRole(type: AxisType, a: ParsedOperand, b: ParsedOperand): boolean {
     const run = matcher("exact", type.name);
     if (run === undefined) return false;
     const aText = textOf(a);
     const bText = textOf(b);
-    for (let mask = 0; mask < BIT_UNIVERSE; mask++) {
-        if (run(mask, aText) && !run(mask, bText)) return false;
-    }
     // An operand no mask satisfies is not a role; implication from the empty set proves nothing worth acting on.
     let satisfiable = false;
-    for (let mask = 0; mask < BIT_UNIVERSE && !satisfiable; mask++) satisfiable = run(mask, aText);
+    for (let mask = 0; mask < ROLE_MASK_LIMIT; mask++) {
+        if (!run(mask, aText)) continue;
+        if (!run(mask, bText)) return false;
+        satisfiable = true;
+    }
     return satisfiable;
 }
 
@@ -450,6 +460,7 @@ function contentSafe(kinds: readonly Kind[], operand: ParsedOperand): boolean {
 function impliesContentValue(kinds: readonly Kind[], a: ValueExpr, b: ValueExpr): boolean {
     if (a.op === "anyOf") return a.alternatives.every((alt) => impliesContentValue(kinds, alt, b));
     if (b.op === "anyOf") return b.alternatives.some((alt) => impliesContentValue(kinds, a, alt));
+    // TEXT_OPS spelled out, because the compiler narrows the expression union only on literal comparisons.
     if (a.op !== "exact" && a.op !== "contains" && a.op !== "glob") return false;
     if (b.op !== "contains") return false;
     const aOperand = a.operand;
@@ -468,8 +479,8 @@ function impliesContentValue(kinds: readonly Kind[], a: ValueExpr, b: ValueExpr)
 /** Implication between two row-level scope asks, pointwise over one row of one of the given kinds. */
 function impliesTermAsk(kinds: readonly Kind[], a: ScopeAsk, b: ScopeAsk): boolean {
     if (a.on === "count" || b.on === "count") return false;
-    const ka = keyOfTerm(term(false, a));
-    const kb = keyOfTerm(term(false, b));
+    const ka = termKey(term(false, a));
+    const kb = termKey(term(false, b));
     if (ka !== null && ka === kb) return true;
     if (a.on === "kindWord" || b.on === "kindWord") return a.on === "kindWord" && b.on === "kindWord" && a.kind === b.kind;
     if (a.on === "content" && b.on === "content") return impliesContentValue(kinds, a.value, b.value);
@@ -573,12 +584,7 @@ function countClassOf(t: NormTerm): CountClass | null {
 }
 
 /** Whether a run's count terms all guarantee at least one satisfying row, making the run existential. */
-function runExistential(run: NormRun): boolean {
-    return run.counts.every((t) => {
-        const cls = countClassOf(t);
-        return cls === "some";
-    });
-}
+const runExistential = (run: NormRun): boolean => run.counts.every((t) => countClassOf(t) === "some");
 
 /** Whether one run implies another: a witness row for `a` is a witness for `b`, count constraints carried. */
 function runImplies(kinds: readonly Kind[], a: NormRun, b: NormRun): boolean {
@@ -605,7 +611,7 @@ function runImplies(kinds: readonly Kind[], a: NormRun, b: NormRun): boolean {
 /** Whether two runs constrain rows identically, by term identity. */
 function sameRowTerms(a: NormRun, b: NormRun): boolean {
     const keysOf = (run: NormRun): string =>
-        run.rows.map((t) => keyOfTerm(term(t.not, t.ask)) ?? "\u0000").toSorted().join("\u0001");
+        run.rows.map((t) => termKey(term(t.not, t.ask)) ?? "\u0000").toSorted().join("\u0001");
     return keysOf(a) === keysOf(b);
 }
 
@@ -647,7 +653,7 @@ function dedupeMembers<T>(items: readonly T[], alg: Members<T>): T[] | null {
     const kept = items.filter((item) => {
         const key = alg.keyOf(item);
         if (key === null) return true;
-        const signed = `${alg.negated(item) ? "-" : "+"}${key}`;
+        const signed = signedKey(alg.negated(item), key);
         if (seen.has(signed)) return false;
         seen.add(signed);
         return true;
@@ -697,7 +703,7 @@ const LITS: Members<Lit> = {
 /** The algebra over the terms of one scope, dispatching content across the scope's kinds. */
 function termMembers(kinds: readonly Kind[]): Members<ScopeTerm> {
     return {
-        keyOf: keyOfTerm,
+        keyOf: termKey,
         negated: (t) => t.not,
         implies: (a, b) => a.ask !== null && b.ask !== null && impliesTermAsk(kinds, a.ask, b.ask),
     };
@@ -716,6 +722,22 @@ function mapGroups(tree: Tree, rewrite: (group: readonly Lit[]) => readonly Lit[
     return changed ? next : null;
 }
 
+/** Rewrites each clause through one function; `null` from every clause means an unchanged tree. */
+function mapLits(tree: Tree, rewrite: (lit: Lit) => Lit | null): Tree | null {
+    return mapGroups(tree, (group) => {
+        let changed = false;
+        const lits = group.map((lit) => {
+            const next = rewrite(lit);
+            if (next !== null) changed = true;
+            return next ?? lit;
+        });
+        return changed ? lits : null;
+    });
+}
+
+/** What a rule tells the reader about a query whose every alternative is dead. */
+const ALL_DEAD = "every alternative of this query contradicts itself; it is returned as written";
+
 /** What a scope rewrite may say about one clause's runs. */
 type ScopeRewrite =
     | { readonly runs: ReadonlyArray<readonly ScopeTerm[]> }
@@ -724,18 +746,27 @@ type ScopeRewrite =
     | null;
 
 /**
- * The ask a rewritten scope is left asking — spelled the way the formatter spells it, because a scope of one
- * positive term formats braceless and would re-read as the unwrapped structure: a lone content term is the content
- * test, a lone kind word the kind-exists ask, anything else the scope itself.
+ * The unwrapped structure a promoted term's spelling re-reads as: a lone content term is the content test, a lone
+ * kind word the kind-exists ask — a kind ask keeps its scope when the word names some other kind, where the
+ * promoted spelling would not re-read. Which terms promote at all is {@link unbracedTerm}'s decision.
+ */
+function unwrappedAsk(ask: Ask & { on: "column" | "kind" }, lone: ScopeTerm): Ask {
+    const only = lone.ask;
+    if (only?.on === "content") return {...ask, test: {is: "content", value: only.value}};
+    if (only?.on === "kindWord" && (ask.on !== "kind" || ask.kind === only.kind)) {
+        return {on: "kind", kind: only.kind, test: {is: "exists"}};
+    }
+    return {...ask, test: {is: "scope", terms: [[lone]]}};
+}
+
+/**
+ * The ask a rewritten run is left asking — spelled the way the formatter spells it, because a scope that sheds its
+ * braces re-reads as the unwrapped structure. A promoted count keeps the scope: its braceless spelling re-reads as
+ * this very structure, so there is nothing to unwrap.
  */
 function unscopedAsk(ask: Ask & { on: "column" | "kind" }, rows: readonly ScopeTerm[]): Ask {
-    if (rows.length === 1 && !rows[0].not) {
-        const only = rows[0].ask;
-        if (only?.on === "content") return {...ask, test: {is: "content", value: only.value}};
-        if (only?.on === "kindWord" && (ask.on !== "kind" || ask.kind === only.kind)) {
-            return {on: "kind", kind: only.kind, test: {is: "exists"}};
-        }
-    }
+    const lone = unbracedTerm([rows]);
+    if (lone !== null && lone.ask?.on !== "count") return unwrappedAsk(ask, lone);
     return {...ask, test: {is: "scope", terms: [rows]}};
 }
 
@@ -754,7 +785,7 @@ function scopedAsk(ask: Ask & { on: "column" | "kind" }, runs: ReadonlyArray<rea
  */
 function mapScopes(
     tree: Tree, ctx: Ctx,
-    rewrite: (runs: ReadonlyArray<readonly ScopeTerm[]>, kinds: readonly Kind[], lit: Lit) => ScopeRewrite,
+    rewrite: (runs: ReadonlyArray<readonly ScopeTerm[]>, kinds: readonly Kind[]) => ScopeRewrite,
 ): Tree | null {
     let changed = false;
     const groups: (readonly Lit[] | null)[] = tree.map((group) => {
@@ -765,7 +796,7 @@ function mapScopes(
                 lits.push(lit);
                 continue;
             }
-            const result = rewrite(ask.test.terms, scopeKinds(ask), lit);
+            const result = rewrite(ask.test.terms, scopeKinds(ask));
             if (result === null) {
                 lits.push(lit);
             } else if (result === "unsatisfiable") {
@@ -781,7 +812,7 @@ function mapScopes(
     if (!changed) return null;
     const kept = groups.filter((group): group is readonly Lit[] => group !== null);
     if (kept.length === 0 && tree.length > 0) {
-        ctx.note("every alternative of this query contradicts itself; it is returned as written");
+        ctx.note(ALL_DEAD);
         return null;
     }
     return kept;
@@ -800,7 +831,7 @@ interface ValueSite {
 function propSite(ref: PropRef): ValueSite {
     return {
         prop: propOf(ref), kinds: [ref.kind],
-        keyFor: (value) => keyOfTerm(term(false, {on: "props", props: [ref], value})),
+        keyFor: (value) => termKey(term(false, {on: "props", props: [ref], value})),
     };
 }
 
@@ -808,17 +839,15 @@ function propSite(ref: PropRef): ValueSite {
 function contentSite(kinds: readonly Kind[]): ValueSite {
     return {
         prop: null, kinds,
-        keyFor: (value) => keyOfTerm(term(false, {on: "content", value})),
+        keyFor: (value) => termKey(term(false, {on: "content", value})),
     };
 }
 
 /** The site of a count value. */
-function countSite(): ValueSite {
-    return {
-        prop: COUNT_PROP, kinds: [],
-        keyFor: (value) => keyOfTerm(term(false, {on: "count", value})),
-    };
-}
+const COUNT_SITE: ValueSite = {
+    prop: COUNT_PROP, kinds: [],
+    keyFor: (value) => termKey(term(false, {on: "count", value})),
+};
 
 /** Implication between two expressions at one site, whichever half of the oracle the site calls for. */
 function impliesAtSite(site: ValueSite, a: ValueExpr, b: ValueExpr): boolean {
@@ -849,7 +878,7 @@ function mapValues(tree: Tree, rewrite: (value: ValueExpr, site: ValueSite) => V
         const terms = test.terms.map((run) => run.map((t) => {
             if (t.state !== "ok" || t.ask === null) return t;
             const site = t.ask.on === "content" ? contentSite(kinds)
-                : t.ask.on === "count" ? countSite()
+                : t.ask.on === "count" ? COUNT_SITE
                     : t.ask.on === "props" && t.ask.props.length === 1 ? propSite(t.ask.props[0]) : null;
             if (site === null || t.ask.on === "kindWord") return t;
             const value = rewrite(t.ask.value, site);
@@ -860,55 +889,53 @@ function mapValues(tree: Tree, rewrite: (value: ValueExpr, site: ValueSite) => V
         return changed ? {is: "scope", terms} : null;
     };
 
-    return mapGroups(tree, (group) => {
-        let changed = false;
-        const lits = group.map((lit): Lit => {
-            const ask = lit.ask;
-            if (ask.on === "prop" && ask.value !== null) {
-                const value = rewrite(ask.value, propSite(ask.ref));
-                if (value === null) return lit;
-                changed = true;
-                return {not: lit.not, ask: {...ask, value}};
-            }
-            if (ask.on === "column" || ask.on === "kind") {
-                const test = rewriteTest(ask.test, scopeKinds(ask));
-                if (test === null) return lit;
-                changed = true;
-                return {not: lit.not, ask: {...ask, test}};
-            }
-            return lit;
-        });
-        return changed ? lits : null;
+    return mapLits(tree, (lit) => {
+        const ask = lit.ask;
+        if (ask.on === "prop" && ask.value !== null) {
+            const value = rewrite(ask.value, propSite(ask.ref));
+            return value === null ? null : {not: lit.not, ask: {...ask, value}};
+        }
+        if (ask.on === "column" || ask.on === "kind") {
+            const test = rewriteTest(ask.test, scopeKinds(ask));
+            return test === null ? null : {not: lit.not, ask: {...ask, test}};
+        }
+        return null;
     });
 }
 
 /* ------------------------------------------------------------------------------ the rules */
 
-/** R1: a conjunction never asks one question twice, at either level. */
-function duplicateClause(tree: Tree, ctx: Ctx): Tree | null {
-    const topLevel = mapGroups(tree, (group) => dedupeMembers(group, LITS));
-    if (topLevel !== null) return topLevel;
-    return mapScopes(tree, ctx, (runs, kinds) => {
-        let changed = false;
-        const next = runs.map((run) => {
-            const deduped = dedupeMembers(run, termMembers(kinds));
-            if (deduped !== null) changed = true;
-            return deduped ?? run;
+/**
+ * A rule that applies one conjunction reducer at both levels: each top-level group, then each run of every scope.
+ * R1 and R3 are this one shape with different reducers, so the walking lives once.
+ */
+function memberRule(reduce: <T>(items: readonly T[], alg: Members<T>) => T[] | null):
+    (tree: Tree, ctx: Ctx) => Tree | null {
+    return (tree, ctx) => {
+        const topLevel = mapGroups(tree, (group) => reduce(group, LITS));
+        if (topLevel !== null) return topLevel;
+        return mapScopes(tree, ctx, (runs, kinds) => {
+            const alg = termMembers(kinds);
+            let changed = false;
+            const next = runs.map((run) => {
+                const reduced = reduce(run, alg);
+                if (reduced !== null) changed = true;
+                return reduced ?? run;
+            });
+            return changed ? {runs: next} : null;
         });
-        return changed ? {runs: next} : null;
-    });
+    };
 }
+
+/** R1: a conjunction never asks one question twice, at either level. */
+const duplicateClause = memberRule(dedupeMembers);
 
 /** R2: an alternation never offers one alternative twice. */
 function duplicateGroup(tree: Tree, ctx: Ctx): Tree | null {
-    const groupKey = (group: readonly Lit[]): string =>
-        group.map((lit) => `${lit.not ? "-" : "+"}${keyOfLit(lit) ?? "\u0000"}`).toSorted().join("\u0001");
-    const topLevel = dedupeRuns(tree, groupKey);
+    const topLevel = dedupeRuns(tree, (group) => litKeys(group).toSorted().join("\u0001"));
     if (topLevel !== null) return topLevel;
-    return mapScopes(tree, ctx, (runs, kinds) => {
-        const runKey = (run: readonly ScopeTerm[]): string => run
-            .map((t) => `${t.not ? "-" : "+"}${termMembers(kinds).keyOf(t) ?? "\u0000"}`).toSorted().join("\u0001");
-        const deduped = dedupeRuns(runs, runKey);
+    return mapScopes(tree, ctx, (runs) => {
+        const deduped = dedupeRuns(runs, (run) => termKeys(run).toSorted().join("\u0001"));
         return deduped === null ? null : {runs: deduped};
     });
 }
@@ -926,28 +953,14 @@ function dedupeRuns<T>(runs: ReadonlyArray<T>, keyOf: (run: T) => string): T[] |
 }
 
 /** R3: a conjunction keeps the stronger ask, at either level and in either polarity. */
-function impliedClause(tree: Tree, ctx: Ctx): Tree | null {
-    const topLevel = mapGroups(tree, (group) => dropImpliedMembers(group, LITS));
-    if (topLevel !== null) return topLevel;
-    return mapScopes(tree, ctx, (runs, kinds) => {
-        let changed = false;
-        const next = runs.map((run) => {
-            const dropped = dropImpliedMembers(run, termMembers(kinds));
-            if (dropped !== null) changed = true;
-            return dropped ?? run;
-        });
-        return changed ? {runs: next} : null;
-    });
-}
+const impliedClause = memberRule(dropImpliedMembers);
 
 /** R4: an alternation absorbs an alternative that only restates another with extra conditions. */
 function impliedGroup(tree: Tree, ctx: Ctx): Tree | null {
-    const topLevel = absorbRuns(tree, (group) => group.map((lit) => `${lit.not ? "-" : "+"}${keyOfLit(lit) ?? "\u0000"}`));
+    const topLevel = absorbRuns(tree, litKeys);
     if (topLevel !== null) return topLevel;
     return mapScopes(tree, ctx, (runs) => {
-        const absorbed = absorbRuns(runs, (run) => run
-            .filter((t) => t.state === "ok" && t.ask !== null)
-            .map((t) => `${t.not ? "-" : "+"}${keyOfTerm(t) ?? "\u0000"}`));
+        const absorbed = absorbRuns(runs, (run) => termKeys(run.filter((t) => t.state === "ok" && t.ask !== null)));
         return absorbed === null ? null : {runs: absorbed};
     });
 }
@@ -974,7 +987,7 @@ function contradiction(tree: Tree, ctx: Ctx): Tree | null {
     if (dead.some(Boolean)) {
         const kept = tree.filter((_, index) => !dead[index]);
         if (kept.length === 0) {
-            ctx.note("every alternative of this query contradicts itself; it is returned as written");
+            ctx.note(ALL_DEAD);
             return null;
         }
         return kept;
@@ -989,13 +1002,10 @@ function contradiction(tree: Tree, ctx: Ctx): Tree | null {
 
 /** R6: a query that constrains nothing simplifies to the query that asks nothing. */
 function everything(tree: Tree, ctx: Ctx): Tree | null {
-    const singles = tree
-        .map((group, index) => ({group, index}))
-        .filter(({group}) => group.length === 1)
-        .map(({group, index}) => ({lit: group[0], index}));
-    for (const p of singles.filter(({lit}) => !lit.not)) {
-        for (const n of singles.filter(({lit}) => lit.not)) {
-            if (impliesAsk(n.lit.ask, p.lit.ask)) {
+    const singles = tree.filter((group) => group.length === 1).map((group) => group[0]);
+    for (const p of singles.filter((lit) => !lit.not)) {
+        for (const n of singles.filter((lit) => lit.not)) {
+            if (impliesAsk(n.ask, p.ask)) {
                 ctx.note("this query matches every spell — one alternative selects whatever the other excludes — "
                     + "so its simplest form is the empty query");
                 return [];
@@ -1025,8 +1035,8 @@ function foldGroups(a: readonly Lit[], b: readonly Lit[]): readonly Lit[] | null
     const ka = keyed(a);
     const kb = keyed(b);
     if (ka.includes(null) || kb.includes(null)) return null;
-    const onlyInA = ka.map((key, index) => index).filter((index) => !kb.includes(ka[index]));
-    const onlyInB = kb.map((key, index) => index).filter((index) => !ka.includes(kb[index]));
+    const onlyInA = ka.flatMap((key, index) => (kb.includes(key) ? [] : [index]));
+    const onlyInB = kb.flatMap((key, index) => (ka.includes(key) ? [] : [index]));
     if (onlyInA.length !== 1 || onlyInB.length !== 1) return null;
     const litA = a[onlyInA[0]];
     const litB = b[onlyInB[0]];
@@ -1057,7 +1067,7 @@ const altsOf = (value: ValueExpr): readonly ValueExpr[] => (value.op === "anyOf"
 
 /** One group of alternatives holding both expressions, nested groups flattened. */
 function mergeAlternatives(a: ValueExpr, b: ValueExpr): ValueExpr {
-    return {op: "anyOf", alternatives: [...altsOf(a), ...altsOf(b)]};
+    return anyOfExpr([...altsOf(a), ...altsOf(b)]);
 }
 
 /** R8: a group of alternatives never offers one alternative twice. */
@@ -1066,7 +1076,7 @@ function duplicateAlternative(tree: Tree): Tree | null {
         if (value.op !== "anyOf") return null;
         const deduped = dedupeRuns(value.alternatives, (alt) => site.keyFor(alt) ?? "\u0000");
         if (deduped === null) return null;
-        return deduped.length === 1 ? deduped[0] : {op: "anyOf", alternatives: deduped};
+        return deduped.length === 1 ? deduped[0] : anyOfExpr(deduped);
     });
 }
 
@@ -1102,7 +1112,7 @@ function impliedAlternative(tree: Tree): Tree | null {
             }
         }
         if (!changed) return null;
-        return alternatives.length === 1 ? alternatives[0] : {op: "anyOf", alternatives};
+        return alternatives.length === 1 ? alternatives[0] : anyOfExpr(alternatives);
     });
 }
 
@@ -1113,10 +1123,11 @@ function impliedAlternative(tree: Tree): Tree | null {
  * unions either reduce to a comparison — which implication-dropping already found — or have no single spelling.
  */
 function fuseIntervals(prop: Prop, alternatives: readonly ValueExpr[]): ValueExpr[] | null {
+    const intervals = alternatives.map((alt) => intervalOf(prop, alt));
     for (let a = 0; a < alternatives.length; a++) {
         for (let b = a + 1; b < alternatives.length; b++) {
-            const ia = intervalOf(prop, alternatives[a]);
-            const ib = intervalOf(prop, alternatives[b]);
+            const ia = intervals[a];
+            const ib = intervals[b];
             if (ia === null || ib === null || ia.type !== ib.type) continue;
             if (!closedInterval(ia) || !closedInterval(ib)) continue;
             if (ia.lo > ib.hi || ib.lo > ia.hi) continue;
@@ -1143,7 +1154,7 @@ function flatRange(tree: Tree): Tree | null {
                 if (next !== null) changed = true;
                 return next ?? alt;
             });
-            return changed ? {op: "anyOf", alternatives} : null;
+            return changed ? anyOfExpr(alternatives) : null;
         }
         if (value.op !== "range" || site.prop === null) return null;
         const lo = quantityOf(site.prop, value.lo);
@@ -1156,65 +1167,130 @@ function flatRange(tree: Tree): Tree | null {
     return mapValues(tree, normalise);
 }
 
-/** R11: inclusive bounds on one subject fuse to a range inside one row's scope; an empty meet is a contradiction. */
+/**
+ * R11: inclusive bounds on one subject fuse to a range, and an empty meet is a contradiction — inside one row's
+ * scope always, and across top-level clauses on a kind declared {@link Kind.single}, where every clause provably
+ * reads the same row.
+ */
 function mergeBounds(tree: Tree, ctx: Ctx): Tree | null {
-    return mapScopes(tree, ctx, (runs, kinds) => {
-        void kinds;
+    const topLevel = fuseGroupBounds(tree, ctx);
+    if (topLevel !== null) return topLevel;
+    return mapScopes(tree, ctx, (runs) => {
         let changed = false;
-        let unsatisfiable = false;
-        const next = runs.map((run) => {
-            const fused = fuseRunBounds(run);
-            if (fused === null) return run;
+        const kept: (readonly ScopeTerm[])[] = [];
+        for (const run of runs) {
+            const fused = fuseBounds(run, termBound);
             if (fused === "empty") {
-                unsatisfiable = true;
-                return run;
+                changed = true;
+                continue;
             }
-            changed = true;
-            return fused;
-        });
-        if (unsatisfiable && runs.length === 1) return "unsatisfiable";
-        return changed ? {runs: next} : null;
+            if (fused !== null) changed = true;
+            kept.push(fused ?? run);
+        }
+        if (kept.length === 0 && runs.length > 0) return "unsatisfiable";
+        return changed ? {runs: kept} : null;
     });
 }
 
-/** Fuses one gte-lte pair on one subject within a run, or reports the empty intersection. */
-function fuseRunBounds(run: readonly ScopeTerm[]): readonly ScopeTerm[] | "empty" | null {
-    interface Bound {
-        readonly index: number;
-        readonly prop: Prop;
-        readonly ask: ScopeAsk & { on: "count" | "props" };
-        readonly value: ValueExpr & { op: "gte" | "lte" };
+/** The top-level half of R11: a dead alternative drops, and a query of nothing else is left as written. */
+function fuseGroupBounds(tree: Tree, ctx: Ctx): Tree | null {
+    let changed = false;
+    const kept: (readonly Lit[])[] = [];
+    for (const group of tree) {
+        const fused = fuseBounds(group, litBound);
+        if (fused === "empty") {
+            changed = true;
+            continue;
+        }
+        if (fused !== null) changed = true;
+        kept.push(fused ?? group);
     }
+    if (!changed) return null;
+    if (kept.length === 0 && tree.length > 0) {
+        ctx.note(ALL_DEAD);
+        return null;
+    }
+    return kept;
+}
 
-    const bounds = new Map<string, Bound[]>();
-    run.forEach((t, index) => {
-        if (t.state !== "ok" || t.ask === null || t.not) return;
-        const ask = t.ask;
-        if (ask.on !== "count" && (ask.on !== "props" || ask.props.length !== 1)) return;
-        const value = ask.value;
-        if (value.op !== "gte" && value.op !== "lte") return;
-        const subject = ask.on === "count" ? "count" : `${ask.props[0].kind.id}.${ask.props[0].prop}`;
-        const prop = ask.on === "count" ? COUNT_PROP : propOf(ask.props[0]);
-        const list = bounds.get(subject) ?? [];
-        list.push({index, prop, ask, value: {op: value.op, operand: value.operand}});
-        bounds.set(subject, list);
+/** One member's bound: the subject and property it constrains, and how to respell the member as a range. */
+interface BoundSite<T> {
+    /** What two bounds must share to describe one value: a property's identity, or the count. */
+    readonly subject: string;
+    readonly prop: Prop;
+    readonly value: ValueExpr;
+    readonly fuse: (range: ValueExpr) => T;
+}
+
+/** The bound a scope term states, or null: a positive value on the count or on one property of the row. */
+function termBound(t: ScopeTerm): BoundSite<ScopeTerm> | null {
+    if (t.state !== "ok" || t.ask === null || t.not) return null;
+    const ask = t.ask;
+    if (ask.on === "count") {
+        return {
+            subject: "count", prop: COUNT_PROP, value: ask.value,
+            fuse: (range) => term(false, {on: "count", value: range}),
+        };
+    }
+    if (ask.on !== "props" || ask.props.length !== 1) return null;
+    const [ref] = ask.props;
+    return {
+        subject: `${ref.kind.id}.${ref.prop}`, prop: propOf(ref), value: ask.value,
+        fuse: (range) => term(false, {on: "props", props: ask.props, value: range}),
+    };
+}
+
+/** The bound a clause states, or null: a positive value on one property of a kind declared single. */
+function litBound(lit: Lit): BoundSite<Lit> | null {
+    const ask = lit.ask;
+    if (lit.not || ask.on !== "prop" || ask.value === null || ask.ref.kind.single !== true) return null;
+    const ref = ask.ref;
+    return {
+        subject: `${ref.kind.id}.${ref.prop}`, prop: propOf(ref), value: ask.value,
+        fuse: (range) => ({not: false, ask: {on: "prop", ref, value: range}}),
+    };
+}
+
+/**
+ * Fuses one gte-lte pair over one subject, or reports an unsatisfiable conjunction.
+ *
+ * Generic over the conjunction's members because one fusion serves two levels: scope terms inside one row, and
+ * top-level clauses on a kind declared single — the two places where every bound on a subject provably reads one
+ * value. Two detections share the walk: a gte-lte pair fuses to the range that spells the pair, and any two
+ * members selecting disjoint intervals of one subject — `cast=2s cast=4s` included — are an empty meet.
+ */
+function fuseBounds<T>(items: readonly T[], boundOf: (item: T) => BoundSite<T> | null): readonly T[] | "empty" | null {
+    const bySubject = new Map<string, { index: number; bound: BoundSite<T> }[]>();
+    items.forEach((item, index) => {
+        const bound = boundOf(item);
+        if (bound === null) return;
+        const list = bySubject.get(bound.subject) ?? [];
+        list.push({index, bound});
+        bySubject.set(bound.subject, list);
     });
 
-    for (const list of bounds.values()) {
-        const low = list.find((bound) => bound.value.op === "gte");
-        const high = list.find((bound) => bound.value.op === "lte");
-        if (low === undefined || high === undefined) continue;
-        const lo = quantityOf(low.prop, low.value.operand);
-        const hi = quantityOf(high.prop, high.value.operand);
-        if (lo === null || hi === null || lo.type !== hi.type) continue;
-        if (lo.value > hi.value) return "empty";
-        const range: ValueExpr = {op: "range", lo: low.value.operand, hi: high.value.operand};
-        const fused: ScopeAsk = low.ask.on === "count"
-            ? {on: "count", value: range}
-            : {on: "props", props: low.ask.props, value: range};
-        return run
-            .map((t, index) => (index === low.index ? term(false, fused) : t))
-            .filter((_, index) => index !== high.index);
+    for (const list of bySubject.values()) {
+        const intervals = list.map(({bound}) => intervalOf(bound.prop, bound.value));
+        for (let a = 0; a < list.length; a++) {
+            for (let b = a + 1; b < list.length; b++) {
+                const ia = intervals[a];
+                const ib = intervals[b];
+                if (ia !== null && ib !== null && ia.type === ib.type && disjoint(ia, ib)) return "empty";
+            }
+        }
+        const low = list.findIndex(({bound}) => bound.value.op === "gte");
+        const high = list.findIndex(({bound}) => bound.value.op === "lte");
+        if (low < 0 || high < 0) continue;
+        const ia = intervals[low];
+        const ib = intervals[high];
+        if (ia === null || ib === null || ia.type !== ib.type) continue;
+        const lo = list[low].bound.value;
+        const hi = list[high].bound.value;
+        if (lo.op !== "gte" || hi.op !== "lte") continue;
+        const range: ValueExpr = {op: "range", lo: lo.operand, hi: hi.operand};
+        return items
+            .map((item, index) => (index === list[low].index ? list[low].bound.fuse(range) : item))
+            .filter((_, index) => index !== list[high].index);
     }
     return null;
 }
@@ -1232,7 +1308,7 @@ function unwrapScope(tree: Tree): Tree | null {
     return rewriteScopedLits(tree, (ask, runs) => {
         const lone = loneTerm(runs);
         if (lone === null || lone.ask?.on !== "content") return null;
-        return {...ask, test: {is: "content", value: lone.ask.value}};
+        return unwrappedAsk(ask, lone);
     });
 }
 
@@ -1241,30 +1317,19 @@ function rewriteScopedLits(
     tree: Tree,
     rewrite: (ask: Ask & { on: "column" | "kind" }, runs: ReadonlyArray<readonly ScopeTerm[]>) => Ask | null,
 ): Tree | null {
-    return mapGroups(tree, (group) => {
-        let changed = false;
-        const lits = group.map((lit): Lit => {
-            const ask = lit.ask;
-            if ((ask.on !== "column" && ask.on !== "kind") || ask.test === null || ask.test.is !== "scope") return lit;
-            const next = rewrite(ask, ask.test.terms);
-            if (next === null) return lit;
-            changed = true;
-            return {not: lit.not, ask: next};
-        });
-        return changed ? lits : null;
+    return mapLits(tree, (lit) => {
+        const ask = lit.ask;
+        if ((ask.on !== "column" && ask.on !== "kind") || ask.test === null || ask.test.is !== "scope") return null;
+        const next = rewrite(ask, ask.test.terms);
+        return next === null ? null : {not: lit.not, ask: next};
     });
 }
 
 /**
- * R13: the same ask through its shortest head, once the scope adds nothing to it — a property's own declared door,
- * or, for a property without one, its kind's global word bound to the value.
- */
-/**
- * The shortest head that re-reads as the same props ask, or null. A property with a declared door is the shortest
- * spelling of all; without a declaration the spelling would not re-read as the same head — the round-trip guard
- * would catch it anyway; refusing keeps the rule honest rather than lucky — but the property's kind may still
- * offer its own word as the door, when it is global and the value re-reads through the head's dispatch onto
- * these same properties.
+ * The shortest head that re-reads as the same props ask, or null — R13's target. A property with a declared door
+ * is the shortest spelling of all; without a declaration the spelling would not re-read as the same head —
+ * refusing keeps the rule honest rather than lucky — but the property's kind may still offer its own word as the
+ * door, when it is global and the value re-reads through that head's dispatch onto these same properties.
  */
 function doored(refs: readonly PropRef[], value: ValueExpr): Ask | null {
     if (refs.length === 1 && propOf(refs[0]).prefix !== undefined) {
@@ -1289,18 +1354,13 @@ function shortestDoor(tree: Tree): Tree | null {
 
 /** The props-test half of R13: a column or kind ask whose whole test is one doored property. */
 function propsTestDoors(tree: Tree): Tree | null {
-    return mapGroups(tree, (group) => {
-        let changed = false;
-        const lits = group.map((lit): Lit => {
-            const ask = lit.ask;
-            if ((ask.on !== "column" && ask.on !== "kind") || ask.test === null || ask.test.is !== "props") return lit;
-            const {props, value} = ask.test;
-            if (props.length !== 1 || propOf(props[0]).prefix === undefined) return lit;
-            if (ask.on === "kind" && props[0].kind !== ask.kind) return lit;
-            changed = true;
-            return {not: lit.not, ask: {on: "prop", ref: props[0], value}};
-        });
-        return changed ? lits : null;
+    return mapLits(tree, (lit) => {
+        const ask = lit.ask;
+        if ((ask.on !== "column" && ask.on !== "kind") || ask.test === null || ask.test.is !== "props") return null;
+        const {props, value} = ask.test;
+        if (props.length !== 1 || propOf(props[0]).prefix === undefined) return null;
+        if (ask.on === "kind" && props[0].kind !== ask.kind) return null;
+        return {not: lit.not, ask: {on: "prop", ref: props[0], value}};
     });
 }
 
@@ -1323,12 +1383,15 @@ function kindThroughColumn(tree: Tree): Tree | null {
         const lone = loneTerm(runs);
         if (lone === null || lone.ask?.on !== "kindWord") return null;
         if (ask.on === "kind" && ask.kind !== lone.ask.kind) return null;
-        return {on: "kind", kind: lone.ask.kind, test: {is: "exists"}};
+        return unwrappedAsk(ask, lone);
     });
 }
 
 /** A count term asking for exactly zero rows, the canonical zero-edge spelling. */
-const ZERO_COUNT: ScopeAsk = {on: "count", value: {op: "exact", operand: {type: "count", value: 0}}};
+const ZERO_COUNT: ScopeAsk = {
+    on: "count",
+    value: {op: "exact", operand: {type: COUNT_PROP.types[0].name, value: 0}},
+};
 
 /**
  * R17: counts speak existence at the edges.
@@ -1338,16 +1401,7 @@ const ZERO_COUNT: ScopeAsk = {on: "count", value: {op: "exact", operand: {type: 
  * else. Single-run scopes only: one alternative of an alternation cannot flip the clause it lives in.
  */
 function countExistence(tree: Tree): Tree | null {
-    return mapGroups(tree, (group) => {
-        let changed = false;
-        const lits = group.map((lit): Lit => {
-            const next = countEdge(lit);
-            if (next === null) return lit;
-            changed = true;
-            return next;
-        });
-        return changed ? lits : null;
-    });
+    return mapLits(tree, countEdge);
 }
 
 /** Rewrites one clause at the count-existence edges, or leaves it. */
@@ -1382,7 +1436,7 @@ function countEdge(lit: Lit): Lit | null {
         // "No rows at all": negated, that is existence; positive, it converges on the one canonical zero spelling.
         if (lit.not) return {not: false, ask: {...ask, test: {is: "exists"}}};
         const already = counts.length === 1 && !counts[0].not
-            && keyOfTerm(counts[0]) === keyOfTerm(term(false, ZERO_COUNT));
+            && termKey(counts[0]) === termKey(term(false, ZERO_COUNT));
         return already ? null : {not: false, ask: {...ask, test: {is: "scope", terms: [[term(false, ZERO_COUNT)]]}}};
     }
     // "No row satisfying these terms" is the negation of "some row does", so the clause flips around the rows.
@@ -1427,9 +1481,13 @@ export const RULES: readonly Rule[] = Object.freeze([
     },
     {
         id: "R11", name: "merge-bounds", tier: "simplify",
-        law: "inside one row, inclusive bounds on one property fuse to a range; an empty intersection is a "
-            + "contradiction",
-        examples: [{from: "spell:{cast:>=2s cast:<=5s}", to: "cast:2s-5s"}],
+        law: "bounds on one subject fuse to a range and an empty meet is a contradiction — inside one row always, "
+            + "and across clauses on a kind that declares a spell holds at most one of its rows",
+        examples: [
+            {from: "spell:{cast:>=2s cast:<=5s}", to: "cast:2s-5s"},
+            {from: "cast>=2s cast<=5s", to: "cast:2s-5s"},
+            {from: "spell:{cast=2s cast=4s} | name:frost", to: "name:frost"},
+        ],
         apply: mergeBounds,
     },
     {
@@ -1576,10 +1634,11 @@ export const KEPT: readonly Boundary[] = Object.freeze([
             + "inferences",
     },
     {
-        id: "B7", name: "top-level-never-fuses",
-        keeps: "cast:>=2s cast:<=5s stays two clauses at the top level",
-        why: "nothing declares an axis single-row-per-spell, and without that declaration fusing two existentials "
-            + "is unsound; bounds merge inside the row scope, where the binding is the meaning",
+        id: "B7", name: "existentials-stay-apart",
+        keeps: "scale:>=+10% scale:<=+50% stays two clauses at the top level",
+        why: "two clauses are two existentials — a spell with one small and one large scale row satisfies the pair "
+            + "and no single range — so bounds fuse across clauses only on a kind that declares a spell holds at "
+            + "most one of its rows, the declaration that makes the two clauses one row",
     },
     {
         id: "B8", name: "unsat-unspelled",

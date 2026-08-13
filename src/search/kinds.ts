@@ -189,6 +189,15 @@ export interface Kind {
      */
     readonly group?: string;
 
+    /**
+     * Whether a spell carries at most one row of this kind, ever.
+     *
+     * The declaration that licenses reasoning across clauses: two top-level bounds on one of this kind's properties
+     * describe the same row, so they may fuse to a range. Omitted means rows may repeat, and every clause stays its
+     * own existential — declare it only where the row source guarantees the bound.
+     */
+    readonly single?: boolean;
+
     /** One line describing the kind to a reader. */
     readonly hint: string;
 
@@ -401,7 +410,7 @@ export const icon = defineKind({
  * row" would select nearly everything, so none is spent.
  */
 export const delivery = defineKind({
-    column: spellColumn,
+    column: spellColumn, single: true,
     hint: "how the spell goes off — at once, behind a cast bar, or as a channel",
     props: {
         cast: {
@@ -425,13 +434,13 @@ export const delivery = defineKind({
 
 /** A spell's own number. Reached through the column head; the kind needs no separate word. */
 export const spellId = defineKind({
-    column: idColumn,
+    column: idColumn, single: true,
     hint: "the spell's own number — what .cast takes",
     props: {value: corpus(TIER.id, id)},
 });
 
 export const expansion = defineKind({
-    column: idColumn, word: "xpac", global: true, full: "expansion",
+    column: idColumn, word: "xpac", global: true, full: "expansion", single: true,
     hint: "the expansion that introduced it — legion, >wotlk, <=mop",
     props: {rung: of(ordinal)},
 });

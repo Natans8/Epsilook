@@ -11,28 +11,15 @@ import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
 import {formatQuery} from "../../src/search/format";
-import {run} from "../../src/search/kernel";
-import {parse} from "../../src/search/parse";
-import type {Parsed} from "../../src/search/parse";
 import {equivalent, KEPT, RULES, simplify, suggestions} from "../../src/search/simplify";
 
-import {complement, DATA, EVERY} from "./world";
-
-function parsed(query: string): Parsed {
-    const result = parse(query);
-    const errors = result.diagnostics.filter((d) => d.severity === "error");
-    assert.deepEqual(errors, [], `query "${query}" should parse cleanly`);
-    return result;
-}
+import {answers, complement, EVERY, parsed} from "./world";
 
 /** The canonical spelling of a query string, with no simplification. */
 const canonical = (query: string): string => formatQuery(parsed(query));
 
 /** The canonical spelling of a query string after simplification. */
 const simplified = (query: string): string => formatQuery(simplify(parsed(query)).parsed);
-
-/** The spells a parse selects on the synthetic world, sorted. */
-const answers = (p: Parsed): number[] => [...run(p, DATA)].toSorted((a, b) => a - b);
 
 const SIMPLIFY_RULES = RULES.filter((rule) => rule.tier === "simplify");
 const FORMAT_RULES = RULES.filter((rule) => rule.tier === "format");
@@ -111,9 +98,18 @@ describe("the boundaries, as refusals", () => {
         assert.equal(simplified("model:fireball* model:fire"), "model:fireball*");
     });
 
-    it("B7 top-level-never-fuses: bounds fuse only inside the row scope", () => {
-        untouched("cast>=2s cast<=5s");
+    it("B7 existentials-stay-apart: bounds fuse across clauses only on a kind declared single", () => {
+        // Scale rows may repeat on one spell, so its clauses stay existentials; a delivery row cannot.
+        untouched("scale:>=+10% scale:<=+50%");
+        assert.equal(simplified("cast>=2s cast<=5s"), "cast:2s-5s");
         assert.equal(simplified("spell:{cast>=2s cast<=5s}"), "cast:2s-5s");
+    });
+
+    it("a contradiction across single-kind clauses, or inside one row, is an empty meet", () => {
+        assert.equal(simplified("cast=2s cast=4s | name:frost"), "name:frost");
+        const whole = simplify(parsed("spell:{cast=2s cast=4s}"));
+        assert.deepEqual(whole.applied, []);
+        assert.equal(whole.notes.length, 1);
     });
 
     it("B8 unsat-unspelled: a fully contradictory query is returned as written, with a note", () => {
