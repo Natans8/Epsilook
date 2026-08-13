@@ -16,8 +16,8 @@ app solo after the subscription ends; **the tests are the handover**.
 ## Writing one
 
 Put it beside the thing it tests, mirroring `src/` **including its directories**: `src/search/vocabulary/units.ts` →
-`test/search/vocabulary/units.test.ts`. Import the module exactly as the app does — extensionless — because the file
-is bundled before it runs:
+`test/search/vocabulary/units.test.ts`. Import the module exactly as the app does — extensionless — because the file is
+bundled before it runs:
 
 ```ts
 import {strict as assert} from "node:assert";
