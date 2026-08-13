@@ -126,8 +126,10 @@ DATA_MODULES = (
 SEARCH_CORE = "src/search/"
 
 # The matching half: the modules below the evaluation seam. Everything else in
-# the directory is declarative and must not import them.
-SEARCH_MATCHER = ("value-matching", "rows", "kernel")
+# the directory is declarative and must not import them. The simplifier lives
+# below the seam by law: implication is grounded in running the registered
+# matchers, never in a second copy of any matching rule.
+SEARCH_MATCHER = ("value-matching", "rows", "kernel", "simplify")
 
 # index.ts is the public surface and re-exports both halves on purpose, so it
 # is the one module in the directory the seam does not apply to.

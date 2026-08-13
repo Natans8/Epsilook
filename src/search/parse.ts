@@ -290,8 +290,13 @@ for (const op of PREFIX_OPERATORS) {
 const accepts = (type: AxisType, opName: string): boolean =>
     type.accepts.some((op) => op.name === opName);
 
-/** The synthetic property behind the count word, so cardinality reads operands like any numeric axis. */
-const COUNT_PROP: Prop = {types: [countType]};
+/**
+ * The synthetic property behind the count word, so cardinality reads operands like any numeric axis.
+ *
+ * Exported for simplification, whose count reasoning must read operands through exactly the property the desugar
+ * binds them to — a second declaration would drift from this one.
+ */
+export const COUNT_PROP: Prop = {types: [countType]};
 
 /**
  * The property a {@link PropRef} names.

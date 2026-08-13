@@ -52,7 +52,10 @@ export type {
 } from "./parse";
 export {parse, propOf} from "./parse";
 
-export {equivalent, formatQuery} from "./format";
+export {formatQuery, queryKey} from "./format";
+
+export type {Boundary, Rule, RuleExample, RuleTier, Simplified, Suggestion} from "./simplify";
+export {equivalent, KEPT, RULES, simplify, suggestions} from "./simplify";
 
 export type {Dataset, Row, RowAsk, RowSource, Stored} from "./rows";
 export {contentMatches, matchProp, plainMatches, propRefMatches, rowMatches} from "./rows";

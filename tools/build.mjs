@@ -92,7 +92,7 @@ function checkReachability(metafile) {
  * they throw.
  *
  * Adding one is a name in this list and an npm script beside `query`. */
-const CLI_ENTRIES = ["query", "measure", "surface", "parse", "equal", "battery"];
+const CLI_ENTRIES = ["query", "measure", "surface", "parse", "equal", "battery", "simplify"];
 
 const cliOptions = CLI_ENTRIES.map((name) => ({
     entryPoints: [resolve(root, `tools/${name}.ts`)],

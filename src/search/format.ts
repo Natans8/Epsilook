@@ -34,6 +34,19 @@ const OPENS_STRUCTURE = new RegExp(`^[${escapeRegExp([...new Set([
 /** Digit shapes that could re-read as a number, a number list or a range rather than text. */
 const NUMBER_SHAPED = new RegExp(String.raw`^\d[\d.${escapeRegExp(GRAMMAR.numberList + GRAMMAR.range)}]*$`);
 
+/** Leading characters that spell a prefix operator, which every reader binds to its head without a colon. */
+const OPENS_OPERATOR = new RegExp(`^[${escapeRegExp([...new Set(
+    PREFIX_OPERATORS.map((op) => spelling(op)[0]),
+)].join(""))}]`);
+
+/**
+ * Joins a head to its value: a prefix operator binds on its own, so the colon drops where one opens the value —
+ * the convention comparison queries are written in, and the spelling the parser's implied colon reads back.
+ */
+function bindTo(head: string, text: string): string {
+    return OPENS_OPERATOR.test(text) ? `${head}${text}` : `${head}${GRAMMAR.bind}${text}`;
+}
+
 /** Characters mid-value that force the quotes even on a number-shaped text: the list and range separators. */
 const NUMBER_STRUCTURE = new RegExp(`[${escapeRegExp(GRAMMAR.numberList + GRAMMAR.range)}]`);
 
@@ -177,9 +190,9 @@ function termText(term: ScopeTerm, tier: Spelling): string | null {
     const ask = term.ask;
     if (ask.on === "content") return `${negate}${termValueText(ask.value, tier)}`;
     if (ask.on === "kindWord") return `${negate}${wordOf(ask.kind)}`;
-    if (ask.on === "count") return `${negate}${GRAMMAR.countWord}${GRAMMAR.bind}${valueText(ask.value, undefined, tier)}`;
+    if (ask.on === "count") return `${negate}${bindTo(GRAMMAR.countWord, valueText(ask.value, undefined, tier))}`;
     const ref = ask.props[0];
-    return `${negate}${ref.prop}${GRAMMAR.bind}${valueText(ask.value, ref, tier)}`;
+    return `${negate}${bindTo(ref.prop, valueText(ask.value, ref, tier))}`;
 }
 
 /**
@@ -200,18 +213,23 @@ function askText(ask: Ask, tier: Spelling): string | null {
     if (ask.on === "plain") return valueText(ask.value, undefined, tier);
     if (ask.on === "prop") {
         const door = doorOf(ask.ref.prop, propOf(ask.ref));
-        return ask.value === null ? null : `${door}${GRAMMAR.bind}${valueText(ask.value, ask.ref, tier)}`;
+        return ask.value === null ? null : bindTo(door, valueText(ask.value, ask.ref, tier));
     }
 
     const head = ask.on === "column" ? ask.column.key : wordOf(ask.kind);
     const test = ask.test;
     if (test === null) return null;
-    if (test.is === "exists") return `${head}${GRAMMAR.bind}${GRAMMAR.wildcard}`;
-    if (test.is === "content") return `${head}${GRAMMAR.bind}${valueText(test.value, undefined, tier)}`;
+    // A kind with a word of its own spells bare existence through its column — `model:missile` over `missile:*` —
+    // a spelling that re-reads even for a kind whose word opens no tag. A wordless kind IS its column's head.
+    const exists = ask.on === "kind" && ask.kind.word !== undefined
+        ? `${ask.kind.column.key}${GRAMMAR.bind}${ask.kind.word}`
+        : `${head}${GRAMMAR.bind}${GRAMMAR.wildcard}`;
+    if (test.is === "exists") return exists;
+    if (test.is === "content") return bindTo(head, valueText(test.value, undefined, tier));
     if (test.is === "props") {
         const ref = test.props[0];
         // The value re-reads through the head's own dispatch, so the property name needs no spelling here.
-        return `${head}${GRAMMAR.bind}${valueText(test.value, ref, tier)}`;
+        return bindTo(head, valueText(test.value, ref, tier));
     }
 
     const runs = test.terms
@@ -220,13 +238,19 @@ function askText(ask: Ask, tier: Spelling): string | null {
             .filter((pair): pair is { term: ScopeTerm; text: string } => pair.text !== null))
         .filter((run) => run.length > 0);
     const flat = runs.flat();
-    if (flat.length === 0) return `${head}${GRAMMAR.bind}${GRAMMAR.wildcard}`;
+    if (flat.length === 0) return exists;
     // A single positive term needs no brace — a scope of one clause is that clause — except a bind, whose word
     // means something different (or nothing) outside its scope.
     if (flat.length === 1) {
         const {term, text} = flat[0];
         if (!term.not && (term.ask?.on === "content" || term.ask?.on === "kindWord")) {
             return `${head}${GRAMMAR.bind}${text}`;
+        }
+        // The one bind that does escape its scope: a lone count opened by an operator binds through the head
+        // itself — the column-form desugar, inverted.
+        if (!term.not && term.ask?.on === "count") {
+            const value = valueText(term.ask.value, undefined, tier);
+            if (OPENS_OPERATOR.test(value)) return `${head}${value}`;
         }
     }
     const body = runs.map((run) => run.map((pair) => pair.text).join(" ")).join(` ${GRAMMAR.or} `);
@@ -258,14 +282,21 @@ function clauseTexts(parsed: Parsed, tier: Spelling): string[][] {
 }
 
 /**
- * One string per parse that two equivalent queries share.
+ * One string per parse that two same-question queries share — the whole-query counterpart of {@link clauseKey}.
  *
  * Every clause reduces to its canonical spelling — the same convergence {@link formatQuery} performs, folded per
  * {@link Spelling} because matching folds case too — so delimiter, notation and case differences vanish there. Clause
  * order never matters and neither does group order, so both sort; what remains is the multiset of canonical clauses
  * per alternation group.
+ *
+ * This is the raw textual tier: spellings converge here, structure never does. Equivalence proper compares this
+ * key over SIMPLIFIED forms and lives with the simplifier; the simplifier's own round-trip guard compares it raw,
+ * which is what keeps the two from recursing into each other.
+ *
+ * @param parsed A parse, from {@link ./parse!parse}.
+ * @returns The folded canonical text of its evaluable query, order normalised.
  */
-function normalised(parsed: Parsed): string {
+export function queryKey(parsed: Parsed): string {
     return clauseTexts(parsed, "folded")
         .map((group) => group.toSorted().join(" "))
         .toSorted()
@@ -273,8 +304,8 @@ function normalised(parsed: Parsed): string {
 }
 
 /**
- * One clause's folded canonical text — the identity {@link equivalent} compares clauses by — or null when the
- * clause holds nothing evaluable. Two clauses with one key ask the same question, whatever their spelling.
+ * One clause's folded canonical text — the identity equivalence compares clauses by — or null when the clause
+ * holds nothing evaluable. Two clauses with one key ask the same question, whatever their spelling.
  *
  * @param clause The clause.
  * @returns Its folded canonical text, or null.
@@ -294,19 +325,3 @@ export function termKey(term: ScopeTerm): string | null {
     return termText(term, "folded");
 }
 
-/**
- * Whether two parses ask the same evaluable question.
- *
- * Equivalence is up to everything the language says does not matter: clause order, group order, delimiter, notation
- * and letter-case spellings, and anything an incomplete or invalid clause failed to say. `model:{fire}` is
- * equivalent to `model:fire` and to `model:FIRE`; `model:fire model:missile` is not equivalent to
- * `model:{fire missile}` — two rows against one. Regex patterns are the one case-sensitive spelling, per
- * {@link Spelling}.
- *
- * @param a One parse.
- * @param b Another.
- * @returns Whether their evaluable queries mean the same thing.
- */
-export function equivalent(a: Parsed, b: Parsed): boolean {
-    return normalised(a) === normalised(b);
-}

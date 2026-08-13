@@ -12,6 +12,7 @@
     "query": "node tools/build.mjs --cli && node tools/query.mjs",
     "parse": "node tools/build.mjs --cli && node tools/parse.mjs",
     "equal": "node tools/build.mjs --cli && node tools/equal.mjs",
+    "simplify": "node tools/build.mjs --cli && node tools/simplify.mjs",
     "measure": "node tools/build.mjs --cli && node tools/measure.mjs",
     "battery": "node tools/build.mjs --cli && node tools/battery.mjs",
     "lint": "oxlint --type-aware",

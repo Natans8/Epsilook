@@ -19,6 +19,7 @@
     "tools/parse.ts",
     "tools/equal.ts",
     "tools/battery.ts",
+    "tools/simplify.ts",
     // The test suite is the same engine on the same runtime — Node, no DOM —
     // so it belongs to this target rather than to a third one. A directory
     // rather than a file list: tests are added constantly, and a test that

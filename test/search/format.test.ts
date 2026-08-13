@@ -12,10 +12,10 @@ const same = (a: string, b: string): boolean => equivalent(parse(a), parse(b));
 describe("formatQuery", () => {
     it("is idempotent: formatting the parse of a canonical string returns it", () => {
         for (const query of [
-            "fireball", "model:fire -sound:ice", "name:=Fireball", 'name:"Blood Pool"',
-            "model:{fire missile}", "model:{attach:(chest|head) fire}", "scale:>50", "cast:instant",
+            "fireball", "model:fire -sound:ice", "name=Fireball", 'name:"Blood Pool"',
+            "model:{fire missile}", "model:{attach:(chest|head) fire}", "scale>50", "cast:instant",
             "name:/^fire/", "model:fire | sound:fire", 'missile:{from:chest to:"right hand" motion:parabola}',
-            "scale:(-50)-10", "xpac:>legion", "-model:*",
+            "scale:(-50)-10", "xpac>legion", "-model:*", "model:missile", "model<=4",
             // Values whose bare spelling would re-read as structure keep their quotes.
             '"model:fire"', '"-fire"', 'name:"fi*re"', 'model:"/fire"', 'name:"1,2"', 'name:"<3"',
             String.raw`"a \\"`, "model:{fire|frost missile}",
@@ -30,19 +30,31 @@ describe("formatQuery", () => {
         assert.equal(canonical("model:(attach:chest)"), "model:{attach:chest}");
         assert.equal(canonical("model:{fire}"), "model:fire");
         assert.equal(canonical("id:133,134"), "id:(133|134)");
-        assert.equal(canonical("model<=4"), "model:{count:<=4}");
-        assert.equal(canonical("name=Fireball"), "name:=Fireball");
+        assert.equal(canonical("model:{count:<=4}"), "model<=4");
+        assert.equal(canonical("name:=Fireball"), "name=Fireball");
+    });
+
+    it("binds a prefix operator without the colon, at the top level and inside a scope", () => {
+        assert.equal(canonical("cast:>2s"), "cast>2s");
+        assert.equal(canonical("scale:>=+20%"), "scale>=+20%");
+        assert.equal(canonical("model:{fire count:<4}"), "model:{fire count<4}");
+        assert.equal(canonical("model:{attach:=chest fire}"), "model:{attach=chest fire}");
+    });
+
+    it("spells a bare kind-existence ask through its column", () => {
+        assert.equal(canonical("missile:*"), "model:missile");
+        assert.equal(canonical("model:missile"), "model:missile");
     });
 
     it("canonicalises open ranges to the comparison spelling", () => {
-        assert.equal(canonical("cast:10-*"), "cast:>=10s");
-        assert.equal(canonical("cast:*-10"), "cast:<=10s");
-        assert.equal(canonical("cast:10-"), "cast:>=10s");
+        assert.equal(canonical("cast:10-*"), "cast>=10s");
+        assert.equal(canonical("cast:*-10"), "cast<=10s");
+        assert.equal(canonical("cast:10-"), "cast>=10s");
     });
 
     it("writes sentinels as their words and values in their display notation", () => {
         assert.equal(canonical("cast:0"), "cast:instant");
-        assert.equal(canonical("scale:2"), "scale:=+100%");
+        assert.equal(canonical("scale:2"), "scale=+100%");
         assert.equal(canonical('cast:"instant"'), "cast:instant");
     });
 
@@ -73,17 +85,17 @@ describe("the written tier", () => {
     const written = (query: string): string => formatQuery(parse(query), "written");
 
     it("upholds the notation the reader chose where canonical converges it", () => {
-        assert.equal(written("scale:x1.5"), "scale:=x1.5");
-        assert.equal(canonical("scale:x1.5"), "scale:=+50%");
-        assert.equal(written("cast:500ms"), "cast:=500ms");
-        assert.equal(written("cast:10-*"), "cast:>=10");
+        assert.equal(written("scale:x1.5"), "scale=x1.5");
+        assert.equal(canonical("scale:x1.5"), "scale=+50%");
+        assert.equal(written("cast:500ms"), "cast=500ms");
+        assert.equal(written("cast:10-*"), "cast>=10");
         assert.equal(written("scale:x2-50"), "scale:x2-50");
     });
 
     it("still converges structure: delimiters and anchors spell canonically around the upheld value", () => {
         assert.equal(written("model:(fire missile)"), "model:{fire missile}");
         assert.equal(written("cast:instant"), "cast:instant");
-        assert.equal(written("cast:0"), "cast:=0");
+        assert.equal(written("cast:0"), "cast=0");
     });
 
     it("is idempotent: the written form of a written form is itself", () => {
