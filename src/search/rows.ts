@@ -20,7 +20,7 @@
 import type {Column} from "./columns";
 import type {Kind, Prop} from "./kinds";
 import {sentinelOf} from "./kinds";
-import type {Ask, ParsedOperand, PropRef, ScopeAsk, ValueExpr} from "./parse";
+import type {Ask, ParsedOperand, PropRef, ScopeAsk, ValueExpr} from "./ast";
 import type {AxisType, Value} from "./value-types";
 import {flag, text} from "./value-types";
 import {matcher} from "./value-matching";

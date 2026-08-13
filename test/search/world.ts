@@ -15,7 +15,7 @@ import {
 } from "../../src/search/catalogue";
 import type {Kind} from "../../src/search/kinds";
 import {parse} from "../../src/search/parse";
-import type {Parsed} from "../../src/search/parse";
+import type {Parsed} from "../../src/search/ast";
 import type {Dataset, Row, RowSource, Stored} from "../../src/search/rows";
 import {setOrdinalLadder} from "../../src/search/value-types";
 

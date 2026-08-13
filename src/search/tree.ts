@@ -15,10 +15,8 @@
 import {i18n} from "../i18n";
 import {clauseKey, termKey, unbracedTerm} from "./format";
 import type {Kind, Prop} from "./kinds";
-import type {
-    Ask, Clause, Parsed, ParsedOperand, PropRef, RowTest, ScopeAsk, ScopeTerm, Span, ValueExpr,
-} from "./parse";
-import {COUNT_PROP, propOf} from "./parse";
+import type {Ask, Clause, Parsed, ParsedOperand, PropRef, RowTest, ScopeAsk, ScopeTerm, Span, ValueExpr} from "./ast";
+import {COUNT_PROP, propOf} from "./ast";
 import {kindsOf} from "./schema";
 
 /* ----------------------------------------------------------------------- the tree model */

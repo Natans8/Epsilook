@@ -60,10 +60,12 @@ export {buildSchema, HEADS, kindIn, kindsOf, propIn, schemaProblems} from "./sch
 export {GRAMMAR, PREFIX_OPERATORS} from "./grammar";
 
 export type {
-    Ask, Clause, ClauseState, Diagnostic, Fix, ParsedOperand, ParseMode, Parsed, PropRef, RowTest,
+    Ask, Clause, ClauseState, Diagnostic, Fix, Parsed, ParsedOperand, ParseMode, PropRef, RowTest,
     ScopeAsk, ScopeTerm, Severity, Span, ValueExpr,
-} from "./parse";
-export {parse, propOf} from "./parse";
+} from "./ast";
+export {anyOfExpr, COUNT_PROP, propOf} from "./ast";
+
+export {parse} from "./parse";
 
 export {formatQuery, queryKey} from "./format";
 

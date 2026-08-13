@@ -8,7 +8,7 @@
 import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
-import type {Ask} from "../../src/search/parse";
+import type {Ask} from "../../src/search/ast";
 import type {Dataset} from "../../src/search/rows";
 
 import {answers, complement, DATA, EVERY, parsed} from "./world";

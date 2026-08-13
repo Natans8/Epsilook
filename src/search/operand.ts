@@ -1,0 +1,542 @@
+/**
+ * @file Reading one operand: what a written value means once the head it binds to is known.
+ *
+ * The parser decides where a value starts and ends; this decides what it says. The two are separable because a head
+ * resolves to exactly one of three things — a column, a kind, or a property — and each reads an operand its own way:
+ * a property reads through its declared notations in order, a kind offers its properties the operand in declaration
+ * order and falls back to counting its rows, a column dispatches across its kinds, and free text at the top level
+ * reads everything as content. {@link ValueCtx} is that choice made once, so the parser walks segments without ever
+ * asking what kind of axis it is walking them for.
+ *
+ * Nothing here knows about positions. A reader is handed the operand's text and returns an {@link Interp} — a value,
+ * a refusal, or an emptiness — and the parser turns that into a clause with a span. Findings raised along the way go
+ * into the {@link Pending} list the caller owns, because a diagnostic needs a clause index that does not exist yet.
+ *
+ * Refusals carry their own fix. An axis that cannot answer an operator offers the clause without the symbol; a
+ * quoted quantity offers it without the quotes. Both are the quote law and the operator registry speaking, never a
+ * message written by hand at the site.
+ */
+// The instance rather than the bare `t`, because several value-reading closures here take a parameter named `t`
+// and would shadow the import.
+import {i18n} from "../i18n";
+import type {Fix, ParsedOperand, PropRef, Severity, ValueExpr} from "./ast";
+import {anyOfExpr, COUNT_PROP, propOf} from "./ast";
+import type {Column} from "./columns";
+import {GRAMMAR, PREFIX_OPERATORS} from "./grammar";
+import type {Kind, ParsedValue, Prop} from "./kinds";
+import {hintOf, parseValue, sentinelOf, wordOf} from "./kinds";
+import type {Operator} from "./operators";
+import {ORDERING} from "./operators";
+import {compilePattern} from "./patterns";
+import type {Head} from "./schema";
+import {headWord, kindIn, kindsOf} from "./schema";
+import {fold} from "./text-normalization";
+import type {AxisType} from "./value-types";
+import {count as countType, path as pathType} from "./value-types";
+
+/** How one position reads an operand. Implementations differ by what the head resolved to. */
+export interface ValueCtx {
+    operator(op: Operator, operand: string, opts: { readonly whole: string; readonly phrase?: boolean }): Interp;
+
+    /** Reads `lo-hi`, or null when nothing in this position orders. */
+    range(text: string): Interp | null;
+
+    /** Reads a range whose bounds arrive already split, as in `(-50)-10`. */
+    rangeParts(lo: string, hi: string): Interp | null;
+
+    glob(pattern: string): Interp;
+
+    /** `alone` is false inside alternation, where a kind word reads as content rather than as a kind test. */
+    bare(word: string, alone: boolean): Interp;
+
+    phrase(text: string): Interp;
+
+    regex(pattern: string): Interp;
+
+    star(): Interp;
+}
+
+/** What an operand resolved to, before it is shaped into a clause or a scope term. */
+export type Interp =
+    | { readonly r: "content"; readonly value: ValueExpr }
+    | { readonly r: "props"; readonly props: readonly PropRef[]; readonly value: ValueExpr }
+    | { readonly r: "count"; readonly value: ValueExpr }
+    | { readonly r: "kindWord"; readonly kind: Kind }
+    | { readonly r: "exists" }
+    | { readonly r: "empty"; readonly why: string }
+    | {
+    readonly r: "fail";
+    readonly message: string;
+    /** A symbol whose removal is the offered fix. */
+    readonly fixDrop?: string;
+    /** Offer removing the quotes as the fix. */
+    readonly fixQuotes?: true;
+    /**
+     * A further keystroke could still change the verdict — the value did not parse, but more characters might
+     * complete a word that does. Such a failure is held quietly while typing and reported only in final text,
+     * where declined operators and structural impossibilities stay errors in both modes.
+     */
+    readonly rescuable?: true;
+};
+
+/** A finding collected while a clause is still being interpreted, attached once its index exists. */
+export interface Pending {
+    readonly severity: Severity;
+    readonly message: string;
+    readonly fix?: Fix;
+}
+
+/** The operators that require an order, by name — the ones whose refusal message says "no ordering". */
+export const ORDERING_NAMES: ReadonlySet<string> = new Set(ORDERING.map((op) => op.name));
+
+/** The comparisons written before a value, by name — the operators the count desugar answers. */
+export const COMPARABLE: ReadonlySet<string> = new Set(PREFIX_OPERATORS.map((op) => op.name));
+
+/**
+ * The prefix operators the expression tree can shape.
+ *
+ * A prefix operator outside this set would be recognised by the scanner — the grammar derives its spellings from the
+ * registry — pass every acceptance check, and then have no {@link ValueExpr} variant to become. Declaring one
+ * therefore starts by extending the union; until then the declaration fails here, at import, where it was made.
+ */
+const EXPRESSIBLE_PREFIX: ReadonlySet<string> = new Set(["exact", "lt", "lte", "gt", "gte"]);
+for (const op of PREFIX_OPERATORS) {
+    if (!EXPRESSIBLE_PREFIX.has(op.name)) {
+        throw new Error(`prefix operator "${op.name}" has no shape in the expression tree`);
+    }
+}
+
+export const accepts = (type: AxisType, opName: string): boolean =>
+    type.accepts.some((op) => op.name === opName);
+
+/**
+ * Whether a type's values are quantities rather than strings.
+ *
+ * The quote rule turns on this: a phrase is a literal string value, and a quantity has no string reading, so a
+ * quoted number is refused where a quoted word is read. Decided from the declarations — a type measuring in
+ * notations, or edited as a bare number, holds quantities; everything read from words or text does not.
+ */
+export const quantity = (type: AxisType): boolean => type.quantity === true;
+
+/**
+ * Why a pattern will not compile, or null when it will.
+ *
+ * Validation goes through the evaluator's own compiler, so a pattern that validates always runs.
+ *
+ * @param pattern A regular expression's source, as written between the slashes.
+ * @returns The engine's own complaint, or null.
+ */
+function patternProblem(pattern: string): string | null {
+    const compiled = compilePattern(pattern);
+    return typeof compiled === "string" ? compiled : null;
+}
+
+/**
+ * The pattern's compile failure as an interpretation, or null when it compiles.
+ *
+ * Rescuable, because a pattern is broken on most keystrokes of the way to being written.
+ */
+export function badPattern(pattern: string): Interp | null {
+    const problem = patternProblem(pattern);
+    if (problem === null) return null;
+    return {r: "fail", rescuable: true, message: i18n.t("diagnostics:pattern.invalid", {problem})};
+}
+
+/** Whether any of the types is the path type, whose glued names make patterns weak — the warning turns on this. */
+export const pathTyped = (types: readonly AxisType[]): boolean => types.includes(pathType);
+
+/** The content interpretation of a value expression, the shape plain search and column content share. */
+export const content = (value: ValueExpr): Interp => ({r: "content", value});
+
+/** The refusal for an operator an axis cannot answer, with the drop-the-symbol fix. */
+export function declined(word: string, op: Operator): Interp {
+    return {
+        r: "fail",
+        message: ORDERING_NAMES.has(op.name)
+            ? i18n.t("diagnostics:axis.noOrdering", {word})
+            : i18n.t("diagnostics:axis.cannotAnswer", {word, operator: op.symbol ?? op.name}),
+        fixDrop: op.symbol ?? undefined,
+    };
+}
+
+/** The refusal for an operand the axis cannot read; rescuable, because the next keystroke may finish a word. */
+export function illTyped(word: string, prop: Prop): Interp {
+    return {r: "fail", rescuable: true, message: i18n.t("diagnostics:axis.takes", {word, hint: hintOf(prop)})};
+}
+
+/** The refusal for a quoted quantity, with the drop-the-quotes fix. */
+export function quotedQuantity(word: string, prop: Prop): Interp {
+    return {
+        r: "fail", rescuable: true, fixQuotes: true,
+        message: i18n.t("diagnostics:axis.takesQuoted", {word, hint: hintOf(prop)}),
+    };
+}
+
+/** A pattern on a file path is honest but weak, and the warning says why — once per clause. */
+export function warnPathGlob(pend: Pending[]): void {
+    const message = i18n.t("diagnostics:pattern.pathWeak");
+    if (!pend.some((p) => p.message === message)) pend.push({severity: "warning", message});
+}
+
+/**
+ * Merges the interpretations of a value's alternatives into one.
+ *
+ * Alternatives must resolve the same way — all content, all one property family, all counts — because a single chip
+ * carries one question. A failure in any alternative is the whole value's failure.
+ */
+export function combineAlternatives(parts: readonly Interp[]): Interp {
+    const failed = parts.find((p) => p.r === "fail");
+    if (failed !== undefined) return failed;
+    const real = parts.filter((p) => p.r !== "empty");
+    if (real.length === 0) return {r: "empty", why: i18n.t("diagnostics:why.noValue")};
+    if (real.length === 1) return real[0];
+
+    if (real.every((p) => p.r === "content")) {
+        return {r: "content", value: anyOfExpr(real.map((p) => (p as { value: ValueExpr }).value))};
+    }
+    if (real.every((p) => p.r === "props")) {
+        const props: PropRef[] = [];
+        for (const p of real as ReadonlyArray<{ props: readonly PropRef[] }>) {
+            for (const ref of p.props) {
+                if (!props.some((have) => have.kind === ref.kind && have.prop === ref.prop)) props.push(ref);
+            }
+        }
+        return {r: "props", props, value: anyOfExpr(real.map((p) => (p as { value: ValueExpr }).value))};
+    }
+    if (real.every((p) => p.r === "count")) {
+        return {r: "count", value: anyOfExpr(real.map((p) => (p as { value: ValueExpr }).value))};
+    }
+    return {r: "fail", message: i18n.t("diagnostics:value.differentQuestions")};
+}
+
+export function ctxFor(head: Head, pend: Pending[]): ValueCtx {
+    if (head.role === "column") return columnCtx(head.column, pend);
+    if (head.role === "kind") return kindCtx(head.kind, true, pend);
+    return propCtx([{kind: head.kind, prop: head.name}], headWord(head), pend);
+}
+
+/** An operand read against one property, or one word shared by several kinds' properties. */
+export function propCtx(refs: readonly PropRef[], word: string, pend: Pending[]): ValueCtx {
+    return typedCtx(propOf(refs[0]), word, pend, (value) => ({r: "props", props: refs, value}));
+}
+
+/** The count word: cardinality reads operands exactly as a numeric axis does. */
+export function countCtx(pend: Pending[]): ValueCtx {
+    return typedCtx(COUNT_PROP, GRAMMAR.countWord, pend, (value) => ({r: "count", value}));
+}
+
+/** The shared reader over a property's declared notations. */
+export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value: ValueExpr) => Interp): ValueCtx {
+    /** Whether the quoted text is one of the property's sentinel words, which are strings and stay reachable. */
+    const isSentinel = (t: string): boolean => sentinelOf(prop, t) !== null;
+    /** The string reading of a quoted operand: the first textual type answering `opName` that parses it. */
+    const stringReading = (t: string, opName: string): ParsedValue | null => {
+        for (const type of prop.types) {
+            if (quantity(type) || !accepts(type, "contains") || !accepts(type, opName)) continue;
+            const value = type.parse?.(t);
+            if (value !== null && value !== undefined) return {type, value};
+        }
+        return null;
+    };
+    /**
+     * The quote law's refusal: a quoted operand that is neither a sentinel word nor readable as anything but a
+     * quantity is refused, because a quantity has no string reading.
+     */
+    const refusesQuote = (t: string): boolean => {
+        if (isSentinel(t)) return false;
+        const pv = parseValue(prop, t);
+        return pv !== null ? quantity(pv.type) : prop.types.some(quantity);
+    };
+    const bareValue = (t: string): Interp => {
+        const pv = parseValue(prop, t);
+        if (pv === null) return illTyped(word, prop);
+        const op = accepts(pv.type, "contains") ? "contains" as const : "exact" as const;
+        return done({op, operand: {type: pv.type.name, value: pv.value, written: t}});
+    };
+    const openBound = (bound: string, op: "gte" | "lte"): Interp | null => {
+        for (const type of prop.types) {
+            if (!accepts(type, "range") || !accepts(type, op) || !type.parse) continue;
+            const value = type.parse(bound);
+            if (value !== null) return done({op, operand: {type: type.name, value, written: bound}});
+        }
+        return null;
+    };
+    const rangeParts = (lo: string, hi: string): Interp | null => {
+        if (lo === GRAMMAR.wildcard && hi !== GRAMMAR.wildcard) return openBound(hi, "lte");
+        if (hi === GRAMMAR.wildcard && lo !== GRAMMAR.wildcard) return openBound(lo, "gte");
+        for (const type of prop.types) {
+            if (!accepts(type, "range")) continue;
+            // Bounds written without units read together, in one notation — never half factor, half proportion.
+            const pair = type.parsePair?.(lo, hi);
+            if (pair !== null && pair !== undefined) {
+                return done({
+                    op: "range",
+                    lo: {type: type.name, value: pair[0], written: lo},
+                    hi: {type: type.name, value: pair[1], written: hi},
+                });
+            }
+            if (!type.parse) continue;
+            const a = type.parse(lo);
+            const b = type.parse(hi);
+            if (a !== null && b !== null) {
+                return done({
+                    op: "range",
+                    lo: {type: type.name, value: a, written: lo},
+                    hi: {type: type.name, value: b, written: hi},
+                });
+            }
+        }
+        return null;
+    };
+    return {
+        operator: (op, operand, opts): Interp => {
+            if (opts.phrase === true) {
+                const read = stringReading(operand, op.name);
+                if (read !== null) {
+                    return done(opExpr(op.name,
+                        {type: read.type.name, value: read.value, written: operand}));
+                }
+                // A quoted operand is a string. Sentinel words are strings; a quantity is not, so an operator
+                // applied to a quoted number is refused rather than read as the number it looks like.
+                if (refusesQuote(operand)) return quotedQuantity(word, prop);
+            }
+            const pv = parseValue(prop, operand);
+            if (pv === null) return illTyped(word, prop);
+            if (!accepts(pv.type, op.name)) return declined(word, op);
+            return done(opExpr(op.name, {type: pv.type.name, value: pv.value, written: operand}));
+        },
+        range: (t): Interp | null => {
+            if (!prop.types.some((type) => accepts(type, "range"))) return null;
+            if (t.endsWith(GRAMMAR.range) && t.length > 1) {
+                const open = openBound(t.slice(0, -1), "gte");
+                if (open !== null) {
+                    // The trailing shorthand is the one open form whose reading is not on the page.
+                    pend.push({
+                        severity: "note",
+                        message: i18n.t("diagnostics:value.trailingRange",
+                            {written: t, bound: t.slice(0, -1), wildcard: GRAMMAR.wildcard}),
+                    });
+                    return open;
+                }
+            }
+            for (let k = 1; k < t.length - 1; k++) {
+                if (t[k] !== GRAMMAR.range) continue;
+                const ranged = rangeParts(t.slice(0, k), t.slice(k + 1));
+                if (ranged !== null) return ranged;
+            }
+            return null;
+        },
+        rangeParts,
+        glob: (pattern): Interp => {
+            const globbing = prop.types.find((type) => accepts(type, "glob"));
+            if (globbing === undefined) {
+                // Rescuable: `*-` is a keystroke away from the open range `*-10`, which is no pattern at all.
+                return {r: "fail", rescuable: true, message: i18n.t("diagnostics:axis.noPatterns", {word})};
+            }
+            if (pathTyped([globbing])) warnPathGlob(pend);
+            return done({op: "glob", operand: {text: pattern}});
+        },
+        bare: bareValue,
+        regex: (pattern): Interp => {
+            if (!prop.types.some((type) => accepts(type, "regex"))) {
+                return {r: "fail", message: i18n.t("diagnostics:axis.noRegex", {word})};
+            }
+            return badPattern(pattern) ?? done({op: "regex", operand: {text: pattern}});
+        },
+        phrase: (t): Interp => {
+            const read = stringReading(t, "contains");
+            if (read !== null) {
+                return done({op: "contains", operand: {type: read.type.name, value: read.value, written: t}});
+            }
+            // A phrase is a string value. Word vocabularies — sentinels, roles, rungs — are strings, so
+            // quoting one of their words is harmless; a quantity has no string reading, and refusing says
+            // what the quotes did rather than silently reading the number they wrap.
+            if (refusesQuote(t)) return quotedQuantity(word, prop);
+            return bareValue(t);
+        },
+        star: (): Interp => done({op: "present"}),
+    };
+}
+
+export function opExpr(op: string, operand: ParsedOperand): ValueExpr {
+    if (op === "exact") return {op: "exact", operand};
+    if (op === "lt" || op === "lte" || op === "gt" || op === "gte") return {op, operand};
+    // Unreachable: every prefix operator is checked against EXPRESSIBLE_PREFIX at import.
+    throw new Error(`operator "${op}" has no expression shape`);
+}
+
+/**
+ * An operand read against a kind: its properties claim it in declaration order — the subject first — and a
+ * comparison no property claims falls back to counting the kind's rows, when the operand is a count and the
+ * position allows one.
+ */
+export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): ValueCtx {
+    const word = wordOf(kind);
+    const refs = Object.keys(kind.props).map((prop): PropRef => ({kind, prop}));
+    const subject = refs.length > 0 ? propOf(refs[0]) : COUNT_PROP;
+    const countValue = (op: Operator, operand: string): Interp | null => {
+        if (!countFallback || !COMPARABLE.has(op.name)) return null;
+        const value = countType.parse?.(operand);
+        if (value === null || value === undefined) return null;
+        return {r: "count", value: opExpr(op.name, {type: countType.name, value, written: operand})};
+    };
+    return {
+        operator: (op, operand, opts): Interp => {
+            let claimed = false;
+            for (const ref of refs) {
+                const pv = parseValue(propOf(ref), operand);
+                if (pv === null) continue;
+                claimed = true;
+                if (accepts(pv.type, op.name)) {
+                    return propCtx([ref], word, pend).operator(op, operand, opts);
+                }
+            }
+            // A quoted operand is a string, which the count question refuses like any quantity.
+            const counted = opts.phrase === true ? null : countValue(op, operand);
+            if (counted !== null) return counted;
+            if (claimed) return declined(word, op);
+            return illTyped(word, subject);
+        },
+        range: (t): Interp | null => {
+            for (const ref of refs) {
+                const ranged = propCtx([ref], word, pend).range(t);
+                if (ranged !== null) return ranged;
+            }
+            if (countFallback) return countCtx(pend).range(t);
+            return null;
+        },
+        rangeParts: (lo, hi): Interp | null => {
+            for (const ref of refs) {
+                const ranged = propCtx([ref], word, pend).rangeParts(lo, hi);
+                if (ranged !== null) return ranged;
+            }
+            if (countFallback) return countCtx(pend).rangeParts(lo, hi);
+            return null;
+        },
+        glob: (pattern): Interp => {
+            const globbing = refs.filter((ref) => propOf(ref).types.some((type) => accepts(type, "glob")));
+            if (globbing.length === 0) {
+                return {r: "fail", rescuable: true, message: i18n.t("diagnostics:axis.noPatterns", {word})};
+            }
+            if (globbing.some((ref) => pathTyped(propOf(ref).types))) warnPathGlob(pend);
+            return {r: "props", props: globbing, value: {op: "glob", operand: {text: pattern}}};
+        },
+        bare: (t): Interp => {
+            const claimants = refs.filter((ref) => parseValue(propOf(ref), t) !== null);
+            if (claimants.length === 0) return illTyped(word, subject);
+            if (claimants.length === 1) {
+                return propCtx(claimants, word, pend).bare(t, false);
+            }
+            return {r: "props", props: claimants, value: {op: "contains", operand: {text: t}}};
+        },
+        regex: (pattern): Interp => {
+            const takers = refs.filter((ref) => propOf(ref).types.some((type) => accepts(type, "regex")));
+            if (takers.length === 0) {
+                return {r: "fail", message: i18n.t("diagnostics:axis.noRegex", {word})};
+            }
+            return badPattern(pattern)
+                ?? {r: "props", props: takers, value: {op: "regex", operand: {text: pattern}}};
+        },
+        phrase: (t): Interp => {
+            const textual = refs.filter((ref) => propOf(ref).types.some((type) => {
+                if (quantity(type) || !accepts(type, "contains")) return false;
+                const value = type.parse?.(t);
+                return value !== null && value !== undefined;
+            }));
+            // A single claimant reads through its own property, so a typed operand — a colour, say — is
+            // carried as its value; several claimants share one text operand, and are all textual.
+            if (textual.length === 1) return propCtx(textual, word, pend).phrase(t);
+            if (textual.length > 0) {
+                return {r: "props", props: textual, value: {op: "contains", operand: {text: t}}};
+            }
+            // No textual property reads it, so the string falls to the word vocabularies: sentinels and
+            // word-valued properties take a quoted word; a quantity refuses a quoted number.
+            const wordy = refs.filter((ref) => {
+                const prop = propOf(ref);
+                if (sentinelOf(prop, t) !== null) return true;
+                const pv = parseValue(prop, t);
+                return pv !== null && !quantity(pv.type);
+            });
+            if (wordy.length > 0) return propCtx(wordy, word, pend).phrase(t);
+            const numeric = refs.some((ref) => parseValue(propOf(ref), t) !== null
+                || propOf(ref).types.some(quantity));
+            if (numeric) return quotedQuantity(word, subject);
+            return illTyped(word, subject);
+        },
+        star: (): Interp => ({r: "exists"}),
+    };
+}
+
+/**
+ * An operand read against a whole column.
+ *
+ * A comparison whose operand is a count is the count question — the desugar `model:>4` means `model:{count:>4}`,
+ * whatever properties exist. Any other operator token is ordinary content, because spell and file names carry
+ * operators of their own; the anchor `=` alone keeps its meaning on content. A lone word naming one of the
+ * column's kinds tests the kind; a phrase never does, which is how content spelled like a kind word stays
+ * reachable.
+ */
+export function columnCtx(column: Column, pend: Pending[]): ValueCtx {
+    const kinds = kindsOf(column);
+    return {
+        operator: (op, operand, opts): Interp => {
+            // A quoted operand is a string, so it can neither be the count question nor carry a live wildcard.
+            const value = opts.phrase !== true && COMPARABLE.has(op.name) ? countType.parse?.(operand) : null;
+            if (value !== null && value !== undefined) {
+                return {r: "count", value: opExpr(op.name, {type: countType.name, value, written: operand})};
+            }
+            if (op.name === "exact") {
+                if (opts.phrase !== true && operand.includes(GRAMMAR.wildcard)) {
+                    return {
+                        r: "fail",
+                        message: i18n.t("diagnostics:value.exactPattern"),
+                        fixDrop: op.symbol ?? undefined
+                    };
+                }
+                return content({op: "exact", operand: {text: operand}});
+            }
+            return content({op: "contains", operand: {text: opts.whole}});
+        },
+        range: (t): Interp | null => countCtx(pend).range(t),
+        rangeParts: (lo, hi): Interp | null => countCtx(pend).rangeParts(lo, hi),
+        glob: (pattern): Interp => {
+            if (kinds.some((k) => Object.values(k.props).some((p) => pathTyped(p.types)))) {
+                warnPathGlob(pend);
+            }
+            return content({op: "glob", operand: {text: pattern}});
+        },
+        bare: (t, alone): Interp => {
+            if (alone) {
+                const named = kindIn(column, fold(t));
+                if (named !== undefined) return {r: "kindWord", kind: named};
+            }
+            return content({op: "contains", operand: {text: t}});
+        },
+        phrase: (t): Interp => content({op: "contains", operand: {text: t}}),
+        regex: (pattern): Interp => badPattern(pattern) ?? content({op: "regex", operand: {text: pattern}}),
+        star: (): Interp => ({r: "exists"}),
+    };
+}
+
+/**
+ * A bare term at the top level: plain search.
+ *
+ * Operator characters are inert here — spell names carry lone operators as tokens, and there is no row set for a
+ * count to measure — so everything except the lone wildcard and a pattern is content.
+ */
+export function topCtx(): ValueCtx {
+    return {
+        operator: (op, operand, opts): Interp => content({op: "contains", operand: {text: opts.whole}}),
+        range: (): Interp | null => null,
+        rangeParts: (): Interp | null => null,
+        glob: (pattern): Interp => content({op: "glob", operand: {text: pattern}}),
+        bare: (t): Interp => content({op: "contains", operand: {text: t}}),
+        phrase: (t): Interp => content({op: "contains", operand: {text: t}}),
+        // Unreachable by scanning — a slash in free text is data — and defensively literal if ever called.
+        regex: (pattern): Interp => content({
+            op: "contains",
+            operand: {text: `${GRAMMAR.regex}${pattern}${GRAMMAR.regex}`},
+        }),
+        star: (): Interp => content({op: "present"}),
+    };
+}

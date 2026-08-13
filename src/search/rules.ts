@@ -18,8 +18,8 @@
 import {i18n} from "../i18n";
 import {termKey} from "./format";
 import type {Prop} from "./kinds";
-import type {Ask, PropRef, ScopeAsk, ScopeTerm, ValueExpr} from "./parse";
-import {anyOfExpr, COUNT_PROP, propOf} from "./parse";
+import type {Ask, PropRef, ScopeAsk, ScopeTerm, ValueExpr} from "./ast";
+import {COUNT_PROP, anyOfExpr, propOf} from "./ast";
 import type {Members} from "./implication";
 import {
     closedInterval, contradicts, countClassOf, dedupeMembers, disjoint, dropImpliedMembers, impliesAsk,

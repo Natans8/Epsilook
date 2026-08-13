@@ -25,7 +25,7 @@ import "./catalogue";      // the kinds register themselves as they are declared
 import type {Column} from "./columns";
 import {COLUMNS} from "./columns";
 import type {Kind, Prop} from "./kinds";
-import {KINDS, operatorsOf} from "./kinds";
+import {doorOf, KINDS, operatorsOf, wordOf} from "./kinds";
 import {fold} from "./text-normalization";
 import {TYPES} from "./value-types";
 
@@ -38,6 +38,18 @@ export type Head =
     | { readonly role: "column"; readonly column: Column }
     | { readonly role: "kind"; readonly kind: Kind }
     | { readonly role: "prop"; readonly kind: Kind; readonly name: string; readonly prop: Prop };
+
+/**
+ * The spelling a head is written with — the word a diagnostic names it by, and the word a rewritten clause spells.
+ *
+ * @param head The resolved head.
+ * @returns Its column key, its kind word, or its property's door.
+ */
+export function headWord(head: Head): string {
+    if (head.role === "column") return head.column.key;
+    if (head.role === "kind") return wordOf(head.kind);
+    return doorOf(head.name, head.prop);
+}
 
 /** Every top-level word that may open a tag, resolved. */
 export const HEADS = new Map<string, Head>();

@@ -14,8 +14,8 @@
 import {GRAMMAR, PREFIX_OPERATORS, spelling} from "./grammar";
 import {doorOf, formatValue, sentinelOf, wordOf} from "./kinds";
 import {exact, gt, gte, lt, lte} from "./operators";
-import type {Ask, Clause, Parsed, PropRef, ScopeTerm, ValueExpr} from "./parse";
-import {propOf} from "./parse";
+import type {Ask, Clause, Parsed, PropRef, ScopeTerm, ValueExpr} from "./ast";
+import {propOf} from "./ast";
 import {escapeRegExp} from "./patterns";
 import {TYPES} from "./value-types";
 import type {Value} from "./value-types";

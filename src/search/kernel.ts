@@ -22,7 +22,7 @@
  */
 import {COLUMNS} from "./columns";
 import type {Kind} from "./kinds";
-import type {Ask, Clause, Parsed, RowTest, ScopeTerm, ValueExpr} from "./parse";
+import type {Ask, Clause, Parsed, RowTest, ScopeTerm, ValueExpr} from "./ast";
 import type {Dataset, Row, RowAsk, RowSource} from "./rows";
 import {plainMatches, rowMatches} from "./rows";
 import type {Value} from "./value-types";

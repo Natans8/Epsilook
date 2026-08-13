@@ -23,7 +23,7 @@
  * through simplification: two queries ask the same question exactly when their simplified canonical forms agree.
  */
 import {formatQuery, queryKey} from "./format";
-import type {Parsed} from "./parse";
+import type {Parsed} from "./ast";
 import {parse} from "./parse";
 import type {Rule} from "./rules";
 import {RULES} from "./rules";
