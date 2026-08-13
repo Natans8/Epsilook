@@ -77,6 +77,10 @@ def test_a_truncated_row_is_an_error(line: str) -> None:
         list(iter_insert_rows(line))
 
 
+def names(statement: str) -> list[str]:
+    return [column.name for column in parse_create_table(statement)]
+
+
 def test_the_schema_is_the_column_order_an_insert_relies_on() -> None:
     """An INSERT names no columns, so a misread schema misaligns every row."""
     statement = """CREATE TABLE `creature_template` (
@@ -86,10 +90,29 @@ def test_the_schema_is_the_column_order_an_insert_relies_on() -> None:
       PRIMARY KEY (`entry`),
       KEY `idx_name` (`name`)
     ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4;"""
-    assert parse_create_table(statement) == ["entry", "name", "modelid1"]
+    assert names(statement) == ["entry", "name", "modelid1"]
 
 
 def test_a_generated_column_is_still_a_column() -> None:
     statement = ("CREATE TABLE `t` (`a` int NOT NULL, "
                  "`b` int GENERATED ALWAYS AS (`a` + 1) STORED, `c` varchar(8));")
-    assert parse_create_table(statement) == ["a", "b", "c"]
+    assert names(statement) == ["a", "b", "c"]
+
+
+def test_a_float_is_lossy_and_a_double_is_not() -> None:
+    """The distinction the overlay refuses a column on.
+
+    MySQL prints a FLOAT at six significant digits and a DOUBLE at full
+    precision, so only the first arrives rounded. Widening the rule to "any
+    floating point type" would refuse a column that loses nothing.
+    """
+    statement = ("CREATE TABLE `t` (`a` float NOT NULL, `b` double NOT NULL, "
+                 "`c` int NOT NULL, `d` varchar(8));")
+    assert [column.lossy for column in parse_create_table(statement)] == \
+           [True, False, False, False]
+
+
+def test_a_column_carries_the_type_the_dialect_spells() -> None:
+    statement = "CREATE TABLE `t` (`a` int unsigned NOT NULL, `b` char(100));"
+    assert [column.kind for column in parse_create_table(statement)] == \
+           ["UINT", "CHAR"]

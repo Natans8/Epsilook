@@ -22,7 +22,17 @@ from ..progress import log
 from ..targets import VISUAL_REDIRECTS
 from .archive import read_member
 from .cache import CACHE_DIR, download
-from .dump import iter_insert_rows, parse_create_table
+from .dump import Column, iter_insert_rows, parse_create_table
+
+STAMP_COLUMN = "VerifiedBuild"
+"""The client build a hotfix row was last verified against.
+
+TrinityCore stamps every hotfix row with it, and dropping it -- which this build
+did for 46 pack formats -- leaves no way to ask whether a row belongs to the
+client being packed. Measured across all six cached releases: every hotfix table
+declares it and every row carries a value, so it is read as a required column
+rather than an optional one.
+"""
 
 # TrinityCore TDB release per game version (server-side world DB + hotfixes).
 # "hotfixes" is optional — the 3.3.5 branch ships a world-only dump, and
@@ -139,6 +149,35 @@ TDB_TABLES = {
     },
 }
 
+# The stamp rides every hotfix table, so it is appended once here rather than
+# repeated on nine rows — which also keeps the declaration above about the
+# columns the ROUTES want, which is what it is for.
+TDB_TABLES["hotfixes"] = {table: [*columns, STAMP_COLUMN]
+                          for table, columns in TDB_TABLES["hotfixes"].items()}
+
+TDB_LOSSY_COLUMNS = frozenset({
+    # MySQL prints a FLOAT at six significant digits, so this arrives rounded:
+    # the dump's 111.951 against the client's full float32 expansion, a
+    # difference of up to 1.9e-4. Preferring it would replace a precise value
+    # with a truncated one.
+    #
+    # MEASURED, not assumed. Over all five releases that ship hotfixes, the
+    # eight INTEGER columns show 8 verifiable differences and all 8 are adopted
+    # by the following client — real hotfixes, worth having. This column shows
+    # 10 differences and NOT ONE is adopted by the next client: ten artifacts of
+    # how the dump prints, and nothing else.
+    ("spell_effect", "EffectBasePoints"),
+})
+"""Overlay columns whose text is lossier than the client's own, by column type.
+
+Declared rather than derived so the overlay can be composed without reading a
+700 MB dump — and checked against the dump's own DDL every time one is
+distilled, so the declaration cannot quietly stop being true.
+
+⚠ The column is still DISTILLED. Refusing it is the overlay's job, and dropping
+it here would take it away from the builder that still reads it directly.
+"""
+
 
 def tdb_column_index(table: str, column: str, schema: list[str]) -> int | None:
     """Position of a column in a TDB table, or None if it is a legacy spelling.
@@ -154,22 +193,56 @@ def tdb_column_index(table: str, column: str, schema: list[str]) -> int | None:
              f"declared in TDB_OPTIONAL_COLUMNS; schema = {schema}")
 
 
+def check_lossy_declaration(table: str, schema: list[Column], keep: list[str]) -> None:
+    """Fail unless TDB_LOSSY_COLUMNS says exactly what this dump's DDL says.
+
+    The overlay refuses a column whose text is lossier than the client's own,
+    and it decides that from a declaration rather than by opening the dump. This
+    is what keeps the two in step: the dump states the type right here, so a
+    column that becomes lossy — or stops being — is caught the next time a
+    release is distilled instead of silently degrading a value years later.
+    """
+    kinds = {column.name: column for column in schema}
+    for column in keep:
+        declared = (table, column) in TDB_LOSSY_COLUMNS
+        actual = column in kinds and kinds[column].lossy
+        if declared == actual:
+            continue
+        sys.exit(
+            f"error: {table}.{column} is "
+            + (f"declared in TDB_LOSSY_COLUMNS but this dump types it "
+               f"{kinds[column].kind}" if declared else
+               f"typed {kinds[column].kind}, which a dump prints lossily, and it "
+               f"is not declared in TDB_LOSSY_COLUMNS"))
+
+
 def distill_dump(lines: Iterable[str], name: str, want: dict[str, list[str]],
-                 out_dir: Path, required: bool = True) -> None:
+                 out_dir: Path, required: bool = True,
+                 overlay: bool = False) -> None:
     """Write the wanted tables and columns of one SQL dump out as CSVs.
 
     `lines` is the dump's text, streamed; `name` identifies it in errors.
 
-    A table may legitimately have no ``INSERT`` -- a hotfixes dump carries only
-    the rows that were hotfixed -- and still gets a header-only CSV, so a
-    reader can stream it without a special case. With `required` false a table
-    missing from the dump altogether is tolerated too: older hotfix dumps
-    predate some of the tables the build overlays.
+    `required` says a table missing from the dump is fatal. True for the world
+    tables, which are the only source of what they carry; false where absence
+    is ordinary — older hotfix releases predate some of the tables the build
+    overlays, and not every locale is translated.
+
+    `overlay` says this dump REVISES data the client already has, which is a
+    different claim from `required` and carries two rules of its own. Only an
+    overlay can degrade a value by supplying it, so only its column types are
+    checked against TDB_LOSSY_COLUMNS; and only for an overlay is "no such
+    table" the same answer as "no rows", so only there does an absent table get
+    a header-only stand-in.
+
+    A table may also legitimately have no ``INSERT`` -- a hotfixes dump carries
+    only the rows that were hotfixed -- and still gets a header-only CSV, so a
+    reader can stream it without a special case.
 
     A row whose value count disagrees with its schema exits rather than
     writing a misaligned CSV.
     """
-    schemas: dict[str, list[str]] = {}
+    schemas: dict[str, list[Column]] = {}
     writers: dict[str, tuple] = {}
     handles = []
     stream = iter(lines)
@@ -183,13 +256,16 @@ def distill_dump(lines: Iterable[str], name: str, want: dict[str, list[str]],
                     break
             if table in want:
                 schemas[table] = parse_create_table("".join(statement))
+                if overlay:
+                    check_lossy_declaration(table, schemas[table], want[table])
         elif line.startswith("INSERT INTO `"):
             table = line.split("`")[1]
             if table not in want:
                 continue
             if table not in writers:
                 keep = want[table]
-                idx = [tdb_column_index(table, c, schemas[table]) for c in keep]
+                names = [column.name for column in schemas[table]]
+                idx = [tdb_column_index(table, c, names) for c in keep]
                 handle = open(out_dir / f"{table}.csv", "w",  # pylint: disable=consider-using-with
                               newline="", encoding="utf-8")
                 handles.append(handle)
@@ -211,10 +287,44 @@ def distill_dump(lines: Iterable[str], name: str, want: dict[str, list[str]],
                 sys.exit(f"error: table {table} not found in {name}")
             why = TDB_OPTIONAL_TABLES.get(table, "no overrides")
             log(f"    {table}: absent from this dump — {why}")
-            continue
-        if table not in writers:  # zero hotfixed rows — emit header only
+            if not overlay:
+                # A world table is the only source of what it carries, so its
+                # absence has to stay visible: the creature-display route picks
+                # the first candidate table that EXISTS, and an empty stand-in
+                # would win that race and silently blank every morph.
+                continue
+        if table not in writers:
+            # No hotfixed rows, or no such table in this release. For an overlay
+            # both mean "no overrides", so both get the same header-only file —
+            # which is what lets a cached release be recognised by its headers
+            # instead of re-distilled from 700 MB of SQL on every build.
             with open(out_dir / f"{table}.csv", "w", newline="", encoding="utf-8") as handle:
                 csv.writer(handle).writerow(keep)
+
+
+def distilled(tdb_dir: Path, want: dict[str, list[str]]) -> bool:
+    """Whether the cache already holds exactly the tables and columns wanted.
+
+    The header is compared, not merely the file's existence. Widening a column
+    list used to leave the old CSVs in place looking complete, so the new column
+    was never distilled and every route that asked for it saw a build that
+    predates it — the failure mode the whole drift taxonomy exists to make
+    impossible, arriving through the cache instead of through the data.
+
+    A table absent from an older release is not a miss: the distiller tolerates
+    it and writes nothing, so there is nothing here to compare. Those are
+    excluded by the declaration that let them be absent in the first place.
+    """
+    for table, columns in want.items():
+        path = tdb_dir / f"{table}.csv"
+        if not path.exists():
+            if table in TDB_OPTIONAL_TABLES:
+                continue
+            return False
+        with path.open(newline="", encoding="utf-8") as handle:
+            if next(csv.reader(handle), []) != columns:
+                return False
+    return True
 
 
 def tdb_release(version: str) -> dict | None:
@@ -259,9 +369,9 @@ def fetch_tdb(version: str) -> Path | None:
     # a release may ship world only (the 3.3.5 branch does), so only the kinds
     # this release actually has count towards "already distilled"
     kinds = [k for k in ("world", "hotfixes") if k in rel]
-    wanted_csvs = [t for k in kinds for t in TDB_TABLES[k]]
-    if all((tdb_dir / f"{t}.csv").exists() for t in wanted_csvs):
-        log(f"TDB ({rel['tag']}): cached ({len(wanted_csvs)} distilled tables)")
+    wanted = {t: c for k in kinds for t, c in TDB_TABLES[k].items()}
+    if distilled(tdb_dir, wanted):
+        log(f"TDB ({rel['tag']}): cached ({len(wanted)} distilled tables)")
         return tdb_dir
     if "hotfixes" not in rel:
         log(f"TDB ({rel['tag']}): world-only release — no hotfix overrides for this build")
@@ -276,6 +386,7 @@ def fetch_tdb(version: str) -> Path | None:
         # legitimately predate some of the tables we look for
         with read_member(archive, member) as lines:
             distill_dump(lines, member, TDB_TABLES[kind], tdb_dir,
-                         required=(kind == "world"))
+                         required=(kind == "world"),
+                         overlay=(kind == "hotfixes"))
     return tdb_dir
 

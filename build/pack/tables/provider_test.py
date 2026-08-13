@@ -14,12 +14,19 @@ from pathlib import Path
 import pytest
 
 from .csv_tables import CsvTables
+from .overlay import OverlaidTables
 from .provider import Tables
 
 # Every implementation, as a factory taking the directory to serve. A new
 # provider is one entry here and no new test.
+#
+# `OverlaidTables` is here with nothing to overlay on purpose. A composition
+# that changes the contract when it has no revisions to apply would be a
+# composition routes cannot be handed blindly, and being handed it blindly is
+# the entire point. What it does WITH revisions is `overlay_test.py`.
 PROVIDERS: list[tuple[str, Callable[[Path], Tables]]] = [
     ("CsvTables", lambda directory: CsvTables(directory)),
+    ("OverlaidTables", lambda directory: OverlaidTables(CsvTables(directory))),
 ]
 
 TABLE = """\

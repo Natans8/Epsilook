@@ -46,6 +46,8 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build" / "build_data.py"
 DATA = ROOT / "site" / "data"
 MANIFEST = DATA / "versions.json"
+UV_RUN = ["uv", "run", "python"]
+"""How every Python the repository owns is launched (see `build_argv`)."""
 
 
 
@@ -59,7 +61,14 @@ def git(*args: str) -> str:
 
 
 def build_argv(pack: Pack, refresh: bool) -> list[str]:
-    argv = [sys.executable, str(BUILD), "--version", pack.build, "--label", pack.label]
+    """The command that builds one pack, run through the pinned environment.
+
+    `uv run` rather than this script's own interpreter: the build takes runtime
+    dependencies now (sqlglot reads the TDB dump's DDL), and they are pinned by
+    uv.lock. Spawning the ambient interpreter picks up whichever site-packages
+    happen to be on the machine, which on a clean checkout is none of them.
+    """
+    argv = [*UV_RUN, str(BUILD), "--version", pack.build, "--label", pack.label]
     if pack.id != pack.build:
         argv += ["--id", pack.id]
     if pack.default:
@@ -233,8 +242,9 @@ def main() -> int:
 
     if args.list:
         for pack in chosen:
-            printable = " ".join(f'"{a}"' if " " in a else a for a in build_argv(pack, args.refresh)[1:])
-            print(f"python {printable}")
+            printable = " ".join(f'"{a}"' if " " in a else a
+                                 for a in build_argv(pack, args.refresh))
+            print(printable)
         return 0
 
     if args.verify:

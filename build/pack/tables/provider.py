@@ -36,12 +36,12 @@ class Tables(Protocol):
 
     def available(self, table: str) -> bool:
         """Whether this source has the named table at all."""
-        ...
+        raise NotImplementedError
 
     def header(self, table: str) -> list[str]:
         """The table's column names, in source order."""
-        ...
+        raise NotImplementedError
 
     def rows(self, table: str, columns: Sequence[str]) -> Iterator[tuple[str, ...]]:
-        """Yield the named columns of every row, hotfixes applied."""
-        ...
+        """Yield the named columns of every row, revisions applied."""
+        raise NotImplementedError
