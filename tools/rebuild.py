@@ -130,7 +130,7 @@ def prune_cache() -> int:
     freed = 0
     for directory, size in stale_cache():
         shutil.rmtree(directory, ignore_errors=True)
-        print(f"{DIM}pruned     build/cache/{directory.name} ({size / 1e6:,.0f} MB){RESET}")
+        print(f"{DIM}pruned     .cache/{directory.name} ({size / 1e6:,.0f} MB){RESET}")
         freed += size
     return freed
 

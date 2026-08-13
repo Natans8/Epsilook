@@ -6,8 +6,8 @@
     python tools/builddb.py --refresh-dbd   # re-fetch the WoWDBDefs schema definitions
     python tools/builddb.py --list          # what would be built, and from where
 
-The result is ONE DuckDB file at `build/cache/epsilook.duckdb`, gitignored like
-everything else under `build/cache/`. It is not part of the product, nothing in
+The result is ONE DuckDB file at `.cache/epsilook.duckdb`, gitignored like
+everything else under `.cache/`. It is not part of the product, nothing in
 `site/` reads it, and deleting it costs only the time to rebuild.
 
 WHY IT EXISTS
@@ -44,7 +44,7 @@ THREE DECISIONS WORTH KNOWING BEFORE YOU CHANGE ANYTHING
        joined and counted. Adding real FK constraints WILL break the build.
 
     3. NOTHING IS DOWNLOADED THAT build_data.py ALREADY CACHES. This reads
-       `build/cache/` in place. The only things it fetches are the `.dbd`
+       `.cache/` in place. The only things it fetches are the `.dbd`
        schema definitions, the enum tables, and the few EXTRA_TABLES below that
        the pack does not need but exploration does.
 """
@@ -69,6 +69,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 import dbd  # noqa: E402  (path set above)
 from packs import PACKS, builds  # noqa: E402  (path set above)
 
+from repo import CACHE
+
 try:
     # The `type: ignore` is REQUIRED, not cosmetic: tools/check.py type-checks
     # all of tools/, and CI runs it on a machine that has never installed
@@ -77,9 +79,8 @@ try:
     import duckdb  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - the one dependency, and it is optional
     sys.exit(
-        "tools/builddb.py needs DuckDB (the only dependency outside the stdlib,\n"
-        "and only for this development tool — the product build stays stdlib-only):\n"
-        "    python -m pip install duckdb"
+        "tools/builddb.py needs DuckDB, which pyproject.toml declares:\n"
+        "    uv run python tools/builddb.py"
     )
 
 try:
@@ -96,7 +97,6 @@ except ImportError:  # pragma: no cover - optional, and absence is not an error
     tqdm = None
 
 ROOT = Path(__file__).resolve().parent.parent
-CACHE = ROOT / "build" / "cache"
 DBD_CACHE = CACHE / "dbd"
 ENUM_CACHE = CACHE / "enums"
 DB_PATH = CACHE / "epsilook.duckdb"

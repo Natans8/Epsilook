@@ -66,6 +66,8 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo import CACHE
+
 # BLIZZARD'S OWN VERSION SERVICE — Ribbit V2 over HTTPS, which is what Agent and
 # the game clients themselves use as of 2025. No key, no account, no scraping.
 #
@@ -220,10 +222,9 @@ assert sum(p.default for p in PACKS) == 1, "exactly one pack must be the default
 assert len({p.key for p in PACKS}) == len(PACKS), "duplicate pack key"
 assert len({p.id for p in PACKS}) == len(PACKS), "duplicate pack id"
 
-CACHE = Path(__file__).resolve().parent.parent / "build" / "cache"
 
-# A per-build download cache directory, e.g. `build/cache/9.2.7.45745`. Anything
-# else under build/cache/ is shared or long-lived (dbd, enums, expansions,
+# A per-build download cache directory, e.g. `.cache/9.2.7.45745`. Anything
+# else under .cache/ is shared or long-lived (dbd, enums, expansions,
 # listfile, the DuckDB file) and is never a rotation candidate.
 BUILD_DIR_RE = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
 TDB_DIR_RE = re.compile(r"^tdb-(.+)$")

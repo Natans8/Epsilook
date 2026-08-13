@@ -191,8 +191,8 @@ export type PillSlot = Segment | false | null | undefined | "" | 0 | PillSlot[];
  * default — and a row whose mask has several bits renders one icon per bit
  * rather than a fused glyph: the mixes are common (16.5% of model rows are
  * caster+target on 9.2.7) and the rarer ones (caster+area) have no sensible
- * single glyph. Masters live in build/icons/*.svg with a preview page at
- * build/target_icons.html. */
+ * single glyph. Masters live in docs/icons/*.svg with a preview page at
+ * docs/icons/preview.html. */
 export const TARGET_CASTER = 1, TARGET_TARGET = 2, TARGET_AREA = 4,
     TARGET_NOT_CASTER = 8, TARGET_MISSILE_DEST = 16;
 

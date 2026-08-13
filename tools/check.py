@@ -46,7 +46,7 @@ import sys
 import time
 from pathlib import Path
 
-from repo import BUMP_PATHS, ROOT, changed_under, git, have_ref
+from repo import BUMP_PATHS, CACHE, ROOT, changed_under, git, have_ref
 
 # A piped stdout on Windows is cp1252, and a failure detail quotes whatever the
 # failing tool printed (node --test opens every line with U+25B6). A report
@@ -730,7 +730,7 @@ def check_arcanum(rep: Report) -> None:
 
 
 def check_cache(rep: Report) -> None:
-    """Warn-only: build/cache holds downloads no pack in the roster needs.
+    """Warn-only: .cache holds downloads no pack in the roster needs.
 
     THE CACHE IS THE ONE THING HERE THAT GROWS WITHOUT ANYONE SEEING IT. A patch
     bump strands the previous build's tables - ~300 MB for a retail line - and
@@ -743,7 +743,7 @@ def check_cache(rep: Report) -> None:
     being committed, and a gitignored directory is not part of what CI sees.
     """
     if os.environ.get("CI"):
-        rep.skip("cache rotation", "build/cache is not present in CI")
+        rep.skip("cache rotation", ".cache is not present in CI")
         return
     try:
         sys.path.insert(0, str(ROOT / "tools"))
@@ -754,7 +754,7 @@ def check_cache(rep: Report) -> None:
 
     stale = stale_cache()
     if not stale:
-        rep.ok("cache rotation", "build/cache holds only what the roster needs")
+        rep.ok("cache rotation", ".cache holds only what the roster needs")
         return
     total = sum(size for _, size in stale)
     names = ", ".join(directory.name for directory, _ in stale[:3])
@@ -791,7 +791,7 @@ def check_pack_freshness(rep: Report) -> None:
         return
 
     tracked = [p for p in PACKS if p.product not in (FROZEN, ARCHIVE)]
-    cache = ROOT / "build" / "cache" / "pack-freshness.json"
+    cache = CACHE / "pack-freshness.json"
     now = time.time()
     if cache.exists() and now - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
         try:
@@ -922,7 +922,7 @@ def check_dependencies(rep: Report) -> None:
     if os.environ.get("CI"):
         rep.skip("dependencies", "not a CI concern")
         return
-    cache = ROOT / "build" / "cache" / "npm-outdated.json"
+    cache = CACHE / "npm-outdated.json"
     now = time.time()
     if cache.exists() and now - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
         try:

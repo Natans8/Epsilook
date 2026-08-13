@@ -20,6 +20,9 @@ package = false
 
 [dependency-groups]
 dev = [
+    # The exploration database and the tools that read it. Not a build
+    # dependency: nothing in the shipped pack path touches DuckDB.
+    "duckdb",
     "mypy",
     "pyflakes",
     "pylint",
@@ -32,3 +35,11 @@ dev = [
 # Python in the tree is the builder being replaced and the tools around it.
 testpaths = ["build/pack"]
 addopts = "--quiet --no-header"
+cache_dir = ".pytest_cache"
+
+# Both caches are pinned to the repository root. Left to their defaults they
+# land relative to whatever directory the tool was invoked from, which puts
+# generated files inside a source root -- where the IDE indexes them and every
+# exclusion has to be maintained twice.
+[tool.mypy]
+cache_dir = ".mypy_cache"

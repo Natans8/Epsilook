@@ -67,8 +67,12 @@ site/                    the site — published to GitHub Pages by .github/workf
   js/                    BUILD OUTPUT, gitignored: app.js and its sourcemap
   dev/oracle.js          console measurement helpers — a dev tool, never bundled
   data/<version>/        one gzipped data pack per game version
-build/                   the pack generator (Python 3)
+build/                   the pack generator (Python 3) — source and its tracked inputs, nothing generated
   build_data.py          regenerates the packs
+  enums/                 checked-in enum tables, each with its attribution
+  expansion_ids.json.gz  which expansion introduced each spell (tools/expansions.py writes it)
+  sources/               a vendored era client table no public archive serves
+  spelltext.py           the description template language, cooked to prose
   pack/                  the build as layers, each one replaceable on its own
     sources/             acquire: URLs, the cache, archives, the TrinityCore dumps
     tables/              the provider seam every reader reads through
@@ -97,8 +101,10 @@ docker/                  the self-hosting path — see "Hosting it yourself"
   Dockerfile.dockerignore  an allowlist of what the image build may see
   nginx.conf             the server block: caching, compression, the 404 page
   compose.yaml           one service, ready to paste into a NAS
+.cache/                  GENERATED, gitignored: downloaded tables, distilled dumps, the exploration database
 docs/                    how it works underneath, in prose
   DATA_ROUTES.md         every data route: sources, the spell->visual->kit graph, the pack layout
+  icons/                 the SVG masters behind the pill glyphs, and a preview page
   PILLS.md               the pill design guide: anatomy, segment order, how to add one
   DB_SCHEMA.md           the exploration database — a SQL mirror of every table the build downloads
 ```
@@ -188,7 +194,7 @@ The underlying script still takes its identity as arguments, if you want to driv
 python build/build_data.py --version 9.2.7.45745 --label "Shadowlands 9.2.7"
 ```
 
-Downloads (and caches under `build/cache/`) the game tables from
+Downloads (and caches under `.cache/`) the game tables from
 [wago.tools](https://wago.tools), the community listfile, and the
 [TrinityCore TDB](https://github.com/TrinityCore/TrinityCore/releases) for the same build; writes
 `site/data/<version>/spelldata.json.gz` and updates
@@ -349,7 +355,7 @@ elements already on screen and that has produced convincing false failures.
 ### Exploring the data
 
 The app ships no SQL, but the *data* is much easier to reason about with some. `python tools/builddb.py` mirrors every
-table the build downloads into one DuckDB file under `build/cache/` — ten game versions as ten schemas, plus a `ref`
+table the build downloads into one DuckDB file under `.cache/` — ten game versions as ten schemas, plus a `ref`
 schema holding the listfile, 169 decoded enums, and a catalog of every column's type, comment and foreign key (read
 straight out of the WoWDBDefs definitions, so the schema is derived rather than hand-written).
 

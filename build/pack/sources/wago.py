@@ -153,7 +153,7 @@ TABLES = [
     "SpellDescriptionVariables",
     "SpellXDescriptionVariables",
     "SpellTargetRestrictions",
-    # ⚠ SpellAuraOptions was in build/cache/9.2.7.45745/ ALREADY — left there by
+    # ⚠ SpellAuraOptions was in .cache/9.2.7.45745/ ALREADY — left there by
     # an exploration run — so the first build of this route worked here and
     # crashed on Vanilla. Same shape as the UiMap mistake at format 40, caught
     # this time only because a missing table is a hard error. It supplies $u

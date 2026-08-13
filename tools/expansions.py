@@ -43,8 +43,10 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+from repo import CACHE
+
 REPO = Path(__file__).resolve().parent.parent
-CACHE = REPO / "build" / "cache" / "expansions"
+CACHE_DIR = CACHE / "expansions"
 # Committed, tiny, and the reason a login-gated client dump never has to be:
 # one delta-encoded spell-ID list per era client that no public archive serves.
 SOURCES = REPO / "build" / "sources"
@@ -55,7 +57,7 @@ OUT = REPO / "build" / "expansion_ids.json.gz"
 
 # The per-table 7z of every archived build of Spell.dbc/db2 (623 of them), from
 # the one mirror of the wow.tools archive that is still served. ~150 MB, fetched
-# once into build/cache/ and never again; only a few members are ever extracted.
+# once into .cache/ and never again; only a few members are ever extracted.
 ARCHIVE_URL = "https://files.gw2archive.eu/wow.tools/DBFilesClient/Spell.7z"
 
 ORIGIN = "origin"  # defines the rung
@@ -213,9 +215,9 @@ LADDER: list[Expansion] = [
 
 
 def _archive_7z() -> Path:
-    dst = CACHE / "Spell.7z"
+    dst = CACHE_DIR / "Spell.7z"
     if not dst.exists():
-        CACHE.mkdir(parents=True, exist_ok=True)
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
         print(f"  downloading {ARCHIVE_URL} (~150 MB, once)")
         with urllib.request.urlopen(ARCHIVE_URL, timeout=600) as r, dst.open("wb") as f:
             while chunk := r.read(1 << 20):
@@ -239,7 +241,7 @@ def write_vendored(dump: Path, key: str) -> None:
 
     ids = _wdbc_ids(dump.read_bytes())  # parse first: never commit an unreadable file
     SOURCES.mkdir(parents=True, exist_ok=True)
-    staged = CACHE / "vendor" / dest.member
+    staged = CACHE_DIR / "vendor" / dest.member
     staged.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(dump, staged)
     out = SOURCES / dest.archive
@@ -281,14 +283,14 @@ def ids_of(where: Archive | Pack | Vendored) -> set[int]:
         if not src.exists():
             raise SystemExit(f"missing {src}\n  it is committed — restore it from git,"
                              f"\n  or rebuild it from: {where.origin}")
-        out = CACHE / "vendor" / where.member
+        out = CACHE_DIR / "vendor" / where.member
         if not out.exists():
             out.parent.mkdir(parents=True, exist_ok=True)
             subprocess.run(["7z", "e", str(src), f"-o{out.parent}", where.member, "-y"],
                            check=True, stdout=subprocess.DEVNULL)
         return _wdbc_ids(out.read_bytes())
 
-    out = CACHE / "builds" / where.member
+    out = CACHE_DIR / "builds" / where.member
     if not out.exists():
         out.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(["7z", "e", str(_archive_7z()), f"-o{out.parent}",

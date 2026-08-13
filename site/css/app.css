@@ -1683,7 +1683,7 @@ main {
 }
 
 /* SIX DOTS, DRAWN RATHER THAN DRAWN FROM. The app's icon set is seven 24×24
-   line-art glyphs with a process behind it (build/icons) and this is a texture,
+   line-art glyphs with a process behind it (docs/icons) and this is a texture,
    not a picture of anything, so it adds nothing to that set. It stays lit at
    rest: a handle that only appears on hover is a handle nobody knows is there,
    which is the fault being fixed. */

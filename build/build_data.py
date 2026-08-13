@@ -28,7 +28,7 @@ byte-identical pack, which makes "rebuild and diff" a usable regression test
 for any change in here.
 
 Stdlib only, plus 7-Zip (7z on PATH or in Program Files) to extract the TDB
-archive once. Downloads are cached under build/cache/ ; pass --refresh to
+archive once. Downloads are cached under .cache/ ; pass --refresh to
 force re-download of the wago/listfile sources.
 
 Usage:

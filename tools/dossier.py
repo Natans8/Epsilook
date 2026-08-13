@@ -17,7 +17,7 @@ WHY IT EXISTS
     once and emits a single structure, with every id RESOLVED beside its raw
     value so the output is both readable and checkable.
 
-    It reads `build/cache/epsilook.duckdb` (tools/builddb.py) and nothing else.
+    It reads `.cache/epsilook.duckdb` (tools/builddb.py) and nothing else.
     It is a DEVELOPMENT tool: nothing in `site/` or `build/` imports it, and
     tools/check.py does not run it, for the same reason it does not run
     builddb.py - the database is a disposable cache, not a product invariant.
@@ -89,6 +89,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 
+from repo import CACHE
+
 try:
     # The `type: ignore` is REQUIRED, not cosmetic: tools/check.py type-checks
     # all of tools/, and CI runs it on a machine that has never installed
@@ -97,13 +99,11 @@ try:
     import duckdb  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - the one dependency, and it is optional
     sys.exit(
-        "tools/dossier.py needs DuckDB (the only dependency outside the stdlib,\n"
-        "and only for this development tool - the product build stays stdlib-only):\n"
-        "    python -m pip install duckdb"
+        "tools/dossier.py needs DuckDB, which pyproject.toml declares:\n"
+        "    uv run python tools/dossier.py"
     )
 
 ROOT = Path(__file__).resolve().parent.parent
-CACHE = ROOT / "build" / "cache"
 DB_PATH = CACHE / "epsilook.duckdb"
 VERSIONS_JSON = ROOT / "site" / "data" / "versions.json"
 
@@ -261,7 +261,7 @@ class Dossier:
         """Missile flight-path names, from the database or the build's own CSV.
 
         SpellMissileMotion joined the build at pack format 34, so a database
-        built before that has the CSV in `build/cache/<build>/` but no table.
+        built before that has the CSV in `.cache/<build>/` but no table.
         Both are read, newest first, because neither is guaranteed.
         """
         got = {int(i): n for i, n in
@@ -1368,7 +1368,7 @@ def resolve(d: Dossier, words: list[str]) -> list[int]:
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Everything the data knows about one spell, followed to the leaves.",
-        epilog="reads build/cache/epsilook.duckdb (build it with tools/builddb.py)")
+        epilog="reads .cache/epsilook.duckdb (build it with tools/builddb.py)")
     ap.add_argument("spell", nargs="*", help="spell ids, or a name to look up")
     ap.add_argument("--version", metavar="V",
                     help="pack to read, by build-id prefix (default: the manifest default)")

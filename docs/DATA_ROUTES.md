@@ -24,7 +24,7 @@ Read it in five stages:
 
 ```mermaid
 flowchart LR
-    subgraph SRC["Sources (build-time, cached in build/cache/)"]
+    subgraph SRC["Sources (build-time, cached in .cache/)"]
         W["wago.tools<br/>33 db2 tables as CSV"]
         L["community listfile<br/>fid → path"]
         T["TrinityCore TDB<br/>world + hotfixes SQL"]

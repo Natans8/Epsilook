@@ -18,6 +18,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# Everything generated: downloaded game tables, the distilled TrinityCore
+# dumps, the exploration database, the freshness answers. Gitignored, and the
+# one place in the tree the build may write to.
+#
+# Named here rather than rebuilt from parts in each tool, because it was
+# spelled out in seven of them and a directory written down seven times is a
+# directory that cannot move. The build package declares its own copy: it runs
+# on a different path root and must not import from `tools/`.
+CACHE = ROOT / ".cache"
+
 # A change to the css, the bundle's SOURCES or the build itself needs a bump.
 # site/js is generated and gitignored, so it can never appear in a diff - which
 # is why src/ is watched instead of the bundle it produces. An html-only or

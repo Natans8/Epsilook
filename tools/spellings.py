@@ -27,10 +27,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from repo import CACHE
+
 ROOT = Path(__file__).resolve().parents[1]
 VARCON = ROOT / "node_modules" / "varcon" / "varcon.txt"
 OUT = ROOT / "src" / "search" / "spelling-folds.ts"
-DB = ROOT / "build" / "cache" / "epsilook.duckdb"
+DB = CACHE / "epsilook.duckdb"
 
 # A variant is kept only under a bare category tag (or the equal-variants dot): the v/V/-/x suffixes mark forms a
 # dictionary lists but does not prefer, and folding those would merge words on weak evidence.
@@ -96,7 +98,8 @@ def corpus_words() -> set[str]:
     try:
         import duckdb  # type: ignore[import-not-found]  # optional, dev-tool-only, like builddb.py
     except ImportError:
-        raise SystemExit("tools/spellings.py needs DuckDB: python -m pip install duckdb") from None
+        raise SystemExit("tools/spellings.py needs DuckDB: run it as `uv run python "
+                         "tools/spellings.py`") from None
 
     sources = [
         'SELECT "Name_lang" AS t FROM v9_2_7."SpellName"',

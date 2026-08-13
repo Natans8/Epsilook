@@ -90,7 +90,7 @@ TDB_ASSET_URL = "https://github.com/TrinityCore/TrinityCore/releases/download/{t
 # the wago rows by row ID (TDB is preferred wherever it has data).
 #
 # NOTE widening a column list here does NOT invalidate the distilled CSV (the
-# cache check is existence-only) — delete build/cache/tdb-*/ to re-distill.
+# cache check is existence-only) — delete .cache/tdb-*/ to re-distill.
 TDB_TABLES = {
     "world": {
         "creature_template": ["entry", "name",
