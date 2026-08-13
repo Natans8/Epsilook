@@ -18,12 +18,20 @@ class Tables(Protocol):
 
     - Values are the source's own text, unparsed. Typing happens in the
       route, so two providers over the same source yield identical packs.
-    - Hotfixes are already applied; no reader opts in.
     - Rows arrive in source file order. Last-write-wins and
       first-candidate-wins semantics in the routes depend on it.
     - An empty field is ``""``. A provider that distinguishes NULL from the
       empty string must collapse the difference exactly as the CSV reader
       does.
+    - A table declared absent for this build yields nothing rather than
+      failing, and its section comes out empty. Anything undeclared is a hard
+      error.
+
+    The hotfix overlay is NOT a rule here, because it is not a property of a
+    source: it is one source read over another. Composing two ``Tables`` is
+    what applies it, which keeps the merge written once instead of once per
+    implementation, and leaves this contract testable against a bare
+    directory of CSVs.
     """
 
     def available(self, table: str) -> bool:
