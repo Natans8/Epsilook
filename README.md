@@ -91,7 +91,8 @@ tools/                   every routine that would otherwise be a thing to rememb
   verify_site.sh         is this assembled document root actually servable?
   docker_smoke.py        build the image, run it, prove it serves the site
   ide.py                 format + lint through the JetBrains IDEs, routed by owner
-  builddb.py             build the exploration database (development tool)
+  builddb.py             build the exploration database of the SOURCES (development tool)
+  packdb.py              build the exploration database of the SHIPPED PACKS (development tool)
   dossier.py             one spell, every route followed to the leaves
   dbd.py                 parser for WoWDBDefs .dbd schema definitions
   arcanum.py             build/read Arcanum ArcSpell import strings (development tool)

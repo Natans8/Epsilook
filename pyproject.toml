@@ -23,6 +23,9 @@ dev = [
     # The exploration database and the tools that read it. Not a build
     # dependency: nothing in the shipped pack path touches DuckDB.
     "duckdb",
+    # Columns cross into DuckDB as columns. A pack is already column
+    # oriented, so binding it row by row would be the one avoidable cost.
+    "pyarrow",
     "mypy",
     "pyflakes",
     "pylint",
