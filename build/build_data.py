@@ -1490,7 +1490,19 @@ def find_7z() -> str:
 
 
 def iter_insert_rows(line: str) -> Iterator[list[str]]:
-    """Yield value tuples (lists of raw strings) from one INSERT ... VALUES line."""
+    r"""Yield value tuples (lists of raw strings) from one INSERT ... VALUES line.
+
+    A backslash is decoded as "take the next character literally", which is
+    right for \\ and \' and wrong for mysqldump's control escapes: \n, \r, \t,
+    \0 and \Z each yield their bare letter instead of the character they stand
+    for.
+
+    TODO: decode the control escapes. Only creature_template_locale carries
+    any (53 \n in the 9.2.7 world dump, all currently read as the letter n), so
+    the fix changes locale bytes and must land as its own change with the
+    locale overlays rebuilt against it. The tables behind the English pack
+    carry only \" and \', both already correct.
+    """
     i = line.find("VALUES")
     if i < 0:
         return
