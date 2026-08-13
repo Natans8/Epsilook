@@ -25,23 +25,21 @@ import {fileURLToPath} from "node:url";
 import {dirname, resolve} from "node:path";
 import {gunzipSync} from "node:zlib";
 
-import type {Column} from "../src/search/columns";
+import type {Ask, Column, Dataset, Kind, Row, RowTest, ScopeTerm, Stored, ValueExpr} from "../src/search/index";
 import {
-    animColumn, fxColumn, idColumn, mechColumn, modelColumn, soundColumn, spellColumn,
-} from "../src/search/columns";
-import type {Kind} from "../src/search/kinds";
-import {
+    animColumn, catalogue, colour as colourType, COLOUR_NAMES, fold, fxColumn, id as idType, idColumn, KINDS,
+    mechColumn, modelColumn, setOrdinalLadder, soundColumn, spellColumn, squash, TARGET_ROLES,
+} from "../src/search/index";
+
+// The kinds this file builds rows for, under their own names. Taken off the catalogue rather than off the door, which
+// carries it as a namespace so the game's nouns do not crowd out the language's.
+const {
     animKit, attached, aura, barrage, camo, chain, debuff, delivery, description, desaturate, detect, display,
     dissolve, effect, equipped, expansion, freeze, gameObject, ghost, glow, ground, icon, invis, item, keybind,
-    KINDS, location, loose, missile, morph, mount, name as nameKind, origin, passenger, pose, replace, scale, screen,
-    seats, shadowy, shapeshift, sound as soundKind, speed, spellId as spellIdKind, summon, tint, tracking, trail,
+    location, loose, missile, morph, mount, name: nameKind, origin, passenger, pose, replace, scale, screen,
+    seats, shadowy, shapeshift, sound: soundKind, speed, spellId: spellIdKind, summon, tint, tracking, trail,
     transparency, triggers,
-} from "../src/search/kinds";
-import type {Ask, RowTest, ScopeTerm, ValueExpr} from "../src/search/parse";
-import type {Dataset, Row, Stored} from "../src/search/rows";
-import {COLOUR_NAMES} from "../src/search/colour-names";
-import {fold, squash} from "../src/search/text-normalization";
-import {colour as colourType, id as idType, setOrdinalLadder, TARGET_ROLES} from "../src/search/value-types";
+} = catalogue;
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 

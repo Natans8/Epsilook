@@ -9,10 +9,9 @@
 import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
+import {camo, chain, description, expansion} from "../../src/search/catalogue";
 import {COLUMNS, fxColumn, modelColumn} from "../../src/search/columns";
-import {
-    camo, chain, defineKind, description, expansion, formatValue, hintOf, KINDS, operatorsOf, parseValue,
-} from "../../src/search/kinds";
+import {defineKind, formatValue, hintOf, KINDS, operatorsOf, parseValue} from "../../src/search/kinds";
 import {buildSchema, HEADS, kindIn, kindsOf, propIn, schemaProblems} from "../../src/search/schema";
 import {flag, id, path, text, TYPES} from "../../src/search/value-types";
 

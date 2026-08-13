@@ -40,9 +40,8 @@ import type {PackDomain, SpellData, SpellPack, VersionEntry} from "../src/data";
 import {groupsOf, parseQueryParts} from "../src/query";
 import {searchGroups} from "../src/search";
 import "../src/pilltypes";     // side effect: registers every pill type
-import {run as runKernel} from "../src/search/kernel";
-import {parse} from "../src/search/parse";
-import type {Dataset} from "../src/search/rows";
+import type {Dataset} from "../src/search/index";
+import {parse, run as runKernel} from "../src/search/index";
 import {packDataset} from "./dataset";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");

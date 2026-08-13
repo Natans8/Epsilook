@@ -21,6 +21,7 @@
  * different things depending on which declaration was registered first. Throwing at import makes the application, the
  * command line tools, the tests and the repository checks all fail identically and immediately.
  */
+import "./catalogue";      // the kinds register themselves as they are declared; assembly needs them all present
 import type {Column} from "./columns";
 import {COLUMNS} from "./columns";
 import type {Kind, Prop} from "./kinds";

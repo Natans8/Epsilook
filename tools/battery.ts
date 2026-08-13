@@ -20,9 +20,8 @@ import {parseArgs} from "node:util";
 import {groupsOf, parseQueryParts} from "../src/query";
 import {searchGroups} from "../src/search";
 import "../src/pilltypes";     // side effect: registers every pill type
-import {run} from "../src/search/kernel";
-import {parse} from "../src/search/parse";
-import type {Dataset} from "../src/search/rows";
+import type {Dataset} from "../src/search/index";
+import {parse, run} from "../src/search/index";
 import {loadPack, packDataset} from "./dataset";
 
 /* STDOUT IS THE RESULT; everything else is stderr — the same rule as tools/query.ts. */

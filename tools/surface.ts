@@ -15,14 +15,10 @@
  * appear with the spelling a reader types, taken from the registry, so a change of symbol reaches this output without
  * an edit here.
  */
-import {COLUMNS} from "../src/search/columns";
-import type {Kind, Prop} from "../src/search/kinds";
-import {hintOf, KINDS, operatorsOf} from "../src/search/kinds";
-import type {Operator} from "../src/search/operators";
-import {CLAUSE_OPERATORS, OPERATORS} from "../src/search/operators";
-import type {Head} from "../src/search/schema";
-import {HEADS, kindsOf} from "../src/search/schema";
-import {flag} from "../src/search/value-types";
+import type {Head, Kind, Operator, Prop} from "../src/search/index";
+import {
+    CLAUSE_OPERATORS, COLUMNS, flag, HEADS, hintOf, KINDS, kindsOf, operatorsOf, OPERATORS,
+} from "../src/search/index";
 
 /**
  * Two example operands per type, so a printed query reads as one a person would write.

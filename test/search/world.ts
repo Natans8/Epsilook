@@ -12,7 +12,7 @@ import {run} from "../../src/search/kernel";
 import {
     attached, chain, delivery, description, effect, expansion, missile, name as nameKind, scale,
     sound as soundKind, spellId, tint,
-} from "../../src/search/kinds";
+} from "../../src/search/catalogue";
 import type {Kind} from "../../src/search/kinds";
 import {parse} from "../../src/search/parse";
 import type {Parsed} from "../../src/search/parse";
