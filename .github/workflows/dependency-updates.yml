@@ -1,0 +1,132 @@
+# Is any npm dependency behind its latest release?
+#
+# THE POINT IS TO STOP A HUMAN HAVING TO REMEMBER, the same reason
+# pack-updates.yml exists. `tools/check.py` already warns about this, but it
+# only fires when somebody runs it — so a quiet month is a month of nobody
+# being told. This asks once a week and opens ONE issue when something is
+# behind, editing that same issue on later runs instead of filing a new one.
+#
+# Both halves of package.json are covered: `npm outdated` reports
+# devDependencies alongside dependencies, which is what makes the toolchain —
+# esbuild, typescript, oxlint — visible here at all. Most of what this repo
+# installs IS a dev dependency.
+#
+# It deliberately does NOT bump anything. A major of TypeScript or esbuild can
+# change what compiles, and the repo's own checks are the acceptance test, so
+# the upgrade wants `python tools/check.py` and a look at the result. The issue
+# is the nudge; a human runs the two commands it prints.
+name: dependency updates
+
+on:
+  schedule:
+    # Mondays 06:30 UTC, half an hour after the pack check, so the two never
+    # race for the same issue-writing token and their notifications arrive
+    # together rather than a week apart.
+    - cron: "30 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false  # package.json is all this reads; the packs are not needed
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Ask npm which dependencies have a newer release
+        id: check
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          # `npm outdated` exits 1 when anything is outdated, which is the right
+          # signal for a human running it and the wrong one here: the step must
+          # survive so the issue can be filed. `|| true` is deliberate.
+          npm outdated --json > outdated.json 2>/dev/null || true
+          node --input-type=module -e '
+            import {readFileSync, writeFileSync} from "node:fs";
+            const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+            const dev = new Set(Object.keys(pkg.devDependencies ?? {}));
+            let raw = {};
+            try { raw = JSON.parse(readFileSync("outdated.json", "utf8") || "{}"); } catch {}
+            const behind = Object.entries(raw).filter(([, i]) => i.current !== i.latest);
+            const line = ([name, i]) =>
+              `  ${name.padEnd(22)} ${String(i.current).padEnd(12)} -> ${String(i.latest).padEnd(12)} ${dev.has(name) ? "(dev)" : ""}`.trimEnd();
+            const report = behind.length
+              ? [`${behind.length} behind:`, "", ...behind.sort(([a], [b]) => a.localeCompare(b)).map(line)].join("\n")
+              : "every dependency is at its latest release";
+            writeFileSync("report.txt", report);
+            console.log(report);
+          '
+          if [ -s report.txt ] && grep -q -- "->" report.txt; then
+            echo "behind=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "behind=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or update the tracking issue
+        if: steps.check.outputs.behind == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('report.txt', 'utf8');
+            const title = 'npm dependencies are behind their latest releases';
+            const body = [
+              'At least one dependency in `package.json` has a newer release. `(dev)` marks a devDependency — the toolchain, which is most of what this repo installs.',
+              '',
+              '```',
+              report.trim(),
+              '```',
+              '',
+              '### What to do',
+              '',
+              '1. Update what is worth updating. `npm update` takes the semver-compatible ones; a major needs its version range edited in `package.json` first.',
+              '2. Run the checks — they are the acceptance test, since a new major of TypeScript, esbuild or oxlint can change what compiles or what lints:',
+              '',
+              '```bash',
+              'npm install && python tools/check.py',
+              '```',
+              '',
+              '3. Commit `package.json` **and** `package-lock.json` together. Pushing is the deploy.',
+              '',
+              '### If it turns out not to be worth doing',
+              '',
+              'Close the issue with the reason. It is re-raised on the next Monday anything is still behind, so closing is not losing it.',
+              '',
+              '### You do not have to read this issue to find out',
+              '',
+              '`python tools/check.py` runs a `dependencies` check that warns with the same information, so a stale dependency surfaces during ordinary work too. This issue is the backstop for a quiet week, not the only signal.',
+              '',
+              '_Raised by `.github/workflows/dependency-updates.yml`; this issue is edited in place, not reopened._',
+            ].join('\n');
+
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'dependency-updates',
+            });
+
+            if (existing.data.length) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['dependency-updates'],
+              });
+            }
