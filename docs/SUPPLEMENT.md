@@ -30,17 +30,17 @@ Each route is one way of learning what a file is called, and they are not equall
 `tools/supplement.py` in priority order, and the order means two things at once: **earlier wins a conflict, and earlier
 feeds what comes later.**
 
-| route           | reads                                              | name            | cost                   |
-|-----------------|----------------------------------------------------|-----------------|------------------------|
-| `terrain`       | the map table, then each map's tile grid           | real            | a minute               |
-| `icons`         | the icon database an addon ships                   | real            | a second               |
-| `objects`       | the gameobject name list the client ships          | real or derived | seconds                |
-| `customization` | the character-customization tables, joined by name | semantic        | a minute               |
-| `modelnames`    | the name a model carries about itself              | real            | minutes                |
-| `reskins`       | the retail world model a file was copied from      | semantic        | minutes                |
-| `worldmodels`   | group geometry and textures, from their models     | derived         | minutes                |
-| `models`        | skins, textures and anims, from their models       | derived         | minutes                |
-| `neighbours`    | the id space itself: what a file arrived beside    | adjacent        | seconds                |
+| route           | reads                                              | name            | cost     |
+|-----------------|----------------------------------------------------|-----------------|----------|
+| `terrain`       | the map table, then each map's tile grid           | real            | a minute |
+| `icons`         | the icon database an addon ships                   | real            | a second |
+| `objects`       | the gameobject name list the client ships          | real or derived | seconds  |
+| `customization` | the character-customization tables, joined by name | semantic        | a minute |
+| `modelnames`    | the name a model carries about itself              | real            | minutes  |
+| `reskins`       | the retail world model a file was copied from      | semantic        | minutes  |
+| `worldmodels`   | group geometry and textures, from their models     | derived         | minutes  |
+| `models`        | skins, textures and anims, from their models       | derived         | minutes  |
+| `neighbours`    | the id space itself: what a file arrived beside    | adjacent        | seconds  |
 
 **A real name is one the game itself would look the file up by.** Terrain qualifies because a map's directory plus a
 tile's position in the map's fixed grid determines the filename by convention — nothing is invented. Icons and the
@@ -55,11 +55,11 @@ That is why it outranks parentage.
 and it sits under an `epsilon/` prefix so it can never be mistaken for a path the game uses. The object route derives
 one too, for the names the client reports as a bare filename with no directory.
 
-**An adjacent name is weaker still, and the `near/` bucket is what says so.** Every other route follows a pointer —
-a model names its textures, a tile names what stands on it — so its claim can be checked by re-reading the parent. The
+**An adjacent name is weaker still, and the `near/` bucket is what says so.** Every other route follows a pointer — a
+model names its textures, a tile names what stands on it — so its claim can be checked by re-reading the parent. The
 last route follows nothing: it names a file after the art it was *delivered* beside, on the evidence that file ids are
-handed out as assets are added. That is a real signal and it is not a reference, so it is marked apart, and a route
-that reads these names later can tell the two kinds apart without re-deriving either.
+handed out as assets are added. That is a real signal and it is not a reference, so it is marked apart, and a route that
+reads these names later can tell the two kinds apart without re-deriving either.
 
 **Two routes read the file itself rather than anything that references it**, which is what lets them reach files no
 table mentions at all:
@@ -68,8 +68,8 @@ table mentions at all:
   model gave it — so it ranks with the routes the client reports. ⚠ **Some models hold a texture path in that field
   instead**, and taking it would name a model after its own texture, so a value ending `.blp` is refused.
 - **`reskins`** reads `MOHD.wmoID`, the retail id a world model declares, and matches it against the stock roots that
-  declare the same one. A reskin inherits its original's id, so the file says which retail model it began as. That is
-  a description rather than a filename, so it sits with `customization` — and **below `objects`, deliberately**:
+  declare the same one. A reskin inherits its original's id, so the file says which retail model it began as. That is a
+  description rather than a filename, so it sits with `customization` — and **below `objects`, deliberately**:
   Epsilon's own name for these files (`EPS_RockArch2_…`) is better than "a copy of `6ng_rockarchwmo_02l`", so if the
   object walk ever reaches one, it wins.
 
@@ -86,8 +86,8 @@ directly produce 179.**
 
 ### Naming follows the game's own conventions, where there is one
 
-A derived name is only worth having if it looks like a name the game would use, so each convention was measured
-against the community listfile rather than assumed. Three hold and are applied; three do not and are not.
+A derived name is only worth having if it looks like a name the game would use, so each convention was measured against
+the community listfile rather than assumed. Three hold and are applied; three do not and are not.
 
 | child                       | convention                         | measured                 |
 |-----------------------------|------------------------------------|--------------------------|
@@ -130,9 +130,9 @@ Prints what each route needs and costs, and runs nothing. Then:
 uv run python tools/supplement.py --diff
 ```
 
-Runs every route that can run, merges them in priority order, writes `.cache/supplement/supplement.csv`, and reports
-how the result differs from what is currently vendored. Each route also writes its own file under `.cache/supplement/`,
-so any one can be re-run alone:
+Runs every route that can run, merges them in priority order, writes `.cache/supplement/supplement.csv`, and reports how
+the result differs from what is currently vendored. Each route also writes its own file under `.cache/supplement/`, so
+any one can be re-run alone:
 
 ```bash
 uv run python tools/supplement.py --only models
@@ -148,8 +148,8 @@ in seconds rather than minutes. That is what makes iterating on a rule cheap.
 **A run whose output is going to be vendored must pass `--network`.** A local-only walk does not merely find fewer
 names, it finds *different* ones. A derived path names the parent that refers to the file, and where several parents
 refer to one texture the walk picks the lowest-numbered parent it actually read — so which parents the machine happens
-to have cached changes the name. Local-only output is therefore reproducible on one machine and not across two, which
-is exactly the property a vendored artefact must not have.
+to have cached changes the name. Local-only output is therefore reproducible on one machine and not across two, which is
+exactly the property a vendored artefact must not have.
 
 ```bash
 uv run python tools/supplement.py --diff --network      # the run to vendor from
@@ -168,31 +168,30 @@ cached under `.cache/casc/`, so a second run costs nothing.
 
 ## 4. The catalogue the client ships
 
-**`objects` names roughly three quarters of everything the supplement carries, and it used to cost an evening in
-game.** It no longer does. The client ships its own `id;name` list as an ordinary file in its storage, and that file is
-where the client API reads from:
+**`objects` names roughly three quarters of everything the supplement carries, and it used to cost an evening in game.**
+It no longer does. The client ships its own `id;name` list as an ordinary file in its storage, and that file is where
+the client API reads from:
 
-| file id      | rows    | what it names                                    |
-|--------------|--------:|--------------------------------------------------|
-| `23200000`   | 166,671 | models and world models — what `objects` reads   |
-| `23200001`   | 194,720 | sounds; names one id the listfile lacks, below the floor |
+| file id    |    rows | what it names                                            |
+|------------|--------:|----------------------------------------------------------|
+| `23200000` | 166,671 | models and world models — what `objects` reads           |
+| `23200001` | 194,720 | sounds; names one id the listfile lacks, below the floor |
 
-**It is the same catalogue, not a second opinion.** Measured against a captured `/edump gob` walk: the identical
-166,671 ids, agreeing on **166,670** of them. The single row that differs is the shipped file being *right* — the walk
-returns `Катапульта` through the addon's chat layer as mojibake, and reading the bytes skips the round trip that
-mangles it.
+**It is the same catalogue, not a second opinion.** Measured against a captured `/edump gob` walk: the identical 166,671
+ids, agreeing on **166,670** of them. The single row that differs is the shipped file being *right* — the walk returns
+`Катапульта` through the addon's chat layer as mojibake, and reading the bytes skips the round trip that mangles it.
 
-So the route reads the file, and falls back to a live capture and then a saved copy only if it cannot. **Nothing in
-this procedure now requires anybody to log in.**
+So the route reads the file, and falls back to a live capture and then a saved copy only if it cannot. **Nothing in this
+procedure now requires anybody to log in.**
 
 > ⚠ `.claude/data/epsilon/dump_gob_names.json` is kept as a fallback and is no longer irreplaceable. It was, for as
 > long as the walk was the only source — that is why the warning about the addon clearing its section between dumps
 > mattered, and why it no longer does.
 
 **A capture will not name more than the shipped file does, and neither reaches everything.** Both hold 166,671 entries
-while `GameObjectDisplayInfo` carries 167,376 distinct file ids: **705 are in the table and absent from the
-catalogue**, 692 of them otherwise unnamed. **That is a data limit, not an API one** — the ceiling is baked into the
-file the client ships, so no way of reading it will produce those names.
+while `GameObjectDisplayInfo` carries 167,376 distinct file ids: **705 are in the table and absent from the catalogue**,
+692 of them otherwise unnamed. **That is a data limit, not an API one** — the ceiling is baked into the file the client
+ships, so no way of reading it will produce those names.
 
 ## 5. Verifying
 
@@ -232,25 +231,25 @@ uv run python tools/supplement.py --coverage
 
 A `--network` run reaches **127,245 of the 128,476 custom files, 99.0%**, leaving 1,231:
 
-| kind                    | count | what could reach it          |
-|-------------------------|------:|-------------------------------|
-| `blp`                   |   539 | nothing that refers to it     |
-| `m2`                    |   269 | their own bytes name nothing  |
-| `chunked, unrecognised` |   207 | nothing                       |
-| `skin`                  |   171 | their models are unnamed      |
+| kind                    | count | what could reach it                 |
+|-------------------------|------:|-------------------------------------|
+| `blp`                   |   539 | nothing that refers to it           |
+| `m2`                    |   269 | their own bytes name nothing        |
+| `chunked, unrecognised` |   207 | nothing                             |
+| `skin`                  |   171 | their models are unnamed            |
 | `empty`                 |    30 | nothing — the files are zero length |
-| `mp3`                   |    10 | sound                         |
-| unknown                 |     5 | nothing recognises the bytes  |
+| `mp3`                   |    10 | sound                               |
+| unknown                 |     5 | nothing recognises the bytes        |
 
 **⭐ Every parent left is silent.** The two routes that read a file for what it says about itself have taken everything
 they can: not one of the 269 models carries a name. No world model of either kind survives in that list, which is the
 check that the routes reading them are complete.
 
 **That was the ceiling for every route that follows a reference, and it is why the last route follows none.** What
-remains is not unreachable, it is unreferenced — so `neighbours` names it by the art it was delivered beside instead.
-It claims **2,239 rows** on a `--network` run, which is what carries the walk from 97.3% to 99.0%. ⚠ Measured
-local-only it claims 631, and that figure describes the install rather than the route: a walk can only classify a file
-it can read, and the install held 853 of the 3,470 unnamed at the time.
+remains is not unreachable, it is unreferenced — so `neighbours` names it by the art it was delivered beside instead. It
+claims **2,239 rows** on a `--network` run, which is what carries the walk from 97.3% to 99.0%. ⚠ Measured local-only it
+claims 631, and that figure describes the install rather than the route: a walk can only classify a file it can read,
+and the install held 853 of the 3,470 unnamed at the time.
 
 **⚠ Not one of the 1,231 that remain is on disk.** Everything this install holds is named, so the remainder can only be
 classified over the network, and a route reaching it would have to do the same.
@@ -265,11 +264,11 @@ adjacency rows came out `epsilon/near/model/<fid>`.
 the first pass's `near/` names as buckets and spell the compounding literally as `near/near/`. Excluding what it
 produced is what makes a re-run idempotent: measured, the second run adds zero rows.
 
-**⚠ A local-only run reaches 91.8%, and the gap is not small.** Nine tenths of what an install lacks is exactly what
-the file-reading routes want, so `--network` is not an optimisation here; it is most of the result.
+**⚠ A local-only run reaches 91.8%, and the gap is not small.** Nine tenths of what an install lacks is exactly what the
+file-reading routes want, so `--network` is not an optimisation here; it is most of the result.
 
-**The pipeline converges in one pass.** Re-running the walks that consume other routes' output against a complete
-result yields zero new rows, which follows from the ordering: routes run parents-before-children, and the children they
+**The pipeline converges in one pass.** Re-running the walks that consume other routes' output against a complete result
+yields zero new rows, which follows from the ordering: routes run parents-before-children, and the children they
 produce — groups, skins, textures — cannot themselves be parents. There is no fixed point to iterate towards.
 
 No terrain appears in that list either, which is the same check for the terrain route.
@@ -282,9 +281,9 @@ The remaining textures have no *referrer*. They are not model textures — the p
 customization textures, nor the ground textures a map paints with, which is the one place left that could have
 referenced them and does not. That is what `neighbours` is for, and what its weaker standing records.
 
-**⭐ The id space is itself evidence, and a map's own run is the sharpest form of it.** Prophecy Lordaeron's art
-occupies one unbroken stretch, `23,302,369`–`23,308,848`, across all three ways a map is named — its tiles, the models
-its terrain places, the textures it paints with. **92 unnamed files fall inside it**, and they are named after the map
+**⭐ The id space is itself evidence, and a map's own run is the sharpest form of it.** Prophecy Lordaeron's art occupies
+one unbroken stretch, `23,302,369`–`23,308,848`, across all three ways a map is named — its tiles, the models its
+terrain places, the textures it paints with. **92 unnamed files fall inside it**, and they are named after the map
 rather than after whichever parent folder happened to sit nearest, because a map says what a file is *for* while a
 folder named after a file id says nothing. ⚠ Two maps delivered together share a stretch — `classicazeroth` and
 `classickalimdor` do — so a file inside two runs is claimed by neither and falls through to the weaker rule.
@@ -293,22 +292,22 @@ folder named after a file id says nothing. ⚠ Two maps delivered together share
 
 Do not re-open these without new evidence; each cost a measurement.
 
-| route                        | why it is closed                                                                     |
-|------------------------------|--------------------------------------------------------------------------------------|
-| world-model groups           | custom roots reference stock group geometry, so no group target is unnamed           |
-| terrain textures             | tileset textures are shared across every tile, so a large sample yields almost none  |
-| `.lookup tiletexture`        | 201 terms, 144 returning a full page, **zero** results above the custom floor        |
+| route                        | why it is closed                                                                      |
+|------------------------------|---------------------------------------------------------------------------------------|
+| world-model groups           | custom roots reference stock group geometry, so no group target is unnamed            |
+| terrain textures             | tileset textures are shared across every tile, so a large sample yields almost none   |
+| `.lookup tiletexture`        | 201 terms, 144 returning a full page, **zero** results above the custom floor         |
 | every other client table     | `--referrers` over 836 tables: 10,152 of 11,152 unnamed are mentioned by none of them |
-| `.gob spawn`                 | fails for the display-carrying orphans, models and world-model roots alike           |
+| `.gob spawn`                 | fails for the display-carrying orphans, models and world-model roots alike            |
 | `GODI_Search`                | returns exactly the same 166,671 rows as the index walk; the ceiling is the catalogue |
-| embedded paths in WMO or ADT | a chunk census finds no `MODN` and no `MOTX`: modern formats carry file ids only     |
-| a world model's doodads      | `MODI`/`MODD` across every named world model reference nothing unnamed               |
-| **a map's texture table**    | **`.tex` carries `TXVR`/`TXBT`/`TXMD` and no `TXFN`: 5.8 MB, zero unnamed ids**      |
+| embedded paths in WMO or ADT | a chunk census finds no `MODN` and no `MOTX`: modern formats carry file ids only      |
+| a world model's doodads      | `MODI`/`MODD` across every named world model reference nothing unnamed                |
+| **a map's texture table**    | **`.tex` carries `TXVR`/`TXBT`/`TXMD` and no `TXFN`: 5.8 MB, zero unnamed ids**       |
 
-⚠ **Read the last two as the correction they are.** The texture table was the most promising remaining lead — it is
-the file that would name a map's ground textures, and the largest unnamed block is textures. It does not name them.
-**And a head read shows only its version chunk**, so the question can only be settled by reading it whole; the cap
-would have produced the same emptiness for a file that did name them.
+⚠ **Read the last two as the correction they are.** The texture table was the most promising remaining lead — it is the
+file that would name a map's ground textures, and the largest unnamed block is textures. It does not name them. **And a
+head read shows only its version chunk**, so the question can only be settled by reading it whole; the cap would have
+produced the same emptiness for a file that did name them.
 
 ⛔ **The question to ask before adding another route is not "what fraction is named".** No shipped pack references a
 single custom file — every pack is built from wago's retail tables — so this supplement is preparation for an Epsilon
@@ -327,8 +326,8 @@ uv run python tools/supplement.py --diff --network --vendor
 **⛔ `--vendor` refuses a local-only or partial run**, because either one produces a file that is reproducible on this
 machine and nowhere else. A local walk does not find fewer names, it finds *different* ones — a derived path names the
 parent that refers to the file, and where several do, the walk takes the lowest-numbered one it managed to read, so
-which parents a machine happens to hold decides the name. A `--only` run is refused from the other end: it would
-vendor a merge of this run and whatever the cache was left holding.
+which parents a machine happens to hold decides the name. A `--only` run is refused from the other end: it would vendor
+a merge of this run and whatever the cache was left holding.
 
 Two properties make an unchanged re-vendoring stage nothing, and both are in `write_rows`:
 
@@ -358,5 +357,5 @@ produce more of the same:
   the lowest-numbered it could read, so reading more of them changes the answer. This is the property `--vendor`
   demands a full network run for.
 - **one fell from parentage to adjacency** — texture `19400081`, which no parent claimed this time and which
-  `neighbours` then named. It is the one rename that trades a stronger claim for a weaker one, and the `near/` bucket
-  is what makes that visible rather than silent.
+  `neighbours` then named. It is the one rename that trades a stronger claim for a weaker one, and the `near/` bucket is
+  what makes that visible rather than silent.
