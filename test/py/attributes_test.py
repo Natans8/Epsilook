@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from pack.routes.attributes import WORD_BITS, attribute_bit, read_spell_attributes, shipped_attributes
+import pytest
+
+from pack.routes.attributes import (WORD_BITS, attribute_bit,
+                                    read_spell_attributes, shipped_attributes)
 
 
 def test_a_bit_is_found_in_the_column_that_holds_it() -> None:
@@ -59,3 +62,13 @@ def test_a_flag_that_requires_another_is_an_intersection() -> None:
         200: words(bit, other),    # the intersection that does
     })
     assert grouped[str(meta["handler"])] == [200]
+
+
+def test_two_bits_sharing_a_handler_are_refused(monkeypatch) -> None:
+    """The handler keys the output, so a duplicate would leave one bit's spells
+    standing in for another's, with the section present and plausible."""
+    import pack.routes.attributes as attributes
+    monkeypatch.setattr(attributes, "load_local_enum", lambda _name: {
+        1: {"handler": "same"}, 2: {"handler": "same"}})
+    with pytest.raises(SystemExit):
+        attributes.shipped_attributes()

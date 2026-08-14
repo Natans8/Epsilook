@@ -122,3 +122,16 @@ def test_a_source_with_no_header_at_all_is_fatal(source: Path, tables: Tables) -
     (source / "SpellVisual.csv").write_text("", encoding="utf-8", newline="")
     with pytest.raises(SystemExit):
         list(tables.rows("SpellVisual", ["ID"]))
+
+
+def test_a_truncated_row_is_fatal(source: Path, tables: Tables) -> None:
+    """A row narrower than its header is a broken cache, not missing data.
+
+    Indexing it raises naming neither the table nor the directory it came
+    from, which is the one thing an operator needs with sixty tables and
+    twelve builds to choose between.
+    """
+    (source / "Spell.csv").write_text("ID,Name,Amount,Empty\n3,Fireball\n",
+                                      encoding="utf-8", newline="")
+    with pytest.raises(SystemExit):
+        list(tables.rows("Spell", ["ID", "Amount"]))

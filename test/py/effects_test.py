@@ -326,8 +326,12 @@ def test_every_reference_payload_is_declared_not_branched() -> None:
         assert bool(payload.aura) != bool(payload.effects), (
             "a payload selects on an aura or on effects, never both")
         assert callable(payload.into)
-    selectors = [p.aura for p in MISC_PAYLOADS if p.aura]
-    assert len(selectors) == len(set(selectors)), "two payloads claim one aura"
+    auras = [p.aura for p in MISC_PAYLOADS if p.aura]
+    assert len(auras) == len(set(auras)), "two payloads claim one aura"
+    # The effect half resolves the same way, so an overlap there would also
+    # silently leave the last declaration holding the selector.
+    effects = [effect for p in MISC_PAYLOADS for effect in p.effects]
+    assert len(effects) == len(set(effects)), "two payloads claim one effect"
 
 
 def test_a_roster_nobody_supplied_is_refused(tables: BuildTables) -> None:

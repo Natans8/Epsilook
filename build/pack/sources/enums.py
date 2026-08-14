@@ -79,10 +79,14 @@ def read_enum_names(name: str, version: str) -> dict[int, str]:
             line = line.strip()
 
             def in_range(rng: str) -> bool:
+                # Compared over as many components as the guard names. A guard
+                # written `7.3.5` against a build of `7.3.5.26972` would other-
+                # wise compare short-and-therefore-less at both ends and match
+                # nothing, dropping the name on the build it was written for.
                 lo, _, hi = rng.strip().partition("-")
                 lo_t = tuple(int(p) for p in lo.split("."))
                 hi_t = tuple(int(p) for p in hi.split(".")) if hi else lo_t
-                return lo_t <= ver <= hi_t
+                return lo_t <= ver[:len(lo_t)] and ver[:len(hi_t)] <= hi_t
 
             if not any(in_range(r) for r in guard.split(",")):
                 continue

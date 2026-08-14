@@ -50,6 +50,15 @@ def shipped_attributes() -> dict[int, Mapping[str, object]]:
     if not shipped:
         sys.exit("error: spell_attributes.json declares no handler "
                  "- nothing to ship")
+    # Handlers key the output, so two bits sharing one would leave only the
+    # last bit's spells under it -- a flag quietly reporting another's
+    # population. Copying an entry as a template is the obvious way to add the
+    # next flag, and forgetting to change its handler is the obvious slip.
+    handlers = [str(meta["handler"]) for meta in shipped.values()]
+    if len(handlers) != len(set(handlers)):
+        repeated = sorted({h for h in handlers if handlers.count(h) > 1})
+        sys.exit(f"error: spell_attributes.json declares one handler for "
+                 f"several bits: {repeated}")
     return shipped
 
 

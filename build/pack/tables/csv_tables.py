@@ -75,6 +75,14 @@ class CsvTables:
                     sys.exit(f"error: {table}.csv is missing column {column!r} and it is "
                              f"not declared in OPTIONAL_COLUMNS; header = {header}")
             stand_ins = [self.defaults.get((table, column), "") for column in columns]
+            width = len(header)
             for row in reader:
+                # A row narrower than the header is a truncated file, and
+                # indexing it would raise naming neither the table nor where it
+                # came from. Every other failure here says both.
+                if len(row) < width:
+                    sys.exit(f"error: {table}.csv in {self.directory} has a row "
+                             f"of {len(row)} fields against a {width}-column "
+                             f"header; the cached copy is truncated")
                 yield tuple(row[i] if i is not None else stand_in
                             for i, stand_in in zip(index, stand_ins))
