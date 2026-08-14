@@ -46,28 +46,27 @@ def missiles(tables: BuildTables):
 
 
 def test_the_row_wins_where_it_says_anything(tables: BuildTables) -> None:
-    """The two disagree on 24% of rows, and the case was settled in game:
-    the visual said Chest, the row said Base, and it launched from the BASE."""
+    """Settled in game: the visual said Chest, the row said Base, and it
+    launched from the base."""
     assert (8000, 7, 1, 2) in missiles(tables)[10].models
 
 
 def test_the_visual_fills_in_what_the_row_leaves_unset(
         tables: BuildTables) -> None:
-    """Complementary rather than redundant, which is why both are read."""
+    """Complementary rather than redundant, so both are read."""
     assert (8000, 7, 5, 6) in missiles(tables)[10].models
 
 
 def test_a_row_declaring_only_a_source_takes_the_visuals_destination(
         tables: BuildTables) -> None:
-    """The two ends resolve independently: a row can win one and defer on the
-    other."""
+    """The two ends resolve independently."""
     assert (8000, 8, 9, 6) in missiles(tables)[10].models
 
 
 def test_with_neither_declaring_a_source_the_default_stands_in(
         tables: BuildTables) -> None:
-    """Needed for 47.3% of missile rows, and materialised here rather than left
-    blank so the pill, the search and the exports all agree."""
+    """Materialised rather than left blank, so pill, search and exports
+    agree."""
     assert (8000, 0, DEFAULT_MISSILE_SOURCE, -1) in missiles(tables)[11].models
 
 
@@ -78,7 +77,7 @@ def test_the_raid_set_merges_with_the_base_set(tables: BuildTables) -> None:
 def test_the_motion_pairs_with_the_projectile_not_the_set(
         tables: BuildTables) -> None:
     """It rides the same row as the model, so a set naming several motions
-    becomes several rows rather than one row with an ambiguous path."""
+    becomes several rows."""
     assert {motion for _, motion, _, _ in missiles(tables)[10].models} == {7, 8}
 
 
@@ -108,6 +107,6 @@ def test_a_missile_row_belonging_to_no_set_is_skipped(
 
 
 def test_a_motion_with_no_name_is_not_a_motion(tables: BuildTables) -> None:
-    """Name only: the table's other real column is a script nothing renders."""
+    """A motion the table cannot name is not carried."""
     assert read_missile_motions(
         tables(SpellMissileMotion=SPELL_MISSILE_MOTION)) == {7: "Arc", 8: "Straight"}

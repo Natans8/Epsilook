@@ -1,10 +1,8 @@
 """What a db2 enum value means, from the three places the answer lives.
 
 Checked-in files under ``build/enums`` carry the values this build interprets
-itself, each with its attribution; WoWDBDefs carries the community's names for
-the rest; wow.tools carries the animation names. The latter two are refetched
-every build because they keep being corrected for game builds that shipped
-years ago.
+itself; WoWDBDefs carries the community's names for the rest; wow.tools carries
+the animation names. The latter two are refetched every build.
 """
 
 from __future__ import annotations
@@ -23,10 +21,9 @@ ENUMS_DIR = BUILD_DIR / "enums"
 # Animation names indexed by AnimID (Stand=0, ...), maintained by wow.tools
 ANIMS_JS_URL = "https://raw.githubusercontent.com/Marlamin/wow.tools.local/main/wwwroot/js/anims.js"
 
-# Enum value names from WoWDBDefs meta/enums — the authority on what db2
-# enum values mean ("ID NAME" lines; see read_enum_names for the format).
-# SpellEffect = names for SpellEffect.Effect (SPELL_EFFECT_* without the
-# prefix), SpellEffectAura = names for SpellEffect.EffectAura (SPELL_AURA_*).
+# Enum value names from WoWDBDefs meta/enums. SpellEffect names
+# SpellEffect.Effect (SPELL_EFFECT_* without the prefix), SpellEffectAura names
+# SpellEffect.EffectAura (SPELL_AURA_*).
 WOWDBDEFS_ENUM_URL = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/meta/enums/{name}.dbde"
 ENUM_FILES = ["SpellEffect", "SpellEffectAura", "Target"]
 
@@ -34,26 +31,22 @@ ENUM_FILES = ["SpellEffect", "SpellEffectAura", "Target"]
 def load_local_enum(name: str) -> dict[int, Any]:
     """Load a checked-in build/enums/<name>.json enum into {value: payload}.
 
-    These are the external game/client enums the build depends on (M2
-    attachment points, procedural-effect types, the kit EffectType dispatch,
-    ...) — cached as parseable files with source attribution instead of
-    hardcoded, so the one place they live is greppable, offline and editable.
     The payload is whatever the file holds: a name string, an int, or a
-    per-value metadata dict. See enums/README.md for the format. A missing or
-    malformed file is a hard error, the same discipline as read_enum_names.
+    per-value metadata dict; see enums/README.md for the format. A missing or
+    malformed file is a hard error.
     """
     data = json.loads((ENUMS_DIR / f"{name}.json").read_text(encoding="utf-8"))
     return {int(k): v for k, v in data["values"].items()}
 
 
 def enum_ids_where(mapping: dict[int, Any], handler: str) -> set[int]:
-    """The enum values whose metadata dict carries handler == <handler>."""
+    """Select the enum values whose metadata dict carries this handler."""
     return {k for k, v in mapping.items()
             if isinstance(v, dict) and v.get("handler") == handler}
 
 
 def enum_id_where(mapping: dict[int, Any], handler: str) -> int:
-    """The one enum value with handler == <handler> (errors unless exactly one)."""
+    """Select the one enum value with this handler; error unless exactly one."""
     ids = enum_ids_where(mapping, handler)
     if len(ids) != 1:
         sys.exit(f"error: enums expected exactly one value for handler "
@@ -73,10 +66,9 @@ def read_anim_names() -> list[str]:
 def read_enum_names(name: str, version: str) -> dict[int, str]:
     """Parse a WoWDBDefs meta/enums .dbde file into {value: NAME}.
 
-    Format: one "ID NAME" per line, optionally "// comment" suffixed. Some
+    Format: one "ID NAME" per line, optionally "// comment" suffixed, and some
     lines carry a "(BUILD a-b, c-d)" guard restricting which game builds the
-    name applies to. Lines with no name (or junk like "==") are skipped —
-    the app falls back to showing the raw id.
+    name applies to. Lines with no name are skipped.
     """
     ver = tuple(int(p) for p in version.split("."))
     names: dict[int, str] = {}
@@ -106,9 +98,8 @@ def read_enum_names(name: str, version: str) -> dict[int, str]:
 def fetch_enum_names() -> None:
     """Refresh the animation names and the WoWDBDefs enum lists.
 
-    Unconditional, and small enough that it costs nothing: these are documents
-    the community keeps correcting for game builds that shipped years ago, so
-    a cached copy silently keeps serving a name that has since been fixed.
+    Unconditional: both keep being corrected for game builds that shipped years
+    ago.
     """
     log("Animation names (wow.tools):")
     download_volatile(ANIMS_JS_URL, CACHE_DIR / "anims.js")

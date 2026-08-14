@@ -1,14 +1,7 @@
 """`CsvTables` must agree with the reader it replaces, over the real cache.
 
-The contract suite proves the provider keeps its promises. This proves it
-keeps the BUILD's promises: same rows, same order, same text, for every table
-the build downloads, read against the cached 9.2.7 tables rather than a
-fixture. That is the difference between a seam that is claimed and one that is
-demonstrated.
-
-Skipped when the cache is absent, which is every CI run and any checkout that
-has not built a pack. It is a local proof, not a gate -- the gate is pack
-identity.
+Same rows, same order, same text, for every table the build downloads. Skipped
+when the cache is absent, which is every CI run.
 """
 
 from __future__ import annotations
@@ -39,8 +32,8 @@ def _legacy() -> object:
 
 @pytest.mark.parametrize("table", TABLES)
 def test_every_downloaded_table_reads_identically(table: str, legacy: object) -> None:
-    """Whole tables, not samples: a difference in one late row is exactly the
-    kind of thing a sample misses and a pack diff then reports as mysterious."""
+    """Whole tables, not samples: one late row differing is what a sample
+    misses."""
     tables = CsvTables(TABLE_DIR)
     if not tables.available(table):
         pytest.skip(f"{table} is absent on {PACK}")
@@ -52,8 +45,8 @@ def test_every_downloaded_table_reads_identically(table: str, legacy: object) ->
 
 
 def test_the_pinned_sound_kit_build_is_just_another_source(legacy: object) -> None:
-    """The one cross-build read in the build, and it needs no special case:
-    a different directory is a different provider instance."""
+    """The one cross-build read in the build: a different directory is a
+    different provider instance, not a special case."""
     pinned = CACHE_DIR / legacy.SOUNDKITNAME_BUILD  # type: ignore[attr-defined]
     if not (pinned / "SoundKitName.csv").exists():
         pytest.skip("the pinned sound-kit build is not cached")

@@ -1,15 +1,9 @@
 """The spell list itself: id -> name, and the names a spell can take on.
 
-The name table is the spell list. A spell exists for this build only if it
-has a name row, and every route downstream filters against the set this returns.
-That makes it the first thing read and the one place a build's population is
-decided.
-
-Which table carries the name is the oldest piece of drift in the project:
-`SpellName.db2` was split out of `Spell.db2` in BfA, so Legion and earlier keep
-the name on `Spell` itself. Both spellings are an id plus a localised name
-column, so the reading is identical and only the source differs -- declared in
-`SPELL_NAME_SOURCES`, first candidate the build actually has.
+The name table is the spell list: a spell exists for this build only if it has
+a name row, and every route downstream filters against it. Which table carries
+the name drifted -- `SpellName.db2` was split out of `Spell.db2` in BfA -- so
+the source is declared in `SPELL_NAME_SOURCES`, first candidate the build has.
 """
 
 from __future__ import annotations
@@ -28,28 +22,25 @@ class SpellNames:
     """The spell list, and the two other things a spell can be called."""
 
     names: dict[int, str] = field(default_factory=dict)
-    """Spell id -> name. Membership IS the spell list."""
+    """Spell id -> name. Membership is the spell list."""
 
     subtexts: dict[int, str] = field(default_factory=dict)
-    """Spell id -> the parenthetical rank or variant under the name, where the
-    build has one. Only for spells that are in `names`."""
+    """Spell id -> the parenthetical rank or variant under the name, for the
+    builds and spells that have one."""
 
     overrides: dict[int, str] = field(default_factory=dict)
     """Spell id -> every name it can rename its target to, as one string.
 
-    Search corpus only, never displayed. A spell may carry SEVERAL override
-    rows and pick among them at cast time, so there is no single answer to
-    print -- but all of them should be findable, which is what one joined
-    string gives at no cost to the row.
+    Search corpus only, never displayed: a spell may carry several and picks
+    among them at cast time, so there is no single answer to print.
     """
 
 
 def read_spell_names(tables: Tables) -> SpellNames:
     """Read the spell list and its subtexts.
 
-    A build with no name source at all is fatal rather than empty: it means the
-    declaration has fallen behind the game, and an empty spell list would look
-    exactly like a successful build of nothing.
+    A build with no name source is fatal: an empty spell list would look like a
+    successful build of nothing.
     """
     source = next(((table, columns) for table, columns in SPELL_NAME_SOURCES
                    if tables.available(table)), None)
@@ -73,10 +64,8 @@ def read_override_names(tables: Tables,
                         by_spell: dict[int, set[int]]) -> dict[int, str]:
     """Spell -> its override names as one searchable string.
 
-    `by_spell` is what the effect route found: which SpellOverrideName ids each
-    spell's auras name. Resolved in sorted id order so the string is stable
-    across builds, and spells whose ids all fail to resolve are absent rather
-    than empty.
+    `by_spell` is which SpellOverrideName ids each spell's auras name. Resolved
+    in sorted id order so the string is stable across builds.
     """
     names = {to_int(override_id): name for override_id, name
              in tables.rows("SpellOverrideName", ["ID", "OverrideName_lang"])}

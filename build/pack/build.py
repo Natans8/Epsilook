@@ -22,15 +22,8 @@ class Line(Enum):
 class Build:
     """One game build, constructed from its roster row once sources are probed.
 
-    Constructed once per pack build and passed down, replacing per-build
-    facts previously looked up in scattered module-level tables keyed on
-    different things.
-
     The engine generation -- which shape the tables arrive in -- is
-    deliberately not a field: every buildable pack is the post-7.0
-    generation, and a second generation would be served by a ``tables/``
-    projection, not a reader branch. Add the field when its second value
-    exists.
+    deliberately not a field; add it when its second value exists.
     """
 
     key: str
@@ -49,9 +42,8 @@ class Build:
     """Retail, Classic re-release, or PTR."""
 
     tdb: str | None
-    """The matched TDB release tag; ``None`` means the build ships without
-    one and every route needing it degrades as declared."""
+    """The matched TDB release tag; ``None`` when the build ships without one."""
 
     absent_tables: frozenset[str]
-    """Declared-optional tables this build predates, probed at source time
-    and shipped in ``meta.absentTables``."""
+    """Declared-optional tables this build predates, shipped in
+    ``meta.absentTables``."""

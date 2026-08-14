@@ -36,6 +36,7 @@ import argparse
 import ast
 import gzip
 import hashlib
+import io
 import json
 import os
 import re
@@ -43,6 +44,8 @@ import shutil
 import subprocess
 import sys
 import time
+import tokenize
+from collections.abc import Iterator
 from pathlib import Path
 
 from repo import (BUMP_PATHS, CACHE, DIM, GREEN, RED, RESET, ROOT, YELLOW,
@@ -704,6 +707,102 @@ def check_build_layers(rep: Report) -> None:
                f"{'/, '.join(BUILD_PLACELESS)}/ free of paths and URLs")
 
 
+PROSE_RULES: list[tuple[str, re.Pattern[str], str]] = [
+    ("decoration", re.compile(r"[←-⯿─-╿\U0001F000-\U0001FAFF]|[-=#]{5,}"),
+     "emoji or a decorative rule; use plain prose"),
+    ("shouting", re.compile(r"(?:\b[A-Z][A-Z'’-]+\b[ ,]+){3,}\b[A-Z][A-Z'’-]+\b"),
+     "an all-caps sentence; use an ordinary one"),
+    ("dated", re.compile(r"\b(?:19|20)\d\d-\d\d-\d\d\b"),
+     "a date; describe the code as it is now"),
+    ("attributed", re.compile(r"\b(?:the )?users?'?s?\s+(?:call|own|rule|verdict|"
+                              r"spec|priority|question)\b|\(user[,)]|\bwe agreed\b",
+                              re.IGNORECASE),
+     "a decision attributed to a person; state the rule instead"),
+    ("cross-referenced", re.compile(r"\bPHASE\s*\d|\bsection\s*\d+[a-z]?\b|§",
+                                    re.IGNORECASE),
+     "a plan section or phase number; name the concept instead"),
+]
+"""What a comment may not contain, with the wording to use instead.
+
+Each is a rule `docs/CODE_STYLE.md` states in prose that a reader has to
+remember. They are mechanical and their failure is invisible, which is what
+makes them guards rather than review notes: nothing breaks when a comment
+shouts or cites a planning document, the documentation just stops being for the
+developer reading the code and starts being a record of how it was written.
+"""
+
+
+def prose_of(source: str, name: str) -> Iterator[tuple[int, str]]:
+    """Yield the `(line, text)` of every comment and docstring in a module.
+
+    Tokenised rather than matched line by line, so a rule cannot fire on code
+    that merely looks like prose - a regex literal, a URL, a table of
+    constants - and cannot miss prose that spans lines.
+
+    Args:
+        source: the module's text.
+        name: its path, for the error a syntax failure raises.
+
+    Yields:
+        One pair per comment or string literal, in source order.
+    """
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError) as broken:
+        raise ValueError(f"{name}: {broken}") from broken
+    for token in tokens:
+        if token.type is tokenize.COMMENT:
+            yield token.start[0], token.string
+        elif token.type is tokenize.STRING and token.line.lstrip().startswith(
+                ('"""', "'''", 'r"""', "f'''")):
+            yield token.start[0], token.string
+
+
+def check_comment_style(rep: Report) -> None:
+    """The data build's comments must follow the documentation style guide.
+
+    Documentation is written for a developer reading the code, which is a
+    different thing from a record of how the code came to look the way it
+    does. The difference is invisible at the time and expensive later: a
+    comment citing a plan section outlives the plan, one attributing a choice
+    to somebody sends the next reader looking for them instead of for the
+    reason, and one that shouts trains readers to skim.
+
+    Only the data build is covered. Every rule here applies repository-wide,
+    but the modules this guards are the ones written to it, and a guard that
+    fails on code predating it is a guard people learn to bypass.
+
+    Skipped rather than failed while the package is absent, so this does not
+    become the reason a checkout without it cannot commit.
+    """
+    root = ROOT / BUILD_PACKAGE
+    modules = sorted(root.rglob("*.py")) if root.is_dir() else []
+    if not modules:
+        rep.skip("comment style", f"{BUILD_PACKAGE} not present yet")
+        return
+
+    problems: list[str] = []
+    for path in modules:
+        name = path.relative_to(ROOT).as_posix()
+        for line, text in prose_of(path.read_text(encoding="utf-8"), name):
+            for rule, pattern, advice in PROSE_RULES:
+                if (found := pattern.search(text)) is None:
+                    continue
+                offending = found.group(0).strip()[:40]
+                problems.append(f"{name}:{line} {rule}: {offending!r} - {advice}")
+                break
+
+    if problems:
+        for problem in problems[:8]:
+            rep.fail("comment style", problem)
+        if len(problems) > 8:
+            rep.fail("comment style", f"...and {len(problems) - 8} more")
+    else:
+        rep.ok("comment style",
+               f"{len(modules)} modules free of emoji, shouting, dates, "
+               f"attribution and plan references")
+
+
 def check_cache_declaration(rep: Report) -> None:
     """The build and its tooling must agree on where the cache is.
 
@@ -1049,6 +1148,7 @@ def main() -> int:
     check_layers(rep)
     check_cache_declaration(rep)
     check_build_layers(rep)
+    check_comment_style(rep)
     check_cli_entries(rep)
     check_license_scope(rep)
     check_arcanum(rep)

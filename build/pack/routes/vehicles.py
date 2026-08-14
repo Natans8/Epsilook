@@ -1,13 +1,8 @@
 """Vehicles and their seats: where a rider sits and what both of them animate.
 
 A vehicle names up to eight seats by slot, and each seat carries the animations
-the RIDER plays and, separately, the ones the VEHICLE plays.
-
-The two animation sets stay apart. They are the rider's behaviour and the
-vehicle's, and folding them together would file a mount's own movement under
-what its passenger is doing. Only the seat ORDER survives per seat; everything
-else is unioned per vehicle, because a spell surfaces the vehicle as a whole
-rather than one seat at a time.
+the rider plays and, separately, the ones the vehicle plays. The two sets stay
+apart; everything but the seat order is unioned per vehicle.
 """
 
 from __future__ import annotations
@@ -29,8 +24,7 @@ SEAT_ANIMKIT_COLUMNS = [
     "EnterAnimKitID", "RideAnimKitID", "ExitAnimKitID",
     "VehicleEnterAnimKitID", "VehicleRideAnimKitID", "VehicleExitAnimKitID",
 ]
-"""The seat's anim kits. Ordinary anim kit ids, so they join the existing group
-rather than needing plumbing of their own."""
+"""The seat's anim kits. Ordinary anim kit ids, so they join that group."""
 
 
 @dataclass
@@ -38,10 +32,8 @@ class VehicleSeats:
     """Each vehicle's seats and the animations they reach."""
 
     seats: dict[int, list[str]] = field(default_factory=dict)
-    """Vehicle -> the attachment name of each seat, in slot order.
-
-    Empty slots are dropped, so the list LENGTH is the seat count.
-    """
+    """Vehicle -> the attachment name of each seat, in slot order. Empty slots
+    are dropped, so the list length is the seat count."""
 
     passenger_anims: dict[int, set[int]] = field(default_factory=dict)
     """Vehicle -> the animations its riders play."""
@@ -56,14 +48,9 @@ class VehicleSeats:
 def read_vehicle_seats(tables: Tables) -> VehicleSeats:
     """Walk each vehicle to its seats and collect what they carry.
 
-    Two independent absences, and the middle case is why they are checked
-    separately. Both tables postdate the oldest clients. With no vehicle table
-    there is nothing at all. With vehicles but no SEAT table the slot positions
-    still give the seat COUNT, which is worth keeping -- a two-seat vehicle is
-    still a two-seat vehicle when nothing can say where the seats are.
-
-    The seat columns are read from the header rather than declared, because
-    which of them a build carries varies and the header states the answer.
+    The two absences are checked separately: with vehicles but no seat table
+    the slot positions still give the seat count. The seat columns are read
+    from the header, because which of them a build carries varies.
     """
     vehicles = VehicleSeats()
     if not tables.available("Vehicle"):
@@ -101,8 +88,8 @@ def read_vehicle_seats(tables: Tables) -> VehicleSeats:
         for seat_id in seat_ids:
             seat = seat_rows.get(seat_id)
             if seat is None:
-                # The vehicle names a seat row this build does not have. The
-                # slot is still a seat, so it keeps its place and loses its name.
+                # The vehicle names a seat row this build does not have; the
+                # slot keeps its place and loses its name.
                 names.append("")
                 continue
             attachment, rider_anims, vehicle_anims, seat_kits = seat

@@ -1,10 +1,7 @@
 """Shapeshift forms: the name a form has, and the creature it turns you into.
 
-Most forms have no creature at all, which is why the name and the displays
-are kept apart rather than a form being "a display with a label". Battle Stance,
-Shadowform, Stealth and Moonkin change what a character can DO without changing
-what it looks like, so they are a name and nothing else -- and a route that
-required a display would drop them.
+Most forms have no creature at all -- Battle Stance, Shadowform, Stealth,
+Moonkin -- so the name and the displays are kept apart.
 """
 
 from __future__ import annotations
@@ -15,11 +12,8 @@ from ..tables import Tables, array_columns
 from .columns import to_int
 
 FORM_DISPLAY_SLOTS = 4
-"""How many creature displays a form's array holds where it is an array.
-
-It narrowed to a plain scalar in a later build, which the array reader hides.
-Nothing is lost in the array builds: only the first slot is ever filled.
-"""
+"""How many creature displays a form's array holds where it is an array. A
+later build narrowed it to a scalar; only the first slot is ever filled."""
 
 
 @dataclass
@@ -31,7 +25,7 @@ class ShapeshiftForms:
 
     displays: dict[int, list[int]] = field(default_factory=dict)
     """Form -> the creature displays it turns the character into, in slot
-    order. Empty for the forms that change no appearance."""
+    order. Empty for forms that change no appearance."""
 
 
 def read_shapeshift_forms(tables: Tables) -> ShapeshiftForms:

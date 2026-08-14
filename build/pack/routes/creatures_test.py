@@ -40,8 +40,7 @@ entry,name,modelid1,modelid2,modelid3,modelid4
 
 
 def test_a_display_resolves_through_two_hops(tables: BuildTables) -> None:
-    """Several displays share one model, which is why the file id lives a table
-    further down than the look does."""
+    """Several displays share one model, so the file id lives a table down."""
     creatures = read_creature_models(
         tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
                CreatureModelData=CREATURE_MODEL_DATA), None)
@@ -59,8 +58,7 @@ def test_a_display_whose_model_has_no_file_resolves_to_nothing(
 
 
 def test_without_a_server_dump_the_models_still_resolve(tables: BuildTables) -> None:
-    """The half that degrades is the naming half, and only that half: a build
-    with no dump renders a morph's model and loses the word for it."""
+    """Only the naming half degrades."""
     creatures = read_creature_models(
         tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
                CreatureModelData=CREATURE_MODEL_DATA), None)
@@ -70,8 +68,7 @@ def test_without_a_server_dump_the_models_still_resolve(tables: BuildTables) -> 
 
 
 def test_a_name_is_trimmed(tables: BuildTables) -> None:
-    """The dump reader decodes faithfully; a display name is the one thing that
-    wants its stray whitespace gone."""
+    """The dump reader decodes faithfully, so the trim happens in the route."""
     creatures = read_creature_models(
         tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
                CreatureModelData=CREATURE_MODEL_DATA),
@@ -92,9 +89,8 @@ def test_displays_come_out_in_slot_order(tables: BuildTables) -> None:
 
 def test_the_legacy_column_shape_yields_the_same_displays(
         tables: BuildTables) -> None:
-    """The reason the two spellings share one output: in the legacy shape the
-    COLUMN POSITION is the slot, so an empty column is a skipped slot rather
-    than a display of zero."""
+    """In the legacy shape the column position is the slot, so an empty column
+    is a skipped slot rather than a display of zero."""
     creatures = read_creature_models(
         tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
                CreatureModelData=CREATURE_MODEL_DATA),
@@ -104,9 +100,8 @@ def test_the_legacy_column_shape_yields_the_same_displays(
 
 def test_a_dump_carrying_no_display_columns_degrades_rather_than_failing(
         tables: BuildTables) -> None:
-    """The server-side drift declarations at work: a release with neither the
-    display table nor the legacy columns keeps its names and loses only the
-    morphs, instead of failing the build."""
+    """A release with neither the display table nor the legacy columns keeps
+    its names and loses only the morphs."""
     creatures = read_creature_models(
         tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
                CreatureModelData=CREATURE_MODEL_DATA),

@@ -1,20 +1,10 @@
 """The kit dispatch: where a visual kit's effect rows become payloads.
 
-`SpellVisualKitEffect` is the fan-out point of the whole graph. One row says
-"this kit plays effect E of type T", and the type decides which of ten tables E
-is an id in. Everything the pack shows about a spell that is not a name or a
-number arrives through here.
-
-A procedure reference is dispatched twice. Its effect type says only "this is
-a procedure"; which KIND of procedure it is was already decided when the
-procedure route bucketed it. So the second dispatch is a membership test against
-those buckets rather than a second read of the row -- the route that knows what
-a Type means is the one that decided, and this one does not re-decide.
-
-A row pointing at a payload this build does not have is dropped. It is not an
-error: an older build legitimately lacks the table, and a kit referencing a row
-that is not there has nothing to show. Keeping it would ship an id the app
-cannot resolve into anything.
+One `SpellVisualKitEffect` row says "this kit plays effect E of type T", and
+the type decides which of ten tables E is an id in. A procedure reference is
+dispatched twice: the second dispatch is a membership test against the buckets
+the procedure route filled. A row pointing at a payload this build lacks is
+dropped rather than treated as an error.
 """
 
 from __future__ import annotations
@@ -49,15 +39,10 @@ ChainDraw = tuple[int, int, int]
 class KitEffects:
     """What each kit contributes, in the bucket its effect type chose.
 
-    Every field is kit -> the payload ids it references, so the per-spell walk
-    is a union over the kits a spell reaches rather than a second dispatch.
-    Freezes and camos are valueless, so kit membership is the whole payload.
-
-    A kit is absent from a bucket it contributed nothing to, so read these
-    with `.get(kit, ())` rather than by subscript. They are plain dicts on
-    purpose: a bucket that answers every key by inserting an empty set into
-    itself grows as it is read, which makes "which kits play a sound" depend on
-    what was asked earlier.
+    Every field is kit -> the payload ids it references; freezes and camos are
+    valueless, so kit membership is the whole payload. A kit is absent from a
+    bucket it contributed nothing to, so read these with `.get(kit, ())`. They
+    are plain dicts on purpose: a defaulting bucket would grow as it is read.
     """
 
     models: dict[int, set[AttachModel]] = field(default_factory=dict)
@@ -84,9 +69,8 @@ def add_chains(chains: dict[int, tuple], chain_id: int, source: int,
                destination: int, into: set[ChainDraw]) -> None:
     """Add a chain and every chain it nests, tagged with an attachment pair.
 
-    Nested chains INHERIT the attachments of the beam that drew the parent:
-    they are segments of the same beam rather than independently anchored
-    effects, so giving them their own ends would draw them from the wrong place.
+    Nested chains inherit the parent beam's attachments: they are segments of
+    the same beam.
     """
     expanded: set[int] = set()
     expand_chain(chains, chain_id, expanded)
@@ -98,14 +82,14 @@ def read_kit_effects(tables: Tables, models: ModelSources, procs: ProcEffects,
     """Dispatch every kit effect row into the bucket its type chose."""
     kits = KitEffects(
         models={kit: set(rows) for kit, rows in models.attach_models.items()},
-        # The attached models' own animations and anim kits seed the same
-        # buckets this walk fills, which is safe because the walk unions.
+        # The attached models seed the same buckets this walk fills; the walk
+        # unions rather than replaces.
         animkits={kit: set(rows) for kit, rows in models.attach_animkits.items()},
         visual_anims={kit: set(rows) for kit, rows in models.attach_anims.items()})
 
     # An animation effect points at a row carrying both an anim kit and up to
     # two animations the kit plays directly on the unit. 0 and -1 both mean
-    # unset here -- 0 would be Stand, which is not a spell playing anything.
+    # unset here: 0 would be Stand.
     visual_anims: dict[int, tuple[int, int, int]] = {}
     for row_id, initial, loop, animkit in tables.rows(
             "SpellVisualAnim", ["ID", "InitialAnimID", "LoopAnimID", "AnimKitID"]):
@@ -164,11 +148,7 @@ def _add_procedure(kits: KitEffects, kit: int, procedure: int,
                    procs: ProcEffects, fx: FxPayloads) -> None:
     """Route one procedure reference to whichever buckets it landed in.
 
-    Membership tests rather than a second decode: the procedure route already
-    read the Type, and a row can only ever be in one value bucket.
-
-    A procedure-route chain has no beam row, so it carries no attachment
-    pair. Giving it one would claim two anchor points the data never named.
+    A procedure-route chain has no beam row, so it carries no attachment pair.
     """
     chain = procs.chain.get(procedure, 0)
     if chain:

@@ -54,17 +54,16 @@ def items(tables: BuildTables):
 
 
 def test_the_first_appearance_wins(tables: BuildTables) -> None:
-    """What makes the pill show the item's BASE look rather than an arbitrary
-    recolour: appearances arrive in source order and the first that yields a
-    file is taken."""
+    """The base look rather than a transmog recolour: appearances arrive in
+    source order."""
     assert items(tables).model_fid[10] == 8099
     assert items(tables).icon_fid[10] == 9000
 
 
 def test_the_lowest_file_of_a_resources_id_is_the_base_model(
         tables: BuildTables) -> None:
-    """A resources id names several files when the model ships with levels of
-    detail, and they do not arrive in order."""
+    """A model shipping with levels of detail names several files, out of
+    order."""
     assert items(tables).model_fid[10] == 8099
 
 
@@ -75,25 +74,21 @@ def test_the_second_model_slot_is_reached_when_the_first_is_unset(
 
 
 def test_an_unnamed_item_still_resolves(tables: BuildTables) -> None:
-    """The majority of this route: internal props that exist purely to be
-    held in a spell visual. Dropping them for having no name would throw the
-    route away."""
+    """Internal props that exist purely to be held in a spell visual."""
     resolved = items(tables)
     assert 11 not in resolved.name
     assert resolved.resolved(11)
 
 
 def test_an_empty_display_name_is_not_a_name(tables: BuildTables) -> None:
-    """The column exists on every row; only a non-empty one is a name, and
-    quality rides with it rather than standing alone."""
+    """The column exists on every row; only a non-empty one is a name."""
     resolved = items(tables)
     assert 12 not in resolved.name
     assert 12 not in resolved.quality
 
 
 def test_an_item_reaching_no_model_is_unresolved(tables: BuildTables) -> None:
-    """Its icon still lands: the icon comes off the appearance and does not
-    depend on the model hop succeeding."""
+    """The icon comes off the appearance and does not need the model hop."""
     resolved = items(tables)
     assert not resolved.resolved(13)
     assert resolved.icon_fid[13] == 9002

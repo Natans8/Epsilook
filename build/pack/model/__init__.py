@@ -1,8 +1,8 @@
 """The section registry -- the build's extension point.
 
 A pack section is one ``Section`` record; assembly, ``meta.counts``,
-``meta.domains``, module placement, locale output, the generated drift table
-and the registry guard all follow from it. Knows nothing about bytes.
+``meta.domains``, module placement, locale output and the registry guard all
+follow from it.
 """
 
 from .registry import SECTIONS, register

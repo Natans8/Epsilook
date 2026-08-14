@@ -74,8 +74,8 @@ def kits(tables: BuildTables):
 
 def test_the_attached_models_seed_the_buckets_the_walk_fills(
         tables: BuildTables) -> None:
-    """They arrive from a different table and belong in the same bucket, which
-    is safe because the walk unions rather than replaces."""
+    """They arrive from a different table; the walk unions rather than
+    replaces."""
     resolved = kits(tables)
     assert (8000, 0, 5, NO_ATTACHMENT, 0, NO_MOTION) in resolved.models[1]
     assert resolved.animkits[1] == {42, 700}
@@ -83,14 +83,13 @@ def test_the_attached_models_seed_the_buckets_the_walk_fills(
 
 
 def test_an_unset_animation_is_not_played(tables: BuildTables) -> None:
-    """0 would be Stand and -1 is unset; neither is a spell playing anything."""
+    """0 would be Stand and -1 is unset."""
     assert kits(tables).visual_anims[1] == {17, 12}
 
 
 def test_a_procedure_reaches_the_bucket_it_was_sorted_into(
         tables: BuildTables) -> None:
-    """The second dispatch is a membership test, not a second decode: the
-    route that read the Type already decided."""
+    """The second dispatch is a membership test, not a second decode."""
     resolved = kits(tables)
     assert resolved.tints[3] == {11}
     assert resolved.freezes == {4}
@@ -101,22 +100,20 @@ def test_a_procedure_reaches_the_bucket_it_was_sorted_into(
 
 def test_a_procedure_chain_carries_no_attachment_pair(
         tables: BuildTables) -> None:
-    """It has no beam row, so claiming two anchor points would invent them."""
+    """It has no beam row to take them from."""
     assert kits(tables).chains[2] == {(70, NO_ATTACHMENT, NO_ATTACHMENT),
                                       (71, NO_ATTACHMENT, NO_ATTACHMENT)}
 
 
 def test_a_beam_passes_its_ends_down_to_the_chains_it_nests(
         tables: BuildTables) -> None:
-    """Nested chains are segments of the same beam, so they inherit its ends
-    rather than being anchored on their own."""
+    """Nested chains are segments of the same beam."""
     assert kits(tables).chains[6] == {(70, 1, 2), (71, 1, 2)}
 
 
 def test_a_row_pointing_at_a_payload_this_build_lacks_is_dropped(
         tables: BuildTables) -> None:
-    """Not an error: an older build legitimately lacks the table, and there is
-    nothing to show."""
+    """Not an error: an older build legitimately lacks the table."""
     resolved = kits(tables)
     assert resolved.dissolves[7] == {400}
     assert 999 not in resolved.dissolves[7]
@@ -139,6 +136,6 @@ def test_a_kit_or_effect_of_zero_is_skipped(tables: BuildTables) -> None:
 
 
 def test_a_sound_kit_keeps_every_file_it_plays(tables: BuildTables) -> None:
-    """The client picks between variations, so all of them are the kit."""
+    """The client picks between variations, so all of them are the kit's."""
     assert read_soundkit_files(
         tables(SoundKitEntry=SOUND_KIT_ENTRY)) == {300: {9000, 9001}}

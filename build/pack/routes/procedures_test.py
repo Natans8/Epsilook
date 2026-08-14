@@ -40,8 +40,7 @@ def procs(tables: BuildTables):
 
 
 def test_every_chain_type_reaches_one_bucket(tables: BuildTables) -> None:
-    """Three Types mean chain, and the float spelling is one of the reasons the
-    value is decoded rather than cast."""
+    """Three Types mean chain, and one of them spells its value as a float."""
     assert procs(tables).chain == {1: 55, 2: 56}
 
 
@@ -50,24 +49,23 @@ def test_a_tint_keeps_three_bytes(tables: BuildTables) -> None:
 
 
 def test_the_fourth_byte_is_not_colour(tables: BuildTables) -> None:
-    """A packed colour is three bytes; whatever rides above them is not one."""
+    """A packed colour is three bytes."""
     assert procs(tables).tints[19] == 0xFF0000
 
 
 def test_a_material_recolour_reads_its_own_column(tables: BuildTables) -> None:
-    """The payload column differs per Type, which is the whole reason the
-    dispatch comes before the read."""
+    """The payload column differs per Type."""
     assert procs(tables).tints[4] == 255
 
 
 def test_a_colourless_tint_folds_in_as_black(tables: BuildTables) -> None:
-    """Deliberately unlike the ghost case: black IS a tint, because it
-    multiplies the model down to darkness."""
+    """Deliberately unlike the ghost case: black multiplies the model down to
+    darkness."""
     assert procs(tables).tints[5] == 0
 
 
 def test_a_colourless_ghost_is_dropped(tables: BuildTables) -> None:
-    """A ghost with no colour has nothing to show, so the row is not a row."""
+    """A ghost with no colour has nothing to show."""
     resolved = procs(tables)
     assert resolved.ghost_mats == {6: 0x00FF00}
     assert 7 not in resolved.ghost_mats
@@ -93,8 +91,7 @@ def test_the_valueless_types_are_membership(tables: BuildTables) -> None:
 
 def test_a_model_procedure_resolves_through_its_own_table(
         tables: BuildTables) -> None:
-    """Two Types reach two different tables and land in one bucket, tagged by
-    the category that says which."""
+    """Two Types reach two tables and land in one bucket, tagged by category."""
     assert procs(tables).models == {
         14: (8300, MODEL_CAT_AREA, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION),
         16: (8400, MODEL_CAT_TRAIL, NO_ATTACHMENT, NO_ATTACHMENT, 0, NO_MOTION),
@@ -107,9 +104,8 @@ def test_a_model_that_does_not_resolve_is_dropped(tables: BuildTables) -> None:
 
 def test_an_animation_pairs_with_the_slot_it_replaces(
         tables: BuildTables) -> None:
-    """What folds this into the same group as the replacement aura: a value
-    is meaningless without the base it stands in for. Slot 4 (Walk) is left
-    alone here, so it contributes no pair."""
+    """A value is meaningless without the base it stands in for. Slot 4 (Walk)
+    is left alone here, so it contributes no pair."""
     assert procs(tables).anims == {17: ((0, 12), (5, 13))}
 
 

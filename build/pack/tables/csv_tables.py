@@ -15,14 +15,8 @@ csv.field_size_limit(10_000_000)
 class CsvTables:
     """One directory of `<table>.csv` files, presented row-wise as text.
 
-    The provider the build has always effectively used, now behind the seam.
-    It serves ONE source: the build's own tables, a pinned build's, or the
-    distilled TrinityCore dump are three instances rather than three cases.
-
-    Values come back as the source's own text, unparsed. That is not laziness:
-    typing here would make two providers over the same source disagree in the
-    low-order digits of a float, and the routes are what decide a column's
-    type anyway.
+    Values come back as the source's own text: typing here would make two
+    providers over the same source disagree in a float's low-order digits.
     """
 
     def __init__(self, directory: Path, *,
@@ -30,10 +24,8 @@ class CsvTables:
                  defaults: dict[tuple[str, str], str] | None = None) -> None:
         """Serve the CSVs in `directory`.
 
-        `absent_tables` names the tables a build may legitimately lack, and
-        `defaults` the columns it may lack with the value to stand in. Both
-        default to the build-wide drift declarations; a test or a second
-        source passes its own.
+        `absent_tables` and `defaults` fall back to the build-wide drift
+        declarations; a test or a second source passes its own.
         """
         self.directory = directory
         self.absent_tables = OPTIONAL_TABLES if absent_tables is None else absent_tables
@@ -57,18 +49,9 @@ class CsvTables:
     def rows(self, table: str, columns: Sequence[str]) -> Iterator[tuple[str, ...]]:
         """Yield the named columns of every row, in file order.
 
-        A declared-absent table yields nothing, so the section it feeds comes
-        out empty and its feature switches itself off. A declared-optional
-        column yields its stand-in value. A column that is missing without
-        being declared is a hard error: silently dropping data is the one
-        outcome worth crashing over.
-
-        A file with no header at all is a hard error too, and a different one
-        from a table that is absent: a table this build predates leaves no
-        file, so a file that exists but says nothing is a truncated download
-        rather than a declared absence. Named here because the alternative is
-        a bare `StopIteration`, which a generator reports as a `RuntimeError`
-        naming neither the table nor the cache it came from.
+        A declared-absent table yields nothing and a declared-optional column
+        yields its stand-in; anything undeclared exits. A file with no header
+        is a truncated download rather than an absence, and exits too.
         """
         path = self.path_of(table)
         if not path.exists():

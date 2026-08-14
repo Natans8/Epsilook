@@ -1,14 +1,8 @@
-"""Colour, from the game's three spellings to the pack's one -- and to a WORD.
+"""Colour: the game's three floats to the pack's packed integer, and to a word.
 
-The game stores a colour as three 0..1 floats, the pack ships one packed
-0xRRGGBB integer, and the search corpus wants neither: it wants a word.
-
-The word is why this route exists. For roughly 46% of the spells that carry
-an effect colour, the tint is the only colour signal there is -- the texture
-underneath is greyscale, and what makes it red is the multiply. So
-`fx:"chain red"` can only work if the word is baked at build time, from the
-number, before anything is searchable. The app reproduces these same buckets so
-the hover panel's caption says the word that searches.
+The word is baked here because many effect textures are greyscale and take
+their colour from the tint alone. The app reproduces these buckets so the hover
+caption says the word that searches.
 """
 
 from __future__ import annotations
@@ -22,12 +16,8 @@ HUE_WORDS = ((15, "red"), (45, "orange"), (70, "yellow"), (160, "green"),
              (361, "red"))
 
 MIN_SATURATION, MIN_VALUE = 0.15, 0.08
-"""Below either, a colour carries no hue worth a word.
-
-White, grey and near-black tints are not a colour a player would search for --
-they are the absence of one -- so they name nothing rather than being forced
-into the nearest bucket.
-"""
+"""Below either, a colour names no hue: white, grey and near-black are the
+absence of one rather than a colour anyone searches for."""
 
 
 def to_channel(text: str) -> int:
@@ -57,9 +47,7 @@ def hue_word(red: int, green: int, blue: int) -> str:
 def hue_words(colors: tuple[int, ...]) -> str:
     """The distinct hue words of several packed colours, in the order given.
 
-    A row may carry more than one colour -- a shadowy effect carries two -- and
-    a searcher looking for either should find it, so both words ship. Negative
-    entries are "no colour here" sentinels and name nothing.
+    A negative entry is the "no colour here" sentinel and names nothing.
     """
     words = dict.fromkeys(word for color in colors if color >= 0
                           if (word := hue_word(*unpack_rgb(color))))

@@ -9,14 +9,8 @@ from .sources.wago import TABLES
 
 
 def test_every_optional_table_is_also_downloaded() -> None:
-    """The two lists do different jobs and a table usually needs both.
-
-    `TABLES` is what gets fetched; `OPTIONAL_TABLES` only says a 404 on one is
-    allowed. Declaring a table optional and forgetting to fetch it leaves it
-    never downloaded, which looks exactly like a build that predates it: the
-    feature switches off silently on every version and the log says "absent",
-    so nothing points at the mistake.
-    """
+    """A table declared optional but never fetched looks exactly like a build
+    that predates it: the feature switches off and the log says "absent"."""
     assert not set(OPTIONAL_TABLES) - set(TABLES)
 
 
@@ -36,6 +30,6 @@ def test_tdb_drift_names_tables_the_dumps_are_distilled_for() -> None:
 
 
 def test_a_declared_optional_column_carries_a_stand_in_value() -> None:
-    """The declaration IS the default, so an empty one has to be deliberate."""
+    """The declaration is the default, so an empty one has to be deliberate."""
     for (table, column), default in {**OPTIONAL_COLUMNS, **TDB_OPTIONAL_COLUMNS}.items():
         assert isinstance(default, str), f"{table}.{column}"

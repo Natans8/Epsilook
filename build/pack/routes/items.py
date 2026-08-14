@@ -1,15 +1,9 @@
 """Item -> the name, quality, icon and model a spell visual holds up.
 
-Pure client data, so this route works on every build including the ones with no
-server dump. Reached when a `SpellVisualEffectName` names an `Item::ID` rather
-than a file: the spell hands the caster a real item and plays its model.
-
-Most of these items have no name, and dropping the nameless ones would throw
-away the majority of the route. Only `ItemSearchName` carries a name, and about
-a third of the items this route reaches never appear there -- they are internal
-props (unnamed potions, dynamite, gizmos) that exist purely to be held in a
-spell visual. They still resolve to a model and an icon, which is what makes
-them worth rendering without one.
+Pure client data. Reached when a `SpellVisualEffectName` names an `Item::ID`
+rather than a file. Only `ItemSearchName` carries a name and many of these
+items never appear there -- internal props that exist to be held in a spell
+visual -- so a nameless item still resolves to a model and an icon.
 """
 
 from __future__ import annotations
@@ -28,8 +22,7 @@ class ItemModels:
     """Item id -> its display name. Absent for the unnamed props."""
 
     quality: dict[int, int] = field(default_factory=dict)
-    """Item id -> quality. Only ever set alongside a name, since it is the
-    name row that carries it."""
+    """Item id -> quality. Only ever set alongside a name, which carries it."""
 
     icon_fid: dict[int, int] = field(default_factory=dict)
     """Item id -> its inventory icon file id."""
@@ -46,14 +39,9 @@ def read_item_models(tables: Tables) -> ItemModels:
     """Read an item's name, quality, icon and model.
 
     The model hop is `ItemModifiedAppearance -> ItemAppearance ->
-    ItemDisplayInfo -> ModelResourcesID -> ModelFileData.FileDataID`, four
-    tables to cross what is conceptually one edge, because the game separates
-    an item from the look it can be transmogrified into.
-
-    First appearance wins, and that is what makes the pill show the item's
-    BASE look rather than an arbitrary recolour: an item carries one appearance
-    row per transmog variant, they arrive in source order, and taking the first
-    that yields a file is the only rule here that is stable across builds.
+    ItemDisplayInfo -> ModelResourcesID -> ModelFileData.FileDataID`. First
+    appearance wins, which is the item's base look rather than a transmog
+    recolour.
     """
     items = ItemModels()
     for item_id, display, quality in tables.rows(
@@ -71,8 +59,7 @@ def read_item_models(tables: Tables) -> ItemModels:
         if resource and file and file < resource_fid.get(resource, file + 1):
             resource_fid[resource] = file
 
-    # Slot 0 is the main model and slot 1 the second component of a paired item
-    # (an off-hand, the other half of a set piece).
+    # Slot 0 is the main model, slot 1 the second component of a paired item.
     display_resources: dict[int, tuple[int, int]] = {}
     for display_id, first, second in tables.rows(
             "ItemDisplayInfo", ["ID", "ModelResourcesID_0", "ModelResourcesID_1"]):

@@ -1,12 +1,8 @@
 """Mounts: the display a mount-granting spell puts you on.
 
 Reached from the mount table by the spell that grants it, then out to the
-displays it can wear -- faction and gender variants, so several per mount.
-
-This route needs no server dump, unlike the morphs it resembles. Both the
-name and the model are client data, so a mount resolves on every build. The
-name comes off the mount row itself; where a display has none, the pill falls
-back to the model file's name.
+displays it can wear -- faction and gender variants, so several per mount. Both
+halves are client data, so this needs no server dump.
 """
 
 from __future__ import annotations
@@ -36,13 +32,8 @@ def read_mounts(tables: Tables, spell_names: dict[int, str],
                 creatures: CreatureModels) -> MountData:
     """Read the mount displays each mount-granting spell reaches.
 
-    A mount whose granting spell this build does not ship is skipped: the spell
-    list is what decides a build's population, and a mount reachable by nothing
-    is not reachable.
-
-    The first mount to claim a display names it. A display shared by several
-    mounts is one model wearing one name, so the alternative would be an
-    arbitrary last-write rather than a better answer.
+    A mount whose granting spell this build does not ship is skipped. The first
+    mount to claim a display names it.
     """
     displays: dict[int, list[int]] = {}
     for display_id, mount_id in tables.rows(

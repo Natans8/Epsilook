@@ -1,11 +1,9 @@
 """File data id to asset path, from the community listfile.
 
-Revalidated on every build, unlike every other source here. The listfile keeps
-growing for builds already shipped: a file id that had no name last month may
-have one today, and an existence check silently keeps serving the old answer.
-
-The release tag is the cheap oracle -- one API call, and the 148 MB body is
-only refetched when the tag actually moved.
+Revalidated on every build, unlike every other source here: the listfile keeps
+growing for builds already shipped, so a file id with no name last month may
+have one today. The release tag is the cheap oracle -- one API call, and the
+body is refetched only when the tag moved.
 """
 
 from __future__ import annotations
@@ -24,9 +22,8 @@ LISTFILE_RELEASE_API = "https://api.github.com/repos/wowdev/wow-listfile/release
 def fetch_listfile(refresh: bool) -> Path:
     """Ensure the community listfile is current, and return its path.
 
-    An unreachable release API is not fatal: a cached copy still builds a
-    correct pack, just possibly missing the newest names, so it says so and
-    carries on. Only an unreachable API with nothing cached raises.
+    An unreachable release API is fatal only with nothing cached; otherwise the
+    cached copy is used, possibly missing the newest names.
     """
     listfile_dir = CACHE_DIR / "listfile"
     listfile = listfile_dir / "community-listfile.csv"

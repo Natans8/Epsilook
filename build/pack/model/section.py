@@ -19,9 +19,8 @@ class Encoding(Enum):
 class Scope(Enum):
     """Whether a section ships per build or once across builds.
 
-    ``UNIVERSAL`` means a content-addressed shared module, never one global
-    file: the section is still produced per build, and sharing is a manifest
-    fact that holds only while the bytes agree. A build that diverges
+    ``UNIVERSAL`` is a content-addressed shared module, not one global file:
+    the section is still produced per build, and a build that diverges
     references its own variant.
     """
 
@@ -37,8 +36,8 @@ SectionColumns = Mapping[str, Sequence[object]]
 class Count:
     """One ``meta.counts`` entry: its key and the computation behind it.
 
-    A computation rather than a column reference, because many counts are
-    filtered, cross-section or dynamic and a bare name cannot express them.
+    A computation rather than a column reference: many counts are filtered,
+    cross-section or dynamic.
     """
 
     key: str
@@ -49,8 +48,7 @@ class Count:
 class Domain:
     """One ``meta.domains`` entry: the measured domain of a numeric axis.
 
-    Measured per pack; a domain is never declared, because bounds taken from
-    one build are wrong on the others.
+    Measured per pack; bounds taken from one build are wrong on the others.
     """
 
     key: str
@@ -62,16 +60,9 @@ class Section:
     """One pack section, declared whole.
 
     ``produce`` receives the shared ``DeriveContext`` and nothing else;
-    inter-section dependencies are forbidden -- anything two sections share
-    is computed in ``derive/`` and carried by the context. Sections naming
-    ``localizable`` columns are produced again per locale, against a
-    locale-qualified context.
-
-    ``needs`` names the source tables the section requires. A build missing
-    any of them ships the section absent and reports it: absence is a
-    declaration, never a branch, and an undeclared miss fails the build
-    loudly.
-
+    inter-section dependencies are forbidden. Sections naming ``localizable``
+    columns are produced again per locale. A build missing any table in
+    ``needs`` ships the section absent, and an undeclared miss fails the build.
     A column absent from ``encoding`` is ``Encoding.DENSE``.
     """
 
@@ -95,8 +86,8 @@ class Section:
     domains: tuple[Domain, ...] = ()
 
     localizable: tuple[str, ...] = ()
-    """Columns whose values are locale text; empty means the section ships
-    identically for every language."""
+    """Columns carrying locale text; empty means one copy serves every
+    language."""
 
     needs: tuple[str, ...] = ()
     """Source tables required; a build lacking one switches the section off."""

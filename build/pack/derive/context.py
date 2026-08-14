@@ -11,14 +11,11 @@ from ..build import Build
 class DeriveContext:
     """Everything a section may read, computed once per build per locale.
 
-    The only argument a ``Section.produce`` callable receives.
-    Inter-section dependencies are forbidden: anything two sections share is
-    computed in ``derive/`` and carried here. A locale build constructs its
-    own context over locale-qualified tables; the base and locale contexts
-    are otherwise identical in shape.
+    The only argument a ``Section.produce`` callable receives. A locale build
+    constructs its own context over locale-qualified tables.
 
-    TODO: the derived fields (route bundles, the walk, path resolution, the
-    icon index) land here as the readers move over from ``build_data.py``.
+    TODO: the readers moving over from ``build_data.py`` - add the derived
+    fields (route bundles, the walk, path resolution, the icon index) here.
     """
 
     build: Build

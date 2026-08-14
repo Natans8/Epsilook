@@ -19,11 +19,7 @@ def test_every_escape_decodes_to_its_character(escape: str, character: str) -> N
 
 
 def test_the_control_escapes_are_characters_not_letters() -> None:
-    """The shape that shipped wrong: `\\n` must be a newline, not an `n`.
-
-    Spelled out beside the parametrised sweep because the table can only prove
-    the code agrees with itself, and the point of this one is the value.
-    """
+    """Spelled out beside the sweep, which only proves the table self-consistent."""
     assert one_value(r"'Ragnaros\nthe Firelord'") == "Ragnaros\nthe Firelord"
     assert one_value(r"'a\rb\tc\0d\Ze'") == "a\rb\tc\0d\x1ae"
 
@@ -72,7 +68,7 @@ def test_a_line_without_values_yields_nothing() -> None:
     "INSERT INTO `t` VALUES (1,2",
 ])
 def test_a_truncated_row_is_an_error(line: str) -> None:
-    """Loudly, because a silently short row is the failure worth crashing over."""
+    """A silently short row is the failure worth crashing over."""
     with pytest.raises(ValueError):
         list(iter_insert_rows(line))
 
@@ -100,12 +96,7 @@ def test_a_generated_column_is_still_a_column() -> None:
 
 
 def test_a_float_is_lossy_and_a_double_is_not() -> None:
-    """The distinction the overlay refuses a column on.
-
-    MySQL prints a FLOAT at six significant digits and a DOUBLE at full
-    precision, so only the first arrives rounded. Widening the rule to "any
-    floating point type" would refuse a column that loses nothing.
-    """
+    """MySQL prints a FLOAT at six significant digits and a DOUBLE in full."""
     statement = ("CREATE TABLE `t` (`a` float NOT NULL, `b` double NOT NULL, "
                  "`c` int NOT NULL, `d` varchar(8));")
     assert [column.lossy for column in parse_create_table(statement)] == \

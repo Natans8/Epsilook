@@ -1,12 +1,8 @@
 """Key overrides: pressing a game function casts a spell instead.
 
-The Type column is documented nowhere and was decoded from the data. The
-definition carries no comment and the wiki's page is a two-field stub, so the
-evidence is what names it: every Type-1 row is the jump function on every build
-that has the table, and every Type-1 spell is a mid-air ability while every
-Type-0 spell replaces an ordinary ground press. The decisive row is a spell that
-appears as BOTH types on the SAME function -- one payload, two rows -- which
-makes Type a trigger CONDITION rather than a kind of payload.
+The Type column is documented nowhere and was decoded from the data. It is a
+trigger condition, not a kind of payload: Type 1 is mid-air, Type 0 an ordinary
+ground press, and one spell appears as both on the same function.
 """
 
 from __future__ import annotations
@@ -17,8 +13,7 @@ from ..tables import Tables
 from .columns import to_int
 
 KEYBOUND_TYPE_WORDS = {0: "", 1: "mid-air"}
-"""When an override fires. The ordinary press gets no word, because naming the
-default would put a label on almost every row and distinguish nothing."""
+"""When an override fires. The ordinary press gets no word."""
 
 
 @dataclass
@@ -32,19 +27,11 @@ class KeyboundOverride:
     """The condition the override fires under, empty for the ordinary press."""
 
     spell: int
-    """The spell cast instead.
-
-    May name a spell this build no longer ships, and is kept either way so the
-    pill can still show the id it points at.
-    """
+    """The spell cast instead. May name a spell this build no longer ships."""
 
 
 def keybound_type_word(type_id: int) -> str:
-    """The word for when an override fires.
-
-    An unknown future type falls back to naming its number rather than being
-    guessed at -- the same rule an out-of-range seat attachment follows.
-    """
+    """The word for when an override fires; an unknown type names its number."""
     if type_id in KEYBOUND_TYPE_WORDS:
         return KEYBOUND_TYPE_WORDS[type_id]
     return f"type {type_id}"
@@ -53,9 +40,8 @@ def keybound_type_word(type_id: int) -> str:
 def read_keybound_overrides(tables: Tables) -> dict[int, KeyboundOverride]:
     """Read every key override.
 
-    The flags column is deliberately not read: it is absent on two builds,
-    all-zero on most, and its handful of nonzero rows carry no recoverable
-    meaning. Reading it would buy a drift declaration and nothing else.
+    The flags column is not read: absent on two builds, all-zero on most, and
+    its nonzero rows carry no recoverable meaning.
     """
     return {to_int(override_id): KeyboundOverride(
         function=(function or "").strip(),

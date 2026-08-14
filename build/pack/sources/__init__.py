@@ -1,16 +1,9 @@
 """Acquisition: URLs, cache policy, archive extraction, TDB distillation.
 
-The only layer that names a URL or an input file path. It brings every byte
-the build reads into the cache -- downloaded CSVs, the distilled TrinityCore
-tables, the community listfile, the checked-in enum files -- and hands the
-layer above a `Sources` saying where each of them is. Knows nothing about
-spells.
-
-`fetch_sources` is the door: one call brings a build's whole world into the
-cache. Beside it are the readers for the sources that are parsed rather than
-merely located -- the checked-in enum tables, the expansion ladder, and the two
-community name lists. Everything else is an implementation detail of a
-submodule, reachable by naming it.
+The only layer that names a URL or an input file path. `fetch_sources` brings
+every byte one build reads into the cache and returns a `Sources` saying where
+each of them is; the other exports read the sources that are parsed rather than
+merely located.
 """
 
 from __future__ import annotations

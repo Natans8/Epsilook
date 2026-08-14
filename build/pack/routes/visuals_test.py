@@ -41,8 +41,7 @@ def graph(tables: BuildTables):
 
 
 def test_a_seed_visual_carries_no_extra_bits() -> None:
-    """Its rows are already masked by their own event, so adding a bit here
-    would claim an audience the event did not."""
+    """Its rows are already masked by their own event."""
     assert expand_redirects({10}, {}) == {10: NO_TARGET}
 
 
@@ -52,29 +51,22 @@ def test_a_redirect_carries_the_bit_of_the_column_it_came_through() -> None:
 
 
 def test_a_redirect_reached_through_a_redirect_carries_both() -> None:
-    """Chains longer than one hop are real, which is why this cannot flatten
-    into a single lookup."""
+    """Chains longer than one hop are real."""
     reached = expand_redirects(
         {10}, {10: [(20, TARGET_CASTER)], 20: [(22, TARGET_MISSILE_DEST)]})
     assert reached[22] == TARGET_CASTER | TARGET_MISSILE_DEST
 
 
 def test_a_cycle_terminates_at_the_fixpoint() -> None:
-    """The reason this is a worklist and not a recursion: on 9.2.7 one pair
-    of visuals names each other.
-
-    Both end up carrying both bits, and that is the right answer rather than an
-    artefact -- going round the cycle, each visual really is reachable through
-    the other's column. The loop stops because a mask only ever GAINS bits, so
-    a second lap adds nothing and the re-queue is dropped.
-    """
+    """Both visuals carry both bits, since each really is reachable through the
+    other's column. The loop stops because a mask only ever gains bits."""
     reached = expand_redirects({1}, {1: [(2, TARGET_CASTER)], 2: [(1, TARGET_TARGET)]})
     assert reached == {1: TARGET_CASTER | TARGET_TARGET,
                        2: TARGET_CASTER | TARGET_TARGET}
 
 
 def test_a_visual_naming_itself_is_dropped(tables: BuildTables) -> None:
-    """A no-op redirect, and one exists on 9.2.7."""
+    """A no-op redirect the data really carries."""
     assert graph(tables).spell_visuals[101] == {12: NO_TARGET}
 
 
@@ -86,8 +78,7 @@ def test_a_spell_reaches_every_visual_its_visuals_redirect_to(
 
 
 def test_the_kit_edge_splits_the_mask_by_phase(tables: BuildTables) -> None:
-    """"Target" means a different unit in the two phases, so folding them
-    before the spell's effects are known loses what rescues a mixed spell."""
+    """"Target" means a different unit in the two phases."""
     assert graph(tables).visual_kits[10] == {
         900: (NO_TARGET, TARGET_CASTER | TARGET_TARGET),  # impact, two rows
         901: (TARGET_CASTER, NO_TARGET),                  # aura start

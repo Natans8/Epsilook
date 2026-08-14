@@ -1,8 +1,4 @@
-"""Build progress output.
-
-A build takes minutes and is watched while it runs, so every line is flushed
-as it is written rather than when the buffer fills.
-"""
+"""Build progress output, flushed per line so a running build can be watched."""
 
 from __future__ import annotations
 

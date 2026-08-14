@@ -22,15 +22,15 @@ def test_every_bucket_is_reachable(channels: tuple[int, int, int], word: str) ->
 
 
 def test_the_hue_circle_wraps_back_to_red() -> None:
-    """Red is the only word on both ends, so a magenta-red must not fall off."""
+    """Red is the only word on both ends of the circle."""
     assert hue_word(255, 0, 40) == "red"
 
 
 @pytest.mark.parametrize("channels", [(255, 255, 255), (128, 128, 128), (0, 0, 0),
                                       (10, 10, 12)])
 def test_a_colourless_tint_names_nothing(channels: tuple[int, int, int]) -> None:
-    """White, grey and near-black are the absence of a colour, and forcing them
-    into the nearest bucket would make `fx:blue` match untinted content."""
+    """Forcing them into the nearest bucket would make `fx:blue` match
+    untinted content."""
     assert hue_word(*channels) == ""
 
 
@@ -39,8 +39,6 @@ def test_a_packed_colour_round_trips() -> None:
 
 
 def test_several_colours_give_each_word_once_in_order() -> None:
-    """A shadowy row carries two colours and a searcher looking for either
-    should find it -- but a repeated word helps nobody."""
     assert hue_words((pack_rgb(255, 0, 0), pack_rgb(0, 0, 255),
                       pack_rgb(200, 0, 0))) == "red blue"
 

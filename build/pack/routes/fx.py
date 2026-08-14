@@ -1,16 +1,9 @@
-"""The payload tables behind the effects a kit plays: beams, dissolves, glows,
-ghosts and full-screen grades.
+"""The payload tables behind the effects a kit plays.
 
-Six unrelated tables with one thing in common -- a kit reaches them by effect
-type, and each carries a payload that is mostly renderer tuning with a small
-VISIBLE core. This route keeps the core and drops the tuning, which is why each
-reader names the columns it takes rather than taking the row.
-
-What counts as tuning was got wrong once, and the correction is the reason
-the rule is written down: the full-screen mask triplet was skipped as tuning
-when it is a radial vignette, and area-denial effects previewed as a coloured
-rim around a clear centre until it came back. Tuning is a column that changes
-how a thing is drawn; geometry that changes WHERE it is drawn is content.
+Six unrelated tables a kit reaches by effect type. Each reader names the columns
+it takes, keeping the visible core and dropping the renderer tuning: tuning is
+a column that changes how a thing is drawn, and geometry that changes where it
+is drawn is content.
 """
 
 from __future__ import annotations
@@ -25,13 +18,8 @@ SCREEN_EFFECT_FOG = 3
 """The screen effect whose parameter carries a fog tint rather than a grade."""
 
 TEX_OVERLAY, TEX_MASK = 0, 1
-"""What a texture is FOR, and the two are not interchangeable.
-
-A blend-set texture is a MASK: flat grey or white, meaningless untinted, and
-painted by the grade colours. An overlay texture is finished art drawn on top
-in its own colours. A preview that treats one as the other is wrong either way
-round, so the role ships with the texture rather than being inferred from it.
-"""
+"""What a texture is for. A mask is flat grey, meaningless untinted and painted
+by the grade colours; an overlay is finished art in its own colours."""
 
 ARGB_ALPHA_SHIFT = 24
 RGB_MASK = 0xFFFFFF
@@ -47,11 +35,10 @@ class ScreenRow:
     """One screen effect: what it does to the whole frame while its aura holds.
 
     A colour of -1 means the row carries none, which is not the same as black.
-    Gamma, saturation, blur, fades and the ambience columns are skipped.
     """
 
     name: str = ""
-    """The row's own internal name, which is readable and worth showing."""
+    """The row's own internal name."""
 
     fog: int = -1
     """The packed fog tint, for the rows that are fog."""
@@ -67,7 +54,7 @@ class ScreenRow:
 
     mask: Vignette = (0.0, 0.0, 0.0)
     """The radial vignette shaping where the grade applies. A size of 0 means
-    the row has no full-screen effect at all, so there is nothing to shape."""
+    the row has no full-screen effect to shape."""
 
     textures: Textures = ()
     """The textures it draws, each with the role it plays."""
@@ -91,7 +78,7 @@ class FxPayloads:
     """Edge glow -> its packed colour, which is the whole visible payload."""
 
     glow_alphas: dict[int, int] = field(default_factory=dict)
-    """Edge glow -> its alpha, a real 0..255 spread rather than a set flag."""
+    """Edge glow -> its alpha, a real 0..255 spread rather than a flag."""
 
     shadowies: dict[int, tuple[int, int, int]] = field(default_factory=dict)
     """Ghost effect -> (primary colour, secondary colour, attachment)."""
@@ -104,11 +91,7 @@ class FxPayloads:
 
 
 def read_blend_sets(tables: Tables) -> dict[int, tuple[int, ...]]:
-    """Blend set -> its textures, deduplicated and in slot order.
-
-    Two consumers, which is why it is read once: a dissolve's materials and a
-    screen effect's mask layers.
-    """
+    """Blend set -> its textures, deduplicated and in slot order."""
     columns = array_columns(tables, "TextureBlendSet", "TextureFileDataID", 3)
     return {to_int(row[0]): tuple(dict.fromkeys(
         file for file in (to_int(value) for value in row[1:]) if file))
@@ -120,10 +103,8 @@ def read_full_screen_effects(
 ) -> dict[int, tuple[int, int, Vignette, Textures]]:
     """Full-screen effect -> (multiply, add, vignette, textures).
 
-    The vignette is content, not tuning. It is what decides WHERE the grade
-    lands: the offset shifts its centre and the size and power shape the
-    falloff, so an area-denial effect is a coloured rim around a clear centre
-    rather than an evenly tinted frame.
+    The vignette is content, not tuning: it decides where the grade lands, so
+    an area effect is a coloured rim around a clear centre.
     """
     rows: dict[int, tuple[int, int, Vignette, Textures]] = {}
     for row in tables.rows(
@@ -133,9 +114,8 @@ def read_full_screen_effects(
              "OverlayTextureFileDataID", "TextureBlendSetID",
              "MaskOffsetY", "MaskSizeMultiplier", "MaskPower"]):
         overlay = to_int(row[7])
-        # A file carrying both roles keeps the overlay one: it is the finished
-        # art either way, and painting it as a mask would tint art that already
-        # has its own colours.
+        # A file carrying both roles keeps the overlay one: painting finished
+        # art as a mask would tint art that has its own colours.
         roles: dict[int, int] = {}
         if overlay:
             roles[overlay] = TEX_OVERLAY
@@ -156,10 +136,7 @@ def read_screens(tables: Tables,
                  ) -> dict[int, ScreenRow]:
     """Screen effect -> its payload, the full-screen half folded in.
 
-    The fog parameter is AARRGGBB, not the RRGGBBXX the wiki claims. Verified
-    against the rows whose colours are known from the game: the top byte is
-    opacity and spreads across the whole range, so reading it the other way
-    round yields a colour shifted by a byte and an opacity that is really blue.
+    The fog parameter is AARRGGBB, not the RRGGBBXX the wiki claims.
     """
     screens: dict[int, ScreenRow] = {}
     for screen_id, name, parameter, effect, full_screen_id in tables.rows(
@@ -181,10 +158,8 @@ def read_fx_payloads(tables: Tables) -> FxPayloads:
     blend_sets = read_blend_sets(tables)
     payloads = FxPayloads()
 
-    # The geometry columns are renderer tuning, but the attachment is not: it is
-    # a raw M2 point naming where on the model the effect is anchored, and -1
-    # means the WHOLE body rather than "unset". So it is kept rather than
-    # dropped the way an unset model attachment is.
+    # The geometry columns are renderer tuning; the attachment is not. -1 here
+    # means the whole body rather than unset, so it is kept.
     for dissolve_id, blend_set_id, duration, attach in tables.rows(
             "DissolveEffect", ["ID", "TextureBlendSetID", "Duration", "AttachID"]):
         payloads.dissolves[to_int(dissolve_id)] = (
@@ -199,8 +174,7 @@ def read_fx_payloads(tables: Tables) -> FxPayloads:
         payloads.svse_screen[to_int(row_id)] = to_int(screen_id)
 
     # The colour is the whole visible payload; the multiplier, fade and fresnel
-    # columns are tuning. The alpha is a real spread rather than a set flag,
-    # unlike the ghost effect's, so it is worth showing.
+    # columns are tuning. The alpha is a real spread rather than a flag.
     for glow_id, red, green, blue, alpha in tables.rows(
             "EdgeGlowEffect",
             ["ID", "GlowRed", "GlowGreen", "GlowBlue", "GlowAlpha"]):
@@ -209,14 +183,14 @@ def read_fx_payloads(tables: Tables) -> FxPayloads:
         payloads.glow_alphas[to_int(glow_id)] = to_channel(alpha)
 
     # Two packed colours stored as signed ARGB, so the alpha byte is masked off.
-    # The attachment reads like the dissolve's and is kept for the same reason.
+    # The attachment reads like the dissolve's.
     for effect_id, primary, secondary, attach in tables.rows(
             "ShadowyEffect", ["ID", "PrimaryColor", "SecondaryColor", "AttachPos"]):
         payloads.shadowies[to_int(effect_id)] = (
             to_int(primary) & RGB_MASK, to_int(secondary) & RGB_MASK, to_int(attach))
 
     # Chains nest: a composite chain names up to eleven others. The flicker and
-    # wave columns are tuning; the colour, the sound and the textures are not.
+    # wave columns are tuning.
     textures = array_columns(tables, "SpellChainEffects", "TextureFileDataID", 3)
     nested = array_columns(tables, "SpellChainEffects", "SpellChainEffectID", 11)
     for row in tables.rows("SpellChainEffects",
@@ -227,16 +201,15 @@ def read_fx_payloads(tables: Tables) -> FxPayloads:
             to_int(value) for value in row[1:5])
         payloads.chains[to_int(row[0])] = (
             chain_red, chain_green, chain_blue, sound,
-            # Deduplicated but kept in slot order: a chain may repeat a texture,
-            # and the order is what the renderer layers them in.
+            # Deduplicated but kept in slot order, which is what the renderer
+            # layers them in.
             tuple(dict.fromkeys(file for file in
                                 (to_int(value) for value in row[5:first]) if file)),
             tuple(chain for chain in
                   (to_int(value) for value in row[first:]) if chain),
         )
 
-    # A beam attaches at BOTH ends -- source on the caster, destination on
-    # whatever it connects to -- so the pair rides with the chain it draws
+    # A beam attaches at both ends, so the pair rides with the chain it draws
     # rather than with either end.
     for beam_id, chain_id, source, destination in tables.rows(
             "BeamEffect", ["ID", "BeamID", "SourceAttachID", "DestAttachID"]):
@@ -248,11 +221,8 @@ def read_fx_payloads(tables: Tables) -> FxPayloads:
 def expand_chain(chains: dict[int, tuple], chain_id: int, into: set[int]) -> None:
     """Add a chain and every chain it nests to `into`.
 
-    A worklist rather than the recursion it looks like it wants to be, for the
-    same two reasons the visual redirects are one: the graph may contain a
-    cycle, and its depth is the data's to choose rather than ours. Membership
-    in `into` is both the cycle stop and the visited set, so this terminates
-    whatever shape the nesting takes and never grows the Python stack with it.
+    A worklist, not a recursion: the graph may contain a cycle. Membership in
+    `into` is both the cycle stop and the visited set.
     """
     queue = [chain_id]
     while queue:

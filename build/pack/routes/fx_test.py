@@ -75,24 +75,21 @@ def payloads(tables: BuildTables):
 
 def test_a_blend_set_keeps_slot_order_and_drops_repeats(
         tables: BuildTables) -> None:
-    """The order is what the renderer layers them in, so it is not a set."""
+    """The order is what the renderer layers them in."""
     assert read_blend_sets(tables(TextureBlendSet=TEXTURE_BLEND_SET)) == {
         1: (100, 101), 2: (200,)}
 
 
 def test_a_build_predating_the_blend_set_table_reads_nothing(
         tables: BuildTables) -> None:
-    """Asking what shape an array field takes must not be what decides
-    whether the build survives: the table is declared optional, so a build that
-    predates it loses its dissolve materials and screen masks rather than
-    failing."""
+    """Asking what shape an array field takes must not decide whether the
+    build survives."""
     assert read_blend_sets(tables()) == {}
 
 
 def test_a_build_predating_the_fx_tables_yields_no_payloads(
         tables: BuildTables) -> None:
-    """Every one of them is declared optional, so the categories switch
-    themselves off together."""
+    """All of them are declared optional, so the categories switch off."""
     payloads = read_fx_payloads(tables(
         SpellChainEffects=SPELL_CHAIN_EFFECTS, BeamEffect=BEAM_EFFECT))
     assert payloads.dissolves == {}
@@ -105,14 +102,13 @@ def test_a_dissolve_carries_its_blend_sets_textures(tables: BuildTables) -> None
 
 
 def test_an_unanchored_dissolve_keeps_its_minus_one(tables: BuildTables) -> None:
-    """Unlike a model attachment, -1 here means the WHOLE body rather than
-    "unset", so dropping it would lose what the row says."""
+    """Unlike a model attachment, -1 here means the whole body, not unset."""
     assert payloads(tables).dissolves[11] == (0, (), -1)
 
 
 def test_the_vignette_survives(tables: BuildTables) -> None:
-    """The correction this route is written around: it decides WHERE the
-    grade lands, so an area effect is a rim around a clear centre."""
+    """It decides where the grade lands, so an area effect is a rim around a
+    clear centre."""
     assert payloads(tables).screens[31].mask == (0.25, 2.0, 1.5)
 
 
@@ -125,27 +121,21 @@ def test_a_screen_with_no_full_screen_row_has_no_vignette(
 
 
 def test_the_two_texture_roles_are_kept_apart(tables: BuildTables) -> None:
-    """A mask is meaningless untinted and an overlay is finished art, so a
-    preview that swaps them is wrong either way round."""
+    """A mask is meaningless untinted; an overlay is finished art."""
     assert set(payloads(tables).screens[31].textures) == {
         (300, TEX_OVERLAY), (100, TEX_MASK), (101, TEX_MASK)}
 
 
 def test_a_file_in_both_roles_keeps_the_overlay(tables: BuildTables) -> None:
-    """It is the finished art either way, and painting it as a mask would tint
-    art that already has its own colours.
-
-    The same file id is a mask on the screen that only blend-sets it, so this
-    is the role being decided rather than the file carrying one.
-    """
+    """The same file id is a mask on the screen that only blend-sets it, so the
+    role is decided per screen rather than carried by the file."""
     resolved = payloads(tables)
     assert dict(resolved.screens[31].textures)[100] == TEX_MASK
     assert dict(resolved.screens[33].textures)[100] == TEX_OVERLAY
 
 
 def test_the_fog_parameter_is_argb(tables: BuildTables) -> None:
-    """Not the RRGGBBXX the wiki claims: the top byte is opacity, verified
-    against the rows whose colours are known from the game."""
+    """Not the RRGGBBXX the wiki claims: the top byte is opacity."""
     screen = payloads(tables).screens[30]
     assert screen.fog == 0x404200
     assert screen.fog_alpha == 0x80
@@ -158,7 +148,7 @@ def test_a_non_fog_screen_carries_no_fog(tables: BuildTables) -> None:
 
 
 def test_a_glow_packs_its_colour_and_keeps_its_alpha(tables: BuildTables) -> None:
-    """The alpha is a real spread rather than a set flag, so it is shown."""
+    """The alpha is a real spread rather than a flag."""
     assert payloads(tables).glows[50] == 0x00FF00
     assert payloads(tables).glow_alphas[50] == 128
 
@@ -187,8 +177,7 @@ def test_expanding_a_chain_reaches_what_it_nests(tables: BuildTables) -> None:
 
 
 def test_a_chain_cycle_terminates(tables: BuildTables) -> None:
-    """Guarded on membership rather than depth, so a pair that nest each other
-    stops instead of recursing forever."""
+    """Guarded on membership rather than depth."""
     reached: set[int] = set()
     expand_chain(payloads(tables).chains, 72, reached)
     assert reached == {72, 73}

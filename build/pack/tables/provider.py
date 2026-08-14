@@ -9,29 +9,14 @@ from typing import Protocol
 class Tables(Protocol):
     """One source of game tables, presented row-wise as text.
 
-    A ``Tables`` is one source, not the whole build: a route may be handed
-    several (the building pack's own tables, the TDB, a pinned build), wired
-    by the caller.
+    The contract every implementation must honour:
 
-    The contract every implementation must honour, because route semantics
-    depend on each point:
-
-    - Values are the source's own text, unparsed. Typing happens in the
-      route, so two providers over the same source yield identical packs.
-    - Rows arrive in source file order. Last-write-wins and
-      first-candidate-wins semantics in the routes depend on it.
-    - An empty field is ``""``. A provider that distinguishes NULL from the
-      empty string must collapse the difference exactly as the CSV reader
-      does.
+    - Values are the source's own text, unparsed; the route types them.
+    - Rows arrive in source file order, which the routes' last-write-wins and
+      first-candidate-wins semantics depend on.
+    - An empty field is ``""``, never ``None``.
     - A table declared absent for this build yields nothing rather than
-      failing, and its section comes out empty. Anything undeclared is a hard
-      error.
-
-    The hotfix overlay is NOT a rule here, because it is not a property of a
-    source: it is one source read over another. Composing two ``Tables`` is
-    what applies it, which keeps the merge written once instead of once per
-    implementation, and leaves this contract testable against a bare
-    directory of CSVs.
+      failing; anything undeclared is a hard error.
     """
 
     def available(self, table: str) -> bool:

@@ -28,16 +28,15 @@ def test_the_seat_list_length_is_the_seat_count(tables: BuildTables) -> None:
 
 
 def test_the_two_animation_sets_stay_apart(tables: BuildTables) -> None:
-    """The rider's behaviour and the vehicle's. Folding them together would
-    file a mount's own movement under what its passenger is doing."""
+    """Folding them together would file a mount's own movement under what its
+    passenger is doing."""
     seats = read_vehicle_seats(tables(Vehicle=VEHICLE, VehicleSeat=VEHICLE_SEAT))
     assert seats.passenger_anims[1] == {20, 21}
     assert seats.vehicle_anims[1] == {30, 31}
 
 
 def test_the_anim_kits_join_one_group(tables: BuildTables) -> None:
-    """Both sides' kits are ordinary anim kit ids, so they need no plumbing of
-    their own."""
+    """Both sides' kits are ordinary anim kit ids."""
     seats = read_vehicle_seats(tables(Vehicle=VEHICLE, VehicleSeat=VEHICLE_SEAT))
     assert seats.animkits == {1: {40}, 2: {41}}
 
@@ -49,22 +48,19 @@ def test_a_seat_row_this_build_lacks_keeps_its_slot(tables: BuildTables) -> None
 
 
 def test_a_seat_attachment_is_an_index_not_a_raw_id(tables: BuildTables) -> None:
-    """The one column in the game data that is indexed rather than raw, which
-    is what this route has to remember on the reader's behalf."""
+    """The one attachment column in the game data that is indexed, not raw."""
     seats = read_vehicle_seats(tables(Vehicle=VEHICLE, VehicleSeat=VEHICLE_SEAT))
     assert seats.seats[2] == ["VehicleSeat2"]
 
 
 def test_with_no_seat_table_the_count_survives(tables: BuildTables) -> None:
-    """The middle case, and why the two absences are checked separately: a
-    two-seat vehicle is still a two-seat vehicle when nothing can say where the
-    seats are."""
+    """A two-seat vehicle is still a two-seat vehicle when nothing can say
+    where the seats are."""
     seats = read_vehicle_seats(tables(Vehicle=VEHICLE))
     assert seats.seats == {1: ["", ""], 2: [""], 3: []}
     assert seats.passenger_anims == {}
 
 
 def test_with_no_vehicle_table_there_is_nothing(tables: BuildTables) -> None:
-    """The category simply never appears, like any other declared absence."""
     seats = read_vehicle_seats(tables())
     assert seats.seats == {}

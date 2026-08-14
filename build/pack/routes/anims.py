@@ -1,10 +1,7 @@
-"""Animations: the kits that segment them, the regions a segment moves, and the
-swaps an aura makes.
+"""Animations: anim kit segments, the regions they move, and aura swaps.
 
-An animation id is an index into a community-maintained name list rather than a
-db2 key, so it is the LIST that decides which ids exist. Every reader here
-drops an id past its end for the same reason: an id nothing can name renders as
-a bare number, which says less than leaving it out.
+An animation id indexes a community-maintained name list rather than a db2 key,
+so every reader here drops an id past the list's end.
 """
 
 from __future__ import annotations
@@ -15,12 +12,7 @@ from ..tables import Tables
 from .columns import to_int
 
 BONESET_FULL_BODY = "Full Body"
-"""The default region, and the reason it is never shown.
-
-Nearly every anim kit animates the whole body, so the label would appear on
-almost every pill and distinguish nothing. Only a specific region -- an upper
-body, a head, one hand -- says something worth reading.
-"""
+"""The default region. Never shown, because it distinguishes nothing."""
 
 
 def read_animkit_anims(tables: Tables,
@@ -36,18 +28,10 @@ def read_animkit_anims(tables: Tables,
 
 
 def read_animkit_bonesets(tables: Tables) -> dict[int, dict[int, list[str]]]:
-    """Anim kit -> {animation -> the body regions that animation's segment moves}.
+    """Anim kit -> {animation -> the body regions that segment moves}.
 
-    A region is a property of a segment, not of the kit, which is why the
-    result is nested rather than flat. The same kit segments several animations
-    and they need not move the same parts, so merging the regions onto the kit
-    would claim an upper-body-only animation moves whatever its neighbour does.
-
-    A segment that moves two regions keeps both, so the frontend renders two
-    pills rather than one merged label. The bone-index blob is not surfaced; the
-    region NAME is the useful part.
-
-    Only the (kit, animation) pairs with at least one specific region appear.
+    A region belongs to a segment, not to the kit, so the result nests. Only
+    the (kit, animation) pairs with at least one specific region appear.
     """
     names: dict[int, str] = {}
     for boneset_id, name in tables.rows("AnimKitBoneSet", ["ID", "Name"]):
@@ -62,8 +46,8 @@ def read_animkit_bonesets(tables: Tables) -> dict[int, dict[int, list[str]]]:
         if region:
             configs.setdefault(to_int(config_id), set()).add(region)
 
-    # A config may repeat and the same animation may appear in several segments,
-    # so the regions union across them.
+    # A config may repeat and an animation may appear in several segments, so
+    # the regions union across them.
     regions: dict[tuple[int, int], set[str]] = {}
     for kit_id, anim_id, config_id in tables.rows(
             "AnimKitSegment", ["ParentAnimKitID", "AnimID", "AnimKitConfigID"]):
@@ -83,12 +67,8 @@ def read_anim_replacements(tables: Tables, anim_names: Sequence[str]
                            ) -> dict[int, set[tuple[int, int]]]:
     """Replacement set -> the (from, to) animation swaps it makes.
 
-    Keyed by the set id an animation-replacement aura points at. Both ends index
-    the name list, so a pair with either end past it is dropped: a swap that can
-    name neither what it replaced nor what it played says nothing.
-
-    The set table itself carries nothing worth reading, so it is not fetched --
-    the replacements name their own parent.
+    Keyed by the set id an animation-replacement aura points at. Both ends
+    index the name list, and a pair with either end past it is dropped.
     """
     replacements: dict[int, set[tuple[int, int]]] = {}
     for set_id, source, destination in tables.rows(

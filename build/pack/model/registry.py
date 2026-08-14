@@ -5,8 +5,7 @@ from __future__ import annotations
 from .section import Section
 
 SECTIONS: list[Section] = []
-"""Every registered section, in registration order -- the artifact's key
-order."""
+"""Every registered section, in registration order: the artifact's key order."""
 
 
 def register(section: Section) -> Section:

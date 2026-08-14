@@ -1,19 +1,10 @@
-"""Character procedures: one table, thirteen meanings, chosen by its Type.
+"""Character procedures: one table, many meanings, chosen by its Type.
 
-`SpellProceduralEffect` is a single table whose four generic `Value` columns
-mean something different for every Type -- Type IS the client's character
-procedure index, so it selects both the handler and which column carries the
-payload. A chain id, a packed colour, a percentage, an animation slot and a
-model id all arrive in the same columns.
-
-So the dispatch is the route. Reading a `Value` without first reading the
-Type reads a colour as a model id and both as a percentage. Each row lands in
-the bucket its type feeds, and the kit walk finds a proc by looking its id up
-in each bucket rather than by re-deciding what the row meant.
-
-The types themselves are declared in `enums/spell_procedural_effect_types.json`
-with their decodes, so a type gaining a meaning is an edit to that file and a
-bucket here, never a branch in the walk.
+Type is the client's character procedure index: it selects both the handler and
+which of the four generic `Value` columns carries the payload, so reading a
+`Value` before the Type reads a colour as a model id. Each row lands in the
+bucket its type feeds. The types are declared with their decodes in
+`enums/spell_procedural_effect_types.json`.
 """
 
 from __future__ import annotations
@@ -41,12 +32,7 @@ PROC_TYPE_STANDWALK = enum_id_where(_PROC_TYPES, "standwalk")
 
 PROC_STANDWALK_SLOTS = (0, 4, 5)
 """The base animation each of the stand/walk procedure's first three values
-replaces: Stand, Walk, Run.
-
-The fourth value is dropped. It overrides no slot, and the decode found it
-near-always junk, so pairing it with a base would invent a replacement the
-character never plays.
-"""
+replaces: Stand, Walk, Run. The fourth value overrides no slot and is dropped."""
 
 RGB_MASK = 0xFFFFFF
 """A packed colour is three bytes; the fourth carries no colour."""
@@ -87,16 +73,10 @@ class ProcEffects:
 def read_proc_effects(tables: Tables, models: ModelSources) -> ProcEffects:
     """Read every procedure row and bucket it by what its Type means.
 
-    A row that says nothing is dropped rather than bucketed empty, and the
-    test differs per type because "nothing" is spelled differently: a colourless
-    recolour is zero, a desaturation of 0% is no desaturation, and an animation
-    slot of 0 is a slot left alone. Keeping them would ship rows the app has to
-    filter, and a percentage of zero renders as a claim that something happened.
-
-    The colourless case is NOT uniform, and the difference is deliberate: a
-    colourless ghost recolour is dropped, while a colourless tint folds in as
-    black, because black IS a tint -- it multiplies the model to darkness --
-    whereas a ghost with no colour is a ghost with nothing to show.
+    A row that says nothing is dropped, and "nothing" is spelled differently
+    per type. The colourless case is deliberately not uniform: a colourless
+    ghost is dropped, while a colourless tint folds in as black, because black
+    is a tint that multiplies the model to darkness.
     """
     procs = ProcEffects()
     for row in tables.rows("SpellProceduralEffect",
@@ -136,10 +116,9 @@ def read_proc_effects(tables: Tables, models: ModelSources) -> ProcEffects:
                 procs.models[proc_id] = (file, MODEL_CAT_TRAIL, NO_ATTACHMENT,
                                          NO_ATTACHMENT, 0, NO_MOTION)
         elif type_id == PROC_TYPE_STANDWALK:
-            # Paired with the base slot each value overrides, so this folds into
-            # the same replacement group as the animation-replacement aura: the
-            # same mechanic expressed through fixed engine slots rather than a
-            # set. A value of 0 leaves its slot alone and is skipped per slot.
+            # Paired with the base slot each value overrides, folding into the
+            # same replacement group as the animation-replacement aura. A value
+            # of 0 leaves its slot alone.
             pairs = tuple(
                 (base, replacement) for base, replacement in zip(
                     PROC_STANDWALK_SLOTS,

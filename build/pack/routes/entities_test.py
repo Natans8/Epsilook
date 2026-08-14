@@ -54,8 +54,6 @@ ID,Name_lang,CreatureDisplayID_0,CreatureDisplayID_1,CreatureDisplayID_2,Creatur
 
 
 def test_the_ordinary_press_gets_no_word(tables: BuildTables) -> None:
-    """Naming the default would label almost every row and distinguish
-    nothing."""
     overrides = read_keybound_overrides(
         tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))
     assert overrides[2].when == ""
@@ -63,15 +61,12 @@ def test_the_ordinary_press_gets_no_word(tables: BuildTables) -> None:
 
 
 def test_an_unknown_type_names_its_number(tables: BuildTables) -> None:
-    """Rather than being guessed at -- the rule an out-of-range seat attachment
-    follows too."""
     assert read_keybound_overrides(
         tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))[3].when == "type 7"
 
 
 def test_an_override_keeps_a_spell_this_build_does_not_ship(
         tables: BuildTables) -> None:
-    """So the pill can still show the id it points at."""
     assert read_keybound_overrides(
         tables(SpellKeyboundOverride=SPELL_KEYBOUND_OVERRIDE))[3].spell == 999
 
@@ -85,8 +80,7 @@ def test_a_mount_reaches_every_display_it_wears(tables: BuildTables) -> None:
 
 def test_a_mount_whose_spell_this_build_lacks_is_skipped(
         tables: BuildTables) -> None:
-    """The spell list decides a build's population, and a mount reachable by
-    nothing is not reachable."""
+    """The spell list decides a build's population."""
     mounts = read_mounts(tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY),
                          {100: "Summon Ram", 101: "Summon Nothing"}, CREATURES)
     assert all(spell != 999 for spell, _ in mounts.links)
@@ -94,7 +88,7 @@ def test_a_mount_whose_spell_this_build_lacks_is_skipped(
 
 def test_a_mount_display_resolves_without_a_server_dump(
         tables: BuildTables) -> None:
-    """Unlike the morphs it resembles: both halves are client data."""
+    """Both halves are client data."""
     mounts = read_mounts(tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY),
                          {100: "Summon Ram", 101: "Summon Nothing"}, CREATURES)
     assert mounts.name[50] == "Swift Ram"
@@ -115,17 +109,15 @@ def test_an_object_resolves_its_model_through_its_display(
 
 def test_without_a_server_dump_an_object_has_nothing(
         tables: BuildTables) -> None:
-    """Both halves go, not one: the display id the model needs is itself
-    server-side, so there is no half-filled state to ship."""
+    """The display id the model needs is itself server-side."""
     objects = read_gameobjects(
         tables(GameObjectDisplayInfo=GAME_OBJECT_DISPLAY_INFO), None)
     assert (objects.name, objects.fid, objects.type) == ({}, {}, {})
 
 
 def test_a_form_with_no_creature_keeps_its_name(tables: BuildTables) -> None:
-    """Most forms are this: they change what a character can do without
-    changing what it looks like, and a route needing a display would drop
-    them."""
+    """Most forms are this: they change what a character can do, not how it
+    looks."""
     forms = read_shapeshift_forms(tables(SpellShapeshiftForm=SPELL_SHAPESHIFT_FORM))
     assert forms.names[2] == "Shadowform"
     assert forms.displays[2] == []
@@ -138,17 +130,16 @@ def test_a_form_keeps_its_displays_in_slot_order(tables: BuildTables) -> None:
 
 def test_a_build_predating_the_form_table_ships_no_forms(
         tables: BuildTables) -> None:
-    """Declared optional, so the shapeshift category switches itself off.
-    Reading the header to learn the array's shape must not be what turns a
-    survivable absence into a failed build."""
+    """Reading the header to learn the array's shape must not turn a declared
+    absence into a failed build."""
     forms = read_shapeshift_forms(tables())
     assert (forms.names, forms.displays) == ({}, {})
 
 
 def test_a_form_display_array_may_have_collapsed_to_a_scalar(
         tables: BuildTables) -> None:
-    """A later build narrowed the array; the header states which spelling this
-    build uses, so one reader serves both."""
+    """The header states which spelling a build uses, so one reader serves
+    both."""
     forms = read_shapeshift_forms(tables(SpellShapeshiftForm="""\
 ID,Name_lang,CreatureDisplayID
 1,Bear Form,50

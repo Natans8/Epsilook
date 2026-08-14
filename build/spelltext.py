@@ -1,57 +1,22 @@
 #!/usr/bin/env python3
-"""COOK A SPELL DESCRIPTION INTO PLACEHOLDER-FREE PROSE.
+"""Cook a spell description template into placeholder-free prose.
 
-The client stores a description as a TEMPLATE, not as text. Spell 11 ships
-`Deals $s1 Frost damage to the target.`, spell 158986 ships literally
-`$@spelldesc159001`, and 19,807 spells on 9.2.7 ship nothing BUT a redirect.
-The game resolves the template at tooltip time against the caster's own state;
-Wowhead resolves it server-side for display. Neither result is searchable,
-which is the whole gap this fills — see docs/DATA_ROUTES.md.
+The client stores a description as a template resolved at tooltip time against
+the caster's own state. The cooked string here is search text, so the rule is
+never to print a number this data cannot justify and never to leave a `$`.
+That splits every code in two: a code whose value is in a db2 already read is
+substituted, and one that depends on the caster or the UI is elided, leaving
+the sentence around it intact.
 
-WHAT THIS IS FOR DECIDES HOW EXACT IT HAS TO BE. The cooked string is SEARCH
-TEXT (and the hover that shows why a row matched): a roleplayer types "blood
-pool" or "kneel", never a number. So the rule is not "reproduce Wowhead" — it
-is:
+Two rules the rest of the module turns on. An expression is all or nothing:
+one caster-dependent operand elides the whole `${...}`, because half an
+arithmetic expression is a wrong answer rather than a smaller one. And the
+context spell changes on a redirect: `$@spelldesc159001` inserts 159001's
+template, whose `$s1` means 159001's first effect, so resolution is a recursion
+carrying the context spell rather than one substitution pass.
 
-    NEVER PRINT A NUMBER THIS DATA CANNOT JUSTIFY, and never leave a `$`.
-
-Which splits every code into two kinds, and the split is the whole design:
-
-  RESOLVED   the value is in a db2 we already read — effect points, duration,
-             tick period, radius, range, stack cap, charges, chain targets.
-             Substituted for real.
-  ELIDED     the value depends on the CASTER (attack power, spell power, the
-             primary stat, versatility, player level) or on the UI ($z, an
-             icon). Removed, leaving prose: "Sears an enemy, causing Nature
-             damage" rather than "causing ${$M1+($SP*.168)} Nature damage".
-
-Eliding reads naturally because these templates are written as English
-sentences with a number slotted in; take the number out and the sentence
-survives. Printing a fabricated 0 does not.
-
-⚠ WOWHEAD IS AN ORACLE FOR THE PROSE AND **NOT** FOR THE NUMBERS, and it is
-worth knowing before anyone re-runs that comparison. Retail Wowhead renders
-every spell at the CURRENT retail patch — Midnight as of 2026-08 — and spell
-scaling is re-tuned every expansion, so its figure for a 9.2.7 spell is
-computed against a curve our pack does not use (Chained Bolt: the 9.2.7 db2
-says 5.19, retail Wowhead shows 427). There is no Wowhead for Shadowlands, so
-for nine of our eleven packs no external oracle for the numbers exists at all.
-The values here are the BUILD'S OWN, which is the right answer for a
-build-pinned pack even where it disagrees with the site. A structural diff
-against Wowhead is still worth running — it is what caught the case-insensitive
-texture bug and the conditional-chain bug below.
-
-⚠ AN EXPRESSION IS ALL-OR-NOTHING. `${$s1*$<mult>}` resolves only if every
-operand does; one caster-dependent term elides the whole `${...}`. Half an
-arithmetic expression is not a smaller answer, it is a wrong one.
-
-⚠ THE CONTEXT SPELL CHANGES ON A REDIRECT. `$@spelldesc159001` inserts 159001's
-template, and the `$s1` inside it means 159001's first effect — not the
-original spell's. Resolution is therefore a recursion carrying the context
-spell, not a substitution pass over one string.
-
-Stdlib only, like build_data.py, and no knowledge of the pack: it takes lookup
-dicts and returns strings.
+The values are the build's own, which is the right answer for a build-pinned
+pack even where it disagrees with a site rendering a later patch.
 """
 
 from __future__ import annotations
@@ -59,24 +24,15 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-# ---------------------------------------------------------------- the codes
-#
-# Derived from a census of every `$` token in 9.2.7's 129,050 descriptions plus
-# its 63,788 aura descriptions (see docs/DATA_ROUTES.md §3x). Frequency drove
-# the coverage: `s` alone is 80,917 occurrences and the top four (s, d, t, A)
-# are the overwhelming majority, while everything below `x` is a long tail of
-# tens.
-
 # letter -> what a SpellValues lookup should return. Several letters are the
-# same quantity under different spellings, which is the client's history rather
-# than a distinction: `$w1`, `$W1`, `$S1` and `$e1` all read an effect's amount
-# exactly as `$s1` does ("Stamina increased by $w1", spell 19705).
+# same quantity under different spellings: `$w1`, `$W1`, `$S1` and `$e1` all
+# read an effect's amount exactly as `$s1` does.
 POINTS_CODES = "sSwWe"
 CODE_MEANING = {
     **{c: "points" for c in POINTS_CODES},
     "m": "points_min",
     "M": "points_max",
-    "o": "points_total",  # amount x ticks over the full duration
+    "o": "points_total",  # amount times ticks over the full duration
     "b": "points_per_combo",
     "t": "period", "T": "period",
     "a": "radius", "A": "radius",
@@ -91,15 +47,14 @@ CODE_MEANING = {
     "v": "max_target_level",
 }
 
-# Codes spelled as a WORD rather than a letter, every one of which depends on
-# the caster, on gear, or on the UI, and so can only be elided.
+# Codes spelled as a word rather than a letter. Every one depends on the
+# caster, on gear or on the UI, so all of them can only be elided.
 #
-# ⚠ THE ALTERNATION IS SORTED LONGEST-FIRST, and that is load-bearing rather
-# than tidy: a regex alternation takes the FIRST branch that matches, so with
-# "AP" ahead of "RAP" the string `$RAP` is read as `$R` (a range!) followed by
-# the literal letters "AP" — a fabricated number in the middle of a sentence,
-# which is precisely the failure this module exists to avoid. Sorting here
-# rather than by hand means adding a word can never reintroduce it.
+# The alternation is sorted longest-first, and that is load-bearing: a regex
+# alternation takes the first branch that matches, so with "AP" ahead of "RAP"
+# the string `$RAP` reads as `$R` (a range) followed by the letters "AP", which
+# fabricates a number mid-sentence. Sorting here means adding a word cannot
+# reintroduce that.
 ELIDED_WORDS = [
     # caster stats and scaling
     "RAP", "AP", "SP", "MWB", "mwb", "MHP", "PL", "pl", "pri",
@@ -110,34 +65,30 @@ ELIDED_WORDS = [
     "proccooldown", "procrppm", "maxcast",
     # creature-level bands, UI markers, the player's hearth
     "ctrmax", "ctrmin", "lootspec", "bullet", "expandtiptag",
-    # a handful of MALFORMED redirects: `$347182spelldesc` (41 on 9.2.7) has
-    # its `@` in the wrong place, so the redirect pass never sees it
+    # malformed redirects such as `$347182spelldesc`, whose `@` is in the wrong
+    # place, so the redirect pass never sees them
     "spelldesc", "spellaura", "spelltooltip", "spellname", "spellicon",
 ]
 # The trailing `;` is part of the token for the ones that carry one (`$bullet;`)
-# and absent for the rest, so it is optional — left behind it opens an encounter
-# note with a stray semicolon.
+# and absent for the rest, so it is optional.
 _ELIDED_WORD_RE = re.compile(
     r"\$\d*(" + "|".join(sorted(ELIDED_WORDS, key=len, reverse=True)) + r")\d*;?")
 
 # `$j1g` / `$j1f` — the ground and flight halves of a mount's speed effect.
-# Two letters with the index BETWEEN them, so the generic code regex would read
-# `$j1` and leave a stray "g". 2,222 occurrences on 9.2.7.
+# Two letters with the index between them, so the generic code regex would read
+# `$j1` and leave a stray "g".
 _JGF_RE = re.compile(r"\$\d*j\d*[gf]")
 
-# `$z` is the player's hearth location and `$g male:female;` their gender —
-# both real, neither ours to know.
+# `$g male:female;` is the caster's gender, which this has no way to know.
 _GENDER_RE = re.compile(r"\$[gG]([^:;]*):([^;]*);")
-# One capture of the whole form list (2 in English, up to 3 in Russian —
-# one/few/many); the picker splits on ":" and asks the locale which form the
-# number in front of it takes.
+# One capture of the whole form list; the picker splits on ":" and asks the
+# locale which form the number in front of it takes.
 _PLURAL_RE = re.compile(r"\$[lL]([^;]*:[^;]*);")
 _BAR_PLURAL_RE = re.compile(r"\|4([^;]*:[^;]*);")
 
 # `$/10;s2`, `$*2;23478s1` and `$45548/5;s1` — a divisor or multiplier glued to
-# the code it scales. THE SCALED CODE CARRIES NO `$` OF ITS OWN, which is why
-# it needs its own pattern rather than a lookahead onto the ordinary one; and
-# the spell id may sit on EITHER side of the operator.
+# the code it scales. The scaled code carries no `$` of its own, so it needs
+# its own pattern, and the spell id may sit on either side of the operator.
 _SCALE_RE = re.compile(r"\$(\d*)([/*])(\d+(?:\.\d+)?);(\d*)([a-zA-Z])(\d*)")
 
 # `$<shield>` — a named variable from SpellDescriptionVariables, whose body is
@@ -150,35 +101,28 @@ _AT_OTHER_RE = re.compile(r"\$@+[A-Za-z]\w*\d*")
 
 # `$12345s1` (another spell's effect) or `$s1` (this spell's). The optional
 # leading digits are a spell id, the optional trailing ones an effect index.
-#
-# `l` and `L` are EXCLUDED: `$lpoint:points;` is a plural, and the plural can
-# only be picked once the number in front of it exists — so it has to survive
-# this pass and be resolved after it. Neither letter names a value, so nothing
-# is lost by keeping them out.
+# `l` and `L` are excluded: a plural can only be picked once the number in
+# front of it exists, so it has to survive this pass and be resolved after it.
 _CODE_RE = re.compile(r"\$(\d*)([a-km-zA-KM-Z])(\d*)")
 
 # UI escape sequences: colour runs, inline textures and atlases, hyperlinks.
 #
-# ⚠ THESE ARE CASE-SIGNIFICANT AND `re.I` CORRUPTS THEM. `|T` opens a texture
-# and `|t` closes it, so a case-insensitive `\|T.*?\|t` happily starts on a
-# CLOSING tag: spell 272123 opens "Chance to inflict|t" (a stray close, one of
-# Blizzard's own typos), and the pattern then ate everything up to the next
-# `|t` — deleting the sentence and leaving the icon path behind in its place.
-# Found by diffing against Wowhead's rendering; do not add the flag back.
+# These are case-significant and `re.I` corrupts them. `|T` opens a texture and
+# `|t` closes it, so a case-insensitive `\|T.*?\|t` can start on a closing tag
+# and eat everything up to the next `|t`, deleting the sentence and leaving the
+# icon path in its place. Do not add the flag.
 _COLOUR_RE = re.compile(r"\|[cC][0-9A-Fa-f]{8}|\|[rR]")
 _TEXTURE_RE = re.compile(r"\|T.*?\|t", re.S)
 _ATLAS_RE = re.compile(r"\|A.*?\|a", re.S)
 _LINK_RE = re.compile(r"\|H.*?\|h(.*?)\|h", re.S)
-# What is left after those four is an UNBALANCED escape — a stray `|t` with no
-# `|T` in front of it, of which 9.2.7 ships several (spell 272123 opens with
-# "Chance to inflict|t"). Blizzard's own typos; drop the marker, keep the word.
-# Spelled as the observed escape letters rather than `\|.` so that a pipe used
-# as ordinary punctuation cannot take the character after it with it.
+# What is left after those four is an unbalanced escape, of which the game
+# ships several. Spelled as the observed escape letters rather than `\|.`, so
+# that a pipe used as ordinary punctuation cannot take the next character.
 _STRAY_BAR_RE = re.compile(r"\|[cCrRtTaAhHsSdDnN4]?")
 
 # Encounter-journal difficulty blocks: `$[!2 ...body... $]` shows the body
-# unless difficulty 2, `$[2 ...$]` only on it. Both bodies are real prose and
-# the search wants all of it, so the markers go and the text stays.
+# unless difficulty 2, `$[2 ...$]` only on it. Both bodies are prose the search
+# wants, so the markers go and the text stays.
 _DIFFICULTY_RE = re.compile(r"\$\[!?\d+|\$\]")
 
 _WS_BEFORE_PUNCT = re.compile(r"[ \t]+([,.;:!?%)\]])")
@@ -193,22 +137,17 @@ MAX_DEPTH = 6  # redirect chains reach 3 in practice; the cap is the cycle stop
 class SpellValues:
     """Every number a description can ask for, keyed by spell.
 
-    One flat bundle rather than a reader per table: the caller fills whichever
-    dicts its build actually has, and a code whose dict is empty elides exactly
-    as a caster-dependent one does. That is the OPTIONAL_TABLES contract met
-    without a per-version branch — a Classic build with no SpellRadius simply
-    renders radius-free prose.
+    The caller fills whichever dicts its build has, and a code whose dict is
+    empty elides exactly as a caster-dependent one does.
     """
 
     # spell -> effect index (1-based) -> value
     points: dict[int, dict[int, float]] = field(default_factory=dict)
-    # SpellEffect.Variance — the spread `$m1 to $M1` is written around. 9.2.7
-    # has no DieSides column at all, so without this the two ends of a range
-    # come out identical ("Deals 2.6 to 2.6 damage", against Wowhead's 2 to 3).
+    # SpellEffect.Variance — the spread `$m1 to $M1` is written around. Without
+    # it the two ends of a range come out identical.
     variance: dict[int, dict[int, float]] = field(default_factory=dict)
-    # float throughout, including the counts: every one of them is read through
-    # the same `_at` lookup and rendered by the same formatter, and a dict of
-    # int is not a dict of float to a type checker
+    # float throughout, including the counts: all of them are read through the
+    # same `_at` lookup and rendered by the same formatter
     period: dict[int, dict[int, float]] = field(default_factory=dict)  # ms
     radius: dict[int, dict[int, float]] = field(default_factory=dict)
     chain_targets: dict[int, dict[int, float]] = field(default_factory=dict)
@@ -231,12 +170,10 @@ def _num(v: float) -> str:
 
 
 def _amount(v: float) -> str:
-    """An EFFECT AMOUNT, rounded the way the client rounds one.
+    """An effect amount, rounded the way the client rounds one.
 
-    Whole numbers at and above 1, because that is what the game shows and what
-    Wowhead shows: the db2 stores 15.899 for a stat reduction the tooltip
-    calls 16, and 2.608 for a hit it calls 3. Below 1 the decimals are the
-    whole content of the number (a 0.4% chance), so they stay.
+    Whole numbers at and above 1. Below 1 the decimals are the whole content of
+    the number, such as a 0.4% chance, so they stay.
     """
     v = abs(v)
     return str(round(v)) if v >= 1 else f"{v:.2f}".rstrip("0").rstrip(".")
@@ -246,12 +183,9 @@ def _amount(v: float) -> str:
 class TextLocale:
     """Locale-dependent wording for cooked prose.
 
-    The template language is the same in every locale; what differs is the
-    wording the cooker itself supplies — duration units ("2 hours" / "2 ч")
-    and how a plural marker picks among its forms. English `$lpoint:points;`
-    carries two forms; Russian's `|4минуту:минуты:минут;` carries three
-    (one / few / many), so the form list is variable-length and the picking
-    rule belongs to the locale.
+    What differs by locale is the wording the cooker supplies -- duration units
+    -- and how a plural marker picks among its forms. A form list is
+    variable-length, so the picking rule belongs to the locale.
     """
     seconds: tuple[str, ...] = ("sec",)
     minutes: tuple[str, ...] = ("min",)
@@ -261,19 +195,18 @@ class TextLocale:
     def plural_index(self, n: float | None, nforms: int) -> int:
         """Index into a plural marker's form list for quantity `n`.
 
-        `None` means the number was elided — the plural is then the form that
-        reads as a general statement, which is the last one in every locale
-        this supports. English: exactly 1 is singular, everything else plural.
+        `None` means the number was elided; the last form is then taken, being
+        the one that reads as a general statement.
         """
         return 0 if n == 1 and nforms > 1 else nforms - 1
 
 
 class _RussianTextLocale(TextLocale):
     def plural_index(self, n: float | None, nforms: int) -> int:
-        """Russian one/few/many: 1 → one, 2-4 → few, 5+ and 11-14 → many.
+        """Russian one/few/many: 1 is one, 2-4 few, 5+ and 11-14 many.
 
-        A fractional quantity takes the few form ("1.5 секунды"), matching how
-        the client words it. Two-form markers clamp few onto the last form.
+        A fractional quantity takes the few form, matching how the client words
+        it. Two-form markers clamp few onto the last form.
         """
         if n is None:
             return nforms - 1
@@ -296,11 +229,10 @@ RUSSIAN = _RussianTextLocale(seconds=("сек",), minutes=("мин",),
 
 
 def format_duration(ms: int, locale: TextLocale = ENGLISH) -> str:
-    """Milliseconds as the client words them — "8 sec", "1 min", "2 hours".
+    """Milliseconds as the client words them: "8 sec", "1 min", "2 hours".
 
-    A negative or absurd duration is the game's "no limit" sentinel, which the
-    delivery line already words as unlimited (§3s); here it has no number to
-    print, so it elides.
+    A negative or absurd duration is the game's "no limit" sentinel; it has no
+    number to print, so it elides.
     """
     if ms <= 0 or ms >= 0x7FFFFFF0:
         return ""
@@ -321,9 +253,8 @@ def format_duration(ms: int, locale: TextLocale = ENGLISH) -> str:
 class DescriptionCooker:
     """Resolves description templates for one game version.
 
-    Construct once per build and call `cook(spell_id, template)`; the
-    per-template work is a single recursive walk with no shared mutable state
-    beyond the caches, so it is safe to call in any order.
+    Construct once per build and call `cook(spell_id, template)`. Templates may
+    be cooked in any order.
     """
 
     def __init__(self, descriptions: dict[int, str], aura_descriptions: dict[int, str],
@@ -338,32 +269,28 @@ class DescriptionCooker:
         self.locale = locale
         self.stats = {"elided": 0, "resolved": 0}
 
-    # ------------------------------------------------------------ public
-
     def cook(self, spell: int, template: str) -> str:
         """One template, rendered in `spell`'s context and tidied."""
         if not template:
             return ""
         return _tidy(self._render(template, spell, 0, ()))
 
-    # ------------------------------------------------------- the recursion
-
     def _render(self, text: str, spell: int, depth: int, seen: tuple[int, ...]) -> str:
         """Resolve every construct in `text`, reading values from `spell`.
 
         The passes are ordered by what each one's output can still contain:
-        redirects splice in whole templates (so they run first, and recurse),
-        variables splice in fragments, and only once no more `$` can ARRIVE is
-        it safe to evaluate expressions and substitute values.
+        redirects splice in whole templates, variables splice in fragments, and
+        only once no more `$` can arrive is it safe to evaluate expressions and
+        substitute values.
         """
         if depth > MAX_DEPTH:
             return ""
         text = self._expand_redirects(text, spell, depth, seen)
         text = self._expand_variables(text, spell, depth)
         text = self._resolve_conditionals(text, spell, depth)
-        # Difficulty markers are spelled with a `$` (`$[!2 … $]`), so they have
-        # to go BEFORE code substitution — which ends by deleting every `$`
-        # still standing and would otherwise leave a bare "[!2" in the prose.
+        # Difficulty markers are spelled with a `$`, so they go before code
+        # substitution, which ends by deleting every `$` still standing and
+        # would otherwise leave a bare "[!2" in the prose.
         text = _DIFFICULTY_RE.sub("", text)
         text = self._eval_expressions(text, spell)
         text = self._substitute_codes(text, spell)
@@ -371,10 +298,9 @@ class DescriptionCooker:
 
     def _expand_redirects(self, text: str, spell: int, depth: int,
                           seen: tuple[int, ...]) -> str:
-        """`$@spelldescN` and friends — splice in another spell's own text.
+        """`$@spelldescN` and friends: splice in another spell's own text.
 
-        The spliced body is rendered in the TARGET's context, which is the
-        whole reason this cannot be a flat substitution table.
+        The spliced body is rendered in the target's context.
         """
 
         def sub(m: re.Match[str]) -> str:
@@ -395,7 +321,7 @@ class DescriptionCooker:
         return _AT_OTHER_RE.sub("", text)
 
     def _expand_variables(self, text: str, spell: int, depth: int) -> str:
-        """`$<shield>` — a named template from SpellDescriptionVariables."""
+        """`$<shield>`: a named template from SpellDescriptionVariables."""
         if "$<" not in text:
             return text
         table = self.variables.get(spell, {})
@@ -408,26 +334,16 @@ class DescriptionCooker:
 
         return _VAR_RE.sub(sub, text)
 
-    # ------------------------------------------------------- conditionals
-
     def _resolve_conditionals(self, text: str, spell: int, depth: int) -> str:
-        """`$?c1[A]?c2[B]…[default]` — take the DEFAULT branch, as Wowhead does.
+        """`$?c1[A]?c2[B]...[default]`: take the default branch.
 
-        ⚠ IT IS A SWITCH, NOT AN IF/ELSE, and reading it as one was worth a
-        whole spell's text. Spell 342156 chains twelve conditions before its
-        default — `$?a137005[Abomination Limb]?a212611[Fodder to the Flame]…
-        [Activating your Necrolord class ability] increases your…` — with a
-        single `$` at the very front. A two-bracket parser consumes the first
-        pair, emits nothing, and leaves `?a212611[Fodder to the Flame]?a…` in
-        the output as literal text. `$?c[A][B]` is just this shape with one
-        condition, so the chain parser subsumes it rather than special-casing.
+        It is a switch, not an if/else: one `$` can front a chain of a dozen
+        conditions, and a two-bracket parser leaves the rest in the output as
+        literal text. `$?c[A][B]` is the same shape with one condition.
 
-        Every condition asks about the CASTER — which talent, which aura, which
-        class — and the app has no caster. The trailing unconditioned bracket
-        is the game's own "none of the above", which is both the honest answer
-        and the one Wowhead's default rendering shows. Where there is no
-        default (the common `$?s12345[ …talent text…][]` shape) the result is
-        empty, i.e. the optional line simply does not appear.
+        Every condition asks about the caster, and there is no caster here, so
+        the trailing unconditioned bracket wins. Where there is no default the
+        result is empty and the optional line does not appear.
         """
         out: list[str] = []
         i = 0
@@ -437,7 +353,7 @@ class DescriptionCooker:
                 out.append(text[i:])
                 break
             out.append(text[i:j])
-            # walk the whole `?cond[…]` chain, keeping only the last bracket
+            # walk the whole `?cond[...]` chain, keeping only the last bracket
             # that had no condition in front of it
             pos, default, consumed = j + 1, "", False
             while pos < len(text) and text[pos] == "?":
@@ -460,14 +376,11 @@ class DescriptionCooker:
             i = pos
         return "".join(out)
 
-    # -------------------------------------------------------- expressions
-
     def _eval_expressions(self, text: str, spell: int) -> str:
-        """`${$s1*$<mult>}` — arithmetic, ALL-OR-NOTHING.
+        """`${$s1*$<mult>}`: arithmetic, all or nothing.
 
-        Every operand must resolve to a number; one caster-dependent term and
-        the whole expression elides. A partially-evaluated expression would
-        print a confidently wrong figure, which is worse than printing none.
+        Every operand must resolve to a number; one caster-dependent term
+        elides the whole expression.
         """
         out: list[str] = []
         i = 0
@@ -503,11 +416,10 @@ class DescriptionCooker:
             v = self._value(m, spell, numeric=True)
             return v if v else "\0"  # a sentinel no arithmetic can survive
 
-        # The caster-dependent words go first and DELIBERATELY, as the sentinel
-        # rather than as "": `$RAP` would otherwise reach _CODE_RE, match `$R`
-        # as a range and leave a stray "P" — which happens to fail the digits
-        # check below and elide anyway. Relying on that would be relying on an
-        # accident; a term we cannot know must kill the expression on purpose.
+        # The caster-dependent words go first, and as the sentinel rather than
+        # as "": `$RAP` would otherwise reach _CODE_RE, match `$R` as a range
+        # and leave a stray "P". A term that cannot be known must kill the
+        # expression on purpose rather than by accident.
         body = _ELIDED_WORD_RE.sub("\0", body)
         body = _JGF_RE.sub("\0", body)
         body = self._apply_scales(body, spell, numeric=True)
@@ -525,8 +437,6 @@ class DescriptionCooker:
             return ""
         return _amount(value)
 
-    # ------------------------------------------------------------- values
-
     def _substitute_codes(self, text: str, spell: int) -> str:
         """Replace every remaining `$code` with its value, or with nothing."""
         text = _ELIDED_WORD_RE.sub("", text)
@@ -539,7 +449,7 @@ class DescriptionCooker:
         return text.replace("$", "")
 
     def _apply_scales(self, text: str, spell: int, numeric: bool = False) -> str:
-        """`$/10;s2` — a scale factor and the code it scales, as one token."""
+        """`$/10;s2`: a scale factor and the code it scales, as one token."""
 
         def sub(m: re.Match[str]) -> str:
             # the id may be written before the operator or after it
@@ -608,19 +518,16 @@ class DescriptionCooker:
             self.stats["resolved" if out else "elided"] += 1
             return out
         if got is None or got == 0:
-            # A zero is the client's "computed at runtime" — every modern player
-            # spell scales, and printing "Deals 0 Frost damage" is the one
-            # outcome worse than printing nothing at all. (Wowhead does print
-            # it: spell 17 renders "absorbing 0 damage" there.)
+            # A zero is the client's "computed at runtime": every modern player
+            # spell scales, and "Deals 0 Frost damage" is worse than saying
+            # nothing.
             self.stats["elided"] += 1
             return ""
         self.stats["resolved"] += 1
-        # inside an expression the value is an OPERAND, so it keeps its
-        # precision; on its own it is a figure a reader sees, so it rounds
+        # inside an expression the value is an operand and keeps its precision;
+        # on its own it is a figure a reader sees, so it rounds
         return _num(abs(round(got, 3))) if numeric else _amount(got)
 
-
-# -------------------------------------------------------------- helpers
 
 def _at(table: dict[int, dict[int, float]], spell: int, index: int) -> float | None:
     return table.get(spell, {}).get(index)
@@ -630,9 +537,8 @@ def _balanced(text: str, start: int, open_ch: str = "[", close_ch: str = "]"
               ) -> tuple[str | None, int]:
     """The body of the bracket at `start`, and the index just past its close.
 
-    Brackets NEST — a conditional's branch routinely holds another one — so a
-    naive `find(close)` cuts in the middle of the inner construct and the two
-    halves both come out as garbage.
+    Brackets nest -- a conditional's branch routinely holds another one -- so a
+    naive `find(close)` would cut in the middle of the inner construct.
     """
     if start >= len(text) or text[start] != open_ch:
         return None, start
@@ -648,16 +554,15 @@ def _balanced(text: str, start: int, open_ch: str = "[", close_ch: str = "]"
 
 
 def _resolve_plurals(text: str, locale: TextLocale = ENGLISH) -> str:
-    """`$lpoint:points;` — the form agreeing with the number in front of it.
+    """`$lpoint:points;`: the form agreeing with the number in front of it.
 
-    With the number elided there is nothing to agree with, and the last form
-    is the one that reads as a general statement ("combo points"), so it wins.
+    With the number elided there is nothing to agree with, so the last form
+    wins, being the one that reads as a general statement.
     """
 
     def pick(m: re.Match[str]) -> str:
-        # The LAST number in the run before it, not the character immediately
-        # before: the client agrees with the quantity, and a noun sits between
-        # them as often as not — "Awards $s3 combo $lpoint:points;".
+        # The last number in the run before it, not the character immediately
+        # before: a noun sits between the two as often as not.
         before = re.findall(r"\d+(?:\.\d+)?", text[max(0, m.start() - 60):m.start()])
         n = float(before[-1]) if before else None
         forms = m.group(1).split(":")
@@ -670,8 +575,7 @@ def _resolve_plurals(text: str, locale: TextLocale = ENGLISH) -> str:
 def _strip_markup(text: str) -> str:
     """Remove the UI escape sequences, keeping the words they wrapped.
 
-    Balanced constructs first so their bodies go with them; the catch-all for
-    unbalanced leftovers only ever sees Blizzard's typos.
+    Balanced constructs go first, so their bodies go with them.
     """
     text = _TEXTURE_RE.sub("", text)
     text = _ATLAS_RE.sub("", text)
@@ -683,9 +587,8 @@ def _strip_markup(text: str) -> str:
 def _tidy(text: str) -> str:
     """Close the gaps eliding left behind, without rewriting the prose.
 
-    Only whitespace and empty brackets are touched. Repairing grammar ("causing
-    Nature damage" -> "causing damage") would be inventing text, and the point
-    of eliding was to stop doing that.
+    Only whitespace and empty brackets are touched: repairing grammar would be
+    inventing text.
     """
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = _EMPTY_PARENS.sub("", text)

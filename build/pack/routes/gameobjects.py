@@ -1,11 +1,7 @@
-"""Game objects a spell spawns: the name, the model, and whether the web has a
-page for it.
+"""Game objects a spell spawns: the name, the model and the object type.
 
-The name and the model come from different sides, which is what decides how
-this degrades. The entry, its name and its display id live only in the server
-dump; the display -> file hop is client data. So a build with no dump keeps
-neither the name nor the model -- the display id it would need for the model is
-itself server-side -- and the pill falls back to the bare spawn id.
+All of it depends on the server dump: the display id the model needs is itself
+server-side, so a build without one keeps nothing here.
 """
 
 from __future__ import annotations
@@ -27,19 +23,14 @@ class GameObjectData:
     """Entry -> its model file, 0 where it does not resolve."""
 
     type: dict[int, int] = field(default_factory=dict)
-    """Entry -> its object type.
-
-    Shipped because it decides whether the web has a page for the object at
-    all, which is what the frontend needs before offering a link.
-    """
+    """Entry -> its object type, which decides whether the web has a page for
+    it to link to."""
 
 
 def read_gameobjects(tables: Tables, world: Tables | None) -> GameObjectData:
     """Read each spawnable object's name, model and type.
 
-    `world` is the server dump and is None for the builds that have none, which
-    is the whole of this route's degradation: with no dump there are no entries
-    to resolve, so everything stays empty rather than half-filled.
+    `world` is the server dump, None for builds that have none.
     """
     objects = GameObjectData()
     if world is None:

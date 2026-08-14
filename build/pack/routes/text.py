@@ -1,15 +1,8 @@
 """The prose a spell carries: descriptions, their variables, encounter notes.
 
-Raw templates only. A description is a small language -- `$s1`, `$@spelldesc`,
-`$<shield>` -- with its own grammar, and cooking it into readable prose lives in
-`spelltext.py`. This route's job is to find the templates and the bodies they
-interpolate, which keeps a parser out of the reading layer and lets it be
-exercised on its own.
-
-The templates are deliberately not filtered against the spell list. A
-template routinely redirects to a spell that has no name row of its own, and
-dropping those empties 491 descriptions on 9.2.7 that resolve perfectly well.
-The filter belongs where the pack is assembled, not here.
+Raw templates only; cooking them into readable prose lives in `spelltext.py`.
+The templates are deliberately not filtered against the spell list, because a
+template routinely redirects to a spell that has no name row of its own.
 """
 
 from __future__ import annotations
@@ -25,11 +18,8 @@ ASSIGNMENT = re.compile(r"\s*\$(\w+)\s*=\s*(.*)$")
 """One `$name=body` line of a description-variables row."""
 
 JOURNAL_DEPTH = 4
-"""How far to follow a journal section's children.
-
-The journal nests three deep, so this is one more than the data needs -- it is
-the cycle stop rather than a shape claim.
-"""
+"""How far to follow a journal section's children. The journal nests three
+deep, so this is the cycle stop rather than a shape claim."""
 
 
 @dataclass
@@ -37,19 +27,17 @@ class SpellText:
     """Every raw template a spell carries, before any of it is cooked."""
 
     descriptions: dict[int, str] = field(default_factory=dict)
-    """Spell id -> what the tooltip says the CAST does."""
+    """Spell id -> what the tooltip says the cast does."""
 
     auras: dict[int, str] = field(default_factory=dict)
-    """Spell id -> what the buff says while it is on you. A different claim
-    from the description and often the only one that is written."""
+    """Spell id -> what the buff says while it is on you, often the only claim
+    that is written."""
 
     variables: dict[int, dict[str, str]] = field(default_factory=dict)
     """Spell id -> {variable name -> its template body}.
 
-    A row is a newline-separated list of assignments SHARED by every spell
-    pointing at it, and each body is itself a template resolved in the reading
-    spell's own context -- so the bodies travel unresolved and the cooker does
-    the resolving.
+    The bodies travel unresolved: each is itself a template resolved in the
+    reading spell's own context.
     """
 
     notes: dict[int, str] = field(default_factory=dict)
@@ -88,15 +76,10 @@ def read_variables(tables: Tables) -> dict[int, dict[str, str]]:
 def read_encounter_notes(tables: Tables) -> dict[int, str]:
     """Spell -> the dungeon journal's note on it, children folded in.
 
-    A spell-linked section usually has an empty body. 6,658 sections name a
-    spell on 9.2.7 and only 324 of them say anything, because the client
-    renders the spell's own description in that slot. What IS written is the
-    difficulty-specific note beside it ("In Mythic difficulty, …") -- real
-    prose no other route carries, which is why an almost-always-empty table
-    still earns a read.
-
-    Child sections fold into their parent so a note written one level down is
-    not lost.
+    A spell-linked section usually has an empty body, because the client renders
+    the spell's own description in that slot; what is written is the
+    difficulty-specific note beside it. Children fold into their parent so a
+    note one level down is not lost.
     """
     sections: dict[str, tuple[str, str, str]] = {}
     for section_id, body, parent, spell in tables.rows(
@@ -108,8 +91,8 @@ def read_encounter_notes(tables: Tables) -> dict[int, str]:
     for section_id, (_, parent, _spell) in sections.items():
         if to_int(parent):
             children[parent].append(section_id)
-    # Sorted once. A subtree is walked again for every ancestor that names a
-    # spell, so sorting inside the recursion re-sorts the same list each visit.
+    # Sorted once: a subtree is walked again for every ancestor that names a
+    # spell.
     for siblings in children.values():
         siblings.sort()
 
@@ -129,7 +112,7 @@ def read_encounter_notes(tables: Tables) -> dict[int, str]:
 
 
 def read_spell_text(tables: Tables) -> SpellText:
-    """Every raw template in one bundle, which is how the cooker wants them."""
+    """Every raw template in one bundle, which is how the cooker takes them."""
     descriptions, auras = read_templates(tables)
     return SpellText(descriptions, auras,
                      read_variables(tables), read_encounter_notes(tables))

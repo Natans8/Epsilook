@@ -1,19 +1,7 @@
-"""The one overlay that exists: TrinityCore's hotfixes over the client's db2.
+"""TrinityCore's hotfixes over the client's db2: which table revises which.
 
-Blizzard changes data server-side after a client ships, and TrinityCore
-publishes those rows. They are the same rows the client holds, revised -- so
-they are an overlay in the exact sense `OverlaidTables` composes, and this is
-the declaration that says which table revises which and under what spelling.
-
-The two sides do not agree on names, and that is the whole reason this file
-is a mapping rather than a list. The client's `SpellVisual` is the server's
-`spell_visual`; the client's `EffectMiscValue_0` is the server's
-`EffectMiscValue1`. Every reader used to carry both spellings itself, which is
-how a reader could quietly overlay the wrong column or none at all.
-
-A second overlay source -- another server build, a live feed -- would be
-another map beside this one, composed the same way. Nothing here is reached by
-`OverlaidTables`, which knows only base, source and mapping.
+The two sides agree on almost no name, so this mapping is the only place either
+spelling appears.
 """
 
 from __future__ import annotations
@@ -27,12 +15,8 @@ from .overlay import Overlay
 
 
 def _hotfix(table: str, columns: Mapping[str, str]) -> Overlay:
-    """One hotfix overlay, stamped.
-
-    TrinityCore stamps every hotfix row with the client build it was verified
-    against, on every table -- measured across all six cached releases -- so
-    the stamp is supplied here rather than repeated on nine rows.
-    """
+    """One hotfix overlay; every hotfix row names the client build it was
+    verified against, on every table."""
     return Overlay(table, columns, stamp=STAMP_COLUMN)
 
 
@@ -40,40 +24,23 @@ SPELL_NAME_OVERLAYS = {
     table: _hotfix("spell_name", {"ID": "ID", columns[1]: "Name"})
     for table, columns in SPELL_NAME_SOURCES
 }
-"""The name overlay, once per table the name is ever read from.
-
-Derived from the drift declaration rather than written out, because the client
-table carrying a spell's name CHANGES between builds -- `SpellName.db2` was
-split out of `Spell.db2` in BfA, so Legion and earlier keep the name on `Spell`
-and Legion has a server release. Naming only the modern table here would mean
-the overlay applied on the builds that read `SpellName` and silently did not on
-the builds that read `Spell`: an overlay that is forgotten on some builds and
-not others, which is the failure `OverlaidTables` exists to make impossible.
-
-Deriving it means a third name source arrives overlaid without anyone
-remembering, and `check_overlay_declaration` cannot fall out of step with the
-drift map because it no longer restates it.
-"""
+"""The name overlay, once per table the name is ever read from: naming one
+table would overlay some builds and silently not others."""
 
 SPELL_EFFECT_COLUMNS = {
     "ID": "ID",
     "SpellID": "SpellID",
     "Effect": "Effect",
     "EffectAura": "EffectAura",
-    # The array columns are the spelling disagreement in its purest form: the
-    # client exports a db2 array field as `X_0`, the server names the same
-    # column `X1`. Zero-based against one-based, on the same data.
+    # The client exports a db2 array field as `X_0`, the server as `X1`.
     "EffectMiscValue_0": "EffectMiscValue1",
     "EffectMiscValue_1": "EffectMiscValue2",
     "ImplicitTarget_0": "ImplicitTarget1",
     "ImplicitTarget_1": "ImplicitTarget2",
-    # Spelled the same on both sides, verified against TDB927's hotfix schema.
     "EffectTriggerSpell": "EffectTriggerSpell",
-    # EffectBasePoints is deliberately ABSENT. The dump types it FLOAT and
-    # MySQL prints a FLOAT at six significant digits, so the server's copy is a
-    # rounding of the client's. Leaving it unmapped is what a per-column merge
-    # buys: the client's precise value stands, and nothing has to remember why.
-    # `check_lossy_declaration` fails the distill if that ever stops being true.
+    # EffectBasePoints is deliberately absent: the dump types it FLOAT, so the
+    # server's copy is a rounding of the client's. `check_lossy_declaration`
+    # fails the distill if that stops being true.
 }
 
 HOTFIX_OVERLAYS = {
@@ -114,15 +81,13 @@ HOTFIX_OVERLAYS = {
 
 
 def check_overlay_declaration() -> list[str]:
-    """Ways this map and the distiller's could have drifted apart, named.
+    """Ways this map and the distiller's column list could have drifted apart.
 
-    Two declarations describe the same overlay from opposite ends -- the
-    distiller says which server columns to KEEP, this says which client column
-    each one revises -- and neither can be derived from the other, because only
-    one of them knows the client's spelling. So they are checked against each
-    other instead, and `overlay_test.py` is where that check runs.
+    Neither can be derived from the other: only this one knows the client's
+    spelling.
 
-    Returns an empty list when they agree.
+    Returns:
+        One message per disagreement; empty when the two agree.
     """
     problems: list[str] = []
     kept = TDB_TABLES["hotfixes"]

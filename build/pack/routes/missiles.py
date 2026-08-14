@@ -1,11 +1,8 @@
-"""Projectiles: the second path out of a spell visual, and the only one that
-reaches a model in flight.
+"""Projectiles: the second path out of a spell visual.
 
 `SpellVisual` names a missile set (plus a raid variant), the set groups
-`SpellVisualMissile` rows, and each row carries a model, a flight path, and
-sometimes a launch sound and an anim kit. Nothing else in the graph reaches
-this content: a spell's missile model is typically referenced from here and
-nowhere else.
+`SpellVisualMissile` rows, and each row carries a model, a flight path and
+sometimes a launch sound and an anim kit.
 """
 
 from __future__ import annotations
@@ -41,8 +38,7 @@ class VisualMissiles:
 def read_missile_motions(tables: Tables) -> dict[int, str]:
     """Missile motion id -> its name: the arc a projectile flies.
 
-    Name only. The table's other real column is a motion script, which is the
-    bulk of its bytes and which nothing renders.
+    Name only; the table's other real column is a script nothing renders.
     """
     return {to_int(motion_id): name
             for motion_id, name in tables.rows("SpellMissileMotion", ["ID", "Name"])
@@ -53,15 +49,8 @@ def read_missiles(tables: Tables, effect_name_fid: dict[int, int],
                   effect_name_type: dict[int, int]) -> dict[int, VisualMissiles]:
     """Read each visual's projectiles, attachments resolved.
 
-    The row's attachments win over its visual's, and the two are
-    complementary rather than redundant: over the missile rows reachable from a
-    visual, the visual alone carries a launch point for 16.4%, the missile row
-    alone for 50.7%, and either for 52.7%. So the row is read first and the
-    visual fills in what it leaves unset.
-
-    The row winning is not a guess. The two disagree on 24% of rows, and the
-    case was settled in game: Glacial Blast's visual says Chest and its row says
-    Base, and the missile launched from the BASE.
+    The row's attachments win over its visual's, which fills in what the row
+    leaves unset. The precedence was settled in game.
     """
     visual_columns = ["ID", "SpellVisualMissileSetID", "RaidSpellVisualMissileSetID",
                       "MissileAttachment", "MissileDestinationAttachment"]
@@ -70,10 +59,8 @@ def read_missiles(tables: Tables, effect_name_fid: dict[int, int],
         first, raid, source, destination = (to_int(value) for value in values)
         visuals[to_int(visual_id)] = (first, raid, source, destination)
 
-    # The motion rides the SAME row as the model, so a flight path pairs with
-    # the projectile it belongs to rather than with the whole set. 99.4% of
-    # (set, effect name) pairs name exactly one motion and the handful that name
-    # several become several rows -- the rule the attachment pair follows too.
+    # The motion rides the same row as the model, so a (set, effect name) pair
+    # naming several motions becomes several rows.
     sets: dict[int, VisualMissiles] = {}
     for row in tables.rows(
             "SpellVisualMissile",
@@ -86,8 +73,8 @@ def read_missiles(tables: Tables, effect_name_fid: dict[int, int],
         into = sets.setdefault(set_id, VisualMissiles())
         file = effect_name_fid.get(name_id, 0)
         if not file:
-            # A weapon type with no file: the caster's own weapon THROWN as the
-            # projectile. The sentinel renders as a per-slot marker.
+            # A weapon type with no file: the caster's own weapon thrown as the
+            # projectile.
             file = EFFECT_NAME_TYPE_WEAPON.get(effect_name_type.get(name_id, 0), 0)
         if file:
             into.models.add((file, motion, source, destination))

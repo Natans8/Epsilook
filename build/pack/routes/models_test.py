@@ -86,8 +86,7 @@ def test_a_plain_row_attaches_its_own_file(tables: BuildTables) -> None:
 
 
 def test_the_attachment_is_part_of_the_key(tables: BuildTables) -> None:
-    """The same model at two points stays two rows and renders as two pills,
-    rather than merging into one that cannot say where it played."""
+    """The same model at two points stays two rows."""
     assert sources(tables).attach_models[900] == {
         (8000, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0, NO_MOTION),
         (8000, MODEL_CAT_ATTACH, 11, NO_ATTACHMENT, 0, NO_MOTION),
@@ -95,15 +94,14 @@ def test_the_attachment_is_part_of_the_key(tables: BuildTables) -> None:
 
 
 def test_an_item_row_carries_the_item_as_its_ref(tables: BuildTables) -> None:
-    """The category is what says which id space the ref is in, so a display id
-    and an item id can share one field."""
+    """The category says which id space the ref is in."""
     assert sources(tables).attach_models[901] == {
         (8200, MODEL_CAT_ITEM, 5, NO_ATTACHMENT, 700, NO_MOTION)}
 
 
 def test_a_display_row_resolves_through_the_creature_chain(
         tables: BuildTables) -> None:
-    """Pure client data, so it works on the builds with no server dump."""
+    """Pure client data, so it works without a server dump."""
     assert sources(tables).attach_models[902] == {
         (8100, MODEL_CAT_DISPLAY, 5, NO_ATTACHMENT, 50, NO_MOTION)}
 
@@ -116,9 +114,8 @@ def test_a_weapon_row_with_no_file_becomes_its_slot_sentinel(
 
 def test_an_unnamed_weapon_file_is_dropped_to_its_sentinel(
         tables: BuildTables) -> None:
-    """The Classic placeholder: a file id on a weapon row that names no real
-    asset. Rewriting it to 0 where the column is read leaves every route
-    downstream to take the branch it already has."""
+    """The Classic placeholder: a file id on a weapon row naming no real
+    asset."""
     assert sources(tables).attach_models[904] == {
         (WEAPON_FID_OFF, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0, NO_MOTION)}
 
@@ -132,8 +129,7 @@ def test_a_named_file_on_a_weapon_row_is_left_alone(tables: BuildTables) -> None
 
 def test_a_plain_row_sharing_the_placeholder_file_keeps_its_model(
         tables: BuildTables) -> None:
-    """Only weapon rows are touched. A Type-0 row naming the same file id is an
-    ordinary model and stays one."""
+    """Only weapon rows are touched."""
     text = SPELL_VISUAL_EFFECT_NAME + "7,6666,0,0\n"
     fid, _, _ = read_effect_names(tables(SpellVisualEffectName=text), none_named)
     assert fid[5] == 0
@@ -145,8 +141,8 @@ def test_a_kit_of_zero_is_skipped(tables: BuildTables) -> None:
 
 
 def test_the_attached_models_animations_are_indexed(tables: BuildTables) -> None:
-    """They are ordinary animation ids the kit plays, so they land even when the
-    model itself did not resolve. Stand and unset are both skipped."""
+    """Ordinary animation ids the kit plays, so they land even when the model
+    did not resolve. Stand and unset are both skipped."""
     assert sources(tables).attach_anims == {900: {17}}
     assert sources(tables).attach_animkits == {900: {42}}
 

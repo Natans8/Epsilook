@@ -1,8 +1,7 @@
 """Everything one build reads, gathered into the cache and named.
 
-The single entry point to this layer. Above it nothing knows a URL, a cache
-policy or a file name -- a table provider is handed a `Sources` and reads
-through it.
+The single entry point to this layer: above it nothing knows a URL, a cache
+policy or a file name.
 """
 
 from __future__ import annotations
@@ -20,24 +19,21 @@ from .wago import fetch_tables
 class Sources:
     """Where one build's sources ended up on disk.
 
-    Four independent sources rather than one merged directory, because they
-    disagree on purpose: `pinned_tables` is another build's, and `tdb` holds
-    rows that override `tables` by row id.
+    Kept apart rather than merged: `pinned_tables` is another build's, and `tdb`
+    holds rows that override `tables` by row id.
     """
 
     tables: Path
     """This build's own table CSVs, one file per db2 table."""
 
     pinned_tables: Path
-    """The build sound-kit names are read from, which is never the one being
-    packed: no shipped build carries that table."""
+    """The build sound-kit names come from, never the one being packed."""
 
     listfile: Path
     """The community listfile: file data id to asset path."""
 
     tdb: Path | None
-    """The distilled TrinityCore tables, or None when no release maps to this
-    build. Four Classic packs ship without one and say so."""
+    """The distilled TrinityCore tables, or None when no release maps here."""
 
 
 def fetch_sources(version: str, refresh: bool) -> Sources:
