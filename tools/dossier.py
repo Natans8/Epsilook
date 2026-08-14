@@ -1007,7 +1007,8 @@ class Dossier:
         if n:
             d["name"] = n
         # the Epsilon emote a player performs this animation with; the id
-        # `.mod anim` and Arcanum's Anim action take
+        # `.mod anim` and `.mod standstate` both take, neither taking an
+        # AnimationData id
         emote = self.anim_emote.get(int(a))
         if emote:
             d["epsilon_emote"] = dict(emote)

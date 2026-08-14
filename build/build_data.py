@@ -2068,8 +2068,12 @@ def read_anim_emotes(anim_names: list[str]) -> tuple[list[int], list[int]]:
     Returns two columns parallel to ``anim_names`` and indexed the same way, 0
     where Epsilon has no emote of that kind for the animation. Epsilon exposes
     the client's animation set as emotes, so an animation this pack indexes is
-    one a player can perform, and the emote id is what ``.mod anim`` and
-    Arcanum's Anim action take -- neither accepts an AnimationData id.
+    one a player can perform.
+
+    An emote id is what every route into an animation takes: ``.mod anim``
+    plays it on the current animation, ``.mod standstate`` sets it as the
+    standing pose, and Arcanum wraps both. None of them accepts an
+    AnimationData id, which is why this mapping is the click-path.
 
     Shipped in every pack, not only an Epsilon one: an animation present in any
     build is performable on Epsilon if Epsilon has an emote for it. Ids past

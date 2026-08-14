@@ -595,15 +595,20 @@ A **weapon slot is a model with no file**: some effect-name types name the caste
 ammo rather than an asset. Those carry a sentinel and a stand-in name, so nothing downstream needs a special case.
 
 **An animation also ships the emote that performs it**, in two columns indexed by animation id exactly as the names are:
-one plays the animation once, the other replays it until reset, and zero means there is no emote of that kind. This is
-the only payload in the pack that does not describe the game build being packed. Epsilon exposes the client's animation
-set as emotes, so an animation any build indexes is one a player can perform there, which is why every pack carries the
-columns rather than an Epsilon-only pack — and the emote id is the form `.mod anim` and the Arcanum action both take,
-neither of which accepts an animation id. Like the sound-kit names it is a pinned cross-build source rather than drift,
-and it goes further: it is vendored, because no build can regenerate it. Two caveats belong with it. The pairing is
-measured rather than computed — the ids are almost arithmetic in the animation id, and the handful that are not would
-otherwise name an emote that plays a different animation. And an emote existing does not mean every model can perform
-it, so the column is a click-path, not a promise.
+Epsilon's one-shot emote plays the animation once, its loop runs it until reset, and zero means there is no emote of
+that kind. This is the only payload in the pack that does not describe the game build being packed. Epsilon exposes the
+client's animation set as emotes, so an animation any build indexes is one a player can perform there, which is why
+every pack carries the columns rather than an Epsilon-only pack. **An emote id is what every route in takes** — the
+commands that play an animation are keyed by emote and none of them accepts an animation id, which is exactly the gap
+these columns close. Like the sound-kit names it is a pinned cross-build source rather than drift, and it goes further:
+it is vendored, because no build can regenerate it.
+
+Three caveats belong with it, and the last two bound what a surface may claim. The pairing is **measured rather than
+computed** — the ids are almost arithmetic in the animation id, and the handful that are not would otherwise name an
+emote that plays a different animation. **What the loop looks like is a property of the animation, not of the kind**:
+running an action animation forever reads as repetition, running one that settles reads as a held pose, so the column
+records which emote sustains the animation and not what sustaining it looks like. And **an emote existing does not mean
+every model can perform it**, so the columns are a click-path, not a promise.
 
 ### Routes that start at an effect
 

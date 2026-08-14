@@ -168,9 +168,12 @@ export interface SpellPack {
     animNames: string[];
     /** The Epsilon emote that performs each animation, indexed by AnimID like
      *  `animNames` (format 47+). 0 where Epsilon has no emote of that kind.
-     *  Both are what `.mod anim` takes; neither accepts an AnimationData id. */
+     *  An emote id is what `.mod anim` and `.mod standstate` both take;
+     *  neither accepts an AnimationData id. */
     animEmoteOneshots?: number[];
-    /** Looping counterpart of `animEmoteOneshots` — replays until reset. */
+    /** Sustained counterpart of `animEmoteOneshots`: Epsilon's `[Loop]` emote,
+     *  which runs until reset. Whether that reads as a repeating action or a
+     *  held pose depends on the animation. */
     animEmoteLoops?: number[];
     animKitAnims: { animKitIds: number[]; animIds: number[] };
     /** Boneset region names (format 33+), referenced by index below. */
@@ -683,9 +686,9 @@ export interface SpellData {
     animKitSpells: Map<number, number[]>;
     animNames: string[];
     animNamesL: string[];
-    /** Epsilon emote ids per AnimID: the one-shot plays once, the loop replays
-     *  until reset. 0 means Epsilon has no emote of that kind, and a pack older
-     *  than format 47 leaves both empty. */
+    /** Epsilon emote ids per AnimID: the one-shot plays the animation once, the
+     *  loop runs it until reset. 0 means Epsilon has no emote of that kind, and
+     *  a pack older than format 47 leaves both empty. */
     animEmoteOneshots: number[];
     animEmoteLoops: number[];
     animKitAnims: Map<number, number[]>;

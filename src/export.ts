@@ -122,7 +122,7 @@ export interface ExportRow {
     models?: ({ category: string; files: ExportModelFile[] } | string)[];
     soundKits?: { id: number; files: string[]; targets: string[] }[];
     /** `emote` is the Epsilon emote performing this animation — `oneshot`
-     *  plays once, `loop` replays until reset. Absent where Epsilon has
+     *  plays it once, `loop` runs it until reset. Absent where Epsilon has
      *  neither, or where the pack predates format 47. */
     anims?: {
         name: string; targets: string[];
