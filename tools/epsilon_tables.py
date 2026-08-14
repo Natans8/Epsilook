@@ -16,6 +16,7 @@ has them.
 
 from __future__ import annotations
 
+import struct
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -138,6 +139,27 @@ def table_ids() -> dict[str, int]:
             if separator and name.startswith(prefix) and name.endswith(".db2"):
                 found[name[len(prefix):-len(".db2")]] = int(fid)
     return found
+
+
+def open_positional(storage: Reads, fid: int) -> Table | None:
+    """One table read without its definition, its columns merely numbered.
+
+    For asking what values a table holds rather than what they mean. A
+    definition is fetched per table and there are well over a thousand of them,
+    so a sweep that only needs the numbers should not be paying for names it
+    will not read.
+
+    Returns:
+        The table, or None if the client does not carry it or it does not parse.
+    """
+    raw = storage.read(fid)
+    if not raw:
+        return None
+    try:
+        parsed = Db2(raw, None)
+        return Table(list(parsed.columns), list(parsed.rows()))
+    except (ValueError, IndexError, KeyError, struct.error):
+        return None
 
 
 def open_table(storage: Reads, name: str, ids: dict[str, int]) -> Table | None:

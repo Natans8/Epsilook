@@ -146,11 +146,20 @@ and a clean logout — SavedVariables are flushed on exit, not at character sele
 everything the supplement carries.
 
 The addon clears its own section at the start of every walk, so **running any other dump destroys the previous
-capture**. The pipeline therefore prefers a live capture and falls back to a saved copy of one at
-`.claude/data/epsilon/dump_gob_names.json`.
+capture**. The pipeline therefore prefers a live capture and falls back to a saved copy of one under
+`.claude/data/epsilon/`.
 
-> ⚠ That saved copy is currently the only one in existence, and it is not tracked by git. The installation's
-> SavedVariables no longer holds the walk, and neither does its backup. Losing that file costs another evening in game.
+> ⚠ Those copies are not tracked by git, and a dump of anything else overwrites the live one. Keep a copy the moment a
+> walk lands.
+
+**It is reproducible, and the saved copy is verified.** A second walk taken later returned 166,671 pairs against the
+first walk's 166,671 — the same file ids, the same names, with one exception: a name the earlier tooling had recorded
+as mojibake came back correct, because the reader here resolves the escapes the client actually writes rather than
+reinterpreting the bytes. So the cost is an evening, not a one-way door.
+
+**And a fresh walk will not name more than the last one did.** The client API enumerates a fixed 166,671 entries while
+`GameObjectDisplayInfo` carries 167,376 distinct file ids: **705 are in the table and absent from the API**, 692 of
+them otherwise unnamed. Those cannot be reached this way at all, however many times the walk is run.
 
 ## 5. Verifying
 

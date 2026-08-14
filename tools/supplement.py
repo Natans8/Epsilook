@@ -392,6 +392,50 @@ def coverage(merged: dict[int, str]) -> None:
             f"and were not opened; --network includes them{RESET}")
 
 
+def referrers(merged: dict[int, str]) -> None:
+    """Which of the client's own tables mention a file nothing has named.
+
+    The routes read a handful of tables, so "no route reaches this file" is a
+    statement about those and not about the client, which ships well over a
+    thousand. This asks the whole set instead: every table, every column, does
+    any value name a file still without one.
+
+    A table that turns up here is a candidate route, not a route -- it says a
+    file is referenced, not what it should be called.
+    """
+    from epsilon_tables import open_positional, table_ids  # pylint: disable=import-outside-toplevel
+
+    from tqdm import tqdm  # pylint: disable=import-outside-toplevel
+
+    custom = storage().custom_fids(SUPPLEMENT_FLOOR)  # type: ignore[attr-defined]
+    unnamed = {fid for fid in custom if fid not in merged}
+    log(f"\n  looking for {len(unnamed):,} unnamed files across every table")
+
+    ids = table_ids()
+    # Every id in range is this many digits, which makes an integer-shaped cell
+    # cheap to reject before it is parsed.
+    width = {len(str(fid)) for fid in unnamed}
+
+    found: dict[str, set[int]] = {}
+    unreadable = 0
+    for name, fid in tqdm(sorted(ids.items()), desc="tables", unit="table"):
+        table = open_positional(storage(), fid)  # type: ignore[arg-type]
+        if table is None:
+            unreadable += 1
+            continue
+        hits = {int(cell) for row in table.rows for cell in row
+                if len(cell) in width and cell.isdigit() and int(cell) in unnamed}
+        if hits:
+            found[name] = hits
+
+    reached = set().union(*found.values()) if found else set()
+    log(f"\n  {len(ids) - unreadable:,} tables read, {unreadable:,} unreadable")
+    log(f"  {len(reached):,} of the {len(unnamed):,} unnamed are mentioned somewhere")
+    log(f"  {len(unnamed) - len(reached):,} are mentioned by no table at all\n")
+    for name, hits in sorted(found.items(), key=lambda kv: -len(kv[1]))[:25]:
+        log(f"    {name:36} {len(hits):>6,}")
+
+
 def diff_against_vendored(merged: dict[int, str]) -> None:
     """Report how the reconstruction differs from what the build reads."""
     if not VENDORED.exists():
@@ -433,6 +477,8 @@ def main() -> int:
                         help="let the walks read files the install does not hold")
     parser.add_argument("--coverage", action="store_true",
                         help="report what is still unnamed, classified by kind")
+    parser.add_argument("--referrers", action="store_true",
+                        help="sweep every client table for mentions of what is unnamed")
     args = parser.parse_args()
 
     if args.list:
@@ -470,6 +516,8 @@ def main() -> int:
         diff_against_vendored(merged)
     if args.coverage:
         coverage(merged)
+    if args.referrers:
+        referrers(merged)
     return 0
 
 
