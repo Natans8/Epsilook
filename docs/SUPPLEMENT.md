@@ -223,26 +223,30 @@ classification says which route would go there.
 uv run python tools/supplement.py --coverage
 ```
 
-A local-only run reaches **117,975 of the 128,476 custom files, 91.8%**, leaving 10,501. Of the **1,096** of those the
-installation holds and can therefore be identified:
+A `--network` run reaches **124,955 of the 128,476 custom files, 97.3%**, leaving 3,521. Of the 3,491 that could be
+read and identified:
 
-| kind                    | count | which route would claim it            |
-|-------------------------|------:|---------------------------------------|
-| `blp`                   |   923 | none yet — see below                  |
-| `skin`                  |   121 | none: their models are not held here  |
-| `chunked, unrecognised` |    14 | none                                  |
-| `m2`                    |    13 | none: they carry no name of their own |
-| `mp3`                   |    11 | sound                                 |
-| `unknown`               |     7 | none                                  |
-| `wmo group`             |     7 | none: their roots are not held here    |
+| kind                    | count | which route would claim it              |
+|-------------------------|------:|------------------------------------------|
+| `blp`                   | 1,994 | none — see below                        |
+| `wmo group`             |   454 | none: their roots carry no id            |
+| `m2`                    |   308 | none: their own bytes name nothing       |
+| `wmo root`              |   280 | none: they declare no retail id          |
+| `skin`                  |   232 | none: their models are unnamed           |
+| `chunked, unrecognised` |   207 | none                                     |
+| unreadable / mp3 / unknown |  46 | sound, and a few that would not open     |
 
-The other **9,405 are not held locally and were not opened**, so what they are is unmeasured. Classifying them would
-cost a request each and the report says so rather than guessing.
+**⭐ Every parent left is silent.** The two routes that read a file for what it says about itself have taken everything
+they can: not one of the 308 models carries a name, and not one of the 280 world-model roots declares a retail id.
+**That is what makes 97.3% the ceiling for the current routes** — the 686 children above are blocked behind those 588
+parents, and nothing left says anything about itself.
 
-**⭐ Read that table against its predecessor: the locally-readable PARENTS are now exhausted.** Before `modelnames` and
-`reskins` it read 169 `m2` and 23 `wmo root` blocking 311 `wmo group` and 126 `skin`. It now reads **13 models, zero
-world-model roots and seven groups** — so on this machine there is no parent left whose name would free a child. What
-remains locally is 923 textures and a handful of odds.
+**⚠ A local-only run reaches 91.8%, and the gap is not small.** Nine tenths of what an install lacks is exactly what
+the file-reading routes want, so `--network` is not an optimisation here; it is most of the result.
+
+**The pipeline converges in one pass.** Re-running the walks that consume other routes' output against a complete
+result yields zero new rows, which follows from the ordering: routes run parents-before-children, and the children they
+produce — groups, skins, textures — cannot themselves be parents. There is no fixed point to iterate towards.
 
 No terrain appears in that list, which is the check that the terrain route is complete.
 
@@ -250,14 +254,9 @@ No terrain appears in that list, which is the check that the terrain route is co
 > terrain, world tables and world models all begin with the same version chunk, so magic-only classification calls
 > thousands of map tiles world models. `classify()` separates them on the chunks they carry instead.
 
-**The largest remaining move is `--network`, and the two file-reading routes are why it is worth more than it was.**
-Nine tenths of what is unnamed is simply not on this machine. `modelnames` and `reskins` both read the file itself, so
-every parent the network reaches is a parent they can name — and each named parent frees its children. Measured
-locally, 179 parents brought 472 children with them.
-
-The remaining local textures have no route yet. They are not model textures — the parentage walks have taken those —
-and they are not customization textures either. Identifying what uses them is the open question; there is no measured
-answer, so do not assume one.
+The remaining textures have no route. They are not model textures — the parentage walks have taken those — nor
+customization textures, nor the ground textures a map paints with, which is the one place left that could have
+referenced them and does not.
 
 ### Routes that are closed, with what closed them
 
@@ -272,26 +271,18 @@ Do not re-open these without new evidence; each cost a measurement.
 | `.gob spawn`                 | fails for the display-carrying orphans, models and world-model roots alike           |
 | `GODI_Search`                | returns exactly the same 166,671 rows as the index walk; the ceiling is the catalogue |
 | embedded paths in WMO or ADT | a chunk census finds no `MODN` and no `MOTX`: modern formats carry file ids only     |
-| `.lookup object`             | 22,051 custom filenames, and **no file id on any of them** — see below               |
+| a world model's doodads      | `MODI`/`MODD` across every named world model reference nothing unnamed               |
+| **a map's texture table**    | **`.tex` carries `TXVR`/`TXBT`/`TXMD` and no `TXFN`: 5.8 MB, zero unnamed ids**      |
 
-> ⚠ **`.lookup object` was swept and knows nothing this does not, so nobody need spend an evening on it.** Over 201
-> terms it returns 34,838 gameobject entries naming a model file, 20,262 of them filenames the listfile has never heard
-> of — Epsilon's own, lowercase: `eps_rockarch_lavarock.wmo`, `eps_emptywmo_gilneas_outpost_stable_v2`. Set-differenced
-> against this supplement, **49 remain unaccounted for**, and none carries a file id. The server's object names and the
-> `objects` walk's names are the same body.
->
-> **That is also what closes the 692 display-carrying orphans**: had they names on the server, the leftover would be
-> about 692 rather than 49. It is not. Those files have no name in the client catalogue, the server's gameobject
-> table, any db2, or their own bytes.
->
-> ⚠ The leftover read **2,429** until leading markers were stripped — entries are prefixed `[bfa 8.0] name.m2` as well
-> as suffixed `name.m2 [elevator]`, and stripping only the suffix leaves thousands of ordinary listfile names looking
-> novel.
+⚠ **Read the last two as the correction they are.** The texture table was the most promising remaining lead — it is
+the file that would name a map's ground textures, and the largest unnamed block is textures. It does not name them.
+**And a head read shows only its version chunk**, so the question can only be settled by reading it whole; the cap
+would have produced the same emptiness for a file that did name them.
 
-⛔ **And the question to ask before adding another route is not "what fraction is named".** No shipped pack references
-a single custom file — every pack is built from wago's retail tables — so this supplement is preparation for an
-Epsilon pack that does not exist yet. Coverage here is a readiness measure, and a route reaching files that pack will
-never carry is worth nothing however elegant.
+⛔ **The question to ask before adding another route is not "what fraction is named".** No shipped pack references a
+single custom file — every pack is built from wago's retail tables — so this supplement is preparation for an Epsilon
+pack that does not exist yet. Coverage here is a readiness measure, and a route reaching files that pack will never
+carry is worth nothing however elegant.
 
 ## 7. The step this does not take
 

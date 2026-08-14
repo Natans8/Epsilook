@@ -572,16 +572,22 @@ def reskin_names(storage: Reads, unnamed: set[int], stock: dict[int, str],
 PLACED_BUCKET = "placed"
 """Where a world model named by the map it stands in sits."""
 
-PLACEMENT_CHUNKS = (b"MODF", b"MDDF")
-"""Where a terrain tile records what it places.
+PLACEMENT_CHUNKS = (b"MODF", b"MDDF", b"MLMD", b"MLDD")
+"""Where a map records what it places.
 
-Both are read even though only world models have ever turned up: a doodad
-placement costs nothing to look at, and finding none is worth knowing rather
-than assuming.
+A tile's own placements and the low-detail ones its map keeps for distance are
+the same kind of statement about the same kind of file, so both are read. The
+doodad chunks are read too even though only world models have ever turned up:
+looking costs nothing, and finding none is worth knowing rather than assuming.
 """
 
-OBJECT_TILE_SUFFIXES = ("_obj0.adt", "_obj1.adt")
-"""Which tiles carry placements. The other six files of a tile do not."""
+OBJECT_TILE_SUFFIXES = ("_obj0.adt", "_obj1.adt", ".wdl")
+"""Which files carry placements.
+
+The other six files of a tile do not, and reading them is a fetch that cannot
+contribute. The map's low-detail terrain does, which is only reachable at all
+because the map header names it.
+"""
 
 
 def placement_names(storage: Reads, known: dict[int, str], unnamed: set[int],

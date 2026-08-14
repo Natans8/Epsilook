@@ -649,3 +649,17 @@ def test_an_unset_auxiliary_slot_names_nothing() -> None:
     finally:
         epsilon_walks.custom_maps = original
     assert names == {wdt: "world/maps/mymap/mymap.wdt"}
+
+
+def test_low_detail_terrain_places_world_models_too() -> None:
+    """A map's distance geometry names the same kind of file its tiles do, and
+    is only reachable because the map header names it."""
+    from epsilon_walks import placement_names  # pylint: disable=import-outside-toplevel
+
+    placed = FLOOR + 11
+    body = struct.pack("<I", placed) + b"\x00" * 60
+    raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
+        chunk(b"MLMD", body, reversed_tags=True)
+    known = {700: "world/maps/prophecylordaeron/prophecylordaeron.wdl"}
+    assert placement_names(FakeStorage({700: raw}), known, {placed}) == {
+        placed: f"epsilon/placed/prophecylordaeron/{placed}.wmo"}
