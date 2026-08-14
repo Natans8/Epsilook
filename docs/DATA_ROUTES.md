@@ -604,8 +604,10 @@ these columns close. Like the sound-kit names it is a pinned cross-build source 
 it is vendored, because no build can regenerate it.
 
 Three caveats belong with it, and the last two bound what a surface may claim. The pairing is **measured rather than
-computed** — the ids are almost arithmetic in the animation id, and the handful that are not would otherwise name an
-emote that plays a different animation. **What the loop looks like is a property of the animation, not of the kind**:
+computed**, and the reason is *when* the private server generated it: the arithmetic covers that server's own animation
+table exactly, and every animation with an emote beyond it is one downported from a later expansion, added afterwards
+and placed wherever there was room. Computing the pair would therefore name an emote that plays a different animation,
+and would invent one for the two the generator skipped. **What the loop looks like is a property of the animation, not of the kind**:
 running an action animation forever reads as repetition, running one that settles reads as a held pose, so the column
 records which emote sustains the animation and not what sustaining it looks like. And **an emote existing does not mean
 every model can perform it**, so the columns are a click-path, not a promise.
