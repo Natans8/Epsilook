@@ -179,6 +179,15 @@ BUILD_LAYERS = ("sources", "tables", "routes", "derive", "model", "encode", "emi
 # swappable and the artifact reshapeable without editing a route.
 BUILD_PLACELESS = ("routes", "derive", "model", "encode")
 
+# The layers holding a game table, and the one layer allowed to read them.
+# Importing downward is legal by the rule above, so without this a derivation
+# could quietly go back to the source instead of working from what a route
+# produced - and the split stops meaning anything the moment two layers both
+# read tables. Keeping the reach short is also what makes everything above
+# routes/ testable from plain values, with no source to stand up at all.
+BUILD_SOURCE_LAYERS = ("sources", "tables")
+BUILD_READING_LAYER = "routes"
+
 # Names that mean "I am reaching for a file or a URL". Matched as parsed
 # identifiers rather than as text, so a word in a comment or a docstring is not
 # a violation - several of these are ordinary English.
@@ -698,6 +707,10 @@ def check_build_layers(rep: Report) -> None:
                 problems.append(f"{name} is package-root vocabulary but imports {reached}/")
             elif BUILD_LAYERS.index(reached) > BUILD_LAYERS.index(layer):
                 problems.append(f"{name} imports upward, into {reached}/")
+            elif (reached in BUILD_SOURCE_LAYERS
+                  and BUILD_LAYERS.index(layer) > BUILD_LAYERS.index(BUILD_READING_LAYER)):
+                problems.append(f"{name} reads a game table directly, from {reached}/; "
+                                f"only {BUILD_READING_LAYER}/ may")
 
         if layer not in BUILD_PLACELESS:
             continue
@@ -715,7 +728,8 @@ def check_build_layers(rep: Report) -> None:
             rep.fail("build layers", f"...and {len(problems) - 6} more")
     else:
         rep.ok("build layers",
-               f"{len(modules)} modules import downward only; {placeless} in "
+               f"{len(modules)} modules import downward only, and no further "
+               f"than {BUILD_READING_LAYER}/ for a table; {placeless} in "
                f"{'/, '.join(BUILD_PLACELESS)}/ name no path or URL directly")
 
 
