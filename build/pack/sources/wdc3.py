@@ -126,10 +126,58 @@ class Field:
 
 @dataclass(frozen=True)
 class Column:
-    """One exported column joined to the field that stores it."""
+    """One exported column joined to the field that stores it.
+
+    Everything a value needs beyond the raw bits is settled here rather than
+    per row, because all of it follows from the spec and the field and both are
+    fixed once the file is parsed.
+
+    Attributes:
+        bits: how many bits of the raw value carry meaning.
+        mask: those bits, as a mask.
+        element_bits: the width of one array element inside the record.
+        pallet: reader for one row's worth of pallet entries, when the value
+            lives in the pallet block.
+        common: the field's exceptions to its default, when it lives in the
+            common block.
+    """
 
     spec: ColumnSpec
     field: Field | None
+    bits: int
+    mask: int
+    element_bits: int
+    pallet: struct.Struct | None
+    common: dict[int, int] | None
+
+
+def value_bits(spec: ColumnSpec, field: Field | None) -> int:
+    """How many bits of a column's raw value carry meaning.
+
+    Whichever of the packing and the declaration is narrower, because either
+    can be the binding one. A bitpacked field holds the value sign-compressed
+    into as many bits as its range needs, so a 26-bit colour extends from bit
+    25 rather than from the declared 32. Where the packer spent more bits than
+    the type has, the type bounds it instead: an attachment declared one byte
+    and stored in nine reads -1 from bit 7 and 255 from bit 8. A pallet or
+    common field holds a 32-bit word whose meaningful part is only ever what
+    the schema declares, so extending a one-byte -1 over the width of the index
+    that addressed it produces a large positive number.
+    """
+    if field is None:
+        return spec.bits
+    if field.storage == NONE:
+        stored = element_bits(spec, field)
+    elif field.storage in (BITPACKED, BITPACKED_SIGNED):
+        stored = field.size_bits
+    else:
+        stored = 32
+    return min(stored, spec.bits) or spec.bits
+
+
+def element_bits(spec: ColumnSpec, field: Field) -> int:
+    """The width of one element of a field the record stores directly."""
+    return field.size_bits // spec.count if spec.count else field.size_bits
 
 
 def read_bits(data: bytes, offset_bits: int, size_bits: int) -> int:
@@ -217,13 +265,14 @@ class Db2:
         if blob[:4] != b"WDC3":
             raise ValueError(f"not WDC3: {blob[:4]!r}")
         self.blob = blob
+        # Seventeen words, of which decoding reads eight; the rest are bound to
+        # throwaways rather than dropped so the count stays visible.
         (_magic, self.record_count, self.field_count, self.record_size,
-         self.string_table_size, self.table_hash, self.layout_hash,
-         self.min_id, self.max_id, self.locale, self.flags, self.id_index,
-         self.total_field_count, self.bitpacked_data_offset,
-         self.lookup_column_count, self.field_storage_info_size,
-         self.common_data_size, self.pallet_data_size,
-         self.section_count) = _HEADER.unpack_from(blob, 0)
+         _string_table_size, _table_hash, _layout_hash, _min_id, _max_id,
+         _locale, self.flags, _id_index, _total_field_count,
+         _bitpacked_data_offset, _lookup_column_count,
+         self.field_storage_info_size, self.common_data_size,
+         self.pallet_data_size, self.section_count) = _HEADER.unpack_from(blob, 0)
 
         at = _HEADER.size
         self.sections = [Section(*_SECTION.unpack_from(blob, at + i * _SECTION.size))
@@ -244,9 +293,11 @@ class Db2:
 
         self.fields = self._fields(storage)
         self.declared = self._join(schema)
-        self._commons = {c.field.index: self._common_map(c.field)
-                         for c in self.declared
-                         if c.field is not None and c.field.storage == COMMON}
+        self._record_area = self.record_size * self.record_count
+        # A float32 has far fewer distinct values in a table than it has rows,
+        # because pallet and common storage deduplicate them by construction.
+        # Keyed on the raw word rather than the float, which is strictly finer.
+        self._floats: dict[int, str] = {}
 
     def _fields(self, storage: Sequence[tuple[int, ...]]) -> list[Field]:
         """The record's fields, with each pallet and common block located.
@@ -276,7 +327,7 @@ class Db2:
         with one whose id is an ordinary field.
         """
         if schema is None:
-            return [Column(ColumnSpec(name=f"Field_{f.index}"), f)
+            return [self._column(ColumnSpec(name=f"Field_{f.index}"), f)
                     for f in self.fields]
         columns: list[Column] = []
         position = 0
@@ -285,8 +336,20 @@ class Db2:
             if spec.in_record:
                 field = self.fields[position] if position < len(self.fields) else None
                 position += 1
-            columns.append(Column(spec, field))
+            columns.append(self._column(spec, field))
         return columns
+
+    def _column(self, spec: ColumnSpec, field: Field | None) -> Column:
+        """One joined column, with everything a value needs precomputed."""
+        bits = value_bits(spec, field)
+        pallet = common = None
+        if field is not None and field.storage in (PALLET, PALLET_ARRAY):
+            pallet = struct.Struct(f"<{spec.count}I")
+        elif field is not None and field.storage == COMMON:
+            common = self._common_map(field)
+        return Column(spec=spec, field=field, bits=bits, mask=(1 << bits) - 1,
+                      element_bits=element_bits(spec, field) if field else 0,
+                      pallet=pallet, common=common)
 
     @property
     def columns(self) -> list[str]:
@@ -301,31 +364,6 @@ class Db2:
         return dict(struct.unpack_from("<II", block, at)
                     for at in range(0, len(block) - 7, 8))
 
-    def _value_bits(self, column: Column) -> int:
-        """How many bits of a column's raw value carry meaning.
-
-        Whichever of the packing and the declaration is narrower, because
-        either can be the binding one. A bitpacked field holds the value
-        sign-compressed into as many bits as its range needs, so a 26-bit
-        colour extends from bit 25 rather than from the declared 32. Where the
-        packer spent more bits than the type has, the type bounds it instead:
-        an attachment declared one byte and stored in nine reads -1 from bit 7
-        and 255 from bit 8. A pallet or common field holds a 32-bit word whose
-        meaningful part is only ever what the schema declares, so extending a
-        one-byte -1 over the width of the index that addressed it produces a
-        large positive number.
-        """
-        spec, field = column.spec, column.field
-        if field is None:
-            return spec.bits
-        if field.storage == NONE:
-            stored = field.size_bits // spec.count if spec.count else field.size_bits
-        elif field.storage in (BITPACKED, BITPACKED_SIGNED):
-            stored = field.size_bits
-        else:
-            stored = 32
-        return min(stored, spec.bits) or spec.bits
-
     def _values(self, column: Column, block: bytes, record_at: int,
                 record_id: int) -> list[int]:
         """The column's raw unsigned value(s), before width and type apply."""
@@ -334,37 +372,39 @@ class Db2:
             return [0] * spec.count
         base = record_at * 8 + field.offset_bits
         if field.storage == NONE:
-            width = field.size_bits // spec.count if spec.count else field.size_bits
+            width = column.element_bits
             return [read_bits(block, base + i * width, width)
                     for i in range(spec.count)]
         if field.storage in (BITPACKED, BITPACKED_SIGNED):
             return [read_bits(block, base, field.size_bits)]
-        if field.storage == COMMON:
-            return [self._commons.get(field.index, {}).get(record_id, field.default)]
+        if column.common is not None:
+            return [column.common.get(record_id, field.default)]
+        assert column.pallet is not None
         index = read_bits(block, base, field.size_bits)
-        at = field.pallet_at + index * 4 * spec.count
-        return list(struct.unpack_from(f"<{spec.count}I", self.pallet_data, at))
+        return list(column.pallet.unpack_from(
+            self.pallet_data, field.pallet_at + index * 4 * spec.count))
 
     def _text(self, column: Column, values: Sequence[int], block: bytes,
               record_at: int, strings_at: int) -> list[str]:
         """Turn a column's raw values into the text the CSV export carries."""
-        spec = column.spec
-        bits = self._value_bits(column)
-        mask = (1 << bits) - 1
-        out: list[str] = []
-        for position, value in enumerate(values):
-            value &= mask
-            if spec.kind in ("string", "locstring"):
-                out.append(self._string(column, value, block, record_at,
-                                        position, strings_at))
-            elif spec.kind == "float":
-                out.append(format_float(struct.unpack(
-                    "<f", (value & 0xFFFFFFFF).to_bytes(4, "little"))[0]))
-            elif spec.signed:
-                out.append(str(sign_extend(value, bits)))
-            else:
-                out.append(str(value))
-        return out
+        spec, mask, bits = column.spec, column.mask, column.bits
+        if spec.kind in ("string", "locstring"):
+            return [self._string(column, value & mask, block, record_at,
+                                 position, strings_at)
+                    for position, value in enumerate(values)]
+        return [self._spell(spec.kind, spec.signed, value & mask, bits)
+                for value in values]
+
+    def _spell(self, kind: str, signed: bool, value: int, bits: int) -> str:
+        """One scalar value, spelled the way the CSV export spells it."""
+        if kind == "float":
+            word = value & 0xFFFFFFFF
+            text = self._floats.get(word)
+            if text is None:
+                text = self._floats[word] = format_float(
+                    struct.unpack("<f", word.to_bytes(4, "little"))[0])
+            return text
+        return str(sign_extend(value, bits) if signed else value)
 
     def _string(self, column: Column, value: int, block: bytes, record_at: int,
                 position: int, strings_at: int) -> str:
@@ -381,7 +421,7 @@ class Db2:
         here = (record_at + (field.offset_bits >> 3)
                 + position * (column.spec.bits >> 3))
         at = (strings_at + here + sign_extend(value, column.spec.bits)
-              - self.record_size * self.record_count)
+              - self._record_area)
         if not 0 <= at < len(block):
             return ""
         end = block.find(b"\0", at)
@@ -448,19 +488,25 @@ class Db2:
         else:
             produced = self._record_rows(section, layout, relationship)
 
-        by_id: dict[int, tuple[str, ...]] = {}
+        # A copy is a real exported row reusing another record's data, so a
+        # reader that drops them comes out short rather than wrong. The copy
+        # table is read before the rows so that only the rows it names are
+        # held: a section whose copies reuse a hundredth of it would otherwise
+        # be retained whole, which is not what a generator promises.
+        copies = [struct.unpack_from("<II", self.blob,
+                                     layout["copy_at"] + i * 8)
+                  for i in range(section.copy_table_count)]
+        wanted = {copied for _new_id, copied in copies}
+
+        sources: dict[int, tuple[str, ...]] = {}
         for record_id, row in produced:
-            if section.copy_table_count:
-                by_id[record_id] = row
+            if record_id in wanted:
+                sources[record_id] = row
             yield row
 
-        # A copy is a real exported row reusing another record's data, so a
-        # reader that drops them comes out short rather than wrong.
         id_at = self.id_position()
-        for i in range(section.copy_table_count):
-            new_id, copied = struct.unpack_from("<II", self.blob,
-                                                layout["copy_at"] + i * 8)
-            source = by_id.get(copied)
+        for new_id, copied in copies:
+            source = sources.get(copied)
             if source is not None:
                 yield source[:id_at] + (str(new_id),) + source[id_at + 1:]
 
@@ -490,15 +536,27 @@ class Db2:
             return 0
         return self._values(column, block, record_at, 0)[0]
 
+    @staticmethod
+    def _supplied(column: Column, record_id: int, foreign: int) -> str | None:
+        """The text for a column the record does not carry, or None.
+
+        The id list and the relationship map are the two places a value lives
+        outside the record, and both row shapes have to consult them.
+        """
+        if column.field is not None:
+            return None
+        if column.spec.is_id:
+            return str(record_id)
+        return str(foreign) if column.spec.is_relation else None
+
     def _row(self, block: bytes, record_at: int, record_id: int,
              strings_at: int, foreign: int) -> tuple[str, ...]:
         """One record, spelled as the CSV export spells it."""
         out: list[str] = []
         for column in self.declared:
-            if column.field is None and column.spec.is_id:
-                out.append(str(record_id))
-            elif column.field is None and column.spec.is_relation:
-                out.append(str(foreign))
+            supplied = self._supplied(column, record_id, foreign)
+            if supplied is not None:
+                out.append(supplied)
             else:
                 out.extend(self._text(
                     column, self._values(column, block, record_at, record_id),
@@ -520,12 +578,11 @@ class Db2:
             record = self.blob[offset:offset + size]
             out: list[str] = []
             at = 0
+            foreign = relationship.get(index, 0)
             for column in self.declared:
-                if column.field is None and column.spec.is_id:
-                    out.append(str(record_id))
-                    continue
-                if column.field is None and column.spec.is_relation:
-                    out.append(str(relationship.get(index, 0)))
+                supplied = self._supplied(column, record_id, foreign)
+                if supplied is not None:
+                    out.append(supplied)
                     continue
                 text, at = self._inline_value(column.spec, record, at)
                 out.extend(text)
@@ -544,11 +601,5 @@ class Db2:
             width = spec.bits >> 3
             value = int.from_bytes(record[at:at + width], "little")
             at += width
-            if spec.kind == "float":
-                out.append(format_float(
-                    struct.unpack("<f", value.to_bytes(4, "little"))[0]))
-            elif spec.signed:
-                out.append(str(sign_extend(value, spec.bits)))
-            else:
-                out.append(str(value))
+            out.append(self._spell(spec.kind, spec.signed, value, spec.bits))
         return out, at

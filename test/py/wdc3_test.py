@@ -10,7 +10,7 @@ reader agreeing with itself.
 from __future__ import annotations
 
 import struct
-from dataclasses import dataclass, field as data_field
+from dataclasses import dataclass
 
 import pytest
 
@@ -34,7 +34,8 @@ class Stored:
     size_bits: int
     storage: int = wdc3.NONE
     additional: int = 0
-    extra: tuple[int, int, int] = (0, 0, 0)
+    default: int = 0
+    """What a common-storage field reads where the record has no exception."""
 
 
 @dataclass
@@ -63,8 +64,6 @@ class Table:
     pallet: bytes = b""
     common: bytes = b""
     has_id_list: bool = True
-    id_index: int = 0
-    extra_fields: list[Stored] = data_field(default_factory=list)
 
     def blob(self) -> bytes:
         """The file, with every offset resolved."""
@@ -99,7 +98,7 @@ class Table:
         out = _HEADER.pack(
             b"WDC3", total, len(self.fields), self.record_size,
             sum(len(s.strings) for s in self.sections), 0, 0, 0, 0, 0,
-            4 if self.has_id_list else 0, self.id_index, len(self.fields), 0, 0,
+            4 if self.has_id_list else 0, 0, len(self.fields), 0, 0,
             _STORAGE_INFO.size * len(self.fields), len(self.common),
             len(self.pallet), len(self.sections))
         out += b"".join(headers)
@@ -107,7 +106,7 @@ class Table:
         for stored in self.fields:
             out += _STORAGE_INFO.pack(stored.offset_bits, stored.size_bits,
                                       stored.additional, stored.storage,
-                                      *stored.extra)
+                                      stored.default, 0, 0)
         return out + self.pallet + self.common + b"".join(bodies)
 
 
@@ -124,7 +123,7 @@ def test_a_pallet_value_masks_to_the_width_the_schema_declares() -> None:
     """
     table = Table(
         fields=[Stored(offset_bits=0, size_bits=5, storage=wdc3.PALLET,
-                       additional=8, extra=(0, 5, 0))],
+                       additional=8)],
         # Two entries whose meaningful byte is the low one.
         pallet=bytes.fromhex("ff3da240") + bytes.fromhex("133da240"),
         sections=[Built(records=bytes([0, 1]), ids=(10, 11))],
@@ -143,7 +142,7 @@ def test_a_bitpacked_value_extends_over_its_own_width_when_that_is_narrower() ->
     """
     table = Table(
         fields=[Stored(offset_bits=0, size_bits=26,
-                       storage=wdc3.BITPACKED_SIGNED, extra=(0, 26, 0))],
+                       storage=wdc3.BITPACKED_SIGNED)],
         sections=[Built(records=struct.pack("<I", 0x3DA640E), ids=(1,))],
         record_size=4,
         schema=[ID, ColumnSpec(name="Colour", bits=32)])
@@ -156,7 +155,7 @@ def test_a_bitpacked_value_extends_over_the_declared_width_when_that_is_narrower
     bounds it: one byte stored in nine reads -1 from bit 7, not 255 from bit 8."""
     table = Table(
         fields=[Stored(offset_bits=0, size_bits=9,
-                       storage=wdc3.BITPACKED_SIGNED, extra=(0, 9, 0))],
+                       storage=wdc3.BITPACKED_SIGNED)],
         sections=[Built(records=struct.pack("<H", 0xFF), ids=(1,))],
         record_size=2,
         schema=[ID, ColumnSpec(name="MissileAttachment", bits=8)])
@@ -274,7 +273,7 @@ def test_a_common_field_falls_back_to_its_declared_default() -> None:
     """Common storage lists only the records that differ from the default."""
     table = Table(
         fields=[Stored(offset_bits=0, size_bits=0, storage=wdc3.COMMON,
-                       additional=8, extra=(255, 0, 0))],
+                       additional=8, default=255)],
         common=struct.pack("<II", 2, 19),
         sections=[Built(records=b"\0\0", ids=(1, 2))],
         record_size=1,
