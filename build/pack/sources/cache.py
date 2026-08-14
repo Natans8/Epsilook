@@ -10,12 +10,12 @@ from __future__ import annotations
 import sys
 import urllib.error
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from ..progress import log
-from .source import Fetched, Origin
+from .source import Fetched, Origin, Part, each
 
 BUILD_DIR = Path(__file__).resolve().parents[2]
 """The build's own directory: where its checked-in sources live, tracked."""
@@ -102,13 +102,15 @@ class Pinned:
     about a client already released, so the first fetch is the last one.
     """
 
-    optional: bool = False
-    """Whether a 404 means this build predates the source rather than that the
-    fetch failed."""
-
-    def get(self, origin: Origin, dest: Path, refresh: bool) -> bool:
+    def get(self, origin: Origin, dest: Path, refresh: bool,
+            optional: bool = False) -> bool:
         """Download once, and reuse the cached copy on every later build."""
-        return download(origin.address, dest, refresh, optional=self.optional)
+        return download(origin.address, dest, refresh, optional=optional)
+
+    def get_many(self, parts: Sequence[Part], into: Path,
+                 refresh: bool) -> list[Path]:
+        """One request each: separate addresses share nothing to resolve."""
+        return each(self, parts, into, refresh)
 
 
 @dataclass(frozen=True)
@@ -120,10 +122,16 @@ class Volatile:
     cached copy is kept only for a run with no network.
     """
 
-    def get(self, origin: Origin, dest: Path, refresh: bool) -> bool:
+    def get(self, origin: Origin, dest: Path, refresh: bool,
+            optional: bool = False) -> bool:
         """Fetch unconditionally, which is what makes this policy the one it is."""
         download_volatile(origin.address, dest)
         return True
+
+    def get_many(self, parts: Sequence[Part], into: Path,
+                 refresh: bool) -> list[Path]:
+        """One request each: separate addresses share nothing to resolve."""
+        return each(self, parts, into, refresh)
 
 
 @dataclass(frozen=True)
@@ -136,13 +144,21 @@ class Tracked:
     whichever route came up short.
     """
 
-    def get(self, origin: Origin, dest: Path, refresh: bool) -> bool:
+    def get(self, origin: Origin, dest: Path, refresh: bool,
+            optional: bool = False) -> bool:
         """Confirm the file is in the checkout."""
         if not dest.exists():
+            if optional:
+                return False
             sys.exit(f"error: {dest} is tracked in this repository and is not "
                      f"there; the checkout is incomplete")
         log(f"  tracked  {dest.name} ({dest.stat().st_size:,} bytes)")
         return True
+
+    def get_many(self, parts: Sequence[Part], into: Path,
+                 refresh: bool) -> list[Path]:
+        """One check each: nothing is fetched, so nothing is shared."""
+        return each(self, parts, into, refresh)
 
 
 def tracked_source(name: str, path: Path) -> Fetched:
@@ -198,7 +214,13 @@ class Revalidated:
     reading the same token.
     """
 
-    def get(self, origin: Origin, dest: Path, refresh: bool) -> bool:
+    def get_many(self, parts: Sequence[Part], into: Path,
+                 refresh: bool) -> list[Path]:
+        """One revalidation each: every part has its own publication."""
+        return each(self, parts, into, refresh)
+
+    def get(self, origin: Origin, dest: Path, refresh: bool,
+            optional: bool = False) -> bool:
         """Fetch the body only where the oracle says the publication moved."""
         remembered = (self.token_file.read_text(encoding="utf-8").strip()
                       if self.token_file.exists() else "")

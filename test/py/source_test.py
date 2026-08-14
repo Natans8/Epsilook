@@ -18,7 +18,7 @@ import json
 import urllib.error
 import urllib.request
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -27,7 +27,7 @@ import pytest
 from pack.sources.cache import Pinned, Revalidated, Volatile, tracked_source
 from pack.sources.listfile import LISTFILE_ASSET, latest_release
 from pack.sources.source import (Extracted, Fetch, Fetched, Gathered, Origin,
-                                 Source)
+                                 Part, Source, each)
 from pack.sources.tdb import TDB_TABLES, Distill
 
 BODY = b"ID,Name\n1,Fireball\n"
@@ -87,7 +87,11 @@ class Copied:
     refreshes: list[bool] = field(default_factory=list)
     """The flag each call was made with, for the cases about what reaches it."""
 
-    def get(self, origin: Origin, dest: Path, refresh: bool) -> bool:
+    batches: list[int] = field(default_factory=list)
+    """The size of each set offered, for the cases about what a policy sees."""
+
+    def get(self, origin: Origin, dest: Path, refresh: bool,
+            optional: bool = False) -> bool:
         if origin.address not in self.bodies:
             return False
         self.refreshes.append(refresh)
@@ -95,6 +99,11 @@ class Copied:
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(self.bodies[origin.address])
         return True
+
+    def get_many(self, parts: Sequence[Part], into: Path,
+                 refresh: bool) -> list[Path]:
+        self.batches.append(len(parts))
+        return each(self, parts, into, refresh)
 
 
 @dataclass
@@ -134,15 +143,14 @@ def _fetched(tmp_path: Path, present: bool) -> Built:
 
 
 def _gathered(tmp_path: Path, present: bool) -> Built:
-    """Several sources landing in one directory: a build's table exports."""
+    """One policy over several files in a directory: a build's table exports."""
     work: list[str] = []
     into = tmp_path / "cache" / "9.9.9.99999"
     bodies = {"spell": BODY, "visual": BODY} if present else {}
-    parts = [Fetched(name=table, origin=Origin(address),
-                     dest=into / f"{table}.csv", fetch=Copied(bodies, work))
+    parts = [Part(origin=Origin(address), name=f"{table}.csv")
              for table, address in (("Spell", "spell"), ("SpellVisual", "visual"))]
-    return Built(Gathered(name="a build's tables", into=into, parts=parts),
-                 into, work)
+    return Built(Gathered(name="a build's tables", into=into,
+                          fetch=Copied(bodies, work), parts=parts), into, work)
 
 
 def _extracted(tmp_path: Path, present: bool) -> Built:
@@ -297,12 +305,26 @@ def test_a_gathered_source_survives_a_part_this_build_predates(
     absent on its own, and the directory is still the source."""
     work: list[str] = []
     into = tmp_path / "cache" / "old"
-    parts = [Fetched(name="Spell", origin=Origin("spell"), dest=into / "Spell.csv",
-                     fetch=Copied({"spell": BODY}, work)),
-             Fetched(name="UiMap", origin=Origin("uimap"), dest=into / "UiMap.csv",
-                     fetch=Copied({}, work))]
-    assert Gathered(name="tables", into=into, parts=parts).acquire(False) == into
+    parts = [Part(origin=Origin("spell"), name="Spell.csv"),
+             Part(origin=Origin("uimap"), name="UiMap.csv", optional=True)]
+    gathered = Gathered(name="tables", into=into,
+                        fetch=Copied({"spell": BODY}, work), parts=parts)
+    assert gathered.acquire(False) == into
     assert not (into / "UiMap.csv").exists()
+
+
+def test_a_gathered_source_offers_its_policy_the_whole_set(
+        tmp_path: Path) -> None:
+    """One policy over many parts, so a store that resolves keys in one pass
+    over a large index is asked once rather than once per file. Handing each
+    part its own policy is what would make that impossible to express."""
+    work: list[str] = []
+    into = tmp_path / "cache" / "9.9.9.99999"
+    fetch = Copied({"spell": BODY, "visual": BODY}, work)
+    parts = [Part(origin=Origin(address), name=f"{table}.csv")
+             for table, address in (("Spell", "spell"), ("SpellVisual", "visual"))]
+    Gathered(name="tables", into=into, fetch=fetch, parts=parts).acquire(False)
+    assert fetch.batches == [2]
 
 
 # The `Fetch` contract.
@@ -394,7 +416,7 @@ def test_a_pinned_source_this_build_predates_is_absent(
     """A 404 on a declared-optional table is the build saying it predates it."""
     wired = _pinned(tmp_path, network)
     network.bodies.clear()
-    assert not Pinned(optional=True).get(wired.origin, wired.dest, False)
+    assert not Pinned().get(wired.origin, wired.dest, False, optional=True)
     assert not wired.dest.exists()
 
 
@@ -405,7 +427,7 @@ def test_a_pinned_source_that_vanishes_takes_its_stale_copy_with_it(
     wired = _pinned(tmp_path, network)
     wired.fetch.get(wired.origin, wired.dest, False)
     network.bodies.clear()
-    assert not Pinned(optional=True).get(wired.origin, wired.dest, True)
+    assert not Pinned().get(wired.origin, wired.dest, True, optional=True)
     assert not wired.dest.exists()
 
 

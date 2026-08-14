@@ -56,6 +56,29 @@ class Origin:
         return f"{self.address} ({self.detail})" if self.detail else self.address
 
 
+@dataclass(frozen=True)
+class Part:
+    """One file of a gathered source, named where it lands.
+
+    A declaration rather than a source of its own. What the parts of one
+    gathered source share is the policy that gets them, so a part states only
+    what is its own: where its bytes are, what to call them, and whether this
+    build lacking them is a fact rather than a failure.
+    """
+
+    origin: Origin
+    name: str
+    """The file name it lands under, inside the gatherer's directory."""
+
+    optional: bool = False
+    """Whether this build not having it is declared rather than an error.
+
+    A property of the source, not of how bytes travel: which tables a client
+    predates is a fact about that client, and a policy that had to carry it
+    could only ever answer it for the one transport it happens to use.
+    """
+
+
 class Fetch(Protocol):
     """A policy for getting located bytes, and for when a cached copy will do.
 
@@ -65,20 +88,58 @@ class Fetch(Protocol):
     tracked in the repository is never fetched at all.
     """
 
-    def get(self, origin: Origin, dest: Path, refresh: bool) -> bool:
+    def get(self, origin: Origin, dest: Path, refresh: bool,
+            optional: bool = False) -> bool:
         """Ensure ``dest`` holds the origin's bytes.
 
         Args:
             origin: where the bytes come from.
             dest: where they must be once this returns.
             refresh: get them again even where a cached copy would pass.
+            optional: the source declares this build may not have it, so an
+                upstream saying so is an answer rather than a failure.
 
         Returns:
-            True once they are there; False where this source is declared
-            absent for this build, which is how a build predating a table
-            reports it. Any other failure raises or exits.
+            True once they are there; False where this build is declared to
+            lack it. Any other failure raises or exits.
         """
         raise NotImplementedError
+
+    def get_many(self, parts: Sequence[Part], into: Path,
+                 refresh: bool) -> list[Path]:
+        """Get a whole set at once, and say which of them landed.
+
+        The set is offered rather than the parts one at a time because that is
+        the only moment a policy can act on what they share. Over http there is
+        nothing to share and this is a loop; over a content store, resolving
+        keys is one pass over an index whose repeated scanning would otherwise
+        dominate the read. A policy with nothing to share calls ``each``.
+
+        Args:
+            parts: what to get, in the order they are declared.
+            into: the directory they land in.
+            refresh: get them again even where cached copies would pass.
+
+        Returns:
+            Where each part that landed now is. Empty when this build is
+            declared to lack every one of them.
+        """
+        raise NotImplementedError
+
+
+def each(fetch: Fetch, parts: Sequence[Part], into: Path,
+         refresh: bool) -> list[Path]:
+    """Get parts one at a time: what a policy with nothing to share does.
+
+    Written once here rather than in each policy, so that the policies which
+    do have something to share are the only ones that say anything about it.
+    """
+    landed = []
+    for part in parts:
+        dest = into / part.name
+        if fetch.get(part.origin, dest, refresh, part.optional):
+            landed.append(dest)
+    return landed
 
 
 class Extract(Protocol):
@@ -234,36 +295,37 @@ class Extracted:
 
 @dataclass(frozen=True)
 class Gathered:
-    """Several sources landing in one directory, acquired as one.
+    """One policy over several files, landing in a directory a provider reads.
 
-    A build's table exports are dozens of files a provider reads as one
-    directory, and which of them this build has is decided per file: a table
-    the client predates is absent on its own, without the directory being
-    absent with it.
+    What separates this from ``Fetched`` is what the provider is handed -- a
+    directory rather than a file -- and not how many files there are. A
+    directory holding one is still a directory, and it is the gatherer that
+    names it and decides what lands in it.
+
+    Holding one ``Fetch`` over many parts, rather than many sources each with a
+    policy of their own, is what lets a policy see the whole set: over http
+    every part carries an identical policy anyway, and a content store cannot
+    resolve its keys in one pass unless something asks it for the set.
     """
 
     name: str
     into: Path
-    parts: Sequence[Source]
+    fetch: Fetch
+    parts: Sequence[Part]
 
     def origins(self) -> list[Origin]:
         """Every part's, in the order the parts are declared."""
-        return [origin for part in self.parts for origin in part.origins()]
+        return [part.origin for part in self.parts]
 
     def acquire(self, refresh: bool) -> Path | None:
-        """Acquire every part, and return the directory they share.
+        """Get every part, and return the directory they share.
 
         Absent only when every part is. A directory in which this build
         predates each file is not a source degrading as declared, it is a
-        version nothing was fetched for.
-
-        The directory is made here because it is this source that names it.
-        Every part writing into it is what makes it exist today, which is a
-        property of where those parts happen to land rather than of anything
-        this contract promises.
+        version nothing was fetched for -- so nothing is left behind for a
+        later run to find and take for a complete one.
         """
-        landed = [part.acquire(refresh) for part in self.parts]
-        if not any(path is not None for path in landed):
+        if not self.fetch.get_many(self.parts, self.into, refresh):
             return None
         self.into.mkdir(parents=True, exist_ok=True)
         return self.into
