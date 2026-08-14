@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import csv
 import gzip
+import io
 import json
 import sys
 from collections import Counter
@@ -217,6 +218,12 @@ def _models(known: dict[int, str]) -> dict[int, str]:
                           local_only=LOCAL_ONLY).names
 
 
+def _neighbours(known: dict[int, str]) -> dict[int, str]:
+    from epsilon_walks import neighbour_names  # pylint: disable=import-outside-toplevel
+    return neighbour_names(storage(), known, _unnamed(known),  # type: ignore[arg-type]
+                           local_only=LOCAL_ONLY)
+
+
 ROUTES: tuple[Route, ...] = (
     Route(name="terrain",
           summary="the map table, and each map's own grid of tiles",
@@ -282,6 +289,11 @@ ROUTES: tuple[Route, ...] = (
           needs="the storage",
           cost="minutes",
           produce=_models),
+    Route(name="neighbours",
+          summary="files named by the art they were delivered alongside",
+          needs="the storage, and every name the routes above it settled",
+          cost="seconds, and every remaining file with --network",
+          produce=_neighbours),
 )
 """Every route, in priority order.
 
@@ -289,7 +301,6 @@ Highest first, and the ordering principle is how much the name is worth rather
 than how much it cost: a name the game itself uses beats one the client reports,
 which beats one derived from where a file hangs.
 """
-
 
 _NAME_WIDTH = max(len(route.name) for route in ROUTES)
 """How wide a route's name column is, so every report lines up."""
@@ -308,16 +319,26 @@ def read_rows(path: Path) -> dict[int, str]:
 
 
 def write_rows(path: Path, rows: dict[int, str]) -> None:
-    """Write `<file id>;<path>`, sorted by id.
+    """Write `<file id>;<path>`, sorted by id, plain or gzipped by suffix.
 
     Sorted so that two runs of the same routes produce the same bytes, which is
     what lets an unchanged rebuild stage nothing.
+
+    ⚠ A gzip member stores a modification time, and the default is the clock.
+    That alone would make every re-vendoring a diff, so it is written as zero:
+    the point of sorting is defeated by a header that changes on its own.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle, delimiter=";", lineterminator="\n")
-        for fid in sorted(rows):
-            writer.writerow([fid, rows[fid]])
+    body = io.StringIO()
+    writer = csv.writer(body, delimiter=";", lineterminator="\n")
+    for fid in sorted(rows):
+        writer.writerow([fid, rows[fid]])
+    raw = body.getvalue().encode("utf-8")
+    if path.suffix == ".gz":
+        with gzip.GzipFile(path, "wb", compresslevel=9, mtime=0) as handle:
+            handle.write(raw)
+    else:
+        path.write_bytes(raw)
 
 
 def golden_rows(route: Route) -> dict[int, str] | None:
@@ -558,6 +579,8 @@ def main() -> int:
                         help="report what is still unnamed, classified by kind")
     parser.add_argument("--referrers", action="store_true",
                         help="sweep every client table for mentions of what is unnamed")
+    parser.add_argument("--vendor", action="store_true",
+                        help="write the merged result to the file the build reads")
     args = parser.parse_args()
 
     if args.list:
@@ -565,6 +588,21 @@ def main() -> int:
         return 0
     if args.verify:
         return verify()
+    full_walk = args.network and args.only is None
+    if args.vendor and not full_walk:
+        # A local-only walk does not find fewer names, it finds DIFFERENT ones:
+        # a derived path names the parent that refers to the file, and where
+        # several parents do, the walk takes the lowest-numbered one it managed
+        # to read. Which parents a machine happens to hold therefore decides
+        # the name, so the output is reproducible on one machine and nowhere
+        # else -- exactly what a vendored artefact may not be. A partial run
+        # is refused for the same reason from the other end: it would vendor a
+        # merge of this run and whatever the last one left in the cache.
+        log(f"  {RED}FAIL{RESET}  --vendor needs a full --network run: "
+            "a local-only or partial walk is not reproducible off this machine")
+        return 1
+    # Vendoring is meant to be a decision, and the diff is what makes it one.
+    args.diff = args.diff or args.vendor
 
     global LOCAL_ONLY  # pylint: disable=global-statement
     LOCAL_ONLY = not args.network
@@ -597,6 +635,9 @@ def main() -> int:
         coverage(merged)
     if args.referrers:
         referrers(merged)
+    if args.vendor:
+        write_rows(VENDORED, merged)
+        log(f"\n  vendored      {len(merged):,} rows -> {VENDORED}")
     return 0
 
 

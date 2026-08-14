@@ -40,6 +40,7 @@ feeds what comes later.**
 | `reskins`       | the retail world model a file was copied from      | semantic        | minutes                |
 | `worldmodels`   | group geometry and textures, from their models     | derived         | minutes                |
 | `models`        | skins, textures and anims, from their models       | derived         | minutes                |
+| `neighbours`    | the id space itself: what a file arrived beside    | adjacent        | seconds                |
 
 **A real name is one the game itself would look the file up by.** Terrain qualifies because a map's directory plus a
 tile's position in the map's fixed grid determines the filename by convention — nothing is invented. Icons and the
@@ -53,6 +54,12 @@ That is why it outranks parentage.
 **A derived name is a placeholder and says so.** It states which model refers to the file, which is all anyone knows,
 and it sits under an `epsilon/` prefix so it can never be mistaken for a path the game uses. The object route derives
 one too, for the names the client reports as a bare filename with no directory.
+
+**An adjacent name is weaker still, and the `near/` bucket is what says so.** Every other route follows a pointer —
+a model names its textures, a tile names what stands on it — so its claim can be checked by re-reading the parent. The
+last route follows nothing: it names a file after the art it was *delivered* beside, on the evidence that file ids are
+handed out as assets are added. That is a real signal and it is not a reference, so it is marked apart, and a route
+that reads these names later can tell the two kinds apart without re-deriving either.
 
 **Two routes read the file itself rather than anything that references it**, which is what lets them reach files no
 table mentions at all:
@@ -223,23 +230,40 @@ classification says which route would go there.
 uv run python tools/supplement.py --coverage
 ```
 
-A `--network` run reaches **124,955 of the 128,476 custom files, 97.3%**, leaving 3,521. Of the 3,491 that could be
-read and identified:
+A `--network` run reaches **127,245 of the 128,476 custom files, 99.0%**, leaving 1,231:
 
-| kind                    | count | which route would claim it              |
-|-------------------------|------:|------------------------------------------|
-| `blp`                   | 1,994 | none — see below                        |
-| `wmo group`             |   454 | none: their roots carry no id            |
-| `m2`                    |   308 | none: their own bytes name nothing       |
-| `wmo root`              |   280 | none: they declare no retail id          |
-| `skin`                  |   232 | none: their models are unnamed           |
-| `chunked, unrecognised` |   207 | none                                     |
-| unreadable / mp3 / unknown |  46 | sound, and a few that would not open     |
+| kind                    | count | what could reach it          |
+|-------------------------|------:|-------------------------------|
+| `blp`                   |   539 | nothing that refers to it     |
+| `m2`                    |   269 | their own bytes name nothing  |
+| `chunked, unrecognised` |   207 | nothing                       |
+| `skin`                  |   171 | their models are unnamed      |
+| `empty`                 |    30 | nothing — the files are zero length |
+| `mp3`                   |    10 | sound                         |
+| unknown                 |     5 | nothing recognises the bytes  |
 
 **⭐ Every parent left is silent.** The two routes that read a file for what it says about itself have taken everything
-they can: not one of the 308 models carries a name, and not one of the 280 world-model roots declares a retail id.
-**That is what makes 97.3% the ceiling for the current routes** — the 686 children above are blocked behind those 588
-parents, and nothing left says anything about itself.
+they can: not one of the 269 models carries a name. No world model of either kind survives in that list, which is the
+check that the routes reading them are complete.
+
+**That was the ceiling for every route that follows a reference, and it is why the last route follows none.** What
+remains is not unreachable, it is unreferenced — so `neighbours` names it by the art it was delivered beside instead.
+It claims **2,239 rows** on a `--network` run, which is what carries the walk from 97.3% to 99.0%. ⚠ Measured
+local-only it claims 631, and that figure describes the install rather than the route: a walk can only classify a file
+it can read, and the install held 853 of the 3,470 unnamed at the time.
+
+**⚠ Not one of the 1,231 that remain is on disk.** Everything this install holds is named, so the remainder can only be
+classified over the network, and a route reaching it would have to do the same.
+
+**⛔ A neighbour must identify something, or it says nothing.** The derived buckets come in two shapes: per-parent
+(`epsilon/texture/<model>`) and flat (`epsilon/model`, `epsilon/buildingtile`, `unknown`). Only the first can carry the
+claim — "delivered near `epsilon/model`" means the neighbour was *some* model, which is no claim at all. The rule is a
+segment count rather than a list, so a route adding a bucket does not need a row. ⚠ Before it existed, 14.6% of the
+adjacency rows came out `epsilon/near/model/<fid>`.
+
+**⛔ And the route must not read its own output.** `--only` seeds from the last full run, so a second pass would treat
+the first pass's `near/` names as buckets and spell the compounding literally as `near/near/`. Excluding what it
+produced is what makes a re-run idempotent: measured, the second run adds zero rows.
 
 **⚠ A local-only run reaches 91.8%, and the gap is not small.** Nine tenths of what an install lacks is exactly what
 the file-reading routes want, so `--network` is not an optimisation here; it is most of the result.
@@ -248,15 +272,22 @@ the file-reading routes want, so `--network` is not an optimisation here; it is 
 result yields zero new rows, which follows from the ordering: routes run parents-before-children, and the children they
 produce — groups, skins, textures — cannot themselves be parents. There is no fixed point to iterate towards.
 
-No terrain appears in that list, which is the check that the terrain route is complete.
+No terrain appears in that list either, which is the same check for the terrain route.
 
 > ⚠ Classifying on the leading four bytes alone gives a wrong answer, and it is a wrong answer that looks right:
 > terrain, world tables and world models all begin with the same version chunk, so magic-only classification calls
 > thousands of map tiles world models. `classify()` separates them on the chunks they carry instead.
 
-The remaining textures have no route. They are not model textures — the parentage walks have taken those — nor
+The remaining textures have no *referrer*. They are not model textures — the parentage walks have taken those — nor
 customization textures, nor the ground textures a map paints with, which is the one place left that could have
-referenced them and does not.
+referenced them and does not. That is what `neighbours` is for, and what its weaker standing records.
+
+**⭐ The id space is itself evidence, and a map's own run is the sharpest form of it.** Prophecy Lordaeron's art
+occupies one unbroken stretch, `23,302,369`–`23,308,848`, across all three ways a map is named — its tiles, the models
+its terrain places, the textures it paints with. **92 unnamed files fall inside it**, and they are named after the map
+rather than after whichever parent folder happened to sit nearest, because a map says what a file is *for* while a
+folder named after a file id says nothing. ⚠ Two maps delivered together share a stretch — `classicazeroth` and
+`classickalimdor` do — so a file inside two runs is claimed by neither and falls through to the weaker rule.
 
 ### Routes that are closed, with what closed them
 
@@ -284,11 +315,48 @@ single custom file — every pack is built from wago's retail tables — so this
 pack that does not exist yet. Coverage here is a readiness measure, and a route reaching files that pack will never
 carry is worth nothing however elegant.
 
-## 7. The step this does not take
+## 7. Vendoring
 
-**Nothing here writes `build/sources/epsilon-listfile-supplement.csv.gz`.** The pipeline writes to `.cache/` and prints
-a diff; vendoring is a separate, deliberate act. That is the property worth keeping: the supplement is the one thing in
-the build that a person put there on purpose, and the diff is what makes that a decision rather than a formality.
+Writing `build/sources/epsilon-listfile-supplement.csv.gz` is a separate, deliberate act, and it has its own flag so
+that it cannot happen as a side effect of a run somebody started for the diff:
 
-When it is taken, the result must be sorted and deduplicated — which `write_rows` guarantees — so that an unchanged
-rebuild produces identical bytes and stages nothing.
+```bash
+uv run python tools/supplement.py --diff --network --vendor
+```
+
+**⛔ `--vendor` refuses a local-only or partial run**, because either one produces a file that is reproducible on this
+machine and nowhere else. A local walk does not find fewer names, it finds *different* ones — a derived path names the
+parent that refers to the file, and where several do, the walk takes the lowest-numbered one it managed to read, so
+which parents a machine happens to hold decides the name. A `--only` run is refused from the other end: it would
+vendor a merge of this run and whatever the cache was left holding.
+
+Two properties make an unchanged re-vendoring stage nothing, and both are in `write_rows`:
+
+- the rows are **sorted by id and unique**, so the same routes produce the same bytes;
+- the gzip member is written with **`mtime=0`**. ⚠ Gzip stores a modification time and defaults it to the clock, which
+  would make every re-vendoring a diff on its own and defeat the sorting entirely.
+
+⚠ Gzip also stores the **file name**, so the bytes hold for the vendored path and are not a property of the rows alone.
+Writing the same rows to a different name is a different file.
+
+The supplement is the one thing in the build that a person put there on purpose, and the diff is what makes that a
+decision rather than a formality.
+
+### What the current file holds
+
+The vendored file carries **127,277 rows**, reconstructed by a full `--network` run. Against the 95,410 it replaced:
+**31,867 added, none lost, 796 renamed.** The renames come in four shapes worth recognising, because a later run will
+produce more of the same:
+
+- **569 followed their parent into a better bucket** — a world-model group is named beside its root, so a root that
+  gains a truer name hands one to its groups. `epsilon/wmo/watertile_4_slime_000.wmo` became
+  `epsilon/watertile/watertile_4_slime_000.wmo` without the derived name itself changing.
+- **122 became file-id shaped**, which reads like a loss and is not. A group named `<root>_000.wmo` asserts that one
+  root owns it; reading more parents over the network shows three roots sharing that geometry — the building and its
+  alliance and horde variants — so the claim was withdrawn in favour of one that is true.
+- **104 changed which parent named them**, for the same reason: where several parents refer to one file the walk takes
+  the lowest-numbered it could read, so reading more of them changes the answer. This is the property `--vendor`
+  demands a full network run for.
+- **one fell from parentage to adjacency** — texture `19400081`, which no parent claimed this time and which
+  `neighbours` then named. It is the one rename that trades a stronger claim for a weaker one, and the `near/` bucket
+  is what makes that visible rather than silent.

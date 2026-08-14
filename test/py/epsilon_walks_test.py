@@ -148,7 +148,6 @@ def test_a_child_shared_between_parents_keeps_its_file_id() -> None:
     assert walk.names == {shared: f"epsilon/skin/first/{shared}.skin"}
 
 
-
 def test_a_texture_always_keeps_its_file_id() -> None:
     parent = FLOOR + 1
     files = {parent: chunk(b"TXID", ids(FLOOR + 10))}
@@ -618,12 +617,12 @@ def test_a_map_names_its_own_auxiliary_files() -> None:
     lgt, wdl = FLOOR + 2, FLOOR + 7
     header = struct.pack("<8I", 970, lgt, 0, 0, 0, 0, wdl, 0)
     raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
-        chunk(b"MPHD", header, reversed_tags=True)
+          chunk(b"MPHD", header, reversed_tags=True)
     storage = FakeStorage({wdt: raw})
 
     import epsilon_walks
     original = epsilon_walks.custom_maps
-    epsilon_walks.custom_maps = lambda _s, _f: [("mymap", wdt)]
+    epsilon_walks.custom_maps = lambda storage, floor: [("mymap", wdt)]
     try:
         names = terrain_names(storage, FLOOR)
     finally:
@@ -639,11 +638,11 @@ def test_an_unset_auxiliary_slot_names_nothing() -> None:
 
     wdt = FLOOR + 1
     raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
-        chunk(b"MPHD", struct.pack("<8I", 970, 0, 0, 0, 0, 0, 0, 0),
-              reversed_tags=True)
+          chunk(b"MPHD", struct.pack("<8I", 970, 0, 0, 0, 0, 0, 0, 0),
+                reversed_tags=True)
     import epsilon_walks
     original = epsilon_walks.custom_maps
-    epsilon_walks.custom_maps = lambda _s, _f: [("mymap", wdt)]
+    epsilon_walks.custom_maps = lambda storage, floor: [("mymap", wdt)]
     try:
         names = terrain_names(FakeStorage({wdt: raw}), FLOOR)
     finally:
@@ -659,7 +658,7 @@ def test_low_detail_terrain_places_world_models_too() -> None:
     placed = FLOOR + 11
     body = struct.pack("<I", placed) + b"\x00" * 60
     raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
-        chunk(b"MLMD", body, reversed_tags=True)
+          chunk(b"MLMD", body, reversed_tags=True)
     known = {700: "world/maps/prophecylordaeron/prophecylordaeron.wdl"}
     assert placement_names(FakeStorage({700: raw}), known, {placed}) == {
         placed: f"epsilon/placed/prophecylordaeron/{placed}.wmo"}
@@ -673,7 +672,7 @@ def test_a_ground_texture_is_named_by_the_map_that_paints_with_it() -> None:
     painted = FLOOR + 3
     body = struct.pack("<I", painted)
     raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
-        chunk(b"MDID", body, reversed_tags=True)
+          chunk(b"MDID", body, reversed_tags=True)
     known = {600: "world/maps/classicazeroth/classicazeroth_31_49_tex0.adt"}
     assert ground_texture_names(FakeStorage({600: raw}), known, {painted}) == {
         painted: f"epsilon/ground/classicazeroth/{painted}.blp"}
@@ -684,6 +683,92 @@ def test_only_the_texture_tile_records_the_painting() -> None:
 
     painted = FLOOR + 3
     raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
-        chunk(b"MDID", struct.pack("<I", painted), reversed_tags=True)
+          chunk(b"MDID", struct.pack("<I", painted), reversed_tags=True)
     known = {600: "world/maps/m/m_31_49_obj0.adt"}
     assert ground_texture_names(FakeStorage({600: raw}), known, {painted}) == {}
+
+
+BLP = b"BLP2" + b"\x00" * 8
+"""Enough of a texture for the classifier to recognise one."""
+
+ORPHAN = FLOOR + 500
+"""An id nothing refers to, which is what the last route is for."""
+
+
+def neighbour_walk(files: dict[int, bytes], known: dict[int, str]):
+    """The adjacency route over a handful of files, naming ORPHAN or nothing."""
+    from epsilon_walks import neighbour_names  # pylint: disable=import-outside-toplevel
+
+    return neighbour_names(FakeStorage(files), known, {ORPHAN})
+
+
+def test_a_file_is_named_by_the_art_it_arrived_beside() -> None:
+    """Nothing refers to these at all, so the ordering is the only evidence
+    there is: ids are handed out as art is added."""
+    known = {ORPHAN - 1: "epsilon/texture/eps_draconic_blue_wg_tower02/x.blp"}
+    assert neighbour_walk({ORPHAN: BLP}, known) == {
+        ORPHAN: f"epsilon/near/texture/eps_draconic_blue_wg_tower02/{ORPHAN}.blp"}
+
+
+def test_a_distant_neighbour_says_nothing_and_names_nothing() -> None:
+    """Adjacency is the whole claim, so a file that merely outlived the art
+    around it must not be named after it."""
+    from epsilon_walks import NEIGHBOUR_CAP  # pylint: disable=import-outside-toplevel
+
+    known = {ORPHAN - NEIGHBOUR_CAP - 1: "epsilon/texture/far/x.blp"}
+    assert neighbour_walk({ORPHAN: BLP}, known) == {}
+
+
+def test_a_map_run_outranks_the_nearest_neighbour() -> None:
+    """A map says what a file is FOR; a parent folder named after a file id
+    says nothing, so the span wins wherever it applies."""
+    known = {ORPHAN - 1: "epsilon/texture/23303244/x.blp",
+             FLOOR + 400: "world/maps/prophecylordaeron/prophecylordaeron_45_45_tex0.adt",
+             FLOOR + 600: "epsilon/placed/prophecylordaeron/y.wmo"}
+    assert neighbour_walk({ORPHAN: BLP}, known) == {
+        ORPHAN: f"epsilon/near/prophecylordaeron/{ORPHAN}.blp"}
+
+
+def test_two_maps_delivered_together_claim_nothing() -> None:
+    """Overlapping runs are real -- the classic maps share a stretch -- and a
+    file inside both belongs to neither as far as this can tell."""
+    known = {FLOOR + 400: "world/maps/classicazeroth/a_31_49_tex0.adt",
+             FLOOR + 600: "world/maps/classicazeroth/b_31_49_tex0.adt",
+             FLOOR + 401: "world/maps/classickalimdor/c_31_49_tex0.adt",
+             FLOOR + 601: "world/maps/classickalimdor/d_31_49_tex0.adt",
+             ORPHAN - 1: "epsilon/texture/set/x.blp"}
+    assert neighbour_walk({ORPHAN: BLP}, known) == {
+        ORPHAN: f"epsilon/near/texture/set/{ORPHAN}.blp"}
+
+
+def test_an_icon_is_grouped_rather_than_placed_beside_one_neighbour() -> None:
+    """Icons live in one flat directory, so naming one after the icon next to
+    it would assert a relationship that does not exist."""
+    known = {ORPHAN - 1: "Interface/ICONS/w3reforgedpigfarm.blp"}
+    assert neighbour_walk({ORPHAN: BLP}, known) == {ORPHAN: f"epsilon/icons/{ORPHAN}.blp"}
+
+
+def test_the_extension_comes_from_the_bytes_not_the_neighbours() -> None:
+    """A model in a run of textures would otherwise be handed .blp, which is a
+    plausible-looking path that matches nothing."""
+    known = {ORPHAN - 1: "epsilon/texture/set/x.blp"}
+    assert neighbour_walk({ORPHAN: b"MD21" + b"\x00" * 8}, known) == {
+        ORPHAN: f"epsilon/near/texture/set/{ORPHAN}.m2"}
+
+
+def test_bytes_nothing_recognises_are_left_unnamed() -> None:
+    """The one guess this route could not mark as a guess is the extension."""
+    known = {ORPHAN - 1: "epsilon/texture/set/x.blp"}
+    assert neighbour_walk({ORPHAN: b"ZZZZ" + b"\x00" * 8}, known) == {}
+
+
+def test_a_second_pass_produces_what_the_first_did() -> None:
+    """The route reads every name settled before it, and after one pass its own
+    output is among them. Left in, an adjacency name would be read as a bucket
+    and the second pass would state that a file arrived beside something that
+    arrived beside something, spelling it literally. Re-running is ordinary
+    here, so the exclusion is what makes a re-run add nothing."""
+    known = {ORPHAN - 1: "epsilon/texture/set/x.blp"}
+    first = neighbour_walk({ORPHAN: BLP}, known)
+    assert first == {ORPHAN: f"epsilon/near/texture/set/{ORPHAN}.blp"}
+    assert neighbour_walk({ORPHAN: BLP}, {**known, **first}) == first

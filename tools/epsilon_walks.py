@@ -36,6 +36,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from epsilon_names import ICON_DIRECTORY
 from epsilon_storage import Reads, chunks
 from tqdm import tqdm
 
@@ -78,6 +79,7 @@ The position is the whole reason terrain comes out with real names: the array
 is fixed-width and every slot means the same thing in every cell, so a file id's
 place in it determines the name the game would look the file up by.
 """
+
 
 @dataclass(frozen=True)
 class Child:
@@ -285,7 +287,10 @@ def heads_of(storage: Reads, ids: list[int], *, label: str,
     """
     storage.encoding_keys(ids)
     here = [fid for fid in ids if storage.holds_locally(fid)]
-    remote = [] if local_only else [fid for fid in ids if fid not in set(here)]
+    # Built once: as the comprehension's condition it was rebuilt per candidate,
+    # which is half a minute of set construction on the pass a networked run makes.
+    local = set(here)
+    remote = [] if local_only else [fid for fid in ids if fid not in local]
 
     found: dict[int, bytes] = {}
     for fid in tqdm(here, desc=f"{label} (install)", unit="file"):
@@ -589,7 +594,6 @@ contribute. The map's low-detail terrain does, which is only reachable at all
 because the map header names it.
 """
 
-
 GROUND_BUCKET = "ground"
 """Where a texture named by the map it paints sits."""
 
@@ -703,6 +707,8 @@ CUSTOMIZATION_CONTEXT = ("ChrModel", "ChrRaceXChrModel", "ChrRaces")
 and a client missing them yields a shorter path rather than no path."""
 
 SEXES = {"0": "male", "1": "female"}
+
+
 def wearers(tables: dict[str, Table | None]) -> dict[int, str]:
     """Which race and sex each character model belongs to.
 
@@ -1041,3 +1047,188 @@ def world_model_children(storage: Reads, known: dict[int, str],
     return walk_parents(storage, known, unnamed, suffix=".wmo",
                         reader=_world_model_children, kinds=WORLD_MODEL_CHILDREN,
                         local_only=local_only, label="world models")
+
+
+NEIGHBOUR_BUCKET = "near"
+"""Where a name derived from adjacency sits.
+
+Apart from the parentage buckets, and the distinction is the point. Those state
+that a model refers to the file; this states only that the file arrived beside
+something, which is a weaker claim and must not be mistaken for the stronger
+one by a route that reads these names later.
+"""
+
+ICON_BUCKET = "icons"
+"""Where an icon with no name sits.
+
+Not under `near`: three signals agree that these are icons -- the id space, the
+64x64 shape and the name hash the client stores for them -- so calling one an
+icon is corroborated rather than inferred from a neighbour. What no source
+knows is which icon, and the file id is the only handle left.
+"""
+
+GROUPED_DIRECTORIES = {ICON_DIRECTORY.lower(): ICON_BUCKET}
+"""Flat directories where belonging to the directory is itself the claim.
+
+The icon directory is the only one so far, and it earns the exception because
+what it says -- this is an icon -- is corroborated elsewhere. Adding another is
+a row.
+"""
+
+IDENTIFYING_SEGMENTS = 3
+"""How many segments a directory needs before it names a particular thing.
+
+The derived buckets come in two shapes: per-parent (`epsilon/texture/<model>`)
+and flat (`epsilon/model`, `epsilon/buildingtile`, `unknown`). Only the first
+identifies anything, so only the first can carry an adjacency claim -- being
+delivered near `epsilon/model` says the neighbour was some model, which is the
+same empty claim the icon directory would make. Counting segments separates
+them without a list that would need a row every time a route adds a bucket.
+"""
+
+NEIGHBOUR_CAP = 16
+"""How far the nearest named file may be before adjacency says nothing.
+
+Measured: within one id claims 54.6% of the block and within sixteen claims
+72.8%, after which it flattens while the gaps run to six figures. A cap is what
+stops a file being named after art it merely outlived.
+"""
+
+MAP_PREFIXES = ("world/maps/", f"{DERIVED_ROOT}/{PLACED_BUCKET}/",
+                f"{DERIVED_ROOT}/{GROUND_BUCKET}/")
+"""Every path shape that says which map a file belongs to.
+
+A map is named three ways by three routes -- its own tiles, the models its
+terrain places, the textures it paints with -- and the span wants all of them,
+because the run is the delivery rather than any one route's view of it.
+"""
+
+
+def map_of(path: str) -> str | None:
+    """The map a path belongs to, however that path was derived."""
+    lowered = path.lower()
+    for prefix in MAP_PREFIXES:
+        if lowered.startswith(prefix):
+            return lowered[len(prefix):].split("/", 1)[0]
+    return None
+
+
+def map_spans(known: dict[int, str]) -> dict[str, tuple[int, int]]:
+    """The id run each map's named files occupy, lowest to highest.
+
+    Art arrives per project, so a map's files land in one stretch of the id
+    space. That makes the stretch itself evidence: a file inside it was
+    delivered with that map, whatever nothing says about it.
+
+    ⚠ This is a hull, not a run, and it carries no cap the way the neighbour
+    rule does -- one stray id would swallow every gap up to it. It is trusted
+    because the runs measure dense (Prophecy Lordaeron holds 3,322 files across
+    6,479 ids), and because a hull that swallowed another map's would overlap
+    it and then claim nothing.
+    """
+    seen: dict[str, list[int]] = defaultdict(list)
+    for fid, path in known.items():
+        where = map_of(path)
+        if where:
+            seen[where].append(fid)
+    return {where: (min(ids), max(ids)) for where, ids in seen.items()}
+
+
+def _span_owner(fid: int, spans: dict[str, tuple[int, int]]) -> str | None:
+    """Which map's run holds this id, or None where the answer is not one.
+
+    Two maps delivered together share a stretch, and a file inside both belongs
+    to neither as far as anything here can tell, so it falls through to the
+    weaker rule rather than being assigned to whichever sorted first.
+    """
+    holding = [where for where, (low, high) in spans.items() if low <= fid <= high]
+    return holding[0] if len(holding) == 1 else None
+
+
+KIND_EXTENSIONS = {
+    "blp": "blp",
+    "m2": "m2",
+    "skin": "skin",
+    "wmo root": "wmo",
+    "wmo group": "wmo",
+    "adt": "adt",
+    "wdt": "wdt",
+    "mp3": "mp3",
+    "ogg": "ogg",
+}
+"""What each kind is called on disk.
+
+The extension comes from the file's own bytes rather than from its neighbours,
+because a model sitting in a run of textures would otherwise be handed a
+texture's extension. A kind absent here is not named at all: `unknown` and
+`chunked, unrecognised` describe bytes nothing recognises, and inventing a
+suffix for those would be the one guess this route cannot mark as one.
+"""
+
+
+def neighbour_names(storage: Reads, known: dict[int, str], unnamed: set[int],
+                    *, local_only: bool = True) -> dict[int, str]:
+    """Files named by the art they were delivered alongside.
+
+    The last resort, and the only route here that names a file from no
+    reference to it at all. Every other derivation follows a pointer: a model
+    names its textures, a tile names what stands on it. These files are pointed
+    at by nothing, and what is left is the file id -- which is not arbitrary,
+    because ids are handed out as art is added, so a file's neighbours are the
+    files it arrived with.
+
+    Three rules in descending order of what the name is worth: a map's own id
+    run says what the file is for; the icon directory says what kind of thing
+    it is; the nearest named file says only what it shipped beside.
+
+    ⚠ What this claims is weaker than anything else here, and the `near` bucket
+    is what says so. A parentage name can be checked by re-reading the parent;
+    this one cannot be checked at all, because the evidence is an ordering
+    rather than a reference.
+
+    Args:
+        storage: the opened storage.
+        known: every name settled so far, which is what the runs are read from.
+        unnamed: the ids still wanting a name.
+        local_only: refuse to reach the network.
+
+    Returns:
+        File id to path.
+    """
+    # ⛔ This route must not read its own output. A `near` name states that a
+    # file arrived beside something; treating it as a bucket would state that a
+    # file arrived beside something that arrived beside something, and a second
+    # pass spells that literally as `near/near/`. Re-running is normal here --
+    # `--only` seeds from the last full run -- so the exclusion is what keeps a
+    # re-run idempotent rather than compounding.
+    produced = (f"{DERIVED_ROOT}/{NEIGHBOUR_BUCKET}/", f"{DERIVED_ROOT}/{ICON_BUCKET}/")
+    source = {fid: path for fid, path in known.items()
+              if not path.lower().startswith(produced)}
+
+    neighbours = sorted(source)
+    if not neighbours:
+        return {}
+    spans = map_spans(source)
+
+    buckets: dict[int, str] = {}
+    for fid in sorted(unnamed):
+        owner = _span_owner(fid, spans)
+        if owner:
+            buckets[fid] = f"{NEIGHBOUR_BUCKET}/{owner}"
+            continue
+        at = bisect.bisect_left(neighbours, fid)
+        gap, neighbour = min((abs(fid - near), near)
+                             for near in neighbours[max(at - 1, 0):at + 1])
+        directory = source[neighbour].replace("\\", "/").rpartition("/")[0]
+        grouped = GROUPED_DIRECTORIES.get(directory.lower())
+        if grouped:
+            buckets[fid] = grouped
+        elif gap <= NEIGHBOUR_CAP and directory.count("/") + 1 >= IDENTIFYING_SEGMENTS:
+            trimmed = directory.removeprefix(f"{DERIVED_ROOT}/")
+            buckets[fid] = f"{NEIGHBOUR_BUCKET}/{trimmed}"
+
+    raws = heads_of(storage, sorted(buckets), label="neighbours",
+                    local_only=local_only)
+    return {fid: f"{DERIVED_ROOT}/{bucket}/{fid}.{extension}"
+            for fid, bucket in buckets.items()
+            if (extension := KIND_EXTENSIONS.get(classify(raws.get(fid) or b"")))}
