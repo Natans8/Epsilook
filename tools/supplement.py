@@ -193,6 +193,12 @@ def _reskins(known: dict[int, str]) -> dict[int, str]:
                         stock_paths(), local_only=LOCAL_ONLY)
 
 
+def _placements(known: dict[int, str]) -> dict[int, str]:
+    from epsilon_walks import placement_names  # pylint: disable=import-outside-toplevel
+    return placement_names(storage(), known, _unnamed(known),  # type: ignore[arg-type]
+                           local_only=LOCAL_ONLY)
+
+
 def _world_models(known: dict[int, str]) -> dict[int, str]:
     from epsilon_walks import world_model_children  # pylint: disable=import-outside-toplevel
     return world_model_children(storage(), known, _unnamed(known),  # type: ignore[arg-type]
@@ -250,6 +256,11 @@ ROUTES: tuple[Route, ...] = (
           needs="the storage and the listfile",
           cost="minutes, and every retail root with --network",
           produce=_reskins),
+    Route(name="placements",
+          summary="world models named by the map whose terrain places them",
+          needs="the storage",
+          cost="minutes",
+          produce=_placements),
     Route(name="worldmodels",
           summary="group geometry and material textures, from the models using them",
           needs="the storage",

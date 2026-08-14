@@ -529,3 +529,41 @@ def test_a_model_the_head_cannot_name_is_re_read_whole() -> None:
     assert model_self_names(storage, {fid}, local_only=False) == {
         fid: "epsilon/model/alterac_pine04.m2"}
     assert storage.heads == 1
+
+
+def tile(*ids: int) -> bytes:
+    """A terrain object tile placing these world models."""
+    body = b"".join(struct.pack("<I", i) + b"\x00" * 60 for i in ids)
+    return chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
+        chunk(b"MODF", body, reversed_tags=True)
+
+
+def test_a_world_model_is_named_by_the_map_that_places_it() -> None:
+    """For a model nothing else reaches, where it stands is the one thing
+    anybody knows about it."""
+    from epsilon_walks import placement_names  # pylint: disable=import-outside-toplevel
+
+    placed, other = FLOOR + 9, FLOOR + 10
+    known = {500: "world/maps/prophecylordaeron/prophecylordaeron_35_29_obj0.adt"}
+    storage = FakeStorage({500: tile(placed, other)})
+    assert placement_names(storage, known, {placed}) == {
+        placed: f"epsilon/placed/prophecylordaeron/{placed}.wmo"}
+
+
+def test_only_the_object_tiles_are_opened() -> None:
+    """Six of a tile's eight files record no placement, and opening them is a
+    fetch that can never contribute."""
+    from epsilon_walks import placement_names  # pylint: disable=import-outside-toplevel
+
+    placed = FLOOR + 9
+    known = {500: "world/maps/m/m_35_29_tex0.adt", 501: "world/maps/m/m_35_29.blp"}
+    storage = FakeStorage({500: tile(placed), 501: tile(placed)})
+    assert placement_names(storage, known, {placed}) == {}
+
+
+def test_a_placement_of_something_already_named_is_left_alone() -> None:
+    from epsilon_walks import placement_names  # pylint: disable=import-outside-toplevel
+
+    known = {500: "world/maps/m/m_35_29_obj0.adt"}
+    storage = FakeStorage({500: tile(FLOOR + 9)})
+    assert placement_names(storage, known, set()) == {}

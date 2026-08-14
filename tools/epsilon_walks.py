@@ -491,6 +491,66 @@ def reskin_names(storage: Reads, unnamed: set[int], stock: dict[int, str],
     return names
 
 
+PLACED_BUCKET = "placed"
+"""Where a world model named by the map it stands in sits."""
+
+PLACEMENT_CHUNKS = (b"MODF", b"MDDF")
+"""Where a terrain tile records what it places.
+
+Both are read even though only world models have ever turned up: a doodad
+placement costs nothing to look at, and finding none is worth knowing rather
+than assuming.
+"""
+
+OBJECT_TILE_SUFFIXES = ("_obj0.adt", "_obj1.adt")
+"""Which tiles carry placements. The other six files of a tile do not."""
+
+
+def placement_names(storage: Reads, known: dict[int, str], unnamed: set[int],
+                    *, local_only: bool = True) -> dict[int, str]:
+    """World models named by the map whose terrain places them.
+
+    A tile records what stands on it by file id. For a model nothing else
+    reaches, that is the one thing anybody knows about it: not what it is, but
+    where it is -- which is worth having, and is why this sits with the walks
+    that name a file after its neighbours rather than with the ones that name
+    it after itself.
+
+    The names it produces are of PARENTS, so the walk that names a world
+    model's groups picks up behind it and this must run before that one.
+
+    Args:
+        storage: the opened storage.
+        known: every name settled so far, which is where the tiles come from.
+        unnamed: the ids still wanting a name.
+        local_only: refuse to reach the network.
+
+    Returns:
+        File id to path.
+    """
+    tiles = sorted(fid for fid, path in known.items()
+                   if path.lower().endswith(OBJECT_TILE_SUFFIXES))
+    if not tiles:
+        return {}
+    raws = heads_of(storage, tiles, label="placements", local_only=local_only)
+
+    placed: dict[int, str] = {}
+    for fid, raw in raws.items():
+        directory = known[fid].replace("\\", "/").rsplit("/", 2)[-2]
+        for tag, data in chunks(raw, reversed_tags=True):
+            if tag not in PLACEMENT_CHUNKS:
+                continue
+            # Read as a flat run of ids rather than as placement records: the
+            # entry layout differs between the two chunks and across versions,
+            # and every id that matters is one this walk already knows to want.
+            for at in range(0, len(data) - 3, 4):
+                found = struct.unpack_from("<I", data, at)[0]
+                if found in unnamed:
+                    placed.setdefault(found, directory)
+    return {fid: f"{DERIVED_ROOT}/{PLACED_BUCKET}/{where}/{fid}.wmo"
+            for fid, where in placed.items()}
+
+
 CUSTOMIZATION_BUCKET = "chrcustomization"
 """Where a character-customization texture's derived path sits."""
 

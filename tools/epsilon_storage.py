@@ -435,10 +435,13 @@ class EpsilonStorage:
         found = self.local.read(key)
         if found is not None:
             return found
+        # Deliberately does NOT locate a key it has not been given. Finding one
+        # reads every index the install keeps, and a reader that does that per
+        # call turns a wide fetch into eighteen hundred file reads per worker.
+        # A caller that wants the cheap route calls `locate` for its whole set
+        # first; without that this takes the loose address, which costs a
+        # request more but only for the files nobody located.
         where = self._located.get(key)
-        if where is None and key not in self._unlocated:
-            self.locate([file_id])
-            where = self._located.get(key)
         try:
             if where is not None:
                 self._located[key] = where
