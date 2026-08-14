@@ -121,9 +121,9 @@ class Source(Protocol):
     - Acquiring twice returns the same path, and the second call redoes only
       what the source's own policy says has gone stale.
     - ``refresh`` gets the source again. What that reaches is the source's
-      business rather than the caller's: it is an answer to "the cached bytes
-      may be wrong", so it reaches a fetch and stops at a test that already
-      compares what the cache holds against what would be written.
+      business rather than the caller's: it stops at any test already comparing
+      what the cache holds against what would be written, and at any bytes
+      whose own policy can tell whether they moved.
     - ``origins`` costs nothing: no request and no read. It is what lets a
       build say what it reads without reading any of it.
     - An absent source leaves nothing a later run would take for a complete
@@ -210,12 +210,21 @@ class Extracted:
         exactly, so a cache that passes it is one no re-run could improve;
         overriding it would spend a re-scan of a solid archive, and where that
         archive has since been pruned a fresh download of it, to arrive at the
-        same rows. What refresh does reach is everything the test fails on.
+        same rows.
+
+        What refresh reaches is the extraction, and not the bytes under it. It
+        answers "the rows may be wrong", which re-running the extraction is
+        what settles; the bytes have their own policy and it already knows
+        whether they moved. Forwarding it would re-transfer hundreds of
+        megabytes of an archive published against a fixed release to arrive at
+        the identical file -- and it would not even buy a repair, because a
+        fetch writes through a temporary and renames, so an interrupted one
+        leaves no destination to be stale.
         """
         if self.extract.complete(self.into):
             log(f"  cached   {self.into.name}")
             return self.into
-        located = self.inner.acquire(refresh)
+        located = self.inner.acquire(False)
         if located is None:
             return None
         self.into.mkdir(parents=True, exist_ok=True)

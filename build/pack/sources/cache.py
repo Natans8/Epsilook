@@ -23,8 +23,20 @@ BUILD_DIR = Path(__file__).resolve().parents[2]
 CACHE_DIR = BUILD_DIR.parent / ".cache"
 """Where every downloaded source lands, and the only directory the build writes.
 
-Declared again in ``tools/repo.py``, which runs on a different path root and
-must not import this package."""
+Declared again in ``tools/repo.py``, for the scripts that run on a different
+path root. ``check_cache_declaration`` reconciles the two, which is what keeps
+a build and its tooling reading one cache."""
+
+
+def cached(dest: Path) -> bool:
+    """Whether a copy is already held, so a fetch can be spared.
+
+    Empty counts as absent. A body is written before anything that records what
+    it is, so a response carrying nothing must not read as a copy already held:
+    whatever remembers it would then agree with its oracle forever, and the
+    source would be served empty rather than refetched.
+    """
+    return dest.exists() and dest.stat().st_size > 0
 
 
 def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
@@ -36,7 +48,7 @@ def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
         absent (HTTP 404), which is how a build that predates a db2 table
         reports it. Any other error raises.
     """
-    if dest.exists() and dest.stat().st_size > 0 and not refresh:
+    if cached(dest) and not refresh:
         log(f"  cached   {dest.name} ({dest.stat().st_size:,} bytes)")
         return True
     log(f"  fetching {url}")
@@ -77,7 +89,8 @@ def download_volatile(url: str, dest: Path) -> None:
         log(f"  WARNING  {dest.name}: {exc}; using cached copy")
         return
     changed = not dest.exists() or dest.read_bytes() != body
-    dest.write_bytes(body)
+    if changed:
+        dest.write_bytes(body)
     log(f"  {'updated ' if changed else 'current '} {dest.name} ({len(body):,} bytes)")
 
 
@@ -187,25 +200,20 @@ class Revalidated:
 
     def get(self, origin: Origin, dest: Path, refresh: bool) -> bool:
         """Fetch the body only where the oracle says the publication moved."""
-        cached = (self.token_file.read_text(encoding="utf-8").strip()
-                  if self.token_file.exists() else "")
-        # Empty counts as absent, the way `download` treats its own cache. A
-        # body is written before its token, so a response that carried nothing
-        # leaves a file that exists and a token that says it is current --
-        # after which the token alone would agree with the oracle forever, and
-        # the source would be served empty rather than refetched.
-        have = dest.exists() and dest.stat().st_size > 0
+        remembered = (self.token_file.read_text(encoding="utf-8").strip()
+                      if self.token_file.exists() else "")
+        have = cached(dest)
         try:
             token, address = self.resolve(origin.address)
         except (OSError, ValueError, LookupError) as exc:
             if not have:
                 raise
             log(f"  WARNING  could not resolve {origin.describe()} ({exc}); "
-                f"using the cached copy (token {cached or 'unknown'})")
+                f"using the cached copy (token {remembered or 'unknown'})")
             return True
-        if refresh or not have or cached != token:
-            if cached and cached != token:
-                log(f"  stale    cached token {cached} -> {token}")
+        if refresh or not have or remembered != token:
+            if remembered and remembered != token:
+                log(f"  stale    cached token {remembered} -> {token}")
             download(address, dest, refresh=True)
             self.token_file.parent.mkdir(parents=True, exist_ok=True)
             self.token_file.write_text(token, encoding="utf-8")

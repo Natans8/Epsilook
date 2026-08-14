@@ -84,9 +84,13 @@ class Copied:
     bodies: dict[str, bytes]
     work: list[str]
 
+    refreshes: list[bool] = field(default_factory=list)
+    """The flag each call was made with, for the cases about what reaches it."""
+
     def get(self, origin: Origin, dest: Path, refresh: bool) -> bool:
         if origin.address not in self.bodies:
             return False
+        self.refreshes.append(refresh)
         self.work.append(f"get {origin.address}")
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(self.bodies[origin.address])
@@ -254,6 +258,26 @@ def test_a_refresh_does_not_override_a_completeness_test(tmp_path: Path) -> None
     built.work.clear()
     assert built.source.acquire(True) == built.landing
     assert built.work == []
+
+
+def test_a_refresh_does_not_reach_the_bytes_under_an_extraction(
+        tmp_path: Path) -> None:
+    """Refresh answers "the rows may be wrong", which re-running the extraction
+    is what settles. The bytes below it have their own policy and it already
+    knows whether they moved: an archive published against a fixed release is
+    the same file however often it is asked for, so forwarding the flag would
+    re-transfer hundreds of megabytes to arrive at what is already there."""
+    work: list[str] = []
+    fetch = Copied({"dump": BODY}, work)
+    into = tmp_path / "cache" / "release"
+    archive = Fetched(name="the archive", origin=Origin("dump"),
+                      dest=tmp_path / "cache" / "dump.7z", fetch=fetch)
+    source = Extracted(name="a distilled release", inner=archive,
+                       extract=Rows(work), into=into)
+    source.acquire(False)
+    (into / "rows.csv").unlink()
+    source.acquire(True)
+    assert fetch.refreshes == [False, False]
 
 
 def test_an_incomplete_extraction_is_redone(tmp_path: Path) -> None:

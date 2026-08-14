@@ -21,7 +21,7 @@ from ..targets import VISUAL_REDIRECTS
 from .archive import read_member
 from .cache import CACHE_DIR, Pinned
 from .dump import Column, iter_insert_rows, parse_create_table
-from .source import Extracted, Fetched, Origin, Source
+from .source import Extract, Extracted, Fetched, Origin, Source
 
 STAMP_COLUMN = "VerifiedBuild"
 """The client build a hotfix row was last verified against.
@@ -394,7 +394,7 @@ class Distill:
 
 
 def tdb_extraction(release: Mapping[str, str], name: str,
-                   extract: Distill) -> Extracted:
+                   extract: Extract) -> Extracted:
     """One release's archive, and what is distilled out of it, as one source.
 
     The archive is cached in the directory the CSVs land in, so a release is
