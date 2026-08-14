@@ -1,4 +1,4 @@
-"""Parser for WoWDBDefs `.dbd` files — the schema source for tools/builddb.py.
+"""Parser for WoWDBDefs `.dbd` files -- the schema source for every db2 reader.
 
 A `.dbd` file describes one client db2 table across every build the community has
 ever seen. It is the only machine-readable source for three things the wago.tools
@@ -13,6 +13,12 @@ CSV export cannot tell us:
     turns 79 loose tables into something you can navigate.
   * the **comments** — `// 1: SpellProceduralEffectID, 2: ...` is often the only
     documentation an enum column has anywhere.
+
+It lives in `sources/` because it IS one: it fetches WoWDBDefs over the network
+and caches what it gets. It was written in `tools/` before there was an
+acquisition layer to put it in, and reading a db2 by column NAME rather than by
+position needs it -- which is what a private client's tables require, since a
+position read off a sample row is a guess.
 
 Format reference: https://github.com/wowdev/WoWDBDefs (README.md).
 

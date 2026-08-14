@@ -40,7 +40,7 @@ import os
 import struct
 import time
 
-import dbd
+from pack.sources import dbd
 import epsilon_tables
 import pytest
 

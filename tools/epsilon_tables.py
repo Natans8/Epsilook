@@ -25,7 +25,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 
-import dbd  # noqa: E402  (path set above)
+from pack.sources import dbd  # noqa: E402  (path set above)
 from epsilon_storage import Reads  # noqa: E402
 from pack.sources.wdc3 import ColumnSpec, Db2  # noqa: E402
 from repo import CACHE, LISTFILE_ASSET  # noqa: E402
