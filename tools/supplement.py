@@ -8,17 +8,22 @@ install, another needs somebody to log in and walk a client API for an evening -
 so which routes to run is a decision, and a decision needs the numbers in front
 of it.
 
-    python tools/supplement.py                 run every route that can run, and merge
-    python tools/supplement.py --list          what each route needs, and what it costs
-    python tools/supplement.py --only icons    one route
-    python tools/supplement.py --verify        check each route against a known-good copy
-    python tools/supplement.py --diff          compare the result against what is vendored
+    uv run python tools/supplement.py              run every route, and merge
+    uv run python tools/supplement.py --list       what each route needs and costs
+    uv run python tools/supplement.py --only icons one route
+    uv run python tools/supplement.py --verify     check routes against known-good copies
+    uv run python tools/supplement.py --diff       compare against what is vendored
+    uv run python tools/supplement.py --coverage   what is still unnamed, by kind
+    uv run python tools/supplement.py --network    let the walks fetch what is not on disk
 
 Routes are declared, not branched on: a new one is a row in `ROUTES` naming what
 it needs and what it yields, and the merge, the report and the verification all
 read that row. Order in `ROUTES` is priority order -- where two routes name the
 same file, the earlier one wins, because they are listed from names the game
 itself uses down to names derived from where a file hangs.
+
+The written procedure, including what to check by hand and what is still
+unnamed, is `docs/SUPPLEMENT.md`.
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ import csv
 import gzip
 import json
 import sys
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -73,9 +79,12 @@ class Route:
         summary: what the route reads, in one line.
         needs: what must be present for it to run at all.
         cost: roughly what running it takes, for the listing.
-        produce: the route itself, returning file id to asset path. It is free
-            to return ids outside the custom space; the merge is what confines
-            them, so no route has to remember the rule.
+        produce: the route itself, given every name the routes before it
+            settled and returning file id to asset path. Most ignore what they
+            are given; a walk cannot, because it derives a child's path from its
+            parent's name and so can only reach what is already named. It is
+            free to return ids outside the custom space; the merge is what
+            confines them, so no route has to remember the rule.
         golden: a known-good copy to verify against, under `REFERENCE`.
         reference: reads that copy into rows comparable with `produce`. The
             copies were written by the exploration that found each route and
@@ -89,22 +98,77 @@ class Route:
     summary: str
     needs: str
     cost: str
-    produce: Callable[[], dict[int, str]]
+    produce: Callable[[dict[int, str]], dict[int, str]]
     golden: str | None = None
     reference: Callable[[dict[str, str]], dict[int, str]] | None = None
     compare: Callable[[dict[int, str]], dict[int, str]] | None = None
 
 
-def _icons() -> dict[int, str]:
+_STORAGE: object | None = None
+
+# How many custom files the storage declares. Only the walks need it, and
+# opening it costs a service round trip and a pass over the encoding file, so
+# nothing opens it until a walk asks.
+LOCAL_ONLY = True
+"""Whether a walk refuses to reach the network.
+
+The default, and it is a measured choice rather than caution. The install holds
+under half the files a walk would want, but overlap saturates: reading the other
+half took a walk from 4,151 derived names to 4,861, for sixty per cent more
+files and a great many more requests. The switch exists because that last few
+hundred is sometimes worth it, not because the default is a compromise.
+"""
+
+
+def storage() -> object:
+    """The opened storage, shared between the walks that need it."""
+    global _STORAGE  # pylint: disable=global-statement
+    if _STORAGE is None:
+        # Imported here so that the routes which read no game content keep
+        # running on an interpreter that has none of the build's dependencies.
+        from epsilon_storage import EpsilonStorage  # pylint: disable=import-outside-toplevel
+        from epsilon_names import INSTALL  # pylint: disable=import-outside-toplevel
+        _STORAGE = EpsilonStorage(INSTALL)
+    return _STORAGE
+
+
+def _icons(_known: dict[int, str]) -> dict[int, str]:
     return icon_names()
 
 
-def _objects() -> dict[int, str]:
+def _objects(_known: dict[int, str]) -> dict[int, str]:
     return object_names(read_object_dump(cached=REFERENCE / "dump_gob_names.json"),
                         SUPPLEMENT_FLOOR)
 
 
+def _terrain(_known: dict[int, str]) -> dict[int, str]:
+    from epsilon_walks import terrain_names  # pylint: disable=import-outside-toplevel
+    return terrain_names(storage(), SUPPLEMENT_FLOOR)  # type: ignore[arg-type]
+
+
+def _unnamed(known: dict[int, str]) -> set[int]:
+    """Every custom file id no route has named yet."""
+    return set(storage().custom_fids(SUPPLEMENT_FLOOR)) - known.keys()  # type: ignore[attr-defined]
+
+
+def _world_models(known: dict[int, str]) -> dict[int, str]:
+    from epsilon_walks import world_model_children  # pylint: disable=import-outside-toplevel
+    return world_model_children(storage(), known, _unnamed(known),  # type: ignore[arg-type]
+                                local_only=LOCAL_ONLY).names
+
+
+def _models(known: dict[int, str]) -> dict[int, str]:
+    from epsilon_walks import model_children  # pylint: disable=import-outside-toplevel
+    return model_children(storage(), known, _unnamed(known),  # type: ignore[arg-type]
+                          local_only=LOCAL_ONLY).names
+
+
 ROUTES: tuple[Route, ...] = (
+    Route(name="terrain",
+          summary="the map table, and each map's own grid of tiles",
+          needs="the storage",
+          cost="a minute",
+          produce=_terrain),
     Route(name="icons",
           summary="the client's own icon database, in an addon it ships",
           needs="the install",
@@ -129,6 +193,16 @@ ROUTES: tuple[Route, ...] = (
           reference=lambda raw: {int(fid): path for fid, path in raw.items()},
           compare=lambda rows: {fid: path for fid, path in rows.items()
                                 if path.startswith(f"{ROOT_BUCKET}/")}),
+    Route(name="worldmodels",
+          summary="group geometry and material textures, from the models using them",
+          needs="the storage",
+          cost="minutes",
+          produce=_world_models),
+    Route(name="models",
+          summary="skins, textures and animations, from the models using them",
+          needs="the storage",
+          cost="minutes",
+          produce=_models),
 )
 """Every route, in priority order.
 
@@ -177,28 +251,26 @@ def golden_rows(route: Route) -> dict[int, str] | None:
     return route.reference(json.loads(path.read_text(encoding="utf-8")))
 
 
-def run_route(route: Route) -> dict[int, str]:
-    """Run one route and write its own output file."""
-    rows = route.produce()
-    write_rows(WORK / f"{route.name}.csv", rows)
-    return rows
+def run(wanted: list[Route], seed: dict[int, str]) -> tuple[dict[int, str], list[str]]:
+    """Run routes in priority order, merging as it goes.
 
-
-def merge(produced: dict[str, dict[int, str]]) -> tuple[dict[int, str], list[str]]:
-    """Fold every route's rows into one supplement, in priority order.
+    Merging between routes rather than after them all is what lets a walk work:
+    it derives a child's path from its parent's name, so it has to see what the
+    routes before it settled. That also makes the order meaningful in two ways
+    at once -- earlier wins a conflict, and earlier feeds what comes later.
 
     Args:
-        produced: route name to its rows.
+        wanted: the routes to run, already in priority order.
+        seed: names to start from, for a run of only some routes.
 
     Returns:
-        The merged rows, and one report line per route saying what it added.
+        The merged rows, and one report line per route.
     """
-    merged: dict[int, str] = {}
+    merged = dict(seed)
     report = []
-    for route in ROUTES:
-        rows = produced.get(route.name)
-        if rows is None:
-            continue
+    for route in wanted:
+        rows = route.produce(merged)
+        write_rows(WORK / f"{route.name}.csv", rows)
         admitted = {fid: path for fid, path in rows.items() if fid > SUPPLEMENT_FLOOR}
         fresh = {fid: path for fid, path in admitted.items() if fid not in merged}
         merged.update(fresh)
@@ -229,7 +301,7 @@ def verify() -> int:
         if expected is None:
             log(f"  {YELLOW}skip{RESET}  {route.name:12} {DIM}no reference copy on disk{RESET}")
             continue
-        actual = route.produce()
+        actual = route.produce({})
         if route.compare is not None:
             actual = route.compare(actual)
 
@@ -247,6 +319,40 @@ def verify() -> int:
             log(f"          {fid}  got {actual[fid]}")
             log(f"          {' ' * len(str(fid))}  want {expected[fid]}")
     return 1 if failures else 0
+
+
+def coverage(merged: dict[int, str]) -> None:
+    """Report what is named, and classify what is not.
+
+    Total coverage is the goal, so the remainder is the output that matters:
+    a count says how far there is to go, and the classification says which
+    route would go there. Only files the install already holds are opened,
+    because this is a report rather than a walk.
+    """
+    from epsilon_walks import classify  # pylint: disable=import-outside-toplevel
+
+    from tqdm import tqdm  # pylint: disable=import-outside-toplevel
+
+    custom = storage().custom_fids(SUPPLEMENT_FLOOR)  # type: ignore[attr-defined]
+    named = [fid for fid in custom if fid in merged]
+    unnamed = [fid for fid in custom if fid not in merged]
+    log(f"\n  custom files  {len(custom):,}")
+    log(f"  named         {len(named):,} ({len(named) / len(custom):.1%})")
+    log(f"  unnamed       {len(unnamed):,}")
+
+    storage().encoding_keys(unnamed)  # type: ignore[attr-defined]
+    here = [fid for fid in unnamed
+            if storage().holds_locally(fid)]  # type: ignore[attr-defined]
+    kinds: Counter[str] = Counter()
+    for fid in tqdm(here, desc="classifying", unit="file"):
+        kinds[classify(storage().read(fid, local_only=True) or b"")] += 1  # type: ignore[attr-defined]
+
+    log(f"\n  of the {len(here):,} unnamed the install holds:")
+    for kind, count in kinds.most_common():
+        log(f"    {kind:22} {count:>7,}")
+    if len(here) < len(unnamed):
+        log(f"    {DIM}{len(unnamed) - len(here):,} more are not held locally "
+            f"and were not opened{RESET}")
 
 
 def diff_against_vendored(merged: dict[int, str]) -> None:
@@ -286,6 +392,10 @@ def main() -> int:
                         help="check each route against its known-good copy")
     parser.add_argument("--diff", action="store_true",
                         help="compare the merged result against the vendored file")
+    parser.add_argument("--network", action="store_true",
+                        help="let the walks read files the install does not hold")
+    parser.add_argument("--coverage", action="store_true",
+                        help="report what is still unnamed, classified by kind")
     args = parser.parse_args()
 
     if args.list:
@@ -294,17 +404,25 @@ def main() -> int:
     if args.verify:
         return verify()
 
+    global LOCAL_ONLY  # pylint: disable=global-statement
+    LOCAL_ONLY = not args.network
+
     wanted = [route for route in ROUTES
               if args.only is None or route.name in args.only]
-    produced: dict[str, dict[int, str]] = {}
-    for route in wanted:
-        try:
-            produced[route.name] = run_route(route)
-        except (OSError, ValueError) as exc:
-            log(f"  {RED}FAIL{RESET}  {route.name:12} {exc}")
-            return 1
 
-    merged, report = merge(produced)
+    # A walk run on its own still needs the names the routes before it settled,
+    # so a partial run starts from the last full one rather than from nothing.
+    seed: dict[int, str] = {}
+    previous = WORK / "supplement.csv"
+    if args.only and previous.exists():
+        seed = read_rows(previous)
+        log(f"  {DIM}starting from {len(seed):,} names in {previous.name}{RESET}")
+
+    try:
+        merged, report = run(wanted, seed)
+    except (OSError, ValueError, LookupError) as exc:
+        log(f"  {RED}FAIL{RESET}  {exc}")
+        return 1
     log("")
     for line in report:
         log(line)
@@ -313,6 +431,8 @@ def main() -> int:
 
     if args.diff:
         diff_against_vendored(merged)
+    if args.coverage:
+        coverage(merged)
     return 0
 
 

@@ -26,6 +26,12 @@ dev = [
     # Columns cross into DuckDB as columns. A pack is already column
     # oriented, so binding it row by row would be the one avoidable cost.
     "pyarrow",
+    # Progress for the tools that take minutes -- a pack sweep, a walk over the
+    # client's storage. Declared rather than ambient: it was already imported by
+    # a tool the checkers read, so a machine without it failed type checking
+    # rather than failing to draw a bar.
+    "tqdm",
+    "types-tqdm",
     "mypy",
     "pyflakes",
     "pylint",

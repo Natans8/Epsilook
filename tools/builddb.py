@@ -83,18 +83,10 @@ except ImportError:  # pragma: no cover - the one dependency, and it is optional
         "    uv run python tools/builddb.py"
     )
 
-try:
-    # Progress bars are a NICETY, so unlike duckdb above this one degrades to
-    # nothing rather than exiting: a ~2.5 minute build with no output for
-    # minutes at a time reads as a hang, and that is all this fixes.
-    #     python -m pip install tqdm
-    # BOTH codes are needed and neither is redundant: a machine with tqdm
-    # installed but no stubs raises import-untyped, and CI — which has never
-    # installed it — raises import-not-found. Silencing only one leaves
-    # tools/check.py red on the other kind of machine.
-    from tqdm import tqdm  # type: ignore[import-not-found,import-untyped]
-except ImportError:  # pragma: no cover - optional, and absence is not an error
-    tqdm = None
+# Progress bars: a ~2.5 minute build with no output for minutes at a time reads
+# as a hang, and that is all this fixes. Declared in pyproject.toml, so unlike
+# the era when it was installed by hand there is no absence to degrade to.
+from tqdm import tqdm
 
 ROOT = Path(__file__).resolve().parent.parent
 DBD_CACHE = CACHE / "dbd"
@@ -317,25 +309,21 @@ TARGET_TYPES = [
 
 
 def log(message: str) -> None:
-    # Routed through tqdm.write when a bar may be on screen: an ordinary print
-    # lands ON TOP of the bar and shreds it. Falls back to print when tqdm is
-    # not installed, which is the whole compatibility story.
-    if tqdm is not None:
-        tqdm.write(message)
-    else:
-        print(message, flush=True)
+    # Routed through tqdm.write because a bar may be on screen: an ordinary
+    # print lands ON TOP of the bar and shreds it.
+    tqdm.write(message)
 
 
 def progress(items: "Iterable[Any]", desc: str, unit: str,
              total: int | None = None, nested: bool = False) -> "Iterable[Any]":
     """Wrap an iterable in a tqdm bar, or return it untouched.
 
-    Two reasons it can decline: tqdm is not installed, or stderr is not a TTY —
-    the second matters because this script is routinely run redirected to a log
-    file (`python tools/builddb.py > out.log`), and a bar rendered into a file
-    is thousands of lines of carriage-return noise that buries the real output.
+    It declines when stderr is not a TTY, which matters because this script is
+    routinely run redirected to a log file (`python tools/builddb.py > out.log`)
+    and a bar rendered into a file is thousands of lines of carriage-return
+    noise that buries the real output.
     """
-    if tqdm is None or not sys.stderr.isatty():
+    if not sys.stderr.isatty():
         return items
     return tqdm(items, desc=desc, unit=unit, total=total,
                 leave=not nested, dynamic_ncols=True)

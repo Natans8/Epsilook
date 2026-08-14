@@ -81,6 +81,12 @@ LFS_OID_RE = re.compile(rb"oid sha256:([0-9a-f]{64})")
 DOC_TRIGGERS = (
     (("build/build_data.py", "build/pack"), "docs/DATA_ROUTES.md"),
     (("src/config.ts",), "README.md"),
+    # The supplement is the one source no build can fetch, so its procedure is
+    # the only record of how the vendored file was produced. A route added or
+    # a rule changed without the procedure following it is how that record goes
+    # stale, and nothing else would notice.
+    (("tools/supplement.py", "tools/epsilon_names.py", "tools/epsilon_walks.py",
+      "tools/epsilon_storage.py"), "docs/SUPPLEMENT.md"),
 )
 
 # A PACK FORMAT BUMP MEANS THE PACK'S SHAPE CHANGED, and these consume that
