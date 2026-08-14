@@ -37,7 +37,7 @@ dev = [
 # `pythonpath` puts the package and the test support module on the import path
 # without an editable install; `importlib` keeps pytest from rewriting sys.path.
 testpaths = ["test/py"]
-pythonpath = ["build", "test/py"]
+pythonpath = ["build", "test/py", "tools"]
 addopts = "--quiet --no-header --import-mode=importlib"
 cache_dir = ".pytest_cache"
 

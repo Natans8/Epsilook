@@ -920,6 +920,71 @@ def check_listfile_declaration(rep: Report) -> None:
     rep.ok("listfile declaration", f"build and tools agree on {theirs}")
 
 
+def check_supplement(rep: Report) -> None:
+    """The vendored asset-name supplement must hold what the build assumes it does.
+
+    It is the one source no build can fetch, so nothing downstream re-derives
+    it and nothing downstream would notice it going wrong. Three properties are
+    worth a guard because each fails silently:
+
+    The floor is declared twice, beside the code that applies it and beside the
+    code that reconstructs it, for the same reason the listfile asset name is --
+    reaching the build's copy drags the acquisition layer onto a bare
+    interpreter. Drift here does not break a build, it quietly admits a row that
+    overwrites a real community name with a private client's spelling of it.
+
+    Sorted order and unique ids are what make an unchanged rebuild stage
+    nothing, which is the whole argument for vendoring a derived file rather
+    than a note saying how to derive it.
+    """
+    vendored = ROOT / "build" / "sources" / "epsilon-listfile-supplement.csv.gz"
+    if not vendored.exists():
+        rep.skip("supplement", "nothing vendored")
+        return
+    try:
+        sys.path.insert(0, str(ROOT / "tools"))
+        from supplement import SUPPLEMENT_FLOOR as ours  # pylint: disable=import-outside-toplevel
+        sys.path.insert(0, str(ROOT / "build"))
+        from pack.sources.listfile import SUPPLEMENT_FLOOR as theirs  # pylint: disable=import-outside-toplevel
+    except ImportError as exc:
+        rep.fail("supplement", f"could not read a floor declaration: {exc}")
+        return
+    if ours != theirs:
+        rep.fail("supplement",
+                 f"the build admits above {theirs:,}, the reconstruction above {ours:,}")
+        return
+
+    previous, duplicates, below = -1, 0, 0
+    unsorted = False
+    count = 0
+    with gzip.open(vendored, "rt", encoding="utf-8") as handle:
+        for line in handle:
+            fid, separator, _path = line.partition(";")
+            if not separator:
+                continue
+            count += 1
+            current = int(fid)
+            if current == previous:
+                duplicates += 1
+            elif current < previous:
+                unsorted = True
+            if current <= theirs:
+                below += 1
+            previous = current
+
+    problems = []
+    if unsorted:
+        problems.append("not sorted by file id")
+    if duplicates:
+        problems.append(f"{duplicates:,} duplicate ids")
+    if below:
+        problems.append(f"{below:,} rows at or below the floor")
+    if problems:
+        rep.fail("supplement", "; ".join(problems))
+        return
+    rep.ok("supplement", f"{count:,} rows, sorted, all above {theirs:,}")
+
+
 def check_arcanum(rep: Report) -> None:
     """tools/arcanum.py must still produce strings Arcanum can import.
 
@@ -1279,6 +1344,7 @@ def main() -> int:
     check_cli_entries(rep)
     check_license_scope(rep)
     check_listfile_declaration(rep)
+    check_supplement(rep)
     check_arcanum(rep)
     check_pack_freshness(rep)
     check_cache(rep)
