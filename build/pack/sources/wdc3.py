@@ -352,9 +352,9 @@ class Db2:
         and a caller reading positions has to know both. A value's type is one:
         a string is stored as the offset that locates it, so it reads as a
         number with nothing to mark it as anything else. An array's cardinality
-        is the other: the width the field structure declares is not one the
-        packing honours, so an array stays one column instead of becoming one
-        per element.
+        is the other: a field declares the width of the whole array and never
+        how many elements share it, so an array stays one column instead of
+        becoming one per element.
 
         The id is not among them, and leaving it out cost more than a name. A
         file whose id list supplies it gets a column of its own ahead of the
