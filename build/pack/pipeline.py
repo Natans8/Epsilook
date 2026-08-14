@@ -83,6 +83,9 @@ class Providers:
             change, not inside the stage that has to reproduce a pack built
             before it existed.
         """
+        self.base: Tables = CsvTables(sources.tables)
+        """The client's own tables, unrevised. What a printed number reads."""
+
         self.tables: Tables = CsvTables(sources.tables)
         self.pinned: Tables = CsvTables(sources.pinned_tables)
         self.world: Tables | None = None
@@ -93,7 +96,7 @@ class Providers:
             # the build's provider rather than standing beside it: a route
             # reading `SpellEffect` cannot tell whether a row was revised, and
             # that is the point.
-            self.tables = OverlaidTables(base=self.tables,
+            self.tables = OverlaidTables(base=self.base,
                                          overlays=hotfix_overlays(build),
                                          source=world)
         self.listfile: Tables = ListfileTables(sources.listfile)
@@ -167,7 +170,14 @@ def read_all(providers: Providers, build: Build) -> DeriveContext:
     templates = read_spell_text(tables)
 
     log("Cooking spell descriptions ...")
-    prose = cook_text(templates, read_spell_values(tables), names)
+    # The COOKED numbers come from the client alone, never the server's
+    # revisions. A hotfix table prints a float at six significant digits and
+    # carries only the integer spelling of an amount, so on a build whose
+    # client exports only the float column the overlay would replace a precise
+    # value with a coarse one -- a degradation, not a correction. The overlaid
+    # provider is right for everything that asks what a spell IS; this asks
+    # what number to print.
+    prose = cook_text(templates, read_spell_values(providers.base), names)
 
     log("Walking spell -> model/sound/animkit/chain chains ...")
     visuals = walk_spells(names.names, graph, missiles, kits, soundkit_files,
