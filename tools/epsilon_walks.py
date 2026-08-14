@@ -50,12 +50,9 @@ trips rather than by bandwidth and the width is what makes it finish.
 DERIVED_ROOT = "epsilon"
 """Where a derived path sits, so it is never mistaken for one the game uses."""
 
-MAP_TABLE = 1349477
-"""``Map.db2``. Its rows name every map, including the ones this client added."""
-
-MAP_DIRECTORY, MAP_NAME, MAP_WDT = 0, 1, 21
-"""Which columns of that table carry the directory, the display name and the
-world table's file id."""
+MAP_DIRECTORY, MAP_WDT = "Directory", "WdtFileDataID"
+"""Which columns of ``Map.db2`` carry a map's directory and its world table's
+file id. Its rows name every map, including the ones this client added."""
 
 GRID = 64
 """A map is a fixed grid of this many cells on each side."""
@@ -164,22 +161,25 @@ def custom_maps(storage: Reads, floor: int) -> list[tuple[str, int]]:
 
     A map whose world table sits in the client's own id space is one the client
     added; there is no other flag that says so.
-    """
-    from pack.sources.wdc3 import Db2  # pylint: disable=import-outside-toplevel
 
-    raw = storage.read(MAP_TABLE)
-    if not raw:
+    Read by column name. A positionally read table cannot tell a string from
+    the offset that locates it, so the directory came back as the number
+    `53330` where the row holds `Azeroth`, and every path built from it named
+    a directory no storage has.
+    """
+    from epsilon_tables import open_table, table_ids  # pylint: disable=import-outside-toplevel
+
+    table = open_table(storage, "Map", table_ids())
+    if table is None or not table.has(MAP_DIRECTORY, MAP_WDT):
         return []
     found = []
-    for row in Db2(raw, None).rows():
-        if len(row) <= MAP_WDT:
-            continue
+    for directory, wdt_text in table.values(MAP_DIRECTORY, MAP_WDT):
         try:
-            wdt = int(row[MAP_WDT])
+            wdt = int(wdt_text)
         except ValueError:
             continue
         if wdt > floor:
-            found.append((row[MAP_DIRECTORY], wdt))
+            found.append((directory, wdt))
     return found
 
 

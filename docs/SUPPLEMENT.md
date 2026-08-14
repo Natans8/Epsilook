@@ -53,9 +53,11 @@ That is why it outranks parentage.
 and it sits under an `epsilon/` prefix so it can never be mistaken for a path the game uses. The object route derives
 one too, for the names the client reports as a bare filename with no directory.
 
-> ⚠ Join by column *name*, never by position. The customization chain crosses five tables, and two of the positions
-> recorded for them were wrong — a wrong position yields a confident name for the wrong thing rather than an error.
-> `tools/epsilon_tables.py` pairs the reader with the published definitions so every join reads a named column.
+> ⚠ Read every column by *name*, never by position — and this is not only about joins. The customization chain crosses
+> five tables and two of the positions recorded for them were wrong; the terrain route read `Map.db2` positionally and
+> got the number `53330` where the row holds `Azeroth`, because a positional read cannot tell a string from the offset
+> that locates it. Either way the result is a confident name for the wrong thing rather than an error.
+> `tools/epsilon_tables.py` pairs the reader with the published definitions so every read names its column.
 
 ### Naming follows the game's own conventions, where there is one
 
