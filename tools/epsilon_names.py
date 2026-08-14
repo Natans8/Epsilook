@@ -124,10 +124,16 @@ def unescape(text: str) -> str:
 def read_saved_table(path: Path, section: str) -> dict[str, str]:
     """One flat ``key = value`` table out of a SavedVariables file.
 
-    The addon stores each walk as a single level of string to string, so this
+    The addon stores each walk as a single level of key to scalar, so this
     reads the named section and stops at the line that closes it rather than
-    parsing Lua. A nested table inside the section would be skipped, not
-    mis-read: only quoted scalar values match.
+    parsing Lua.
+
+    A value is quoted or bare depending on what the client handed the addon: a
+    name arrives as a string and an id as a number, and the writer passes both
+    through as they are. Reading only the quoted form makes a whole section of
+    numbers look like an empty table, which reads as "the walk captured
+    nothing" rather than as a value this cannot see. A nested table is skipped
+    rather than mis-read.
 
     Args:
         path: the SavedVariables file.
@@ -144,9 +150,11 @@ def read_saved_table(path: Path, section: str) -> dict[str, str]:
     start = at + len(opening)
     end = text.find("\n\t},", start)
     body = text[start:end if end > 0 else len(text)]
-    return {key: unescape(value)
-            for key, value in re.findall(r'\["([^"]+)"\]\s*=\s*"((?:[^"\\]|\\.)*)"',
-                                         body)}
+    found = {}
+    for key, quoted, bare in re.findall(
+            r'\["([^"]+)"\]\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^,\n{]+))', body):
+        found[key] = unescape(quoted) if bare == "" else bare.strip()
+    return found
 
 
 def account_dumps(addon: str = DUMP_ADDON) -> list[Path]:

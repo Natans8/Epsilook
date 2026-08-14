@@ -118,6 +118,10 @@ EpsilonDumpDB = {
 \t\t["18000001"] = "first.m2\\r",
 \t\t["18000002"] = "second.wmo\\r",
 \t},
+\t["gobDisplay"] = {
+\t\t["-141417"] = 19301810,
+\t\t["-141482"] = 19301809,
+\t},
 \t["spells"] = {
 \t\t["12"] = "Fireball",
 \t},
@@ -144,6 +148,14 @@ def test_read_saved_table_stops_at_the_section_it_was_asked_for(saved: Path) -> 
 
 def test_a_missing_section_reads_as_absent_rather_than_failing(saved: Path) -> None:
     assert read_saved_table(saved, "sound") == {}
+
+
+def test_a_section_of_bare_numbers_reads_as_values_not_as_nothing(saved: Path) -> None:
+    """The client hands the addon a name as a string and an id as a number, and
+    the writer passes both through. Matching only the quoted form makes a whole
+    section look like an empty table."""
+    assert read_saved_table(saved, "gobDisplay") == {"-141417": "19301810",
+                                                     "-141482": "19301809"}
 
 
 ICON_LIBRARY = '''
