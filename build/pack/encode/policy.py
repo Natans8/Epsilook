@@ -7,12 +7,9 @@ and it is why a section never has to know what gzip does with an array of
 repeated empty strings.
 
 The two policies trade bytes against entries, and the trade was measured on the
-product's own build rather than assumed:
-
-| 9.2.7 module set | FEWEST_BYTES | FEWEST_ENTRIES |
-|------------------|--------------|----------------|
-| total            | 12,579,734   | 13,565,500     |
-| first load       | 9,602,316    | 10,588,082     |
+product's own build rather than assumed. Over the whole module set, fewest
+bytes comes to 12,579,734 against 13,565,500, and on a first load with the
+prose deferred, 9,602,316 against 10,588,082.
 
 Padding a partial column costs almost nothing on the wire, because gzip eats a
 run of repeated fillers; what it costs is the reader walking every entry.
