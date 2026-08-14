@@ -51,10 +51,13 @@ def test_a_lossy_column_must_be_declared() -> None:
         check_lossy_declaration("t", schema(Amount="float"), ["Amount"])
 
 
-def test_a_declaration_that_stopped_being_true_is_caught() -> None:
-    with pytest.raises(SystemExit):
-        check_lossy_declaration("spell_effect", schema(EffectBasePoints="int"),
-                                ["EffectBasePoints"])
+def test_a_release_that_types_a_declared_column_exactly_is_allowed() -> None:
+    """The oldest dumps type `EffectBasePoints` INT where modern ones type it
+    FLOAT, so an equality check makes those releases unbuildable. Refusing the
+    column anyway costs a revision nobody relied on and keeps it meaning one
+    thing whichever release a build matched."""
+    check_lossy_declaration("spell_effect", schema(EffectBasePoints="int"),
+                            ["EffectBasePoints"])
 
 
 def test_a_column_this_release_predates_is_not_a_type_disagreement() -> None:

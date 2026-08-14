@@ -125,14 +125,21 @@ TDB_TABLES["hotfixes"] = {table: [*columns, STAMP_COLUMN]
                           for table, columns in TDB_TABLES["hotfixes"].items()}
 
 TDB_LOSSY_COLUMNS = frozenset({
-    # A FLOAT here, so the dump prints it rounded against the client's value.
+    # A FLOAT in a modern dump, so its text is printed rounded against the
+    # client's value. The oldest releases type the same column INT, where it is
+    # exact -- it is refused there too, so one column means one thing whichever
+    # release a build matched.
     ("spell_effect", "EffectBasePoints"),
 })
-"""Overlay columns whose text is lossier than the client's own, by column type.
+"""Overlay columns whose text may be lossier than the client's own.
 
 Declared so the overlay can be composed without reading the dump, and checked
 against the dump's own DDL on every distill. The column is still distilled;
 refusing it is the overlay's job.
+
+A CEILING, not an equality: the roster spans releases a decade apart and a
+column's type moves between them, so a declaration says "lossy in at least one
+release we distil" rather than "lossy in this one".
 """
 
 
@@ -153,10 +160,15 @@ def tdb_column_index(table: str, column: str, schema: list[str]) -> int | None:
 
 
 def check_lossy_declaration(table: str, schema: list[Column], keep: list[str]) -> None:
-    """Fail unless TDB_LOSSY_COLUMNS says exactly what this dump's DDL says.
+    """Fail on a dump column that prints lossily and is not declared.
 
     The overlay decides from the declaration rather than by opening the dump, so
-    this is what keeps the two in step.
+    this is what keeps the two in step. Only one direction can do harm, and the
+    check is asymmetric for that reason. An undeclared lossy column is applied
+    over the client's own exact value, silently rounding it; a declared column
+    a given release happens to type exactly is merely refused, which costs a
+    revision nobody was relying on and keeps the column meaning one thing across
+    every release.
     """
     kinds = {column.name: column for column in schema}
     for column in keep:
@@ -164,15 +176,11 @@ def check_lossy_declaration(table: str, schema: list[Column], keep: list[str]) -
             # This release predates the column, declared in
             # TDB_OPTIONAL_COLUMNS, which is not a type disagreement.
             continue
-        declared = (table, column) in TDB_LOSSY_COLUMNS
-        if declared == kinds[column].lossy:
-            continue
-        sys.exit(
-            f"error: {table}.{column} is "
-            + (f"declared in TDB_LOSSY_COLUMNS but this dump types it "
-               f"{kinds[column].kind}" if declared else
-               f"typed {kinds[column].kind}, which a dump prints lossily, and it "
-               f"is not declared in TDB_LOSSY_COLUMNS"))
+        if kinds[column].lossy and (table, column) not in TDB_LOSSY_COLUMNS:
+            sys.exit(
+                f"error: {table}.{column} is typed {kinds[column].kind}, which "
+                f"a dump prints lossily, and it is not declared in "
+                f"TDB_LOSSY_COLUMNS")
 
 
 def distill_dump(lines: Iterable[str], name: str, want: dict[str, list[str]],
