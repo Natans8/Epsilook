@@ -190,3 +190,43 @@ def test_a_library_of_an_unknown_shape_is_refused(tmp_path: Path) -> None:
     library.write_text("local nothing = true\n", encoding="utf-8")
     with pytest.raises(ValueError):
         icon_names(library)
+
+
+class CatalogueStorage:
+    """A storage holding the client's shipped name list and nothing else."""
+
+    def __init__(self, raw: bytes | None) -> None:
+        self.raw = raw
+
+    def encoding_keys(self, file_ids):
+        return {}
+
+    def read(self, file_id: int, *, local_only: bool = False) -> bytes | None:
+        from epsilon_names import OBJECT_CATALOGUE  # pylint: disable=import-outside-toplevel
+        return self.raw if file_id == OBJECT_CATALOGUE else None
+
+
+def test_the_shipped_catalogue_is_read_without_a_capture() -> None:
+    """It is what the client API reads, so no route needs anybody logged in."""
+    from epsilon_names import read_object_dump  # pylint: disable=import-outside-toplevel
+
+    storage = CatalogueStorage(b"106679;altarofstorms.wmo\n18000012;EPS_Thing.wmo\n")
+    assert read_object_dump(cached=None, storage=storage) == {
+        106679: "altarofstorms.wmo", 18000012: "EPS_Thing.wmo"}
+
+
+def test_a_catalogue_row_keeps_the_bytes_it_was_written_with() -> None:
+    """The capture route returned this name as mojibake through the addon's
+    chat layer; reading the file skips the round trip that mangled it."""
+    from epsilon_names import read_object_dump  # pylint: disable=import-outside-toplevel
+
+    storage = CatalogueStorage("341891;Катапульта\n".encode("utf-8"))
+    assert read_object_dump(cached=None, storage=storage) == {341891: "Катапульта"}
+
+
+def test_an_unreadable_catalogue_falls_through_rather_than_returning_empty() -> None:
+    """An empty result would look like a client that names nothing."""
+    from epsilon_names import read_object_dump  # pylint: disable=import-outside-toplevel
+
+    with pytest.raises(FileNotFoundError):
+        read_object_dump(cached=None, storage=CatalogueStorage(None))

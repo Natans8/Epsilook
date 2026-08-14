@@ -2,8 +2,7 @@
 
 `build/sources/epsilon-listfile-supplement.csv.gz` is the only source in this repository that the build cannot fetch.
 Everything else — the game tables, the community listfile, the TrinityCore dump — is downloaded and revalidated on every
-run. This one is vendored, because deriving it needs a private client's own installation and, for the largest route, a
-person logged into that client walking an API by hand.
+run. This one is vendored, because deriving it needs a private client's own installation, which no build machine has.
 
 That makes it the one file where "how was this produced" has to be written down. This is that procedure. It is a script
 rather than a note, because the routes disagree about cost by four orders of magnitude and choosing which to run is a
@@ -35,7 +34,7 @@ feeds what comes later.**
 |-----------------|----------------------------------------------------|-----------------|------------------------|
 | `terrain`       | the map table, then each map's tile grid           | real            | a minute               |
 | `icons`         | the icon database an addon ships                   | real            | a second               |
-| `objects`       | the gameobject walk through the client API         | real or derived | **an evening in game** |
+| `objects`       | the gameobject name list the client ships          | real or derived | seconds                |
 | `customization` | the character-customization tables, joined by name | semantic        | a minute               |
 | `modelnames`    | the name a model carries about itself              | real            | minutes                |
 | `reskins`       | the retail world model a file was copied from      | semantic        | minutes                |
@@ -160,27 +159,33 @@ else runs for players, so the walk prints how many files it is about to ask for 
 when a result is going to be vendored; do not leave it running in the background out of habit. Everything it fetches is
 cached under `.cache/casc/`, so a second run costs nothing.
 
-## 4. The one cost that is not compute
+## 4. The catalogue the client ships
 
-**`objects` cannot be re-run from a machine.** It needs the `EpsilonDump` addon, a logged-in character, `/edump gob`,
-and a clean logout — SavedVariables are flushed on exit, not at character select. It names roughly three quarters of
-everything the supplement carries.
+**`objects` names roughly three quarters of everything the supplement carries, and it used to cost an evening in
+game.** It no longer does. The client ships its own `id;name` list as an ordinary file in its storage, and that file is
+where the client API reads from:
 
-The addon clears its own section at the start of every walk, so **running any other dump destroys the previous
-capture**. The pipeline therefore prefers a live capture and falls back to a saved copy of one under
-`.claude/data/epsilon/`.
+| file id      | rows    | what it names                                    |
+|--------------|--------:|--------------------------------------------------|
+| `23200000`   | 166,671 | models and world models — what `objects` reads   |
+| `23200001`   | 194,720 | sounds; **no id in the custom range**, so unused |
 
-> ⚠ Those copies are not tracked by git, and a dump of anything else overwrites the live one. Keep a copy the moment a
-> walk lands.
+**It is the same catalogue, not a second opinion.** Measured against a captured `/edump gob` walk: the identical
+166,671 ids, agreeing on **166,670** of them. The single row that differs is the shipped file being *right* — the walk
+returns `Катапульта` through the addon's chat layer as mojibake, and reading the bytes skips the round trip that
+mangles it.
 
-**It is reproducible, and the saved copy is verified.** A second walk taken later returned 166,671 pairs against the
-first walk's 166,671 — the same file ids, the same names, with one exception: a name the earlier tooling had recorded
-as mojibake came back correct, because the reader here resolves the escapes the client actually writes rather than
-reinterpreting the bytes. So the cost is an evening, not a one-way door.
+So the route reads the file, and falls back to a live capture and then a saved copy only if it cannot. **Nothing in
+this procedure now requires anybody to log in.**
 
-**And a fresh walk will not name more than the last one did.** The client API enumerates a fixed 166,671 entries while
-`GameObjectDisplayInfo` carries 167,376 distinct file ids: **705 are in the table and absent from the API**, 692 of
-them otherwise unnamed. Those cannot be reached this way at all, however many times the walk is run.
+> ⚠ `.claude/data/epsilon/dump_gob_names.json` is kept as a fallback and is no longer irreplaceable. It was, for as
+> long as the walk was the only source — that is why the warning about the addon clearing its section between dumps
+> mattered, and why it no longer does.
+
+**A capture will not name more than the shipped file does, and neither reaches everything.** Both hold 166,671 entries
+while `GameObjectDisplayInfo` carries 167,376 distinct file ids: **705 are in the table and absent from the
+catalogue**, 692 of them otherwise unnamed. **That is a data limit, not an API one** — the ceiling is baked into the
+file the client ships, so no way of reading it will produce those names.
 
 ## 5. Verifying
 

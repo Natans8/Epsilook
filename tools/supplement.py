@@ -3,10 +3,9 @@
 The supplement is the only source the build cannot fetch: it names the assets a
 private client adds, which no public listfile knows about. This is the procedure
 that rebuilds it, and the reason it is a script rather than a note is that the
-routes disagree about cost by four orders of magnitude -- one reads a file in the
-install, another needs somebody to log in and walk a client API for an evening --
-so which routes to run is a decision, and a decision needs the numbers in front
-of it.
+routes disagree about cost by three orders of magnitude -- one reads a file in
+the install, another opens tens of thousands over the network -- so which routes
+to run is a decision, and a decision needs the numbers in front of it.
 
     uv run python tools/supplement.py              run every route, and merge
     uv run python tools/supplement.py --list       what each route needs and costs
@@ -63,10 +62,11 @@ WORK = ROOT / ".cache" / "supplement"
 REFERENCE = ROOT / ".claude" / "data" / "epsilon"
 """Where the exploration's saved artefacts live.
 
-Two different things live here and they are worth telling apart. The known-good
-copies `--verify` reads are conveniences: losing one costs a verification, not a
-route. `dump_gob_names.json` is not -- it is the only surviving copy of a walk
-that costs an evening in game, and no route can rebuild it.
+These are conveniences: the known-good copies `--verify` reads cost a
+verification if lost, not a route. `dump_gob_names.json` was once more than
+that -- the only surviving copy of a walk that cost an evening in game -- and is
+now a fallback, because the client ships the same catalogue as a file the
+`objects` route reads directly.
 """
 
 
@@ -161,7 +161,8 @@ def _icons(_known: dict[int, str]) -> dict[int, str]:
 
 
 def _objects(_known: dict[int, str]) -> dict[int, str]:
-    return object_names(read_object_dump(cached=REFERENCE / "dump_gob_names.json"),
+    return object_names(read_object_dump(cached=REFERENCE / "dump_gob_names.json",
+                                         storage=storage()),
                         SUPPLEMENT_FLOOR)
 
 
@@ -224,9 +225,9 @@ ROUTES: tuple[Route, ...] = (
           compare=lambda rows: {fid: path for fid, path in rows.items()
                                 if fid > SUPPLEMENT_FLOOR}),
     Route(name="objects",
-          summary="the gameobject-display walk through the client API",
-          needs="a captured dump",
-          cost="an evening in game, once",
+          summary="the gameobject name list the client ships",
+          needs="the storage",
+          cost="seconds",
           produce=_objects,
           golden="pseudo_paths.json",
           # The copy records only the names that had to be derived, not the

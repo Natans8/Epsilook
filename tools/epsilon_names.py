@@ -167,25 +167,65 @@ def account_dumps(addon: str = DUMP_ADDON) -> list[Path]:
     return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
 
 
-def read_object_dump(cached: Path | None = None) -> dict[int, str]:
-    """The client's gameobject-display walk: file id to the name it reports.
+OBJECT_CATALOGUE = 23_200_000
+"""The client's own gameobject name list, shipped as a file in its storage.
 
-    Prefers a live capture, because a fresh one covers content added since the
-    cached copy was taken. Falls back to the cached copy, which is the only
-    thing standing between this route and another evening in game -- the addon
-    clears its own section at the start of every walk, so running any other
-    dump destroys the last one.
+This is where the client API reads from, so it is the same catalogue rather
+than a second opinion: measured against a captured walk it holds the identical
+166,671 ids and agrees on 166,670 of them. The one row that differs is this
+file being right -- the walk returns `Катапульта` through the addon's chat
+layer as mojibake, and reading the bytes avoids the round trip that mangles it.
+"""
+
+SOUND_CATALOGUE = 23_200_001
+"""The same shape for sounds: file id to name, 194,720 rows. It carries no id
+in the client's own range, so it names no custom asset and no route reads it."""
+
+
+def read_catalogue(storage: object, file_id: int) -> dict[int, str]:
+    """One of the client's shipped `id;name` lists.
+
+    Args:
+        storage: the opened storage.
+        file_id: which catalogue to read.
+
+    Returns:
+        File id to the raw name, uncleaned. Empty when the file cannot be read.
+    """
+    storage.encoding_keys([file_id])  # type: ignore[attr-defined]
+    raw = storage.read(file_id, local_only=True)  # type: ignore[attr-defined]
+    if not raw:
+        return {}
+    rows: dict[int, str] = {}
+    for line in raw.decode("utf-8", "replace").splitlines():
+        fid, sep, name = line.partition(";")
+        if sep and fid.strip().isdigit():
+            rows[int(fid)] = name.strip()
+    return rows
+
+
+def read_object_dump(cached: Path | None = None,
+                     storage: object | None = None) -> dict[int, str]:
+    """The gameobject-display catalogue: file id to the name the client reports.
+
+    Prefers the list the client ships, because reading it costs nothing and
+    needs nobody to log in. Falls back to a live capture and then to a saved
+    copy, both of which were the only routes before that file was found.
 
     Args:
         cached: a previously saved copy, as ``{file id: name}`` json.
+        storage: the opened storage, when the shipped list may be read.
 
     Returns:
         File id to the raw name, uncleaned.
 
     Raises:
-        FileNotFoundError: if neither a live capture nor a cached copy is
-            readable, which is the condition that costs an evening to clear.
+        FileNotFoundError: if no source is readable at all.
     """
+    if storage is not None:
+        shipped = read_catalogue(storage, OBJECT_CATALOGUE)
+        if shipped:
+            return shipped
     for path in account_dumps():
         section = read_saved_table(path, "gob")
         if section:
@@ -194,8 +234,8 @@ def read_object_dump(cached: Path | None = None) -> dict[int, str]:
         return {int(fid): name
                 for fid, name in json.loads(cached.read_text(encoding="utf-8")).items()}
     raise FileNotFoundError(
-        "no gameobject dump: run `/edump gob` in game and log out cleanly, "
-        f"or provide a cached copy (looked for {cached})")
+        f"no gameobject catalogue: file {OBJECT_CATALOGUE} unreadable, no live "
+        f"capture, and no cached copy (looked for {cached})")
 
 
 def clean(name: str) -> str:
