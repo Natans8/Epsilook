@@ -285,3 +285,155 @@ def test_a_texture_with_no_option_is_still_refused(monkeypatch: pytest.MonkeyPat
                                           [("", "9", "12")])
     fake_tables(monkeypatch, nameless)
     assert customization_names(FakeStorage({}), FLOOR) == {}
+
+
+def world_model(wmo_id: int, *, header: bool = True) -> bytes:
+    """A world model root declaring the retail model it came from.
+
+    The header opens with seven counts and a four-byte ambient colour, so the
+    id sits at byte thirty-two; writing the whole prefix rather than padding
+    keeps the test honest about why that offset is what it is.
+    """
+    body = struct.pack("<7I", 0, 0, 0, 0, 0, 0, 0) + b"\xff\xff\xff\xff"
+    body += struct.pack("<I", wmo_id) + b"\x00" * 28
+    raw = chunk(b"MVER", struct.pack("<I", 17), reversed_tags=True)
+    return raw + (chunk(b"MOHD", body, reversed_tags=True) if header else b"")
+
+
+def test_a_world_model_reports_the_retail_id_it_carries() -> None:
+    from epsilon_walks import world_model_id  # pylint: disable=import-outside-toplevel
+
+    assert world_model_id(world_model(1375)) == 1375
+
+
+def test_only_a_world_model_root_reports_one() -> None:
+    """A group carries no MOHD, and a model is not chunked this way at all."""
+    from epsilon_walks import world_model_id  # pylint: disable=import-outside-toplevel
+
+    assert world_model_id(world_model(1375, header=False)) is None
+    assert world_model_id(b"MD21" + b"\x00" * 64) is None
+    assert world_model_id(None) is None
+    assert world_model_id(b"") is None
+
+
+def test_an_unset_retail_id_names_nothing() -> None:
+    """Zero is absence, not a model. Treating it as one collapses every
+    file that declares nothing onto whichever retail root also declares zero."""
+    from epsilon_walks import world_model_id  # pylint: disable=import-outside-toplevel
+
+    assert world_model_id(world_model(0)) is None
+
+
+def test_a_reskin_is_named_after_the_root_sharing_its_id() -> None:
+    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
+
+    custom = FLOOR + 5
+    storage = FakeStorage({custom: world_model(1375), 900: world_model(1375),
+                           901: world_model(42)})
+    names = reskin_names(storage, {custom},
+                         {900: "World/WMO/Kalimdor/WinterspringRockBridge.wmo",
+                          901: "World/WMO/Elsewhere/Other.wmo"})
+    assert names == {custom: f"epsilon/reskin/winterspringrockbridge/{custom}.wmo"}
+
+
+def test_a_reskin_matching_no_retail_root_is_left_alone() -> None:
+    """An unmatched id says nothing, and a guess would say something wrong."""
+    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
+
+    custom = FLOOR + 5
+    storage = FakeStorage({custom: world_model(7777), 900: world_model(1375)})
+    assert reskin_names(storage, {custom},
+                        {900: "World/WMO/Kalimdor/Bridge.wmo"}) == {}
+
+
+def test_group_files_are_never_read_for_a_header_they_cannot_have() -> None:
+    """Forty thousand groups sit in the listfile beside the roots, and reading
+    one costs a fetch that can never contribute."""
+    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
+
+    custom = FLOOR + 5
+    storage = FakeStorage({custom: world_model(1375), 900: world_model(1375)})
+    names = reskin_names(storage, {custom},
+                         {900: "World/WMO/Kalimdor/Bridge.wmo",
+                          901: "World/WMO/Kalimdor/Bridge_000.wmo"})
+    assert names == {custom: f"epsilon/reskin/bridge/{custom}.wmo"}
+
+
+def test_no_readable_retail_root_names_nothing_rather_than_silently_none() -> None:
+    """Without the retail side there is nothing to match, and an empty result
+    would otherwise read as the custom files carrying no id at all."""
+    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
+
+    custom = FLOOR + 5
+    storage = FakeStorage({custom: world_model(1375)})
+    assert reskin_names(storage, {custom}, {900: "World/WMO/Absent.wmo"}) == {}
+
+
+def model(name: bytes, *, chunked: bool = True) -> bytes:
+    """A model carrying its own name, in either container shape."""
+    header = struct.pack("<III", 272, len(name) + 1, 0)  # patched below
+    body = b"MD20" + header + b"\x00" * 16 + name + b"\x00"
+    offset = len(b"MD20" + header) + 16
+    body = b"MD20" + struct.pack("<III", 272, len(name) + 1, offset) + b"\x00" * 16 \
+           + name + b"\x00"
+    return chunk(b"MD21", body) if chunked else body
+
+
+def test_a_model_reports_the_name_it_carries() -> None:
+    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
+
+    assert model_name(model(b"TheWorldTree")) == "TheWorldTree"
+
+
+def test_both_container_shapes_read_the_same() -> None:
+    """The modern wrapper keeps the old magic inside it, so the only difference
+    is the chunk around it."""
+    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
+
+    assert model_name(model(b"UI_Alliance", chunked=False)) == "UI_Alliance"
+    assert model_name(model(b"UI_Alliance", chunked=True)) == "UI_Alliance"
+
+
+def test_a_model_naming_a_texture_names_nothing() -> None:
+    """Some models hold a texture path in the name field. Taking it would name
+    the model after its own texture, which is a confident wrong answer."""
+    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
+
+    assert model_name(model(rb"DUNGEONS\BUILDINGS\DARKPORTAL_STONE.BLP")) is None
+
+
+def test_a_length_that_does_not_fit_is_refused() -> None:
+    """A misread length would otherwise slice an arbitrary run of bytes out of
+    the file and call it a name."""
+    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
+
+    body = b"MD20" + struct.pack("<III", 272, 40, 9_000) + b"\x00" * 32
+    assert model_name(chunk(b"MD21", body)) is None
+    assert model_name(b"REVM" + b"\x00" * 32) is None
+    assert model_name(None) is None
+
+
+def test_models_sharing_a_name_are_told_apart_by_id() -> None:
+    """A name is the artist's, not the file's, so several models legitimately
+    share one -- but only those need the id."""
+    from epsilon_walks import model_self_names  # pylint: disable=import-outside-toplevel
+
+    a, b, alone = FLOOR + 1, FLOOR + 2, FLOOR + 3
+    storage = FakeStorage({a: model(b"Cloak_A"), b: model(b"Cloak_A"),
+                           alone: model(b"Banner_B")})
+    assert model_self_names(storage, {a, b, alone}) == {
+        a: f"epsilon/model/Cloak_A_{a}.m2",
+        b: f"epsilon/model/Cloak_A_{b}.m2",
+        alone: "epsilon/model/Banner_B.m2",
+    }
+
+
+def test_the_name_keeps_the_casing_it_was_written_with() -> None:
+    """The listfile carries capitals because the names are shown to a person,
+    and a name folded here would be the one row that disagrees."""
+    from epsilon_walks import model_self_names  # pylint: disable=import-outside-toplevel
+
+    fid = FLOOR + 7
+    storage = FakeStorage({fid: model(b"Collections_Cloth_RaidMage_Q_01_Hu_M")})
+    assert model_self_names(storage, {fid}) == {
+        fid: "epsilon/model/Collections_Cloth_RaidMage_Q_01_Hu_M.m2"}

@@ -28,8 +28,9 @@ another route lands is how the last few are picked up.
 
 from __future__ import annotations
 
+import re
 import struct
-from collections import defaultdict
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -211,6 +212,178 @@ def terrain_names(storage: Reads, floor: int) -> dict[int, str]:
                     if fid > floor and slot in TILE_SLOTS:
                         names[fid] = TILE_SLOTS[slot].format(
                             stem=stem, directory=directory, x=x, y=y)
+    return names
+
+
+MODEL_BUCKET = "model"
+"""Where a model named by the name it carries about itself sits."""
+
+MD20_HEADER = struct.Struct("<III")
+"""Version, then the length and offset of the model's own name.
+
+The name is the first thing the header points at, so it is reachable without
+understanding anything else in the format.
+"""
+
+MAX_MODEL_NAME = 512
+"""Longer than any real name, and the guard that stops a misread length from
+slicing an arbitrary megabyte out of the file and calling it a name."""
+
+
+def model_name(raw: bytes | None) -> str | None:
+    """The name a model stores about itself.
+
+    Every M2 carries one, and for a file nothing else reaches it is the only
+    thing that says what the model IS rather than where it hangs. The modern
+    container wraps the old header in an `MD21` chunk and keeps the `MD20`
+    magic inside it, so both shapes are read the same way once the wrapper is
+    off.
+
+    Args:
+        raw: the decoded file, or None when it could not be read.
+
+    Returns:
+        The name, or None when the bytes are not a model, carry no name, or
+        declare a length that does not fit the file.
+    """
+    if not raw or raw[:4] not in (b"MD20", b"MD21"):
+        return None
+    body = raw
+    if raw[:4] == b"MD21":
+        for tag, data in chunks(raw, reversed_tags=False):
+            if tag == b"MD21":
+                body = data
+                break
+    start = 4 if body[:4] == b"MD20" else 0
+    if len(body) < start + MD20_HEADER.size:
+        return None
+    _version, length, offset = MD20_HEADER.unpack_from(body, start)
+    if not 0 < length < MAX_MODEL_NAME or offset + length > len(body):
+        return None
+    found = body[offset:offset + length].split(b"\x00")[0]
+    text = found.decode("ascii", "replace").strip()
+    # Some models name a texture here rather than themselves. That is a real
+    # string about a different file, so taking it would name the model after
+    # its own texture.
+    if not text or text.lower().endswith(".blp"):
+        return None
+    return text
+
+
+def model_self_names(storage: Reads, unnamed: set[int],
+                     *, local_only: bool = True) -> dict[int, str]:
+    """Models named by the name they carry, for the ones nothing else reaches.
+
+    Args:
+        storage: the opened storage.
+        unnamed: the ids still wanting a name.
+        local_only: refuse to reach the network, naming only what is to hand.
+
+    Returns:
+        File id to path.
+    """
+    storage.encoding_keys(sorted(unnamed))
+    found: dict[int, str] = {}
+    for fid in tqdm(sorted(unnamed), desc="model names", unit="file"):
+        name = model_name(storage.read(fid, local_only=local_only))
+        if name:
+            found[fid] = name
+
+    # A name is the artist's, not the file's, so several models legitimately
+    # share one. The id disambiguates exactly those, and only those, which is
+    # the shape the object walk already uses.
+    repeated = {name for name, count in Counter(found.values()).items() if count > 1}
+    names: dict[int, str] = {}
+    for fid, name in found.items():
+        stem = f"{name}_{fid}" if name in repeated else name
+        names[fid] = f"{DERIVED_ROOT}/{MODEL_BUCKET}/{stem}.m2"
+    return names
+
+
+RESKIN_BUCKET = "reskin"
+"""Where a world model named after the one it was copied from sits."""
+
+MOHD_WMOID_OFFSET = 32
+"""Where `wmoID` sits inside a world model's header.
+
+The chunk opens with seven counts and a four-byte ambient colour, so the id
+begins at byte thirty-two. Documented on wowdev.wiki/WMO and confirmed against
+the client: every stock root read carries a distinct one.
+"""
+
+GROUP_SUFFIX = re.compile(r"_\d{3}\.wmo$", re.IGNORECASE)
+"""A world model group's filename. Groups carry no `MOHD`, so reading one costs
+a fetch that can never contribute, and there are forty thousand of them."""
+
+
+def world_model_id(raw: bytes | None) -> int | None:
+    """The retail world model a file declares itself to be.
+
+    Args:
+        raw: the decoded file, or None when it could not be read.
+
+    Returns:
+        The `wmoID` from the file's header, or None when the bytes are not a
+        world model root or carry no id.
+    """
+    if not raw or raw[:4] != b"REVM":
+        return None
+    for tag, data in chunks(raw, reversed_tags=True):
+        if tag == b"MOHD" and len(data) >= MOHD_WMOID_OFFSET + 4:
+            found = int(struct.unpack_from("<I", data, MOHD_WMOID_OFFSET)[0])
+            return found or None
+    return None
+
+
+def reskin_names(storage: Reads, unnamed: set[int], stock: dict[int, str],
+                 *, local_only: bool = True) -> dict[int, str]:
+    """World models named by the retail model they were reskinned from.
+
+    Nothing in the client references these files -- they are not doodads of any
+    named model, no table mentions them, and the display entry they carry
+    cannot be spawned -- so no parentage walk reaches them and there is nothing
+    left to derive a path from. What they do carry is their own header, and a
+    reskin that starts from a retail root inherits that root's `wmoID`. The id
+    is a key into the retail id space, so matching it against the stock roots
+    that declare the same one says which model the file began as.
+
+    That is a description rather than the file's own name, so it ranks with the
+    customization walk: it says what the thing IS, which parentage never does.
+
+    Args:
+        storage: the opened storage.
+        unnamed: the ids still wanting a name. Every earlier route has already
+            taken what it can, so this is the whole of what is left to try.
+        stock: retail file id to path, for the roots to match against.
+        local_only: refuse to reach the network, naming only what is to hand.
+
+    Returns:
+        File id to path. Empty when no stock root could be read, since without
+        the retail side there is nothing to match against and a silent empty
+        result would look like the custom files carrying no id.
+    """
+    roots = [fid for fid, path in stock.items() if not GROUP_SUFFIX.search(path)]
+    storage.encoding_keys(roots)
+    retail: dict[int, int] = {}
+    for fid in tqdm(sorted(roots), desc="reskin: retail roots", unit="file"):
+        found = world_model_id(storage.read(fid, local_only=local_only))
+        if found is not None:
+            retail.setdefault(found, fid)
+    if not retail:
+        print("  reskin: skipped, no stock world model root could be read")
+        return {}
+
+    storage.encoding_keys(sorted(unnamed))
+    names: dict[int, str] = {}
+    for fid in tqdm(sorted(unnamed), desc="reskin: custom roots", unit="file"):
+        found = world_model_id(storage.read(fid, local_only=local_only))
+        origin = retail.get(found) if found is not None else None
+        if origin is None:
+            continue
+        stem = stock[origin].replace("\\", "/").rsplit("/", 1)[-1]
+        stem = stem.rsplit(".", 1)[0].lower()
+        names[fid] = f"{DERIVED_ROOT}/{RESKIN_BUCKET}/{stem}/{fid}.wmo"
+    print(f"  reskin: {len(retail):,} retail roots read, {len(names):,} named")
     return names
 
 

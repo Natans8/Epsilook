@@ -37,6 +37,8 @@ feeds what comes later.**
 | `icons`         | the icon database an addon ships                   | real            | a second               |
 | `objects`       | the gameobject walk through the client API         | real or derived | **an evening in game** |
 | `customization` | the character-customization tables, joined by name | semantic        | a minute               |
+| `modelnames`    | the name a model carries about itself              | real            | minutes                |
+| `reskins`       | the retail world model a file was copied from      | semantic        | minutes                |
 | `worldmodels`   | group geometry and textures, from their models     | derived         | minutes                |
 | `models`        | skins, textures and anims, from their models       | derived         | minutes                |
 
@@ -52,6 +54,23 @@ That is why it outranks parentage.
 **A derived name is a placeholder and says so.** It states which model refers to the file, which is all anyone knows,
 and it sits under an `epsilon/` prefix so it can never be mistaken for a path the game uses. The object route derives
 one too, for the names the client reports as a bare filename with no directory.
+
+**Two routes read the file itself rather than anything that references it**, which is what lets them reach files no
+table mentions at all:
+
+- **`modelnames`** takes the name a model stores in its own header. That is a real name — the one whoever built the
+  model gave it — so it ranks with the routes the client reports. ⚠ **Some models hold a texture path in that field
+  instead**, and taking it would name a model after its own texture, so a value ending `.blp` is refused.
+- **`reskins`** reads `MOHD.wmoID`, the retail id a world model declares, and matches it against the stock roots that
+  declare the same one. A reskin inherits its original's id, so the file says which retail model it began as. That is
+  a description rather than a filename, so it sits with `customization` — and **below `objects`, deliberately**:
+  Epsilon's own name for these files (`EPS_RockArch2_…`) is better than "a copy of `6ng_rockarchwmo_02l`", so if the
+  object walk ever reaches one, it wins.
+
+**Both name PARENTS, and that is why they are worth more than their own row counts.** A named model lets the `models`
+walk name its skins, textures and animations; a named world-model root lets `worldmodels` name its groups. Measured on
+the local-only run that introduced them: **179 parents named, 472 children following, 651 rows for two routes that
+directly produce 179.**
 
 > ⚠ Read every column by *name*, never by position — and this is not only about joins. The customization chain crosses
 > five tables and two of the positions recorded for them were wrong; the terrain route read `Map.db2` positionally and
@@ -199,20 +218,26 @@ classification says which route would go there.
 uv run python tools/supplement.py --coverage
 ```
 
-A full run with `--network` reaches **118,294 of the 128,476 custom files, 92.1%**, leaving 10,182. Of the 2,348 of
-those the installation holds and can therefore be identified:
+A local-only run reaches **117,975 of the 128,476 custom files, 91.8%**, leaving 10,501. Of the **1,096** of those the
+installation holds and can therefore be identified:
 
-| kind            | count | which route would claim it        |
-|-----------------|------:|-----------------------------------|
-| `blp`           | 1,687 | none yet — see below              |
-| `wmo group`     |   311 | none: their roots are unnamed     |
-| `m2`            |   169 | none: nothing references them     |
-| `skin`          |   126 | none: their models are unnamed    |
-| `wmo root`      |    23 | none: roots, not children         |
-| everything else |    32 | sound, and a few unrecognised     |
+| kind                    | count | which route would claim it            |
+|-------------------------|------:|---------------------------------------|
+| `blp`                   |   923 | none yet — see below                  |
+| `skin`                  |   121 | none: their models are not held here  |
+| `chunked, unrecognised` |    14 | none                                  |
+| `m2`                    |    13 | none: they carry no name of their own |
+| `mp3`                   |    11 | sound                                 |
+| `unknown`               |     7 | none                                  |
+| `wmo group`             |     7 | none: their roots are not held here    |
 
-The other **7,834 are not held locally and were not opened**, so what they are is unmeasured. Classifying them would
+The other **9,405 are not held locally and were not opened**, so what they are is unmeasured. Classifying them would
 cost a request each and the report says so rather than guessing.
+
+**⭐ Read that table against its predecessor: the locally-readable PARENTS are now exhausted.** Before `modelnames` and
+`reskins` it read 169 `m2` and 23 `wmo root` blocking 311 `wmo group` and 126 `skin`. It now reads **13 models, zero
+world-model roots and seven groups** — so on this machine there is no parent left whose name would free a child. What
+remains locally is 923 textures and a handful of odds.
 
 No terrain appears in that list, which is the check that the terrain route is complete.
 
@@ -220,17 +245,48 @@ No terrain appears in that list, which is the check that the terrain route is co
 > terrain, world tables and world models all begin with the same version chunk, so magic-only classification calls
 > thousands of map tiles world models. `classify()` separates them on the chunks they carry instead.
 
-**The largest remaining move is `--network`.** Nine tenths of what is unnamed is simply not on this machine — 9,860 of
-the 12,404 were never opened. The three walks reach further with the network on, and that is the run a vendored result
-comes from anyway.
+**The largest remaining move is `--network`, and the two file-reading routes are why it is worth more than it was.**
+Nine tenths of what is unnamed is simply not on this machine. `modelnames` and `reskins` both read the file itself, so
+every parent the network reaches is a parent they can name — and each named parent frees its children. Measured
+locally, 179 parents brought 472 children with them.
 
 The remaining local textures have no route yet. They are not model textures — the parentage walks have taken those —
 and they are not customization textures either. Identifying what uses them is the open question; there is no measured
 answer, so do not assume one.
 
-Two routes are closed and should not be re-opened. The world-model group route is exhausted — custom roots reference
-stock group geometry, so no group target is unnamed. The terrain texture route is a dead end, because tileset textures
-are shared across every tile that uses them, so a large sample yields almost no distinct unnamed files.
+### Routes that are closed, with what closed them
+
+Do not re-open these without new evidence; each cost a measurement.
+
+| route                        | why it is closed                                                                     |
+|------------------------------|--------------------------------------------------------------------------------------|
+| world-model groups           | custom roots reference stock group geometry, so no group target is unnamed           |
+| terrain textures             | tileset textures are shared across every tile, so a large sample yields almost none  |
+| `.lookup tiletexture`        | 201 terms, 144 returning a full page, **zero** results above the custom floor        |
+| every other client table     | `--referrers` over 836 tables: 10,152 of 11,152 unnamed are mentioned by none of them |
+| `.gob spawn`                 | fails for the display-carrying orphans, models and world-model roots alike           |
+| `GODI_Search`                | returns exactly the same 166,671 rows as the index walk; the ceiling is the catalogue |
+| embedded paths in WMO or ADT | a chunk census finds no `MODN` and no `MOTX`: modern formats carry file ids only     |
+| `.lookup object`             | 22,051 custom filenames, and **no file id on any of them** — see below               |
+
+> ⚠ **`.lookup object` was swept and knows nothing this does not, so nobody need spend an evening on it.** Over 201
+> terms it returns 34,838 gameobject entries naming a model file, 20,262 of them filenames the listfile has never heard
+> of — Epsilon's own, lowercase: `eps_rockarch_lavarock.wmo`, `eps_emptywmo_gilneas_outpost_stable_v2`. Set-differenced
+> against this supplement, **49 remain unaccounted for**, and none carries a file id. The server's object names and the
+> `objects` walk's names are the same body.
+>
+> **That is also what closes the 692 display-carrying orphans**: had they names on the server, the leftover would be
+> about 692 rather than 49. It is not. Those files have no name in the client catalogue, the server's gameobject
+> table, any db2, or their own bytes.
+>
+> ⚠ The leftover read **2,429** until leading markers were stripped — entries are prefixed `[bfa 8.0] name.m2` as well
+> as suffixed `name.m2 [elevator]`, and stripping only the suffix leaves thousands of ordinary listfile names looking
+> novel.
+
+⛔ **And the question to ask before adding another route is not "what fraction is named".** No shipped pack references
+a single custom file — every pack is built from wago's retail tables — so this supplement is preparation for an
+Epsilon pack that does not exist yet. Coverage here is a readiness measure, and a route reaching files that pack will
+never carry is worth nothing however elegant.
 
 ## 7. The step this does not take
 

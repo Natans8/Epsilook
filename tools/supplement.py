@@ -106,6 +106,10 @@ class Route:
 
 _STORAGE: object | None = None
 
+_STOCK: dict[int, str] | None = None
+"""The listfile's world models, read once. Fifty thousand rows, and two routes
+would otherwise parse the same file twice."""
+
 # How many custom files the storage declares. Only the walks need it, and
 # opening it costs a service round trip and a pass over the encoding file, so
 # nothing opens it until a walk asks.
@@ -132,6 +136,26 @@ def storage() -> object:
     return _STORAGE
 
 
+def stock_paths() -> dict[int, str]:
+    """Retail file id to path, from the community listfile.
+
+    The reskin route matches against the retail models, so it needs the names
+    the listfile already carries rather than anything this script derives.
+    """
+    global _STOCK  # pylint: disable=global-statement
+    if _STOCK is None:
+        from repo import CACHE, LISTFILE_ASSET  # pylint: disable=import-outside-toplevel
+        rows: dict[int, str] = {}
+        with (CACHE / "listfile" / LISTFILE_ASSET).open(encoding="utf-8",
+                                                        errors="replace") as handle:
+            for line in handle:
+                fid, sep, path = line.partition(";")
+                if sep and path.strip().lower().endswith(".wmo"):
+                    rows[int(fid)] = path.strip()
+        _STOCK = rows
+    return _STOCK
+
+
 def _icons(_known: dict[int, str]) -> dict[int, str]:
     return icon_names()
 
@@ -154,6 +178,18 @@ def _customization(_known: dict[int, str]) -> dict[int, str]:
 def _unnamed(known: dict[int, str]) -> set[int]:
     """Every custom file id no route has named yet."""
     return set(storage().custom_fids(SUPPLEMENT_FLOOR)) - known.keys()  # type: ignore[attr-defined]
+
+
+def _modelnames(known: dict[int, str]) -> dict[int, str]:
+    from epsilon_walks import model_self_names  # pylint: disable=import-outside-toplevel
+    return model_self_names(storage(), _unnamed(known),  # type: ignore[arg-type]
+                            local_only=LOCAL_ONLY)
+
+
+def _reskins(known: dict[int, str]) -> dict[int, str]:
+    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
+    return reskin_names(storage(), _unnamed(known),  # type: ignore[arg-type]
+                        stock_paths(), local_only=LOCAL_ONLY)
 
 
 def _world_models(known: dict[int, str]) -> dict[int, str]:
@@ -203,6 +239,16 @@ ROUTES: tuple[Route, ...] = (
           needs="the storage",
           cost="a minute",
           produce=_customization),
+    Route(name="modelnames",
+          summary="models named by the name they carry about themselves",
+          needs="the storage",
+          cost="minutes",
+          produce=_modelnames),
+    Route(name="reskins",
+          summary="world models named by the retail model they were copied from",
+          needs="the storage and the listfile",
+          cost="minutes, and every retail root with --network",
+          produce=_reskins),
     Route(name="worldmodels",
           summary="group geometry and material textures, from the models using them",
           needs="the storage",
