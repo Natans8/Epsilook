@@ -31,12 +31,9 @@ from typing import Protocol
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 
-from pack.sources.casc import (Located as Remote, Service, Storage,  # noqa: E402
-                               decode_blte, find_encoding_keys)
+from pack.sources.casc import (EPSILON, Located as Remote,  # noqa: E402
+                               Storage, decode_blte, find_encoding_keys)
 from tqdm import tqdm  # noqa: E402
-
-EPSILON = Service(host="tact.epsilonwow.net")
-"""The client's own content service."""
 
 HEAD_CAP = 16 * 1024
 """How much of a container a head read asks for.
@@ -447,11 +444,11 @@ class EpsilonStorage:
                 self._located[key] = where
                 end = where.offset + min(where.size, cap) - 1
                 blob = self.remote._get(  # pylint: disable=protected-access
-                    self.remote.service.data_url(where.archive),
+                    self.remote.cdn.data_url(where.archive),
                     headers={"Range": f"bytes={where.offset}-{end}"})
             else:
                 blob = self.remote._get(  # pylint: disable=protected-access
-                    self.remote.service.data_url(key.hex()),
+                    self.remote.cdn.data_url(key.hex()),
                     headers={"Range": f"bytes=0-{cap - 1}"})
         except (LookupError, OSError, ValueError):
             return None

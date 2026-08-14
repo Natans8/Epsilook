@@ -15,13 +15,22 @@ The chain, once, because every step below is one link in it::
     the encoding key locates bytes, loose or inside an archive
     every located blob is a BLTE container
 
-Four things here are easy to get wrong and fail quietly rather than loudly.
-They are marked at the code that handles them, and they are: the config path the
+That chain is the same wherever it is read, so a service says only the two
+things services differ on: where its versions document is, and which host
+serves the content it names. A private server answers both from one host; the
+vendor publishes versions on a version service and content on a network it
+names in a second document.
+
+Five things here are easy to get wrong and fail quietly rather than loudly.
+They are marked at the code that handles them, and they are: the config path a
 service advertises is not the one it serves; a page count read at the wrong
-offset reads as billions of pages and looks like a hang; a localised file appears
-in the root once per locale and keeping the first match returns whichever sorts
-first; and an archive index whose offsets are six bytes wide is a group index
-whose leading bytes are an archive number rather than part of the offset.
+offset reads as billions of pages and looks like a hang; a localised file
+appears in the root once per locale and keeping the first match returns
+whichever sorts first; an archive index whose offsets are six bytes wide is a
+group index whose leading bytes are an archive number rather than part of the
+offset; and a root file states which manifest format it is in, so reading a
+newer one at the older offsets yields file ids that are wrong rather than
+absent.
 """
 
 from __future__ import annotations
@@ -30,9 +39,10 @@ import struct
 import urllib.error
 import urllib.request
 import zlib
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from ..progress import log
 from .cache import CACHE_DIR
@@ -47,36 +57,60 @@ NO_NAME_HASH = 0x10000000
 """Content flag meaning a root block stores no name hashes, so its records are
 eight bytes narrower each."""
 
+STATED_HEADER_MAX = 1024
+"""How large the root's own header may say it is.
+
+The discriminator between the two root headers, and it is a size comparison
+because the two formats differ by which number sits in the second word: the
+older one puts a total file count there, in the millions, and the newer one
+the length of its own header, which is a couple of dozen bytes. Nothing in
+either says outright which it is.
+"""
+
+SPLIT_FLAGS_TOP_SHIFT = 17
+"""Where the third part of a split content flags field belongs.
+
+Manifest version two spends three fields on what one used to hold, and the
+last of them is a single byte carrying the flags above bit seventeen.
+"""
+
+
+ReadText = Callable[[str], str]
+"""One request, answered as text. What a service is handed when locating its
+content costs a document of its own."""
+
+CONTENT_PATH = "tpr/wow"
+"""Where a network keeps this product, under whichever host serves it. Every
+service measured here publishes the same one, so it is the default rather than
+a per-service fact, and a document naming another is still believed."""
+
 
 @dataclass(frozen=True)
-class Service:
-    """Where one product's TACT service and content delivery network live."""
+class Cdn:
+    """One content delivery network: the host and path that serve a build.
+
+    Both halves of a build live under the one path: configuration files under
+    ``config`` and every content blob under ``data``. A service names this,
+    rather than being it, because the vendor's version service serves neither.
+    """
 
     host: str
-    """The service host, e.g. ``tact.epsilonwow.net``."""
+    """The host that serves the bytes, e.g. ``level3.blizzard.com``."""
 
-    product: str = "wow"
-    """The product path on the service, e.g. ``wow``."""
-
-    path: str = "tpr/wow"
-    """The content path on the network, taken from the service's own ``/cdns``."""
-
-    region: str = "eu"
-    """Which region's row to read. Regions normally carry identical builds."""
-
-    @property
-    def versions_url(self) -> str:
-        """Where the live build and configuration digests are published."""
-        return f"http://{self.host}/{self.product}/versions"
+    path: str = CONTENT_PATH
+    """The content path under it, taken from a ``/cdns`` document's ``Path``."""
 
     def config_url(self, digest: str) -> str:
         """Where one configuration file lives.
 
         The path is ``<content path>/config``, and NOT the ``ConfigPath`` the
-        service's own ``/cdns`` document advertises. A private service may
-        publish the latter and serve only the former, and the failure is quiet:
-        the miss returns an HTML error page, so a caller that checks for bytes
-        rather than for status gets a plausible nothing.
+        ``/cdns`` document advertises. Both services measured here advertise
+        ``tpr/configs/data`` and serve nothing under it: the vendor's own
+        network answers 403 there and 200 under ``config``, and a private
+        service copying the document inherits the same gap. The failure is
+        quiet either way, because the miss returns an error document rather
+        than nothing, so a caller that checks for bytes rather than for status
+        gets a plausible answer that is not a configuration file.
         """
         return f"http://{self.host}/{self.path}/config/{_shard(digest)}"
 
@@ -88,6 +122,151 @@ class Service:
 def _shard(digest: str) -> str:
     """``"55921441..."`` -> ``"55/92/55921441..."``, the two-level fan-out."""
     return f"{digest[0:2]}/{digest[2:4]}/{digest}"
+
+
+class Service(Protocol):
+    """One product's TACT service: which build is live, and where it is served.
+
+    An implementation answers two questions and nothing else, because the two
+    known shapes agree on everything below them. The chain from a build config
+    to a file's bytes is identical, and so are the paths under a network's
+    content path, which is why locating a build is the whole of this seam.
+    """
+
+    @property
+    def label(self) -> str:
+        """What this service is called on disk, and in the log.
+
+        Read-only on the interface so a frozen implementation satisfies it, as
+        with the sources' own contract.
+        """
+        raise NotImplementedError
+
+    @property
+    def region(self) -> str:
+        """Which region's row to read. Regions normally carry identical builds."""
+        raise NotImplementedError
+
+    @property
+    def versions_url(self) -> str:
+        """Where the live build and configuration digests are published."""
+        raise NotImplementedError
+
+    def cdn(self, read: ReadText) -> Cdn:
+        """Which network serves this service's content.
+
+        Args:
+            read: how to fetch a document, for a service that publishes the
+                answer rather than being it. A service that serves its own
+                content makes no request at all.
+
+        Returns:
+            Where this service's configuration files and data blobs live.
+        """
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class SelfHosted:
+    """A service that is also its own network, as a private server is.
+
+    One host answers for the versions document, the configuration files and
+    the data blobs alike, so nothing has to be looked up to reach the content:
+    the service is the network, and its own ``/cdns`` document says as much.
+    """
+
+    host: str
+    """The service host, e.g. ``tact.epsilonwow.net``."""
+
+    product: str = "wow"
+    """The product path on the service, e.g. ``wow``."""
+
+    path: str = CONTENT_PATH
+    """The content path on the host, taken from its own ``/cdns``."""
+
+    region: str = "eu"
+    """Which region's row to read."""
+
+    @property
+    def label(self) -> str:
+        """The host, which is the whole of what such a service is."""
+        return self.host
+
+    @property
+    def versions_url(self) -> str:
+        """The product's versions document, served by the host itself."""
+        return f"http://{self.host}/{self.product}/versions"
+
+    def cdn(self, read: ReadText) -> Cdn:
+        """The host itself, without asking it. See `Service.cdn`."""
+        return Cdn(self.host, self.path)
+
+
+@dataclass(frozen=True)
+class Blizzard:
+    """The vendor's own service: versions in one place, content in another.
+
+    The version service holds every region's row whichever region's host is
+    asked, so the host and the region are two knobs rather than one: the host
+    is who is asked, and the region is which row is read and which network's
+    row is taken from the ``/cdns`` document beside it.
+
+    A product is a whole line rather than a build, so every live client the
+    vendor publishes is reachable by constructing this with that product's
+    name. There is no second class for one.
+    """
+
+    product: str = "wow"
+    """The product line, e.g. ``wow`` for retail or ``wow_classic``."""
+
+    region: str = "eu"
+    """Which region's row to read, in both documents."""
+
+    host: str = "eu.version.battle.net"
+    """Which version service host to ask. Version two over https: the older
+    TACT host proxies this one, and the raw protocol on port 1119 is neither
+    http nor reachable from a proxied network."""
+
+    @property
+    def label(self) -> str:
+        """The product, qualified, because one host serves every line."""
+        return f"blizzard-{self.product}"
+
+    @property
+    def versions_url(self) -> str:
+        """The product's versions document on the version service."""
+        return f"https://{self.host}/v2/products/{self.product}/versions"
+
+    @property
+    def cdns_url(self) -> str:
+        """The document naming which networks serve this product."""
+        return f"https://{self.host}/v2/products/{self.product}/cdns"
+
+    def cdn(self, read: ReadText) -> Cdn:
+        """The first host this region's row names. See `Service.cdn`.
+
+        The rows are keyed ``Name`` rather than ``Region`` here, unlike the
+        versions document beside it, and a region may name several hosts. The
+        first is taken: they serve the same content, and choosing between them
+        is a fallback policy rather than an address.
+
+        Raises:
+            LookupError: if the document names no host at all.
+        """
+        rows = read_bpsv(read(self.cdns_url))
+        here = [row for row in rows if row.get("Name") == self.region] or rows
+        hosts = here[0].get("Hosts", "").split() if here else []
+        if not hosts:
+            raise LookupError(
+                f"{self.cdns_url} names no host for region {self.region}")
+        return Cdn(hosts[0], here[0].get("Path") or CONTENT_PATH)
+
+
+EPSILON = SelfHosted(host="tact.epsilonwow.net")
+"""The Epsilon client's own content service."""
+
+RETAIL = Blizzard()
+"""The live retail line, on the vendor's own service."""
 
 
 def read_bpsv(text: str) -> list[dict[str, str]]:
@@ -245,6 +424,64 @@ def _encoding_entries(blob: bytes) -> Iterator[tuple[bytes, bytes]]:
 
 
 @dataclass(frozen=True)
+class Header:
+    """What a root file says about itself before its first block.
+
+    Two headers exist and neither is tagged. The older one is the magic and
+    two counts; the newer states its own length and which manifest version
+    follows, and both counts move along behind it. Reading the newer at the
+    older offsets is the quiet failure this separates out: every number lands
+    one field early, so the walk yields file ids rather than failing.
+    """
+
+    version: int
+    """Which manifest version the blocks are in. Zero for the older header,
+    which predates the field and always carries version one's blocks."""
+
+    blocks_at: int
+    """Where the first block begins."""
+
+    total: int
+    """How many records the file claims, across every locale."""
+
+    named: int
+    """How many of them carry a name hash."""
+
+    @property
+    def names_every_record(self) -> bool:
+        """Whether a block's no-name-hash flag is honoured at all.
+
+        A file in which every record is named stores a name hash in every
+        block, flag or no flag, and a reader that skipped those eight bytes
+        per record would walk off the end of the block.
+        """
+        return self.total == self.named
+
+    @classmethod
+    def parse(cls, blob: bytes) -> Header:
+        """Read whichever header this is.
+
+        Args:
+            blob: the decoded root file.
+
+        Returns:
+            What it says about itself.
+
+        Raises:
+            ValueError: if the blob is not a root file.
+        """
+        if blob[:4] != b"TSFM":
+            raise ValueError(f"not a root file: {blob[:4]!r}")
+        stated = struct.unpack_from("<I", blob, 4)[0]
+        if stated > STATED_HEADER_MAX:
+            total, named = stated, struct.unpack_from("<I", blob, 8)[0]
+            return cls(version=0, blocks_at=12, total=total, named=named)
+        version = struct.unpack_from("<I", blob, 8)[0]
+        total, named = struct.unpack_from("<II", blob, 12)
+        return cls(version=version, blocks_at=stated, total=total, named=named)
+
+
+@dataclass(frozen=True)
 class Root:
     """The root file: a file data id to a content key, for one locale."""
 
@@ -256,6 +493,10 @@ class Root:
 
     records: int
     """How many records across every locale. Matches the file's own header."""
+
+    header: Header
+    """What the file said about itself. Kept because the record count is a
+    self-check on the walk and the version says which shape was walked."""
 
     @classmethod
     def parse(cls, blob: bytes, locale: int = LOCALE_ENUS) -> Root:
@@ -271,15 +512,13 @@ class Root:
         Raises:
             ValueError: if the blob is not a root file.
         """
-        if blob[:4] != b"TSFM":
-            raise ValueError(f"not a root file: {blob[:4]!r}")
+        header = Header.parse(blob)
         keys: dict[int, bytes] = {}
         blocks = records = 0
-        at, size = 12, len(blob)
+        at, size = header.blocks_at, len(blob)
 
         while at < size:
-            count, content_flags, locale_flags = struct.unpack_from("<Iii", blob, at)
-            at += 12
+            count, content_flags, locale_flags, at = _block(blob, at, header)
             if count == 0:
                 continue
             blocks += 1
@@ -289,7 +528,7 @@ class Root:
             at += 4 * count
             content_keys = at
             at += 16 * count
-            if not content_flags & NO_NAME_HASH:
+            if header.names_every_record or not content_flags & NO_NAME_HASH:
                 at += 8 * count
 
             # Filtering here rather than when a caller asks is the whole point:
@@ -302,7 +541,28 @@ class Root:
                 file_id += delta + 1
                 position = content_keys + 16 * index
                 keys[file_id] = blob[position:position + 16]
-        return cls(keys=keys, blocks=blocks, records=records)
+        return cls(keys=keys, blocks=blocks, records=records, header=header)
+
+
+def _block(blob: bytes, at: int, header: Header) -> tuple[int, int, int, int]:
+    """One block header, in whichever shape the file declared.
+
+    Version two spends seventeen bytes where version one spent twelve: the
+    locale mask moved in front, and the content flags became three fields that
+    are put back together here rather than anywhere a caller can see. The two
+    orders are the reason this is read through the header rather than by
+    matching on what the numbers look like.
+
+    Returns:
+        The record count, the content flags, the locale mask, and where the
+        block's own arrays begin.
+    """
+    if header.version >= 2:
+        count, locale_flags, low, high, top = struct.unpack_from("<IIIIB", blob, at)
+        content_flags = low | high | (top << SPLIT_FLAGS_TOP_SHIFT)
+        return count, content_flags, locale_flags, at + 17
+    count, content_flags, locale_flags = struct.unpack_from("<Iii", blob, at)
+    return count, content_flags, locale_flags, at + 12
 
 
 @dataclass(frozen=True)
@@ -320,6 +580,12 @@ class Storage:
     Everything is fetched from the service and cached on disk, so a second run
     of anything costs nothing. Construction resolves the live build, the
     encoding file and the root; opening a file resolves its keys and fetches it.
+
+    What a first read costs is set by the encoding file, which is fetched whole
+    and held in memory before any file id resolves: 141 MB compressed on the
+    private service's 9.2.7, and 187 MB on the vendor's retail line at 12.1.0.
+    Reading one file from a service is not a small act, and nothing here
+    pretends otherwise.
     """
 
     def __init__(self, service: Service, *, cache: Path | None = None,
@@ -333,7 +599,7 @@ class Storage:
             locale: the root locale mask to keep.
         """
         self.service = service
-        self.cache = cache or CACHE_DIR / "casc" / service.host
+        self.cache = cache or CACHE_DIR / "casc" / service.label
         self.cache.mkdir(parents=True, exist_ok=True)
 
         versions = read_bpsv(self._get_text(service.versions_url))
@@ -342,7 +608,8 @@ class Storage:
         self.build = row.get("VersionsName", "")
         self.build_config_digest = row["BuildConfig"]
         self.cdn_config_digest = row["CDNConfig"]
-        log(f"  {service.host}: build {self.build}, "
+        self.cdn = service.cdn(self._get_text)
+        log(f"  {service.label}: build {self.build} on {self.cdn.host}, "
             f"config {self.build_config_digest}")
 
         self.build_config = read_config(self._config(self.build_config_digest))
@@ -413,7 +680,7 @@ class Storage:
 
     def _config(self, digest: str) -> str:
         """One configuration file, cached."""
-        return self._get_text(self.service.config_url(digest), name=digest)
+        return self._get_text(self.cdn.config_url(digest), name=digest)
 
     def _fetch(self, encoding_key: bytes, name: str) -> bytes:
         """The raw container for one encoding key, loose or from an archive.
@@ -426,7 +693,7 @@ class Storage:
         if cached.exists() and cached.stat().st_size:
             return cached.read_bytes()
         try:
-            blob = self._get(self.service.data_url(encoding_key.hex()))
+            blob = self._get(self.cdn.data_url(encoding_key.hex()))
         except urllib.error.HTTPError as exc:
             if exc.code != 404:
                 raise
@@ -442,7 +709,7 @@ class Storage:
                 f"{encoding_key.hex()} is neither loose nor in any archive the "
                 f"network declares")
         end = found.offset + found.size - 1
-        return self._get(self.service.data_url(found.archive),
+        return self._get(self.cdn.data_url(found.archive),
                          headers={"Range": f"bytes={found.offset}-{end}"})
 
     def archives(self) -> dict[bytes, Located]:
@@ -477,7 +744,7 @@ class Storage:
             that is absent or is not an ordinary one.
         """
         try:
-            blob = self._get(f"{self.service.data_url(name)}.index",
+            blob = self._get(f"{self.cdn.data_url(name)}.index",
                              name=f"{name}.index")
         except urllib.error.HTTPError:
             return {}
