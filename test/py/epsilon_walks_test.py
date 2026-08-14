@@ -663,3 +663,27 @@ def test_low_detail_terrain_places_world_models_too() -> None:
     known = {700: "world/maps/prophecylordaeron/prophecylordaeron.wdl"}
     assert placement_names(FakeStorage({700: raw}), known, {placed}) == {
         placed: f"epsilon/placed/prophecylordaeron/{placed}.wmo"}
+
+
+def test_a_ground_texture_is_named_by_the_map_that_paints_with_it() -> None:
+    """It hangs off no model, so no parentage walk reaches it; a tile is the
+    only thing that refers to it at all."""
+    from epsilon_walks import ground_texture_names  # pylint: disable=import-outside-toplevel
+
+    painted = FLOOR + 3
+    body = struct.pack("<I", painted)
+    raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
+        chunk(b"MDID", body, reversed_tags=True)
+    known = {600: "world/maps/classicazeroth/classicazeroth_31_49_tex0.adt"}
+    assert ground_texture_names(FakeStorage({600: raw}), known, {painted}) == {
+        painted: f"epsilon/ground/classicazeroth/{painted}.blp"}
+
+
+def test_only_the_texture_tile_records_the_painting() -> None:
+    from epsilon_walks import ground_texture_names  # pylint: disable=import-outside-toplevel
+
+    painted = FLOOR + 3
+    raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
+        chunk(b"MDID", struct.pack("<I", painted), reversed_tags=True)
+    known = {600: "world/maps/m/m_31_49_obj0.adt"}
+    assert ground_texture_names(FakeStorage({600: raw}), known, {painted}) == {}

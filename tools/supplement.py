@@ -199,6 +199,12 @@ def _placements(known: dict[int, str]) -> dict[int, str]:
                            local_only=LOCAL_ONLY)
 
 
+def _ground(known: dict[int, str]) -> dict[int, str]:
+    from epsilon_walks import ground_texture_names  # pylint: disable=import-outside-toplevel
+    return ground_texture_names(storage(), known, _unnamed(known),  # type: ignore[arg-type]
+                                local_only=LOCAL_ONLY)
+
+
 def _world_models(known: dict[int, str]) -> dict[int, str]:
     from epsilon_walks import world_model_children  # pylint: disable=import-outside-toplevel
     return world_model_children(storage(), known, _unnamed(known),  # type: ignore[arg-type]
@@ -261,6 +267,11 @@ ROUTES: tuple[Route, ...] = (
           needs="the storage",
           cost="minutes",
           produce=_placements),
+    Route(name="ground",
+          summary="textures named by the map whose terrain paints with them",
+          needs="the storage",
+          cost="minutes",
+          produce=_ground),
     Route(name="worldmodels",
           summary="group geometry and material textures, from the models using them",
           needs="the storage",

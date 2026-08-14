@@ -590,6 +590,60 @@ because the map header names it.
 """
 
 
+GROUND_BUCKET = "ground"
+"""Where a texture named by the map it paints sits."""
+
+GROUND_CHUNKS = (b"MDID", b"MHID")
+"""Where a terrain tile records the textures it paints with.
+
+A diffuse layer and a height layer, both by file id. A modern tile carries no
+texture-name chunk at all, so these are the only reference to the texture that
+exists anywhere -- and no table mentions them either.
+"""
+
+TEXTURE_TILE_SUFFIX = "_tex0.adt"
+"""Which tile file records the painting. The object tiles record placements
+instead, and the rest record neither."""
+
+
+def ground_texture_names(storage: Reads, known: dict[int, str], unnamed: set[int],
+                         *, local_only: bool = True) -> dict[int, str]:
+    """Textures named by the map whose terrain paints with them.
+
+    The parentage walks reach a texture through the model that uses it, and a
+    ground texture hangs off no model -- it is named by a tile, which nothing
+    was reading. What this can say is which map paints with it, which is the
+    only thing anybody knows about the file.
+
+    Args:
+        storage: the opened storage.
+        known: every name settled so far, which is where the tiles come from.
+        unnamed: the ids still wanting a name.
+        local_only: refuse to reach the network.
+
+    Returns:
+        File id to path.
+    """
+    tiles = sorted(fid for fid, path in known.items()
+                   if path.lower().endswith(TEXTURE_TILE_SUFFIX))
+    if not tiles:
+        return {}
+    raws = heads_of(storage, tiles, label="ground textures", local_only=local_only)
+
+    painted: dict[int, str] = {}
+    for fid, raw in raws.items():
+        directory = known[fid].replace("\\", "/").rsplit("/", 2)[-2]
+        for tag, data in chunks(raw, reversed_tags=True):
+            if tag not in GROUND_CHUNKS:
+                continue
+            for at in range(0, len(data) - 3, 4):
+                found = struct.unpack_from("<I", data, at)[0]
+                if found in unnamed:
+                    painted.setdefault(found, directory)
+    return {fid: f"{DERIVED_ROOT}/{GROUND_BUCKET}/{where}/{fid}.blp"
+            for fid, where in painted.items()}
+
+
 def placement_names(storage: Reads, known: dict[int, str], unnamed: set[int],
                     *, local_only: bool = True) -> dict[int, str]:
     """World models named by the map whose terrain places them.
