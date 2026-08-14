@@ -331,7 +331,21 @@ def model_name(raw: bytes | None) -> str | None:
     # its own texture.
     if not text or text.lower().endswith(".blp"):
         return None
-    return text
+    # A few carry the whole path the model was built at, drive letter and all.
+    # Everything after the archive it was packed into is a game-relative path
+    # the author actually used, which says more than the bare filename does.
+    text = text.replace(chr(92), "/")
+    marker = text.lower().rfind(".mpq/")
+    if marker != -1:
+        text = text[marker + 5:]
+    elif "/" in text or ":" in text:
+        text = text.rsplit("/", 1)[-1]
+    # The name usually carries its own extension, and the caller adds one.
+    for suffix in (".m2", ".mdx"):
+        if text.lower().endswith(suffix):
+            text = text[:-len(suffix)]
+            break
+    return text.strip("/ ") or None
 
 
 def model_self_names(storage: Reads, unnamed: set[int],
@@ -349,10 +363,29 @@ def model_self_names(storage: Reads, unnamed: set[int],
     heads = heads_of(storage, sorted(unnamed), label="model names",
                      local_only=local_only)
     found: dict[int, str] = {}
+    retry: list[int] = []
     for fid, raw in heads.items():
         name = model_name(raw)
         if name:
             found[fid] = name
+        elif raw[:4] in (b"MD20", b"MD21"):
+            retry.append(fid)
+
+    # A capped head is enough for most models and wrong for some: measured,
+    # nine in ten of the ones it reports as nameless do carry a name that a
+    # whole file yields. Which ones cannot be known without asking, so the
+    # cheap read runs first and only its failures are paid for in full.
+    if retry and not local_only:
+        print(f"  model names: {len(retry):,} models reported no name from their "
+              f"head and are being re-read whole")
+        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+            pending = {pool.submit(storage.read, fid): fid for fid in retry}
+            for done in tqdm(as_completed(pending), total=len(pending),
+                             desc="model names (whole)", unit="file"):
+                whole = done.result()
+                name = model_name(whole) if whole else None
+                if name:
+                    found[pending[done]] = name
 
     # A name is the artist's, not the file's, so several models legitimately
     # share one. The id disambiguates exactly those, and only those, which is

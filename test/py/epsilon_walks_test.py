@@ -492,3 +492,40 @@ def test_the_retail_side_of_a_reskin_stays_on_disk() -> None:
     assert reskin_names(storage, {custom}, {900: "World/WMO/Bridge.wmo"},
                         local_only=False) == {}
     assert storage.heads == 0
+
+
+def test_a_name_that_carries_its_own_extension_does_not_gain_a_second() -> None:
+    """Most models spell the extension in the name, and the path adds one."""
+    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
+
+    assert model_name(model(b"dal_bazaar_stall.m2")) == "dal_bazaar_stall"
+    assert model_name(model(b"old_thing.mdx")) == "old_thing"
+
+
+def test_an_authoring_path_keeps_the_part_the_game_would_use() -> None:
+    """A few models carry the whole path they were built at. What follows the
+    archive is a game-relative path the author used; the drive letter is not."""
+    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
+
+    raw = rb"D:\Work\World of Warcraft\Data\patch-s.mpq\World\Custom\Deco\wallset_01.m2"
+    assert model_name(model(raw)) == "World/Custom/Deco/wallset_01"
+
+
+def test_a_path_with_no_archive_in_it_falls_back_to_the_filename() -> None:
+    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
+
+    assert model_name(model(rb"C:\models\thing.m2")) == "thing"
+
+
+def test_a_model_the_head_cannot_name_is_re_read_whole() -> None:
+    """The cap is right for most models and wrong for some, and which is which
+    cannot be known without asking."""
+    from epsilon_walks import model_self_names  # pylint: disable=import-outside-toplevel
+
+    fid = FLOOR + 1
+    whole = model(b"alterac_pine04")
+    # A head that keeps the container's magic but not the name it points at.
+    storage = HeadStorage({fid: whole}, cap=8)
+    assert model_self_names(storage, {fid}, local_only=False) == {
+        fid: "epsilon/model/alterac_pine04.m2"}
+    assert storage.heads == 1
