@@ -1,59 +1,82 @@
-"""Epsilon's own tables, decoded and checked against the export for one build.
+"""The reader against a published decoding of the same bytes.
 
-A reader that is wrong about a field agrees with itself perfectly, so nothing
-the decoder can be asked about itself catches a decode defect. What does is a
-second source for the same bytes: wago's export and Epsilon's client both cover
-9.2.7.45745, so every table the build reads can be checked column by column
-against data that is known good.
+A decoder that is wrong about a field agrees with itself perfectly, so nothing
+it can be asked about itself finds a defect. What finds one is a second reading
+of the same file: wago publishes both the db2 and its own CSV export of that
+db2, so decoding the first and comparing to the second leaves nowhere for a
+misread field to hide.
 
-What the check reports is a per-table status rather than a count of differing
-rows. A count cannot tell a misread field from a value Epsilon ships
-differently, and reading one as the other is how a decode defect gets accepted:
-the two tables whose row counts looked worst were a repacked table and a
-server-wide flag change, while a table reading one column of every row wrongly
-looked like a rounding artifact.
+Both sides describing the SAME FILE is what makes this an oracle. An earlier
+version of this test compared a private server's copy of each table against the
+public export and excused the differences as that server's edits, which cannot
+tell an edited value from a misread one -- it is the decoder's own claim used
+to grade the decoder. It passed while the float spelling was wrong, because the
+rows it got wrong were inside the excuse.
 
-Two comparisons are deliberately loose, and neither hides a decoding question:
+So there is no per-table declaration here, and the only tolerance is one the
+file computes about itself:
 
-  * A float column is compared as a float32. The export spells an extreme or
-    exactly-halfway decimal its own way, and two spellings of one float32 do
-    not disagree about the value.
-  * A column named in `EPSILON_CHANGES` is not compared. Those are values
-    Epsilon's own client ships differently, each verified against the raw bytes
-    rather than assumed from the size of the disagreement.
+  * Every row that decodes must match the export exactly, column for column.
+  * The header must match in length and order. A name the export spells as a
+    placeholder is skipped: names come from the definitions, so a placeholder
+    against a real name compares their vintages rather than the decoding.
+  * No row may be invented: the decoded ids are a subset of the export's.
+  * Rows may be MISSING only up to what the encrypted sections hold. Blizzard
+    ships sections under keys the reader does not have, and skipping them is
+    the documented behaviour rather than a failure. A table with no encrypted
+    section must therefore reproduce every row.
+  * A float beyond 1e15 may be spelled differently, because past that
+    magnitude the export's decimal is a few units in the last place off the
+    value it came from. Both spellings must still name the same float32.
 
-Everything else must match exactly, which is what makes a new disagreement a
-failure rather than a number someone has to re-interpret.
-
-Reading the client means fetching from its content network, so this is opt-in:
-set `EPSILOOK_EPSILON_ORACLE` to run it. The declarations below stay useful
-while it is skipped, because they are the record of what was measured.
+Fetching the db2 files means asking wago for one file per table, so this is
+opt-in: set `EPSILOOK_DB2_ORACLE` to run it. They are cached, so only the first
+run pays.
 """
 
 from __future__ import annotations
 
 import csv
-import importlib.util
 import os
+import re
 import struct
-import sys
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
-from typing import Any
 
 import pytest
 
-from pack.sources import casc, wdc3
+from pack.sources import wdc3
 
 ROOT = Path(__file__).resolve().parents[2]
 CACHE = ROOT / ".cache"
-BUILD = (9, 2, 7, 45745)
-EXPORT = CACHE / "9.2.7.45745"
+BUILD_TEXT = "9.2.7.45745"
+BUILD: tuple[int, int, int, int] = (9, 2, 7, 45745)
+EXPORT = CACHE / BUILD_TEXT
+"""Where the build already caches the CSV export of each table."""
+
+DB2_CACHE = CACHE / "wago-db2" / BUILD_TEXT
 LISTFILE = CACHE / "listfile" / "community-listfile-withcapitals.csv"
 DEFINITIONS = CACHE / "dbd"
-HOST = "tact.epsilonwow.net"
+CASC_URL = "https://wago.tools/api/casc/{fid}?version=" + BUILD_TEXT
+
+_DEFAULT_BITS = {"float": 32, "string": 32, "locstring": 32}
+
+UNNAMED = re.compile(r"^Field_\d+_\d+_\d+_\d+_\d+(_lang)?$")
+"""How the export spells a column its definitions had no name for.
+
+The name in a header comes from the definitions rather than from decoding, so
+where the export carries a placeholder and the definitions have since named the
+column, comparing the two compares their vintages. The position is still
+checked, which is the part decoding decides."""
+
+pytestmark = pytest.mark.skipif(
+    not os.environ.get("EPSILOOK_DB2_ORACLE"),
+    reason="fetches one db2 per table; set EPSILOOK_DB2_ORACLE to run")
 
 
-def load_definitions_parser() -> Any:
+def load_definitions_parser() -> object:
     """The `.dbd` parser, loaded from the tools directory by its path.
 
     Loaded rather than imported because the package does not hold it yet, and
@@ -62,8 +85,11 @@ def load_definitions_parser() -> Any:
 
     TODO: import it as an ordinary module once the source layer places the
     parser inside the package. Where a schema parser belongs is that layer's
-    question, and the oracle follows it wherever it lands.
+    question, and this follows it wherever it lands.
     """
+    import importlib.util
+    import sys
+
     path = ROOT / "tools" / "dbd.py"
     if not path.exists():
         return None
@@ -81,70 +107,15 @@ def load_definitions_parser() -> Any:
 
 dbd = load_definitions_parser()
 
-EPSILON_CHANGES: dict[str, tuple[str, ...]] = {
-    # Attribute bits set and cleared across nearly every spell, which is a
-    # server making its whole spell list castable rather than a misread field:
-    # the raw record carries the bits, and the deltas are one or two named bits
-    # rather than noise.
-    "SpellMisc": ("Attributes_0", "Attributes_1", "Attributes_4"),
-    # Tables the client has repacked wholesale, adding hundreds of thousands of
-    # rows and losing or rewriting columns of the stock ones. The bounding
-    # boxes read as zero because the records hold zeros.
-    "GameObjectDisplayInfo": ("GeoBox_0", "GeoBox_1", "GeoBox_2", "GeoBox_3",
-                              "GeoBox_4", "GeoBox_5", "ObjectEffectPackageID",
-                              "OverrideLootEffectScale", "OverrideNameScale"),
-    "ItemModifiedAppearance": ("TransmogSourceTypeEnum",),
-    "ItemAppearance": ("TransmogPlayerConditionID",),
-    "ItemDisplayInfo": ("GeosetGroup_0", "ModelMaterialResourcesID_0",
-                        "ModelType_0"),
-    # Columns the client's own packing has collapsed to a constant: the pallet
-    # backing each one holds a single entry, so the table itself says no other
-    # value is reachable.
-    "ItemSearchName": ("AllowableClass", "AllowableRace", "MinFactionID",
-                       "MinReputation", "RequiredAbility", "RequiredSkill",
-                       "RequiredSkillRank"),
-    # Content the server has edited: replaced sounds, a repurposed area, and
-    # scattered model geometry.
-    "SoundKitEntry": ("FileDataID", "Volume"),
-    "AreaTable": ("AreaName_lang", "ContentTuningID", "Flags_0", "ZoneName"),
-    "CreatureDisplayInfo": ("StateSpellVisualKitID",),
-    "CreatureModelData": ("BloodID", "CollisionHeight", "CollisionWidth",
-                          "Flags", "GeoBox_0", "GeoBox_1", "GeoBox_2",
-                          "GeoBox_3", "GeoBox_4", "GeoBox_5", "MountHeight"),
-    "UiMapAssignment": ("AreaID", "MapID", "Region_0", "Region_1", "Region_3",
-                        "Region_4", "UiMapID", "WMODoodadPlacementID",
-                        "WMOGroupID"),
-}
-"""Columns where Epsilon's client and the export hold different values.
 
-Not decode defects. Each was read back from the raw record before being listed,
-because the size of a disagreement says nothing about its cause.
-"""
-
-RENAMED_COLUMNS = {"SpellOverrideName"}
-"""Tables the export and the definitions disagree about the NAME of a column in.
-
-The definition has since named a column the export still calls
-`Field_9_1_0_38709_001_lang`. The header comparison is skipped; the values are
-still compared positionally.
-"""
-
-_DEFAULT_BITS = {"float": 32, "string": 32, "locstring": 32}
-
-pytestmark = pytest.mark.skipif(
-    not os.environ.get("EPSILOOK_EPSILON_ORACLE") or dbd is None,
-    reason="reads Epsilon's content network; set EPSILOOK_EPSILON_ORACLE to run")
-
-
-def schema_for(definition: Any,
-               build: tuple[int, int, int, int]) -> list[wdc3.ColumnSpec] | None:
+def schema_for(definition: object) -> list[wdc3.ColumnSpec] | None:
     """The reader's schema, out of a parsed definition's build block."""
-    block = definition.block_for(build) if definition else None
-    if block is None or definition is None:
+    block = definition.block_for(BUILD) if definition else None  # type: ignore[attr-defined]
+    if block is None:
         return None
     out = []
     for entry in block.columns:
-        meaning = definition.columns.get(entry.name)
+        meaning = definition.columns.get(entry.name)  # type: ignore[attr-defined]
         kind = meaning.type if meaning else "int"
         out.append(wdc3.ColumnSpec(
             name=entry.name, kind=kind,
@@ -155,45 +126,97 @@ def schema_for(definition: Any,
     return out
 
 
-def same_float32(left: str, right: str) -> bool:
-    """Whether two decimal spellings denote the same float32."""
-    try:
-        pair = [struct.unpack("<f", struct.pack("<f", float(text)))[0]
-                for text in (left, right)]
-    except (ValueError, OverflowError):
-        return False
-    return pair[0] == pair[1]
-
-
-@pytest.fixture(name="client", scope="session")
-def _client() -> tuple[casc.Storage, dict[str, int]]:
-    """Epsilon's storage, and the file data id of every client table.
+@pytest.fixture(name="file_ids", scope="session")
+def _file_ids() -> dict[str, int]:
+    """The file data id of every client table, from the listfile.
 
     Matching on the `.db2` extension is not optional: each of these tables also
     has a legacy `.dbc` id that no modern root references, and matching the
     stem resolves to a file the game stopped shipping several expansions ago.
     """
-    if not LISTFILE.exists() or not EXPORT.is_dir():
-        pytest.skip("the listfile and the cached export are not both present")
-    fids: dict[str, int] = {}
+    if not LISTFILE.exists():
+        pytest.skip("the listfile is not cached")
+    out: dict[str, int] = {}
     with LISTFILE.open(encoding="utf-8", errors="replace") as handle:
         for line in handle:
             fid, _, path = line.partition(";")
-            path = path.strip()
-            if path.lower().startswith("dbfilesclient/") \
-                    and path.lower().endswith(".db2"):
-                fids[Path(path).stem] = int(fid)
-    return casc.Storage(casc.Service(host=HOST)), fids
+            low = path.strip().lower()
+            if low.startswith("dbfilesclient/") and low.endswith(".db2"):
+                out[Path(path.strip()).stem] = int(fid)
+    return out
+
+
+def fetch_db2(table: str, fid: int) -> bytes:
+    """The published db2 for this build, cached after the first fetch.
+
+    Retried because the service extracts the file on demand and answers 504
+    while it is busy, which is not the same as the file being absent.
+    """
+    dest = DB2_CACHE / f"{table}.db2"
+    if dest.exists() and dest.stat().st_size:
+        return dest.read_bytes()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    request = urllib.request.Request(CASC_URL.format(fid=fid),
+                                     headers={"User-Agent": "epsilook-build"})
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=300) as response:
+                blob = response.read()
+            dest.write_bytes(blob)
+            return blob
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                pytest.skip(f"{table} is not published for {BUILD_TEXT}")
+            if attempt == 2:
+                pytest.skip(f"{table}: the service answered {exc.code}")
+            time.sleep(5)
+        except OSError:
+            if attempt == 2:
+                pytest.skip(f"{table}: the service could not be reached")
+            time.sleep(5)
+    raise AssertionError("unreachable")
 
 
 def export_rows(table: str) -> tuple[list[str], list[tuple[str, ...]]]:
-    """One cached export CSV: its header and its rows."""
+    """The cached CSV export: its header and its rows."""
     path = EXPORT / f"{table}.csv"
     if not path.exists():
         return [], []
     with path.open(newline="", encoding="utf-8") as handle:
         reader = csv.reader(handle)
         return next(reader, []), [tuple(row) for row in reader]
+
+
+def same_huge_float(left: str, right: str) -> bool:
+    """Whether two spellings name one float32 too large for a decimal to pin.
+
+    Past 1e15 a double cannot hold every integer, and the export's decimal
+    drifts a few units in the last place from the exact widening of the stored
+    float32 -- it prints `-9.999999843067501e+16` where the value is exactly
+    `-9.999999843067494e+16`. Both name the same float32, which is all the
+    column holds, so the disagreement is about spelling a number neither format
+    can write down rather than about what was decoded.
+
+    Scoped to that magnitude on purpose. Allowing it anywhere would stop the
+    comparison noticing a rounding rule that is simply wrong, which is how the
+    spelling stayed broken before.
+    """
+    try:
+        pair = [struct.unpack("<f", struct.pack("<f", float(text)))[0]
+                for text in (left, right)]
+    except (ValueError, OverflowError):
+        return False
+    return pair[0] == pair[1] and abs(pair[0]) >= 1e15
+
+
+def unreadable_rows(data: wdc3.Db2, size: int) -> int:
+    """How many rows sit in sections this reader cannot open.
+
+    Their records and their copies both count: a copy is an exported row in its
+    own right, so a skipped section withholds more rows than it has records.
+    """
+    return sum(section.record_count + section.copy_table_count
+               for section in data.sections if not section.readable(size))
 
 
 def tables() -> list[str]:
@@ -203,54 +226,63 @@ def tables() -> list[str]:
 
 
 @pytest.mark.parametrize("table", tables())
-def test_epsilons_copy_decodes_to_the_export(
-        table: str, client: tuple[casc.Storage, dict[str, int]]) -> None:
-    """Every column of every shared row, bar the declared differences."""
-    storage, fids = client
+def test_the_reader_reproduces_the_published_export(
+        table: str, file_ids: dict[str, int]) -> None:
+    """Decode the published db2; every row must match the published CSV."""
+    if dbd is None:
+        pytest.skip("the definition parser is not present")
     header, export = export_rows(table)
     if not export:
         pytest.skip(f"{table} is not in the cached export")
-    if table not in fids or fids[table] not in storage.root.keys:
-        pytest.skip(f"{table} is not in Epsilon's root")
+    if table not in file_ids:
+        pytest.skip(f"{table} is not in the listfile")
 
-    definition = dbd.load(table, DEFINITIONS)
-    data = wdc3.Db2(storage.open(fids[table]), schema_for(definition, BUILD))
-    columns = data.columns
-    rows = list(data.rows())
+    data = wdc3.Db2(fetch_db2(table, file_ids[table]),
+                    schema_for(dbd.load(table, DEFINITIONS)))  # type: ignore[attr-defined]
+    decoded = list(data.rows())
 
-    if table not in RENAMED_COLUMNS:
-        assert columns == header, (
-            f"{table}: the decoded header is not the export's. A column order "
-            f"or naming rule is wrong, and every value comparison below it "
-            f"would be meaningless.")
-    assert len(columns) == len(header), f"{table}: column count differs"
+    assert len(data.columns) == len(header), (
+        f"{table}: {len(data.columns)} columns decoded against {len(header)} "
+        f"exported, so every value comparison below would be meaningless\n"
+        f"  decoded  {data.columns}\n  exported {header}")
+    named = [(mine, theirs) for mine, theirs in zip(data.columns, header)
+             if not UNNAMED.match(theirs)]
+    assert all(mine == theirs for mine, theirs in named), (
+        f"{table}: the decoded column order is not the export's: "
+        + "; ".join(f"{theirs!r} decoded as {mine!r}"
+                    for mine, theirs in named if mine != theirs))
 
     at = data.id_position()
-    export_by = {row[at]: row for row in export}
-    epsilon_by = {row[at]: row for row in rows}
-    shared = export_by.keys() & epsilon_by.keys()
-    assert shared, f"{table}: no row id is present in both sources"
+    expected = {row[at]: row for row in export}
+    got = {row[at]: row for row in decoded}
+
+    invented = got.keys() - expected.keys()
+    assert not invented, (
+        f"{table}: {len(invented)} decoded row(s) are not in the export, "
+        f"first {sorted(invented)[:5]}")
+
+    withheld = unreadable_rows(data, len(data.blob))
+    absent = expected.keys() - got.keys()
+    assert len(absent) <= withheld, (
+        f"{table}: {len(absent)} row(s) missing but only {withheld} sit in "
+        f"sections this reader cannot open, so {len(absent) - withheld} were "
+        f"lost while decoding a readable section")
 
     floats = {name for column in data.declared if column.spec.kind == "float"
               for name in column.spec.spellings()}
-    allowed = set(EPSILON_CHANGES.get(table, ()))
-
-    failures: dict[str, tuple[str, str, str]] = {}
-    for key in shared:
-        want, got = export_by[key], epsilon_by[key]
-        if want == got:
+    wrong: dict[str, tuple[str, str, str]] = {}
+    for key in expected.keys() & got.keys():
+        want, mine = expected[key], got[key]
+        if want == mine:
             continue
-        for index, name in enumerate(columns):
-            if name in allowed or name in failures:
+        for index, name in enumerate(data.columns):
+            if name in wrong or want[index] == mine[index]:
                 continue
-            if want[index] == got[index]:
+            if name in floats and same_huge_float(want[index], mine[index]):
                 continue
-            if name in floats and same_float32(want[index], got[index]):
-                continue
-            failures[name] = (key, want[index], got[index])
-
-    assert not failures, (
-        f"{table}: {len(failures)} column(s) decode to something the export "
-        f"does not hold, and none is a declared Epsilon change: "
-        + "; ".join(f"{name} at id {key}: export {want!r}, decoded {got!r}"
-                    for name, (key, want, got) in sorted(failures.items())))
+            wrong[name] = (key, want[index], mine[index])
+    assert not wrong, (
+        f"{table}: {len(wrong)} column(s) decode to something the export does "
+        f"not hold: " + "; ".join(
+            f"{name} at id {key}: export {want!r}, decoded {mine!r}"
+            for name, (key, want, mine) in sorted(wrong.items())))

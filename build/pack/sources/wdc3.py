@@ -44,8 +44,11 @@ _SECTION = struct.Struct("<Q8I")
 _FIELD_STRUCTURE = struct.Struct("<hH")
 _STORAGE_INFO = struct.Struct("<HHII3I")
 
+_WIDENED = Context(prec=15, rounding=ROUND_HALF_UP)
+"""The precision the export widens a float to before rounding its places."""
+
 _SIGNIFICANT = Context(prec=14, rounding=ROUND_HALF_EVEN)
-"""The significant digits the CSV export holds a rounded float to."""
+"""The significant digits it then holds the rounded decimal to."""
 
 
 @dataclass(frozen=True)
@@ -155,21 +158,23 @@ def sign_extend(value: int, bits: int) -> int:
 def format_float(value: float) -> str:
     """A float32 spelled the way the CSV export spells it.
 
-    The float32 is widened, rounded to eleven decimal places, and then held to
-    fourteen significant digits. Both limits show in the output and neither
-    implies the other: `-96.00900268554688` keeps all eleven places at thirteen
-    digits, while `1616.858642578125` reaches fourteen digits first and comes
-    out `1616.8586425781` with ten. The two steps break a tie differently and
-    both spellings are needed to match the export: an exact half goes away
-    from zero when places are dropped, and to an even digit when significant
-    figures are. Trailing zeros are stripped and a whole number loses its
-    fractional part.
+    The export rounds twice, and the intermediate step is visible in its
+    output. The float32 is widened, written to fifteen significant digits, and
+    rounded to eleven decimal places, and finally held to fourteen significant
+    digits. Every step shows in the output and none implies the others.
+    Rounding once straight to eleven disagrees wherever the discarded digits
+    carry the eleventh place over: `214.1703338623046875` reaches
+    `214.170333862305` at fifteen digits and `214.17033386231` from there,
+    where a single rounding gives `214.1703338623`. The last step is what
+    leaves a larger magnitude with fewer places, `2506.97998046875` coming out
+    `2506.9799804688`. Halves go away from zero while places are being dropped
+    and to an even digit while significant figures are, trailing zeros are
+    stripped, and a whole number loses its fractional part.
 
     Whether the result is written in exponent form is decided after rounding
     rather than before: `0.0001` is what a float32 slightly under it rounds to
     and is written plainly, where `-1e-06` is not. Magnitudes past what eleven
-    places can describe are written at full precision instead, which is the one
-    place more than fourteen digits appear.
+    places can describe are written at full precision instead.
     """
     if not math.isfinite(value):
         return str(value)
@@ -178,8 +183,8 @@ def format_float(value: float) -> str:
     if value == int(value):
         return str(int(value))
 
-    rounded = _SIGNIFICANT.plus(
-        Decimal(value).quantize(Decimal("1e-11"), rounding=ROUND_HALF_UP))
+    rounded = _SIGNIFICANT.plus(_WIDENED.plus(Decimal(value)).quantize(
+        Decimal("1e-11"), rounding=ROUND_HALF_UP))
     if not rounded:
         return "0"
     if abs(rounded) >= Decimal("1e-4"):

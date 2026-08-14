@@ -325,14 +325,23 @@ def test_a_table_read_without_a_schema_names_its_columns_positionally() -> None:
     (0.10000000149011612, "0.10000000149"),
     (3.1415927410125732, "3.14159274101"),
     (-96.00900268554688, "-96.00900268555"),
-    # Eleven places would be a fifteenth significant digit, so ten survive.
-    (1616.858642578125, "1616.8586425781"),
     (1.5707999467849731, "1.57079994678"),
-    # Exactly between two decimals, so the even one wins rather than the
-    # larger. Both signs, because rounding away from zero passes one and fails
-    # the other.
-    (2023.77001953125, "2023.7700195312"),
-    (-4089.60009765625, "-4089.6000976562"),
+    (12.300000190734863, "12.30000019073"),
+    # Rounding straight to eleven places gives 214.1703338623 here: the
+    # fifteen-digit step carries the eleventh place over first. Both signs,
+    # because a rule that rounds toward zero passes one and fails the other.
+    (214.1703338623046875, "214.17033386231"),
+    (109.99756622314453125, "109.99756622315"),
+    (-245.2870330810546875, "-245.28703308106"),
+    (-113.63899993896484375, "-113.63899993897"),
+    (27.169942855834961, "27.16994285584"),
+    # Fourteen significant digits reached before eleven places are spent, so
+    # ten survive. An exact half goes to the even digit at this step, which is
+    # what separates these two.
+    (2506.97998046875, "2506.9799804688"),
+    (-2525.26806640625, "-2525.2680664062"),
+    (1616.858642578125, "1616.8586425781"),
+    (1114.2847900390625, "1114.2847900391"),
     # Rounds up to exactly the smallest magnitude still written plainly.
     (9.9999997473787516e-05, "0.0001"),
     (-9.9999999747524271e-07, "-1e-06"),
@@ -341,7 +350,11 @@ def test_a_table_read_without_a_schema_names_its_columns_positionally() -> None:
 ])
 def test_a_float_is_spelled_the_way_the_export_spells_it(value: float,
                                                          text: str) -> None:
-    """Eleven decimal places, held to fourteen significant digits."""
+    """Fifteen significant digits, then eleven places, then fourteen digits.
+
+    Every pair here was read out of a published table and its published export,
+    so a rule that drops one of the three steps fails at least one of them.
+    """
     assert wdc3.format_float(value) == text
 
 
