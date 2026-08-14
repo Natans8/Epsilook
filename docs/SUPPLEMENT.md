@@ -31,13 +31,13 @@ Each route is one way of learning what a file is called, and they are not equall
 `tools/supplement.py` in priority order, and the order means two things at once: **earlier wins a conflict, and earlier
 feeds what comes later.**
 
-| route         | what it reads                                          | quality of the name        | cost                     |
-|---------------|--------------------------------------------------------|----------------------------|--------------------------|
-| `terrain`     | the map table, then each custom map's own grid of tiles | real — the game's own      | a minute                 |
-| `icons`       | the icon database in an addon the client ships          | real — the client's own    | a second                 |
-| `objects`     | the gameobject-display walk through the client API      | real, or derived if bare   | **an evening in game**   |
-| `worldmodels` | group geometry and textures, from the models using them | derived — parentage only   | minutes                  |
-| `models`      | skins, textures and animations, from the models using them | derived — parentage only | minutes                  |
+| route         | reads                                          | name            | cost                   |
+|---------------|------------------------------------------------|-----------------|------------------------|
+| `terrain`     | the map table, then each map's tile grid       | real            | a minute               |
+| `icons`       | the icon database an addon ships               | real            | a second               |
+| `objects`     | the gameobject walk through the client API     | real or derived | **an evening in game** |
+| `worldmodels` | group geometry and textures, from their models | derived         | minutes                |
+| `models`      | skins, textures and anims, from their models   | derived         | minutes                |
 
 **A real name is one the game itself would look the file up by.** Terrain qualifies because a map's directory plus a
 tile's position in the map's fixed grid determines the filename by convention — nothing is invented. Icons and the
@@ -152,14 +152,14 @@ uv run python tools/supplement.py --coverage
 A local-only run currently reaches **107,891 of the 128,476 custom files, 84.0%**, leaving 20,585. Of the 7,823 of
 those the installation holds and can therefore be identified:
 
-| kind                  |  count | which route would claim it                    |
-|-----------------------|-------:|-----------------------------------------------|
-| `blp`                 |  7,118 | character customization, below — not parentage |
-| `wmo group`           |    315 | reachable only with `--network`                |
-| `m2`                  |    169 | reachable only with `--network`                |
-| `skin`                |    166 | reachable only with `--network`                |
-| `wmo root`            |     23 | none — these are roots, not children           |
-| everything else       |     32 | unclassified; sound, and a few unrecognised    |
+| kind            | count | which route would claim it              |
+|-----------------|------:|-----------------------------------------|
+| `blp`           | 7,118 | character customization — not parentage |
+| `wmo group`     |   315 | reachable only with `--network`         |
+| `m2`            |   169 | reachable only with `--network`         |
+| `skin`          |   166 | reachable only with `--network`         |
+| `wmo root`      |    23 | none: these are roots, not children     |
+| everything else |    32 | sound, and a few unrecognised           |
 
 No terrain appears in that list, which is the check that the terrain route is complete.
 
