@@ -1,27 +1,18 @@
 """The readers: one module per route family.
 
-A reader takes the `Tables` it is handed and returns a typed bundle. This is the
-INTERPRETIVE half of the build -- dispatch on effect and procedure types, chain
-expansion, target-mask resolution, the decode of a column that means one thing
-under one enum value and another under the next. It is the half a relational
-engine is worst at, which is why the routes are Python over a provider rather
-than views over a database.
-
-A route never learns where a row came from or what ships. No file paths, no
-URLs, no emitters -- the path rule in `tools/check.py` enforces it. That is what
-makes the source swappable and the artifact reshapeable without editing a
-reader, and it is why the layer can be tested against a directory of three-row
-CSVs.
-
-`docs/DATA_ROUTES.md` documents what each route MEANS; these modules are how it
-is read.
+A reader takes the `Tables` it is handed and returns a typed bundle. It may
+not name a file, a URL or an emitter; `tools/check.py` enforces that.
+`docs/DATA_ROUTES.md` documents what each route means.
 """
 
 from __future__ import annotations
 
 from .anims import (read_anim_replacements, read_animkit_anims,
                     read_animkit_bonesets)
+from .attributes import attribute_bit, read_spell_attributes
 from .creatures import CreatureModels, read_creature_models
+from .effects import (EffectRow, MaskedIds, SpellEffectRows,
+                      implicit_target_bits, read_spell_effect_rows)
 from .fx import FxPayloads, ScreenRow, expand_chain, read_fx_payloads
 from .gameobjects import GameObjectData, read_gameobjects
 from .items import ItemModels, read_item_models
@@ -34,28 +25,37 @@ from .names import SpellNames, read_override_names, read_spell_names
 from .procedures import ProcEffects, read_proc_effects
 from .shapeshifts import ShapeshiftForms, read_shapeshift_forms
 from .sounds import read_soundkit_files
+from .spells import SpellProperties, read_spell_properties
 from .text import SpellText, read_spell_text
+from .values import DescriptionValues, read_spell_values
 from .vehicles import VehicleSeats, read_vehicle_seats
 from .visuals import VisualGraph, read_visual_graph
 
 __all__ = [
     "CreatureModels",
+    "DescriptionValues",
+    "EffectRow",
     "FxPayloads",
     "GameObjectData",
     "ItemModels",
     "KeyboundOverride",
     "KitEffects",
+    "MaskedIds",
     "ModelSources",
     "MountData",
     "ProcEffects",
     "ScreenRow",
     "ShapeshiftForms",
+    "SpellEffectRows",
     "SpellNames",
+    "SpellProperties",
     "SpellText",
     "VehicleSeats",
     "VisualGraph",
     "VisualMissiles",
+    "attribute_bit",
     "expand_chain",
+    "implicit_target_bits",
     "read_anim_replacements",
     "read_animkit_anims",
     "read_animkit_bonesets",
@@ -73,8 +73,12 @@ __all__ = [
     "read_proc_effects",
     "read_shapeshift_forms",
     "read_soundkit_files",
+    "read_spell_attributes",
+    "read_spell_effect_rows",
     "read_spell_names",
+    "read_spell_properties",
     "read_spell_text",
+    "read_spell_values",
     "read_vehicle_seats",
     "read_visual_graph",
 ]
