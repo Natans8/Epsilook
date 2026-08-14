@@ -7,14 +7,14 @@ or drops one that is.
 
 from __future__ import annotations
 
-from .conftest import BuildTables
-from .effects import (AURA_ANIM_REPLACEMENT_SET, AURA_KEYBOUND_OVERRIDE,
-                      AURA_MOD_INVISIBILITY, AURA_MOD_INVISIBILITY_DETECT,
-                      AURA_OVERRIDE_NAME, AURA_SCREEN_EFFECT, AURA_SET_VEHICLE_ID,
-                      AURA_SHAPESHIFT, AURA_TRANSFORM, EFFECT_APPLY_AURA,
-                      EFFECT_PLAY_SOUND, EFFECT_SUMMON, EffectRow,
-                      read_spell_effect_rows)
-from ..targets import TARGET_AREA, TARGET_CASTER, TARGET_TARGET
+from pack.routes.effects import (AURA_ANIM_REPLACEMENT_SET, AURA_KEYBOUND_OVERRIDE,
+                                 AURA_MOD_INVISIBILITY, AURA_MOD_INVISIBILITY_DETECT,
+                                 AURA_OVERRIDE_NAME, AURA_SCREEN_EFFECT,
+                                 AURA_SET_VEHICLE_ID, AURA_SHAPESHIFT, AURA_TRANSFORM,
+                                 EFFECT_APPLY_AURA, EFFECT_PLAY_SOUND, EFFECT_SUMMON,
+                                 MISC_PAYLOADS, EffectRow, read_spell_effect_rows)
+from pack.targets import TARGET_AREA, TARGET_CASTER, TARGET_TARGET
+from support import BuildTables
 
 SPELLS = frozenset({100, 200, 300})
 
@@ -310,3 +310,25 @@ def test_an_implicit_target_the_build_does_not_name_contributes_nothing(
     rows = read(tables, effect_rows(
         f"100,{EFFECT_APPLY_AURA},{AURA_TRANSFORM},900,0,77,0,0,0,0"))
     assert rows.morphs.masks == {(100, 900): 0}
+
+
+def test_every_reference_payload_is_declared_not_branched() -> None:
+    """The extension point, pinned.
+
+    Adding a payload whose misc value is a reference must be a row in
+    `MISC_PAYLOADS` plus the field it names, with no edit to the walk. A
+    declaration that stopped covering a selector would show up as a branch
+    somewhere in the reader instead.
+    """
+    for payload in MISC_PAYLOADS:
+        assert bool(payload.aura) != bool(payload.effects), (
+            "a payload selects on an aura or on effects, never both")
+        assert callable(payload.into)
+    selectors = [p.aura for p in MISC_PAYLOADS if p.aura]
+    assert len(selectors) == len(set(selectors)), "two payloads claim one aura"
+
+
+def test_a_declared_roster_is_one_the_reader_is_handed() -> None:
+    """A roster name with nothing behind it would silently keep every row."""
+    named = {p.roster for p in MISC_PAYLOADS if p.roster}
+    assert named <= {"screens", "keybounds"}
