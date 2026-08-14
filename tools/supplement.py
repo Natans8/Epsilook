@@ -222,6 +222,10 @@ which beats one derived from where a file hangs.
 """
 
 
+_NAME_WIDTH = max(len(route.name) for route in ROUTES)
+"""How wide a route's name column is, so every report lines up."""
+
+
 def read_rows(path: Path) -> dict[int, str]:
     """One `<file id>;<path>` file, plain or gzipped."""
     opener = gzip.open if path.suffix == ".gz" else open
@@ -286,16 +290,22 @@ def run(wanted: list[Route], seed: dict[int, str]) -> tuple[dict[int, str], list
         merged.update(fresh)
         below = len(rows) - len(admitted)
         note = f", {below:,} below the floor" if below else ""
-        report.append(f"  {route.name:12} {len(rows):>8,} rows, "
+        report.append(f"  {route.name:{_NAME_WIDTH}} {len(rows):>8,} rows, "
                       f"{len(fresh):>8,} new{note}")
     return merged, report
 
 
 def show_list() -> None:
     """Print what each route needs and costs, without running anything."""
-    log(f"\n  {'route':12} {'needs':18} {'cost':24} what it reads")
+    # Widths come from the routes rather than from a guess, so adding one whose
+    # name is longer than the rest does not silently break the alignment.
+    name = max(len(route.name) for route in ROUTES)
+    needs = max(len(route.needs) for route in ROUTES)
+    cost = max(len(route.cost) for route in ROUTES)
+    log(f"\n  {'route':{name}} {'needs':{needs}} {'cost':{cost}} what it reads")
     for route in ROUTES:
-        log(f"  {route.name:12} {route.needs:18} {route.cost:24} {DIM}{route.summary}{RESET}")
+        log(f"  {route.name:{name}} {route.needs:{needs}} {route.cost:{cost}} "
+            f"{DIM}{route.summary}{RESET}")
     log("")
 
 
@@ -309,21 +319,22 @@ def verify() -> int:
     for route in ROUTES:
         expected = golden_rows(route)
         if expected is None:
-            log(f"  {YELLOW}skip{RESET}  {route.name:12} {DIM}no reference copy on disk{RESET}")
+            log(f"  {YELLOW}skip{RESET}  {route.name:{_NAME_WIDTH}} "
+                f"{DIM}no reference copy on disk{RESET}")
             continue
         actual = route.produce({})
         if route.compare is not None:
             actual = route.compare(actual)
 
         if actual == expected:
-            log(f"  {GREEN}ok{RESET}    {route.name:12} {DIM}{len(actual):,} rows "
-                f"reproduced exactly{RESET}")
+            log(f"  {GREEN}ok{RESET}    {route.name:{_NAME_WIDTH}} "
+                f"{DIM}{len(actual):,} rows reproduced exactly{RESET}")
             continue
         failures += 1
         missing, extra = set(expected) - set(actual), set(actual) - set(expected)
         differing = [fid for fid in set(actual) & set(expected)
                      if actual[fid] != expected[fid]]
-        log(f"  {RED}FAIL{RESET}  {route.name:12} {len(missing):,} missing, "
+        log(f"  {RED}FAIL{RESET}  {route.name:{_NAME_WIDTH}} {len(missing):,} missing, "
             f"{len(extra):,} unexpected, {len(differing):,} differing")
         for fid in sorted(differing)[:3]:
             log(f"          {fid}  got {actual[fid]}")
