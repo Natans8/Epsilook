@@ -44,12 +44,14 @@ def ridden(which: str, id_column: str,
         once per call rather than per column, since both columns are two
         halves of the same rows.
     """
+
     def produce(reads: Reads) -> SectionColumns:
         limit = len(reads.declared.anim_names) if bounded else None
         rows = spell_rows(getattr(reads.vehicles, which), reads.rows.vehicles,
                           limit)
         return {"spellIds": [row[0] for row in rows],
                 id_column: [row[1] for row in rows]}
+
     return produce
 
 

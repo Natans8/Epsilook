@@ -77,13 +77,7 @@ T = TypeVar("T")
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "site" / "data"
 
-
-
-
-
-
 LISTFILE_RELEASE_API = "https://api.github.com/repos/wowdev/wow-listfile/releases/latest"
-
 
 # ------------------------------------------------------- per-build source map
 #
@@ -117,12 +111,6 @@ LISTFILE_RELEASE_API = "https://api.github.com/repos/wowdev/wow-listfile/release
 assert not set(OPTIONAL_TABLES) - set(TABLES), (
     f"OPTIONAL_TABLES entries missing from TABLES (never downloaded): "
     f"{sorted(set(OPTIONAL_TABLES) - set(TABLES))}")
-
-
-
-
-
-
 
 # SpellVisualKitEffect.EffectType values (what the kit effect points at) —
 # the full enum + dispatch tags live in enums/spell_visual_kit_effect_types.json.
@@ -961,7 +949,6 @@ PACK_FORMAT = 48  # 48: files.gobs — the id `.gob spawn` takes for each model
 csv.field_size_limit(10_000_000)
 
 
-
 # ------------------------------------------------------------------ parsing
 
 def table_available(table_dir: Path, table: str) -> bool:
@@ -1133,7 +1120,6 @@ def color_rows(
     pairs = sorted((s, r, m) for s, rs in spell_map.items() for r, m in rs.items())
     ids = sorted({r for rs in spell_map.values() for r in rs})
     return pairs, ids, [hue_words(colors_of(r)) for r in ids]
-
 
 
 # ----------------------------------------------------------------- readers

@@ -224,7 +224,6 @@ PYTHON_SOURCES = ("build/build_data.py", "build/locale_data.py", BUILD_PACKAGE,
 FRESHNESS_CACHE_HOURS = 24
 
 
-
 class Report:
     """Accumulates check results and decides the exit status."""
 

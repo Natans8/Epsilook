@@ -29,6 +29,7 @@ def channels(payload: str, gate: str) -> Callable[[Reads], SectionColumns]:
     when nothing in the game can reveal it, while a spell that reveals shows one
     only when its channel has something to reveal.
     """
+
     def produce(reads: Reads) -> SectionColumns:
         hidden = {kind for kinds in reads.effects.invis.ids.values()
                   for kind in kinds}
@@ -38,6 +39,7 @@ def channels(payload: str, gate: str) -> Callable[[Reads], SectionColumns]:
         return {"spellIds": [row[0] for row in rows],
                 "types": [row[1] for row in rows],
                 "targets": [source.masks.get(row, 0) for row in rows]}
+
     return produce
 
 
