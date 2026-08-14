@@ -9,8 +9,14 @@ keys come out in.
 Both orders are declared here rather than left to fall out of registration.
 A document's key order is not something a later reader can rederive, and the
 one this artifact has was fixed by the builder being replaced; reproducing it
-exactly is what makes the replacement provable. Once the artifact becomes
-modules with their own hashes the orders stop mattering and these go away.
+exactly is what makes the replacement provable.
+
+This module is SCHEDULED FOR DELETION, and the trigger is the app reading the
+module set. Until then it is the only artifact the site can load, so it stays;
+after then it is a second shape of the same pack, and a second shape is a
+second thing to keep in step. Do not invest here -- a change that would improve
+these two lists belongs in the modules instead, which need no key order at all
+because each one is named by its own content.
 """
 
 from __future__ import annotations
