@@ -6,7 +6,7 @@ procedure index, so it selects both the handler and which column carries the
 payload. A chain id, a packed colour, a percentage, an animation slot and a
 model id all arrive in the same columns.
 
-⛔ SO THE DISPATCH IS THE ROUTE. Reading a `Value` without first reading the
+So the dispatch is the route. Reading a `Value` without first reading the
 Type reads a colour as a model id and both as a percentage. Each row lands in
 the bucket its type feeds, and the kit walk finds a proc by looking its id up
 in each bucket rather than by re-deciding what the row meant.
@@ -87,13 +87,13 @@ class ProcEffects:
 def read_proc_effects(tables: Tables, models: ModelSources) -> ProcEffects:
     """Read every procedure row and bucket it by what its Type means.
 
-    ⛔ A ROW THAT SAYS NOTHING IS DROPPED RATHER THAN BUCKETED EMPTY, and the
+    A row that says nothing is dropped rather than bucketed empty, and the
     test differs per type because "nothing" is spelled differently: a colourless
     recolour is zero, a desaturation of 0% is no desaturation, and an animation
     slot of 0 is a slot left alone. Keeping them would ship rows the app has to
     filter, and a percentage of zero renders as a claim that something happened.
 
-    ⚠ The colourless case is NOT uniform, and the difference is deliberate: a
+    The colourless case is NOT uniform, and the difference is deliberate: a
     colourless ghost recolour is dropped, while a colourless tint folds in as
     black, because black IS a tint -- it multiplies the model to darkness --
     whereas a ghost with no colour is a ghost with nothing to show.

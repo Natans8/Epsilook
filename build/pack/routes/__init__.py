@@ -7,7 +7,7 @@ under one enum value and another under the next. It is the half a relational
 engine is worst at, which is why the routes are Python over a provider rather
 than views over a database.
 
-⛔ A ROUTE NEVER LEARNS WHERE A ROW CAME FROM OR WHAT SHIPS. No file paths, no
+A route never learns where a row came from or what ships. No file paths, no
 URLs, no emitters -- the path rule in `tools/check.py` enforces it. That is what
 makes the source swappable and the artifact reshapeable without editing a
 reader, and it is why the layer can be tested against a directory of three-row

@@ -92,7 +92,7 @@ def test_displays_come_out_in_slot_order(tables: BuildTables) -> None:
 
 def test_the_legacy_column_shape_yields_the_same_displays(
         tables: BuildTables) -> None:
-    """⛔ The reason the two spellings share one output: in the legacy shape the
+    """The reason the two spellings share one output: in the legacy shape the
     COLUMN POSITION is the slot, so an empty column is a skipped slot rather
     than a display of zero."""
     creatures = read_creature_models(

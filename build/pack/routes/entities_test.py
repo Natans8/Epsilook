@@ -94,7 +94,7 @@ def test_a_mount_whose_spell_this_build_lacks_is_skipped(
 
 def test_a_mount_display_resolves_without_a_server_dump(
         tables: BuildTables) -> None:
-    """⭐ Unlike the morphs it resembles: both halves are client data."""
+    """Unlike the morphs it resembles: both halves are client data."""
     mounts = read_mounts(tables(Mount=MOUNT, MountXDisplay=MOUNT_X_DISPLAY),
                          {100: "Summon Ram", 101: "Summon Nothing"}, CREATURES)
     assert mounts.name[50] == "Swift Ram"
@@ -115,7 +115,7 @@ def test_an_object_resolves_its_model_through_its_display(
 
 def test_without_a_server_dump_an_object_has_nothing(
         tables: BuildTables) -> None:
-    """⛔ Both halves go, not one: the display id the model needs is itself
+    """Both halves go, not one: the display id the model needs is itself
     server-side, so there is no half-filled state to ship."""
     objects = read_gameobjects(
         tables(GameObjectDisplayInfo=GAME_OBJECT_DISPLAY_INFO), None)
@@ -123,7 +123,7 @@ def test_without_a_server_dump_an_object_has_nothing(
 
 
 def test_a_form_with_no_creature_keeps_its_name(tables: BuildTables) -> None:
-    """⭐ Most forms are this: they change what a character can do without
+    """Most forms are this: they change what a character can do without
     changing what it looks like, and a route needing a display would drop
     them."""
     forms = read_shapeshift_forms(tables(SpellShapeshiftForm=SPELL_SHAPESHIFT_FORM))
@@ -138,7 +138,7 @@ def test_a_form_keeps_its_displays_in_slot_order(tables: BuildTables) -> None:
 
 def test_a_build_predating_the_form_table_ships_no_forms(
         tables: BuildTables) -> None:
-    """⛔ Declared optional, so the shapeshift category switches itself off.
+    """Declared optional, so the shapeshift category switches itself off.
     Reading the header to learn the array's shape must not be what turns a
     survivable absence into a failed build."""
     forms = read_shapeshift_forms(tables())

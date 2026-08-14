@@ -5,7 +5,7 @@ publishes those rows. They are the same rows the client holds, revised -- so
 they are an overlay in the exact sense `OverlaidTables` composes, and this is
 the declaration that says which table revises which and under what spelling.
 
-⛔ THE TWO SIDES DO NOT AGREE ON NAMES, and that is the whole reason this file
+The two sides do not agree on names, and that is the whole reason this file
 is a mapping rather than a list. The client's `SpellVisual` is the server's
 `spell_visual`; the client's `EffectMiscValue_0` is the server's
 `EffectMiscValue1`. Every reader used to carry both spellings itself, which is
@@ -48,7 +48,7 @@ SPELL_EFFECT_COLUMNS = {
     "ImplicitTarget_1": "ImplicitTarget2",
     # Spelled the same on both sides, verified against TDB927's hotfix schema.
     "EffectTriggerSpell": "EffectTriggerSpell",
-    # ⛔ EffectBasePoints is deliberately ABSENT. The dump types it FLOAT and
+    # EffectBasePoints is deliberately ABSENT. The dump types it FLOAT and
     # MySQL prints a FLOAT at six significant digits, so the server's copy is a
     # rounding of the client's. Leaving it unmapped is what a per-column merge
     # buys: the client's precise value stands, and nothing has to remember why.

@@ -82,7 +82,7 @@ def test_a_blend_set_keeps_slot_order_and_drops_repeats(
 
 def test_a_build_predating_the_blend_set_table_reads_nothing(
         tables: BuildTables) -> None:
-    """⛔ Asking what shape an array field takes must not be what decides
+    """Asking what shape an array field takes must not be what decides
     whether the build survives: the table is declared optional, so a build that
     predates it loses its dissolve materials and screen masks rather than
     failing."""
@@ -105,13 +105,13 @@ def test_a_dissolve_carries_its_blend_sets_textures(tables: BuildTables) -> None
 
 
 def test_an_unanchored_dissolve_keeps_its_minus_one(tables: BuildTables) -> None:
-    """⛔ Unlike a model attachment, -1 here means the WHOLE body rather than
+    """Unlike a model attachment, -1 here means the WHOLE body rather than
     "unset", so dropping it would lose what the row says."""
     assert payloads(tables).dissolves[11] == (0, (), -1)
 
 
 def test_the_vignette_survives(tables: BuildTables) -> None:
-    """⛔ The correction this route is written around: it decides WHERE the
+    """The correction this route is written around: it decides WHERE the
     grade lands, so an area effect is a rim around a clear centre."""
     assert payloads(tables).screens[31].mask == (0.25, 2.0, 1.5)
 
@@ -144,7 +144,7 @@ def test_a_file_in_both_roles_keeps_the_overlay(tables: BuildTables) -> None:
 
 
 def test_the_fog_parameter_is_argb(tables: BuildTables) -> None:
-    """⛔ Not the RRGGBBXX the wiki claims: the top byte is opacity, verified
+    """Not the RRGGBBXX the wiki claims: the top byte is opacity, verified
     against the rows whose colours are known from the game."""
     screen = payloads(tables).screens[30]
     assert screen.fog == 0x404200

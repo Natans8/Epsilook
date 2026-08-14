@@ -15,7 +15,7 @@ from ..progress import log
 from .cache import CACHE_DIR, download
 
 WAGO_CSV_URL = "https://wago.tools/db2/{table}/csv?build={version}"
-# THE ONE CROSS-VERSION SOURCE: sound-kit names come from a build that is not
+# The one cross-version source: sound-kit names come from a build that is not
 # the one being packed, because no build we ship has them.
 #
 # `SoundKitName` shipped 7.3.0 -> 8.3.0 and in the Classic re-releases, and
@@ -71,7 +71,7 @@ TABLES = [
     # which is the case a roleplayer actually wants ("a beam that holds").
     "SpellDuration",
     # What breaks a cast / an aura / a channel. Its own table, which is why the
-    # 449-bit attribute sweep never surfaced it. THE THREE COLUMNS DO NOT SHARE
+    # 449-bit attribute sweep never surfaced it. the three columns do not share
     # AN ENUM: InterruptFlags uses SpellInterrupts::InterruptFlags (bit 0 =
     # Movement), while AuraInterruptFlags and ChannelInterruptFlags use
     # SpellInterruptFlags, where movement is bit 3 (MovingCancels). Assuming
@@ -90,7 +90,7 @@ TABLES = [
     "SpellCastingRequirements",
     "AreaGroupMember",
     "AreaTable",
-    # The area pill's map button. BOTH LISTS ARE REQUIRED and they do different
+    # The area pill's map button. Both lists are required and they do different
     # jobs: this one is what gets DOWNLOADED, OPTIONAL_TABLES only says a 404 is
     # allowed. Declaring them optional alone left them un-fetched on every build,
     # and 9.2.7 kept working purely because an exploration run had left its CSVs
@@ -153,7 +153,7 @@ TABLES = [
     "SpellDescriptionVariables",
     "SpellXDescriptionVariables",
     "SpellTargetRestrictions",
-    # ⚠ SpellAuraOptions was in .cache/9.2.7.45745/ ALREADY — left there by
+    # SpellAuraOptions was in .cache/9.2.7.45745/ ALREADY — left there by
     # an exploration run — so the first build of this route worked here and
     # crashed on Vanilla. Same shape as the UiMap mistake at format 40, caught
     # this time only because a missing table is a hard error. It supplies $u

@@ -53,8 +53,8 @@ def read_missiles(tables: Tables, effect_name_fid: dict[int, int],
                   effect_name_type: dict[int, int]) -> dict[int, VisualMissiles]:
     """Read each visual's projectiles, attachments resolved.
 
-    ⛔ THE ROW'S ATTACHMENTS WIN OVER ITS VISUAL'S, and the two are
-    COMPLEMENTARY rather than redundant: over the missile rows reachable from a
+    The row's attachments win over its visual's, and the two are
+    complementary rather than redundant: over the missile rows reachable from a
     visual, the visual alone carries a launch point for 16.4%, the missile row
     alone for 50.7%, and either for 52.7%. So the row is read first and the
     visual fills in what it leaves unset.

@@ -1,6 +1,6 @@
 """Shapeshift forms: the name a form has, and the creature it turns you into.
 
-⭐ MOST FORMS HAVE NO CREATURE AT ALL, which is why the name and the displays
+Most forms have no creature at all, which is why the name and the displays
 are kept apart rather than a form being "a display with a label". Battle Stance,
 Shadowform, Stealth and Moonkin change what a character can DO without changing
 what it looks like, so they are a name and nothing else -- and a route that

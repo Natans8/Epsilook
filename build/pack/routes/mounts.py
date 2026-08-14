@@ -3,7 +3,7 @@
 Reached from the mount table by the spell that grants it, then out to the
 displays it can wear -- faction and gender variants, so several per mount.
 
-⭐ THIS ROUTE NEEDS NO SERVER DUMP, unlike the morphs it resembles. Both the
+This route needs no server dump, unlike the morphs it resembles. Both the
 name and the model are client data, so a mount resolves on every build. The
 name comes off the mount row itself; where a display has none, the pill falls
 back to the model file's name.

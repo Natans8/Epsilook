@@ -63,7 +63,7 @@ def test_the_default_region_is_never_shown(tables: BuildTables) -> None:
 
 
 def test_a_region_belongs_to_its_own_animation(tables: BuildTables) -> None:
-    """⛔ Why the result nests rather than flattening: the same kit segments
+    """Why the result nests rather than flattening: the same kit segments
     several animations and they need not move the same parts.
 
     Animation 2 is reached through two configs and keeps both their regions;

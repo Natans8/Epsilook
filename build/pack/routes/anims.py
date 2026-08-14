@@ -38,7 +38,7 @@ def read_animkit_anims(tables: Tables,
 def read_animkit_bonesets(tables: Tables) -> dict[int, dict[int, list[str]]]:
     """Anim kit -> {animation -> the body regions that animation's segment moves}.
 
-    ⛔ A REGION IS A PROPERTY OF A SEGMENT, NOT OF THE KIT, which is why the
+    A region is a property of a segment, not of the kit, which is why the
     result is nested rather than flat. The same kit segments several animations
     and they need not move the same parts, so merging the regions onto the kit
     would claim an upper-body-only animation moves whatever its neighbour does.

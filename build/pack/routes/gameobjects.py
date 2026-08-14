@@ -1,7 +1,7 @@
 """Game objects a spell spawns: the name, the model, and whether the web has a
 page for it.
 
-⛔ THE NAME AND THE MODEL COME FROM DIFFERENT SIDES, which is what decides how
+The name and the model come from different sides, which is what decides how
 this degrades. The entry, its name and its display id live only in the server
 dump; the display -> file hop is client data. So a build with no dump keeps
 neither the name nor the model -- the display id it would need for the model is

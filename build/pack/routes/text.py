@@ -1,12 +1,12 @@
 """The prose a spell carries: descriptions, their variables, encounter notes.
 
-RAW TEMPLATES ONLY. A description is a small language -- `$s1`, `$@spelldesc`,
+Raw templates only. A description is a small language -- `$s1`, `$@spelldesc`,
 `$<shield>` -- with its own grammar, and cooking it into readable prose lives in
 `spelltext.py`. This route's job is to find the templates and the bodies they
 interpolate, which keeps a parser out of the reading layer and lets it be
 exercised on its own.
 
-⛔ THE TEMPLATES ARE DELIBERATELY NOT FILTERED AGAINST THE SPELL LIST. A
+The templates are deliberately not filtered against the spell list. A
 template routinely redirects to a spell that has no name row of its own, and
 dropping those empties 491 descriptions on 9.2.7 that resolve perfectly well.
 The filter belongs where the pack is assembled, not here.
@@ -88,7 +88,7 @@ def read_variables(tables: Tables) -> dict[int, dict[str, str]]:
 def read_encounter_notes(tables: Tables) -> dict[int, str]:
     """Spell -> the dungeon journal's note on it, children folded in.
 
-    ⚠ A SPELL-LINKED SECTION USUALLY HAS AN EMPTY BODY. 6,658 sections name a
+    A spell-linked section usually has an empty body. 6,658 sections name a
     spell on 9.2.7 and only 324 of them say anything, because the client
     renders the spell's own description in that slot. What IS written is the
     difficulty-specific note beside it ("In Mythic difficulty, …") -- real

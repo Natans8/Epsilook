@@ -61,7 +61,7 @@ def test_a_material_recolour_reads_its_own_column(tables: BuildTables) -> None:
 
 
 def test_a_colourless_tint_folds_in_as_black(tables: BuildTables) -> None:
-    """⚠ Deliberately unlike the ghost case: black IS a tint, because it
+    """Deliberately unlike the ghost case: black IS a tint, because it
     multiplies the model down to darkness."""
     assert procs(tables).tints[5] == 0
 
@@ -107,7 +107,7 @@ def test_a_model_that_does_not_resolve_is_dropped(tables: BuildTables) -> None:
 
 def test_an_animation_pairs_with_the_slot_it_replaces(
         tables: BuildTables) -> None:
-    """⛔ What folds this into the same group as the replacement aura: a value
+    """What folds this into the same group as the replacement aura: a value
     is meaningless without the base it stands in for. Slot 4 (Walk) is left
     alone here, so it contributes no pair."""
     assert procs(tables).anims == {17: ((0, 12), (5, 13))}

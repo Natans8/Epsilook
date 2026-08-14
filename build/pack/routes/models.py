@@ -6,7 +6,7 @@ the ground, a weapon trail, a barrage volley, a creature's own display, and an
 item held in hand. What they share is the END -- a file id and a category word
 -- so they are collected here and the differences stay in how each is reached.
 
-⛔ THE CATEGORY IS NOT DECORATION. It says which id space a row's `ref` is in,
+The category is not decoration. It says which id space a row's `ref` is in,
 so a display id and an item id can share one field instead of each adding
 their own, and it is what the next Type-N route extends rather than rewrites.
 """
@@ -61,7 +61,7 @@ EFFECT_NAME_TYPE_DISPLAY = enum_id_where(_EFFECT_NAME_TYPES, "display")
 EFFECT_NAME_TYPE_ITEM = enum_id_where(_EFFECT_NAME_TYPES, "item")
 
 # Sentinel file ids for a model that has no file because the caster already
-# owns it. ONE PER SLOT, not per type: the eight weapon types make four pills,
+# owns it. One per slot, not per type: the eight weapon types make four pills,
 # because 8/9/10 repeat 3/4/5 with "(ignore disarmed)" -- a visibility rule for
 # a disarmed caster, not a different weapon -- and 6/7 are basic against
 # preferred ammo. Both distinctions say which item the client picks, not what a
@@ -131,7 +131,7 @@ class ModelSources:
     attach_models: dict[int, set[AttachModel]] = field(default_factory=dict)
     """Kit -> the models it attaches to a unit.
 
-    ⛔ THE ATTACHMENT IS PART OF THE KEY, so the same model at two different
+    The attachment is part of the key, so the same model at two different
     points stays two rows and renders as two pills rather than merging: 10.5%
     of (kit, effect name) pairs carry more than one distinct attachment.
 
@@ -156,7 +156,7 @@ def read_effect_names(tables: Tables, named: Callable[[set[int]], set[int]]
     creature display id, or a weapon slot -- and only the type tells the three
     apart, because all four spellings put something in the same columns.
 
-    ⛔ THE PLACEHOLDER DROP HAPPENS HERE AND NOWHERE ELSE. The Classic clients
+    The placeholder drop happens here and nowhere else. The Classic clients
     leave an unnamed file id on their weapon rows, which is not a model anyone
     can render. Rewriting it to 0 at the one place the column is read leaves
     every route downstream to take the "no file -> sentinel" branch it already

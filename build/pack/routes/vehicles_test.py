@@ -28,7 +28,7 @@ def test_the_seat_list_length_is_the_seat_count(tables: BuildTables) -> None:
 
 
 def test_the_two_animation_sets_stay_apart(tables: BuildTables) -> None:
-    """⛔ The rider's behaviour and the vehicle's. Folding them together would
+    """The rider's behaviour and the vehicle's. Folding them together would
     file a mount's own movement under what its passenger is doing."""
     seats = read_vehicle_seats(tables(Vehicle=VEHICLE, VehicleSeat=VEHICLE_SEAT))
     assert seats.passenger_anims[1] == {20, 21}
@@ -56,7 +56,7 @@ def test_a_seat_attachment_is_an_index_not_a_raw_id(tables: BuildTables) -> None
 
 
 def test_with_no_seat_table_the_count_survives(tables: BuildTables) -> None:
-    """⛔ The middle case, and why the two absences are checked separately: a
+    """The middle case, and why the two absences are checked separately: a
     two-seat vehicle is still a two-seat vehicle when nothing can say where the
     seats are."""
     seats = read_vehicle_seats(tables(Vehicle=VEHICLE))

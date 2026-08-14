@@ -174,7 +174,7 @@ Declared rather than derived so the overlay can be composed without reading a
 700 MB dump — and checked against the dump's own DDL every time one is
 distilled, so the declaration cannot quietly stop being true.
 
-⚠ The column is still DISTILLED. Refusing it is the overlay's job, and dropping
+The column is still DISTILLED. Refusing it is the overlay's job, and dropping
 it here would take it away from the builder that still reads it directly.
 """
 

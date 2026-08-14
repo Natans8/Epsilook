@@ -3,7 +3,7 @@
 The game stores a colour as three 0..1 floats, the pack ships one packed
 0xRRGGBB integer, and the search corpus wants neither: it wants a word.
 
-⭐ THE WORD IS WHY THIS ROUTE EXISTS. For roughly 46% of the spells that carry
+The word is why this route exists. For roughly 46% of the spells that carry
 an effect colour, the tint is the only colour signal there is -- the texture
 underneath is greyscale, and what makes it red is the multiply. So
 `fx:"chain red"` can only work if the word is baked at build time, from the

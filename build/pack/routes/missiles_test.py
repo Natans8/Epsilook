@@ -46,7 +46,7 @@ def missiles(tables: BuildTables):
 
 
 def test_the_row_wins_where_it_says_anything(tables: BuildTables) -> None:
-    """⛔ The two disagree on 24% of rows, and the case was settled in game:
+    """The two disagree on 24% of rows, and the case was settled in game:
     the visual said Chest, the row said Base, and it launched from the BASE."""
     assert (8000, 7, 1, 2) in missiles(tables)[10].models
 

@@ -60,7 +60,7 @@ def test_a_redirect_reached_through_a_redirect_carries_both() -> None:
 
 
 def test_a_cycle_terminates_at_the_fixpoint() -> None:
-    """⛔ The reason this is a worklist and not a recursion: on 9.2.7 one pair
+    """The reason this is a worklist and not a recursion: on 9.2.7 one pair
     of visuals names each other.
 
     Both end up carrying both bits, and that is the right answer rather than an
@@ -86,7 +86,7 @@ def test_a_spell_reaches_every_visual_its_visuals_redirect_to(
 
 
 def test_the_kit_edge_splits_the_mask_by_phase(tables: BuildTables) -> None:
-    """⛔ "Target" means a different unit in the two phases, so folding them
+    """"Target" means a different unit in the two phases, so folding them
     before the spell's effects are known loses what rescues a mixed spell."""
     assert graph(tables).visual_kits[10] == {
         900: (NO_TARGET, TARGET_CASTER | TARGET_TARGET),  # impact, two rows

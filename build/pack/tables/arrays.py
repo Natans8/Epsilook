@@ -23,7 +23,7 @@ def array_columns(tables: Tables, table: str, base: str, count: int) -> list[str
     CreatureDisplayID is ``[4]`` through 10.1.x and a scalar from 10.2.0 on.
     Nothing is lost in the array builds -- slots 1..3 are empty in all 64 rows.
 
-    ⛔ AN ABSENT TABLE HAS NO COLUMNS, WHICH IS NOT A SCHEMA SURPRISE. A build
+    An absent table has no columns, which is not a schema surprise. A build
     may legitimately predate the whole table, and asking what shape its array
     field takes must not be the thing that decides whether the build survives.
     Returning nothing hands the caller a column list that yields no rows, so

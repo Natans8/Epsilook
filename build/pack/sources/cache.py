@@ -58,7 +58,7 @@ def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
 
 
 def download_volatile(url: str, dest: Path) -> None:
-    """Fetch a small source that CHANGES UNDER BUILDS WE ALREADY SHIP.
+    """Fetch a small source that changes under builds we already ship.
 
     The same problem as the listfile, and the same reason `download()` is wrong
     for it: a version-pinned table is correct forever once cached, but the enum

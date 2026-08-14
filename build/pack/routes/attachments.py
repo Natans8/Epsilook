@@ -6,7 +6,7 @@ than with any one of them. The names are the game's own, and on seats they read
 oddly ("Breath", "ChestBloodBack") because artists reuse generic slots as seat
 anchors. That is the data, not a decode error.
 
-⛔ ONE CONSUMER IS INDEXED AND THE REST ARE RAW, and confusing the two is the
+One consumer is indexed and the rest are raw, and confusing the two is the
 trap this module exists to hold. Every attachment column in the game data is a
 raw id into the name table -- except `VehicleSeat.AttachmentID`, which is an
 index into an array hardcoded in the client binary. Reading a seat's value as a
@@ -34,7 +34,7 @@ value, and the indices where the two hypotheses disagree are decisive -- index
 14 decodes to VehicleSeat2, present on 100% of the models that use it, while
 raw 14 (ShoulderFlapLeft) is present on 0%.
 
-⚠ The array is 6.0.1-era and modern data has indices past its end. Those stay
+The array is 6.0.1-era and modern data has indices past its end. Those stay
 unmapped on purpose.
 """
 
@@ -50,7 +50,7 @@ DEFAULT_MISSILE_SOURCE = 56
 """Where a missile launches from when nothing says: M2 "VirtualSpellDirected".
 
 Needed for 47.3% of missile rows on 9.2.7, where neither the missile row nor
-its visual names a launch point. ⭐ VERIFIED IN GAME on two independent models:
+its visual names a launch point. Verified in game on two independent models:
 a blank Fireball is indistinguishable from one that declares this explicitly on
 the same model, and Shadow Bolt agreed. "Virtual" is the client's own word for
 a COMPUTED point, which is exactly what a fallback is. Materialised here rather

@@ -65,7 +65,7 @@ other area. "Both" is derived app-side from bits 1|2 rather than being a bit.
 AURA_PHASE_EVENTS = frozenset({7, 8})
 """SpellVisualEvent.StartEvent values that mean the AURA phase (start / end).
 
-⭐ THE ONE PHASE THAT CAN DISAGREE WITH THE REST OF THE SPELL, which is why it
+The one phase that can disagree with the rest of the spell, which is why it
 is the only one split out. `TargetType` is relative to the CAST -- "the caster"
 against "the unit being cast at" -- and is not a claim about which unit owns
 the visual. When a spell is cast on the caster themself the two are the same
@@ -90,7 +90,7 @@ def resolve_target_mask(aura_mask: int, other_mask: int,
     `TARGET_CASTER` where the matching test says the spell targets only the
     caster -- that is, where "the target" IS the caster.
 
-    ⛔ Only the plain target bit is rewritten. `TARGET_NOT_CASTER` says "not the
+    Only the plain target bit is rewritten. `TARGET_NOT_CASTER` says "not the
     caster" outright, so it can never mean the caster and is left alone.
     """
     if aura_mask & TARGET_TARGET and aura_bits == TARGET_CASTER:
@@ -103,7 +103,7 @@ def resolve_target_mask(aura_mask: int, other_mask: int,
 def merge_masked(into: dict[T, int], items: Iterable[T], mask: int) -> None:
     """Union `items` into `into`, OR-ing `mask` onto each one's target mask.
 
-    ⭐ THE SINGLE PRIMITIVE BEHIND THE WHOLE GRAPH WALK. Every payload bucket is
+    The single primitive behind the whole graph walk. Every payload bucket is
     a {content item -> target mask} map, whatever the content is, so adding a
     kit's contribution is one operation rather than one per payload kind. That
     is what keeps the walk a loop over kits instead of a switch over payloads.

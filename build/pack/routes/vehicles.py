@@ -3,7 +3,7 @@
 A vehicle names up to eight seats by slot, and each seat carries the animations
 the RIDER plays and, separately, the ones the VEHICLE plays.
 
-⛔ THE TWO ANIMATION SETS STAY APART. They are the rider's behaviour and the
+The two animation sets stay apart. They are the rider's behaviour and the
 vehicle's, and folding them together would file a mount's own movement under
 what its passenger is doing. Only the seat ORDER survives per seat; everything
 else is unioned per vehicle, because a spell surfaces the vehicle as a whole
@@ -56,7 +56,7 @@ class VehicleSeats:
 def read_vehicle_seats(tables: Tables) -> VehicleSeats:
     """Walk each vehicle to its seats and collect what they carry.
 
-    ⛔ TWO INDEPENDENT ABSENCES, and the middle case is why they are checked
+    Two independent absences, and the middle case is why they are checked
     separately. Both tables postdate the oldest clients. With no vehicle table
     there is nothing at all. With vehicles but no SEAT table the slot positions
     still give the seat COUNT, which is worth keeping -- a two-seat vehicle is

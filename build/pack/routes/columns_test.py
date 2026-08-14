@@ -21,7 +21,7 @@ def test_an_id_survives_being_exported_as_a_float(text: str) -> None:
 
 
 def test_the_first_nonzero_spelling_wins() -> None:
-    """⛔ The rule that keeps three builds from shipping blank.
+    """The rule that keeps three builds from shipping blank.
 
     Vanilla, TBC and MoP export BOTH spellings of an effect's amount with the
     float left at zero, so "first nonempty" is not enough -- it has to be

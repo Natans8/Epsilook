@@ -5,13 +5,13 @@
 is an id in. Everything the pack shows about a spell that is not a name or a
 number arrives through here.
 
-⛔ A PROCEDURE REFERENCE IS DISPATCHED TWICE. Its effect type says only "this is
+A procedure reference is dispatched twice. Its effect type says only "this is
 a procedure"; which KIND of procedure it is was already decided when the
 procedure route bucketed it. So the second dispatch is a membership test against
 those buckets rather than a second read of the row -- the route that knows what
 a Type means is the one that decided, and this one does not re-decide.
 
-⛔ A ROW POINTING AT A PAYLOAD THIS BUILD DOES NOT HAVE IS DROPPED. It is not an
+A row pointing at a payload this build does not have is dropped. It is not an
 error: an older build legitimately lacks the table, and a kit referencing a row
 that is not there has nothing to show. Keeping it would ship an id the app
 cannot resolve into anything.
@@ -53,7 +53,7 @@ class KitEffects:
     is a union over the kits a spell reaches rather than a second dispatch.
     Freezes and camos are valueless, so kit membership is the whole payload.
 
-    ⛔ A KIT IS ABSENT FROM A BUCKET IT CONTRIBUTED NOTHING TO, so read these
+    A kit is absent from a bucket it contributed nothing to, so read these
     with `.get(kit, ())` rather than by subscript. They are plain dicts on
     purpose: a bucket that answers every key by inserting an empty set into
     itself grows as it is read, which makes "which kits play a sound" depend on
@@ -167,7 +167,7 @@ def _add_procedure(kits: KitEffects, kit: int, procedure: int,
     Membership tests rather than a second decode: the procedure route already
     read the Type, and a row can only ever be in one value bucket.
 
-    ⛔ A procedure-route chain has NO BEAM ROW, so it carries no attachment
+    A procedure-route chain has no beam row, so it carries no attachment
     pair. Giving it one would claim two anchor points the data never named.
     """
     chain = procs.chain.get(procedure, 0)

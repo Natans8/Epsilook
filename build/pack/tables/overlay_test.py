@@ -168,7 +168,7 @@ def test_a_table_the_build_predates_stays_empty(tmp_path: Path) -> None:
 
 
 def test_two_spellings_of_one_id_are_one_row(tmp_path: Path) -> None:
-    """⛔ The two sources are different exporters.
+    """The two sources are different exporters.
 
     Values travel as text, but a row id spelled `11` on one side and `11.0` on
     the other must still be the same ROW -- otherwise the revision misses, and

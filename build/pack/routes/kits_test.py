@@ -89,7 +89,7 @@ def test_an_unset_animation_is_not_played(tables: BuildTables) -> None:
 
 def test_a_procedure_reaches_the_bucket_it_was_sorted_into(
         tables: BuildTables) -> None:
-    """⛔ The second dispatch is a membership test, not a second decode: the
+    """The second dispatch is a membership test, not a second decode: the
     route that read the Type already decided."""
     resolved = kits(tables)
     assert resolved.tints[3] == {11}
@@ -101,7 +101,7 @@ def test_a_procedure_reaches_the_bucket_it_was_sorted_into(
 
 def test_a_procedure_chain_carries_no_attachment_pair(
         tables: BuildTables) -> None:
-    """⛔ It has no beam row, so claiming two anchor points would invent them."""
+    """It has no beam row, so claiming two anchor points would invent them."""
     assert kits(tables).chains[2] == {(70, NO_ATTACHMENT, NO_ATTACHMENT),
                                       (71, NO_ATTACHMENT, NO_ATTACHMENT)}
 

@@ -34,7 +34,7 @@ from .provider import Tables
 def join_key(text: str) -> str:
     """One row id, in a spelling both sources can be compared on.
 
-    ⛔ THE JOIN IS THE ONE PLACE TEXT-IN-TEXT-OUT IS NOT ENOUGH. Values travel
+    The join is the one place text-in-text-out is not enough. Values travel
     as the source's own text, which is what keeps two providers producing the
     same pack -- but the base and the overlay are different exporters, and two
     spellings of the same NUMBER must still name the same row. A row id that
@@ -65,7 +65,7 @@ class Overlay:
     so the mapping is the declaration, and it is the only place either spelling
     appears.
 
-    ⭐ A base column absent from `columns` is one the overlay may not supply,
+    A base column absent from `columns` is one the overlay may not supply,
     and that is the point of merging per column rather than per row. Some
     columns are declared here only because a wholesale row replace would BLANK
     them; others must be left out because the overlay's copy is worse than the
@@ -179,7 +179,7 @@ class OverlaidTables:
         A revised row keeps every base value the overlay does not supply, so a
         column left out of the mapping is untouched rather than blanked.
 
-        ⭐ Rows the base does not have are APPENDED rather than dropped, and
+        Rows the base does not have are APPENDED rather than dropped, and
         that is not tidiness: measured across the shipped releases, a handful of
         revision rows name ids the client's own table never carried. They are
         genuine additions the server made and the client never shipped, so
@@ -188,7 +188,7 @@ class OverlaidTables:
         there is no base row to take them from.
         """
         source, overlay = self.source, self.overlays.get(table)
-        # ⚠ `base.available` is not redundant with the others. A build that
+        # `base.available` is not redundant with the others. A build that
         # PREDATES a table reads it as empty by declaration, and without this
         # test every revision row would come out as an addition -- conjuring a
         # table the client never had out of the revisions to it.

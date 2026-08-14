@@ -1,6 +1,6 @@
 """Key overrides: pressing a game function casts a spell instead.
 
-⛔ THE TYPE COLUMN IS DOCUMENTED NOWHERE and was decoded from the data. The
+The Type column is documented nowhere and was decoded from the data. The
 definition carries no comment and the wiki's page is a two-field stub, so the
 evidence is what names it: every Type-1 row is the jump function on every build
 that has the table, and every Type-1 spell is a mid-air ability while every

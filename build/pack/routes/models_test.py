@@ -86,7 +86,7 @@ def test_a_plain_row_attaches_its_own_file(tables: BuildTables) -> None:
 
 
 def test_the_attachment_is_part_of_the_key(tables: BuildTables) -> None:
-    """⛔ The same model at two points stays two rows and renders as two pills,
+    """The same model at two points stays two rows and renders as two pills,
     rather than merging into one that cannot say where it played."""
     assert sources(tables).attach_models[900] == {
         (8000, MODEL_CAT_ATTACH, 5, NO_ATTACHMENT, 0, NO_MOTION),
@@ -116,7 +116,7 @@ def test_a_weapon_row_with_no_file_becomes_its_slot_sentinel(
 
 def test_an_unnamed_weapon_file_is_dropped_to_its_sentinel(
         tables: BuildTables) -> None:
-    """⛔ The Classic placeholder: a file id on a weapon row that names no real
+    """The Classic placeholder: a file id on a weapon row that names no real
     asset. Rewriting it to 0 where the column is read leaves every route
     downstream to take the branch it already has."""
     assert sources(tables).attach_models[904] == {

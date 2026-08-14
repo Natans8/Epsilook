@@ -54,7 +54,7 @@ def items(tables: BuildTables):
 
 
 def test_the_first_appearance_wins(tables: BuildTables) -> None:
-    """⛔ What makes the pill show the item's BASE look rather than an arbitrary
+    """What makes the pill show the item's BASE look rather than an arbitrary
     recolour: appearances arrive in source order and the first that yields a
     file is taken."""
     assert items(tables).model_fid[10] == 8099
@@ -75,7 +75,7 @@ def test_the_second_model_slot_is_reached_when_the_first_is_unset(
 
 
 def test_an_unnamed_item_still_resolves(tables: BuildTables) -> None:
-    """⛔ The majority of this route: internal props that exist purely to be
+    """The majority of this route: internal props that exist purely to be
     held in a spell visual. Dropping them for having no name would throw the
     route away."""
     resolved = items(tables)

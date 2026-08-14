@@ -1,6 +1,6 @@
 """The spell list itself: id -> name, and the names a spell can take on.
 
-⭐ THE NAME TABLE IS THE SPELL LIST. A spell exists for this build only if it
+The name table is the spell list. A spell exists for this build only if it
 has a name row, and every route downstream filters against the set this returns.
 That makes it the first thing read and the one place a build's population is
 decided.

@@ -4,7 +4,7 @@ Pure client data, so this route works on every build including the ones with no
 server dump. Reached when a `SpellVisualEffectName` names an `Item::ID` rather
 than a file: the spell hands the caster a real item and plays its model.
 
-⛔ MOST OF THESE ITEMS HAVE NO NAME, and dropping the nameless ones would throw
+Most of these items have no name, and dropping the nameless ones would throw
 away the majority of the route. Only `ItemSearchName` carries a name, and about
 a third of the items this route reaches never appear there -- they are internal
 props (unnamed potions, dynamite, gizmos) that exist purely to be held in a
@@ -50,7 +50,7 @@ def read_item_models(tables: Tables) -> ItemModels:
     tables to cross what is conceptually one edge, because the game separates
     an item from the look it can be transmogrified into.
 
-    ⛔ FIRST APPEARANCE WINS, and that is what makes the pill show the item's
+    First appearance wins, and that is what makes the pill show the item's
     BASE look rather than an arbitrary recolour: an item carries one appearance
     row per transmog variant, they arrive in source order, and taking the first
     that yields a file is the only rule here that is stable across builds.

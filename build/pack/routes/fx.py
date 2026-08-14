@@ -6,9 +6,9 @@ type, and each carries a payload that is mostly renderer tuning with a small
 VISIBLE core. This route keeps the core and drops the tuning, which is why each
 reader names the columns it takes rather than taking the row.
 
-⛔ WHAT COUNTS AS TUNING WAS GOT WRONG ONCE, and the correction is the reason
+What counts as tuning was got wrong once, and the correction is the reason
 the rule is written down: the full-screen mask triplet was skipped as tuning
-when it is a RADIAL VIGNETTE, and area-denial effects previewed as a coloured
+when it is a radial vignette, and area-denial effects previewed as a coloured
 rim around a clear centre until it came back. Tuning is a column that changes
 how a thing is drawn; geometry that changes WHERE it is drawn is content.
 """
@@ -120,7 +120,7 @@ def read_full_screen_effects(
 ) -> dict[int, tuple[int, int, Vignette, Textures]]:
     """Full-screen effect -> (multiply, add, vignette, textures).
 
-    ⛔ THE VIGNETTE IS CONTENT, NOT TUNING. It is what decides WHERE the grade
+    The vignette is content, not tuning. It is what decides WHERE the grade
     lands: the offset shifts its centre and the size and power shape the
     falloff, so an area-denial effect is a coloured rim around a clear centre
     rather than an evenly tinted frame.
@@ -156,7 +156,7 @@ def read_screens(tables: Tables,
                  ) -> dict[int, ScreenRow]:
     """Screen effect -> its payload, the full-screen half folded in.
 
-    ⛔ THE FOG PARAMETER IS AARRGGBB, not the RRGGBBXX the wiki claims. Verified
+    The fog parameter is AARRGGBB, not the RRGGBBXX the wiki claims. Verified
     against the rows whose colours are known from the game: the top byte is
     opacity and spreads across the whole range, so reading it the other way
     round yields a colour shifted by a byte and an opacity that is really blue.

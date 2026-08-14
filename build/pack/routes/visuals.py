@@ -4,13 +4,13 @@ Two hops, both many-to-many, and both carrying a TARGET MASK -- who the content
 plays for. Almost every payload in the pack is reached by walking these edges,
 so what they get wrong, everything downstream repeats.
 
-⛔ THE REDIRECT GRAPH HAS CYCLES. A `SpellVisual` can name another visual the
+The redirect graph has cycles. A `SpellVisual` can name another visual the
 client swaps in for it, and on 9.2.7 one visual names itself while one pair
 names each other. So following redirects is a WORKLIST over a mask that only
 ever gains bits -- a fixpoint that terminates whatever shape the data takes --
 and not the recursion it looks like it wants to be.
 
-⭐ FOLLOWING THEM AT ALL IS WHAT MAKES THAT CONTENT VISIBLE. The redirected-to
+Following them at all is what makes that content visible. The redirected-to
 visual is usually reachable no other way: on 9.2.7 only 37 of 228 caster
 targets and 30 of 257 hostile targets also appear in `SpellXSpellVisual`.
 """
@@ -42,7 +42,7 @@ class VisualGraph:
     visual_kits: dict[int, dict[int, tuple[int, int]]] = field(default_factory=dict)
     """Visual -> {kit -> (aura-phase mask, every-other-phase mask)}.
 
-    ⛔ SPLIT BY PHASE, and it is not tidiness. "Target" means a different unit
+    Split by phase, and it is not tidiness. "Target" means a different unit
     in the two: an aura-phase visual belongs to the aura and plays on whoever
     CARRIES it, while every other phase shares the cast's frame. Folding them
     into one mask before the spell's own effects are known loses the

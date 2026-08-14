@@ -6,7 +6,7 @@ float and produce different packs from one source. Turning that text into a
 number is therefore a route's job, and these are the spellings the game data
 actually uses.
 
-⛔ Each of these is a DECODE, not a cast. `int(text)` would be shorter and
+Each of these is a DECODE, not a cast. `int(text)` would be shorter and
 wrong on every one of them: the game exports an empty cell where it means zero,
 an integer as `2.0` on some builds and `2` on others, and one value under two
 different column names depending on which build exported it.
@@ -33,7 +33,7 @@ def to_int_from_float(text: str) -> int:
 def to_amount(*spellings: str) -> float:
     """An effect's amount, from the first of its column spellings that is set.
 
-    ⛔ THE ORDER IS THE DECLARATION AND IT IS NOT ARBITRARY. `SpellEffect`
+    The order is the declaration and it is not arbitrary. `SpellEffect`
     exports the value as an int (`EffectBasePoints`) or a float
     (`EffectBasePointsF`) depending on the build, and three builds export BOTH
     with the float left at zero. So the rule is "first nonempty and nonzero"
