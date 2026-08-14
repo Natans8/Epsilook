@@ -567,3 +567,85 @@ def test_a_placement_of_something_already_named_is_left_alone() -> None:
     known = {500: "world/maps/m/m_35_29_obj0.adt"}
     storage = FakeStorage({500: tile(FLOOR + 9)})
     assert placement_names(storage, known, set()) == {}
+
+
+def test_a_missing_origin_is_found_by_bracketing_rather_than_by_sweeping() -> None:
+    """The id tracks file id, so the ids either side of a missing one bound the
+    region it lives in -- which is why this reads a few roots and not fifty
+    thousand."""
+    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
+
+    custom = FLOOR + 5
+    # 10 and 30 are on disk and bracket id 20, which is only on the service.
+    files = {10: world_model(10), 30: world_model(30), custom: world_model(20)}
+    stock = {10: "World/WMO/Low.wmo", 20: "World/WMO/Wanted.wmo",
+             30: "World/WMO/High.wmo"}
+
+    class Bracketing(HeadStorage):
+        """Holds the bracketing roots locally and the wanted one only remotely."""
+
+        def holds_locally(self, file_id: int) -> bool:
+            return file_id in (10, 30)
+
+        def read(self, file_id: int, *, local_only: bool = False):
+            if local_only and file_id not in (10, 30):
+                return None
+            return self.files.get(file_id)
+
+    # Wide enough to reach the header the id sits in, which a real fetch is.
+    storage = Bracketing({**files, 20: world_model(20)}, cap=4096)
+    assert reskin_names(storage, {custom}, stock, local_only=False) == {
+        custom: f"epsilon/reskin/wanted/{custom}.wmo"}
+
+
+def test_bracketing_never_runs_on_a_local_only_pass() -> None:
+    """It is a network search by construction; without one there is nothing to
+    search."""
+    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
+
+    custom = FLOOR + 5
+    storage = FakeStorage({10: world_model(10), custom: world_model(20)})
+    assert reskin_names(storage, {custom}, {10: "World/WMO/Low.wmo"},
+                        local_only=True) == {}
+
+
+def test_a_map_names_its_own_auxiliary_files() -> None:
+    """The header's positions determine which file each id is, and the game's
+    convention determines what it is called -- so these are real names."""
+    from epsilon_walks import terrain_names  # pylint: disable=import-outside-toplevel
+
+    wdt = FLOOR + 1
+    lgt, wdl = FLOOR + 2, FLOOR + 7
+    header = struct.pack("<8I", 970, lgt, 0, 0, 0, 0, wdl, 0)
+    raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
+        chunk(b"MPHD", header, reversed_tags=True)
+    storage = FakeStorage({wdt: raw})
+
+    import epsilon_walks
+    original = epsilon_walks.custom_maps
+    epsilon_walks.custom_maps = lambda _s, _f: [("mymap", wdt)]
+    try:
+        names = terrain_names(storage, FLOOR)
+    finally:
+        epsilon_walks.custom_maps = original
+    assert names[lgt] == "world/maps/mymap/mymap.lgt"
+    assert names[wdl] == "world/maps/mymap/mymap.wdl"
+    assert names[wdt] == "world/maps/mymap/mymap.wdt"
+
+
+def test_an_unset_auxiliary_slot_names_nothing() -> None:
+    """A map that has no fog volume stores a zero, and zero is not a file."""
+    from epsilon_walks import terrain_names  # pylint: disable=import-outside-toplevel
+
+    wdt = FLOOR + 1
+    raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
+        chunk(b"MPHD", struct.pack("<8I", 970, 0, 0, 0, 0, 0, 0, 0),
+              reversed_tags=True)
+    import epsilon_walks
+    original = epsilon_walks.custom_maps
+    epsilon_walks.custom_maps = lambda _s, _f: [("mymap", wdt)]
+    try:
+        names = terrain_names(FakeStorage({wdt: raw}), FLOOR)
+    finally:
+        epsilon_walks.custom_maps = original
+    assert names == {wdt: "world/maps/mymap/mymap.wdt"}

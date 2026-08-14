@@ -28,6 +28,7 @@ another route lands is how the last few are picked up.
 
 from __future__ import annotations
 
+import bisect
 import re
 import struct
 from collections import Counter, defaultdict
@@ -184,6 +185,19 @@ def custom_maps(storage: Reads, floor: int) -> list[tuple[str, int]]:
     return found
 
 
+MAP_FILE_SLOTS = ("lgt", "occ", "fogs", "mpv", "tex", "wdl", "pd4")
+"""What a map's header points at, after its flags, in order.
+
+Each is the map named again with a different extension, so these are real names
+for the same reason the tile grid is: the position in the header determines
+which file it is, and the game's own convention determines what that file is
+called. The header carries a fixed eight words, the first of which is the flags.
+"""
+
+_MPHD_SLOTS = 8
+"""Words of the map header this reads: the flags and the seven file ids."""
+
+
 def terrain_names(storage: Reads, floor: int) -> dict[int, str]:
     """Real paths for every terrain file the client's own maps own.
 
@@ -202,6 +216,18 @@ def terrain_names(storage: Reads, floor: int) -> dict[int, str]:
             continue
         names[wdt] = f"world/maps/{directory}/{directory}.wdt"
         for tag, body in chunks(raw, reversed_tags=True):
+            if tag == b"MPHD" and len(body) >= _MPHD_SLOTS * 4:
+                # A map's own auxiliary files: its lighting, occlusion, fog,
+                # volumes, texture table and low-detail terrain. Nothing else
+                # reaches them -- no table mentions them and they hang off no
+                # model -- and they read as unrecognised chunked files or as
+                # nothing at all when they are not named from here.
+                ids = struct.unpack_from(f"<{_MPHD_SLOTS}I", body, 0)
+                for extension, fid in zip(MAP_FILE_SLOTS, ids[1:]):
+                    if fid > floor:
+                        names[fid] = (f"world/maps/{directory}/"
+                                      f"{directory}.{extension}")
+                continue
             if tag != b"MAID":
                 continue
             for cell in range(min(GRID * GRID, len(body) // _TILE_ENTRY)):
@@ -433,6 +459,53 @@ def world_model_id(raw: bytes | None) -> int | None:
     return None
 
 
+def _bracketed_retail(storage: Reads, roots: list[int], stock: dict[int, str],
+                      known: dict[int, int], wanted: set[int], *,
+                      local_only: bool) -> dict[int, int]:
+    """Retail roots for the ids the install does not already account for.
+
+    Reading all fifty thousand roots to find a handful is a poor trade, and it
+    is unnecessary: the id tracks file id closely enough that the ids either
+    side of a missing one bracket the region it must live in. Measured, that
+    narrows the search by an order of magnitude and still finds every one.
+
+    Args:
+        storage: the opened storage.
+        roots: every retail root's file id.
+        stock: retail file id to path, for reporting only.
+        known: the ids already accounted for, as id to file id.
+        wanted: the ids still to place.
+        local_only: refuse to reach the network, in which case nothing is done.
+
+    Returns:
+        Id to retail file id, for those found.
+    """
+    if local_only or not wanted or not known:
+        return {}
+    ordered = sorted(known)
+    seen = set(known.values())
+    candidates: set[int] = set()
+    for target in wanted:
+        at = bisect.bisect_left(ordered, target)
+        low = known[ordered[at - 1]] if at else min(seen)
+        high = known[ordered[at]] if at < len(ordered) else max(seen)
+        low, high = min(low, high), max(low, high)
+        candidates.update(f for f in roots if low <= f <= high and f not in seen)
+    if not candidates:
+        return {}
+    print(f"  reskin: {len(wanted)} ids are not on disk; {len(candidates):,} "
+          f"retail roots bracket them, of {len(roots) - len(seen):,} unread")
+    raws = heads_of(storage, sorted(candidates), label="reskin: retail (network)",
+                    local_only=False)
+    found: dict[int, int] = {}
+    for fid, raw in raws.items():
+        got = world_model_id(raw)
+        if got in wanted:
+            found.setdefault(got, fid)
+    print(f"  reskin: {len(found)} of {len(wanted)} placed")
+    return found
+
+
 def reskin_names(storage: Reads, unnamed: set[int], stock: dict[int, str],
                  *, local_only: bool = True) -> dict[int, str]:
     """World models named by the retail model they were reskinned from.
@@ -479,6 +552,11 @@ def reskin_names(storage: Reads, unnamed: set[int], stock: dict[int, str],
     names: dict[int, str] = {}
     heads = heads_of(storage, sorted(unnamed), label="reskin: custom roots",
                      local_only=local_only)
+    declared = {found for raw in heads.values()
+                if (found := world_model_id(raw)) is not None}
+    retail |= _bracketed_retail(storage, roots, stock, retail,
+                                declared - set(retail), local_only=local_only)
+
     for fid, raw in heads.items():
         found = world_model_id(raw)
         origin = retail.get(found) if found is not None else None
