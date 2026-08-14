@@ -1,10 +1,15 @@
-"""Reading the shared listfile: which asset, and the streaming filter."""
+"""Reading the shared listfile: which asset, the streaming filter, and how a
+supplement extends it through the ordinary merge."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from pack.sources.listfile import LISTFILE_ASSET, resolve_paths
+from pack.routes.assets import resolve_paths
+from pack.sources.listfile import LISTFILE_ASSET, SUPPLEMENT_FLOOR
+from pack.supplements import above
+from pack.tables.listfile_tables import ID, PATH, TABLE, ListfileTables
+from pack.tables.overlay import OverlaidTables, Overlay
 
 LINES = """\
 1;Interface/Cinematics/Logo_800.avi
@@ -14,10 +19,11 @@ LINES = """\
 """
 
 
-def listfile(tmp_path: Path, text: str = LINES) -> Path:
-    path = tmp_path / "listfile.csv"
+def listfile(tmp_path: Path, text: str = LINES,
+             name: str = "listfile.csv") -> ListfileTables:
+    path = tmp_path / name
     path.write_text(text, encoding="utf-8", newline="")
-    return path
+    return ListfileTables(path)
 
 
 def test_the_asset_is_the_capitalised_community_one() -> None:
@@ -55,3 +61,64 @@ def test_a_row_that_is_not_a_row_is_skipped(tmp_path: Path) -> None:
     """The file is not ours and its tail has been truncated before."""
     text = LINES + "not a row\n;\nxyz;path\n"
     assert set(resolve_paths(listfile(tmp_path, text), {1, 900})) == {1, 900}
+
+
+def test_the_provider_serves_one_table_and_names_its_columns(
+        tmp_path: Path) -> None:
+    """The format carries no header, so the column names are the provider's."""
+    tables = listfile(tmp_path)
+    assert tables.available(TABLE)
+    assert not tables.available("SpellName")
+    assert tables.header(TABLE) == [ID, PATH]
+
+
+def test_the_provider_projects_columns_in_the_order_asked_for(
+        tmp_path: Path) -> None:
+    """Part of the provider contract, pinned here because this provider serves
+    one fixed table and so cannot join the parametrised suite as it stands."""
+    tables = listfile(tmp_path)
+    assert next(iter(tables.rows(TABLE, [PATH, ID]))) == (
+        "Interface/Cinematics/Logo_800.avi", "1")
+    assert next(iter(tables.rows(TABLE, [ID]))) == ("1",)
+
+
+def test_the_provider_hands_back_the_source_text_and_the_route_trims_it(
+        tmp_path: Path) -> None:
+    """Text in, text out: a field's own whitespace is the source's, so the
+    provider keeps it and the reader that turns it into a name is where it
+    goes. Only the line terminator is the provider's to remove."""
+    tables = listfile(tmp_path, "7;  Interface/Padded.blp  \n")
+    assert next(iter(tables.rows(TABLE, [ID, PATH]))) == (
+        "7", "  Interface/Padded.blp  ")
+    assert resolve_paths(tables, {7}) == {7: "Interface/Padded.blp"}
+
+
+def _supplemented(tmp_path: Path, supplement: str) -> OverlaidTables:
+    """The community listfile with a supplement over it, wired as any two
+    sources are."""
+    return OverlaidTables(
+        base=listfile(tmp_path, name="community.csv"),
+        overlays={TABLE: Overlay(TABLE, {ID: ID, PATH: PATH}, key=ID,
+                                 admits=above(SUPPLEMENT_FLOOR))},
+        source=listfile(tmp_path, supplement, name="supplement.csv"),
+    )
+
+
+def test_a_supplement_names_what_the_community_listfile_cannot(
+        tmp_path: Path) -> None:
+    """The listfile is a table like any other, so extending it is the same
+    merge that applies the server's hotfixes."""
+    tables = _supplemented(tmp_path, "19602034;Interface/ICONS/eps_arc_armourblue.blp\n")
+    assert resolve_paths(tables, {1, 19602034}) == {
+        1: "Interface/Cinematics/Logo_800.avi",
+        19602034: "Interface/ICONS/eps_arc_armourblue.blp",
+    }
+
+
+def test_a_supplement_may_not_rename_an_asset_the_base_already_names(
+        tmp_path: Path) -> None:
+    """Its rule confines it to ids beyond the base, so a regenerated supplement
+    that grew a stock row cannot quietly replace a real name with its own
+    spelling of one."""
+    tables = _supplemented(tmp_path, "1;Interface/WRONG.avi\n")
+    assert resolve_paths(tables, {1}) == {1: "Interface/Cinematics/Logo_800.avi"}

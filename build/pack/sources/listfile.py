@@ -42,6 +42,23 @@ paths folds case at the comparison, so this constant cannot decide whether a
 search finds something.
 """
 
+SUPPLEMENT_FLOOR = 18_000_000
+"""The id below which a listfile supplement may not name anything.
+
+Deliberately not the community listfile's highest id. That number grows on every
+release, so bounding a supplement by it would hold only until the next one:
+a private client's own name table carries stock ids as well as its own, and the
+day the listfile grew past the recorded ceiling one of those stock rows would
+start being admitted and would replace a real name with the client's spelling of
+it.
+
+This is the floor of the id space a private client allocates its own assets from.
+That is a choice the client makes rather than an observation of a moving file, so
+everything it adds sits above this and everything Blizzard ships sits below, and
+a supplement confined by `above(SUPPLEMENT_FLOOR)` cannot shadow a community name
+however far the listfile grows.
+"""
+
 
 def fetch_listfile(refresh: bool) -> Path:
     """Ensure the community listfile is current, and return its path.
@@ -108,32 +125,3 @@ def fetch_listfile(refresh: bool) -> Path:
         log(f"  current  {listfile.name} (tag {latest_tag}, "
             f"{listfile.stat().st_size:,} bytes)")
     return listfile
-
-
-def resolve_paths(listfile: Path, wanted: set[int]) -> dict[int, str]:
-    """The asset paths of the file ids asked for.
-
-    Streamed and filtered rather than loaded: the listfile is some 150 MB over
-    a few million rows, and one build references a fraction of them.
-
-    Args:
-        listfile: the cached listfile.
-        wanted: the file ids to keep. Anything else is discarded as it is read.
-
-    Returns:
-        File id to its path, holding only the ids the listfile names. A wanted
-        id the listfile has no row for is simply absent.
-    """
-    found: dict[int, str] = {}
-    with listfile.open(newline="", encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            fid_text, separator, path = line.partition(";")
-            if not separator:
-                continue
-            try:
-                fid = int(fid_text)
-            except ValueError:
-                continue
-            if fid in wanted:
-                found[fid] = path.strip()
-    return found

@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from .arrays import array_columns
 from .csv_tables import CsvTables
-from .hotfixes import HOTFIX_OVERLAYS
+from .hotfixes import hotfix_overlays
+from .listfile_tables import ListfileTables
 from .overlay import OverlaidTables, Overlay
 from .provider import Tables
 
-__all__ = ["HOTFIX_OVERLAYS", "CsvTables", "OverlaidTables", "Overlay", "Tables",
-           "array_columns"]
+__all__ = ["CsvTables", "ListfileTables", "OverlaidTables", "Overlay",
+           "Tables", "array_columns", "hotfix_overlays"]

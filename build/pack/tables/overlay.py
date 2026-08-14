@@ -2,8 +2,13 @@
 
 `OverlaidTables` implements `Tables` over two `Tables`, so a reader never asks
 for the overlay and cannot forget it. The merge is per column, unions rows
-rather than only replacing them, and applies a row only where the overlay is at
-least as current as the base.
+rather than only replacing them, and applies a row only where the overlay's own
+rule admits it.
+
+That rule is the supplement's, not the merge's: an overlay carries a predicate
+over one of its fields (see `supplements`), so the same merge serves a hotfix
+source judged on the build it was verified against and an asset-name supplement
+judged on the range of ids it is allowed to name.
 """
 
 from __future__ import annotations
@@ -11,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 
+from ..supplements import Admits, always
 from .provider import Tables
 
 
@@ -47,9 +53,16 @@ class Overlay:
     key: str = "ID"
     """The base column both sides identify a row by. Must be mapped."""
 
-    stamp: str | None = None
-    """The overlay column naming the client build a row was verified against;
-    `None` when the source does not stamp its rows."""
+    judged_on: str | None = None
+    """The overlay column whose text decides whether a row counts, or `None` to
+    judge the key itself."""
+
+    admits: Admits = always
+    """Whether a row counts, given the text of the field named by `judged_on`.
+
+    Declared with its bound already closed over, so the merge has nothing to
+    remember and cannot compare against a bound that never arrived.
+    """
 
     def __post_init__(self) -> None:
         if self.key not in self.columns:
@@ -72,19 +85,6 @@ class OverlaidTables:
     source: Tables | None = None
     """Where the revisions come from; `None` means every table passes through."""
 
-    build: int = 0
-    """The client build a stamped row is judged against; required whenever a
-    stamped overlay is present."""
-
-    def __post_init__(self) -> None:
-        # Refused here because the omission is otherwise invisible: a stamp
-        # compared against 0 lets every row through.
-        if self.source is not None and not self.build \
-                and any(overlay.stamp for overlay in self.overlays.values()):
-            raise ValueError(
-                "OverlaidTables: a stamped overlay needs the client build to "
-                "judge its rows against; pass build=<the build being packed>")
-
     def available(self, table: str) -> bool:
         """Whether the base has the table. An overlay cannot introduce one."""
         return self.base.available(table)
@@ -93,37 +93,46 @@ class OverlaidTables:
         """The base's column names. The overlay's spellings are its own."""
         return self.base.header(table)
 
-    def _applies(self, stamp: str) -> bool:
-        """Whether a row stamped `stamp` is current enough to apply.
-
-        A row stamped below the build being read describes an older client, so
-        applying it would put stale data over current data. An unreadable stamp
-        counts as older.
-        """
-        try:
-            return int(stamp) >= self.build
-        except ValueError:
-            return False
-
     def _revisions(self, source: Tables, overlay: Overlay,
                    columns: Sequence[str]) -> dict[str, tuple[str, dict[str, str]]]:
         """The overlay's rows for one table, keyed by the joinable key value.
 
         Each entry keeps the key's own text, which an added row comes out
         spelling. Only the overlay is buffered, so the base stays a stream.
+
+        A row the overlay's own rule refuses is dropped here rather than
+        further down, so a refused row cannot reach the merge at all.
+
+        The buffer is the sizing limit on this whole mechanism, and it is worth
+        knowing before wiring a large supplement: measured at roughly 400 bytes
+        per row, which is nothing for a hotfix table of a few hundred rows and
+        half a gigabyte for a source of well over a million. A supplement whose
+        rule confines it to ids the base cannot reach is disjoint from the base
+        by construction and so needs no join at all -- that is the shape to
+        reach for when one of those arrives.
         """
         supplied = [column for column in columns
                     if column in overlay.columns and column != overlay.key]
         asked = [overlay.columns[column] for column in (overlay.key, *supplied)]
-        if overlay.stamp:
-            asked.append(overlay.stamp)
+        if overlay.judged_on:
+            asked.append(overlay.judged_on)
+
+        # Judging the key is the whole rule for a supplement confined to a range
+        # of its own, and it reads the key through the same normalisation the
+        # join uses: the two sides are different exporters, so a rule reading
+        # `5000.0` strictly would refuse the row it exists to admit, silently.
+        # Resolved by what the field IS rather than by whether it was named, so
+        # that naming the key's own column means what omitting it means.
+        judges_key = overlay.judged_on in (None, overlay.columns[overlay.key])
 
         out: dict[str, tuple[str, dict[str, str]]] = {}
         for row in source.rows(overlay.table, asked):
-            if overlay.stamp and not self._applies(row[-1]):
+            key = join_key(row[0])
+            if not overlay.admits(key if judges_key else row[-1]):
                 continue
-            # zip stops at `supplied`, which drops the stamp without naming it
-            out[join_key(row[0])] = (row[0], dict(zip(supplied, row[1:])))
+            # zip stops at `supplied`, which drops a judged column without
+            # naming it
+            out[key] = (row[0], dict(zip(supplied, row[1:])))
         return out
 
     def rows(self, table: str, columns: Sequence[str]) -> Iterator[tuple[str, ...]]:

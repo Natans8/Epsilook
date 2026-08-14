@@ -10,6 +10,7 @@ from __future__ import annotations
 from .anims import (read_anim_replacements, read_animkit_anims,
                     read_animkit_bonesets)
 from .areas import Area, AreaGates, read_area_gates
+from .assets import resolve_paths
 from .attributes import attribute_bit, read_spell_attributes
 from .creatures import CreatureModels, read_creature_models
 from .delivery import Delivery, read_spell_delivery
@@ -88,4 +89,5 @@ __all__ = [
     "read_spell_values",
     "read_vehicle_seats",
     "read_visual_graph",
+    "resolve_paths",
 ]

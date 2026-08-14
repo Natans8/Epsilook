@@ -10,7 +10,7 @@ Layers, in data-flow order; imports point the other way, toward ``sources/``:
     encode/   per-column layouts the sections declare
     emit/     module files, the manifest, hashes, locale placement
 
-``drift``, ``targets``, ``progress`` and ``build`` are vocabulary any layer may
-import and import no layer. ``routes/``, ``derive/``, ``model/`` and
-``encode/`` name no file path and no URL.
+``drift``, ``targets``, ``supplements``, ``progress`` and ``build`` are
+vocabulary any layer may import and import no layer. ``routes/``, ``derive/``,
+``model/`` and ``encode/`` name no file path and no URL.
 """
