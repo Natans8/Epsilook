@@ -257,3 +257,27 @@ def test_slug_makes_one_path_segment(name: str, expected: str) -> None:
     from epsilon_walks import slug  # pylint: disable=import-outside-toplevel
 
     assert slug(name) == expected
+
+
+def test_a_choice_with_no_name_falls_back_to_its_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Most choices this client adds carry no display name. The option still
+    says what the texture is for, so the choice becomes an identifier rather
+    than the whole row being dropped."""
+    from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
+
+    nameless = dict(TABLES)
+    nameless["ChrCustomizationChoice"] = (["Name_lang", "ID", "ChrCustomizationOptionID"],
+                                          [("", "43", "9")])
+    fake_tables(monkeypatch, nameless)
+    assert customization_names(FakeStorage({}), FLOOR) == {
+        FLOOR + 1: f"epsilon/chrcustomization/eye_color/choice_43/{FLOOR + 1}.blp"}
+
+
+def test_a_texture_with_no_option_is_still_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The option is the half worth having; without it there is nothing to say."""
+    from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
+
+    nameless = dict(TABLES)
+    nameless["ChrCustomizationOption"] = (["Name_lang", "ID"], [("", "9")])
+    fake_tables(monkeypatch, nameless)
+    assert customization_names(FakeStorage({}), FLOOR) == {}

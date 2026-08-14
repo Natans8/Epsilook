@@ -298,9 +298,13 @@ def customization_names(storage: Reads, floor: int) -> dict[int, str]:
         if not choice:
             continue
         option = slug(option_names.get(option_of.get(choice, 0), ""))
-        chosen = slug(choice_names.get(choice, ""))
-        if not option or not chosen:
+        if not option:
             continue
+        # A choice this client added carries no display name of its own, and
+        # most of them do not. The option still names what the texture is for,
+        # which is the half worth having, so the choice falls back to its id --
+        # an identifier rather than an invented name.
+        chosen = slug(choice_names.get(choice, "")) or f"choice_{choice}"
         names[fid] = (f"{DERIVED_ROOT}/{CUSTOMIZATION_BUCKET}/{option}/"
                       f"{chosen}/{fid}.blp")
     return names

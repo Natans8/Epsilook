@@ -364,16 +364,32 @@ def coverage(merged: dict[int, str]) -> None:
     storage().encoding_keys(unnamed)  # type: ignore[attr-defined]
     here = [fid for fid in unnamed
             if storage().holds_locally(fid)]  # type: ignore[attr-defined]
-    kinds: Counter[str] = Counter()
-    for fid in tqdm(here, desc="classifying", unit="file"):
-        kinds[classify(storage().read(fid, local_only=True) or b"")] += 1  # type: ignore[attr-defined]
 
-    log(f"\n  of the {len(here):,} unnamed the install holds:")
+    # With the network allowed there is no reason to report on a subset. The
+    # question this answers is what the remainder IS, and an answer drawn only
+    # from the files that happen to be cached describes the cache instead.
+    opening = here if LOCAL_ONLY else unnamed
+    if opening is not here:
+        storage().prepare_network()  # type: ignore[attr-defined]
+
+    kinds: Counter[str] = Counter()
+    unreadable = 0
+    for fid in tqdm(opening, desc="classifying", unit="file"):
+        raw = storage().read(fid, local_only=LOCAL_ONLY)  # type: ignore[attr-defined]
+        if raw is None:
+            unreadable += 1
+        else:
+            kinds[classify(raw)] += 1
+
+    scope = "unnamed the install holds" if LOCAL_ONLY else "unnamed"
+    log(f"\n  of the {len(opening):,} {scope}:")
     for kind, count in kinds.most_common():
         log(f"    {kind:22} {count:>7,}")
-    if len(here) < len(unnamed):
-        log(f"    {DIM}{len(unnamed) - len(here):,} more are not held locally "
-            f"and were not opened{RESET}")
+    if unreadable:
+        log(f"    {'unreadable':22} {unreadable:>7,}")
+    if len(opening) < len(unnamed):
+        log(f"    {DIM}{len(unnamed) - len(opening):,} more are not held locally "
+            f"and were not opened; --network includes them{RESET}")
 
 
 def diff_against_vendored(merged: dict[int, str]) -> None:
