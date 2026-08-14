@@ -1,8 +1,13 @@
-"""What a spell's effects DO, who they are aimed at, and what they trigger.
+"""What a spell's effects DO, who they are aimed at, and the words for both.
 
 One row per effect rather than per spell, because a search scope binds its axes
 to one row: a query for an effect that is also aimed a certain way must mean a
 single effect that is both, not two effects that are one each.
+
+The name tables live here rather than in a vocabulary module of their own,
+because they are the codomain of these columns -- `effects` indexes
+`effectNames` and the target columns index the two target tables. Reading one
+without the others tells you nothing.
 """
 
 from __future__ import annotations
@@ -10,9 +15,8 @@ from __future__ import annotations
 from collections import Counter
 
 from ...derive import Reads
-from ...derive.links import link_kind_word
-from ...targets import IMPLICIT_PREFIX
 from ...measure import numeric_domain
+from ...targets import IMPLICIT_PREFIX
 from ..registry import register
 from ..section import (Cardinality, Count, Domain, Layout, Scope, Section,
                        SectionColumns)
@@ -54,36 +58,12 @@ def target_bits(reads: Reads) -> SectionColumns:
     """The caster, target or area bit each implicit target contributes.
 
     A row's icons are the union of its two targets' bits, so this rides as a
-    small map rather than as a fourth column as long as the mechanics rows --
-    which measured a hundred and ten kilobytes gzipped for the same fact.
+    small map rather than as a column as long as the mechanics rows -- which
+    measured a hundred and ten kilobytes gzipped for the same fact.
     """
     return {"bits": {str(target): reads.target_bits[target]
                      for target in used_targets(reads)
                      if reads.target_bits.get(target)}}
-
-
-def spell_links(reads: Reads) -> SectionColumns:
-    """Every edge from a spell to a spell it triggers, and the word it prints.
-
-    One direction only: "triggered by" is these same edges read backwards, so
-    the app inverts the index at load rather than the pack carrying it twice.
-    A pair joined in two different ways stays two rows, since those are two
-    distinct facts; the renderer merges them into one chip listing both words.
-    """
-    kinds: dict[str, int] = {}
-    rows = []
-    for source, destination, effect, aura in sorted(reads.effects.links):
-        word = link_kind_word(effect, aura, reads.effect_names, reads.aura_names)
-        rows.append((source, destination, kinds.setdefault(word, len(kinds))))
-    # Two effect rows differing only in a column the pack does not ship are one
-    # edge once the word is what identifies it.
-    rows = sorted(set(rows))
-    return {"srcIds": [row[0] for row in rows],
-            "dstIds": [row[1] for row in rows],
-            "kinds": [row[2] for row in rows],
-            "targets": [reads.effects.link_targets.get((row[0], row[1]), 0)
-                        for row in rows],
-            "kindNames": list(kinds)}
 
 
 SPELL_MECHANICS = register(Section(
@@ -144,58 +124,4 @@ IMPLICIT_TARGET_BITS = register(Section(
     columns=("bits",),
     layout=Layout.BARE,
     reads=("rows", "target_bits"),
-))
-
-SPELL_LINKS = register(Section(
-    name="spellLinks",
-    doc="Every edge from a spell to one it triggers, and the word that edge prints.",
-    module="core",
-    produce=spell_links,
-    columns=("srcIds", "dstIds", "kinds", "targets", "kindNames"),
-    reads=("effects", "effect_names", "aura_names"),
-    counts=(Count("spellLinks", lambda columns, _r: len(columns["srcIds"])),
-            Count("linkKinds", lambda columns, _r: len(columns["kindNames"]))),
-))
-
-
-def spell_keybinds(reads: Reads) -> SectionColumns:
-    """Which key an aura stops working while it holds."""
-    rows = sorted((spell, override)
-                  for spell, overrides in reads.effects.keybinds.ids.items()
-                  for override in overrides)
-    return {"spellIds": [row[0] for row in rows],
-            "overrideIds": [row[1] for row in rows],
-            "targets": [reads.effects.keybinds.masks.get(row, 0) for row in rows]}
-
-
-def keybinds(reads: Reads) -> SectionColumns:
-    """Each referenced override's key, its timing word, and what it casts."""
-    used = sorted({override for overrides in reads.effects.keybinds.ids.values()
-                   for override in overrides})
-    return {"ids": used,
-            "functions": [reads.keybinds[override].function for override in used],
-            "whens": [reads.keybinds[override].when for override in used],
-            # What retail casts in the key's place. Shipped for a later pass
-            # and not displayed, since Epsilon only disables the key.
-            "spells": [reads.keybinds[override].spell for override in used]}
-
-
-SPELL_KEYBINDS = register(Section(
-    name="spellKeybinds",
-    doc="Which keybound override an aura suppresses while it holds.",
-    module="core",
-    produce=spell_keybinds,
-    columns=("spellIds", "overrideIds", "targets"),
-    reads=("effects",),
-    counts=(Count("spellKeybinds", lambda columns, _r: len(columns["spellIds"])),),
-))
-
-KEYBINDS = register(Section(
-    name="keybinds",
-    doc="Each suppressed key, when it is suppressed, and what replaces it.",
-    module="core",
-    produce=keybinds,
-    columns=("ids", "functions", "whens", "spells"),
-    reads=("effects", "keybinds"),
-    counts=(Count("keybinds", lambda columns, _r: len(columns["ids"])),),
 ))
