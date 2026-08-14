@@ -117,13 +117,13 @@ anywhere that says "this spell shows a sheep".
 
 ```mermaid
 flowchart LR
-    SN["SpellName<br/>ID · Name_lang"]
-    SP["Spell<br/>ID · NameSubtext_lang<br/>Description_lang · AuraDescription_lang"]
+    SN["SpellName<br/>ID · Name_lang<br/>one row per spell"]
+    SP["Spell<br/>ID · NameSubtext_lang<br/>Description_lang · AuraDescription_lang<br/>one row per spell"]
     SM["SpellMisc<br/>SpellID · DifficultyID<br/>SpellIconFileDataID · SchoolMask<br/>Attributes_0..N · DurationIndex · RangeIndex"]
     SE["SpellEffect<br/>SpellID · DifficultyID · EffectIndex<br/>Effect · EffectAura<br/>EffectMiscValue_0 · _1<br/>ImplicitTarget_0 · _1<br/>EffectBasePoints · EffectTriggerSpell"]
     SN -.->|"same ID"| SP
-    SN --> SM
-    SN --> SE
+    SN -->|"one row per difficulty"| SM
+    SN -->|"one row per effect,<br/>times each difficulty"| SE
 ```
 
 Two traps live here. **A spell has one row per difficulty** on several of these, and the row a player sees is the base
@@ -258,15 +258,47 @@ sound depending entirely on the column beside it, and it is the half a relationa
 
 ### The spine: spell to visual to kit
 
-Almost everything visible hangs off two hops, both many-to-many, and both carrying a target mask.
+Almost everything visible hangs off this, and the shape is a composition rather than a chain of single hops. Every
+edge is one-to-many, so a spell fans out into a tree:
 
 ```mermaid
 flowchart LR
-    S["spell"] -->|SpellXSpellVisual| V["visual"]
-    V -->|redirect columns| V
-    V -->|SpellVisualEvent| K["kit"]
-    K -->|SpellVisualKitEffect| P["payload"]
+    S["a spell"] -->|"SpellXSpellVisual<br/>many"| V["a SpellVisual<br/>the whole performance"]
+    V -->|"redirect columns<br/>0..4, and may cycle"| V
+    V -->|"SpellVisualEvent<br/>many: the timeline"| E["an event<br/>StartEvent to EndEvent<br/>with ms offsets<br/>TargetType"]
+    E -->|"one"| K["a SpellVisualKit<br/>one bundle, played at that moment"]
+    K -->|"SpellVisualKitEffect<br/>many, each typed"| P["a payload<br/>one of ten tables"]
+    K -->|"SpellVisualKitModelAttach<br/>many"| A["a model at an attachment point"]
 ```
+
+**A visual is a performance, and its events are its timeline.** An event does not merely say "this kit belongs to
+this visual". It carries a start event and an end event with millisecond offsets on both, so it schedules a kit
+*within a window*: precast, cast, impact, the life of a channel, the moment an aura is applied or falls off. A
+fireball's visual is not one kit — it is the caster's precast glow, the cast animation, the missile, and the impact
+burst, each its own event on the same visual.
+
+It also carries `TargetType`, so the same visual can play different content to different people, which is where the
+target mask comes from.
+
+**The aura events are split out from the rest,** because they are the only ones whose "target" can disagree with the
+spell's. Everything else shares the cast's frame. The full set of start events is not publicly documented and the app
+does not need it; what it needs is which events mean the aura phase, and that is declared.
+
+**The pack keeps none of the timing.** The walk uses the phase to separate aura events and then flattens the event
+away, so a payload reaches the pack attached to its spell rather than to the moment it fires, and the four offset
+columns are not read at all. That is a deliberate simplification rather than an oversight — the pack's shape is
+spell to payload, and a moment would be a grouping level between them.
+
+**A kit is a bundle, and it used to be a record with fixed slots.** In the original client a kit was one row with a
+column per attachment — head, chest, base, left hand, right hand, breath, three special slots — plus a sound, a
+camera shake and up to four character procedures. Modern builds normalised those fixed columns into rows:
+`SpellVisualKitEffect` is a variable-length list of `(EffectType, Effect)` pairs, and `SpellVisualKitModelAttach`
+holds the models with their attachment points.
+
+**That normalisation is the whole reason the type dispatch exists.** When the slots were columns, the column name
+told you what the value meant. Once they became rows, the meaning moved into `EffectType`, and reading `Effect`
+without it reads a colour as a model. Everything in [Routes that start at a visual](#routes-that-start-at-a-visual) is
+a consequence of that one change.
 
 **A visual can redirect to another visual** that the client substitutes under some condition: what the caster sees,
 what a hostile target sees, a low-violence variant, a reduced-camera-movement variant. Only the first two say anything
