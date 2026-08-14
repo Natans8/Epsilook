@@ -453,17 +453,43 @@ flowchart LR
 ```
 
 **A visual is a performance, and its events are its timeline.** An event does not merely say "this kit belongs to this
-visual". It carries a start event and an end event with millisecond offsets on both, so it schedules a kit *within a
-window*: precast, cast, impact, the life of a channel, the moment an aura is applied or falls off. A fireball's visual
-is not one kit — it is the caster's precast glow, the cast animation, the missile, and the impact burst, each its own
-event on the same visual.
+visual". It names a start event and an end event, so it schedules a kit *within a window*. A fireball's visual is not
+one kit — it is the caster's precast glow, the cast animation, the missile, and the impact burst, each its own event on
+the same visual.
+
+**The window is bounded by named events, not by a clock.** Each event is one of thirteen the client fires, and they run
+in the order a spell lives:
+
+```mermaid
+timeline
+    title A visual's phases, and the events that bound them
+    section The cast's own frame
+        precast : 1 start : 2 end
+        cast : 3 fires
+        travel : 4 start : 5 end
+        impact : 6 fires
+    section Windows with a life of their own
+        aura : 7 start : 8 end
+        area trigger : 9 start : 10 end
+        channel : 11 start : 12 end
+    section Held open by nothing
+        plays once : 13 as the end event : what cast and impact use
+```
+
+The pairs are almost all matched brackets, and the populations say which shapes are ordinary — on 9.2.7, impact-then-
+done is 54,957 rows, cast-then-done 49,810, the aura window 47,470, precast 26,514, the channel window 8,857.
+
+**The four millisecond-offset columns are a rare nudge, not the mechanism.** They shift a bound away from its event,
+and on 9.2.7 exactly **1,037 of 207,241 event rows — 0.50% — carry a non-zero offset in any of the four**. Every one of
+Fireball's three events has four zeros. So a diagram of this with a time axis would be inventing the thing it drew;
+the ordering above is what the data actually says.
 
 It also carries `TargetType`, so the same visual can play different content to different people, which is where the
 target mask comes from.
 
 **The aura events are split out from the rest,** because they are the only ones whose "target" can disagree with the
-spell's. Everything else shares the cast's frame. The full set of start events is not publicly documented and the app
-does not need it; what it needs is which events mean the aura phase, and that is declared.
+spell's. Everything else shares the cast's frame. The events are enumerated by `SpellVisualEventEvent` in WoWDBDefs'
+`meta/enums`, but the app needs only which of them mean the aura phase, and that is declared.
 
 **The pack keeps none of the timing.** The walk uses the phase to separate aura events and then flattens the event away,
 so a payload reaches the pack attached to its spell rather than to the moment it fires, and the four offset columns are
