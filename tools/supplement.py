@@ -416,9 +416,16 @@ def referrers(merged: dict[int, str]) -> None:
     # cheap to reject before it is parsed.
     width = {len(str(fid)) for fid in unnamed}
 
+    # Absent and unreadable are different answers and the difference decides
+    # what the sweep is worth: a table this client does not ship says nothing,
+    # while one that fails to parse is a hole in the result.
+    root = storage().remote.root.keys  # type: ignore[attr-defined]
     found: dict[str, set[int]] = {}
-    unreadable = 0
+    absent = unreadable = 0
     for name, fid in tqdm(sorted(ids.items()), desc="tables", unit="table"):
+        if fid not in root:
+            absent += 1
+            continue
         table = open_positional(storage(), fid)  # type: ignore[arg-type]
         if table is None:
             unreadable += 1
@@ -429,9 +436,12 @@ def referrers(merged: dict[int, str]) -> None:
             found[name] = hits
 
     reached = set().union(*found.values()) if found else set()
-    log(f"\n  {len(ids) - unreadable:,} tables read, {unreadable:,} unreadable")
+    log(f"\n  {len(ids) - absent - unreadable:,} tables read; {absent:,} the client "
+        f"does not ship, {unreadable:,} unreadable")
     log(f"  {len(reached):,} of the {len(unnamed):,} unnamed are mentioned somewhere")
-    log(f"  {len(unnamed) - len(reached):,} are mentioned by no table at all\n")
+    log(f"  {len(unnamed) - len(reached):,} are mentioned by no table at all"
+        + (f"  {RED}(and {unreadable:,} tables went unread){RESET}" if unreadable else "")
+        + "\n")
     for name, hits in sorted(found.items(), key=lambda kv: -len(kv[1]))[:25]:
         log(f"    {name:36} {len(hits):>6,}")
 
