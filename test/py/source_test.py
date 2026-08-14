@@ -12,12 +12,9 @@ asserting the fake instead.
 
 from __future__ import annotations
 
-import email.message
-import io
 import json
 import urllib.error
 import urllib.request
-from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,38 +26,12 @@ from pack.sources.listfile import LISTFILE_ASSET, latest_release
 from pack.sources.source import (Extracted, Fetch, Fetched, Gathered, Origin,
                                  Part, Source, each)
 from pack.sources.tdb import TDB_TABLES, Distill
+from support import Network
 
 BODY = b"ID,Name\n1,Fireball\n"
 
 ASSET = "https://example.invalid/asset.csv"
 RELEASES = "https://example.invalid/releases/latest"
-
-
-@dataclass
-class Network:
-    """The network, as addresses mapped to bodies.
-
-    Installed over `urllib.request.urlopen`, which every fetch policy reaches
-    through. An address it does not carry answers 404, which is how a build
-    that predates a table finds out.
-    """
-
-    bodies: dict[str, bytes] = field(default_factory=dict)
-
-    asked: Counter[str] = field(default_factory=Counter)
-    """One count per request made, so a policy that should not have made one
-    can be caught doing it."""
-
-    def open(self, request: urllib.request.Request, timeout: float | None = None
-             ) -> io.BytesIO:
-        """Stand in for `urlopen`: bytes, as a context manager."""
-        address = request.full_url
-        self.asked[address] += 1
-        body = self.bodies.get(address)
-        if body is None:
-            raise urllib.error.HTTPError(address, 404, "Not Found",
-                                         email.message.Message(), None)
-        return io.BytesIO(body)
 
 
 @pytest.fixture(name="network")

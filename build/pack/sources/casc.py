@@ -21,9 +21,11 @@ serves the content it names. A private server answers both from one host; the
 vendor publishes versions on a version service and content on a network it
 names in a second document.
 
-Five things here are easy to get wrong and fail quietly rather than loudly.
+Six things here are easy to get wrong and fail quietly rather than loudly.
 They are marked at the code that handles them, and they are: the config path a
-service advertises is not the one it serves; a page count read at the wrong
+service advertises is not the one it serves; a network that will not say
+whether an object exists refuses a miss rather than denying it, so the archive
+route is reached through two status codes; a page count read at the wrong
 offset reads as billions of pages and looks like a hang; a localised file
 appears in the root once per locale and keeping the first match returns
 whichever sorts first; an archive index whose offsets are six bytes wide is a
@@ -322,7 +324,7 @@ def read_config(text: str) -> dict[str, list[str]]:
 
 
 class Encrypted(Exception):
-    """A chunk sealed with a key the public service does not publish."""
+    """A chunk sealed with a key nothing here carries."""
 
 
 def decode_blte(blob: bytes, *, skip_encrypted: bool = True) -> bytes:
@@ -506,12 +508,9 @@ class Root:
     blocks: int
     """How many blocks the file held. A self-check on the read."""
 
-    records: int
-    """How many records across every locale. Matches the file's own header."""
-
     header: Header
-    """What the file said about itself. Kept because the record count is a
-    self-check on the walk and the version says which shape was walked."""
+    """What the file said about itself: how many records the walk had to find,
+    and which block shape it was reading them in."""
 
     @classmethod
     def parse(cls, blob: bytes, locale: int = LOCALE_ENUS) -> Root:
@@ -525,7 +524,14 @@ class Root:
             The parsed root.
 
         Raises:
-            ValueError: if the blob is not a root file.
+            ValueError: if the blob is not a root file, or the walk did not
+                land on the number of records the file itself declares. That
+                second test is what turns a block layout this does not know
+                into a failure: a stride that is wrong by any amount keeps
+                consuming bytes and yields file ids that are merely wrong,
+                which is the one outcome nothing downstream can detect. It
+                holds on both known services, at 2,396,959 records and
+                3,255,987.
         """
         header = Header.parse(blob)
         keys: dict[int, bytes] = {}
@@ -556,7 +562,12 @@ class Root:
                 file_id += delta + 1
                 position = content_keys + 16 * index
                 keys[file_id] = blob[position:position + 16]
-        return cls(keys=keys, blocks=blocks, records=records, header=header)
+        if records != header.total:
+            raise ValueError(
+                f"root manifest version {header.version} walked {records:,} "
+                f"records over {blocks:,} blocks, and the file declares "
+                f"{header.total:,}")
+        return cls(keys=keys, blocks=blocks, header=header)
 
 
 def _block(blob: bytes, at: int, header: Header) -> tuple[int, int, int, int]:
@@ -589,6 +600,57 @@ class Located:
     size: int
 
 
+INDEX_FOOTER = 28
+"""Trailing bytes of an archive index that describe how to read the rest."""
+
+
+def read_index(blob: bytes) -> Iterator[tuple[bytes, int, int]]:
+    """Every encoding key an archive index declares, with where its bytes are.
+
+    The archive is not named here because an index does not name it: a reader
+    over the network knows it from what it asked for, and a reader over an
+    install knows it from the file's own name. That is the whole of what the
+    two differ on, which is why the walk is written once.
+
+    Args:
+        blob: the index file.
+
+    Yields:
+        Each ``(encoding key, offset, size)``, skipping the zero keys that are
+        a block's padding rather than a file. Nothing at all for an index that
+        is not an ordinary one: only offsets four bytes wide are. Six means a
+        group index, whose leading two bytes are an archive number rather than
+        part of the offset, so reading it this way resolves keys to nonsense;
+        zero means a loose-file index.
+    """
+    if len(blob) < INDEX_FOOTER:
+        return
+    footer = len(blob) - INDEX_FOOTER
+    block_bytes = blob[footer + 11] * 1024
+    offset_bytes = blob[footer + 12]
+    size_bytes = blob[footer + 13]
+    key_bytes = blob[footer + 14]
+    entries = struct.unpack_from("<I", blob, footer + 16)[0]
+    if offset_bytes != 4 or not block_bytes:
+        return
+
+    width = key_bytes + size_bytes + offset_bytes
+    per_block = block_bytes // width
+    read = 0
+    while read < entries:
+        at = (read // per_block) * block_bytes
+        for _ in range(min(per_block, entries - read)):
+            key = blob[at:at + key_bytes]
+            size = int.from_bytes(blob[at + key_bytes:at + key_bytes + size_bytes],
+                                  "big")
+            offset = int.from_bytes(blob[at + key_bytes + size_bytes:at + width],
+                                    "big")
+            if int.from_bytes(key, "big"):
+                yield key, offset, size
+            at += width
+            read += 1
+
+
 class Storage:
     """One build's CASC, addressed by file data id.
 
@@ -613,7 +675,6 @@ class Storage:
                 own cache by default.
             locale: the root locale mask to keep.
         """
-        self.service = service
         self.cache = cache or CACHE_DIR / "casc" / service.label
         self.cache.mkdir(parents=True, exist_ok=True)
 
@@ -634,14 +695,14 @@ class Storage:
         # directly, which is what breaks the circularity: everything else is
         # named by a content key and needs this file to be resolvable at all.
         encoding_key = bytes.fromhex(self.build_config["encoding"][1])
-        self.encoding = decode_blte(self._fetch(encoding_key, "encoding"))
+        self.encoding = decode_blte(self._fetch(encoding_key))
 
         root_content_key = bytes.fromhex(self.build_config["root"][0])
         root_key = find_encoding_keys(self.encoding, {root_content_key})
         if root_content_key not in root_key:
             raise LookupError("the root's content key is not in the encoding file")
         self.root = Root.parse(
-            decode_blte(self._fetch(root_key[root_content_key], "root")), locale)
+            decode_blte(self._fetch(root_key[root_content_key])), locale)
         log(f"  {len(self.root.keys):,} file ids, {self.root.blocks:,} blocks")
         self._archives: dict[bytes, Located] | None = None
 
@@ -690,14 +751,14 @@ class Storage:
             encoding_key = resolved.get(content_key)
             if encoding_key is not None:
                 out[file_id] = decode_blte(
-                    self._fetch(encoding_key, f"fid{file_id}"))
+                    self._fetch(encoding_key))
         return out
 
     def _config(self, digest: str) -> str:
         """One configuration file, cached."""
         return self._get_text(self.cdn.config_url(digest), name=digest)
 
-    def _fetch(self, encoding_key: bytes, name: str) -> bytes:
+    def _fetch(self, encoding_key: bytes) -> bytes:
         """The raw container for one encoding key, loose or from an archive.
 
         A loose fetch is tried first because it costs one request against an
@@ -706,8 +767,16 @@ class Storage:
         of the network rather than of the file: a private service serves most
         of its content loose, and the vendor's serves almost none of it that
         way, so on retail this is a request spent to learn that.
+
+        Cached under the encoding key, which is what the bytes are addressed
+        by. Naming the file for what was wanted instead -- the encoding table,
+        the root, a file data id -- outlives the build it was fetched for, and
+        every one of those names is stable while its content is not: a service
+        that has since patched would answer a warm cache with the previous
+        build's bytes. Content addressing also shares what did not change,
+        which between two builds is nearly everything.
         """
-        cached = self.cache / f"{name}.blte"
+        cached = self.cache / f"{encoding_key.hex()}.blte"
         if cached.exists() and cached.stat().st_size:
             return cached.read_bytes()
         try:
@@ -750,52 +819,29 @@ class Storage:
         return self._archives
 
     def _read_archive_index(self, name: str) -> dict[bytes, Located]:
-        """One archive index, whose entries are key, size and offset.
-
-        Only an index whose offsets are four bytes wide is one of these. Six
-        means a group index, where the leading two bytes are an archive number
-        rather than part of the offset, so reading it as an ordinary index
-        resolves keys to nonsense; zero means a loose-file index.
+        """One archive index, named for the archive it was asked for.
 
         Returns:
             Encoding key to where it sits in this archive; empty for an index
             that is absent or is not an ordinary one.
+
+        Raises:
+            urllib.error.HTTPError: if the network failed to answer rather than
+                answering that it does not serve this. The distinction is the
+                whole point: reading any error as an empty index drops that
+                archive's entire contents from the map, and the files in it
+                then fail as "in no archive the network declares", which is a
+                statement about the network that is not true.
         """
         try:
             blob = self._get(f"{self.cdn.data_url(name)}.index",
                              name=f"{name}.index")
-        except urllib.error.HTTPError:
+        except urllib.error.HTTPError as exc:
+            if exc.code not in NOT_SERVED:
+                raise
             return {}
-        if len(blob) < 28:
-            return {}
-
-        footer = len(blob) - 28
-        block_bytes = blob[footer + 11] * 1024
-        offset_bytes = blob[footer + 12]
-        size_bytes = blob[footer + 13]
-        key_bytes = blob[footer + 14]
-        entries = struct.unpack_from("<I", blob, footer + 16)[0]
-        if offset_bytes != 4:
-            return {}
-
-        width = key_bytes + size_bytes + offset_bytes
-        per_block = block_bytes // width
-        found: dict[bytes, Located] = {}
-        read = 0
-        while read < entries:
-            at = (read // per_block) * block_bytes
-            for _ in range(min(per_block, entries - read)):
-                key = blob[at:at + key_bytes]
-                size = int.from_bytes(blob[at + key_bytes:at + key_bytes + size_bytes],
-                                      "big")
-                offset = int.from_bytes(blob[at + key_bytes + size_bytes:at + width],
-                                        "big")
-                # A zero key is block padding rather than a file.
-                if int.from_bytes(key, "big"):
-                    found[key] = Located(name, offset, size)
-                at += width
-                read += 1
-        return found
+        return {key: Located(name, offset, size)
+                for key, offset, size in read_index(blob)}
 
     def _get(self, url: str, headers: dict | None = None,
              name: str | None = None) -> bytes:

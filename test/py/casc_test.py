@@ -13,7 +13,6 @@ produce it.
 
 from __future__ import annotations
 
-import io
 import struct
 import urllib.error
 import urllib.request
@@ -24,6 +23,7 @@ import pytest
 
 from pack.sources.casc import (EPSILON, RETAIL, Blizzard, Cdn, Header, Root,
                                SelfHosted, Storage)
+from support import Network
 
 LOCALE_ENUS = 0x2
 LOCALE_KOKR = 0x4
@@ -67,8 +67,9 @@ def deltas(fids: Sequence[int]) -> list[int]:
 
 
 def key(number: int) -> bytes:
-    """One content key, distinguishable from another."""
-    return bytes([number]) * 16
+    """One content key, distinguishable from another and derived from the id
+    it belongs to, so a walk landing on the wrong record is visible."""
+    return number.to_bytes(4, "big") * 4
 
 
 def arrays(fids: Sequence[int], *, names: bool) -> bytes:
@@ -101,16 +102,39 @@ the two headers: the older one puts a file count where the newer one puts its
 own length."""
 
 
-def root_v1(*blocks: bytes, total: int = TOTAL, named: int = NAMED) -> bytes:
-    """A root whose header is the magic and two counts."""
-    return b"TSFM" + struct.pack("<II", total, named) + b"".join(blocks)
+def counted(blocks: Sequence[bytes]) -> int:
+    """How many records the blocks hold. The count is the first field of a
+    block in both shapes, which is the one thing the two agree on."""
+    return sum(struct.unpack_from("<I", block, 0)[0] for block in blocks)
 
 
-def root_v2(*blocks: bytes, version: int = 2, total: int = TOTAL,
-            named: int = NAMED) -> bytes:
+def root_v1(*blocks: bytes, total: int | None = None, named: int = 0) -> bytes:
+    """A root whose header is the magic and two counts.
+
+    The total defaults to what the blocks actually hold, because the walk is
+    checked against it. An older header needs that to exceed the size a newer
+    header could state, so a root written here carries `BULK`.
+    """
+    return (b"TSFM" + struct.pack("<II", counted(blocks) if total is None
+                                  else total, named) + b"".join(blocks))
+
+
+def root_v2(*blocks: bytes, version: int = 2, total: int | None = None,
+            named: int = 0) -> bytes:
     """A root whose header states its own length and its manifest version."""
-    return (b"TSFM" + struct.pack("<IIIII", 24, version, total, named, 0)
-            + b"".join(blocks))
+    return (b"TSFM" + struct.pack("<IIIII", 24, version,
+                                  counted(blocks) if total is None else total,
+                                  named, 0) + b"".join(blocks))
+
+
+BULK = block_v1(range(1000, 2100), locale=LOCALE_KOKR)
+"""A block of another locale, holding more records than a newer header could
+state as its own length.
+
+Two jobs, and both are what a real root looks like: it puts the older header's
+count above the discriminator, and it is the bulk of records that a walk counts
+while an English reader keeps none of them.
+"""
 
 
 def test_config_url_is_not_the_path_the_document_advertises() -> None:
@@ -176,13 +200,13 @@ def test_a_document_naming_no_host_is_an_error() -> None:
 
 
 def test_the_older_header_carries_counts_where_the_newer_carries_a_size() -> None:
-    header = Header.parse(root_v1())
+    header = Header.parse(root_v1(total=TOTAL, named=NAMED))
     assert (header.version, header.blocks_at) == (0, 12)
     assert (header.total, header.named) == (TOTAL, NAMED)
 
 
 def test_the_newer_header_states_its_own_length_and_version() -> None:
-    header = Header.parse(root_v2())
+    header = Header.parse(root_v2(total=TOTAL, named=NAMED))
     assert (header.version, header.blocks_at) == (2, 24)
     assert (header.total, header.named) == (TOTAL, NAMED)
 
@@ -194,16 +218,16 @@ def test_anything_else_is_not_a_root_file() -> None:
 
 def test_only_the_wanted_locale_is_kept() -> None:
     root = Root.parse(root_v1(block_v1([5, 6, 9]),
-                              block_v1([5, 6], locale=LOCALE_KOKR)))
+                              block_v1([5, 6], locale=LOCALE_KOKR), BULK))
     assert sorted(root.keys) == [5, 6, 9]
-    assert (root.blocks, root.records) == (2, 5)
+    assert root.blocks == 3
 
 
 def test_a_flagged_block_is_eight_bytes_narrower_per_record() -> None:
     """The stride is what the next block's ids depend on, so a second block
     reading correctly is the assertion."""
     root = Root.parse(root_v1(block_v1([1, 2], flags=NO_NAME_HASH, names=False),
-                              block_v1([40, 41])))
+                              block_v1([40, 41]), BULK))
     assert sorted(root.keys) == [1, 2, 40, 41]
     assert root.keys[40] == key(40)
 
@@ -211,9 +235,9 @@ def test_a_flagged_block_is_eight_bytes_narrower_per_record() -> None:
 def test_a_root_naming_every_record_keeps_the_name_hashes() -> None:
     """The flag is not honoured where the header says nothing is unnamed, and
     a reader that skipped those bytes anyway would misread what follows."""
+    every = counted([block_v1([1, 2]), block_v1([40, 41]), BULK])
     root = Root.parse(root_v1(block_v1([1, 2], flags=NO_NAME_HASH),
-                              block_v1([40, 41]),
-                              total=TOTAL, named=TOTAL))
+                              block_v1([40, 41]), BULK, named=every))
     assert sorted(root.keys) == [1, 2, 40, 41]
     assert root.keys[40] == key(40)
 
@@ -223,7 +247,15 @@ def test_the_newer_block_puts_the_locale_first() -> None:
                               block_v2([70], locale=LOCALE_KOKR)))
     assert sorted(root.keys) == [5, 6, 9]
     assert root.header.version == 2
-    assert (root.blocks, root.records) == (2, 4)
+    assert root.blocks == 2
+
+
+def test_a_walk_that_misses_the_declared_record_count_is_an_error() -> None:
+    """A block layout this does not know keeps consuming bytes and yields file
+    ids that are merely wrong, so the file's own total is the only thing that
+    can catch it."""
+    with pytest.raises(ValueError, match="declares"):
+        Root.parse(root_v1(block_v1([1, 2]), total=TOTAL))
 
 
 def test_the_newer_block_splits_the_content_flags_across_three_fields() -> None:
@@ -283,35 +315,8 @@ AT = 64
 return something other than the file."""
 
 
-class FakeNetwork:
-    """The addresses a service publishes, and nothing else.
-
-    An address it does not carry answers 403 rather than 404, which is what
-    the vendor's own network does and what the loose-then-archive fallback
-    has to read as a miss.
-    """
-
-    def __init__(self, bodies: dict[str, bytes]) -> None:
-        self.bodies = bodies
-        self.asked: list[tuple[str, str]] = []
-        """Each request as its address and the range it wanted, if any."""
-
-    def open(self, request: urllib.request.Request,
-             timeout: float | None = None) -> io.BytesIO:
-        wanted = request.headers.get("Range", "")
-        self.asked.append((request.full_url, wanted))
-        body = self.bodies.get(request.full_url)
-        if body is None:
-            raise urllib.error.HTTPError(request.full_url, 403, "Forbidden",
-                                         None, None)  # type: ignore[arg-type]
-        if wanted:
-            first, last = wanted.removeprefix("bytes=").split("-")
-            body = body[int(first):int(last) + 1]
-        return io.BytesIO(body)
-
-
 @pytest.fixture(name="network")
-def _network(monkeypatch: pytest.MonkeyPatch) -> FakeNetwork:
+def _network(monkeypatch: pytest.MonkeyPatch) -> Network:
     """A whole build, published where a `Blizzard` service would look for it.
 
     Its one file sits inside an archive rather than loose, which is the shape
@@ -324,7 +329,7 @@ def _network(monkeypatch: pytest.MonkeyPatch) -> FakeNetwork:
     contained = blte(PAYLOAD)
     cdn = Cdn("cdn.example.invalid")
 
-    network = FakeNetwork({
+    network = Network({
         RETAIL.versions_url:
             "Region!STRING:0|BuildConfig!HEX:16|CDNConfig!HEX:16|"
             "VersionsName!String:0\n"
@@ -339,17 +344,17 @@ def _network(monkeypatch: pytest.MonkeyPatch) -> FakeNetwork:
         cdn.config_url(cdn_config): f"archives = {archive}\n".encode(),
         cdn.data_url(encoding_key.hex()): blte(encoding_file({
             root_content: root_key, file_content: file_key})),
-        cdn.data_url(root_key.hex()): blte(root_v1(block_v1([FID]))),
+        cdn.data_url(root_key.hex()): blte(root_v1(block_v1([FID]), BULK)),
         f"{cdn.data_url(archive)}.index":
             archive_index({file_key: (AT, len(contained))}),
         cdn.data_url(archive): b"\0" * AT + contained,
-    })
+    }, missing=403)
     monkeypatch.setattr(urllib.request, "urlopen", network.open)
     return network
 
 
 def test_the_whole_chain_reaches_a_file_the_archive_holds(
-        network: FakeNetwork, tmp_path: Path) -> None:
+        network: Network, tmp_path: Path) -> None:
     """Versions, the region's row, the network, both configs, the encoding
     table, the root, and one file that is not served loose."""
     storage = Storage(RETAIL, cache=tmp_path / "cache")
@@ -358,32 +363,31 @@ def test_the_whole_chain_reaches_a_file_the_archive_holds(
 
 
 def test_a_loose_miss_answered_403_still_reaches_the_archive(
-        network: FakeNetwork, tmp_path: Path) -> None:
+        network: Network, tmp_path: Path) -> None:
     """A reader keyed on 404 alone raises here rather than falling through,
     and on a network that archives almost everything that is every file."""
     storage = Storage(RETAIL, cache=tmp_path / "cache")
     storage.open(FID)
     refused = Cdn("cdn.example.invalid").data_url(key(4).hex())
-    assert (refused, "") in network.asked
-    assert any(url.endswith(".index") for url, _ in network.asked)
+    assert refused in network.asked
+    assert any(url.endswith(".index") for url in network.asked)
 
 
 def test_the_archive_is_read_by_range_rather_than_whole(
-        network: FakeNetwork, tmp_path: Path) -> None:
+        network: Network, tmp_path: Path) -> None:
     storage = Storage(RETAIL, cache=tmp_path / "cache")
     storage.open(FID)
     archive = Cdn("cdn.example.invalid").data_url("ab" * 16)
-    ranges = [wanted for url, wanted in network.asked if url == archive]
-    assert ranges == [f"bytes={AT}-{AT + len(blte(PAYLOAD)) - 1}"]
+    assert network.ranged == [
+        (archive, f"bytes={AT}-{AT + len(blte(PAYLOAD)) - 1}")]
 
 
 def test_a_second_open_asks_the_network_for_nothing(
-        network: FakeNetwork, tmp_path: Path) -> None:
+        network: Network, tmp_path: Path) -> None:
     """Every fetched blob is cached under the service's own label, so the
     second run of anything costs nothing."""
     cache = tmp_path / "cache"
     Storage(RETAIL, cache=cache).open(FID)
     network.asked.clear()
     assert Storage(RETAIL, cache=cache).open(FID) == PAYLOAD
-    assert [url for url, _ in network.asked] == [RETAIL.versions_url,
-                                                 RETAIL.cdns_url]
+    assert list(network.asked) == [RETAIL.versions_url, RETAIL.cdns_url]

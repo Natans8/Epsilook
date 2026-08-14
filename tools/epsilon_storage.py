@@ -32,7 +32,8 @@ from typing import Protocol
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 
 from pack.sources.casc import (EPSILON, Located as Remote,  # noqa: E402
-                               Storage, decode_blte, find_encoding_keys)
+                               Storage, decode_blte, find_encoding_keys,
+                               read_index)
 from tqdm import tqdm  # noqa: E402
 
 HEAD_CAP = 16 * 1024
@@ -65,9 +66,6 @@ _OFFSET_BITS = 30
 
 _ENTRY_HEADER = 30
 """Bytes of per-file header inside an archive, before the container begins."""
-
-_INDEX_FOOTER = 28
-"""Trailing bytes of an archive index that describe how to read the rest."""
 
 
 class Reads(Protocol):
@@ -150,48 +148,21 @@ class LocalArchives:
         """One archive index: which of a named archive's bytes are which file.
 
         The archive's name is the index's own filename, which is what makes a
-        local copy usable against the service without asking it anything.
+        local copy usable against the service without asking it anything. The
+        walk itself is the build's, because an index the client downloaded and
+        an index the service serves are the same file.
+
+        Filtered as it goes rather than after: the full set across every index
+        runs to millions of entries, and holding them to throw nearly all away
+        costs more than the read does.
 
         Args:
             path: the index file.
             wanted: the only keys worth keeping.
         """
-        blob = path.read_bytes()
-        if len(blob) < _INDEX_FOOTER:
-            return {}
-        footer = len(blob) - _INDEX_FOOTER
-        block_bytes = blob[footer + 11] * 1024
-        offset_bytes = blob[footer + 12]
-        size_bytes = blob[footer + 13]
-        key_bytes = blob[footer + 14]
-        entries = struct.unpack_from("<I", blob, footer + 16)[0]
-        # Four-byte offsets are an ordinary archive index. Six means a group
-        # index, whose leading bytes are an archive number rather than part of
-        # the offset, so reading it this way resolves keys to nonsense.
-        if offset_bytes != 4 or not block_bytes:
-            return {}
-
-        width = key_bytes + size_bytes + offset_bytes
-        per_block = block_bytes // width
-        archive = path.stem
-        found: dict[bytes, Remote] = {}
-        read = 0
-        while read < entries:
-            at = (read // per_block) * block_bytes
-            for _ in range(min(per_block, entries - read)):
-                key = blob[at:at + key_bytes]
-                size = int.from_bytes(blob[at + key_bytes:at + key_bytes + size_bytes],
-                                      "big")
-                offset = int.from_bytes(
-                    blob[at + key_bytes + size_bytes:at + width], "big")
-                # Filtered here rather than after: the full set across every
-                # index runs to millions of entries, and holding them to throw
-                # nearly all away costs more than the read does.
-                if key in wanted:
-                    found[key] = Remote(archive, offset, size)
-                at += width
-                read += 1
-        return found
+        return {key: Remote(path.stem, offset, size)
+                for key, offset, size in read_index(path.read_bytes())
+                if key in wanted}
 
     def _current(self) -> list[Path]:
         """The newest index file per bucket.
@@ -376,7 +347,7 @@ class EpsilonStorage:
             # scanning the whole encoding file, which is fine for the handful
             # of tables a build opens and ruinous across tens of thousands:
             # every read would re-scan a hundred and forty megabytes.
-            raw = self.remote._fetch(key, f"fid{file_id}")  # pylint: disable=protected-access
+            raw = self.remote._fetch(key)  # pylint: disable=protected-access
             return decode_blte(raw)
         except (LookupError, OSError, ValueError, zlib.error):
             return None
