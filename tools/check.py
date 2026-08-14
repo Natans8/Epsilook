@@ -44,10 +44,12 @@ import shutil
 import subprocess
 import sys
 import time
+import tempfile
 import tokenize
 from collections.abc import Iterator
 from pathlib import Path
 
+import mermaid
 from repo import (BUMP_PATHS, CACHE, DIM, GREEN, RED, RESET, ROOT, YELLOW,
                   changed_under, git, have_ref, survive_console_encoding)
 
@@ -1117,6 +1119,40 @@ def check_dependencies(rep: Report) -> None:
     rep.warn("dependencies", f"{len(behind)} behind: {listing}{more} - evaluate before deploying")
 
 
+def check_mermaid(rep: Report) -> None:
+    """Every diagram in a tracked doc must parse, or GitHub shows an error card.
+
+    Nothing else notices: the markdown is valid, the file commits, and the
+    breakage is visible only to a human who scrolls to it. The renderer is a
+    real headless browser, so it agrees with GitHub about what parses — which
+    also makes it the one check here that cannot run without being installed.
+    It resolves with `npx --no-install` and skips rather than downloading a
+    browser, so a machine without it says so instead of reporting a pass.
+    """
+    cmd = mermaid.renderer()
+    if cmd is None:
+        rep.skip("mermaid", f"npx --no-install {mermaid.MERMAID_CLI} does not resolve")
+        return
+    work = [(f, mermaid.blocks_of(f)) for f in mermaid.markdown_files() if f.exists()]
+    work = [(f, b) for f, b in work if b]
+    total = sum(len(b) for _, b in work)
+    if not total:
+        rep.skip("mermaid", "no diagrams in tracked docs")
+        return
+    failures = 0
+    with tempfile.TemporaryDirectory() as scratch:
+        for path, blocks in work:
+            rel = path.relative_to(ROOT).as_posix()
+            out = Path(scratch) / f"{rel.replace('/', '_')}.svg"
+            if mermaid.render_file(cmd, path, out) is None:
+                continue
+            for line, error in mermaid.failing_blocks(cmd, path, blocks, Path(scratch)):
+                failures += 1
+                rep.fail("mermaid", f"{rel}:{line}  {error}")
+    if not failures:
+        rep.ok("mermaid", f"{total} diagrams render")
+
+
 def check_toolchain(rep: Report) -> None:
     """tsc needs `npm install` once (typescript and esbuild are pinned
     devDependencies); the build doubles as the module-graph guard.
@@ -1160,6 +1196,7 @@ def check_toolchain(rep: Report) -> None:
                              "--recursive=y", *PYTHON_SOURCES],
              "errors only; style findings are advisory (.pylintrc)")
     run_tool(rep, "pytest", ["uv", "run", "pytest"], "test/py/*_test.py")
+    check_mermaid(rep)
 
 
 # ---------------------------------------------------------------------- main
