@@ -168,7 +168,7 @@ where the client API reads from:
 | file id      | rows    | what it names                                    |
 |--------------|--------:|--------------------------------------------------|
 | `23200000`   | 166,671 | models and world models — what `objects` reads   |
-| `23200001`   | 194,720 | sounds; **no id in the custom range**, so unused |
+| `23200001`   | 194,720 | sounds; names one id the listfile lacks, below the floor |
 
 **It is the same catalogue, not a second opinion.** Measured against a captured `/edump gob` walk: the identical
 166,671 ids, agreeing on **166,670** of them. The single row that differs is the shipped file being *right* — the walk
