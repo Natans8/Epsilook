@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from .anims import (read_anim_replacements, read_animkit_anims,
                     read_animkit_bonesets)
+from .areas import Area, AreaGates, read_area_gates
 from .attributes import attribute_bit, read_spell_attributes
 from .creatures import CreatureModels, read_creature_models
+from .delivery import Delivery, read_spell_delivery
 from .effects import (EffectRow, MaskedIds, SpellEffectRows,
                       implicit_target_bits, read_spell_effect_rows)
 from .fx import FxPayloads, ScreenRow, expand_chain, read_fx_payloads
@@ -32,7 +34,10 @@ from .vehicles import VehicleSeats, read_vehicle_seats
 from .visuals import VisualGraph, read_visual_graph
 
 __all__ = [
+    "Area",
+    "AreaGates",
     "CreatureModels",
+    "Delivery",
     "DescriptionValues",
     "EffectRow",
     "FxPayloads",
@@ -59,6 +64,7 @@ __all__ = [
     "read_anim_replacements",
     "read_animkit_anims",
     "read_animkit_bonesets",
+    "read_area_gates",
     "read_creature_models",
     "read_fx_payloads",
     "read_gameobjects",
@@ -74,6 +80,7 @@ __all__ = [
     "read_shapeshift_forms",
     "read_soundkit_files",
     "read_spell_attributes",
+    "read_spell_delivery",
     "read_spell_effect_rows",
     "read_spell_names",
     "read_spell_properties",
