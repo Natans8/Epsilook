@@ -6,12 +6,14 @@ follow from it.
 """
 
 from .registry import SECTIONS, register
-from .section import Count, Domain, Encoding, Scope, Section, SectionColumns
+from .section import (Count, Domain, Encoding, Layout, Scope, Section,
+                      SectionColumns)
 
 __all__ = [
     "Count",
     "Domain",
     "Encoding",
+    "Layout",
     "SECTIONS",
     "Scope",
     "Section",

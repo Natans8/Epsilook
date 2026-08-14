@@ -70,7 +70,8 @@ from pack.targets import (NO_TARGET, TARGET_AREA, TARGET_CASTER, TARGET_MISSILE_
 # Sibling module. The description templates are a small language with its own
 # grammar, so they get their own file rather than another 400 lines here — and
 # one that can be exercised on its own.
-from spelltext import DescriptionCooker, SpellValues
+from pack.derive.spelltext import DescriptionCooker
+from pack.routes.values import DescriptionValues as SpellValues
 
 T = TypeVar("T")
 
@@ -2760,7 +2761,7 @@ def read_spell_values(table_dir: Path) -> SpellValues:
     """Every number a description template can ask for (§3x).
 
     All six tables are already downloaded for other routes or declared optional,
-    and NONE of them reaches the pack: they exist only so build/spelltext.py can
+    and NONE of them reaches the pack: they exist only so the cooker in pack/derive can
     substitute `$s1`, `$d`, `$A1` and friends before the text is shipped.
 
     Base difficulty only. A spell may carry one row per DifficultyID, and the
@@ -4030,7 +4031,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         },
         "spells": spells,
         # §3x WHAT A SPELL SAYS IT DOES, cooked to placeholder-free prose by
-        # build/spelltext.py. Two bodies of text, one shape each: `text` holds
+        # the cooker in pack/derive. Two bodies of text, one shape each: `text` holds
         # the distinct strings (slot 0 is always "") and `of` indexes into it
         # per spell, parallel to spells.ids.
         #

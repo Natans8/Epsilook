@@ -72,12 +72,12 @@ build/                   the pack generator (Python 3) — source and its tracke
   enums/                 checked-in enum tables, each with its attribution
   expansion_ids.json.gz  which expansion introduced each spell (tools/expansions.py writes it)
   sources/               a vendored era client table no public archive serves
-  spelltext.py           the description template language, cooked to prose
   pack/                  the build as layers, each one replaceable on its own
     sources/             acquire: URLs, the cache, archives, the TrinityCore dumps
     tables/              the provider seam every reader reads through
     routes/              the readers: tables in, typed bundles out
     derive/              the graph walk and every cross-route derivation
+      spelltext.py       the description template language, cooked to prose
     model/               the section registry
     encode/              how a column is laid out
     emit/                module files, the manifest, hashes

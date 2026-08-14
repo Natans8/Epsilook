@@ -24,7 +24,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-# letter -> what a SpellValues lookup should return. Several letters are the
+from ..routes.values import DescriptionValues
+
+# letter -> what a DescriptionValues lookup should return. Several letters are the
 # same quantity under different spellings: `$w1`, `$W1`, `$S1` and `$e1` all
 # read an effect's amount exactly as `$s1` does.
 POINTS_CODES = "sSwWe"
@@ -133,35 +135,6 @@ _EMPTY_PARENS = re.compile(r"\(\s*\)")
 MAX_DEPTH = 6  # redirect chains reach 3 in practice; the cap is the cycle stop
 
 
-@dataclass
-class SpellValues:
-    """Every number a description can ask for, keyed by spell.
-
-    The caller fills whichever dicts its build has, and a code whose dict is
-    empty elides exactly as a caster-dependent one does.
-    """
-
-    # spell -> effect index (1-based) -> value
-    points: dict[int, dict[int, float]] = field(default_factory=dict)
-    # SpellEffect.Variance — the spread `$m1 to $M1` is written around. Without
-    # it the two ends of a range come out identical.
-    variance: dict[int, dict[int, float]] = field(default_factory=dict)
-    # float throughout, including the counts: all of them are read through the
-    # same `_at` lookup and rendered by the same formatter
-    period: dict[int, dict[int, float]] = field(default_factory=dict)  # ms
-    radius: dict[int, dict[int, float]] = field(default_factory=dict)
-    chain_targets: dict[int, dict[int, float]] = field(default_factory=dict)
-    misc_value: dict[int, dict[int, float]] = field(default_factory=dict)
-    # spell -> value
-    duration: dict[int, int] = field(default_factory=dict)  # ms
-    max_stacks: dict[int, int] = field(default_factory=dict)
-    charges: dict[int, int] = field(default_factory=dict)
-    proc_chance: dict[int, int] = field(default_factory=dict)
-    max_targets: dict[int, int] = field(default_factory=dict)
-    max_target_level: dict[int, int] = field(default_factory=dict)
-    range_max: dict[int, float] = field(default_factory=dict)
-
-
 def _num(v: float) -> str:
     """A number the way a tooltip writes one: no trailing .0, one decimal."""
     if v == int(v):
@@ -258,7 +231,7 @@ class DescriptionCooker:
     """
 
     def __init__(self, descriptions: dict[int, str], aura_descriptions: dict[int, str],
-                 names: dict[int, str], values: SpellValues,
+                 names: dict[int, str], values: DescriptionValues,
                  variables: dict[int, dict[str, str]],
                  locale: TextLocale = ENGLISH):
         self.descriptions = descriptions

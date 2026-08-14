@@ -105,7 +105,7 @@ TABLES = [
     "ItemDisplayInfo",
     "ModelFileData",
     # The description route: Spell.Description_lang is a template and these fill
-    # it in. None of their values ship — build/spelltext.py substitutes them and
+    # it in. None of their values ship — the cooker substitutes them and
     # the pack carries the cooked prose. SpellRadius and SpellRange are index
     # tables ($A1 yards, $r yards); SpellXDescriptionVariables is the only
     # bridge from a spell to a named `$<var>` body.

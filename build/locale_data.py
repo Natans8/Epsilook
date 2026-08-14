@@ -23,7 +23,7 @@ sound-kit / missile-motion / boneset names (developer identifiers), enum-name
 vocabularies (effect / aura / target words are the app's search language),
 and the app's own labels — those are UI, not data.
 
-Descriptions are cooked by build/spelltext.py exactly as the base pack's are,
+Descriptions are cooked by the cooker in pack/derive exactly as the base pack's are,
 from the locale's own templates, with a TextLocale supplying the wording the
 cooker itself contributes (duration units, plural-form picking — Russian
 declension markers carry three forms where English carries two).
@@ -62,7 +62,8 @@ from pack.progress import log
 from pack.sources.cache import CACHE_DIR, download
 from pack.sources.tdb import Distill, tdb_extraction, tdb_release
 from pack.sources.wago import WAGO_CSV_URL
-from spelltext import ENGLISH, RUSSIAN, DescriptionCooker, TextLocale
+from pack.derive.spelltext import (ENGLISH, RUSSIAN, DescriptionCooker,
+                                   TextLocale)
 
 # The overlay's own format, independent of the base PACK_FORMAT: the two evolve
 # for different reasons (a new base section is only an overlay change when it
@@ -70,7 +71,7 @@ from spelltext import ENGLISH, RUSSIAN, DescriptionCooker, TextLocale
 LOCALE_FORMAT = 1
 
 # Locale code -> the prose wording the cooker needs for it. Adding a language
-# the game ships is one entry here (plus a TextLocale in spelltext.py when its
+# the game ships is one entry here (plus a TextLocale in the cooker when its
 # plural rules differ from an existing one).
 #
 # enUS is the locale the base pack itself is read in, so its overlay is empty

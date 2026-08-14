@@ -581,7 +581,7 @@ class Dossier:
             "subtext": (sp[0].get("NameSubtext_lang") if sp else None) or None,
             # ⚠ THE RAW TEMPLATE, NOT WHAT THE PACK SHIPS. Since format 43 the
             # pack carries these cooked to placeholder-free prose by
-            # build/spelltext.py — `$@spelldesc159001` there is a whole
+            # the cooker in build/pack/derive/spelltext.py — `$@spelldesc159001` there is a whole
             # paragraph here. This tool reads the game tables rather than the
             # pack, so what it prints is the input to that step; the key names
             # say so rather than letting the two be mistaken for each other.

@@ -1,6 +1,7 @@
 """The prose a spell carries: descriptions, their variables, encounter notes.
 
-Raw templates only; cooking them into readable prose lives in `spelltext.py`.
+Raw templates only; cooking them into readable prose is a derivation over
+what several routes produced, so it lives in `derive/spelltext.py`.
 The templates are deliberately not filtered against the spell list, because a
 template routinely redirects to a spell that has no name row of its own.
 """
