@@ -25,7 +25,7 @@ from .provider import Tables
 # composition routes cannot be handed blindly, and being handed it blindly is
 # the entire point. What it does WITH revisions is `overlay_test.py`.
 PROVIDERS: list[tuple[str, Callable[[Path], Tables]]] = [
-    ("CsvTables", lambda directory: CsvTables(directory)),
+    ("CsvTables", CsvTables),
     ("OverlaidTables", lambda directory: OverlaidTables(CsvTables(directory))),
 ]
 
@@ -120,3 +120,17 @@ def test_an_undeclared_missing_table_is_fatal(tables: Tables) -> None:
 def test_the_header_of_an_absent_table_is_empty(tables: Tables) -> None:
     """Empty rather than fatal, because array_columns asks before it knows."""
     assert tables.header("SpellVisual") == []
+
+
+def test_a_source_with_no_header_at_all_is_fatal(source: Path, tables: Tables) -> None:
+    """A truncated download is not a declared absence.
+
+    A build that predates a table leaves NO file, so a file that exists and
+    says nothing is a broken cache -- and it has to be reported as one. Left to
+    itself the header read runs off the end of a generator, which Python
+    re-raises as a `RuntimeError` naming neither the table nor the directory it
+    came from.
+    """
+    (source / "SpellVisual.csv").write_text("", encoding="utf-8", newline="")
+    with pytest.raises(SystemExit):
+        list(tables.rows("SpellVisual", ["ID"]))

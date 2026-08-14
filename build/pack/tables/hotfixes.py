@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from ..drift import SPELL_NAME_SOURCES
 from ..sources.tdb import STAMP_COLUMN, TDB_LOSSY_COLUMNS, TDB_TABLES
 from ..targets import VISUAL_REDIRECTS
 from .overlay import Overlay
@@ -33,6 +34,26 @@ def _hotfix(table: str, columns: Mapping[str, str]) -> Overlay:
     the stamp is supplied here rather than repeated on nine rows.
     """
     return Overlay(table, columns, stamp=STAMP_COLUMN)
+
+
+SPELL_NAME_OVERLAYS = {
+    table: _hotfix("spell_name", {"ID": "ID", columns[1]: "Name"})
+    for table, columns in SPELL_NAME_SOURCES
+}
+"""The name overlay, once per table the name is ever read from.
+
+Derived from the drift declaration rather than written out, because the client
+table carrying a spell's name CHANGES between builds -- `SpellName.db2` was
+split out of `Spell.db2` in BfA, so Legion and earlier keep the name on `Spell`
+and Legion has a server release. Naming only the modern table here would mean
+the overlay applied on the builds that read `SpellName` and silently did not on
+the builds that read `Spell`: an overlay that is forgotten on some builds and
+not others, which is the failure `OverlaidTables` exists to make impossible.
+
+Deriving it means a third name source arrives overlaid without anyone
+remembering, and `check_overlay_declaration` cannot fall out of step with the
+drift map because it no longer restates it.
+"""
 
 SPELL_EFFECT_COLUMNS = {
     "ID": "ID",
@@ -56,7 +77,7 @@ SPELL_EFFECT_COLUMNS = {
 }
 
 HOTFIX_OVERLAYS = {
-    "SpellName": _hotfix("spell_name", {"ID": "ID", "Name_lang": "Name"}),
+    **SPELL_NAME_OVERLAYS,
     "SpellXSpellVisual": _hotfix("spell_x_spell_visual", {
         "ID": "ID", "SpellID": "SpellID", "SpellVisualID": "SpellVisualID"}),
     "SpellVisual": _hotfix("spell_visual", {

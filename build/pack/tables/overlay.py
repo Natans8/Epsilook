@@ -117,7 +117,23 @@ class OverlaidTables:
     packs have no server release at all -- and every table passes through."""
 
     build: int = 0
-    """The client build being read, against which a stamped row is judged."""
+    """The client build being read, against which a stamped row is judged.
+
+    Required whenever there is a stamped overlay to apply; the default stands
+    only for the compositions that have nothing to overlay.
+    """
+
+    def __post_init__(self) -> None:
+        # Without this the omission is invisible: a stamp compares against 0,
+        # every row passes, and the composition quietly does what it did before
+        # the filter existed. It is the same failure the overlay was built to
+        # remove -- forgetting looks exactly like having nothing to do -- so it
+        # is refused at the wiring site rather than discovered in a pack.
+        if self.source is not None and not self.build \
+                and any(overlay.stamp for overlay in self.overlays.values()):
+            raise ValueError(
+                "OverlaidTables: a stamped overlay needs the client build to "
+                "judge its rows against; pass build=<the build being packed>")
 
     def available(self, table: str) -> bool:
         """Whether the base has the table. An overlay cannot introduce one."""

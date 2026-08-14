@@ -62,6 +62,13 @@ class CsvTables:
         column yields its stand-in value. A column that is missing without
         being declared is a hard error: silently dropping data is the one
         outcome worth crashing over.
+
+        A file with no header at all is a hard error too, and a different one
+        from a table that is absent: a table this build predates leaves no
+        file, so a file that exists but says nothing is a truncated download
+        rather than a declared absence. Named here because the alternative is
+        a bare `StopIteration`, which a generator reports as a `RuntimeError`
+        naming neither the table nor the cache it came from.
         """
         path = self.path_of(table)
         if not path.exists():
@@ -71,7 +78,10 @@ class CsvTables:
                      f"not declared optional")
         with path.open(newline="", encoding="utf-8") as handle:
             reader = csv.reader(handle)
-            header = next(reader)
+            header = next(reader, None)
+            if header is None:
+                sys.exit(f"error: {table}.csv in {self.directory} is empty; it has no "
+                         f"header row, so the cached copy is incomplete")
             index: list[int | None] = []
             for column in columns:
                 if column in header:

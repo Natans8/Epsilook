@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from ..drift import SPELL_NAME_SOURCES
 from .csv_tables import CsvTables
 from .hotfixes import HOTFIX_OVERLAYS, check_overlay_declaration
 from .overlay import OverlaidTables, Overlay
@@ -196,8 +197,59 @@ def test_the_key_must_be_mapped() -> None:
         Overlay("spell", {"Name": "Label"})
 
 
+def test_a_stamped_overlay_refuses_to_run_without_a_build(tmp_path: Path) -> None:
+    """The omission has to be loud, because its symptom is silence.
+
+    A stamp compared against a build of 0 lets every row through, which is
+    exactly what the composition did before the filter existed -- and on 9.2.7,
+    the one pack anybody verifies by hand, the filter drops no rows at all. So
+    the mistake would show up first on Midnight, in bytes, long after the
+    wiring that caused it.
+    """
+    base, source = tmp_path / "base", tmp_path / "source"
+    base.mkdir()
+    source.mkdir()
+    (base / "Spell.csv").write_text(BASE, encoding="utf-8", newline="")
+    (source / "spell.csv").write_text(REVISIONS, encoding="utf-8", newline="")
+    with pytest.raises(ValueError):
+        OverlaidTables(
+            CsvTables(base),
+            {"Spell": Overlay("spell", {"ID": "Id", "Name": "Label"},
+                              stamp="Verified")},
+            CsvTables(source))
+
+
+def test_an_unstamped_overlay_needs_no_build(tmp_path: Path) -> None:
+    """Only a stamp needs something to judge itself against."""
+    base, source = tmp_path / "base", tmp_path / "source"
+    base.mkdir()
+    source.mkdir()
+    (base / "Spell.csv").write_text(BASE, encoding="utf-8", newline="")
+    (source / "spell.csv").write_text(REVISIONS, encoding="utf-8", newline="")
+    tables = OverlaidTables(CsvTables(base),
+                            {"Spell": Overlay("spell", {"ID": "Id", "Name": "Label"})},
+                            CsvTables(source))
+    assert by_id(tables, "Name")["12"] == "Blink Revised"
+
+
 def test_the_two_declarations_of_the_hotfix_overlay_agree() -> None:
     """The distiller says which server columns to keep; the overlay map says
     which client column each one revises. Neither can be derived from the
     other, so they are checked against each other."""
     assert check_overlay_declaration() == []
+
+
+def test_every_table_a_spell_name_is_read_from_is_overlaid() -> None:
+    """The client table carrying a spell's name CHANGES between builds.
+
+    `SpellName.db2` was split out of `Spell.db2` in BfA, so Legion and earlier
+    read the name from `Spell` -- and Legion has a server release. An overlay
+    named for the modern table alone would apply on the builds that read
+    `SpellName` and silently not on the builds that read `Spell`, which is the
+    per-reader forgetting this composition exists to make impossible.
+    """
+    for table, columns in SPELL_NAME_SOURCES:
+        overlay = HOTFIX_OVERLAYS.get(table)
+        assert overlay is not None, f"{table} carries spell names but is not overlaid"
+        assert columns[1] in overlay.columns, \
+            f"{table}.{columns[1]} is the name column but the overlay does not revise it"
