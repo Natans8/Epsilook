@@ -30,7 +30,7 @@ from __future__ import annotations
 import math
 import struct
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Context, Decimal
 
 NONE, BITPACKED, COMMON, PALLET, PALLET_ARRAY, BITPACKED_SIGNED = range(6)
@@ -98,16 +98,23 @@ class Section:
     offset_map_id_count: int
     copy_table_count: int
 
-    def readable(self, size: int) -> bool:
+    def readable(self, size: int, offset_map: bool = False) -> bool:
         """Whether this section's bytes are present and unencrypted.
 
         The record count is not the test: an absent locale declares records
         while carrying a non-zero encryption key and an offset past end of
         file.
+
+        An offset-map section is bounded by where its records end rather than
+        by a fixed record size, so one that declares no end describes a span
+        of negative length, and the id list, copy table and offset map all
+        then resolve to somewhere before the section begins.
         """
         return (self.encryption_key == 0
                 and self.record_count > 0
-                and 0 < self.file_offset < size)
+                and 0 < self.file_offset < size
+                and (not offset_map
+                     or self.offset_records_end > self.file_offset))
 
 
 @dataclass(frozen=True)
@@ -206,18 +213,17 @@ def sign_extend(value: int, bits: int) -> int:
 def format_float(value: float) -> str:
     """A float32 spelled the way the CSV export spells it.
 
-    The export rounds twice, and the intermediate step is visible in its
-    output. The float32 is widened, written to fifteen significant digits, and
-    rounded to eleven decimal places, and finally held to fourteen significant
-    digits. Every step shows in the output and none implies the others.
-    Rounding once straight to eleven disagrees wherever the discarded digits
-    carry the eleventh place over: `214.1703338623046875` reaches
-    `214.170333862305` at fifteen digits and `214.17033386231` from there,
-    where a single rounding gives `214.1703338623`. The last step is what
-    leaves a larger magnitude with fewer places, `2506.97998046875` coming out
-    `2506.9799804688`. Halves go away from zero while places are being dropped
-    and to an even digit while significant figures are, trailing zeros are
-    stripped, and a whole number loses its fractional part.
+    The export rounds three times and each step shows in the output, so none of
+    them implies the others. The float32 is widened to fifteen significant
+    digits, rounded to eleven decimal places, and finally held to fourteen
+    significant digits. Rounding once straight to eleven disagrees wherever the
+    discarded digits carry the eleventh place over: `214.1703338623046875`
+    reaches `214.170333862305` at fifteen digits and `214.17033386231` from
+    there, where a single rounding gives `214.1703338623`. The last step is
+    what leaves a larger magnitude with fewer places, `2506.97998046875` coming
+    out `2506.9799804688`. Halves go away from zero in the first two steps and
+    to an even digit in the third, trailing zeros are stripped, and a whole
+    number loses its fractional part.
 
     Whether the result is written in exponent form is decided after rounding
     rather than before: `0.0001` is what a float32 slightly under it rounds to
@@ -257,7 +263,8 @@ class Db2:
             blob: the whole decompressed file.
             schema: the exported columns, in order. None names them
                 positionally, which is enough to inspect a table whose schema
-                is not to hand.
+                is not to hand; `_positional` says what such a read cannot
+                tell you.
 
         Raises:
             ValueError: the bytes are not a WDC3 file.
@@ -265,11 +272,11 @@ class Db2:
         if blob[:4] != b"WDC3":
             raise ValueError(f"not WDC3: {blob[:4]!r}")
         self.blob = blob
-        # Seventeen words, of which decoding reads eight; the rest are bound to
+        # Seventeen words, of which decoding reads nine; the rest are bound to
         # throwaways rather than dropped so the count stays visible.
         (_magic, self.record_count, self.field_count, self.record_size,
          _string_table_size, _table_hash, _layout_hash, _min_id, _max_id,
-         _locale, self.flags, _id_index, _total_field_count,
+         _locale, self.flags, self.id_index, _total_field_count,
          _bitpacked_data_offset, _lookup_column_count,
          self.field_storage_info_size, self.common_data_size,
          self.pallet_data_size, self.section_count) = _HEADER.unpack_from(blob, 0)
@@ -327,8 +334,7 @@ class Db2:
         with one whose id is an ordinary field.
         """
         if schema is None:
-            return [self._column(ColumnSpec(name=f"Field_{f.index}"), f)
-                    for f in self.fields]
+            schema = self._positional()
         columns: list[Column] = []
         position = 0
         for spec in schema:
@@ -337,6 +343,33 @@ class Db2:
                 field = self.fields[position] if position < len(self.fields) else None
                 position += 1
             columns.append(self._column(spec, field))
+        return columns
+
+    def _positional(self) -> list[ColumnSpec]:
+        """A schema for a file whose own is not to hand: one column per field.
+
+        Two things a record cannot say about itself go missing with the schema,
+        and a caller reading positions has to know both. A value's type is one:
+        a string is stored as the offset that locates it, so it reads as a
+        number with nothing to mark it as anything else. An array's cardinality
+        is the other: the width the field structure declares is not one the
+        packing honours, so an array stays one column instead of becoming one
+        per element.
+
+        The id is not among them, and leaving it out cost more than a name. A
+        file whose id list supplies it gets a column of its own ahead of the
+        fields; one whose record carries it has the header say which field that
+        is. Either way the id is in the row and the copy table can find it,
+        where before it was absent and every copied row overwrote the first
+        column instead.
+        """
+        columns = [ColumnSpec(name=f"Field_{field.index}")
+                   for field in self.fields]
+        if self.flags & 4:
+            return [ColumnSpec(name="ID", is_id=True, in_record=False),
+                    *columns]
+        if 0 <= self.id_index < len(columns):
+            columns[self.id_index] = replace(columns[self.id_index], is_id=True)
         return columns
 
     def _column(self, spec: ColumnSpec, field: Field | None) -> Column:
@@ -348,7 +381,7 @@ class Db2:
         elif field is not None and field.storage == COMMON:
             common = self._common_map(field)
         return Column(spec=spec, field=field, bits=bits, mask=(1 << bits) - 1,
-                      element_bits=element_bits(spec, field) if field else 0,
+                      element_bits=element_bits(spec, field) if field is not None else 0,
                       pallet=pallet, common=common)
 
     @property
@@ -379,7 +412,10 @@ class Db2:
             return [read_bits(block, base, field.size_bits)]
         if column.common is not None:
             return [column.common.get(record_id, field.default)]
-        assert column.pallet is not None
+        if column.pallet is None:
+            raise ValueError(
+                f"field {field.index} declares storage type {field.storage}, "
+                "which this reader does not know")
         index = read_bits(block, base, field.size_bits)
         return list(column.pallet.unpack_from(
             self.pallet_data, field.pallet_at + index * 4 * spec.count))
@@ -454,7 +490,11 @@ class Db2:
         """`record index -> foreign id`, for a relation stored outside the record."""
         if not section.relationship_data_size:
             return {}
-        count = struct.unpack_from("<I", self.blob, at)[0]
+        # The count is the file's own word, and the block that has to hold the
+        # pairs is what bounds it. Unbounded, a malformed header walks the read
+        # into whatever follows the section and builds a dict out of it.
+        count = min(struct.unpack_from("<I", self.blob, at)[0],
+                    max(0, (section.relationship_data_size - 12) // 8))
         return dict(struct.unpack_from("<II", self.blob, at + 12 + i * 8)[::-1]
                     for i in range(count))
 
@@ -473,8 +513,9 @@ class Db2:
 
     def rows(self) -> Iterator[tuple[str, ...]]:
         """Every readable section's rows, as text, in file order."""
+        offset_map = bool(self.flags & 1)
         for section in self.sections:
-            if not section.readable(len(self.blob)):
+            if not section.readable(len(self.blob), offset_map):
                 continue
             yield from self._section_rows(section)
 
@@ -583,6 +624,16 @@ class Db2:
                 supplied = self._supplied(column, record_id, foreign)
                 if supplied is not None:
                     out.append(supplied)
+                    continue
+                if column.field is None:
+                    # A column the record does not carry has no bytes here to
+                    # advance over. Reading one would shift every column after
+                    # it and resynchronise a string on the wrong NUL, and the
+                    # row would still come out the right width. Spelled the way
+                    # the fixed-length path spells it, so one schema does not
+                    # describe two row shapes.
+                    out.extend(self._text(column, [0] * column.spec.count,
+                                          record, 0, 0))
                     continue
                 text, at = self._inline_value(column.spec, record, at)
                 out.extend(text)

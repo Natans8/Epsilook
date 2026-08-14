@@ -42,7 +42,7 @@ class Stored:
 class Built:
     """One section's contents, before the offsets that locate them are known."""
 
-    records: bytes
+    records: bytes = b""
     strings: bytes = b""
     ids: tuple[int, ...] = ()
     copies: tuple[tuple[int, int], ...] = ()
@@ -51,6 +51,15 @@ class Built:
     unheld_records: int = 0
     """Records the header counts that this section does not hold, which is what
     displaces a string offset in a table with an unreadable second section."""
+    variable: tuple[bytes, ...] = ()
+    """One record each, for a table whose rows live behind an offset map.
+    `records` is not read then: the map is what locates a row."""
+    records_end: int | None = None
+    """What the section claims as the end of its offset records, where a test
+    needs that to disagree with the bytes it actually wrote."""
+    declared_relations: int | None = None
+    """How many relationship pairs the block claims to hold, where a test needs
+    that to disagree with how many it wrote."""
 
 
 @dataclass
@@ -64,11 +73,21 @@ class Table:
     pallet: bytes = b""
     common: bytes = b""
     has_id_list: bool = True
+    id_index: int = 0
+    """Which field carries the id, for a table whose record holds it."""
+    offset_map: bool = False
+    """Whether records are variable-length and located by an offset map, which
+    is a different row path rather than a different packing."""
+
+    def held(self, section: Built) -> int:
+        """How many records a section holds, however its rows are laid out."""
+        if self.offset_map:
+            return len(section.variable)
+        return len(section.records) // self.record_size
 
     def blob(self) -> bytes:
         """The file, with every offset resolved."""
-        total = sum(len(s.records) // self.record_size + s.unheld_records
-                    for s in self.sections)
+        total = sum(self.held(s) + s.unheld_records for s in self.sections)
         head = (_HEADER.size + _SECTION.size * len(self.sections)
                 + _FIELD_STRUCTURE.size * len(self.fields)
                 + _STORAGE_INFO.size * len(self.fields)
@@ -78,27 +97,52 @@ class Table:
         headers: list[bytes] = []
         at = head
         for section in self.sections:
-            body = section.records + section.strings
-            body += struct.pack(f"<{len(section.ids)}I", *section.ids)
-            for new_id, copied in section.copies:
-                body += struct.pack("<II", new_id, copied)
             relations = b""
             if section.relations:
-                relations = struct.pack("<3I", len(section.relations), 0, 0)
+                declared = (len(section.relations)
+                            if section.declared_relations is None
+                            else section.declared_relations)
+                relations = struct.pack("<3I", declared, 0, 0)
                 for foreign, index in section.relations:
                     relations += struct.pack("<II", foreign, index)
-            body += relations
-            headers.append(_SECTION.pack(
-                section.encryption_key, at,
-                len(section.records) // self.record_size, len(section.strings),
-                0, len(section.ids) * 4, len(relations), 0, len(section.copies)))
+            copies = b"".join(struct.pack("<II", new_id, copied)
+                              for new_id, copied in section.copies)
+
+            if self.offset_map:
+                # An offset map addresses each record where it lies in the
+                # file, so the entries cannot be written until the section's
+                # own position is known. The ids follow the relationships,
+                # which is the one part of the order the fixed path reverses.
+                records = b"".join(section.variable)
+                entries = b""
+                offset = at
+                for one in section.variable:
+                    entries += struct.pack("<IH", offset, len(one))
+                    offset += len(one)
+                body = (records + copies + entries + relations
+                        + struct.pack(f"<{len(section.ids)}I", *section.ids))
+                records_end = (at + len(records) if section.records_end is None
+                               else section.records_end)
+                headers.append(_SECTION.pack(
+                    section.encryption_key, at, len(section.variable), 0,
+                    records_end, 0, len(relations), len(section.variable),
+                    len(section.copies)))
+            else:
+                body = (section.records + section.strings
+                        + struct.pack(f"<{len(section.ids)}I", *section.ids)
+                        + copies + relations)
+                headers.append(_SECTION.pack(
+                    section.encryption_key, at, self.held(section),
+                    len(section.strings), 0, len(section.ids) * 4,
+                    len(relations), 0, len(section.copies)))
             bodies.append(body)
             at += len(body)
 
         out = _HEADER.pack(
             b"WDC3", total, len(self.fields), self.record_size,
             sum(len(s.strings) for s in self.sections), 0, 0, 0, 0, 0,
-            4 if self.has_id_list else 0, 0, len(self.fields), 0, 0,
+            (4 if self.has_id_list else 0) | (1 if self.offset_map else 0),
+            self.id_index, len(self.fields), 0, 0,
             _STORAGE_INFO.size * len(self.fields), len(self.common),
             len(self.pallet), len(self.sections))
         out += b"".join(headers)
@@ -308,14 +352,156 @@ def test_an_unsigned_column_is_not_sign_extended() -> None:
 
 
 def test_a_table_read_without_a_schema_names_its_columns_positionally() -> None:
-    """Enough to inspect a table whose schema is not to hand."""
+    """Enough to inspect a table whose schema is not to hand.
+
+    The id is a column of its own ahead of the fields, because the id list
+    supplies it rather than the record, and a reader that drops it cannot say
+    which row it is holding.
+    """
     table = Table(
         fields=[Stored(offset_bits=0, size_bits=32)],
-        sections=[Built(records=struct.pack("<I", 7))],
+        sections=[Built(records=struct.pack("<I", 7), ids=(4,))],
+        record_size=4,
+        schema=[])
+    parsed = wdc3.Db2(table.blob(), None)
+
+    assert parsed.columns == ["ID", "Field_0"]
+    assert list(parsed.rows()) == [("4", "7")]
+
+
+def test_a_schema_less_read_marks_the_id_the_record_itself_carries() -> None:
+    """No id list means the id is an ordinary field, and the header says which.
+
+    Marking it in place rather than adding a column keeps one value in one
+    column: the id is already in the record and must not be exported twice.
+    """
+    table = Table(
+        fields=[Stored(offset_bits=0, size_bits=32),
+                Stored(offset_bits=32, size_bits=32)],
+        sections=[Built(records=struct.pack("<II", 7, 4))],
+        record_size=8,
+        schema=[],
+        has_id_list=False,
+        id_index=1)
+    parsed = wdc3.Db2(table.blob(), None)
+
+    assert parsed.columns == ["Field_0", "Field_1"]
+    assert parsed.id_position() == 1
+    assert list(parsed.rows()) == [("7", "4")]
+
+
+def test_a_copy_rewrites_the_id_of_a_schema_less_row_not_its_first_value(
+) -> None:
+    """A copy reuses a record's data under a new id, and only the id moves.
+
+    Without an id column to find, the new id was written over whatever the
+    first column held, so a copied row came back with its data displaced and
+    nothing marking it as wrong.
+    """
+    table = Table(
+        fields=[Stored(offset_bits=0, size_bits=32)],
+        sections=[Built(records=struct.pack("<I", 7), ids=(1,),
+                        copies=((2, 1),))],
         record_size=4,
         schema=[])
 
-    assert wdc3.Db2(table.blob(), None).columns == ["Field_0"]
+    assert list(wdc3.Db2(table.blob(), None).rows()) == [("1", "7"),
+                                                         ("2", "7")]
+
+
+def test_an_offset_map_table_reads_records_the_map_locates() -> None:
+    """Variable-length records carry their strings inline and end at a NUL.
+
+    A row is as wide as its values are long, so nothing can be addressed by
+    multiplying a record size: the map says where each one starts.
+    """
+    table = Table(
+        fields=[Stored(offset_bits=0, size_bits=32),
+                Stored(offset_bits=32, size_bits=32)],
+        sections=[Built(variable=(b"Azeroth\0" + struct.pack("<i", 7),
+                                  b"Kalimdor\0" + struct.pack("<i", 9)),
+                        ids=(1, 2))],
+        record_size=1,
+        schema=[ID, ColumnSpec(name="Name", kind="string"),
+                ColumnSpec(name="Value")],
+        offset_map=True)
+
+    assert list(read(table).rows()) == [("1", "Azeroth", "7"),
+                                        ("2", "Kalimdor", "9")]
+
+
+def test_an_offset_map_record_holds_no_bytes_for_a_column_it_does_not_carry(
+) -> None:
+    """Advancing over a column the record never held desynchronises the rest.
+
+    The row would still come out the right width, with the string after it
+    resynchronised on the wrong NUL, so the damage is silent. The fixed-length
+    path reads such a column as zero without consuming, and the two paths
+    answer for one schema.
+    """
+    table = Table(
+        fields=[Stored(offset_bits=0, size_bits=32),
+                Stored(offset_bits=32, size_bits=32)],
+        sections=[Built(variable=(b"Azeroth\0" + struct.pack("<i", 7),),
+                        ids=(1,))],
+        record_size=1,
+        schema=[ID, ColumnSpec(name="Absent", in_record=False),
+                ColumnSpec(name="Name", kind="string"),
+                ColumnSpec(name="Value")],
+        offset_map=True)
+
+    assert list(read(table).rows()) == [("1", "0", "Azeroth", "7")]
+
+
+def test_an_offset_map_section_declaring_no_end_is_skipped() -> None:
+    """Its records are bounded by where they end, not by a record size.
+
+    A section that declares no end describes a span of negative length, and
+    every part after the records then resolves to before the section began --
+    which decodes to plausible nonsense rather than to nothing.
+    """
+    table = Table(
+        fields=[Stored(offset_bits=0, size_bits=32)],
+        sections=[Built(variable=(struct.pack("<i", 7),), ids=(1,),
+                        records_end=0)],
+        record_size=1,
+        schema=[ID, ColumnSpec(name="Value")],
+        offset_map=True)
+
+    assert not list(read(table).rows())
+
+
+def test_a_relationship_block_is_read_no_further_than_it_reaches() -> None:
+    """The count is the file's own word and the block is what bounds it.
+
+    Unbounded, a header claiming more pairs than it wrote walks the read into
+    whatever follows the section and builds a dict out of it.
+    """
+    table = Table(
+        fields=[Stored(offset_bits=0, size_bits=32)],
+        sections=[Built(records=struct.pack("<I", 7), ids=(1,),
+                        relations=((42, 0),), declared_relations=99)],
+        record_size=4,
+        schema=[ID, ColumnSpec(name="Value"),
+                ColumnSpec(name="Parent", is_relation=True, in_record=False)])
+
+    assert list(read(table).rows()) == [("1", "7", "42")]
+
+
+def test_a_storage_type_the_reader_does_not_know_names_itself() -> None:
+    """Reached by elimination, so anything unrecognised arrives here as pallet.
+
+    An assertion would say nothing about which field, and would be stripped
+    out entirely under `-O`.
+    """
+    table = Table(
+        fields=[Stored(offset_bits=0, size_bits=8, storage=9)],
+        sections=[Built(records=b"\x05", ids=(1,))],
+        record_size=1,
+        schema=[ID, ColumnSpec(name="Value", bits=8)])
+
+    with pytest.raises(ValueError, match="storage type 9"):
+        list(read(table).rows())
 
 
 @pytest.mark.parametrize(("value", "text"), [

@@ -6,12 +6,11 @@ of the same file: wago publishes both the db2 and its own CSV export of that
 db2, so decoding the first and comparing to the second leaves nowhere for a
 misread field to hide.
 
-Both sides describing the SAME FILE is what makes this an oracle. An earlier
-version of this test compared a private server's copy of each table against the
-public export and excused the differences as that server's edits, which cannot
-tell an edited value from a misread one -- it is the decoder's own claim used
-to grade the decoder. It passed while the float spelling was wrong, because the
-rows it got wrong were inside the excuse.
+Both sides must describe the SAME FILE, and that is what makes this an oracle.
+A private server's copy of a table compared against the public export is not
+one: nothing there can tell an edited value from a misread one, and excusing
+the differences as that server's edits is the decoder's own claim used to grade
+the decoder. A tolerance that wide hides a whole rounding rule.
 
 So there is no per-table declaration here, and the only tolerance is one the
 file computes about itself:
@@ -111,9 +110,8 @@ def same_huge_float(left: str, right: str) -> bool:
     column holds, so the disagreement is about spelling a number neither format
     can write down rather than about what was decoded.
 
-    Scoped to that magnitude on purpose. Allowing it anywhere would stop the
-    comparison noticing a rounding rule that is simply wrong, which is how the
-    spelling stayed broken before.
+    Scoped to that magnitude on purpose: allowed anywhere, it would stop the
+    comparison noticing a rounding rule that is simply wrong.
     """
     try:
         pair = [struct.unpack("<f", struct.pack("<f", float(text)))[0]
