@@ -31,8 +31,9 @@ from typing import Protocol
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 
-from pack.sources.casc import (Service, Storage, decode_blte,  # noqa: E402
-                               find_encoding_keys)
+from pack.sources.casc import (Located as Remote, Service, Storage,  # noqa: E402
+                               decode_blte, find_encoding_keys)
+from tqdm import tqdm  # noqa: E402
 
 EPSILON = Service(host="tact.epsilonwow.net")
 """The client's own content service."""
@@ -60,6 +61,9 @@ _OFFSET_BITS = 30
 _ENTRY_HEADER = 30
 """Bytes of per-file header inside an archive, before the container begins."""
 
+_INDEX_FOOTER = 28
+"""Trailing bytes of an archive index that describe how to read the rest."""
+
 
 class Reads(Protocol):
     """What a walk needs of a storage: resolve ids, say what is local, read.
@@ -78,6 +82,9 @@ class Reads(Protocol):
 
     def read(self, file_id: int, *, local_only: bool = False) -> bytes | None:
         """One file's decoded bytes."""
+
+    def prepare_network(self) -> None:
+        """Do whatever the first networked read would do, once and in advance."""
 
 
 @dataclass(frozen=True)
@@ -103,9 +110,83 @@ class LocalArchives:
             install: the client's installation directory.
         """
         self.data = install / "Data" / "data"
+        self.indices = install / "Data" / "indices"
         self.entries: dict[bytes, Located] = {}
         for path in self._current():
             self.entries.update(self._read(path))
+
+    def archive_locations(self, wanted: set[bytes]) -> dict[bytes, Remote]:
+        """Where the service's archives hold each wanted file, read from disk.
+
+        The client keeps its own copy of every archive index the service
+        publishes, which is the same set a networked reader would otherwise
+        download in full -- some gigabytes of it -- purely to find out where a
+        few thousand files sit. Reading them here costs a disk pass instead.
+
+        Only the wanted keys are kept. The full set runs to millions of entries
+        and there is no reason to hold the ones nothing is going to ask for.
+
+        Args:
+            wanted: the encoding keys to locate.
+
+        Returns:
+            Encoding key to its place in a named archive, for those found.
+        """
+        found: dict[bytes, Remote] = {}
+        if not self.indices.is_dir():
+            return found
+        for path in tqdm(sorted(self.indices.glob("*.index")),
+                         desc="archive indices (install)", unit="index"):
+            found.update(self._read_archive(path, wanted))
+        return found
+
+    @staticmethod
+    def _read_archive(path: Path, wanted: set[bytes]) -> dict[bytes, Remote]:
+        """One archive index: which of a named archive's bytes are which file.
+
+        The archive's name is the index's own filename, which is what makes a
+        local copy usable against the service without asking it anything.
+
+        Args:
+            path: the index file.
+            wanted: the only keys worth keeping.
+        """
+        blob = path.read_bytes()
+        if len(blob) < _INDEX_FOOTER:
+            return {}
+        footer = len(blob) - _INDEX_FOOTER
+        block_bytes = blob[footer + 11] * 1024
+        offset_bytes = blob[footer + 12]
+        size_bytes = blob[footer + 13]
+        key_bytes = blob[footer + 14]
+        entries = struct.unpack_from("<I", blob, footer + 16)[0]
+        # Four-byte offsets are an ordinary archive index. Six means a group
+        # index, whose leading bytes are an archive number rather than part of
+        # the offset, so reading it this way resolves keys to nonsense.
+        if offset_bytes != 4 or not block_bytes:
+            return {}
+
+        width = key_bytes + size_bytes + offset_bytes
+        per_block = block_bytes // width
+        archive = path.stem
+        found: dict[bytes, Remote] = {}
+        read = 0
+        while read < entries:
+            at = (read // per_block) * block_bytes
+            for _ in range(min(per_block, entries - read)):
+                key = blob[at:at + key_bytes]
+                size = int.from_bytes(blob[at + key_bytes:at + key_bytes + size_bytes],
+                                      "big")
+                offset = int.from_bytes(
+                    blob[at + key_bytes + size_bytes:at + width], "big")
+                # Filtered here rather than after: the full set across every
+                # index runs to millions of entries, and holding them to throw
+                # nearly all away costs more than the read does.
+                if key in wanted:
+                    found[key] = Remote(archive, offset, size)
+                at += width
+                read += 1
+        return found
 
     def _current(self) -> list[Path]:
         """The newest index file per bucket.
@@ -183,6 +264,7 @@ class EpsilonStorage:
         self.remote = remote or Storage(EPSILON)
         self.local = LocalArchives(install)
         self._keys: dict[int, bytes] = {}
+        self._mapped: set[bytes] = set()
 
     @property
     def file_ids(self) -> Iterable[int]:
@@ -227,6 +309,40 @@ class EpsilonStorage:
         key = self._keys.get(file_id)
         return key is not None and self.local.holds(key)
 
+    def prepare_network(self) -> None:
+        """Resolve where the archived files sit, before any concurrent read.
+
+        Two problems, one answer. The service reader builds its archive map
+        lazily and not thread safely, so a walk that goes wide before the map
+        exists has every worker build the whole thing at once. And building it
+        at all means downloading every archive index the service publishes,
+        which is gigabytes fetched to locate a few thousand small files.
+
+        The client already keeps its own copy of those indices, so they are
+        read from disk and handed to the reader before it can want them. If the
+        install has no copy, the reader falls back to its own way of getting
+        them, which is correct and merely expensive.
+        """
+        wanted = {key for key in self._keys.values()
+                  if not self.local.holds(key)} - self._mapped
+        if not wanted:
+            return
+        # Merged rather than built once: each walk resolves its own parents, so
+        # a map built for the first would not carry the second's, and a miss
+        # there reads as the file being unavailable rather than unlooked-for.
+        self._mapped |= wanted
+        found = self.local.archive_locations(wanted)
+        if found:
+            # Handing the map over rather than letting it be built: the reader
+            # exposes no way to seed it, and the alternative is a second
+            # implementation of the ranged read that uses it.
+            existing = self.remote._archives or {}  # pylint: disable=protected-access
+            self.remote._archives = existing | found  # pylint: disable=protected-access
+            print(f"  archive map: {len(found):,} of {len(wanted):,} located "
+                  f"from the install, nothing downloaded")
+        else:
+            self.remote.archives()
+
     def read(self, file_id: int, *, local_only: bool = False) -> bytes | None:
         """One file's decoded bytes.
 
@@ -244,7 +360,13 @@ class EpsilonStorage:
         if found is not None or local_only:
             return found
         try:
-            return self.remote.open(file_id)
+            # Fetched by the key already resolved rather than by asking the
+            # reader to open the id. Its own entry point resolves a key by
+            # scanning the whole encoding file, which is fine for the handful
+            # of tables a build opens and ruinous across tens of thousands:
+            # every read would re-scan a hundred and forty megabytes.
+            raw = self.remote._fetch(key, f"fid{file_id}")  # pylint: disable=protected-access
+            return decode_blte(raw)
         except (LookupError, OSError, ValueError, zlib.error):
             return None
 

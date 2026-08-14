@@ -57,6 +57,29 @@ one too, for the names the client reports as a bare filename with no directory.
 > recorded for them were wrong — a wrong position yields a confident name for the wrong thing rather than an error.
 > `tools/epsilon_tables.py` pairs the reader with the published definitions so every join reads a named column.
 
+### Naming follows the game's own conventions, where there is one
+
+A derived name is only worth having if it looks like a name the game would use, so each convention was measured
+against the community listfile rather than assumed. Three hold and are applied; three do not and are not.
+
+| child                       | convention                         | measured                 |
+|-----------------------------|------------------------------------|--------------------------|
+| a model's skin              | `<model>00.skin`, beside the model | 3,976 / 4,000 models     |
+| a world model's group       | `<root>_000.wmo`, beside the root  | 3,999 / 4,000 groups     |
+| a model's animation         | `<model><anim>-<variation>.anim`   | 3,318 / 4,000 animations |
+| `.phys` / `.skel` / `.bone` | no predictable spelling            | under 1% each            |
+
+**Where a convention holds, the child is placed beside its parent and named the way the game names it** — so a skin of
+`world/expansion05/doodads/thing.m2` is `world/expansion05/doodads/thing00.skin`, which is a *real* name, not a
+placeholder. The child inherits its parent's standing: a child of a parent whose own path was derived lands under
+`epsilon/` too, without needing a second rule.
+
+**Where no convention holds, the file id keeps the path unique** and it sits in a bucket under `epsilon/`, because a
+plausible-looking invented name is worse than an obviously derived one.
+
+> ⚠ An animation is named by the animation it holds, not by its position in the list. The two fields ahead of the file
+> id in the chunk are the animation id and its variation — they are the name, not padding to skip past.
+
 ### Why the order matters twice
 
 A walk can only name a child of a parent that *already has a name*. So the same walk yields different results depending

@@ -59,19 +59,15 @@ def test_stem_of_takes_the_bare_filename() -> None:
     assert stem_of(r"world\maps\thing.wmo") == "thing"
 
 
-def test_a_model_skin_is_numbered_the_way_the_game_numbers_skins() -> None:
-    assert MODEL_CHILDREN[b"SFID"].numbering == "{stem}{index:02d}"
-
-
-def test_a_world_model_group_is_numbered_the_way_the_game_numbers_groups() -> None:
-    """Two digits and no separator would look right and match no file."""
-    assert WORLD_MODEL_CHILDREN[b"GFID"].numbering == "{stem}_{index:03d}"
-
-
-def test_a_texture_carries_no_position() -> None:
-    """A texture's slot is a material property, not part of any filename."""
-    assert MODEL_CHILDREN[b"TXID"].numbering is None
-    assert WORLD_MODEL_CHILDREN[b"MOMT"].numbering is None
+def test_only_the_kinds_the_game_names_predictably_sit_beside_their_parent() -> None:
+    """Measured against the published listfile: a model's skins and animations
+    and a world model's groups follow a convention; the rest do not."""
+    assert MODEL_CHILDREN[b"SFID"].beside
+    assert MODEL_CHILDREN[b"AFID"].beside
+    assert WORLD_MODEL_CHILDREN[b"GFID"].beside
+    for tag in (b"TXID", b"BFID", b"SKID", b"PFID"):
+        assert not MODEL_CHILDREN[tag].beside
+    assert not WORLD_MODEL_CHILDREN[b"MOMT"].beside
 
 
 def test_every_tile_slot_is_a_path_the_game_would_look_up() -> None:
@@ -95,6 +91,9 @@ class FakeStorage:
     def read(self, file_id: int, *, local_only: bool = False) -> bytes | None:
         return self.files.get(file_id)
 
+    def prepare_network(self) -> None:
+        """Nothing to prepare: every file here is already to hand."""
+
 
 def model_walk(files: dict[int, bytes], known: dict[int, str], unnamed: set[int]):
     from epsilon_walks import _model_children  # pylint: disable=import-outside-toplevel
@@ -104,13 +103,38 @@ def model_walk(files: dict[int, bytes], known: dict[int, str], unnamed: set[int]
                         local_only=True, label="models")
 
 
-def test_a_child_claimed_by_one_parent_is_numbered_by_its_position() -> None:
+def test_a_skin_takes_the_name_the_game_would_look_it_up_by() -> None:
+    """Beside its model, as the model's name and a two-digit index."""
     parent = FLOOR + 1
     files = {parent: chunk(b"SFID", ids(FLOOR + 10, FLOOR + 11))}
-    walk = model_walk(files, {parent: "epsilon/object/theme/thing.m2"},
+    walk = model_walk(files, {parent: "world/expansion05/doodads/thing.m2"},
                       {FLOOR + 10, FLOOR + 11})
-    assert walk.names == {FLOOR + 10: "epsilon/skin/thing00.skin",
-                          FLOOR + 11: "epsilon/skin/thing01.skin"}
+    assert walk.names == {
+        FLOOR + 10: "world/expansion05/doodads/thing00.skin",
+        FLOOR + 11: "world/expansion05/doodads/thing01.skin"}
+
+
+def test_a_child_is_only_as_real_as_the_parent_that_names_it() -> None:
+    """The convention is applied whatever the parent's path is, so a child of a
+    derived parent stays under the derived root without a second rule."""
+    parent = FLOOR + 1
+    files = {parent: chunk(b"SFID", ids(FLOOR + 10))}
+    walk = model_walk(files, {parent: "epsilon/object/theme/thing.m2"}, {FLOOR + 10})
+    assert walk.names == {FLOOR + 10: "epsilon/object/theme/thing00.skin"}
+
+
+def test_a_world_model_group_sits_beside_its_root() -> None:
+    from epsilon_walks import (WORLD_MODEL_CHILDREN as KINDS,  # pylint: disable=import-outside-toplevel
+                               _world_model_children)
+
+    parent = FLOOR + 1
+    files = {parent: chunk(b"GFID", ids(FLOOR + 10, FLOOR + 11), reversed_tags=True)}
+    walk = walk_parents(FakeStorage(files), {parent: "world/wmo/azeroth/keep.wmo"},
+                        {FLOOR + 10, FLOOR + 11}, suffix=".wmo",
+                        reader=_world_model_children, kinds=KINDS,
+                        local_only=True, label="world models")
+    assert walk.names == {FLOOR + 10: "world/wmo/azeroth/keep_000.wmo",
+                          FLOOR + 11: "world/wmo/azeroth/keep_001.wmo"}
 
 
 def test_a_child_shared_between_parents_keeps_its_file_id() -> None:
@@ -124,6 +148,7 @@ def test_a_child_shared_between_parents_keeps_its_file_id() -> None:
     assert walk.names == {shared: f"epsilon/skin/first/{shared}.skin"}
 
 
+
 def test_a_texture_always_keeps_its_file_id() -> None:
     parent = FLOOR + 1
     files = {parent: chunk(b"TXID", ids(FLOOR + 10))}
@@ -131,14 +156,17 @@ def test_a_texture_always_keeps_its_file_id() -> None:
     assert walk.names == {FLOOR + 10: f"epsilon/texture/thing/{FLOOR + 10}.blp"}
 
 
-def test_an_animation_entry_is_read_past_its_two_leading_fields() -> None:
-    """An animation reference is an id and a variation before the file id, so
-    reading it as a bare array yields animation numbers as file ids."""
+def test_an_animation_is_named_by_the_animation_it_holds() -> None:
+    """The two fields ahead of the file id are the animation and its variation,
+    and they are the name -- not padding to be skipped past. Reading the chunk
+    as a bare array of ids also takes an animation number for a file id."""
     parent = FLOOR + 1
-    body = struct.pack("<HHI", 3, 0, FLOOR + 10)
-    walk = model_walk({parent: chunk(b"AFID", body)}, {parent: "a/thing.m2"},
+    body = struct.pack("<HHI", 42, 1, FLOOR + 10)
+    walk = model_walk({parent: chunk(b"AFID", body)},
+                      {parent: "character/bloodelf/female/bloodelffemale.m2"},
                       {FLOOR + 10})
-    assert walk.names == {FLOOR + 10: "epsilon/anim/thing00.anim"}
+    assert walk.names == {
+        FLOOR + 10: "character/bloodelf/female/bloodelffemale0042-01.anim"}
 
 
 def test_a_child_that_is_already_named_is_left_alone() -> None:

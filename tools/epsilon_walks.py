@@ -81,35 +81,39 @@ class Child:
     """How a file found through one chunk is named.
 
     Args:
-        bucket: the directory the derived path sits under.
         extension: the child's own extension.
-        numbering: how the child's position is spelled, or None when the format
-            does not guarantee a position. The spelling is the game's own for
-            that kind of file, not a house style: a world model's groups are
-            numbered with a separator and three digits, a model's skins with
-            two and none, and using one convention for both produces paths that
-            look right and match nothing.
+        beside: whether the game names this kind of file after its parent and
+            puts it in the parent's own directory. Where that holds, the child's
+            path is fully determined by the parent's, so it is not a derived
+            path at all -- it is the name the game itself would look the file up
+            by, and it is only as real as the parent's name is.
+        bucket: the directory a derived path sits under, for the kinds where no
+            such convention holds.
     """
 
-    bucket: str
     extension: str
-    numbering: str | None = None
+    beside: bool = False
+    bucket: str = ""
 
 
 MODEL_CHILDREN = {
-    b"SFID": Child("skin", "skin", "{stem}{index:02d}"),
-    b"TXID": Child("texture", "blp"),
-    b"AFID": Child("anim", "anim", "{stem}{index:02d}"),
-    b"BFID": Child("bone", "bone", "{stem}{index:02d}"),
-    b"SKID": Child("skel", "skel", "{stem}{index:02d}"),
-    b"PFID": Child("phys", "phys", "{stem}{index:02d}"),
+    b"SFID": Child("skin", beside=True, bucket="skin"),
+    b"TXID": Child("blp", bucket="texture"),
+    b"AFID": Child("anim", beside=True, bucket="anim"),
+    b"BFID": Child("bone", bucket="bone"),
+    b"SKID": Child("skel", bucket="skel"),
+    b"PFID": Child("phys", bucket="phys"),
 }
 """Which chunks of a model point at another file, and how to name what they
 point at.
 
-A texture is the one with no position worth carrying. Its slot is a property of
-the material rather than part of any filename the game uses, so those keep the
-shape that leans on the file id instead.
+Only two of these follow a convention the listfile bears out. A model's skins
+sit beside it as the model's name and a two-digit index, and its animations as
+the model's name, the animation's own id and its variation -- both measured
+across thousands of published names. The remaining three do live beside their
+model but are named too irregularly to predict, and a texture's slot is a
+material property rather than part of any filename, so all four keep the shape
+that leans on the file id.
 """
 
 _ANIMATION_ENTRY = 8
@@ -297,51 +301,57 @@ def customization_names(storage: Reads, floor: int) -> dict[int, str]:
     return names
 
 
-def _model_children(raw: bytes) -> dict[bytes, list[int]]:
+def _model_children(raw: bytes) -> dict[bytes, list[tuple[int, str]]]:
     """The file ids one model points at, by chunk tag.
 
     A model from before the chunked format begins with a different magic and
     carries no chunks at all, so it yields nothing rather than failing: its
     references are inline and name no separate file.
     """
-    found: dict[bytes, list[int]] = {}
+    found: dict[bytes, list[tuple[int, str]]] = {}
     for tag, body in chunks(raw):
         if tag not in MODEL_CHILDREN:
             continue
         if tag == b"AFID":
-            found[tag] = [struct.unpack_from("<I", body, at + 4)[0]
-                          for at in range(0, len(body) - _ANIMATION_ENTRY + 1,
-                                          _ANIMATION_ENTRY)]
+            # An animation is named by the animation it holds rather than by
+            # its position in the list, so the two fields ahead of the file id
+            # are the name and not something to skip past.
+            found[tag] = []
+            for at in range(0, len(body) - _ANIMATION_ENTRY + 1, _ANIMATION_ENTRY):
+                animation, variation, fid = struct.unpack_from("<HHI", body, at)
+                found[tag].append((fid, f"{animation:04d}-{variation:02d}"))
         else:
-            found[tag] = list(struct.unpack_from(f"<{len(body) // 4}I", body))
+            found[tag] = [(fid, f"{index:02d}") for index, fid
+                          in enumerate(struct.unpack_from(f"<{len(body) // 4}I", body))]
     return found
 
 
-def _world_model_children(raw: bytes) -> dict[bytes, list[int]]:
+def _world_model_children(raw: bytes) -> dict[bytes, list[tuple[int, str]]]:
     """The group files and material textures one world model points at."""
-    found: dict[bytes, list[int]] = {}
+    found: dict[bytes, list[tuple[int, str]]] = {}
     for tag, body in chunks(raw, reversed_tags=True):
         if tag == b"GFID":
-            found.setdefault(b"GFID", []).extend(
-                struct.unpack_from(f"<{len(body) // 4}I", body))
+            groups = found.setdefault(b"GFID", [])
+            for fid in struct.unpack_from(f"<{len(body) // 4}I", body):
+                groups.append((fid, f"_{len(groups):03d}"))
         elif tag == b"MOMT":
             textures = found.setdefault(b"MOMT", [])
             for at in range(0, len(body) - _MATERIAL + 1, _MATERIAL):
                 for offset in _MATERIAL_TEXTURES:
                     fid = struct.unpack_from("<I", body, at + offset)[0]
                     if fid:
-                        textures.append(fid)
+                        textures.append((fid, ""))
     return found
 
 
 WORLD_MODEL_CHILDREN = {
-    b"GFID": Child("wmo", "wmo", "{stem}_{index:03d}"),
-    b"MOMT": Child("texture", "blp"),
+    b"GFID": Child("wmo", beside=True, bucket="wmo"),
+    b"MOMT": Child("blp", bucket="texture"),
 }
 """The world-model counterpart of `MODEL_CHILDREN`.
 
-A group file's numbering is the game's own: a root's groups are the root's name,
-an underscore and three digits.
+A group sits beside its root as the root's name, an underscore and three
+digits, which the listfile bears out for very nearly every published group.
 """
 
 
@@ -373,7 +383,7 @@ def walk_parents(storage: Reads, known: dict[int, str], unnamed: set[int],
     here = [fid for fid in parents if storage.holds_locally(fid)]
     remote = [fid for fid in parents if not storage.holds_locally(fid)]
 
-    claims: dict[int, list[tuple[int, bytes, int]]] = defaultdict(list)
+    claims: dict[int, list[tuple[int, bytes, str]]] = defaultdict(list)
     read = 0
 
     def collect(parent: int, raw: bytes | None) -> None:
@@ -381,10 +391,10 @@ def walk_parents(storage: Reads, known: dict[int, str], unnamed: set[int],
         if not raw:
             return
         read += 1
-        for tag, ids in reader(raw).items():
-            for index, child in enumerate(ids):
+        for tag, references in reader(raw).items():
+            for child, suffix in references:
                 if child in unnamed:
-                    claims[child].append((parent, tag, index))
+                    claims[child].append((parent, tag, suffix))
 
     for parent in tqdm(here, desc=f"{label} (install)", unit="file"):
         collect(parent, storage.read(parent, local_only=True))
@@ -395,6 +405,9 @@ def walk_parents(storage: Reads, known: dict[int, str], unnamed: set[int],
         # decision rather than a detail of how a default happens to be set.
         print(f"  {label}: {len(remote):,} files are not on disk and will be "
               f"requested from the service")
+        # Before going wide, never during: the fallback index every miss needs
+        # is built lazily, so a concurrent first read has each worker build it.
+        storage.prepare_network()
         with ThreadPoolExecutor(max_workers=WORKERS) as pool:
             pending = {pool.submit(storage.read, fid): fid for fid in remote}
             for done in tqdm(as_completed(pending), total=len(pending),
@@ -403,14 +416,19 @@ def walk_parents(storage: Reads, known: dict[int, str], unnamed: set[int],
 
     names: dict[int, str] = {}
     for child, entries in claims.items():
-        parent, tag, index = min(entries)
+        parent, tag, suffix = min(entries)
         kind = kinds[tag]
-        stem = stem_of(known[parent])
-        if kind.numbering is not None and len(entries) == 1:
-            spelled = kind.numbering.format(stem=stem, index=index)
-            names[child] = f"{DERIVED_ROOT}/{kind.bucket}/{spelled}.{kind.extension}"
+        parent_path = known[parent]
+        stem = stem_of(parent_path)
+        if kind.beside and len(entries) == 1:
+            # The game's own name for this file, which is the parent's name and
+            # the parent's directory. Whether it is a real path or a derived one
+            # is settled by the parent's own name, not here.
+            directory = parent_path.replace("\\", "/").rpartition("/")[0]
+            spelled = f"{stem}{suffix}.{kind.extension}"
+            names[child] = f"{directory}/{spelled}" if directory else spelled
         else:
-            # Shared between parents, or a slot the format does not number: the
+            # Shared between parents, or a kind the game names irregularly: the
             # file id is what keeps the path unique, and the parent directory is
             # what carries the meaning.
             names[child] = f"{DERIVED_ROOT}/{kind.bucket}/{stem}/{child}.{kind.extension}"
