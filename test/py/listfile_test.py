@@ -6,7 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from pack.routes.assets import resolve_paths
-from pack.sources.listfile import LISTFILE_ASSET, SUPPLEMENT_FLOOR
+from pack.sources.listfile import (LISTFILE_ASSET, SUPPLEMENT,
+                                   SUPPLEMENT_FLOOR)
 from pack.supplements import above
 from pack.tables.listfile_tables import ID, PATH, TABLE, ListfileTables
 from pack.tables.overlay import OverlaidTables, Overlay
@@ -122,3 +123,28 @@ def test_a_supplement_may_not_rename_an_asset_the_base_already_names(
     spelling of one."""
     tables = _supplemented(tmp_path, "1;Interface/WRONG.avi\n")
     assert resolve_paths(tables, {1}) == {1: "Interface/Cinematics/Logo_800.avi"}
+
+
+def test_the_vendored_supplement_loads_and_is_wholly_admitted() -> None:
+    """The supplement ships in the repository, so this reads the real file: every
+    row must be beyond the floor, or the rule that keeps it from shadowing a
+    community name is not the rule this file needs."""
+    tables = ListfileTables(SUPPLEMENT)
+    assert tables.available(TABLE), f"{SUPPLEMENT} is not vendored"
+    admits = above(SUPPLEMENT_FLOOR)
+    ids = [int(fid) for fid, _path in tables.rows(TABLE, [ID, PATH])]
+    assert ids, "the vendored supplement is empty"
+    assert all(admits(str(fid)) for fid in ids), \
+        "a vendored row sits at or below the floor and could shadow a real name"
+    assert len(set(ids)) == len(ids), "the vendored supplement repeats a file id"
+    assert ids == sorted(ids), "the vendored supplement is not sorted by file id"
+
+
+def test_the_vendored_supplement_names_nothing_the_community_listfile_names(
+        tmp_path: Path) -> None:
+    """Its whole purpose is to reach what the community listfile cannot, so an
+    overlap would mean the floor had moved rather than that a name was gained."""
+    community = listfile(tmp_path, name="community.csv")
+    named = {int(fid) for fid, _ in community.rows(TABLE, [ID, PATH])}
+    vendored = {int(fid) for fid, _ in ListfileTables(SUPPLEMENT).rows(TABLE, [ID, PATH])}
+    assert not (named & vendored)

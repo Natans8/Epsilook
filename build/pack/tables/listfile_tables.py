@@ -12,9 +12,11 @@ semicolon-separated, with no header line to read the column names from.
 
 from __future__ import annotations
 
+import gzip
 import sys
 from collections.abc import Iterator, Sequence
 from pathlib import Path
+from typing import IO
 
 TABLE = "Listfile"
 """The one table this provider serves. Declared once so the provider and the
@@ -34,8 +36,25 @@ class ListfileTables:
     """
 
     def __init__(self, path: Path) -> None:
-        """Serve the listfile at `path`."""
+        """Serve the listfile at `path`, gzipped or plain."""
         self.path = path
+
+    def _open(self) -> IO[str]:
+        """The file as text, decompressing a vendored copy on the way.
+
+        A downloaded listfile is plain and a vendored one is compressed, because
+        one is cached and the other is tracked and wants to stay small. Which it
+        is follows from the suffix rather than from a flag, so a caller never
+        chooses.
+        """
+        if self.path.suffix == ".gz":
+            return gzip.open(self.path, "rt", encoding="utf-8", errors="replace",
+                             newline="")
+        # `newline=""` on purpose: without it a lone carriage return counts as a
+        # line terminator, so a path carrying one would be split into a
+        # truncated row that still looks like a real name and a remainder that
+        # is silently skipped.
+        return self.path.open(newline="", encoding="utf-8", errors="replace")
 
     def available(self, table: str) -> bool:
         """Whether this is the table served, and its file is there."""
@@ -77,11 +96,7 @@ class ListfileTables:
         forward = index == [0, 1]
         reverse = index == [1, 0]
 
-        # `newline=""` on purpose: without it a lone carriage return counts as a
-        # line terminator, so a path carrying one would be split into a
-        # truncated row that still looks like a real name and a remainder that
-        # is silently skipped.
-        with self.path.open(newline="", encoding="utf-8", errors="replace") as handle:
+        with self._open() as handle:
             for line in handle:
                 fid, separator, asset = line.rstrip("\r\n").partition(";")
                 if not separator:
