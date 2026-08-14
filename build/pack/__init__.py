@@ -2,7 +2,7 @@
 
 Layers, in data-flow order; imports point the other way, toward ``sources/``:
 
-    sources/  acquisition: download, cache, extraction, distillation, provenance
+    sources/  the acquisition seam: ``Source`` -- located, gotten, extracted
     tables/   the provider seam: ``Tables`` -- available, header, rows
     routes/   the readers: tables in, typed bundles out
     derive/   the graph walk and every cross-route derivation, computed once

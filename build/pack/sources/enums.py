@@ -10,10 +10,11 @@ from __future__ import annotations
 import json
 import sys
 import re
+from pathlib import Path
 from typing import Any
 
-from ..progress import log
-from .cache import BUILD_DIR, CACHE_DIR, download_volatile
+from .cache import BUILD_DIR, CACHE_DIR, Volatile
+from .source import Fetched, Origin, Source
 
 ENUMS_DIR = BUILD_DIR / "enums"
 """Checked-in enum tables: values this build decides the meaning of itself."""
@@ -26,6 +27,15 @@ ANIMS_JS_URL = "https://raw.githubusercontent.com/Marlamin/wow.tools.local/main/
 # SpellEffect.EffectAura (SPELL_AURA_*).
 WOWDBDEFS_ENUM_URL = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/meta/enums/{name}.dbde"
 ENUM_FILES = ["SpellEffect", "SpellEffectAura", "Target"]
+
+ANIMS_FILE = CACHE_DIR / "anims.js"
+"""Where the animation names land, named once so the source that fetches them
+and the reader that parses them cannot point at different files."""
+
+
+def enum_file(name: str) -> Path:
+    """Where one WoWDBDefs enum list lands, for the same reason."""
+    return CACHE_DIR / "enums" / f"{name}.dbde"
 
 
 def load_local_enum(name: str) -> dict[int, Any]:
@@ -56,7 +66,7 @@ def enum_id_where(mapping: dict[int, Any], handler: str) -> int:
 
 def read_anim_names() -> list[str]:
     """Parse the animationNames JS array (index = AnimID)."""
-    src = (CACHE_DIR / "anims.js").read_text(encoding="utf-8")
+    src = ANIMS_FILE.read_text(encoding="utf-8")
     names = re.findall(r'"([^"]*)"', src)
     if len(names) < 1000 or names[0] != "Stand":
         sys.exit("error: anims.js did not parse as expected")
@@ -72,7 +82,7 @@ def read_enum_names(name: str, version: str) -> dict[int, str]:
     """
     ver = tuple(int(p) for p in version.split("."))
     names: dict[int, str] = {}
-    for line in (CACHE_DIR / "enums" / f"{name}.dbde").read_text(encoding="utf-8").splitlines():
+    for line in enum_file(name).read_text(encoding="utf-8").splitlines():
         line = line.split("//", 1)[0].strip()
         if line.startswith("(BUILD "):
             guard, _, line = line[len("(BUILD "):].partition(")")
@@ -99,16 +109,18 @@ def read_enum_names(name: str, version: str) -> dict[int, str]:
 
 
 
-def fetch_enum_names() -> None:
-    """Refresh the animation names and the WoWDBDefs enum lists.
+def enum_sources() -> list[Source]:
+    """The name lists that are fetched rather than checked in.
 
-    Unconditional: both keep being corrected for game builds that shipped years
-    ago.
+    Volatile rather than pinned, all of them: both lists keep being corrected
+    for game builds that shipped years ago, so a copy kept forever serves a
+    name upstream has since fixed.
     """
-    log("Animation names (wow.tools):")
-    download_volatile(ANIMS_JS_URL, CACHE_DIR / "anims.js")
-
-    log("Enum names (wowdev/WoWDBDefs):")
-    for name in ENUM_FILES:
-        download_volatile(WOWDBDEFS_ENUM_URL.format(name=name),
-                          CACHE_DIR / "enums" / f"{name}.dbde")
+    return [
+        Fetched(name="animation names (wow.tools)", origin=Origin(ANIMS_JS_URL),
+                dest=ANIMS_FILE, fetch=Volatile()),
+        *(Fetched(name=f"enum names, {name} (wowdev/WoWDBDefs)",
+                  origin=Origin(WOWDBDEFS_ENUM_URL.format(name=name)),
+                  dest=enum_file(name), fetch=Volatile())
+          for name in ENUM_FILES),
+    ]

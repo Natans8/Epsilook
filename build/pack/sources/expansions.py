@@ -10,9 +10,19 @@ import gzip
 import json
 from typing import Any
 
-from .cache import BUILD_DIR
+from .cache import BUILD_DIR, tracked_source
+from .source import Source
 
 EXPANSIONS_FILE = BUILD_DIR / "expansion_ids.json.gz"
+
+
+def expansions_source() -> Source:
+    """The committed ladder: in the checkout, or nowhere.
+
+    No fetch can produce it -- it was derived once from historical clients --
+    so acquiring it is the check that it is there.
+    """
+    return tracked_source("expansion ladder", EXPANSIONS_FILE)
 
 
 def load_expansions() -> tuple[list[dict[str, Any]], dict[int, int]]:

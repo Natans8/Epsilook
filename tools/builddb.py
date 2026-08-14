@@ -67,6 +67,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 
 import dbd  # noqa: E402  (path set above)
+from pack.sources.tdb import tdb_dir_name  # noqa: E402  (path set above)
 from packs import PACKS, builds, schema_name  # noqa: E402  (path set above)
 
 from repo import CACHE, LISTFILE_ASSET
@@ -508,10 +509,14 @@ def load_tdb(con: "duckdb.DuckDBPyConnection", build_id: str, tdb_tag: str | Non
 
     Four Classic re-release packs have no TDB release at all — they simply get
     no tdb_ tables, exactly as the pack build degrades for them.
+
+    The directory is named by the build rather than spelled again here: it is
+    keyed on the release TAG, so two builds matching one release read one
+    directory, and a tool guessing at that name reads nothing at all.
     """
     if not tdb_tag:
         return 0
-    directory = CACHE / f"tdb-{tdb_tag}"
+    directory = CACHE / tdb_dir_name(tdb_tag)
     if not directory.is_dir():
         return 0
     schema = schema_name(build_id)

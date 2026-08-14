@@ -11,15 +11,17 @@ from __future__ import annotations
 
 import csv
 import sys
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..drift import TDB_OPTIONAL_COLUMNS, TDB_OPTIONAL_TABLES
 from ..progress import log
 from ..targets import VISUAL_REDIRECTS
 from .archive import read_member
-from .cache import CACHE_DIR, download
+from .cache import CACHE_DIR, Pinned
 from .dump import Column, iter_insert_rows, parse_create_table
+from .source import Extracted, Fetched, Origin, Source
 
 STAMP_COLUMN = "VerifiedBuild"
 """The client build a hotfix row was last verified against.
@@ -80,6 +82,14 @@ TDB_RELEASES = {
     },
 }
 TDB_ASSET_URL = "https://github.com/TrinityCore/TrinityCore/releases/download/{tag}/{asset}"
+
+Wanted = Mapping[str, list[str]]
+"""The tables one dump is scanned for, mapped to the columns kept from each.
+
+A roster rather than the roster: the same dump is read for the pack's tables
+and, by a language overlay, for the `*_locale` tables carrying the same rows in
+another language.
+"""
 
 # Tables distilled out of the TDB SQL dumps into cached CSVs, with the columns
 # kept. World tables are complete; hotfix rows are applied on top of the wago
@@ -183,7 +193,7 @@ def check_lossy_declaration(table: str, schema: list[Column], keep: list[str]) -
                 f"TDB_LOSSY_COLUMNS")
 
 
-def distill_dump(lines: Iterable[str], name: str, want: dict[str, list[str]],
+def distill_dump(lines: Iterable[str], name: str, want: Wanted,
                  out_dir: Path, required: bool = True,
                  overlay: bool = False) -> None:
     """Write the wanted tables and columns of one SQL dump out as CSVs.
@@ -196,8 +206,10 @@ def distill_dump(lines: Iterable[str], name: str, want: dict[str, list[str]],
         name: what to call the dump in an error.
         want: the columns to keep, per table.
         out_dir: where the CSVs are written.
-        required: a table missing from the dump is fatal. True for the world
-            tables, the only source of what they carry.
+        required: a table missing from the dump is fatal. True where this dump
+            is the only source of what the table carries, as it is for the
+            pack's own world tables and is not for their `*_locale`
+            counterparts, which a release may predate.
         overlay: this dump revises data the client already has. Only an overlay
             has its column types checked against TDB_LOSSY_COLUMNS, and only for
             an overlay does an absent table get a header-only stand-in.
@@ -260,7 +272,7 @@ def distill_dump(lines: Iterable[str], name: str, want: dict[str, list[str]],
                 csv.writer(handle).writerow(keep)
 
 
-def distilled(tdb_dir: Path, want: dict[str, list[str]]) -> bool:
+def distilled(into: Path, want: Wanted) -> bool:
     """Check whether the cache holds exactly the tables and columns wanted.
 
     The header is compared, not the file's existence, which would leave a widened
@@ -268,7 +280,7 @@ def distilled(tdb_dir: Path, want: dict[str, list[str]]) -> bool:
     excluded by the declaration that let it be absent.
     """
     for table, columns in want.items():
-        path = tdb_dir / f"{table}.csv"
+        path = into / f"{table}.csv"
         if not path.exists():
             if table in TDB_OPTIONAL_TABLES:
                 continue
@@ -295,41 +307,124 @@ def tdb_release(version: str) -> dict | None:
     return None
 
 
-def fetch_tdb(version: str) -> Path | None:
-    """Distil the TDB tables for this version if needed, and say where they are.
+def tdb_dir_name(tag: str) -> str:
+    """The directory one release is cached in: its archive, and what was
+    distilled out of it.
 
-    The dumps are read straight out of the downloaded archive, so the SQL never
-    reaches the filesystem.
+    Keyed on the release tag rather than on a build, because several builds
+    match one release and each of them would otherwise pay for the same
+    hundreds of megabytes. The name alone, so a reader rooting the cache at its
+    own declaration of where it is can still name the same directory.
+    """
+    return f"tdb-{tag}"
+
+
+@dataclass(frozen=True)
+class Distill:
+    """Turning one release's dumps into the CSVs a provider serves.
+
+    A release is scanned once and leaves a directory of CSVs holding only the
+    declared tables and columns, with the archive beside them.
+    """
+
+    kinds: tuple[str, ...]
+    """Which dumps this release ships, in the order they are read."""
+
+    members: Mapping[str, str]
+    """Dump kind, mapped to the member's path inside the archive."""
+
+    want: Mapping[str, Wanted] = field(default_factory=lambda: TDB_TABLES)
+    """Dump kind, mapped to the tables kept from it and the columns of each.
+
+    A field rather than the one roster, because the same archive is scanned for
+    more than one set of tables: the pack's, and the `*_locale` tables a
+    language overlay reads out of the same world dump. Both then answer
+    completeness the same way, by comparing headers -- so a column added to
+    either roster re-distils the releases cached without it, rather than
+    leaving them looking finished and quietly missing it.
+    """
+
+    required: frozenset[str] = frozenset({"world"})
+    """The kinds a wanted table missing from the dump is fatal in.
+
+    The pack's world tables are the only source of what they carry, so nothing
+    can be built without them. Their `*_locale` counterparts are not: a release
+    may predate one, and those strings stay in the language the base pack
+    already ships.
+    """
+
+    overlay: frozenset[str] = frozenset({"hotfixes"})
+    """The kinds revising data the client already has.
+
+    Only an overlay has its column types checked against TDB_LOSSY_COLUMNS, and
+    only for an overlay does an absent table get a header-only stand-in.
+    """
+
+    def wanted(self) -> dict[str, list[str]]:
+        """Every table this extraction writes, with the columns kept.
+
+        Only the kinds this release actually ships: a world-only release is
+        complete without the hotfix tables, and asking for them would leave it
+        permanently undistilled.
+        """
+        return {table: columns for kind in self.kinds
+                for table, columns in self.want[kind].items()}
+
+    def complete(self, into: Path) -> bool:
+        """Whether the cache already holds exactly these tables and columns."""
+        return distilled(into, self.wanted())
+
+    def run(self, located: Path, into: Path) -> None:
+        """Read each dump straight out of the archive, writing the CSVs out.
+
+        The SQL never reaches the filesystem: a release is hundreds of
+        megabytes of it, and only the declared columns of a dozen tables
+        survive the scan.
+        """
+        for kind in sorted((self.overlay & set(self.want)) - set(self.kinds)):
+            log(f"  no {kind} dump in this release: nothing revises what the "
+                f"client itself carries")
+        for kind in self.kinds:
+            member = self.members[kind]
+            log(f"  distilling {member} ...")
+            with read_member(located, member) as lines:
+                distill_dump(lines, member, self.want[kind], into,
+                             required=kind in self.required,
+                             overlay=kind in self.overlay)
+
+
+def tdb_extraction(release: Mapping[str, str], name: str,
+                   extract: Distill) -> Extracted:
+    """One release's archive, and what is distilled out of it, as one source.
+
+    The archive is cached in the directory the CSVs land in, so a release is
+    one directory whichever tables were asked of it -- and whichever of them
+    asks first pays for the download.
+
+    The archive is reached only where the distillation is not already complete,
+    which is what keeps a refresh from spending hundreds of megabytes to arrive
+    at the same rows. Where it is reached, a refresh is honoured: a truncated
+    archive is exactly what somebody passes the flag to be rid of.
+    """
+    into = CACHE_DIR / tdb_dir_name(release["tag"])
+    archive = Fetched(name=f"TDB archive ({release['tag']})",
+                      origin=Origin(TDB_ASSET_URL.format(**release)),
+                      dest=into / release["asset"], fetch=Pinned())
+    return Extracted(name=name, inner=archive, extract=extract, into=into)
+
+
+def tdb_source(version: str) -> Source | None:
+    """The distilled TrinityCore tables for one build.
 
     Returns:
-        The directory holding the distilled CSVs, or None when no TDB release
-        maps to this version, which is not an error: the routes that need one
-        degrade as declared.
+        The source, or None when no release maps to this version. Not an
+        error: the routes that need one degrade as declared.
     """
-    rel = tdb_release(version)
-    if rel is None:
-        log(f"TDB: no release mapped for {version} — morphs will not resolve, "
-            f"hotfixes will not apply")
+    release = tdb_release(version)
+    if release is None:
         return None
-    tdb_dir = CACHE_DIR / f"tdb-{rel['tag']}"
-    # Only the kinds this release actually has count towards "already
-    # distilled".
-    kinds = [k for k in ("world", "hotfixes") if k in rel]
-    wanted = {t: c for k in kinds for t, c in TDB_TABLES[k].items()}
-    if distilled(tdb_dir, wanted):
-        log(f"TDB ({rel['tag']}): cached ({len(wanted)} distilled tables)")
-        return tdb_dir
-    if "hotfixes" not in rel:
-        log(f"TDB ({rel['tag']}): world-only release — no hotfix overrides for this build")
-    tdb_dir.mkdir(parents=True, exist_ok=True)
-    archive = tdb_dir / rel["asset"]
-    download(TDB_ASSET_URL.format(**rel), archive, refresh=False)
-    for kind in kinds:
-        member = rel[kind]
-        log(f"  distilling {member} ...")
-        with read_member(archive, member) as lines:
-            distill_dump(lines, member, TDB_TABLES[kind], tdb_dir,
-                         required=(kind == "world"),
-                         overlay=(kind == "hotfixes"))
-    return tdb_dir
+    kinds = tuple(kind for kind in ("world", "hotfixes") if kind in release)
+    return tdb_extraction(
+        release, f"TDB ({release['tag']})",
+        Distill(kinds=kinds, members={kind: release[kind] for kind in kinds}))
 

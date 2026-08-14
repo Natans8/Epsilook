@@ -16,12 +16,10 @@ checking for.
 from __future__ import annotations
 
 import json
-import urllib.error
 import urllib.request
-from pathlib import Path
 
-from ..progress import log
-from .cache import BUILD_DIR, CACHE_DIR, download
+from .cache import BUILD_DIR, CACHE_DIR, Revalidated, tracked_source
+from .source import Fetched, Origin, Source
 
 LISTFILE_RELEASE_API = "https://api.github.com/repos/wowdev/wow-listfile/releases/latest"
 
@@ -76,68 +74,57 @@ however far the listfile grows.
 """
 
 
-def fetch_listfile(refresh: bool) -> Path:
-    """Ensure the community listfile is current, and return its path.
+def latest_release(api: str) -> tuple[str, str]:
+    """The latest release's tag, and where its listfile asset is.
 
-    An unreachable release API is fatal only with nothing cached; otherwise the
-    cached copy is used, possibly missing the newest names.
+    The oracle a revalidated fetch asks before fetching anything: one small
+    request, against a body of a hundred megabytes.
 
     Args:
-        refresh: download even when the cached tag is already the latest.
+        api: the releases endpoint to read.
 
     Returns:
-        Where the listfile is on disk.
+        The release tag, and the asset's download url.
 
     Raises:
-        OSError: if the release cannot be reached and nothing is cached.
+        LookupError: if the release carries no such asset. Told apart from an
+            unreachable endpoint on purpose -- a release that stops carrying
+            this asset reads as "the network is down" if both land in one
+            message, and the build then runs on a cached listfile forever
+            while reporting a problem nobody can act on.
+        OSError: if the endpoint cannot be reached.
+        ValueError: if what came back is not the document it should be.
     """
-    listfile_dir = CACHE_DIR / "listfile"
-    listfile = listfile_dir / LISTFILE_ASSET
-    # The tag names the RELEASE, not the asset, so it is shared with anything
-    # else reading a listfile out of this cache. Switching asset while the tag
-    # stands still is covered by the existence check below.
-    tag_file = listfile_dir / "release-tag.txt"
-    log("Listfile (wowdev/wow-listfile):")
-    cached_tag = tag_file.read_text(encoding="utf-8").strip() if tag_file.exists() else ""
-    latest_tag, asset_url = "", ""
-    try:
-        with urllib.request.urlopen(
-                urllib.request.Request(LISTFILE_RELEASE_API,
-                                       headers={"User-Agent": "epsilook-build"}), timeout=60
-        ) as response:
-            release = json.load(response)
-        latest_tag = release["tag_name"]
-        assets = {asset["name"]: asset["browser_download_url"]
-                  for asset in release["assets"]}
-        # Told apart from an unreachable API on purpose. A release that stops
-        # carrying this asset reads as "the network is down" if both land in
-        # one message, and the build then runs on a cached listfile forever
-        # while reporting a problem nobody can act on.
-        if LISTFILE_ASSET not in assets:
-            raise LookupError(
-                f"release {latest_tag} carries no {LISTFILE_ASSET} "
-                f"(it has {', '.join(sorted(assets))})")
-        asset_url = assets[LISTFILE_ASSET]
-    # Three shapes of the same answer, "the latest release did not resolve": a
-    # network failure is a `URLError` and so an `OSError`; a body that is not
-    # JSON at all -- a proxy or captive-portal page -- is a `JSONDecodeError`
-    # and so a `ValueError`; JSON missing a key we need is a `LookupError`,
-    # which is also what the absent-asset check above raises.
-    except (OSError, ValueError, LookupError) as exc:
-        if not listfile.exists():
-            raise
-        log(f"  WARNING  could not resolve the latest release ({exc}); "
-            f"using cached listfile (tag {cached_tag or 'unknown'})")
-        # Cleared so the download below cannot run on a tag whose url never
-        # resolved, which would fetch the empty string.
-        latest_tag = ""
+    request = urllib.request.Request(api, headers={"User-Agent": "epsilook-build"})
+    with urllib.request.urlopen(request, timeout=60) as response:
+        release = json.load(response)
+    assets = {asset["name"]: asset["browser_download_url"]
+              for asset in release["assets"]}
+    if LISTFILE_ASSET not in assets:
+        raise LookupError(f"release {release['tag_name']} carries no "
+                          f"{LISTFILE_ASSET} (it has {', '.join(sorted(assets))})")
+    return release["tag_name"], assets[LISTFILE_ASSET]
 
-    if latest_tag and (refresh or not listfile.exists() or cached_tag != latest_tag):
-        if cached_tag and cached_tag != latest_tag:
-            log(f"  stale    cached tag {cached_tag} -> {latest_tag}")
-        download(asset_url, listfile, refresh=True)
-        tag_file.write_text(latest_tag, encoding="utf-8")
-    elif latest_tag:
-        log(f"  current  {listfile.name} (tag {latest_tag}, "
-            f"{listfile.stat().st_size:,} bytes)")
-    return listfile
+
+def listfile_source() -> Source:
+    """The community listfile, revalidated against the latest release tag.
+
+    Its origin is the endpoint the address is published at rather than the
+    address itself: which asset url serves this file changes with every
+    release, and the endpoint is the fixed thing a reader can go and look at.
+    """
+    into = CACHE_DIR / "listfile"
+    return Fetched(
+        name="listfile (wowdev/wow-listfile)",
+        origin=Origin(LISTFILE_RELEASE_API, f"the {LISTFILE_ASSET} asset"),
+        dest=into / LISTFILE_ASSET,
+        fetch=Revalidated(resolve=latest_release,
+                          token_file=into / "release-tag.txt"))
+
+
+def supplement_source() -> Source:
+    """The vendored asset-name supplement: in the checkout, or nowhere.
+
+    No fetch can produce it, so acquiring it is the check that it is there.
+    """
+    return tracked_source("asset-name supplement", SUPPLEMENT)

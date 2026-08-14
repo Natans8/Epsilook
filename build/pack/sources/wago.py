@@ -3,6 +3,9 @@
 One file per db2 table per build. The roster below is what gets fetched; which
 of them a given build may legitimately lack is declared separately, in
 ``drift``.
+
+An export cannot change under a build already released, so every one of these
+is pinned: fetched once, then read out of the cache forever.
 """
 
 from __future__ import annotations
@@ -10,8 +13,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..drift import OPTIONAL_TABLES
-from ..progress import log
-from .cache import CACHE_DIR, download
+from .cache import CACHE_DIR, Pinned
+from .source import Fetched, Gathered, Origin, Source
 
 WAGO_CSV_URL = "https://wago.tools/db2/{table}/csv?build={version}"
 # The one cross-version source: no shipped build carries sound-kit names.
@@ -121,22 +124,35 @@ TABLES = [
 ]
 
 
-def fetch_tables(version: str, refresh: bool) -> tuple[Path, Path]:
-    """Download this build's table CSVs, and the pinned sound-kit names.
+def _export(table: str, version: str, into: Path) -> Fetched:
+    """One table's export, as a source of its own.
 
-    Returns:
-        The build's own table directory and the pinned build's, kept apart so
-        the pinned build's other tables cannot shadow the ones being packed.
+    Optionality is per table rather than per build: a table the client
+    predates answers 404, and which tables may is what ``OPTIONAL_TABLES``
+    declares.
     """
-    table_dir = CACHE_DIR / version
-    log(f"Tables (wago.tools, build {version}):")
-    for table in TABLES:
-        download(WAGO_CSV_URL.format(table=table, version=version),
-                 table_dir / f"{table}.csv", refresh,
-                 optional=table in OPTIONAL_TABLES)
+    return Fetched(name=table,
+                   origin=Origin(WAGO_CSV_URL.format(table=table, version=version)),
+                   dest=into / f"{table}.csv",
+                   fetch=Pinned(optional=table in OPTIONAL_TABLES))
 
-    pinned_dir = CACHE_DIR / SOUNDKITNAME_BUILD
-    log(f"Sound-kit names (wago.tools, pinned build {SOUNDKITNAME_BUILD}):")
-    download(WAGO_CSV_URL.format(table="SoundKitName", version=SOUNDKITNAME_BUILD),
-             pinned_dir / "SoundKitName.csv", refresh)
-    return table_dir, pinned_dir
+
+def tables_source(version: str) -> Source:
+    """This build's table exports, as the one directory a provider reads."""
+    into = CACHE_DIR / version
+    return Gathered(name=f"tables (wago.tools, build {version})", into=into,
+                    parts=[_export(table, version, into) for table in TABLES])
+
+
+def pinned_tables_source() -> Source:
+    """The sound-kit names, from the last build that carries them.
+
+    Its own directory, and never the one being packed: the pinned build has
+    every other table too, and sharing a directory would let those shadow the
+    ones this build is packing.
+    """
+    into = CACHE_DIR / SOUNDKITNAME_BUILD
+    return Gathered(
+        name=f"sound-kit names (wago.tools, pinned build {SOUNDKITNAME_BUILD})",
+        into=into,
+        parts=[_export("SoundKitName", SOUNDKITNAME_BUILD, into)])

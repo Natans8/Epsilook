@@ -102,17 +102,98 @@ dropping data is worse than failing loudly. See [Drift between builds](#drift-be
 
 ## Acquire
 
-| source                  | gives                                                    | shape                                              |
-|-------------------------|----------------------------------------------------------|----------------------------------------------------|
-| **wago.tools**          | The client's own db2 tables, one set per game build      | CSV per table, downloaded and cached               |
-| **community listfile**  | File id to asset path                                    | One flat list; the only thing that names a file id |
-| **TrinityCore release** | Server world tables, and hotfix rows revising the client | A solid archive of SQL, distilled to CSV           |
-| **checked-in enums**    | Enum value to name, with attribution                     | Committed under `build/enums/`                     |
-| **animation name list** | Animation id to name                                     | A community list; ids index it                     |
-| **a pinned build**      | Sound kit names                                          | One fixed build, whatever build is packing         |
+| source                    | gives                                                    | shape                                              |
+|---------------------------|----------------------------------------------------------|----------------------------------------------------|
+| **wago.tools**            | The client's own db2 tables, one set per game build      | CSV per table, downloaded and cached               |
+| **community listfile**    | File id to asset path                                    | One flat list; the only thing that names a file id |
+| **TrinityCore release**   | Server world tables, and hotfix rows revising the client | A solid archive of SQL, distilled to CSV           |
+| **checked-in enums**      | Enum value to name, with attribution                     | Committed under `build/enums/`                     |
+| **animation name list**   | Animation id to name                                     | A community list; ids index it                     |
+| **a pinned build**        | Sound kit names                                          | One fixed build, whatever build is packing         |
+| **asset-name supplement** | A private client's own names for the assets it adds      | Vendored under `build/sources/`, compressed        |
+| **expansion ladder**      | Which expansion introduced a spell                       | Committed; derived once from historical clients    |
 
 Everything lands in a cache keyed by build, so a rebuild re-reads rather than re-downloads, and the cache rotates
 against the shipped roster so an abandoned version stops costing disk.
+
+### What a source is
+
+A source does three jobs, and the interface names them separately because each one varies on its own — and because a
+layer that ran all three inside every module had nowhere to put a new format except beside whichever module it
+resembled most.
+
+- **Locating** is a value, not a step. An `Origin` is an address plus what is taken from it — which asset of a
+  release, which file data id of a storage — so a build can report what it reads on a machine with no network, and
+  every address the build knows is written down in one layer where a reader can find it.
+- **Getting** is a policy, and the policies differ on one question: *can this source change under a build that already
+  shipped?* An export of a released client cannot, so it is fetched once and kept (`Pinned`). A community name list
+  keeps being corrected for builds that shipped years ago, so it is fetched every build (`Volatile`). The listfile
+  keeps growing but is a hundred megabytes, so a cheap oracle decides and the body moves only when the release tag
+  does (`Revalidated`). A vendored file is never fetched at all, and getting it is the check that it is there
+  (`Tracked`).
+- **Extracting** turns bytes into rows. A CSV already is rows; a mysqldump and a db2 are not. An extraction answers
+  two things — how to write the rows, and whether what is in the cache is *already exactly* what it would write. That
+  second answer is on the interface rather than inside each extraction because getting it wrong is silent: a column
+  added to the roster leaves every cached release looking finished and quietly missing it.
+
+`acquire` is the whole of it: a path a provider can open, or `None` when this build declares the source absent — which
+is how a build predating a table reports it, with no per-version branch anywhere above.
+
+**Declaring the roster and acquiring it are two steps.** `source_roster(version)` says what a build reads and where
+each of it comes from, with no request made; `fetch_sources` acquires that roster and returns the paths. The split is
+what makes provenance answerable offline, and it is what lets the build's own log carry one heading per source naming
+where it came from, whatever shape that source has.
+
+```mermaid
+---
+title: The source seam and what plugs into it
+---
+classDiagram
+    accTitle: The source seam and what plugs into it
+    accDescr {
+      Source is the seam: a name, the origins its bytes come from, and acquire. Three
+      implementations compose it. Fetched pairs one origin with a fetch policy, Gathered acquires
+      several sources into one directory, and Extracted wraps another source with an extraction.
+      Fetch has four policies, differing on whether the source can change under a build that
+      already shipped. Extract is the open end, where a format nothing else reads arrives.
+    }
+
+    class Source {
+        <<interface>>
+        +name
+        +origins()
+        +acquire(refresh)
+    }
+    class Fetch {
+        <<interface>>
+        +get(origin, dest, refresh)
+    }
+    class Extract {
+        <<interface>>
+        +complete(into)
+        +run(located, into)
+    }
+    class Origin {
+        +address
+        +detail
+        +describe()
+    }
+
+    Source <|.. Fetched : one origin, one policy
+    Source <|.. Gathered : many, one directory
+    Source <|.. Extracted : bytes, then rows
+    Fetch <|.. Pinned : released, so fixed
+    Fetch <|.. Volatile : corrected upstream
+    Fetch <|.. Revalidated : grows, so asked
+    Fetch <|.. Tracked : in the checkout
+    Extract <|.. Distill : a dump, to CSV
+
+    Fetched --> Origin : located at
+    Fetched --> Fetch : gotten through
+    Gathered --> Source : one per file
+    Extracted --> Source : bytes from
+    Extracted --> Extract : rows through
+```
 
 **The server release is one download doing two unrelated jobs.** Its *world tables* name things the client has no name
 for — a creature's name is server data, so a morph resolves to a model on any build but gets a *word* only where a

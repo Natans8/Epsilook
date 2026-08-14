@@ -59,9 +59,8 @@ from build_data import (AURA_OVERRIDE_NAME, DATA_DIR, PACK_FORMAT,
                         read_table, to_int)
 from pack.drift import OPTIONAL_TABLES
 from pack.progress import log
-from pack.sources.archive import read_member
 from pack.sources.cache import CACHE_DIR, download
-from pack.sources.tdb import TDB_ASSET_URL, distill_dump, tdb_release
+from pack.sources.tdb import Distill, tdb_extraction, tdb_release
 from pack.sources.wago import WAGO_CSV_URL
 from spelltext import ENGLISH, RUSSIAN, DescriptionCooker, TextLocale
 
@@ -131,6 +130,15 @@ def fetch_locale_tables(version: str, locale: str, refresh: bool) -> Path:
 def ensure_tdb_locale_tables(version: str) -> Path | None:
     """Ensure the TDB `*_locale` tables are distilled; return the TDB dir.
 
+    The same source the base pack's own TrinityCore tables come from, asked for
+    a different set of tables: they land in the release's one cache directory,
+    and are recognised there by their headers — so a column added to
+    TDB_LOCALE_TABLES re-distils the releases that were cached without it,
+    rather than being silently absent from every overlay built over them.
+
+    Not `required`: a world dump may legitimately predate a locale table, and
+    those names then stay as the base pack ships them.
+
     Returns None when no TDB release maps to this version (the Classic
     re-release packs) — creature and gameobject names then stay untranslated,
     exactly as the base pack ships them as raw ids.
@@ -139,18 +147,12 @@ def ensure_tdb_locale_tables(version: str) -> Path | None:
     if rel is None:
         log("TDB: no release mapped — creature/gameobject names stay English")
         return None
-    tdb_dir = CACHE_DIR / f"tdb-{rel['tag']}"
-    if all((tdb_dir / f"{t}.csv").exists() for t in TDB_LOCALE_TABLES):
-        log(f"TDB ({rel['tag']}): locale tables cached")
-        return tdb_dir
-    tdb_dir.mkdir(parents=True, exist_ok=True)
-    archive = tdb_dir / rel["asset"]
-    download(TDB_ASSET_URL.format(**rel), archive, refresh=False)
-    log(f"  distilling locale tables from {rel['world']} ...")
-    # not `required`: a world dump may legitimately predate a locale table
-    with read_member(archive, rel["world"]) as lines:
-        distill_dump(lines, rel["world"], TDB_LOCALE_TABLES, tdb_dir, required=False)
-    return tdb_dir
+    log(f"TDB locale tables ({rel['tag']}):")
+    return tdb_extraction(
+        rel, f"TDB locale tables ({rel['tag']})",
+        Distill(kinds=("world",), members={"world": rel["world"]},
+                want={"world": TDB_LOCALE_TABLES},
+                required=frozenset())).acquire(False)
 
 
 def read_tdb_locale_names(tdb_dir: Path | None, table: str, locale: str) -> dict[int, str]:
