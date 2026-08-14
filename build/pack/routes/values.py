@@ -16,8 +16,10 @@ caster-dependent one.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from ..sources.scaling import scaled_amount
 from ..tables import Tables
 from .columns import BASE_DIFFICULTY, to_amount, to_int
 
@@ -68,6 +70,16 @@ class DescriptionValues:
     max_targets: dict[int, int] = field(default_factory=dict)
     max_target_level: dict[int, int] = field(default_factory=dict)
 
+    level: int = 0
+    """The caster level every value here was resolved at.
+
+    It travels WITH the values rather than beside them because it is what they
+    mean: an amount and the level it was computed at are one fact, and a reader
+    handed the number alone cannot tell a flat value from a scaled one. Zero
+    means no level was supplied, which is also what a code asking for the level
+    itself reads as "unknown".
+    """
+
     range_max: dict[int, float] = field(default_factory=dict)
     """The spell's maximum range, in yards."""
 
@@ -78,17 +90,30 @@ def at_effect(into: dict[int, dict[int, float]], spell: int, index: int,
     into.setdefault(spell, {})[index] = value
 
 
-def read_spell_values(tables: Tables) -> DescriptionValues:
+def read_spell_values(tables: Tables, *, level: int = 0,
+                      scaling: Mapping[int, Mapping[str, float]] | None = None
+                      ) -> DescriptionValues:
     """Read every number the description cooker may substitute.
 
     Args:
         tables: the source to read from.
+        level: the caster level to resolve at, stamped onto the result. It is
+            the build's own level cap, since a pack has no caster and the level
+            a reader cares about is the one they play at.
+        scaling: the spell-scaling game table, which an effect declaring a
+            `ScalingClass` gets its amount from instead of from its base
+            points. Absent, such an effect keeps its base points -- which is
+            what the artifact carried before this route could resolve them.
 
     Returns:
         The values, with a dict left empty wherever this build lacks the table
         behind it.
     """
-    values = DescriptionValues()
+    values = DescriptionValues(level=level)
+    windows = {to_int(spell): (to_int(low), to_int(high)) for spell, low, high
+               in tables.rows("SpellScaling",
+                              ["SpellID", "MinScalingLevel", "MaxScalingLevel"])
+               } if tables.available("SpellScaling") else {}
     radius = {to_int(row_id): to_amount(size) for row_id, size
               in tables.rows("SpellRadius", ["ID", "Radius"])}
     duration = {to_int(row_id): to_int(length) for row_id, length
@@ -99,12 +124,20 @@ def read_spell_values(tables: Tables) -> DescriptionValues:
     for row in tables.rows("SpellEffect", [
             "SpellID", "DifficultyID", "EffectIndex", "EffectBasePoints",
             "EffectBasePointsF", "EffectAuraPeriod", "EffectRadiusIndex_0",
-            "EffectChainTargets", "EffectMiscValue_0", "Variance"]):
+            "EffectChainTargets", "EffectMiscValue_0", "Variance",
+            "ScalingClass", "Coefficient"]):
         if to_int(row[1]) != BASE_DIFFICULTY:
             continue
         spell = to_int(row[0])
         index = to_int(row[2]) + FIRST_EFFECT_INDEX
-        at_effect(values.points, spell, index, to_amount(row[3], row[4]))
+        # A scaled effect's base points are not its amount -- they are usually
+        # zero. The amount is the game table read at the caster's level, and
+        # only where that resolves does it replace them.
+        low, high = windows.get(spell, (0, 0))
+        amount = scaled_amount(scaling or {}, to_int(row[10]), to_amount(row[11]),
+                               level, low, high) if level else None
+        at_effect(values.points, spell, index,
+                  amount if amount is not None else to_amount(row[3], row[4]))
         if spread := to_amount(row[9]):
             at_effect(values.variance, spell, index, spread)
         if ticks := to_int(row[5]):

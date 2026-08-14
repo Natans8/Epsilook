@@ -10,6 +10,10 @@ from __future__ import annotations
 # table -> the user-facing feature that switches off when the build predates it
 OPTIONAL_TABLES = {
     "SpellName": "spell names (pre-BfA they live on Spell itself)",
+    # The window a scaled amount's level is clamped to. Without it a scaled
+    # effect still resolves, just unclamped -- so the loss is a number that
+    # keeps climbing past the level its spell was built for.
+    "SpellScaling": "the level window a scaled effect's amount is read at",
     # Without these the area pill still names its areas and links Wowhead; it
     # only loses the map button.
     "UiMap": "zone map ids for the area pill's map command",
@@ -62,6 +66,13 @@ OPTIONAL_COLUMNS = {
     # Vanilla, TBC and MoP export both with the float vestigial.
     ("SpellEffect", "EffectBasePoints"): "",
     ("SpellEffect", "EffectBasePointsF"): "",
+    # Modern scaling: an effect declaring a class and a coefficient reads its
+    # amount from the spell-scaling game table instead of from its base points.
+    # Absent on the older clients entirely, and 0 is what "does not scale"
+    # already means on the builds that do carry them -- so the default is the
+    # same answer either way.
+    ("SpellEffect", "ScalingClass"): "0",
+    ("SpellEffect", "Coefficient"): "0",
     # The Classic re-release clients carry the effect tables but not their
     # attach column, irregularly. -1 is a present-but-unset row: the whole
     # body, which is what an effect with no anchor animates.

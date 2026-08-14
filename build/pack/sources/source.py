@@ -225,13 +225,22 @@ class Fetched:
 
     fetch: Fetch
 
+    optional: bool = False
+    """Whether a build may legitimately not have this at all.
+
+    The same field `Part` carries, for the same reason: absence is a fact about
+    the source rather than about how its bytes travel. Optional, acquisition
+    returns nothing and the reader treats it as a build that predates the file;
+    required, a missing source stops the build.
+    """
+
     def origins(self) -> list[Origin]:
         """The one place these bytes come from."""
         return [self.origin]
 
     def acquire(self, refresh: bool) -> Path | None:
         """Get the bytes, and say where they are."""
-        if not self.fetch.get(self.origin, self.dest, refresh):
+        if not self.fetch.get(self.origin, self.dest, refresh, self.optional):
             return None
         return self.dest
 

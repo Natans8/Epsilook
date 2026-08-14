@@ -111,6 +111,9 @@ TABLES = [
     # bridge from a spell to a named `$<var>` body.
     "SpellRadius",
     "SpellRange",
+    # The scaling window: how far up and down the game table an effect's own
+    # level is clamped before its amount is read.
+    "SpellScaling",
     "SpellDescriptionVariables",
     "SpellXDescriptionVariables",
     "SpellTargetRestrictions",

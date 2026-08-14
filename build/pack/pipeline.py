@@ -17,7 +17,7 @@ before another is one whose bundle the next one reads.
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from .build import Build, Line
 from .declarations import Declarations
@@ -25,8 +25,6 @@ from .derive import (DeriveContext, build_icon_index, build_rows,
                      collect_references, cook_text, resolve_displays,
                      walk_spells)
 from .drift import OPTIONAL_TABLES
-from .emit import legacy
-from .emit.legacy import META
 from .emit.manifest import manifest
 from .emit.meta import gathered, meta
 from .emit.module import Module, absent_sections, assemble
@@ -48,8 +46,10 @@ from .routes import (implicit_target_bits, read_anim_replacements,
 from .routes.anims import read_anim_emotes
 from .sources import (Sources, fetch_sources, load_expansions,
                       load_local_enum, read_anim_names, read_enum_names)
+from .sources.cache import CACHE_DIR
 from .sources.gobs import read_gob_displays
 from .sources.listfile import release_tag
+from .sources.scaling import read_scaling, scaling_source
 from .sources.tdb import tdb_release
 from .tables import (CsvTables, ListfileTables, OverlaidTables, Tables,
                      hotfix_overlays)
@@ -124,7 +124,9 @@ def read_kit_names(pinned: Tables, used: set[int]) -> list[tuple[int, str]]:
                   if name.strip() and kit in used)
 
 
-def read_all(providers: Providers, build: Build) -> DeriveContext:
+def read_all(providers: Providers, build: Build,
+             ladder: tuple[list[dict], dict[int, int]],
+             scaling: Mapping[int, Mapping[str, float]]) -> DeriveContext:
     """Run every route and every derivation, and return what a section reads.
 
     The order is the dependency graph: creature displays before the model
@@ -178,7 +180,10 @@ def read_all(providers: Providers, build: Build) -> DeriveContext:
     # value with a coarse one -- a degradation, not a correction. The overlaid
     # provider is right for everything that asks what a spell IS; this asks
     # what number to print.
-    prose = cook_text(templates, read_spell_values(providers.base), names)
+    prose = cook_text(templates,
+                      read_spell_values(providers.base, level=build.max_level,
+                                        scaling=scaling),
+                      names)
 
     log("Walking spell -> model/sound/animkit/chain chains ...")
     visuals = walk_spells(names.names, graph, missiles, kits, soundkit_files,
@@ -193,7 +198,7 @@ def read_all(providers: Providers, build: Build) -> DeriveContext:
 
     log("Assembling pack ...")
     spell_ids = sorted(names.names)
-    rungs, era_of = load_expansions()
+    rungs, era_of = ladder
     return DeriveContext(
         build=build, spell_ids=spell_ids,
         names=names, props=props, templates=templates, effects=effects,
@@ -269,8 +274,27 @@ def absent_tables(tables: Tables) -> list[str]:
     return absent
 
 
-def build_for(version: str, tables: Tables, *, key: str = "",
-              line: Line = Line.RETAIL) -> Build:
+def level_cap(version: str, rungs: Sequence[Mapping[str, object]]) -> int:
+    """The level cap of the expansion this build belongs to, or zero.
+
+    Matched on the game major version, which is what a rung declares and what
+    a build id starts with. A Classic re-release lands on the rung it
+    re-implements, which is right: its cap is that expansion's, whatever client
+    it runs on.
+
+    Zero when no rung claims the major -- a build newer than the ladder. The
+    cooker reads that as "elide", so an unclaimed build loses the level rather
+    than printing another expansion's.
+    """
+    major = int(version.split(".")[0])
+    for rung in rungs:
+        if rung["major"] == major:
+            return int(str(rung.get("maxLevel", 0)))
+    return 0
+
+
+def build_for(version: str, tables: Tables, rungs: Sequence[Mapping[str, object]],
+              *, key: str = "", line: Line = Line.RETAIL) -> Build:
     """The `Build` value for one pack, once its sources have been probed.
 
     What a build IS to the code, rather than the version string every layer
@@ -280,46 +304,18 @@ def build_for(version: str, tables: Tables, *, key: str = "",
     release = tdb_release(version)
     return Build(key=key or patch, version=version, patch=patch, line=line,
                  tdb=(release or {}).get("tag"),
-                 absent_tables=frozenset(absent_tables(tables)))
+                 absent_tables=frozenset(absent_tables(tables)),
+                 max_level=level_cap(version, rungs))
 
 
-def run(version: str, label: str, *, refresh: bool = False,
-        key: str = "", line: Line = Line.RETAIL) -> dict[str, object]:
-    """Build one pack, from acquiring its sources to the finished document.
+def packed(version: str, label: str, *, refresh: bool = False,
+           policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
+           key: str = "", line: Line = Line.RETAIL
+           ) -> tuple[dict[str, object], dict[str, object]]:
+    """Build one pack, from acquiring its sources to its encoded sections.
 
-    Args:
-        version: the build id to pack.
-        label: the human name the version picker shows.
-        refresh: re-fetch every source even where a cached copy would do.
-        key: the roster key, when the caller has one.
-        line: which distribution line the build ships on.
-
-    Returns:
-        The pack, ready to serialize.
-    """
-    started = time.monotonic()
-    sources = fetch_sources(version, refresh)
-    providers = Providers(sources, build=int(version.rsplit(".", 1)[-1]))
-    build = build_for(version, providers.tables, key=key, line=line)
-
-    context = read_all(providers, build)
-    columns, encoded = produce(context, providers.tables)
-    if stray := legacy.unordered(list(encoded)):
-        log(f"  sections with no declared place in the artifact: "
-            f"{', '.join(stray)}")
-    counts, domains = gathered(columns, context, legacy.COUNT_ORDER)
-    document = legacy.document(
-        meta(build, label, release_tag(), counts, domains), encoded)
-    log(f"  {len(encoded)} sections, {len(counts)} counts, "
-        f"{len(domains)} domains  [{time.monotonic() - started:.1f}s]")
-    return document
-
-
-def modules(version: str, label: str, *, refresh: bool = False,
-            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
-            key: str = "", line: Line = Line.RETAIL
-            ) -> tuple[list[Module], dict[str, object]]:
-    """Build one pack as the module set it ships as.
+    Everything up to the point where the artifact takes a shape, which is the
+    one thing this does not decide: `modules` groups these into files.
 
     Args:
         version: the build id to pack.
@@ -330,32 +326,52 @@ def modules(version: str, label: str, *, refresh: bool = False,
         line: which distribution line the build ships on.
 
     Returns:
+        The header and the encoded sections, both by name.
+    """
+    sources = fetch_sources(version, refresh)
+    providers = Providers(sources, build=int(version.rsplit(".", 1)[-1]))
+    ladder = load_expansions()
+    build = build_for(version, providers.tables, ladder[0], key=key, line=line)
+
+    scaling = read_scaling(scaling_source(version, CACHE_DIR).acquire(refresh))
+    context = read_all(providers, build, ladder, scaling)
+    columns, encoded = produce(context, providers.tables, policy)
+    counts, domains = gathered(columns, context)
+    log(f"  {len(encoded)} sections, {len(counts)} counts, {len(domains)} domains")
+    return meta(build, label, release_tag(), counts, domains), encoded
+
+
+def modules(version: str, label: str, *, refresh: bool = False,
+            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
+            key: str = "", line: Line = Line.RETAIL, pack_id: str = "",
+            location: str = "") -> tuple[list[Module], dict[str, object]]:
+    """Build one pack as the module set it ships as.
+
+    Args:
+        version: the build id to pack.
+        label: the human name the version picker shows.
+        refresh: re-fetch every source even where a cached copy would do.
+        policy: how a column's declared kind becomes a layout.
+        key: the roster key, when the caller has one.
+        line: which distribution line the build ships on.
+        pack_id: the pack's identity, when it is not the build id -- a test
+            line sharing a patch with live.
+        location: where the writer will put the modules, relative to the site
+            root, so the manifest can name them where they actually are.
+
+    Returns:
         The modules, each named by its own content, and the manifest naming
         them. A module whose bytes match another build's IS that build's file:
         nothing here arranges the sharing, and nothing has to.
     """
     started = time.monotonic()
-    sources = fetch_sources(version, refresh)
-    providers = Providers(sources, build=int(version.rsplit(".", 1)[-1]))
-    build = build_for(version, providers.tables, key=key, line=line)
-
-    context = read_all(providers, build)
-    columns, encoded = produce(context, providers.tables, policy)
-    counts, domains = gathered(columns, context, legacy.COUNT_ORDER)
-    header = meta(build, label, release_tag(), counts, domains)
-    assembled = assemble([META_SECTION, *SECTIONS], {META: header, **encoded})
+    header, encoded = packed(version, label, refresh=refresh, policy=policy,
+                             key=key, line=line)
+    assembled = assemble(SECTIONS, encoded)
     absent = absent_sections(SECTIONS, encoded)
     log(f"  {len(encoded)} sections in {len(assembled)} modules "
         f"[{time.monotonic() - started:.1f}s]")
-    return assembled, manifest(version, assembled, absent)
+    return assembled, manifest(pack_id or version, assembled, header,
+                               absent=absent, location=location)
 
 
-META_SECTION = Section(
-    name=META, doc="What the pack says about itself.", module="core",
-    produce=lambda _reads: {}, columns=())
-"""The header, declared so it lands in a module like everything else.
-
-It produces nothing -- it is assembled from what the other sections declared --
-but it still has to be placed, and giving it a record is cheaper than teaching
-the assembler about one special key.
-"""
