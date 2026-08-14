@@ -70,7 +70,7 @@ jobs:
               '2. Run the sequence below. `rebuild.py` retires the pack being replaced — there is nothing to delete by hand, and the label follows the build.',
               '',
               '```bash',
-              'python tools/rebuild.py <key> && python tools/check.py && git push && python tools/verify_live.py',
+              'python tools/rebuild.py <key> && uv run python tools/check.py && git push && python tools/verify_live.py',
               '```',
               '',
               '3. Commit the rebuilt pack **and** the `tools/packs.py` edit together. Pushing is the deploy.',
@@ -81,7 +81,7 @@ jobs:
               '',
               '### You do not have to read this issue to find out',
               '',
-              '`python tools/check.py` runs a `pack freshness` check that warns with the same information, so a stale pack surfaces during ordinary work too. This issue is the backstop for a quiet week, not the only signal.',
+              '`uv run python tools/check.py` runs a `pack freshness` check that warns with the same information, so a stale pack surfaces during ordinary work too. This issue is the backstop for a quiet week, not the only signal.',
               '',
               '_Raised by `.github/workflows/pack-updates.yml`; this issue is edited in place, not reopened._',
             ].join('\n');

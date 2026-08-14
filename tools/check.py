@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Epsilook's one-command gate: run every check before a push.
 
-    python tools/check.py                 # everything, base = origin/main
-    python tools/check.py --fast          # skip the toolchain checks (no npx/mypy)
-    python tools/check.py --base HEAD~1   # compare against a different deploy
-    python tools/check.py --quiet         # only failures and warnings
+    uv run python tools/check.py                 # everything, base = origin/main
+    uv run python tools/check.py --fast          # skip the toolchain checks (no npx/mypy)
+    uv run python tools/check.py --base HEAD~1   # compare against a different deploy
+    uv run python tools/check.py --quiet         # only failures and warnings
+
+The `uv run` is load-bearing, unlike the other tools/ scripts: the declaration
+guards below import the build's acquisition layer, which pulls in sqlglot, and
+that is pinned in pyproject.toml rather than installed on a bare interpreter.
 
 Two families of check live here.
 

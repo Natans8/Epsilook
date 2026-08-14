@@ -131,7 +131,7 @@ which serves `site/` on port 8378 and rebuilds the bundle on every request, so a
 
 The packs are stored in [Git LFS](https://git-lfs.com), so a clone needs it installed — without it `site/data`
 holds 132-byte pointer files instead of packs and no version will load. `git lfs install && git lfs pull` fixes an
-existing clone; `python tools/check.py` says `via LFS pointer` when it is looking at stubs rather than packs.
+existing clone; `uv run python tools/check.py` says `via LFS pointer` when it is looking at stubs rather than packs.
 
 Pushing to `main` deploys, through `.github/workflows/pages.yml`: it builds the bundle and uploads `site/` — which is
 also why the packs can live in LFS at all, since GitHub Pages cannot resolve LFS pointers when it serves a branch
@@ -275,7 +275,7 @@ into `meta.absentTables`.
 Nothing here is required to run the app — it is all dev-time only.
 
 ```
-python tools/check.py
+uv run python tools/check.py
 ```
 
 is the one command: it type-checks, builds, lints, and then runs the handful of invariants that are specific to this
