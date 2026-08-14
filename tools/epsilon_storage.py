@@ -38,6 +38,14 @@ from tqdm import tqdm  # noqa: E402
 EPSILON = Service(host="tact.epsilonwow.net")
 """The client's own content service."""
 
+HEAD_CAP = 16 * 1024
+"""How much of a container a head read asks for.
+
+Measured over the files this install lacks: a sixteen kilobyte cap is a tenth
+of fetching them whole, and four thousand of the ten thousand are smaller than
+it, so those arrive complete for nothing.
+"""
+
 _INDEX_SIZE_AT = 0x20
 """Where an index file records how many bytes of entries follow.
 
@@ -265,6 +273,10 @@ class EpsilonStorage:
         self.local = LocalArchives(install)
         self._keys: dict[int, bytes] = {}
         self._mapped: set[bytes] = set()
+        self._located: dict[bytes, Remote] = {}
+        """Where the install's indices say a file sits, kept so a head read
+        asks the archive directly instead of taking a 404 off the loose URL
+        first."""
 
     @property
     def file_ids(self) -> Iterable[int]:
@@ -369,6 +381,109 @@ class EpsilonStorage:
             return decode_blte(raw)
         except (LookupError, OSError, ValueError, zlib.error):
             return None
+
+    def read_head(self, file_id: int, cap: int = HEAD_CAP) -> bytes | None:
+        """As much of a file's start as `cap` container bytes yield.
+
+        The routes that read a file for its own name want its head: a world
+        model states the retail id it came from in the first chunk, and a model
+        states its name in the header. Fetching the whole file to reach that is
+        most of a gigabyte across the files this client does not hold locally,
+        against roughly a tenth of it capped -- and the cap is free for the
+        third of them that are smaller than it anyway.
+
+        Two requests become one as well. The reader tries the loose URL first
+        and falls back to the archive on a 404, which is right when nothing
+        knows where the file is; here the install's own indices already say,
+        so the archive is asked directly.
+
+        Args:
+            file_id: the id to read.
+            cap: how many container bytes to ask for.
+
+        Returns:
+            The decoded prefix, which may be short of the whole file, or None
+            when no route has it. A local file is returned whole, since reading
+            it costs nothing.
+        """
+        key = self._keys.get(file_id) or self.encoding_keys([file_id]).get(file_id)
+        if key is None:
+            return None
+        found = self.local.read(key)
+        if found is not None:
+            return found
+        where = self._located.get(key) or self.local.archive_locations({key}).get(key)
+        try:
+            if where is not None:
+                self._located[key] = where
+                end = where.offset + min(where.size, cap) - 1
+                blob = self.remote._get(  # pylint: disable=protected-access
+                    self.remote.service.data_url(where.archive),
+                    headers={"Range": f"bytes={where.offset}-{end}"})
+            else:
+                blob = self.remote._get(  # pylint: disable=protected-access
+                    self.remote.service.data_url(key.hex()),
+                    headers={"Range": f"bytes=0-{cap - 1}"})
+        except (LookupError, OSError, ValueError):
+            return None
+        return decode_blte_prefix(blob)
+
+
+def decode_blte_prefix(blob: bytes) -> bytes:
+    """Decode every complete chunk of a container that may be cut short.
+
+    `decode_blte` assumes the whole container is present and walks its chunk
+    table to the end; given a prefix it reads a length past the buffer and
+    raises. This stops at the first chunk that did not arrive whole, which is
+    the point of asking for a prefix at all.
+
+    Args:
+        blob: the start of a container.
+
+    Returns:
+        The decoded bytes of the chunks that arrived complete. Empty when the
+        blob is not a container or nothing complete arrived.
+    """
+    if blob[:4] != b"BLTE":
+        return b""
+    header_size = struct.unpack_from(">I", blob, 4)[0]
+    if header_size == 0:
+        # One unchunked body, so a prefix of it is a prefix of the compression
+        # stream; the decompressor is what tolerates the truncation.
+        return _decode_prefix_chunk(blob[8:])
+    if len(blob) < 12:
+        return b""
+    count = struct.unpack_from(">I", b"\0" + blob[9:12])[0]
+    out = bytearray()
+    at, position = 12, header_size
+    for _ in range(count):
+        if at + 24 > len(blob):
+            break
+        compressed = struct.unpack_from(">I", blob, at)[0]
+        at += 24
+        if position + compressed > len(blob):
+            out += _decode_prefix_chunk(blob[position:])
+            break
+        out += _decode_prefix_chunk(blob[position:position + compressed])
+        position += compressed
+    return bytes(out)
+
+
+def _decode_prefix_chunk(chunk: bytes) -> bytes:
+    """One chunk that may be cut short, by its leading mode byte."""
+    if not chunk:
+        return b""
+    mode, body = chunk[:1], chunk[1:]
+    if mode == b"N":
+        return body
+    if mode == b"Z":
+        # A streaming decompressor returns what the prefix supports instead of
+        # refusing the whole chunk for want of its tail.
+        try:
+            return zlib.decompressobj().decompress(body)
+        except zlib.error:
+            return b""
+    return b""
 
 
 def chunks(raw: bytes, *, reversed_tags: bool = False) -> Iterator[tuple[bytes, bytes]]:

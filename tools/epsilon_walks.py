@@ -230,6 +230,26 @@ MAX_MODEL_NAME = 512
 slicing an arbitrary megabyte out of the file and calling it a name."""
 
 
+def _head(storage: Reads, file_id: int, local_only: bool) -> bytes | None:
+    """A file's start, fetched capped when it has to come over the network.
+
+    Both routes here read a header, so the tail of a file is bought and thrown
+    away. A capped read is a tenth of the bytes across the files an install
+    lacks, and it is the same bytes for the third of them smaller than the cap.
+
+    ⛔ Only for a reader that wants the START of a file. The parentage walks
+    read chunks that sit at the end, and a truncated container yields fewer of
+    them with no error -- which reads as a parent with no children rather than
+    as a short read.
+    """
+    if local_only:
+        return storage.read(file_id, local_only=True)
+    head = getattr(storage, "read_head", None)
+    if head is None:
+        return storage.read(file_id)
+    return head(file_id)
+
+
 def model_name(raw: bytes | None) -> str | None:
     """The name a model stores about itself.
 
@@ -285,7 +305,7 @@ def model_self_names(storage: Reads, unnamed: set[int],
     storage.encoding_keys(sorted(unnamed))
     found: dict[int, str] = {}
     for fid in tqdm(sorted(unnamed), desc="model names", unit="file"):
-        name = model_name(storage.read(fid, local_only=local_only))
+        name = model_name(_head(storage, fid, local_only))
         if name:
             found[fid] = name
 
@@ -365,8 +385,13 @@ def reskin_names(storage: Reads, unnamed: set[int], stock: dict[int, str],
     roots = [fid for fid, path in stock.items() if not GROUP_SUFFIX.search(path)]
     storage.encoding_keys(roots)
     retail: dict[int, int] = {}
+    # The retail side stays on disk whatever the caller asked for. There are
+    # fifty thousand of these and any one of them might hold the id a custom
+    # file is looking for, so fetching them is most of a gigabyte spent on the
+    # half of the join that is not the point. The custom side is what the
+    # network is for.
     for fid in tqdm(sorted(roots), desc="reskin: retail roots", unit="file"):
-        found = world_model_id(storage.read(fid, local_only=local_only))
+        found = world_model_id(storage.read(fid, local_only=True))
         if found is not None:
             retail.setdefault(found, fid)
     if not retail:
@@ -376,7 +401,7 @@ def reskin_names(storage: Reads, unnamed: set[int], stock: dict[int, str],
     storage.encoding_keys(sorted(unnamed))
     names: dict[int, str] = {}
     for fid in tqdm(sorted(unnamed), desc="reskin: custom roots", unit="file"):
-        found = world_model_id(storage.read(fid, local_only=local_only))
+        found = world_model_id(_head(storage, fid, local_only))
         origin = retail.get(found) if found is not None else None
         if origin is None:
             continue

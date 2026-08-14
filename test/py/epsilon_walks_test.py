@@ -437,3 +437,54 @@ def test_the_name_keeps_the_casing_it_was_written_with() -> None:
     storage = FakeStorage({fid: model(b"Collections_Cloth_RaidMage_Q_01_Hu_M")})
     assert model_self_names(storage, {fid}) == {
         fid: "epsilon/model/Collections_Cloth_RaidMage_Q_01_Hu_M.m2"}
+
+
+class HeadStorage(FakeStorage):
+    """A storage whose network reads arrive capped, as a ranged fetch does."""
+
+    def __init__(self, files, cap: int = 32) -> None:
+        super().__init__(files)
+        self.cap = cap
+        self.heads = 0
+
+    def read(self, file_id: int, *, local_only: bool = False):
+        return None if local_only else self.files.get(file_id)
+
+    def read_head(self, file_id: int):
+        self.heads += 1
+        raw = self.files.get(file_id)
+        return None if raw is None else raw[:self.cap]
+
+
+def test_a_networked_header_read_is_capped() -> None:
+    """The name sits in the header, so the tail is bought and thrown away."""
+    from epsilon_walks import model_self_names  # pylint: disable=import-outside-toplevel
+
+    fid = FLOOR + 1
+    storage = HeadStorage({fid: model(b"Tiny") + b"\x00" * 100_000}, cap=200)
+    assert model_self_names(storage, {fid}, local_only=False) == {
+        fid: "epsilon/model/Tiny.m2"}
+    assert storage.heads == 1
+
+
+def test_a_local_run_never_asks_for_a_capped_read() -> None:
+    """A file already on disk costs nothing to read whole, and a cap could
+    only lose chunks."""
+    from epsilon_walks import model_self_names  # pylint: disable=import-outside-toplevel
+
+    fid = FLOOR + 1
+    storage = HeadStorage({fid: model(b"Tiny")})
+    assert model_self_names(storage, {fid}, local_only=True) == {}
+    assert storage.heads == 0
+
+
+def test_the_retail_side_of_a_reskin_stays_on_disk() -> None:
+    """Fifty thousand roots might each hold the wanted id, so fetching them is
+    a gigabyte spent on the half of the join that is not the point."""
+    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
+
+    custom = FLOOR + 5
+    storage = HeadStorage({custom: world_model(1375), 900: world_model(1375)})
+    assert reskin_names(storage, {custom}, {900: "World/WMO/Bridge.wmo"},
+                        local_only=False) == {}
+    assert storage.heads == 0
