@@ -1,2385 +1,609 @@
 # Epsilook data routes
 
-Every path data takes from an upstream source to a pixel in the app. This is the map of *where things come from*;
-`build/build_data.py` is the implementation and
-`CLAUDE.md` holds the decisions and gotchas behind it.
+The life of one piece of game data, from a byte on somebody else's server to a pill under a search result.
 
-Where a route ends — the pill it becomes, the category word it answers to, how a query token matches it — is
-**[PILLS.md](PILLS.md)**. The two meet at
-`src/pilltypes.ts`, which declares one record per kind of content: the route's corpus, the spells it reaches, and its
-keyword.
+Everything the app shows was decided at build time. Nothing is fetched per result, nothing is computed from a live
+service, and the only things that leave the browser afterwards are the [runtime hotlinks](#runtime-hotlinks) a reader
+asks for by hovering. So a question about where something comes from is always a question about this pipeline, and
+this document walks it in order.
 
-Read it in five stages:
+It describes what each stage *means* rather than how it is currently written, so that it stays true while the builder
+is replaced. Where a route *ends* — the pill it becomes, the word it answers to, how a query token matches it — is
+[PILLS.md](PILLS.md). The decisions behind a route, and the measurements that settled them, are
+[DECISIONS.md](DECISIONS.md).
 
-1. [Sources](#1-sources) — what gets downloaded, from where
-2. [The visual graph](#2-the-visual-graph-spine) — the spine every visual route hangs off
-3. [Payload routes](#3-payload-routes) — the ~20 routes from a kit/spell to something showable
-4. [The pack](#4-the-pack) — how it lands in the UI
-5. [Version differences](#5-version-differences) — what each of the six builds does and doesn't have
-6. [Runtime routes](#6-runtime-routes-browser-on-demand) — what the browser fetches live
+## The journey
 
----
+```mermaid
+flowchart TD
+    WAGO["wago.tools<br/>client db2 tables, one set per build"]
+    TDB["TrinityCore release<br/>world tables and hotfix rows"]
+    LIST["community listfile<br/>file id to asset path"]
+    ANIM["animation name list<br/>ids index it"]
+    PIN["a pinned build<br/>sound kit names"]
 
-## 0. The pipeline at a glance
+    CACHE[("cache, keyed by build")]
+    WAGO --> CACHE
+    TDB -->|"stream member, distil SQL"| CACHE
+    LIST -->|"names every file id"| CACHE
+    ANIM --> CACHE
+    PIN --> CACHE
+
+    CACHE --> PROV["the provider seam<br/>available · header · rows<br/>text in, text out, source order"]
+    PROV --> OVL{{"hotfix overlay<br/>merge per column · union rows<br/>apply at or above the client"}}
+
+    ENUM["checked-in enums<br/>committed, with attribution"]
+    OVL --> VISR["read: from a visual<br/>models · missiles · sounds · animations<br/>chains · dissolves · glows · ghosts<br/>screens · procedures"]
+    OVL --> EFFR["read: from an effect<br/>morphs · summons · objects · forms<br/>vehicles · invisibility · keybinds<br/>links · speed · scale · mechanics"]
+    OVL --> ROWR["read: from the spell row<br/>name · icon · school · attributes<br/>delivery · description · area gate"]
+    ENUM --> VISR
+    ENUM --> EFFR
+    ENUM --> ROWR
+
+    WALK["derive, once per build<br/>the graph walk · target masks resolved<br/>file ids to paths · the icon index"]
+    VISR --> WALK
+    EFFR --> WALK
+    ROWR --> WALK
+
+    WALK --> SEC["the section registry<br/>one record each: what fills it, its columns,<br/>counts, domains, the tables it needs"]
+    SEC --> ENC["encode<br/>parallel columns · sparse · dedup"]
+    ENC --> PACK[("the pack<br/>sections and meta<br/>gzipped, content-hashed")]
+
+    PACK --> IDX["index<br/>inverted, over the whole vocabulary, at load"]
+    IDX --> QRY["query<br/>text to chips to a matcher"]
+    QRY --> REN["render<br/>rows · cells · pills · exports"]
+    REN -. "only on hover or click" .-> HOT["hotlinks<br/>icons · textures · sounds<br/>3D viewer · spell pages"]
+```
+
+Each stage owns one thing and is ignorant of the next, which is what lets any of them be replaced alone.
+
+| stage       | owns                                                            | knows nothing about              |
+|-------------|-----------------------------------------------------------------|----------------------------------|
+| **acquire** | URLs, caching, archives, distillation                           | spells                           |
+| **provide** | One interface over any source; absence; the hotfix overlay      | what a table means               |
+| **read**    | Turning rows into typed meaning. The interpretive half          | where rows came from, what ships |
+| **derive**  | The one graph walk and everything more than one reader needs    | encoding                         |
+| **declare** | Which sections exist, what fills them, what they count          | bytes                            |
+| **emit**    | Column layout, compression, the manifest                        | routes                           |
+| **index**   | Inverted indexes over every value the pack carries              | how a query is written           |
+| **render**  | Rows, cells, pills, exports                                     | how a value was found            |
+
+Two properties hold everywhere and are worth stating once.
+
+**Values travel as text until a reader types them.** A source hands back exactly what it spelled. The reader turns text
+into a number, because the same column is exported as `2` by one build and `2.0` by another, and an empty cell means
+zero rather than missing. Typing earlier would let two sources disagree in the low-order digits of a float and produce
+different packs from the same data.
+
+**An absence is declared, never branched on.** Older builds legitimately lack tables, columns and whole sources. Each
+absence is a declaration naming the feature that switches off; anything undeclared is a hard error, because silently
+dropping data is worse than failing loudly. See [Drift between builds](#drift-between-builds).
+
+## Acquire
+
+| source                  | gives                                                          | shape                                      |
+|-------------------------|----------------------------------------------------------------|--------------------------------------------|
+| **wago.tools**          | The client's own db2 tables, one set per game build            | CSV per table, downloaded and cached       |
+| **community listfile**  | File id to asset path                                          | One flat list; the only thing that names a file id |
+| **TrinityCore release** | Server world tables, and hotfix rows revising the client       | A solid archive of SQL, distilled to CSV   |
+| **checked-in enums**    | Enum value to name, with attribution                           | Committed under `build/enums/`             |
+| **animation name list** | Animation id to name                                           | A community list; ids index it             |
+| **a pinned build**      | Sound kit names                                                | One fixed build, whatever build is packing |
+
+Everything lands in a cache keyed by build, so a rebuild re-reads rather than re-downloads, and the cache rotates
+against the shipped roster so an abandoned version stops costing disk.
+
+**The server release is one download doing two unrelated jobs.** Its *world tables* name things the client has no name
+for — a creature's name is server data, so a morph resolves to a model on any build but gets a *word* only where a
+release exists. Its *hotfix rows* revise the client's own tables, and those are applied at the next stage rather than
+here.
+
+**The sound-kit names are the one cross-build read.** No build ships a name table for them, so the names come from a
+build that did, whatever build is being packed. It is a pinned source rather than drift: the build being packed still
+decides which kits are *used*.
+
+## The shape of the data, at both ends
+
+The game's tables and the pack's sections are shaped for opposite jobs, and the whole build is the translation between
+them. Understanding both is what makes every route below obvious rather than arbitrary.
+
+### At the source
+
+The client's data is a normalised graph of small tables joined by id. Almost nothing is on the row you start from: a
+spell's *name* is on one table, what it *does* on another, what it *looks like* three hops away. There is no column
+anywhere that says "this spell shows a sheep".
+
+**A spell's own tables.** Everything keyed directly by spell:
 
 ```mermaid
 flowchart LR
-    subgraph SRC["Sources (build-time, cached in .cache/)"]
-        W["wago.tools<br/>33 db2 tables as CSV"]
-        L["community listfile<br/>fid → path"]
-        T["TrinityCore TDB<br/>world + hotfixes SQL"]
-        A["anims.js<br/>AnimID → name"]
-        E["WoWDBDefs enums<br/>SpellEffect / SpellEffectAura"]
+    SN["SpellName<br/>ID · Name_lang"]
+    SP["Spell<br/>ID · NameSubtext_lang<br/>Description_lang · AuraDescription_lang"]
+    SM["SpellMisc<br/>SpellID · DifficultyID<br/>SpellIconFileDataID · SchoolMask<br/>Attributes_0..N · DurationIndex · RangeIndex"]
+    SE["SpellEffect<br/>SpellID · DifficultyID · EffectIndex<br/>Effect · EffectAura<br/>EffectMiscValue_0 · _1<br/>ImplicitTarget_0 · _1<br/>EffectBasePoints · EffectTriggerSpell"]
+    SN -.->|"same ID"| SP
+    SN --> SM
+    SN --> SE
+```
+
+Two traps live here. **A spell has one row per difficulty** on several of these, and the row a player sees is the base
+one — taking whichever arrived last prints raid numbers on ordinary spells. And **`EffectMiscValue_0` has no fixed
+meaning**: `Effect` or `EffectAura` on the same row decides which table it indexes.
+
+**The visual spine and its payload tables.** This is the half that took the exploration:
+
+```mermaid
+flowchart LR
+    XSV["SpellXSpellVisual<br/>SpellID · SpellVisualID"]
+    SV["SpellVisual<br/>ID · AnimEventSoundID<br/>SpellVisualMissileSetID<br/>CasterSpellVisualID · HostileSpellVisualID"]
+    SVE["SpellVisualEvent<br/>SpellVisualID · SpellVisualKitID<br/>TargetType · StartEvent"]
+    SVKE["SpellVisualKitEffect<br/>ParentSpellVisualKitID<br/>EffectType · Effect"]
+    ATT["SpellVisualKitModelAttach<br/>ParentSpellVisualKitID<br/>SpellVisualEffectNameID · AttachmentID"]
+    SVEN["SpellVisualEffectName<br/>ID · ModelFileDataID<br/>Type · GenericID"]
+    SVM["SpellVisualMissile<br/>SpellVisualMissileSetID<br/>SpellVisualEffectNameID<br/>SpellMissileMotionID · Attachment"]
+    PAY["chains · beams · dissolves · glows<br/>shadowies · screens · procedures<br/>area models · barrages · weapon trails"]
+    XSV --> SV
+    SV -->|"redirect columns"| SV
+    SV --> SVE --> SVKE
+    SVKE -->|"by EffectType"| PAY
+    SVKE --> ATT --> SVEN
+    SV --> SVM --> SVEN
+```
+
+**The asset chains.** Several routes end at a file id, but few reach one directly:
+
+```mermaid
+flowchart LR
+    SVEN2["SpellVisualEffectName<br/>Type decides which"]
+    SVEN2 -->|"Type names a file"| FID(["FileDataID"])
+    SVEN2 -->|"Type names a display"| CDI["CreatureDisplayInfo<br/>ID · ModelID"]
+    SVEN2 -->|"Type names an item"| IMA["ItemModifiedAppearance<br/>ItemID · ItemAppearanceID"]
+    SVEN2 -->|"Type names a weapon slot"| SLOT["no file at all<br/>the caster's own weapon"]
+    CDI --> CMD["CreatureModelData<br/>ID · FileDataID"] --> FID
+    IMA --> IA["ItemAppearance<br/>ID · ItemDisplayInfoID"] --> IDI["ItemDisplayInfo<br/>ID · ModelResourcesID_0 · _1"]
+    IDI --> MFD["ModelFileData<br/>FileDataID · ModelResourcesID"] --> FID
+    FID --> LF["community listfile<br/>fid to path"]
+```
+
+The recurring joins, for reference:
+
+| from                       | column                            | to                       |
+|----------------------------|-----------------------------------|--------------------------|
+| `SpellXSpellVisual`        | `SpellVisualID`                   | `SpellVisual`            |
+| `SpellVisualEvent`         | `SpellVisualKitID`                | a kit                    |
+| `SpellVisualKitEffect`     | `Effect`, meaning set by `EffectType` | one of ten payload tables |
+| `SpellVisualKitModelAttach`| `SpellVisualEffectNameID`         | `SpellVisualEffectName`  |
+| `SpellVisualMissile`       | `SpellVisualMissileSetID`         | `SpellVisual`'s set      |
+| `SpellEffect`              | `EffectMiscValue_0`, meaning set by `Effect`/`EffectAura` | a creature, form, vehicle, object, sound kit, channel |
+| `SpellEffect`              | `EffectTriggerSpell`              | another spell            |
+| `CreatureDisplayInfo`      | `ModelID`                         | `CreatureModelData`      |
+| `SoundKitEntry`            | `SoundKitID`                      | the audio files          |
+| `AnimKitSegment`           | `ParentAnimKitID`, `AnimID`       | an anim kit's animations |
+| `SpellCastingRequirements` | `RequiredAreasID`                 | `AreaGroupMember` to `AreaTable` |
+
+### As shipped
+
+The pack inverts all of that. The graph is already walked, so the app never joins: what ships is **column-oriented**,
+and every section is one of exactly three shapes.
+
+```mermaid
+flowchart TD
+    subgraph A["1. Dense per-spell columns"]
+        A1["spells<br/>ids · names · subtexts · altNames<br/>icons · schools · eras<br/><br/>every array the same length,<br/>index-aligned, one entry per spell"]
     end
-
-    B["build_data.py<br/>walk + resolve + bake"]
-    P["site/data/&lt;build&gt;/pack.json.gz<br/>column-oriented, ~44 sections"]
-    D["data.ts<br/>builds in-memory indexes"]
-    U["search.ts + app/<br/>query + render"]
-    W --> B
-    L --> B
-    T --> B
-    A --> B
-    E --> B
-    B --> P --> D --> U
-
-    subgraph RT["Runtime hotlinks (on demand, never bulk)"]
-        Z["zamimg — icons, sounds"]
-        C["wago CASC — .blp textures, logos"]
-        V["wowtools.work — 3D viewer"]
-        H["wowhead — spell/npc/model pages"]
+    subgraph B["2. Link rows: one per (spell, payload)"]
+        B1["spellMorphs<br/>spellIds · creatureIds · targets"]
+        B2["spellModels<br/>spellIds · fids · cats · targets<br/>srcAttach · dstAttach · refIds · motions"]
+        B3["spellSounds<br/>spellIds · soundKitIds · fids · targets"]
     end
-    U -.-> Z
-    U -.-> C
-    U -.-> V
-    U -.-> H
-```
-
-Nothing is fetched from a local DB dump, and nothing is fetched per-result at runtime. Everything the search touches is
-baked into the pack.
-
----
-
-## 1. Sources
-
-| Source                      | URL shape                                         | Role                                                                                                                                                                         |
-|-----------------------------|---------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **wago.tools**              | `wago.tools/db2/{table}/csv?build={version}`      | The 34 client db2 tables. Version-pinned, so a pack always matches its build.                                                                                                |
-| **community listfile**      | `github.com/wowdev/wow-listfile` (latest release) | `FileDataID → path`. The only way a fid becomes `cfx_mage_fireball_missile.m2`. ~150 MB, streamed and filtered, never loaded whole. **Revalidated every build** — see below. |
-| **TrinityCore TDB**         | GitHub release `.7z` per era                      | Two distinct roles — see below.                                                                                                                                              |
-| **anims.js**                | `wow.tools.local` raw                             | `AnimID → name` (Stand, SpellCastDirected, …).                                                                                                                               |
-| **WoWDBDefs `meta/enums/`** | raw master                                        | `SpellEffect.dbde` + `SpellEffectAura.dbde` — the authority on what a mechanic enum value means.                                                                             |
-
-### Four sources go stale under packs we already ship — everything else is build-pinned
-
-A version-pinned db2 is correct forever once cached. **The listfile, the three WoWDBDefs enum lists and `anims.js` are
-not**: they are community-maintained documents that keep being corrected and extended for game builds that shipped long
-ago. `download()`'s "is it cached?" test is wrong for all of them, and was silently wrong for months.
-
-**The enum case is the sharper one because it changes what users can TYPE** — an enum name IS a search word, so a stale
-one is a word that does not exist and a correct one that finds nothing. Measured drift when this was fixed: one renamed
-value (`SpellEffect` 324, a typo correction upstream).
-
-`download_volatile()` handles the three `.dbde` files and `anims.js` — 7–42 KB each, so they are simply re-fetched every
-build, with the cached copy kept when the network is unavailable. The listfile is 148 MB and gets the tag-comparison
-treatment below instead.
-
-**The checked-in `build/enums/*.json` are a different matter and were verified current** (2026-08-09):
-`spell_attributes.json` is 449 contiguous bits with **zero** name mismatches against wowdev's
-`EnumeratedString#SpellMisc::Attributes`, and the WoWDBDefs-sourced ones lack no upstream value. Those are static by
-design — see `build/enums/README.md`.
-
-### The listfile is the largest of them, and gets a tag check rather than a re-fetch
-
-Every other source is pinned to a build, so a cached copy is correct forever. The listfile is not: it is a community
-effort that keeps *growing* for builds that shipped long ago, so a fid with no name last month may have one today. A
-plain "is it cached?" check therefore keeps serving an old answer indefinitely — and did. **The packs built on
-2026-08-08 used a listfile from 2026-07-14**, 25 days and ~670 KB of paths behind.
-
-So `fetch_sources()` **revalidates it on every build**: one call to the GitHub releases API, compare `tag_name` against
-the cached `listfile/release-tag.txt`, and re-download the 148 MB body only when the tag actually moved. If the API is
-unreachable the cached copy is used with a warning rather than failing the build — a slightly old listfile still
-produces a correct pack, it just names fewer files.
-
-**Every pack records the tag it was built against as `meta.listfileTag`**, which is what made the staleness above
-provable after the fact rather than a suspicion. All eleven currently read `202608081256`.
-
-### The TDB release is matched on the PATCH, not the build id
-
-`TDB_RELEASES` is written with a full build id because that is the client the release was cut against, but **a TDB
-tracks a patch**: TDB927 is the 9.2.7 world data whatever the hotfix suffix says. `tdb_release()` therefore tries an
-exact build match first and falls back to `major.minor.patch`.
-
-**Keyed strictly, the mapping fell off the moment a pack was bumped** — 3.4.3.58936 → 3.4.3.x would have lost TDB335 and
-every morph name with it, announced by nothing louder than one `no release mapped` line in a 200-line build log.
-Verified to change no pack currently shipped; it exists to protect the next bump.
-
-**`python tools/packs.py --check` reports TDB coverage for a candidate build before anyone edits the roster**, next to
-whether wago has ingested it — the two facts that decide whether a bump is possible and what it costs.
-
-### TDB does two unrelated jobs
-
-```mermaid
-flowchart LR
-    TDB["TDB release .7z"] --> WORLD["world dump"]
-    TDB --> HOT["hotfixes dump"]
-    WORLD --> CT["creature_template<br/>creature → NPC name"]
-    WORLD --> CTM["creature_template_model<br/>creature → display ids"]
-    CT --> USE1["morphs + summons<br/>(server-side; the client never ships it)"]
-    CTM --> USE1
-    HOT --> OV["9 tables overlaid onto the<br/>wago rows BY ROW ID"]
-    OV --> USE2["post-ship corrections<br/>(TDB wins where it has a row)"]
-```
-
-**World tables are the only source of creature names and displays** — that data lives on the server, so without a
-`TDB_RELEASES` entry morph pills render as
-`creature #<id>`. **Hotfix tables** are the rows Blizzard patched over the wire after the build shipped; they are
-applied on top of wago by row ID for
-`spell_name`, `spell_x_spell_visual`, `spell_visual`, `spell_visual_missile`,
-`spell_visual_effect_name`, `spell_effect`, `spell_misc`,
-`creature_display_info`, `creature_model_data`.
-
-A version with no TDB entry still builds — morphs stay unresolved, hotfixes don't apply, and the build logs both.
-
-**How the dumps are read.** Each dump is piped out of the archive with `7z x -so` and scanned as it streams, so the
-~700 MB of SQL never reaches the filesystem; only the distilled CSVs and the archive stay in the cache. A
-`CREATE TABLE` is parsed with `sqlglot` for its column order — an `INSERT` names no columns, so that order is the only
-thing keeping a row's values aligned — and the rows themselves go through a hand-written scanner, because no
-maintained library reads a mysqldump file. That scanner decodes MySQL's full escape table; a name's own leading and
-trailing spaces survive it, and the routes that show a name as a name trim it there.
-
----
-
-## 2. The visual graph spine
-
-Almost every visual route starts here. Both hops are many-to-many.
-
-```mermaid
-flowchart LR
-    S["Spell<br/>(SpellName, or Spell.Name_lang pre-BfA)"]
-    SXSV["SpellXSpellVisual"]
-    SV["SpellVisual"]
-    SVE["SpellVisualEvent"]
-    K["SpellVisualKit"]
-    SVKE["SpellVisualKitEffect<br/>EffectType dispatch"]
-    MS["SpellVisualMissile<br/>(missile set)"]
-    S --> SXSV --> SV
-    SV -->|" Caster/HostileSpellVisualID<br/>(redirect, + target bit) "| SV
-    SV -->|" SpellVisualEvent rows "| SVE -->|" + TargetType "| K
-    SV -->|" SpellVisualMissileSetID<br/>+ RaidSpellVisualMissileSetID "| MS
-    SV -->|" AnimEventSoundID "| AES["SoundKitEntry → sound fids"]
-    K --> SVKE
-```
-
-Three things to hold onto:
-
-**The kit edge carries a target mask.** `SpellVisualEvent.TargetType` says *who the kit plays on*, and it rides along
-with everything that kit contributes. A visual can reach the same kit through several event rows, so masks union per
-edge. Impact kits genuinely carry duplicate rows differing only in TargetType — that is why a row can be caster *and*
-target.
-
-| TargetType | bit | search words       | icon meaning                                                        |
-|------------|-----|--------------------|---------------------------------------------------------------------|
-| 1          | 1   | `caster`           | on the caster                                                       |
-| 2          | 2   | `target`           | on the target                                                       |
-| 3          | 4   | `area`             | on the ground at the target                                         |
-| 4          | 8   | `target`, `others` | on the target only, never the caster                                |
-| 5          | 16  | `area`             | on the ground where the missile lands                               |
-| 0          | —   | —                  | effectively unused (1 row in 207,241 on 9.2.7); contributes nothing |
-
-**The words NEST, they do not partition.** `target` covers bit 8 as well as bit 2, because a never-caster row is still a
-target row and is what you want back from `model:target`; `others` is the narrower question — content the caster never
-sees — and it exists because the pill draws that bit in its own colour, so the red crosshair had a glyph and no name
-(11,227 spells on 9.2.7 in Models, 8,213 in Sounds). `area` nests the same way over bit 16, which keeps **no** word of
-its own: a missile's destination is a place on the ground like any other, and the icon's own tooltip says which. `both`
-is derived (bits 1 **and** 2) rather than being a bit.
-
-**All five payload columns test the mask, since 2026-08-04 — `fx:` did not, and it was drawing the icons anyway.**
-Models, sounds and anims had split target words out of the tokens since the words existed; the fx search never did, so
-`fx:caster` fell through to ordinary corpus text and selected the 32 spells with "caster" in an asset path while 27 of
-their cells lit their icons off the mask. It is now `fx:caster` = 14,641. The mask reaches the fx search through the
-pill-type registry's `targets` axis (docs/PILLS.md §3) — **a type that declares none answers NOTHING to a target word**,
-which is right for a tint or a desaturation and is the thing to check when adding a type that draws the icons.
-`mech:` is the exception and deliberately so: its corpus **is** the `TARGET_*` enum names the column prints, so
-`mech:caster` matches `UNIT_CASTER` / `DEST_CASTER` / `SRC_CASTER` by name — the same "category words match file names
-too" rule the whole app runs on, one level up.
-
-**…but `TargetType` is relative to the CAST, not to the visual.** It distinguishes
-"the caster" from "the unit being cast at" — and on a **self-cast spell those are the same unit**, where the client
-still writes `Target`. Taken literally that draws a *target* icon on Divine Shield's own bubble, Ice Barrier,
-Invisibility and every other self-buff's aura visual: 32,136 spells and 48,025 model rows on 9.2.7.
-`SpellEffect.ImplicitTarget` is what tells a self-cast from a real one, so the two tables must be read together
-(`resolve_target_mask` in `build_data.py`).
-
-*Which* effect row to believe depends on **when** the visual plays —
-`SpellVisualEvent.StartEvent` (`meta/enums/SpellVisualEventEvent.dbde`: 1/2 precast, 3 cast, 4/5 travel, 6 impact, **7/8
-aura**, 9/10 area trigger, 11/12 channel, 13 one-shot). So each kit edge keeps its mask split in two halves:
-
-| phase                     | who to believe                            | why                                                                                                                                                                             |
-|---------------------------|-------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **aura** (StartEvent 7/8) | the `APPLY_AURA` effects' implicit target | the visual belongs to the aura, so it plays on whoever *carries* it — which can disagree with the rest of the spell (Vanish, Blink: a self-aura beside effects aimed at others) |
-| every other phase         | *all* effects' implicit targets           | they share the cast's frame, so "Target" is the caster only when the whole spell is self-cast (Healing Potion, Eye of Kilrogg)                                                  |
-
-A `Target` bit becomes `Caster` when its half's test says the spell targets only the caster. **Only that bit is
-rewritten** — `TargetType 4` ("Target, not caster")
-says outright that it is not the caster, so it never flips. The rule is monotone: it replaces bit 2 with bit 1 and can
-never clear a caster bit, which makes the transition histogram a build oracle (9.2.7: `2→1` 37,485, `3→1` 10,276,
-`7→5` 153, `10→9` 21, `18→17` 18; plus 22 rows `2→3` where the aura phase flips but another phase keeps a genuine
-target).
-
-The contrast that shows it working: **17 Power Word: Shield** (`TARGET_UNIT_TARGET_ALLY`)
-keeps `holydivineshield_state_base` on *target*, while **642 Divine Shield**
-(`TARGET_UNIT_CASTER`) moves `cfx_paladin_divineshield_statebase` to *caster* — the same kind of shield-state visual,
-correctly told apart. Banish and Polymorph are untouched.
-
-Note this reads `StartEvent` **only** far enough to get the icons right; the full phase axis (surfacing cast/aura/impact
-per pill) is deliberately not built. When it is: 97.7% of kits appear in just one phase, so phase is nearly a property
-of the kit, and `StartEvent`/`EndEvent` are populated on all ten packs (no drift).
-
-**The missile path bypasses events entirely**, so missile content carries *no*
-mask — that is exactly the ~4% of unmasked rows in every pack, and the row count matching the missile row count is a
-good build oracle.
-
-**A `SpellVisual` can redirect to another `SpellVisual`.** Four columns on the row name a substitute visual the client
-swaps in (`VISUAL_REDIRECTS` in
-`build_data.py`); the build follows them so the spell also reaches everything the substitute carries. This matters
-because the redirected-to visual is usually reachable no other way — on 9.2.7 only 37 of 228 caster targets and 30 of
-257 hostile targets also appear in `SpellXSpellVisual` — so following the redirect is what makes that content visible at
-all, not a re-labelling of rows already shown (263 spells gain a caster/target model bit this way).
-
-| Column                                         | extra bit    | meaning                                    |
-|------------------------------------------------|--------------|--------------------------------------------|
-| `CasterSpellVisualID`                          | `caster` (1) | what the caster themself sees              |
-| `HostileSpellVisualID`                         | `target` (2) | what a hostile target sees                 |
-| `LowViolenceSpellVisualID`                     | —            | client-setting variant, no target semantic |
-| `ReducedUnexpectedCameraMovementSpellVisualID` | —            | client-setting variant, no target semantic |
-
-The bit rides along with everything reached through that redirect, exactly like a `TargetType` mask, and unions with it.
-Two traps the build handles and any future edit must keep: **the redirect graph has cycles** (a self-reference and a
-two-cycle on 9.2.7, chains up to 3 hops), so expansion is a mask-fixpoint worklist, not recursion; and **a hotfix row
-replaces the wago `SpellVisual` row wholesale**, so the redirect columns (and `AnimEventSoundID`) join the TDB hotfix
-overlay or a hotfixed visual silently loses them.
-
----
-
-## 3. Payload routes
-
-### 3a. Kit dispatch — `SpellVisualKitEffect.EffectType`
-
-The single busiest fan-out in the build. `EffectType` says which table `Effect`
-points at.
-
-```mermaid
-flowchart LR
-    KE["SpellVisualKitEffect"]
-    KE -->|" 1 "| PROC["SpellProceduralEffect"]
-    KE -->|" 5 "| SK["SoundKitID"]
-    KE -->|" 6 "| SVA["SpellVisualAnim"]
-    KE -->|" 7 "| SH["ShadowyEffect"]
-    KE -->|" 8 "| EM["SpellEffectEmission"]
-    KE -->|" 11 "| DE["DissolveEffect"]
-    KE -->|" 12 "| EG["EdgeGlowEffect"]
-    KE -->|" 13 "| BE["BeamEffect"]
-    KE -->|" 17 "| BA["BarrageEffect"]
-    KE -->|" 19 "| SVSE["SpellVisualScreenEffect"]
-    PROC --> PT["dispatched again by Type<br/>(see 3b)"]
-    SK --> SKE["SoundKitEntry → sound fids"]
-    SVA --> AK["AnimKitID → AnimKitSegment"]
-    SVA --> LA["Initial/LoopAnimID → AnimationData"]
-    SH --> GH["ghost — 2 packed colors"]
-    EM --> AM["SpellVisualKitAreaModel → model fid"]
-    DE --> TBS["TextureBlendSet → texture fids"]
-    EG --> GL["glow — packed RGB + alpha"]
-    BE --> CH["SpellChainEffects"]
-    BA --> EN["SpellVisualEffectName → model fid"]
-    SVSE --> SE["ScreenEffect"]
-```
-
-The remaining EffectType values were audited and deliberately dropped: **2**
-(ModelAttach-by-id) is 100% redundant with the parent-kit walk; **10**
-(UnitSoundType) plays the target's own sound and names no file; **15/20** are absent from the data; the rest carry no
-model or sound columns.
-
-### 3b. Proc dispatch — `SpellProceduralEffect.Type`
-
-`Type` is the client's character-procedure index, so it selects both the handler *and* which `Value_n` column holds the
-payload. This is the second fan-out.
-
-| Type      | Payload column                      | Becomes                                 |
-|-----------|-------------------------------------|-----------------------------------------|
-| 0, 12, 26 | `Value_0` → SpellChainEffects       | **chain** (beams)                       |
-| 1         | `Value_0` packed RGB                | **tint**                                |
-| 7         | `Value_0/1/2` → AnimationData       | **replace** (Stand/Walk/Run swaps, §3o) |
-| 9         | `Value_0` → SpellVisualKitAreaModel | **model** (`ground`)                    |
-| 11        | —                                   | **freeze** (valueless)                  |
-| 14        | `Value_0` alpha 0..1                | **transparency %**                      |
-| 18        | —                                   | **camo** (valueless)                    |
-| 21        | `Value_2` strength 0..1             | **desaturate %**                        |
-| 22        | `Value_3` packed RGB                | **ghost** (material recolor)            |
-| 23        | `Value_3` packed RGB                | **tint** (material recolor)             |
-| 27        | `Value_0` → WeaponTrail             | **model** (`trail`)                     |
-
-Colors are `0xRRGGBB`; `INT_MIN` is the "unset" sentinel. The types not surfaced (2–6, 8, 10, 13, 15–17, 19–20, 24–25,
-28–34) are renderer or gameplay state, or too rare to be worth a pill.
-
-#### The full decode
-
-`Type` is the client "character procedure" index (`m_characterProcedure`), documented on wowdev.wiki/DB/SpellVisualKit —
-not on the SpellProceduralEffect page, and not in WoWDBDefs. It is one continuous append-only enum; WotLK stops at 17.
-Decoded and verified against 9.2.7 by FK joins and spell-name semantics.
-
-| Type       | Meaning                                                                                          |
-|------------|--------------------------------------------------------------------------------------------------|
-| 0, 12, 26  | **Chain** — `Value_0` → SpellChainEffects. 26 is main beams, 12/0 variants                       |
-| 1          | **Color/tint** — `Value_0` packed RGB, multiply                                                  |
-| 2          | Scale                                                                                            |
-| 3, 5       | Color payload (purpose unconfirmed)                                                              |
-| 4          | Emissive color                                                                                   |
-| 6          | Eclipse overlay                                                                                  |
-| 7          | **Stand/Walk anim** — `Value_0/1/2` → AnimationData; `Value_2` is RUN and IS meaningful          |
-| 8          | Weapon Trail (old)                                                                               |
-| 9          | **Blizzard/AreaModel** — `Value_0` → SpellVisualKitAreaModel                                     |
-| 10         | Fishing Line                                                                                     |
-| 11         | **Freeze**                                                                                       |
-| 13         | Gore/blood [undocumented]                                                                        |
-| 14         | **SetAlphaMod / transparency** — `Value_0` alpha                                                 |
-| 15         | DoFade                                                                                           |
-| 16         | AddMountTransition                                                                               |
-| 17         | **AddItemVisual** — `Value_1` Item ID                                                            |
-| 18         | **AddCamouflage**                                                                                |
-| 19         | AddHeadLook                                                                                      |
-| 20         | AddTimeRate                                                                                      |
-| 21         | **CustomMaterial/desaturate** — `Value_2` strength, ~94% colorless                               |
-| 22, 23     | **CustomMaterial recolor** — `Value_3` packed RGB; 22 translucent shadow materials, 23 tint      |
-| 24         | PlayAllAttachedMirrored                                                                          |
-| 25         | Mirror Image / ItemVisual                                                                        |
-| 27         | **Weapon Trail modern** — `Value_0` → WeaponTrail.db2 ID → FileDataID                            |
-| 28, 32, 34 | Rare, undecoded                                                                                  |
-| 29         | LOD enforce [undocumented]                                                                       |
-| 30         | Cast/strike anim override [undocumented]                                                         |
-| 31         | Legion artifact hidden proc, all-zero [undocumented]                                             |
-| 33         | Desaturate aura, 2 dead spells [undocumented]                                                    |
-
-Type 7 merges with aura 312 into the `replace` group (§3o). Revisit candidates: 13 (blood color) and 17 (item visuals).
-
-### 3c. The six model routes
-
-Every `(spell, model)` row is tagged with **how** the model is used. Same fid can appear once per category.
-
-```mermaid
-flowchart LR
-    A1["SpellVisualKitModelAttach"] --> EN["SpellVisualEffectName"]
-    M1["SpellVisual → SpellVisualMissile"] --> EN
-    E17["kit ET 17 → BarrageEffect"] --> EN
-    EN -->|" Type 0 (.ModelFileDataID) "| LF["listfile → model path"]
-    EN -->|" Type 1 (.GenericID = Item::ID)<br/>attach route only "| ITM["ItemModifiedAppearance → ItemAppearance<br/>→ ItemDisplayInfo → ModelFileData"]
-    ITM --> LF
-    EN -->|" Type 2 (.GenericID = CreatureDisplayID)<br/>attach route only "| CDI["CreatureDisplayInfo.ModelID<br/>→ CreatureModelData.FileDataID"]
-    CDI --> LF
-    EN -->|" Type 3-10, no named file "| WPN["sentinel fid per slot<br/>'equipped main hand' / 'off hand'<br/>/ 'ranged' / 'ammo'"]
-    E8["kit ET 8 → SpellEffectEmission"] --> AM["SpellVisualKitAreaModel<br/>.ModelFileDataID"]
-    P9["proc Type 9"] --> AM
-    P27["proc Type 27 → WeaponTrail<br/>.FileDataID"] --> LF
-    AM --> LF
-    A1 -.->|" category "| C0["attach — no word, loose pills"]
-    A1 -.->|" category (Type 1) "| C6["item"]
-    A1 -.->|" category (Type 2) "| C5["display"]
-    M1 -.->|" category "| C1["missile"]
-    M1 ==>|" SpellMissileMotionID "| MO["SpellMissileMotion.Name<br/>flight path — part of the row key"]
-    E17 -.->|" category "| C4["barrage"]
-    E8 -.->|" category "| C2["ground"]
-    P9 -.->|" category "| C2
-    P27 -.->|" category "| C3["trail"]
-```
-
-`SpellVisualKitAreaModel` carries its fid **directly** — no
-`SpellVisualEffectName` hop. Note `ground`, not `area`: the target words include
-`area` and the two mean different things (only 42% of this category's rows carry an area target bit).
-
-**`SpellVisualEffectName.Type`** picks how the effect-name resolves to a model:
-**0 = FileDataID** (`ModelFileDataID`, every route above), **1 = Item**
-(`GenericID` = Item::ID), **2 = CreatureDisplayInfo** (`GenericID` = a CreatureDisplayID). On the **attach route only**,
-a Type-2 row resolves that display through `CreatureDisplayInfo → CreatureModelData` (pure client data — no TDB) into
-the `display` model category. Its pill sits in the Models column but wears the morph pill's buttons (Wowhead model
-viewer by displayId, ⧉ copy displayId, `.morph`, `.lookup display creature`) and keeps its attachment point like any
-other attached model. The label is the model's base filename. The category word is **`display`**, not `creature`: a
-creature model's path lives under `creature/…`, so `creature` would collide with ~21% of the model-file corpus by the
-filename-substring rule. Missiles/barrage keep reading
-`ModelFileDataID` for every Type (they carry no CreatureDisplay/Item content).
-
-**Type 1 = an Item::ID → the `item` model category** (attach route only). The item carries its own model through the
-appearance chain
-`ItemModifiedAppearance → ItemAppearance → ItemDisplayInfo → ModelResourcesID
-→ ModelFileData.FileDataID` (pure client data, so it works on the TDB-less Classic packs; 99.8% of reached items resolve
-on 9.2.7), plus the display name and quality from `ItemSearchName` and the inventory icon from
-`ItemAppearance.DefaultIconFileDataID`. `ItemSparse` is deliberately **not**
-downloaded: measured to add zero names over `ItemSearchName` for this population, at 6× the size. The pill has two
-shapes, split on whether the item has a name (about two-thirds do; the rest are internal props — unnamed potions,
-dynamite, gizmos — that exist only to be held in a visual):
-
-- **named** → `[Wowhead item page] · {target}{icon}{name} · attach · ⧉ copy
-  item id · .additem · .lookup item {name}`. The name is coloured by the item's quality (the classic poor→artifact ramp;
-  colour only, **not** searchable). Both the leading `[wh]` button *and the icon* are Wowhead item links opening the
-  model view (`item={id}/#modelviewer`) — that `<a href>` anchor is the app's proven tooltip trigger, so hovering the
-  icon raises the item tooltip. The label stays a click-to-search button (with a `data-wowhead` mirror for its own
-  tooltip) rather than a link, so clicking the name searches instead of navigating.
-- **nameless** → `[3D viewer] · {target}{icon}{model base name} · attach ·
-  .lookup item {model base name}`. No Wowhead, no `.additem`, no id copy — none resolve without a name — and
-  `.lookup item` falls back to the model's base filename (no extension; `.lookup item` accepts either a name or a model
-  name). The icon still reads (you can see it is a potion or a bomb).
-
-The category word is **`item`**; it collides with ~4.3% of the model-file corpus (the `item/objectcomponents/…` paths)
-by the filename-substring rule — well under the ~21% that ruled out `creature`, and coherent because those files *are*
-item models. `model:"item <name>"` matches on the item name via a dedicated corpus (`itemSearchL`); the model file and
-category word match through the ordinary model index. This is the **attach route only** — the 62 missile-route Type-1
-effect-names on 9.2.7 render nothing, matching the "item attachments" scope.
-
-**Types 3–10 = a weapon the caster already has.** They carry *no* model of their own (`ModelFileDataID` **and**
-`GenericID` both 0) while attaching to weapon/hand M2 points and being frequently reused as a missile — i.e. the model
-is the real item the caster is holding, resolved client-side at cast. The `Type` picks the **slot**, and dual-wield
-emits a mainhand+offhand pair. `SpellVisualEffectNameType.dbde`
-defines only 0–2, but [wowdev.wiki/EnumeratedString](https://wowdev.wiki/EnumeratedString#SpellVisualEffectName::Type)
-carries the client's own enum, and it matches what the data showed:
-
-| Type | official name                 | pill                 | evidence (spell names)                                       |
-|------|-------------------------------|----------------------|--------------------------------------------------------------|
-| 3    | Unit - Item - Main hand       | `equipped main hand` | Throw Spear, Heroic Throw, Javelin Toss, Impale, Fishing     |
-| 4    | Unit - Item - Off hand        | `equipped off hand`  | Pandaren Spirit (`T3@LargeWeaponRight + T4@LargeWeaponLeft`) |
-| 5    | Unit - Item - Ranged          | `equipped ranged`    | Arcane Shot, Pistol Barrage, Hold Rifle, Wailing Arrow       |
-| 6    | Unit - Ammo - Basic           | `equipped ammo`      | Sha Corruption (2 rows)                                      |
-| 7    | Unit - Ammo - Preferred       | `equipped ammo`      | missile-only (1 row)                                         |
-| 8    | Main hand *(ignore disarmed)* | `equipped main hand` | Hold/Sharpen/Throw Sword, Whirling Blade                     |
-| 9    | Off hand *(ignore disarmed)*  | `equipped off hand`  | Thal'kiel skull, Crystalline Swords                          |
-| 10   | Ranged *(ignore disarmed)*    | `equipped ranged`    | Hold Rifles, Barrage, Death Blossom                          |
-
-Eight types, **four pills**: "(ignore disarmed)" is a visibility rule for a disarmed caster rather than a different
-weapon, and basic-vs-preferred ammo says which arrow the client picks, so both collapse. Because there is no file to
-name, these rows carry a **sentinel fid per slot** (`SYNTHETIC_MODEL_FILES`, −1…−4) and render as a flat marker pill —
-no 3D, texture, Wowhead or `.lo` button — while keeping their category (`attach` vs thrown-as-`missile`), attachment
-point and target icon. Each sentinel gets a synthetic `files` entry whose *path is its label*, so it renders and
-searches through the ordinary filename route with no special case: a pill click searches `model:"equipped off hand"`
-exactly as a real model pill searches its own filename. Every label opens with **`equipped`** — a word no real model
-path carries — so `model:equipped` still finds the whole family (where `model:weapon` would also catch every `weapon/…`
-file). That one word is also the only thing autocomplete offers: the slots are *values*, and only meta words belong
-there (the `attach <point>` rule, §3c). The rows'
-`StartAnimID`/`AnimID`/`EndAnimID`/`AnimKitID` already reach the Animations column (§3e), so what the spell *plays* was
-searchable before the model was.
-
-**Trap — "fileless" is not always spelled 0.** The Classic re-release clients backfill these rows with an **unnamed
-placeholder fid** instead: Cata 4.4.2 points all seven of its weapon rows at fid **1255628**, WotLK 3.4.3 one — the very
-same effect-name IDs (8905–8909, 9007, 50201) that are fid 0 on every other build. One fid shared across six weapon
-slots is not a per-weapon model, and taken literally it renders a junk `file #1255628` pill. So a weapon row's fid is
-trusted **only when the listfile can name it**, which keeps genuinely hardcoded weapons (Sylvanas's bow, fid 3597252 on
-9.2.7+) rendering as the real models they are. The check runs once in `read_model_sources`, after the hotfix overlay,
-and rewrites the placeholder to 0 so every downstream route takes its existing "no file → sentinel" branch. Only weapon
-rows are touched — a Type-0 row naming the same fid keeps its normal model pill (which is why Cata still reports one
-unnamed file).
-
-#### Missile flight paths — the arc a projectile travels
-
-`SpellVisualMissile.SpellMissileMotionID → SpellMissileMotion.Name` names the path a missile flies. It rides the same
-row as the model, so the flight path pairs with the **projectile it belongs to** rather than with the whole missile set,
-and it is part of the model row key exactly as the attachment pair is — a model flown two ways is two rows and renders
-as two pills. On 9.2.7 that costs 163 extra rows out of 317,613: **99.4%** of `(set, effect-name)` pairs name exactly
-one motion.
-
-Only ID and Name are read. The table's other real column is `ScriptBody`, a Lua-ish motion script that is the bulk of
-its bytes and that nothing renders. The pack ships only the motions in use (**1,199** of ~1,650 on 9.2.7) as a
-`missileMotions: {ids, names}` block, with `spellModels.motions` indexing into it by id (0 = none, and 0 on every
-non-missile category).
-
-Coverage on 9.2.7: **14,514** of 24,145 missile model rows (60.1%) carry a motion, reaching **13,301** spells. It
-renders as a `motion` pill segment between the model name and the attachment pair, and is searchable as
-`model:"motion parabola"` / `model:(motion "forward spin")` — 7,796 spells and 924 respectively.
-
-#### Missile attachments come from the ROW first, then the visual, then a verified default
-
-Both `SpellVisual` and `SpellVisualMissile` carry a launch/impact attachment pair, and they are **complementary, not
-redundant**. Over the 18,553 missile rows reachable from a visual on 9.2.7:
-
-| source attachment             | rows              |
-|-------------------------------|-------------------|
-| `SpellVisual` only            | 3,039 (16.4%)     |
-| `SpellVisualMissile` row only | 9,409 (50.7%)     |
-| **either**                    | **9,774 (52.7%)** |
-| neither                       | 8,779 (47.3%)     |
-
-So the row is read first and the visual is the fallback — **more than tripling** source coverage against reading the
-visual alone. Where both are set they agree (322 conflicts of ~3,000). An earlier comment justified preferring
-`SpellVisual` with "105.6k rows carry a destination versus 14.9k" — that counted all 105k visuals, ~87k of which have no
-missile at all, so it measured the wrong population.
-
-**The destination precedence was settled in game**, because there the two disagree on **4,457 rows (24%)**: casting
-`Glacial Blast` (369018), where the visual says Chest and the row says Base, lands at the **base**. The row wins.
-
-**A row with no attachment in either column launches from `VirtualSpellDirected` (M2 attachment 56)** — the client's own
-name for a computed point, verified in game on two independent models (a blank Fireball 9053 is indistinguishable from
-Fireball 133, which declares it explicitly; Shadow Bolt agreed). It is materialised in the build, so **every missile row
-now has a launch point** — 0% blank, down from ~84%. `DEFAULT_MISSILE_SOURCE` is the one place it is spelled.
-
-**The names come in two families**, and both are useful:
-
-| family               | shape                                                                 | share |
-|----------------------|-----------------------------------------------------------------------|-------|
-| **geometry**         | `Parabola (High)`, `Boomerang`, `Spiral`, `Fountain`, `Snake`         | ~60%  |
-| **per-spell script** | `Mage - Fire - Fireball`, `Warlock - Destro - Chaos Bolt (Secondary)` | ~40%  |
-
-The script family is effectively a second, Blizzard-authored name for the spell, which is why the names are worth
-shipping rather than reducing to a geometry enum. A few carry developer intent recorded nowhere else —
-`Always Miss - Left or Right, Miss by 1-2 yd` (Wrath, 83457) is a deliberate miss behaviour, and one motion's name is a
-shipped code comment.
-
-**The TDB hotfix overlay must carry the column too.** `spell_visual_missile` is overlaid by row ID *wholesale*, so a
-hotfixed missile row that omitted `SpellMissileMotionID` would silently blank the flight path — the same reason
-`spell_visual` overlays its missile attachments. Adding it to `TDB_TABLES` requires deleting the stale distilled
-`spell_visual_missile.csv` per TDB release, because the distilled-CSV cache is keyed on file existence, not columns.
-
-Present on **every build** (45 motions on Vanilla 1.15.8 → 1,997 on TWW 11.2.7), so no drift declaration is needed.
-
-### 3d. The four-and-a-half sound routes
-
-```mermaid
-flowchart LR
-    K5["kit EffectType 5"] --> SKID["SoundKitID"]
-    MSND["SpellVisualMissile.SoundEntriesID"] --> SKID
-    CSND["SpellChainEffects.SoundKitID"] --> SKID
-    AESND["SpellVisual.AnimEventSoundID"] --> SKID
-    SKID --> SKE["SoundKitEntry"] --> FID["sound FileDataIDs"]
-```
-
-The chain route is the "half": a beam's own sound folds into the spell's Sounds column and inherits the chain's target
-mask.
-
-`AnimEventSoundID` hangs off the `SpellVisual` row itself (not a kit or a missile), and its value is a `SoundKit::ID` —
-the same type the missile route already eats — so it drops straight into the existing sound plumbing. It is the
-**widest-reaching of these** — 1,999 spells on 9.2.7 (vs a few hundred each for the caster/hostile redirects), populated
-on every pack including Vanilla — and it inherits the redirect target bit of whatever edge reached the visual.
-
-### 3e. The animation routes
-
-```mermaid
-flowchart LR
-    K6["kit ET 6 → SpellVisualAnim"] -->|AnimKitID| AKS["AnimKitSegment"] --> AID1["AnimIDs — grouped under an AnimKit head"]
-    MAK["SpellVisualMissile.AnimKitID"] --> AKS
-    K6 -->|" Initial/LoopAnimID "| AID2["AnimIDs — loose pills"]
-    MA2["SpellVisualKitModelAttach"] -->|" AnimKitID "| AKS
-    MA2 -->|" Start/Anim/EndAnimID "| AID2
-    P7["proc Type 7 (Stand/Walk/Run)"] --> AID3["'replace' group — base → replacement pairs (§3o)"]
-    AR312["aura 312 → AnimReplacement"] --> AID3
-    VS["VehicleSeat (via aura 296 → Vehicle)"] -->|" Enter/Ride/RideUpper/Exit anims "| AID4["AnimIDs — 'passenger' group"]
-    VS -->|" VehicleEnter/Exit/RideAnimLoop "| AID2
-    VS -->|" 6 × AnimKitID "| AKS
-    AID1 --> N["names via anims.js"]
-    AID2 --> N
-    AID3 --> N
-    AID4 --> N
-```
-
-`SpellVisualAnim`'s initial/loop anims are **the dominant source** — 119k rows vs 32k animkit rows on 9.2.7. `-1` and
-`0` both mean unset (0 would be Stand). Impact kits animate the *target*, so these are not caster-only.
-
-**That split is searchable as `anim:kit` / `anim:loose`** (2026-08-04): where an animation came from is the one thing
-the column draws plainly — numbered AnimKit boxes above, loose pills below — and the search could not ask about it.
-31,259 spells have an AnimKit, 82,009 have a loose anim and 11,168 have both, so it partitions the column rather than
-naming a corner of it. They are **head words like `replace` and `passenger`**, matched the same way (the word OR the
-anim's own name), which is what makes `anim:"kit dance"` a dance that arrived in a bundle and leaves `anim:loose` still
-finding `Attack2HLoosePierce` by name — the documented overlap, same as `fx:glow` finding `beam_webglowwhite`. Four
-sources, four words, one rule (`inSource` in search.ts).
-
-`SpellVisualKitModelAttach` carries animations on the SAME rows that attach a model (§3c, attachment point in §3h): its
-`StartAnimID`/`AnimID`/`EndAnimID` are AnimationData ids for the attached model's start/loop/end and join the loose
-pills; its `AnimKitID` rejoins the animkit groups. Keyed by kit, they union into the existing buckets (no pack section
-of their own), and are indexed even when the row's `ModelFileDataID` is 0 (a Type 1/2 effect-name, whose model comes
-from
-`GenericID`, or a Type 3–10 equipped-weapon row that has no model at all), since they are anims the spell's kit plays.
-Same `>0` gate as `SpellVisualAnim`. Adds
-~10.5k animkit and ~6.7k loose-anim (spell,anim) pairs on 9.2.7.
-
-The vehicle-seat route splits by **whose** animation it is: the nine passenger columns (`EnterAnimStart/Loop`,
-`RideAnimStart/Loop`,
-`RideUpperAnimStart/Loop`, `ExitAnimStart/Loop/End`) head a `passenger`
-group, while the vehicle's own three (`VehicleEnterAnim`, `VehicleExitAnim`,
-`VehicleRideAnimLoop`) join the loose pills — the rider's behaviour and the vehicle's are different things. The six
-`*AnimKitID` columns are ordinary
-`AnimKit::ID`s and rejoin the animkit groups, so the build counts them as
-"used" and ships their segments. Population on 9.2.7: 99.8% of seats set at least one passenger anim, the vehicle's own
-are 3–7%, any animkit 12.7%.
-
-**Bonesets — the body region a segment animates.** Each `AnimKitSegment` (one anim in a kit) names an
-`AnimKitConfigID`; the config resolves through `AnimKitConfigBoneSet` (`ParentAnimKitConfigID → AnimKitBoneSetID`) to
-one or more `AnimKitBoneSet.Name`s — "Upper Body", "Head", "Right Hand", "Jaw", … (28 named regions on 9.2.7, all
-build-present so no drift). The bone-index blob (`BoneDataID`) is not surfaced; the region **name** is the useful part.
-
-```mermaid
-flowchart LR
-    SEG["AnimKitSegment<br/>(kit, anim, AnimKitConfigID)"] -->|ParentAnimKitConfigID| CBS["AnimKitConfigBoneSet"]
-    CBS -->|AnimKitBoneSetID| BS["AnimKitBoneSet.Name"]
-```
-
-A boneset is a property of the **segment**, so it is keyed by `(kit, anim)` and shown only on that **anim pill** — never
-on the kit head. Each region becomes its OWN pill, so an anim that animates two regions (a config naming Left + Right
-Shoulder, or two segments) renders as two pills, not one merged label. **"Full Body" is the default** (nearly every
-segment animates the whole body — 19,310 of 21,462 kits on 9.2.7) and is never shipped or shown; only a specific region
-says anything. Searchable through the `boneset` keyword inside `anim:` (`anim:"boneset upper body"`), which consumes
-every token after it as region words and matches them against the spell's boneset haystack (a name may be several words,
-unlike an `attach` point). 9.2.7 ships 4,354 `(kit, anim) → region` rows across 9 region names for the used AnimKits. A
-single `AnimKitConfig` can name several bonesets (68 name two, e.g. Left+Right Shoulder), and a single
-`(kit, anim)` can reach several through multiple segments — both unioned, then Full Body dropped.
-
-### 3f. Routes that start at `SpellEffect`, not at a visual
-
-Nine fx categories skip the visual graph entirely: a particular `Effect` or
-`EffectAura` enum makes `EffectMiscValue_n` an id into another table — or, for movement speed and object scale, makes
-`EffectBasePoints` the payload itself.
-
-```mermaid
-flowchart LR
-    SE["SpellEffect"]
-    SE -->|" EffectAura 56 (TRANSFORM)<br/>misc0 = creature id "| MO["morph"]
-    SE -->|" Effect 28 (SUMMON)<br/>misc0 = creature, misc1 = SummonProperties "| SU["summon"]
-    SE -->|" EffectAura 260 (SCREEN_EFFECT)<br/>misc0 = ScreenEffect id "| SC["screen"]
-    SE -->|" EffectAura 36 (MOD_SHAPESHIFT)<br/>misc0 = SpellShapeshiftForm "| SS["shapeshift"]
-    SE -->|" EffectAura 370 (OVERRIDE_NAME)<br/>misc0 = SpellOverrideName "| ON["alt names — search corpus only"]
-    SE -->|" EffectAura 296 (SET_VEHICLE_ID)<br/>misc0 = Vehicle id "| VE["vehicle"]
-    SE -->|" EffectAura 406 (KEYBOUND_OVERRIDE)<br/>misc0 = SpellKeyboundOverride "| KB["keybind"]
-    SE -->|" EffectAura in SPEED_AURAS (14 of them)<br/>EffectBasePoints = the percent "| SP["speed"]
-    SE -->|" EffectAura in SCALE_AURAS (61 / 239 / 591)<br/>EffectBasePoints = the percent "| SZ["scale"]
-    SE -->|" Effect + EffectAura + ImplicitTarget "| ME["Mechanics column"]
-```
-
-**The vehicle route covers "the caster BECOMES a vehicle", not "boards one".**
-`CONTROL_VEHICLE` (aura 236) is the far larger population — 1,581 rows vs 247 on 9.2.7 — but its `EffectMiscValue_0` is
-a seat/flag value, not a
-`Vehicle.db2` id, so it needs its own route and is deliberately not wired up.
-
-**These effect-driven fx carry a target mask of their own** (pack format 25), and it does *not* come from the visual
-graph — it is the producing
-`SpellEffect` row's `ImplicitTarget_0`/`_1` (the `Target` enum, mapped to the same caster/target/area bits as §2's
-`TargetType`, by `implicit_target_bit`). It answers *who the effect lands on*: a polymorph's morph is on the **target**,
-a self-transform on the **caster**, a summon on the **area** where it lands. These rows never pass through
-`SpellVisualEvent`, so `TargetType` says nothing about them — the implicit target is the only source. Alt-names
-(`aura 370`) are search-corpus-only and carry no mask.
-
-**misc0 on a transform aura is a creature id, not a display id** — a long-standing trap. Both morphs and shapeshift
-forms then walk the same creature→model chain:
-
-```mermaid
-flowchart LR
-    CR["creature entry"] -->|" TDB creature_template_model<br/>(or legacy modelid1..4) "| DI["CreatureDisplayID"]
-    FORM["SpellShapeshiftForm.CreatureDisplayID"] --> DI
-    DI --> CDI["CreatureDisplayInfo.ModelID"] --> CMD["CreatureModelData.FileDataID"] --> LF["listfile → model path"]
-```
-
-Screen effects are the one payload arriving from **both** directions — the aura route (~2.3k spells) and the kit route
-via `SpellVisualScreenEffect` (18 rows on 9.2.7) — so the walk extends an already-populated set.
-
-### 3g. Screen effect payload
-
-```mermaid
-flowchart LR
-    SEF["ScreenEffect"] -->|" Param_0 (Effect=3) "| FOG["fog tint aarrggbb<br/>low 24 bits = color, top byte = opacity"]
-    SEF -->|FullScreenEffectID| FSE["FullScreenEffect"]
-    FSE --> GR["ColorMultiply / ColorAddition"]
-    FSE --> VG["Mask triplet = radial vignette"]
-    FSE -->|OverlayTextureFileDataID| OVL["overlay — finished art"]
-    FSE -->|TextureBlendSetID| MSK["TextureBlendSet → mask textures"]
-```
-
-The two texture columns are **not interchangeable**: overlays are finished art drawn in their own colors, masks are flat
-blend-set art the grade colors paint. The pack tags each texture with its role. The wiki's `rrggbbxx` claim for
-`Param_0` is WotLK-era and wrong for modern rows — ours reads `aarrggbb`, settled by name semantics.
-
-### 3h. Attachment points — where on the model something plays
-
-```mermaid
-flowchart LR
-    MA["SpellVisualKitModelAttach.AttachmentID"] --> AN["M2 attachment name"]
-    SV["SpellVisual.MissileAttachment<br/>+ MissileDestinationAttachment"] --> AN
-    BE["BeamEffect.SourceAttachID<br/>+ DestAttachID"] --> AN
-    AN --> P["pill segment — 'Chest' or 'SpellRightHand → Chest'"]
-```
-
-Three routes carry an attachment, and **all three are RAW M2 attachment ids**
-(the `M2_ATTACHMENT_NAMES` table) — only `VehicleSeat` is indexed, see §3i. The id is part of the row key, so the same
-model at two points stays two rows and renders as two pills: on 9.2.7, 44,906 (spell, fid, category) groups split this
-way, and the split is what makes a caster/target difference visible instead of silently merged.
-
-**Single-point vs travelling is a real distinction, not a formatting choice.**
-Attached, ground, trail and barrage models sit at ONE point and render the bare name; missiles and beams travel and
-render `Source → Dest`. The two are indistinguishable in the data (both look like "src set, dst unset"), so the renderer
-is told explicitly — `TRAVELLING_MODEL_CATS` in `src/app/tags.ts`. A travelling row that knows only one end reads
-`from X` /
-`to Y`; it must never render a dangling arrow.
-
-Two traps:
-
-- **`SpellVisualKitModelAttach.LowDefModelAttachID` is a SELF-REFERENCE to another row of the same table** — the
-  low-detail variant of that attachment — **not an attachment id and not a FileDataID.** It is unused by the build; what
-  matters is only that it is not mistaken for an attach point. **Corrected 2026-07-29** (this entry previously said "a
-  FileDataID", inferred from `max 430259` being far outside the 0..57 attachment range — which rules out an attachment
-  but says nothing about which of the two remaining readings is right). Measured on 9.2.7 with the exploration database:
-  of the 36 distinct nonzero values, **36 (100%) resolve as `SpellVisualKitModelAttach.ID`**
-  and only **8 (22%) as a listfile FileDataID**; the referenced rows all carry `ParentSpellVisualKitID = 0`, i.e.
-  orphans reachable only from the high-detail row that names them. `WoWDBDefs` agrees
-  (`int<SpellVisualKitModelAttach::ID> LowDefModelAttachID`).
-- **Missile attachments are taken from `SpellVisual`, not
-  `SpellVisualMissile`.** The missile route is per-visual (a whole set is unioned into one bucket) and that is also
-  where the data lives: 105.6k rows carry a destination there versus 14.9k on the missile table. `spell_visual`
-  in `TDB_TABLES` must overlay both columns — a hotfix row replaces the wago row wholesale, so omitting them would
-  silently blank the attachments.
-
-`SpellChainEffects` itself has **no** attachment column (its `Joint*` fields are geometry); beams attach through
-`BeamEffect` (`SourceAttachID → DestAttachID`, rendered as the source→dest pair on the chain pill), which is why chains
-only carry attach points on builds that have that table.
-
-**Three more effect tables carry an M2 attachment id, now surfaced (§3, format 33): `DissolveEffect.AttachID`,
-`ShadowyEffect.AttachPos` and `BarrageEffect.AttachmentPoint`.** Unlike a model-attach `-1` (which means "no segment"),
-on these effects **`-1` means the WHOLE body** — the frontend labels it "full body" — because an effect with no anchor
-covers the whole model (70–77% of dissolve/shadowy rows on 9.2.7). Dissolve and shadowy are fx pills: the region word
-(the M2 name, or "full body") rides the effect's own fx search corpus, so `fx:"dissolve chest"` / `fx:"ghost full body"`
-narrow by anchor with no new keyword; shadowy is grouped by colour, so a colour drawn at several points shows the union.
-Barrage is a model pill, so its point rides the model row's `src` and reuses the whole model-attach machinery
-(`model:"attach handarrow barrage"`). These columns are **absent on several Classic re-release clients** (irregularly —
-Vanilla's `DissolveEffect` has `AttachID`, TBC's does not), so all three are `OPTIONAL_COLUMNS` defaulting to `-1`
-(full body). A scan of every effect table found these three plus `BeamEffect` are the ONLY ones with an attachment
-column — EdgeGlow, WeaponTrail, ColorEffect, Emission, AreaModel and Screen have none.
-
-### 3i. Vehicle seat payload
-
-```mermaid
-flowchart LR
-    V["Vehicle (via aura 296)"] -->|" SeatID_0..7 "| VS["VehicleSeat"]
-    VS -->|" AttachmentID = INDEX "| GL["g_vehicleGeoComponentLinks[]"]
-    GL -->|" M2 attachment id "| AN["attachment name — one pill per seat"]
-    VS -->|" passenger anim columns "| PA["'passenger' anim group"]
-    VS -->|" vehicle anim columns "| LP["loose anim pills"]
-    VS -->|" AnimKit columns "| AK["animkit groups"]
-```
-
-A vehicle fills up to eight `SeatID_n` slots; the filled count IS the seat count, and 0-seat vehicles are dropped at
-build.
-
-**`VehicleSeat.AttachmentID` is an INDEX, not an M2 attachment id** — it indexes a table hardcoded in the client binary
-(`g_vehicleGeoComponentLinks`), which exists in no db2 and so is transcribed into `build_data.py`. wowdev.wiki quotes
-the array but hedges it with a `?`, so it was verified rather than trusted: 138 vehicle M2s were fetched and each seat
-checked against its own vehicle's model. The decoded attachment is present **91.2%** of the time vs **42.4%** for the
-raw value, and where the hypotheses diverge it is decisive — index 14 decodes to `VehicleSeat2`, present on 100% of the
-models using it, while raw 14 (`ShoulderFlapLeft`) is present on 0%. Indices 13..20 come out as
-`VehicleSeat1..8` in order, which the array's own shape corroborates.
-
-Two consequences worth knowing:
-
-- The array is 6.0.1-era; modern data has indices past its end (26, 27). Those stay unmapped and render as a raw `idx N`
-  rather than a guess.
-- The decoded names are the game's own and often read oddly as seat positions (`Breath` and `ChestBloodBack` are the 2nd
-  and 4th most common on 9.2.7)
-  because artists reuse generic attachment slots as seat anchors. **That is the data, not a decode error** — the pill
-  tooltip says so explicitly.
-
-**Do not reuse this decode for the other attachment columns** (§3h): they are *raw* M2 attachment ids.
-`SpellVisualKitModelAttach.AttachmentID` spans -1..57 across 55 distinct values on 9.2.7 — the direct-id signature —
-versus
-`VehicleSeat.AttachmentID`'s dense 0..27.
-
-### 3j. Keybound overrides — which key stops working
-
-```mermaid
-flowchart LR
-    SE["SpellEffect<br/>EffectAura 406 (KEYBOUND_OVERRIDE)"]
-    SE -->|" misc0 = SpellKeyboundOverride::ID "| KO["SpellKeyboundOverride"]
-    KO -->|" Function "| FN["key name — the pill (JUMP, MOVEFORWARD, ...)"]
-    KO -->|" Type "| TY["timing word — '' or 'mid-air'"]
-    KO -->|" Data = Spell::ID "| SP["replacement spell — shipped, NOT displayed"]
-```
-
-While the aura holds, a movement/UI key stops doing what it normally does. The join is exact: **105/105 aura rows
-resolve on 9.2.7**. On the newest builds the table trails the aura slightly — 11 rows on both DF and TWW point at an
-override the build does not ship — and those are dropped rather than shown as a bare id.
-
-**`Data` is a `Spell::ID`.** 46 of 53 distinct values on 9.2.7 are live spells; the other 7 (43574, 52477, 79579,
-206768, 284741, 284991, 292038) are stale references to spells since deleted from the client DB2.
-
-**The replacement spell is shipped but deliberately not displayed** (user's call, 2026-07-23). Retail casts it in the
-key's place, but on **Epsilon the override only disables the key** — it never casts the replacement — so naming it would
-promise behaviour Epsilon users cannot get. It stays in the pack (`keybinds.spells`) so a future pass can surface it
-without a rebuild; restoring it means adding the id and name back to `keybindSearchL` in `data.ts`
-and to `keybindTag` in `src/app/tags.ts`, nothing more.
-
-#### `Type` is decoded, not documented
-
-Nothing documents this enum: the `.dbd` has no comment on `Type`, wowdev.wiki/DB/SpellKeyboundOverride is a 6.0.1
-two-field stub, and EnumeratedString has no section for it. It was decoded from the data (2026-07-23) and the evidence
-is strong enough to name:
-
-- **100% of Type-1 rows are `JUMP`, on every build that has the table** — 0 of 13 rows on MoP, 2 Legion, 3 BfA, 7 SL, 23
-  DF, 25 TWW. 60 rows, no exceptions. Type 0 spans all ten functions.
-- Every Type-1 spell is a **mid-air** ability: Glide, `[DNT] Pirate Double
-  Jump`, Jump Dash, Lift Off, Empowered Flight, Highland Drake, Gnomish Gravity Launcher, Defying Gravity, Faerie Wings,
-  Zephyr's Catch, Wild Winds, Here's a Boost!, Prevent Jump. Every Type-0 spell replaces an ordinary ground press:
-  Paddle Raft, Dodge Left/Right/Back, Locust Leap, Saurok Leap, Abandon Vehicle, Switch Seats, Flop, Stormforged Leap.
-- **Decisive:** spell 319125 "Fizzle" appears as **both** Type 0 (override 173)
-  and Type 1 (override 177) on the same function. Same payload, two rows — so
-  `Type` is a trigger *condition*, not a kind of payload.
-
-So **Type 0 = the ordinary press, Type 1 = the press while already airborne.**
-Type 0 renders bare and only the mid-air case is labelled; an unknown future type falls back to `type N` rather than
-being guessed at.
-
-**`Flags` is deliberately not read**: absent from the table entirely on Legion and BfA, all-zero on 9.2.7, and only ten
-nonzero rows (values 1 and 3) on TWW with no recoverable meaning. Reading it would buy a drift declaration and nothing
-else.
-
-### 3k. Movement speed — which movement, and by how much
-
-The one `SpellEffect` route whose payload is not an id into another table: the **aura** says which movement is scaled
-and
-`EffectBasePoints` says by what percent. Fourteen auras, five movement words.
-
-| word      | auras                        | when it applies                   |
-|-----------|------------------------------|-----------------------------------|
-| `run`     | 31, 129, 171                 | `MOVE_RUN` on foot                |
-| `mounted` | 32, 130, 172                 | `MOVE_RUN` while mounted          |
-| `swim`    | 58                           | `MOVE_SWIM`                       |
-| `flight`  | 206, 207, 208, 209, 210, 211 | `MOVE_FLIGHT`                     |
-| `all`     | 33                           | every movement type, applied last |
-
-**The mapping is `Unit::UpdateSpeed`** (TrinityCore `Entities/Unit/Unit.cpp`) — one function, one switch, and the whole
-truth about which aura scales which movement. `MOVE_WALK` returns from it immediately, so walking takes no modifiers at
-all and never appears here.
-
-**The six flight auras deliberately share one word.** They all scale the same
-`MOVE_FLIGHT` number and which of them applies is a question about the unit's *state* — mounted, in a vehicle, neither —
-not about a different kind of movement. The branches overlap besides: 206 feeds the vehicle case *and* the unmounted
-one, which is why druid Flight Form uses it. Splitting them would invent a distinction the engine does not make.
-
-**The sign is the whole story, and the aura name is not.** 187 rows of
-`MOD_DECREASE_SPEED` on 9.2.7 carry a *positive* amount and plenty of
-`MOD_INCREASE_*` rows a negative one, so the pill prints the signed number and never translates it into a verb.
-
-**Zero-percent rows are DROPPED** (user's call, 2026-07-23 — this reverses the earlier "keep them" decision). A speed
-pill is made of nothing but its number, so a `+0%` one promises a change and delivers none, and it inflates the
-`fx:speed` count with spells whose real amount lives somewhere the pack cannot reach — a talent (Stealth's 129), the
-morph the spell also applies, a script. What survives is the **Mechanics** column, which still carries
-`MOD_INCREASE_SPEED` for the same spell: "has a speed aura at all" is a question that already has a home. On 9.2.7 that
-drops 164 of 5,780 rows, 121 spells losing their pill outright.
-
-**A pill is the `(movement, percent)` pair**, and that pair is what the pack ships and the search matches on. Several
-auras map to one movement, so a spell setting two of them to the same percent collapses to a single row rather than
-rendering twins — The Quick and the Dead's four auras become three pills. `all` is never something the renderer
-*derives*: no spell's separate auras add up to full coverage (the widest reaches four of the five, and never swim), so
-it only ever comes from aura 33.
-
-#### Verified against the game's own tooltips
-
-A `Description_lang` writes an effect's value as `$s<N>%`, where N is the **1-based `EffectIndex`** — so the text names
-which effect it is quoting. On 9.2.7, **4,590 such placeholders point at an effect carrying one of these auras and
-4,574 (99.7%) resolve to a nonzero value**; the 16 zeros are the dropped genuinely-zero rows above. That is a per-row
-check of both the aura set and the column choice, and it is the cheapest oracle available for this route — rerun it
-whenever the set changes.
-
-#### `EffectBasePoints` has two spellings and every build has exactly one
-
-The int column is the real one through Legion; the float `EffectBasePointsF` replaced it in BfA. Both are declared in
-`OPTIONAL_COLUMNS` and read **int first**, because the overlap builds are a trap: **Vanilla, TBC and MoP export both and
-leave the float at zero** (46 of 40,249 rows nonzero on Vanilla; zero on 771 of 783 speed rows). Preferring the float
-would silently blank those three packs. `EffectBasePoints` also joins the TDB hotfix overlay for the usual
-wholesale-replace reason — all four dumps that carry hotfixes at all spell it the int way, even TDB1127.
-
-Values are rounded to one decimal, which drops the float32 conversion noise the modern builds carry (`14.27999973297` →
-`14.3`) while keeping the ones that really are fractional (`47.5`). Eight rows on 9.2.7 are fractional, sixteen on TWW.
-
-#### What is deliberately not here
-
-So a later pass does not "fix" an omission — the table in `build_data.py` is the extension point, one line each:
-
-- **252 `MOD_SPEED_SLOW_ALL` — the name lies, and it is the one trap in this family.** TrinityCore handles it with
-  `HandleModCombatSpeedPct`, i.e. `ApplyCastTimePercentMod` + `ApplyAttackTimePercentMod`, exactly like 193
-  `MELEE_SLOW`; it never touches movement. The data agrees — Icy Touch's −15% is Frost Fever's attack-speed slow.
-- **191 `USE_NORMAL_MOVEMENT_SPEED`, 437 `MOD_MINIMUM_SPEED_RATE`** — real movement auras, but the amount is an absolute
-  speed in yards/sec (`UpdateSpeed`
-  divides it by `baseMoveSpeed`), not a percent. 205 + 65 spells on 9.2.7.
-- **305 `MOD_MINIMUM_SPEED`, 373 `MOD_SPEED_NO_CONTROL`, 388 `MOD_TAXI_FLIGHT_SPEED`** — percents, but of a floor, an
-  uncontrolled dash and a taxi flight rather than a change to a speed. They need a word of their own before they can
-  render. 113 + 36 + 1 spells.
-- **513–524, the skyriding physics auras** (air friction, lift coefficient, banking rate) — a different mechanic in
-  different units, TWW only.
-
-### 3k-bis. Object scale — how much bigger or smaller
-
-Movement speed's shorter twin, and it shares nearly all of §3k's machinery. The **aura** marks the effect as a size
-change and `EffectBasePoints` is the signed **percent**, read exactly the same way (int-first, `OPTIONAL_COLUMNS`,
-one-decimal rounding, TDB hotfix overlay). The difference from speed is that there is only **one** thing an aura can
-scale, so there is no movement word — a pill is the percent alone, and the `scale` group head carries the identity.
-
-**Three aura ids, one mechanic.** TrinityCore's `Unit::RecalculateObjectScale` sums 61 `MOD_SCALE` and 239
-`MOD_SCALE_2` through one handler (`HandleAuraModScale`) as `scale = nativeScale + CalculatePct(1.0, Σ)`, so `+30` is
-1.3× and `-50` is half. The catch is that **`MOD_SCALE_2`'s id drifts**: it is **239** on WotLK and every retail build,
-**591** on the 2024+ Classic clients (Vanilla, TBC, Cata, MoP). No build carries both, and the same spells appear under
-each (Noggenfogger Elixir −51% is 239 on WotLK 3.4.3, 591 on TBC 2.5.6). `SCALE_AURAS = {61, 239, 591}` covers the drift
-with a set, no per-version branch — the drift is in the client's enum, not in what the aura does. (Aura 427
-`SCALE_PLAYER_LEVEL` is out: its amount is a level, not a percent.)
-
-**Same rules as speed:** the pill shows the signed **change**, not the resulting size (below −100% the server floors the
-result at 0.1 / 0.01, which is what the fourteen rows down to −999% on 9.2.7 mean); **zero-percent rows are dropped**
-(64 of 3,286 on 9.2.7, 59 spells — the twelve Polymorph ranks among them, whose size comes from the morph they apply);
-one row per `(spell, percent)`, so the three auras collapse into it. The tooltip oracle confirms the set the same way —
-150 `$s<N>%` placeholders point at a scale aura on 9.2.7 and 149 (99.3%) resolve nonzero, in text like "Increases the
-size of the target by $s1%".
-
-### 3l. The Mechanics column — effects paired with their targets
-
-```mermaid
-flowchart LR
-    SE["SpellEffect row"]
-    SE -->|" Effect enum "| EF["SPELL_EFFECT_* name"]
-    SE -->|" EffectAura enum "| AU["SPELL_AURA_* name"]
-    SE -->|" ImplicitTarget_0 / _1 "| IT["TARGET_* names"]
-    IT -->|" implicit_target_bit() "| MK["caster / target / area icons"]
-    EF --> P["one pill"]
-    AU --> P
-    MK --> P
-```
-
-Until pack format 29 this column shipped **two flat per-spell sets** — "this spell has `APPLY_AURA` and
-`TRIGGER_MISSILE` somewhere" and "it has
-`PERIODIC_DAMAGE` somewhere" — with the effect index and the effect↔aura pairing discarded at build. Format 29 ships
-**one row per distinct
-`SpellEffect`** instead, so what an effect does and what it is aimed at stay attached to each other.
-
-Why it matters: Lava Burst (51505) is `TRIGGER_MISSILE → UNIT_TARGET_ENEMY`
-plus `ENERGIZE → UNIT_CASTER`. Flat, that is four unordered pills and nothing says the missile is the enemy-aimed half.
-**28,705 of 276,168 spells (10.4%)
-have both more than one kind of effect and more than one distinct target** — exactly the population a flat set cannot
-describe.
-
-Rows are deduped on `(spell, effect, aura, targetA, targetB)`, which collapses the per-`DifficultyID` copies
-`SpellEffect` ships: 416,865 rows become 372,111 on 9.2.7. That dedupe is why the pairing is **nearly free**: the
-section costs 1.21 MB gzipped against the 1.17 MB the two flat sets it replaces cost, so the whole 9.2.7 pack grew **+34
-KB (+0.4%)** — 7,873,061 → 7,907,511 bytes. TWW grew +0.3%; Vanilla, whose spells rarely carry two targets, got 1.7%
-*smaller*.
-
-**What renders, and what only searches.** The pill shows the specific thing first and the carrier second —
-`PERIODIC_DAMAGE | APPLY_AURA`, not the reverse — so the aura name leads and the near-universal `APPLY_AURA` reads as
-the boilerplate it is. **Who it lands on is shown only as the existing caster/target/area icons** (user's call,
-2026-07-23): the `TARGET_*` names are long, would dominate the pill and repeat down the column. They stay in the tooltip
-and stay searchable, because the icons cannot tell
-`UNIT_TARGET_ENEMY` from `UNIT_TARGET_ALLY`.
-
-Two consequences of hiding the names:
-
-- Pills that would render identically are merged, keeping every underlying row for the tooltip and the hit test.
-  Soulstone (20707) has two `DUMMY` effects, one aimed at `CORPSE_TARGET_ALLY` and one at `UNIT_TARGET_ALLY` — both "on
-  the target", so they are one pill whose tooltip names both.
-- The **CSV/JSON export spells the targets out** (`PERIODIC_DAMAGE /
-  APPLY_AURA -> TARGET_UNIT_CASTER`), one line per raw row: an export is read without tooltips or icons.
-
-**`mech:` matches whole rows, not names.** `mech:"school_damage
-unit_target_enemy"` means *one effect that is both* (7,826 spells on 9.2.7) — the whole reason for pairing. Matching
-that literally would mean building a corpus string per row, so it is done on ids: each token resolves to the id sets
-whose name contains it (~980 names to scan), then the flat row arrays are swept testing membership. That is ~10x faster
-than walking the per-spell row objects (170 ms → 15–25 ms per query on 372k rows). A row's `0` means "no effect" / "no
-aura" / "target unset" and never matches — without that guard `mech:none` would return every aura-less row, since
-`SPELL_AURA_NONE` really is named `NONE`.
-
-**The icon mask is not stored per row.** `implicitTargetBits` ships the
-~130-entry map instead, and a row's mask is `bits[targetA] | bits[targetB]`. A fourth 372k-long parallel array measured
-110 KB gzipped for data derivable from a 1 KB map.
-
-### 3m. GameObject spawners — what the spell PLACES
-
-`SpellEffect.Effect` ∈ `{50 TRANS_DOOR, 76 SUMMON_OBJECT_WILD, 104 SUMMON_OBJECT_SLOT1, 171
-SUMMON_PERSONAL_GAMEOBJECT}` → `EffectMiscValue_0` is a **`gameobject_template` entry**. Renders in the **Effects
-column** as an `object` pill — summon's sibling: one conjures a creature, this places an object.
-
-```mermaid
-flowchart LR
-    SE["SpellEffect<br/>Effect 50/76/104/171"] -->|EffectMiscValue_0| GT["gameobject_template<br/>(TDB world)"]
-    GT -->|name| L["pill label"]
-    GT -->|displayId| GODI["GameObjectDisplayInfo"]
-    GODI -->|FileDataID| LF["listfile → model name"]
-```
-
-**The client `GameObjects.db2` is NOT this table.** It holds world-PLACED doodads keyed by their own id — measured 2026-
-07-24 on 9.2.7: **0 of 1,429 spell-referenced entries appear in it**. The name and the displayId live only in the TDB
-world dump, which is why this route resolves on the six TDB packs and degrades to id-only on the four TDB-less Classic
-clients, exactly like morph/summon creature names.
-
-The pill: `( [wh]|[3d] | {target}{name or model base} | ⧉ id | .lo | .gob )`. `.gob` (`.gobject spawn {entry}`) ALWAYS
-works — the entry is the effect's own misc value, needing no resolution. **`.lo` always passes the MODEL file name**,
-never the display name (user's call 2026-07-24). The label prefers the object's name and falls back to the model base.
-
-**Entries no world dump carries are DROPPED** (user's call 2026-07-24, confirmed in game: they spawn nothing). They are
-debug/TEST/cut content — 242 of 1,428 on 9.2.7, and the newest TDB (TWW, 77,908 entries) recognises only 10 of them, so
-this is not a stale-snapshot problem. Same rule as keybound overrides. Cost: the route is empty on the four TDB-less
-Classic packs, which could resolve nothing at all. 9.2.7 after the drop: 1,366 rows / 1,186 entries, all named, 1,180
-model-resolved.
-
-#### Which objects have a Wowhead page — it is the TYPE
-
-`gameobject_template.type` (GAMEOBJECT_TYPE) decides it, NOT whether we resolved a name. Wowhead indexes only
-**player-facing** objects; mechanical and invisible ones have no page, so linking every named object 404s about half the
-time. `wowheadObjectTypes` in `config.ts` is the allowlist — **objects outside it fall back to the ordinary 3D model
-viewer**, the same either/or the item route uses for a nameless item, so every pill still opens something.
-
-Verified 2026-07-24 against wowhead.com/objects — whose own type labels (Container / Shared Container / Treasure /
-Herb / Mining Node / Fishing Pool / Interactive / Quest / Tool) map onto exactly these — plus nine spot-checks, 9/9
-agreeing:
-
-|                | types                                               | evidence                                                                                      |
-|----------------|-----------------------------------------------------|-----------------------------------------------------------------------------------------------|
-| **has a page** | 3 CHEST, 10 GOOBER, 2 QUESTGIVER, 22 SPELLCASTER    | Rusty Chest, Cache of the Fire Lord, Pet Stone, Scrying Bowl, Portal to Stormwind             |
-| **no page**    | 0 DOOR, 5 GENERIC, 6 TRAP, 8 SPELL_FOCUS, 18 RITUAL | Explosives Cart, Forgotten Mirror, Battle Standard, Witherbark Totem Bundle, Summoning Portal |
-
-25 FISHINGHOLE and 51 GATHERINGNODE are Wowhead's Fishing Pool / Herb / Mining Node labels; no spell reaches one, but
-they belong to the rule and are in the allowlist. On 9.2.7 that gates **564 of 1,186** objects to Wowhead and sends the
-other 622 to the model viewer.
-
-**Three dead hypotheses, do not retry.** (1) *A newer TDB knows the live ones* — no: all five first-tested entries,
-including both misses, are in EVERY TDB; TrinityCore keeps deleted entries forever. (2) *Era* — no: Rusty Chest is
-Vanilla and has a page, Summoning Portal is Vanilla and does not. (3) *Is it spawned in the world* — no, 3/5: Rusty
-Chest and Cache of the Fire Lord have pages but no static `gameobject` spawn rows (TrinityCore spawns those by
-script/pool), and gating on it would have killed the link for 1,129 of 1,186.
-
-### 3n. Mounts — what the spell puts you ON
-
-`Mount.db2` keyed by **`SourceSpellID`** (the mount-granting spell) → `MountXDisplay.CreatureDisplayInfoID` → the same
-creature chain morphs use (`CreatureDisplayInfo.ModelID → CreatureModelData.FileDataID`). Renders in the **Models
-column** as a display-id pill.
-
-```mermaid
-flowchart LR
-    M["Mount<br/>SourceSpellID, Name_lang"] --> MXD["MountXDisplay"]
-    MXD -->|CreatureDisplayInfoID| CDI["CreatureDisplayInfo"]
-    CDI --> CMD["CreatureModelData"] -->|FileDataID| LF["listfile → model"]
-```
-
-Pure client data — unlike morphs it needs **no TDB**, so name and model both resolve on every pack that ships
-`Mount.db2`. 9.2.7: 1,043 links / 1,015 displays, **100% named and 100% model-resolved**. The pill is morph-shaped but
-the display is what you RIDE, so the command is **`.mod` = `.modify mount {displayId}`** rather than `.morph`, alongside
-the Wowhead model-viewer link, ⧉ display id and `.lo`. No target icons: a mount is always the caster's own.
-
-**Sourced from `Mount.db2`, not the `MOUNTED` aura (78).** The aura route reaches 728 rows but carries no names; the
-Mount.db2 route names all 1,015 and still covers the aura's spells (458 Brown Horse, 470 Black Stallion are
-`SourceSpellID`s).
-
-**Dead end, do not re-chase:** there is no per-mount rider seat/anim data. `MountSpecialRiderAnimKitID` is populated on
-**3 of 1,012** mounts, and the MOUNTED aura maps into `Mount.db2` for only 11 of 509 displays. Real per-seat positions
-exist only for vehicle-mounts, which §3i already covers.
-
-### 3o. Animation replacement — which animation becomes which (`replace`)
-
-One `replace` group in the Animations column, fed by **two sources that describe the same thing** — the character
-swapping a base animation for another — unioned per spell and deduped:
-
-- **proc Type 7** (`SpellProceduralEffect`, §3b): `Value_0/1/2` are what the character plays instead of **Stand / Walk /
-  Run**. Reached through the visual graph. Paired with its base slot (AnimIDs 0 / 4 / 5) at read time, so it emits the
-  same `(src, dst)` shape as the general form. `Value_3` is dropped (no base slot, near-always junk).
-- **aura 312** `ANIM_REPLACEMENT_SET`: `EffectMiscValue_0` → an `AnimReplacementSet` id → **`AnimReplacement`**
-  (`ParentAnimReplacementSetID`) → `(SrcAnimID, DstAnimID)` pairs — the general form, any animation.
-
-```mermaid
-flowchart LR
-    P7["proc Type 7<br/>Value_0/1/2"] -->|" pair with Stand/Walk/Run "| RP["(src → dst) pairs"]
-    A312["aura 312 → AnimReplacement"] --> RP
-    RP --> G["one 'replace' group, deduped"]
-```
-
-Both anim ids index into `animNames`, so a swap renders as two equally-weighted labels with an arrow — `Stand →
-StealthStand` — and **both sides are searchable** (`anim:"replace stand"` finds swaps out of Stand, `anim:"replace
-stealthstand"` finds swaps into it). `AnimReplacementSet.db2` itself is **not fetched** (only `ID` + `ExecOrder`).
-
-**They were separate until 2026-07-24** (proc-7 as a `stance` group, aura 312 as `replace`); the user merged them
-because they are the same mechanic — Stealth carried `Stand→StealthStand` from *both*, showing it twice. `stance` is
-**not** kept as an alias (no-legacy-alias norm). 9.2.7: 3,158 (spell, src, dst) rows / 1,100 spells.
-
-**Why it can look like it does nothing in game:** a replacement only shows while the character is performing the SOURCE
-animation. Sea Legs swaps only swimming anims, Blowdart only bow-holding, Floating Death only flying/swimming — so
-testing one while standing still shows nothing.
-
-### 3p. PLAY_SOUND / PLAY_MUSIC — sounds with no visual behind them
-
-`SpellEffect.Effect` 131 (`PLAY_SOUND`) and 132 (`PLAY_MUSIC`) → `EffectMiscValue_0` is a **SoundKit**, the same
-`SoundKitEntry.SoundKitID` the missile and kit routes resolve (measured 9.2.7: 133/134 and 163/164 resolve). They fold
-into the existing **Sounds column** with no new pill or section — the only sound route that starts at `SpellEffect`
-rather than in the visual graph.
-
-### 3q. Spell school — gathered, not yet surfaced
-
-`SpellMisc.SchoolMask`, a bitmask (1 Physical / 2 Holy / 4 Fire / 8 Nature / 16 Frost / 32 Shadow / 64 Arcane; a spell
-may span several). Base difficulty wins, read straight off wago with no hotfix overlay — school is static client data.
-Shipped as `spells.schools` and **deliberately not displayed yet** (user's call): a future search axis. Present on every
-build back to Vanilla. 9.2.7: 272,847 of 276,332 spells carry a nonzero school.
-
-### 3r. Spell links — the one route whose payload is another spell
-
-`SpellEffect.EffectTriggerSpell` names another `Spell::ID`. **Every other route in this document ends at a payload — a
-model, a sound, a kit, a number. This one ends at another ROW of the results table**, which is what shapes the pill (a
-spell icon and name, clicking to `id:<n>`) and what makes the reverse direction worth building.
-
-```mermaid
-flowchart LR
-    SE["SpellEffect<br/>EffectTriggerSpell"] -->|names| S2["Spell::ID<br/>(another row)"]
-    SE -->|" EffectAura ≠ 0 "| AW["aura word<br/>periodically · on proc · linked"]
-    SE -->|" else "| EW["effect word<br/>on cast · removes · teaches"]
-    AW --> K["spellLinks.kindNames"]
-    EW --> K
-    SE -->|" ImplicitTarget_0/_1 "| T["spellLinks.targets<br/>caster · target · area"]
-```
-
-**The payoff number: 8,791 spells on 9.2.7 have no `SpellXSpellVisual` row of their own but trigger one that does.**
-Those rows look empty in every other column and are not — the visual is one hop away, and before this route there was
-nothing on screen saying so.
-
-**HOW the two are joined is the effect, or on `APPLY_AURA` the aura, that owns the column** — an `APPLY_AURA` effect
-says only "applies an aura", which all of them do, so the aura is what carries meaning. Two dispatch dicts, because the
-two enums collide numerically: effect 3 is `DUMMY` while aura 3 is `PERIODIC_DAMAGE`, effect 42 is `JUMP_DEST` while
-aura 42 is `PROC_TRIGGER_SPELL`.
-
-**NOT EVERY EDGE IS A TRIGGER, and the word is the only thing that says so.** `REMOVE_AURA`/`REMOVE_AURA_2` name the
-aura being *removed* — 8,250 edges, 14% of the graph — so calling the whole graph "triggers" would read backwards on one
-edge in seven. Top words on 9.2.7:
-
-| word             | edges  | | word              | edges |
-|------------------|--------|-|-------------------|-------|
-| periodically     | 11,741 | | linked summon     | 1,669 |
-| on cast          | 10,472 | | on landing        | 1,181 |
-| removes          | 8,250  | | teaches           | 1,161 |
-| as a missile     | 7,486  | | linked            | 694   |
-| forced on target | 7,036  | | on confirm        | 457   |
-| on proc          | 4,531  | | periodic dummy    | 308   |
-| by script        | 1,968  | | *(160 fallbacks)* | 1,317 |
-
-An unlisted effect/aura falls back to **its own enum name, lowercased** — the same fallback an unknown id already gets
-in the Mechanics column (§3l). That tail is 2.3% of edges over 160 auras that merely happen to carry the column, so its
-word is honestly "the aura this came from" rather than a relationship. It **ships rather than being dropped** because
-114 spells reach their one visual-bearing link *only* on such an edge.
-
-**AN EXPLICIT WORD EARNS ITS PLACE ONE OF TWO WAYS, AND "it sounds right" IS NOT ONE OF THEM.** Either **(a)** the enum
-names a trigger and the word says *when* it fires (`PROC_TRIGGER_SPELL` → "on proc", `TRIGGER_SPELL_ON_EXPIRE` → "when
-it expires"), or **(b)** the enum names one relationship under several spellings and the word collapses them
-(`REMOVE_AURA` + `REMOVE_AURA_2` → "removes", the seven jump/charge effects → "on landing"). Everything else takes the
-fallback, which claims only where the edge came from.
-
-**THE RULE WAS AUDITED TWICE AND THE SECOND PASS IS THE ONE THAT MATTERED** (2026-07-30). The first pass applied it only
-to the entries it happened to look at, and left the biggest word in the feature untouched — `PERIODIC_TRIGGER_SPELL`
-still read "every tick", **12,554 edges, 21% of the graph and the most-displayed word here**. "Tick" is community jargon
-(TrinityCore's own `PeriodicTick`), but it is not what the enum says and it **names no interval**: periodic means *at an
-interval*, and the interval is `EffectAuraPeriod` — set on **99.75%** of these rows, median **1 s**, ranging 0.05 s to 2
-h. The word is now `periodically`, which claims exactly what the enum does.
-
-The second pass also stopped **rewording single enums**, the subtler half of the same mistake: a lone enum has no
-spellings to collapse, so a reword is just a second name for one thing and it always claims slightly more than the
-original. What changed, with 9.2.7 edge counts:
-
-| enum                                | was                  | now                      | why                                                                             |
-|-------------------------------------|----------------------|--------------------------|---------------------------------------------------------------------------------|
-| aura 23/227/48 `PERIODIC_TRIGGER_*` | every tick           | `periodically`           | the enum says *periodic*; "tick" names an interval it never gives (12,685)      |
-| aura 226 `PERIODIC_DUMMY`           | by script            | *periodic dummy*         | being periodic is the fact that distinguishes it from `DUMMY` (342)             |
-| aura 109 `ADD_TARGET_TRIGGER`       | on proc              | *add target trigger*     | asserted a proc the enum never mentions (15)                                    |
-| aura 395 `AREA_TRIGGER`             | in its area          | *area trigger*           | asserted a firing condition (units inside) it never states (26)                 |
-| auras 293/332/333/258 `OVERRIDE_*`  | overrides            | *(four fallbacks)*       | four different things — spells, two action-bar flavours, a summoned OBJECT (34) |
-| aura 403 `OVERRIDE_SPELL_VISUAL`    | overrides its visual | *override spell visual*  | lone enum, nothing to collapse (1)                                              |
-| effect 226 `TRIGGER_ACTION_SET`     | on cast              | *trigger action set*     | an action set is not a cast (6)                                                 |
-| effect 133 `UNLEARN_SPECIALIZATION` | unlearns             | *unlearn specialization* | "unlearns" dropped the specialization (65)                                      |
-| effect 179 `CREATE_AREATRIGGER`     | in its area          | *create areatrigger*     | same overclaim as aura 395; 182 already fell back (46)                          |
-| aura 428 `LINKED_SUMMON`            | linked summon        | *linked summon*          | **identical** — the entry restated the fallback, so it was deleted (1,669)      |
-
-Earlier under the same rule: aura 3 `PERIODIC_DAMAGE` (was "every tick"), effect 2 `SCHOOL_DAMAGE` (was "on damage"),
-effect 182 `DESPAWN_AREATRIGGER` (shared 179's word while being its opposite), and
-`TRIGGER_SPELL_ON_POWER_AMOUNT`/`_PCT` "on power" → `on power level`, which had read as "powered on".
-
-**No edge was gained or lost — 58,486 both times**, and no SPELL changed bucket either: `mech:"triggers every tick"`
-was 11,739 and `mech:"triggers periodically"` is **11,739**, because all three `PERIODIC_TRIGGER_*` auras already shared
-the old word and simply share the new one. The retired spelling now returns **0**, per the standing no-legacy-alias
-norm. Distinct words went **168 → 178** as the over-collapsed entries split apart, which is where the movement is: "by
-script" 2,276 → 1,968 (`PERIODIC_DUMMY` left) and "on cast" 10,478 → 10,472 (`TRIGGER_ACTION_SET` left). **Counting
-note, since it is easy to get wrong here: 11,741 is the EDGE count for `periodically` and 11,739 is the SPELL count — a
-spell with two periodic links is one spell and two edges.**
-
-**THE EXACT VERSION IS AVAILABLE AND IS NOT YET A DECISION.** `EffectAuraPeriod` would let the pill read "every 1s" /
-"every 3s" instead of "periodically". It is not built because it costs a pack format bump and all ten packs re-shipped,
-fragments one word into ~40, and puts **numbers in the mech corpus** — the substring-noise trap the spell id was
-deliberately kept out of (§3r, above). Raise it before building it.
-
-**Two rows are dropped at build time**, both because the chip is an icon and a name: a target this pack cannot name
-(3,160 of 63,883 rows on 9.2.7 — the chip would be a bare id nobody can act on) and a self-link (51 rows — a chip
-pointing at its own row).
-
-**The pack ships ONE direction.** `spellLinks` is `{srcIds, dstIds, kinds, targets, kindNames}`, sorted by source so the
-source column delta-encodes under gzip; the reverse is the same edges read backwards, so `data.ts` inverts the index at
-load rather than the pack paying for it twice. A (source, target) pair joined two different ways stays two rows — two
-distinct facts — which the renderer merges into one chip listing both words (252 of 58,214 pairs).
-
-**`targets` (pack format 36) is the edge's own `ImplicitTarget_0/_1` mask** — set on 55,595 of 58,486 edges (95.1%) on
-9.2.7 — so a link chip wears the same target icons, from the same bits, as every other effect-driven route in §3. **A
-link DOES have an implicit target**: the edge *is* a `SpellEffect` row, so its implicit targets say who the effect
-carrying the trigger is aimed at. It rides both directions unchanged, because who the triggering effect aims at is
-equally who the triggered spell lands on.
-
-Two search axes, one per direction: **`mech:triggers`** and **`mech:origin`**, each keyed by the LINKED spell's id with
-a corpus of that spell's name and every word the two are joined by — so `mech:"triggers fireball"` and
-`mech:"triggers periodically"` are one code path.
-
-**The ID is searchable too, and NOT through that corpus**: `mech:"triggers 265714"` is 101 spells, matched by equality
-against the id the chip stands for via the pill type's `bare` axis — the same mechanism invis/detect use for a channel
-number. The distinction is the whole reason it can exist. A corpus is matched by SUBSTRING, so putting a 6-digit id in
-one was measured out (`mech:"speed 70"` 76 → 85, `mech:"invis 13"` 11 → 47); equality costs the field nothing. Note a
-spell that is neither end of an edge answers 0 — `mech:"triggers 133"` is empty because Fireball triggers nothing and is
-triggered by nothing, which is correct rather than broken. Neither collides with the effect/aura names the Mechanics
-column already matches, which are singular (`TRIGGER_SPELL`), so `mech:trigger` still finds the enum rows. `origin`
-replaced `triggeredby` on 2026-07-30 (user: "not aesthetic") — every other category word in the app is one plain word.
-**`mech:origin` is 47,031 against 47,024 link targets**, the 7 extra arriving through the *other*
-direction's corpus on names like "Reorigination" — the documented "a category word matches names in addition to the
-category" behaviour, and the exact mirror of `mech:triggers` being 49,216 against 49,209 sources.
-
-**Mechanics, not fx** — fx is what a spell *looks* like, mech is what it *does*, and a link renders nothing in game. The
-visible thing is on the other row, which is exactly why the chip has to get you there.
-
-**Present on all ten builds** (Vanilla 7,256 edges / 17 words → TWW 83,566 / 196), so it is not in `OPTIONAL_COLUMNS`.
-`EffectTriggerSpell` joins the TDB hotfix overlay for the wholesale-replace reason §1 gives: a hotfixed `spell_effect`
-row omitting it would blank the edge. It is spelled the same on both sides, unlike the misc/target columns.
-
----
-
-### 3s. Spell attribute flags — the route with no payload at all
-
-`SpellMisc.Attributes_0..N`, 32 bits per column. **Every other route in this document resolves an id to a payload; this
-one resolves to nothing but its own truth value** — the flag IS the content, which is why the pills are valueless (the
-category word is the whole pill, like `fx:freeze`) and why the pack section is a bare list of spell ids per flag.
-
-**Bit B lives in `Attributes_(B//32)` at `1<<(B%32)`.** The 449 names come from wowdev.wiki `EnumeratedString`
-§`SpellMisc::Attributes` and are checked in as `build/enums/spell_attributes.json` — the single source of truth for both
-`build_data.py` (which flags to ship) and `tools/builddb.py` (`ref.spell_attribute`).
-
-**WHICH flags ship is a data edit, not a code change.** A `handler` tag on a bit in that JSON is what puts it in the
-pack; adding one costs a tag plus one `attrFlag(...)` line in `src/pilltypes.ts`. Nothing in the reader, in `data.ts`,
-in either render site or in the export branches on which flag it is.
-
-**`requires` is an intersection, declared as data.** Bit 160 `AllowActionsDuringChannel` is AND-ed with bit 34
-`IsChannelled` in the build, because the flag alone samples spells that are not channels at all — the reason it is done
-in the build rather than in the UI is that a word which lies is worse than a word which is missing.
-
-| flag                        | bit | word               | 9.2.7 spells | column                                  |
-|-----------------------------|-----|--------------------|--------------|-----------------------------------------|
-| `PreventsAnim`              | 50  | `anim:pose`        | 784          | Animations                              |
-| `TrackTargetInChannel`      | 46  | `fx:tracking`      | 2,712        | **Effects** — it is the caster's FACING |
-| `UnbreakableChannel`        | 358 | `mech:unbreakable` | 580          | Mechanics                               |
-| `AllowActionsDuringChannel` | 160 | `mech:unhindered`  | 868 (∩ 34)   | Mechanics                               |
-| `AuraIsDebuff`              | 26  | `mech:debuff`      | 17,193       | Mechanics                               |
-
-**`TrackTargetInChannel` is the CASTER'S FACING, not the beam** (user's correction, tested): the caster stays turned
-toward the target, locked in its direction, for the whole channel — the beam merely follows from that. It renders in
-Effects rather than Mechanics because a character being turned is what the spell LOOKS like; 59% of them also carry a
-chain, and the move cut the word's corpus noise from 175 to 8. Its unshipped sibling is bit 22
-`TrackTargetInCastPlayerOnly`, the cast-time equivalent.
-
-### 3s-bis. Delivery — the cast time and the channel, with VALUES (`spellDelivery`, format 39)
-
-**A route of its own, and NOT A PARTITION.** It ships per-spell values rather than membership lists, and the three
-searchable sets are derived from those values in `data.ts` — one source of truth, so a spell cannot sit in the
-`casttime` set while its `castMs` says otherwise.
-
-| set       | word             | rule                                               | 9.2.7   |
-|-----------|------------------|----------------------------------------------------|---------|
-| casttime  | `mech:casttime`  | `SpellCastTimes.Base > 0`                          | 48,873  |
-| channeled | `mech:channeled` | `IsChannelled` (34) **or** `IsSelfChannelled` (38) | 14,228  |
-| instant   | `mech:instant`   | **the complement** — in neither of the above       | 216,379 |
-|           |                  | *of which, in BOTH casttime and channeled*         | *3,148* |
-
-**THE TWO TIMED WORDS TAKE A NUMBER, IN SECONDS** — `mech:"casttime 2"`, `mech:"casttime >3"`, `mech:"channeled <=3"`.
-They are not attribute-flag memberships like the rest of §3s: their pill types are keyed BY the time, so the registry's
-ordinary numeric axis reads it (`of` → `deliverySecs`, the same rounding `render.ts` prints with). The overlap is
-queryable on both numbers at once — `mech:"casttime >8" mech:"channeled >8"` is 4 spells on 9.2.7, which the format-38
-partition could not have asked at all. Full grammar and populations below, under *The two timed words take a value*.
-
-**⚠ `casttime` AND `channeled` OVERLAP ON 3,148 SPELLS AND THAT IS THE POINT.** They cast and *then* channel. The
-format-38 version of this route made delivery a strict three-way partition with "channel wins", which threw the cast
-number away for every one of those spells. **Verified in game 2026-08-05** (docs/DECISIONS.md, *"Cast-then-channel is
-REAL"*): `Gripping Shadows` 249466 — 12 s cast, 6 s channel — shows a cast bar and then a second draining bar, while the
-same spell NAME with the cast time removed (186350) shows no fill-up phase. **Do not restore the partition, and do not
-expect the three counts to sum to the pack.**
-
-**Coverage is now total: 276,332 of 276,332.** Because `instant` is the complement rather than a third list, the 1,846
-spells with **no `SpellMisc` row at all** finally get an answer instead of falling out of every delivery query.
-
-#### The pack section
-
-`spellDelivery` — parallel arrays over **only** the spells that have a cast time or a channel (59,953 on 9.2.7):
-
-| field      | meaning                                                                              |
-|------------|--------------------------------------------------------------------------------------|
-| `spellIds` | the spell                                                                            |
-| `castMs`   | cast-bar length; **0 = no cast bar**                                                 |
-| `durMs`    | channel length; **-1 = no limit**, **0 = no duration row**. Only read with bit 0 set |
-| `flags`    | bit 0 `DELIVERY_CHANNELLED`, bit 1 `DELIVERY_BREAKS_ON_MOVE`                         |
-
-**`durMs` 0 and -1 are DIFFERENT and are not folded.** 674 spells on 9.2.7 are flagged as channels but ship no duration
-row; one was tested in game and did nothing at all, which is not what an unlimited channel looks like — but that result
-was inconclusive (the sheet could not tell "nothing to display" from "did not cast"). See DECISIONS.md before merging
-them.
-
-#### Sources
-
-- **`SpellCastTimes`** (`SpellMisc.CastingTimeIndex` → `Base` ms), on every build back to Vanilla. Three edge cases, all
-  swept 2026-08-05:
-    - **`Base = 0`** — one shared row (ID 1) behind 225,465 spells. Instant.
-    - **An unresolved index** — the table starts at ID 1, so `CastingTimeIndex = 0` resolves to nothing. 97 spells.
-      Instant, same as above.
-    - **`Base = -1000000`** — the **ranged weapon speed sentinel**, not a duration. One row (ID 18) behind 51 spells,
-      every one a hunter ranged shot. **Wowhead prints no cast-time line at all for these** (checked on 1516 and 22914:
-      only `Requires Ranged Weapon`), **but Epsilon fires them with no cast bar, so here they are `Instant`** — the
-      wording is Epsilon's, not retail's. Because all 51 share ONE table row, one in-game test settles all of them.
-    - **`SpellCastTimes.Minimum` is deliberately IGNORED**: it is the haste floor (164 of 212 rows equal `Base`, 44 are
-      0), and `Base` is the nominal number to show.
-- **`SpellDuration`** (`SpellMisc.DurationIndex` → `Duration` ms), 314 rows. `Duration < 0` or `> 1e8` = no limit.
-- **`SpellInterrupts.ChannelInterruptFlags`** → breaks-on-move, **6,689** spells. **MIND THE ENUM:** that column uses
-  `SpellInterruptFlags` where movement is **bit 3**, while the sibling `InterruptFlags` (cast) uses a *different* enum
-  where movement is bit 0 — see `build/enums/README.md`. And mind the intersection: **7,375 spells carry the channel
-  movement bit but 686 of them are not channels at all**, so the build ANDs it with the channelled flag, the same
-  correction `AllowActionsDuringChannel` already needed.
-
-#### The words are Wowhead's
-
-On the user's call (*"Match the wowhead convention"*):
-
-- **`casttime`, not `cast`.** Wowhead's own spell-page row label is literally `Cast time`, so the axis already matched.
-  A bare `cast` measures **216,457** — `on cast` is a spell-link word carried by the whole mech corpus, so the word is
-  unusable. (This was recorded as 200,496 before format 38; the word `casttime`, which `cast` substring-matches, is the
-  difference.)
-- **`channeled` with ONE `l`.** Wowhead, the client and Blizzard all spell it that way. The British `channelled`
-  shipped for one day at format 38 and made **`mech:channeled` return 4 spells against 14,228** — i.e. it failed exactly
-  the roleplayer who read the word on Wowhead and typed it here. No legacy alias: `mech:channelled` is now 0.
-- **The line's own wording follows Wowhead's tooltip** (`Instant`, `1.8 sec cast`) **but never its slot order.** Wowhead
-  writes `Channeled (5 sec cast)`, label first; ours is always `<value> <label>`, so it is `5 sec channel`. See PILLS.md
-  for why the delivery line is not a pill at all.
-
-#### The two timed words take a value (2026-08-05)
-
-**`casttime` and `channeled` are numeric words, in SECONDS** — the unit Wowhead, the client and the person typing all
-use. The argument grammar is the one every other numeric word already has, so there is nothing new to learn:
-
-| query                                      | means                               | 9.2.7  |
-|--------------------------------------------|-------------------------------------|--------|
-| `mech:"casttime 2"` = `mech:"casttime =2"` | exactly a two-second cast bar       | 15,187 |
-| `mech:"casttime >3"`                       | casts longer than three seconds     | 5,216  |
-| `mech:"casttime 1.75"`                     | fractions work; 125 distinct values | 65     |
-| `mech:"channeled 5"`                       | a five-second channel               | 1,232  |
-| `mech:"channeled <=3"`                     | short channels                      | 1,750  |
-| `mech:"channeled >=0"`                     | **every channel that HAS a length** | 8,324  |
-
-**THE NUMBER SEARCHED IS THE NUMBER PRINTED.** `data.ts` exports `deliverySecs(ms)` and both the delivery line and the
-numeric axis go through it, so a row showing `1.75 sec cast` is reachable by `mech:"casttime 1.75"` and there is no
-second rounding rule to drift.
-
-**A CHANNEL WITH NO NUMBER ANSWERS NO NUMERIC QUESTION.** `durMs` -1 (unlimited, 5,230) and 0 (no duration row, 674) are
-real keys in the map — `mech:channeled` still returns all 14,228 — but the axis reads **`NaN`** for them, and every
-comparison rejects NaN. That is why `mech:"channeled <99999"` is 8,324 and not 14,228: the line prints `unlimited
-channel` with no seconds in it, so no question *about* seconds should sweep it in. **Selecting those two groups wants a
-WORD, not a bound** — and one of them now has it.
-
-**✅ `unlimited` IS THAT WORD, shipped 2026-08-05.** The channel type gained a **corpus** (`channelSearchL`, keyed by
-`durMs` exactly as the spell map is), holding `channeled unlimited` on the -1 bucket and a bare `channeled` everywhere
-else. So the phrase falls out of the axis the app already has, with no new pill type and no new pack section:
-
-| query                        | means                                      | 9.2.7     |
-|------------------------------|--------------------------------------------|-----------|
-| `mech:"channeled unlimited"` | the bound phrase — **exactly the members** | **5,230** |
-| `mech:unlimited`             | the shorthand, +1 corpus collision         | 5,231     |
-
-**Measured against the alternatives before registering**, per PILLS.md *Choosing the keyword*: 1 collision for
-`unlimited`, against 96 for `endless` and 13 for `permanent`. It is also the word the line already prints, so the thing
-on screen is the thing you type.
-
-**THE 674 WITH NO DURATION ROW DELIBERATELY GET NO WORD.** They keep a bare `channeled`. What they do in game is still
-open (one test showed no bar at all, which is not what unlimited looks like, and the question was inconclusive — see
-DECISIONS.md), and naming a group implies knowing what it is. **NUMBERS STAY OUT of the corpus**: a substring `5` would
-match 15, 25 and 50, which is measurably what happened to `speed` (76 → 85). The corpus carries only what has no number.
-
-**`operatorOnly`, like `speed` and `scale`.** The `mech:` field is shared with ~980 effect/aura/target names, so a
-number standing loose in a chip keeps the literal meaning it always had: `mech:1.5` is 6 spells (a substring), not the
-10,241 with a 1.5 s cast. Only a comparison — or a number written against the word — asks about time.
-
-**COUNT SPELLS, NOT `SpellMisc` ROWS.** A spell with several difficulty rows is one spell, and the two readings differ
-by up to 15% — the same five flags are 799 / 2,748 / 591 / 3,400 / 19,812 counted as rows. Base difficulty wins, the
-same rule `read_spell_icons` and `read_spell_schools` use.
-
-**Present on all ten builds, and the bit numbering is stable across them** — counting each flag per build gives a clean
-monotonic rise (`PreventsAnim`: Vanilla 127 → TWW 967), which is what consistent numbering looks like. Builds ship
-between **14 and 17** `Attributes_N` columns, so the columns come from `array_columns` and a bit beyond a build's array
-simply reads as unset: the flag switches off for that version rather than erroring. No `OPTIONAL_COLUMNS` entry needed.
-
-**THE WORDING IS EPSILON'S, NOT RETAIL'S.** Roughly half the flags tested did not survive contact with Epsilon, so only
-flags the user confirmed in game ship at all, and the phrasing describes what they saw — `UnbreakableChannel` must not
-say "locks you in place", because the caster can move and act while it holds. See docs/DECISIONS.md *"EPSILON
-BEHAVIOUR"*.
-
----
-
-## 4. The pack
-
-The build bakes everything into one gzipped, **column-oriented** JSON per game version: a section like
-`{spellIds, fids}` is parallel arrays where row *i*
-links `spellIds[i]` to `fids[i]`. That gzips far better than a list of objects.
-
-```mermaid
-flowchart LR
-    subgraph LINK["link sections (spell → item, + target mask)"]
-        L1["spellModels · spellSounds · spellAnimKits<br/>animKitAnimBoneset · bonesetNames<br/>spellVisualAnims · spellAnims · spellFx<br/>spellDissolves · spellGlows · spellShadowies<br/>spellGhostMats · spellTints · spellDesaturates<br/>spellTransparencies · spellFreezes · spellCamos<br/>spellScreens · spellMorphs · spellShapeshifts<br/>spellSummons · spellVehicles · spellPassengerAnims<br/>spellVehicleAnims · spellVehicleAnimKits<br/>spellMechanics · spellKeybinds · spellSpeeds · spellScales"]
+    subgraph C["3. Value tables the links point into"]
+        C1["morphs<br/>creatureIds · names"]
+        C2["files<br/>fids · paths"]
+        C3["soundKitNames<br/>soundKitIds · names"]
     end
-    subgraph SPELL["spell → spell (§3r)"]
-        S1["spellLinks — srcIds · dstIds · kinds · targets · kindNames<br/>ONE direction; data.ts inverts it at load"]
-    end
-    subgraph PAY["payload sections (item → what it is)"]
-        P1["fxChains · fxTextures · dissolves · dissolveTextures<br/>glows · shadowies · ghostMats · tints<br/>screens · screenTextures · morphs · morphDisplays<br/>shapeshifts · shapeshiftDisplays · summons<br/>vehicles · vehicleSeats"]
-    end
-    subgraph NAME["name tables"]
-        N1["files (fid → path) · animNames · effectNames<br/>auraNames · iconNames + iconFids (§3y) · modelCatNames<br/>targetNames · summonControlNames · missileMotions<br/>implicitTargetNames · implicitTargetBits · keybinds<br/>soundKitNames (§3u — from a PINNED 8.3.0 build)"]
-    end
-    LINK --> IDX["data.ts<br/>forward + reverse Map per section"]
-    PAY --> IDX
-    NAME --> IDX
-    SPELL --> IDX
-    IDX --> Q["search.ts — FIELDS registry"]
-    IDX --> R["app/render.ts + app/tags.ts — cells + pills"]
+    B1 --> C1
+    B2 --> C2
+    B3 --> C2
+    B3 --> C3
 ```
 
-Sections carrying a parallel `targets` array (the target-icon feature):
-`spellModels`, `spellSounds`, `spellAnimKits`, `spellVisualAnims`, `spellFx`,
-`spellDissolves`, `spellGlows`, `spellShadowies`, `spellGhostMats` (these from
-`SpellVisualEvent.TargetType`, §2), plus — from `SpellEffect.ImplicitTarget`
-(§3f, pack format 25) — `spellMorphs`, `spellSummons`, `spellVehicles`,
-`spellShapeshifts`, `spellScreens`, `spellSpeeds`, `spellScales`. Both feed the same `maskIndex` in `data.ts`
-and the same icon renderer, so the two mask sources are indistinguishable downstream.
+| shape          | why                                                                                            |
+|----------------|-------------------------------------------------------------------------------------------------|
+| **dense**      | One entry per spell, so the row index *is* the spell. No key to look up while rendering a table  |
+| **link rows**  | The many-to-many the graph walk flattened, with the target mask on the row that earned it        |
+| **value table**| A name or path stored once and referenced by id, instead of repeated on every link row           |
 
-`data.ts` builds a **forward and a reverse index** for each — spell→items for rendering, item→spells for searching.
-Every section read is guarded (`if (pack.X)`) so an older-format pack degrades rather than crashes.
+Columns are parallel arrays rather than a list of objects, because the app wants a whole column at a time and repeated
+keys cost more than they explain. A column dominated by empty values is stored sparsely, and repeated text is
+deduplicated into a value table plus an index.
 
-### 4a. `meta` — what the pack says ABOUT itself
+**The inversion is the point.** At the source, "which spells show a sheep" is unanswerable without walking every
+spell. As shipped, it is one lookup in `files`, one scan of `spellModels`, and the answer is a list of spell ids.
 
-Not a route: derived facts the build already holds, shipped so nothing downstream has to re-derive them.
+## Provide
 
-| key                                | what                                                                        |
-|------------------------------------|-----------------------------------------------------------------------------|
-| `format`                           | the pack's shape version, so a stale cached pack is recognisable app-side   |
-| `version` · `label`                | the build id and its human name                                             |
-| `built` · `listfileTag` · `tdbTag` | provenance — the day, the listfile release and the TDB behind this pack     |
-| `absentTables`                     | db2 tables this build PREDATES; §5's per-version drift is generated from it |
-| `counts`                           | 96 per-section row counts; §5's numbers are read from here, never estimated |
-| **`domains`**                      | **§3z below** — what each numeric axis's values look like in THIS pack      |
+Every reader reads through one interface — is this table available, what are its columns, give me these columns of
+every row — so a reader never learns whether a row came from a file, a query or a feed. That is what makes the source
+swappable, and it is enforced rather than promised: nothing in the reading layers may name a file path or a URL.
 
-#### §3z Numeric domains (`meta.domains`, format 46)
+The contract has four points, each one a semantic some reader depends on:
 
-**One entry per numeric axis, written by `numeric_domain()` in `build_data.py`.** `{n, min, max, distinct, mean,
-median, p1, p99, clipped, step, mode, modeShare, signed, sentinels, ui, values?}`.
+- **Text in, text out.** Values are the source's own spelling, unparsed.
+- **Rows arrive in source order.** Readers resolve collisions by last-write-wins and first-candidate-wins, so a
+  provider that reordered rows would change which value survives.
+- **An empty field is the empty string,** never null and never absent.
+- **A declared-absent table yields nothing** and its section comes out empty; an undeclared absence is fatal.
 
-**⛔ MEASURED PER PACK, NEVER DECLARED.** Value sets differ per game version, so a min/max read off 9.2.7 is wrong on the
-other ten — and deriving them honestly app-side means sorting up to ~276k values per axis on **every page load**. The
-build already holds the values, so it pays that cost once for everyone. This is the same argument, and the same home, as
-`counts`.
+**The hotfix overlay is a composition, not a feature of a reader.** It is one source read over another, so it is
+written once and every reader inherits it — a reader cannot forget what it never has to ask for. Three rules govern
+the merge, each earned rather than symmetric:
 
-**⚠ `min` AND `max` ARE THE LEAST USEFUL TWO.** Each of the others exists because a decision needs it and nothing else
-supplies it: **`step`** is what a control moves by (the gap between adjacent values — a slider stepping by 1 over a
-column of multiples of 5 offers four dead positions in five) · **`p1`/`p99`** are the ROBUST bounds it should span, with
-`clipped` saying an outlier was hidden · **`mode`/`modeShare`** say how much of the column is one DEFAULT value, which
-no other number reveals · **`distinct`** decides the affordance, because cardinality does that and not the type (3
-distinct values want a picker, 1,758 want a slider, and both can be the same `float`) · **`values`** is the picker's
-actual option list, present exactly when `ui` is `picker`, so the control is generated rather than hand-listed.
+- **Per column, not per row.** A wholesale row replace blanks every column the overlay does not carry. Merging per
+  column also lets a column whose overlay copy is *worse* than the client's simply go unmapped — a float that has been
+  through a text format printing fewer digits than it holds is a degradation, not a correction.
+- **Rows are unioned.** A few revision rows name ids the client's table never carried. They are genuine server-side
+  additions, and dropping them loses data nothing else can reach.
+- **A row applies only where it is at least as current as the client.** Every hotfix row is stamped with the client
+  build it was verified against; one stamped below the build being packed describes an older client, whose changes
+  that client already shipped.
 
-**Sentinels are counted out before any bound is taken** — a channel's `-1` means "no limit", not minus a millisecond,
-and one of those at either end silently ruins every bound below it. `sentinels` reports how many were excluded.
+**An array field's width is read, not declared.** The client exports an array column as `X_0, X_1, …` and sometimes
+narrows it to a bare `X` between builds. The header states the answer, so a declaration would only be a second place
+for it to be wrong.
 
-Axes today: `scale` · `speed` · `transparency` · `desaturate` · `casttime` · `channel` · `seat` · `invis`, plus
-`count.model` / `count.sound` / `count.anim` / `count.fx` / `count.mech` — the universal `count` axis's domain per
-column. **Adding one is a single row in the `"domains"` dict in `build_data.py`.**
+## Read
 
-Read it with **`npm run measure`** (`tools/measure.ts`), which prints domains and row counts for every pack and times
-the search engine over the same keystrokes.
+This is the interpretive half: rows in, typed meaning out. It is where a number becomes a creature, a colour or a
+sound depending entirely on the column beside it, and it is the half a relational engine is worst at.
 
-### 4b. The locale overlay — translated strings as a sparse add-on (`spelldata.<locale>.json.gz`, locale format 1)
+### The spine: spell to visual to kit
 
-**Built by `build/locale_data.py`, one file per (base pack, locale), written BESIDE the base pack it belongs to. ruRU on
-9.2.7 is the first. ⚠ NOT LOADED BY THE APP YET — the overlay exists ahead of its integration**, so today it is a
-prepared artifact, not a route the app reads.
-
-An overlay is an ADD-ON, never a second pack: it carries only the user-facing strings the game itself localizes, re-read
-in another locale, and **only where the translation exists and differs from the English the base pack ships**
-— wago serves the English string for untranslated rows, so "same as English" and "not translated" are one case and the
-app-side fallback (keep the base string) is right for both. No ids the base does not have, no visuals, no numbers.
-
-**enUS ships too, and it is EMPTY — 292 bytes, all twelve counts zero, by construction.** It is the locale the base pack
-is itself read in, so every string equals the English it is diffed against. It is declared so the roster names every
-locale the app can be asked for rather than every locale except the default one, and its emptiness is the machinery's
-own check: a non-zero count there means the base pack and the `&locale=` route disagree about the same strings.
-
-**`meta.sparse` says which kind of overlay a file is, and `--full` builds the other one.** Sparseness is the DEFAULT and
-not a premise: `--full` drops the differs-from-English test and writes every string the locale has, for an overlay that
-is the sole source of its strings rather than an annotation on the base pack. Measured on 9.2.7 enUS: **276,327 names,
-128,374 descriptions, 62,035 auras, 5.3 MB gzipped** — the description count is exactly the base pack's own §3x
-coverage, which is what makes it a standalone equivalent rather than an approximation.
-
-⚠ **A full enUS is short one route, and only that one: `creatureNames` and `objectNames` come back 0.** The TDB
-`*_locale` tables carry only NON-English rows — English lives in `creature_template.name` / `gameobject_template.name`
-itself — so an English overlay reading the locale tables finds nothing to read. ruRU gets 18,059 and 424 from the same
-call. If a full English overlay is ever the sole source, those two names come from the base TDB tables instead; every
-other section already stands alone.
-
-⛔ **enGB is NOT a second English: on 9.2.7 it is byte-identical to enUS across all three text columns** — 276,332 spell
-names, 129,050 descriptions and 63,788 aura descriptions, **zero differences in every one**. The client's British locale
-carries no separate strings, so there is no in-game source of `colour` / `armour` spellings and the VarCon fold
-(`tools/spellings.py`) is the only route to them. Do not build an enGB overlay expecting content.
-
-| overlay section                                              | source                                                                                                                        |
-|--------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
-| `spellNames` / `spellSubtexts` / `spellAltNames`             | wago `_lang` columns — the same CSV route with `&locale=`                                                                     |
-| `spellText` (descriptions / auras / encounters)              | cooked by `build/spelltext.py` from the locale's templates                                                                    |
-| `areaNames` · `itemNames` · `mountNames` · `shapeshiftNames` | wago `_lang` columns                                                                                                          |
-| `creatureNames` (morphs + summons) · `objectNames`           | TDB `creature_template_locale` / `gameobject_template_locale`, distilled from the world dump already cached for the base pack |
-
-Deliberately NOT covered: asset file paths (the client never localizes them), sound-kit / missile-motion / boneset names
-(developer identifiers), enum-name vocabularies (the app's search language), and the app's own labels.
-
-**Descriptions cook through the SAME `DescriptionCooker` as the base pack's**, with a `TextLocale` supplying the two
-things the cooker itself words: duration units ("8 sec" / "8 сек") and plural-form picking — Russian declension markers
-(`|4минуту:минуты:минут;`) carry three forms (one / few / many) where English carries two, so the form list is
-variable-length and the picking rule belongs to the locale. Every numeric lookup reads the base pack's own table cache;
-values do not localize. Measured on 9.2.7 ruRU: 217,895 names, 127,530 descriptions, 61,366 aura texts, zero residual
-`$` or `|` — the same cleanliness bar as §3x.
-
-`meta.localeFormat` versions the overlay's own shape, independent of the base `PACK_FORMAT` (a new base section is only
-an overlay change when it carries localizable text); `meta.base` names the pack id it diffs against, which is why **a
-rebuilt base wants its overlays rebuilt after it**. All builds serve all locales on the wago route (no per-version
-drift — measured 2026-07-29); the four TDB-less Classic packs simply get no creature/object translations, exactly as
-their base packs fall back to raw ids.
-
-### 3t. The area gate — WHERE a spell may be cast (`spellAreas` + `areas`, format 40)
-
-**SHIPPED AND LIVE (2026-08-05).** All ten packs carry both sections, `data.ts` reads them, and the Mechanics column
-draws the group described below. Searchable as `mech:location` / `mech:"location <name>"`.
-
-**The first route that is a RESTRICTION rather than content.** Every other route in this file answers *what does this
-spell do*; this one answers *where will it refuse to cast*. That difference is why it is drawn as a group whose head
-reads **`only in`** — see docs/PILLS.md.
-
-**Why this gate and not the other thirteen: it is one of only two Epsilon actually enforces on `.cast`.** Seven gate
-families were tested in game on 2026-08-05 and the rule that explains all seven is *a gate binds on `.cast` exactly when
-its check has no bypass guard*. Area (`CheckCast:6050` → `CheckLocation`) and spell focus (`CheckCast:6068`) are
-unguarded; reagents, equipped items, caster auras, shapeshift and `OnlyOutdoors` each sit behind a `TRIGGERED_IGNORE_*`
-flag or a config guard and do not bind. Full evidence in docs/DECISIONS.md.
-
-**The route is two flat hops and needs no decoder:**
-
-```
-SpellCastingRequirements.RequiredAreasID
-  -> AreaGroupMember.AreaID          (a group is 1..N areas)
-    -> AreaTable.AreaName_lang       (the name)
-       AreaTable.ParentAreaID        (walked to the root, for the two LINKS only)
-       UiMapAssignment -> UiMap      (Type 3 + name match -> a map id, or none)
-```
-
-Measured on 9.2.7: **12,375 spells**, **39,807 (spell, area) rows**, **3,147 distinct areas**, **0 unnamed**. **65.2%
-are gated to exactly one area**, which is why most pills collapse to a single word. 6 spells name an area group with no
-live area and are dropped.
-
-#### THE PARENT ZONE IS NOT THE ANSWER — do not "improve" this into a rollup
-
-`AreaTable.ParentAreaID` makes it trivial to collapse a multi-area group to one pretty name: *Masquerade*'s 32 areas
-become the single word **Suramar**, and 86% of all gated spells reduce to one name. **It is wrong.** Of the 3,864 groups
-that roll up to a single parent, **only 55 contain every child of that parent — 3,809 (98.6%) cover only PART of the
-zone.** "Only in Suramar" would be false on almost every pill it was printed on. The area's OWN name ships; the root is
-used for the two links and nothing else, where naming the containing zone is correct.
-
-#### The pack sections
-
-`spellAreas` — one row per (spell, area) pair, so a spell gated to four areas ships four rows and the group renders four
-items. There is deliberately no "primary" area.
-
-| field      | meaning                 |
-|------------|-------------------------|
-| `spellIds` | the spell               |
-| `areaIds`  | one area it is gated to |
-
-`areas` — the deduped area table the rows point at:
-
-| field    | meaning                                                                                  |
-|----------|------------------------------------------------------------------------------------------|
-| `ids`    | `AreaTable.ID`                                                                           |
-| `names`  | the area's own name — **never its parent's**                                             |
-| `roots`  | top-level ancestor, for `wowhead.com/zone=<root>`                                        |
-| `mapIds` | `UiMapID` for `/run OpenWorldMap(<id>)`, **0 = no usable map** (2,468 of 3,147 have one) |
-
-**Wowhead only has pages for ROOT areas**, which is why `roots` exists: `zone=7964` (the subzone The Drift) is a 404,
-while its root `zone=7637` (Suramar) resolves. Verified by hand on three ids.
-
-**The map lookup is deliberately strict and the pill drops the segment rather than guessing.** Only `UiMap.Type = 3`
-(Zone) maps whose name equals the area's are accepted — an area also resolves to Type 2 continent maps and to a
-*neighbouring* zone's map (Zereth Mortis reaches one called "Resonant Peaks"), and opening the wrong map is worse than
-offering no button.
-
-#### Sources
-
-- **`SpellCastingRequirements`**, **`AreaGroupMember`**, **`AreaTable`** — in `TABLES`, present on all ten builds.
-- **`UiMap`**, **`UiMapAssignment`** — in **both** `TABLES` and `OPTIONAL_TABLES`, and it must be both: `TABLES` is what
-  gets DOWNLOADED and `OPTIONAL_TABLES` only permits a 404. They were declared optional alone at first, so nothing ever
-  fetched them and the map button worked on 9.2.7 only — because an exploration run had left those CSVs in its cache.
-  Now asserted at module level in `build_data.py`. **Measured on all ten (2026-08-05): present everywhere except Legion
-  7.3.5, which 404s both** — `UiMap` replaced `WorldMapArea` in BfA 8.0, so Legion predates it and correctly ships
-  `mapIds` 0 with no map button. The five Classic re-releases DO have it, being modern clients serving old content.
-
-| pack   | 1.15.8 | 2.5.6 | 3.4.3 | 4.4.2 | 5.5.4 | 7.3.5 | 8.3.7 | 9.2.7  | 10.2.7 | 11.2.7 |
-|--------|--------|-------|-------|-------|-------|-------|-------|--------|--------|--------|
-| gated  | 220    | 203   | 566   | 1,914 | 3,244 | 5,813 | 7,914 | 12,375 | 14,074 | 15,561 |
-| areas  | 163    | 181   | 364   | 803   | 1,158 | 2,091 | 2,769 | 3,147  | 3,576  | 4,519  |
-| w/ map | 114    | 152   | 292   | 689   | 960   | **0** | 2,163 | 2,468  | 2,819  | 3,666  |
-
-- **Deliberately unused columns of `SpellCastingRequirements`:** `RequiresSpellFocus` also binds on `.cast` but needs
-  `SpellFocusObject` to be legible; `RequiredAuraVision`, `MinFactionID` and `MinReputation` have **zero references** in
-  TrinityCore's spell code, so they gate nothing; `FacingCasterFlags` is evaluated in `Spell::CheckRange`, a positional
-  check, not a property of the spell.
-
----
-
-### 3u. Sound-kit names — the one CROSS-VERSION source (`soundKitNames`, format 41)
-
-**SHIPPED (2026-08-06).** All ten packs carry the section, `data.ts` reads it, and the Sounds column draws the name as
-the SoundKit pill's **label**, moving the id into its own compact copy button (PILLS.md). An unnamed kit keeps the id as
-its label. Searchable through the existing `sound:` prefix.
-
-**THIS IS THE ONLY ROUTE THAT READS A TABLE FROM A BUILD OTHER THAN THE ONE BEING PACKED, and it has to be.**
-`SoundKitName` shipped 7.3.0 → **8.3.0** and in the Classic re-releases, and **no 9.x, 10.x, 11.x or 12.x build has it
-at any level** — so a modern pack cannot name its own kits. `build_data.SOUNDKITNAME_BUILD` pins **8.3.0.32218**, the
-last build that contains the file.
-
-```
-SoundKitName.ID   == SoundKit.ID     (from the pinned 8.3.0 build)
-SoundKitName.Name -> the pill's note segment + the sound: corpus
-```
-
-**Why joining an old table is sound, and the measurement that proves it:** kit ids are stable across builds. Of the
-84,317 kits present in both 7.3.5 and 9.2.7, **84,026 (99.65%) play a byte-identical `SoundKitEntry` file set** and only
-185 (0.22%) share no file at all — and those are re-recorded assets, not recycled ids.
-
-**Coverage is partial BY CONSTRUCTION and that is not a defect.** Kits added after 8.3.0 have no name in any build, so
-they are absent rather than invented — the pill then renders exactly as it did before format 41.
-
-| on 9.2.7                               | value                                                  |
-|----------------------------------------|--------------------------------------------------------|
-| distinct sound kits the app reaches    | 42,860                                                 |
-| **named by the pinned 8.3.0 table**    | **27,600 (64.4%)**                                     |
-| of all 686,330 sound rows              | 75.8%                                                  |
-| **spells with at least one named kit** | **104,511 — 87.9% of the 118,939 that have any sound** |
-
-**8.3.0 STRICTLY CONTAINS every other candidate**, so there is nothing to union it with: Legion 7.3.5 names 15,542 of
-the same kits, Wrath 3.4.3 is a subset of Legion, and `Epsilon_Merchant/SoundList.lua` stops at id 140,607 and is 99.69%
-string-identical to 8.3.0. `SoundKitChild` parent inheritance buys **one** kit. Full record, including the three wrong
-turns and why Wowhead cannot be used, is in docs/DECISIONS.md → *"Sound kit names — BfA 8.3.0 is the source"*.
-
-**RE-VERIFIED EXHAUSTIVELY 2026-08-06 — the search for a better source is CLOSED, do not re-run it.** Probed at the CASC
-level (`api/casc/1665033?version=…`, the check that actually settles it, since a wago CSV 404 can mean "no dbd layout"
-rather than "no file"):
-
-- **`8.3.0.32218` is the last build in existence with the file**, and the cutoff is exact — `8.3.0.32272`, the very next
-  PTR build, is already 0 bytes. Every later retail build through **12.0.7** is 0.
-- **No Shadowlands alpha or beta ever had it.** All fourteen earliest `9.0.1.x` beta builds are 0 — so the table died
-  mid-8.3, not at the expansion boundary.
-- **The Classic re-release lines do ship it** — newest per line: Wrath **3.4.3.58936** (401 KB), Cata **4.4.0.57244**
-  (668 KB), Era **1.15.2.55140**. Their ids reach **275,167**, far past 8.3.0's ceiling of 145,145, which looks like new
-  coverage and **is not**: measured against the kits 9.2.7 actually reaches, all four Classic sources together add
-  **ZERO** names 8.3.0 does not already have. The union is exactly 27,600.
-- **There is no second name table.** `soundkitname.db2` (fid 1665033) is the only matching path in the listfile, and
-  `soundkit_internal.db2` — the one promising-looking sibling — is a listfile-known path that CASC never serves.
-
-**The section is purely additive** — verified at format 41 by diffing the rebuilt 9.2.7 pack against its predecessor:
-**75 of 75 pre-existing sections byte-identical**, one section added, none removed, +3.5% gzipped.
-
----
-
-### 3v. Which expansion added a spell — the route with NO client column (`spells.eras` + `expansions`, format 42)
-
-**No table in any build records this.** `ItemSearchName.ExpansionID` exists but is items; `PlayerCondition`'s
-`Min/MaxExpansionLevel` are a gate, not provenance. So the answer is **derived by diffing client spell tables** — walk
-the expansions oldest-first, and the first one whose `Spell` table holds an ID is the one that introduced it.
-
-**The ladder is declared in `tools/expansions.py`, not here and not in the build.** One `Expansion(...)` row per rung
-carries everything that can differ: its ID sources, the words `xpac:` accepts, the Wowhead site for that era and any
-caveat. `build_data.py` only *reads* the committed result — **adding an expansion touches no frontend file and no build
-code.**
-
-| source kind   | what it is                                      | used for                       |
-|---------------|-------------------------------------------------|--------------------------------|
-| `Archive(…)`  | a build in the wow.tools DBC mirror             | Vanilla…MoP (original clients) |
-| `Pack(…)`     | a version Epsilook already ships                | Legion…TWW                     |
-| `Vendored(…)` | a client table committed under `build/sources/` | **Warlords only**              |
-
-**⛔ THE CLASSIC RE-RELEASES CANNOT DATE A SPELL, AND USING THEM WAS THE FIRST DESIGN.** They are modern rebuilds:
-Classic Era 1.15.8 holds **16,124 spells the real 1.12.1 client never had** (Jaccard **0.466**) — Season of Discovery
-content, `[DNT]` test spells, anniversary rewards — which alone mis-credited **3,438** spells of the 9.2.7 pack to
-Vanilla. WotLK Classic is far more faithful (**750** additions, Jaccard **0.962**) but still adds store mounts and
-MoP-era items. So each pre-Legion rung takes the **original era client** as its `origin`, and the matching re-release
-rides along as a `parallel` source — measured by `--report`, never able to move a spell.
-
-**⚠ WARLORDS IS THE ONE RUNG NO PUBLIC ARCHIVE COVERS.** Every 6.x build on the mirror is Beta or PTR (it carries no
-`Retail` label before 8.x at all), and the bulk dumps holding the 6.x build configs are switched off, so the CASC route
-is closed too. The retail 6.2.4 table is therefore **committed** — `build/sources/wod-6.2.4-spell.7z`, 2.1 MB, the one
-table the ladder reads out of a 517-file pack. It was validated against the mirror's 6.2.4 PTR build and is that build
-**minus exactly one record**: `205651 Test Banner`, a test spell cut before launch that returns in Legion — the
-signature of a real retail client, and the measurement that bounds the whole PTR-vs-retail question at **one row**.
-
-**⛔ AND THE SPELL ID IS NOT A SUBSTITUTE — measured, not assumed.** Best-fit ID cut points disagree with the ladder on
-**19,154 of 276,332 spells (6.93%)**; Cata alone is 18.1% wrong. The bands genuinely overlap (Wrath p99 = 75,209 vs Cata
-p01 = 63,940). For the WoD/Legion split specifically, the best cut ANY threshold can achieve is **95.49%** —
-~4,500 spells permanently misfiled — which is why the vendored client replaced it outright.
-
-**Wowhead is not a source either.** Every `"patch":` field on a spell page belongs to a *guide article*; the occasional
-"Added in patch 4.0.3" is prose in a comment. They derive it by diffing every build — the same method, more builds.
-
-**Shipped shape.** `spells.eras` is one index per spell, parallel to `spells.ids`, into the `expansions` section
-(`keys`/`labels`/`shorts`/`majors`/`aliases`/`wowhead`/`caveats`). **-1 = no rung claims it.** `majors` is the game
-major version, and it is there so the app can index `CFG.expansionArt` — the row draws the expansion's own inline art,
-**vendored under `site/img/expansions/` and never hotlinked**, rather than the frontend restating which art belongs to
-which expansion. (The game's own art does not work for this: `interface/icons/expansionicon_*` covers only the first six
-expansions, and the glue logos in `CFG.expansionLogos` are full "World of Warcraft" lockups that read identically at row
-height. See DECISIONS.md.) `meta.counts` carries one
-`expansion.<key>` per rung plus `expansion.unknown`, and unlike the delivery counts **these DO partition the pack**.
-
-**9.2.7 (the product), read from the pack:** Vanilla 5,823 · TBC 14,581 · WotLK 16,599 · Cata 23,745 · MoP 15,304 ·
-**WoD 42,600** · Legion 57,224 · BfA 51,157 · Shadowlands 49,299 · unknown **0**. The retail packs (7.3.5+) date every
-spell. **The Classic packs are the only ones with `unknown`** — 11,563 on Classic Era, 2,057 MoP Classic, 997 Cata
-Classic, 714 WotLK Classic, 309 TBC Classic — and that is correct: those spells reached no retail client, so no
-expansion introduced them. They render no tag rather than a wrong one.
-
-**⚠ IT DATES THE ID, NOT TODAY'S SPELL.** A removed-then-readded ID reports its FIRST appearance: `1645 Worgen Form` is
-in 1.12.1, gone by 2.4.3 and back later, so it reads Vanilla while Wowhead's prose calls it 4.0.3 for the current spell
-reusing that id. Say "first appeared", never "was designed in".
-
----
-
-### 3x. What the spell SAYS it does — cooked description, aura text and encounter note (`spellText`, format 45)
-
-**`Spell.Description_lang` is a TEMPLATE, not text**, and 19,807 spells on 9.2.7 ship nothing but
-`$@spelldescNNN` — a redirect to another spell's. The client resolves it at tooltip time against the caster; Wowhead
-resolves it server-side for display. Neither result is searchable, which is the gap this fills.
-
-`build/spelltext.py` cooks a template into placeholder-free prose. **Its output is all the pack carries** — every table
-below exists only to be substituted away.
-
-| what                | source                                                                 | resolves        |
-|---------------------|------------------------------------------------------------------------|-----------------|
-| the templates       | `Spell.Description_lang`, `Spell.AuraDescription_lang`                 | the text itself |
-| named variables     | `SpellDescriptionVariables` ← `SpellXDescriptionVariables`             | `$<shield>`     |
-| effect amounts      | `SpellEffect.EffectBasePointsF` + `.Variance`                          | `$s1 $m1 $M1`   |
-| tick period, radius | `SpellEffect.EffectAuraPeriod`, `.EffectRadiusIndex_0` → `SpellRadius` | `$t1 $A1`       |
-| duration, range     | `SpellMisc` → `SpellDuration`, `SpellRange`                            | `$d $r`         |
-| stacks, procs       | `SpellAuraOptions`                                                     | `$u $n $h`      |
-| max targets         | `SpellTargetRestrictions`                                              | `$i $v`         |
-| encounter notes     | `JournalEncounterSection.BodyText_lang` (+ child sections)             | a second body   |
-
-**THE RULE IS "NEVER PRINT A NUMBER THIS DATA CANNOT JUSTIFY".** Caster-dependent terms (`$AP`, `$SP`, `$pri`,
-`$versadmg`, player level) and a zero base point are **elided**, leaving prose that still reads — *"Shields an ally for
-15 sec, absorbing damage"*, where Wowhead prints *"absorbing 0 damage"*. **An expression is all-or-nothing**: one
-unknown operand elides the whole `${…}`, because half an arithmetic expression is a wrong answer rather than a smaller
-one.
-
-**⚠ WOWHEAD IS AN ORACLE FOR THE PROSE AND NOT FOR THE NUMBERS.** Retail Wowhead renders every spell at the CURRENT
-retail patch, and scaling is re-tuned every expansion — its figure for a 9.2.7 spell uses a curve this pack does not
-(Chained Bolt: db2 5.19, Wowhead 427). There is no Wowhead for Shadowlands, so for nine of eleven packs no external
-numeric oracle exists. A structural diff is still worth running: on 58 sampled spells the prose matched **57**, and it
-is what caught two real bugs — `re.I` on `\|T.*?\|t` (case-significant; it matched from a stray CLOSING tag and ate the
-sentence) and reading `$?c1[A]?c2[B][default]` as an if/else when it is a **switch** (spell 342156 chains twelve).
-
-**THREE BODIES, ONE IDEA.** `descriptions` is what the CAST does, `auras` (format 45) is what the STATE says while it
-holds — a different string and usually a terse fragment, "Stunned.", "Fading.", "Firing at the target." — and
-`encounters` is the dungeon journal's third-person note. All three answer the same `desc` keyword and the same plain
-search, because a user looking for a spell that stuns does not care which of the three said so. They are separate pools
-only because they dedupe separately.
-
-**Ships DEDUPED**, because a bare redirect cooks to its target's string. Each pool holds `{text, of}` — distinct strings
-with `""` at slot 0, and a per-spell index parallel to `spells.ids`. On 9.2.7: descriptions 129,051 → **79,330**
-distinct, aura texts 62,035 → **34,519**, encounter notes 389 → **336**.
-
-**In plain search, and scoped by the `desc` keyword inside `name:`** (`name:"desc kneel"`,
-`name:(desc "blood pool")`). Plain inclusion was the user's call once the overlap was measured; the two canonical counts
-it moves are `fireball` 4,258 → **4,348** and `fire|frost` 25,560 → **32,148**, and no field-scoped count moves at all.
-See docs/DECISIONS.md. Drawn as one stacked-lines mark beside the spell name which lights on a hit; hovering shows both
-bodies with the matched runs marked. **Case-insensitivity is a parameter of the match** (`Search.foldedMatchers`), not a
-stored lowercase twin: a folded regex over the pool answers in 4 ms where a precomputed copy answers in 7 ms and costs ~
-9 MB of heap.
-
-**Per-build coverage** — read from the rebuilt packs, not estimated. Vanilla/TBC/WotLK have no `JournalEncounterSection`
-(declared in `OPTIONAL_TABLES`); Cata and MoP have the table but no spell-linked body text.
-
-| build  | spells  | with description | distinct | encounter notes |
-|--------|---------|------------------|----------|-----------------|
-| 1.15.9 | 31,249  | 17,577           | 14,130   | 0               |
-| 2.5.6  | 28,687  | 17,480           | 13,706   | 0               |
-| 3.4.3  | 49,394  | 30,925           | 23,433   | 0               |
-| 4.4.2  | 71,227  | 37,951           | 28,635   | 0               |
-| 5.5.4  | 98,159  | 48,733           | 35,310   | 0               |
-| 7.3.5  | 179,382 | 87,109           | 57,818   | 174             |
-| 8.3.7  | 227,237 | 107,842          | 67,767   | 292             |
-| 9.2.7  | 276,332 | 128,374          | 79,330   | 389             |
-| 10.2.7 | 327,092 | 150,949          | 91,447   | 528             |
-| 11.2.7 | 375,895 | 174,406          | 102,832  | 659             |
-| 12.0.7 | 404,401 | 187,564          | 109,065  | 713             |
-
-**⚠ `SpellAuraOptions` WAS ALREADY IN THE 9.2.7 CACHE**, left there by an exploration run, so the first build of this
-route worked on 9.2.7 and crashed on Vanilla. Same shape as the `UiMap` mistake at format 40 — `TABLES` and
-`OPTIONAL_TABLES` do different jobs and a table usually needs both.
-
----
-
-### 3y. The art the spell wears — icon name and FileDataID (`iconNames` + `iconFids`, format 44)
-
-**The route is unchanged and old; what is new at format 44 is the FID and the SEARCH.** The icon has been in the pack
-and drawn beside the name for a long time — `SpellMisc.SpellIconFileDataID` → the listfile → the base name, which is the
-key Wowhead's CDN serves art under. Format 44 ships the FileDataID alongside the deduped name table, and the app turned
-the picture into a control.
+Almost everything visible hangs off two hops, both many-to-many, and both carrying a target mask.
 
 ```mermaid
 flowchart LR
-    SM["SpellMisc<br/>SpellIconFileDataID"] --> LF["community listfile<br/>fid → path"]
-    LF --> N["interface/icons/&lt;name&gt;.blp<br/>→ iconNames[k]"]
-    LF --> F["the fid itself<br/>→ iconFids[k]"]
-    N --> S["spells.icons[i] — 1-based, 0 = none"]
-    F --> WH["wowhead.com/icon=&lt;fid&gt;"]
+    S["spell"] -->|SpellXSpellVisual| V["visual"]
+    V -->|redirect columns| V
+    V -->|SpellVisualEvent| K["kit"]
+    K -->|SpellVisualKitEffect| P["payload"]
 ```
 
-**⭐ THE POINT OF THE AXIS IS REUSE, and it is what the name can never answer.** On 9.2.7, **272,900 spells wear 9,846
-distinct icons — 27.7 spells each**. Most spells borrow art rather than getting their own, so "everything that looks
-like this" groups spells no title search reaches. That is also why the pool is searched POOL-FIRST, exactly as §3x's
-prose is:
-9,846 tests instead of 272,900.
-
-**THE PATH IS A CONSTANT AND THE NAME IS THE WHOLE IDENTITY.** Measured across five packs from Vanilla to 11.2.7,
-**every** named spell icon lives in `interface/icons/` and no other folder ever appears — 1–2 fids per pack are absent
-from the listfile entirely, which is the only way to have no name. So the pack stores `spell_fire_flamebolt`, never the
-directory and never the `.blp` (user's call, 2026-08-10), and nothing is lost by it.
-
-**Searched two ways, and they are NOT the same door:**
-
-| written                     | matches               | why                                                       |
-|-----------------------------|-----------------------|-----------------------------------------------------------|
-| plain search (`FIELDS.all`) | the icon NAME only    | an icon name is a file name — the `fx:chain` rule, one up |
-| `name:"icon <word>"`        | the name, word-wise   | the scoped door: this icon and nothing else               |
-| `name:"icon <fid>"`         | the FileDataID, EXACT | keyword-only — see the trap below                         |
-
-**⛔ THE FID IS KEYWORD-ONLY, AND THAT ASYMMETRY IS DELIBERATE** (user's call, 2026-08-10). In plain search a lone number
-is ALREADY an exact spell-ID lookup, so letting it also mean "an icon fid" would turn `135812` from the one spell asked
-for into the 295 that share a picture. Inside `name:"icon 135812"` the keyword has said which id space the number lives
-in, so there is nothing to collide with. `spellsByIcon` takes a `byId` flag rather than existing twice.
-
-**The plain-search cost, measured on 9.2.7 and accepted:** of the 38-query canonical battery, **36 are unchanged and the
-two that move are the only two plain-search queries** — `fireball` 4,348 → **4,861** (+513) and `fire|frost` 32,148 →
-**38,357** (+6,209). Every scoped field is byte-identical, which is what says nothing leaked. It carries §3x's known
-weakness unchanged: `sortByRelevance` scores on the NAME alone, so an icon-only hit ranks beside a filename hit, and the
-fix when it is wanted is a further relevance tier rather than removing this.
-
-**⚠ THE FALLBACK ICON IS NOT FILTERED, AND THAT WAS DECIDED RATHER THAN OVERLOOKED** (user, 2026-08-10, reversing
-themselves mid-build — *"Still display it still match it"*). `trade_engineering` is worn by **101,981 of 272,900 spells
-on 9.2.7 — 37%** — against 1,236 for the next most common icon; it is Blizzard's placeholder for internal content
-(`OLD`/`TEST`/`DND` rows, teleports, script spells). The shape holds on every pack: the top icon takes 27–37% and the
-runner-up under 2%, spelled `trade_engineering` on nine packs and **`temp` on Vanilla and TBC** (22.8% / 25.6%). So
-`engineering` is a 102,306-spell plain search by design. A `PLACEHOLDER_ICONS` declaration was written and reverted —
-**do not re-propose it without re-reading this paragraph.**
-
-| pack   | spells with an icon | distinct icons | top icon            | share |
-|--------|---------------------|----------------|---------------------|-------|
-| 1.15.9 | 31,051              | 1,673          | `temp`              | 22.8% |
-| 2.5.6  | 28,678              | 1,531          | `temp`              | 25.6% |
-| 3.4.3  | 49,374              | 2,448          | `trade_engineering` | 27.1% |
-| 4.4.2  | 71,205              | 3,463          | `trade_engineering` | 32.6% |
-| 5.5.4  | 98,013              | 4,742          | `trade_engineering` | 34.3% |
-| 7.3.5  | 177,051             | 6,894          | `trade_engineering` | 36.8% |
-| 8.3.7  | 224,315             | 8,241          | `trade_engineering` | 36.8% |
-| 9.2.7  | 272,900             | 9,846          | `trade_engineering` | 37.4% |
-| 10.2.7 | 322,992             | 11,707         | `trade_engineering` | 37.0% |
-| 11.2.7 | 371,003             | 13,449         | `trade_engineering` | 36.6% |
-| 12.0.7 | 399,116             | 14,239         | `trade_engineering` | 36.5% |
-
-**Zero schema drift** — `SpellIconFileDataID` is on `SpellMisc` in every build back to Vanilla, so this needs no
-`OPTIONAL_COLUMNS` line. The fids cost **+6.5 KB gzipped** on 9.2.7 (11,442,772 → 11,449,292), which is the whole
-storage price of the id half.
-
-**Rendered as a BUTTON, not an image (`spellIcon` in `src/app/render.ts`).** It left the Wowhead anchor it used to sit
-inside — a button nested in an anchor is neither valid nor clickable — so hovering the ICON no longer raises Wowhead's
-game tooltip and hovering the NAME still does. That trade was authorised in advance. Its own tooltip carries the name,
-`Icon <fid>` and the gestures; the border goes gold when the query matched the icon, and the matched substring is marked
-in the panel via `data-tip-hl`, the same channel §3x's description mark uses.
-
----
-
-## 5. Version differences
-
-Eleven builds ship across twelve packs, spanning 2004-era content to current retail. Going *backwards*
-is a different problem from going forwards: forwards is additive, backwards is mostly "the table does not exist yet."
-The five Classic re-release clients (Vanilla / TBC / WotLK / Cataclysm / MoP) complicate that — see below.
-
-### The twelve packs
-
-**Read from `meta` on the shipped packs, 2026-08-12 — never estimated.** Which builds we ship is declared in
-`tools/packs.py`; this table is what those declarations produced.
-
-| Pack id          | Label                   |  Spells |    Pack | TDB release   | Absent tables |
-|------------------|-------------------------|--------:|--------:|---------------|--------------:|
-| 1.15.9.69109     | Vanilla Classic         |  31,249 |  1.2 MB | —             |            10 |
-| 2.5.6.69110      | TBC Classic             |  28,687 |  1.2 MB | —             |            19 |
-| 3.4.3.58936      | WotLK Classic           |  49,394 |  2.1 MB | TDB335.25101  |            12 |
-| 4.4.2.60895      | Cataclysm Classic       |  71,227 |  3.0 MB | —             |            11 |
-| 5.5.4.69155      | MoP Classic             |  98,159 |  4.2 MB | —             |             6 |
-| 7.3.5.26972      | Legion                  | 179,382 |  7.8 MB | TDB735.00     |             6 |
-| 8.3.7.35662      | Battle for Azeroth      | 227,237 | 10.0 MB | TDB837.20101  |             1 |
-| 9.2.7.45745      | Shadowlands *(default)* | 276,332 | 12.2 MB | TDB927.22111  |             0 |
-| 10.2.7.55664     | Dragonflight            | 327,092 | 14.5 MB | TDB1027.24051 |             0 |
-| 11.2.7.65299     | The War Within          | 375,895 | 16.8 MB | TDB1127.26011 |             0 |
-| 12.1.0.69273     | Midnight                | 413,890 | 18.7 MB | TDB1200.26021 |             0 |
-| 12.1.0-ptr.69273 | Midnight PTR            | 413,890 | 18.7 MB | TDB1200.26021 |             0 |
-
-**A PACK ID IS NORMALLY THE BUILD ID, AND `-ptr` IS THE ONE EXCEPTION.** The app's clean URL is the PATCH (`?v=12.1.0`),
-so two packs on one patch would resolve to each other — and a test line sits on the live patch whenever it has not moved
-ahead yet. `Pack.tag` in `tools/packs.py` puts the marker in the patch segment (`12.1.0-ptr.69273`), which also keys the
-Wowhead section (`CFG.wowheadSitePrefix.ptr` → `/ptr/`, where the major alone cannot tell a test line from the client it
-tests). `build_data.py` takes it as `--id`, separately from the `--version` it downloads.
-
-**While the PTR is level with live the two builds are the same bytes**, so the shipped manifest points the PTR entry at
-Midnight's pack file rather than carrying a second 18.5 MB copy. Rebuilding it writes its own directory back — re-point
-`file`/`hash` by hand, or keep the duplicate once the lines diverge and the data genuinely differs.
-
-**Midnight HAS a TDB now — `TDB1200.26021`, wired 2026-08-12, and it took morph displays from 0 to 4,635.** The entry
-used to say no 12.x release existed; TrinityCore published one and the hotfix overlay applies with it.
-
-**⚠ IT IS THE ONE MAPPING THAT IS NOT AN EXACT PATCH MATCH.** The dump names the 12.0 client it was cut against while
-the pack ships 12.1.0, so `tdb_release()`'s patch fallback does not reach it and the entry is keyed on the build
-itself — meaning **a 12.x patch bump silently drops it**, announced by one `no release mapped` line in the build log.
-Re-key it when Midnight bumps. It is named across the gap on the 3.4.3 precedent: creature entries carry across a minor
-patch, and the alternative is no morph display names for retail at all.
-
-**All of them are at pack format 46** (the area gate, §3t — on top of format 39's delivery route with values, §3s-bis,
-format 38's attribute flags and first delivery partition, §3s, format 36's target masks on spell links, §3r, format 35's
-spell-link route, and format 34's missile flight paths).
-
-**Format 40 added no spells** — it only says where existing ones may be cast — so every count in this section carries
-over from format 39 unchanged.
-
-**Format 39's per-version drift, read from the packs rather than estimated** (`meta.counts["delivery.*"]`):
-
-| pack                | `mech:instant` | `mech:casttime` | `mech:channeled` | both cast+channel | breaks on move |
-|---------------------|---------------:|----------------:|-----------------:|------------------:|---------------:|
-| Vanilla 1.15.8      |         23,523 |           7,273 |              518 |                66 |            382 |
-| TBC 2.5.6           |         21,059 |           6,723 |              972 |               104 |            654 |
-| WotLK 3.4.3         |         36,575 |          11,097 |            1,921 |               199 |          1,178 |
-| Cataclysm 4.4.2     |         54,256 |          14,206 |            3,107 |               342 |          1,668 |
-| MoP 5.5.4           |         75,518 |          18,735 |            4,563 |               687 |          2,400 |
-| Legion 7.3.5        |        139,413 |          32,788 |            9,045 |             1,864 |          4,416 |
-| BfA 8.3.7           |        176,732 |          41,328 |           11,688 |             2,511 |          5,626 |
-| Shadowlands 9.2.7   |        216,379 |          48,873 |           14,228 |             3,148 |          6,689 |
-| Dragonflight 10.2.7 |        256,848 |          57,426 |           16,589 |             3,771 |          7,811 |
-| TWW 11.2.7          |        295,024 |          66,672 |           18,646 |             4,447 |          8,753 |
-
-**`instant` + `casttime` + `channeled` DOES NOT SUM TO THE PACK, and must not be made to.** The middle two overlap by
-the "both" column; `instant` is the complement of their union. Per pack: `instant + (casttime + channeled - both)` = the
-full spell count, exactly.
-
-**No build lost the route** — `SpellCastTimes`, `SpellDuration` and `SpellInterrupts` are present on all ten, so there
-is no `OPTIONAL_TABLES` degradation to document here. **The cast+channel overlap exists as far back as Vanilla** (66
-spells), so it is not a modern-retail artifact and never was a safe simplification.
-
-**Format 37's per-version drift** (`meta.counts["spellAttrs.<handler>"]`):
-
-**Format 37's per-version drift, read from the packs rather than estimated** (`meta.counts["spellAttrs.<handler>"]`):
-
-| pack                | `anim:pose` | `fx:tracking` | `mech:unbreakable` | `mech:unhindered` | `mech:debuff` |
-|---------------------|------------:|--------------:|-------------------:|------------------:|--------------:|
-| Vanilla 1.15.8      |         127 |           193 |             **15** |                13 |           901 |
-| TBC 2.5.6           |         153 |           294 |              **0** |                50 |           700 |
-| WotLK 3.4.3         |         233 |           611 |              **0** |               133 |         1,330 |
-| Cataclysm 4.4.2     |         254 |           884 |              **0** |               299 |         1,870 |
-| MoP 5.5.4           |         361 |         1,185 |                 66 |               429 |         3,109 |
-| Legion 7.3.5        |         559 |         1,874 |                318 |               611 |         8,814 |
-| BfA 8.3.7           |         680 |         2,264 |                411 |               728 |        12,481 |
-| Shadowlands 9.2.7   |         784 |         2,712 |                580 |               868 |        17,193 |
-| Dragonflight 10.2.7 |         891 |         3,228 |                650 |               940 |        20,632 |
-| TWW 11.2.7          |         967 |         3,711 |                861 |             1,074 |        24,710 |
-
-**The three zeroes are real data, not drift** — `Attributes_11` exists on those builds, no spell sets bit 358. The word
-is simply not offered there, through the pill type's `when` gate, which is the same mechanism an absent table uses. The
-monotonic rise everywhere else is the evidence that **bit numbering is stable across builds**; that is how it was
-checked, rather than by hunting per-build enum definitions.
-
-The formats below are the older history, kept for what a stale pack still reads as:
-
-**Format 33** (animkit bonesets — the body region each anim animates, §3e — plus effect attachment points for
-Shadowy/Dissolve/Barrage, §3h — on top of format 32's five data-mined routes, format 31's object-scale modifiers,
-§3k-bis, format 30's movement-speed modifiers, §3k, and format 29's mechanics paired with their implicit targets, §3l,
-and the keybound-override route, §3j). The four pre-MoP packs each gained one absent table,
-`SpellKeyboundOverride`; nothing else drifted (the boneset tables are build-present everywhere, and the three effect
-attach columns are `OPTIONAL_COLUMNS`, so their absence on some Classic clients degrades to "full body" rather than
-drifting). Recent bumps are additive and version-agnostic: format 26 added the invis/detect channel pills
-(`MOD_INVISIBILITY[_DETECT]`
-auras), format 27 the `display` model category, format 28 the `item` category, format 29 replaced the flat
-`spellEffects`/`spellAuras` sets with `spellMechanics` and added
-`implicitTargetNames`/`implicitTargetBits` + `spellKeybinds`/`keybinds`. A format-28 pack is still read: its two flat
-sets load as target-less mechanic rows, so the column renders without target segments or icons rather than breaking.
-Format 26–28 all carry back to Vanilla (SpellVisualEffectName.Type is present on every shipped build — no absent-table
-or optional-column drift; the five item tables also ship on every build, so the route degrades by *content*, not by a
-missing table). Earlier format costs still hold: format 22 target masks ~+11% size, format 23 vehicles essentially free,
-format 24 attachment points ~+18% model rows, format 25 one
-`targets` array per effect-fx link section. Format 28 renamed `spellModels`'s
-`displayIds` array to `refIds` (it now carries an Item::ID on item rows too) and added the `items`/`itemIconNames`/
-`itemQualityNames` sections; a format-27 pack is still read (its `displayIds` array is accepted as `refIds`). Splitting
-the equipped-weapon marker per slot (§3c) needed **no** bump — it only changes which sentinel fids appear in the
-existing `files`/`spellModels` sections, and the frontend reads any negative fid as fileless rather than naming one.
-**Format 29 is close to free**: pairing replaced two flat sections with one (9.2.7 +0.4%, TWW +0.3%, Vanilla −1.7%), and
-the keybind sections are ~1 KB. **Format 30 is nearly free too** — one link section of 5.7k rows on 9.2.7, under 0.1 MB
-gzipped, and no pack changed size band. **Format 31 (scale)** is smaller still — 3.2k rows on 9.2.7, one section — and
-dropping the zero-percent speed/scale rows in the same build shaves a little back; no pack changed size band.
-
-**Format 35 (spell links, §3r) is the most expensive additive bump so far: +3.43% over all ten packs** (48.69 → 50.37 MB
-gzipped; per pack +2.18% on TBC to +5.05% on Vanilla, and +3.56% on 9.2.7). That is the price of a section whose rows
-are two 6-digit spell ids rather than an index into a small payload table — 58,485 rows on 9.2.7, 83,566 on TWW. It buys
-the only route that reaches another spell's row, and **shipping one direction rather than two is what keeps it to 3%**:
-`data.ts` inverts the edge list at load. No pack changed size band.
-
-### Movement speed by version
-
-Rows are `(spell, movement, percent)` pills; a spell can hold several. Both columns of the route — the fourteen auras
-and `EffectBasePoints` — exist on **every** shipped build, so there is no drift declaration: the route degrades by
-*content*, and the only era difference it shows is the real one. (Counts are post-drop of the zero-percent rows.)
-
-| Pack         |  rows | spells |   run | mounted | swim | flight |   all |
-|--------------|------:|-------:|------:|--------:|-----:|-------:|------:|
-| 1.15.8.67156 |   772 |    759 |   206 |     181 |   20 |  **0** |   365 |
-| 2.5.6.68775  | 1,053 |    961 |   196 |     250 |   25 |     71 |   511 |
-| 3.4.3.58936  | 1,361 |  1,296 |   326 |      67 |   35 |     81 |   852 |
-| 4.4.2.60895  | 1,632 |  1,560 |   443 |      45 |   57 |    102 |   985 |
-| 5.5.4.68716  | 2,188 |  2,094 |   675 |      59 |   76 |    109 | 1,269 |
-| 7.3.5.26972  | 3,691 |  3,502 | 1,142 |      92 |  111 |    147 | 2,199 |
-| 8.3.7.35662  | 4,603 |  4,351 | 1,349 |     128 |  157 |    169 | 2,800 |
-| 9.2.7.45745  | 5,533 |  5,240 | 1,638 |     146 |  171 |    195 | 3,383 |
-| 10.2.7.55664 | 6,586 |  6,247 | 1,981 |     184 |  180 |    240 | 4,001 |
-| 11.2.7.65299 | 7,575 |  7,176 | 2,253 |     200 |  186 |    269 | 4,667 |
-
-**Vanilla has zero flight rows** — flying arrived in TBC, so the six flight auras have nothing to attach to on 1.15.8.
-That is the data telling the truth, not a missing table: the `flight` word simply never renders there.
-
-`all` is the largest group everywhere, which is expected — it is aura 33, i.e. every snare in the game.
-
-### Object scale by version
-
-Rows are `(spell, percent)` pills (zero-percent rows dropped). The route exists on **every** build; only the
-`MOD_SCALE_2` aura id drifts (239 retail/WotLK, 591 on the 2024+ Classic clients — see §3k-bis), which a set absorbs, so
-again no drift declaration. `grow` / `shrink` split the sign.
-
-| Pack         |  rows | spells |  grow | shrink |    min |  max |
-|--------------|------:|-------:|------:|-------:|-------:|-----:|
-| 1.15.8.67156 |   193 |    190 |   166 |     27 |   −100 |  700 |
-| 2.5.6.68775  |   267 |    263 |   220 |     47 | −1,000 |  599 |
-| 3.4.3.58936  |   511 |    502 |   422 |     89 | −1,000 |  599 |
-| 4.4.2.60895  |   768 |    759 |   641 |    127 |   −999 | 1000 |
-| 5.5.4.68716  | 1,137 |  1,121 |   966 |    171 |   −999 | 1000 |
-| 7.3.5.26972  | 1,996 |  1,978 | 1,694 |    302 |   −999 | 1500 |
-| 8.3.7.35662  | 2,533 |  2,508 | 2,177 |    356 |   −999 | 1500 |
-| 9.2.7.45745  | 3,194 |  3,169 | 2,773 |    421 |   −999 | 1500 |
-| 10.2.7.55664 | 3,767 |  3,737 | 3,282 |    485 |   −999 | 1500 |
-| 11.2.7.65299 | 4,426 |  4,392 | 3,867 |    559 | −1,000 | 1500 |
-
-The negative floor (−999 / −1000) is a real value the server clamps, not a sentinel; growth reaches +1500% (16× normal
-size). Grow outnumbers shrink ~6–8:1 every era.
-
-### Keybound overrides by version
-
-Rows are `(spell, override)` links; overrides are the distinct
-`SpellKeyboundOverride` rows they reach. The table arrives in **MoP (5.0.1)** — the four earlier packs 404 it and the
-`keybind` category simply never appears.
-
-| Build                 | Table rows | Aura 406 rows | Shipped links | Overrides | Dropped |
-|-----------------------|-----------:|--------------:|--------------:|----------:|--------:|
-| Vanilla 1.15.8        |   *absent* |             — |             0 |         0 |       — |
-| TBC 2.5.6             |   *absent* |             — |             0 |         0 |       — |
-| WotLK 3.4.3           |   *absent* |             — |             0 |         0 |       — |
-| Cataclysm 4.4.2       |   *absent* |             — |             0 |         0 |       — |
-| MoP 5.5.4             |         13 |            14 |            13 |        10 |       1 |
-| Legion 7.3.5          |         49 |            53 |            53 |        41 |       0 |
-| BfA 8.3.7             |         56 |            72 |            72 |        47 |       0 |
-| Shadowlands 9.2.7     |         77 |           105 |           105 |        64 |       0 |
-| Dragonflight 10.2.7   |        126 |           174 |           163 |       106 |      11 |
-| The War Within 11.2.7 |        147 |           208 |           197 |       121 |      11 |
-
-"Dropped" is aura rows whose `misc0` names an override the build does not ship — the table trailing the aura on the
-newest two builds, and one stale row on MoP. Distinct implicit-target names shipped per build (`implicitTargets`) grows
-the same way: 85 on Vanilla, 98 WotLK, 123 MoP, 133 from Shadowlands on.
-
-### Attachment coverage by version
-
-Read from each pack after the format-24 rebuild:
-
-| Pack                    | model rows | with an attach point | missiles w/ both ends | beams w/ both ends |
-|-------------------------|-----------:|---------------------:|----------------------:|-------------------:|
-| Vanilla 1.15.8 (fmt 22) |     31,651 |                    — |                     — |                  — |
-| TBC 2.5.6 (fmt 22)      |     35,006 |                    — |                     — |                  — |
-| WotLK 3.4.3             |     74,693 |               68,565 |                   718 |                  0 |
-| Cataclysm 4.4.2         |     94,285 |               84,859 |                 1,412 |                  0 |
-| MoP 5.5.4               |    126,079 |              110,706 |                 2,289 |                  1 |
-| Legion 7.3.5            |    214,432 |              200,466 |                 3,563 |                537 |
-| BfA 8.3.7               |    264,466 |              198,655 |                 3,592 |              2,448 |
-| Shadowlands 9.2.7       |    314,064 |              226,810 |                 3,753 |              5,273 |
-| Dragonflight 10.2.7     |    368,230 |              252,382 |                 3,977 |              7,237 |
-| TWW 11.2.7              |    418,432 |              278,576 |                 4,085 |              9,013 |
-
-Beam attach points need `BeamEffect`, which WotLK and Cataclysm lack — hence the zeroes, and MoP's single row.
-Attached-model coverage is high everywhere (~85-92% of rows outside BfA).
-
-### Creature-display models by version
-
-`display`-category rows (`SpellVisualEffectName` Type 2, §3c), read from each pack's `meta.counts.spellDisplayModels`.
-`SpellVisualEffectName.Type` is present on every shipped build, so the route degrades by *content*, not by a missing
-column — the Classic re-releases simply carry few Type-2 attach rows.
-
-| Pack            | display rows | | Pack                | display rows |
-|-----------------|-------------:|-|---------------------|-------------:|
-| Vanilla 1.15.8  |           23 | | BfA 8.3.7           |          721 |
-| TBC 2.5.6       |            1 | | Shadowlands 9.2.7   |        1,087 |
-| WotLK 3.4.3     |            0 | | Dragonflight 10.2.7 |        1,432 |
-| Cataclysm 4.4.2 |            4 | | TWW 11.2.7          |        1,827 |
-| MoP 5.5.4       |           48 | |                     |              |
-| Legion 7.3.5    |          445 | |                     |              |
-
-WotLK 3.4.3's zero is data-truthful (that Classic client has no Type-2 attach row resolving to a display), not a build
-failure. All rows resolve to a real model fid — unresolvable displays are dropped at build time.
-
-### Item models by version
-
-`item`-category rows (`SpellVisualEffectName` Type 1, §3c), from each pack's
-`meta.counts` — `spellItemModels` (rows), `items` (distinct), `namedItems`
-(with an `ItemSearchName` name). Attach route only.
-
-| Pack            | item rows | items | named | | Pack                | item rows | items | named |
-|-----------------|----------:|------:|------:|-|---------------------|----------:|------:|------:|
-| Vanilla 1.15.8  |        36 |    18 |    10 | | BfA 8.3.7           |       935 |   562 |   562 |
-| TBC 2.5.6       |         0 |     0 |     0 | | Shadowlands 9.2.7   |     1,211 |   651 |   433 |
-| WotLK 3.4.3     |         0 |     0 |     0 | | Dragonflight 10.2.7 |     1,431 |   709 |   467 |
-| Cataclysm 4.4.2 |         0 |     0 |     0 | | TWW 11.2.7          |     1,579 |   764 |   497 |
-| MoP 5.5.4       |         0 |     0 |     0 | |                     |           |       |       |
-| Legion 7.3.5    |       719 |   481 |   481 | |                     |           |       |       |
-
-TBC through MoP are data-truthful zeroes: those Classic clients carry no Type-1 attach row (the route first appears in
-the retail-line Legion data and, oddly, in a handful of Vanilla Classic rows). Legion/BfA showing 100% named is also the
-data — the nameless internal-prop items (potions, dynamite) are reached mainly on the later builds. The named share is
-what decides the pill shape per row.
-
-### Equipped-weapon markers by version
-
-Sentinel rows (`SpellVisualEffectName` Type 3–10, §3c), read from each pack's
-`meta.counts.spellWeaponModels` and split by slot from its `spellModels` fids. Like the display route, `Type` ships on
-every build, so this degrades by content only.
-
-| Pack                | rows | main hand | off hand | ranged | ammo |
-|---------------------|-----:|----------:|---------:|-------:|-----:|
-| Vanilla 1.15.8      |    0 |         0 |        0 |      0 |    0 |
-| TBC 2.5.6           |   46 |        22 |        5 |      5 |   14 |
-| WotLK 3.4.3         |  140 |        85 |       10 |      8 |   37 |
-| Cataclysm 4.4.2     |  248 |       115 |       18 |     37 |   78 |
-| MoP 5.5.4           |  357 |       195 |       26 |     48 |   88 |
-| Legion 7.3.5        |  626 |       401 |       46 |     80 |   99 |
-| BfA 8.3.7           |  678 |       427 |       47 |     90 |  114 |
-| Shadowlands 9.2.7   |  698 |       477 |       49 |     93 |   79 |
-| Dragonflight 10.2.7 |  732 |       510 |       48 |     97 |   77 |
-| TWW 11.2.7          |  754 |       526 |       46 |    103 |   79 |
-
-Vanilla's 0 is data-truthful: its single Type-3 effect-name (8905) is not reached by any kit or missile set, so no spell
-shows the marker. Its pack predates the count and omits the key — it was deliberately **not** rebuilt for a zero-valued
-diagnostic field (see "the build is deterministic" in CLAUDE.md). WotLK and Cata are the two packs whose numbers depend
-on the placeholder-fid rule in §3c: before it they read 132 and **0**. The per-slot split added 2–3 rows per pack over
-the single-sentinel build: where one spell threw *both* weapons at the same attachment point the merged row is now two
-pills (9.2.7's three are the Demon Hunter glaive spells — Fury of the Illidari ×2, Glaive Tempest).
-
-### The five Classic re-release clients don't sit on the timeline
-
-Vanilla Classic (1.15.8), TBC Classic (2.5.6), WotLK Classic (3.4.3), Cataclysm Classic (4.4.2) and MoP Classic (5.5.4)
-are *not* points on the retail line — they are current-generation Classic clients backporting old content, so a client's
-db2 set reflects its fork point, not the game era. The absent-table counts therefore do **not** nest by era:
-
-- **TBC Classic is the most stripped client of the ten** (13 absent = WotLK's 10 + `TextureBlendSet` + `Vehicle` +
-  `VehicleSeat`).
-- **Cataclysm Classic is as stripped as WotLK Classic** (10 absent) — the 4.4.x client still lacks `BeamEffect`,
-  `DissolveEffect`, `EdgeGlowEffect`,
-  `SpellEffectEmission`, `WeaponTrail` and `FullScreenEffect`.
-- **Vanilla Classic and MoP Classic are the richest of the five** (6 absent each) — but *differently*: Vanilla keeps
-  `BeamEffect`, `DissolveEffect`,
-  `EdgeGlowEffect` and `FullScreenEffect`; MoP keeps those three effect tables plus `SpellEffectEmission` (ground
-  models), and is the only Classic client with the emission route populated, but drops `FullScreenEffect`.
-- **Only WotLK Classic has a TDB** (the 3.3.5 world-only dump). Vanilla, TBC, Cataclysm and MoP all build TDB-less:
-  creature morph and summon *names/displays* don't resolve (the pills fall back to raw ids), and no hotfix overlay
-  applies. Summon *control* words (guardian/pet/…) still work — those come from `SummonProperties`, a client table.
-
-| Feature                  | Vanilla 1.15.8 | TBC 2.5.6 | Cata 4.4.2 | MoP 5.5.4 | Via                                                                                                                                                     |
-|--------------------------|:--------------:|:---------:|:----------:|:---------:|---------------------------------------------------------------------------------------------------------------------------------------------------------|
-| chain / beam             |       ✓       | proc-only | proc-only  |    ✓     | `BeamEffect` present on Vanilla & MoP; TBC/Cata chains all arrive via proc Type 0                                                                       |
-| dissolve                 |     ✓ (4)     |     —     |     —      |  ✓ (1)   | `DissolveEffect`                                                                                                                                        |
-| glow                     |     ✓ (1)     |     —     |     —      |  ✓ (1)   | `EdgeGlowEffect`                                                                                                                                        |
-| ground models (emission) |       —        |     —     |     —      |    ✓     | `SpellEffectEmission` — populated only on MoP                                                                                                           |
-| screen fx                |    partial     |     —     |  partial   |  partial  | Vanilla keeps `FullScreenEffect`; Cata/MoP have only `ScreenEffect`+aura route; none has the `SpellVisualScreenEffect` kit route; TBC neither populated |
-| ghost (shadowy)          |       —        |     —     |     —      |     —     | `ShadowyEffect` absent on all four                                                                                                                      |
-| barrage / trail          |       —        |     —     |     —      |     —     | `BarrageEffect` / `WeaponTrail` absent on all four                                                                                                      |
-| alt-name search          |       —        |     —     |     —      |     —     | `SpellOverrideName` absent on all four                                                                                                                  |
-| morph / summon names     |       —        |     —     |     —      |     —     | no TDB world DB for these builds                                                                                                                        |
-
-Everything else — models, sounds, animations, mechanics, tints, transparency, freeze, shapeshifts — works on all four.
-Unlike the original-3.3.5 data, these modern Classic clients carry the full proc enum (each has a Type-21 desaturate
-row), so the "proc types stop at 17" cutoff below is a WotLK *Classic* client trait, not a general Classic one.
-
-### When each table arrived
-
-This is the *retail* client progression; the Classic re-release clients above fork off it and are covered in the
-previous section.
+**A visual can redirect to another visual** that the client substitutes under some condition: what the caster sees,
+what a hostile target sees, a low-violence variant, a reduced-camera-movement variant. Only the first two say anything
+about who is watching; the others are client settings nobody casts at anyone.
+
+Following redirects is what makes that content visible at all, because the redirected-to visual is usually reachable
+no other way. **The redirect graph contains cycles** — a visual can name itself, and two can name each other — so the
+expansion is a worklist over a mask that only ever gains bits, which terminates whatever shape the data takes.
+
+**A kit is reached through an event, and the event's phase matters.** Every phase but one shares the cast's frame; the
+*aura* phase belongs to the aura and plays on whoever carries it. The two are carried apart until the spell's own
+effects are known, because folding them together loses the distinction that rescues a spell whose self-aura rides
+alongside effects aimed at someone else.
+
+**The kit is the fan-out point,** and it is the single most important thing to picture. One row says "this kit plays
+effect E of type T", and the *type* decides which of about ten tables E is an id in. Reading the effect without first
+reading its type reads a colour as a model.
 
 ```mermaid
 flowchart LR
-    W["WotLK 3.4.3<br/>11 absent"] --> L["Legion 7.3.5<br/>4 absent"] --> B["BfA 8.3.7<br/>1 absent"] --> S["Shadowlands 9.2.7+<br/>complete"]
-    W -.->|" gained at Legion "| G1["BeamEffect · DissolveEffect<br/>EdgeGlowEffect · ShadowyEffect<br/>FullScreenEffect · SpellEffectEmission<br/>WeaponTrail · SpellKeyboundOverride<br/>(the last arrives at MoP)"]
-    L -.->|" gained at BfA "| G2["BarrageEffect<br/>SpellOverrideName<br/>SpellName (split out of Spell)"]
-    B -.->|" gained at Shadowlands "| G3["SpellVisualScreenEffect<br/>(the kit route into screen fx)"]
+    KE["SpellVisualKitEffect<br/>(kit, EffectType, Effect)"]
+    KE --> T{"EffectType"}
+    T -->|sound| SND["a sound kit"]
+    T -->|anim| ANM["an anim kit and<br/>the animations it plays"]
+    T -->|beam| BEAM["a chain, with an anchor at each end"]
+    T -->|emission| EMI["an area model"]
+    T -->|barrage| BAR["a volley of one model"]
+    T -->|dissolve| DIS["textures and a duration"]
+    T -->|edge glow| GLO["a colour and an alpha"]
+    T -->|shadowy| SHA["two colours"]
+    T -->|screen| SCR["a full-frame grade"]
+    T -->|procedure| PRC{"procedure Type"}
+    PRC -->|chain| BEAM
+    PRC -->|tint, ghost| COL["a packed colour"]
+    PRC -->|desaturate, transparency| PCT["a percentage"]
+    PRC -->|freeze, camo| BARE["a bare fact, no value"]
+    PRC -->|area model, weapon trail| MOD["a model file"]
+    PRC -->|stand or walk| SWAP["animation replacements"]
 ```
 
-**`SpellName` is the one non-monotonic case** and worth understanding: it was split out of `Spell.db2` in BfA, so Legion
-carries the name on `Spell.Name_lang`
-— but WotLK *Classic* is a modern client and has `SpellName` normally. The absence tracks the client generation, not the
-game era. `SPELL_NAME_SOURCES`
-picks whichever exists.
+**A procedure is dispatched twice.** Its effect type says only "this is a procedure"; which *kind* it is was decided
+when the procedure table was read, because that table's four generic value columns mean something different for every
+type. So the second dispatch is a membership test against buckets already filled, never a second reading of the row:
+the route that knows what a type means is the one that decided, and the walk does not re-decide.
 
-### What that costs each version
+### Routes that start at a visual
 
-| Feature                    |  WotLK  | Legion  |   BfA   | 9.2.7+ | Why                                                                                                 |
-|----------------------------|:-------:|:-------:|:-------:|:------:|-----------------------------------------------------------------------------------------------------|
-| chain / beam               | partial |   ✓    |   ✓    |   ✓   | WotLK has no `BeamEffect` — its 755 chains all come via proc Type 0                                 |
-| dissolve                   |    —    |   ✓    |   ✓    |   ✓   | `DissolveEffect`                                                                                    |
-| glow                       |    —    |   ✓    |   ✓    |   ✓   | `EdgeGlowEffect`                                                                                    |
-| ghost (shadowy)            |    —    |   ✓    |   ✓    |   ✓   | `ShadowyEffect`                                                                                     |
-| ghost (material)           |    —    |   ✓    |   ✓    |   ✓   | proc Type 22 — *see below*                                                                          |
-| desaturate                 |    —    |   ✓    |   ✓    |   ✓   | proc Type 21 — *see below*                                                                          |
-| camo                       |    —    |   ✓    |   ✓    |   ✓   | proc Type 18 — *see below*                                                                          |
-| screen fx grading          |    —    | partial | partial |   ✓   | `FullScreenEffect` absent in WotLK; kit route needs `SpellVisualScreenEffect`                       |
-| ground models (emission)   |    —    |   ✓    |   ✓    |   ✓   | `SpellEffectEmission`                                                                               |
-| trail models               |    —    |   ✓    |   ✓    |   ✓   | `WeaponTrail`                                                                                       |
-| barrage models             |    —    |    —    |   ✓    |   ✓   | `BarrageEffect`                                                                                     |
-| alt-name search            |    —    |    —    |   ✓    |   ✓   | `SpellOverrideName`                                                                                 |
-| vehicles / passenger anims |  thin   |   ✓    |   ✓    |   ✓   | `Vehicle` + `VehicleSeat` present everywhere; WotLK's thinness is *content*, not schema — see below |
-| keybind overrides          |    —    |   ✓    |   ✓    |   ✓   | `SpellKeyboundOverride` arrives at MoP (5.0.1)                                                      |
+| route          | ends at                                             | ships as                              |
+|----------------|-----------------------------------------------------|---------------------------------------|
+| **models**     | A model file plus the category naming its kind      | `spellModels`, `files`                |
+| **missiles**   | A projectile, its flight path and its two anchors   | `spellModels`, `missileMotions`       |
+| **sounds**     | A sound kit, and through it the audio files         | `spellSounds`, `soundKitNames`        |
+| **animations** | An animation, an anim kit, or a body region         | `spellAnimKits`, `animKitAnims`, `animNames`, `bonesetNames` |
+| **chains**     | A beam: colour, textures, a sound, nested chains    | `spellFx`, `fxChains`, `fxTextures`   |
+| **dissolves**  | A duration, textures and an anchor                  | `spellDissolves`, `dissolves`         |
+| **glows**      | A packed colour and an alpha                        | `spellGlows`, `glows`                 |
+| **ghosts**     | Two packed colours and an anchor                    | `spellShadowies`, `shadowies`         |
+| **screens**    | A full-frame colour grade, vignette and textures    | `spellScreens`, `screens`             |
+| **procedures** | Whatever its type says: thirteen different meanings | `spellTints`, `spellFreezes`, and more|
 
-Everything else — models, sounds, animations, mechanics (including their implicit targets), morphs, summons,
-shapeshifts, tints, transparency, freeze — works on all ten. `SpellEffect.ImplicitTarget_0/_1` in particular is present
-on every shipped build, so the §3l pairing needs no drift declaration; only the number of distinct target names varies
-(85 on Vanilla → 133 from Shadowlands).
+**Seven routes end in a model file and share almost nothing upstream.** What they share is the ending, so they carry a
+category, and the category is not decoration: it says *which id space the row's reference is in*, so a creature
+display and an item can share one field instead of each adding their own.
 
-### Vehicles by version
+| category | reached by                                            | its reference is |
+|----------|-------------------------------------------------------|------------------|
+| attach   | A kit attaching a model to a unit                     | nothing          |
+| missile  | A visual's missile set                                | nothing          |
+| ground   | A kit's emitter, or a procedure naming an area model  | nothing          |
+| trail    | A procedure naming a weapon trail                     | nothing          |
+| barrage  | A kit effect naming a volley                          | nothing          |
+| display  | An effect name typed as a creature display            | a display id     |
+| item     | An effect name typed as an item                       | an item id       |
 
-Counts read from each pack's `meta.counts` after the format-23 rebuild:
+A **weapon slot is a model with no file**: some effect-name types name the caster's own main hand, off hand, ranged or
+ammo rather than an asset. Those carry a sentinel and a stand-in name, so nothing downstream needs a special case.
 
-| Pack                | format | spell→vehicle | seats | passenger anims | seat animkits |
-|---------------------|:------:|--------------:|------:|----------------:|--------------:|
-| Vanilla 1.15.8      |   22   |             — |     — |               — |             — |
-| TBC 2.5.6           |   22   |             — |     — |               — |             — |
-| WotLK 3.4.3         |   23   |             4 |     6 |              24 |             0 |
-| Cataclysm 4.4.2     |   23   |            59 |    92 |             259 |             2 |
-| MoP 5.5.4           |   23   |           121 |   221 |             596 |            10 |
-| Legion 7.3.5        |   23   |           162 |   292 |             795 |            21 |
-| BfA 8.3.7           |   23   |           185 |   328 |             909 |            22 |
-| Shadowlands 9.2.7   |   23   |           233 |   384 |           1,138 |            44 |
-| Dragonflight 10.2.7 |   23   |           293 |   419 |           1,397 |            49 |
-| TWW 11.2.7          |   23   |           323 |   464 |           1,529 |            57 |
+### Routes that start at an effect
 
-**Vanilla and TBC were deliberately not rebuilt** — vehicles are a WotLK-era feature, so those two stay at format 22 and
-simply carry no vehicle sections. The runtime guards every section read, so mixed pack formats are fine.
+A spell's effects carry its gameplay, and five visual categories start here rather than in the visual graph. The shape
+is uniform — an effect or aura value selects the meaning, and a misc value on the same row is an id into whatever
+table that meaning implies. The same column is a creature, a channel number or a sound kit depending only on what sits
+beside it:
 
-**WotLK's 4 is real, not a bug.** Aura 296 *is* `SET_VEHICLE_ID` on that build (verified via `read_enum_names`, so it is
-not enum drift) — WotLK Classic just has 7 `SET_VEHICLE_ID` rows in the whole of `SpellEffect`. The expansion that
-introduced vehicles overwhelmingly uses `CONTROL_VEHICLE` (aura 236, 213 rows there) instead, which is a different route
-we do not surface.
+```mermaid
+flowchart LR
+    SE["SpellEffect row<br/>Effect · EffectAura · misc0 · misc1<br/>ImplicitTarget A and B"]
+    SE --> SEL{"which selector<br/>is set"}
+    SEL -->|"aura: transform"| CRE["a creature"]
+    SEL -->|"aura: shapeshift"| FRM["a form"]
+    SEL -->|"aura: set vehicle"| VEH["a vehicle and its seats"]
+    SEL -->|"aura: invisibility"| CHN["a channel number<br/>zero is a real channel"]
+    SEL -->|"aura: keybound override"| KEY["a key override"]
+    SEL -->|"aura: screen effect"| SCE["a screen effect"]
+    SEL -->|"effect: summon"| SUM["a creature and how it is controlled"]
+    SEL -->|"effect: spawn object"| OBJ["a gameobject"]
+    SEL -->|"effect: play sound"| PSD["a sound kit"]
+    SEL -->|"aura: speed or scale"| NUM["a signed percentage<br/>not a reference"]
+    SEL -->|"effect: trigger spell"| LNK["another spell"]
+    SEL -->|"anything unparsed"| MEC["stays a mechanics row"]
+    CRE --> MEC
+    FRM --> MEC
+    VEH --> MEC
+    NUM --> MEC
+```
 
-### Two things that look like bugs and are not
+The last edge is the point: **a parsed value is marked consumed on its row rather than removed from it,** so every
+effect and aura remains searchable and the mechanics column is always the whole table.
 
-**Empty sections are often the enum, not the table.** WotLK's ghost-material, desaturate and camo sections are empty
-even though no *table* is missing: those come from `SpellProceduralEffect` types 22, 21 and 18, and **WotLK's proc types
-stop at 17**. The enum is append-only, so the cutoff is exactly what the counts show — freeze (Type 11) and transparency
-(Type 14) are populated on WotLK, and everything above 17 is zero.
+| selector               | misc value is      | ships as                          |
+|------------------------|--------------------|-----------------------------------|
+| transform aura         | a creature         | `spellMorphs`, `morphs`, `morphDisplays` |
+| shapeshift aura        | a form             | `spellShapeshifts`, `shapeshifts` |
+| set-vehicle aura       | a vehicle          | `spellVehicles`, `vehicles`, `vehicleSeats` |
+| screen-effect aura     | a screen effect    | `spellScreens`                    |
+| invisibility auras     | a channel number   | `spellInvis`, `spellDetects`      |
+| keybound-override aura | a key override     | `spellKeybinds`, `keybinds`       |
+| anim-replacement aura  | a replacement set  | `spellReplaceAnims`               |
+| override-name aura     | an override name   | folded into the search corpus     |
+| summon effect          | a creature         | `spellSummons`, `summons`         |
+| gameobject effects     | a gameobject       | `spellObjects`, `objects`         |
+| play-sound effects     | a sound kit        | folded into `spellSounds`         |
 
-**Category searches can return rows for a feature this build lacks.** That is the documented filename-substring
-behavior, not a fallback. On WotLK
-`fx:desaturate` still matches `healbeam_desaturated`, `model:trail` matches
-`ribbontrail`, and `fx:glow` matches `beam_webglowwhite`.
+Three do not fit that shape:
 
-### Era differences visible in the data
+**Speed and scale carry a number, not a reference.** The aura says which movement is scaled and the amount says by how
+much. The amount is a signed percentage and the sign is stored rather than derived, because the aura's name does not
+carry it: a decrease aura may hold a positive value. An amount of zero is dropped — the pill is made of nothing but
+the number.
 
-Some gaps are content, not schema — the same route exists, the game just used it differently:
+**Spell links are the one route whose payload is another spell.** A link to a spell the pack cannot name is dropped,
+because the chip is an icon and a name; so is a self-link. Only one direction is stored, and the reverse index is
+derived in the browser.
 
-| Section            |  WotLK |   9.2.7 | Reading                                                                                       |
-|--------------------|-------:|--------:|-----------------------------------------------------------------------------------------------|
-| `spellAnimKits`    |    446 |  42,415 | AnimKits barely existed in the WotLK era (its 446 come mostly from the §3e ModelAttach route) |
-| `spellVisualAnims` | 39,247 | 125,793 | …but `SpellVisualAnim` was already the dominant animation source                              |
-| `spellSounds`      | 71,474 | 674,779 | modern spells carry far denser sound graphs                                                   |
-| `spellShapeshifts` |     69 |     120 | forms grew slowly; displays actually *shrank* (20 → 18)                                       |
+**Mechanics rows are what is left.** Every effect and aura a spell has, paired with the implicit targets of the row
+that carried it. The granularity is per effect and that is a correctness property: a search scope binds its axes to
+one row, so asking for an effect that is a jump *and* aims at a unit must mean a single effect that is both.
 
-### Drift is declared, not branched
+**A value that reached a parsed payload is marked consumed.** It stays on its row and stays searchable; the flag only
+tells the renderer that a dedicated pill already shows it, so the raw one is not drawn a second time. That makes the
+mechanics column an inventory of the features not built yet — most effect and aura values are unparsed rather than
+missing, and promoting one takes it out of that column on its own.
 
-Five declarations near the top of `build_data.py` absorb all of the above, so the readers stay version-agnostic — adding
-a version is a config edit, not a code edit:
+### Routes that start at the spell row
 
-| Declaration                                                                 | Handles                                                                                                                                                                              |
-|-----------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `OPTIONAL_TABLES`                                                           | Table postdates the build → 404 tolerated, section empty, feature switches off.                                                                                                      |
-| `OPTIONAL_COLUMNS`                                                          | Table exists, one column doesn't → default stands in (3 so far: two missile-set variants, plus `ReducedUnexpectedCameraMovementSpellVisualID` absent on Legion 7.3.5 and BfA 8.3.7). |
-| `SPELL_NAME_SOURCES`                                                        | Data moved tables — first candidate that exists wins.                                                                                                                                |
-| `TDB_OPTIONAL_TABLES` / `TDB_OPTIONAL_COLUMNS` / `CREATURE_DISPLAY_SOURCES` | The same three kinds of drift on the TrinityCore side, in its own namespace.                                                                                                         |
-| `array_columns()`                                                           | A column that changed shape — `CreatureDisplayID_0..3` became a scalar in 10.2.0.                                                                                                    |
+| route          | ships as                    | notes                                                        |
+|----------------|-----------------------------|--------------------------------------------------------------|
+| **name**       | `spells`                    | Membership is the spell list; every route filters against it |
+| **icon**       | `iconFids`, `iconNames`     | Zero means no icon, so it never displaces one already found  |
+| **school**     | `spells`                    | A mask; zero is a real value meaning schoolless              |
+| **attributes** | `spellAttrs`                | Which flags ship is a declaration, not code                  |
+| **delivery**   | `spellDelivery`             | Cast and channel are not a partition; many spells do both    |
+| **description**| `spellText`                 | A template, cooked to prose. See below                       |
+| **area gate**  | `spellAreas`, `areas`       | Where a spell may be cast at all                             |
+| **expansion**  | `spells.eras`, `expansions` | The only route with no column in any shipped build           |
 
-**Anything not declared is still a hard error.** An unexpected schema change must fail the build loudly rather than
-silently lose data. To add a version, run the build and let it tell you what is missing, then decide per item whether it
-belongs in a declaration or is a genuine bug.
+**Which table carries the name is the oldest drift in the project.** The name table was split out of the spell table
+partway through the game's history, so older builds keep the name on the spell row. Both spellings are an id plus a
+localised name column, so only the source differs — declared as an ordered list, first candidate the build has.
 
-### TDB-side caveats
+**A description is a template, and what ships is the cooked prose.** The client resolves it at tooltip time against
+the caster's own state; a template is not searchable and a rendered tooltip is not obtainable in bulk. The governing
+rule is never to print a number this data cannot justify and never to leave a placeholder: a code whose value is in a
+table already read is substituted, and one depending on the caster or the interface is elided, leaving the sentence
+around it intact. These templates are written as English sentences with a number slotted in, so removing the number
+leaves prose that reads.
 
-- **WotLK's world data is not an exact build match.** TDB335 targets original 3.3.5a, not the 3.4.x Classic client. It
-  is the only creature name/display source for the era and resolution looks fine, but treat WotLK morph and summon names
-  as best-effort.
-- **Legion-era and 3.3.5 dumps have no `creature_template_model`** — displays live in `modelid1..4` columns on
-  `creature_template` instead.
-- **TDB335 is world-only** (no hotfixes dump), and TDB735 nests its SQLs in a subfolder without the `full_` infix. Both
-  shapes are declared in
-  `TDB_RELEASES`.
-- **Vanilla Classic (1.15.8) and TBC Classic (2.5.6) have no TDB at all** — TrinityCore ships no 1.15/2.5 world
-  database, so they are absent from
-  `TDB_RELEASES` and `fetch_tdb` returns `None`. Morph/summon names and displays don't resolve for those two builds (raw
-  ids only); every wago-sourced section is unaffected.
+**The area gate resolves to the area's own name, never its parent zone.** Rolling a multi-area group up to its
+containing zone collapses most groups to one pretty word and is wrong: most cover part of a zone rather than all of
+it, so the rolled-up name would be false on almost every pill it was printed on.
 
----
+## Derive
 
-## 6. Runtime routes (browser, on demand)
+Anything more than one section needs is computed once here rather than by each reader. That is what keeps the section
+declarations flat, with no ordering between them and no section depending on another.
 
-Nothing here is fetched during search or bulk-downloaded. All of it is user-triggered and configured in
-`src/config.ts`.
+- **The graph walk.** One pass over every spell, following the spine to its kits and unioning each payload it reaches.
+  Every payload bucket is the same shape — content item to target mask — so adding a kit's contribution is one
+  operation rather than one per payload kind, and the walk stays a loop over kits rather than a switch over payloads.
+- **Target masks resolved.** See below.
+- **Path resolution.** Every file id the walk collected, looked up in the listfile once.
+- **The icon index,** and the other cross-route indexes a pill needs.
 
-| Route           | URL                                                                                    | Trigger                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-|-----------------|----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Spell icons     | `wow.zamimg.com/images/wow/icons/medium/{icon}.jpg`                                    | Lazy per visible row. Icon *names* are baked into the pack.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Sound playback  | `wow.zamimg.com/sound-ids/live/enus/{bucket}/{fid}/{base}.ogg`                         | Explicit click. Serves current retail; 404s fail soft.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Texture preview | `wago.tools/api/casc/{fid}?version={version}`                                          | Hover, after a 150 ms intent delay. Raw `.blp`, decoded in-browser by the vendored `bufo.js` + `js-blp.js`. Version-pinned to the active pack.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Expansion logo  | same CASC API                                                                          | One image per version switch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| 3D model viewer | `wowtools.work/mv/?filedataid={fid}&type=m2`                                           | Link-out only, nothing fetched.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Wowhead         | `wowhead.com/{wh}spell=` · `/{wh}npc=` · `/{wh}sound=` · `spell={spell}/#modelviewer:` | Link-out only. `{wh}` = per-version site prefix (`config.ts` `wowheadSitePrefix`): Vanilla → `classic/`, everything else → retail (empty). Only `/classic/` and retail are permanent Wowhead sections, so the mid-Classic clients point at retail rather than a seasonal section that will rot. The model viewer (morph/display/mount/shapeshift pills) has no `{wh}` — always retail (best skin compositing; display IDs render cross-era) — but opens the `#modelviewer` fragment over the spell's OWN page (`spell={spell}/#modelviewer:1:{displayId}:0`) rather than the Wowhead home page, since the fragment works on any page. |
+### The target mask
 
-House rule, unchanged: **fetch only on explicit user action, never preload, never bulk-download.** The icon and sound
-hotlinks sit on tolerated-hotlinking footing, not an affirmative license.
+A row of the graph carries the audience it plays for: the caster, the target, an area, or a combination. The same
+vocabulary is used by an effect's implicit target and by a visual event, because it is the same question asked of
+different tables, and sharing it is what lets the two be compared at all.
 
----
+The comparison matters because **the client writes "target" whenever a spell is cast at a unit, including when that
+unit is the caster.** A self-buff would otherwise show a target icon for content that plays on you. So a target bit
+becomes a caster bit wherever the matching test says the spell aims only at its caster: for the aura phase, believe
+the spell's apply-aura effects; for every other phase, believe all of them.
 
-## Quick reference — where does column *X* come from?
+## Declare
 
-| Column           | Routes feeding it                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-|------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Models**       | attach (kit→ModelAttach→EffectName Type 0), display (kit→ModelAttach→EffectName Type 2→CreatureDisplayID→model, morph-style pill), missile (SpellVisual→MissileSet), ground (kit ET 8 + proc 9→AreaModel), trail (proc 27→WeaponTrail), barrage (kit ET 17→BarrageEffect), **mount** (Mount.db2 SourceSpellID→MountXDisplay→display, §3n); every graph row also carries its M2 attachment point (§3h)                                                            |
-| **Sounds**       | kit ET 5, missile `SoundEntriesID`, chain `SoundKitID`, `SpellVisual.AnimEventSoundID`, **SpellEffect 131/132 PLAY_SOUND/PLAY_MUSIC (§3p)** — all → SoundKitEntry                                                                                                                                                                                                                                                                                                |
-| **Animations**   | SpellVisualAnim initial/loop (loose), AnimKit via ET 6 + missile (grouped), ModelAttach Start/Anim/End (loose) + its AnimKit (grouped), proc Type 7 + aura 312 merged (replace, §3o), VehicleSeat passenger anims (passenger) + its vehicle anims (loose) + its AnimKits (grouped), anim-replacement sets (replace, §3o); **each anim pill carries its boneset region (AnimKitConfigBoneSet→AnimKitBoneSet.Name, §3e) — one pill per region, `boneset` keyword** |
-| **Effects (fx)** | chain, dissolve, glow, ghost, tint, desaturate, transparency, freeze, camo, screen, shapeshift, morph, summon, object (§3m), seat, invis, detect, keybind, speed, scale — see §3a–3q; **chain/dissolve/ghost/barrage pills carry their M2 attachment point (§3h), -1 = "full body"**                                                                                                                                                                             |
-| **Not shown**    | `spells.schools` — SpellMisc.SchoolMask, gathered only (§3q)                                                                                                                                                                                                                                                                                                                                                                                                     |
-| **Mechanics**    | one row per `SpellEffect`: `.Effect` + `.EffectAura` enums (names from WoWDBDefs) paired with that row's `.ImplicitTarget_0/_1` — §3l; plus **spell links** (`.EffectTriggerSpell` → another spell's row, both directions, §3r)                                                                                                                                                                                                                                  |
-| **Expansion**    | §3v — NO client column. Derived by diffing original era clients (`tools/expansions.py` → `build/expansion_ids.json.gz`); ships as `spells.eras` + `expansions`                                                                                                                                                                                                                                                                                                   |
-| **Name search**  | SpellName/Spell + `NameSubtext_lang` + SpellOverrideName alt names                                                                                                                                                                                                                                                                                                                                                                                               |
-| **Target bits**  | `SpellVisualEvent.TargetType` on the kit edge (§2), resolved against `SpellEffect.ImplicitTarget` per phase (`StartEvent`) so a self-cast spell's "Target" reads as the caster, plus `Caster`/`HostileSpellVisualID` redirects that mark whatever they reach caster/target                                                                                                                                                                                       |
+Every section is one record: its name, what fills it, which columns it has, how each column is laid out, which counts
+and measured domains it contributes, whether its values are locale text, which source tables it needs, and whether it
+ships per build or once across builds.
+
+From that one record come the assembly, the counts, the domains, the module the section lands in, the locale overlay
+and the generated documentation — so a new axis is a declaration rather than an edit in six places.
+
+**Naming a section's source tables is what makes drift computable.** A section whose tables are absent switches itself
+off and says so, rather than a reader branching on the build.
+
+### Drift between builds
+
+Building an older version is mostly a story of things that do not exist yet. Every difference is declared, and the
+kinds are distinct because they fail differently:
+
+| the difference                 | declared as                       | what happens                              |
+|--------------------------------|-----------------------------------|-------------------------------------------|
+| The table postdates the build  | An optional table, naming its feature | The reader yields nothing; the feature switches off |
+| A column postdates the build   | An optional column, naming a default  | The declared default stands in        |
+| The data moved between tables  | An ordered list of candidates     | The first candidate this build has wins   |
+| An enum value's name differs   | Per-build guards on the enum file | The name resolves per build               |
+| A whole source is absent       | A release map                     | Routes needing it degrade, declared       |
+| The array shape changed        | Nothing — the header is read      | Handled by reading                        |
+| The values differ              | Nothing — measured per pack       | Bounds taken from one build are wrong on the others |
+| **Anything undeclared**        | —                                 | **The build fails loudly**                |
+
+Two shapes are not drift and must not be filed as it. A **pinned cross-build source** deliberately reads a different
+build, which is a property of the route rather than of this build. And a version that cannot be expressed at all is a
+roster decision: the game renormalised its spell-visual schema once, and a build predating that has no definition for
+several required tables, which no declaration can paper over.
+
+## Emit
+
+The pack is column-oriented: a section is parallel arrays rather than a list of objects, because the app wants a
+column at a time and repeated keys cost more than they explain. Columns dominated by empty values are stored sparsely,
+and text that repeats is deduplicated into a value table plus an index — descriptions collapse to roughly two-thirds
+of their distinct count that way.
+
+Beside the sections, `meta` ships the facts nothing downstream should have to re-derive:
+
+| key             | is                                                                 |
+|-----------------|--------------------------------------------------------------------|
+| `format`        | The pack format; a bump means every consumer is re-read            |
+| `version`       | The game build packed, and `label` its human name                  |
+| `built`         | When, so a rebuild is visible                                      |
+| `listfileTag`   | Which listfile release named the files                             |
+| `tdbTag`        | Which server release supplied names and hotfixes, if any           |
+| `absentTables`  | What this build did not have, so absence is reportable             |
+| `counts`        | Every population, so nothing counts a column at load               |
+| `domains`       | The measured range of each numeric axis, so no control re-derives it |
+
+`versions.json` names every shipped build and carries a content hash per pack, which is what busts a cache without a
+version string to bump.
+
+## Index, query, render
+
+The browser fetches one pack and builds **inverted indexes over the whole vocabulary at load**. That is the reason
+almost nothing is deferred: a column that has not arrived does not make a search slower, it makes it answer *wrong* —
+fewer hits than exist — which is worse than a slower load.
+
+A query is text, which becomes chips, which become a matcher. Rendering turns a matched row into cells and pills,
+where a pill is a small record — a word, a tone, sometimes an icon and a target marker — rather than markup, so the
+same record can also become an export line or a copied command.
+
+## Runtime hotlinks
+
+The only things fetched after load, and only when a reader asks:
+
+| on                          | fetches                                        |
+|-----------------------------|------------------------------------------------|
+| A row appearing             | The spell's icon                               |
+| Hovering a texture pill     | A `.blp` preview, decoded in the browser       |
+| Clicking a sound            | The audio file                                 |
+| Clicking a model            | An external 3D viewer, in a new tab            |
+| Hovering a spell link       | The external spell page's own tooltip          |
+
+The house rule is that these are fetched on an explicit hover or click, never preloaded and never in bulk. There is no
+affirmative licence for any of them; the footing is tolerated hotlinking, and behaving like a bulk downloader is what
+would end it.
+
+## One datum, end to end
+
+A polymorph turns its target into a sheep, and the app shows the sheep's model. Every stage above is involved.
+
+| stage       | what happens to it                                                                                       |
+|-------------|-----------------------------------------------------------------------------------------------------------|
+| **acquire** | `SpellEffect`, `CreatureDisplayInfo` and `CreatureModelData` are downloaded; the server release is distilled; the listfile is cached |
+| **provide** | Those tables are served as rows, with any hotfix rows merged in per column                                |
+| **read**    | The effect row's aura says *transform*, so its misc value is read as a creature rather than as a number   |
+| **read**    | The creature's *name* comes from the server world table; without a release it stays a raw id, declared     |
+| **read**    | The creature's display resolves through display to model data to a file id — two hops, because several displays share one model |
+| **derive**  | The walk records the pair against the spell, unioning the target mask from the effect's implicit targets   |
+| **derive**  | The file id is resolved to an asset path through the listfile                                             |
+| **declare** | It belongs to `spellMorphs`, whose companions `morphs` and `morphDisplays` carry the name and the display  |
+| **emit**    | Those become parallel columns, gzipped, hashed into `versions.json`                                        |
+| **index**   | The browser indexes the path and the creature name alongside every other model's                          |
+| **query**   | `model:sheep` matches the *path*, because category searches match filenames as well as the category word   |
+| **render**  | A model pill, carrying the target icon the mask decided                                                    |
+| **hotlink** | Hovering it fetches the texture preview; clicking opens the external viewer                               |
+
+## Adding a route
+
+This document is meant to grow by rows, not by paragraphs. A new axis touches exactly four places here, and if it
+needs a fifth the document has drifted and should be reshaped rather than appended to.
+
+| when you add                          | edit                                                                   |
+|---------------------------------------|-------------------------------------------------------------------------|
+| A route from a visual, effect or spell row | One row in that family's table under [Read](#read)                 |
+| A new source table it joins through   | One row in the joins table under [At the source](#at-the-source)        |
+| A new pack section                    | One row in the shipped-shape table, naming which of the three shapes it is |
+| Something a reader can see            | One row in [Quick reference](#quick-reference)                          |
+
+Three rules keep that true:
+
+- **A route appears once per table, never twice in prose.** If a route needs explaining beyond its row, the
+  explanation goes under the family heading it belongs to, not into a new section of its own.
+- **The diagrams are grouped, not exhaustive.** They show every *kind* of hop, not every table. A new route that is
+  the tenth of an existing kind changes no diagram; one that introduces a genuinely new kind of hop changes exactly
+  one.
+- **Numbers stay out.** Populations and measurements belong in `DECISIONS.md` and the exploration database, because a
+  count written here is stale at the next pack rebuild and nothing checks it. What belongs here is the *shape*, which
+  changes only when the data model does.
+
+The declaration side of this is enforced rather than remembered: a section that ships without being read, or a
+selector that stops being covered, fails `tools/check.py` rather than silently disagreeing with this page.
+
+## Quick reference
+
+Where a shown thing comes from, by what the reader sees:
+
+| the reader sees        | it came from                                                          |
+|------------------------|-----------------------------------------------------------------------|
+| The spell's name       | The client's spell-name table, hotfixes applied                       |
+| The icon               | The spell's misc row, base difficulty winning                         |
+| A model pill           | One of seven model routes; the category says which id space it is in  |
+| A missile pill         | The visual's missile set, with the row's anchors beating the visual's |
+| A sound pill           | A kit, reached four ways, resolved to its audio files                 |
+| An animation pill      | An index into the community name list, not a table key                |
+| A morph's name         | The server world tables; absent without a release, and declared so    |
+| A colour               | A packed value from a chain, glow, ghost or procedure row             |
+| A percentage           | An effect's amount, signed, with zero dropped                         |
+| The description        | A template cooked to prose at build time                              |
+| An area name           | The area's own name, never its parent zone                            |
+| A target icon          | The mask on the row, with self-cast resolved                          |
