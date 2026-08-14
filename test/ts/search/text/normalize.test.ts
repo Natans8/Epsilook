@@ -53,6 +53,40 @@ describe("fold", () => {
     it("keeps spacing and punctuation, so a phrase means what it shows", () => {
         assert.equal(fold("Anti-Magic Shell"), "anti-magic shell");
     });
+
+    it("removes colour runs, keeping the words they wrapped", () => {
+        // Spell 53, Backstab. The pack ships the escapes rather than stripping them, because the colours are meant
+        // to render; matching removes them on both sides, the same way it removes letter case.
+        assert.equal(fold("|cFFFFFFFFAwards $s3 combo|r"), "awards $s3 combo");
+        // The game writes the pair in both cases -- spell 339, Entangling Roots, uses the uppercase spelling.
+        assert.equal(fold("|C0033AA11Tree of Life: Instant cast.|R"), "tree of life: instant cast.");
+    });
+
+    it("removes a texture whole, so an icon path is not prose", () => {
+        // Spell 24423, Bloody Screech. Keeping the path would make every description carrying an icon match
+        // `interface` or `blp`.
+        assert.equal(fold("|Tinterface\\icons\\ability_criticalstrike.blp:24|t Mortal Wounds"), " mortal wounds");
+        assert.equal(fold("a |A:jailerstower-score-gem-tooltipicon:20:16:3:0|a b"), "a  b");
+    });
+
+    it("keeps a link's display text and drops its target", () => {
+        // Spell 208323, Toranaar's Defiance: the phrase on screen is the bracketed name.
+        assert.equal(fold("|Hspell:195131|h[Aldrachi Brand]|h"), "[aldrachi brand]");
+    });
+
+    it("keeps both forms of a plural, so either reaches it", () => {
+        // Spell 205473, Icicles.
+        assert.equal(fold("$w1 |4Icicle:Icicles; stored."), "$w1 icicle icicles stored.");
+    });
+
+    it("reads a line break as a space and an escaped pipe as a pipe", () => {
+        assert.equal(fold("first|nsecond"), "first second");
+        assert.equal(fold("a||b"), "a|b");
+    });
+
+    it("leaves text carrying no pipe untouched", () => {
+        assert.equal(fold("Frostbolt Volley"), "frostbolt volley");
+    });
 });
 
 describe("squash", () => {
