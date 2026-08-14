@@ -84,6 +84,17 @@ CONTENT_PATH = "tpr/wow"
 service measured here publishes the same one, so it is the default rather than
 a per-service fact, and a document naming another is still believed."""
 
+NOT_SERVED = (403, 404)
+"""What a network answers for a blob it does not serve loose.
+
+Two codes for one answer, because a bucket-backed network refuses to say
+whether an object exists rather than saying it does not, and the vendor's is
+one: it answers 403 where the private service answers 404. Reading only 404 as
+the miss is what makes the difference expensive rather than cosmetic, because
+the archive route is reached through it, and on a network where most files are
+archived that is nearly every file.
+"""
+
 
 @dataclass(frozen=True)
 class Cdn:
@@ -320,9 +331,13 @@ def decode_blte(blob: bytes, *, skip_encrypted: bool = True) -> bytes:
     Args:
         blob: the container, starting at its magic.
         skip_encrypted: treat an encrypted chunk as empty rather than failing.
-            Those chunks are a vendor's unreleased content and no public key
-            opens them, so a reader that refuses them cannot read the files that
-            merely contain one.
+            Nothing here carries a key, so a reader that refuses them cannot
+            read the files that merely contain one -- and on the vendor's own
+            network that is not a rare shape: a live table can be most of a
+            file by chunk count and still be short of what it declares, which
+            is the one way a file read here comes back incomplete rather than
+            absent. The container's chunk table states the whole decoded size,
+            so the gap is measurable against what this returns.
 
     Returns:
         The decoded bytes.
@@ -685,9 +700,12 @@ class Storage:
     def _fetch(self, encoding_key: bytes, name: str) -> bytes:
         """The raw container for one encoding key, loose or from an archive.
 
-        A loose fetch is tried first because most files are served that way and
-        it costs one request; the archive route needs an index over every archive
-        the network declares, which is the expensive part of this module.
+        A loose fetch is tried first because it costs one request against an
+        index over every archive the network declares, which is the expensive
+        part of this module. Which of the two is the common case is a property
+        of the network rather than of the file: a private service serves most
+        of its content loose, and the vendor's serves almost none of it that
+        way, so on retail this is a request spent to learn that.
         """
         cached = self.cache / f"{name}.blte"
         if cached.exists() and cached.stat().st_size:
@@ -695,7 +713,7 @@ class Storage:
         try:
             blob = self._get(self.cdn.data_url(encoding_key.hex()))
         except urllib.error.HTTPError as exc:
-            if exc.code != 404:
+            if exc.code not in NOT_SERVED:
                 raise
             blob = self._from_archive(encoding_key)
         cached.write_bytes(blob)

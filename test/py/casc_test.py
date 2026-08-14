@@ -13,13 +13,17 @@ produce it.
 
 from __future__ import annotations
 
+import io
 import struct
+import urllib.error
+import urllib.request
 from collections.abc import Sequence
+from pathlib import Path
 
 import pytest
 
 from pack.sources.casc import (EPSILON, RETAIL, Blizzard, Cdn, Header, Root,
-                               SelfHosted)
+                               SelfHosted, Storage)
 
 LOCALE_ENUS = 0x2
 LOCALE_KOKR = 0x4
@@ -230,3 +234,156 @@ def test_the_newer_block_splits_the_content_flags_across_three_fields() -> None:
                               block_v2([40, 41])))
     assert sorted(root.keys) == [1, 2, 40, 41]
     assert root.keys[40] == key(40)
+
+
+# The whole chain, over a service that exists only here. What it is for is the
+# one difference a real read found: a network that will not say whether an
+# object exists answers a loose miss 403, and the archive route is reached
+# through that answer.
+
+PAGE = 4096
+"""The page and block size the synthetic tables below are written in."""
+
+FID = 7
+"""The one file the fake service carries, reachable only from an archive."""
+
+
+def blte(payload: bytes) -> bytes:
+    """The smallest container: no chunk table, one uncompressed chunk."""
+    return b"BLTE" + struct.pack(">I", 0) + b"N" + payload
+
+
+def encoding_file(pairs: dict[bytes, bytes]) -> bytes:
+    """An encoding table of one page, mapping each content key to one
+    encoding key."""
+    page = b"".join(bytes([1]) + b"\0" * 5 + content + encoding
+                    for content, encoding in pairs.items())
+    header = (b"EN" + bytes([1, 16, 16]) + struct.pack(">HH", PAGE // 1024, 4)
+              + struct.pack(">II", 1, 0) + bytes([0]) + struct.pack(">I", 0))
+    return header + b"\0" * 32 + page.ljust(PAGE, b"\0")
+
+
+def archive_index(located: dict[bytes, tuple[int, int]]) -> bytes:
+    """An ordinary archive index: one block of entries, then the footer that
+    says how to read it."""
+    block = b"".join(ekey + size.to_bytes(4, "big") + offset.to_bytes(4, "big")
+                     for ekey, (offset, size) in located.items())
+    footer = bytearray(28)
+    footer[11] = PAGE // 1024
+    footer[12] = 4
+    footer[13] = 4
+    footer[14] = 16
+    footer[16:20] = struct.pack("<I", len(located))
+    return block.ljust(PAGE, b"\0") + bytes(footer)
+
+
+PAYLOAD = b"the file's own bytes"
+AT = 64
+"""Where the file sits inside its archive, so a whole-archive read would
+return something other than the file."""
+
+
+class FakeNetwork:
+    """The addresses a service publishes, and nothing else.
+
+    An address it does not carry answers 403 rather than 404, which is what
+    the vendor's own network does and what the loose-then-archive fallback
+    has to read as a miss.
+    """
+
+    def __init__(self, bodies: dict[str, bytes]) -> None:
+        self.bodies = bodies
+        self.asked: list[tuple[str, str]] = []
+        """Each request as its address and the range it wanted, if any."""
+
+    def open(self, request: urllib.request.Request,
+             timeout: float | None = None) -> io.BytesIO:
+        wanted = request.headers.get("Range", "")
+        self.asked.append((request.full_url, wanted))
+        body = self.bodies.get(request.full_url)
+        if body is None:
+            raise urllib.error.HTTPError(request.full_url, 403, "Forbidden",
+                                         None, None)  # type: ignore[arg-type]
+        if wanted:
+            first, last = wanted.removeprefix("bytes=").split("-")
+            body = body[int(first):int(last) + 1]
+        return io.BytesIO(body)
+
+
+@pytest.fixture(name="network")
+def _network(monkeypatch: pytest.MonkeyPatch) -> FakeNetwork:
+    """A whole build, published where a `Blizzard` service would look for it.
+
+    Its one file sits inside an archive rather than loose, which is the shape
+    of nearly everything on the vendor's network, and the root names it by the
+    content key `block_v1` writes for that id.
+    """
+    build, cdn_config, archive = "aa" * 16, "cc" * 16, "ab" * 16
+    encoding_key, root_content, root_key = key(1), key(2), key(3)
+    file_content, file_key = key(FID), key(4)
+    contained = blte(PAYLOAD)
+    cdn = Cdn("cdn.example.invalid")
+
+    network = FakeNetwork({
+        RETAIL.versions_url:
+            "Region!STRING:0|BuildConfig!HEX:16|CDNConfig!HEX:16|"
+            "VersionsName!String:0\n"
+            f"us|{'ff' * 16}|{cdn_config}|9.9.9.9\n"
+            f"eu|{build}|{cdn_config}|1.0.0.1\n".encode(),
+        RETAIL.cdns_url:
+            "Name!STRING:0|Path!STRING:0|Hosts!STRING:0\n"
+            f"eu|{cdn.path}|{cdn.host}\n".encode(),
+        cdn.config_url(build):
+            f"root = {root_content.hex()}\n"
+            f"encoding = {'00' * 16} {encoding_key.hex()}\n".encode(),
+        cdn.config_url(cdn_config): f"archives = {archive}\n".encode(),
+        cdn.data_url(encoding_key.hex()): blte(encoding_file({
+            root_content: root_key, file_content: file_key})),
+        cdn.data_url(root_key.hex()): blte(root_v1(block_v1([FID]))),
+        f"{cdn.data_url(archive)}.index":
+            archive_index({file_key: (AT, len(contained))}),
+        cdn.data_url(archive): b"\0" * AT + contained,
+    })
+    monkeypatch.setattr(urllib.request, "urlopen", network.open)
+    return network
+
+
+def test_the_whole_chain_reaches_a_file_the_archive_holds(
+        network: FakeNetwork, tmp_path: Path) -> None:
+    """Versions, the region's row, the network, both configs, the encoding
+    table, the root, and one file that is not served loose."""
+    storage = Storage(RETAIL, cache=tmp_path / "cache")
+    assert (storage.build, storage.cdn) == ("1.0.0.1", Cdn("cdn.example.invalid"))
+    assert storage.open(FID) == PAYLOAD
+
+
+def test_a_loose_miss_answered_403_still_reaches_the_archive(
+        network: FakeNetwork, tmp_path: Path) -> None:
+    """A reader keyed on 404 alone raises here rather than falling through,
+    and on a network that archives almost everything that is every file."""
+    storage = Storage(RETAIL, cache=tmp_path / "cache")
+    storage.open(FID)
+    refused = Cdn("cdn.example.invalid").data_url(key(4).hex())
+    assert (refused, "") in network.asked
+    assert any(url.endswith(".index") for url, _ in network.asked)
+
+
+def test_the_archive_is_read_by_range_rather_than_whole(
+        network: FakeNetwork, tmp_path: Path) -> None:
+    storage = Storage(RETAIL, cache=tmp_path / "cache")
+    storage.open(FID)
+    archive = Cdn("cdn.example.invalid").data_url("ab" * 16)
+    ranges = [wanted for url, wanted in network.asked if url == archive]
+    assert ranges == [f"bytes={AT}-{AT + len(blte(PAYLOAD)) - 1}"]
+
+
+def test_a_second_open_asks_the_network_for_nothing(
+        network: FakeNetwork, tmp_path: Path) -> None:
+    """Every fetched blob is cached under the service's own label, so the
+    second run of anything costs nothing."""
+    cache = tmp_path / "cache"
+    Storage(RETAIL, cache=cache).open(FID)
+    network.asked.clear()
+    assert Storage(RETAIL, cache=cache).open(FID) == PAYLOAD
+    assert [url for url, _ in network.asked] == [RETAIL.versions_url,
+                                                 RETAIL.cdns_url]
