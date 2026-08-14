@@ -38,11 +38,19 @@ part of it is not ours to license at all.
        Blizzard Entertainment. No copyright is claimed over this material and none is granted by the
        AGPL above; it is redistributed here for non-commercial fan use only.
 
-   site/img/expansions/**
+   site/img/expansions/** — except badges/, recorded separately below
        Expansion marks taken from Warcraft Wiki <https://warcraft.wiki.gg>, whose content is licensed
        CC BY-SA 4.0. These files remain under CC BY-SA 4.0 — attribution as given here, and share-alike
        for anyone who modifies them. They are not covered by the AGPL. The underlying expansion marks
        are trademarks of Blizzard Entertainment.
+
+   site/img/expansions/badges/**
+       Round per-expansion medallions bundled with wow.export <https://github.com/Kruithne/wow.export>,
+       taken from its src/images/expansion/ unchanged. That project ships them with no attribution and
+       its own licence file covers only its fonts and nwjs, so their provenance is unestablished. They
+       are not the client's own interface/icons/expansionicon_* art, which exists for six expansions
+       only and is different art. No copyright is claimed over them and none is granted by the AGPL
+       above. The underlying expansion marks are trademarks of Blizzard Entertainment.
 
    Distributing these alongside the AGPL-licensed work does not place them under the AGPL, and does not
    place the AGPL work under their terms.
