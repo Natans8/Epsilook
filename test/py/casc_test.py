@@ -23,6 +23,7 @@ import pytest
 
 from pack.sources.casc import (EPSILON, RETAIL, Blizzard, Cdn, Header, Root,
                                SelfHosted, Storage)
+from pack.sources.source import Gathered, Part
 from support import Network
 
 LOCALE_ENUS = 0x2
@@ -116,7 +117,7 @@ def root_v1(*blocks: bytes, total: int | None = None, named: int = 0) -> bytes:
     header could state, so a root written here carries `BULK`.
     """
     return (b"TSFM" + struct.pack("<II", counted(blocks) if total is None
-                                  else total, named) + b"".join(blocks))
+    else total, named) + b"".join(blocks))
 
 
 def root_v2(*blocks: bytes, version: int = 2, total: int | None = None,
@@ -279,6 +280,9 @@ PAGE = 4096
 FID = 7
 """The one file the fake service carries, reachable only from an archive."""
 
+FILE_KEY = key(4)
+"""What that file's network addresses its bytes by."""
+
 
 def blte(payload: bytes) -> bytes:
     """The smallest container: no chunk table, one uncompressed chunk."""
@@ -325,7 +329,7 @@ def _network(monkeypatch: pytest.MonkeyPatch) -> Network:
     """
     build, cdn_config, archive = "aa" * 16, "cc" * 16, "ab" * 16
     encoding_key, root_content, root_key = key(1), key(2), key(3)
-    file_content, file_key = key(FID), key(4)
+    file_content, file_key = key(FID), FILE_KEY
     contained = blte(PAYLOAD)
     cdn = Cdn("cdn.example.invalid")
 
@@ -391,3 +395,35 @@ def test_a_second_open_asks_the_network_for_nothing(
     network.asked.clear()
     assert Storage(RETAIL, cache=cache).open(FID) == PAYLOAD
     assert list(network.asked) == [RETAIL.versions_url, RETAIL.cdns_url]
+
+
+def test_a_storage_is_a_fetch_the_sources_layer_can_be_handed(
+        network: Network, tmp_path: Path) -> None:
+    """The blob policy satisfies `Fetch`, so a set of files in a content store
+    is an ordinary `Gathered` rather than a second acquisition mechanism.
+
+    What this pins is the contract, not a source the build has: nothing reads
+    a db2 yet, and the extraction that will is not written. The half that
+    could be written without inventing a consumer is written, and this is it
+    standing up.
+    """
+    storage = Storage(RETAIL, cache=tmp_path / "cache")
+    source = Gathered(name="a content store", into=tmp_path / "tables",
+                      fetch=storage.blobs,
+                      parts=[Part(storage.blob(FILE_KEY), "the.db2")])
+
+    assert [origin.describe() for origin in source.origins()] == [
+        Cdn("cdn.example.invalid").data_url(FILE_KEY.hex())]
+    assert source.acquire(False) == tmp_path / "tables"
+    assert (tmp_path / "tables" / "the.db2").read_bytes() == blte(PAYLOAD)
+
+
+def test_a_blob_no_network_holds_is_absent_rather_than_a_failure(
+        network: Network, tmp_path: Path) -> None:
+    """The same answer a build gets for a table its client predates."""
+    storage = Storage(RETAIL, cache=tmp_path / "cache")
+    source = Gathered(name="a content store", into=tmp_path / "tables",
+                      fetch=storage.blobs,
+                      parts=[Part(storage.blob(key(99)), "nothing.db2",
+                                  optional=True)])
+    assert source.acquire(False) is None

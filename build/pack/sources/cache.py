@@ -39,14 +39,34 @@ def cached(dest: Path) -> bool:
     return dest.exists() and dest.stat().st_size > 0
 
 
+ABSENT = (404,)
+"""What an ordinary server answers for something it does not have.
+
+A tuple because it is the network's vocabulary rather than a universal: one
+that will not disclose whether an object exists refuses the request instead,
+and reads as 403. Which codes mean absent is declared where a source is wired,
+so a policy never has to guess.
+"""
+
+
 def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
-             optional: bool = False) -> bool:
+             optional: bool = False, absent: tuple[int, ...] = ABSENT) -> bool:
     """Download url to dest unless it is already cached (or refresh is set).
+
+    Args:
+        url: where the bytes are.
+        dest: where they must be once this returns.
+        refresh: fetch again even where a cached copy would pass.
+        headers: anything the request needs beyond the agent, a byte range in
+            particular.
+        optional: the source declares this build may not have it, so an
+            upstream saying so is an answer rather than a failure.
+        absent: which statuses say so. See `ABSENT`.
 
     Returns:
         True once the source is cached; False when an `optional` source is
-        absent (HTTP 404), which is how a build that predates a db2 table
-        reports it. Any other error raises.
+        absent, which is how a build that predates a db2 table reports it. Any
+        other error raises.
     """
     if cached(dest) and not refresh:
         log(f"  cached   {dest.name} ({dest.stat().st_size:,} bytes)")
@@ -61,7 +81,7 @@ def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
                 out.write(chunk)
     except urllib.error.HTTPError as e:
         tmp.unlink(missing_ok=True)
-        if optional and e.code == 404:
+        if optional and e.code in absent:
             dest.unlink(missing_ok=True)  # a stale pack's table must not linger
             log(f"  absent   {dest.name} (this build predates the table)")
             return False
@@ -99,13 +119,19 @@ class Pinned:
     """Getting a source that cannot change under a build that already shipped.
 
     A version-pinned export is the case: the bytes at that address are a fact
-    about a client already released, so the first fetch is the last one.
+    about a client already released, so the first fetch is the last one. So is
+    anything a network addresses by its own content, which cannot change
+    without becoming a different address.
     """
+
+    absent: tuple[int, ...] = ABSENT
+    """Which statuses this network says "not here" with. See `ABSENT`."""
 
     def get(self, origin: Origin, dest: Path, refresh: bool,
             optional: bool = False) -> bool:
         """Download once, and reuse the cached copy on every later build."""
-        return download(origin.address, dest, refresh, optional=optional)
+        return download(origin.address, dest, refresh, optional=optional,
+                        absent=self.absent)
 
     def get_many(self, parts: Sequence[Part], into: Path,
                  refresh: bool) -> list[Path]:

@@ -41,13 +41,14 @@ import struct
 import urllib.error
 import urllib.request
 import zlib
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 from ..progress import log
-from .cache import CACHE_DIR
+from .cache import CACHE_DIR, Pinned, Volatile, download
+from .source import Origin, Part, each
 
 USER_AGENT = {"User-Agent": "epsilook-build"}
 
@@ -96,6 +97,16 @@ the miss is what makes the difference expensive rather than cosmetic, because
 the archive route is reached through it, and on a network where most files are
 archived that is nearly every file.
 """
+
+PINNED = Pinned(absent=NOT_SERVED)
+"""Getting anything this network names by its own content: a configuration
+file, an archive index. Named by content, so the first fetch is the last one.
+"""
+
+LIVE = Volatile()
+"""Getting the two documents that say which build is live. They are the one
+thing here that is meant to change under a build that already shipped, so they
+are read fresh and the cached copy is kept only for a run with no network."""
 
 
 @dataclass(frozen=True)
@@ -600,6 +611,88 @@ class Located:
     size: int
 
 
+@dataclass(frozen=True)
+class Blob(Origin):
+    """One content blob, named by the key its network addresses it by.
+
+    An `Origin` says where bytes are without fetching them, and for a content
+    store that is two answers rather than one: the key is what the store calls
+    these bytes, and the address is where the network may also hand them over
+    directly. A blob that is only inside an archive still has both -- the
+    address simply refuses, which is what sends the policy to the key.
+    """
+
+    encoding_key: bytes = b""
+
+
+@dataclass(frozen=True)
+class Stored:
+    """Getting bytes a content store addresses by their own encoding key.
+
+    The difference from `Pinned` is not when to fetch again -- content-named
+    bytes never change, so the first fetch is the last one either way -- but
+    where to look. A network serves some of its blobs loose and keeps the rest
+    inside archives, and which is which is a property of the network rather
+    than of the file: the private service serves most of its content loose and
+    the vendor's serves almost none of it that way. So the loose address is
+    tried first because it costs one request, and a refusal is the answer that
+    sends this to the archive index rather than a failure.
+    """
+
+    cdn: Cdn
+    archives: Callable[[], dict[bytes, Located]]
+    """Every archived blob the network declares. A callable because building
+    it costs an index per archive, and a build that never misses loose must
+    not pay for it."""
+
+    def get(self, origin: Origin, dest: Path, refresh: bool,
+            optional: bool = False) -> bool:
+        """Put one blob at ``dest``, loose or ranged out of its archive.
+
+        Args:
+            origin: a `Blob`. Another origin has no key to look up, which is
+                the whole of what this policy is for.
+            dest: where the bytes must be once this returns.
+            refresh: fetch again even where a cached copy would pass.
+            optional: a blob this network holds nowhere is an answer rather
+                than a failure.
+
+        Returns:
+            True once the bytes are there.
+
+        Raises:
+            TypeError: if the origin does not name a key.
+            LookupError: if the blob is neither loose nor in any archive the
+                network declares, and it was not declared optional.
+        """
+        if not isinstance(origin, Blob):
+            raise TypeError(f"{origin.address} names no content key")
+        if download(origin.address, dest, refresh, optional=True,
+                    absent=NOT_SERVED):
+            return True
+
+        found = self.archives().get(origin.encoding_key)
+        if found is None:
+            if optional:
+                return False
+            raise LookupError(
+                f"{origin.encoding_key.hex()} is neither loose nor in any "
+                f"archive the network declares")
+        end = found.offset + found.size - 1
+        return download(self.cdn.data_url(found.archive), dest, refresh,
+                        headers={"Range": f"bytes={found.offset}-{end}"})
+
+    def get_many(self, parts: Sequence[Part], into: Path,
+                 refresh: bool) -> list[Path]:
+        """One at a time, over an index built once for all of them.
+
+        The set has something to share and it is already shared: the archive
+        index is built on the first miss and held, so the second part through
+        here pays a lookup rather than a walk.
+        """
+        return each(self, parts, into, refresh)
+
+
 INDEX_FOOTER = 28
 """Trailing bytes of an archive index that describe how to read the rest."""
 
@@ -678,13 +771,15 @@ class Storage:
         self.cache = cache or CACHE_DIR / "casc" / service.label
         self.cache.mkdir(parents=True, exist_ok=True)
 
-        versions = read_bpsv(self._get_text(service.versions_url))
+        versions = read_bpsv(self._document(service.versions_url))
         row = next((r for r in versions if r.get("Region") == service.region),
                    versions[0])
         self.build = row.get("VersionsName", "")
         self.build_config_digest = row["BuildConfig"]
         self.cdn_config_digest = row["CDNConfig"]
-        self.cdn = service.cdn(self._get_text)
+        self.cdn = service.cdn(self._document)
+        self._archives: dict[bytes, Located] | None = None
+        self.blobs = Stored(self.cdn, self.archives)
         log(f"  {service.label}: build {self.build} on {self.cdn.host}, "
             f"config {self.build_config_digest}")
 
@@ -704,7 +799,6 @@ class Storage:
         self.root = Root.parse(
             decode_blte(self._fetch(root_key[root_content_key])), locale)
         log(f"  {len(self.root.keys):,} file ids, {self.root.blocks:,} blocks")
-        self._archives: dict[bytes, Located] | None = None
 
     def open(self, file_id: int) -> bytes:
         """The decoded contents of one file data id.
@@ -754,19 +848,27 @@ class Storage:
                     self._fetch(encoding_key))
         return out
 
+    def _document(self, url: str) -> str:
+        """One of the two documents that say which build is live.
+
+        Both must be read fresh -- what they publish is exactly what changes
+        under a build that already shipped -- so this is the volatile policy,
+        which keeps its copy only for a run with no network. The document is
+        named by the endpoint that serves it, which is the convention every
+        TACT service follows.
+        """
+        dest = self.cache / url.rsplit("/", 1)[-1]
+        LIVE.get(Origin(url), dest, refresh=True)
+        return dest.read_text(encoding="utf-8", errors="replace")
+
     def _config(self, digest: str) -> str:
-        """One configuration file, cached."""
-        return self._get_text(self.cdn.config_url(digest), name=digest)
+        """One configuration file, named by its own content."""
+        dest = self.cache / digest
+        PINNED.get(Origin(self.cdn.config_url(digest)), dest, refresh=False)
+        return dest.read_text(encoding="utf-8", errors="replace")
 
     def _fetch(self, encoding_key: bytes) -> bytes:
         """The raw container for one encoding key, loose or from an archive.
-
-        A loose fetch is tried first because it costs one request against an
-        index over every archive the network declares, which is the expensive
-        part of this module. Which of the two is the common case is a property
-        of the network rather than of the file: a private service serves most
-        of its content loose, and the vendor's serves almost none of it that
-        way, so on retail this is a request spent to learn that.
 
         Cached under the encoding key, which is what the bytes are addressed
         by. Naming the file for what was wanted instead -- the encoding table,
@@ -776,28 +878,14 @@ class Storage:
         build's bytes. Content addressing also shares what did not change,
         which between two builds is nearly everything.
         """
-        cached = self.cache / f"{encoding_key.hex()}.blte"
-        if cached.exists() and cached.stat().st_size:
-            return cached.read_bytes()
-        try:
-            blob = self._get(self.cdn.data_url(encoding_key.hex()))
-        except urllib.error.HTTPError as exc:
-            if exc.code not in NOT_SERVED:
-                raise
-            blob = self._from_archive(encoding_key)
-        cached.write_bytes(blob)
-        return blob
+        dest = self.cache / f"{encoding_key.hex()}.blte"
+        self.blobs.get(self.blob(encoding_key), dest, refresh=False)
+        return dest.read_bytes()
 
-    def _from_archive(self, encoding_key: bytes) -> bytes:
-        """A ranged request for a file that is only inside an archive."""
-        found = self.archives().get(encoding_key)
-        if found is None:
-            raise LookupError(
-                f"{encoding_key.hex()} is neither loose nor in any archive the "
-                f"network declares")
-        end = found.offset + found.size - 1
-        return self._get(self.cdn.data_url(found.archive),
-                         headers={"Range": f"bytes={found.offset}-{end}"})
+    def blob(self, encoding_key: bytes) -> Blob:
+        """Where one encoded file is, said without fetching it."""
+        return Blob(self.cdn.data_url(encoding_key.hex()),
+                    encoding_key=encoding_key)
 
     def archives(self) -> dict[bytes, Located]:
         """Every archived file the network declares, by encoding key.
@@ -821,42 +909,35 @@ class Storage:
     def _read_archive_index(self, name: str) -> dict[bytes, Located]:
         """One archive index, named for the archive it was asked for.
 
+        An index is named by its own content, so it is fetched once and never
+        again. An archive the network declares and then does not serve an
+        index for is an answer; anything else it says is a failure, and the
+        distinction is the whole point. Reading any error as an empty index
+        drops that archive's entire contents from the map, and the files in it
+        then fail as "in no archive the network declares", which is a
+        statement about the network that is not true.
+
         Returns:
             Encoding key to where it sits in this archive; empty for an index
             that is absent or is not an ordinary one.
-
-        Raises:
-            urllib.error.HTTPError: if the network failed to answer rather than
-                answering that it does not serve this. The distinction is the
-                whole point: reading any error as an empty index drops that
-                archive's entire contents from the map, and the files in it
-                then fail as "in no archive the network declares", which is a
-                statement about the network that is not true.
         """
-        try:
-            blob = self._get(f"{self.cdn.data_url(name)}.index",
-                             name=f"{name}.index")
-        except urllib.error.HTTPError as exc:
-            if exc.code not in NOT_SERVED:
-                raise
+        dest = self.cache / f"{name}.index"
+        if not PINNED.get(Origin(f"{self.cdn.data_url(name)}.index"), dest,
+                          refresh=False, optional=True):
             return {}
         return {key: Located(name, offset, size)
-                for key, offset, size in read_index(blob)}
+                for key, offset, size in read_index(dest.read_bytes())}
 
-    def _get(self, url: str, headers: dict | None = None,
-             name: str | None = None) -> bytes:
-        """One request, through the on-disk cache when it is cacheable."""
-        cached = self.cache / name if name else None
-        if cached is not None and cached.exists() and cached.stat().st_size:
-            return cached.read_bytes()
+    def _get(self, url: str, headers: dict | None = None) -> bytes:
+        """One request, straight back, held nowhere.
+
+        What is left of this module's own fetching, and it is deliberately the
+        part that is not acquisition: a caller reading the head of a container
+        it will not keep. Everything that lands on disk goes through a policy
+        above.
+        """
         request = urllib.request.Request(url, headers={**USER_AGENT,
                                                       **(headers or {})})
         with urllib.request.urlopen(request, timeout=600) as response:
-            blob = response.read()
-        if cached is not None:
-            cached.write_bytes(blob)
+            blob: bytes = response.read()
         return blob
-
-    def _get_text(self, url: str, name: str | None = None) -> str:
-        """One request, decoded as text."""
-        return self._get(url, name=name).decode("utf-8", errors="replace")
