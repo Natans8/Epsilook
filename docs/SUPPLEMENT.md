@@ -70,9 +70,13 @@ against the community listfile rather than assumed. Three hold and are applied; 
 | `.phys` / `.skel` / `.bone` | no predictable spelling            | under 1% each            |
 
 **Where a convention holds, the child is placed beside its parent and named the way the game names it** — so a skin of
-`world/expansion05/doodads/thing.m2` is `world/expansion05/doodads/thing00.skin`, which is a *real* name, not a
-placeholder. The child inherits its parent's standing: a child of a parent whose own path was derived lands under
-`epsilon/` too, without needing a second rule.
+`world/expansion05/doodads/thing.m2` would be `world/expansion05/doodads/thing00.skin`. The child inherits its parent's
+standing: a child of a parent whose own path was derived lands under `epsilon/` too, without needing a second rule.
+
+> ⚠ In practice this currently yields no real names, and the reason is worth knowing before anyone counts it as a win.
+> Every custom child of a real-pathed model is already named by an earlier route — measured at 1,333 of 1,333 across a
+> four-thousand-model sample. The walks only ever reach what nothing better named, and that is models whose own names
+> were derived. The rule is right and costs nothing; it simply has nothing left to claim.
 
 **Where no convention holds, the file id keeps the path unique** and it sits in a bucket under `epsilon/`, because a
 plausible-looking invented name is worse than an obviously derived one.
@@ -111,8 +115,8 @@ uv run python tools/supplement.py --only models
 
 **The walks read the installation first and refuse the network by default.** The install holds under half the files a
 walk wants — a client's own additions are the least-cached part of any install, because they download on demand — but
-coverage saturates from either direction, so a local-only run is a sound estimate of the whole at a fraction of the
-requests. That is what makes iterating on a rule cheap: the whole pipeline runs in seconds.
+coverage saturates: local-only reaches 116,072 names against the full run's 118,294, for a fraction of the requests and
+in seconds rather than minutes. That is what makes iterating on a rule cheap.
 
 **A run whose output is going to be vendored must pass `--network`.** A local-only walk does not merely find fewer
 names, it finds *different* ones. A derived path names the parent that refers to the file, and where several parents
@@ -125,8 +129,10 @@ uv run python tools/supplement.py --diff --network      # the run to vendor from
 uv run python tools/supplement.py --diff                # the run to iterate with
 ```
 
-Nothing here ever needs a full content download. The largest single thing any route fetches is the encoding file, once,
-cached thereafter; the walks fetch small files and are bound by round trips rather than bandwidth.
+Nothing here ever needs a full content download, and in particular it never downloads an archive index: **the client
+keeps its own copy of every one of them**, and a full run located 48,605 of 48,605 wanted files from those without
+asking the service anything. What remains is one small ranged request per file, which is what the walk's own progress
+counts.
 
 **`--network` is a deliberate act, not a faster default.** It makes tens of thousands of requests to a service somebody
 else runs for players, so the walk prints how many files it is about to ask for before it asks for any of them. Run it
@@ -182,17 +188,20 @@ classification says which route would go there.
 uv run python tools/supplement.py --coverage
 ```
 
-A local-only run currently reaches **116,072 of the 128,476 custom files, 90.3%**, leaving 12,404. Of the 2,544 of
+A full run with `--network` reaches **118,294 of the 128,476 custom files, 92.1%**, leaving 10,182. Of the 2,348 of
 those the installation holds and can therefore be identified:
 
 | kind            | count | which route would claim it        |
 |-----------------|------:|-----------------------------------|
-| `blp`           | 1,839 | none yet — see below              |
-| `wmo group`     |   315 | `worldmodels`, with `--network`   |
-| `m2`            |   169 | `models`, with `--network`        |
-| `skin`          |   166 | `models`, with `--network`        |
+| `blp`           | 1,687 | none yet — see below              |
+| `wmo group`     |   311 | none: their roots are unnamed     |
+| `m2`            |   169 | none: nothing references them     |
+| `skin`          |   126 | none: their models are unnamed    |
 | `wmo root`      |    23 | none: roots, not children         |
 | everything else |    32 | sound, and a few unrecognised     |
+
+The other **7,834 are not held locally and were not opened**, so what they are is unmeasured. Classifying them would
+cost a request each and the report says so rather than guessing.
 
 No terrain appears in that list, which is the check that the terrain route is complete.
 

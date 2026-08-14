@@ -138,11 +138,16 @@ class Walk:
         names: file id to the path derived for it.
         read: how many parent files were opened.
         skipped: how many were passed over because the install lacks them.
+        unreadable: how many could not be read at all. Worth reporting rather
+            than swallowing: a parent that fails to arrive takes every claim it
+            would have made with it, and the result is simply a few files left
+            unnamed with nothing to say why.
     """
 
     names: dict[int, str]
     read: int
     skipped: int
+    unreadable: int = 0
 
 
 def stem_of(path: str) -> str:
@@ -384,11 +389,12 @@ def walk_parents(storage: Reads, known: dict[int, str], unnamed: set[int],
     remote = [fid for fid in parents if not storage.holds_locally(fid)]
 
     claims: dict[int, list[tuple[int, bytes, str]]] = defaultdict(list)
-    read = 0
+    read = unreadable = 0
 
     def collect(parent: int, raw: bytes | None) -> None:
-        nonlocal read
+        nonlocal read, unreadable
         if not raw:
+            unreadable += 1
             return
         read += 1
         for tag, references in reader(raw).items():
@@ -432,8 +438,11 @@ def walk_parents(storage: Reads, known: dict[int, str], unnamed: set[int],
             # file id is what keeps the path unique, and the parent directory is
             # what carries the meaning.
             names[child] = f"{DERIVED_ROOT}/{kind.bucket}/{stem}/{child}.{kind.extension}"
+    if unreadable:
+        print(f"  {label}: {unreadable:,} of {len(here) + len(remote):,} parents "
+              f"could not be read; their children stay unnamed")
     return Walk(names=names, read=read,
-                skipped=len(remote) if local_only else 0)
+                skipped=len(remote) if local_only else 0, unreadable=unreadable)
 
 
 TERRAIN_CHUNKS = (b"MHDR", b"MCNK", b"MCIN")
