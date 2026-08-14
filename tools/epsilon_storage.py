@@ -273,6 +273,8 @@ class EpsilonStorage:
         self.local = LocalArchives(install)
         self._keys: dict[int, bytes] = {}
         self._mapped: set[bytes] = set()
+        self._unlocated: set[bytes] = set()
+        """Keys the install's indices do not carry, so they are asked for once."""
         self._located: dict[bytes, Remote] = {}
         """Where the install's indices say a file sits, kept so a head read
         asks the archive directly instead of taking a 404 off the loose URL
@@ -382,6 +384,27 @@ class EpsilonStorage:
         except (LookupError, OSError, ValueError, zlib.error):
             return None
 
+    def locate(self, file_ids: Iterable[int]) -> None:
+        """Find where the archives hold these files, in ONE pass over the index.
+
+        `archive_locations` reads every index the install keeps, so asking it
+        per file reads eighteen hundred files per fetch and a walk that should
+        take minutes takes hours. It is the same shape as resolving encoding
+        keys one at a time, and it has the same fix.
+
+        Args:
+            file_ids: the files a head read is about to want.
+        """
+        keys = self.encoding_keys(file_ids)
+        wanted = {key for key in keys.values() if key not in self._located}
+        wanted -= self._unlocated
+        if not wanted:
+            return
+        self._located.update(self.local.archive_locations(wanted))
+        # Remembered so a file the indices do not carry is asked for once and
+        # then goes down the loose route, rather than re-reading every index.
+        self._unlocated |= {key for key in wanted if key not in self._located}
+
     def read_head(self, file_id: int, cap: int = HEAD_CAP) -> bytes | None:
         """As much of a file's start as `cap` container bytes yield.
 
@@ -412,7 +435,10 @@ class EpsilonStorage:
         found = self.local.read(key)
         if found is not None:
             return found
-        where = self._located.get(key) or self.local.archive_locations({key}).get(key)
+        where = self._located.get(key)
+        if where is None and key not in self._unlocated:
+            self.locate([file_id])
+            where = self._located.get(key)
         try:
             if where is not None:
                 self._located[key] = where

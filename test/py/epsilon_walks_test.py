@@ -447,6 +447,10 @@ class HeadStorage(FakeStorage):
         self.cap = cap
         self.heads = 0
 
+    def holds_locally(self, file_id: int) -> bool:
+        """Nothing here is on disk; that is what makes the read a fetch."""
+        return False
+
     def read(self, file_id: int, *, local_only: bool = False):
         return None if local_only else self.files.get(file_id)
 

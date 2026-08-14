@@ -230,24 +230,68 @@ MAX_MODEL_NAME = 512
 slicing an arbitrary megabyte out of the file and calling it a name."""
 
 
-def _head(storage: Reads, file_id: int, local_only: bool) -> bytes | None:
-    """A file's start, fetched capped when it has to come over the network.
+def heads_of(storage: Reads, ids: list[int], *, label: str,
+             local_only: bool = True) -> dict[int, bytes]:
+    """The start of every one of these files, from disk and then the service.
 
-    Both routes here read a header, so the tail of a file is bought and thrown
-    away. A capped read is a tenth of the bytes across the files an install
-    lacks, and it is the same bytes for the third of them smaller than the cap.
+    Both routes that name a file from its own bytes read a header, so the tail
+    is bought and thrown away. A capped read is a tenth of the bytes across the
+    files an install lacks, and the same bytes for the third of them smaller
+    than the cap.
+
+    Goes wide for the same reason the parentage walks do: these are thousands
+    of small requests and the wall clock is round trips, not bandwidth. Read
+    one at a time the same set takes hours.
 
     ⛔ Only for a reader that wants the START of a file. The parentage walks
     read chunks that sit at the end, and a truncated container yields fewer of
     them with no error -- which reads as a parent with no children rather than
     as a short read.
+
+    Args:
+        storage: the opened storage.
+        ids: the files to read.
+        label: what to call this pass in its progress output.
+        local_only: refuse to reach the network, reading only what is to hand.
+
+    Returns:
+        File id to the bytes read, for those that could be read at all.
     """
-    if local_only:
-        return storage.read(file_id, local_only=True)
-    head = getattr(storage, "read_head", None)
-    if head is None:
-        return storage.read(file_id)
-    return head(file_id)
+    storage.encoding_keys(ids)
+    here = [fid for fid in ids if storage.holds_locally(fid)]
+    remote = [] if local_only else [fid for fid in ids if fid not in set(here)]
+
+    found: dict[int, bytes] = {}
+    for fid in tqdm(here, desc=f"{label} (install)", unit="file"):
+        raw = storage.read(fid, local_only=True)
+        if raw:
+            found[fid] = raw
+    if not remote:
+        return found
+
+    # Said out loud before it starts, as the parentage walks do: this is
+    # somebody else's service and a pass of this width is a decision.
+    print(f"  {label}: {len(remote):,} files are not on disk and will be "
+          f"requested from the service, capped to their heads")
+    # Before going wide, never during: the fallback index every miss needs is
+    # built lazily and is not thread safe, so a concurrent first read has each
+    # worker build its own.
+    storage.prepare_network()
+    # One pass over the install's archive indices for the whole set. Asking per
+    # file re-reads all of them each time, which is hours rather than minutes.
+    locate = getattr(storage, "locate", None)
+    if locate is not None:
+        locate(remote)
+    read_head = getattr(storage, "read_head", None)
+    fetch = read_head if read_head is not None else storage.read
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        pending = {pool.submit(fetch, fid): fid for fid in remote}
+        for done in tqdm(as_completed(pending), total=len(pending),
+                         desc=f"{label} (network)", unit="file"):
+            raw = done.result()
+            if raw:
+                found[pending[done]] = raw
+    return found
 
 
 def model_name(raw: bytes | None) -> str | None:
@@ -302,10 +346,11 @@ def model_self_names(storage: Reads, unnamed: set[int],
     Returns:
         File id to path.
     """
-    storage.encoding_keys(sorted(unnamed))
+    heads = heads_of(storage, sorted(unnamed), label="model names",
+                     local_only=local_only)
     found: dict[int, str] = {}
-    for fid in tqdm(sorted(unnamed), desc="model names", unit="file"):
-        name = model_name(_head(storage, fid, local_only))
+    for fid, raw in heads.items():
+        name = model_name(raw)
         if name:
             found[fid] = name
 
@@ -398,10 +443,11 @@ def reskin_names(storage: Reads, unnamed: set[int], stock: dict[int, str],
         print("  reskin: skipped, no stock world model root could be read")
         return {}
 
-    storage.encoding_keys(sorted(unnamed))
     names: dict[int, str] = {}
-    for fid in tqdm(sorted(unnamed), desc="reskin: custom roots", unit="file"):
-        found = world_model_id(_head(storage, fid, local_only))
+    heads = heads_of(storage, sorted(unnamed), label="reskin: custom roots",
+                     local_only=local_only)
+    for fid, raw in heads.items():
+        found = world_model_id(raw)
         origin = retail.get(found) if found is not None else None
         if origin is None:
             continue
