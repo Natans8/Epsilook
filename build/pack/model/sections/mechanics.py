@@ -14,7 +14,8 @@ from ...derive.links import link_kind_word
 from ...targets import IMPLICIT_PREFIX
 from ...measure import numeric_domain
 from ..registry import register
-from ..section import Count, Domain, Layout, Scope, Section, SectionColumns
+from ..section import (Cardinality, Count, Domain, Layout, Scope, Section,
+                       SectionColumns)
 
 
 def spell_mechanics(reads: Reads) -> SectionColumns:
@@ -24,7 +25,11 @@ def spell_mechanics(reads: Reads) -> SectionColumns:
             "effects": [row[1] for row in rows],
             "auras": [row[2] for row in rows],
             "targetsA": [row[3] for row in rows],
-            "targetsB": [row[4] for row in rows]}
+            "targetsB": [row[4] for row in rows],
+            # Raw, because what they mean is a function of the effect or aura
+            # beside them and that reading is the app's.
+            "misc0": [row[5] for row in rows],
+            "misc1": [row[6] for row in rows]}
 
 
 def used_targets(reads: Reads) -> list[int]:
@@ -86,8 +91,12 @@ SPELL_MECHANICS = register(Section(
     doc="One row per spell effect: what it does and who it is aimed at.",
     module="core",
     produce=spell_mechanics,
-    columns=("spellIds", "effects", "auras", "targetsA", "targetsB"),
+    columns=("spellIds", "effects", "auras", "targetsA", "targetsB",
+             "misc0", "misc1"),
     reads=("rows",),
+    # Most rows carry neither, so they are stored as the rows that do.
+    cardinality={"misc0": Cardinality.PARTIAL, "misc1": Cardinality.PARTIAL},
+    absent={"misc0": 0, "misc1": 0},
     counts=(Count("spellMechanics",
                   lambda columns, _r: len(columns["spellIds"])),),
     domains=(Domain("count.mech", lambda columns, _r: numeric_domain(
@@ -97,27 +106,29 @@ SPELL_MECHANICS = register(Section(
 EFFECT_NAMES = register(Section(
     name="effectNames",
     doc="Every effect id's enum name, for the word a mechanics pill prints.",
-    module="names",
+    module="universal",
     produce=lambda reads: {"names": reads.effect_names},
     columns=("names",),
     layout=Layout.BARE,
     reads=("effect_names",),
+    scope=Scope.UNIVERSAL,
 ))
 
 AURA_NAMES = register(Section(
     name="auraNames",
     doc="Every aura id's enum name, for the word a mechanics pill prints.",
-    module="names",
+    module="universal",
     produce=lambda reads: {"names": reads.aura_names},
     columns=("names",),
     layout=Layout.BARE,
     reads=("aura_names",),
+    scope=Scope.UNIVERSAL,
 ))
 
 IMPLICIT_TARGET_NAMES = register(Section(
     name="implicitTargetNames",
     doc="The name of each implicit target this build's rows name.",
-    module="names",
+    module="core",
     produce=target_names,
     columns=("names",),
     layout=Layout.BARE,

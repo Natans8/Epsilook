@@ -72,7 +72,7 @@ SPELL_MORPHS = register(Section(
 MORPHS = register(Section(
     name="morphs",
     doc="The name of each creature a spell morphs into.",
-    module="names",
+    module="core",
     produce=lambda reads: {
         "creatureIds": sorted({creature for creatures
                                in reads.effects.morphs.ids.values()
@@ -85,6 +85,7 @@ MORPHS = register(Section(
     reads=("effects", "creatures"),
     degraded_without=("creature_template",),
     counts=(Count("morphs", lambda columns, _r: len(columns["creatureIds"])),),
+    localizable=('names',),
 ))
 
 MORPH_DISPLAYS = register(Section(
@@ -113,7 +114,7 @@ SPELL_MOUNTS = register(Section(
 MOUNTS = register(Section(
     name="mounts",
     doc="Each reached mount display's name and model file.",
-    module="names",
+    module="core",
     produce=lambda reads: {
         "displayIds": sorted(reads.references.mount_displays),
         "names": [reads.mounts.name.get(display, "")
@@ -123,6 +124,7 @@ MOUNTS = register(Section(
     columns=("displayIds", "names", "fids"),
     reads=("mounts", "references"),
     counts=(Count("mounts", lambda columns, _r: len(columns["displayIds"])),),
+    localizable=('names',),
 ))
 
 SPELL_SHAPESHIFTS = register(Section(
@@ -139,7 +141,7 @@ SPELL_SHAPESHIFTS = register(Section(
 SHAPESHIFTS = register(Section(
     name="shapeshifts",
     doc="The name of each shapeshift form a spell reaches.",
-    module="names",
+    module="core",
     produce=lambda reads: {
         "ids": sorted({form for forms in reads.effects.forms.ids.values()
                        for form in forms}),
@@ -148,6 +150,7 @@ SHAPESHIFTS = register(Section(
                                       for f in fs})]},
     columns=("ids", "names"),
     reads=("effects", "forms"),
+    localizable=('names',),
 ))
 
 SHAPESHIFT_DISPLAYS = register(Section(
@@ -174,7 +177,7 @@ SPELL_SUMMONS = register(Section(
 SUMMONS = register(Section(
     name="summons",
     doc="The name of each summoned creature.",
-    module="names",
+    module="core",
     produce=lambda reads: {
         "creatureIds": sorted({creature for summoned
                                in reads.effects.summons.values()
@@ -186,6 +189,7 @@ SUMMONS = register(Section(
     reads=("effects", "creatures"),
     degraded_without=("creature_template",),
     counts=(Count("summons", lambda columns, _r: len(columns["creatureIds"])),),
+    localizable=('names',),
 ))
 
 SUMMON_CONTROL_NAMES = register(Section(
@@ -216,7 +220,7 @@ SPELL_OBJECTS = register(Section(
 OBJECTS = register(Section(
     name="objects",
     doc="Each placed object's name, model file and type.",
-    module="names",
+    module="core",
     produce=lambda reads: {
         "ids": sorted({entry for _spell, entry in reads.references.object_rows}),
         "names": [reads.objects.name.get(entry, "") for entry
@@ -231,4 +235,5 @@ OBJECTS = register(Section(
     reads=("references", "objects"),
     degraded_without=("gameobject_template",),
     counts=(Count("objects", lambda columns, _r: len(columns["ids"])),),
+    localizable=('names',),
 ))

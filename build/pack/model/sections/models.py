@@ -108,6 +108,7 @@ ITEMS = register(Section(
     counts=(Count("items", lambda columns, _r: len(columns["ids"])),
             Count("namedItems", lambda columns, _r: sum(
                 1 for name in columns["names"] if name))),
+    localizable=('names',),
 ))
 
 ITEM_ICON_NAMES = register(Section(

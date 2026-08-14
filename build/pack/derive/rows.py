@@ -68,7 +68,8 @@ class PackRows:
     sounds: list[tuple[int, int, int, int]] = field(default_factory=list)
     animkits: list[tuple[int, int, int]] = field(default_factory=list)
     chains: list[tuple[int, int, int, int, int]] = field(default_factory=list)
-    mechanics: list[tuple[int, int, int, int, int]] = field(default_factory=list)
+    mechanics: list[tuple[int, int, int, int, int, int, int]] = field(
+        default_factory=list)
 
     motions: list[int] = field(default_factory=list)
     """The flight paths the model rows name, sorted."""
@@ -130,7 +131,8 @@ def build_rows(visuals: SpellVisuals, effects: SpellEffectRows,
         # pack does not carry are one row once the shipped columns are what
         # identifies them.
         mechanics=sorted({(row.spell, row.effect, row.aura, row.target_a,
-                           row.target_b) for row in effects.mechanics}),
+                           row.target_b, row.misc_a, row.misc_b)
+                          for row in effects.mechanics}),
         motions=sorted({row[7] for row in models if row[7]}),
         items=sorted({row[6] for row in models
                       if row[2] == MODEL_CAT_ITEM and row[6]}),

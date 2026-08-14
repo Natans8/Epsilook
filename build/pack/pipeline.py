@@ -17,8 +17,7 @@ before another is one whose bundle the next one reads.
 from __future__ import annotations
 
 import time
-from dataclasses import replace
-from pathlib import Path
+from collections.abc import Mapping
 
 from .build import Build, Line
 from .derive import (DeriveContext, build_icon_index, build_rows,
@@ -26,9 +25,12 @@ from .derive import (DeriveContext, build_icon_index, build_rows,
                      walk_spells)
 from .drift import OPTIONAL_TABLES
 from .emit import legacy
+from .emit.legacy import META
+from .emit.manifest import manifest
 from .emit.meta import gathered, meta
-from .encode import encode_section
-from .model import SECTIONS, Section
+from .emit.module import Module, absent_sections, assemble
+from .encode import FEWEST_BYTES, FEWEST_ENTRIES, encode_section
+from .model import SECTIONS, Cardinality, Encoding, Section
 from .progress import log
 from .routes import (implicit_target_bits, read_anim_replacements,
                      read_animkit_anims, read_animkit_bonesets,
@@ -214,8 +216,9 @@ def switched_off(section: Section, tables: Tables) -> bool:
     return any(not tables.available(table) for table in section.needs)
 
 
-def produce(context: DeriveContext,
-            tables: Tables) -> tuple[dict[str, object], dict[str, object]]:
+def produce(context: DeriveContext, tables: Tables,
+            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES
+            ) -> tuple[dict[str, object], dict[str, object]]:
     """Every section this build ships: what it produced, and what it encodes to.
 
     A section whose `needs` this build lacks is left out rather than shipped
@@ -235,7 +238,7 @@ def produce(context: DeriveContext,
             continue
         produced = section.produce(context.reads(section.reads))
         columns[section.name] = produced
-        encoded[section.name] = encode_section(section, produced)
+        encoded[section.name] = encode_section(section, produced, policy)
     return columns, encoded
 
 
@@ -298,3 +301,49 @@ def run(version: str, label: str, *, refresh: bool = False,
     log(f"  {len(encoded)} sections, {len(counts)} counts, "
         f"{len(domains)} domains  [{time.monotonic() - started:.1f}s]")
     return document
+
+
+def modules(version: str, label: str, *, refresh: bool = False,
+            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
+            key: str = "", line: Line = Line.RETAIL
+            ) -> tuple[list[Module], dict[str, object]]:
+    """Build one pack as the module set it ships as.
+
+    Args:
+        version: the build id to pack.
+        label: the human name the version picker shows.
+        refresh: re-fetch every source even where a cached copy would do.
+        policy: how a column's declared kind becomes a layout.
+        key: the roster key, when the caller has one.
+        line: which distribution line the build ships on.
+
+    Returns:
+        The modules, each named by its own content, and the manifest naming
+        them. A module whose bytes match another build's IS that build's file:
+        nothing here arranges the sharing, and nothing has to.
+    """
+    started = time.monotonic()
+    sources = fetch_sources(version, refresh)
+    providers = Providers(sources, build=int(version.rsplit(".", 1)[-1]))
+    build = build_for(version, providers.tables, key=key, line=line)
+
+    context = read_all(providers, build)
+    columns, encoded = produce(context, providers.tables, policy)
+    counts, domains = gathered(columns, context, legacy.COUNT_ORDER)
+    header = meta(build, label, release_tag(), counts, domains)
+    assembled = assemble([META_SECTION, *SECTIONS], {META: header, **encoded})
+    absent = absent_sections(SECTIONS, encoded)
+    log(f"  {len(encoded)} sections in {len(assembled)} modules "
+        f"[{time.monotonic() - started:.1f}s]")
+    return assembled, manifest(version, assembled, absent)
+
+
+META_SECTION = Section(
+    name=META, doc="What the pack says about itself.", module="core",
+    produce=lambda _reads: {}, columns=())
+"""The header, declared so it lands in a module like everything else.
+
+It produces nothing -- it is assembled from what the other sections declared --
+but it still has to be placed, and giving it a record is cheaper than teaching
+the assembler about one special key.
+"""

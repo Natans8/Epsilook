@@ -55,4 +55,5 @@ SPELLS = register(Section(
                  "icons": Cardinality.PARTIAL},
     absent={"icons": 0},
     counts=(Count("spells", lambda columns, _reads: len(columns["ids"])),),
+    localizable=('names', 'subtexts', 'altNames'),
 ))

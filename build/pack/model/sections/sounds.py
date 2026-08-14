@@ -39,7 +39,7 @@ SPELL_SOUNDS = register(Section(
 SOUND_KIT_NAMES = register(Section(
     name="soundKitNames",
     doc="Human names for the sound kits this pack reaches, from a pinned build.",
-    module="names",
+    module="core",
     produce=lambda reads: {
         "soundKitIds": [kit for kit, _name in reads.kit_names],
         "names": [name for _kit, name in reads.kit_names]},

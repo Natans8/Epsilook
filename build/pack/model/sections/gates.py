@@ -127,4 +127,5 @@ AREAS = register(Section(
     cardinality={"mapIds": Cardinality.PARTIAL},
     absent={"mapIds": 0},
     counts=(Count("areas", lambda columns, _r: len(columns["ids"])),),
+    localizable=('names',),
 ))

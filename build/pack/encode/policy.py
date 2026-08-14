@@ -6,16 +6,26 @@ change shape from one edit here instead of eighty edits across the registry --
 and it is why a section never has to know what gzip does with an array of
 repeated empty strings.
 
-Two policies exist because the artifact has two readers and only one of them
-has been taught the second shape yet. `COMPATIBLE` emits what the app reads
-today. `COMPACT` emits what each kind actually wants -- partial columns stop
-padding a value into every row that has none, which is a parse-time win rather
-than a byte one, since gzip already eats the padding but `JSON.parse` still
-walks every entry.
+The two policies trade bytes against entries, and the trade was measured on the
+product's own build rather than assumed:
 
-Switching is one name at the call site, and the app has to learn the sparse
-shape in the same change: an encoder the reader does not understand is a
-silently wrong pack, not a smaller one.
+| 9.2.7 module set | FEWEST_BYTES | FEWEST_ENTRIES |
+|------------------|--------------|----------------|
+| total            | 12,579,734   | 13,565,500     |
+| first load       | 9,602,316    | 10,588,082     |
+
+Padding a partial column costs almost nothing on the wire, because gzip eats a
+run of repeated fillers; what it costs is the reader walking every entry.
+Skipping the padding inverts that -- the row indexes a sparse column carries
+are incompressible, so it buys parse time at just under a megabyte. With no
+latency budget and a first load measured in megabytes, bytes are what a person
+waits for, so `FEWEST_BYTES` ships.
+
+`FEWEST_ENTRIES` stays because the measurement is a fact about THIS data and
+not a law: a column far emptier than these would invert it again. A section
+that knows it has one can name `Encoding.SPARSE` outright without moving the
+whole build. Whichever ships, the app must understand the shape -- an encoder
+the reader does not know is a silently wrong pack, not a smaller one.
 """
 
 from __future__ import annotations
@@ -24,26 +34,25 @@ from collections.abc import Mapping
 
 from ..model.section import Cardinality, Encoding
 
-COMPATIBLE: Mapping[Cardinality, Encoding] = {
+FEWEST_BYTES: Mapping[Cardinality, Encoding] = {
     Cardinality.TOTAL: Encoding.DENSE,
-    # A partial column pads rather than skips, because that is the shape the
-    # app reads today: it joins by position and has no way to ask which rows a
-    # sparse column covers.
+    # A partial column pads rather than skips: the filler compresses to nearly
+    # nothing, and the row indexes that would replace it do not.
     Cardinality.PARTIAL: Encoding.DENSE,
     Cardinality.SHARED: Encoding.DEDUP,
 }
-"""The layouts the shipped app understands."""
+"""What ships: the smallest artifact, measured."""
 
-COMPACT: Mapping[Cardinality, Encoding] = {
+FEWEST_ENTRIES: Mapping[Cardinality, Encoding] = {
     Cardinality.TOTAL: Encoding.DENSE,
     Cardinality.PARTIAL: Encoding.SPARSE,
     Cardinality.SHARED: Encoding.DEDUP,
 }
-"""The layouts each kind wants, once a reader understands them all."""
+"""The fewest values for a reader to walk, at a cost in bytes."""
 
 
 def layout_of(kind: Cardinality,
-              policy: Mapping[Cardinality, Encoding] = COMPATIBLE) -> Encoding:
+              policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES) -> Encoding:
     """The layout one kind of column gets under `policy`.
 
     Raises:

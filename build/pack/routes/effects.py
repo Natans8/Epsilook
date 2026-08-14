@@ -9,8 +9,12 @@ A value reaching a payload is marked consumed on its `EffectRow`, which keeps
 it searchable while telling the renderer a dedicated pill already shows it.
 `docs/DATA_ROUTES.md` documents what each payload means.
 
-TODO: carry the raw misc values out of this route, so an axis over one is a
-declaration rather than a rebuild. Blocked on the section registry.
+The raw misc values travel out with the row. Their meaning is a function of
+the effect or aura beside them, which is knowledge the app already has, so
+shipping the number turns a future axis over one into a declaration instead of
+a rebuild. It is not a skeleton key: many of them are ids into tables the pack
+does not carry, so an axis a person would search BY NAME still needs its own
+vocabulary shipped.
 """
 
 from __future__ import annotations
@@ -196,6 +200,17 @@ class EffectRow:
     target_a: int
     target_b: int
     """The row's two implicit-target columns, unresolved and kept apart."""
+
+    misc_a: int = 0
+    misc_b: int = 0
+    """The row's two misc values, raw.
+
+    Meaningless on their own -- what they refer to is decided by the effect or
+    aura on the same row -- which is exactly why they are carried rather than
+    interpreted here. Every payload this route decodes reads one of these, and
+    throwing the number away afterwards is what made each new axis over one a
+    format bump.
+    """
 
     effect_consumed: bool = False
     aura_consumed: bool = False
@@ -493,5 +508,6 @@ def read_spell_effect_rows(tables: Tables, spell_names: Container[int],
         # a new axis flags its own selector the moment it is declared above.
         if effect or aura:
             rows.mechanics.add(EffectRow(spell, effect, aura, first, second,
+                                         misc0, misc1,
                                          consumed_effect, consumed_aura))
     return rows

@@ -12,11 +12,11 @@ from ..model.section import (Cardinality, Encoding, Layout, Section,
                              SectionColumns)
 from .columns import (EMPTY_SLOT, LAYOUTS, dense, deduped, encode_column,
                       sparse)
-from .policy import COMPACT, COMPATIBLE, layout_of
+from .policy import FEWEST_BYTES, FEWEST_ENTRIES, layout_of
 
 __all__ = [
-    "COMPACT",
-    "COMPATIBLE",
+    "FEWEST_BYTES",
+    "FEWEST_ENTRIES",
     "EMPTY_SLOT",
     "LAYOUTS",
     "dense",
@@ -29,7 +29,7 @@ __all__ = [
 
 
 def encode_section(section: Section, produced: SectionColumns,
-                   policy: Mapping[Cardinality, Encoding] = COMPATIBLE) -> object:
+                   policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES) -> object:
     """One section's produced columns, laid out as the record declares.
 
     Args:

@@ -11,10 +11,11 @@ both manifests point at it. Nothing has to decide in advance whether a module
 is common to every build -- if it is, it is shared, and if a build diverges it
 gets its own name.
 
-TODO: one localizable section has to yield one module per locale. ``assemble``
-maps a section to a single payload today, so the fan-out needs a seam here
-rather than a caller rewriting ``Section.module``; it is blocked on the locale
-split naming what a per-locale module is called.
+A section is not necessarily one module's worth. The columns carrying the
+game's own language go to the locale module and the rest stay with the
+structure, so a reader wanting Russian fetches one file instead of a second
+copy of every id. The section keeps its name in both, and joining them is
+reading two objects with the same key.
 """
 
 from __future__ import annotations
@@ -111,6 +112,46 @@ def absent_sections(sections: Sequence[Section],
     return sorted(section.name for section in sections if section.name not in produced)
 
 
+LOCALE_MODULE = "names"
+"""Where a section's localizable columns go by default.
+
+One module rather than one per section: every name in the pack is swapped
+together when the language changes, so splitting them finer would only make a
+reader fetch more files for one decision.
+"""
+
+LOCALE_MODULES = ("names", "text")
+"""The modules that hold a language rather than a structure.
+
+Two, and the split between them is what each is FOR rather than what it holds:
+a name is needed for the first keystroke, and prose is not. A section already
+in one of these is language throughout and stays whole.
+"""
+
+
+def split(section: Section, payload: object) -> list[tuple[str, object]]:
+    """One section's payload, split into the modules it belongs in.
+
+    A section with no localizable columns is one entry. A section with some is
+    two: the structure in its own module and the language in the locale one,
+    under the same section name in both.
+    """
+    if not section.localizable or not isinstance(payload, dict):
+        return [(section.module, payload)]
+    if section.module in LOCALE_MODULES:
+        return [(section.module, payload)]
+    spoken = {name: column for name, column in payload.items()
+              if name in section.localizable}
+    rest = {name: column for name, column in payload.items()
+            if name not in section.localizable}
+    placed = [(LOCALE_MODULE, spoken)]
+    # A section that is ALL language contributes nothing to its own module, and
+    # shipping an empty object there would make a reader think it had checked.
+    if rest:
+        placed.insert(0, (section.module, rest))
+    return placed
+
+
 def assemble(sections: Sequence[Section],
              produced: Mapping[str, object]) -> list[Module]:
     """Group produced sections into the modules that will be written.
@@ -139,6 +180,7 @@ def assemble(sections: Sequence[Section],
     payloads: dict[str, dict[str, object]] = {}
     for section in sections:
         if section.name in produced:
-            payloads.setdefault(section.module, {})[section.name] = produced[section.name]
+            for module, payload in split(section, produced[section.name]):
+                payloads.setdefault(module, {})[section.name] = payload
     return [Module(name=name, payload=serialize(payload))
             for name, payload in payloads.items()]
