@@ -8,7 +8,8 @@ behaviour change.
 
 from __future__ import annotations
 
-from pack.targets import NO_TARGET, TARGET_AREA, TARGET_CASTER, TARGET_TARGET, implicit_target_bit, resolve_target_mask
+from pack.targets import (NO_TARGET, TARGET_AREA, TARGET_BITS, TARGET_CASTER,
+                          TARGET_TARGET, implicit_target_bit, resolve_target_mask)
 
 
 def test_a_place_beats_the_unit_it_is_anchored_to() -> None:
@@ -58,7 +59,9 @@ def test_the_bits_are_the_visual_graphs_own() -> None:
     """Not a parallel vocabulary: an effect's implicit target and a visual
     event's TargetType answer the same question of different tables, and
     resolve_target_mask can only compare them because they share bits."""
-    assert implicit_target_bit("TARGET_UNIT_CASTER") == TARGET_CASTER
+    classified = {implicit_target_bit(f"TARGET_{word}")
+                  for word in ("UNIT_CASTER", "UNIT_TARGET_ALLY", "DEST_DEST")}
+    assert classified <= set(TARGET_BITS.values())
 
 
 def test_a_self_cast_spell_reads_target_as_caster() -> None:

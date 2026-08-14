@@ -19,6 +19,10 @@ MIN_SATURATION, MIN_VALUE = 0.15, 0.08
 """Below either, a colour names no hue: white, grey and near-black are the
 absence of one rather than a colour anyone searches for."""
 
+RGB_MASK = 0xFFFFFF
+"""The colour half of a packed value. Several tables store a colour as signed
+ARGB, where the top byte is opacity rather than colour."""
+
 
 def to_channel(text: str) -> int:
     """A 0..1 float colour column as a 0..255 channel byte."""

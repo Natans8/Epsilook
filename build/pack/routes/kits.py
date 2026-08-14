@@ -9,6 +9,7 @@ dropped rather than treated as an error.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Container
 from dataclasses import dataclass, field
 
 from ..sources import enum_id_where, load_local_enum
@@ -65,6 +66,33 @@ class KitEffects:
     camos: set[int] = field(default_factory=set)
 
 
+@dataclass(frozen=True)
+class RosteredPayload:
+    """An effect type whose payload is kept only if its table has the row.
+
+    Three of the ten types differ in nothing but which table answers and which
+    bucket receives, so they are declared rather than written out. The rest do
+    something structurally different and stay in the walk.
+    """
+
+    known: Callable[[FxPayloads], Container[int]]
+    """Where to ask whether this build carries the row."""
+
+    into: Callable[[KitEffects], dict[int, set[int]]]
+    """Which bucket receives it."""
+
+
+ROSTERED_PAYLOADS: dict[int, RosteredPayload] = {
+    EFFECT_TYPE_DISSOLVE: RosteredPayload(lambda fx: fx.dissolves,
+                                          lambda kits: kits.dissolves),
+    EFFECT_TYPE_EDGE_GLOW: RosteredPayload(lambda fx: fx.glows,
+                                           lambda kits: kits.glows),
+    EFFECT_TYPE_SHADOWY: RosteredPayload(lambda fx: fx.shadowies,
+                                         lambda kits: kits.shadowies),
+}
+"""Effect type to the payload it keeps, for the types that only look one up."""
+
+
 def add_chains(chains: dict[int, tuple], chain_id: int, source: int,
                destination: int, into: set[ChainDraw]) -> None:
     """Add a chain and every chain it nests, tagged with an attachment pair.
@@ -117,15 +145,9 @@ def read_kit_effects(tables: Tables, models: ModelSources, procs: ProcEffects,
                 effect, (0, NO_ATTACHMENT, NO_ATTACHMENT))
             add_chains(fx.chains, chain, source, destination,
                        kits.chains.setdefault(kit, set()))
-        elif effect_type == EFFECT_TYPE_DISSOLVE:
-            if effect in fx.dissolves:
-                kits.dissolves.setdefault(kit, set()).add(effect)
-        elif effect_type == EFFECT_TYPE_EDGE_GLOW:
-            if effect in fx.glows:
-                kits.glows.setdefault(kit, set()).add(effect)
-        elif effect_type == EFFECT_TYPE_SHADOWY:
-            if effect in fx.shadowies:
-                kits.shadowies.setdefault(kit, set()).add(effect)
+        elif (rostered := ROSTERED_PAYLOADS.get(effect_type)) is not None:
+            if effect in rostered.known(fx):
+                rostered.into(kits).setdefault(kit, set()).add(effect)
         elif effect_type == EFFECT_TYPE_EMISSION:
             file = models.emission_fid.get(effect, 0)
             if file:

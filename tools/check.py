@@ -186,8 +186,8 @@ PLACE_NAMES = ("Path", "open", "urlopen", "urllib", "requests", "listdir", "glob
 # cannot drift on what they cover. The versions they run at are pinned by
 # uv.lock rather than by whatever the machine happens to have installed, which
 # is why all three go through `uv run`.
-PYTHON_SOURCES = ("build/build_data.py", "build/locale_data.py", "build/pack",
-                  "test/py", "tools")
+PYTHON_SOURCES = ("build/build_data.py", "build/locale_data.py", BUILD_PACKAGE,
+                  PYTHON_TESTS, "tools")
 
 # How long a pack-freshness answer stays good. Blizzard patches weekly at
 # most, so a day is generous and keeps a normal working day to one request.
@@ -642,8 +642,8 @@ def imported_modules(tree: ast.Module, package: str) -> list[str]:
 
 
 def check_build_layers(rep: Report) -> None:
-    """The data build's layers must only depend downward, and only the ends of
-    the pipeline may touch a file or a URL.
+    """The data build's layers must only depend downward, and the middle of the
+    pipeline must not name a file or a URL itself.
 
     Both directions are silent. A route importing an emitter welds the reading
     of a game table to one artifact shape, so the pack cannot be reshaped
@@ -651,6 +651,13 @@ def check_build_layers(rep: Report) -> None:
     the provider seam stops being real the moment anything reads around it.
     Neither breaks a build - the code runs fine, it just quietly stops being
     the thing the split was for.
+
+    The path half is a test on parsed identifiers, so it proves a module names
+    no path DIRECTLY. It does not prove the layer never reaches a file: a
+    module may still call something one layer down that opens one, which is how
+    the checked-in enum declarations are read. Widening it to reject that would
+    reject reading a declaration the build owns, which is not the same thing as
+    reaching for a source.
 
     Tests are exempt from both rules and deliberately so: a test's job is often
     to assert that two layers agree, and it is not part of the graph the rules
@@ -669,16 +676,19 @@ def check_build_layers(rep: Report) -> None:
         return
 
     problems: list[str] = []
+    placeless = 0
     for path in modules:
         relative = path.relative_to(root.parent).with_suffix("")
-        # A module's package is its directory; an __init__ IS its package.
+        # A module's package is its directory; an __init__ IS its package, so a
+        # relative import inside one resolves against itself.
         package = ".".join(relative.parts[:-1])
         dotted = package if relative.name == "__init__" else ".".join(relative.parts)
         layer = build_layer_of(dotted)
+        placeless += layer in BUILD_PLACELESS
         name = path.relative_to(ROOT).as_posix()
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=name)
 
-        for target in imported_modules(tree, dotted if relative.name == "__init__" else package):
+        for target in imported_modules(tree, package):
             reached = build_layer_of(target)
             if reached is None or reached == layer:
                 continue
@@ -702,11 +712,9 @@ def check_build_layers(rep: Report) -> None:
         if len(problems) > 6:
             rep.fail("build layers", f"...and {len(problems) - 6} more")
     else:
-        placeless = sum(1 for p in modules if build_layer_of(
-            ".".join(p.relative_to(root.parent).with_suffix("").parts)) in BUILD_PLACELESS)
         rep.ok("build layers",
                f"{len(modules)} modules import downward only; {placeless} in "
-               f"{'/, '.join(BUILD_PLACELESS)}/ free of paths and URLs")
+               f"{'/, '.join(BUILD_PLACELESS)}/ name no path or URL directly")
 
 
 PROSE_RULES: list[tuple[str, re.Pattern[str], str]] = [
@@ -735,29 +743,56 @@ developer reading the code and starts being a record of how it was written.
 
 
 def prose_of(source: str, name: str) -> Iterator[tuple[int, str]]:
-    """Yield the `(line, text)` of every comment and docstring in a module.
+    """Yield the `(line, text)` of every comment block and docstring in a module.
 
     Tokenised rather than matched line by line, so a rule cannot fire on code
     that merely looks like prose - a regex literal, a URL, a table of
-    constants - and cannot miss prose that spans lines.
+    constants.
+
+    A run of `#` lines is joined into one block before it is yielded. Python
+    tokenises each of them separately, so a rule applied per token reads every
+    wrapped sentence as several short ones and misses anything spanning a line
+    break, which is most of what a wrapped comment says.
 
     Args:
         source: the module's text.
         name: its path, for the error a syntax failure raises.
 
     Yields:
-        One pair per comment or string literal, in source order.
+        One pair per comment block or string literal, in source order. The line
+        is where the block starts.
+
+    Raises:
+        ValueError: if the module does not tokenise.
     """
     try:
         tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
     except (tokenize.TokenError, IndentationError, SyntaxError) as broken:
         raise ValueError(f"{name}: {broken}") from broken
+
+    start = 0
+    block: list[str] = []
     for token in tokens:
         if token.type is tokenize.COMMENT:
+            # A blank line or any code between two `#` lines ends the block.
+            if block and token.start[0] != start + len(block):
+                yield start, " ".join(block)
+                block = []
+            if not block:
+                start = token.start[0]
+            block.append(token.string.lstrip("#").strip())
+            continue
+        if block and token.type not in (tokenize.NL, tokenize.NEWLINE):
+            yield start, " ".join(block)
+            block = []
+        # A docstring is a triple-quoted string opening its own line. The
+        # prefix letters are stripped rather than enumerated, so `r'''` and
+        # `f"""` are covered without listing every combination.
+        if token.type is tokenize.STRING and token.line.lstrip().lstrip(
+                "rbfuRBFU").startswith(('"""', "'''")):
             yield token.start[0], token.string
-        elif token.type is tokenize.STRING and token.line.lstrip().startswith(
-                ('"""', "'''", 'r"""', "f'''")):
-            yield token.start[0], token.string
+    if block:
+        yield start, " ".join(block)
 
 
 def check_comment_style(rep: Report) -> None:

@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from ..tables import Tables
 from .attachments import DEFAULT_MISSILE_SOURCE
 from .columns import to_int
-from .models import EFFECT_NAME_TYPE_WEAPON
+from .models import ModelSources, file_for_effect_name
 
 # (file id, motion, source attachment, destination attachment)
 Missile = tuple[int, int, int, int]
@@ -45,8 +45,7 @@ def read_missile_motions(tables: Tables) -> dict[int, str]:
             if name}
 
 
-def read_missiles(tables: Tables, effect_name_fid: dict[int, int],
-                  effect_name_type: dict[int, int]) -> dict[int, VisualMissiles]:
+def read_missiles(tables: Tables, models: ModelSources) -> dict[int, VisualMissiles]:
     """Read each visual's projectiles, attachments resolved.
 
     The row's attachments win over its visual's, which fills in what the row
@@ -71,12 +70,9 @@ def read_missiles(tables: Tables, effect_name_fid: dict[int, int],
         if not set_id:
             continue
         into = sets.setdefault(set_id, VisualMissiles())
-        file = effect_name_fid.get(name_id, 0)
-        if not file:
-            # A weapon type with no file: the caster's own weapon thrown as the
-            # projectile.
-            file = EFFECT_NAME_TYPE_WEAPON.get(effect_name_type.get(name_id, 0), 0)
-        if file:
+        # A weapon type with no file resolves to the caster's own weapon,
+        # thrown as the projectile.
+        if file := file_for_effect_name(models, name_id):
             into.models.add((file, motion, source, destination))
         if sound:
             into.soundkits.add(sound)

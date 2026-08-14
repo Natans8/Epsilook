@@ -155,6 +155,26 @@ def read_effect_names(tables: Tables, named: Callable[[set[int]], set[int]]
     return fid, types, generic
 
 
+def file_for_effect_name(models: ModelSources, name_id: int) -> int:
+    """The model file an effect-name row resolves to, or 0 if it reaches none.
+
+    A row with no file may still name a weapon SLOT, which resolves to the
+    sentinel standing in for the caster's own weapon. Both the attached-model
+    route and the missile route need that fallback, so it lives here rather
+    than being decided twice.
+
+    Args:
+        models: the read effect-name columns.
+        name_id: the `SpellVisualEffectName` row to resolve.
+
+    Returns:
+        A file id, a weapon sentinel, or 0.
+    """
+    if file := models.effect_name_fid.get(name_id, 0):
+        return file
+    return EFFECT_NAME_TYPE_WEAPON.get(models.effect_name_type.get(name_id, 0), 0)
+
+
 def read_model_sources(tables: Tables, creatures: CreatureModels, items: ItemModels,
                        named: Callable[[set[int]], set[int]]) -> ModelSources:
     """Read every table that ends in a model file.
@@ -234,11 +254,7 @@ def _attached_model(name_id: int, attach: int, models: ModelSources,
         file = items.model_fid.get(item, 0)
         return ((file, MODEL_CAT_ITEM, attach, NO_ATTACHMENT, item, NO_MOTION)
                 if file else None)
-    file = models.effect_name_fid.get(name_id, 0)
+    file = file_for_effect_name(models, name_id)
     if file:
         return (file, MODEL_CAT_ATTACH, attach, NO_ATTACHMENT, 0, NO_MOTION)
-    weapon_fid = EFFECT_NAME_TYPE_WEAPON.get(name_type, 0)
-    if weapon_fid:
-        # A weapon the caster already has, held at this point.
-        return (weapon_fid, MODEL_CAT_ATTACH, attach, NO_ATTACHMENT, 0, NO_MOTION)
     return None

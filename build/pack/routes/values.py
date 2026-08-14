@@ -19,10 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..tables import Tables
-from .columns import to_amount, to_int
-
-BASE_DIFFICULTY = 0
-"""The difficulty whose row a player's tooltip shows."""
+from .columns import BASE_DIFFICULTY, to_amount, to_int
 
 FIRST_EFFECT_INDEX = 1
 """What a template calls a spell's first effect. The table counts from zero."""

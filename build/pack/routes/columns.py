@@ -9,6 +9,14 @@ build.
 
 from __future__ import annotations
 
+BASE_DIFFICULTY = 0
+"""The difficulty whose row a player's tooltip shows.
+
+Several tables carry one row per difficulty for the same spell. Which row wins
+is the reading route's call -- some take the base row over any other, some skip
+the rest outright -- but they are all deciding about this value.
+"""
+
 
 def to_int(text: str) -> int:
     """An integer column. An empty cell means zero, which is what it is."""

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pack.routes.attachments import DEFAULT_MISSILE_SOURCE
 from pack.routes.missiles import read_missile_motions, read_missiles
-from pack.routes.models import WEAPON_FID_RANGED
+from pack.routes.models import WEAPON_FID_RANGED, ModelSources
 from support import BuildTables
 
 # Visual 10 declares both attach points and names a base set and a raid set.
@@ -35,14 +35,13 @@ ID,Name
 9,
 """
 
-EFFECT_NAME_FID = {1: 8000, 2: 0}
-EFFECT_NAME_TYPE = {1: 0, 2: 5}
+MODELS = ModelSources(effect_name_fid={1: 8000, 2: 0},
+                      effect_name_type={1: 0, 2: 5})
 
 
 def missiles(tables: BuildTables):
     return read_missiles(tables(SpellVisual=SPELL_VISUAL,
-                                SpellVisualMissile=SPELL_VISUAL_MISSILE),
-                         EFFECT_NAME_FID, EFFECT_NAME_TYPE)
+                                SpellVisualMissile=SPELL_VISUAL_MISSILE), MODELS)
 
 
 def test_the_row_wins_where_it_says_anything(tables: BuildTables) -> None:

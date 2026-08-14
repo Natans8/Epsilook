@@ -113,16 +113,16 @@ class MiscPayload:
     effects: frozenset[int] = frozenset()
     """The selector. A payload names one or the other, never both."""
 
-    masked: bool = True
-    """Whether the audience is recorded. False for payloads that render as
-    something other than a chip of their own."""
-
     zero_is_a_value: bool = False
     """Whether a misc value of zero is data. True only where the number is a
     channel rather than a row id."""
 
     roster: str = ""
-    """Names a roster the payload must appear in to be kept, or empty."""
+    """Names the roster this payload must appear in to be kept, or empty.
+
+    The name is a key into the rosters the reader is handed, so a payload that
+    needs narrowing declares it here rather than adding a parameter.
+    """
 
 
 MISC_PAYLOADS: tuple[MiscPayload, ...] = (
@@ -137,10 +137,8 @@ MISC_PAYLOADS: tuple[MiscPayload, ...] = (
                 roster="screens"),
     MiscPayload(lambda rows: rows.keybinds, aura=AURA_KEYBOUND_OVERRIDE,
                 roster="keybounds"),
-    MiscPayload(lambda rows: rows.altnames, aura=AURA_OVERRIDE_NAME,
-                masked=False),
-    MiscPayload(lambda rows: rows.anim_sets, aura=AURA_ANIM_REPLACEMENT_SET,
-                masked=False),
+    MiscPayload(lambda rows: rows.altnames, aura=AURA_OVERRIDE_NAME),
+    MiscPayload(lambda rows: rows.anim_sets, aura=AURA_ANIM_REPLACEMENT_SET),
     MiscPayload(lambda rows: rows.objects, effects=EFFECT_SPAWN_OBJECT),
 )
 """Every payload whose misc value is a reference, declared once.
@@ -390,7 +388,7 @@ def read_summon_control(tables: Tables) -> dict[int, int]:
 
 
 def read_spell_effect_rows(tables: Tables, spell_names: Container[int],
-                           screens: Container[int], keybounds: Container[int],
+                           rosters: Mapping[str, Container[int]],
                            target_bits: Mapping[int, int]) -> SpellEffectRows:
     """Read `SpellEffect` once and split it into every payload it feeds.
 
@@ -398,20 +396,25 @@ def read_spell_effect_rows(tables: Tables, spell_names: Container[int],
         tables: the source to read from.
         spell_names: the build's spell list; effects of anything absent from it
             are skipped.
-        screens: the screen effects this build has. One it lacks is dropped
-            rather than kept as a bare id, having nothing to show.
-        keybounds: the key overrides this build has. The table trails its aura
-            on the newest builds, so a missing one is dropped the same way.
+        rosters: what each roster-narrowed payload may reference on this build,
+            keyed by the name its declaration gives. A payload naming a roster
+            drops a misc value the roster does not contain, because a screen
+            effect or key override the build lacks has nothing to show.
         target_bits: implicit-target id to target bit, from
             `implicit_target_bits`.
 
     Returns:
         Every payload, with the mechanics rows left over after consumption.
+
+    Raises:
+        KeyError: if a declaration names a roster the caller did not supply,
+            which would otherwise keep every row of that payload silently.
     """
     rows = SpellEffectRows()
     control = read_summon_control(tables)
-    rosters: dict[str, Container[int]] = {"screens": screens,
-                                          "keybounds": keybounds}
+    if missing := {p.roster for p in MISC_PAYLOADS if p.roster} - set(rosters):
+        raise KeyError(f"MISC_PAYLOADS names rosters nobody supplied: "
+                       f"{sorted(missing)}")
     by_aura = {p.aura: p for p in MISC_PAYLOADS if p.aura}
     by_effect = {effect: p for p in MISC_PAYLOADS for effect in p.effects}
 
@@ -461,8 +464,8 @@ def read_spell_effect_rows(tables: Tables, spell_names: Container[int],
             rows.sounds[key] = rows.sounds.get(key, NO_TARGET) | mask
             consumed_effect = True
 
-        # Speed and scale carry a NUMBER rather than a reference, and A ZERO
-        # AMOUNT IS DROPPED for both. These pills are made of nothing but the
+        # Speed and scale carry a number rather than a reference, and a zero
+        # amount is dropped for both. These pills are made of nothing but the
         # number, so a "+0%" one promises a change and delivers none, and it
         # drags the spell into fx:speed and fx:scale counts it does not belong
         # in. The amount is genuinely elsewhere on those rows -- a talent, the

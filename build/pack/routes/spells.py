@@ -14,10 +14,7 @@ from collections.abc import Container
 from dataclasses import dataclass, field
 
 from ..tables import Tables, array_columns
-from .columns import to_int
-
-BASE_DIFFICULTY = 0
-"""The difficulty whose row a player's tooltip shows."""
+from .columns import BASE_DIFFICULTY, to_int
 
 ATTRIBUTE_COLUMNS_MAX = 32
 """Upper bound when probing for `SpellMisc.Attributes_N`.

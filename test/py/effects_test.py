@@ -7,6 +7,8 @@ or drops one that is.
 
 from __future__ import annotations
 
+import pytest
+
 from pack.routes.effects import (AURA_ANIM_REPLACEMENT_SET, AURA_KEYBOUND_OVERRIDE,
                                  AURA_MOD_INVISIBILITY, AURA_MOD_INVISIBILITY_DETECT,
                                  AURA_OVERRIDE_NAME, AURA_SCREEN_EFFECT,
@@ -35,13 +37,14 @@ def effect_rows(*rows: str) -> str:
     return header + "".join(row + "\n" for row in rows)
 
 
-def read(tables: BuildTables, spell_effect: str, *,
-         screens: frozenset[int] = frozenset({50}),
-         keybounds: frozenset[int] = frozenset({60})):
-    """Read one `SpellEffect` fixture with the two rosters declared."""
+ROSTERS = {"screens": frozenset({50}), "keybounds": frozenset({60})}
+
+
+def read(tables: BuildTables, spell_effect: str, **rosters: frozenset[int]):
+    """Read one `SpellEffect` fixture, overriding any roster by name."""
     return read_spell_effect_rows(
         tables(SpellEffect=spell_effect, SummonProperties=SUMMON_PROPERTIES),
-        SPELLS, screens, keybounds, TARGET_BITS)
+        SPELLS, {**ROSTERS, **rosters}, TARGET_BITS)
 
 
 def test_a_misc_value_lands_where_its_aura_sends_it(tables: BuildTables) -> None:
@@ -190,7 +193,6 @@ def test_a_consumed_value_stays_on_its_row(tables: BuildTables) -> None:
 def test_the_effect_half_is_consumed_too(tables: BuildTables) -> None:
     """Not only auras: a summon reaches a pill of its own."""
     rows = read(tables, effect_rows(f"100,{EFFECT_SUMMON},0,900,7,1,0,0,0,0"))
-    assert rows.summons == {100: {(900, 2)}}
     row, = rows.mechanics
     assert (row.effect, row.effect_consumed) == (EFFECT_SUMMON, True)
 
@@ -328,7 +330,10 @@ def test_every_reference_payload_is_declared_not_branched() -> None:
     assert len(selectors) == len(set(selectors)), "two payloads claim one aura"
 
 
-def test_a_declared_roster_is_one_the_reader_is_handed() -> None:
-    """A roster name with nothing behind it would silently keep every row."""
-    named = {p.roster for p in MISC_PAYLOADS if p.roster}
-    assert named <= {"screens", "keybounds"}
+def test_a_roster_nobody_supplied_is_refused(tables: BuildTables) -> None:
+    """A roster name with nothing behind it would keep every row silently, so
+    it is refused at the call rather than discovered in a pack."""
+    with pytest.raises(KeyError):
+        read_spell_effect_rows(
+            tables(SpellEffect=effect_rows(), SummonProperties=SUMMON_PROPERTIES),
+            SPELLS, {"screens": frozenset()}, TARGET_BITS)

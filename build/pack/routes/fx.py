@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..tables import Tables, array_columns
-from .colors import pack_rgb, to_channel
+from .colors import RGB_MASK, pack_rgb, to_channel
 from .columns import to_int
 
 SCREEN_EFFECT_FOG = 3
@@ -22,7 +22,6 @@ TEX_OVERLAY, TEX_MASK = 0, 1
 by the grade colours; an overlay is finished art in its own colours."""
 
 ARGB_ALPHA_SHIFT = 24
-RGB_MASK = 0xFFFFFF
 
 # (offsetY, size multiplier, power)
 Vignette = tuple[float, float, float]

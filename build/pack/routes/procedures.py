@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from ..sources import enum_id_where, enum_ids_where, load_local_enum
 from ..tables import Tables
 from .attachments import NO_ATTACHMENT, NO_MOTION
+from .colors import RGB_MASK
 from .columns import to_int, to_int_from_float
 from .models import MODEL_CAT_AREA, MODEL_CAT_TRAIL, AttachModel, ModelSources
 
@@ -33,9 +34,6 @@ PROC_TYPE_STANDWALK = enum_id_where(_PROC_TYPES, "standwalk")
 PROC_STANDWALK_SLOTS = (0, 4, 5)
 """The base animation each of the stand/walk procedure's first three values
 replaces: Stand, Walk, Run. The fourth value overrides no slot and is dropped."""
-
-RGB_MASK = 0xFFFFFF
-"""A packed colour is three bytes; the fourth carries no colour."""
 
 
 @dataclass
