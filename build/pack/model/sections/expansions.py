@@ -31,6 +31,10 @@ def expansions(reads: Reads) -> SectionColumns:
         # it, so which picture belongs to which expansion is named once in the
         # frontend's config and never here.
         "majors": [rung["major"] for rung in rungs],
+        # The level cap the expansion shipped with. It is what a description's
+        # level-dependent placeholders were cooked at, so it travels with the
+        # rung rather than being a number the reader has to know.
+        "maxLevels": [rung["maxLevel"] for rung in rungs],
         "aliases": [rung["aliases"] for rung in rungs],
         # "" where no era site exists, which the app reads as "use retail".
         "wowhead": [rung["wowhead"] for rung in rungs],
@@ -56,7 +60,8 @@ EXPANSIONS = register(Section(
     doc="The expansion ladder oldest first, which spells.eras indexes into.",
     module="universal",
     produce=expansions,
-    columns=("keys", "labels", "shorts", "majors", "aliases", "wowhead", "caveats"),
+    columns=("keys", "labels", "shorts", "majors", "maxLevels", "aliases",
+             "wowhead", "caveats"),
     reads=("declared", "spell_ids"),
     counts=(CountFamily(era_counts),),
     scope=Scope.UNIVERSAL,

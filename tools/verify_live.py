@@ -194,22 +194,38 @@ def main() -> int:
     # 3. the packs: the manifest is the app's own index, so walk it. 1b only
     # breaks once the SERVED manifest equals this one, so iterating the local
     # copy walks exactly what is live — and is a list rather than `Any | None`.
+    # A pack is its manifest plus the modules that manifest names, and the
+    # modules are what the bytes are in — so checking only the manifest would
+    # pass on a deploy that shipped an index to files it never uploaded. Named
+    # modules are collected across packs first: builds on one game build share
+    # a file, and requesting it once per pack would be the same HEAD repeatedly.
     manifest = local_manifest
+    wanted: dict[str, str] = {}
     for entry in manifest:
         url = args.site + entry["file"] + f"?v={entry['hash']}"
-        status, _, headers = get(url, int(time.time() * 1000), head=True)
+        status, body, _ = get(url, int(time.time() * 1000))
+        if status != 200:
+            failures += 1
+            print(f"{RED}FAIL{RESET}  {entry['id']} manifest HTTP {status}")
+            continue
+        for module in json.loads(body).get("modules", {}).values():
+            wanted[module["file"]] = entry["id"]
+
+    for file, owner in sorted(wanted.items()):
+        status, _, headers = get(args.site + file, int(time.time() * 1000), head=True)
         size = int(headers.get("Content-Length", 0) or 0)
-        local = ROOT / "site" / entry["file"]
+        local = ROOT / "site" / file
         local_size = local.stat().st_size if local.exists() else -1
         if status != 200:
             failures += 1
-            print(f"{RED}FAIL{RESET}  {entry['id']} pack HTTP {status}")
+            print(f"{RED}FAIL{RESET}  {owner} module {file} HTTP {status}")
         elif local_size >= 0 and size != local_size:
             failures += 1
-            print(f"{RED}FAIL{RESET}  {entry['id']} pack is {size:,} bytes live, "
+            print(f"{RED}FAIL{RESET}  {file} is {size:,} bytes live, "
                   f"{local_size:,} local")
     if not failures:
-        print(f"{GREEN}ok{RESET}    {len(manifest)} packs served, sizes match local")
+        print(f"{GREEN}ok{RESET}    {len(manifest)} packs served over "
+              f"{len(wanted)} module(s), sizes match local")
 
     print()
     if failures:

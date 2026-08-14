@@ -66,10 +66,14 @@ def scaling_source(build: str, cache_dir: Path) -> Fetched:
     bytes at that address cannot change under a build that already shipped, so
     the first fetch is the last one.
 
-    OPTIONAL, because not every client ships it. A build without the file has
-    no scaled effects to resolve either, so its absence costs nothing -- and
-    the raw route answers slowly when busy, so a transient failure must leave
-    the build printing base points rather than stopping it.
+    OPTIONAL, because not every client ships it: a build without the file has
+    no scaled effects to resolve either, so its absence costs nothing.
+
+    TODO: `optional` absorbs a 404 but NOT a 504, and this route answers 504
+        while busy -- so a rebuild still dies on a transient failure instead of
+        degrading to base points. Three separate roster rebuilds each stopped
+        on one busy request that succeeded seconds later. The fix is a retry in
+        the fetch policy, not another flag here.
     """
     return Fetched(
         name=f"spell scaling game table ({build})",

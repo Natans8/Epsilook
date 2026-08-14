@@ -23,7 +23,7 @@ flowchart TD
     accDescr {
       Six external sources land in a build cache, are read through one provider seam with a
       hotfix overlay, interpreted by three families of readers, walked once, declared as sections,
-      encoded into a gzipped pack, and then indexed, queried and rendered in the browser. Hotlinks
+      encoded and emitted as gzipped modules, and then indexed, queried and rendered in the browser. Hotlinks
       are the only thing fetched afterwards, and only on hover or click.
     }
 
@@ -57,8 +57,8 @@ flowchart TD
     ROWR --> WALK
 
     WALK --> SEC["the section registry<br/>one record each: what fills it, its columns,<br/>counts, domains, the tables it needs"]
-    SEC --> ENC["encode<br/>parallel columns · sparse · dedup"]
-    ENC --> PACK[("the pack<br/>sections and meta<br/>gzipped, content-hashed")]
+    SEC --> ENC["encode<br/>a column's kind decides its layout,<br/>for the whole build at once"]
+    ENC --> PACK[("the pack, as modules<br/>core · names · text · universal<br/>each gzipped and named by its own bytes")]
 
     PACK --> IDX["index<br/>inverted, over the whole vocabulary, at load"]
     IDX --> QRY["query<br/>text to chips to a matcher"]
@@ -85,7 +85,7 @@ Each stage owns one thing and is ignorant of the next, which is what lets any of
 | **read**    | Turning rows into typed meaning. The interpretive half       | where rows came from, what ships |
 | **derive**  | The one graph walk and everything more than one reader needs | encoding                         |
 | **declare** | Which sections exist, what fills them, what they count       | bytes                            |
-| **emit**    | Column layout, compression, the manifest                     | routes                           |
+| **emit**    | Grouping into modules, compression, the manifest             | routes                           |
 | **index**   | Inverted indexes over every value the pack carries           | how a query is written           |
 | **render**  | Rows, cells, pills, exports                                  | how a value was found            |
 
@@ -467,8 +467,8 @@ flowchart TD
 | **value table** | A name or path stored once and referenced by id, instead of repeated on every link row          |
 
 Columns are parallel arrays rather than a list of objects, because the app wants a whole column at a time and repeated
-keys cost more than they explain. A column dominated by empty values is stored sparsely, and repeated text is
-deduplicated into a value table plus an index.
+keys cost more than they explain. What each column costs to store is decided in one place, and [Emit](#emit) is where
+that decision and its measurement live.
 
 **The inversion is the point.** At the source, "which spells show a sheep" is unanswerable without walking every spell.
 As shipped, it is one lookup in `files`, one scan of `spellModels`, and the answer is a list of spell ids.
@@ -772,8 +772,16 @@ because the chip is an icon and a name; so is a self-link. Only one direction is
 derived in the browser.
 
 **Mechanics rows are what is left.** Every effect and aura a spell has, paired with the implicit targets of the row that
-carried it. The granularity is per effect and that is a correctness property: a search scope binds its axes to one row,
-so asking for an effect that is a jump *and* aims at a unit must mean a single effect that is both.
+carried it and with both of its raw misc values. The granularity is per effect and that is a correctness property: a
+search scope binds its axes to one row, so asking for an effect that is a jump *and* aims at a unit must mean a single
+effect that is both.
+
+**The misc values ship raw, because their meaning is the reader's to apply.** What a misc value refers to is a function
+of the effect or aura beside it, and that pairing is already in the pack — so shipping the number turns a future axis
+over one into a declaration rather than another format bump. It is not a skeleton key: a misc value that indexes a
+table the pack does not carry is an id nobody can search by name, and giving it a name still means shipping its
+vocabulary. Carrying them also makes the row identity finer, since two effects alike in everything the pack shows but
+summoning different creatures are two rows rather than one.
 
 **A value that reached a parsed payload is marked consumed.** It stays on its row and stays searchable; the flag only
 tells the renderer that a dedicated pill already shows it, so the raw one is not drawn a second time. That makes the
@@ -901,7 +909,8 @@ entries nobody is waiting on. Both policies are declared; the smaller one ships.
 
 ### Modules
 
-The pack is not one file. It is four, and which one a column lands in follows from what the column is:
+A pack is a `manifest.json` naming the module files it is made of. Which module a column lands in follows from what the
+column is:
 
 | module      | holds                                                             |
 |-------------|-------------------------------------------------------------------|
@@ -919,8 +928,10 @@ builds whose sections serialise alike name one file and both manifests point at 
 own name with no special case. That is why `universal` is a module like any other rather than a second mechanism, and
 why nothing here is a union — a union would force every reader to fetch what all builds reference.
 
-Each pack carries a `manifest.json` naming its modules by file and size, plus the sections this build ships without, so
-the app can tell "this build never had it" from "this pack is broken".
+The manifest names each module by file and size, states the pack's format and build date so a reader learns both before
+committing to a download, and lists the sections this build ships without — so "this build never had it" is
+distinguishable from "this pack is broken". Every module file lives in one shared directory, because a module is named
+by its own content and two packs land on one file exactly when their bytes agree.
 
 Beside the sections, `meta` ships the facts nothing downstream should have to re-derive:
 
@@ -935,8 +946,14 @@ Beside the sections, `meta` ships the facts nothing downstream should have to re
 | `counts`       | Every population, so nothing counts a column at load                 |
 | `domains`      | The measured range of each numeric axis, so no control re-derives it |
 
-`versions.json` names every shipped build and carries a content hash per pack, which is what busts a cache without a
-version string to bump.
+`versions.json` names every shipped build and points each at its manifest, with a content hash over that manifest —
+which is what busts a cache without a version string to bump. The modules underneath need no busting at all, since
+their names already change exactly when their bytes do; the manifest is the one file whose name is fixed, and because
+it names every module its hash moves whenever any of them does.
+
+Two roster lines sitting on one build — a test line level with live — each get their own manifest, and both name the
+same module files. Nothing declares that: their sections encode to the same bytes, so they resolve to the same
+content-addressed names. The day the builds diverge, so do the modules.
 
 ## Index, query, render
 

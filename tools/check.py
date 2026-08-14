@@ -106,6 +106,12 @@ FORMAT_CONSUMERS = (
     "docs/DATA_ROUTES.md",
 )
 
+# Where PACK_FORMAT is declared. Named because the guard above reads the diff
+# of this file and nothing else: point it at a file the number has moved out
+# of and it stops firing, silently, which is the one failure a warn-only check
+# cannot survive. check_format_declaration is what keeps this path honest.
+PACK_FORMAT_HOME = "build/pack/emit/meta.py"
+
 # THE DATA/QUERY LAYER. These modules answer a query and know nothing about how
 # it is shown, which is what makes the two halves mutually replaceable: `data +
 # query + search + pilltypes` is a complete headless search engine, and the GUI
@@ -179,10 +185,15 @@ DOM_NAMES = (
 # replaced without the others noticing: a different table source, a different
 # artifact shape. That only holds while imports flow one way, so the order here
 # IS the rule - a layer may import the layers below it and nothing above.
+#
+# `__main__` is the top of it: the entry point owns argv and where the artifact
+# lands, and nothing in the package may import it. Naming it here is what makes
+# that true - left out, it reads as package-root vocabulary, and the rule for
+# that vocabulary is that it may import no layer at all.
 BUILD_PACKAGE = "build/pack"
 PYTHON_TESTS = "test/py"
 BUILD_LAYERS = ("sources", "tables", "routes", "derive", "model", "encode",
-                "emit", "pipeline")
+                "emit", "pipeline", "__main__")
 
 # The layer that wires the rest together, and the one exemption to the reading
 # rule below. Every other layer is written not to know what is around it - a
@@ -387,6 +398,49 @@ def pack_hash(path: Path) -> tuple[str, bool]:
     return hashlib.sha256(raw).hexdigest()[:10], False
 
 
+def module_files(entries: list[dict[str, object]]) -> set[str]:
+    """Every module file the roster's packs name, as site-relative paths.
+
+    Read out of the per-pack manifests rather than off the directory, because
+    the manifests are what a browser follows: a module nothing names is not
+    part of any pack however present it looks.
+    """
+    named: set[str] = set()
+    for entry in entries:
+        manifest_path = SITE / str(entry.get("file", ""))
+        if not manifest_path.exists():
+            continue
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        for module in manifest.get("modules", {}).values():
+            named.add(module["file"])
+    return named
+
+
+def unreferenced_modules(entries: list[dict[str, object]]) -> list[str]:
+    """Module files on disk that no pack's manifest names.
+
+    A module is content-addressed, so a rebuild that changes one writes a new
+    file and leaves the old one behind. Nothing breaks -- the manifests point
+    at the new one -- but the repository keeps paying for it, and these are LFS
+    objects. Reported rather than swept here, since a checker deleting data is
+    the wrong shape; `rebuild.py` sweeps them.
+    """
+    directory = SITE / "data" / "modules"
+    if not directory.is_dir():
+        return []
+    named = module_files(entries)
+    stale = sorted(path.name for path in directory.iterdir()
+                   if path.is_file()
+                   and f"data/modules/{path.name}" not in named)
+    if not stale:
+        return []
+    return [f"{len(stale)} module(s) no manifest names, e.g. {stale[0]} "
+            f"- run tools/rebuild.py --prune-modules"]
+
+
 def check_manifest(rep: Report) -> None:
     """versions.json agrees with the packs on disk, hash included."""
     if not MANIFEST.exists():
@@ -417,9 +471,11 @@ def check_manifest(rep: Report) -> None:
             problems.append(f"{entry.get('id')}: hash {entry.get('hash')} but pack is {actual}")
 
     on_disk = {p.name for p in (SITE / "data").iterdir()
-               if p.is_dir() and (p / "spelldata.json.gz").exists()}
+               if p.is_dir() and (p / "manifest.json").exists()}
     for orphan in sorted(on_disk - listed):
         problems.append(f"{orphan}: pack on disk, no manifest entry")
+
+    problems += unreferenced_modules(entries)
 
     defaults = [e.get("id") for e in entries if e.get("default")]
     if len(defaults) != 1:
@@ -446,7 +502,7 @@ def check_docs(rep: Report, base: str) -> None:
             rep.warn(f"{doc} freshness", f"{', '.join(hits)} changed, {doc} did not")
 
     # A format bump is the precise signal that the pack's SHAPE moved.
-    if "build/build_data.py" in changed and _format_moved(base):
+    if PACK_FORMAT_HOME in changed and _format_moved(base):
         missed = [f for f in FORMAT_CONSUMERS if f not in changed]
         if missed:
             rep.warn("pack format consumers",
@@ -455,9 +511,30 @@ def check_docs(rep: Report, base: str) -> None:
 
 def _format_moved(base: str) -> bool:
     """Did this diff change PACK_FORMAT? Read off the diff, not the file."""
-    diff = git("diff", "-U0", base, "--", "build/build_data.py")
+    diff = git("diff", "-U0", base, "--", PACK_FORMAT_HOME)
     return any(line.startswith(("+PACK_FORMAT", "-PACK_FORMAT"))
                for line in diff.splitlines())
+
+
+def check_format_declaration(rep: Report) -> None:
+    """PACK_FORMAT is where the format guard expects to find it.
+
+    The consumer warning above watches one file's diff. Move the declaration
+    and that warning does not break - it simply never fires again, so the next
+    bump ships with data.ts and dossier.py none the wiser. This is the guard
+    that turns a silent stop into a loud one.
+    """
+    home = ROOT / PACK_FORMAT_HOME
+    if not home.exists():
+        rep.fail("pack format home", f"{PACK_FORMAT_HOME} does not exist")
+        return
+    if not re.search(r"^PACK_FORMAT\s*=\s*\d+", home.read_text(encoding="utf-8"),
+                     re.M):
+        rep.fail("pack format home",
+                 f"{PACK_FORMAT_HOME} declares no PACK_FORMAT; the format "
+                 f"consumer warning is watching the wrong file")
+        return
+    rep.ok("pack format home", PACK_FORMAT_HOME)
 
 
 def check_pack_sections(rep: Report) -> None:
@@ -476,12 +553,25 @@ def check_pack_sections(rep: Report) -> None:
     if not default:
         rep.skip("pack sections", "no default pack")
         return
-    pack = SITE / default["file"]
-    if not pack.exists() or pack.read_bytes()[:len(LFS_POINTER_MAGIC)] == LFS_POINTER_MAGIC:
-        rep.skip("pack sections", "default pack not smudged locally")
+    manifest_path = SITE / default["file"]
+    if not manifest_path.exists():
+        rep.skip("pack sections", "default pack has no manifest")
         return
-    with gzip.open(pack, "rt", encoding="utf-8") as fh:
-        sections = set(json.load(fh)) - {"meta"}
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    # Across every module, because a section split between core and a locale
+    # module appears in both and reading one would report the other's half as
+    # unread.
+    sections: set[str] = set()
+    for module in manifest.get("modules", {}).values():
+        module_path = SITE / module["file"]
+        if (not module_path.exists()
+                or module_path.read_bytes()[:len(LFS_POINTER_MAGIC)] == LFS_POINTER_MAGIC):
+            rep.skip("pack sections", f"{module['file']} not smudged locally")
+            return
+        with gzip.open(module_path, "rt", encoding="utf-8") as fh:
+            sections |= set(json.load(fh))
+    sections -= {"meta"}
     source = (ROOT / "src" / "data.ts").read_text(encoding="utf-8")
     unread = sorted(s for s in sections if s not in source)
     if unread:
@@ -1355,6 +1445,7 @@ def main() -> int:
     check_bump(rep, args.base, version)
     check_line_endings(rep)
     check_manifest(rep)
+    check_format_declaration(rep)
     check_pack_sections(rep)
     check_layers(rep)
     check_cache_declaration(rep)

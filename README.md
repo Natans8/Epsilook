@@ -66,13 +66,18 @@ site/                    the site — published to GitHub Pages by .github/workf
   css/app.css            every style, themed by the token block at the top
   js/                    BUILD OUTPUT, gitignored: app.js and its sourcemap
   dev/oracle.js          console measurement helpers — a dev tool, never bundled
-  data/<version>/        one gzipped data pack per game version
+  data/versions.json     the roster: every shipped build, pointing at its manifest
+  data/<version>/        manifest.json — which modules that build's pack is made of
+  data/modules/          the modules themselves, each named by its own content hash
 build/                   the pack generator (Python 3) — source and its tracked inputs, nothing generated
-  build_data.py          regenerates the packs
+  build_data.py          the builder the package replaced; nothing runs it
   enums/                 checked-in enum tables, each with its attribution
   expansion_ids.json.gz  which expansion introduced each spell (tools/expansions.py writes it)
   sources/               a vendored era client table no public archive serves
-  pack/                  the build as layers, each one replaceable on its own
+  pack/                  regenerates the packs, as layers each replaceable on its own
+    __main__.py          the entry point: build one pack and write it
+    drift.py             every per-build difference, declared rather than branched on
+    pipeline.py          the wiring: which provider a route reads, and in what order
     sources/             acquire: URLs, the cache, archives, the TrinityCore dumps
     tables/              the provider seam every reader reads through
     routes/              the readers: tables in, typed bundles out
@@ -114,7 +119,7 @@ Note that `site/` is the published website and `docs/` is documentation, which i
 convention. It is possible because Pages builds from `.github/workflows/pages.yml` rather than from a branch folder, so
 no repo setting names either directory.
 
-`build_data.py` walks the game's own tables — spell → visual → kit → model/sound/animkit/effect — and bakes the result
+`build/pack` walks the game's own tables — spell → visual → kit → model/sound/animkit/effect — and bakes the result
 into one column-oriented JSON pack per version. The browser fetches that pack once, builds its search indexes in
 `data.ts`, and every query after that is pure in-memory set intersection. Joins and search logic live in the app, not in
 SQL.
@@ -189,30 +194,32 @@ the command above. The label follows the build, and the pack being replaced is r
 due, `python tools/packs.py --check` asks Blizzard's own version service which build each line is currently on (a weekly
 GitHub Action does the same and opens an issue).
 
-The underlying script still takes its identity as arguments, if you want to drive it directly:
+The underlying build still takes its identity as arguments, if you want to drive it directly. It is a package, so it
+runs as a module from `build/` — running its directory as a script would leave it with no parent and its own imports
+would not resolve:
 
 ```
-python build/build_data.py --version 9.2.7.45745 --label "Shadowlands 9.2.7"
+cd build && uv run python -m pack --version 9.2.7.45745 --label "Shadowlands 9.2.7"
 ```
 
 Downloads (and caches under `.cache/`) the game tables from
 [wago.tools](https://wago.tools), the community listfile, and the
-[TrinityCore TDB](https://github.com/TrinityCore/TrinityCore/releases) for the same build; writes
-`site/data/<version>/spelldata.json.gz` and updates
-`versions.json`. Takes ~15 s once the sources are cached, and is **deterministic** — apart from the build date in
+[TrinityCore TDB](https://github.com/TrinityCore/TrinityCore/releases) for the same build; writes the pack's modules to
+`site/data/modules/`, a `site/data/<version>/manifest.json` naming them, and an entry in
+`versions.json`. Takes ~25 s once the sources are cached, and is **deterministic** — apart from the build date in
 `meta.built`, an unchanged rebuild is byte-identical, which makes "rebuild and diff" the regression test for any change
-to the script. `python tools/rebuild.py --verify` runs exactly that: rebuild, compare with the date normalised away,
+to the script. Because a module is named by its own content hash, a rebuild only writes the modules that actually
+changed, and two packs on the same game build name the same files rather than carrying two copies. `python tools/rebuild.py --verify` runs exactly that: rebuild, compare with the date normalised away,
 then put the committed pack back, so a no-op rebuild cannot leave a date change staged for every user to re-download.
 Pass `--refresh` to re-download. Extracting the TDB archive (once per version)
 needs [7-Zip](https://www.7-zip.org/) on the PATH.
 
 **Adding a game version** is the same command with a different `--version`
-(any build wago.tools lists). Add an entry in `TDB_RELEASES` at the top of
-`build_data.py` if TrinityCore publishes a matching world DB, so morph/summon names and hotfixes resolve — it is
-optional (no TDB exists for the Classic re-release clients, and those sections simply fall back to raw ids). Shipped
-packs: Vanilla Classic 1.15.8, TBC Classic 2.5.6, WotLK Classic 3.4.3, Cataclysm Classic 4.4.2, Mists of Pandaria
-Classic 5.5.4, Legion 7.3.5, Battle for Azeroth 8.3.7, Shadowlands 9.2.7 (default), Dragonflight 10.2.7 and The War
-Within 11.2.7.
+(any build wago.tools lists). Add an entry in `TDB_RELEASES` in
+`build/pack/sources/tdb.py` if TrinityCore publishes a matching world DB, so morph/summon names and hotfixes resolve —
+it is
+optional (no TDB exists for the Classic re-release clients, and those sections simply fall back to raw ids). The shipped
+packs are whatever `tools/packs.py` declares — that file is the roster, and this list would only go stale beside it.
 
 Two flags control how a pack is presented:
 
@@ -227,8 +234,8 @@ Both live in `versions.json`, so changing them means rebuilding that version wit
 it (`expansionLogos` in `src/config.ts`, decoded from the game's own `.blp`).
 
 **Older versions** work too, and mostly differ by what does not exist yet: db2 tables get introduced, split and renamed
-as the game evolves. Rather than branch per version, the differences are declared in one block near the top of
-`build_data.py`:
+as the game evolves. Rather than branch per version, the differences are declared in one module,
+`build/pack/drift.py`:
 
 | declaration                                                                 | meaning                                                                                       |
 |-----------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
@@ -245,7 +252,7 @@ into `meta.absentTables`.
 
 ### Extending it
 
-- **A new search field**: emit the data in `build_data.py`, index it in
+- **A new search field**: declare a section in `build/pack/model/sections/`, index it in
   `src/data.ts`, then add one entry to `FIELDS` in `src/search.ts` — it becomes a query prefix and a field button
   automatically.
 - **A new kind of pill** (a new sort of thing a results column can show):

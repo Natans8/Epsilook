@@ -57,9 +57,19 @@ CODE_MEANING = {
 # the string `$RAP` reads as `$R` (a range) followed by the letters "AP", which
 # fabricates a number mid-sentence. Sorting here means adding a word cannot
 # reintroduce that.
+LEVEL_WORDS = ("PL", "pl")
+"""Codes meaning "the caster's level".
+
+Resolved at the build's level cap rather than elided. A tooltip resolves these
+against whoever is casting; here there is no caster, and the level a reader
+cares about is the one they play at -- so the cap is the one answer that is
+right for more of them than any other. Eliding instead left sentences like
+"targets over level." with the number cut out of the middle.
+"""
+
 ELIDED_WORDS = [
     # caster stats and scaling
-    "RAP", "AP", "SP", "MWB", "mwb", "MHP", "PL", "pl", "pri",
+    "RAP", "AP", "SP", "MWB", "mwb", "MHP", "pri",
     "INT", "STR", "AGI", "STA", "SPI", "versadmg", "abs",
     # weapon damage, enchant values, item-level scaling
     "ecix", "ec", "bc", "sw", "mw",
@@ -75,6 +85,12 @@ ELIDED_WORDS = [
 # and absent for the rest, so it is optional.
 _ELIDED_WORD_RE = re.compile(
     r"\$\d*(" + "|".join(sorted(ELIDED_WORDS, key=len, reverse=True)) + r")\d*;?")
+
+# The level codes, matched the same way the elided ones are. Kept as its own
+# pattern so the two lists cannot both claim a word: a code in both would be
+# substituted or dropped depending on which pass ran first.
+_LEVEL_WORD_RE = re.compile(
+    r"\$\d*(" + "|".join(sorted(LEVEL_WORDS, key=len, reverse=True)) + r")\d*;?")
 
 # `$j1g` / `$j1f` — the ground and flight halves of a mount's speed effect.
 # Two letters with the index between them, so the generic code regex would read
@@ -240,6 +256,11 @@ class DescriptionCooker:
         self.values = values
         self.variables = variables  # spell -> {name -> template}
         self.locale = locale
+        self._level = str(values.level) if values.level else ""
+        """What a level code prints, read off the values it was resolved with.
+
+        Empty when no level was supplied, so an unknown level is elided rather
+        than printed as a zero."""
         self.stats = {"elided": 0, "resolved": 0}
 
     def cook(self, spell: int, template: str) -> str:
@@ -389,7 +410,10 @@ class DescriptionCooker:
             v = self._value(m, spell, numeric=True)
             return v if v else "\0"  # a sentinel no arithmetic can survive
 
-        # The caster-dependent words go first, and as the sentinel rather than
+        # Level first, since it is a number this build knows and the words pass
+        # below would otherwise swallow it.
+        body = _LEVEL_WORD_RE.sub(self._level or "\0", body)
+        # The caster-dependent words go next, and as the sentinel rather than
         # as "": `$RAP` would otherwise reach _CODE_RE, match `$R` as a range
         # and leave a stray "P". A term that cannot be known must kill the
         # expression on purpose rather than by accident.
@@ -412,6 +436,7 @@ class DescriptionCooker:
 
     def _substitute_codes(self, text: str, spell: int) -> str:
         """Replace every remaining `$code` with its value, or with nothing."""
+        text = _LEVEL_WORD_RE.sub(self._level, text)
         text = _ELIDED_WORD_RE.sub("", text)
         text = _JGF_RE.sub("", text)
         text = _GENDER_RE.sub(lambda m: m.group(1), text)  # no caster; pick one

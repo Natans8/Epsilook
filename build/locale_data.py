@@ -52,12 +52,24 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+# This script CONSUMES a built pack rather than producing one, which is why it
+# reaches for the reader every other consumer uses instead of opening the
+# artifact itself. The layer rule that forbids reaching into `tools/` binds the
+# build PACKAGE; this is a script beside it, and it goes away with the sparse
+# overlay it exists to build.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
-from build_data import (AURA_OVERRIDE_NAME, DATA_DIR, PACK_FORMAT,
+import packfile  # noqa: E402  (needs the path above)
+from build_data import (AURA_OVERRIDE_NAME, DATA_DIR,
                         read_description_templates, read_description_variables,
                         read_encounter_notes, read_spell_names, read_spell_values,
                         read_table, to_int)
 from pack.drift import OPTIONAL_TABLES
+# The base pack's format comes from whatever BUILDS the base pack, which is the
+# package. Reading the legacy builder's copy would let an overlay claim to
+# match a shape no pack on disk has, and nothing downstream would notice --
+# the stamp is only ever compared, never used to decide anything.
+from pack.emit.meta import PACK_FORMAT
 from pack.progress import log
 from pack.sources.cache import CACHE_DIR, download
 from pack.sources.tdb import Distill, tdb_extraction, tdb_release
@@ -184,15 +196,22 @@ def read_spell_overrides(table_dir: Path) -> dict[int, list[int]]:
 
 
 def load_base_pack(pack_id: str) -> dict:
-    """The shipped base pack — the English strings the overlay diffs against."""
-    path = DATA_DIR / pack_id / "spelldata.json.gz"
-    if not path.exists():
+    """The shipped base pack — the English strings the overlay diffs against.
+
+    Only the modules carrying language: this reads names and prose to diff a
+    translation against them, and the structure module is the largest one there
+    is with nothing in it this wants.
+    """
+    path = DATA_DIR / pack_id
+    if not (path / "manifest.json").exists():
         sys.exit(f"error: no base pack at {path} — build the version pack first")
-    raw = path.read_bytes()
-    if raw.startswith(b"version https://git-lfs"):
-        sys.exit(f"error: {path} is an LFS pointer, not a pack — `git lfs pull` first")
-    with gzip.open(io.BytesIO(raw), "rt", encoding="utf-8") as fh:
-        return json.load(fh)
+    for file in packfile.manifest_of(path)["modules"].values():
+        landed = packfile.SITE / file["file"]
+        if not landed.exists():
+            sys.exit(f"error: {landed} is missing — rebuild the version pack")
+        if landed.read_bytes().startswith(b"version https://git-lfs"):
+            sys.exit(f"error: {landed} is an LFS pointer — `git lfs pull` first")
+    return packfile.load(path, want=("names", "text"))
 
 
 def sparse_names(ids: list[int], english: list[str],

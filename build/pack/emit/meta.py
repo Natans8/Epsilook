@@ -13,14 +13,18 @@ takes its own with it.
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
 from ..build import Build
 from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 
-PACK_FORMAT = 48
+PACK_FORMAT = 49
 """What shape the artifact is in.
+
+49 carries the raw misc values on every mechanics row, which also makes a row
+finer: two effects alike in everything the pack showed but reaching different
+payloads no longer collapse into one.
 
 Bumped whenever a reader that understood the last version would misread this
 one. The app refuses a pack whose format it does not know, which is what makes
@@ -54,22 +58,20 @@ def domains_of(section: Section, columns: SectionColumns,
             if (measured := declared.compute(columns, reads)) is not None}
 
 
-def gathered(produced: Mapping[str, SectionColumns], context: DeriveContext,
-             order: Sequence[str]) -> tuple[dict[str, int],
-dict[str, Mapping[str, object]]]:
-    """The counts and domains of every section that shipped, in `order`.
+def gathered(produced: Mapping[str, SectionColumns], context: DeriveContext
+             ) -> tuple[dict[str, int], dict[str, Mapping[str, object]]]:
+    """The counts and domains of every section that shipped.
+
+    Registry order, which groups a section's counts with the section they
+    describe. Nothing depends on the order -- these are looked up by key -- so
+    the artifact does not carry a second list saying what it should be.
 
     Args:
         produced: what each section's `produce` returned, by section name.
         context: the build's derive context, for the reads a count declares.
-        order: the key order the artifact carries. Applied to the counts rather
-            than left to fall out of registration, because the order a document
-            was first written in is not something a later reader can rederive.
 
     Returns:
-        The two `meta` tables. A count key the order does not name lands after
-        the ones it does, so a newly declared count is visible rather than
-        dropped.
+        The two `meta` tables.
     """
     counted: dict[str, int] = {}
     measured: dict[str, Mapping[str, object]] = {}
@@ -78,9 +80,7 @@ dict[str, Mapping[str, object]]]:
             continue
         counted.update(counts_of(section, produced[section.name], context))
         measured.update(domains_of(section, produced[section.name], context))
-    ranked = {key: counted.pop(key) for key in order if key in counted}
-    ranked.update(counted)
-    return ranked, measured
+    return counted, measured
 
 
 def meta(build: Build, label: str, listfile_tag: str,

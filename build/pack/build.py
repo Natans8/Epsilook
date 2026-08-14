@@ -51,3 +51,12 @@ class Build:
     The one attribute no source can be probed for -- it is a fact about the
     roster row, so it is ``None`` until a caller that has the row supplies it.
     """
+
+    max_level: int = 0
+    """The level cap this build's expansion shipped with.
+
+    What a description's level-dependent placeholders are resolved at, since a
+    tooltip's caster is nobody in particular here and the level a reader cares
+    about is the one they play at. Zero means no rung claimed the build, and
+    the cooker elides rather than inventing a level.
+    """

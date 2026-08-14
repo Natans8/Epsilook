@@ -226,11 +226,11 @@ PACKS: tuple[Pack, ...] = (
     # with it the rest, so it is tagged rather than told apart by its build —
     # see Pack.id. Its links go to Wowhead's own /ptr/ section.
     #
-    # ⚠ WHILE IT IS LEVEL WITH LIVE the two builds are the same bytes, so the
-    # shipped manifest points this entry at midnight's pack file by hand rather
-    # than carrying a second copy. Rebuilding it writes its own directory back;
-    # re-point `file` (and `hash`) in site/data/versions.json, or leave the
-    # duplicate once the lines diverge and the data genuinely differs.
+    # WHILE IT IS LEVEL WITH LIVE it is the same BUILD as midnight, so its
+    # modules encode to the same bytes, so they get the same content-addressed
+    # names and are written once — both manifests then name the same files.
+    # The condition is the shared build, not the roster row: move this to a
+    # build of its own and the modules diverge with it, needing no edit here.
     Pack("midnight-ptr", "Midnight PTR", "wowt", "12.1.0.69273", tag="ptr"),
     # Lines that moved on, and pinned retail. Historical artifacts: their build
     # is final, so FROZEN rather than a product that would answer about a

@@ -25,11 +25,10 @@ from __future__ import annotations
 
 import argparse
 import csv
-import gzip
-import json
 import sys
 from pathlib import Path
 
+import packfile
 from packs import select
 
 from repo import CACHE, DIM, GREEN, LISTFILE_ASSET, RESET, YELLOW
@@ -42,9 +41,12 @@ TAG_FILE = CACHE / "listfile" / "release-tag.txt"
 
 
 def pack_files(path: Path) -> tuple[dict[int, str], str]:
-    """A pack's fid -> path table, and the listfile tag it was built against."""
-    with gzip.open(path, "rt", encoding="utf-8") as handle:
-        pack = json.load(handle)
+    """A pack's fid -> path table, and the listfile tag it was built against.
+
+    Asset paths are structure, so `core` alone answers this -- reading the
+    locale modules as well would decompress a third more for nothing.
+    """
+    pack = packfile.load(path, want=("core",))
     files = pack["files"]
     # Negative ids are the build's own inventions -- the equipped-weapon slots,
     # which stand in for "whatever the caster is holding" and name no asset. The
@@ -84,8 +86,8 @@ def main() -> int:
         return 0
     cached_tag = TAG_FILE.read_text(encoding="utf-8").strip() if TAG_FILE.exists() else "unknown"
 
-    packs = [(pack, DATA / pack.id / "spelldata.json.gz") for pack in select(args.version)]
-    packs = [(pack, path) for pack, path in packs if path.exists()]
+    packs = [(pack, DATA / pack.id) for pack in select(args.version)]
+    packs = [(pack, path) for pack, path in packs if (path / "manifest.json").exists()]
     if not packs:
         print("no packs on disk")
         return 0

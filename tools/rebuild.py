@@ -3,15 +3,15 @@
 
     python tools/rebuild.py --list           # what would run, for every pack
     python tools/rebuild.py 9.2.7            # rebuild one pack (prefix match)
-    python tools/rebuild.py                  # rebuild all ten
+    python tools/rebuild.py                  # rebuild the whole roster
     python tools/rebuild.py --verify         # the deterministic-build oracle
     python tools/rebuild.py --verify 11.2.7  # ... against another pack
 
-WHY IT EXISTS. build_data.py takes --label and --default on every invocation
-and forgets them otherwise, so a rebuild that omits them silently renames a
-pack to its build id and drops the default flag. Those values are already
-written down in site/data/versions.json - this reads them back instead of
-asking a human to retype ten labels correctly.
+WHY IT EXISTS. The build takes --label and --default on every invocation and
+forgets them otherwise, so a rebuild that omits them silently renames a pack to
+its build id and drops the default flag. Those values are already written down
+in tools/packs.py - this reads them back instead of asking a human to retype a
+dozen labels correctly.
 
 --verify IS THE ORACLE. The build is deterministic: rebuilding a pack whose
 sources have not changed must reproduce it byte for byte, except meta.built,
@@ -43,7 +43,15 @@ from packs import PACKS, Pack, select, stale_cache
 from repo import DIM, GREEN, RED, RESET, YELLOW
 
 ROOT = Path(__file__).resolve().parent.parent
-BUILD = ROOT / "build" / "build_data.py"
+BUILD = "pack"
+"""The build package, run as a module.
+
+A module rather than a path because it IS a package: running its directory as a
+script gives it no parent, so its own relative imports fail.
+"""
+
+BUILD_ROOT = ROOT / "build"
+"""Where the package is importable from, which is what `cwd` is set to."""
 DATA = ROOT / "site" / "data"
 MANIFEST = DATA / "versions.json"
 UV_RUN = ["uv", "run", "python"]
@@ -68,7 +76,7 @@ def build_argv(pack: Pack, refresh: bool) -> list[str]:
     uv.lock. Spawning the ambient interpreter picks up whichever site-packages
     happen to be on the machine, which on a clean checkout is none of them.
     """
-    argv = [*UV_RUN, str(BUILD), "--version", pack.build, "--label", pack.label]
+    argv = [*UV_RUN, "-m", BUILD, "--version", pack.build, "--label", pack.label]
     if pack.id != pack.build:
         argv += ["--id", pack.id]
     if pack.default:
@@ -124,6 +132,39 @@ def retire_superseded(built: list[Pack]) -> list[str]:
     return gone
 
 
+def prune_modules() -> tuple[int, int]:
+    """Delete module files no pack's manifest names. Count and bytes freed.
+
+    A module is named by its own content, so changing one writes a new file
+    beside the old rather than over it. Nothing breaks when the old one stays --
+    every manifest already points at the new one -- but these are LFS objects
+    and the repository keeps paying for them.
+
+    Safe on a targeted rebuild as well as a full one: what counts as named is
+    read from EVERY pack's manifest on disk, so a pack nobody rebuilt still
+    speaks for the modules it uses.
+    """
+    directory = DATA / "modules"
+    if not directory.is_dir():
+        return 0, 0
+
+    named: set[str] = set()
+    for manifest_path in DATA.glob("*/manifest.json"):
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for module in manifest.get("modules", {}).values():
+            named.add(Path(module["file"]).name)
+
+    gone, freed = 0, 0
+    for path in sorted(directory.iterdir()):
+        if not path.is_file() or path.name in named:
+            continue
+        freed += path.stat().st_size
+        git("rm", "--quiet", "--", f"site/data/modules/{path.name}")
+        path.unlink(missing_ok=True)
+        gone += 1
+    return gone, freed
+
+
 def prune_cache() -> int:
     """Delete the download caches no pack in the roster needs. Bytes freed.
 
@@ -174,7 +215,7 @@ def describe_difference(before: dict, after: dict) -> list[str]:
 
 def verify(pack: Pack, refresh: bool) -> bool:
     """Rebuild into a scratch copy, compare, restore. True when reproducible."""
-    pack_rel = f"site/data/{pack.id}/spelldata.json.gz"
+    pack_rel = f"site/data/{pack.id}/manifest.json"
     pack_path = ROOT / pack_rel
 
     if git("status", "--porcelain", "--", pack_rel).strip():
@@ -192,7 +233,7 @@ def verify(pack: Pack, refresh: bool) -> bool:
         before = payload(keep)
 
         print(f"{DIM}rebuilding {pack.id} ...{RESET}")
-        proc = subprocess.run(build_argv(pack, refresh), cwd=ROOT, check=False)
+        proc = subprocess.run(build_argv(pack, refresh), cwd=BUILD_ROOT, check=False)
         if proc.returncode != 0:
             print(f"{RED}build failed{RESET} exit {proc.returncode}")
             return False
@@ -228,12 +269,21 @@ def main() -> int:
     ap.add_argument("--prune-cache", action="store_true",
                     help="delete the download caches no pack needs, and stop "
                          "(a rebuild does this for you)")
+    ap.add_argument("--prune-modules", action="store_true",
+                    help="delete the module files no pack's manifest names, "
+                         "and stop (a rebuild does this for you)")
     args = ap.parse_args()
 
     if args.prune_cache:
         freed = prune_cache()
         print(f"{GREEN}freed {freed / 1e6:,.0f} MB{RESET}" if freed
               else f"{GREEN}cache is current{RESET}")
+        return 0
+
+    if args.prune_modules:
+        stale, reclaimed = prune_modules()
+        print(f"{GREEN}pruned {stale} module(s), {reclaimed / 1e6:,.0f} MB{RESET}"
+              if stale else f"{GREEN}every module on disk is named{RESET}")
         return 0
 
     chosen = select(args.version)
@@ -252,7 +302,7 @@ def main() -> int:
 
     for i, pack in enumerate(chosen, 1):
         print(f"{DIM}[{i}/{len(chosen)}] {pack.id}  {pack.label}{RESET}")
-        proc = subprocess.run(build_argv(pack, args.refresh), cwd=ROOT, check=False)
+        proc = subprocess.run(build_argv(pack, args.refresh), cwd=BUILD_ROOT, check=False)
         if proc.returncode != 0:
             print(f"{RED}build failed{RESET} {pack.id} exit {proc.returncode}")
             return 1
@@ -261,6 +311,10 @@ def main() -> int:
     # shipped pack and then leave nothing in its place if the build then failed.
     for name in retire_superseded(chosen):
         print(f"{DIM}retired    site/data/{name} (no longer in the roster){RESET}")
+    stale, reclaimed = prune_modules()
+    if stale:
+        print(f"{DIM}pruned     {stale} module(s) no manifest names, "
+              f"{reclaimed / 1e6:,.0f} MB{RESET}")
     freed = prune_cache()
 
     note = f", freed {freed / 1e6:,.0f} MB of cache" if freed else ""

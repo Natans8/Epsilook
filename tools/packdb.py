@@ -40,13 +40,13 @@ tool would otherwise have.
 from __future__ import annotations
 
 import argparse
-import gzip
 import json
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
+import packfile
 from packs import schema_name, select
 from repo import (CACHE, DIM, GREEN, RESET, ROOT, YELLOW, log,
                   survive_console_encoding)
@@ -135,8 +135,7 @@ def load_pack(connection: Any, pack_id: str, path: Path) -> tuple[int, int]:
     connection.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
     connection.execute(f'CREATE SCHEMA "{schema}"')
 
-    with gzip.open(path, "rt", encoding="utf-8") as handle:
-        pack = json.load(handle)
+    pack = packfile.load(path)
 
     tables = rows = 0
     for name, section in pack.items():
@@ -163,16 +162,18 @@ def main() -> int:
     parser.add_argument("--db", default=str(DB_PATH), help=f"output (default {DB_PATH})")
     args = parser.parse_args()
 
-    chosen = [(p, DATA / p.id / "spelldata.json.gz")
+    chosen = [(p, DATA / p.id)
               for p in (select(" ".join(args.version)) if args.version else select(None))]
-    chosen = [(p, path) for p, path in chosen if path.exists()]
+    chosen = [(p, path) for p, path in chosen if (path / "manifest.json").exists()]
     if not chosen:
         log(f"{YELLOW}no packs on disk{RESET}")
         return 0
 
     if args.list:
         for pack, path in chosen:
-            log(f"  {schema_name(pack.id):<10} {pack.id:<22} {path.stat().st_size / 1e6:>6.1f} MB  {pack.label}")
+            megabytes = sum(packfile.sizes(path).values()) / 1e6
+            log(f"  {schema_name(pack.id):<10} {pack.id:<22} "
+                f"{megabytes:>6.1f} MB  {pack.label}")
         return 0
 
     Path(args.db).parent.mkdir(parents=True, exist_ok=True)
