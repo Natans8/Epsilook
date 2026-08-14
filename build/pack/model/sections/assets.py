@@ -11,7 +11,7 @@ from __future__ import annotations
 from ...derive import Reads
 from ...routes.models import SYNTHETIC_MODEL_FILES
 from ..registry import register
-from ..section import Count, Layout, Section, SectionColumns
+from ..section import Cardinality, Count, Layout, Section, SectionColumns
 
 NO_GOB = 0
 """What a model Epsilon has no placeable object for carries."""
@@ -67,6 +67,9 @@ FILES = register(Section(
     produce=files,
     columns=("fids", "paths", "gobs"),
     reads=("references", "paths", "gobs", "visuals"),
+    # Most assets have no placeable object, and a few have no name at all.
+    cardinality={"paths": Cardinality.PARTIAL, "gobs": Cardinality.PARTIAL},
+    absent={"gobs": 0},
     counts=(Count("files", lambda columns, _reads: len(columns["fids"])),
             Count("gobModels", lambda columns, reads: sum(
                 1 for fid in columns["fids"] if fid in reads.gobs))),

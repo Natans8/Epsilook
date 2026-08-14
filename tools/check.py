@@ -181,7 +181,16 @@ DOM_NAMES = (
 # IS the rule - a layer may import the layers below it and nothing above.
 BUILD_PACKAGE = "build/pack"
 PYTHON_TESTS = "test/py"
-BUILD_LAYERS = ("sources", "tables", "routes", "derive", "model", "encode", "emit")
+BUILD_LAYERS = ("sources", "tables", "routes", "derive", "model", "encode",
+                "emit", "pipeline")
+
+# The layer that wires the rest together, and the one exemption to the reading
+# rule below. Every other layer is written not to know what is around it - a
+# route is handed a provider and never asks where it came from - so something
+# has to hold both ends, and the layer that does is the only place a source and
+# a route are named in the same breath. It constructs providers; it does not
+# read rows through them, which is what the rule is protecting.
+BUILD_WIRING_LAYER = "pipeline"
 
 # The layers that must not touch the filesystem or the network. Acquisition owns
 # the input side and emission owns the output side; everything between them is
@@ -718,6 +727,7 @@ def check_build_layers(rep: Report) -> None:
             elif BUILD_LAYERS.index(reached) > BUILD_LAYERS.index(layer):
                 problems.append(f"{name} imports upward, into {reached}/")
             elif (reached in BUILD_SOURCE_LAYERS
+                  and layer != BUILD_WIRING_LAYER
                   and BUILD_LAYERS.index(layer) > BUILD_LAYERS.index(BUILD_READING_LAYER)):
                 problems.append(f"{name} reads a game table directly, from {reached}/; "
                                 f"only {BUILD_READING_LAYER}/ may")

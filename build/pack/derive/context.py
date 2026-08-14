@@ -77,8 +77,7 @@ class DeriveContext:
     """Every spell the pack lists, sorted. The row order of every per-spell
     column, so a section aligning to it never sorts again."""
 
-    # --- what the routes read ------------------------------------------------
-
+    # What the routes read.
     names: SpellNames = field(default_factory=SpellNames)
     props: SpellProperties = field(default_factory=SpellProperties)
     templates: SpellText = field(default_factory=SpellText)
@@ -111,8 +110,7 @@ class DeriveContext:
     kit_names: Sequence[tuple[int, str]] = ()
     """The named sound kits this pack reaches, from the pinned build."""
 
-    # --- what this layer derived ---------------------------------------------
-
+    # What this layer derived from them.
     visuals: SpellVisuals = field(default_factory=SpellVisuals)
     """What the graph walk attributed to each spell."""
 
@@ -135,8 +133,7 @@ class DeriveContext:
     prose: CookedText = field(default_factory=CookedText)
     """The description templates, cooked to placeholder-free text."""
 
-    # --- what the build declares rather than reads ---------------------------
-
+    # What the build declares rather than reads from any table.
     anim_names: Sequence[str] = ()
     anim_emote_oneshots: Sequence[int] = ()
     anim_emote_loops: Sequence[int] = ()

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from ...derive import Reads
 from ..registry import register
-from ..section import Count, Layout, Section, SectionColumns
+from ..section import Cardinality, Count, Section, SectionColumns
 
 NO_ERA = -1
 """What a spell no expansion rung claims carries.
@@ -46,5 +46,13 @@ SPELLS = register(Section(
     produce=spells,
     columns=("ids", "names", "subtexts", "altNames", "icons", "schools", "eras"),
     reads=("spell_ids", "names", "alt_names", "icons", "props", "era_of"),
+    # Three of these are answers most spells do not have. Saying so is what
+    # lets the encoder stop padding them the day the app can read a gap: 831 KB
+    # of the raw pack is empty alternative names, which gzip eats and
+    # `JSON.parse` still walks.
+    cardinality={"subtexts": Cardinality.PARTIAL,
+                 "altNames": Cardinality.PARTIAL,
+                 "icons": Cardinality.PARTIAL},
+    absent={"icons": 0},
     counts=(Count("spells", lambda columns, _reads: len(columns["ids"])),),
 ))

@@ -6,20 +6,30 @@ assembles the encoded columns into the payload a section ships as.
 
 from __future__ import annotations
 
-from ..model.section import Encoding, Layout, Section, SectionColumns
-from .columns import EMPTY_SLOT, LAYOUTS, dense, deduped, encode_column
+from collections.abc import Mapping
+
+from ..model.section import (Cardinality, Encoding, Layout, Section,
+                             SectionColumns)
+from .columns import (EMPTY_SLOT, LAYOUTS, dense, deduped, encode_column,
+                      sparse)
+from .policy import COMPACT, COMPATIBLE, layout_of
 
 __all__ = [
+    "COMPACT",
+    "COMPATIBLE",
     "EMPTY_SLOT",
     "LAYOUTS",
     "dense",
     "deduped",
     "encode_column",
     "encode_section",
+    "layout_of",
+    "sparse",
 ]
 
 
-def encode_section(section: Section, produced: SectionColumns) -> object:
+def encode_section(section: Section, produced: SectionColumns,
+                   policy: Mapping[Cardinality, Encoding] = COMPATIBLE) -> object:
     """One section's produced columns, laid out as the record declares.
 
     Args:
@@ -49,8 +59,22 @@ def encode_section(section: Section, produced: SectionColumns) -> object:
             + (f"; unexpected {', '.join(extra)}" if extra else ""))
 
     encoded = {name: encode_column(produced[name],
-                                   section.encoding.get(name, Encoding.DENSE))
+                                   layout_for(section, name, policy),
+                                   section.absent.get(name, EMPTY_SLOT))
                for name in section.columns}
     if section.layout is Layout.BARE:
         return encoded[section.columns[0]]
     return encoded
+
+
+def layout_for(section: Section, column: str,
+               policy: Mapping[Cardinality, Encoding]) -> Encoding:
+    """The layout one column ships in.
+
+    A layout the section named outright wins; otherwise the column's declared
+    kind decides under `policy`, and a column that declares neither is total,
+    which is what a column parallel to its rows is.
+    """
+    if column in section.encoding:
+        return section.encoding[column]
+    return layout_of(section.cardinality.get(column, Cardinality.TOTAL), policy)

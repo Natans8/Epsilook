@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping, Sequence
 
 from ...derive import Reads
 from ..registry import register
-from ..section import Count, Encoding, Section, SectionColumns
+from ..section import Cardinality, Count, Section, SectionColumns
 
 
 def aligned(by_spell: Mapping[int, str], ids: Sequence[int]) -> list[str]:
@@ -62,9 +62,12 @@ SPELL_TEXT = register(Section(
     module="text",
     produce=spell_text,
     columns=("descriptions", "auras", "encounters"),
-    encoding={"descriptions": Encoding.DEDUP,
-              "auras": Encoding.DEDUP,
-              "encounters": Encoding.DEDUP},
+    # Every one of them is shared: a redirect cooks to the same prose as its
+    # target, so the distinct strings are far fewer than the spells carrying
+    # them.
+    cardinality={"descriptions": Cardinality.SHARED,
+                 "auras": Cardinality.SHARED,
+                 "encounters": Cardinality.SHARED},
     reads=("spell_ids", "prose"),
     localizable=("descriptions", "auras", "encounters"),
     counts=(Count("spellDescriptions", carrying("descriptions")),

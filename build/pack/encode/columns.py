@@ -52,8 +52,25 @@ def deduped(values: Sequence[object]) -> object:
     return {"text": list(pool), "of": index}
 
 
-LAYOUTS: Mapping[Encoding, Callable[[Sequence[object]], object]] = {
+def sparse(values: Sequence[object], absent: object = EMPTY_SLOT) -> object:
+    """The column as the values that exist, and which rows carry them.
+
+    What a partial mapping costs when it is not padded out into a total one.
+    `at` holds the row positions in order and `is` the value each carries, so a
+    column where most rows have nothing ships only the few that do.
+
+    `absent` is what the producer put in a row that has no value, and it is
+    passed in rather than guessed: which value means nothing is a fact about
+    the column, and a zero is a legitimate answer in most of them. Guessing it
+    would silently drop real rows from whichever column disagreed.
+    """
+    present = [(row, value) for row, value in enumerate(values) if value != absent]
+    return {"at": [row for row, _ in present], "is": [value for _, value in present]}
+
+
+LAYOUTS: Mapping[Encoding, Callable[..., object]] = {
     Encoding.DENSE: dense,
+    Encoding.SPARSE: sparse,
     Encoding.DEDUP: deduped,
 }
 """Every encoding, by the value a section declares.
@@ -64,10 +81,15 @@ starts disagreeing with the record that describes it.
 """
 
 
-def encode_column(values: Sequence[object], encoding: Encoding) -> object:
+def encode_column(values: Sequence[object], encoding: Encoding,
+                  absent: object = EMPTY_SLOT) -> object:
     """One column, laid out as it declared.
+
+    `absent` reaches only the layouts that need to tell a value from a gap.
 
     Raises:
         KeyError: the encoding has no layout.
     """
+    if encoding is Encoding.SPARSE:
+        return sparse(values, absent)
     return LAYOUTS[encoding](values)

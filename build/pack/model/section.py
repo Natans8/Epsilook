@@ -9,18 +9,44 @@ from enum import Enum
 from ..derive import Reads
 
 
+class Cardinality(Enum):
+    """What KIND of mapping a column carries, from its rows to its values.
+
+    The column's own nature, said before anything about storage. It is what a
+    section knows and the encoder does not: whether every row has a value,
+    whether rows share values, whether a row can have several.
+
+    Declaring this rather than a layout is what keeps the two decisions apart.
+    A section states the mapping; `encode/` decides what that mapping costs and
+    may change its mind for the whole build at once. Naming a layout per column
+    would spread one storage decision across eighty records, and changing it
+    would mean editing all of them.
+    """
+
+    TOTAL = "total"
+    """Every row has a value. The array IS the mapping and position is the key."""
+
+    PARTIAL = "partial"
+    """Only some rows have a value; the rest carry a filler that means nothing."""
+
+    SHARED = "shared"
+    """Many rows carry the same value, so the distinct values are far fewer
+    than the rows."""
+
+
 class Encoding(Enum):
     """How a column is laid out in the artifact.
 
-    The cardinality of the mapping the column carries, named by what that
-    cardinality costs to store. `encode/` holds the layout each one means.
+    What a `Cardinality` costs, chosen by `encode/`. A section may name one
+    directly to override the policy, which is for a column whose data disagrees
+    with what its kind would suggest.
     """
 
     DENSE = "dense"
-    """One value per row, in row order. A total mapping."""
+    """One value per row, in row order."""
 
     SPARSE = "sparse"
-    """The rows that have a value, and which rows those are."""
+    """The values that exist, and which rows they belong to."""
 
     DEDUP = "dedup"
     """A pool of the distinct values, and one index per row."""
@@ -132,7 +158,22 @@ class Section:
     the body of ``produce``, which no guard can read.
     """
 
+    cardinality: Mapping[str, Cardinality] = field(default_factory=dict)
+    """What kind of mapping each column carries. A column absent from this is
+    `Cardinality.TOTAL`, which is what a column parallel to the rows is."""
+
+    absent: Mapping[str, object] = field(default_factory=dict)
+    """What a partial column holds in a row that has no value.
+
+    Only a partial column needs one, and only it can say what it is: zero is a
+    real answer in most columns and a gap in a few, and nothing outside the
+    section knows which. Defaults to the empty string.
+    """
+
     encoding: Mapping[str, Encoding] = field(default_factory=dict)
+    """A layout named outright, overriding what the column's kind would get.
+    For a column whose data disagrees with its kind -- one that is partial in
+    principle and full in practice."""
 
     layout: Layout = Layout.COLUMNS
 
