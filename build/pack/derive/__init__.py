@@ -12,15 +12,22 @@ makes every derivation here testable from plain values with no source at all.
 from __future__ import annotations
 
 from .context import DeriveContext
+from .displays import Display, ResolvedDisplays, resolve_displays
 from .icons import NO_ICON, IconIndex, build_icon_index
+from .references import References, collect_references
 from .walk import KIT_BUCKETS, SpellVisuals, walk_spells
 
 __all__ = [
     "KIT_BUCKETS",
     "NO_ICON",
     "DeriveContext",
+    "Display",
     "IconIndex",
+    "References",
+    "ResolvedDisplays",
     "SpellVisuals",
     "build_icon_index",
+    "collect_references",
+    "resolve_displays",
     "walk_spells",
 ]
