@@ -35,15 +35,19 @@ class Build:
     patch: str
     """The patch triple, e.g. ``"9.2.7"``."""
 
-    rung: int
-    """Content rung: which expansion's spells exist, and the era ceiling."""
-
-    line: Line
+    line: Line = Line.RETAIL
     """Retail, Classic re-release, or PTR."""
 
-    tdb: str | None
+    tdb: str | None = None
     """The matched TDB release tag; ``None`` when the build ships without one."""
 
-    absent_tables: frozenset[str]
+    absent_tables: frozenset[str] = frozenset()
     """Declared-optional tables this build predates, shipped in
     ``meta.absentTables``."""
+
+    rung: int | None = None
+    """Content rung: which expansion's spells exist, and the era ceiling.
+
+    The one attribute no source can be probed for -- it is a fact about the
+    roster row, so it is ``None`` until a caller that has the row supplies it.
+    """

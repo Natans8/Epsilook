@@ -188,6 +188,7 @@ def walk_spells(spell_names: Container[int], graph: VisualGraph,
                        aimed, extra)
 
     _fold_chain_sounds(vis, fx, pairs)
+    _fold_effect_sounds(vis, effects, pairs)
     return vis
 
 
@@ -245,6 +246,20 @@ def _walk_kits(vis: SpellVisuals, spell: int, visual: int, graph: VisualGraph,
             vis.freezes.add(spell)
         if kit in kits.camos:
             vis.camos.add(spell)
+
+
+def _fold_effect_sounds(vis: SpellVisuals, effects: SpellEffectRows,
+                        pairs: SoundPairs) -> None:
+    """Fold the sound an effect plays outright into the spell's sounds.
+
+    A spell can play a sound without any visual doing it: `PLAY_SOUND` and
+    `PLAY_MUSIC` name a kit on the effect row itself. It is the same fact as a
+    kit's sound once found -- the same kit, the same files, masked by the
+    effect row's own implicit target -- so it merges into the same family
+    rather than becoming a route of its own.
+    """
+    for (spell, soundkit), mask in effects.sounds.items():
+        merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)
 
 
 def _fold_chain_sounds(vis: SpellVisuals, fx: FxPayloads,

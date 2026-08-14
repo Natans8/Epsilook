@@ -122,6 +122,18 @@ def listfile_source() -> Source:
                           token_file=into / "release-tag.txt"))
 
 
+def release_tag() -> str:
+    """Which listfile release the cached copy came from.
+
+    The pack records it so a name that changed can be traced to the release
+    that changed it. Empty when nothing has been fetched yet, which is an
+    answer rather than a failure: a build reading a vendored listfile has no
+    release to name.
+    """
+    token = CACHE_DIR / "listfile" / "release-tag.txt"
+    return token.read_text(encoding="utf-8").strip() if token.exists() else ""
+
+
 def supplement_source() -> Source:
     """The vendored asset-name supplement: in the checkout, or nowhere.
 

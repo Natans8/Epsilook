@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 
-from ..derive import DeriveContext, Reads
+from ..derive import Reads
 
 
 class Encoding(Enum):
@@ -60,23 +60,44 @@ SectionColumns = Mapping[str, Sequence[object]]
 class Count:
     """One ``meta.counts`` entry: its key and the computation behind it.
 
-    A computation rather than a column reference: many counts are filtered,
-    cross-section or dynamic.
+    A computation rather than a column reference, because half the real counts
+    are filtered, cross-section or dynamic -- how many spells cast instantly is
+    the spells that appear in no delivery row.
+
+    ``compute`` is handed what the section produced and the same ``Reads`` the
+    section declared, in that order. What shipped is the first argument on
+    purpose: a count derived a second way from the sources is a second answer
+    waiting to disagree with the column it claims to describe.
     """
 
     key: str
-    compute: Callable[[DeriveContext], int]
+    compute: Callable[[SectionColumns, Reads], int]
+
+
+@dataclass(frozen=True)
+class CountFamily:
+    """Several ``meta.counts`` entries one section computes together.
+
+    For a count whose KEYS come from the data rather than from the record: one
+    per expansion rung, one per attribute flag. Declaring those singly would
+    mean editing the registry every time the game adds a rung, which is the
+    kind of edit this record exists to remove.
+    """
+
+    compute: Callable[[SectionColumns, Reads], Mapping[str, int]]
 
 
 @dataclass(frozen=True)
 class Domain:
     """One ``meta.domains`` entry: the measured domain of a numeric axis.
 
-    Measured per pack; bounds taken from one build are wrong on the others.
+    Measured per pack, from the column that shipped: bounds taken from one
+    build are wrong on the other ten, and bounds taken from anything but the
+    shipped column describe a control the data does not back.
     """
 
     key: str
-    compute: Callable[[DeriveContext], Mapping[str, object]]
+    compute: Callable[[SectionColumns, Reads], Mapping[str, object] | None]
 
 
 @dataclass(frozen=True)
@@ -115,7 +136,9 @@ class Section:
 
     layout: Layout = Layout.COLUMNS
 
-    counts: tuple[Count, ...] = ()
+    counts: tuple[Count | CountFamily, ...] = ()
+    """What this section contributes to ``meta.counts``: keyed numbers, and
+    families whose keys the data decides."""
 
     domains: tuple[Domain, ...] = ()
 
