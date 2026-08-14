@@ -32,9 +32,13 @@ import struct
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from epsilon_storage import Reads, chunks
 from tqdm import tqdm
+
+if TYPE_CHECKING:  # pragma: no cover - the import is for annotations only
+    from epsilon_tables import Table
 
 WORKERS = 32
 """Concurrent reads for files the install does not hold.
@@ -216,12 +220,43 @@ CUSTOMIZATION_BUCKET = "chrcustomization"
 CUSTOMIZATION_TABLES = ("TextureFileData", "ChrCustomizationMaterial",
                         "ChrCustomizationElement", "ChrCustomizationChoice",
                         "ChrCustomizationOption")
-"""The chain a texture is named through, from the file to what it is for.
+"""The chain from a texture to what it customises. Required; without all five
+there is no name."""
 
-Each step is a join on a named column, never a position: two of the positions
-recorded for these tables were wrong, and a wrong position produces a confident
-name for the wrong thing rather than an error.
-"""
+CUSTOMIZATION_CONTEXT = ("ChrModel", "ChrRaceXChrModel", "ChrRaces")
+"""Who the customisation is for. Optional: these add the race and sex segment,
+and a client missing them yields a shorter path rather than no path."""
+
+SEXES = {"0": "male", "1": "female"}
+def wearers(tables: dict[str, Table | None]) -> dict[int, str]:
+    """Which race and sex each character model belongs to.
+
+    Context rather than identity: a customisation option names what is being
+    changed but not who for, and the same option name is reused across every
+    race. Without this a texture reads as `eye_color/04` whoever wears it.
+
+    Args:
+        tables: the opened context tables, any of which may be absent.
+
+    Returns:
+        Character model id to a path segment naming its wearer, empty when the
+        client does not carry the tables that say.
+    """
+    models, mapping, races = (tables.get("ChrModel"), tables.get("ChrRaceXChrModel"),
+                              tables.get("ChrRaces"))
+    if models is None or mapping is None or races is None:
+        return {}
+    sex = {model: SEXES.get(value, "") for model, value
+           in models.named("ID", "Sex").items()}
+    named = races.named("ID", "ClientFileString")
+    # Keyed on the model, because a race has one model per sex and keying the
+    # other way would keep whichever row came last and lose the other.
+    out: dict[int, str] = {}
+    for model, race in mapping.pairs("ChrModelID", "ChrRacesID").items():
+        label = slug(named.get(race, ""))
+        if label:
+            out[model] = f"{label}_{sex[model]}" if sex.get(model) else label
+    return out
 
 
 def slug(text: str) -> str:
@@ -287,8 +322,15 @@ def customization_names(storage: Reads, floor: int) -> dict[int, str]:
             choice_of[material] = min(choice, choice_of.get(material, choice))
 
     choice_names = choices.named("ID", "Name_lang")
+    choice_order = choices.pairs("ID", "OrderIndex")
     option_of = choices.pairs("ID", "ChrCustomizationOptionID")
     option_names = options.named("ID", "Name_lang")
+
+    # Who the option is for. Optional, so a client without these tables gets a
+    # shorter path rather than none.
+    context = {name: open_table(storage, name, ids) for name in CUSTOMIZATION_CONTEXT}
+    wearer_of = wearers(context)
+    model_of = options.pairs("ID", "ChrModelID")
 
     names: dict[int, str] = {}
     for fid, resource in textures.pairs("FileDataID", "MaterialResourcesID").items():
@@ -297,16 +339,24 @@ def customization_names(storage: Reads, floor: int) -> dict[int, str]:
         choice = choice_of.get(material_of.get(resource, -1), 0)
         if not choice:
             continue
-        option = slug(option_names.get(option_of.get(choice, 0), ""))
+        holder = option_of.get(choice, 0)
+        option = slug(option_names.get(holder, ""))
         if not option:
             continue
-        # A choice this client added carries no display name of its own, and
-        # most of them do not. The option still names what the texture is for,
-        # which is the half worth having, so the choice falls back to its id --
-        # an identifier rather than an invented name.
-        chosen = slug(choice_names.get(choice, "")) or f"choice_{choice}"
-        names[fid] = (f"{DERIVED_ROOT}/{CUSTOMIZATION_BUCKET}/{option}/"
-                      f"{chosen}/{fid}.blp")
+        # A choice this client added usually carries no display name, and its
+        # place in the option is what the game itself shows instead: these are
+        # the numbered swatches in the character creator. So a nameless choice
+        # becomes its position rather than its row id, which is the difference
+        # between "eye colour, the fourth one" and an opaque number.
+        chosen = slug(choice_names.get(choice, ""))
+        if not chosen:
+            order = choice_order.get(choice)
+            chosen = f"{order:02d}" if order is not None else f"choice_{choice}"
+        wearer = wearer_of.get(model_of.get(holder, 0), "")
+        parts = [DERIVED_ROOT, CUSTOMIZATION_BUCKET]
+        if wearer:
+            parts.append(wearer)
+        names[fid] = f"{'/'.join(parts)}/{option}/{chosen}/{fid}.blp"
     return names
 
 

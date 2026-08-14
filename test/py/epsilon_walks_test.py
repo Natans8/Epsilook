@@ -191,9 +191,11 @@ TABLES: dict[str, tuple[list[str], list[tuple[str, ...]]]] = {
     "ChrCustomizationElement": (["ID", "ChrCustomizationChoiceID",
                                  "ChrCustomizationMaterialID"],
                                 [("1", "44", "70"), ("2", "43", "70")]),
-    "ChrCustomizationChoice": (["Name_lang", "ID", "ChrCustomizationOptionID"],
-                               [("TrollMaleEyeColor04", "43", "9")]),
-    "ChrCustomizationOption": (["Name_lang", "ID"], [("Eye Color", "9")]),
+    "ChrCustomizationChoice": (["Name_lang", "ID", "ChrCustomizationOptionID",
+                                "OrderIndex"],
+                               [("TrollMaleEyeColor04", "43", "9", "3")]),
+    "ChrCustomizationOption": (["Name_lang", "ID", "ChrModelID"],
+                               [("Eye Color", "9", "12")]),
 }
 
 
@@ -259,18 +261,19 @@ def test_slug_makes_one_path_segment(name: str, expected: str) -> None:
     assert slug(name) == expected
 
 
-def test_a_choice_with_no_name_falls_back_to_its_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Most choices this client adds carry no display name. The option still
-    says what the texture is for, so the choice becomes an identifier rather
-    than the whole row being dropped."""
+def test_a_nameless_choice_becomes_its_place_in_the_option(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Most choices this client adds carry no display name, and their position
+    is what the character creator shows instead -- the numbered swatches. That
+    is worth more than the row id and more than dropping the texture."""
     from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
 
     nameless = dict(TABLES)
-    nameless["ChrCustomizationChoice"] = (["Name_lang", "ID", "ChrCustomizationOptionID"],
-                                          [("", "43", "9")])
+    nameless["ChrCustomizationChoice"] = (["Name_lang", "ID",
+                                           "ChrCustomizationOptionID", "OrderIndex"],
+                                          [("", "43", "9", "3")])
     fake_tables(monkeypatch, nameless)
     assert customization_names(FakeStorage({}), FLOOR) == {
-        FLOOR + 1: f"epsilon/chrcustomization/eye_color/choice_43/{FLOOR + 1}.blp"}
+        FLOOR + 1: f"epsilon/chrcustomization/eye_color/03/{FLOOR + 1}.blp"}
 
 
 def test_a_texture_with_no_option_is_still_refused(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -278,6 +281,7 @@ def test_a_texture_with_no_option_is_still_refused(monkeypatch: pytest.MonkeyPat
     from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
 
     nameless = dict(TABLES)
-    nameless["ChrCustomizationOption"] = (["Name_lang", "ID"], [("", "9")])
+    nameless["ChrCustomizationOption"] = (["Name_lang", "ID", "ChrModelID"],
+                                          [("", "9", "12")])
     fake_tables(monkeypatch, nameless)
     assert customization_names(FakeStorage({}), FLOOR) == {}

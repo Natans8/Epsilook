@@ -101,8 +101,13 @@ class Table:
 
         Rows whose either side does not read as a number are dropped rather
         than raising: a table read from a private client carries rows the
-        published definition never anticipated.
+        published definition never anticipated. A column the table does not
+        have at all yields nothing for the same reason -- a join it cannot
+        answer contributes no rows, which is what a caller can act on, where
+        an exception would take down a whole route over one optional field.
         """
+        if not self.has(key, value):
+            return {}
         found: dict[int, int] = {}
         for left, right in self.values(key, value):
             try:
@@ -112,7 +117,9 @@ class Table:
         return found
 
     def named(self, key: str, value: str) -> dict[int, str]:
-        """A numeric column mapped to a text one."""
+        """A numeric column mapped to a text one, absent columns yielding none."""
+        if not self.has(key, value):
+            return {}
         found: dict[int, str] = {}
         for left, right in self.values(key, value):
             try:
