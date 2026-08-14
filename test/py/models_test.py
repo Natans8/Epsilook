@@ -8,6 +8,7 @@ from pack.routes.items import ItemModels
 from pack.routes.models import (MODEL_CAT_ATTACH, MODEL_CAT_DISPLAY, MODEL_CAT_ITEM, WEAPON_FID_MAIN, WEAPON_FID_OFF,
                                 read_effect_names, read_model_sources)
 from support import BuildTables
+from build_data import read_gob_displays
 
 # Type 0 names a file, 1 an item, 2 a creature display, 3/4 a weapon slot.
 # Name 5 is a weapon row whose file id names nothing -- the Classic placeholder.
@@ -158,3 +159,30 @@ def test_a_barrage_resolves_through_the_effect_name(tables: BuildTables) -> None
 
 def test_a_weapon_trail_carries_its_file_directly(tables: BuildTables) -> None:
     assert sources(tables).weapontrail_fid == {500: 8400}
+
+
+# The gameobject-display route: a vendored table from a private server's own
+# client, so these check the shape and the sign rather than any game data.
+def test_a_model_gets_the_id_the_spawn_command_takes() -> None:
+    """Verified in game: -192 places the Elwynn campfire, -9471 a map table."""
+    displays = read_gob_displays()
+    assert displays[189705] == -192
+    assert displays[195620] == -9471
+
+
+def test_every_display_is_negative() -> None:
+    """The command reads the sign. A positive number is a gameobject_template
+    entry, which is a different object, so a stray positive would silently
+    place the wrong thing rather than fail.
+    """
+    displays = read_gob_displays()
+    assert displays
+    assert all(v < 0 for v in displays.values())
+
+
+def test_a_model_without_a_display_is_absent_rather_than_zero() -> None:
+    """Creature and item models from late expansions have no display; the
+    reader omits them so the caller decides what a miss means.
+    """
+    displays = read_gob_displays()
+    assert 1738226 not in displays  # babyturtle.m2, checked in game

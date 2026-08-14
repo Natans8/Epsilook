@@ -93,6 +93,9 @@ export interface ExportFxEntry {
 interface ExportModelFile {
     path: string;
     targets: string[];
+    /** The id `.gob spawn` takes to place this model on Epsilon. Negative, and
+     *  absent where Epsilon has no gameobject display for the model. */
+    gob?: number;
 }
 
 /** One exported spell row. Hidden columns leave their fields absent. */
@@ -223,7 +226,11 @@ function exportRows(): ExportRow[] {
                 for (const e of cats) {
                     if (!byCat.has(e.cat)) byCat.set(e.cat, []);
                     // each file carries who it plays on — the export's form of the icons
-                    byCat.get(e.cat)!.push({path: pathOf(e.fid), targets: targetWordsOf(e.targets)});
+                    const gob = d.files.get(e.fid)?.gob || 0;
+                    byCat.get(e.cat)!.push({
+                        path: pathOf(e.fid), targets: targetWordsOf(e.targets),
+                        ...(gob ? {gob} : {}),
+                    });
                 }
                 row.models = [...byCat.keys()].sort((a, b) => a - b).map((c) => ({
                     // the wordless attach category renders as loose pills in the UI,

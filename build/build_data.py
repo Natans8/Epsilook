@@ -61,7 +61,7 @@ from pack.progress import log
 from pack.sources import (SOUNDKITNAME_BUILD, TABLES, fetch_sources,
                           load_expansions, load_local_enum, read_anim_names,
                           read_enum_names)
-from pack.sources.cache import CACHE_DIR
+from pack.sources.cache import BUILD_DIR, CACHE_DIR
 from pack.sources.enums import enum_id_where, enum_ids_where
 from pack.sources.tdb import tdb_release
 from pack.targets import (NO_TARGET, TARGET_AREA, TARGET_CASTER, TARGET_MISSILE_DEST,
@@ -936,7 +936,7 @@ def numeric_domain(values: Iterable[float],
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 47  # 47: animEmoteOneshots/animEmoteLoops — the Epsilon emote per animation
+PACK_FORMAT = 48  # 48: files.gobs — the id `.gob spawn` takes for each model
 # 45: spellText.auras — what the BUFF says, beside what the cast says (§3x)
 # 44: iconNames gains iconFids — the icon's own identity (§3y)
 # 43: spellText — cooked description + encounter prose (§3x)
@@ -2060,6 +2060,37 @@ def read_anim_replacements(
         if sid and 0 <= s < len(anim_names) and 0 <= d < len(anim_names):
             replacements[sid].add((s, d))
     return replacements
+
+
+GOB_DISPLAYS = BUILD_DIR / "sources" / "epsilon-gameobject-displays.csv.gz"
+"""Epsilon's model to gameobject-display map, vendored.
+
+Read from its client rather than fetched: Epsilon rewrites its build config
+roughly monthly, so a build-time fetch would stop packs rebuilding byte-
+identically. Regenerated deliberately, like a listfile bump.
+"""
+
+
+def read_gob_displays() -> dict[int, int]:
+    """Model file id -> the id `.gob spawn` takes to place that model.
+
+    The command reads the SIGN: a positive number is a gameobject_template
+    entry, a negative one is a GameObjectDisplayInfo id. The vendored table
+    holds the display ids as the client stores them, positive, so they are
+    negated here and the pack carries the value a player pastes -- a positive
+    id would silently mean a different object entirely.
+
+    A missing file is a hard error; every pack ships this route.
+    """
+    displays: dict[int, int] = {}
+    with gzip.open(GOB_DISPLAYS, "rt", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            fid, display = to_int(row["fid"]), to_int(row["display"])
+            if fid and display:
+                displays[fid] = -display
+    if len(displays) < 100_000:
+        sys.exit(f"error: {GOB_DISPLAYS.name} parsed as {len(displays)} rows")
+    return displays
 
 
 def read_anim_emotes(anim_names: list[str]) -> tuple[list[int], list[int]]:
@@ -3591,9 +3622,13 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
         if fid in used_fids:
             file_ids.append(fid)
             file_paths.append(name)
+    # gobs: the id `.gob spawn` takes to place this model, 0 where Epsilon
+    # has no display for it. Negative on purpose -- the command reads the sign.
+    gob_displays = read_gob_displays()
     files = {
         "fids": file_ids,
         "paths": file_paths,
+        "gobs": [gob_displays.get(f, 0) for f in file_ids],
     }
 
     # every kit-derived row carries its target mask as the last element (see
@@ -3865,6 +3900,8 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "counts": {
                 "spells": len(spell_ids),
                 "files": len(file_ids),
+                # models a player can place as a gameobject on Epsilon
+                "gobModels": sum(1 for f in file_ids if f in gob_displays),
                 # §3x — spells with text, and the distinct strings behind them.
                 # The gap between the two IS the redirect population: a bare
                 # `$@spelldescNNN` cooks to the same prose as its target.

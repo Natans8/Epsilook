@@ -675,6 +675,18 @@ and an item can share one field instead of each adding their own.
 A **weapon slot is a model with no file**: some effect-name types name the caster's own main hand, off hand, ranged or
 ammo rather than an asset. Those carry a sentinel and a stand-in name, so nothing downstream needs a special case.
 
+**A model ships the id that places it in the world.** Epsilon exposes a gameobject display for nearly every model
+file, and its spawn command reads the SIGN of the number it is given: positive means a server-side object template,
+negative means a display. The pack therefore stores the negated display beside each file's path, so the value is the
+one a player pastes and cannot be mistaken for the other id space. Zero means the private server has no display for
+that model. Like the emote map it is a vendored cross-build source rather than drift, and the same maintenance
+follows: **coverage thins for late-expansion content**, because the display table was generated once and newer models
+were never added to it, so refreshing means re-reading that table.
+
+⚠ **The name is not a substitute for the id.** The objects are named after their model files, so a name search looks
+like an equivalent route — but the matching is substring, and asking for one model returns others whose names merely
+contain it. The id is exact.
+
 **An animation also ships the emote that performs it**, in two columns indexed by animation id exactly as the names are:
 Epsilon's one-shot emote plays the animation once, its loop runs it until reset, and zero means there is no emote of
 that kind. This is the only payload in the pack that does not describe the game build being packed. Epsilon exposes the

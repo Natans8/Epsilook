@@ -121,7 +121,11 @@ export interface SpellPack {
     /** The icon's FileDataID, parallel to iconNames (format 44+). */
     iconFids?: number[];
     /** FileDataID -> listfile path (all models, sounds and textures). */
-    files: { fids: number[]; paths: string[] };
+    /** `gobs` is parallel to `fids` (format 48+): the id `.gob spawn` takes to
+     *  place that model on Epsilon, 0 where Epsilon has no display for it.
+     *  Negative on purpose — the command reads the sign, and a positive number
+     *  means a gameobject_template entry instead. */
+    files: { fids: number[]; paths: string[]; gobs?: number[] };
 
     /** Spell -> model file; cats (format 15+) = usage category per row. */
     spellModels: {
@@ -413,6 +417,9 @@ export interface FileEntry {
     base: string;
     /** Lowercased path — the substring-search corpus. */
     searchL: string;
+    /** The id `.gob spawn` takes to place this model on Epsilon, negative, or
+     *  0 when Epsilon has no gameobject display for it. */
+    gob: number;
 }
 
 /** A creature-display reference on a morph / shapeshift pill. */
@@ -1057,7 +1064,10 @@ export function buildIndexes(pack: SpellPack): SpellData {
         const path = fp.paths[i];
         const base = path ? basename(path) : "";
         if (fid < 0) hasSyntheticFiles = true;
-        files.set(fid, {fid, path, base, searchL: path.toLowerCase()});
+        files.set(fid, {
+            fid, path, base, searchL: path.toLowerCase(),
+            gob: fp.gobs ? fp.gobs[i] || 0 : 0,
+        });
     }
 
     /** Append value to the array at map[key], creating the array on first use. */

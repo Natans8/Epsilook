@@ -119,6 +119,7 @@ function fileOf(fid: number): FileEntry & { name: string } {
         base,
         name: base ? stripExt(base) : "",
         searchL: file?.searchL || "",
+        gob: file?.gob || 0,
     };
 }
 

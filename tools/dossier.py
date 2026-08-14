@@ -224,6 +224,7 @@ class Dossier:
         self.path = dict(self._ref("SELECT fid, path FROM ref.listfile"))
         self.anim = dict(self._ref("SELECT anim_id, name FROM ref.anim_name"))
         self.anim_emote = self._anim_emotes()
+        self.gob_display = self._gob_displays()
         self.attach = dict(self._ref("SELECT attachment_id, name FROM ref.m2_attachment"))
         self.kit_kind = {int(t): (n, note) for t, n, note in self._ref(
             "SELECT effect_type, target_table, note FROM ref.kit_effect_type")}
@@ -532,6 +533,19 @@ class Dossier:
             d["name"] = n
         return d
 
+    def _gob_displays(self) -> dict[int, int]:
+        """Model file id -> the id `.gob spawn` takes, negated as the command wants.
+
+        From the vendored table rather than the mirror, which holds game tables
+        and not a private server's. A missing file is not an error, so a
+        checkout without it still prints every other route.
+        """
+        path = ROOT / "build" / "sources" / "epsilon-gameobject-displays.csv.gz"
+        if not path.exists():
+            return {}
+        with gzip.open(path, "rt", encoding="utf-8", newline="") as handle:
+            return {int(r["fid"]): -int(r["display"]) for r in csv.DictReader(handle)}
+
     def file_ref(self, fid: Any) -> dict[str, Any] | None:
         """A FileDataID with its listfile path."""
         if not fid:
@@ -540,6 +554,10 @@ class Dossier:
         p = self.path.get(int(fid))
         if p:
             d["path"] = p
+        # what `.gob spawn` takes to place this model on Epsilon
+        gob = self.gob_display.get(int(fid))
+        if gob:
+            d["epsilon_gob"] = gob
         return d
 
     def spell_ref(self, sid: Any) -> dict[str, Any] | None:
