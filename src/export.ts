@@ -121,7 +121,13 @@ export interface ExportRow {
      *  the old flat path list instead. */
     models?: ({ category: string; files: ExportModelFile[] } | string)[];
     soundKits?: { id: number; files: string[]; targets: string[] }[];
-    anims?: { name: string; targets: string[] }[];
+    /** `emote` is the Epsilon emote performing this animation — `oneshot`
+     *  plays once, `loop` replays until reset. Absent where Epsilon has
+     *  neither, or where the pack predates format 47. */
+    anims?: {
+        name: string; targets: string[];
+        emote?: { oneshot?: number; loop?: number };
+    }[];
     animKits?: { id: number; anims: string[]; targets: string[] }[];
     replaceAnims?: { from: string; to: string }[];
     fx?: ExportFxEntry[];
@@ -249,10 +255,18 @@ function exportRows(): ExportRow[] {
             const loose = sorted(d.spellVisualAnims.get(id));
             const looseMasks = d.visualAnimTargets.get(id);
             if (loose.length) {
-                row.anims = loose.map((a) => ({
-                    name: d.animNames[a],
-                    targets: targetWordsOf(looseMasks ? looseMasks.get(a) || 0 : 0),
-                }));
+                row.anims = loose.map((a) => {
+                    const entry: NonNullable<ExportRow["anims"]>[number] = {
+                        name: d.animNames[a],
+                        targets: targetWordsOf(looseMasks ? looseMasks.get(a) || 0 : 0),
+                    };
+                    const oneshot = d.animEmoteOneshots[a] || 0;
+                    const loop = d.animEmoteLoops[a] || 0;
+                    if (oneshot || loop) {
+                        entry.emote = {...(oneshot ? {oneshot} : {}), ...(loop ? {loop} : {})};
+                    }
+                    return entry;
+                });
             }
             row.animKits = sorted(d.spellAnimKits.get(id))
                 .map((k) => ({

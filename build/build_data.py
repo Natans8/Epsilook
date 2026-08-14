@@ -936,7 +936,7 @@ def numeric_domain(values: Iterable[float],
 
 # The pack's shape version — bump it whenever a section is added, removed or
 # reshaped, so a stale cached pack is recognisable app-side.
-PACK_FORMAT = 46  # 46: meta.domains — what a numeric control needs, measured per pack (§3z)
+PACK_FORMAT = 47  # 47: animEmoteOneshots/animEmoteLoops — the Epsilon emote per animation
 # 45: spellText.auras — what the BUFF says, beside what the cast says (§3x)
 # 44: iconNames gains iconFids — the icon's own identity (§3y)
 # 43: spellText — cooked description + encounter prose (§3x)
@@ -2060,6 +2060,29 @@ def read_anim_replacements(
         if sid and 0 <= s < len(anim_names) and 0 <= d < len(anim_names):
             replacements[sid].add((s, d))
     return replacements
+
+
+def read_anim_emotes(anim_names: list[str]) -> tuple[list[int], list[int]]:
+    """Read the Epsilon emote that plays each animation, one-shot and looping.
+
+    Returns two columns parallel to ``anim_names`` and indexed the same way, 0
+    where Epsilon has no emote of that kind for the animation. Epsilon exposes
+    the client's animation set as emotes, so an animation this pack indexes is
+    one a player can perform, and the emote id is what ``.mod anim`` and
+    Arcanum's Anim action take -- neither accepts an AnimationData id.
+
+    Shipped in every pack, not only an Epsilon one: an animation present in any
+    build is performable on Epsilon if Epsilon has an emote for it. Ids past
+    this build's animation table are dropped, like the other animation routes.
+    """
+    emotes = load_local_enum("epsilon_emotes")
+    oneshots = [0] * len(anim_names)
+    loops = [0] * len(anim_names)
+    for anim, pair in emotes.items():
+        if 0 <= anim < len(anim_names):
+            oneshots[anim] = pair.get("oneshot", 0)
+            loops[anim] = pair.get("loop", 0)
+    return oneshots, loops
 
 
 # Field defaults for SpellEffectRows below. Every one of its maps is either
@@ -3369,6 +3392,7 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
     kits = read_kit_effects(table_dir, models, procs, fx)
     soundkit_files = read_soundkit_files(table_dir)
     anim_names = read_anim_names()
+    anim_emote_oneshots, anim_emote_loops = read_anim_emotes(anim_names)
     animkit_anims = read_animkit_anims(table_dir, anim_names)
     animkit_bonesets = read_animkit_bonesets(table_dir)
     anim_replacements = read_anim_replacements(table_dir, anim_names)
@@ -3861,6 +3885,10 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
                 "spellAnimKits": len(anim_rows),
                 "animKitAnims": len(kit_anim_rows),
                 "animKitAnimBoneset": len(kit_anim_boneset_rows),
+                # animations a player can perform on Epsilon: those with an
+                # emote of either kind
+                "animEmotes": sum(1 for a in range(len(anim_names))
+                                  if anim_emote_oneshots[a] or anim_emote_loops[a]),
                 "spellMechanics": len(mechanic_rows),
                 "implicitTargets": len(implicit_target_names),
                 "spellKeybinds": len(keybind_rows),
@@ -4094,6 +4122,13 @@ def build_pack(version: str, label: str, table_dir: Path, listfile_path: Path,
             "targets": [r[2] for r in visual_anim_rows],
         },
         "animNames": anim_names,
+        # the Epsilon emote that performs each animation, indexed by
+        # AnimID like animNames, 0 = Epsilon has no emote of that kind. Two
+        # columns rather than one section of pairs, the shape
+        # implicitTargetNames/implicitTargetBits already use for two dense maps
+        # over one id space.
+        "animEmoteOneshots": anim_emote_oneshots,
+        "animEmoteLoops": anim_emote_loops,
         # Mechanics: one row per distinct SpellEffect the spell has, carrying
         # what it does (Effect + EffectAura enum ids, 0 = none) AND who it is
         # aimed at (the two ImplicitTargets, 0 = unset, plus the resolved

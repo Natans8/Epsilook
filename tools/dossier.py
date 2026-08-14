@@ -223,6 +223,7 @@ class Dossier:
             self.enum.setdefault(e, {})[int(v)] = n
         self.path = dict(self._ref("SELECT fid, path FROM ref.listfile"))
         self.anim = dict(self._ref("SELECT anim_id, name FROM ref.anim_name"))
+        self.anim_emote = self._anim_emotes()
         self.attach = dict(self._ref("SELECT attachment_id, name FROM ref.m2_attachment"))
         self.kit_kind = {int(t): (n, note) for t, n, note in self._ref(
             "SELECT effect_type, target_table, note FROM ref.kit_effect_type")}
@@ -985,6 +986,19 @@ class Dossier:
         rows = self.q('SELECT name FROM ref.sound_kit_name WHERE sound_kit_id=?', int(kit_id))
         return rows[0][0] if rows else None
 
+    def _anim_emotes(self) -> dict[int, dict[str, int]]:
+        """Which Epsilon emote performs each animation, one-shot and looping.
+
+        Read from the checked-in table rather than the mirror: the mirror holds
+        game tables, and this one is Epsilon's. A missing file is not an error,
+        so a checkout without it still prints every other route.
+        """
+        path = ROOT / "build" / "enums" / "epsilon_emotes.json"
+        if not path.exists():
+            return {}
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return {int(a): pair for a, pair in data["values"].items()}
+
     def _anim(self, a: Any) -> dict[str, Any] | None:
         if not a or int(a) < 0:
             return None
@@ -992,6 +1006,11 @@ class Dossier:
         n = self.anim.get(int(a))
         if n:
             d["name"] = n
+        # the Epsilon emote a player performs this animation with; the id
+        # `.mod anim` and Arcanum's Anim action take
+        emote = self.anim_emote.get(int(a))
+        if emote:
+            d["epsilon_emote"] = dict(emote)
         return d
 
     def _attach(self, a: Any) -> dict[str, Any] | None:

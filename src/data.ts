@@ -166,6 +166,12 @@ export interface SpellPack {
     spellAnimKits: { spellIds: number[]; animKitIds: number[]; targets?: number[] };
     /** Animation names indexed by AnimID. */
     animNames: string[];
+    /** The Epsilon emote that performs each animation, indexed by AnimID like
+     *  `animNames` (format 47+). 0 where Epsilon has no emote of that kind.
+     *  Both are what `.mod anim` takes; neither accepts an AnimationData id. */
+    animEmoteOneshots?: number[];
+    /** Looping counterpart of `animEmoteOneshots` — replays until reset. */
+    animEmoteLoops?: number[];
     animKitAnims: { animKitIds: number[]; animIds: number[] };
     /** Boneset region names (format 33+), referenced by index below. */
     bonesetNames?: string[];
@@ -677,6 +683,11 @@ export interface SpellData {
     animKitSpells: Map<number, number[]>;
     animNames: string[];
     animNamesL: string[];
+    /** Epsilon emote ids per AnimID: the one-shot plays once, the loop replays
+     *  until reset. 0 means Epsilon has no emote of that kind, and a pack older
+     *  than format 47 leaves both empty. */
+    animEmoteOneshots: number[];
+    animEmoteLoops: number[];
     animKitAnims: Map<number, number[]>;
     animAnimKits: Map<number, number[]>;
     /** Boneset region names, index -> name (format 33+). */
@@ -1288,6 +1299,9 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // animations contained in animkits (names indexed by AnimID)
     const animNames = pack.animNames;
     const animNamesL: string[] = animNames.map((n) => n.toLowerCase());
+    // The Epsilon emote performing each animation, same indexing.
+    const animEmoteOneshots = pack.animEmoteOneshots || [];
+    const animEmoteLoops = pack.animEmoteLoops || [];
     const animKitAnims = new Map<number, number[]>(); // animKitId -> [animId]
     const animAnimKits = new Map<number, number[]>(); // animId -> [animKitId]
     {
@@ -2220,7 +2234,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
         items, itemSearchL, itemSpells, itemCat, missileMotionNames,
         spellSounds, soundSpells, soundFids, soundKitSpells, soundKitFiles, soundKitName,
         spellAnimKits, animKitSpells,
-        animNames, animNamesL, animKitAnims, animAnimKits,
+        animNames, animNamesL, animEmoteOneshots, animEmoteLoops,
+        animKitAnims, animAnimKits,
         bonesetNames, animKitAnimBoneset, spellBonesets,
         spellFx, spellChainRows, fxSpells, fxChains, fxTextures, fxSearchL,
         spellDissolves, dissolveSpells, dissolveDurations, dissolveTextures,
