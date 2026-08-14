@@ -168,6 +168,7 @@ DOM_NAMES = (
 # artifact shape. That only holds while imports flow one way, so the order here
 # IS the rule - a layer may import the layers below it and nothing above.
 BUILD_PACKAGE = "build/pack"
+PYTHON_TESTS = "test/py"
 BUILD_LAYERS = ("sources", "tables", "routes", "derive", "model", "encode", "emit")
 
 # The layers that must not touch the filesystem or the network. Acquisition owns
@@ -185,7 +186,8 @@ PLACE_NAMES = ("Path", "open", "urlopen", "urllib", "requests", "listdir", "glob
 # cannot drift on what they cover. The versions they run at are pinned by
 # uv.lock rather than by whatever the machine happens to have installed, which
 # is why all three go through `uv run`.
-PYTHON_SOURCES = ("build/build_data.py", "build/locale_data.py", "build/pack", "tools")
+PYTHON_SOURCES = ("build/build_data.py", "build/locale_data.py", "build/pack",
+                  "test/py", "tools")
 
 # How long a pack-freshness answer stays good. Blizzard patches weekly at
 # most, so a day is generous and keeps a normal working day to one request.
@@ -768,15 +770,16 @@ def check_comment_style(rep: Report) -> None:
     to somebody sends the next reader looking for them instead of for the
     reason, and one that shouts trains readers to skim.
 
-    Only the data build is covered. Every rule here applies repository-wide,
-    but the modules this guards are the ones written to it, and a guard that
+    The data build and its tests are covered. Every rule here applies
+    repository-wide, but these are the modules written to it, and a guard that
     fails on code predating it is a guard people learn to bypass.
 
     Skipped rather than failed while the package is absent, so this does not
     become the reason a checkout without it cannot commit.
     """
-    root = ROOT / BUILD_PACKAGE
-    modules = sorted(root.rglob("*.py")) if root.is_dir() else []
+    roots = [ROOT / BUILD_PACKAGE, ROOT / PYTHON_TESTS]
+    modules = sorted(path for root in roots if root.is_dir()
+                     for path in root.rglob("*.py"))
     if not modules:
         rep.skip("comment style", f"{BUILD_PACKAGE} not present yet")
         return
@@ -1115,11 +1118,13 @@ def check_toolchain(rep: Report) -> None:
              "correctness + type-aware rules, .oxlintrc.json")
     run_tool(rep, "mypy", ["uv", "run", "mypy", *PYTHON_SOURCES])
     run_tool(rep, "pyflakes", ["uv", "run", "pyflakes", *PYTHON_SOURCES])
+    # --recursive walks a directory that is not an import package. test/py is
+    # deliberately one of those: pytest's importlib mode wants no __init__.py,
+    # and without this pylint reports the absent file as a parse error.
     run_tool(rep, "pylint", ["uv", "run", "pylint", "--errors-only", "--score=n",
-                             *PYTHON_SOURCES],
+                             "--recursive=y", *PYTHON_SOURCES],
              "errors only; style findings are advisory (.pylintrc)")
-    run_tool(rep, "pytest", ["uv", "run", "pytest"],
-             "build/pack/**/*_test.py, beside the code they test")
+    run_tool(rep, "pytest", ["uv", "run", "pytest"], "test/py/*_test.py")
 
 
 # ---------------------------------------------------------------------- main

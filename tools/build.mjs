@@ -122,14 +122,16 @@ const cliOptions = CLI_ENTRIES.map((name) => ({
  * registries are module-level and a test that deliberately corrupts one must
  * not reach the others. Source maps, so a failure points at the .ts line.
  *
- * Output is gitignored build output, exactly like site/js. */
-function testFiles(dir = resolve(root, "test")) {
+ * Output is gitignored build output, exactly like site/js. The suite is split
+ * by language under test/: test/ts is this one, test/py is pytest's. Bundling
+ * starts at test/ts and rebases onto it, so the bundle keeps the shape of the
+ * sources it mirrors. */
+function testFiles(dir = resolve(root, "test/ts")) {
     const out = [];
     for (const entry of readdirSync(dir, {withFileTypes: true})) {
         const path = resolve(dir, entry.name);
-        if (entry.isDirectory()) {
-            if (entry.name !== ".bundle") out.push(...testFiles(path));
-        } else if (entry.name.endsWith(".test.ts")) out.push(path);
+        if (entry.isDirectory()) out.push(...testFiles(path));
+        else if (entry.name.endsWith(".test.ts")) out.push(path);
     }
     return out;
 }
@@ -137,7 +139,7 @@ function testFiles(dir = resolve(root, "test")) {
 const testOptions = () => ({
     entryPoints: testFiles(),
     outdir: resolve(root, "test/.bundle"),
-    outbase: resolve(root, "test"),
+    outbase: resolve(root, "test/ts"),
     outExtension: {".js": ".mjs"},
     bundle: true,
     format: "esm",
@@ -163,7 +165,7 @@ const {values} = parseArgs({
 if (values.test) {
     // The bundle directory is emptied first, because esbuild only writes — it never removes. A test file that is
     // deleted or moved leaves its last build behind, and `node --test` keeps running it against a source that is
-    // gone: `test/search/backend-memory.test.ts` was deleted in b462cff and its 32 tests went on passing for days.
+    // gone: `test/ts/search/backend-memory.test.ts` was deleted in b462cff and its 32 tests went on passing for days.
     rmSync(resolve(root, "test/.bundle"), {recursive: true, force: true});
     await esbuild.build(testOptions());
 } else if (values.cli) {

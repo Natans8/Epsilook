@@ -33,11 +33,12 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-# Tests live beside the code they test, as `<module>_test.py`, so a layer's
-# tests move with the layer. `build/pack` is the whole search path: the other
-# Python in the tree is the builder being replaced and the tools around it.
-testpaths = ["build/pack"]
-addopts = "--quiet --no-header"
+# Tests live outside the code they cover, as `<module>_test.py` under test/py.
+# `pythonpath` puts the package and the test support module on the import path
+# without an editable install; `importlib` keeps pytest from rewriting sys.path.
+testpaths = ["test/py"]
+pythonpath = ["build", "test/py"]
+addopts = "--quiet --no-header --import-mode=importlib"
 cache_dir = ".pytest_cache"
 
 # Both caches are pinned to the repository root. Left to their defaults they

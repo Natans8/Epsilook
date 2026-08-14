@@ -1,23 +1,23 @@
 # The test suite
 
+Two suites, one directory, split by language. `tools/check.py` runs both, so there is one definition of "does this
+pass".
+
 ```bash
-npm test
+npm test        # the TypeScript suite, test/ts
+uv run pytest   # the Python suite, test/py
 ```
 
-Bundles every `test/**/*.test.ts` into `test/.bundle/` and runs it with `node --test`. `tools/check.py` runs the same
-command, so there is one definition of "does this pass".
+## What these are
 
-## What this is
+**`node:test` and `pytest`, with nothing on top** — no Jest, no Vitest, no plugins. A suite with no framework cannot
+rot when the framework does, and this app is maintained solo: the tests are the handover.
 
-**`node:test` and nothing else** — no Jest, no Vitest, no config, no plugins. It is built into Node, it matches this
-repo's stdlib-only instinct, and a suite with no framework cannot rot when the framework does. The user maintains this
-app solo after the subscription ends; **the tests are the handover**.
+## The TypeScript suite, `test/ts`
 
-## Writing one
-
-Put it beside the thing it tests, mirroring `src/` **including its directories**: `src/search/vocabulary/units.ts` →
-`test/search/vocabulary/units.test.ts`. Import the module exactly as the app does — extensionless — because the file is
-bundled before it runs:
+Put a test beside the thing it covers, mirroring `src/` including its directories:
+`src/search/vocabulary/units.ts` becomes `test/ts/search/vocabulary/units.test.ts`. Import the module exactly as the
+app does, extensionless, because the file is bundled before it runs:
 
 ```ts
 import {strict as assert} from "node:assert";
@@ -32,40 +32,57 @@ describe("seconds", () => {
 });
 ```
 
-**`test/.bundle/` is emptied on every build.** esbuild only writes, so a deleted or moved test file used to leave its
-last build behind and `node --test` went on running it: `backend-memory.test.ts` was deleted in `b462cff` and its 32
-tests kept passing for days, inflating every count reported since. `tools/build.mjs` clears the directory first.
+`npm test` bundles every `test/ts/**/*.test.ts` into `test/.bundle/` and runs it with `node --test`.
 
-**Each file runs in its own process.** That isolation is load-bearing, not incidental: the registries (`TYPES`,
-`KINDS`, `COLUMNS`, `OPERATORS`) are module-level, so a test that deliberately corrupts one — proving a guard fires —
-must not reach the others.
+**`test/.bundle/` is emptied on every build.** esbuild only writes, so a deleted or moved test used to leave its last
+build behind and `node --test` went on running it — one deleted file kept 32 tests passing for days, inflating every
+count reported since. `tools/build.mjs` clears the directory first.
+
+**Each file runs in its own process,** and that isolation is load-bearing rather than incidental: the registries are
+module-level, so a test that deliberately corrupts one to prove a guard fires must not reach the others.
+
+## The Python suite, `test/py`
+
+One flat directory of `<module>_test.py`, importing the package absolutely:
+
+```python
+from pack.routes.effects import read_spell_effect_rows
+from support import BuildTables
+```
+
+**Flat, and deliberately not mirroring `build/pack`.** The package is being reorganised into layers, and modules move
+between them; a mirrored test tree would have to move in lockstep, which makes the test layout a hostage to a live
+design decision. Flat, a module moving between layers costs one import line and no file move. Every test basename is
+unique, so nothing collides.
+
+`pyproject.toml` puts `build` and `test/py` on the import path and selects pytest's `importlib` import mode, so nothing
+is installed and `sys.path` is not rewritten. `conftest.py` holds the fixtures, and `support.py` the types they share:
+a fixture reaches a test through pytest and needs no import, but its type does, and importing a name out of `conftest`
+is not something pytest supports.
 
 ## What to test
 
-| test                                                                  | why it earns its keep                                            |
-|-----------------------------------------------------------------------|------------------------------------------------------------------|
-| **a documented example**                                              | it is what stops the law drifting from the engine — see below    |
-| **a guard FIRING**                                                    | a guard nobody has seen fail is not known to work                |
-| **an invariant** (`format(parse(s)) === s`)                           | it holds for values nobody thought to enumerate                  |
-| **a declared table against the code that reads it**                   | the two cannot silently disagree                                 |
-| **a measured number** *(with the measurement cited in the assertion)* | a moved count becomes a finding to explain instead of a surprise |
+| test                                                              | why it earns its keep                                            |
+|-------------------------------------------------------------------|------------------------------------------------------------------|
+| A documented example                                              | It is what stops the law drifting from the engine                |
+| A guard firing                                                    | A guard nobody has seen fail is not known to work                |
+| An invariant, such as `format(parse(s)) === s`                    | It holds for values nobody thought to enumerate                  |
+| A declared table against the code that reads it                   | The two cannot silently disagree                                 |
+| A measured number, with the measurement cited in the assertion    | A moved count becomes a finding to explain rather than a surprise|
 
-**⛔ WHAT NOT TO TEST: the DOM and the UI.** Expensive, brittle, and Firefox plus `site/dev/oracle.js` already cover it
-better — `Oracle.q` for counts, `Oracle.pills` for snapshots, `Oracle.contrast()` for the WCAG walk. `check_layers`
-guards the seam; the Oracle guards the rendering.
+**Do not test the DOM or the UI.** It is expensive and brittle, and Firefox with `site/dev/oracle.js` covers it better.
+`check_layers` guards the seam; the oracle guards the rendering.
 
-**⛔ AND DO NOT TEST THAT A FUNCTION CALLS ANOTHER FUNCTION.** Assert on the answer, never on the route to it.
+**Do not test that one function calls another.** Assert on the answer, never on the route to it.
 
-## The one rule worth stating twice
+## The rule worth stating twice
 
-> **Every worked example in `docs/SEARCH.md` and `docs/TYPES.md` should end up here as a fixture.**
+Every worked example in `docs/SEARCH.md` and `docs/TYPES.md` should end up here as a fixture. A single pass through
+those documents found four contradictions, every one a superseded statement that survived an edit. A fixture makes that
+impossible rather than unlikely.
 
-Four contradictions were found in those documents in a single pass, and every one was a superseded statement surviving
-an edit — `§2.4.2` and `§2.4.5` were both still teaching forms that had been deleted. A fixture makes that impossible
-rather than unlikely.
+## The count battery is not here
 
-## The count battery is NOT here
-
-The 40 canonical counts (CLAUDE.md → *Canonical measurements*) need a real pack, take ~12 s for a sorted query, and are
-a **diff instrument rather than a pass gate** — every number that moves must be explained and intended, which is a
-judgement a test cannot make. They run through `npm run query` and `Oracle.q`.
+The canonical counts need a real pack, take seconds per sorted query, and are a diff instrument rather than a pass
+gate: every number that moves must be explained and intended, which is a judgement a test cannot make. They run through
+`npm run query` and the oracle.
