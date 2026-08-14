@@ -38,6 +38,8 @@ feeds what comes later.**
 | `customization` | the character-customization tables, joined by name | semantic        | a minute |
 | `modelnames`    | the name a model carries about itself              | real            | minutes  |
 | `reskins`       | the retail world model a file was copied from      | semantic        | minutes  |
+| `placements`    | the map whose terrain places a world model         | semantic        | minutes  |
+| `ground`        | the map whose terrain paints with a texture        | semantic        | minutes  |
 | `worldmodels`   | group geometry and textures, from their models     | derived         | minutes  |
 | `models`        | skins, textures and anims, from their models       | derived         | minutes  |
 | `neighbours`    | the id space itself: what a file arrived beside    | adjacent        | seconds  |
@@ -119,6 +121,53 @@ larger one. That is not a defect; it is what makes re-running a walk after anoth
 `--only` seeds itself from the last full run rather than starting empty.
 
 ## 3. Running it
+
+```mermaid
+flowchart TD
+    accTitle: Rebuilding the asset-name supplement, from the routes to the vendored file
+    accDescr {
+      One command runs eleven routes in priority order. Whether it may reach the network decides which
+      names it finds, not merely how many. The routes merge earlier-wins into a working file, the result
+      is diffed against what is vendored, and only a full network run is allowed to write the vendored
+      file, which the build then merges over the community listfile.
+    }
+
+    START(["uv run python tools/supplement.py"]) --> MODE{"may it reach<br/>the network?"}
+    MODE -->|"default: no"| LOCAL["reads only what the install holds<br/>91.8%, and DIFFERENT names, not fewer"]
+    MODE -->|"--network"| NET["also opens what the install lacks,<br/>from the client's own service"]
+
+    LOCAL --> R1
+    NET --> R1
+
+    subgraph ROUTES["the eleven routes, in priority order: earlier wins a conflict, and earlier feeds later"]
+        direction LR
+        R1["terrain · icons · objects<br/><b>real</b><br/>the game would look it up by this"]
+        R2["customization · reskins<br/>placements · ground<br/><b>semantic</b><br/>what the file is for"]
+        R3["modelnames<br/><b>real</b><br/>the name the file<br/>carries about itself"]
+        R4["worldmodels · models<br/><b>derived</b><br/>which parent refers to it"]
+        R5["neighbours<br/><b>adjacent</b><br/>what it was delivered beside"]
+        R1 --> R2 --> R3 --> R4 --> R5
+    end
+
+    R5 --> MERGE["<code>.cache/supplement/supplement.csv</code><br/>plus one file per route, so any can be re-run alone"]
+    MERGE --> DIFF["<b>--diff</b> against the vendored file<br/>added · lost · changed"]
+    DIFF --> READ{"read the renames:<br/>is each one a claim<br/>being withdrawn?"}
+    READ -->|"no"| FIX["a route is wrong — fix it, not the file"]
+    READ -->|"yes"| GATE{"<b>--vendor</b>"}
+    GATE -->|"local-only, or --only"| REFUSE(["refused: reproducible here<br/>and nowhere else"])
+    GATE -->|"full --network run"| WRITE[("<code>build/sources/epsilon-listfile-supplement.csv.gz</code><br/>sorted, unique, mtime zero")]
+    WRITE --> BUILD["merged over the community listfile,<br/>under the admission rule in <code>pack/supplements.py</code>"]
+
+    classDef choice fill:#60a5fa18,stroke:#60a5fa,stroke-width:2px
+    classDef stop fill:#f8717118,stroke:#f87171,stroke-width:2px
+    classDef out fill:#4ade8018,stroke:#4ade80,stroke-width:2px
+    classDef cost fill:#fbbf2418,stroke:#fbbf24,stroke-width:2px
+
+    class MODE,READ,GATE choice
+    class REFUSE,FIX stop
+    class WRITE out
+    class NET cost
+```
 
 ```bash
 uv run python tools/supplement.py --list
