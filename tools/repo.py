@@ -61,6 +61,18 @@ ROOT = Path(__file__).resolve().parent.parent
 # on a different path root and must not import from `tools/`.
 CACHE = ROOT / ".cache"
 
+# Which of the release's listfiles the build caches, for the tools that read
+# the same cache. The capitalised one, because these paths are shown to a
+# reader rather than only matched against.
+#
+# Named here for the same reason CACHE is: it was spelled out in two tools, and
+# a filename written down twice is one that drifts. The build declares its own
+# copy beside the code that downloads it, and `check_listfile_declaration`
+# reconciles the two -- the drift INVERTS an answer rather than breaking one,
+# since reading the lowercase file while packs carry capitals makes every name
+# differ and reports every pack stale forever.
+LISTFILE_ASSET = "community-listfile-withcapitals.csv"
+
 # A change to the css, the bundle's SOURCES or the build itself needs a bump.
 # site/js is generated and gitignored, so it can never appear in a diff - which
 # is why src/ is watched instead of the bundle it produces. An html-only or

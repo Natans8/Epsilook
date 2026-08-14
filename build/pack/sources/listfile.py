@@ -85,10 +85,12 @@ def fetch_listfile(refresh: bool) -> Path:
                 f"release {latest_tag} carries no {LISTFILE_ASSET} "
                 f"(it has {', '.join(sorted(assets))})")
         asset_url = assets[LISTFILE_ASSET]
-    # A network failure arrives as `urllib.error.URLError`, which is an
-    # `OSError`; a malformed release body arrives as the `KeyError` inside
-    # `LookupError`.
-    except (OSError, LookupError) as exc:
+    # Three shapes of the same answer, "the latest release did not resolve": a
+    # network failure is a `URLError` and so an `OSError`; a body that is not
+    # JSON at all -- a proxy or captive-portal page -- is a `JSONDecodeError`
+    # and so a `ValueError`; JSON missing a key we need is a `LookupError`,
+    # which is also what the absent-asset check above raises.
+    except (OSError, ValueError, LookupError) as exc:
         if not listfile.exists():
             raise
         log(f"  WARNING  could not resolve the latest release ({exc}); "

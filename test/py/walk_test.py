@@ -33,19 +33,11 @@ def walk(graph_in: VisualGraph, kits: KitEffects | None = None, *,
          missiles: dict[int, VisualMissiles] | None = None,
          soundkit_files: dict[int, set[int]] | None = None,
          fx: FxPayloads | None = None,
-         effects: SpellEffectRows | None = None,
-         screens: dict[int, set[int]] | None = None,
-         ) -> tuple[SpellVisuals, dict[int, set[int]]]:
-    """Run the walk with everything not under test left empty.
-
-    Returns both the walk's result and the screens dictionary, which the walk
-    extends in place rather than returning.
-    """
-    collected: dict[int, set[int]] = {} if screens is None else screens
-    found = walk_spells(SPELLS, graph_in, missiles or {}, kits or KitEffects(),
-                        soundkit_files or {}, fx or FxPayloads(),
-                        effects or SpellEffectRows(), collected)
-    return found, collected
+         effects: SpellEffectRows | None = None) -> SpellVisuals:
+    """Run the walk with everything not under test left empty."""
+    return walk_spells(SPELLS, graph_in, missiles or {}, kits or KitEffects(),
+                       soundkit_files or {}, fx or FxPayloads(),
+                       effects or SpellEffectRows())
 
 
 def test_every_declared_family_reaches_the_spell() -> None:
@@ -60,7 +52,7 @@ def test_every_declared_family_reaches_the_spell() -> None:
     kits = KitEffects()
     for bucket in KIT_BUCKETS:
         bucket.of_kit(kits)[9] = {item}
-    vis, _ = walk(graph(), kits, fx=FxPayloads(chains={3: (0, 0, 0, 0, (), ())}))
+    vis = walk(graph(), kits, fx=FxPayloads(chains={3: (0, 0, 0, 0, (), ())}))
     for index, bucket in enumerate(KIT_BUCKETS):
         collected = bucket.of_spell(vis)[100]
         assert collected == {item: TARGET_CASTER}, f"family {index} did not collect"
@@ -74,7 +66,7 @@ def test_a_kit_reached_twice_unions_its_audiences() -> None:
         spell_visuals={100: {7: NO_TARGET, 8: NO_TARGET}},
         visual_kits={7: {9: (NO_TARGET, TARGET_CASTER)},
                      8: {9: (NO_TARGET, TARGET_TARGET)}})
-    vis, _ = walk(reached, kits)
+    vis = walk(reached, kits)
     assert vis.models[100] == {MODEL: TARGET_CASTER | TARGET_TARGET}
 
 
@@ -82,7 +74,7 @@ def test_a_redirect_edge_adds_its_bits_to_everything_beyond_it() -> None:
     """Content behind a redirect never passed an event row, so the edge is the
     only thing that can say whose view it is."""
     kits = KitEffects(models={9: {MODEL}})
-    vis, _ = walk(graph(extra=TARGET_TARGET, other_mask=NO_TARGET), kits)
+    vis = walk(graph(extra=TARGET_TARGET, other_mask=NO_TARGET), kits)
     assert vis.models[100] == {MODEL: TARGET_TARGET}
 
 
@@ -91,7 +83,7 @@ def test_a_target_bit_becomes_a_caster_bit_on_a_self_cast_spell() -> None:
     the spell's own effects can say that."""
     kits = KitEffects(models={9: {MODEL}})
     effects = SpellEffectRows(cast_target_bits={100: TARGET_CASTER})
-    vis, _ = walk(graph(other_mask=TARGET_TARGET), kits, effects=effects)
+    vis = walk(graph(other_mask=TARGET_TARGET), kits, effects=effects)
     assert vis.models[100] == {MODEL: TARGET_CASTER}
 
 
@@ -99,8 +91,7 @@ def test_a_missile_carries_no_target_type_of_its_own() -> None:
     """A missile set has no event row, so it takes only what the edge gave it."""
     launched = {7: VisualMissiles(models={(500, 4, 2, 3)}, soundkits=set(),
                                   animkits={11})}
-    vis, _ = walk(graph(extra=TARGET_AREA, other_mask=NO_TARGET),
-                  missiles=launched)
+    vis = walk(graph(extra=TARGET_AREA, other_mask=NO_TARGET), missiles=launched)
     assert vis.models[100] == {(500, MODEL_CAT_MISSILE, 2, 3, 0, 4): TARGET_AREA}
     assert vis.animkits[100] == {11: TARGET_AREA}
 
@@ -109,41 +100,60 @@ def test_a_sound_kit_becomes_one_pair_per_file() -> None:
     """A kit names the variations the client picks between, and the pack keeps
     the pairing so a reader can tell which kit a file came from."""
     kits = KitEffects(soundkits={9: {40}})
-    vis, _ = walk(graph(), kits, soundkit_files={40: {501, 502}})
+    vis = walk(graph(), kits, soundkit_files={40: {501, 502}})
     assert vis.sounds[100] == {(40, 501): TARGET_CASTER, (40, 502): TARGET_CASTER}
 
 
 def test_a_visuals_own_animation_sound_is_collected() -> None:
     """It hangs off the visual rather than off a kit, but is a sound like any
     other once found."""
-    vis, _ = walk(graph(sound=40), soundkit_files={40: {501}})
+    vis = walk(graph(sound=40), soundkit_files={40: {501}})
     assert vis.sounds[100] == {(40, 501): NO_TARGET}
 
 
 def test_a_chains_own_sound_inherits_the_chains_audience() -> None:
     kits = KitEffects(chains={9: {(3, 1, 2)}})
     fx = FxPayloads(chains={3: (0, 0, 0, 40, (), ())})
-    vis, _ = walk(graph(), kits, fx=fx, soundkit_files={40: {501}})
+    vis = walk(graph(), kits, fx=fx, soundkit_files={40: {501}})
     assert vis.sounds[100] == {(40, 501): TARGET_CASTER}
 
 
 def test_the_valueless_families_are_membership_only() -> None:
     kits = KitEffects(freezes={9}, camos={9})
-    vis, _ = walk(graph(), kits)
+    vis = walk(graph(), kits)
     assert vis.freezes == {100} and vis.camos == {100}
 
 
-def test_screen_effects_extend_what_the_auras_already_found() -> None:
-    """Screens arrive from outside the graph too, so the walk adds to them
-    rather than replacing them."""
-    kits = KitEffects(screens={9: {22}})
-    _, screens = walk(graph(), kits, screens={100: {21}})
-    assert screens[100] == {21, 22}
+def test_the_kits_screen_effects_are_collected_without_touching_the_auras() -> None:
+    """Screens also arrive through an aura with no visual involved. The walk
+    reports only its own half, so neither pass writes into the other's bundle
+    and the two are unioned where they are read."""
+    effects = SpellEffectRows()
+    effects.screens.add(100, 21, NO_TARGET)
+    vis = walk(graph(), KitEffects(screens={9: {22}}), effects=effects)
+    # Masked like every other family, even though the pack ships no audience
+    # for a screen today -- giving it one later is then a section change.
+    assert vis.screens == {100: {22: TARGET_CASTER}}
+    assert effects.screens.ids == {100: {21}}
+
+
+def test_a_visual_with_no_sound_conjures_no_empty_bucket() -> None:
+    """The merge is guarded, so a spell reaching no sound at all stays absent
+    from the family rather than arriving with an empty entry."""
+    vis = walk(graph(), KitEffects(models={9: {MODEL}}))
+    assert 100 not in vis.sounds
+
+
+def test_a_kit_naming_a_chain_the_payload_pass_dropped_is_survivable() -> None:
+    """One unresolved row must not be fatal to a build that renders without
+    it, so the chain sound asks rather than indexes."""
+    vis = walk(graph(), KitEffects(chains={9: {(404, 1, 2)}}), fx=FxPayloads())
+    assert vis.chains[100] == {(404, 1, 2): TARGET_CASTER}
 
 
 def test_a_visual_row_naming_an_unknown_spell_is_counted_not_followed() -> None:
     kits = KitEffects(models={9: {MODEL}})
-    vis, _ = walk(graph(spell=999), kits)
+    vis = walk(graph(spell=999), kits)
     assert vis.orphans == 1
     assert not vis.models
 

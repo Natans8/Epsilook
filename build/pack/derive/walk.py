@@ -25,8 +25,29 @@ from ..routes import (FxPayloads, KitEffects, SpellEffectRows, VisualGraph,
 from ..routes.models import MODEL_CAT_MISSILE
 from ..targets import merge_masked, resolve_target_mask
 
-Bucket = dict[int, dict[Any, int]]
-"""Spell to its payload items, each with the union of the masks it arrived by."""
+Bucket = defaultdict[int, dict[Any, int]]
+"""Spell to its payload items, each with the union of the masks it arrived by.
+
+A `defaultdict` in the type and not only in the default, because the walk
+merges into `bucket[spell]` before that spell has one. Declaring it as a plain
+dict would let a caller construct `SpellVisuals` with one and get a `KeyError`
+the annotation said was impossible.
+"""
+
+
+SoundPairs = Mapping[int, list[tuple[int, int]]]
+"""Sound kit to the `(kit, file)` pairs the pack ships for it.
+
+A kit names several files -- the variations the client picks between -- and the
+pack carries the pairing so a reader can tell which kit a file came from. Built
+once per build, so every spell that reaches a kit shares one set of tuples
+rather than allocating its own equal copies.
+"""
+
+
+def _bucket() -> Bucket:
+    """An empty payload bucket, ready to be merged into."""
+    return defaultdict(dict)
 
 
 @dataclass
@@ -38,21 +59,29 @@ class SpellVisuals:
     rather than refusing to grow as they are read.
     """
 
-    models: Bucket = field(default_factory=lambda: defaultdict(dict))
-    sounds: Bucket = field(default_factory=lambda: defaultdict(dict))
-    animkits: Bucket = field(default_factory=lambda: defaultdict(dict))
-    anims: Bucket = field(default_factory=lambda: defaultdict(dict))
+    models: Bucket = field(default_factory=_bucket)
+    sounds: Bucket = field(default_factory=_bucket)
+    animkits: Bucket = field(default_factory=_bucket)
+    anims: Bucket = field(default_factory=_bucket)
     """The base-to-replacement animation pairs its auras swap in."""
-    visual_anims: Bucket = field(default_factory=lambda: defaultdict(dict))
+    visual_anims: Bucket = field(default_factory=_bucket)
     """The animations played directly on the unit."""
-    chains: Bucket = field(default_factory=lambda: defaultdict(dict))
-    dissolves: Bucket = field(default_factory=lambda: defaultdict(dict))
-    glows: Bucket = field(default_factory=lambda: defaultdict(dict))
-    shadowies: Bucket = field(default_factory=lambda: defaultdict(dict))
-    ghost_mats: Bucket = field(default_factory=lambda: defaultdict(dict))
-    tints: Bucket = field(default_factory=lambda: defaultdict(dict))
-    desats: Bucket = field(default_factory=lambda: defaultdict(dict))
-    transps: Bucket = field(default_factory=lambda: defaultdict(dict))
+    chains: Bucket = field(default_factory=_bucket)
+    dissolves: Bucket = field(default_factory=_bucket)
+    glows: Bucket = field(default_factory=_bucket)
+    shadowies: Bucket = field(default_factory=_bucket)
+    ghost_mats: Bucket = field(default_factory=_bucket)
+    tints: Bucket = field(default_factory=_bucket)
+    desats: Bucket = field(default_factory=_bucket)
+    transps: Bucket = field(default_factory=_bucket)
+
+    screens: Bucket = field(default_factory=_bucket)
+    """The screen effects a spell's kits grade the frame with.
+
+    The kit half only. Screens also arrive through an aura, with no visual
+    involved, so the two are unioned where they are read rather than one being
+    written into the other's bundle.
+    """
 
     freezes: set[int] = field(default_factory=set)
     """Spells that freeze their target's animation. Valueless, so membership is
@@ -98,38 +127,22 @@ KIT_BUCKETS: tuple[KitBucket, ...] = (
     KitBucket(lambda kits: kits.tints, lambda vis: vis.tints),
     KitBucket(lambda kits: kits.desats, lambda vis: vis.desats),
     KitBucket(lambda kits: kits.transps, lambda vis: vis.transps),
+    KitBucket(lambda kits: kits.screens, lambda vis: vis.screens),
 )
-"""Every family a kit contributes by id, in the order the pack lists them."""
+"""Every family a kit contributes by id, in the order the pack lists them.
 
-
-def _sounds_of(soundkit_files: Mapping[int, set[int]],
-               soundkit: int) -> list[tuple[int, int]]:
-    """One sound kit as the `(kit, file)` pairs the pack ships.
-
-    A kit names several files -- the variations the client picks between -- and
-    the pack carries the pairing so a reader can tell which kit a file came
-    from.
-
-    Args:
-        soundkit_files: sound kit to the files it plays.
-        soundkit: the kit to expand. Zero means the caller had none.
-
-    Returns:
-        The pairs, empty when the kit is zero or names no file.
-    """
-    return [(soundkit, file) for file in soundkit_files.get(soundkit, ())]
+Screens are here like any other family even though they also arrive through an
+aura: a family carries its audience whether or not the pack ships one today, so
+collecting this half by hand would make giving screens an audience a change to
+the walk rather than to a section.
+"""
 
 
 def walk_spells(spell_names: Container[int], graph: VisualGraph,
                 missiles: Mapping[int, VisualMissiles], kits: KitEffects,
                 soundkit_files: Mapping[int, set[int]], fx: FxPayloads,
-                effects: SpellEffectRows,
-                screens: dict[int, set[int]]) -> SpellVisuals:
+                effects: SpellEffectRows) -> SpellVisuals:
     """Walk every spell's visuals once, unioning what each one reaches.
-
-    Screen effects are the one family that also arrives from outside the graph,
-    through an aura rather than a kit, so they are extended in place rather
-    than collected here.
 
     Args:
         spell_names: the build's spells; a visual row naming anything else is
@@ -141,37 +154,46 @@ def walk_spells(spell_names: Container[int], graph: VisualGraph,
         fx: the payload tables, for the sound a chain carries.
         effects: the per-spell target bits, which decide when "the target"
             means the caster.
-        screens: spell to its screen effects, already holding what the auras
-            contributed. Extended with the kit route.
 
     Returns:
         Every family, keyed by spell, each item carrying the union of the masks
-        it was reached by.
+        it was reached by. Nothing it was handed is modified.
     """
     vis = SpellVisuals()
+    # The pairs a kit expands to, and the two ends of every family, resolved
+    # once instead of per kit visit. The innermost loop below runs for every
+    # spell-visual-kit triple in the build, so anything constant across it is
+    # worth lifting out -- and the shared pair tuples also stop each spell's
+    # bucket keying on its own equal-but-distinct copies.
+    pairs = {kit: [(kit, file) for file in files]
+             for kit, files in soundkit_files.items()}
+    families = [(bucket.of_kit(kits), bucket.of_spell(vis))
+                for bucket in KIT_BUCKETS]
 
     for spell, visuals in graph.spell_visuals.items():
         if spell not in spell_names:
             vis.orphans += 1
             continue
+        aimed = (effects.aura_target_bits.get(spell, 0),
+                 effects.cast_target_bits.get(spell, 0))
         for visual, extra in visuals.items():
-            _walk_missiles(vis, spell, missiles.get(visual), soundkit_files, extra)
+            _walk_missiles(vis, spell, missiles.get(visual), pairs, extra)
             # The visual's own animation-event sound hangs off the visual
             # rather than off a kit or a missile, but is a sound kit like any
-            # other once found.
-            merge_masked(vis.sounds[spell],
-                         _sounds_of(soundkit_files, graph.visual_sounds.get(visual, 0)),
-                         extra)
-            _walk_kits(vis, spell, visual, graph, kits, soundkit_files,
-                       effects, screens, extra)
+            # other once found. Asked for only where there is one, so a visual
+            # without a sound does not conjure the spell an empty bucket.
+            if soundkit := graph.visual_sounds.get(visual, 0):
+                merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), extra)
+            _walk_kits(vis, spell, visual, graph, kits, pairs, families,
+                       aimed, extra)
 
-    _fold_chain_sounds(vis, fx, soundkit_files)
+    _fold_chain_sounds(vis, fx, pairs)
     return vis
 
 
 def _walk_missiles(vis: SpellVisuals, spell: int,
                    launched: VisualMissiles | None,
-                   soundkit_files: Mapping[int, set[int]], mask: int) -> None:
+                   pairs: SoundPairs, mask: int) -> None:
     """Collect one visual's missile sets.
 
     Missile content has no `SpellVisualEvent` row, so it carries only whatever
@@ -186,38 +208,47 @@ def _walk_missiles(vis: SpellVisuals, spell: int,
                   for file, motion, source, destination in launched.models), mask)
     merge_masked(vis.animkits[spell], launched.animkits, mask)
     for soundkit in launched.soundkits:
-        merge_masked(vis.sounds[spell], _sounds_of(soundkit_files, soundkit), mask)
+        merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)
 
 
 def _walk_kits(vis: SpellVisuals, spell: int, visual: int, graph: VisualGraph,
-               kits: KitEffects, soundkit_files: Mapping[int, set[int]],
-               effects: SpellEffectRows, screens: dict[int, set[int]],
-               extra: int) -> None:
+               kits: KitEffects, pairs: SoundPairs,
+               families: list[tuple[dict[int, set[Any]], Bucket]],
+               aimed: tuple[int, int], extra: int) -> None:
     """Collect every kit one visual names, into every family.
 
     The kit's two phase masks are folded into one first, because "the target"
     means the caster on a self-cast spell and only the spell's own effects can
     say whether it is one.
+
+    Args:
+        vis: what the walk has attributed to this spell so far.
+        spell: the spell being walked.
+        visual: the visual it reached these kits through.
+        graph: the two hops.
+        kits: what each kit contributes, for the families with no id.
+        pairs: sound kit to the `(kit, file)` pairs it expands to.
+        families: the two ends of every declared family, resolved once.
+        aimed: the spell's aura and cast target bits.
+        extra: the bits the spell-to-visual edge contributed.
     """
     for kit, (aura_mask, other_mask) in graph.visual_kits.get(visual, {}).items():
-        mask = resolve_target_mask(
-            aura_mask, other_mask,
-            effects.aura_target_bits.get(spell, 0),
-            effects.cast_target_bits.get(spell, 0)) | extra
-        for bucket in KIT_BUCKETS:
-            merge_masked(bucket.of_spell(vis)[spell],
-                         bucket.of_kit(kits).get(kit, ()), mask)
+        mask = resolve_target_mask(aura_mask, other_mask, *aimed) | extra
+        for of_kit, of_spell in families:
+            # Asked before indexing, so a family this kit contributes nothing
+            # to does not leave the spell an empty bucket in it.
+            if contributed := of_kit.get(kit):
+                merge_masked(of_spell[spell], contributed, mask)
         for soundkit in kits.soundkits.get(kit, ()):
-            merge_masked(vis.sounds[spell], _sounds_of(soundkit_files, soundkit), mask)
+            merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)
         if kit in kits.freezes:
             vis.freezes.add(spell)
         if kit in kits.camos:
             vis.camos.add(spell)
-        screens.setdefault(spell, set()).update(kits.screens.get(kit, ()))
 
 
 def _fold_chain_sounds(vis: SpellVisuals, fx: FxPayloads,
-                       soundkit_files: Mapping[int, set[int]]) -> None:
+                       pairs: SoundPairs) -> None:
     """Fold each drawn chain's own sound into the spell's sounds.
 
     A chain carries a sound kit of its own, which belongs in the sounds family
@@ -227,6 +258,8 @@ def _fold_chain_sounds(vis: SpellVisuals, fx: FxPayloads,
     """
     for spell, chains in vis.chains.items():
         for chain, mask in chains.items():
-            soundkit = fx.chains[chain[0]][3]
-            merge_masked(vis.sounds[spell],
-                         _sounds_of(soundkit_files, soundkit), mask)
+            # A kit can name a chain the payload pass did not keep, so this
+            # asks rather than indexes. Exiting on it would make one unresolved
+            # row fatal to a build that renders perfectly well without it.
+            if (row := fx.chains.get(chain[0])) and (soundkit := row[3]):
+                merge_masked(vis.sounds[spell], pairs.get(soundkit, ()), mask)

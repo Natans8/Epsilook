@@ -14,10 +14,9 @@ partition.
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass
 
-from ..sources import enum_ids_where, load_local_enum
+from ..sources import enum_id_where, load_local_enum
 from ..tables import Tables, array_columns
 from .attributes import attribute_bit
 from .columns import BASE_DIFFICULTY, to_int
@@ -66,28 +65,14 @@ class Delivery:
     """`CHANNELLED` and `BREAKS_ON_MOVE`."""
 
 
-def _moving_cancels_bit(enum_name: str) -> int:
-    """The one bit tagged handler `moving` in an interrupt-flags enum.
+CHANNEL_INTERRUPT_ENUM = "spell_interrupt_flags"
+"""Which enum names the bit that movement cancels a channel on.
 
-    Read from the checked-in enum rather than written here because the two
-    enums disagree: movement is one bit in the aura and channel columns and a
-    different one in the cast column. Assuming the three columns of one table
-    shared an enum reported the channel population several times too low once.
-
-    Args:
-        enum_name: the checked-in enum to read.
-
-    Returns:
-        The bit number movement is declared on.
-
-    Raises:
-        SystemExit: if the enum does not tag exactly one bit.
-    """
-    bits = enum_ids_where(load_local_enum(enum_name), "moving")
-    if len(bits) != 1:
-        sys.exit(f"error: {enum_name}.json must tag exactly one bit "
-                 f"handler=moving, found {sorted(bits)}")
-    return next(iter(bits))
+Named rather than assumed because the two interrupt enums disagree: movement is
+one bit in the aura and channel columns and a different one in the cast column.
+Taking the three columns of one table to share an enum reported the channel
+population several times too low once.
+"""
 
 
 def _breaks_on_move(tables: Tables, spells: SpellProperties) -> set[int]:
@@ -106,7 +91,7 @@ def _breaks_on_move(tables: Tables, spells: SpellProperties) -> set[int]:
     """
     if not tables.available("SpellInterrupts"):
         return set()
-    moving = _moving_cancels_bit("spell_interrupt_flags")
+    moving = enum_id_where(load_local_enum(CHANNEL_INTERRUPT_ENUM), "moving")
     columns = array_columns(tables, "SpellInterrupts", "ChannelInterruptFlags",
                             INTERRUPT_COLUMNS_MAX)
     breaks: set[int] = set()

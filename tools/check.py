@@ -50,7 +50,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import mermaid
-from repo import (BUMP_PATHS, CACHE, DIM, GREEN, RED, RESET, ROOT, YELLOW,
+from repo import (BUMP_PATHS, CACHE, DIM, GREEN, LISTFILE_ASSET, RED, RESET, ROOT, YELLOW,
                   changed_under, git, have_ref, survive_console_encoding)
 
 # A failure detail quotes whatever the failing tool printed, and node --test
@@ -898,6 +898,11 @@ def check_listfile_declaration(rep: Report) -> None:
     reading the lowercase file while packs carry capitals makes every name
     differ and reports every pack stale forever. That reads exactly like a real
     listfile release, and acting on it re-ships every pack for nothing.
+
+    Two declarations, not one per reader: `tools/repo.py` serves every tool and
+    the build declares its own, exactly as they split over the cache directory
+    above, and for the same reason -- the build runs on a different path root
+    and must not import from `tools/`.
     """
     if not (ROOT / "build" / "pack" / "sources" / "listfile.py").exists():
         rep.skip("listfile declaration", "build/pack/sources/listfile.py not present yet")
@@ -908,18 +913,11 @@ def check_listfile_declaration(rep: Report) -> None:
     except ImportError as exc:
         rep.fail("listfile declaration", f"could not read the build's declaration: {exc}")
         return
-
-    declared = {"build/pack/sources/listfile.py": theirs}
-    for module in ("listfile", "builddb"):
-        text = (ROOT / "tools" / f"{module}.py").read_text(encoding="utf-8")
-        found = re.search(r'^LISTFILE_ASSET = "([^"]+)"', text, re.M)
-        declared[f"tools/{module}.py"] = found.group(1) if found else "(undeclared)"
-
-    if len(set(declared.values())) != 1:
-        for where, name in declared.items():
-            rep.fail("listfile declaration", f"{where} reads {name}")
+    if theirs != LISTFILE_ASSET:
+        rep.fail("listfile declaration",
+                 f"the build reads {theirs}, the tools read {LISTFILE_ASSET}")
         return
-    rep.ok("listfile declaration", f"3 declarations agree on {theirs}")
+    rep.ok("listfile declaration", f"build and tools agree on {theirs}")
 
 
 def check_arcanum(rep: Report) -> None:

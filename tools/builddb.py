@@ -69,14 +69,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 import dbd  # noqa: E402  (path set above)
 from packs import PACKS, builds, schema_name  # noqa: E402  (path set above)
 
-from repo import CACHE
-
-LISTFILE_ASSET = "community-listfile-withcapitals.csv"
-"""Which listfile the build caches, repeated from `pack/sources/listfile.py`.
-
-Repeated rather than imported, for the reason `tools/listfile.py` gives at its
-own copy; `check_listfile_declaration` is what keeps the three in step.
-"""
+from repo import CACHE, LISTFILE_ASSET
 
 try:
     # The `type: ignore` is REQUIRED, not cosmetic: tools/check.py type-checks

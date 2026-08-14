@@ -12,10 +12,9 @@ nothing has nothing to say.
 
 from __future__ import annotations
 
-from collections.abc import Container, Mapping
 from dataclasses import dataclass, field
 
-from ..routes import CreatureModels, SpellEffectRows
+from ..routes import CreatureModels, ShapeshiftForms, SpellEffectRows
 
 
 @dataclass(frozen=True)
@@ -55,16 +54,15 @@ class ResolvedDisplays:
 
 
 def resolve_displays(effects: SpellEffectRows, creatures: CreatureModels,
-                     form_names: Container[int],
-                     form_displays: Mapping[int, list[int]]) -> ResolvedDisplays:
+                     forms: ShapeshiftForms) -> ResolvedDisplays:
     """Flatten both display routes to rows, dropping what cannot be named.
 
     Args:
         effects: the per-spell morph and form payloads.
         creatures: the display-to-model tables.
-        form_names: the forms this build has a row for. A spell naming anything
-            else keeps its other forms and loses that one.
-        form_displays: form to the displays it wears.
+        forms: the shapeshift forms this build has, and what they wear. A
+            spell naming a form absent from it keeps its others and loses that
+            one.
 
     Returns:
         Both row lists, and the surviving forms per spell. A form with no
@@ -82,11 +80,11 @@ def resolve_displays(effects: SpellEffectRows, creatures: CreatureModels,
     resolved.known_forms = {
         spell: surviving
         for spell, reached in effects.forms.ids.items()
-        if (surviving := {form for form in reached if form in form_names})}
+        if (surviving := {form for form in reached if form in forms.names})}
     used_forms = {form for reached in resolved.known_forms.values()
                   for form in reached}
     resolved.forms = [
         Display(form, display, creatures.fid_for_display(display))
         for form in sorted(used_forms)
-        for display in form_displays.get(form, ())]
+        for display in forms.displays.get(form, ())]
     return resolved

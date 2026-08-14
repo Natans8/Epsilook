@@ -9,7 +9,7 @@ from .icons import IconIndex
 from .walk import SpellVisuals
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class DeriveContext:
     """Everything a section may read, computed once per build per locale.
 
@@ -19,6 +19,11 @@ class DeriveContext:
     Anything two sections share belongs here rather than being recomputed by
     each of them, which is what keeps the section registry flat: a section
     depends on this and never on another section.
+
+    Frozen so a section cannot swap a field out from under the next one, and
+    compared by identity because every field it holds is unhashable -- the
+    default equality would advertise a hash that raises the moment anyone
+    keyed a cache on a build's context.
 
     TODO: the route bundles join these as the sections that read them are
     declared, which is the section registry's stage.

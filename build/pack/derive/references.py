@@ -45,9 +45,6 @@ class References:
     mount_displays: list[int] = field(default_factory=list)
     """The mount displays some spell seats a rider on, sorted."""
 
-    objects: list[int] = field(default_factory=list)
-    """The object entries some spell spawns and the world dump names, sorted."""
-
     object_rows: list[tuple[int, int]] = field(default_factory=list)
     """Sorted `(spell, entry)` pairs for the objects that survived.
 
@@ -56,6 +53,11 @@ class References:
     This also empties the route on the builds that ship without a dump, where
     nothing can be resolved at all.
     """
+
+    @property
+    def objects(self) -> list[int]:
+        """The object entries some spell spawns, sorted and deduplicated."""
+        return sorted({entry for _spell, entry in self.object_rows})
 
     @property
     def wanted(self) -> set[int]:
@@ -87,13 +89,25 @@ def collect_references(visuals: SpellVisuals, effects: SpellEffectRows,
 
     found.chains = {draw[0] for drawn in visuals.chains.values() for draw in drawn}
     found.dissolves = {row for rows in visuals.dissolves.values() for row in rows}
-    found.screens = {row for rows in effects.screens.ids.values() for row in rows}
+    # The two halves of the screen route meet here: an aura applies one with no
+    # visual involved, a kit applies one with no aura. Unioned where they are
+    # read, so neither pass writes into the other's bundle.
+    found.screens = {row for source in (effects.screens.ids, visuals.screens)
+                     for rows in source.values() for row in rows}
 
+    # The models bucket is the largest the walk produces, and both a model's
+    # own file and the inventory icon an item pill shows come out of it, so it
+    # is visited once for the two.
     for models in visuals.models.values():
-        # A negative file id is the build's own equipped-weapon slot: it stands
-        # for whatever the caster is holding and names no asset, so asking the
-        # listfile about it would report a name missing forever.
-        found.assets.update(model[0] for model in models if model[0] > 0)
+        for model in models:
+            # A negative file id is the build's own equipped-weapon slot: it
+            # stands for whatever the caster is holding and names no asset, so
+            # asking the listfile about it would report a name missing forever.
+            if model[0] > 0:
+                found.assets.add(model[0])
+            # An item pill shows the icon the game shows in the bag.
+            if model[1] == MODEL_CAT_ITEM and model[4]:
+                found.icons.add(items.icon_fid.get(model[4], 0))
     for sounds in visuals.sounds.values():
         found.assets.update(file for _kit, file in sounds)
     for chain in found.chains:
@@ -113,16 +127,9 @@ def collect_references(visuals: SpellVisuals, effects: SpellEffectRows,
     found.object_rows = sorted(
         (spell, entry) for spell, entries in effects.objects.ids.items()
         for entry in entries if entry in objects.name)
-    found.objects = sorted({entry for _spell, entry in found.object_rows})
     found.assets.update(file for entry in found.objects
                         if (file := objects.fid.get(entry, 0)))
 
-    found.icons = set(spell_icons.values())
-    # An item pill shows the icon the game shows in the bag, which the same
-    # pass resolves.
-    found.icons.update(
-        items.icon_fid.get(model[4], 0)
-        for models in visuals.models.values() for model in models
-        if model[1] == MODEL_CAT_ITEM and model[4])
+    found.icons.update(spell_icons.values())
     found.icons.discard(0)
     return found

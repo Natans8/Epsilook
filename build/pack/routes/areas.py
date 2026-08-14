@@ -58,27 +58,28 @@ class AreaGates:
     """Area id to its description, for the areas some gate actually names."""
 
 
-def _roots(parents: dict[int, int]) -> dict[int, int]:
-    """Every area's top-level ancestor.
+def _root_of(area: int, parents: dict[int, int]) -> int:
+    """One area's top-level ancestor.
+
+    Asked per gated area rather than precomputed for the table, which is
+    thousands of walks rather than tens of thousands: only the areas some spell
+    is actually gated to ever need one.
 
     The walk carries a seen-set as a cycle guard rather than as decoration:
     this data is not ours, and one self-parenting row would hang the build.
 
     Args:
+        area: the area to resolve.
         parents: area id to its parent, zero where it is already top level.
 
     Returns:
-        Area id to the ancestor its links should point at.
+        The ancestor this area's links should point at.
     """
-    roots: dict[int, int] = {}
-    for area in parents:
-        seen: set[int] = set()
-        walker = area
-        while parents.get(walker) and walker not in seen:
-            seen.add(walker)
-            walker = parents[walker]
-        roots[area] = walker
-    return roots
+    seen: set[int] = set()
+    while parents.get(area) and area not in seen:
+        seen.add(area)
+        area = parents[area]
+    return area
 
 
 def _zone_maps(tables: Tables, names: dict[int, str]) -> dict[int, int]:
@@ -131,7 +132,6 @@ def read_area_gates(tables: Tables) -> AreaGates:
         names[area] = name
         parents[area] = to_int(parent_text)
 
-    roots = _roots(parents)
     maps = _zone_maps(tables, names)
 
     gates = AreaGates()
@@ -145,7 +145,7 @@ def read_area_gates(tables: Tables) -> AreaGates:
                 continue
             gates.gates.append((spell, area))
             if area not in gates.areas:
-                root = roots.get(area, area)
+                root = _root_of(area, parents)
                 gates.areas[area] = Area(names[area], root, maps.get(root, 0))
     gates.gates.sort()
     return gates
