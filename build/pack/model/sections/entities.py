@@ -26,6 +26,7 @@ def linked(payload: str, id_column: str) -> Callable[[Reads], SectionColumns]:
     The mask travels on the pair rather than beside it, since the pair is what
     becomes a chip: a spell reaching two creatures aims at each separately.
     """
+
     def produce(reads: Reads) -> SectionColumns:
         ids: MaskedIds = getattr(reads.effects, payload)
         rows = sorted((spell, entity) for spell, entities in ids.ids.items()
@@ -33,17 +34,20 @@ def linked(payload: str, id_column: str) -> Callable[[Reads], SectionColumns]:
         return {"spellIds": [row[0] for row in rows],
                 id_column: [row[1] for row in rows],
                 "targets": [ids.masks.get(row, 0) for row in rows]}
+
     return produce
 
 
 def display_rows(which: str) -> Callable[[Reads], SectionColumns]:
     """One display route flattened to (subject, display, model file) rows."""
+
     def produce(reads: Reads) -> SectionColumns:
         rows = getattr(reads.displays, which)
         return {"creatureIds" if which == "morphs" else "formIds":
-                [row.subject for row in rows],
+                    [row.subject for row in rows],
                 "displayIds": [row.display for row in rows],
                 "fids": [row.fid for row in rows]}
+
     return produce
 
 

@@ -76,6 +76,7 @@ def channels(payload: str, gate: str):
     when nothing can reveal it, and a detection spell shows one only when its
     type has something to reveal.
     """
+
     def produce(reads: Reads) -> SectionColumns:
         kinds = {kind for kinds in reads.effects.invis.ids.values()
                  for kind in kinds}
@@ -85,6 +86,7 @@ def channels(payload: str, gate: str):
         return {"spellIds": [row[0] for row in rows],
                 "types": [row[1] for row in rows],
                 "targets": [source.masks.get(row, 0) for row in rows]}
+
     return produce
 
 

@@ -40,8 +40,10 @@ def distinct(column: str) -> Callable[[SectionColumns, Reads], int]:
     string is the absence of text rather than one of its values, which is why
     it is excluded here and holds slot zero of the pool once encoded.
     """
+
     def count(columns: SectionColumns, _reads: Reads) -> int:
         return len({text for text in columns[column] if text})
+
     return count
 
 
@@ -51,8 +53,10 @@ def carrying(column: str) -> Callable[[SectionColumns, Reads], int]:
     Kept beside the distinct count because the gap between them IS the redirect
     population: a bare `$@spelldescNNN` cooks to the same prose as its target.
     """
+
     def count(columns: SectionColumns, _reads: Reads) -> int:
         return sum(1 for text in columns[column] if text)
+
     return count
 
 

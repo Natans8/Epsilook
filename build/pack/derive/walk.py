@@ -34,7 +34,6 @@ dict would let a caller construct `SpellVisuals` with one and get a `KeyError`
 the annotation said was impossible.
 """
 
-
 SoundPairs = Mapping[int, list[tuple[int, int]]]
 """Sound kit to the `(kit, file)` pairs the pack ships for it.
 

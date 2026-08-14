@@ -169,9 +169,11 @@ def replacement_rows(visuals: SpellVisuals, effects: SpellEffectRows,
     pair from both.
     """
     pairs: dict[int, set[tuple[int, int]]] = {}
-    def keep(spell: int, source: int, destination: int) -> None:
-        if 0 <= source < limit and 0 <= destination < limit:
-            pairs.setdefault(spell, set()).add((source, destination))
+
+    def keep(of_spell: int, base: int, worn: int) -> None:
+        """Record one swap, dropping either half past the name table."""
+        if 0 <= base < limit and 0 <= worn < limit:
+            pairs.setdefault(of_spell, set()).add((base, worn))
 
     for spell, swapped in visuals.anims.items():
         for source, destination in swapped:

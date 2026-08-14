@@ -93,7 +93,7 @@ SPELL_DELIVERY = register(Section(
             1 for flags in columns["flags"] if flags & BREAKS_ON_MOVE)),
         # The complement: every spell listed in no delivery row at all.
         Count("delivery.instant", lambda columns, reads:
-              len(reads.spell_ids) - len(columns["spellIds"])),
+        len(reads.spell_ids) - len(columns["spellIds"])),
     ),
     domains=(
         # A cast of zero is the absence of a cast bar rather than a

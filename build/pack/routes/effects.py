@@ -39,8 +39,8 @@ EFFECT_PLAYS_SOUND = frozenset({EFFECT_PLAY_SOUND, EFFECT_PLAY_MUSIC})
 """Plays a sound kit outright, with no visual behind it. misc0 is the kit."""
 
 EFFECT_SPAWN_OBJECT = frozenset({
-    50,   # TRANS_DOOR
-    76,   # SUMMON_OBJECT_WILD
+    50,  # TRANS_DOOR
+    76,  # SUMMON_OBJECT_WILD
     104,  # SUMMON_OBJECT_SLOT1
     171,  # SUMMON_PERSONAL_GAMEOBJECT
 })
@@ -100,6 +100,7 @@ One mechanic under three spellings: TrinityCore handles 61 and 239 together,
 and 239 is spelled 591 on the newer Classic clients. No build carries both
 spellings, so a set covers the drift without a per-version branch.
 """
+
 
 @dataclass(frozen=True)
 class MiscPayload:

@@ -70,7 +70,7 @@ def read_variables(tables: Tables) -> dict[int, dict[str, str]]:
             bodies[to_int(set_id)] = assignments
     return {to_int(spell_id): body
             for spell_id, set_id in tables.rows(
-                "SpellXDescriptionVariables", ["SpellID", "SpellDescriptionVariablesID"])
+            "SpellXDescriptionVariables", ["SpellID", "SpellDescriptionVariablesID"])
             if (body := bodies.get(to_int(set_id)))}
 
 

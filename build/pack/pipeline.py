@@ -120,7 +120,7 @@ def read_kit_names(pinned: Tables, used: set[int]) -> list[tuple[int, str]]:
     return sorted((kit, name.strip()) for kit, name in (
         (int(kit_id), name)
         for kit_id, name in pinned.rows(SOUNDKIT_NAME_TABLE, ["ID", "Name"]))
-        if name.strip() and kit in used)
+                  if name.strip() and kit in used)
 
 
 def read_all(providers: Providers, build: Build) -> DeriveContext:

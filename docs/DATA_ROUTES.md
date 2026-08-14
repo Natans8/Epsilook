@@ -890,9 +890,37 @@ several required tables, which no declaration can paper over.
 ## Emit
 
 The pack is column-oriented: a section is parallel arrays rather than a list of objects, because the app wants a column
-at a time and repeated keys cost more than they explain. Columns dominated by empty values are stored sparsely, and text
-that repeats is deduplicated into a value table plus an index — descriptions collapse to roughly two-thirds of their
-distinct count that way.
+at a time and repeated keys cost more than they explain. Text that repeats is deduplicated into a value table plus an
+index — descriptions collapse to roughly two-thirds of their distinct count that way.
+
+A column declares what KIND of mapping it carries — total, partial, or shared between many rows — and one policy turns
+that into a layout for the whole build at once. **A partial column is padded rather than skipped, and that is a
+measurement rather than a default**: gzip crushes a run of repeated fillers to almost nothing while the row indexes that
+would replace them are incompressible, so skipping the padding costs just under a megabyte to save a reader walking
+entries nobody is waiting on. Both policies are declared; the smaller one ships.
+
+### Modules
+
+The pack is not one file. It is four, and which one a column lands in follows from what the column is:
+
+| module      | holds                                                             |
+|-------------|-------------------------------------------------------------------|
+| `core`      | structure, ids, and every searchable column                       |
+| `names`     | the game's own language — spell, item, area and creature names    |
+| `text`      | cooked prose, the one body with a deferral story                  |
+| `universal` | the vocabularies that come out identical on every build           |
+
+A section is not necessarily one module's worth: the columns it declares localizable leave for the locale module while
+its ids stay with the structure, so a reader wanting another language fetches one file rather than a second copy of
+every id. The section keeps its name in both, and joining them is reading two objects under the same key.
+
+**A module is named by its own content hash**, which is what makes sharing fall out instead of being arranged: two
+builds whose sections serialise alike name one file and both manifests point at it, and a build that diverges gets its
+own name with no special case. That is why `universal` is a module like any other rather than a second mechanism, and
+why nothing here is a union — a union would force every reader to fetch what all builds reference.
+
+Each pack carries a `manifest.json` naming its modules by file and size, plus the sections this build ships without, so
+the app can tell "this build never had it" from "this pack is broken".
 
 Beside the sections, `meta` ships the facts nothing downstream should have to re-derive:
 

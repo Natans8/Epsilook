@@ -22,11 +22,13 @@ from ..section import Column, Count, Domain, Section, SectionColumns
 
 def links(bucket: str, id_column: str) -> Callable[[Reads], SectionColumns]:
     """One family's spell-to-row links, each with the audience it was aimed at."""
+
     def produce(reads: Reads) -> SectionColumns:
         rows = masked_rows(getattr(reads.visuals, bucket))
         return {"spellIds": [row[0] for row in rows],
                 id_column: [row[1] for row in rows],
                 "targets": [row[2] for row in rows]}
+
     return produce
 
 
@@ -81,6 +83,7 @@ def colored(bucket: str, colors_of: Callable[[Reads, int], tuple[int, ...]],
             columns: dict[str, Callable[[Reads, int], object]]
             ) -> Callable[[Reads], SectionColumns]:
     """One colour family's distinct rows, their colours and their hue words."""
+
     def produce(reads: Reads) -> SectionColumns:
         ids = used(reads, bucket)
         made: dict[str, Column] = {"ids": ids}
@@ -88,18 +91,21 @@ def colored(bucket: str, colors_of: Callable[[Reads, int], tuple[int, ...]],
             made[name] = [of_row(reads, row) for row in ids]
         made["hues"] = [hue_words(colors_of(reads, row)) for row in ids]
         return made
+
     return produce
 
 
 def percents(bucket: str, value_of: Callable[[Reads, int], int]
              ) -> Callable[[Reads], SectionColumns]:
     """A percent-only family: the percent IS the row, so there is no id table."""
+
     def produce(reads: Reads) -> SectionColumns:
         pairs = sorted({(spell, value_of(reads, row))
                         for spell, rows in getattr(reads.visuals, bucket).items()
                         for row in rows})
         return {"spellIds": [pair[0] for pair in pairs],
                 "percents": [pair[1] for pair in pairs]}
+
     return produce
 
 

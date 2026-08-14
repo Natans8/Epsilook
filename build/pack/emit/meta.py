@@ -56,7 +56,7 @@ def domains_of(section: Section, columns: SectionColumns,
 
 def gathered(produced: Mapping[str, SectionColumns], context: DeriveContext,
              order: Sequence[str]) -> tuple[dict[str, int],
-                                            dict[str, Mapping[str, object]]]:
+dict[str, Mapping[str, object]]]:
     """The counts and domains of every section that shipped, in `order`.
 
     Args:

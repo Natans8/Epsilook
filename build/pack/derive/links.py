@@ -94,6 +94,7 @@ LINK_KIND_BY_EFFECT = {
     # never states.
 }
 
+
 def link_kind_word(effect: int, aura: int, effect_names: Mapping[int, str],
                    aura_names: Mapping[int, str]) -> str:
     """The word one edge prints, from the effect or aura that owns it.
