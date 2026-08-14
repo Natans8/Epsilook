@@ -21,8 +21,9 @@ from dataclasses import replace
 from pathlib import Path
 
 from .build import Build, Line
-from .derive import (DeriveContext, build_icon_index, collect_references,
-                     cook_text, resolve_displays, walk_spells)
+from .derive import (DeriveContext, build_icon_index, build_rows,
+                     collect_references, cook_text, resolve_displays,
+                     walk_spells)
 from .drift import OPTIONAL_TABLES
 from .emit import legacy
 from .emit.meta import gathered, meta
@@ -43,7 +44,7 @@ from .routes import (implicit_target_bits, read_anim_replacements,
                      resolve_paths)
 from .routes.anims import read_anim_emotes
 from .sources import (Sources, fetch_sources, load_expansions,
-                      read_anim_names)
+                      load_local_enum, read_anim_names, read_enum_names)
 from .sources.gobs import read_gob_displays
 from .sources.listfile import release_tag
 from .sources.tdb import tdb_release
@@ -193,6 +194,14 @@ def read_all(providers: Providers, build: Build) -> DeriveContext:
         kit_names=read_kit_names(providers.pinned,
                                  {kit for pairs in visuals.sounds.values()
                                   for kit, _file in pairs}),
+        rows=build_rows(visuals, effects, vehicles),
+        effect_names=read_enum_names("SpellEffect", build.version),
+        aura_names=read_enum_names("SpellEffectAura", build.version),
+        target_names=read_enum_names("Target", build.version),
+        target_bits=implicit_target_bits(build.version),
+        item_quality_names=load_local_enum("item_quality"),
+        attachment_names=load_local_enum("m2_attachments"),
+        summon_control_names=load_local_enum("summon_properties_control"),
         visuals=visuals, icons=build_icon_index(spell_ids, props.icon_fid, paths),
         paths=paths, references=references, displays=displays, prose=prose,
         anim_names=anim_names, anim_emote_oneshots=oneshots,

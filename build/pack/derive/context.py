@@ -16,6 +16,7 @@ from .displays import ResolvedDisplays
 from .icons import IconIndex
 from .prose import CookedText
 from .references import References
+from .rows import PackRows
 from .walk import SpellVisuals
 
 
@@ -130,6 +131,9 @@ class DeriveContext:
     displays: ResolvedDisplays = field(default_factory=ResolvedDisplays)
     """The morph and shapeshift rows, flattened and resolved."""
 
+    rows: PackRows = field(default_factory=PackRows)
+    """Every flattening at least two sections read."""
+
     prose: CookedText = field(default_factory=CookedText)
     """The description templates, cooked to placeholder-free text."""
 
@@ -145,6 +149,20 @@ class DeriveContext:
 
     era_of: Mapping[int, int] = field(default_factory=dict)
     """Spell to its rung in `expansions`; absent means no rung claims it."""
+
+    effect_names: Mapping[int, str] = field(default_factory=dict)
+    aura_names: Mapping[int, str] = field(default_factory=dict)
+    target_names: Mapping[int, str] = field(default_factory=dict)
+    """The enum name tables this build resolves, for the words it prints."""
+
+    target_bits: Mapping[int, int] = field(default_factory=dict)
+    """Implicit target id to the caster/target/area bit it contributes."""
+
+    item_quality_names: Any = ()
+    attachment_names: Any = ()
+    summon_control_names: Any = ()
+    """The checked-in vocabularies the pack ships so the app names nothing
+    itself."""
 
     def reads(self, declared: Iterable[str]) -> Reads:
         """This context narrowed to the named fields."""

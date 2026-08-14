@@ -9,6 +9,8 @@ of these modules rather than an edit to a list somewhere else.
 
 from __future__ import annotations
 
-from . import assets, expansions, spells, text
+from . import (anims, assets, entities, expansions, fx, gates, mechanics,
+               models, sounds, spells, text, vehicles)
 
-__all__ = ["assets", "expansions", "spells", "text"]
+__all__ = ["anims", "assets", "entities", "expansions", "fx", "gates",
+           "mechanics", "models", "sounds", "spells", "text", "vehicles"]

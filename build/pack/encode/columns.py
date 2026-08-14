@@ -26,12 +26,20 @@ a repeated empty string, and a reader never has to test for a missing index.
 """
 
 
-def dense(values: Sequence[object]) -> object:
+def dense(values: Sequence[object] | Mapping[str, object]) -> object:
     """The column as it was produced.
 
     The right answer wherever a value exists for every row: the array IS the
     mapping, and its position is its key.
+
+    A column whose keys are ids rather than positions arrives as a mapping and
+    stays one. That is not a different encoding -- it is the same total mapping
+    with an explicit key, which is what a vocabulary sparse in its own id space
+    needs: a hundred and thirty target ids scattered through a range of
+    thousands would otherwise ship as a mostly-empty array.
     """
+    if isinstance(values, Mapping):
+        return dict(values)
     return list(values)
 
 

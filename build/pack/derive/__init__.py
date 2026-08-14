@@ -13,9 +13,11 @@ from __future__ import annotations
 
 from .context import CONTEXT_FIELDS, DeriveContext, Reads
 from .displays import Display, ResolvedDisplays, resolve_displays
-from .icons import NO_ICON, IconIndex, build_icon_index
+from .icons import NO_ICON, IconIndex, build_icon_index, build_item_icons, icon_name
 from .prose import CookedText, cook_text
 from .references import References, collect_references
+from .rows import (PackRows, boneset_rows, build_rows, color_rows, id_rows,
+                   masked_rows, replacement_rows, spell_rows)
 from .walk import KIT_BUCKETS, SpellVisuals, walk_spells
 
 __all__ = [
@@ -26,13 +28,23 @@ __all__ = [
     "DeriveContext",
     "Display",
     "IconIndex",
+    "PackRows",
     "Reads",
     "References",
     "ResolvedDisplays",
     "SpellVisuals",
+    "boneset_rows",
     "build_icon_index",
+    "build_item_icons",
+    "build_rows",
+    "color_rows",
     "collect_references",
     "cook_text",
+    "icon_name",
+    "id_rows",
+    "masked_rows",
+    "replacement_rows",
     "resolve_displays",
+    "spell_rows",
     "walk_spells",
 ]

@@ -78,3 +78,39 @@ def build_icon_index(spells: Sequence[int],
             index.fids.append(fid)
         index.spells.append(at + 1)
     return index
+
+
+def icon_name(path: str) -> str:
+    """The name an icon path is served under, or "" if it is not an icon.
+
+    An icon is identified by where it lives rather than by what references it,
+    since the same file id can be reached as a model and as a picture.
+    """
+    if not path.lower().startswith(ICON_DIRECTORY):
+        return ""
+    return path.rsplit("/", 1)[-1].rsplit(".", 1)[0].lower()
+
+
+def build_item_icons(items: Sequence[int], icon_fid: Mapping[int, int],
+                     paths: Mapping[int, str]) -> tuple[list[str], list[int]]:
+    """The item icon table, and each item's 1-based place in it.
+
+    The same shape as the spell icon index and for the same reason: a handful
+    of names serve many rows. Kept apart from the spell table because the two
+    are reached differently -- one is the spell's own icon, the other is what
+    the game shows in a bag -- and joining them would make either one's absence
+    depend on the other's population.
+    """
+    names: list[str] = []
+    index: dict[str, int] = {}
+    per_item: list[int] = []
+    for item in items:
+        name = icon_name(paths.get(icon_fid.get(item, 0), ""))
+        if not name:
+            per_item.append(NO_ICON)
+            continue
+        if name not in index:
+            index[name] = len(names)
+            names.append(name)
+        per_item.append(index[name] + 1)
+    return names, per_item
