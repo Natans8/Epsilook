@@ -6,11 +6,15 @@ unreachable, though: the model that uses one points at it by file id, so a path
 can be derived that states where the file hangs even though nothing states what
 it is called.
 
-Two kinds of derivation live here and they are not equally good:
+Three kinds of derivation live here and they are not equally good:
 
     terrain    a real name. A map's own directory plus the position of a tile in
                the map's grid is exactly the filename the game's convention
                produces, so nothing is invented.
+    semantic   what the file is FOR, joined out of the tables that use it. Not
+               the name the game looks it up by, but a description of the thing
+               rather than of its neighbours, which is what makes it worth more
+               than parentage.
     parentage  a placeholder. It says which model refers to the file, which is
                all anyone knows, and is marked as derived by the directory it
                sits under.
@@ -29,7 +33,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
-from epsilon_storage import EpsilonStorage, Reads, chunks
+from epsilon_storage import Reads, chunks
 from tqdm import tqdm
 
 WORKERS = 32
@@ -142,7 +146,7 @@ def stem_of(path: str) -> str:
     return path.replace("\\", "/").rsplit("/", 1)[-1].rsplit(".", 1)[0]
 
 
-def custom_maps(storage: EpsilonStorage, floor: int) -> list[tuple[str, int]]:
+def custom_maps(storage: Reads, floor: int) -> list[tuple[str, int]]:
     """Every map this client added, as its directory and its world table's id.
 
     A map whose world table sits in the client's own id space is one the client
@@ -166,7 +170,7 @@ def custom_maps(storage: EpsilonStorage, floor: int) -> list[tuple[str, int]]:
     return found
 
 
-def terrain_names(storage: EpsilonStorage, floor: int) -> dict[int, str]:
+def terrain_names(storage: Reads, floor: int) -> dict[int, str]:
     """Real paths for every terrain file the client's own maps own.
 
     Args:
@@ -194,6 +198,102 @@ def terrain_names(storage: EpsilonStorage, floor: int) -> dict[int, str]:
                     if fid > floor and slot in TILE_SLOTS:
                         names[fid] = TILE_SLOTS[slot].format(
                             stem=stem, directory=directory, x=x, y=y)
+    return names
+
+
+CUSTOMIZATION_BUCKET = "chrcustomization"
+"""Where a character-customization texture's derived path sits."""
+
+CUSTOMIZATION_TABLES = ("TextureFileData", "ChrCustomizationMaterial",
+                        "ChrCustomizationElement", "ChrCustomizationChoice",
+                        "ChrCustomizationOption")
+"""The chain a texture is named through, from the file to what it is for.
+
+Each step is a join on a named column, never a position: two of the positions
+recorded for these tables were wrong, and a wrong position produces a confident
+name for the wrong thing rather than an error.
+"""
+
+
+def slug(text: str) -> str:
+    """One path segment, out of a name written for a user interface.
+
+    These names carry spaces and punctuation because they are shown in the
+    character creator. A path segment cannot, and matching folds case anyway.
+    """
+    kept = [character if character.isalnum() else "_" for character in text.lower()]
+    return "_".join(part for part in "".join(kept).split("_") if part)
+
+
+def customization_names(storage: Reads, floor: int) -> dict[int, str]:
+    """Character-customization textures, named by what they customise.
+
+    These are the largest group nothing else can name, and no parentage walk
+    reaches them: they hang off the customization tables rather than off any
+    model. The chain runs from the texture's file id to the material it backs,
+    to the element that uses the material, to the choice that element belongs
+    to, and finally to the option that choice sits under -- so a texture comes
+    out as the option and the choice it paints.
+
+    Args:
+        storage: the opened storage.
+        floor: the id above which a file is the client's own.
+
+    Returns:
+        File id to path. Empty when any table in the chain is unreadable, since
+        a partial chain names a texture after the wrong thing rather than
+        failing to name it.
+    """
+    from epsilon_tables import open_table, table_ids  # pylint: disable=import-outside-toplevel
+
+    ids = table_ids()
+    tables = {name: open_table(storage, name, ids) for name in CUSTOMIZATION_TABLES}
+    if any(table is None for table in tables.values()):
+        missing = [name for name, table in tables.items() if table is None]
+        print(f"  customization: skipped, unreadable: {', '.join(missing)}")
+        return {}
+
+    textures = tables["TextureFileData"]
+    materials = tables["ChrCustomizationMaterial"]
+    elements = tables["ChrCustomizationElement"]
+    choices = tables["ChrCustomizationChoice"]
+    options = tables["ChrCustomizationOption"]
+    assert textures and materials and elements and choices and options
+
+    # Each of the three joins below is many-to-one in the direction it is read,
+    # so the lowest id wins rather than whichever row came last. That is what
+    # keeps two runs over the same tables producing the same paths.
+    material_of: dict[int, int] = {}
+    for material, resource in materials.pairs("ID", "MaterialResourcesID").items():
+        material_of[resource] = min(material, material_of.get(resource, material))
+
+    choice_of: dict[int, int] = {}
+    for material_text, choice_text in elements.values("ChrCustomizationMaterialID",
+                                                      "ChrCustomizationChoiceID"):
+        try:
+            material, choice = int(material_text), int(choice_text)
+        except ValueError:
+            continue
+        if material and choice:
+            choice_of[material] = min(choice, choice_of.get(material, choice))
+
+    choice_names = choices.named("ID", "Name_lang")
+    option_of = choices.pairs("ID", "ChrCustomizationOptionID")
+    option_names = options.named("ID", "Name_lang")
+
+    names: dict[int, str] = {}
+    for fid, resource in textures.pairs("FileDataID", "MaterialResourcesID").items():
+        if fid <= floor:
+            continue
+        choice = choice_of.get(material_of.get(resource, -1), 0)
+        if not choice:
+            continue
+        option = slug(option_names.get(option_of.get(choice, 0), ""))
+        chosen = slug(choice_names.get(choice, ""))
+        if not option or not chosen:
+            continue
+        names[fid] = (f"{DERIVED_ROOT}/{CUSTOMIZATION_BUCKET}/{option}/"
+                      f"{chosen}/{fid}.blp")
     return names
 
 
@@ -371,7 +471,7 @@ def classify(raw: bytes) -> str:
     return "chunked, unrecognised"
 
 
-def model_children(storage: EpsilonStorage, known: dict[int, str],
+def model_children(storage: Reads, known: dict[int, str],
                    unnamed: set[int], *, local_only: bool = True) -> Walk:
     """Skins, textures and animations, from the models that use them."""
     return walk_parents(storage, known, unnamed, suffix=".m2",
@@ -379,7 +479,7 @@ def model_children(storage: EpsilonStorage, known: dict[int, str],
                         local_only=local_only, label="models")
 
 
-def world_model_children(storage: EpsilonStorage, known: dict[int, str],
+def world_model_children(storage: Reads, known: dict[int, str],
                          unnamed: set[int], *, local_only: bool = True) -> Walk:
     """Group geometry and material textures, from the world models that use them."""
     return walk_parents(storage, known, unnamed, suffix=".wmo",

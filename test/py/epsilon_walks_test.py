@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import struct
 
+import pytest
+
 from epsilon_storage import chunks
 from epsilon_walks import (MODEL_CHILDREN, WORLD_MODEL_CHILDREN, TILE_SLOTS,
                            stem_of, walk_parents)
@@ -150,3 +152,80 @@ def test_a_parent_of_the_wrong_kind_is_not_walked() -> None:
     parent = FLOOR + 1
     files = {parent: chunk(b"SFID", ids(FLOOR + 10))}
     assert model_walk(files, {parent: "a/thing.wmo"}, {FLOOR + 10}).names == {}
+
+
+TABLES: dict[str, tuple[list[str], list[tuple[str, ...]]]] = {
+    "TextureFileData": (["FileDataID", "UsageType", "MaterialResourcesID"],
+                        [(str(FLOOR + 1), "0", "500"), ("12", "0", "501")]),
+    "ChrCustomizationMaterial": (["ID", "ChrModelTextureTargetID",
+                                  "MaterialResourcesID"],
+                                 [("70", "1", "500"), ("71", "1", "500")]),
+    "ChrCustomizationElement": (["ID", "ChrCustomizationChoiceID",
+                                 "ChrCustomizationMaterialID"],
+                                [("1", "44", "70"), ("2", "43", "70")]),
+    "ChrCustomizationChoice": (["Name_lang", "ID", "ChrCustomizationOptionID"],
+                               [("TrollMaleEyeColor04", "43", "9")]),
+    "ChrCustomizationOption": (["Name_lang", "ID"], [("Eye Color", "9")]),
+}
+
+
+def fake_tables(monkeypatch: pytest.MonkeyPatch,
+                tables: dict[str, tuple[list[str], list[tuple[str, ...]]]]) -> None:
+    """Serve the customization chain from literals instead of the client."""
+    from epsilon_tables import Table  # pylint: disable=import-outside-toplevel
+    import epsilon_tables  # pylint: disable=import-outside-toplevel
+
+    built = {name: Table(columns, rows) for name, (columns, rows) in tables.items()}
+    monkeypatch.setattr(epsilon_tables, "table_ids", dict)
+    monkeypatch.setattr(epsilon_tables, "open_table",
+                        lambda _storage, name, _ids: built.get(name))
+
+
+def test_a_texture_is_named_by_what_it_customises(monkeypatch: pytest.MonkeyPatch) -> None:
+    from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
+
+    fake_tables(monkeypatch, TABLES)
+    assert customization_names(FakeStorage({}), FLOOR) == {
+        FLOOR + 1: f"epsilon/chrcustomization/eye_color/trollmaleeyecolor04/{FLOOR + 1}.blp"}
+
+
+def test_the_lowest_id_wins_where_a_join_is_many_to_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two materials share the resource and two elements share the material, so
+    without this the path depends on which row the reader happened to see last."""
+    from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
+
+    fake_tables(monkeypatch, TABLES)
+    first = customization_names(FakeStorage({}), FLOOR)
+    reversed_rows = {name: (columns, list(reversed(rows)))
+                     for name, (columns, rows) in TABLES.items()}
+    fake_tables(monkeypatch, reversed_rows)
+    assert customization_names(FakeStorage({}), FLOOR) == first
+
+
+def test_an_unreadable_table_names_nothing_rather_than_guessing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A partial chain would name a texture after the wrong thing."""
+    from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
+
+    fake_tables(monkeypatch, {k: v for k, v in TABLES.items()
+                              if k != "ChrCustomizationOption"})
+    assert customization_names(FakeStorage({}), FLOOR) == {}
+
+
+def test_ids_below_the_floor_are_not_named(monkeypatch: pytest.MonkeyPatch) -> None:
+    from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
+
+    fake_tables(monkeypatch, TABLES)
+    assert 12 not in customization_names(FakeStorage({}), FLOOR)
+
+
+@pytest.mark.parametrize("name, expected", [
+    ("Eye Color", "eye_color"),
+    ("Skin Color", "skin_color"),
+    ("HumanMaleSkin01", "humanmaleskin01"),
+    ("  Face  Markings ", "face_markings"),
+    ("Horn Style / Colour", "horn_style_colour"),
+])
+def test_slug_makes_one_path_segment(name: str, expected: str) -> None:
+    from epsilon_walks import slug  # pylint: disable=import-outside-toplevel
+
+    assert slug(name) == expected

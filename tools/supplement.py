@@ -146,6 +146,11 @@ def _terrain(_known: dict[int, str]) -> dict[int, str]:
     return terrain_names(storage(), SUPPLEMENT_FLOOR)  # type: ignore[arg-type]
 
 
+def _customization(_known: dict[int, str]) -> dict[int, str]:
+    from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
+    return customization_names(storage(), SUPPLEMENT_FLOOR)  # type: ignore[arg-type]
+
+
 def _unnamed(known: dict[int, str]) -> set[int]:
     """Every custom file id no route has named yet."""
     return set(storage().custom_fids(SUPPLEMENT_FLOOR)) - known.keys()  # type: ignore[attr-defined]
@@ -193,6 +198,11 @@ ROUTES: tuple[Route, ...] = (
           reference=lambda raw: {int(fid): path for fid, path in raw.items()},
           compare=lambda rows: {fid: path for fid, path in rows.items()
                                 if path.startswith(f"{ROOT_BUCKET}/")}),
+    Route(name="customization",
+          summary="textures named by the character option and choice they paint",
+          needs="the storage",
+          cost="a minute",
+          produce=_customization),
     Route(name="worldmodels",
           summary="group geometry and material textures, from the models using them",
           needs="the storage",

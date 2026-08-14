@@ -31,21 +31,31 @@ Each route is one way of learning what a file is called, and they are not equall
 `tools/supplement.py` in priority order, and the order means two things at once: **earlier wins a conflict, and earlier
 feeds what comes later.**
 
-| route         | reads                                          | name            | cost                   |
-|---------------|------------------------------------------------|-----------------|------------------------|
-| `terrain`     | the map table, then each map's tile grid       | real            | a minute               |
-| `icons`       | the icon database an addon ships               | real            | a second               |
-| `objects`     | the gameobject walk through the client API     | real or derived | **an evening in game** |
-| `worldmodels` | group geometry and textures, from their models | derived         | minutes                |
-| `models`      | skins, textures and anims, from their models   | derived         | minutes                |
+| route           | reads                                              | name            | cost                   |
+|-----------------|----------------------------------------------------|-----------------|------------------------|
+| `terrain`       | the map table, then each map's tile grid           | real            | a minute               |
+| `icons`         | the icon database an addon ships                   | real            | a second               |
+| `objects`       | the gameobject walk through the client API         | real or derived | **an evening in game** |
+| `customization` | the character-customization tables, joined by name | semantic        | a minute               |
+| `worldmodels`   | group geometry and textures, from their models     | derived         | minutes                |
+| `models`        | skins, textures and anims, from their models       | derived         | minutes                |
 
 **A real name is one the game itself would look the file up by.** Terrain qualifies because a map's directory plus a
 tile's position in the map's fixed grid determines the filename by convention — nothing is invented. Icons and the
 object walk qualify because the client reports the name itself.
 
+**A semantic name describes the thing rather than its neighbours.** It is not the name the game looks the file up by,
+but it is joined out of the tables that actually use the file, so it says what the file is *for* —
+`chrcustomization/eye_color/trollmaleeyecolorzandalari04` rather than the id of some model that happens to reference it.
+That is why it outranks parentage.
+
 **A derived name is a placeholder and says so.** It states which model refers to the file, which is all anyone knows,
 and it sits under an `epsilon/` prefix so it can never be mistaken for a path the game uses. The object route derives
 one too, for the names the client reports as a bare filename with no directory.
+
+> ⚠ Join by column *name*, never by position. The customization chain crosses five tables, and two of the positions
+> recorded for them were wrong — a wrong position yields a confident name for the wrong thing rather than an error.
+> `tools/epsilon_tables.py` pairs the reader with the published definitions so every join reads a named column.
 
 ### Why the order matters twice
 
@@ -125,7 +135,7 @@ uv run python tools/supplement.py --verify
 
 Each route is checked against a known-good copy of its output. These copies are what made the rewrite possible: two of
 the routes had no surviving code at all, only their outputs, and reproducing those exactly is what proved the recovered
-rules were right — and what caught two the prose had wrong.
+rules were right — and what caught four the written description had wrong or left out.
 
 **Is the vendored file structurally sound?** `tools/check.py` runs on every commit and fails when the supplement is
 unsorted, carries a duplicate id, or names anything at or below the floor. It also reconciles the floor's two
@@ -149,17 +159,17 @@ classification says which route would go there.
 uv run python tools/supplement.py --coverage
 ```
 
-A local-only run currently reaches **107,891 of the 128,476 custom files, 84.0%**, leaving 20,585. Of the 7,823 of
+A local-only run currently reaches **116,072 of the 128,476 custom files, 90.3%**, leaving 12,404. Of the 2,544 of
 those the installation holds and can therefore be identified:
 
-| kind            | count | which route would claim it              |
-|-----------------|------:|-----------------------------------------|
-| `blp`           | 7,118 | character customization — not parentage |
-| `wmo group`     |   315 | reachable only with `--network`         |
-| `m2`            |   169 | reachable only with `--network`         |
-| `skin`          |   166 | reachable only with `--network`         |
-| `wmo root`      |    23 | none: these are roots, not children     |
-| everything else |    32 | sound, and a few unrecognised           |
+| kind            | count | which route would claim it        |
+|-----------------|------:|-----------------------------------|
+| `blp`           | 1,839 | none yet — see below              |
+| `wmo group`     |   315 | `worldmodels`, with `--network`   |
+| `m2`            |   169 | `models`, with `--network`        |
+| `skin`          |   166 | `models`, with `--network`        |
+| `wmo root`      |    23 | none: roots, not children         |
+| everything else |    32 | sound, and a few unrecognised     |
 
 No terrain appears in that list, which is the check that the terrain route is complete.
 
@@ -167,14 +177,13 @@ No terrain appears in that list, which is the check that the terrain route is co
 > terrain, world tables and world models all begin with the same version chunk, so magic-only classification calls
 > thousands of map tiles world models. `classify()` separates them on the chunks they carry instead.
 
-**The next route to build is character customization**, and it is worth building because it produces a *real* name
-rather than a placeholder. Roughly nine tenths of the identified remainder is textures, and they are not model textures
-— the parentage walks have already taken those. They join out instead: a texture's id maps through the texture-file
-table's material id into the customization tables, which name the option and the choice the texture belongs to, giving
-a path like `epsilon/chrcustomization/<option>/<choice>/<fid>.blp`.
+**The largest remaining move is `--network`.** Nine tenths of what is unnamed is simply not on this machine — 9,860 of
+the 12,404 were never opened. The three walks reach further with the network on, and that is the run a vendored result
+comes from anyway.
 
-> ⚠ Confirm each field position against sample rows before a bulk run. The join is established but the positions were
-> read off sample rows rather than from a definition file.
+The remaining local textures have no route yet. They are not model textures — the parentage walks have taken those —
+and they are not customization textures either. Identifying what uses them is the open question; there is no measured
+answer, so do not assume one.
 
 Two routes are closed and should not be re-opened. The world-model group route is exhausted — custom roots reference
 stock group geometry, so no group target is unnamed. The terrain texture route is a dead end, because tileset textures
