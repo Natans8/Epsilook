@@ -103,7 +103,8 @@ class DeriveContext:
     soundkit_files: Mapping[int, set[int]] = field(default_factory=dict)
     animkit_anims: Mapping[int, set[int]] = field(default_factory=dict)
     animkit_bonesets: Mapping[int, dict[int, list[str]]] = field(default_factory=dict)
-    anim_replacements: Mapping[int, dict[int, int]] = field(default_factory=dict)
+    anim_replacements: Mapping[int, set[tuple[int, int]]] = field(
+        default_factory=dict)
     keybinds: Mapping[int, KeyboundOverride] = field(default_factory=dict)
     delivery: Sequence[Delivery] = ()
     attributes: Mapping[str, Sequence[int]] = field(default_factory=dict)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 from ..derive import Reads
 
@@ -78,8 +79,21 @@ class Scope(Enum):
     UNIVERSAL = "universal"
 
 
-SectionColumns = Mapping[str, Sequence[object]]
-"""What ``produce`` returns: parallel arrays keyed by column name."""
+Column = Sequence[Any] | Mapping[Any, Any]
+"""One column: values in row order, or values keyed by an id.
+
+A column is keyed where its ids are scattered through a much larger range -- a
+vocabulary of a hundred target ids among thousands would otherwise ship as a
+mostly-empty array. Both are total mappings; they differ only in what the key
+is.
+
+The element type is deliberately unconstrained. Columns hold ints, strings,
+floats and lists depending on the section, and narrowing that here would put a
+cast at every producer instead of the knowledge where it belongs.
+"""
+
+SectionColumns = Mapping[str, Column]
+"""What ``produce`` returns, keyed by column name."""
 
 
 @dataclass(frozen=True)

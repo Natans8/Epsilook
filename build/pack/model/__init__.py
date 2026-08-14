@@ -11,7 +11,7 @@ from .section import (Cardinality, Count, CountFamily, Domain, Encoding,
 # Last, and for its side effects: importing a section module registers it, so
 # this is what fills SECTIONS. It must follow the two imports above, which are
 # what a section module reaches back for.
-from . import sections as sections  # noqa: E402  (side-effecting, order matters)
+from . import sections  # noqa: E402  (side-effecting, and order matters)
 
 __all__ = [
     "Cardinality",
@@ -25,4 +25,5 @@ __all__ = [
     "Section",
     "SectionColumns",
     "register",
+    "sections",
 ]

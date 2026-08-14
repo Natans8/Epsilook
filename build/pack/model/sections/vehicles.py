@@ -7,6 +7,8 @@ spell sets on its subject.
 
 from __future__ import annotations
 
+from collections import Counter
+
 from ...derive import Reads, spell_rows
 from ...measure import numeric_domain
 from ..registry import register
@@ -224,8 +226,7 @@ VEHICLE_SEATS = register(Section(
     counts=(Count("vehicleSeats",
                   lambda columns, _r: len(columns["vehicleIds"])),),
     domains=(Domain("seat", lambda columns, _r: numeric_domain(
-        [columns["vehicleIds"].count(vehicle)
-         for vehicle in dict.fromkeys(columns["vehicleIds"])])),),
+        Counter(columns["vehicleIds"]).values())),),
 ))
 
 SPELL_PASSENGER_ANIMS = register(Section(

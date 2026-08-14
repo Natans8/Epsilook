@@ -157,7 +157,7 @@ def boneset_rows(bonesets: Mapping[int, Mapping[int, list[str]]],
 
 
 def replacement_rows(visuals: SpellVisuals, effects: SpellEffectRows,
-                     replacements: Mapping[int, Mapping[int, int]],
+                     replacements: Mapping[int, set[tuple[int, int]]],
                      limit: int) -> list[tuple[int, int, int]]:
     """Every animation a spell swaps for another, from both sources merged.
 

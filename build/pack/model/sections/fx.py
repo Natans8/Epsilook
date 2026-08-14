@@ -17,7 +17,7 @@ from ...derive import Reads, masked_rows
 from ...routes.colors import hue_word, hue_words, pack_rgb
 from ...measure import numeric_domain
 from ..registry import register
-from ..section import Count, Domain, Section, SectionColumns
+from ..section import Column, Count, Domain, Section, SectionColumns
 
 
 def links(bucket: str, id_column: str) -> Callable[[Reads], SectionColumns]:
@@ -83,7 +83,7 @@ def colored(bucket: str, colors_of: Callable[[Reads, int], tuple[int, ...]],
     """One colour family's distinct rows, their colours and their hue words."""
     def produce(reads: Reads) -> SectionColumns:
         ids = used(reads, bucket)
-        made: dict[str, list[object]] = {"ids": ids}
+        made: dict[str, Column] = {"ids": ids}
         for name, of_row in columns.items():
             made[name] = [of_row(reads, row) for row in ids]
         made["hues"] = [hue_words(colors_of(reads, row)) for row in ids]

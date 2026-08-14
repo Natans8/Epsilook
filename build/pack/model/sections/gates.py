@@ -6,7 +6,7 @@ than "what does it look like".
 
 from __future__ import annotations
 
-from ...derive import Reads, id_rows
+from ...derive import Reads
 from ...measure import numeric_domain
 from ...routes.delivery import BREAKS_ON_MOVE, CHANNELLED
 from ..registry import register
@@ -68,9 +68,9 @@ SPELL_ATTRS = register(Section(
     columns=("byFlag",),
     layout=Layout.BARE,
     reads=("attributes",),
-    counts=(CountFamily(lambda columns, _r: {
+    counts=(CountFamily(lambda columns, reads: {
         f"spellAttrs.{handler}": len(spells)
-        for handler, spells in columns["byFlag"].items()}),),
+        for handler, spells in sorted(reads.attributes.items())}),),
 ))
 
 SPELL_DELIVERY = register(Section(

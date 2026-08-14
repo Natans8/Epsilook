@@ -13,7 +13,7 @@ from collections.abc import Callable
 from ...derive import Reads
 from ...routes.effects import MaskedIds
 from ..registry import register
-from ..section import (Cardinality, Count, Layout, Scope, Section,
+from ..section import (Count, Layout, Scope, Section,
                        SectionColumns)
 
 NO_TYPE = -1

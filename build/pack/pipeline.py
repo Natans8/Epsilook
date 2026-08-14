@@ -29,8 +29,8 @@ from .emit.legacy import META
 from .emit.manifest import manifest
 from .emit.meta import gathered, meta
 from .emit.module import Module, absent_sections, assemble
-from .encode import FEWEST_BYTES, FEWEST_ENTRIES, encode_section
-from .model import SECTIONS, Cardinality, Encoding, Section
+from .encode import FEWEST_BYTES, encode_section
+from .model import SECTIONS, Cardinality, Encoding, Section, SectionColumns
 from .progress import log
 from .routes import (implicit_target_bits, read_anim_replacements,
                      read_animkit_anims, read_animkit_bonesets,
@@ -218,7 +218,7 @@ def switched_off(section: Section, tables: Tables) -> bool:
 
 def produce(context: DeriveContext, tables: Tables,
             policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES
-            ) -> tuple[dict[str, object], dict[str, object]]:
+            ) -> tuple[dict[str, SectionColumns], dict[str, object]]:
     """Every section this build ships: what it produced, and what it encodes to.
 
     A section whose `needs` this build lacks is left out rather than shipped
@@ -231,7 +231,7 @@ def produce(context: DeriveContext, tables: Tables,
         counting the encoded form would count a deduped pool rather than the
         rows it stands for.
     """
-    columns: dict[str, object] = {}
+    columns: dict[str, SectionColumns] = {}
     encoded: dict[str, object] = {}
     for section in SECTIONS:
         if switched_off(section, tables):

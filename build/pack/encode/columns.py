@@ -14,9 +14,9 @@ declared per column rather than decided here.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 
-from ..model.section import Encoding
+from ..model.section import Column, Encoding
 
 EMPTY_SLOT = ""
 """What slot 0 of a deduped pool always holds.
@@ -26,7 +26,7 @@ a repeated empty string, and a reader never has to test for a missing index.
 """
 
 
-def dense(values: Sequence[object] | Mapping[str, object]) -> object:
+def dense(values: Column) -> object:
     """The column as it was produced.
 
     The right answer wherever a value exists for every row: the array IS the
@@ -43,7 +43,7 @@ def dense(values: Sequence[object] | Mapping[str, object]) -> object:
     return list(values)
 
 
-def deduped(values: Sequence[object]) -> object:
+def deduped(values: Column) -> object:
     """The column as a pool of distinct values plus one index per row.
 
     What many-rows-to-one-value costs when it is stored as though it were
@@ -60,7 +60,7 @@ def deduped(values: Sequence[object]) -> object:
     return {"text": list(pool), "of": index}
 
 
-def sparse(values: Sequence[object], absent: object = EMPTY_SLOT) -> object:
+def sparse(values: Column, absent: object = EMPTY_SLOT) -> object:
     """The column as the values that exist, and which rows carry them.
 
     What a partial mapping costs when it is not padded out into a total one.
@@ -89,7 +89,7 @@ starts disagreeing with the record that describes it.
 """
 
 
-def encode_column(values: Sequence[object], encoding: Encoding,
+def encode_column(values: Column, encoding: Encoding,
                   absent: object = EMPTY_SLOT) -> object:
     """One column, laid out as it declared.
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from ...derive import Reads, boneset_rows, replacement_rows, spell_rows
+from ...derive import Reads, boneset_rows, replacement_rows
 from ...measure import numeric_domain
 from ..registry import register
 from ..section import Count, Domain, Layout, Scope, Section, SectionColumns

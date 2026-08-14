@@ -17,7 +17,7 @@ from collections.abc import Mapping, Sequence
 
 from ..build import Build
 from ..derive import DeriveContext
-from ..model import SECTIONS, Count, CountFamily, Section, SectionColumns
+from ..model import SECTIONS, CountFamily, Section, SectionColumns
 
 PACK_FORMAT = 48
 """What shape the artifact is in.

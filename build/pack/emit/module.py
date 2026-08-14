@@ -144,7 +144,7 @@ def split(section: Section, payload: object) -> list[tuple[str, object]]:
               if name in section.localizable}
     rest = {name: column for name, column in payload.items()
             if name not in section.localizable}
-    placed = [(LOCALE_MODULE, spoken)]
+    placed: list[tuple[str, object]] = [(LOCALE_MODULE, spoken)]
     # A section that is ALL language contributes nothing to its own module, and
     # shipping an empty object there would make a reader think it had checked.
     if rest:

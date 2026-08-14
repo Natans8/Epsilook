@@ -22,7 +22,7 @@ pack even where it disagrees with a site rendering a later patch.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from ..routes.values import DescriptionValues
 
