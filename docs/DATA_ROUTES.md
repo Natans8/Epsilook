@@ -119,9 +119,10 @@ for — a creature's name is server data, so a morph resolves to a model on any 
 release exists. Its *hotfix rows* revise the client's own tables, and those are applied at the next stage rather than
 here.
 
-**The sound-kit names are the one cross-build read.** No build ships a name table for them, so the names come from a
-build that did, whatever build is being packed. It is a pinned source rather than drift: the build being packed still
-decides which kits are *used*.
+**Two sources are read across builds rather than from the one being packed.** No build ships a name table for the sound
+kits, so those names come from a build that did, whatever build is packing; and the emote that performs each animation
+describes a private server rather than any retail build at all. Both are pinned sources rather than drift, and in both
+the build being packed still decides what is *used* — which kits, which animations.
 
 ## The shape of the data, at both ends
 
