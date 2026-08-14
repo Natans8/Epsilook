@@ -200,10 +200,10 @@ SUMMON_CONTROL_NAMES = register(Section(
     name="summonControlNames",
     doc="The word each summon control value renders as.",
     module="universal",
-    produce=lambda reads: {"names": reads.summon_control_names},
+    produce=lambda reads: {"names": reads.declared.summon_control_names},
     columns=("names",),
     layout=Layout.BARE,
-    reads=("summon_control_names",),
+    reads=("declared",),
     scope=Scope.UNIVERSAL,
 ))
 

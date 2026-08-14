@@ -22,7 +22,7 @@ UNCLAIMED = "expansion.unknown"
 
 def expansions(reads: Reads) -> SectionColumns:
     """One row per rung, in the order the ladder declares them."""
-    rungs = reads.expansions
+    rungs = reads.declared.expansions
     return {
         "keys": [rung["key"] for rung in rungs],
         "labels": [rung["label"] for rung in rungs],
@@ -46,7 +46,7 @@ def era_counts(columns: SectionColumns, reads: Reads) -> dict[str, int]:
     keys = [f"expansion.{key}" for key in columns["keys"]]
     counted = dict.fromkeys([*keys, UNCLAIMED], 0)
     for spell in reads.spell_ids:
-        rung = reads.era_of.get(spell)
+        rung = reads.declared.era_of.get(spell)
         counted[keys[rung] if rung is not None else UNCLAIMED] += 1
     return counted
 
@@ -57,7 +57,7 @@ EXPANSIONS = register(Section(
     module="universal",
     produce=expansions,
     columns=("keys", "labels", "shorts", "majors", "aliases", "wowhead", "caveats"),
-    reads=("expansions", "spell_ids", "era_of"),
+    reads=("declared", "spell_ids"),
     counts=(CountFamily(era_counts),),
     scope=Scope.UNIVERSAL,
 ))

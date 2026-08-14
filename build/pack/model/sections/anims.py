@@ -43,7 +43,7 @@ def boneset_columns(reads: Reads) -> SectionColumns:
 def replacements(reads: Reads) -> SectionColumns:
     """Every animation a spell wears in place of another."""
     rows = replacement_rows(reads.visuals, reads.effects,
-                            reads.anim_replacements, len(reads.anim_names))
+                            reads.anim_replacements, len(reads.declared.anim_names))
     return {"spellIds": [row[0] for row in rows],
             "srcAnims": [row[1] for row in rows],
             "dstAnims": [row[2] for row in rows]}
@@ -55,7 +55,7 @@ def visual_anims(reads: Reads) -> SectionColumns:
     The largest animation source, and the one with no kit to group under, so
     these render as loose pills.
     """
-    limit = len(reads.anim_names)
+    limit = len(reads.declared.anim_names)
     rows = sorted((spell, anim, mask)
                   for spell, anims in reads.visuals.visual_anims.items()
                   for anim, mask in anims.items() if anim < limit)
@@ -114,7 +114,7 @@ SPELL_REPLACE_ANIMS = register(Section(
     module="core",
     produce=replacements,
     columns=("spellIds", "srcAnims", "dstAnims"),
-    reads=("visuals", "effects", "anim_replacements", "anim_names"),
+    reads=("visuals", "effects", "anim_replacements", "declared"),
     counts=(Count("spellReplaceAnims",
                   lambda columns, _r: len(columns["spellIds"])),),
 ))
@@ -125,7 +125,7 @@ SPELL_VISUAL_ANIMS = register(Section(
     module="core",
     produce=visual_anims,
     columns=("spellIds", "animIds", "targets"),
-    reads=("visuals", "anim_names"),
+    reads=("visuals", "declared"),
     counts=(Count("spellVisualAnims",
                   lambda columns, _r: len(columns["spellIds"])),),
 ))
@@ -134,10 +134,10 @@ ANIM_NAMES = register(Section(
     name="animNames",
     doc="Every animation's name, indexed by animation id.",
     module="universal",
-    produce=lambda reads: {"names": list(reads.anim_names)},
+    produce=lambda reads: {"names": list(reads.declared.anim_names)},
     columns=("names",),
     layout=Layout.BARE,
-    reads=("anim_names",),
+    reads=("declared",),
     scope=Scope.UNIVERSAL,
 ))
 
@@ -145,14 +145,14 @@ ANIM_EMOTE_ONESHOTS = register(Section(
     name="animEmoteOneshots",
     doc="The Epsilon emote that performs each animation once, by animation id.",
     module="universal",
-    produce=lambda reads: {"emotes": list(reads.anim_emote_oneshots)},
+    produce=lambda reads: {"emotes": list(reads.declared.anim_emote_oneshots)},
     columns=("emotes",),
     layout=Layout.BARE,
-    reads=("anim_emote_oneshots", "anim_emote_loops"),
+    reads=("declared",),
     scope=Scope.UNIVERSAL,
     counts=(Count("animEmotes", lambda _columns, reads: sum(
-        1 for oneshot, loop in zip(reads.anim_emote_oneshots,
-                                   reads.anim_emote_loops)
+        1 for oneshot, loop in zip(reads.declared.anim_emote_oneshots,
+                                   reads.declared.anim_emote_loops)
         if oneshot or loop)),),
 ))
 
@@ -160,9 +160,9 @@ ANIM_EMOTE_LOOPS = register(Section(
     name="animEmoteLoops",
     doc="The Epsilon emote that holds each animation, by animation id.",
     module="universal",
-    produce=lambda reads: {"emotes": list(reads.anim_emote_loops)},
+    produce=lambda reads: {"emotes": list(reads.declared.anim_emote_loops)},
     columns=("emotes",),
     layout=Layout.BARE,
-    reads=("anim_emote_loops",),
+    reads=("declared",),
     scope=Scope.UNIVERSAL,
 ))

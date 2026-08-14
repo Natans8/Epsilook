@@ -45,7 +45,7 @@ def ridden(which: str, id_column: str,
         halves of the same rows.
     """
     def produce(reads: Reads) -> SectionColumns:
-        limit = len(reads.anim_names) if bounded else None
+        limit = len(reads.declared.anim_names) if bounded else None
         rows = spell_rows(getattr(reads.vehicles, which), reads.rows.vehicles,
                           limit)
         return {"spellIds": [row[0] for row in rows],
@@ -101,7 +101,7 @@ SPELL_PASSENGER_ANIMS = register(Section(
     module="core",
     produce=ridden("passenger_anims", "animIds"),
     columns=("spellIds", "animIds"),
-    reads=("rows", "vehicles", "anim_names"),
+    reads=("rows", "vehicles", "declared"),
     counts=(Count("spellPassengerAnims",
                   lambda columns, _r: len(columns["spellIds"])),),
 ))
@@ -112,7 +112,7 @@ SPELL_VEHICLE_ANIMS = register(Section(
     module="core",
     produce=ridden("vehicle_anims", "animIds"),
     columns=("spellIds", "animIds"),
-    reads=("rows", "vehicles", "anim_names"),
+    reads=("rows", "vehicles", "declared"),
     counts=(Count("spellVehicleAnims",
                   lambda columns, _r: len(columns["spellIds"])),),
 ))

@@ -126,10 +126,10 @@ ITEM_QUALITY_NAMES = register(Section(
     name="itemQualityNames",
     doc="The quality words an item's quality indexes, from the checked-in enum.",
     module="universal",
-    produce=lambda reads: {"names": reads.item_quality_names},
+    produce=lambda reads: {"names": reads.declared.item_quality_names},
     columns=("names",),
     layout=Layout.BARE,
-    reads=("item_quality_names",),
+    reads=("declared",),
     scope=Scope.UNIVERSAL,
 ))
 
@@ -137,10 +137,10 @@ ATTACHMENT_NAMES = register(Section(
     name="attachmentNames",
     doc="Where on a model an attachment id points, by id.",
     module="universal",
-    produce=lambda reads: {"names": reads.attachment_names},
+    produce=lambda reads: {"names": reads.declared.attachment_names},
     columns=("names",),
     layout=Layout.BARE,
-    reads=("attachment_names",),
+    reads=("declared",),
     scope=Scope.UNIVERSAL,
 ))
 

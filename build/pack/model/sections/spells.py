@@ -35,7 +35,7 @@ def spells(reads: Reads) -> SectionColumns:
         "altNames": [reads.alt_names.get(spell, "") for spell in ids],
         "icons": list(reads.icons.spells),
         "schools": [reads.props.school.get(spell, NO_SCHOOL) for spell in ids],
-        "eras": [reads.era_of.get(spell, NO_ERA) for spell in ids],
+        "eras": [reads.declared.era_of.get(spell, NO_ERA) for spell in ids],
     }
 
 
@@ -45,7 +45,7 @@ SPELLS = register(Section(
     module="core",
     produce=spells,
     columns=("ids", "names", "subtexts", "altNames", "icons", "schools", "eras"),
-    reads=("spell_ids", "names", "alt_names", "icons", "props", "era_of"),
+    reads=("spell_ids", "names", "alt_names", "icons", "props", "declared"),
     # Three of these are answers most spells do not have. Saying so is what
     # lets the encoder stop padding them the day the app can read a gap: 831 KB
     # of the raw pack is empty alternative names, which gzip eats and

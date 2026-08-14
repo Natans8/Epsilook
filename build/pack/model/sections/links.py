@@ -26,7 +26,7 @@ def spell_links(reads: Reads) -> SectionColumns:
     kinds: dict[str, int] = {}
     rows = []
     for source, destination, effect, aura in sorted(reads.effects.links):
-        word = link_kind_word(effect, aura, reads.effect_names, reads.aura_names)
+        word = link_kind_word(effect, aura, reads.declared.effect_names, reads.declared.aura_names)
         rows.append((source, destination, kinds.setdefault(word, len(kinds))))
     # Two effect rows differing only in a column the pack does not ship are one
     # edge once the word is what identifies it.
@@ -47,7 +47,7 @@ SPELL_LINKS = register(Section(
     module="core",
     produce=spell_links,
     columns=("srcIds", "dstIds", "kinds", "targets", "kindNames"),
-    reads=("effects", "effect_names", "aura_names"),
+    reads=("effects", "declared"),
     counts=(Count("spellLinks", lambda columns, _r: len(columns["srcIds"])),
             Count("linkKinds", lambda columns, _r: len(columns["kindNames"]))),
 ))

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field, fields
 from typing import Any
 
 from ..build import Build
+from ..declarations import Declarations
 from ..routes import (AreaGates, CreatureModels, Delivery, FxPayloads,
                       GameObjectData, ItemModels, KeyboundOverride, KitEffects,
                       ModelSources, MountData, ProcEffects, ShapeshiftForms,
@@ -138,32 +139,9 @@ class DeriveContext:
     prose: CookedText = field(default_factory=CookedText)
     """The description templates, cooked to placeholder-free text."""
 
-    # What the build declares rather than reads from any table.
-    anim_names: Sequence[str] = ()
-    anim_emote_oneshots: Sequence[int] = ()
-    anim_emote_loops: Sequence[int] = ()
-    gobs: Mapping[int, int] = field(default_factory=dict)
-    """Model file id to the id `.gob spawn` takes for it."""
-
-    expansions: Sequence[Mapping[str, Any]] = ()
-    """The expansion ladder, oldest first."""
-
-    era_of: Mapping[int, int] = field(default_factory=dict)
-    """Spell to its rung in `expansions`; absent means no rung claims it."""
-
-    effect_names: Mapping[int, str] = field(default_factory=dict)
-    aura_names: Mapping[int, str] = field(default_factory=dict)
-    target_names: Mapping[int, str] = field(default_factory=dict)
-    """The enum name tables this build resolves, for the words it prints."""
-
-    target_bits: Mapping[int, int] = field(default_factory=dict)
-    """Implicit target id to the caster/target/area bit it contributes."""
-
-    item_quality_names: Any = ()
-    attachment_names: Any = ()
-    summon_control_names: Any = ()
-    """The checked-in vocabularies the pack ships so the app names nothing
-    itself."""
+    declared: Declarations = field(default_factory=Declarations)
+    """What the build was told rather than read: the ladders, the checked-in
+    vocabularies, and the published enum names."""
 
     def reads(self, declared: Iterable[str]) -> Reads:
         """This context narrowed to the named fields."""

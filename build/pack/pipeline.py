@@ -20,6 +20,7 @@ import time
 from collections.abc import Mapping
 
 from .build import Build, Line
+from .declarations import Declarations
 from .derive import (DeriveContext, build_icon_index, build_rows,
                      collect_references, cook_text, resolve_displays,
                      walk_spells)
@@ -207,18 +208,19 @@ def read_all(providers: Providers, build: Build) -> DeriveContext:
                                  {kit for pairs in visuals.sounds.values()
                                   for kit, _file in pairs}),
         rows=build_rows(visuals, effects, vehicles),
-        effect_names=read_enum_names("SpellEffect", build.version),
-        aura_names=read_enum_names("SpellEffectAura", build.version),
-        target_names=read_enum_names("Target", build.version),
-        target_bits=implicit_target_bits(build.version),
-        item_quality_names=load_local_enum("item_quality"),
-        attachment_names=load_local_enum("m2_attachments"),
-        summon_control_names=load_local_enum("summon_properties_control"),
         visuals=visuals, icons=build_icon_index(spell_ids, props.icon_fid, paths),
         paths=paths, references=references, displays=displays, prose=prose,
-        anim_names=anim_names, anim_emote_oneshots=oneshots,
-        anim_emote_loops=loops, gobs=read_gob_displays(),
-        expansions=rungs, era_of=era_of)
+        declared=Declarations(
+            anim_names=anim_names, anim_emote_oneshots=oneshots,
+            anim_emote_loops=loops, gobs=read_gob_displays(),
+            expansions=rungs, era_of=era_of,
+            effect_names=read_enum_names("SpellEffect", build.version),
+            aura_names=read_enum_names("SpellEffectAura", build.version),
+            target_names=read_enum_names("Target", build.version),
+            target_bits=implicit_target_bits(build.version),
+            item_quality_names=load_local_enum("item_quality"),
+            attachment_names=load_local_enum("m2_attachments"),
+            summon_control_names=load_local_enum("summon_properties_control")))
 
 
 def switched_off(section: Section, tables: Tables) -> bool:

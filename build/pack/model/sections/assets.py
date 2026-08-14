@@ -36,7 +36,7 @@ def files(reads: Reads) -> SectionColumns:
     return {"fids": ids, "paths": paths,
             # Negative on purpose: `.gob spawn` reads the sign to tell a
             # gameobject_template entry from a display id.
-            "gobs": [reads.gobs.get(fid, NO_GOB) for fid in ids]}
+            "gobs": [reads.declared.gobs.get(fid, NO_GOB) for fid in ids]}
 
 
 ICON_NAMES = register(Section(
@@ -66,11 +66,11 @@ FILES = register(Section(
     module="core",
     produce=files,
     columns=("fids", "paths", "gobs"),
-    reads=("references", "paths", "gobs", "visuals"),
+    reads=("references", "paths", "declared", "visuals"),
     # Most assets have no placeable object, and a few have no name at all.
     cardinality={"paths": Cardinality.PARTIAL, "gobs": Cardinality.PARTIAL},
     absent={"gobs": 0},
     counts=(Count("files", lambda columns, _reads: len(columns["fids"])),
             Count("gobModels", lambda columns, reads: sum(
-                1 for fid in columns["fids"] if fid in reads.gobs))),
+                1 for fid in columns["fids"] if fid in reads.declared.gobs))),
 ))
