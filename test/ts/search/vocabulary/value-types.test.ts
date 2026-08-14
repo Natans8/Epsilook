@@ -311,10 +311,22 @@ describe("what each type refuses to parse", () => {
     });
 
     it("folds a value to the declared casing on format, and only there", () => {
-        // The path corpus is all-lowercase (33,199 of 33,199 on 9.2.7), so that is how a path reads back.
-        assert.equal(path.format!("Spells/FEL_FIRE.M2"), "spells/fel_fire.m2");
+        // No shipped type declares a casing, so the mechanism is exercised through one defined here. Folding on
+        // format and not on parse is the whole point: the stored value stays what the corpus holds.
+        const shouty = defineType<string>({
+            name: "shouty", storage: "string", parse: (s) => s, format: (s) => s,
+            casing: "upper", accepts: [present], hint: "x", ui: "text",
+        });
+        assert.equal(shouty.format!("Spells/Fel_Fire.m2"), "SPELLS/FEL_FIRE.M2");
+        assert.equal(shouty.parse!("Spells/Fel_Fire.m2"), "Spells/Fel_Fire.m2");
+    });
+
+    it("keeps a path's own case, because the corpus is mixed", () => {
+        // The listfile is taken in its capitalised form, since these paths are shown to a reader rather than only
+        // matched against. Most carry real casing, so folding them would make every one of those read wrong.
+        assert.equal(path.format!("Spells/FEL_FIRE.M2"), "Spells/FEL_FIRE.M2");
         assert.equal(path.parse!("Spells/FEL_FIRE.M2"), "Spells/FEL_FIRE.M2");
-        // Text declares no casing: name corpora are mixed-case, so a value keeps the case it was written with.
+        // Text declares no casing either: name corpora are mixed-case for the same reason.
         assert.equal(text.format!("Fireball"), "Fireball");
     });
 });

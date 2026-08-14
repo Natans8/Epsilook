@@ -870,6 +870,44 @@ def check_cache_declaration(rep: Report) -> None:
         rep.ok("cache declaration", f"build and tools agree on {CACHE.name}/")
 
 
+def check_listfile_declaration(rep: Report) -> None:
+    """The build and its tooling must read the same listfile asset.
+
+    A release carries several listfiles differing only in case, and the build
+    takes the capitalised one because the paths are shown to a reader. The two
+    tools that read the same cache repeat that name rather than importing it,
+    because importing drags the acquisition layer's dependencies onto a bare
+    interpreter.
+
+    The drift is silent and it inverts an answer rather than breaking one:
+    `tools/listfile.py` compares a pack's names against the listfile, so
+    reading the lowercase file while packs carry capitals makes every name
+    differ and reports every pack stale forever. That reads exactly like a real
+    listfile release, and acting on it re-ships every pack for nothing.
+    """
+    if not (ROOT / "build" / "pack" / "sources" / "listfile.py").exists():
+        rep.skip("listfile declaration", "build/pack/sources/listfile.py not present yet")
+        return
+    try:
+        sys.path.insert(0, str(ROOT / "build"))
+        from pack.sources.listfile import LISTFILE_ASSET as theirs  # pylint: disable=import-outside-toplevel
+    except ImportError as exc:
+        rep.fail("listfile declaration", f"could not read the build's declaration: {exc}")
+        return
+
+    declared = {"build/pack/sources/listfile.py": theirs}
+    for module in ("listfile", "builddb"):
+        text = (ROOT / "tools" / f"{module}.py").read_text(encoding="utf-8")
+        found = re.search(r'^LISTFILE_ASSET = "([^"]+)"', text, re.M)
+        declared[f"tools/{module}.py"] = found.group(1) if found else "(undeclared)"
+
+    if len(set(declared.values())) != 1:
+        for where, name in declared.items():
+            rep.fail("listfile declaration", f"{where} reads {name}")
+        return
+    rep.ok("listfile declaration", f"3 declarations agree on {theirs}")
+
+
 def check_arcanum(rep: Report) -> None:
     """tools/arcanum.py must still produce strings Arcanum can import.
 
@@ -1228,6 +1266,7 @@ def main() -> int:
     check_comment_style(rep)
     check_cli_entries(rep)
     check_license_scope(rep)
+    check_listfile_declaration(rep)
     check_arcanum(rep)
     check_pack_freshness(rep)
     check_cache(rep)

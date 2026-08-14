@@ -36,7 +36,17 @@ from repo import CACHE, DIM, GREEN, RESET, YELLOW
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "site" / "data"
-LISTFILE = CACHE / "listfile" / "community-listfile.csv"
+LISTFILE_ASSET = "community-listfile-withcapitals.csv"
+"""Which listfile the build caches, repeated from `pack/sources/listfile.py`.
+
+Repeated rather than imported: importing it drags the whole acquisition layer
+and its dependencies in, and this tool is meant to run on a bare interpreter.
+`check_listfile_declaration` fails when the two spellings disagree, which is
+the failure that matters -- comparing capitalised packs against the lowercase
+listfile reports every pack stale forever.
+"""
+
+LISTFILE = CACHE / "listfile" / LISTFILE_ASSET
 TAG_FILE = CACHE / "listfile" / "release-tag.txt"
 
 

@@ -71,6 +71,13 @@ from packs import PACKS, builds, schema_name  # noqa: E402  (path set above)
 
 from repo import CACHE
 
+LISTFILE_ASSET = "community-listfile-withcapitals.csv"
+"""Which listfile the build caches, repeated from `pack/sources/listfile.py`.
+
+Repeated rather than imported, for the reason `tools/listfile.py` gives at its
+own copy; `check_listfile_declaration` is what keeps the three in step.
+"""
+
 try:
     # The `type: ignore` is REQUIRED, not cosmetic: tools/check.py type-checks
     # all of tools/, and CI runs it on a machine that has never installed
@@ -592,7 +599,7 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
     con.execute("CREATE SCHEMA IF NOT EXISTS ref")
 
     # -- listfile: the only route from a FileDataID to a path ------------------
-    listfile = CACHE / "listfile" / "community-listfile.csv"
+    listfile = CACHE / "listfile" / LISTFILE_ASSET
     if listfile.exists():
         literal = str(listfile).replace("'", "''")
         con.execute(f"""

@@ -197,13 +197,16 @@ export const text = defineType<string>({
  * (`beecreature.m2`, `beerfest_keg01.m2`), so splitting on punctuation yields tokens matching neither `bee` nor
  * `beer`. Matching is unanchored substring because the corpus permits nothing better, and the type exists so a hint
  * can say so and a future anchoring proposal has somewhere to be refused.
+ *
+ * Declares no {@link ValueType.casing}: the listfile the corpus comes from is taken in its capitalised form, because
+ * these paths are shown to a reader rather than only matched against. So a value keeps the case it was written with,
+ * and matching folds case as it does for every other string type.
  */
 export const path = defineType<string>({
     name: "path",
     storage: "string",
     parse: (s) => s,
     format: (s) => s,
-    casing: "lower",
     accepts: [exact, contains, glob, present, anyOf, regex],
     hint: t("tooltips:type.path"),
     ui: "text",
