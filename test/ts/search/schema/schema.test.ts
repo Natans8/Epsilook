@@ -151,7 +151,7 @@ describe("the shipped schema", () => {
         // dispatch between them the way two notations of one subject do.
         assert.ok(KINDS.has("mech.invis"));
         assert.ok(KINDS.has("mech.detect"));
-        assert.deepEqual(Object.keys(KINDS.get("mech.invis")!.props), ["channel"]);
+        assert.deepEqual(Object.keys(KINDS.get("mech.invis")!.props), ["channel", "target"]);
     });
 
     it("names both ends of a beam apart", () => {

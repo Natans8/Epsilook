@@ -1,11 +1,11 @@
 {
   "pack": "8.3.7.35662",
   "meta": {
-    "format": 49,
+    "format": 50,
     "version": "8.3.7.35662",
     "label": "Battle for Azeroth 8.3.7",
     "built": "2026-08-15",
-    "listfileTag": "202608131431",
+    "listfileTag": "202608142148",
     "tdbTag": "TDB837.20101",
     "absentTables": [
       "SpellVisualScreenEffect"
@@ -106,7 +106,7 @@
       "spellVehicles": 185,
       "vehicles": 170,
       "vehicleSeats": 328,
-      "spellPassengerAnims": 909,
+      "spellPassengerAnims": 1224,
       "spellVehicleAnims": 72,
       "spellVehicleAnimKits": 22
     },
@@ -212,7 +212,8 @@
           90,
           95,
           100
-        ]
+        ],
+        "unit": "%"
       },
       "transparency": {
         "n": 1414,
@@ -255,7 +256,8 @@
           95,
           99,
           100
-        ]
+        ],
+        "unit": "%"
       },
       "casttime": {
         "n": 41328,
@@ -272,7 +274,8 @@
         "modeShare": 0.2534,
         "signed": false,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "channel": {
         "n": 6882,
@@ -289,7 +292,8 @@
         "modeShare": 0.1482,
         "signed": false,
         "sentinels": 4257,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "count.mech": {
         "n": 227069,
@@ -382,7 +386,8 @@
         "modeShare": 0.2188,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "scale": {
         "n": 2533,
@@ -399,7 +404,8 @@
         "modeShare": 0.1176,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "count.sound": {
         "n": 100708,
@@ -449,12 +455,12 @@
   },
   "modules": {
     "core": {
-      "file": "data/modules/core-6ddf66dace03.json.gz",
-      "bytes": 6466491
+      "file": "data/modules/core-38dc35d6b3a9.json.gz",
+      "bytes": 6470048
     },
     "universal": {
-      "file": "data/modules/universal-0bd164ea1731.json.gz",
-      "bytes": 24728
+      "file": "data/modules/universal-d9f655b66417.json.gz",
+      "bytes": 24759
     },
     "names": {
       "file": "data/modules/names-702d499b4984.json.gz",

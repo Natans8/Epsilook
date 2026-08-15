@@ -1,11 +1,11 @@
 {
   "pack": "3.4.3.58936",
   "meta": {
-    "format": 49,
+    "format": 50,
     "version": "3.4.3.58936",
     "label": "WotLK Classic 3.4.3",
     "built": "2026-08-15",
-    "listfileTag": "202608131431",
+    "listfileTag": "202608142148",
     "tdbTag": "TDB335.25101",
     "absentTables": [
       "BarrageEffect",
@@ -118,7 +118,7 @@
       "spellVehicles": 4,
       "vehicles": 4,
       "vehicleSeats": 6,
-      "spellPassengerAnims": 24,
+      "spellPassengerAnims": 34,
       "spellVehicleAnims": 7,
       "spellVehicleAnimKits": 0
     },
@@ -204,7 +204,8 @@
           90,
           95,
           100
-        ]
+        ],
+        "unit": "%"
       },
       "casttime": {
         "n": 11097,
@@ -221,7 +222,8 @@
         "modeShare": 0.1948,
         "signed": false,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "channel": {
         "n": 1250,
@@ -238,7 +240,8 @@
         "modeShare": 0.1736,
         "signed": false,
         "sentinels": 555,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "count.mech": {
         "n": 49390,
@@ -343,7 +346,8 @@
         "modeShare": 0.324,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "scale": {
         "n": 511,
@@ -360,7 +364,8 @@
         "modeShare": 0.137,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "count.sound": {
         "n": 28519,
@@ -422,12 +427,12 @@
   },
   "modules": {
     "core": {
-      "file": "data/modules/core-60859c08d260.json.gz",
-      "bytes": 1166989
+      "file": "data/modules/core-dbeb848c6534.json.gz",
+      "bytes": 1167430
     },
     "universal": {
-      "file": "data/modules/universal-0bd164ea1731.json.gz",
-      "bytes": 24728
+      "file": "data/modules/universal-d9f655b66417.json.gz",
+      "bytes": 24759
     },
     "names": {
       "file": "data/modules/names-e82d11e938f0.json.gz",

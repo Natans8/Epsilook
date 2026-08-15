@@ -1,11 +1,11 @@
 {
   "pack": "4.4.2.60895",
   "meta": {
-    "format": 49,
+    "format": 50,
     "version": "4.4.2.60895",
     "label": "Cataclysm Classic 4.4.2",
     "built": "2026-08-15",
-    "listfileTag": "202608131431",
+    "listfileTag": "202608142148",
     "tdbTag": "",
     "absentTables": [
       "BarrageEffect",
@@ -116,7 +116,7 @@
       "spellVehicles": 59,
       "vehicles": 52,
       "vehicleSeats": 92,
-      "spellPassengerAnims": 259,
+      "spellPassengerAnims": 352,
       "spellVehicleAnims": 38,
       "spellVehicleAnimKits": 2
     },
@@ -206,7 +206,8 @@
           95,
           99,
           100
-        ]
+        ],
+        "unit": "%"
       },
       "casttime": {
         "n": 14206,
@@ -223,7 +224,8 @@
         "modeShare": 0.2018,
         "signed": false,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "channel": {
         "n": 1854,
@@ -240,7 +242,8 @@
         "modeShare": 0.178,
         "signed": false,
         "sentinels": 1075,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "count.mech": {
         "n": 71214,
@@ -331,7 +334,8 @@
         "modeShare": 0.3058,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "scale": {
         "n": 768,
@@ -348,7 +352,8 @@
         "modeShare": 0.1263,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "count.sound": {
         "n": 36941,
@@ -419,12 +424,12 @@
   },
   "modules": {
     "core": {
-      "file": "data/modules/core-69cbb5f1568e.json.gz",
-      "bytes": 1723889
+      "file": "data/modules/core-2ccd72e0e96b.json.gz",
+      "bytes": 1724810
     },
     "universal": {
-      "file": "data/modules/universal-0bd164ea1731.json.gz",
-      "bytes": 24728
+      "file": "data/modules/universal-d9f655b66417.json.gz",
+      "bytes": 24759
     },
     "names": {
       "file": "data/modules/names-4648e1e0d12e.json.gz",

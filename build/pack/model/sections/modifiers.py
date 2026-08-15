@@ -104,7 +104,8 @@ SPELL_SPEEDS = register(Section(
     reads=("effects",),
     counts=(Count("spellSpeeds", lambda columns, _r: len(columns["spellIds"])),),
     domains=(Domain("speed",
-                    lambda columns, _r: numeric_domain(columns["percents"])),),
+                    lambda columns, _r: numeric_domain(columns["percents"]),
+                    unit="%"),),
 ))
 
 SPELL_SCALES = register(Section(
@@ -116,5 +117,6 @@ SPELL_SCALES = register(Section(
     reads=("effects",),
     counts=(Count("spellScales", lambda columns, _r: len(columns["spellIds"])),),
     domains=(Domain("scale",
-                    lambda columns, _r: numeric_domain(columns["percents"])),),
+                    lambda columns, _r: numeric_domain(columns["percents"]),
+                    unit="%"),),
 ))

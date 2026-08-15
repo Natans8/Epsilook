@@ -46,7 +46,8 @@ def replacements(reads: Reads) -> SectionColumns:
                             reads.anim_replacements, len(reads.declared.anim_names))
     return {"spellIds": [row[0] for row in rows],
             "srcAnims": [row[1] for row in rows],
-            "dstAnims": [row[2] for row in rows]}
+            "dstAnims": [row[2] for row in rows],
+            "targets": [row[3] for row in rows]}
 
 
 def visual_anims(reads: Reads) -> SectionColumns:
@@ -113,7 +114,7 @@ SPELL_REPLACE_ANIMS = register(Section(
     doc="Every base animation a spell swaps for another, from both routes merged.",
     module="core",
     produce=replacements,
-    columns=("spellIds", "srcAnims", "dstAnims"),
+    columns=("spellIds", "srcAnims", "dstAnims", "targets"),
     reads=("visuals", "effects", "anim_replacements", "declared"),
     counts=(Count("spellReplaceAnims",
                   lambda columns, _r: len(columns["spellIds"])),),

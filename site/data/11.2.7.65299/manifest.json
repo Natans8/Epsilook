@@ -1,11 +1,11 @@
 {
   "pack": "11.2.7.65299",
   "meta": {
-    "format": 49,
+    "format": 50,
     "version": "11.2.7.65299",
     "label": "The War Within 11.2.7",
     "built": "2026-08-15",
-    "listfileTag": "202608131431",
+    "listfileTag": "202608142148",
     "tdbTag": "TDB1127.26011",
     "absentTables": [],
     "counts": {
@@ -104,7 +104,7 @@
       "spellVehicles": 323,
       "vehicles": 262,
       "vehicleSeats": 464,
-      "spellPassengerAnims": 1529,
+      "spellPassengerAnims": 2077,
       "spellVehicleAnims": 100,
       "spellVehicleAnimKits": 57
     },
@@ -220,7 +220,8 @@
           90,
           95,
           100
-        ]
+        ],
+        "unit": "%"
       },
       "transparency": {
         "n": 2077,
@@ -237,7 +238,8 @@
         "modeShare": 0.2759,
         "signed": false,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "casttime": {
         "n": 66672,
@@ -254,7 +256,8 @@
         "modeShare": 0.2931,
         "signed": false,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "channel": {
         "n": 10730,
@@ -271,7 +274,8 @@
         "modeShare": 0.1414,
         "signed": false,
         "sentinels": 6955,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "count.mech": {
         "n": 375721,
@@ -339,7 +343,8 @@
         "modeShare": 0.1683,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "scale": {
         "n": 4426,
@@ -356,7 +361,8 @@
         "modeShare": 0.1306,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "count.sound": {
         "n": 160156,
@@ -406,12 +412,12 @@
   },
   "modules": {
     "core": {
-      "file": "data/modules/core-f477bebf763a.json.gz",
-      "bytes": 11017246
+      "file": "data/modules/core-59af5241d0c6.json.gz",
+      "bytes": 11019950
     },
     "universal": {
-      "file": "data/modules/universal-0bd164ea1731.json.gz",
-      "bytes": 24728
+      "file": "data/modules/universal-d9f655b66417.json.gz",
+      "bytes": 24759
     },
     "names": {
       "file": "data/modules/names-3b068aa3a273.json.gz",

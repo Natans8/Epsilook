@@ -750,7 +750,7 @@ effect and aura remains searchable and the mechanics column is always the whole 
 |------------------------|-------------------|---------------------------------------------|
 | transform aura         | a creature        | `spellMorphs`, `morphs`, `morphDisplays`    |
 | shapeshift aura        | a form            | `spellShapeshifts`, `shapeshifts`           |
-| set-vehicle aura       | a vehicle         | `spellVehicles`, `vehicles`, `vehicleSeats` |
+| set-vehicle aura       | a vehicle         | `spellVehicles`, `vehicles`, `vehicleSeats`, and the three ridden animation sets |
 | screen-effect aura     | a screen effect   | `spellScreens`                              |
 | invisibility auras     | a channel number  | `spellInvis`, `spellDetects`                |
 | keybound-override aura | a key override    | `spellKeybinds`, `keybinds`                 |
@@ -760,7 +760,14 @@ effect and aura remains searchable and the mechanics column is always the whole 
 | gameobject effects     | a gameobject      | `spellObjects`, `objects`                   |
 | play-sound effects     | a sound kit       | folded into `spellSounds`                   |
 
-Three do not fit that shape:
+Four do not fit that shape:
+
+**A seat is reached through its vehicle, and a rider's animation carries the role it plays in.** The seat spells each
+act as a start, a loop and sometimes an end — nine columns for three acts — so the pack ships the act rather than the
+column: `spellPassengerAnims.roles` indexes `passengerRoleNames` (`enter`, `sit`, `exit`). One animation serving two
+acts is two rows, because which act it belongs to is the question being asked; that is why the section counts more rows
+than it has distinct animations. The vehicle's own animations and the seat's anim kits stay separate sets: folding them
+together would file a mount's movement under what its passenger is doing.
 
 **Speed and scale carry a number, not a reference.** The aura says which movement is scaled and the amount says by how
 much. The amount is a signed percentage and the sign is stored rather than derived, because the aura's name does not
@@ -862,6 +869,16 @@ is the caster.** A self-buff would otherwise show a target icon for content that
 caster bit wherever the matching test says the spell aims only at its caster: for the aura phase, believe the spell's
 apply-aura effects; for every other phase, believe all of them.
 
+**Every row the game aims somewhere ships the mask, as of format 50.** Five families carried one and dropped it on the
+way out — a tint, a fade, a colour drain, an animation replacement and the aura naming a replacement set — because the
+pill they render did not need it. A row that cannot say who it plays on is a row a reader cannot ask about, so the
+question is answerable on all of them now rather than on the ones whose renderer happened to want it.
+
+Two families have no mask to ship and say so rather than shipping a zero: a **mount** comes from
+`Mount.SourceSpellID`, which is a property of the mount and not of a targeted effect row, and a **ghost material**
+carries no attachment. Neither declares the property at all, because an axis that returns nothing forever reads to a
+user as broken rather than as empty.
+
 ## Declare
 
 Every section is one record: its name, what fills it, which columns it has, how each column is laid out, which counts
@@ -870,6 +887,11 @@ ships per build or once across builds.
 
 From that one record come the assembly, the counts, the domains, the module the section lands in, the locale overlay and
 the generated documentation — so a new axis is a declaration rather than an edit in six places.
+
+**A numeric axis declares what its numbers ARE.** A measured domain carries the storage unit beside the bounds — `ms`
+for a cast or a channel, `%` for a size change, a speed change, a fade or a colour drain — because every consumer that
+printed one used to carry its own divisor, which is one fact written three times and three chances to disagree. An axis
+with nothing to convert declares no unit: a count, an id and an index are already what they look like.
 
 **Naming a section's source tables is what makes drift computable.** A section whose tables are absent switches itself
 off and says so, rather than a reader branching on the build.

@@ -99,11 +99,11 @@ SPELL_DELIVERY = register(Section(
         # A cast of zero is the absence of a cast bar rather than a
         # zero-second cast, so it is not part of the domain.
         Domain("casttime", lambda columns, _r: numeric_domain(
-            cast for cast in columns["castMs"] if cast > 0)),
+            cast for cast in columns["castMs"] if cast > 0), unit="ms"),
         # -1 is unlimited, a marker rather than a duration; 0 is no row at all.
         Domain("channel", lambda columns, _r: numeric_domain(
             (duration for duration in columns["durMs"] if duration != 0),
-            sentinels=(-1,))),
+            sentinels=(-1,)), unit="ms"),
     ),
 ))
 

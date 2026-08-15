@@ -8,22 +8,13 @@
  * It lives in tools/ for the reason tools/query.ts does: everything under src/ must be reachable from src/main.ts,
  * and nothing in the app drives the 2.0 engine yet.
  *
- * Deliberate gaps, each waiting on data the pack does not carry in the needed shape rather than on code here:
- *
- * - A passenger row carries no animation: the pack ships the rider's anims as one flat set, without the roles the
- *   kind's enter/sit/exit properties need.
- * - An item row has no name property to put the item's name in, so `model:{item sickle}` selects by path only.
- * - An alternative name (SpellOverrideName) reaches 1.0's corpus but no 2.0 row: SpellData folds it into `namesL`
- *   and keeps no per-spell list to build a row from.
- * - A shadowy or ghost row carries no colour, and a summon row no control word: their kinds declare no property
- *   for them yet, though the pack ships both.
+ * One deliberate gap remains, waiting on data the pack does not carry in the needed shape rather than on code
+ * here: an alternative name (SpellOverrideName) reaches 1.0's corpus but no 2.0 row, because SpellData folds it
+ * into `namesL` and keeps no per-spell list to build a row from.
  */
-import type {SpellData, SpellPack, VersionEntry} from "../src/data";
+import type {SpellData, VersionEntry} from "../src/data";
 import {buildIndexes, DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED} from "../src/data";
-import {readFileSync} from "node:fs";
-import {fileURLToPath} from "node:url";
-import {dirname, resolve} from "node:path";
-import {gunzipSync} from "node:zlib";
+import {pickVersion, readPack} from "./packfile";
 
 import type {Ask, Column, Dataset, Kind, Row, RowTest, ScopeTerm, Stored, ValueExpr} from "../src/search/index";
 import {
@@ -41,8 +32,6 @@ const {
     transparency, triggers,
 } = catalogue;
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-
 /**
  * Loads one shipped pack and builds 1.0's indexes over it.
  *
@@ -51,15 +40,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
  * @throws If no pack matches.
  */
 export function loadPack(want?: string): { data: SpellData; entry: VersionEntry } {
-    const versions: VersionEntry[] = JSON.parse(
-        readFileSync(resolve(ROOT, "site/data/versions.json"), "utf8"));
-    const entry = want
-        ? versions.find((v) => v.id.startsWith(want))
-        : (versions.find((v) => v.default) ?? versions[0]);
-    if (!entry) throw new Error(`no pack matches "${want}" — have: ${versions.map((v) => v.id).join(", ")}`);
-    const pack: SpellPack = JSON.parse(
-        gunzipSync(readFileSync(resolve(ROOT, "site", entry.file))).toString("utf8"));
-    return {data: buildIndexes(pack), entry};
+    const entry = pickVersion(want);
+    return {data: buildIndexes(readPack(entry)), entry};
 }
 
 const row = (kind: Kind, props: Record<string, Stored>): Row => ({kind, props});
@@ -140,20 +122,27 @@ function modelRows(d: SpellData, i: number, cats: Map<number, Kind>): Row[] {
         const kind = cats.get(e.cat) ?? attached;
         const file = d.files.get(e.fid);
         // A negative fid is the fileless weapon sentinel; its "path" is the label "equipped <slot>".
+        const anchor = e.src >= 0 ? d.attachmentNames[e.src] : "";
         if (kind === attached && e.fid < 0 && file) {
-            rows.push(row(equipped, withMask({slot: file.path.replace(/^equipped\s+/, "")}, e.targets)));
+            const worn: Record<string, Stored> = {slot: file.path.replace(/^equipped\s+/, "")};
+            if (anchor) worn.attach = anchor;
+            rows.push(row(equipped, withMask(worn, e.targets)));
             continue;
         }
         const props: Record<string, Stored> = {};
         if (file) props.file = file.path;
         if (kind === missile) {
-            if (e.src >= 0 && d.attachmentNames[e.src]) props.from = d.attachmentNames[e.src];
+            if (anchor) props.from = anchor;
             if (e.dst >= 0 && d.attachmentNames[e.dst]) props.to = d.attachmentNames[e.dst];
             if (e.motion) props.motion = e.motion;
-        } else if ((kind === attached || kind === barrage) && e.src >= 0 && d.attachmentNames[e.src]) {
-            props.attach = d.attachmentNames[e.src];
+        } else if (anchor) {
+            props.attach = anchor;
         }
         if ((kind === display || kind === item) && e.ref) props.id = e.ref;
+        if (kind === item) {
+            const named = d.items.get(e.ref)?.name;
+            if (named) props.name = named;
+        }
         rows.push(row(kind, withMask(props, e.targets)));
     }
     for (const dsp of d.spellMounts.get(id) ?? []) {
@@ -207,14 +196,17 @@ function animRows(d: SpellData, i: number): Row[] {
         const props: Record<string, Stored> = {};
         if (d.animNames[e.src]) props.from = d.animNames[e.src];
         if (d.animNames[e.dst]) props.to = d.animNames[e.dst];
-        rows.push(row(replace, props));
+        rows.push(row(replace, withMask(props, e.mask)));
     }
     if (d.spellAttrs.get("preventsanim")?.has(id)) rows.push(row(pose, {}));
-    // The rider's anims ship as one flat set, so the enter/sit/exit roles cannot be filled until the pack says which
-    // is which; the rows still exist so `anim:passenger` and the column count answer.
-    for (const animId of d.spellPassengerAnims.get(id) ?? []) {
-        void animId;
-        rows.push(row(passenger, {}));
+    // One property per role, so `anim:{passenger sit:*}` asks a different question from `enter:*`. A pack older than
+    // format 50 carries no role and the row still exists, so `anim:passenger` and the column count keep answering.
+    for (const played of d.spellPassengerAnims.get(id) ?? []) {
+        const props: Record<string, Stored> = {};
+        const role = d.passengerRoleNames[played.role];
+        const named = d.animNames[played.anim];
+        if (role && named) props[role] = named;
+        rows.push(row(passenger, props));
     }
     return rows;
 }
@@ -254,10 +246,16 @@ function fxRows(d: SpellData, i: number): Row[] {
         const props: Record<string, Stored> = {};
         const at = attachName(d.shadowyAttach.get(sh));
         if (at) props.attach = at;
+        // The primary of the two: the secondary is the pass's falloff, not a second answer to "what colour".
+        const tone = d.shadowyColors.get(sh);
+        if (tone) props.colour = tone.primary;
         rows.push(row(shadowy, withMask(props, d.shadowyTargets.get(id)?.get(sh))));
     }
     for (const gm of d.spellGhostMats.get(id) ?? []) {
-        rows.push(row(ghost, withMask({}, d.ghostMatTargets.get(id)?.get(gm))));
+        const props: Record<string, Stored> = {};
+        const tone = d.ghostMatColors.get(gm);
+        if (tone !== undefined) props.colour = tone;
+        rows.push(row(ghost, withMask(props, d.ghostMatTargets.get(id)?.get(gm))));
     }
     for (const g of d.spellGlows.get(id) ?? []) {
         const props: Record<string, Stored> = {};
@@ -267,10 +265,17 @@ function fxRows(d: SpellData, i: number): Row[] {
     }
     for (const t of d.spellTints.get(id) ?? []) {
         const colour = d.tintColors.get(t);
-        rows.push(row(tint, colour === undefined ? {} : {colour}));
+        rows.push(row(tint, withMask(colour === undefined ? {} : {colour},
+            d.tintTargets.get(id)?.get(t))));
     }
-    for (const pct of d.spellTransps.get(id) ?? []) rows.push(row(transparency, {percent: pct}));
-    for (const pct of d.spellDesaturates.get(id) ?? []) rows.push(row(desaturate, {percent: pct}));
+    for (const pct of d.spellTransps.get(id) ?? []) {
+        rows.push(row(transparency, withMask({percent: pct},
+            d.transparencyTargets.get(id)?.get(pct))));
+    }
+    for (const pct of d.spellDesaturates.get(id) ?? []) {
+        rows.push(row(desaturate, withMask({percent: pct},
+            d.desaturateTargets.get(id)?.get(pct))));
+    }
     if (d.spellFreezes.has(id)) rows.push(row(freeze, {}));
     if (d.spellCamos.has(id)) rows.push(row(camo, {}));
     for (const c of d.spellMorphs.get(id) ?? []) {
@@ -280,16 +285,20 @@ function fxRows(d: SpellData, i: number): Row[] {
     }
     for (const f of d.spellShapeshifts.get(id) ?? []) {
         const form = d.shapeshiftNames.get(f);
-        rows.push(row(shapeshift, form ? {form} : {}));
+        rows.push(row(shapeshift, withMask(form ? {form} : {},
+            d.shapeshiftTargets.get(id)?.get(f))));
     }
     for (const e of d.spellScaleMods.get(id) ?? []) {
         rows.push(row(scale, withMask({amount: e.pct}, e.mask)));
     }
     for (const e of d.spellSummons.get(id) ?? []) {
         const named = d.summonNames.get(e.creatureId);
-        rows.push(row(summon, withMask(
-            {creature: named ? {id: e.creatureId, text: named} : e.creatureId},
-            d.summonTargets.get(id)?.get(e.creatureId))));
+        const props: Record<string, Stored> = {
+            creature: named ? {id: e.creatureId, text: named} : e.creatureId,
+        };
+        const control = d.summonControlNames[e.control];
+        if (control) props.control = control;
+        rows.push(row(summon, withMask(props, d.summonTargets.get(id)?.get(e.creatureId))));
     }
     for (const obj of d.spellObjects.get(id) ?? []) {
         const named = d.objectNames.get(obj);
@@ -323,28 +332,36 @@ function mechRows(d: SpellData, i: number): Row[] {
         const at = d.spellIndex.get(other);
         return at === undefined ? "" : d.names[at];
     };
-    for (const l of d.spellTriggers.get(id) ?? []) {
-        const named = linkName(l.spell);
-        rows.push(row(triggers, {spell: named ? {id: l.spell, text: named} : l.spell}));
-    }
-    for (const l of d.spellOrigins.get(id) ?? []) {
-        const named = linkName(l.spell);
-        rows.push(row(origin, {spell: named ? {id: l.spell, text: named} : l.spell}));
+    for (const [kind, links] of [[triggers, d.spellTriggers], [origin, d.spellOrigins]] as const) {
+        for (const l of links.get(id) ?? []) {
+            const named = linkName(l.spell);
+            const spell: Stored = named ? {id: l.spell, text: named} : l.spell;
+            // One row per word the edge prints: a pair joined two ways is two facts, which is the grain the pack
+            // ships and the only one on which `how:periodically` can select.
+            if (l.kinds.length === 0) rows.push(row(kind, withMask({spell}, l.mask)));
+            for (const word of l.kinds) rows.push(row(kind, withMask({spell, how: word}, l.mask)));
+        }
     }
     for (const areaId of d.spellAreas.get(id) ?? []) {
         const named = d.areaNames.get(areaId);
         rows.push(row(location, named ? {area: named} : {}));
     }
-    for (const e of d.spellInvisTypes.get(id) ?? []) rows.push(row(invis, {channel: e.type}));
+    for (const e of d.spellInvisTypes.get(id) ?? []) {
+        rows.push(row(invis, withMask({channel: e.type}, d.invisTargets.get(id)?.get(e.type))));
+    }
     for (const e of d.spellDetectTypes.get(id) ?? []) {
-        rows.push(row(detect, {channel: e.type, count: d.invisTypeSpells.get(e.type)?.length ?? 0}));
+        rows.push(row(detect, withMask(
+            {channel: e.type, count: d.invisTypeSpells.get(e.type)?.length ?? 0},
+            d.detectTargets.get(id)?.get(e.type))));
     }
     for (const v of d.spellVehicles.get(id) ?? []) {
         const seatNames = d.vehicleSeats.get(v) ?? [];
         // Each row carries the vehicle's whole seat count beside one seat's attachment, so a scope can bind both.
-        if (seatNames.length === 0) rows.push(row(seats, {count: 0}));
+        const mask = d.vehicleTargets.get(id)?.get(v);
+        if (seatNames.length === 0) rows.push(row(seats, withMask({count: 0}, mask)));
         for (const attach of seatNames) {
-            rows.push(row(seats, attach ? {count: seatNames.length, attach} : {count: seatNames.length}));
+            rows.push(row(seats, withMask(
+                attach ? {count: seatNames.length, attach} : {count: seatNames.length}, mask)));
         }
     }
     for (const e of d.spellSpeedMods.get(id) ?? []) {
@@ -352,7 +369,10 @@ function mechRows(d: SpellData, i: number): Row[] {
     }
     for (const o of d.spellKeybinds.get(id) ?? []) {
         const kb = d.keybinds.get(o);
-        if (kb) rows.push(row(keybind, {key: `${kb.fn} ${kb.when}`.trim()}));
+        if (kb) {
+            rows.push(row(keybind, withMask({key: `${kb.fn} ${kb.when}`.trim()},
+                d.keybindTargets.get(id)?.get(o))));
+        }
     }
     if (d.spellAttrs.get("auraisdebuff")?.has(id)) rows.push(row(debuff, {}));
     return rows;

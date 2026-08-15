@@ -100,19 +100,23 @@
     "display": {
       "hint": "a creature display model attached to the caster or target",
       "props": {
-        "id": "the CreatureDisplayInfo id"
+        "id": "the CreatureDisplayInfo id",
+        "attach": "where on the body it is anchored"
       }
     },
     "item": {
       "hint": "an in-game item's model, held by the caster",
       "props": {
-        "id": "the item's own id"
+        "id": "the item's own id",
+        "name": "the item's name",
+        "attach": "where on the body it is held"
       }
     },
     "equipped": {
       "hint": "a weapon the caster already has — main hand, off hand, ranged or ammo",
       "props": {
-        "slot": "which slot — main hand, off hand, ranged, ammo"
+        "slot": "which slot — main hand, off hand, ranged, ammo",
+        "attach": "where on the body it is held"
       }
     },
     "mount": {
@@ -172,13 +176,14 @@
     "shadowy": {
       "hint": "a translucent shadow pass over the model",
       "props": {
-        "attach": "where on the body it plays"
+        "attach": "where on the body it plays",
+        "colour": "the colour the shadow pass is tinted"
       }
     },
     "ghost": {
       "hint": "a ghost material swapped onto the model",
       "props": {
-        "attach": "where on the body it plays"
+        "colour": "the colour the material recolours to"
       }
     },
     "glow": {
@@ -223,7 +228,8 @@
     "summon": {
       "hint": "a creature the spell summons",
       "props": {
-        "creature": "the summoned creature, by name or by id"
+        "creature": "the summoned creature, by name or by id",
+        "control": "how it answers to you — pet, guardian, vehicle"
       }
     },
     "gameObject": {
@@ -253,13 +259,17 @@
     "triggers": {
       "hint": "another spell this one casts, ticks, procs or removes",
       "props": {
-        "spell": "the spell it triggers, by name or by id"
+        "spell": "the spell it triggers, by name or by id",
+        "how": "what makes it fire — periodically, on proc, on cast",
+        "target": "who the effect carrying the trigger is aimed at"
       }
     },
     "origin": {
       "hint": "a spell that casts, ticks, procs or removes this one",
       "props": {
-        "spell": "the spell that triggers it, by name or by id"
+        "spell": "the spell that triggers it, by name or by id",
+        "how": "what makes it fire — periodically, on proc, on cast",
+        "target": "who the effect carrying the trigger is aimed at"
       }
     },
     "location": {

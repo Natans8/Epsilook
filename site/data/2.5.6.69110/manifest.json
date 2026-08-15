@@ -1,11 +1,11 @@
 {
   "pack": "2.5.6.69110",
   "meta": {
-    "format": 49,
+    "format": 50,
     "version": "2.5.6.69110",
     "label": "TBC Classic 2.5.6",
     "built": "2026-08-15",
-    "listfileTag": "202608131431",
+    "listfileTag": "202608142148",
     "tdbTag": "",
     "absentTables": [
       "BarrageEffect",
@@ -191,7 +191,8 @@
         "ui": "picker",
         "values": [
           100
-        ]
+        ],
+        "unit": "%"
       },
       "transparency": {
         "n": 278,
@@ -222,7 +223,8 @@
           85,
           90,
           100
-        ]
+        ],
+        "unit": "%"
       },
       "casttime": {
         "n": 6727,
@@ -239,7 +241,8 @@
         "modeShare": 0.2044,
         "signed": false,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "channel": {
         "n": 640,
@@ -256,7 +259,8 @@
         "modeShare": 0.1703,
         "signed": false,
         "sentinels": 264,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "count.mech": {
         "n": 28684,
@@ -358,7 +362,8 @@
         "modeShare": 0.246,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "scale": {
         "n": 267,
@@ -375,7 +380,8 @@
         "modeShare": 0.1498,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "count.sound": {
         "n": 17443,
@@ -413,12 +419,12 @@
   },
   "modules": {
     "core": {
-      "file": "data/modules/core-4ed0ffc03df0.json.gz",
-      "bytes": 663013
+      "file": "data/modules/core-5bcbf2e5394d.json.gz",
+      "bytes": 663929
     },
     "universal": {
-      "file": "data/modules/universal-0bd164ea1731.json.gz",
-      "bytes": 24728
+      "file": "data/modules/universal-d9f655b66417.json.gz",
+      "bytes": 24759
     },
     "names": {
       "file": "data/modules/names-3b5dc857bd63.json.gz",

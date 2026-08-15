@@ -212,6 +212,7 @@ export const display = defineKind({
         id: {types: [id], hint: t("tooltips:kind.display.props.id")},
         name: corpus(TIER.asset, text),
         file: corpus(TIER.asset, path),
+        attach: attachPoint(t("tooltips:kind.display.props.attach")),
         target: target(),
     },
 });
@@ -222,6 +223,8 @@ export const item = defineKind({
     props: {
         file: corpus(TIER.asset, path),
         id: {types: [id], hint: t("tooltips:kind.item.props.id")},
+        name: corpus(TIER.asset, text),
+        attach: attachPoint(t("tooltips:kind.item.props.attach")),
         target: target(),
     },
 });
@@ -232,6 +235,7 @@ export const equipped = defineKind({
     hint: t("tooltips:kind.equipped.hint"),
     props: {
         slot: {types: [enumeration], hint: t("tooltips:kind.equipped.props.slot")},
+        attach: attachPoint(t("tooltips:kind.equipped.props.attach")),
         target: target(),
     },
 });
@@ -242,7 +246,6 @@ export const mount = defineKind({
     props: {
         name: corpus(TIER.asset, text),
         file: corpus(TIER.asset, path),
-        target: target(),
     },
 });
 
@@ -359,6 +362,7 @@ export const shadowy = defineKind({
     hint: t("tooltips:kind.shadowy.hint"),
     props: {
         attach: attachPoint(t("tooltips:kind.shadowy.props.attach")),
+        colour: {types: [colour], synonyms: ["color"], hint: t("tooltips:kind.shadowy.props.colour")},
         target: target(),
     },
 });
@@ -368,7 +372,7 @@ export const ghost = defineKind({
     column: fxColumn, word: "ghost", group: "overlay",
     hint: t("tooltips:kind.ghost.hint"),
     props: {
-        attach: attachPoint(t("tooltips:kind.ghost.props.attach")),
+        colour: {types: [colour], synonyms: ["color"], hint: t("tooltips:kind.ghost.props.colour")},
         target: target(),
     },
 });
@@ -396,13 +400,13 @@ export const tint = defineKind({
 export const transparency = defineKind({
     column: fxColumn, word: "transparency", group: "overlay",
     hint: t("tooltips:kind.transparency.hint"),
-    props: {percent: of(percent)},
+    props: {percent: of(percent), target: target()},
 });
 
 export const desaturate = defineKind({
     column: fxColumn, word: "desaturate", group: "overlay",
     hint: t("tooltips:kind.desaturate.hint"),
-    props: {percent: of(percent)},
+    props: {percent: of(percent), target: target()},
 });
 
 export const freeze = defineKind({
@@ -426,7 +430,7 @@ export const morph = defineKind({
 export const shapeshift = defineKind({
     column: fxColumn, word: "shapeshift", group: "transform",
     hint: t("tooltips:kind.shapeshift.hint"),
-    props: {form: corpus(TIER.asset, enumeration)},
+    props: {form: corpus(TIER.asset, enumeration), target: target()},
 });
 
 export const scale = defineKind({
@@ -444,7 +448,11 @@ export const scale = defineKind({
 export const summon = defineKind({
     column: fxColumn, word: "summon", global: true, group: "spawn",
     hint: t("tooltips:kind.summon.hint"),
-    props: {creature: named(t("tooltips:kind.summon.props.creature"), TIER.asset), target: target()},
+    props: {
+        creature: named(t("tooltips:kind.summon.props.creature"), TIER.asset),
+        control: corpus(TIER.asset, enumeration),
+        target: target(),
+    },
 });
 
 export const gameObject = defineKind({
@@ -494,13 +502,21 @@ export const aura = defineKind({
 export const triggers = defineKind({
     column: mechColumn, word: "triggers", global: true, group: "link",
     hint: t("tooltips:kind.triggers.hint"),
-    props: {spell: named(t("tooltips:kind.triggers.props.spell"))},
+    props: {
+        spell: named(t("tooltips:kind.triggers.props.spell")),
+        how: of(enumeration),
+        target: target(),
+    },
 });
 
 export const origin = defineKind({
     column: mechColumn, word: "origin", global: true, group: "link",
     hint: t("tooltips:kind.origin.hint"),
-    props: {spell: named(t("tooltips:kind.origin.props.spell"))},
+    props: {
+        spell: named(t("tooltips:kind.origin.props.spell")),
+        how: of(enumeration),
+        target: target(),
+    },
 });
 
 /** Where a spell refuses to cast. Named by area, since an area id is not a number a reader would know. */
@@ -514,7 +530,10 @@ export const location = defineKind({
 export const invis = defineKind({
     column: mechColumn, word: "invis", group: "stealth", full: "invisibility",
     hint: t("tooltips:kind.invis.hint"),
-    props: {channel: {types: [id], hint: t("tooltips:kind.invis.props.channel")}},
+    props: {
+        channel: {types: [id], hint: t("tooltips:kind.invis.props.channel")},
+        target: target(),
+    },
 });
 
 export const detect = defineKind({
@@ -523,6 +542,7 @@ export const detect = defineKind({
     props: {
         channel: {types: [id], hint: t("tooltips:kind.detect.props.channel")},
         count: {types: [count], hint: t("tooltips:kind.detect.props.count")},
+        target: target(),
     },
 });
 
@@ -532,6 +552,7 @@ export const seats = defineKind({
     props: {
         count: {types: [count], hint: t("tooltips:kind.seats.props.count")},
         attach: attachPoint(t("tooltips:kind.seats.props.attach")),
+        target: target(),
     },
 });
 
@@ -551,7 +572,7 @@ export const speed = defineKind({
 export const keybind = defineKind({
     column: mechColumn, word: "keybind", group: "ui",
     hint: t("tooltips:kind.keybind.hint"),
-    props: {key: of(text)},
+    props: {key: of(text), target: target()},
 });
 
 export const debuff = defineKind({

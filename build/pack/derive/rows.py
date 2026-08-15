@@ -104,6 +104,20 @@ def spell_rows(per_vehicle: Mapping[int, set[int]],
                    if limit is None or value < limit})
 
 
+def spell_role_rows(per_vehicle: Mapping[int, set[tuple[int, int]]],
+                    vehicles: list[tuple[int, int]], limit: int
+                    ) -> list[tuple[int, int, int]]:
+    """The same hop for animations that carry the role they play in.
+
+    Apart from `spell_rows` rather than widening it, because the limit applies
+    to the animation and a caller that lost track of which half it bounded
+    would silently bound the role instead.
+    """
+    return sorted({(spell, anim, role) for spell, vehicle in vehicles
+                   for anim, role in per_vehicle.get(vehicle, ())
+                   if anim < limit})
+
+
 def build_rows(visuals: SpellVisuals, effects: SpellEffectRows,
                seats: VehicleSeats) -> PackRows:
     """Flatten everything at least two sections read, once."""
@@ -158,7 +172,7 @@ def boneset_rows(bonesets: Mapping[int, Mapping[int, list[str]]],
 
 def replacement_rows(visuals: SpellVisuals, effects: SpellEffectRows,
                      replacements: Mapping[int, set[tuple[int, int]]],
-                     limit: int) -> list[tuple[int, int, int]]:
+                     limit: int) -> list[tuple[int, int, int, int]]:
     """Every animation a spell swaps for another, from both sources merged.
 
     Two routes describe one thing -- a character wearing a different animation
@@ -166,22 +180,24 @@ def replacement_rows(visuals: SpellVisuals, effects: SpellEffectRows,
     an aura naming a replacement set, and both are pairs of animation ids, so
     they union into one per-spell set rather than shipping as two families a
     reader would have to merge. Deduped, since a spell commonly carries the same
-    pair from both.
+    pair from both; the two sources' masks union with them, because one pair
+    reached both ways plays on everyone either way reaches.
     """
-    pairs: dict[int, set[tuple[int, int]]] = {}
+    pairs: dict[tuple[int, int, int], int] = {}
 
-    def keep(of_spell: int, base: int, worn: int) -> None:
+    def keep(of_spell: int, base: int, worn: int, mask: int) -> None:
         """Record one swap, dropping either half past the name table."""
         if 0 <= base < limit and 0 <= worn < limit:
-            pairs.setdefault(of_spell, set()).add((base, worn))
+            swap = (of_spell, base, worn)
+            pairs[swap] = pairs.get(swap, 0) | mask
 
     for spell, swapped in visuals.anims.items():
-        for source, destination in swapped:
-            keep(spell, source, destination)
-    for spell, sets in effects.anim_sets.items():
+        for (source, destination), mask in swapped.items():
+            keep(spell, source, destination, mask)
+    for spell, sets in effects.anim_sets.ids.items():
         for identifier in sets:
+            mask = effects.anim_sets.masks.get((spell, identifier), 0)
             for source, destination in replacements.get(identifier, ()):
-                keep(spell, source, destination)
-    return sorted((spell, source, destination)
-                  for spell, swapped in pairs.items()
-                  for source, destination in swapped)
+                keep(spell, source, destination, mask)
+    return sorted((spell, source, destination, mask)
+                  for (spell, source, destination), mask in pairs.items())

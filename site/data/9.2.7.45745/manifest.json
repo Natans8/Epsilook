@@ -1,11 +1,11 @@
 {
   "pack": "9.2.7.45745",
   "meta": {
-    "format": 49,
+    "format": 50,
     "version": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "built": "2026-08-15",
-    "listfileTag": "202608131431",
+    "listfileTag": "202608142148",
     "tdbTag": "TDB927.22111",
     "absentTables": [],
     "counts": {
@@ -104,7 +104,7 @@
       "spellVehicles": 233,
       "vehicles": 208,
       "vehicleSeats": 384,
-      "spellPassengerAnims": 1138,
+      "spellPassengerAnims": 1525,
       "spellVehicleAnims": 76,
       "spellVehicleAnimKits": 44
     },
@@ -216,7 +216,8 @@
           90,
           95,
           100
-        ]
+        ],
+        "unit": "%"
       },
       "transparency": {
         "n": 1646,
@@ -259,7 +260,8 @@
           95,
           99,
           100
-        ]
+        ],
+        "unit": "%"
       },
       "casttime": {
         "n": 48873,
@@ -276,7 +278,8 @@
         "modeShare": 0.3107,
         "signed": false,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "channel": {
         "n": 8324,
@@ -293,7 +296,8 @@
         "modeShare": 0.148,
         "signed": false,
         "sentinels": 5230,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "count.mech": {
         "n": 276162,
@@ -386,7 +390,8 @@
         "modeShare": 0.2015,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "scale": {
         "n": 3194,
@@ -403,7 +408,8 @@
         "modeShare": 0.1152,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "count.sound": {
         "n": 118939,
@@ -453,12 +459,12 @@
   },
   "modules": {
     "core": {
-      "file": "data/modules/core-a0120cee5399.json.gz",
-      "bytes": 7890851
+      "file": "data/modules/core-6a62eeb2667b.json.gz",
+      "bytes": 7896273
     },
     "universal": {
-      "file": "data/modules/universal-0bd164ea1731.json.gz",
-      "bytes": 24728
+      "file": "data/modules/universal-d9f655b66417.json.gz",
+      "bytes": 24759
     },
     "names": {
       "file": "data/modules/names-e5e6844390f2.json.gz",

@@ -827,7 +827,10 @@ const ANIM_GROUPS: {
     id: number; word: string;
     animsOf(d: SpellData, s: number): number[] | undefined
 }[] = [
-    {id: PASSENGER_GROUP, word: "passenger", animsOf: (d, s) => d.spellPassengerAnims.get(s)},
+    {
+        id: PASSENGER_GROUP, word: "passenger",
+        animsOf: (d, s) => d.spellPassengerAnims.get(s)?.map((played) => played.anim),
+    },
 ];
 
 function animationsCell(animKitIds: number[], looseAnimIds: number[],

@@ -13,11 +13,21 @@ from ..tables import Tables
 from .attachments import seat_attachment_name
 from .columns import to_int
 
-SEAT_PASSENGER_ANIM_COLUMNS = [
-    "EnterAnimStart", "EnterAnimLoop",
-    "RideAnimStart", "RideAnimLoop", "RideUpperAnimStart", "RideUpperAnimLoop",
-    "ExitAnimStart", "ExitAnimLoop", "ExitAnimEnd",
-]
+PASSENGER_ROLE_NAMES = {0: "enter", 1: "sit", 2: "exit"}
+"""What a rider is doing while an animation plays, by role id.
+
+Three roles rather than nine columns: the game spells each one as a start, a
+loop and sometimes an end, which are stages of one act and not three things a
+reader would ask about apart.
+"""
+
+SEAT_PASSENGER_ANIM_COLUMNS = {
+    "EnterAnimStart": 0, "EnterAnimLoop": 0,
+    "RideAnimStart": 1, "RideAnimLoop": 1,
+    "RideUpperAnimStart": 1, "RideUpperAnimLoop": 1,
+    "ExitAnimStart": 2, "ExitAnimLoop": 2, "ExitAnimEnd": 2,
+}
+"""The rider's animation columns, each under the role it plays in."""
 SEAT_VEHICLE_ANIM_COLUMNS = ["VehicleEnterAnim", "VehicleExitAnim",
                              "VehicleRideAnimLoop"]
 SEAT_ANIMKIT_COLUMNS = [
@@ -35,8 +45,10 @@ class VehicleSeats:
     """Vehicle -> the attachment name of each seat, in slot order. Empty slots
     are dropped, so the list length is the seat count."""
 
-    passenger_anims: dict[int, set[int]] = field(default_factory=dict)
-    """Vehicle -> the animations its riders play."""
+    passenger_anims: dict[int, set[tuple[int, int]]] = field(default_factory=dict)
+    """Vehicle -> the animations its riders play, each with the role it plays
+    in. One animation used for two roles is two entries, because which act it
+    belongs to is what a reader is asking about."""
 
     vehicle_anims: dict[int, set[int]] = field(default_factory=dict)
     """Vehicle -> the animations the vehicle itself plays."""
@@ -94,8 +106,12 @@ def read_vehicle_seats(tables: Tables) -> VehicleSeats:
                 continue
             attachment, rider_anims, vehicle_anims, seat_kits = seat
             names.append(seat_attachment_name(attachment))
-            for values, into in ((rider_anims, vehicles.passenger_anims),
-                                 (vehicle_anims, vehicles.vehicle_anims),
+            roled = {(value, SEAT_PASSENGER_ANIM_COLUMNS[column])
+                     for column, value in zip(rider_columns, rider_anims)
+                     if value > 0}
+            if roled:
+                vehicles.passenger_anims.setdefault(vehicle, set()).update(roled)
+            for values, into in ((vehicle_anims, vehicles.vehicle_anims),
                                  (seat_kits, vehicles.animkits)):
                 played = {value for value in values if value > 0}
                 if played:

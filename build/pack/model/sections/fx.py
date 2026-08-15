@@ -97,14 +97,22 @@ def colored(bucket: str, colors_of: Callable[[Reads, int], tuple[int, ...]],
 
 def percents(bucket: str, value_of: Callable[[Reads, int], int]
              ) -> Callable[[Reads], SectionColumns]:
-    """A percent-only family: the percent IS the row, so there is no id table."""
+    """A percent-only family: the percent IS the row, so there is no id table.
+
+    Two rows resolving to one percent are one row wearing both audiences, so
+    the masks union rather than splitting the percent in two.
+    """
 
     def produce(reads: Reads) -> SectionColumns:
-        pairs = sorted({(spell, value_of(reads, row))
-                        for spell, rows in getattr(reads.visuals, bucket).items()
-                        for row in rows})
+        masks: dict[tuple[int, int], int] = {}
+        for spell, rows in getattr(reads.visuals, bucket).items():
+            for row, mask in rows.items():
+                key = (spell, value_of(reads, row))
+                masks[key] = masks.get(key, 0) | mask
+        pairs = sorted(masks)
         return {"spellIds": [pair[0] for pair in pairs],
-                "percents": [pair[1] for pair in pairs]}
+                "percents": [pair[1] for pair in pairs],
+                "targets": [masks[pair] for pair in pairs]}
 
     return produce
 
@@ -243,10 +251,8 @@ SPELL_TINTS = register(Section(
     name="spellTints",
     doc="Which model tints a spell applies.",
     module="core",
-    produce=lambda reads: {
-        "spellIds": [row[0] for row in masked_rows(reads.visuals.tints)],
-        "tintIds": [row[1] for row in masked_rows(reads.visuals.tints)]},
-    columns=("spellIds", "tintIds"),
+    produce=links("tints", "tintIds"),
+    columns=("spellIds", "tintIds", "targets"),
     reads=("visuals",),
     counts=(Count("spellTints", lambda columns, _r: len(columns["spellIds"])),),
 ))
@@ -267,12 +273,12 @@ SPELL_DESATURATES = register(Section(
     doc="How far a spell drains the colour from its subject.",
     module="core",
     produce=percents("desats", lambda reads, row: reads.procs.desats[row]),
-    columns=("spellIds", "percents"),
+    columns=("spellIds", "percents", "targets"),
     reads=("visuals", "procs"),
     counts=(Count("spellDesaturates",
                   lambda columns, _r: len(columns["spellIds"])),),
     domains=(Domain("desaturate", lambda columns, _r: numeric_domain(
-        columns["percents"])),),
+        columns["percents"]), unit="%"),),
 ))
 
 SPELL_TRANSPARENCIES = register(Section(
@@ -280,12 +286,12 @@ SPELL_TRANSPARENCIES = register(Section(
     doc="How far a spell fades its subject.",
     module="core",
     produce=percents("transps", lambda reads, row: reads.procs.transps[row]),
-    columns=("spellIds", "percents"),
+    columns=("spellIds", "percents", "targets"),
     reads=("visuals", "procs"),
     counts=(Count("spellTransparencies",
                   lambda columns, _r: len(columns["spellIds"])),),
     domains=(Domain("transparency", lambda columns, _r: numeric_domain(
-        columns["percents"])),),
+        columns["percents"]), unit="%"),),
 ))
 
 SPELL_FREEZES = register(Section(

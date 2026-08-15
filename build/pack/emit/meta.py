@@ -19,12 +19,14 @@ from ..build import Build
 from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 
-PACK_FORMAT = 49
+PACK_FORMAT = 50
 """What shape the artifact is in.
 
-49 carries the raw misc values on every mechanics row, which also makes a row
-finer: two effects alike in everything the pack showed but reaching different
-payloads no longer collapse into one.
+50 is the row reshape: a mask on every row the game aims somewhere, the role a
+rider's animation plays in, and the storage unit each numeric axis is measured
+in. Two of those change row counts rather than only adding columns -- an
+animation used both entering and seated is two rows now, because which act it
+belongs to is the question being asked.
 
 Bumped whenever a reader that understood the last version would misread this
 one. The app refuses a pack whose format it does not know, which is what makes
@@ -54,7 +56,9 @@ def domains_of(section: Section, columns: SectionColumns,
     different thing from one whose values are all zero.
     """
     reads = context.reads(section.reads)
-    return {declared.key: measured for declared in section.domains
+    return {declared.key: ({**measured, "unit": declared.unit}
+                           if declared.unit else measured)
+            for declared in section.domains
             if (measured := declared.compute(columns, reads)) is not None}
 
 

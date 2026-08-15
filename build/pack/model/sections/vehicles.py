@@ -11,10 +11,11 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable
 
-from ...derive import Reads, spell_rows
+from ...derive import Reads, spell_role_rows, spell_rows
 from ...measure import numeric_domain
+from ...routes.vehicles import PASSENGER_ROLE_NAMES
 from ..registry import register
-from ..section import Count, Domain, Section, SectionColumns
+from ..section import (Count, Domain, Layout, Scope, Section, SectionColumns)
 
 
 def seats(reads: Reads) -> SectionColumns:
@@ -97,15 +98,38 @@ VEHICLE_SEATS = register(Section(
         Counter(columns["vehicleIds"]).values())),),
 ))
 
+def passenger_anims(reads: Reads) -> SectionColumns:
+    """The rider's animations, each under the role it plays in.
+
+    The role is what separates entering from sitting, so one animation used
+    for two of them is two rows rather than one a reader cannot place.
+    """
+    rows = spell_role_rows(reads.vehicles.passenger_anims, reads.rows.vehicles,
+                           len(reads.declared.anim_names))
+    return {"spellIds": [row[0] for row in rows],
+            "animIds": [row[1] for row in rows],
+            "roles": [row[2] for row in rows]}
+
+
 SPELL_PASSENGER_ANIMS = register(Section(
     name="spellPassengerAnims",
     doc="The rider's own animations while entering, seated and leaving.",
     module="core",
-    produce=ridden("passenger_anims", "animIds"),
-    columns=("spellIds", "animIds"),
+    produce=passenger_anims,
+    columns=("spellIds", "animIds", "roles"),
     reads=("rows", "vehicles", "declared"),
     counts=(Count("spellPassengerAnims",
                   lambda columns, _r: len(columns["spellIds"])),),
+))
+
+PASSENGER_ROLE_WORDS = register(Section(
+    name="passengerRoleNames",
+    doc="The word each passenger animation role renders and searches under.",
+    module="universal",
+    produce=lambda _reads: {"names": dict(PASSENGER_ROLE_NAMES)},
+    columns=("names",),
+    layout=Layout.BARE,
+    scope=Scope.UNIVERSAL,
 ))
 
 SPELL_VEHICLE_ANIMS = register(Section(

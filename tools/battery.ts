@@ -43,7 +43,7 @@ const PROBES: Probe[] = [
     {v1: "fire|frost", v2: "fire|frost", note: "same, with alternation"},
     {v1: "model:missile", v2: "model:missile", note: ""},
     {v1: "fx:chain", v2: "fx:chain", note: ""},
-    {v1: "fx:summon", v2: "fx:summon", note: "1.0 corpus carries control words + creature ids; 2.0 name/id props"},
+    {v1: "fx:summon", v2: "fx:summon", note: "1.0's corpus also carries the raw creature ids; 2.0 reads them as an id notation"},
     {v1: "fx:tint", v2: "fx:tint", note: ""},
     {v1: "mech:speed", v2: "mech:speed", note: "1.0 also corpus-matches the WORD speed in linked names/areas"},
     {v1: "mech:seat", v2: "mech:seats", note: "the 2.0 word is seats; 1.0 seat also corpus-matches link/area names"},
@@ -54,8 +54,17 @@ const PROBES: Probe[] = [
     {v1: 'mech:"triggers fireball"', v2: "triggers:fireball", note: ""},
     {
         v1: 'mech:"triggers periodically"', v2: "triggers:periodically",
-        note: "GAP: the link words (periodically, on proc, ...) have no 2.0 property yet — matches names only",
+        note: "the link word is a property now; 1.0 also corpus-matches the word in linked spell NAMES",
     },
+    // The properties B6 declared, each on a row the pack already shipped: without a probe here they are declared
+    // and unmeasured, which is how an axis quietly stops answering.
+    {v1: 'fx:"summon pet"', v2: "fx:{summon control:pet}", note: "the summon control word is a property now"},
+    {v1: 'model:"item pauldrons"', v2: "model:{item name:pauldrons}",
+        note: "an item row carries its name now; 1.0 also matches the word in the model PATH"},
+    {v1: 'fx:"shadowy black"', v2: "fx:{shadowy colour:black}",
+        note: "1.0 matches the HUE word in its corpus; 2.0 reads the packed colour, so nearness decides"},
+    {v1: 'anim:"passenger"', v2: "anim:{passenger sit:*}",
+        note: "a rider animation carries its role now, so the seated ones are selectable apart"},
     {v1: 'fx:"scale 50"', v2: "scale:+50", note: "quote law: a quantity; +50 is the stored change"},
     {v1: 'fx:"scale =50"', v2: "scale:+50", note: "bare number means = on a quantity, so both forms land here"},
     {v1: 'mech:"seat >2"', v2: "seats:{count:>2}", note: ""},

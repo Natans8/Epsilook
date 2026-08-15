@@ -293,9 +293,14 @@ class SpellEffectRows:
     who the spell was aimed at says nothing about them.
     """
 
-    anim_sets: dict[int, set[int]] = field(default_factory=dict)
-    """Spell to the animation-replacement sets its auras carry. Unmasked, since
-    the swaps render as animation pills of their own."""
+    anim_sets: MaskedIds = field(default_factory=MaskedIds)
+    """Spell to the animation-replacement sets its auras carry, and who the
+    aura carrying each was aimed at.
+
+    The swaps render as animation pills of their own, which is why the mask
+    went unread for a long time; it is carried because a replacement row can
+    be asked who it plays on like any other row.
+    """
 
     summons: dict[int, set[tuple[int, int]]] = field(default_factory=dict)
     """Spell to the creature and summon-control pairs it summons."""

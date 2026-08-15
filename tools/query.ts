@@ -16,20 +16,14 @@
  * build on any src/ file its import graph never reaches, and a second entry
  * point is exactly that. See "Running queries without a browser" in README.md.
  */
-import {readFileSync} from "node:fs";
-import {fileURLToPath} from "node:url";
-import {dirname, resolve} from "node:path";
-import {gunzipSync} from "node:zlib";
 import {parseArgs} from "node:util";
 
 import {buildIndexes} from "../src/data";
-import type {SpellData, SpellPack, VersionEntry} from "../src/data";
+import type {SpellData, VersionEntry} from "../src/data";
+import {pickVersion, readPack} from "./packfile";
 import {groupsOf, parseQueryParts} from "../src/query";
 import {searchGroups} from "../src/search";
 import "../src/pilltypes";     // side effect: registers every pill type
-
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const DATA = resolve(ROOT, "site/data");
 
 /* STDOUT IS THE RESULT; EVERYTHING ELSE IS STDERR. buildIndexes reports its
  * timing with console.info, which is right in a browser and corrupts a pipe
@@ -45,28 +39,10 @@ const toStderr = (...args: unknown[]): void =>
     void process.stderr.write(args.map(String).join(" ") + "\n");
 console.log = console.info = console.debug = toStderr;
 
-/**
- * The pack, straight off disk.
- *
- * The one thing NOT shared with the browser, and deliberately: data.ts's
- * loadPack speaks fetch + DecompressionStream + a relative URL, which is the
- * browser's transport, not its logic. Everything that turns those bytes into
- * something searchable — buildIndexes — is the shared code. This is the whole
- * of the port: pick the bytes up differently, hand them to the same engine.
- */
+/** The pack, straight off disk. */
 function loadPack(want?: string): { data: SpellData; entry: VersionEntry } {
-    const versions: VersionEntry[] = JSON.parse(
-        readFileSync(resolve(DATA, "versions.json"), "utf8"));
-    const entry = want
-        ? versions.find((v) => v.id.startsWith(want) || v.label?.includes(want))
-        : versions.find((v) => v.default) ?? versions[0];
-    if (!entry) {
-        const known = versions.map((v) => v.id).join(", ");
-        throw new Error(`no pack matches "${want}" — have: ${known}`);
-    }
-    const pack: SpellPack = JSON.parse(
-        gunzipSync(readFileSync(resolve(ROOT, "site", entry.file))).toString("utf8"));
-    return {data: buildIndexes(pack), entry};
+    const entry = pickVersion(want);
+    return {data: buildIndexes(readPack(entry)), entry};
 }
 
 const {values, positionals} = parseArgs({

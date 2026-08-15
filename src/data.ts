@@ -186,7 +186,9 @@ export interface SpellPack {
     animKitAnimBoneset?: { animKitIds: number[]; animIds: number[]; bonesets: number[][] };
     /** Animation replacements — proc Type 7 + aura 312 merged (format 32+):
      *  one row per (base anim -> replacement anim). */
-    spellReplaceAnims?: { spellIds: number[]; srcAnims: number[]; dstAnims: number[] };
+    spellReplaceAnims?: {
+        spellIds: number[]; srcAnims: number[]; dstAnims: number[]; targets?: number[]
+    };
     /** Animations the kits play directly, SpellVisualAnim ET 6 (format 21+). */
     spellVisualAnims?: { spellIds: number[]; animIds: number[]; targets?: number[] };
 
@@ -227,12 +229,12 @@ export interface SpellPack {
     ghostMats?: { ids: number[]; colors: number[]; hues: string[] };
 
     /** Model tints, proc Types 1/23 (format 13+). */
-    spellTints?: { spellIds: number[]; tintIds: number[] };
+    spellTints?: { spellIds: number[]; tintIds: number[]; targets?: number[] };
     tints?: { ids: number[]; colors: number[]; hues: string[] };
 
     /** Percent-payload procs (format 14+): the percent IS the pill id. */
-    spellDesaturates?: { spellIds: number[]; percents: number[] };
-    spellTransparencies?: { spellIds: number[]; percents: number[] };
+    spellDesaturates?: { spellIds: number[]; percents: number[]; targets?: number[] };
+    spellTransparencies?: { spellIds: number[]; percents: number[]; targets?: number[] };
     /** Valueless procs (format 14+): membership is the whole payload. */
     spellFreezes?: { spellIds: number[] };
     spellCamos?: { spellIds: number[] };
@@ -311,6 +313,8 @@ export interface SpellPack {
     summons: { creatureIds: number[]; names: string[] };
     /** Control id -> word (1 guardian, 2 pet, ...; 0 shows no word). */
     summonControlNames?: Record<number, string>;
+    /** What a rider is doing while an animation plays, by role id. */
+    passengerRoleNames?: Record<number, string>;
 
     /** Vehicles (SET_VEHICLE_ID auras): spell -> Vehicle.db2 id, and each
      *  vehicle's seat count. 0-seat vehicles are dropped at build. */
@@ -325,8 +329,9 @@ export interface SpellPack {
     spellInvis?: { spellIds: number[]; types: number[]; targets: number[] };
     spellDetects?: { spellIds: number[]; types: number[]; targets: number[] };
     /** The rider's animations while entering/seated/exiting (a vehicle seat's
-     *  passenger AnimationData). animIds index animNames. */
-    spellPassengerAnims?: { spellIds: number[]; animIds: number[] };
+     *  passenger AnimationData). animIds index animNames; roles index
+     *  passengerRoleNames, and are absent on a pack older than format 50. */
+    spellPassengerAnims?: { spellIds: number[]; animIds: number[]; roles?: number[] };
     /** The vehicle's own animations — rendered as loose pills, not under
      *  "passenger". Same id space. */
     spellVehicleAnims?: { spellIds: number[]; animIds: number[] };
@@ -675,6 +680,14 @@ export interface SpellData {
     objectTargets: Map<number, Map<number, number>>;
     vehicleTargets: Map<number, Map<number, number>>;
     shapeshiftTargets: Map<number, Map<number, number>>;
+    /** Format 50's masks, keyed the way every other category is: spell -> the
+     *  row's own id (a tint id, a percent, a channel) -> mask. Empty on an
+     *  older pack, which is how "the pack has no answer" reads. */
+    tintTargets: Map<number, Map<number, number>>;
+    transparencyTargets: Map<number, Map<number, number>>;
+    desaturateTargets: Map<number, Map<number, number>>;
+    invisTargets: Map<number, Map<number, number>>;
+    detectTargets: Map<number, Map<number, number>>;
     screenTargets: Map<number, Map<number, number>>;
 
     spellSounds: Map<number, { soundKitId: number; fid: number; targets: number }[]>;
@@ -708,7 +721,7 @@ export interface SpellData {
     spellBonesets: Map<number, string[]>;
     /** Animation replacements: spell -> [{src,dst}] pairs, and each anim id
      *  (either side) -> the spells whose swaps touch it. */
-    spellReplaceAnims: Map<number, { src: number; dst: number }[]>;
+    spellReplaceAnims: Map<number, { src: number; dst: number; mask: number }[]>;
     replaceSpells: Map<number, Set<number>>;
     /** Animations the kits play directly (SpellVisualAnim) — loose pills. */
     spellVisualAnims: Map<number, number[]>;
@@ -888,9 +901,12 @@ export interface SpellData {
     scaleSearchL: Map<number, string>;
     scaleTargets: Map<number, Map<number, number>>;
 
-    /** spell id -> [animId] the rider plays; the "passenger" anim group. */
-    spellPassengerAnims: Map<number, number[]>;
+    /** spell id -> the rider's animations, each with the role it plays in;
+     *  the "passenger" anim group. `role` indexes {@link passengerRoleNames},
+     *  and is -1 on a pack older than format 50. */
+    spellPassengerAnims: Map<number, { anim: number; role: number }[]>;
     passengerAnimSpells: Map<number, number[]>;
+    passengerRoleNames: Record<number, string>;
 
     /** spell id -> [overrideId] the keybind fx category renders. */
     spellKeybinds: Map<number, number[]>;
@@ -1283,6 +1299,14 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // already on the pill (it rides spellScaleMods); this indexes it the way
     // every other category is indexed, so the SEARCH can read it too
     const scaleTargets = maskIndex(pack.spellScales, "percents");
+    // Format 50 carries a mask on the families that always had one to carry:
+    // a tint, a fade and a drain are aimed like every other overlay, and an
+    // invisibility channel like every other aura.
+    const tintTargets = maskIndex(pack.spellTints, "tintIds");
+    const transparencyTargets = maskIndex(pack.spellTransparencies, "percents");
+    const desaturateTargets = maskIndex(pack.spellDesaturates, "percents");
+    const invisTargets = maskIndex(pack.spellInvis, "types");
+    const detectTargets = maskIndex(pack.spellDetects, "types");
     // mask bit -> search word
     const targetNames = pack.targetNames || NO_WORDS;
 
@@ -1702,13 +1726,17 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // plus the word "replace" itself. ("stance" was the proc-7 form's name
     // before the merge and is NOT an alias — it is in no corpus and
     // anim:stance returns nothing.)
-    const spellReplaceAnims = new Map<number, { src: number; dst: number }[]>();
+    const spellReplaceAnims =
+        new Map<number, { src: number; dst: number; mask: number }[]>();
     const replaceSpells = new Map<number, Set<number>>(); // animId (either side) -> spell ids
     if (pack.spellReplaceAnims) {
-        const {spellIds, srcAnims, dstAnims} = pack.spellReplaceAnims;
+        const {spellIds, srcAnims, dstAnims, targets} = pack.spellReplaceAnims;
         for (let i = 0; i < spellIds.length; i++) {
             const s = spellIds[i], src = srcAnims[i], dst = dstAnims[i];
-            pushTo(spellReplaceAnims, s, {src, dst});
+            // The mask rides the entry rather than a parallel index, because a
+            // replacement is keyed by BOTH animations and every other index is
+            // keyed by one id.
+            pushTo(spellReplaceAnims, s, {src, dst, mask: targets ? targets[i] : 0});
             for (const a of [src, dst]) {
                 let set = replaceSpells.get(a);
                 if (!set) replaceSpells.set(a, set = new Set());
@@ -2213,12 +2241,14 @@ export function buildIndexes(pack: SpellPack): SpellData {
 
     // the rider's own animations while entering/seated/exiting — their own
     // "passenger" group in the Animations column
-    const spellPassengerAnims = new Map<number, number[]>(); // spell id -> [animId]
+    const spellPassengerAnims = new Map<number, { anim: number; role: number }[]>();
     const passengerAnimSpells = new Map<number, number[]>(); // animId -> [spell id]
+    const passengerRoleNames = pack.passengerRoleNames || NO_WORDS;
     if (pack.spellPassengerAnims) {
-        const {spellIds, animIds} = pack.spellPassengerAnims;
+        const {spellIds, animIds, roles} = pack.spellPassengerAnims;
         for (let i = 0; i < spellIds.length; i++) {
-            pushTo(spellPassengerAnims, spellIds[i], animIds[i]);
+            pushTo(spellPassengerAnims, spellIds[i],
+                {anim: animIds[i], role: roles ? roles[i] : -1});
             pushTo(passengerAnimSpells, animIds[i], spellIds[i]);
         }
     }
@@ -2268,6 +2298,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         targetNames, animKitTargets, visualAnimTargets, fxTargets,
         dissolveTargets, glowTargets, shadowyTargets, ghostMatTargets,
         morphTargets, summonTargets, objectTargets, vehicleTargets, shapeshiftTargets,
+        tintTargets, transparencyTargets, desaturateTargets, invisTargets, detectTargets,
         screenTargets,
         spellMounts, mountSpells, mountNames, mountFids, mountSearchL,
         spellObjects, objectSpells, objectNames, objectFids, objectTypes, objectSearchL,
@@ -2280,7 +2311,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellInvisTypes, spellDetectTypes, invisTypeSpells, detectTypeSpells,
         spellSpeedMods, speedSpells, speedSearchL, speedPercents,
         spellScaleMods, scaleSpells, scaleSearchL, scaleTargets,
-        spellPassengerAnims, passengerAnimSpells,
+        spellPassengerAnims, passengerAnimSpells, passengerRoleNames,
         spellKeybinds, keybindSpells, keybinds, keybindSearchL, keybindTargets,
         spellTriggers, spellOrigins,
         triggersSpells, triggersSearchL, originSpells, originSearchL,

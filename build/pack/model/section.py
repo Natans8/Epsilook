@@ -139,6 +139,17 @@ class Domain:
     key: str
     compute: Callable[[SectionColumns, Reads], Mapping[str, object] | None]
 
+    unit: str = ""
+    """What the numbers in the column ARE, where they are not a bare count.
+
+    A cast time ships in milliseconds and a scale change in signed percent,
+    and every consumer that prints one used to carry its own divisor -- three
+    copies of one fact, which is three chances to disagree. Declared here, the
+    axis says it once and a reader converts from what it was told.
+
+    Empty means the values need no conversion: a count, an id, an index.
+    """
+
 
 @dataclass(frozen=True)
 class Section:

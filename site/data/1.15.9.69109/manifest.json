@@ -1,11 +1,11 @@
 {
   "pack": "1.15.9.69109",
   "meta": {
-    "format": 49,
+    "format": 50,
     "version": "1.15.9.69109",
     "label": "Vanilla Classic 1.15.9",
     "built": "2026-08-15",
-    "listfileTag": "202608131431",
+    "listfileTag": "202608142148",
     "tdbTag": "",
     "absentTables": [
       "BarrageEffect",
@@ -186,7 +186,8 @@
         "ui": "picker",
         "values": [
           100
-        ]
+        ],
+        "unit": "%"
       },
       "transparency": {
         "n": 256,
@@ -217,7 +218,8 @@
           85,
           90,
           100
-        ]
+        ],
+        "unit": "%"
       },
       "casttime": {
         "n": 7273,
@@ -234,7 +236,8 @@
         "modeShare": 0.4191,
         "signed": false,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "channel": {
         "n": 385,
@@ -251,7 +254,8 @@
         "modeShare": 0.1662,
         "signed": false,
         "sentinels": 114,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "count.mech": {
         "n": 31246,
@@ -370,7 +374,8 @@
         "modeShare": 0.1891,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "scale": {
         "n": 193,
@@ -387,7 +392,8 @@
         "modeShare": 0.1451,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "count.sound": {
         "n": 18349,
@@ -410,12 +416,12 @@
   },
   "modules": {
     "core": {
-      "file": "data/modules/core-cfa6d72ba484.json.gz",
-      "bytes": 684238
+      "file": "data/modules/core-d6b37e3926b8.json.gz",
+      "bytes": 684936
     },
     "universal": {
-      "file": "data/modules/universal-0bd164ea1731.json.gz",
-      "bytes": 24728
+      "file": "data/modules/universal-d9f655b66417.json.gz",
+      "bytes": 24759
     },
     "names": {
       "file": "data/modules/names-ce7f74416cdf.json.gz",

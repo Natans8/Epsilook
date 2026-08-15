@@ -121,10 +121,18 @@ def test_an_unmasked_payload_keeps_no_audience(tables: BuildTables) -> None:
     """Override names reach the search corpus and never the screen, so who the
     spell was aimed at says nothing about them."""
     rows = read(tables, effect_rows(
-        f"100,{EFFECT_APPLY_AURA},{AURA_OVERRIDE_NAME},7,0,1,0,0,0,0",
-        f"100,{EFFECT_APPLY_AURA},{AURA_ANIM_REPLACEMENT_SET},8,0,1,0,0,0,0"))
+        f"100,{EFFECT_APPLY_AURA},{AURA_OVERRIDE_NAME},7,0,1,0,0,0,0"))
     assert rows.altnames == {100: {7}}
-    assert rows.anim_sets == {100: {8}}
+
+
+def test_a_replacement_set_carries_who_its_aura_was_aimed_at(
+        tables: BuildTables) -> None:
+    """A swapped animation is a row like any other, so it can be asked who it
+    plays on rather than being the one animation family that cannot answer."""
+    rows = read(tables, effect_rows(
+        f"100,{EFFECT_APPLY_AURA},{AURA_ANIM_REPLACEMENT_SET},8,0,1,0,0,0,0"))
+    assert rows.anim_sets.ids == {100: {8}}
+    assert rows.anim_sets.masks == {(100, 8): TARGET_CASTER}
 
 
 def test_a_summon_carries_its_control_word_but_is_masked_by_creature(

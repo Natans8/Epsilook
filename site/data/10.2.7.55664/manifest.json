@@ -1,11 +1,11 @@
 {
   "pack": "10.2.7.55664",
   "meta": {
-    "format": 49,
+    "format": 50,
     "version": "10.2.7.55664",
     "label": "Dragonflight 10.2.7",
     "built": "2026-08-15",
-    "listfileTag": "202608131431",
+    "listfileTag": "202608142148",
     "tdbTag": "TDB1027.24051",
     "absentTables": [],
     "counts": {
@@ -104,7 +104,7 @@
       "spellVehicles": 293,
       "vehicles": 237,
       "vehicleSeats": 419,
-      "spellPassengerAnims": 1397,
+      "spellPassengerAnims": 1899,
       "spellVehicleAnims": 84,
       "spellVehicleAnimKits": 49
     },
@@ -220,7 +220,8 @@
           90,
           95,
           100
-        ]
+        ],
+        "unit": "%"
       },
       "transparency": {
         "n": 1827,
@@ -263,7 +264,8 @@
           95,
           99,
           100
-        ]
+        ],
+        "unit": "%"
       },
       "casttime": {
         "n": 57426,
@@ -280,7 +282,8 @@
         "modeShare": 0.3041,
         "signed": false,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "channel": {
         "n": 9510,
@@ -297,7 +300,8 @@
         "modeShare": 0.1431,
         "signed": false,
         "sentinels": 6243,
-        "ui": "range"
+        "ui": "range",
+        "unit": "ms"
       },
       "count.mech": {
         "n": 326918,
@@ -365,7 +369,8 @@
         "modeShare": 0.1819,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "scale": {
         "n": 3767,
@@ -382,7 +387,8 @@
         "modeShare": 0.1245,
         "signed": true,
         "sentinels": 0,
-        "ui": "range"
+        "ui": "range",
+        "unit": "%"
       },
       "count.sound": {
         "n": 139521,
@@ -432,12 +438,12 @@
   },
   "modules": {
     "core": {
-      "file": "data/modules/core-e09636ea2fc5.json.gz",
-      "bytes": 9448566
+      "file": "data/modules/core-d673527c2485.json.gz",
+      "bytes": 9453350
     },
     "universal": {
-      "file": "data/modules/universal-0bd164ea1731.json.gz",
-      "bytes": 24728
+      "file": "data/modules/universal-d9f655b66417.json.gz",
+      "bytes": 24759
     },
     "names": {
       "file": "data/modules/names-98f3ae46f61b.json.gz",

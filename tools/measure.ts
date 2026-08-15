@@ -32,11 +32,11 @@
 import {readFileSync} from "node:fs";
 import {fileURLToPath} from "node:url";
 import {dirname, resolve} from "node:path";
-import {gunzipSync} from "node:zlib";
 import {parseArgs} from "node:util";
 
 import {buildIndexes} from "../src/data";
 import type {PackDomain, SpellData, SpellPack, VersionEntry} from "../src/data";
+import {readPack} from "./packfile";
 import {groupsOf, parseQueryParts} from "../src/query";
 import {searchGroups} from "../src/search";
 import "../src/pilltypes";     // side effect: registers every pill type
@@ -236,8 +236,7 @@ const n = (x: number): string =>
 const report: Record<string, unknown>[] = [];
 
 for (const entry of wanted) {
-    const pack: SpellPack = JSON.parse(
-        gunzipSync(readFileSync(resolve(ROOT, "site", entry.file))).toString("utf8"));
+    const pack: SpellPack = readPack(entry);
     const label = entry.label || entry.id;
     const counts = pack.meta.counts;
     const rec: Record<string, unknown> = {

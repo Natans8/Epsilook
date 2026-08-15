@@ -452,8 +452,23 @@ class Dossier:
                     }
         return d
 
+    RIDER_ANIM_COLUMNS = {
+        "EnterAnimStart": "enter", "EnterAnimLoop": "enter",
+        "RideAnimStart": "sit", "RideAnimLoop": "sit",
+        "RideUpperAnimStart": "sit", "RideUpperAnimLoop": "sit",
+        "ExitAnimStart": "exit", "ExitAnimLoop": "exit", "ExitAnimEnd": "exit",
+    }
+    """The rider's animation columns under the role each plays in.
+
+    The same split the pack ships as `spellPassengerAnims.roles`. Repeated
+    rather than imported because no tool may reach into the build package, and
+    a dossier that named the columns without the roles would describe a seat
+    the pack no longer describes that way.
+    """
+
     def vehicle(self, vid: Any) -> dict[str, Any] | None:
-        """Vehicle -> its seats -> the M2 attachment each rider hangs off."""
+        """Vehicle -> its seats -> the M2 attachment each rider hangs off, and
+        what the rider plays entering, seated and leaving."""
         if not vid:
             return None
         d: dict[str, Any] = {"vehicle_id": int(vid), "seats": []}
@@ -466,8 +481,14 @@ class Dossier:
                 continue
             s = self.rows('SELECT * FROM {V}."VehicleSeat" WHERE "ID"=?', seat_id)
             if s:
+                played: dict[str, list[int]] = {}
+                for column, role in self.RIDER_ANIM_COLUMNS.items():
+                    anim = int(s[0].get(column) or 0)
+                    if anim > 0 and anim not in played.setdefault(role, []):
+                        played[role].append(anim)
                 d["seats"].append({"seat_id": seat_id,
-                                   "attachment": self._attach(s[0].get("AttachmentID"))})
+                                   "attachment": self._attach(s[0].get("AttachmentID")),
+                                   "rider_anims": played})
         return d
 
     def shapeshift(self, fid: Any) -> dict[str, Any] | None:
@@ -1265,6 +1286,9 @@ def show(d: dict[str, Any], full: bool = False) -> None:
             for seat in (ent.get("seats") or [])[:cap]:
                 print(f"           seat {seat['seat_id']} at "
                       f"{(seat.get('attachment') or {}).get('name', '?')}")
+                for role, anims in (seat.get("rider_anims") or {}).items():
+                    print(f"             rider {role}: "
+                          + ", ".join(str(anim) for anim in anims))
         if x.get("summon_properties"):
             sp = x["summon_properties"]
             print(f"        -> summon properties: "
