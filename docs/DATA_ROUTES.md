@@ -438,8 +438,9 @@ flowchart TD
     end
     subgraph B["2 · Link rows: one per (spell, payload)"]
         B1["spellMorphs<br/>spellIds · creatureIds · targets"]
-        B2["spellModels<br/>spellIds · fids · cats · targets<br/>srcAttach · dstAttach · refIds · motions"]
-        B3["spellSounds<br/>spellIds · soundKitIds · fids · targets"]
+    end
+    subgraph R["2b · Row tables: pooled rows, referenced per spell"]
+        R1["modelRows · soundRows · animRows<br/>kinds · sizes · values · vocab · absent<br/>counts (per spell) · refs (flat)"]
     end
     subgraph C["3 · Value tables the links point into"]
         C1["morphs<br/>creatureIds · names"]
@@ -447,16 +448,18 @@ flowchart TD
         C3["soundKitNames<br/>soundKitIds · names"]
     end
     A1 -. "spellIds index back into the dense columns" .-> B
+    A1 -. "counts is parallel to the dense columns" .-> R
     B1 --> C1
-    B2 --> C2
-    B3 --> C2
-    B3 --> C3
+    R1 --> C2
+    R1 --> C3
 
     classDef dense fill:#60a5fa18,stroke:#60a5fa,stroke-width:2px
     classDef link fill:#4ade8018,stroke:#4ade80,stroke-width:2px
     classDef value fill:#fbbf2418,stroke:#fbbf24,stroke-width:2px
+    classDef row fill:#c084fc18,stroke:#c084fc,stroke-width:2px
     class A1 dense
-    class B1,B2,B3 link
+    class B1 link
+    class R1 row
     class C1,C2,C3 value
 ```
 
@@ -464,6 +467,7 @@ flowchart TD
 |-----------------|-------------------------------------------------------------------------------------------------|
 | **dense**       | One entry per spell, so the row index *is* the spell. No key to look up while rendering a table |
 | **link rows**   | The many-to-many the graph walk flattened, with the target mask on the row that earned it       |
+| **row tables**  | What a spell HAS, as rows of a named kind: the distinct rows pooled once, referenced per spell  |
 | **value table** | A name or path stored once and referenced by id, instead of repeated on every link row          |
 
 Columns are parallel arrays rather than a list of objects, because the app wants a whole column at a time and repeated
@@ -471,7 +475,7 @@ keys cost more than they explain. What each column costs to store is decided in 
 that decision and its measurement live.
 
 **The inversion is the point.** At the source, "which spells show a sheep" is unanswerable without walking every spell.
-As shipped, it is one lookup in `files`, one scan of `spellModels`, and the answer is a list of spell ids.
+As shipped, it is one lookup in `files`, one scan of `modelRows`, and the answer is a list of spell ids.
 
 ## Provide
 
@@ -647,10 +651,10 @@ the route that knows what a type means is the one that decided, and the walk doe
 
 | route          | ends at                                             | ships as                                                                                            |
 |----------------|-----------------------------------------------------|-----------------------------------------------------------------------------------------------------|
-| **models**     | A model file plus the category naming its kind      | `spellModels`, `files`                                                                              |
-| **missiles**   | A projectile, its flight path and its two anchors   | `spellModels`, `missileMotions`                                                                     |
-| **sounds**     | A sound kit, and through it the audio files         | `spellSounds`, `soundKitNames`                                                                      |
-| **animations** | An animation, an anim kit, or a body region         | `spellAnimKits`, `animKitAnims`, `animNames`, `bonesetNames`, `animEmoteOneshots`, `animEmoteLoops` |
+| **models**     | A model file plus the category naming its kind      | `modelRows`, `files`                                                                              |
+| **missiles**   | A projectile, its flight path and its two anchors   | `modelRows`, `missileMotions`                                                                     |
+| **sounds**     | A sound kit, and through it the audio files         | `soundRows`, `soundKitNames`                                                                      |
+| **animations** | An animation, an anim kit, or a body region         | `animRows`, `animKitAnims`, `animNames`, `bonesetNames`, `animEmoteOneshots`, `animEmoteLoops` |
 | **chains**     | A beam: colour, textures, a sound, nested chains    | `spellFx`, `fxChains`, `fxTextures`                                                                 |
 | **dissolves**  | A duration, textures and an anchor                  | `spellDissolves`, `dissolves`                                                                       |
 | **glows**      | A packed colour and an alpha                        | `spellGlows`, `glows`                                                                               |
@@ -754,17 +758,17 @@ effect and aura remains searchable and the mechanics column is always the whole 
 | screen-effect aura     | a screen effect   | `spellScreens`                              |
 | invisibility auras     | a channel number  | `spellInvis`, `spellDetects`                |
 | keybound-override aura | a key override    | `spellKeybinds`, `keybinds`                 |
-| anim-replacement aura  | a replacement set | `spellReplaceAnims`                         |
+| anim-replacement aura  | a replacement set | `animRows` (`replace`)                         |
 | override-name aura     | an override name  | folded into the search corpus               |
 | summon effect          | a creature        | `spellSummons`, `summons`                   |
 | gameobject effects     | a gameobject      | `spellObjects`, `objects`                   |
-| play-sound effects     | a sound kit       | folded into `spellSounds`                   |
+| play-sound effects     | a sound kit       | folded into `soundRows`                   |
 
 Four do not fit that shape:
 
 **A seat is reached through its vehicle, and a rider's animation carries the role it plays in.** The seat spells each
 act as a start, a loop and sometimes an end — nine columns for three acts — so the pack ships the act rather than the
-column: `spellPassengerAnims.roles` indexes `passengerRoleNames` (`enter`, `sit`, `exit`). One animation serving two
+column: a `passenger` row in `animRows` sets one property per role (`enter`, `sit`, `exit`). One animation serving two
 acts is two rows, because which act it belongs to is the question being asked; that is why the section counts more rows
 than it has distinct animations. The vehicle's own animations and the seat's anim kits stay separate sets: folding them
 together would file a mount's movement under what its passenger is doing.

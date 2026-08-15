@@ -5,6 +5,8 @@
  * This module also owns the two data shapes that flow through the app:
  * the JSON pack baked by build/build_data.py (SpellPack) and the in-memory
  * indexes built from it (SpellData). */
+import type {RowTable, VocabWhere} from "./packrows";
+import {distinct, expand, passengerRows} from "./packrows";
 import {hexColor} from "./util";
 
 /* ----------------------------------------------------------- the pack */
@@ -127,20 +129,18 @@ export interface SpellPack {
      *  means a gameobject_template entry instead. */
     files: { fids: number[]; paths: string[]; gobs?: number[] };
 
-    /** Spell -> model file; cats (format 15+) = usage category per row. */
-    spellModels: {
-        spellIds: number[]; fids: number[]; cats?: number[]; targets?: number[];
-        /** Raw M2 attachment ids, -1 = unset (pack format 24+). Attached models
-         *  use src only; missiles use both (launch -> impact). */
-        srcAttach?: number[]; dstAttach?: number[];
-        /** Ref id: CreatureDisplayID (display cat) or Item::ID (item cat), 0 else
-         *  (format 28+). Format 27 shipped it as displayIds (display rows only). */
-        refIds?: number[]; displayIds?: number[]
-        /** SpellMissileMotion id, 0 = none (format 34+). Missile rows only —
-         *  the arc the projectile flies. Part of the row key like the attach
-         *  pair, so one model flown two ways is two rows. */
-        motions?: number[]
-    };
+    /** Per column, the rows a spell has (format 51+): the distinct rows of each
+     *  kind pooled once, and per spell how many it has and which they are.
+     *  `src/packrows.ts` reads them; the legacy per-spell sections they replaced
+     *  (spellModels, spellSounds, spellAnimKits, spellVisualAnims,
+     *  spellReplaceAnims, spellPassengerAnims, spellMounts) are gone. */
+    modelRows: RowTable;
+    soundRows: RowTable;
+    animRows: RowTable;
+    /** Where each row property's vocabulary lives, and how it is keyed. */
+    rowVocabs?: Record<string, VocabWhere>;
+    /** The weapon slot each fileless model marker stands for. */
+    equippedSlots?: { fids: number[]; slots: string[] };
     /** Flight paths "motions" points at (format 34+), parallel by motion id. */
     missileMotions?: { ids: number[]; names: string[] };
     /** Items reached by "item"-category rows (format 28+), parallel by item id.
@@ -156,9 +156,6 @@ export interface SpellPack {
     /** mask bit -> search word ("caster"/"target"/"area"); format 22+ */
     targetNames?: Record<number, string>;
 
-    /** Spell -> (SoundKit, sound file) rows. */
-    spellSounds: { spellIds: number[]; soundKitIds: number[]; fids: number[]; targets?: number[] };
-
     /**
      * Human names for the sound kits this pack reaches, from the pinned 8.3.0
      * `SoundKitName` (see build_data.SOUNDKITNAME_BUILD). Sparse on purpose —
@@ -167,7 +164,6 @@ export interface SpellPack {
      */
     soundKitNames?: { soundKitIds: number[]; names: string[] };
 
-    spellAnimKits: { spellIds: number[]; animKitIds: number[]; targets?: number[] };
     /** Animation names indexed by AnimID. */
     animNames: string[];
     /** The Epsilon emote that performs each animation, indexed by AnimID like
@@ -905,6 +901,15 @@ export interface SpellData {
      *  the "passenger" anim group. `role` indexes {@link passengerRoleNames},
      *  and is -1 on a pack older than format 50. */
     spellPassengerAnims: Map<number, { anim: number; role: number }[]>;
+
+    /**
+     * The pack's row tables, by column key, and the vocabularies their properties resolve through.
+     *
+     * Carried untouched for the readers that want rows rather than the maps above. Nothing in 1.0 reads them; search
+     * 2.0 evaluates them directly, which is what makes a row source a read rather than a reshape.
+     */
+    rowTables: Record<string, RowTable>;
+    rowVocabs: Record<string, (value: number) => string | undefined>;
     passengerAnimSpells: Map<number, number[]>;
     passengerRoleNames: Record<number, string>;
 
@@ -1041,6 +1046,90 @@ export function buildIndexes(pack: SpellPack): SpellData {
             .filter(Boolean).join(" ").toLowerCase();
     }
 
+    // The pack ships rows now (format 51+): per column, the distinct rows of
+    // each kind pooled once, and per spell which of them it has. Every reader
+    // below was written against the old per-spell sections, so the rows are put
+    // back into exactly those arrays here, once — the same walk `buildIndexes`
+    // did anyway, one step earlier. PHASE 14 deletes the readers and this with
+    // them; nothing new should be written against these shapes.
+    // Kind word -> the category number the readers below switch on, read off
+    // the pack's own `modelCatNames` rather than restated here. The unnamed
+    // category is the plain attached model, and the carried weapon shares it:
+    // the row model tells them apart by the file being a slot marker, which is
+    // a distinction the category number never carried.
+    const catOf: Record<string, number> = {};
+    for (const [cat, word] of Object.entries(pack.modelCatNames || NO_WORDS)) {
+        catOf[word || "attached"] = Number(cat);
+    }
+    catOf.equipped = catOf.attached;
+
+    const NO_ATTACH = {missing: -1};
+    const NONE = {missing: 0};
+    const modelColumns = expand(pack.modelRows, sp.ids, {
+        kinds: catOf,
+        cats: true,
+        columns: {
+            // A carried weapon's file is the slot marker it points at, which is
+            // the `slot` property here and was always a negative file id there.
+            fids: {from: ["file", "slot"], ...NONE},
+            targets: {from: ["target"], ...NONE},
+            srcAttach: {from: ["from", "attach"], ...NO_ATTACH},
+            dstAttach: {from: ["to"], ...NO_ATTACH},
+            refIds: {from: ["id"], ...NONE},
+            motions: {from: ["motion"], ...NONE},
+        },
+    });
+    const spellSoundRows = expand(pack.soundRows, sp.ids, {
+        kinds: {sound: 0},
+        columns: {
+            soundKitIds: {from: ["kit"], ...NONE}, fids: {from: ["file"], ...NONE},
+            targets: {from: ["target"], ...NONE},
+        },
+    });
+    const spellAnimKitRows = distinct(pack.animRows, sp.ids, "kit", "id", {targets: "target"});
+    const spellLooseAnims = expand(pack.animRows, sp.ids, {
+        kinds: {loose: 0},
+        columns: {animIds: {from: ["anim"], ...NONE}, targets: {from: ["target"], ...NONE}},
+    });
+    const spellReplacements = expand(pack.animRows, sp.ids, {
+        kinds: {replace: 0},
+        columns: {
+            srcAnims: {from: ["from"], ...NONE}, dstAnims: {from: ["to"], ...NONE},
+            targets: {from: ["target"], ...NONE},
+        },
+    });
+    const spellMountRows = expand(pack.modelRows, sp.ids, {
+        kinds: {mount: 0}, columns: {displayIds: {from: ["name"], ...NONE}},
+    });
+    const spellPassengers = passengerRows(
+        pack.animRows, sp.ids, Object.values(pack.passengerRoleNames || NO_WORDS));
+
+    // The row tables themselves, carried through untouched for the readers that
+    // want rows rather than the columns above: search 2.0 evaluates these.
+    // Each vocabulary becomes one lookup from a stored number to its text, in
+    // whichever of the two shapes the pack says it is — two parallel columns, or
+    // a section indexed by the number itself.
+    const rowTables: Record<string, RowTable> = {
+        model: pack.modelRows, sound: pack.soundRows, anim: pack.animRows,
+    };
+    const rowVocabs: Record<string, (value: number) => string | undefined> = {};
+    for (const [name, where] of Object.entries(pack.rowVocabs || {})) {
+        const section = (pack as unknown as Record<string, unknown>)[where.in];
+        if (!section) continue;
+        if (where.keys !== undefined && where.values !== undefined) {
+            const block = section as Record<string, unknown>;
+            const keys = block[where.keys] as number[] | undefined;
+            const values = block[where.values] as string[] | undefined;
+            if (!keys || !values) continue;
+            const byKey = new Map<number, string>();
+            for (let i = 0; i < keys.length; i++) byKey.set(keys[i], values[i]);
+            rowVocabs[name] = (value) => byKey.get(value);
+        } else {
+            const direct = section as Record<number, string>;
+            rowVocabs[name] = (value) => direct[value];
+        }
+    }
+
     // §3x the cooked prose. It ships deduped and STAYS deduped — nothing is
     // expanded per spell and nothing is folded to lowercase, so the whole
     // section costs the two arrays the pack already contains. A pack older
@@ -1150,7 +1239,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // gate and its value-matching pool (format 34+; empty on older packs)
     const missileMotionNames = pack.missileMotions ? pack.missileMotions.names : [];
     {
-        const sm = pack.spellModels;
+        const sm = modelColumns;
         const {spellIds, fids, cats, targets, srcAttach, dstAttach} = sm;
         // ref id per row: the entity the model came from, in the id space its
         // category names (a CreatureDisplayID on display rows, an Item::ID on
@@ -1247,7 +1336,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const soundKitFiles = new Map<number, Set<number>>(); // soundKitId -> Set(fid)
     const soundKitName = new Map<number, string>();     // soundKitId -> human name
     {
-        const {spellIds, soundKitIds, fids, targets} = pack.spellSounds;
+        const {spellIds, soundKitIds, fids, targets} = spellSoundRows;
         for (let i = 0; i < spellIds.length; i++) {
             const s = spellIds[i], k = soundKitIds[i], f = fids[i];
             pushTo(spellSounds, s, {soundKitId: k, fid: f, targets: targets ? targets[i] : 0});
@@ -1278,8 +1367,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
 
     // target masks for the id-keyed sections — who each row's content plays
     // on (pack format 22; empty for older packs, which renders as no icons)
-    const animKitTargets = maskIndex(pack.spellAnimKits, "animKitIds");
-    const visualAnimTargets = maskIndex(pack.spellVisualAnims, "animIds");
+    const animKitTargets = maskIndex(spellAnimKitRows, "id");
+    const visualAnimTargets = maskIndex(spellLooseAnims, "animIds");
     const fxTargets = maskIndex(pack.spellFx, "chainIds");
     const dissolveTargets = maskIndex(pack.spellDissolves, "dissolveIds");
     const glowTargets = maskIndex(pack.spellGlows, "glowIds");
@@ -1314,7 +1403,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const spellAnimKits = new Map<number, number[]>(); // spell id -> [animKitId]
     const animKitSpells = new Map<number, number[]>(); // animKitId -> [spell id]
     {
-        const {spellIds, animKitIds} = pack.spellAnimKits;
+        const {spellIds, id: animKitIds} = spellAnimKitRows;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellAnimKits, spellIds[i], animKitIds[i]);
             pushTo(animKitSpells, animKitIds[i], spellIds[i]);
@@ -1729,8 +1818,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const spellReplaceAnims =
         new Map<number, { src: number; dst: number; mask: number }[]>();
     const replaceSpells = new Map<number, Set<number>>(); // animId (either side) -> spell ids
-    if (pack.spellReplaceAnims) {
-        const {spellIds, srcAnims, dstAnims, targets} = pack.spellReplaceAnims;
+    {
+        const {spellIds, srcAnims, dstAnims, targets} = spellReplacements;
         for (let i = 0; i < spellIds.length; i++) {
             const s = spellIds[i], src = srcAnims[i], dst = dstAnims[i];
             // The mask rides the entry rather than a parallel index, because a
@@ -1750,8 +1839,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // rendered as loose pills in the Animations column
     const spellVisualAnims = new Map<number, number[]>(); // spell id -> [animId]
     const visualAnimSpells = new Map<number, number[]>(); // animId -> [spell id]
-    if (pack.spellVisualAnims) {
-        const {spellIds, animIds} = pack.spellVisualAnims;
+    {
+        const {spellIds, animIds} = spellLooseAnims;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellVisualAnims, spellIds[i], animIds[i]);
             pushTo(visualAnimSpells, animIds[i], spellIds[i]);
@@ -1968,8 +2057,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const mountNames = new Map<number, string>();    // displayId -> mount name ("" = unnamed)
     const mountFids = new Map<number, number>();     // displayId -> model fid (0 = unresolved)
     const mountSearchL = new Map<number, string>();  // displayId -> search corpus
-    if (pack.spellMounts) {
-        const {spellIds, displayIds} = pack.spellMounts;
+    {
+        const {spellIds, displayIds} = spellMountRows;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellMounts, spellIds[i], displayIds[i]);
             pushTo(mountSpells, displayIds[i], spellIds[i]);
@@ -2244,8 +2333,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const spellPassengerAnims = new Map<number, { anim: number; role: number }[]>();
     const passengerAnimSpells = new Map<number, number[]>(); // animId -> [spell id]
     const passengerRoleNames = pack.passengerRoleNames || NO_WORDS;
-    if (pack.spellPassengerAnims) {
-        const {spellIds, animIds, roles} = pack.spellPassengerAnims;
+    {
+        const {spellIds, animIds, roles} = spellPassengers;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellPassengerAnims, spellIds[i],
                 {anim: animIds[i], role: roles ? roles[i] : -1});
@@ -2272,6 +2361,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         iconNames, iconFids, iconOf,
         namesL, descriptionText, descriptionOf, auraText, auraOf, encounterText, encounterOf,
         spellIndex, files, hasSyntheticFiles,
+        rowTables, rowVocabs,
         spellModels, modelSpells, modelFids, attachmentNames,
         spellModelCats, modelCatSpells, modelCatFidSpells, modelCatNames,
         items, itemSearchL, itemSpells, itemCat, missileMotionNames,

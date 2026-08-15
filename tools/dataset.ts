@@ -12,14 +12,19 @@
  * here: an alternative name (SpellOverrideName) reaches 1.0's corpus but no 2.0 row, because SpellData folds it
  * into `namesL` and keeps no per-spell list to build a row from.
  */
+import type {RowAt, RowIndex, RowTable} from "../src/packrows";
+import {indexRows, storedAt} from "../src/packrows";
 import type {SpellData, VersionEntry} from "../src/data";
 import {buildIndexes, DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED} from "../src/data";
 import {pickVersion, readPack} from "./packfile";
 
-import type {Ask, Column, Dataset, Kind, Row, RowTest, ScopeTerm, Stored, ValueExpr} from "../src/search/index";
+import type {
+    Ask, Column, Dataset, Kind, Row, RowSource, RowTest, ScopeTerm, Stored, ValueExpr,
+} from "../src/search/index";
 import {
     animColumn, catalogue, colour as colourType, COLOUR_NAMES, fold, fxColumn, id as idType, idColumn, KINDS,
     mechColumn, modelColumn, setOrdinalLadder, soundColumn, spellColumn, squash, TARGET_ROLES,
+    text as textType, wordOf,
 } from "../src/search/index";
 
 // The kinds this file builds rows for, under their own names. Taken off the catalogue rather than off the door, which
@@ -45,6 +50,85 @@ export function loadPack(want?: string): { data: SpellData; entry: VersionEntry 
 }
 
 const row = (kind: Kind, props: Record<string, Stored>): Row => ({kind, props});
+
+/* ------------------------------------------------------------------- the row tables, read */
+
+/**
+ * One column's rows, read out of the pack rather than rebuilt from it.
+ *
+ * The pack pools the distinct rows of each kind, so a materialised {@link Row} is cached per POOL SLOT and every spell
+ * that has that row shares the one object. The cache is therefore bounded by how many different rows the build has,
+ * not by how many times spells use them — measured on Shadowlands, 379 thousand against 1.73 million — and a second
+ * query over the same rows allocates nothing at all.
+ *
+ * This is what `Column.rows()` being a read means: the reshaping the bridge used to do per call happened in the build.
+ */
+class PackRowSource implements RowSource {
+    private readonly index: RowIndex;
+    private readonly built: (Row | undefined)[];
+
+    constructor(private readonly table: RowTable, private readonly kinds: Map<string, Kind>,
+                private readonly vocabs: Record<string, (value: number) => string | undefined>) {
+        this.index = indexRows(table);
+        this.built = Array.from<Row | undefined>({length: this.index.owner.length});
+    }
+
+    rows(spell: number): readonly Row[] {
+        const out: Row[] = [];
+        for (let i = this.index.at[spell]; i < this.index.at[spell + 1]; i++) {
+            const ref = this.table.refs[i];
+            out.push(this.built[ref] ??= this.materialise(this.index.owner[ref]));
+        }
+        return out;
+    }
+
+    /** How many rows the spell has, straight off the shipped counts. */
+    size(spell: number): number {
+        return this.table.counts[spell];
+    }
+
+    /**
+     * One pooled row as the kind it is.
+     *
+     * What a stored number MEANS is the catalogue's to say, never the pack's: a property whose first two notations are
+     * an id and a name carries both, one whose first notation is textual carries the text alone, and anything else is
+     * the number itself. That split is read off the declaration, so a property that gains a notation needs no edit
+     * here.
+     */
+    private materialise(at: RowAt): Row {
+        const kind = this.kinds.get(at.kind);
+        if (!kind) throw new Error(`pack ships rows of unknown kind "${at.kind}"`);
+        const props: Record<string, Stored> = {};
+        for (const [name, prop] of Object.entries(kind.props)) {
+            const stored = storedAt(this.table, at, name);
+            if (stored === undefined) continue;
+            const lookup = this.vocabs[this.table.vocab[at.kind]?.[name] ?? ""];
+            const text = lookup?.(stored);
+            if (prop.types[0] === idType && prop.types[1] === textType) {
+                props[name] = text === undefined ? stored : {id: stored, text};
+            } else if (lookup !== undefined) {
+                if (text !== undefined && text !== "") props[name] = text;
+            } else {
+                props[name] = stored;
+            }
+        }
+        return row(kind, props);
+    }
+}
+
+/**
+ * The kinds of one column, by the word the pack names them with.
+ *
+ * @throws If the pack ships a kind this build has no declaration for — a pack and a catalogue that disagree must fail
+ *   loudly, because the silent alternative is rows quietly vanishing from every answer.
+ */
+function kindsOf(column: Column): Map<string, Kind> {
+    const out = new Map<string, Kind>();
+    for (const kind of KINDS.values()) {
+        if (kind.column === column) out.set(wordOf(kind), kind);
+    }
+    return out;
+}
 
 /** A mask joins a row's props only when it says something: 0 means the pack has no answer, not "plays on nobody". */
 const withMask = (props: Record<string, Stored>, mask: number | undefined): Record<string, Stored> => {
@@ -113,102 +197,6 @@ function catKinds(d: SpellData): Map<number, Kind> {
         out.set(Number(cat), kind);
     }
     return out;
-}
-
-function modelRows(d: SpellData, i: number, cats: Map<number, Kind>): Row[] {
-    const id = d.ids[i];
-    const rows: Row[] = [];
-    for (const e of d.spellModelCats.get(id) ?? []) {
-        const kind = cats.get(e.cat) ?? attached;
-        const file = d.files.get(e.fid);
-        // A negative fid is the fileless weapon sentinel; its "path" is the label "equipped <slot>".
-        const anchor = e.src >= 0 ? d.attachmentNames[e.src] : "";
-        if (kind === attached && e.fid < 0 && file) {
-            const worn: Record<string, Stored> = {slot: file.path.replace(/^equipped\s+/, "")};
-            if (anchor) worn.attach = anchor;
-            rows.push(row(equipped, withMask(worn, e.targets)));
-            continue;
-        }
-        const props: Record<string, Stored> = {};
-        if (file) props.file = file.path;
-        if (kind === missile) {
-            if (anchor) props.from = anchor;
-            if (e.dst >= 0 && d.attachmentNames[e.dst]) props.to = d.attachmentNames[e.dst];
-            if (e.motion) props.motion = e.motion;
-        } else if (anchor) {
-            props.attach = anchor;
-        }
-        if ((kind === display || kind === item) && e.ref) props.id = e.ref;
-        if (kind === item) {
-            const named = d.items.get(e.ref)?.name;
-            if (named) props.name = named;
-        }
-        rows.push(row(kind, withMask(props, e.targets)));
-    }
-    for (const dsp of d.spellMounts.get(id) ?? []) {
-        const props: Record<string, Stored> = {};
-        const mountName = d.mountNames.get(dsp);
-        if (mountName) props.name = mountName;
-        const file = d.files.get(d.mountFids.get(dsp) ?? 0);
-        if (file) props.file = file.path;
-        rows.push(row(mount, props));
-    }
-    return rows;
-}
-
-function soundRows(d: SpellData, i: number): Row[] {
-    return (d.spellSounds.get(d.ids[i]) ?? []).map((e) => {
-        const props: Record<string, Stored> = {};
-        const file = d.files.get(e.fid);
-        if (file) props.file = file.path;
-        const kitName = d.soundKitName.get(e.soundKitId);
-        props.kit = kitName ? {id: e.soundKitId, text: kitName} : e.soundKitId;
-        return row(soundKind, withMask(props, e.targets));
-    });
-}
-
-function animRows(d: SpellData, i: number): Row[] {
-    const id = d.ids[i];
-    const rows: Row[] = [];
-    for (const kitId of d.spellAnimKits.get(id) ?? []) {
-        const mask = d.animKitTargets.get(id)?.get(kitId);
-        const anims = d.animKitAnims.get(kitId) ?? [];
-        if (anims.length === 0) {
-            rows.push(row(animKit, withMask({id: kitId}, mask)));
-            continue;
-        }
-        for (const animId of anims) {
-            const base: Record<string, Stored> = {id: kitId};
-            if (d.animNames[animId]) base.anim = d.animNames[animId];
-            const bonesets = d.animKitAnimBoneset.get(kitId)?.get(animId);
-            // One row per boneset: a region is answered by one row, not by a haystack of every region joined.
-            if (bonesets?.length) {
-                for (const boneset of bonesets) rows.push(row(animKit, withMask({...base, boneset}, mask)));
-            } else rows.push(row(animKit, withMask(base, mask)));
-        }
-    }
-    for (const animId of d.spellVisualAnims.get(id) ?? []) {
-        const props: Record<string, Stored> = {};
-        if (d.animNames[animId]) props.anim = d.animNames[animId];
-        rows.push(row(loose, withMask(props, d.visualAnimTargets.get(id)?.get(animId))));
-    }
-    for (const e of d.spellReplaceAnims.get(id) ?? []) {
-        const props: Record<string, Stored> = {};
-        if (d.animNames[e.src]) props.from = d.animNames[e.src];
-        if (d.animNames[e.dst]) props.to = d.animNames[e.dst];
-        rows.push(row(replace, withMask(props, e.mask)));
-    }
-    if (d.spellAttrs.get("preventsanim")?.has(id)) rows.push(row(pose, {}));
-    // One property per role, so `anim:{passenger sit:*}` asks a different question from `enter:*`. A pack older than
-    // format 50 carries no role and the row still exists, so `anim:passenger` and the column count keep answering.
-    for (const played of d.spellPassengerAnims.get(id) ?? []) {
-        const props: Record<string, Stored> = {};
-        const role = d.passengerRoleNames[played.role];
-        const named = d.animNames[played.anim];
-        if (role && named) props[role] = named;
-        rows.push(row(passenger, props));
-    }
-    return rows;
 }
 
 function fxRows(d: SpellData, i: number): Row[] {
@@ -716,11 +704,16 @@ export function packDataset(d: SpellData): Dataset {
     const builders = new Map<Column, (i: number) => Row[]>([
         [spellColumn, (i) => spellRows(d, i)],
         [idColumn, (i) => idRows(d, i)],
-        [modelColumn, (i) => modelRows(d, i, cats)],
-        [soundColumn, (i) => soundRows(d, i)],
-        [animColumn, (i) => animRows(d, i)],
         [fxColumn, (i) => fxRows(d, i)],
         [mechColumn, (i) => mechRows(d, i)],
+    ]);
+
+    // The three columns the pack ships as rows are read; the two that do not yet
+    // ship rows are still built per call, which is what remains of the bridge.
+    const packed = new Map<Column, RowSource>([
+        [modelColumn, new PackRowSource(d.rowTables.model, kindsOf(modelColumn), d.rowVocabs)],
+        [soundColumn, new PackRowSource(d.rowTables.sound, kindsOf(soundColumn), d.rowVocabs)],
+        [animColumn, new PackRowSource(d.rowTables.anim, kindsOf(animColumn), d.rowVocabs)],
     ]);
 
     let inverted: Inverted | null = null;
@@ -838,6 +831,8 @@ export function packDataset(d: SpellData): Dataset {
     return {
         spells: d.ids.length,
         source(column: Column) {
+            const read = packed.get(column);
+            if (read) return read;
             const build = builders.get(column);
             return build ? {rows: build} : null;
         },

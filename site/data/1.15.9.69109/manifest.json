@@ -1,7 +1,7 @@
 {
   "pack": "1.15.9.69109",
   "meta": {
-    "format": 50,
+    "format": 51,
     "version": "1.15.9.69109",
     "label": "Vanilla Classic 1.15.9",
     "built": "2026-08-15",
@@ -21,11 +21,8 @@
       "WeaponTrail"
     ],
     "counts": {
-      "spellAnimKits": 778,
       "animKitAnims": 233,
       "animKitAnimBoneset": 20,
-      "spellReplaceAnims": 160,
-      "spellVisualAnims": 27449,
       "animEmotes": 1730,
       "icons": 1673,
       "files": 2035,
@@ -33,7 +30,6 @@
       "spellMorphs": 330,
       "morphs": 272,
       "morphDisplays": 0,
-      "spellMounts": 0,
       "mounts": 0,
       "spellShapeshifts": 43,
       "shapeshiftDisplays": 12,
@@ -89,11 +85,6 @@
       "linkKinds": 19,
       "spellMechanics": 39554,
       "implicitTargets": 85,
-      "spellModels": 41037,
-      "spellDisplayModels": 23,
-      "spellItemModels": 36,
-      "spellMissileMotions": 278,
-      "spellWeaponModels": 0,
       "missileMotions": 37,
       "items": 18,
       "namedItems": 10,
@@ -102,9 +93,19 @@
       "spellDetects": 46,
       "spellSpeeds": 772,
       "spellScales": 193,
+      "spellModels": 41037,
+      "spellDisplayModels": 23,
+      "spellItemModels": 36,
+      "spellWeaponModels": 0,
+      "spellMissileMotions": 278,
+      "spellMounts": 0,
+      "spellSounds": 41848,
+      "spellAnimKits": 778,
+      "spellVisualAnims": 27449,
+      "spellReplaceAnims": 160,
+      "spellPassengerAnims": 0,
       "spellScreens": 55,
       "screens": 36,
-      "spellSounds": 41848,
       "soundKitNames": 431,
       "spells": 31249,
       "spellDescriptions": 17577,
@@ -116,34 +117,10 @@
       "spellVehicles": 0,
       "vehicles": 0,
       "vehicleSeats": 0,
-      "spellPassengerAnims": 0,
       "spellVehicleAnims": 0,
       "spellVehicleAnimKits": 0
     },
     "domains": {
-      "count.anim": {
-        "n": 693,
-        "min": 1,
-        "max": 4,
-        "distinct": 4,
-        "mean": 1.1227,
-        "median": 1,
-        "p1": 1,
-        "p99": 3,
-        "clipped": true,
-        "step": 1,
-        "mode": 1,
-        "modeShare": 0.9149,
-        "signed": false,
-        "sentinels": 0,
-        "ui": "picker",
-        "values": [
-          1,
-          2,
-          3,
-          4
-        ]
-      },
       "count.fx": {
         "n": 332,
         "min": 1,
@@ -298,39 +275,6 @@
           30
         ]
       },
-      "count.model": {
-        "n": 17159,
-        "min": 1,
-        "max": 14,
-        "distinct": 14,
-        "mean": 2.3916,
-        "median": 2,
-        "p1": 1,
-        "p99": 7,
-        "clipped": true,
-        "step": 1,
-        "mode": 1,
-        "modeShare": 0.4905,
-        "signed": false,
-        "sentinels": 0,
-        "ui": "picker",
-        "values": [
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7,
-          8,
-          9,
-          10,
-          11,
-          12,
-          13,
-          14
-        ]
-      },
       "invis": {
         "n": 58,
         "min": 0,
@@ -395,6 +339,39 @@
         "ui": "range",
         "unit": "%"
       },
+      "count.model": {
+        "n": 17159,
+        "min": 1,
+        "max": 14,
+        "distinct": 14,
+        "mean": 2.3916,
+        "median": 2,
+        "p1": 1,
+        "p99": 7,
+        "clipped": true,
+        "step": 1,
+        "mode": 1,
+        "modeShare": 0.4905,
+        "signed": false,
+        "sentinels": 0,
+        "ui": "picker",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14
+        ]
+      },
       "count.sound": {
         "n": 18349,
         "min": 1,
@@ -411,17 +388,41 @@
         "signed": false,
         "sentinels": 0,
         "ui": "range"
+      },
+      "count.anim": {
+        "n": 693,
+        "min": 1,
+        "max": 5,
+        "distinct": 5,
+        "mean": 1.1789,
+        "median": 1,
+        "p1": 1,
+        "p99": 3,
+        "clipped": true,
+        "step": 1,
+        "mode": 1,
+        "modeShare": 0.8701,
+        "signed": false,
+        "sentinels": 0,
+        "ui": "picker",
+        "values": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
       }
     }
   },
   "modules": {
     "core": {
-      "file": "data/modules/core-d6b37e3926b8.json.gz",
-      "bytes": 684936
+      "file": "data/modules/core-da702c3d3e76.json.gz",
+      "bytes": 539021
     },
     "universal": {
-      "file": "data/modules/universal-d9f655b66417.json.gz",
-      "bytes": 24759
+      "file": "data/modules/universal-a914182c91f9.json.gz",
+      "bytes": 24971
     },
     "names": {
       "file": "data/modules/names-ce7f74416cdf.json.gz",

@@ -19,7 +19,7 @@ from ..build import Build
 from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 
-PACK_FORMAT = 50
+PACK_FORMAT = 51
 """What shape the artifact is in.
 
 50 is the row reshape: a mask on every row the game aims somewhere, the role a

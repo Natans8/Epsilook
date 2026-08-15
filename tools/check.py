@@ -537,6 +537,46 @@ def check_format_declaration(rep: Report) -> None:
     rep.ok("pack format home", PACK_FORMAT_HOME)
 
 
+def pack_sections() -> tuple[dict[str, object] | None, str]:
+    """The default pack's sections, merged across its modules.
+
+    Read once here because two checks want it and each reading the module set
+    for itself is two accounts of what a pack is. A section SPLIT between core
+    and a locale module appears in both, so the merge is per column: replacing
+    one half with the other would report the missing half as unread.
+
+    Returns:
+        The sections keyed by name, or `None` with the reason a caller should
+        skip on.
+    """
+    if not MANIFEST.exists():
+        return None, "no versions.json"
+    entries = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    default = next((e for e in entries if e.get("default")),
+                   entries[0] if entries else None)
+    if not default:
+        return None, "no default pack"
+    manifest_path = SITE / default["file"]
+    if not manifest_path.exists():
+        return None, "default pack has no manifest"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    sections: dict[str, object] = {}
+    for module in manifest.get("modules", {}).values():
+        module_path = SITE / module["file"]
+        if (not module_path.exists()
+                or module_path.read_bytes()[:len(LFS_POINTER_MAGIC)] == LFS_POINTER_MAGIC):
+            return None, f"{module['file']} not smudged locally"
+        with gzip.open(module_path, "rt", encoding="utf-8") as fh:
+            for name, payload in json.load(fh).items():
+                held = sections.get(name)
+                sections[name] = ({**held, **payload}
+                                  if isinstance(held, dict) and isinstance(payload, dict)
+                                  else payload)
+    sections.pop("meta", None)
+    return sections, ""
+
+
 def check_pack_sections(rep: Report) -> None:
     """Every section the pack SHIPS must be named in src/data.ts.
 
@@ -545,33 +585,11 @@ def check_pack_sections(rep: Report) -> None:
     of it. Nothing errors — the column is simply empty forever. The pack is the
     artifact, so this reads the built file rather than parsing the builder.
     """
-    if not MANIFEST.exists():
-        rep.skip("pack sections", "no versions.json")
+    loaded, why = pack_sections()
+    if loaded is None:
+        rep.skip("pack sections", why)
         return
-    entries = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    default = next((e for e in entries if e.get("default")), entries[0] if entries else None)
-    if not default:
-        rep.skip("pack sections", "no default pack")
-        return
-    manifest_path = SITE / default["file"]
-    if not manifest_path.exists():
-        rep.skip("pack sections", "default pack has no manifest")
-        return
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-
-    # Across every module, because a section split between core and a locale
-    # module appears in both and reading one would report the other's half as
-    # unread.
-    sections: set[str] = set()
-    for module in manifest.get("modules", {}).values():
-        module_path = SITE / module["file"]
-        if (not module_path.exists()
-                or module_path.read_bytes()[:len(LFS_POINTER_MAGIC)] == LFS_POINTER_MAGIC):
-            rep.skip("pack sections", f"{module['file']} not smudged locally")
-            return
-        with gzip.open(module_path, "rt", encoding="utf-8") as fh:
-            sections |= set(json.load(fh))
-    sections -= {"meta"}
+    sections = set(loaded)
     source = (ROOT / "src" / "data.ts").read_text(encoding="utf-8")
     unread = sorted(s for s in sections if s not in source)
     if unread:
@@ -639,6 +657,106 @@ def strip_ts_noise(src: str) -> str:
             out.append(c)
             i += 1
     return "".join(out)
+
+
+def declared_kinds() -> dict[str, set[str]]:
+    """Every kind the catalogue declares, and the properties it gives each.
+
+    Read out of the declaration text rather than by running it, because the
+    catalogue is TypeScript that reaches the string registry and a bundle just
+    to answer a question its source already spells out. A kind is a
+    `defineKind({...})` call; its word is the `word:` field, or its column's key
+    where it declares none, and its properties are the keys of `props`.
+    """
+    source = (ROOT / "src" / "search" / "schema" / "catalogue.ts").read_text(
+        encoding="utf-8")
+    kinds: dict[str, set[str]] = {}
+    for call in re.finditer(r"defineKind\(\{(.*?)\n\}\);", source, re.DOTALL):
+        body = call.group(1)
+        word = re.search(r'\bword:\s*"([^"]+)"', body)
+        column = re.search(r"\bcolumn:\s*(\w+)Column", body)
+        if not column:
+            continue
+        name = word.group(1) if word else column.group(1)
+        kinds[name] = top_level_keys(body, "props")
+    return kinds
+
+
+def top_level_keys(body: str, field: str) -> set[str]:
+    """The keys of one object literal's OWN level, ignoring anything nested.
+
+    Depth-tracked rather than matched by indentation, because a property is
+    written both ways in the catalogue -- on its own line, and inline where the
+    kind has one -- and an indentation rule would silently report the inline
+    ones as having no properties at all. Nested objects are real: a property
+    declares `sentinels`, whose keys are numbers and not properties.
+    """
+    start = body.find(f"{field}: {{")
+    if start < 0:
+        return set()
+    at = body.index("{", start)
+    keys: set[str] = set()
+    depth, key_start = 0, at + 1
+    for position in range(at, len(body)):
+        char = body[position]
+        if char in "{[(":
+            depth += 1
+            if depth == 1:
+                key_start = position + 1
+        elif char in "}])":
+            depth -= 1
+            if depth == 0:
+                break
+        elif char == "," and depth == 1:
+            key_start = position + 1
+        elif char == ":" and depth == 1:
+            found = re.fullmatch(r"\s*(\w+)\s*", body[key_start:position])
+            if found:
+                keys.add(found.group(1))
+    return keys
+
+
+def check_row_schema(rep: Report) -> None:
+    """Every kind and property the pack SHIPS must be declared in the catalogue.
+
+    The pack carries rows now: a kind word, and per kind the properties its
+    values are under. The catalogue is what says the properties MEAN -- which
+    notation reads them, what a bare word matches. A property the pack ships and
+    the catalogue does not declare is read by nothing and silently dropped,
+    which is the same invisible failure `check_pack_sections` exists for, one
+    level further in.
+
+    The other direction is legitimate and not checked: the catalogue may declare
+    a property no build can answer yet.
+    """
+    sections, why = pack_sections()
+    if sections is None:
+        rep.skip("row schema", why)
+        return
+    tables = {name: block for name, block in sections.items()
+              if name.endswith("Rows") and isinstance(block, dict)}
+    if not tables:
+        rep.skip("row schema", "pack ships no row tables")
+        return
+
+    catalogue = declared_kinds()
+    problems: list[str] = []
+    shipped = 0
+    for table, block in sorted(tables.items()):
+        for kind in block.get("kinds", []):
+            if kind not in catalogue:
+                problems.append(f"{table} ships kind {kind!r}, which no kind declares")
+                continue
+            props = set(block.get("values", {}).get(kind, {}))
+            shipped += 1
+            stray = sorted(props - catalogue[kind])
+            if stray:
+                problems.append(
+                    f"{kind} ships {', '.join(stray)}, which it does not declare")
+    if problems:
+        rep.fail("row schema", "; ".join(problems))
+    else:
+        rep.ok("row schema", f"{shipped} shipped kinds declared in the catalogue")
 
 
 def check_layers(rep: Report) -> None:
@@ -1447,6 +1565,7 @@ def main() -> int:
     check_manifest(rep)
     check_format_declaration(rep)
     check_pack_sections(rep)
+    check_row_schema(rep)
     check_layers(rep)
     check_cache_declaration(rep)
     check_build_layers(rep)

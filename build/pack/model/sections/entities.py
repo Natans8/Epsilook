@@ -103,18 +103,6 @@ MORPH_DISPLAYS = register(Section(
                   lambda columns, _r: len(columns["creatureIds"])),),
 ))
 
-SPELL_MOUNTS = register(Section(
-    name="spellMounts",
-    doc="Which mount display a mount-granting spell reaches.",
-    module="core",
-    produce=lambda reads: {
-        "spellIds": [spell for spell, _display in reads.mounts.links],
-        "displayIds": [display for _spell, display in reads.mounts.links]},
-    columns=("spellIds", "displayIds"),
-    reads=("mounts",),
-    counts=(Count("spellMounts", lambda columns, _r: len(columns["spellIds"])),),
-))
-
 MOUNTS = register(Section(
     name="mounts",
     doc="Each reached mount display's name and model file.",
