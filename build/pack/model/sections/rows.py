@@ -105,7 +105,31 @@ def walk(columns: SectionColumns) -> Iterator[Triple]:
 
 def counted(compute: Callable[[list[Triple]], Mapping[str, int]]) -> CountFamily:
     """One section's counts, all from a single walk of its rows."""
-    return CountFamily(lambda columns, _reads: compute(list(walk(columns))))
+    return CountFamily(lambda columns, _reads: compute(walked(columns)))
+
+
+_WALKED: tuple[SectionColumns, list[Triple]] | None = None
+"""The last table walked, and its triples.
+
+One entry, holding the table ITSELF rather than its id: a section's counts and
+its domains are handed the same object one after the other, and nothing else is
+walked in between. Keeping the reference is what makes the identity test safe --
+an id alone can be reused once the table it named is collected, which would hand
+one section's triples to the next.
+"""
+
+
+def walked(columns: SectionColumns) -> list[Triple]:
+    """The section's triples, materialised once per produced table.
+
+    Counts and domains both want every row, and walking twice rebuilds the
+    kind-per-reference array and re-reads every reference for an answer already
+    in hand.
+    """
+    global _WALKED
+    if _WALKED is None or _WALKED[0] is not columns:
+        _WALKED = (columns, list(walk(columns)))
+    return _WALKED[1]
 
 
 def per_spell(rows: Sequence[Triple], kinds: frozenset[str]) -> Counter[int]:
@@ -168,7 +192,7 @@ MODEL_ROWS = register(Section(
     reads=READS,
     counts=(counted(model_counts),),
     domains=(Domain("count.model", lambda columns, _r: numeric_domain(
-        per_spell(list(walk(columns)), MODEL_KINDS).values())),),
+        per_spell(walked(columns), MODEL_KINDS).values())),),
 ))
 
 SOUND_ROWS = register(Section(
@@ -180,7 +204,7 @@ SOUND_ROWS = register(Section(
     reads=READS,
     counts=(counted(lambda rows: {"spellSounds": len(rows)}),),
     domains=(Domain("count.sound", lambda columns, _r: numeric_domain(
-        per_spell(list(walk(columns)), frozenset({"sound"})).values())),),
+        per_spell(walked(columns), frozenset({"sound"})).values())),),
 ))
 
 ANIM_ROWS = register(Section(
@@ -192,7 +216,7 @@ ANIM_ROWS = register(Section(
     reads=READS,
     counts=(counted(anim_counts),),
     domains=(Domain("count.anim", lambda columns, _r: numeric_domain(
-        per_spell(list(walk(columns)), frozenset({"kit"})).values())),),
+        per_spell(walked(columns), frozenset({"kit"})).values())),),
 ))
 
 EQUIPPED_SLOTS = register(Section(

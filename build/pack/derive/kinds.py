@@ -32,7 +32,9 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
-from ..routes.models import MODEL_CAT_ITEM
+from ..routes.models import (MODEL_CAT_AREA, MODEL_CAT_ATTACH, MODEL_CAT_BARRAGE,
+                             MODEL_CAT_DISPLAY, MODEL_CAT_ITEM, MODEL_CAT_MISSILE,
+                             MODEL_CAT_TRAIL)
 from ..routes.vehicles import PASSENGER_ROLE_NAMES
 from .context import Reads
 from .rows import boneset_rows, replacement_rows, spell_role_rows
@@ -147,11 +149,22 @@ def build_column(families: Sequence[Family], reads: Reads,
 
     A spell's references are sorted, so equal runs sit together and a reader
     that stops early on an ordered scan sees the pools in the order they ship.
+
+    Raises:
+        ValueError: a family names a vocabulary nothing declares. Left to the
+            reader it is silent -- the lookup misses, the property keeps the raw
+            number a name was meant to replace, and every query on it answers
+            nothing forever.
     """
     per_spell: dict[int, list[int]] = {}
     pools: dict[str, KindPool] = {}
     base = 0
     for family in families:
+        unknown = sorted(set(family.vocab.values()) - set(VOCABULARIES))
+        if unknown:
+            raise ValueError(
+                f"{family.kind} resolves {', '.join(unknown)}, which no "
+                f"vocabulary declares")
         pools[family.kind] = _pool(family, family.rows(reads), per_spell, base)
         base += pools[family.kind].rows
 
@@ -211,19 +224,19 @@ def _mounts(reads: Reads) -> Iterable[SpellRow]:
 
 
 MODEL_FAMILIES: tuple[Family, ...] = (
-    _models("missile", 1, ("file", "from", "to", "motion", "target"),
+    _models("missile", MODEL_CAT_MISSILE, ("file", "from", "to", "motion", "target"),
             lambda row: (row[1], row[4], row[5], row[7], row[3])),
-    _models("barrage", 4, ("file", "attach", "target"),
+    _models("barrage", MODEL_CAT_BARRAGE, ("file", "attach", "target"),
             lambda row: (row[1], row[4], row[3])),
-    _models("ground", 2, ("file", "target"), lambda row: (row[1], row[3])),
-    _models("attached", 0, ("file", "attach", "target"),
+    _models("ground", MODEL_CAT_AREA, ("file", "target"), lambda row: (row[1], row[3])),
+    _models("attached", MODEL_CAT_ATTACH, ("file", "attach", "target"),
             lambda row: (row[1], row[4], row[3]), worn=False),
-    _models("trail", 3, ("file", "target"), lambda row: (row[1], row[3])),
-    _models("display", 5, ("id", "file", "attach", "target"),
+    _models("trail", MODEL_CAT_TRAIL, ("file", "target"), lambda row: (row[1], row[3])),
+    _models("display", MODEL_CAT_DISPLAY, ("id", "file", "attach", "target"),
             lambda row: (row[6], row[1], row[4], row[3])),
     _models("item", MODEL_CAT_ITEM, ("file", "id", "name", "attach", "target"),
             lambda row: (row[1], row[6], row[6], row[4], row[3])),
-    _models("equipped", 0, ("slot", "attach", "target"),
+    _models("equipped", MODEL_CAT_ATTACH, ("slot", "attach", "target"),
             lambda row: (row[1], row[4], row[3]), worn=True),
     Family(kind="mount", props=("name", "file"), rows=_mounts,
            vocab={"name": "mounts", "file": "files"}),

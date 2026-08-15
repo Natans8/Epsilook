@@ -24,7 +24,7 @@ import type {
 import {
     animColumn, catalogue, colour as colourType, COLOUR_NAMES, fold, fxColumn, id as idType, idColumn, KINDS,
     mechColumn, modelColumn, setOrdinalLadder, soundColumn, spellColumn, squash, TARGET_ROLES,
-    text as textType, wordOf,
+    kindsOf, text as textType, wordOf,
 } from "../src/search/index";
 
 // The kinds this file builds rows for, under their own names. Taken off the catalogue rather than off the door, which
@@ -116,18 +116,9 @@ class PackRowSource implements RowSource {
     }
 }
 
-/**
- * The kinds of one column, by the word the pack names them with.
- *
- * @throws If the pack ships a kind this build has no declaration for — a pack and a catalogue that disagree must fail
- *   loudly, because the silent alternative is rows quietly vanishing from every answer.
- */
-function kindsOf(column: Column): Map<string, Kind> {
-    const out = new Map<string, Kind>();
-    for (const kind of KINDS.values()) {
-        if (kind.column === column) out.set(wordOf(kind), kind);
-    }
-    return out;
+/** The kinds of one column, by the word the pack names them with. */
+function kindsByWord(column: Column): Map<string, Kind> {
+    return new Map(kindsOf(column).map((kind) => [wordOf(kind), kind]));
 }
 
 /** A mask joins a row's props only when it says something: 0 means the pack has no answer, not "plays on nobody". */
@@ -711,9 +702,9 @@ export function packDataset(d: SpellData): Dataset {
     // The three columns the pack ships as rows are read; the two that do not yet
     // ship rows are still built per call, which is what remains of the bridge.
     const packed = new Map<Column, RowSource>([
-        [modelColumn, new PackRowSource(d.rowTables.model, kindsOf(modelColumn), d.rowVocabs)],
-        [soundColumn, new PackRowSource(d.rowTables.sound, kindsOf(soundColumn), d.rowVocabs)],
-        [animColumn, new PackRowSource(d.rowTables.anim, kindsOf(animColumn), d.rowVocabs)],
+        [modelColumn, new PackRowSource(d.rowTables.model, kindsByWord(modelColumn), d.rowVocabs)],
+        [soundColumn, new PackRowSource(d.rowTables.sound, kindsByWord(soundColumn), d.rowVocabs)],
+        [animColumn, new PackRowSource(d.rowTables.anim, kindsByWord(animColumn), d.rowVocabs)],
     ]);
 
     let inverted: Inverted | null = null;

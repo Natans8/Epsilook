@@ -22,10 +22,15 @@ from ..model import SECTIONS, CountFamily, Section, SectionColumns
 PACK_FORMAT = 51
 """What shape the artifact is in.
 
-50 is the row reshape: a mask on every row the game aims somewhere, the role a
-rider's animation plays in, and the storage unit each numeric axis is measured
-in. Two of those change row counts rather than only adding columns -- an
-animation used both entering and seated is two rows now, because which act it
+51 ships rows. The model, sound and animation columns carry the distinct rows
+of each kind pooled once, plus per spell a count and its references, in place
+of the seven per-spell sections they were assembled from. A reader that
+understood 50 finds none of those sections at all.
+
+50 was the row's CONTENT: a mask on every row the game aims somewhere, the role
+a rider's animation plays in, and the storage unit each numeric axis is
+measured in. Two of those change row counts rather than only adding columns --
+an animation used both entering and seated is two rows, because which act it
 belongs to is the question being asked.
 
 Bumped whenever a reader that understood the last version would misread this
