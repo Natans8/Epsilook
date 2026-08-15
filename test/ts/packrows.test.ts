@@ -10,7 +10,7 @@ import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
 import type {RowTable} from "../../src/packrows";
-import {distinct, expand, expandAll, indexRows, passengerRows, rowsAt, storedAt} from "../../src/packrows";
+import {expand, expandAll, indexRows, passengerRows, rowsAt, storedAt} from "../../src/packrows";
 
 /**
  * A model column holding a missile, an attached model and a carried weapon.
@@ -124,7 +124,10 @@ describe("the kit expansion", () => {
     };
 
     it("gives back the kit once, which is what the count always meant", () => {
-        const kits = distinct(ANIMS, [10], "kit", "id", {targets: "target"});
+        const kits = expand(ANIMS, [10], {
+            kinds: {kit: 0}, unique: ["id"],
+            columns: {id: {from: ["id"], missing: 0}, targets: {from: ["target"], missing: 0}},
+        });
         assert.deepEqual(kits.spellIds, [10]);
         assert.deepEqual(kits.id, [55]);
         assert.deepEqual(kits.targets, [4]);

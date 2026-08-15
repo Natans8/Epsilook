@@ -6,7 +6,7 @@
  * the JSON pack baked by build/build_data.py (SpellPack) and the in-memory
  * indexes built from it (SpellData). */
 import type {LegacyColumns, RowTable, VocabWhere} from "./packrows";
-import {distinct, expand, expandAll, passengerRows} from "./packrows";
+import {expand, expandAll, passengerRows} from "./packrows";
 import {hexColor} from "./util";
 
 /* ----------------------------------------------------------- the pack */
@@ -1014,20 +1014,30 @@ export function buildIndexes(pack: SpellPack): SpellData {
 
     const NO_ATTACH = {missing: -1};
     const NONE = {missing: 0};
-    const modelColumns = expand(pack.modelRows, sp.ids, {
-        kinds: catOf,
-        cats: true,
-        columns: {
-            // A carried weapon's file is the slot marker it points at, which is
-            // the `slot` property here and was always a negative file id there.
-            fids: {from: ["file", "slot"], ...NONE},
-            targets: {from: ["target"], ...NONE},
-            srcAttach: {from: ["from", "attach"], ...NO_ATTACH},
-            dstAttach: {from: ["to"], ...NO_ATTACH},
-            refIds: {from: ["id"], ...NONE},
-            motions: {from: ["motion"], ...NONE},
+    // One walk per table, not one per section: each of these tables holds
+    // hundreds of thousands of references, and a section that swept its own
+    // would sweep every one of them again for the sections beside it.
+    const models = expandAll(pack.modelRows, sp.ids, {
+        spellModels: {
+            kinds: catOf,
+            cats: true,
+            columns: {
+                // A carried weapon's file is the slot marker it points at,
+                // which is `slot` here and was always a negative file id there.
+                fids: {from: ["file", "slot"], ...NONE},
+                targets: {from: ["target"], ...NONE},
+                srcAttach: {from: ["from", "attach"], ...NO_ATTACH},
+                dstAttach: {from: ["to"], ...NO_ATTACH},
+                refIds: {from: ["id"], ...NONE},
+                motions: {from: ["motion"], ...NONE},
+            },
         },
+        spellMounts: {kinds: {mount: 0},
+                      columns: {displayIds: {from: ["name"], ...NONE}}},
     });
+    const modelColumns = models.spellModels;
+    const spellMountRows = models.spellMounts;
+
     const spellSoundRows = expand(pack.soundRows, sp.ids, {
         kinds: {sound: 0},
         columns: {
@@ -1035,21 +1045,25 @@ export function buildIndexes(pack: SpellPack): SpellData {
             targets: {from: ["target"], ...NONE},
         },
     });
-    const spellAnimKitRows = distinct(pack.animRows, sp.ids, "kit", "id", {targets: "target"});
-    const spellLooseAnims = expand(pack.animRows, sp.ids, {
-        kinds: {loose: 0},
-        columns: {animIds: {from: ["anim"], ...NONE}, targets: {from: ["target"], ...NONE}},
+
+    const anims = expandAll(pack.animRows, sp.ids, {
+        // A kit ships one row per animation and region, so its rows repeat the
+        // kit id; the section it replaced held each kit once.
+        spellAnimKits: {kinds: {kit: 0}, unique: ["id"],
+                        columns: {id: {from: ["id"], ...NONE},
+                                  targets: {from: ["target"], ...NONE}}},
+        spellVisualAnims: {kinds: {loose: 0},
+                           columns: {animIds: {from: ["anim"], ...NONE},
+                                     targets: {from: ["target"], ...NONE}}},
+        spellReplaceAnims: {kinds: {replace: 0},
+                            columns: {srcAnims: {from: ["from"], ...NONE},
+                                      dstAnims: {from: ["to"], ...NONE},
+                                      targets: {from: ["target"], ...NONE}}},
     });
-    const spellReplacements = expand(pack.animRows, sp.ids, {
-        kinds: {replace: 0},
-        columns: {
-            srcAnims: {from: ["from"], ...NONE}, dstAnims: {from: ["to"], ...NONE},
-            targets: {from: ["target"], ...NONE},
-        },
-    });
-    const spellMountRows = expand(pack.modelRows, sp.ids, {
-        kinds: {mount: 0}, columns: {displayIds: {from: ["name"], ...NONE}},
-    });
+    const spellAnimKitRows = anims.spellAnimKits;
+    const spellLooseAnims = anims.spellVisualAnims;
+    const spellReplacements = anims.spellReplaceAnims;
+
     const spellPassengers = passengerRows(
         pack.animRows, sp.ids, Object.values(pack.passengerRoleNames || NO_WORDS));
 

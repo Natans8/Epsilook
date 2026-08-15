@@ -255,44 +255,6 @@ export function expand(
 }
 
 /**
- * The distinct (spell, value) pairs one property takes, in spell order.
- *
- * A kit ships expanded into one row per animation and region, so its rows repeat the kit id; 1.0 wants the kits, once
- * each. Every other legacy shape is one row per row and reaches this through {@link expand}.
- *
- * @param table The column's row table.
- * @param spellIds Every spell id, in the pack's own order.
- * @param kind The kind whose rows are read.
- * @param prop The property whose distinct values are wanted.
- * @param extra Further properties to carry through, taken from the first row of each distinct pair.
- * @returns The legacy arrays, `spellIds` first.
- */
-export function distinct(
-    table: RowTable, spellIds: readonly number[], kind: string, prop: string,
-    extra: Readonly<Record<string, string>> = {},
-): LegacyColumns {
-    const index = indexRows(table);
-    const out: LegacyColumns = {spellIds: [], [prop]: []};
-    for (const name of Object.keys(extra)) out[name] = [];
-
-    for (let i = 0; i < spellIds.length; i++) {
-        const seen = new Set<number>();
-        for (const row of rowsAt(index, i)) {
-            if (row.kind !== kind) continue;
-            const value = table.values[kind]?.[prop]?.[row.slot];
-            if (value === undefined || seen.has(value)) continue;
-            seen.add(value);
-            out.spellIds.push(spellIds[i]);
-            out[prop].push(value);
-            for (const [name, from] of Object.entries(extra)) {
-                out[name].push(table.values[kind]?.[from]?.[row.slot] ?? 0);
-            }
-        }
-    }
-    return out;
-}
-
-/**
  * The rider's animations as (spell, anim, role) rows.
  *
  * A passenger row carries one property per role and sets exactly one of them, so the role is which property is set —
