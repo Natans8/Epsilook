@@ -41,6 +41,7 @@ import ast
 import gzip
 import hashlib
 import io
+import zlib
 import json
 import os
 import re
@@ -758,6 +759,57 @@ def check_row_schema(rep: Report) -> None:
         rep.fail("row schema", "; ".join(problems))
     else:
         rep.ok("row schema", f"{shipped} shipped kinds declared in the catalogue")
+
+
+MODULE_GZIP_FINGERPRINT = "18bfeb6a365aa843"
+"""What this repository's packs were compressed by.
+
+A module's FILE NAME is the hash of its compressed bytes, so which zlib the
+interpreter links decides what every module is called. CPython's Windows
+binaries ship zlib-ng and a typical Linux interpreter uses the system zlib, and
+the two emit different bytes for identical input -- so a rebuild on the other
+kind renames every module in all twelve packs while the data is unchanged.
+
+Recorded as the compressed digest of a fixed payload rather than as a version
+string, because what matters is the bytes that come out, not which library
+claims to have produced them.
+"""
+
+
+def gzip_fingerprint() -> str:
+    """This interpreter's compressed form of a fixed payload.
+
+    Compressed exactly as `emit/module.py` compresses a module -- level nine
+    with the timestamp zeroed -- so the fingerprint moves only when a module's
+    bytes would.
+    """
+    payload = b"Epsilook module compression fingerprint" * 64
+    buffer = io.BytesIO()
+    with gzip.GzipFile(fileobj=buffer, mode="wb", compresslevel=9, mtime=0) as out:
+        out.write(payload)
+    return hashlib.sha256(buffer.getvalue()).hexdigest()[:16]
+
+
+def check_gzip_flavour(rep: Report) -> None:
+    """Warn when this machine would rename every module it rebuilt.
+
+    A warning and not a failure: nothing is wrong with the checkout, and a
+    machine that compresses differently still builds a correct pack. What it
+    cannot do is rebuild ONE pack -- the modules it writes get new names, the
+    packs it did not rebuild go on naming the old ones, and the shared modules
+    that made the roster cheap quietly stop being shared.
+    """
+    here = gzip_fingerprint()
+    if here == MODULE_GZIP_FINGERPRINT:
+        rep.ok("gzip flavour", f"module bytes match the shipped packs ({here})")
+        return
+    flavour = getattr(zlib, "ZLIBNG_VERSION", "")
+    rep.warn(
+        "gzip flavour",
+        f"this interpreter compresses differently ({here} against "
+        f"{MODULE_GZIP_FINGERPRINT}{', zlib-ng ' + flavour if flavour else ''}); "
+        f"rebuilding one pack here renames its modules and unshares them, so "
+        f"rebuild the whole roster or none of it")
 
 
 def check_layers(rep: Report) -> None:
@@ -1601,6 +1653,7 @@ def main() -> int:
     check_format_declaration(rep)
     check_pack_sections(rep)
     check_row_schema(rep)
+    check_gzip_flavour(rep)
     check_layers(rep)
     check_cache_declaration(rep)
     check_build_layers(rep)
