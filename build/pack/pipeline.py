@@ -273,7 +273,7 @@ def read_all(providers: Providers, build: Build,
     # spells and the words it names them with are resolved per build.
     with phase("build_rows"):
         rows = build_rows(visuals, effects, vehicles, declared.effect_names,
-                          declared.aura_names)
+                          declared.aura_names, animkit_bonesets)
     with phase("build_icon_index"):
         icons = build_icon_index(spell_ids, props.icon_fid, paths)
     with phase("read kit names"):

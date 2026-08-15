@@ -40,8 +40,8 @@ from ..routes.models import (MODEL_CAT_AREA, MODEL_CAT_ATTACH, MODEL_CAT_BARRAGE
                              MODEL_CAT_TRAIL)
 from ..routes.vehicles import PASSENGER_ROLE_NAMES
 from .context import Reads
-from .rows import (ModelRow, boneset_rows, id_rows, masked_rows,
-                   replacement_rows, spell_role_rows, spell_rows)
+from .rows import (ModelRow, id_rows, masked_rows, replacement_rows,
+                   spell_role_rows, spell_rows)
 
 RowValue = int | float
 """One stored value.
@@ -340,8 +340,7 @@ def _animkits(reads: Reads) -> Iterable[SpellRow]:
     answered by one row: asking which spells animate the head must not be
     answered by a row that merely joined every region its kit touches.
     """
-    _rows, names = boneset_rows(reads.animkit_bonesets, reads.rows.used_animkits)
-    pool = {name: at for at, name in enumerate(names)}
+    pool = {name: at for at, name in enumerate(reads.rows.boneset_names)}
     for spell, kit, mask in reads.rows.animkits:
         anims = sorted(reads.animkit_anims.get(kit, ()))
         if not anims:

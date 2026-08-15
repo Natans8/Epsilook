@@ -8,7 +8,7 @@ but about what a player can ask for.
 
 from __future__ import annotations
 
-from ...derive import Reads, boneset_rows
+from ...derive import Reads
 from ..registry import register
 from ..section import (Count, Layout, Scope, Section, SectionColumns, size)
 
@@ -23,7 +23,7 @@ def animkit_anims(reads: Reads) -> SectionColumns:
 
 def boneset_columns(reads: Reads) -> SectionColumns:
     """Which body region each used kit's animations move."""
-    rows, _names = boneset_rows(reads.animkit_bonesets, reads.rows.used_animkits)
+    rows = reads.rows.bonesets
     return {"animKitIds": [row[0] for row in rows],
             "animIds": [row[1] for row in rows],
             "bonesets": [row[2] for row in rows]}
@@ -43,11 +43,10 @@ BONESET_NAMES = register(Section(
     name="bonesetNames",
     doc="The body regions an animation can be confined to, pooled.",
     module="core",
-    produce=lambda reads: {"names": boneset_rows(
-        reads.animkit_bonesets, reads.rows.used_animkits)[1]},
+    produce=lambda reads: {"names": reads.rows.boneset_names},
     columns=("names",),
     layout=Layout.BARE,
-    reads=("rows", "animkit_bonesets"),
+    reads=("rows",),
 ))
 
 ANIMKIT_BONESETS = register(Section(
@@ -56,7 +55,7 @@ ANIMKIT_BONESETS = register(Section(
     module="core",
     produce=boneset_columns,
     columns=("animKitIds", "animIds", "bonesets"),
-    reads=("rows", "animkit_bonesets"),
+    reads=("rows",),
     counts=(size("animKitAnimBoneset", "animKitIds"),),
 ))
 

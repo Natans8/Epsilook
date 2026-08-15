@@ -23,6 +23,7 @@ from ..routes.models import MODEL_CAT_ITEM
 from .links import link_kind_word
 from .walk import Bucket, SpellVisuals
 
+
 class ModelRow(NamedTuple):
     """One model a spell reaches, flattened for the row tables.
 
@@ -55,6 +56,7 @@ class MechanicRow(NamedTuple):
     target_b: int
     misc_a: int
     misc_b: int
+
 
 def masked_rows(bucket: Bucket) -> list[tuple[int, int, int]]:
     """One masked bucket as (spell, payload, mask) rows, sorted."""
@@ -110,6 +112,17 @@ class PackRows:
 
     link_words: list[str] = field(default_factory=list)
     """The distinct words the edges print, in first-seen order."""
+
+    bonesets: list[tuple[int, int, list[int]]] = field(default_factory=list)
+    """(kit, animation, boneset indexes) for every used kit's animations.
+
+    The indexes point into `boneset_names`, which is why the pair is built here:
+    two callers wanting one half each would pool the words twice and number them
+    differently while looking identical.
+    """
+
+    boneset_names: list[str] = field(default_factory=list)
+    """The distinct body regions the boneset rows index, in first-seen order."""
 
     seats: list[tuple[int, str]] = field(default_factory=list)
     """(vehicle, attachment name) for every seat, in artifact order.
@@ -182,7 +195,8 @@ def seat_rows(vehicle_ids: Sequence[int],
 
 def build_rows(visuals: SpellVisuals, effects: SpellEffectRows,
                seats: VehicleSeats, effect_names: Mapping[int, str],
-               aura_names: Mapping[int, str]) -> PackRows:
+               aura_names: Mapping[int, str],
+               bonesets: Mapping[int, Mapping[int, list[str]]]) -> PackRows:
     """Flatten everything at least two sections read, once."""
     models = sorted(
         ModelRow(spell, file, category, mask, source, destination, ref, motion)
@@ -197,6 +211,7 @@ def build_rows(visuals: SpellVisuals, effects: SpellEffectRows,
     used |= {kit for _spell, kit in spell_rows(seats.animkits, vehicles)}
     vehicle_ids = sorted({vehicle for _spell, vehicle in vehicles})
     edges, words = link_rows(effects, effect_names, aura_names)
+    boneset_pairs, boneset_pool = boneset_rows(bonesets, used)
     return PackRows(
         models=models,
         sounds=sorted((spell, kit, file, mask)
@@ -219,6 +234,8 @@ def build_rows(visuals: SpellVisuals, effects: SpellEffectRows,
         vehicles=vehicles,
         vehicle_ids=vehicle_ids,
         used_animkits=used,
+        bonesets=boneset_pairs,
+        boneset_names=boneset_pool,
         links=edges,
         link_words=words,
         seats=seat_rows(vehicle_ids, seats.seats))
