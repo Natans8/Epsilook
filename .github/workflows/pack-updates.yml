@@ -77,7 +77,7 @@ jobs:
               '',
               '### If it turns out not to be worth doing',
               '',
-              'Close the issue with the reason. It is re-raised on the next Monday the line is still ahead, so closing is not losing it — and if the line has genuinely stopped being one we follow, move that pack to `FROZEN` in `tools/packs.py` and it will stop being asked about at all.',
+              'Close the issue with the reason. It is re-raised on the next Monday the line is still ahead, so closing is not losing it — and if the line has genuinely stopped being one we follow, set that pack `tracked=False` in `tools/packs.py` and it will stop being asked about at all.',
               '',
               '### You do not have to read this issue to find out',
               '',

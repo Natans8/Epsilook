@@ -1520,12 +1520,12 @@ def check_pack_freshness(rep: Report) -> None:
         return
     try:
         sys.path.insert(0, str(ROOT / "tools"))
-        from packs import ARCHIVE, FROZEN, PACKS, availability, live_build, patch_key
+        from packs import PACKS, availability, live_build, patch_key
     except ImportError as exc:  # pragma: no cover - packs.py is committed
         rep.skip("pack freshness", f"tools/packs.py not importable ({exc})")
         return
 
-    tracked = [p for p in PACKS if p.product not in (FROZEN, ARCHIVE)]
+    tracked = [p for p in PACKS if p.tracked]
     cache = CACHE / "pack-freshness.json"
     now = time.time()
     if cache.exists() and now - cache.stat().st_mtime < FRESHNESS_CACHE_HOURS * 3600:
@@ -1536,19 +1536,19 @@ def check_pack_freshness(rep: Report) -> None:
     else:
         latest = {}
         for pack in tracked:
-            build = live_build(pack.product)
+            build = live_build(pack.flavour)
             if not build:  # offline, or Blizzard is having a moment
                 rep.skip("pack freshness", "could not reach Blizzard's version service")
                 return
-            latest[pack.product] = build
+            latest[pack.flavour] = build
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(latest, indent=2), encoding="utf-8")
 
     # PATCH, not build — the user's call. A microbuild moving is not a reason to
     # re-ship eleven packs, and warning about one would make this noise.
-    behind = [(p, latest[p.product]) for p in tracked
-              if p.product in latest
-              and patch_key(latest[p.product]) > patch_key(p.build)]
+    behind = [(p, latest[p.flavour]) for p in tracked
+              if p.flavour in latest
+              and patch_key(latest[p.flavour]) > patch_key(p.build)]
     if behind:
         # Only now is the availability probe worth its two requests: it answers
         # whether the bump is even possible yet, before anyone edits the roster.

@@ -129,16 +129,27 @@ def is_internal(product: str) -> bool:
     return any(product.startswith(prefix) for prefix in INTERNAL_PREFIXES)
 
 
-# `product` answers ONE question: where do I ask whether a newer build exists.
+# `flavour` says WHICH LINE a pack is, and `tracked` says whether to ask that
+# line for a newer build. They were one field until it became clear the build
+# number alone no longer identifies a set of game tables: Epsilon ships its own
+# 9.2.7 and the retail PTR ships live's build, so two packs can agree on every
+# digit and share nothing.
 #
-# FROZEN means "do not ask", and it is the answer for most of the roster —
-# NOT because those clients are unimportant but because their product line
-# MOVED ON. `wow_classic` is the progressing Classic line and is on MoP today,
-# so asking it about our WotLK 3.4.3 pack answers "5.5.4.69155", which is not a
-# newer WotLK at all. `wow` is on Midnight (12.x), so it would tell the same lie
-# about all five pinned retail packs. Only a pack whose line is still shipping
-# ITS patch may name a product; everything else is a historical artifact.
-FROZEN = "frozen"
+# The vocabulary is Blizzard's own TACT product codes, because they already
+# named these lines and inventing a second set would be a second answer to one
+# question. `epsilon` is the exception and is ours: its service serves the
+# client at `/wow/`, so its TACT path cannot tell it apart from retail's.
+#
+# `tracked` is a separate question and mostly answers no, NOT because those
+# clients are unimportant but because their line MOVED ON. `wow_classic` is the
+# progressing Classic line and is on MoP today, so asking it about our WotLK
+# 3.4.3 pack answers "5.5.4.69155", which is not a newer WotLK at all. `wow` is
+# on Midnight (12.x), so it would tell the same lie about all five pinned retail
+# packs. Only a pack whose line is still shipping ITS patch may be tracked.
+FLAVOURS = ("wow", "wowt", "wow_classic", "wow_classic_era", "wow_anniversary",
+            "epsilon")
+"""Every line the roster ships, newest-facing first. A closed vocabulary, so a
+typo is a failed build rather than a pack nothing can find."""
 
 # Where the bytes come from. wago serves CASC-era builds only — its oldest of
 # any kind is 1.13.0.28211 — so a genuine pre-Cata client comes from the
@@ -176,8 +187,9 @@ class Pack:
 
     key: str  # stable short name; what you type on the CLI
     name: str  # "Vanilla Classic" — the label is this plus the patch
-    product: str  # wago product line to check for updates, or FROZEN
+    flavour: str  # which line this is — one of FLAVOURS
     build: str  # THE ONE FIELD A PATCH BUMP TOUCHES
+    tracked: bool = False  # ask this line for a newer build?
     default: bool = False  # the pack the app loads when the URL names none
     hidden: bool = False  # resolvable by ?v= but kept out of the dropdown
     source: str = WAGO  # WAGO or ARCHIVE — which downloader reads it
@@ -233,10 +245,10 @@ class Pack:
 PACKS: tuple[Pack, ...] = (
     # The three still shipping their own patch — these are the ones `--check`
     # can actually answer for, and the only ones a routine bump touches.
-    Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.69109"),
-    Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.69110"),
-    Pack("mop", "MoP Classic", "wow_classic", "5.5.4.69155"),
-    Pack("midnight", "Midnight", "wow", "12.1.0.69273"),
+    Pack("vanilla", "Vanilla Classic", "wow_classic_era", "1.15.9.69109", tracked=True),
+    Pack("tbc", "TBC Classic", "wow_anniversary", "2.5.6.69110", tracked=True),
+    Pack("mop", "MoP Classic", "wow_classic", "5.5.4.69155", tracked=True),
+    Pack("midnight", "Midnight", "wow", "12.1.0.69273", tracked=True),
     # The retail test line. It runs AHEAD of live most of the time and level
     # with it the rest, so it is tagged rather than told apart by its build —
     # see Pack.id. Its links go to Wowhead's own /ptr/ section.
@@ -246,25 +258,26 @@ PACKS: tuple[Pack, ...] = (
     # names and are written once — both manifests then name the same files.
     # The condition is the shared build, not the roster row: move this to a
     # build of its own and the modules diverge with it, needing no edit here.
-    Pack("midnight-ptr", "Midnight PTR", "wowt", "12.1.0.69273", tag="ptr"),
+    Pack("midnight-ptr", "Midnight PTR", "wowt", "12.1.0.69273", tracked=True,
+         tag="ptr"),
     # Lines that moved on, and pinned retail. Historical artifacts: their build
-    # is final, so FROZEN rather than a product that would answer about a
-    # different expansion entirely.
-    Pack("wotlk", "WotLK Classic", FROZEN, "3.4.3.58936"),
-    Pack("cata", "Cataclysm Classic", FROZEN, "4.4.2.60895"),
-    Pack("legion", "Legion", FROZEN, "7.3.5.26972"),
-    Pack("bfa", "Battle for Azeroth", FROZEN, "8.3.7.35662"),
-    Pack("shadowlands", "Shadowlands", FROZEN, "9.2.7.45745"),
-    Pack("dragonflight", "Dragonflight", FROZEN, "10.2.7.55664"),
-    Pack("tww", "The War Within", FROZEN, "11.2.7.65299"),
+    # is final, so untracked rather than polling a line that would answer
+    # about a different expansion entirely.
+    Pack("wotlk", "WotLK Classic", "wow_classic", "3.4.3.58936"),
+    Pack("cata", "Cataclysm Classic", "wow_classic", "4.4.2.60895"),
+    Pack("legion", "Legion", "wow", "7.3.5.26972"),
+    Pack("bfa", "Battle for Azeroth", "wow", "8.3.7.35662"),
+    Pack("shadowlands", "Shadowlands", "wow", "9.2.7.45745"),
+    Pack("dragonflight", "Dragonflight", "wow", "10.2.7.55664"),
+    Pack("tww", "The War Within", "wow", "11.2.7.65299"),
 
     # The client the audience actually plays, and the only pack carrying the
     # spells a private server added. It sits on Shadowlands' build, so `tag`
-    # separates the two exactly as it separates the PTR line from live. FROZEN
+    # separates the two exactly as it separates the PTR line from live. Untracked
     # because no public service answers what build it is on: the build's own
     # acquisition checks the live service against this row and refuses to pack
     # a different one.
-    Pack("epsilon", "Epsilon", FROZEN, "9.2.7.45745", tag="epsilon",
+    Pack("epsilon", "Epsilon", "epsilon", "9.2.7.45745", tag="epsilon",
          default=True, locales=("enUS",), client="epsilon"),
 )
 
@@ -294,6 +307,31 @@ def builds() -> list[str]:
     for pack in PACKS:
         seen.setdefault(pack.build, None)
     return list(seen)
+
+
+def table_sets() -> list[Pack]:
+    """One pack per distinct set of game tables, in roster order.
+
+    A BUILD is not a table set and neither is a pack, and the key is NOT the
+    flavour. Two packs on one build read the same downloaded export -- retail
+    and its PTR while the test line is level with live are different LINES and
+    the same tables, which is why their modules come out byte-identical. What
+    separates a set is where the bytes came from: a published build is its
+    build, and a private client's is that client's own decode. Epsilon ships
+    its own 9.2.7 and carries 280,180 spell names against Blizzard's 276,332.
+
+    Anything keyed on the tables themselves -- the exploration database above
+    all -- wants this. `builds()` is still right for the download cache of a
+    published export, which a client build does not use.
+
+    Returns:
+        The first pack declaring each `(build, client)`, which is the one whose
+        id names the set.
+    """
+    seen: dict[tuple[str, str], Pack] = {}
+    for pack in PACKS:
+        seen.setdefault((pack.build, pack.client), pack)
+    return list(seen.values())
 
 
 def _tdb_release():
@@ -536,12 +574,12 @@ def bump(keys: list[str]) -> int:
         if pack is None:
             print(f"no pack named {key!r}", file=sys.stderr)
             return 1
-        if pack.product in (FROZEN, ARCHIVE):
-            print(f"{key} is {pack.product} — its line does not ship new builds",
-                  file=sys.stderr)
+        if not pack.tracked:
+            print(f"{key} is not tracked — the {pack.flavour} line moved on and no "
+                  f"longer ships this patch", file=sys.stderr)
             return 1
 
-        live = live_build(pack.product)
+        live = live_build(pack.flavour)
         if not live:
             print(f"{key}: could not reach Blizzard's version service", file=sys.stderr)
             return 1
@@ -605,8 +643,8 @@ def main() -> int:
         flags = " ".join(f for f, on in
                          (("default", pack.default), ("hidden", pack.hidden)) if on)
         line = f"{pack.key:<14} {pack.id:<17} {pack.label:<28} {flags}"
-        if args.check and pack.product not in (FROZEN, ARCHIVE):
-            available = live_build(pack.product)
+        if args.check and pack.tracked:
+            available = live_build(pack.flavour)
             if available and patch_key(available) > patch_key(pack.build):
                 behind += 1
                 line += f"  <- NEW PATCH: {available}{availability(available)}"
@@ -625,7 +663,7 @@ def main() -> int:
         # Blizzard renamed a product — both need a human, and neither announces
         # itself if --check only ever looks at what we already track.
         published = wow_products()
-        tracked = {p.product for p in PACKS}
+        tracked = {p.flavour for p in PACKS if p.tracked}
         unknown = sorted(p for p in published - tracked - set(IGNORED_PRODUCTS)
                          if not is_internal(p))
         if unknown:
