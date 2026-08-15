@@ -4,6 +4,16 @@ version = "0"
 description = "The Epsilook data build and the repository checks that run over it."
 requires-python = ">=3.12"
 dependencies = [
+    # The engine behind the SQL table provider, and the exploration database the
+    # tools read. One version for both, so a question asked in the mirror and a
+    # pack built through `SqlTables` cannot answer it differently.
+    "duckdb>=1.5.5",
+    # The provider builds its reads as expressions rather than as text: a table
+    # and a column name both arrive from a game export, and the one thing a
+    # string template cannot promise is that they are quoted as identifiers.
+    # `duckdb-engine` is the dialect DuckDB's own documentation names.
+    "duckdb-sqlalchemy>=1.5.5",
+    "sqlalchemy>=2.0.52",
     # The DDL half of reading a mysqldump file. The row scanner is hand-written
     # because nothing on the market reads a dump, but a CREATE TABLE is a real
     # grammar and the column order it yields is what keeps every distilled CSV
@@ -20,9 +30,6 @@ package = false
 
 [dependency-groups]
 dev = [
-    # The exploration database and the tools that read it. Not a build
-    # dependency: nothing in the shipped pack path touches DuckDB.
-    "duckdb",
     # Columns cross into DuckDB as columns. A pack is already column
     # oriented, so binding it row by row would be the one avoidable cost.
     "pyarrow",

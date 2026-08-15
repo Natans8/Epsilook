@@ -14,7 +14,7 @@ declared per column rather than decided here.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 
 from ..model.section import Column, Encoding
 
@@ -101,3 +101,50 @@ def encode_column(values: Column, encoding: Encoding,
     if encoding is Encoding.SPARSE:
         return sparse(values, absent)
     return LAYOUTS[encoding](values)
+
+
+def decode_column(shipped: object, encoding: Encoding,
+                  absent: object = EMPTY_SLOT, rows: int | None = None) -> Column:
+    """A shipped column back as the section produced it.
+
+    The inverse of `encode_column`, and it lives beside it because that is the
+    only way the two stay each other's inverse. A reader that works the layouts
+    out for itself is a second account of them, and the encodings are exactly
+    the kind of thing that gets a fourth member one day.
+
+    A dense column is already what was produced, so this is a copy; the other
+    two are undone.
+
+    Args:
+        shipped: the column as the artifact carries it.
+        encoding: the layout it was written in.
+        absent: what the producer put in a row with no value. Sparse needs it
+            for the same reason encoding did -- the filler is the column's own,
+            and zero is a real answer in most columns.
+        rows: how many rows the section has. A sparse column ships the rows
+            that carry a value and nothing about the ones after the last of
+            them, so a column whose tail is all gaps is the one case the
+            payload cannot state: without this it decodes short. The other two
+            layouts carry their own length and ignore it.
+
+    Raises:
+        ValueError: the payload is not the shape its encoding ships.
+    """
+    if encoding is Encoding.DENSE:
+        if isinstance(shipped, Mapping):
+            return dict(shipped)
+        if not isinstance(shipped, Sequence):
+            raise ValueError(f"a dense column ships a sequence or a mapping, "
+                             f"not {type(shipped).__name__}")
+        return list(shipped)
+    if not isinstance(shipped, Mapping):
+        raise ValueError(f"a {encoding.value} column ships a mapping, "
+                         f"not {type(shipped).__name__}")
+    if encoding is Encoding.DEDUP:
+        pool, index = shipped["text"], shipped["of"]
+        return [pool[position] for position in index]
+    at, values = shipped["at"], shipped["is"]
+    out: list[object] = [absent] * max(rows or 0, at[-1] + 1 if at else 0)
+    for row, value in zip(at, values):
+        out[row] = value
+    return out

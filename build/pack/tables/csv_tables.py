@@ -8,6 +8,7 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 from ..drift import OPTIONAL_COLUMNS, OPTIONAL_TABLES
+from .projection import absent, project
 
 csv.field_size_limit(10_000_000)
 
@@ -55,26 +56,18 @@ class CsvTables:
         """
         path = self.path_of(table)
         if not path.exists():
-            if table in self.absent_tables:
-                return
-            sys.exit(f"error: {table}.csv is missing from {self.directory} and it is "
-                     f"not declared optional")
+            absent(table, self.absent_tables, self.directory)
+            return
         with path.open(newline="", encoding="utf-8") as handle:
             reader = csv.reader(handle)
             header = next(reader, None)
             if header is None:
                 sys.exit(f"error: {table}.csv in {self.directory} is empty; it has no "
                          f"header row, so the cached copy is incomplete")
-            index: list[int | None] = []
-            for column in columns:
-                if column in header:
-                    index.append(header.index(column))
-                elif (table, column) in self.defaults:
-                    index.append(None)
-                else:
-                    sys.exit(f"error: {table}.csv is missing column {column!r} and it is "
-                             f"not declared in OPTIONAL_COLUMNS; header = {header}")
-            stand_ins = [self.defaults.get((table, column), "") for column in columns]
+            plan = project(table, header, columns, defaults=self.defaults)
+            index = [header.index(source) if source is not None else None
+                     for source in plan.sources]
+            stand_ins = plan.stand_ins
             width = len(header)
             for row in reader:
                 # A row narrower than the header is a truncated file, and

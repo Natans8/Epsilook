@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
-from typing import Protocol
+from collections.abc import Callable, Iterator, Sequence
+from pathlib import Path
+from typing import Protocol, TypeAlias
 
 
 class Tables(Protocol):
@@ -30,3 +31,12 @@ class Tables(Protocol):
     def rows(self, table: str, columns: Sequence[str]) -> Iterator[tuple[str, ...]]:
         """Yield the named columns of every row, revisions applied."""
         raise NotImplementedError
+
+
+Provider: TypeAlias = Callable[[Path], Tables]
+"""An implementation, not yet pointed at a directory.
+
+Which one a build reads through is one decision, and the wiring makes it once:
+every source it composes is served by the same implementation, so a build is
+read entirely through one or entirely through the other.
+"""

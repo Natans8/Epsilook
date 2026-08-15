@@ -151,6 +151,11 @@ def main() -> None:
                         help="read this build's tables out of a private "
                              "client's own storage rather than a published "
                              "export, e.g. epsilon")
+    parser.add_argument("--provider", default="csv",
+                        choices=sorted(pipeline.PROVIDERS),
+                        help="which implementation reads the tables. Peers: "
+                             "both produce the same pack, and `sql` is how "
+                             "that stays true")
     parser.add_argument("--refresh", action="store_true",
                         help="re-fetch every source even where a cached copy "
                              "would do")
@@ -180,7 +185,8 @@ def main() -> None:
     modules, manifest = pipeline.modules(args.version, label,
                                          refresh=args.refresh, pack_id=pack_id,
                                          location=MODULE_LOCATION,
-                                         locales=locales, client=args.client)
+                                         locales=locales, client=args.client,
+                                         provider=pipeline.PROVIDERS[args.provider])
 
     with phase("write modules"):
         written = write_modules(modules)

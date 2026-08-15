@@ -21,7 +21,7 @@ be confused by one. Nothing in the product reads the result: it is a
 development tool, and deleting it costs the time to rebuild.
 
 THE SHAPE OF A PACK, and why every section lands as a table. A pack is one
-JSON object of ~80 sections in six shapes, all of which reduce to rows:
+JSON object of ~80 sections, and the shapes reduce to rows:
 
     parallel arrays   {ids: [...], names: [...]}  -> one column each
     ragged arrays     the same, where one column counts something else
@@ -30,11 +30,23 @@ JSON object of ~80 sections in six shapes, all of which reduce to rows:
     lookup            {"3": "Elite"}      -> (key, value)
     list              ["Stand", "Death"]  -> (idx, value), because position IS
                                              the id in every list a pack ships
+    grouped           {missile: {...}, ground: {...}} -> a table per group,
+                                             named for the path down to it
     nested            meta                -> (key, value), values as JSON
 
 That list is closed and checked: an unrecognised shape stops the build rather
 than being guessed at, because a silently skipped section is the failure this
 tool would otherwise have.
+
+THE SECTION REGISTRY IS WHAT SAYS WHICH SHAPE, rather than this file guessing.
+A pack column ships in a declared layout -- dense, sparse or a deduped pool
+plus one index per row -- and a reader that does not undo the layout sees the
+pool and the index instead of the column. That is not hypothetical: before the
+registry was read here, `spellText` and all five `*Rows` sections landed as one
+(key, value) row apiece holding megabytes of JSON, so the entire row model and
+every cooked description were in the mirror and unqueryable. `pack.encode`
+decodes them, which is also why the decode lives beside the encoder rather than
+here.
 """
 
 from __future__ import annotations
@@ -51,6 +63,12 @@ from packs import schema_name, select
 from repo import (CACHE, DIM, GREEN, RESET, ROOT, YELLOW, log,
                   survive_console_encoding)
 
+sys.path.insert(0, str(ROOT / "build"))
+
+from pack.encode import EMPTY_SLOT, FEWEST_BYTES, decode_column, layout_for  # noqa: E402
+from pack.model import SECTIONS  # noqa: E402
+from pack.model.section import Encoding, Layout  # noqa: E402
+
 survive_console_encoding()
 
 try:
@@ -64,6 +82,14 @@ except ImportError:  # pragma: no cover - a development-tool dependency
 
 DATA = ROOT / "site" / "data"
 DB_PATH = CACHE / "epsilook-packs.duckdb"
+
+DECLARED = {section.name: section for section in SECTIONS}
+"""Every section the build declares, by the key it ships under.
+
+`meta` is the one thing in a pack that is not here: it describes the pack
+rather than being one of its sections, and it is the manifest's, not a
+producer's.
+"""
 
 
 # DuckDB column types by the Python type a pack actually carries. A pack holds
@@ -83,13 +109,61 @@ def column_type(values: list[Any]) -> str:
     return "VARCHAR"
 
 
+def _length(shipped: Any, layout: Encoding) -> int:
+    """How many rows a shipped column covers, where it says.
+
+    Dense is its own length and a deduped index is one entry per row. Sparse is
+    the one that cannot answer -- it ships the rows carrying a value and
+    nothing about the gaps after the last of them -- so it reports nothing and
+    lets a sibling column say.
+    """
+    if layout is Encoding.DENSE:
+        return len(shipped) if isinstance(shipped, list) else 0
+    if layout is Encoding.DEDUP:
+        return len(shipped["of"])
+    return 0
+
+
+def decoded(name: str, section: Any) -> Any:
+    """One section with every column's layout undone.
+
+    What the section's `produce` returned, recovered from what shipped. A
+    section the registry does not declare is handed back untouched, which is
+    `meta` and nothing else.
+
+    A sparse column ships only the rows that carry a value, so the row count
+    has to come from somewhere: the section's other columns are the only place
+    it exists, and the longest of them is the section's length.
+    """
+    declaration = DECLARED.get(name)
+    if declaration is None:
+        return section
+    shipped = ({declaration.columns[0]: section}
+               if declaration.layout is Layout.BARE else section)
+    layouts = {column: layout_for(declaration, column, FEWEST_BYTES)
+               for column in declaration.columns}
+    rows = max((_length(shipped[column], layouts[column])
+                for column in declaration.columns if column in shipped), default=0)
+    columns = {
+        column: decode_column(shipped[column], layouts[column],
+                              declaration.absent.get(column, EMPTY_SLOT), rows)
+        for column in declaration.columns if column in shipped}
+    return columns[declaration.columns[0]] if declaration.layout is Layout.BARE else columns
+
+
 def tables_for(name: str, section: Any) -> list[tuple[str, list[str], list[list[Any]]]]:
     """Reduce one pack section to (table, columns, columns-of-values).
 
-    Returns more than one table only for a ragged section, where columns of
-    different lengths are counting different things and a single row would
-    have to pretend otherwise.
+    Returns more than one table where the section holds things of different
+    lengths -- columns counting different things, or a column that is itself a
+    group of columns. A row has to mean one thing, and those cannot share one.
     """
+    section = decoded(name, section)
+    return _tables(name, section)
+
+
+def _tables(name: str, section: Any) -> list[tuple[str, list[str], list[list[Any]]]]:
+    """`tables_for` past the decode, so the recursion does not decode twice."""
     if isinstance(section, dict) and section and all(isinstance(v, list) for v in section.values()):
         by_length: dict[int, list[str]] = {}
         for column, values in section.items():
@@ -107,7 +181,34 @@ def tables_for(name: str, section: Any) -> list[tuple[str, list[str], list[list[
     if isinstance(section, dict) and all(
             not isinstance(v, (list, dict)) for v in section.values()):
         keys = list(section)
-        return [(name, ["key", "value"], [keys, [section[k] for k in keys]])]
+        values = [section[k] for k in keys]
+        # A column holds one type. Most lookups are uniform and land as what
+        # they are; the ones that are not -- a vocabulary naming a word for one
+        # property and a number for the next -- would otherwise fail the load
+        # on whichever value the inference did not expect, so they land as the
+        # text of what they were.
+        if len({type(value) for value in values}) > 1:
+            values = [json.dumps(value, separators=(",", ":")) for value in values]
+        return [(name, ["key", "value"], [keys, values])]
+    if isinstance(section, dict) and any(isinstance(v, dict) for v in section.values()):
+        # Grouped: a column that is itself columns. The row model ships this way
+        # -- one group of properties per row kind -- and flattening it into JSON
+        # is what made the whole of it unqueryable. Each group becomes its own
+        # table, named for the path down to it, because a name assembled from
+        # the path is the one thing that cannot collide with a sibling's.
+        out = []
+        for key, value in section.items():
+            if isinstance(value, (dict, list)):
+                # An empty group is a real answer -- no kind carries a column
+                # no property declares -- and it lands as an empty table rather
+                # than as a row holding nothing.
+                out.extend(_tables(f"{name}_{key}", value) if value
+                           else [(f"{name}_{key}", ["value"], [[]])])
+            else:
+                # A scalar beside the groups: nothing to recurse into, and
+                # dropping it would lose it silently.
+                out.append((f"{name}_{key}", ["value"], [[value]]))
+        return out
     if isinstance(section, dict):  # nested, e.g. meta -- values as JSON text
         keys = list(section)
         return [(name, ["key", "value"],

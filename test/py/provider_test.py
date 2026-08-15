@@ -8,21 +8,30 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from pack.tables.csv_tables import CsvTables
 from pack.tables.overlay import OverlaidTables
 from pack.tables.provider import Tables
+from pack.tables.sql_tables import SqlTables
 
-# Every implementation, as a factory taking the directory to serve.
+# Every implementation, as a factory taking the directory to serve and whatever
+# drift declarations a case wants to stand in for the build-wide ones.
 #
-# `OverlaidTables` appears with nothing to overlay: a route is handed it
+# Each `OverlaidTables` appears with nothing to overlay: a route is handed it
 # blindly, so it must not change the contract when it has no revisions to
 # apply. What it does with revisions is `overlay_test.py`.
-PROVIDERS: list[tuple[str, Callable[[Path], Tables]]] = [
+Factory = Callable[..., Tables]
+
+PROVIDERS: list[tuple[str, Factory]] = [
     ("CsvTables", CsvTables),
-    ("OverlaidTables", lambda directory: OverlaidTables(CsvTables(directory))),
+    ("SqlTables", SqlTables),
+    ("OverlaidCsvTables",
+     lambda directory, **drift: OverlaidTables(CsvTables(directory, **drift))),
+    ("OverlaidSqlTables",
+     lambda directory, **drift: OverlaidTables(SqlTables(directory, **drift))),
 ]
 
 TABLE = """\
@@ -39,9 +48,22 @@ def _source(tmp_path: Path) -> Path:
     return tmp_path
 
 
-@pytest.fixture(name="tables", params=[p for _, p in PROVIDERS], ids=[n for n, _ in PROVIDERS])
-def _tables(request: pytest.FixtureRequest, source: Path) -> Tables:
-    return request.param(source)
+@pytest.fixture(name="make", params=[p for _, p in PROVIDERS], ids=[n for n, _ in PROVIDERS])
+def _make(request: pytest.FixtureRequest, source: Path) -> Factory:
+    """This case's implementation, already pointed at the source directory.
+
+    Handed as a factory rather than an instance because the drift cases stand
+    their own declarations in, and every implementation owes those too.
+    """
+    def build(**drift: Any) -> Tables:
+        return request.param(source, **drift)
+
+    return build
+
+
+@pytest.fixture(name="tables")
+def _tables(make: Factory) -> Tables:
+    return make()
 
 
 def test_a_present_table_is_available(tables: Tables) -> None:
@@ -87,15 +109,15 @@ def test_a_column_may_be_asked_for_twice(tables: Tables) -> None:
     assert next(iter(tables.rows("Spell", ["ID", "ID"]))) == ("3", "3")
 
 
-def test_a_declared_absent_table_yields_nothing(source: Path) -> None:
+def test_a_declared_absent_table_yields_nothing(make: Factory) -> None:
     """How a build that predates a table reports it, with no per-version
     branch: the section comes out empty."""
-    tables = CsvTables(source, absent_tables={"SpellVisual": "the visual route"})
+    tables = make(absent_tables={"SpellVisual": "the visual route"})
     assert list(tables.rows("SpellVisual", ["ID"])) == []
 
 
-def test_a_declared_optional_column_yields_its_stand_in(source: Path) -> None:
-    tables = CsvTables(source, defaults={("Spell", "Missing"): "-1"})
+def test_a_declared_optional_column_yields_its_stand_in(make: Factory) -> None:
+    tables = make(defaults={("Spell", "Missing"): "-1"})
     assert list(tables.rows("Spell", ["ID", "Missing"])) == [
         ("3", "-1"), ("1", "-1"), ("2", "-1")]
 

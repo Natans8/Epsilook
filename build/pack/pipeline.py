@@ -62,9 +62,16 @@ from .sources.listfile import SUPPLEMENT, SUPPLEMENT_FLOOR, release_tag
 from .sources.scaling import read_scaling, scaling_source
 from .sources.tdb import tdb_release
 from .sources.wago import LOCALIZED_TABLES
-from .tables import (CsvTables, ListfileTables, OverlaidTables, Tables,
-                     hotfix_overlays, locale_overlays, supplement_overlay,
-                     translated_exports)
+from .tables import (CsvTables, ListfileTables, OverlaidTables, Provider,
+                     SqlTables, Tables, hotfix_overlays, locale_overlays,
+                     supplement_overlay, translated_exports)
+
+PROVIDERS: dict[str, Provider] = {"csv": CsvTables, "sql": SqlTables}
+"""The implementations a build may be read through, by the name it is asked for.
+
+A roster rather than a branch: the seam's whole claim is that these are peers,
+so choosing one is a lookup and adding one is an entry.
+"""
 
 SOUNDKIT_NAME_TABLE = "SoundKitName"
 """The pinned build's table of human names for sound kits.
@@ -82,7 +89,8 @@ class Providers:
     them itself would be making it again.
     """
 
-    def __init__(self, sources: Sources, *, build: int, locale: str = "") -> None:
+    def __init__(self, sources: Sources, *, build: int, locale: str = "",
+                 provider: Provider = CsvTables) -> None:
         """Wire the providers for one build, in one language.
 
         Args:
@@ -93,8 +101,13 @@ class Providers:
                 the build's own export. Naming one composes two more sources in
                 under the ones already here, so that every route above still
                 asks for a table and gets one.
+            provider: the implementation every directory of game tables here
+                is served by. One for all of them, because a pack read half one
+                way and half the other proves nothing about either. The
+                listfile is not among them: it is a different format, and
+                `ListfileTables` is what reads it whichever of these is chosen.
         """
-        client: Tables = CsvTables(sources.tables)
+        client: Tables = provider(sources.tables)
         if locale:
             # UNDER the hotfix overlay rather than over it, which is what keeps
             # the two languages' row sets identical: the server's rows are
@@ -104,16 +117,16 @@ class Providers:
             # pass alone, and the two halves of a section no longer line up.
             client = OverlaidTables(
                 base=client, overlays=translated_exports(LOCALIZED_TABLES),
-                source=CsvTables(sources.locale_tables[locale]))
+                source=provider(sources.locale_tables[locale]))
 
         self.base: Tables = client
         """The client's own tables, unrevised. What a printed number reads."""
 
         self.tables: Tables = client
-        self.pinned: Tables = CsvTables(sources.pinned_tables)
+        self.pinned: Tables = provider(sources.pinned_tables)
         self.world: Tables | None = None
         if sources.tdb is not None:
-            world: Tables = CsvTables(sources.tdb)
+            world: Tables = provider(sources.tdb)
             if locale:
                 # The creature and object names are the server's alone, so the
                 # language they are read in is the server's too. Its own
@@ -506,7 +519,8 @@ def beside_default(locales: Sequence[Locale]) -> list[str]:
 
 def packed(version: str, label: str, *, refresh: bool = False,
            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
-           locales: Sequence[Locale] = LOCALES, client: str = ""
+           locales: Sequence[Locale] = LOCALES, client: str = "",
+           provider: Provider = CsvTables
            ) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
     """Build one pack, from acquiring its sources to its encoded sections.
 
@@ -522,6 +536,9 @@ def packed(version: str, label: str, *, refresh: bool = False,
             pass whether or not it is named, so naming none builds that alone.
         client: the private client to read this build's tables out of, or empty
             for one somebody published an export of.
+        provider: the `Tables` implementation to read every source through.
+            Peers by construction, so this decides how the build reads and
+            nothing about what it produces.
 
     Returns:
         The header, and what each language produced, by language code. The
@@ -534,7 +551,7 @@ def packed(version: str, label: str, *, refresh: bool = False,
         sources = fetch_sources(version, refresh, beside, client)
     build_id = int(version.rsplit(".", 1)[-1])
     with phase("wire providers"):
-        providers = Providers(sources, build=build_id)
+        providers = Providers(sources, build=build_id, provider=provider)
     with phase("load expansions"):
         ladder = load_expansions()
     with phase("probe absent tables"):
@@ -569,7 +586,8 @@ def packed(version: str, label: str, *, refresh: bool = False,
     for code in sources.locale_tables:
         locale = locale_of(code)
         with phase("wire providers"):
-            spoken_providers = Providers(sources, build=build_id, locale=code)
+            spoken_providers = Providers(sources, build=build_id, locale=code,
+                                         provider=provider)
         said = read_spoken(spoken_providers, locale, values=values,
                            altnames=context.effects.altnames,
                            zone_maps=zone_maps)
@@ -602,7 +620,8 @@ def acquire(version: str, *, refresh: bool = False,
 def modules(version: str, label: str, *, refresh: bool = False,
             policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
             pack_id: str = "", location: str = "",
-            locales: Sequence[Locale] = LOCALES, client: str = ""
+            locales: Sequence[Locale] = LOCALES, client: str = "",
+            provider: Provider = CsvTables
             ) -> tuple[list[Module], dict[str, object]]:
     """Build one pack as the module set it ships as.
 
@@ -617,6 +636,7 @@ def modules(version: str, label: str, *, refresh: bool = False,
             root, so the manifest can name them where they actually are.
         locales: the languages to build.
         client: the private client to read this build's tables out of, if any.
+        provider: the `Tables` implementation to read every source through.
 
     Returns:
         The modules, each named by its own content, and the manifest naming
@@ -625,7 +645,7 @@ def modules(version: str, label: str, *, refresh: bool = False,
     """
     started = time.monotonic()
     header, produced = packed(version, label, refresh=refresh, policy=policy,
-                              locales=locales, client=client)
+                              locales=locales, client=client, provider=provider)
     assembled = [module for code, sections in produced.items()
                  for module in assemble(SECTIONS, sections, locale=code)]
     # Off the build's own pass alone. A further language produces the sections

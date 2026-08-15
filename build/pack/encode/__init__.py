@@ -10,8 +10,8 @@ from collections.abc import Mapping
 
 from ..model.section import (Cardinality, Encoding, Layout, Section,
                              SectionColumns)
-from .columns import (EMPTY_SLOT, LAYOUTS, dense, deduped, encode_column,
-                      sparse)
+from .columns import (EMPTY_SLOT, LAYOUTS, decode_column, dense, deduped,
+                      encode_column, sparse)
 from .policy import FEWEST_BYTES, FEWEST_ENTRIES, layout_of
 
 __all__ = [
@@ -19,6 +19,7 @@ __all__ = [
     "FEWEST_ENTRIES",
     "EMPTY_SLOT",
     "LAYOUTS",
+    "decode_column",
     "dense",
     "deduped",
     "encode_column",

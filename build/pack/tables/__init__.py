@@ -15,8 +15,10 @@ from .hotfixes import hotfix_overlays
 from .listfile_tables import ListfileTables, supplement_overlay
 from .locales import locale_overlays, translated_exports
 from .overlay import OverlaidTables, Overlay
-from .provider import Tables
+from .provider import Provider, Tables
+from .sql_tables import SqlTables
 
 __all__ = ["CsvTables", "ListfileTables", "OverlaidTables", "Overlay",
-           "Tables", "array_columns", "hotfix_overlays", "locale_overlays",
-           "supplement_overlay", "translated_exports"]
+           "Provider", "SqlTables", "Tables", "array_columns",
+           "hotfix_overlays", "locale_overlays", "supplement_overlay",
+           "translated_exports"]
