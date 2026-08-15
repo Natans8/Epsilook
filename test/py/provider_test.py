@@ -122,6 +122,18 @@ def test_a_declared_optional_column_yields_its_stand_in(make: Factory) -> None:
         ("3", "-1"), ("1", "-1"), ("2", "-1")]
 
 
+def test_a_request_of_nothing_but_stand_ins_still_yields_every_row(make: Factory) -> None:
+    """One row per row of the source, not one row of stand-ins.
+
+    A build old enough to lack every column a route asked for still has the
+    rows, and the route counts them. An implementation that works out what to
+    read from the columns alone loses the table here.
+    """
+    tables = make(defaults={("Spell", "Gone"): "-1", ("Spell", "Also"): "0"})
+    assert list(tables.rows("Spell", ["Gone", "Also"])) == [
+        ("-1", "0"), ("-1", "0"), ("-1", "0")]
+
+
 def test_an_undeclared_missing_column_is_fatal(tables: Tables) -> None:
     """The one outcome worth crashing over: silently dropping data."""
     with pytest.raises(SystemExit):

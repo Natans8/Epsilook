@@ -60,6 +60,10 @@ export function loadPack(want?: string): { data: SpellData; pack: RowPack; entry
  * The pack says where each lives and how it is keyed, and there are only two shapes: two parallel columns a reader
  * pairs into a map, or a section indexed by the stored number itself. Reading that here rather than off the loaded
  * 1.0 indexes is the point — the row tables are the pack's, and nothing about them goes through the old engine.
+ *
+ * A paired vocabulary costs a map, and it is built on the first lookup rather than here: a query touches a handful of
+ * the declared vocabularies and every one of them was being paired up front — 63,669 entries on Shadowlands, one of
+ * them a second copy of a map this module builds again a few lines later.
  */
 function rowVocabularies(pack: RowPack): Record<string, (value: number) => string | undefined> {
     const found: Record<string, (value: number) => string | undefined> = {};
@@ -71,9 +75,14 @@ function rowVocabularies(pack: RowPack): Record<string, (value: number) => strin
             const keys = block[where.keys] as number[] | undefined;
             const values = block[where.values] as string[] | undefined;
             if (!keys || !values) continue;
-            const byKey = new Map<number, string>();
-            for (let i = 0; i < keys.length; i++) byKey.set(keys[i], values[i]);
-            found[name] = (value) => byKey.get(value);
+            let byKey: Map<number, string> | undefined;
+            found[name] = (value) => {
+                if (!byKey) {
+                    byKey = new Map<number, string>();
+                    for (let i = 0; i < keys.length; i++) byKey.set(keys[i], values[i]);
+                }
+                return byKey.get(value);
+            };
         } else {
             const direct = section as Record<number, string>;
             found[name] = (value) => direct[value];

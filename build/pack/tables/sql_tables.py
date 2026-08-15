@@ -122,7 +122,11 @@ class SqlTables:
         chosen = [sa.func.coalesce(attached.c[source], "")
                   if source is not None else sa.literal(stand_in)
                   for source, stand_in in zip(plan.sources, plan.stand_ins)]
-        statement = sa.select(*chosen) if chosen else sa.select(sa.literal(1)).select_from(attached)
+        # Named rather than inferred from the columns, because a request made
+        # entirely of stand-ins references none of them: the table would drop
+        # out of the FROM clause and the whole read would collapse to the one
+        # row a bare SELECT of literals returns.
+        statement = sa.select(*chosen or [sa.literal(1)]).select_from(attached)
         sql = str(statement.compile(dialect=DIALECT,
                                     compile_kwargs={"literal_binds": True}))
 
