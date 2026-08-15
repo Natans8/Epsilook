@@ -18,6 +18,9 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import IO
 
+from ..supplements import above
+from .overlay import Overlay
+
 TABLE = "Listfile"
 """The one table this provider serves. Declared once so the provider and the
 overlay that supplements it cannot disagree about the name."""
@@ -26,6 +29,22 @@ ID = "FileDataID"
 PATH = "Path"
 COLUMNS = (ID, PATH)
 """Column names for a format that carries none of its own."""
+
+
+def supplement_overlay(floor: int) -> dict[str, Overlay]:
+    """The asset-name supplement, as an overlay on the listfile.
+
+    An `Overlay` with a rule rather than a second mechanism: the supplement is
+    a second source of the same two columns, admitted only above the id space
+    a private client allocates its own assets from. Confined that way it can
+    add a name the community list has not got and can never replace one it has,
+    whatever either file grows to.
+
+    It adds rather than restates, because a row the community list lacks is
+    exactly what it is for.
+    """
+    return {TABLE: Overlay(table=TABLE, key=ID, judged_on=ID,
+                           admits=above(floor))}
 
 
 class ListfileTables:

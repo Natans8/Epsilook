@@ -167,6 +167,11 @@ class Pack:
     tables for another language would fetch nothing and leave the pack claiming
     a language it has not got. Naming the languages on the roster row is what
     keeps that a declaration rather than a per-build branch in the builder.
+
+    `client` is the other half of the same idea. A published build's tables are
+    downloaded as somebody's export; a private client's are decoded out of its
+    own content store, because no export of them exists. Which client is a
+    roster fact, so the builder takes a key and the declaration lives here.
     """
 
     key: str  # stable short name; what you type on the CLI
@@ -178,6 +183,7 @@ class Pack:
     source: str = WAGO  # WAGO or ARCHIVE — which downloader reads it
     tag: str = ""  # marks a pack whose PATCH another pack also ships (see `id`)
     locales: tuple[str, ...] = ()  # which languages to build; empty = all of them
+    client: str = ""  # a private client to read the tables out of; see below
 
     @property
     def patch(self) -> str:
@@ -248,9 +254,18 @@ PACKS: tuple[Pack, ...] = (
     Pack("cata", "Cataclysm Classic", FROZEN, "4.4.2.60895"),
     Pack("legion", "Legion", FROZEN, "7.3.5.26972"),
     Pack("bfa", "Battle for Azeroth", FROZEN, "8.3.7.35662"),
-    Pack("shadowlands", "Shadowlands", FROZEN, "9.2.7.45745", default=True),
+    Pack("shadowlands", "Shadowlands", FROZEN, "9.2.7.45745"),
     Pack("dragonflight", "Dragonflight", FROZEN, "10.2.7.55664"),
     Pack("tww", "The War Within", FROZEN, "11.2.7.65299"),
+
+    # The client the audience actually plays, and the only pack carrying the
+    # spells a private server added. It sits on Shadowlands' build, so `tag`
+    # separates the two exactly as it separates the PTR line from live. FROZEN
+    # because no public service answers what build it is on: the build's own
+    # acquisition checks the live service against this row and refuses to pack
+    # a different one.
+    Pack("epsilon", "Epsilon", FROZEN, "9.2.7.45745", tag="epsilon",
+         default=True, locales=("enUS",), client="epsilon"),
 )
 
 # Exactly one default, and keys/builds are unique — a duplicate would make
@@ -340,7 +355,14 @@ def stale_cache() -> list[tuple[Path, int]]:
     """
     if not CACHE.is_dir():
         return []
-    keep = set(builds()) | {SOUNDKITNAME_BUILD}
+    # A client's extracted tables land beside the downloaded ones under a name
+    # carrying the client key, so today's build-directory pattern does not match
+    # them and they survive by falling through. Named anyway: what keeps them is
+    # then the roster rather than the shape of a regex, and widening that
+    # pattern cannot quietly start deleting a quarter of a gigabyte that no
+    # download would bring back.
+    keep = (set(builds()) | {SOUNDKITNAME_BUILD}
+            | {f"{pack.build}-{pack.client}" for pack in PACKS if pack.client})
     keep_tdb = {tdb_tag(build) for build in builds()} - {""}
 
     stale = []

@@ -54,6 +54,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .wdc3 import ColumnSpec
+
 DBD_URL = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/definitions/{table}.dbd"
 
 # A build id: "9.2.7.45745". Compared componentwise, so 10.x sorts after 9.x
@@ -275,3 +277,35 @@ def load(table: str, cache_dir: Path, refresh: bool = False,
 
     text = path.read_text(encoding="utf-8", errors="replace")
     return parse(text, table) if text.strip() else None
+
+
+DEFAULT_BITS = {"float": 32, "string": 32, "locstring": 32}
+"""Declared width for the kinds a definition does not give one for."""
+
+
+def schema_for(definition: Definition | None,
+               build: Build | None) -> list[ColumnSpec] | None:
+    """A reader's schema from a parsed definition's block for one build.
+
+    Here rather than beside a reader because it is the definition half of the
+    pair: what a `.dbd` says a build's columns are, in the shape the reader
+    asks for. Two readers wanted it and each wrote its own copy.
+
+    Returns:
+        The columns in export order, or None if the definition covers no such
+        build -- worth telling apart from a parse failure, because it means the
+        table exists but not for this client.
+    """
+    block = definition.block_for(build) if definition and build else None
+    if block is None:
+        return None
+    out: list[ColumnSpec] = []
+    for entry in block.columns:
+        meaning = definition.columns.get(entry.name) if definition else None
+        kind = meaning.type if meaning else "int"
+        out.append(ColumnSpec(name=entry.name, kind=kind,
+                              bits=entry.width or DEFAULT_BITS.get(kind, 32),
+                              signed=not entry.unsigned, count=entry.array or 1,
+                              is_id=entry.is_id, is_relation=entry.is_relation,
+                              in_record=not entry.noninline))
+    return out

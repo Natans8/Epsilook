@@ -24,10 +24,7 @@ from typing import Protocol
 
 from ..progress import log
 from ..sources import dbd
-from ..sources.wdc3 import ColumnSpec, Db2
-
-DEFAULT_BITS = {"float": 32, "string": 32, "locstring": 32}
-"""Declared width for the kinds a definition does not give one for."""
+from ..sources.wdc3 import Db2
 
 
 class Storage(Protocol):
@@ -39,30 +36,6 @@ class Storage(Protocol):
 
     def read(self, file_id: int, *, local_only: bool = False) -> bytes | None:
         """One file's decoded bytes, or None when the client lacks it."""
-
-
-def schema_for(definition: dbd.Definition | None,
-               build: dbd.Build | None) -> list[ColumnSpec] | None:
-    """The reader's schema from a parsed definition's block for one build.
-
-    Returns:
-        The columns in export order, or None if the definition covers no such
-        build -- worth telling apart from a parse failure, because it means the
-        table exists but not for this client.
-    """
-    block = definition.block_for(build) if definition and build else None
-    if block is None:
-        return None
-    out: list[ColumnSpec] = []
-    for entry in block.columns:
-        meaning = definition.columns.get(entry.name) if definition else None
-        kind = meaning.type if meaning else "int"
-        out.append(ColumnSpec(name=entry.name, kind=kind,
-                              bits=entry.width or DEFAULT_BITS.get(kind, 32),
-                              signed=not entry.unsigned, count=entry.array or 1,
-                              is_id=entry.is_id, is_relation=entry.is_relation,
-                              in_record=not entry.noninline))
-    return out
 
 
 class Db2Tables:
@@ -108,7 +81,7 @@ class Db2Tables:
         raw = self._storage.read(fid)
         if not raw:
             return None
-        schema = schema_for(dbd.load(table, self._definitions), self._build)
+        schema = dbd.schema_for(dbd.load(table, self._definitions), self._build)
         if schema is None:
             log(f"  {table}: no definition block for this build")
             return None

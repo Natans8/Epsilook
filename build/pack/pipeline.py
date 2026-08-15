@@ -56,13 +56,15 @@ from .routes.values import DescriptionValues
 from .sources import (Sources, fetch_sources, load_expansions,
                       load_local_enum, read_anim_names, read_enum_names)
 from .sources.cache import CACHE_DIR
+from .sources.client import CLIENTS
 from .sources.gobs import read_gob_displays
-from .sources.listfile import release_tag
+from .sources.listfile import SUPPLEMENT, SUPPLEMENT_FLOOR, release_tag
 from .sources.scaling import read_scaling, scaling_source
 from .sources.tdb import tdb_release
 from .sources.wago import LOCALIZED_TABLES
 from .tables import (CsvTables, ListfileTables, OverlaidTables, Tables,
-                     hotfix_overlays, locale_overlays, translated_exports)
+                     hotfix_overlays, locale_overlays, supplement_overlay,
+                     translated_exports)
 
 SOUNDKIT_NAME_TABLE = "SoundKitName"
 """The pinned build's table of human names for sound kits.
@@ -91,12 +93,6 @@ class Providers:
                 the build's own export. Naming one composes two more sources in
                 under the ones already here, so that every route above still
                 asks for a table and gets one.
-
-        TODO: compose the listfile with the vendored asset-name supplement.
-            It is an `Overlay` admitted `above(SUPPLEMENT_FLOOR)`, and turning
-            it on names ~95k more assets -- so it lands as its own explained
-            change, not inside the stage that has to reproduce a pack built
-            before it existed.
         """
         client: Tables = CsvTables(sources.tables)
         if locale:
@@ -133,7 +129,16 @@ class Providers:
             self.tables = OverlaidTables(base=client,
                                          overlays=hotfix_overlays(build),
                                          source=world)
-        self.listfile: Tables = ListfileTables(sources.listfile)
+        # The community list names what Blizzard ships; the supplement names
+        # what a private client added, and the two never claim the same id --
+        # the overlay admits nothing below the floor a client allocates its own
+        # assets from. So this is additive for every pack and decisive for one:
+        # a build off a private client's tables references the ids only the
+        # supplement can name.
+        self.listfile: Tables = OverlaidTables(
+            base=ListfileTables(sources.listfile),
+            overlays=supplement_overlay(SUPPLEMENT_FLOOR),
+            source=ListfileTables(SUPPLEMENT))
 
     def named(self, fids: set[int]) -> set[int]:
         """Which of `fids` name a real asset.
@@ -146,6 +151,16 @@ class Providers:
         # the listfile costs this build, not what one of its two readers did.
         with phase("resolve paths (listfile)"):
             return set(resolve_paths(self.listfile, fids))
+
+
+def client_keys() -> list[str]:
+    """The private clients a pack may be built from, sorted.
+
+    Read through the wiring rather than off the declaration, because the entry
+    point above may not reach into the acquisition layer -- and what it wants
+    is the roster of choices, not the services behind them.
+    """
+    return sorted(CLIENTS)
 
 
 def read_kit_names(pinned: Tables, used: set[int]) -> list[tuple[int, str]]:
@@ -492,7 +507,7 @@ def beside_default(locales: Sequence[Locale]) -> list[str]:
 
 def packed(version: str, label: str, *, refresh: bool = False,
            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
-           locales: Sequence[Locale] = LOCALES
+           locales: Sequence[Locale] = LOCALES, client: str = ""
            ) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
     """Build one pack, from acquiring its sources to its encoded sections.
 
@@ -506,6 +521,8 @@ def packed(version: str, label: str, *, refresh: bool = False,
         policy: how a column's declared kind becomes a layout.
         locales: the languages to build. The default one is the build's own
             pass whether or not it is named, so naming none builds that alone.
+        client: the private client to read this build's tables out of, or empty
+            for one somebody published an export of.
 
     Returns:
         The header, and what each language produced, by language code. The
@@ -515,7 +532,7 @@ def packed(version: str, label: str, *, refresh: bool = False,
     """
     beside = beside_default(locales)
     with phase("acquire sources"):
-        sources = fetch_sources(version, refresh, beside)
+        sources = fetch_sources(version, refresh, beside, client)
     build_id = int(version.rsplit(".", 1)[-1])
     with phase("wire providers"):
         providers = Providers(sources, build=build_id)
@@ -563,7 +580,7 @@ def packed(version: str, label: str, *, refresh: bool = False,
 
 
 def acquire(version: str, *, refresh: bool = False,
-            locales: Sequence[Locale] = LOCALES) -> None:
+            locales: Sequence[Locale] = LOCALES, client: str = "") -> None:
     """Fetch everything one build reads, and produce nothing.
 
     Acquisition separated from execution, so that builds may then run at the
@@ -579,14 +596,14 @@ def acquire(version: str, *, refresh: bool = False,
     because it IS the build's own acquisition: nothing here decides separately
     what a version needs.
     """
-    fetch_sources(version, refresh, beside_default(locales))
+    fetch_sources(version, refresh, beside_default(locales), client)
     scaling_source(version, CACHE_DIR).acquire(refresh)
 
 
 def modules(version: str, label: str, *, refresh: bool = False,
             policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
-            pack_id: str = "",
-            location: str = "", locales: Sequence[Locale] = LOCALES
+            pack_id: str = "", location: str = "",
+            locales: Sequence[Locale] = LOCALES, client: str = ""
             ) -> tuple[list[Module], dict[str, object]]:
     """Build one pack as the module set it ships as.
 
@@ -600,6 +617,7 @@ def modules(version: str, label: str, *, refresh: bool = False,
         location: where the writer will put the modules, relative to the site
             root, so the manifest can name them where they actually are.
         locales: the languages to build.
+        client: the private client to read this build's tables out of, if any.
 
     Returns:
         The modules, each named by its own content, and the manifest naming
@@ -608,7 +626,7 @@ def modules(version: str, label: str, *, refresh: bool = False,
     """
     started = time.monotonic()
     header, produced = packed(version, label, refresh=refresh, policy=policy,
-                              locales=locales)
+                              locales=locales, client=client)
     assembled = [module for code, sections in produced.items()
                  for module in assemble(SECTIONS, sections, locale=code)]
     # Off the build's own pass alone. A further language produces the sections

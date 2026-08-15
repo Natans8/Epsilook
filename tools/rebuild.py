@@ -86,6 +86,8 @@ def build_argv(pack: Pack, refresh: bool, timing: bool = False) -> list[str]:
     # language says nothing, and gets every language the build declares.
     for locale in pack.locales:
         argv += ["--locale", locale]
+    if pack.client:
+        argv += ["--client", pack.client]
     if pack.default:
         argv.append("--default")
     if pack.hidden:

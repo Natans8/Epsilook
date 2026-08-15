@@ -49,12 +49,19 @@
     "hash": "463549f1ac"
   },
   {
+    "id": "9.2.7-epsilon.45745",
+    "label": "Epsilon 9.2.7",
+    "file": "data/9.2.7-epsilon.45745/manifest.json",
+    "built": "2026-08-15",
+    "hash": "819ff7676c",
+    "default": true
+  },
+  {
     "id": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/manifest.json",
     "built": "2026-08-15",
-    "hash": "74e5c44189",
-    "default": true
+    "hash": "74e5c44189"
   },
   {
     "id": "10.2.7.55664",

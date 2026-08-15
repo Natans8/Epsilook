@@ -146,6 +146,11 @@ def main() -> None:
                              "the default one is built whether or not it is "
                              "named. Omit to build every declared language, "
                              "which is right for any Blizzard build")
+    parser.add_argument("--client", default="", metavar="KEY",
+                        choices=["", *pipeline.client_keys()],
+                        help="read this build's tables out of a private "
+                             "client's own storage rather than a published "
+                             "export, e.g. epsilon")
     parser.add_argument("--refresh", action="store_true",
                         help="re-fetch every source even where a cached copy "
                              "would do")
@@ -165,7 +170,8 @@ def main() -> None:
 
     locales = locales_named(args.locale)
     if args.sources_only:
-        pipeline.acquire(args.version, refresh=args.refresh, locales=locales)
+        pipeline.acquire(args.version, refresh=args.refresh, locales=locales,
+                         client=args.client)
         return
 
     started = time.perf_counter()
@@ -174,7 +180,7 @@ def main() -> None:
     modules, manifest = pipeline.modules(args.version, label,
                                          refresh=args.refresh, pack_id=pack_id,
                                          location=MODULE_LOCATION,
-                                         locales=locales)
+                                         locales=locales, client=args.client)
 
     with phase("write modules"):
         written = write_modules(modules)

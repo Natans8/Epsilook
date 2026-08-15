@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..progress import log
+from .client import client_tables_source
 from .enums import enum_sources
 from .expansions import expansions_source
 from .listfile import listfile_source, supplement_source
@@ -100,7 +101,8 @@ class Sources:
     """
 
 
-def source_roster(version: str, locales: Sequence[str] = ()) -> Roster:
+def source_roster(version: str, locales: Sequence[str] = (),
+                  client: str = "") -> Roster:
     """What one build reads, declared without fetching any of it.
 
     Args:
@@ -108,8 +110,13 @@ def source_roster(version: str, locales: Sequence[str] = ()) -> Roster:
         locales: the languages to read BESIDE the build's own export, which is
             already one. Naming none is what every pack did before there was a
             second language, and it costs nothing.
+        client: the private client to read the tables out of, or empty for a
+            build somebody published an export of. It changes this one source
+            and nothing else: the listfile, the enums, the ladder and the
+            server dump are the same wherever the tables came from.
     """
-    return Roster(tables=tables_source(version),
+    return Roster(tables=(client_tables_source(client, version) if client
+                          else tables_source(version)),
                   pinned_tables=pinned_tables_source(),
                   enums=enum_sources(),
                   listfile=listfile_source(),
@@ -134,14 +141,15 @@ def acquired(source: Source, refresh: bool) -> Path | None:
     return source.acquire(refresh)
 
 
-def fetch_sources(version: str, refresh: bool,
-                  locales: Sequence[str] = ()) -> Sources:
+def fetch_sources(version: str, refresh: bool, locales: Sequence[str] = (),
+                  client: str = "") -> Sources:
     """Ensure every source this build needs is cached, and say where it is.
 
     Args:
         version: the build id.
         locales: the languages to read beside the build's own export.
         refresh: re-fetch every source even where a cached copy would do.
+        client: the private client to read the tables out of, if any.
 
     Raises:
         SystemExit: if a source the build cannot do without came back absent.
@@ -149,7 +157,7 @@ def fetch_sources(version: str, refresh: bool,
             is not an error on its own -- but a whole directory of them means
             the version was never published rather than that it degraded.
     """
-    roster = source_roster(version, locales)
+    roster = source_roster(version, locales, client)
     tables = acquired(roster.tables, refresh)
     pinned_tables = acquired(roster.pinned_tables, refresh)
     for source in roster.enums:
