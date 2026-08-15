@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from ..tables import Tables, array_columns
 from .colors import RGB_MASK, pack_rgb, to_channel
-from .columns import to_int
+from .columns import to_float, to_int
 
 SCREEN_EFFECT_FOG = 3
 """The screen effect whose parameter carries a fog tint rather than a grade."""
@@ -120,7 +120,7 @@ def read_full_screen_effects(
             roles[overlay] = TEX_OVERLAY
         for file in blend_sets.get(to_int(row[8]), ()):
             roles.setdefault(file, TEX_MASK)
-        offset, size, power = (round(float(value or 0), 3) for value in row[9:12])
+        offset, size, power = (to_float(value, 3) for value in row[9:12])
         rows[to_int(row[0])] = (
             pack_rgb(*(to_channel(value) for value in row[1:4])),
             pack_rgb(*(to_channel(value) for value in row[4:7])),
@@ -162,7 +162,7 @@ def read_fx_payloads(tables: Tables) -> FxPayloads:
     for dissolve_id, blend_set_id, duration, attach in tables.rows(
             "DissolveEffect", ["ID", "TextureBlendSetID", "Duration", "AttachID"]):
         payloads.dissolves[to_int(dissolve_id)] = (
-            round(float(duration), 2) if duration else 0,
+            to_float(duration, 2) if duration else 0,
             blend_sets.get(to_int(blend_set_id), ()),
             to_int(attach))
 

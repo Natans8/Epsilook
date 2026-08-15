@@ -16,14 +16,45 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 from ..routes import MaskedIds, SpellEffectRows, VehicleSeats
 from ..routes.models import MODEL_CAT_ITEM
 from .links import link_kind_word
 from .walk import Bucket, SpellVisuals
 
-ModelRow = tuple[int, int, int, int, int, int, int, int]
-"""(spell, file, category, mask, source attach, dest attach, ref id, motion)."""
+class ModelRow(NamedTuple):
+    """One model a spell reaches, flattened for the row tables.
+
+    A tuple, so it sorts, hashes and dedupes exactly as the anonymous shape it
+    replaces; the names are what let a reader three layers away say which of
+    eight small integers it is holding.
+    """
+
+    spell: int
+    file: int
+    category: int
+    mask: int
+    source: int
+    """The attachment the model hangs from."""
+    destination: int
+    """The attachment it points at, for the kinds that span two."""
+    ref: int
+    """What the category says this row refers to: an item, a creature display."""
+    motion: int
+    """The flight path a missile follows, or zero."""
+
+
+class MechanicRow(NamedTuple):
+    """One effect a spell carries, reduced to the columns the pack ships."""
+
+    spell: int
+    effect: int
+    aura: int
+    target_a: int
+    target_b: int
+    misc_a: int
+    misc_b: int
 
 def masked_rows(bucket: Bucket) -> list[tuple[int, int, int]]:
     """One masked bucket as (spell, payload, mask) rows, sorted."""
@@ -50,8 +81,7 @@ class PackRows:
     sounds: list[tuple[int, int, int, int]] = field(default_factory=list)
     animkits: list[tuple[int, int, int]] = field(default_factory=list)
     chains: list[tuple[int, int, int, int, int]] = field(default_factory=list)
-    mechanics: list[tuple[int, int, int, int, int, int, int]] = field(
-        default_factory=list)
+    mechanics: list[MechanicRow] = field(default_factory=list)
 
     motions: list[int] = field(default_factory=list)
     """The flight paths the model rows name, sorted."""
@@ -155,7 +185,7 @@ def build_rows(visuals: SpellVisuals, effects: SpellEffectRows,
                aura_names: Mapping[int, str]) -> PackRows:
     """Flatten everything at least two sections read, once."""
     models = sorted(
-        (spell, file, category, mask, source, destination, ref, motion)
+        ModelRow(spell, file, category, mask, source, destination, ref, motion)
         for spell, payloads in visuals.models.items()
         for (file, category, source, destination, ref, motion), mask
         in payloads.items())
@@ -179,12 +209,13 @@ def build_rows(visuals: SpellVisuals, effects: SpellEffectRows,
         # Deduped on what ships: two effect rows differing only in a flag the
         # pack does not carry are one row once the shipped columns are what
         # identifies them.
-        mechanics=sorted({(row.spell, row.effect, row.aura, row.target_a,
-                           row.target_b, row.misc_a, row.misc_b)
+        mechanics=sorted({MechanicRow(row.spell, row.effect, row.aura,
+                                      row.target_a, row.target_b,
+                                      row.misc_a, row.misc_b)
                           for row in effects.mechanics}),
-        motions=sorted({row[7] for row in models if row[7]}),
-        items=sorted({row[6] for row in models
-                      if row[2] == MODEL_CAT_ITEM and row[6]}),
+        motions=sorted({row.motion for row in models if row.motion}),
+        items=sorted({row.ref for row in models
+                      if row.category == MODEL_CAT_ITEM and row.ref}),
         vehicles=vehicles,
         vehicle_ids=vehicle_ids,
         used_animkits=used,

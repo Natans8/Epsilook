@@ -17,9 +17,6 @@ class Build:
     version: str
     """Full build id, e.g. ``"9.2.7.45745"``."""
 
-    patch: str
-    """The patch triple, e.g. ``"9.2.7"``."""
-
     tdb: str | None = None
     """The matched TDB release tag; ``None`` when the build ships without one."""
 

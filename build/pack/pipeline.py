@@ -487,9 +487,8 @@ def build_for(version: str, tables: Tables,
     What a build IS to the code, rather than the version string every layer
     used to look its own corner of the truth up from.
     """
-    patch = ".".join(version.split(".")[:3])
     release = tdb_release(version)
-    return Build(version=version, patch=patch,
+    return Build(version=version,
                  tdb=release["tag"] if release else None,
                  absent_tables=frozenset(absent_tables(tables)),
                  max_level=level_cap(version, rungs))

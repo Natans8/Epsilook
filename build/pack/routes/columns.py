@@ -31,6 +31,17 @@ def to_int_from_float(text: str) -> int:
     return int(float(text)) if text else 0
 
 
+def to_float(text: str, digits: int | None = None) -> float:
+    """A float column, rounded to `digits` places when one is given.
+
+    An empty cell means zero, as it does for an integer column. A cell holding
+    anything else is parsed, so a column that is padded rather than blank fails
+    here rather than reaching a route as a silent zero.
+    """
+    value = float(text or 0)
+    return value if digits is None else round(value, digits)
+
+
 def to_amount(*spellings: str) -> float:
     """An effect's amount, from the first spelling that is nonempty and nonzero.
 

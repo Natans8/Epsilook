@@ -21,7 +21,7 @@ from ..section import Count, Layout, Scope, Section, SectionColumns
 def used_targets(reads: Reads) -> list[int]:
     """The implicit-target ids this build's rows actually name, sorted."""
     return sorted({target for row in reads.rows.mechanics
-                   for target in (row[3], row[4]) if target})
+                   for target in (row.target_a, row.target_b) if target})
 
 
 def target_names(reads: Reads) -> SectionColumns:

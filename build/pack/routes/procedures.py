@@ -15,7 +15,7 @@ from ..sources import enum_id_where, enum_ids_where, load_local_enum
 from ..tables import Tables
 from .attachments import NO_ATTACHMENT, NO_MOTION
 from .colors import RGB_MASK
-from .columns import to_int, to_int_from_float
+from .columns import to_float, to_int, to_int_from_float
 from .models import MODEL_CAT_AREA, MODEL_CAT_TRAIL, AttachModel, ModelSources
 
 _PROC_TYPES = load_local_enum("spell_procedural_effect_types")
@@ -129,4 +129,4 @@ def read_proc_effects(tables: Tables, models: ModelSources) -> ProcEffects:
 
 def _to_percent(text: str) -> int:
     """A 0..1 strength column as a whole percentage."""
-    return round(float(text or 0) * 100)
+    return round(to_float(text) * 100)

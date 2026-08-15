@@ -40,8 +40,8 @@ from ..routes.models import (MODEL_CAT_AREA, MODEL_CAT_ATTACH, MODEL_CAT_BARRAGE
                              MODEL_CAT_TRAIL)
 from ..routes.vehicles import PASSENGER_ROLE_NAMES
 from .context import Reads
-from .rows import (boneset_rows, id_rows, masked_rows, replacement_rows,
-                   spell_role_rows, spell_rows)
+from .rows import (ModelRow, boneset_rows, id_rows, masked_rows,
+                   replacement_rows, spell_role_rows, spell_rows)
 
 RowValue = int | float
 """One stored value.
@@ -251,7 +251,7 @@ def build_column(families: Sequence[Family], reads: Reads,
 # The model column.
 
 def _models(kind: str, cat: int, props: tuple[str, ...],
-            pick: Callable[[tuple[int, ...]], RowValues],
+            pick: Callable[[ModelRow], RowValues],
             worn: bool | None = None) -> Family:
     """One model category as its own kind.
 
@@ -271,9 +271,10 @@ def _models(kind: str, cat: int, props: tuple[str, ...],
 
     def rows(reads: Reads) -> Iterable[SpellRow]:
         for row in reads.rows.models:
-            if row[2] != cat or (worn is not None and (row[1] < 0) is not worn):
+            if row.category != cat or (worn is not None
+                                       and (row.file < 0) is not worn):
                 continue
-            yield row[0], pick(row)
+            yield row.spell, pick(row)
 
     return Family(
         kind=kind, props=props, rows=rows,
@@ -296,19 +297,21 @@ def _mounts(reads: Reads) -> Iterable[SpellRow]:
 
 MODEL_FAMILIES: tuple[Family, ...] = (
     _models("missile", MODEL_CAT_MISSILE, ("file", "from", "to", "motion", "target"),
-            lambda row: (row[1], row[4], row[5], row[7], row[3])),
+            lambda row: (row.file, row.source, row.destination, row.motion, row.mask)),
     _models("barrage", MODEL_CAT_BARRAGE, ("file", "attach", "target"),
-            lambda row: (row[1], row[4], row[3])),
-    _models("ground", MODEL_CAT_AREA, ("file", "target"), lambda row: (row[1], row[3])),
+            lambda row: (row.file, row.source, row.mask)),
+    _models("ground", MODEL_CAT_AREA, ("file", "target"),
+            lambda row: (row.file, row.mask)),
     _models("attached", MODEL_CAT_ATTACH, ("file", "attach", "target"),
-            lambda row: (row[1], row[4], row[3]), worn=False),
-    _models("trail", MODEL_CAT_TRAIL, ("file", "target"), lambda row: (row[1], row[3])),
+            lambda row: (row.file, row.source, row.mask), worn=False),
+    _models("trail", MODEL_CAT_TRAIL, ("file", "target"),
+            lambda row: (row.file, row.mask)),
     _models("display", MODEL_CAT_DISPLAY, ("id", "file", "attach", "target"),
-            lambda row: (row[6], row[1], row[4], row[3])),
+            lambda row: (row.ref, row.file, row.source, row.mask)),
     _models("item", MODEL_CAT_ITEM, ("file", "id", "name", "attach", "target"),
-            lambda row: (row[1], row[6], row[6], row[4], row[3])),
+            lambda row: (row.file, row.ref, row.ref, row.source, row.mask)),
     _models("equipped", MODEL_CAT_ATTACH, ("slot", "attach", "target"),
-            lambda row: (row[1], row[4], row[3]), worn=True),
+            lambda row: (row.file, row.source, row.mask), worn=True),
     Family(kind="mount", props=("name", "file"), rows=_mounts,
            vocab={"name": "mounts", "file": "files"}),
 )

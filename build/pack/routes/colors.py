@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import colorsys
 
+from .columns import to_float
+
 # Hue boundaries in degrees, each naming everything below it and above the one
 # before. Red appears twice because it wraps the circle.
 HUE_WORDS = ((15, "red"), (45, "orange"), (70, "yellow"), (160, "green"),
@@ -26,7 +28,7 @@ ARGB, where the top byte is opacity rather than colour."""
 
 def to_channel(text: str) -> int:
     """A 0..1 float colour column as a 0..255 channel byte."""
-    return max(0, min(255, round(float(text or 0) * 255)))
+    return max(0, min(255, round(to_float(text) * 255)))
 
 
 def pack_rgb(red: int, green: int, blue: int) -> int:
