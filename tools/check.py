@@ -55,6 +55,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import mermaid
+import packfile
 import packs
 from repo import (BUMP_PATHS, CACHE, DIM, GREEN, LISTFILE_ASSET, RED, RESET, ROOT, YELLOW,
                   changed_under, git, have_ref, survive_console_encoding)
@@ -85,7 +86,7 @@ LFS_OID_RE = re.compile(rb"oid sha256:([0-9a-f]{64})")
 # repository, so git never reports them as changed and a trigger naming one
 # would warn on every run until it was ignored.
 DOC_TRIGGERS = (
-    (("build/build_data.py", "build/pack"), "docs/DATA_ROUTES.md"),
+    (("build/pack",), "docs/DATA_ROUTES.md"),
     (("src/config.ts",), "README.md"),
     # The supplement is the one source no build can fetch, so its procedure is
     # the only record of how the vendored file was produced. A route added or
@@ -236,7 +237,7 @@ PLACE_NAMES = ("Path", "open", "urlopen", "urllib", "requests", "listdir", "glob
 # cannot drift on what they cover. The versions they run at are pinned by
 # uv.lock rather than by whatever the machine happens to have installed, which
 # is why all three go through `uv run`.
-PYTHON_SOURCES = ("build/build_data.py", "build/locale_data.py", BUILD_PACKAGE,
+PYTHON_SOURCES = (BUILD_PACKAGE,
                   PYTHON_TESTS, "tools")
 
 # How long a pack-freshness answer stays good. Blizzard patches weekly at
@@ -423,8 +424,7 @@ def module_files(entries: list[dict[str, object]]) -> set[str]:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             continue
-        for module in manifest.get("modules", {}).values():
-            named.add(module["file"])
+        named.update(packfile.files(manifest))
     return named
 
 
@@ -550,9 +550,8 @@ def pack_sections() -> tuple[dict[str, object] | None, str]:
     """The default pack's sections, merged across its modules.
 
     Read once here because two checks want it and each reading the module set
-    for itself is two accounts of what a pack is. A section SPLIT between core
-    and a locale module appears in both, so the merge is per column: replacing
-    one half with the other would report the missing half as unread.
+    for itself is two accounts of what a pack is -- and joined by `packfile`,
+    which is the one account every other tool reads a pack through.
 
     Returns:
         The sections keyed by name, or `None` with the reason a caller should
@@ -565,23 +564,23 @@ def pack_sections() -> tuple[dict[str, object] | None, str]:
                    entries[0] if entries else None)
     if not default:
         return None, "no default pack"
-    manifest_path = SITE / default["file"]
-    if not manifest_path.exists():
+    pack_dir = SITE / Path(default["file"]).parent
+    if not (pack_dir / "manifest.json").exists():
         return None, "default pack has no manifest"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-    sections: dict[str, object] = {}
-    for module in manifest.get("modules", {}).values():
-        module_path = SITE / module["file"]
+    for file in packfile.files(packfile.manifest_of(pack_dir)):
+        module_path = SITE / file
         if (not module_path.exists()
                 or module_path.read_bytes()[:len(LFS_POINTER_MAGIC)] == LFS_POINTER_MAGIC):
-            return None, f"{module['file']} not smudged locally"
-        with gzip.open(module_path, "rt", encoding="utf-8") as fh:
-            for name, payload in json.load(fh).items():
-                held = sections.get(name)
-                sections[name] = ({**held, **payload}
-                                  if isinstance(held, dict) and isinstance(payload, dict)
-                                  else payload)
+            return None, f"{file} not smudged locally"
+
+    try:
+        sections = packfile.load(pack_dir)
+    except ValueError as exc:
+        # A pack older than the shape the reader expects. Reported as something
+        # to skip rather than raised: this script's job is to say what is
+        # wrong, and `check_manifest` is what fails on a pack out of step.
+        return None, str(exc)
     sections.pop("meta", None)
     return sections, ""
 
@@ -1190,6 +1189,124 @@ def check_cache_declaration(rep: Report) -> None:
         rep.ok("cache declaration", f"build and tools agree on {CACHE.name}/")
 
 
+LANG_COLUMN_RE = re.compile(r"^[A-Za-z0-9_]+_lang$")
+"""How the client's exports spell a column the game translates."""
+
+
+def check_localized_tables(rep: Report) -> None:
+    """Every table a route reads translated text from must be fetched per language.
+
+    The roster of tables re-downloaded for a language is a declaration, and
+    what makes it right is somewhere else entirely: a route naming a `_lang`
+    column. Miss one and the build reads that column in the default language
+    while everything around it is in another -- which is not merely a missing
+    translation. `UiMap` was the case that earned this guard: the area's map
+    button is the map NAMED THE SAME as the area, so reading the two names in
+    different languages matched nothing and the button vanished from a whole
+    language.
+
+    The test is per statement: wherever a `_lang` column is named, a table the
+    roster covers has to be named alongside it. That reads both spellings the
+    build uses -- a table asked for a column outright, and the drift lists that
+    pair a table with its columns for a build to choose between.
+    """
+    root = ROOT / BUILD_PACKAGE
+    modules = sorted(p for p in root.rglob("*.py")
+                     if not p.name.endswith("_test.py")) if root.is_dir() else []
+    if not modules:
+        rep.skip("localized tables", f"{BUILD_PACKAGE} not present yet")
+        return
+    try:
+        sys.path.insert(0, str(ROOT / "build"))
+        from pack.sources.wago import (  # pylint: disable=import-outside-toplevel
+            LOCALIZED_TABLES, READ_IN_ONE_LANGUAGE)
+    except ImportError as exc:
+        rep.fail("localized tables", f"could not read the build's roster: {exc}")
+        return
+
+    covered = set(LOCALIZED_TABLES) | set(READ_IN_ONE_LANGUAGE)
+    problems: list[str] = []
+    named = 0
+    for path in modules:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        wanted: set[int] = set()
+        answered: set[int] = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.stmt):
+                continue
+            texts, lines = set(), set()
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
+                    texts.add(inner.value)
+                    if LANG_COLUMN_RE.match(inner.value):
+                        lines.add(inner.lineno)
+            wanted |= lines
+            if texts & covered:
+                answered |= lines
+        named += len(wanted)
+        for line in sorted(wanted - answered):
+            problems.append(f"{path.relative_to(ROOT).as_posix()}:{line} reads a "
+                            f"_lang column from a table neither LOCALIZED_TABLES "
+                            f"nor READ_IN_ONE_LANGUAGE names")
+
+    if problems:
+        rep.fail("localized tables", "; ".join(problems[:3]))
+    else:
+        rep.ok("localized tables",
+               f"{named} lines naming a translated column, all from the "
+               f"{len(covered)} declared tables")
+
+
+def check_locale_declaration(rep: Report) -> None:
+    """The build and its tooling must agree which language a pack defaults to.
+
+    Declared twice for the reason the cache directory is: `tools/packfile.py`
+    serves every tool that reads a pack off disk and must not put the build
+    package on its path to do it.
+
+    The drift is quiet in the way that costs most. Every reader here falls back
+    to the default when a pack does not carry the language asked for, so a
+    tools-side default naming a language no pack ships would send every reader
+    down the fallback and report English as though it were the answer.
+
+    Three copies, because the third reader is TypeScript and cannot import
+    either of the other two.
+    """
+    if not (ROOT / BUILD_PACKAGE / "derive" / "locales.py").exists():
+        rep.skip("locale declaration", "build/pack/derive/locales.py not present yet")
+        return
+    try:
+        sys.path.insert(0, str(ROOT / "build"))
+        from pack.derive.locales import DEFAULT_LOCALE, LOCALES  # pylint: disable=import-outside-toplevel
+    except ImportError as exc:
+        rep.fail("locale declaration", f"could not read the build's declaration: {exc}")
+        return
+    if DEFAULT_LOCALE != packfile.DEFAULT_LOCALE:
+        rep.fail("locale declaration",
+                 f"the build defaults to {DEFAULT_LOCALE}, the tools to "
+                 f"{packfile.DEFAULT_LOCALE}")
+        return
+    if DEFAULT_LOCALE not in {locale.code for locale in LOCALES}:
+        rep.fail("locale declaration",
+                 f"{DEFAULT_LOCALE} is the default but no pack is built in it")
+        return
+    found = re.search(r'^export const DEFAULT_LOCALE = "([^"]+)"',
+                      (ROOT / "tools" / "packfile.ts").read_text(encoding="utf-8"),
+                      re.MULTILINE)
+    if found is None:
+        rep.fail("locale declaration",
+                 "tools/packfile.ts no longer declares DEFAULT_LOCALE")
+        return
+    if found.group(1) != DEFAULT_LOCALE:
+        rep.fail("locale declaration",
+                 f"the build defaults to {DEFAULT_LOCALE}, packfile.ts to "
+                 f"{found.group(1)}")
+        return
+    rep.ok("locale declaration",
+           f"build, tools and the bundle agree on {DEFAULT_LOCALE}, "
+           f"{len(LOCALES)} language(s) built")
+
+
 def check_listfile_declaration(rep: Report) -> None:
     """The build and its tooling must read the same listfile asset.
 
@@ -1687,6 +1804,8 @@ def main() -> int:
     check_cli_entries(rep)
     check_license_scope(rep)
     check_listfile_declaration(rep)
+    check_localized_tables(rep)
+    check_locale_declaration(rep)
     check_soundkit_declaration(rep)
     check_supplement(rep)
     check_arcanum(rep)

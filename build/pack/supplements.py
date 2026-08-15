@@ -11,6 +11,8 @@ only in what they read and what they compare it to:
                 client already shipped
     asset names a supplement may only name ids the base cannot, which for the
                 custom asset space is a floor on the id itself
+    translations the row names the language it is written in, and one language
+                is being read
 
 So the rule is declared as a predicate over one field's text, closed over its
 bound at the point the source is wired rather than carried as a separate value
@@ -74,3 +76,26 @@ def above(bound: int) -> Admits:
         The predicate, which refuses text it cannot read as an integer.
     """
     return at_least(bound + 1)
+
+
+def spoken(code: str) -> Admits:
+    """Admit a row whose field names this language, exactly.
+
+    For a source that holds every language at once, keyed by a locale column:
+    the server dump's ``*_locale`` tables carry one row per entry per language,
+    and reading one of them means refusing the rest.
+
+    Args:
+        code: the locale code as the source spells it, e.g. ``ruRU``.
+
+    Returns:
+        The predicate, which compares the field's text as it stands. No
+        case-folding and no aliasing: a code the source does not use should
+        report as a language with nothing in it rather than quietly matching a
+        neighbouring one.
+    """
+
+    def admits(text: str) -> bool:
+        return text == code
+
+    return admits

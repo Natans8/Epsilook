@@ -4,56 +4,56 @@
     "label": "Vanilla Classic 1.15.9",
     "file": "data/1.15.9.69109/manifest.json",
     "built": "2026-08-15",
-    "hash": "017ab30202"
+    "hash": "a471cebbfe"
   },
   {
     "id": "2.5.6.69110",
     "label": "TBC Classic 2.5.6",
     "file": "data/2.5.6.69110/manifest.json",
     "built": "2026-08-15",
-    "hash": "1cab8cdd32"
+    "hash": "46e72f4edf"
   },
   {
     "id": "3.4.3.58936",
     "label": "WotLK Classic 3.4.3",
     "file": "data/3.4.3.58936/manifest.json",
     "built": "2026-08-15",
-    "hash": "d0de78c106"
+    "hash": "8848bdadbf"
   },
   {
     "id": "4.4.2.60895",
     "label": "Cataclysm Classic 4.4.2",
     "file": "data/4.4.2.60895/manifest.json",
     "built": "2026-08-15",
-    "hash": "359f558486"
+    "hash": "6ee1775287"
   },
   {
     "id": "5.5.4.69155",
     "label": "MoP Classic 5.5.4",
     "file": "data/5.5.4.69155/manifest.json",
     "built": "2026-08-15",
-    "hash": "5da9f4d08f"
+    "hash": "85aee3c01f"
   },
   {
     "id": "7.3.5.26972",
     "label": "Legion 7.3.5",
     "file": "data/7.3.5.26972/manifest.json",
     "built": "2026-08-15",
-    "hash": "6fa5912e3e"
+    "hash": "653b076120"
   },
   {
     "id": "8.3.7.35662",
     "label": "Battle for Azeroth 8.3.7",
     "file": "data/8.3.7.35662/manifest.json",
     "built": "2026-08-15",
-    "hash": "d3a996d4ca"
+    "hash": "463549f1ac"
   },
   {
     "id": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/manifest.json",
     "built": "2026-08-15",
-    "hash": "200c41c803",
+    "hash": "74e5c44189",
     "default": true
   },
   {
@@ -61,27 +61,27 @@
     "label": "Dragonflight 10.2.7",
     "file": "data/10.2.7.55664/manifest.json",
     "built": "2026-08-15",
-    "hash": "a66201614b"
+    "hash": "02e876fc7c"
   },
   {
     "id": "11.2.7.65299",
     "label": "The War Within 11.2.7",
     "file": "data/11.2.7.65299/manifest.json",
     "built": "2026-08-15",
-    "hash": "f5dd40302e"
+    "hash": "c193889e96"
   },
   {
     "id": "12.1.0.69273",
     "label": "Midnight 12.1.0",
     "file": "data/12.1.0.69273/manifest.json",
     "built": "2026-08-15",
-    "hash": "cfe02d44b6"
+    "hash": "63db37c433"
   },
   {
     "id": "12.1.0-ptr.69273",
     "label": "Midnight PTR 12.1.0",
     "file": "data/12.1.0-ptr.69273/manifest.json",
     "built": "2026-08-15",
-    "hash": "67762a7137"
+    "hash": "4bec5d7a1c"
   }
 ]

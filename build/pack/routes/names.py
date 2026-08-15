@@ -9,6 +9,7 @@ the source is declared in `SPELL_NAME_SOURCES`, first candidate the build has.
 from __future__ import annotations
 
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from ..drift import SPELL_NAME_SOURCES
@@ -61,7 +62,7 @@ def read_spell_names(tables: Tables) -> SpellNames:
 
 
 def read_override_names(tables: Tables,
-                        by_spell: dict[int, set[int]]) -> dict[int, str]:
+                        by_spell: Mapping[int, set[int]]) -> dict[int, str]:
     """Spell -> its override names as one searchable string.
 
     `by_spell` is which SpellOverrideName ids each spell's auras name. Resolved

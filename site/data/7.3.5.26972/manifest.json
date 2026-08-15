@@ -1,7 +1,7 @@
 {
   "pack": "7.3.5.26972",
   "meta": {
-    "format": 52,
+    "format": 53,
     "version": "7.3.5.26972",
     "label": "Legion 7.3.5",
     "built": "2026-08-15",
@@ -482,14 +482,48 @@
     "universal": {
       "file": "data/modules/universal-d3add882f171.json.gz",
       "bytes": 25191
+    }
+  },
+  "locales": {
+    "enUS": {
+      "names": {
+        "file": "data/modules/names-32dfab288a2c.json.gz",
+        "bytes": 1115053
+      },
+      "text": {
+        "file": "data/modules/text-b918c84c9e96.json.gz",
+        "bytes": 2044492
+      }
     },
-    "names": {
-      "file": "data/modules/names-32dfab288a2c.json.gz",
-      "bytes": 1115053
+    "ruRU": {
+      "names": {
+        "file": "data/modules/names-fbebd999b3a7.json.gz",
+        "bytes": 1556917
+      },
+      "text": {
+        "file": "data/modules/text-24c38db13740.json.gz",
+        "bytes": 2764120
+      }
     },
-    "text": {
-      "file": "data/modules/text-b918c84c9e96.json.gz",
-      "bytes": 2044492
+    "frFR": {
+      "names": {
+        "file": "data/modules/names-5cb204d500b8.json.gz",
+        "bytes": 1294894
+      },
+      "text": {
+        "file": "data/modules/text-1af2a9122a46.json.gz",
+        "bytes": 2296803
+      }
+    },
+    "esES": {
+      "names": {
+        "file": "data/modules/names-ab47169a9286.json.gz",
+        "bytes": 1264186
+      },
+      "text": {
+        "file": "data/modules/text-9e883737d8e9.json.gz",
+        "bytes": 2155763
+      }
     }
   },
   "absentSections": []

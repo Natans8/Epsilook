@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from typing import Any
 
 from ..build import Build
@@ -147,6 +147,62 @@ class DeriveContext:
         """This context narrowed to the named fields."""
         return Reads(self, declared)
 
+    def spoken_in(self, spoken: Spoken) -> DeriveContext:
+        """This same build, with everything the language changes replaced.
+
+        Everything else is kept rather than read again, and that is the
+        invariant the whole locale pass rests on: a section's structure column
+        and its language column ship in different modules and are joined by
+        position, so the ids, the counts and the order they were built in have
+        to be one build's rather than two reads that agreed.
+        """
+        return replace(self, **{name: getattr(spoken, name)
+                                for name in SPOKEN_FIELDS})
+
+
+@dataclass(frozen=True)
+class Spoken:
+    """Everything about a build that changes with the language it is read in.
+
+    The exact slice of the context a locale pass rebuilds: the names the game
+    translates, the templates it writes them into, and the prose cooked out of
+    them. Declared as a record rather than as a list of field names so that
+    what a locale pass must produce and what the context will accept are one
+    thing -- a field added here without a route to fill it does not compile,
+    and a field left out is one the pack would ship in English under another
+    language's name.
+    """
+
+    names: SpellNames
+    """The spell list, its subtexts, and the names spells rename targets to."""
+
+    alt_names: Mapping[int, str]
+    """Each spell's override names, folded into one searchable string."""
+
+    templates: SpellText
+    """The raw description templates, which are written per language."""
+
+    creatures: CreatureModels
+    """Creature names, which morphs and summons both read."""
+
+    items: ItemModels
+    """Item display names."""
+
+    mounts: MountData
+    """Mount display names."""
+
+    objects: GameObjectData
+    """Placed object names."""
+
+    forms: ShapeshiftForms
+    """Shapeshift form names."""
+
+    areas: AreaGates
+    """Gated area names."""
+
+    prose: CookedText
+    """The templates cooked with this language's own wording."""
+
 
 CONTEXT_FIELDS = frozenset(existing.name for existing in fields(DeriveContext))
 """Every field a section may declare in its `reads`.
@@ -154,4 +210,12 @@ CONTEXT_FIELDS = frozenset(existing.name for existing in fields(DeriveContext))
 Read once here rather than per registration: the registry checks a declaration
 against it, so a section naming a field that does not exist fails when it is
 declared rather than when some build finally runs its `produce`.
+"""
+
+SPOKEN_FIELDS = frozenset(existing.name for existing in fields(Spoken))
+"""Every context field that carries the game's own language.
+
+What a locale pass rebuilds, and what the registry checks a localizable section
+against: a section shipping translated text must read at least one of these, or
+its column would be the same in every language with nothing to say so.
 """

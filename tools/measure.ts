@@ -21,7 +21,7 @@
  *             thing that cannot be shipped, because it times running code.
  *
  * ⭐ SO ADDING A NUMBER IS A ONE-ROW EDIT IN THE RIGHT PLACE: a numeric axis is
- * one row in `numeric_domain`'s table in build_data.py, a column is one row in
+ * one row in the build's `numeric_domain` table, a column is one row in
  * COLUMNS here, and a search engine is one row in ENGINES here.
  *
  * It lives in tools/ rather than src/ for the reason tools/query.ts does:
@@ -61,7 +61,7 @@ console.log = console.info = console.debug = toStderr;
  * One SEARCH column, and the pack sections whose rows it walks.
  *
  * ⚠ THE MAPPING LIVES HERE AND NOT IN THE BUILD, deliberately: "which column
- * is this" is a search concept, and `build_data.py` has no business knowing
+ * is this" is a search concept, and the pack build has no business knowing
  * about search columns. The build ships section counts; this says how they
  * group.
  *

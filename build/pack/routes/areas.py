@@ -15,6 +15,7 @@ pointing at the containing zone is exactly right.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from ..tables import Tables
@@ -82,8 +83,28 @@ def _root_of(area: int, parents: dict[int, int]) -> int:
     return area
 
 
-def _zone_maps(tables: Tables, names: dict[int, str]) -> dict[int, int]:
+def read_zone_maps(tables: Tables) -> dict[int, int]:
     """Each area's zone map, where one names the same place the area does.
+
+    Read ONCE per build and shared by every language, which is what makes the
+    id it produces a fact about the build. The match below is between two
+    translated names and its result is not one: two maps of a single place tie,
+    and the tie breaks on the spelling, so a language left to resolve its own
+    would sometimes open a different map for the same area.
+
+    Args:
+        tables: the source to read from, in the build's own language.
+
+    Returns:
+        Area id to the lowest matching `UiMapID`.
+    """
+    return _match_zone_maps(tables, {to_int(area): name for area, name
+                                     in tables.rows("AreaTable",
+                                                    ["ID", "AreaName_lang"])})
+
+
+def _match_zone_maps(tables: Tables, names: dict[int, str]) -> dict[int, int]:
+    """The name match itself, given the area names to match against.
 
     Both filters are load-bearing. Matching on type alone reaches continent
     maps; matching on assignment alone reaches a neighbour's map. Requiring the
@@ -108,11 +129,14 @@ def _zone_maps(tables: Tables, names: dict[int, str]) -> dict[int, int]:
     return maps
 
 
-def read_area_gates(tables: Tables) -> AreaGates:
+def read_area_gates(tables: Tables, maps: Mapping[int, int]) -> AreaGates:
     """Read every spell's area gate, and describe the areas they name.
 
     Args:
         tables: the source to read from.
+        maps: each area's zone map, from `read_zone_maps`. Passed in rather
+            than resolved here because it is one answer for the build whatever
+            language this read is in -- see that function.
 
     Returns:
         The sorted gate pairs, and one `Area` per area some gate names. A group
@@ -131,8 +155,6 @@ def read_area_gates(tables: Tables) -> AreaGates:
         area = to_int(area_text)
         names[area] = name
         parents[area] = to_int(parent_text)
-
-    maps = _zone_maps(tables, names)
 
     gates = AreaGates()
     for spell_text, group_text in tables.rows(

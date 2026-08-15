@@ -1,7 +1,7 @@
 {
   "pack": "11.2.7.65299",
   "meta": {
-    "format": 52,
+    "format": 53,
     "version": "11.2.7.65299",
     "label": "The War Within 11.2.7",
     "built": "2026-08-15",
@@ -418,14 +418,48 @@
     "universal": {
       "file": "data/modules/universal-d3add882f171.json.gz",
       "bytes": 25191
+    }
+  },
+  "locales": {
+    "enUS": {
+      "names": {
+        "file": "data/modules/names-3b068aa3a273.json.gz",
+        "bytes": 2297573
+      },
+      "text": {
+        "file": "data/modules/text-406cf8482908.json.gz",
+        "bytes": 4122547
+      }
     },
-    "names": {
-      "file": "data/modules/names-3b068aa3a273.json.gz",
-      "bytes": 2297573
+    "ruRU": {
+      "names": {
+        "file": "data/modules/names-2b47f4b801bd.json.gz",
+        "bytes": 3151482
+      },
+      "text": {
+        "file": "data/modules/text-079c172bd2aa.json.gz",
+        "bytes": 5383306
+      }
     },
-    "text": {
-      "file": "data/modules/text-406cf8482908.json.gz",
-      "bytes": 4122547
+    "frFR": {
+      "names": {
+        "file": "data/modules/names-148fba62b25c.json.gz",
+        "bytes": 2643790
+      },
+      "text": {
+        "file": "data/modules/text-f9aedf9d4742.json.gz",
+        "bytes": 4671179
+      }
+    },
+    "esES": {
+      "names": {
+        "file": "data/modules/names-063e7f5e536f.json.gz",
+        "bytes": 2600337
+      },
+      "text": {
+        "file": "data/modules/text-e4aba0b84942.json.gz",
+        "bytes": 4382416
+      }
     }
   },
   "absentSections": []

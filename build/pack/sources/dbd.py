@@ -57,7 +57,7 @@ from pathlib import Path
 DBD_URL = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/definitions/{table}.dbd"
 
 # A build id: "9.2.7.45745". Compared componentwise, so 10.x sorts after 9.x
-# (the same trap version_key() fixes in build_data.py — a string sort puts
+# (the same trap version_key() fixes for the roster — a string sort puts
 # "10.2.7" before "9.2.7").
 Build = tuple[int, int, int, int]
 

@@ -28,6 +28,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import packfile
 from repo import DIM, GREEN, RED, RESET, YELLOW
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -208,8 +209,10 @@ def main() -> int:
             failures += 1
             print(f"{RED}FAIL{RESET}  {entry['id']} manifest HTTP {status}")
             continue
-        for module in json.loads(body).get("modules", {}).values():
-            wanted[module["file"]] = entry["id"]
+        # Every language, not the one a reader picks: a deploy is complete only
+        # when the file behind each of them is up.
+        for file in packfile.files(json.loads(body)):
+            wanted[file] = entry["id"]
 
     for file, owner in sorted(wanted.items()):
         status, _, headers = get(args.site + file, int(time.time() * 1000), head=True)

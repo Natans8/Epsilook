@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from build_data import read_anim_emotes
+from pack.routes.anims import read_anim_emotes
 from pack.routes.anims import read_anim_replacements, read_animkit_anims, read_animkit_bonesets
 from support import BuildTables
 

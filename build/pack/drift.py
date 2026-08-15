@@ -91,6 +91,10 @@ SPELL_NAME_SOURCES = [
 TDB_OPTIONAL_TABLES = {
     # split out of creature_template's modelid1..4 columns after the Legion era
     "creature_template_model": "creature displays (legacy dumps keep them on creature_template)",
+    # A release may carry no translations at all; the names then stay in the
+    # language the dump's own tables are written in.
+    "creature_template_locale": "translated creature names",
+    "gameobject_template_locale": "translated object names",
 }
 TDB_OPTIONAL_COLUMNS = {
     # the legacy spelling, gone once creature_template_model took over
@@ -107,3 +111,17 @@ CREATURE_DISPLAY_SOURCES = [
     ("creature_template_model", ["CreatureID", "Idx", "CreatureDisplayID"]),
     ("creature_template", ["entry", "modelid1", "modelid2", "modelid3", "modelid4"]),
 ]
+
+TDB_CANDIDATE_TABLES = frozenset(table for table, _columns in CREATURE_DISPLAY_SOURCES)
+"""World tables a reader picks between by which of them exists.
+
+A distillation must leave nothing behind for one of these the dump did not
+have: an empty stand-in exists, so it wins the pick and blanks every row the
+other candidate would have supplied. Every other table is better off with the
+stand-in, which is what tells a finished distillation from an unfinished one --
+without it a roster whose tables are all optional reads as complete before it
+has run at all.
+
+Derived from the list that does the picking rather than written beside it, so a
+second first-wins list cannot be added without this following.
+"""

@@ -23,7 +23,7 @@ beside the original client it re-implements without contaminating it.
 
 The output is frozen historical data — a shipped expansion's spell table never
 changes again — so this runs by hand when an expansion is added and its result
-is committed. `build_data.py` only ever reads the JSON.
+is committed. The build only ever reads the JSON.
 
     python tools/expansions.py            # regenerate
     python tools/expansions.py --verify   # rebuild and diff, writing nothing
@@ -52,7 +52,7 @@ CACHE_DIR = CACHE / "expansions"
 # one delta-encoded spell-ID list per era client that no public archive serves.
 SOURCES = REPO / "build" / "sources"
 # Gzipped: sorted ID lists compress ~4x, and this is generated, frozen data whose
-# line diff would be meaningless anyway. `gzip` is stdlib, so build_data.py reads
+# line diff would be meaningless anyway. `gzip` is stdlib, so the build reads
 # it without gaining a dependency.
 OUT = REPO / "build" / "expansion_ids.json.gz"
 

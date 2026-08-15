@@ -6,9 +6,17 @@ of them a given build may legitimately lack is declared separately, in
 
 An export cannot change under a build already released, so every one of these
 is pinned: fetched once, then read out of the cache forever.
+
+A table whose text the game translates can be asked for in another language,
+which is the same export with its ``_lang`` columns written differently. Those
+land in a directory of their own per language, and only the tables that carry
+translated text are fetched again -- everything else the reader needs is the
+build's own copy, which says the same thing whoever is reading it.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 from ..drift import OPTIONAL_TABLES
 from .cache import CACHE_DIR, Pinned
@@ -125,15 +133,72 @@ TABLES = [
 ]
 
 
-def _export(table: str, version: str) -> Part:
+LOCALIZED_TABLES = [
+    "SpellName",
+    "Spell",
+    "SpellOverrideName",
+    "AreaTable",
+    "ItemSearchName",
+    "Mount",
+    "SpellShapeshiftForm",
+    "JournalEncounterSection",
+]
+"""The tables above a route reads a translated column from.
+
+That is the whole rule, and it is not "the tables whose text the pack ships":
+a name can decide something without being shipped. `check_localized_tables`
+holds the two together by finding every ``_lang`` column the routes read.
+
+The rest of ``TABLES`` says the same thing in every language -- ids, file ids,
+flags, the hops between them -- so a language costs these downloads rather than
+sixty. ``MountXDisplay`` and ``SpellXDescriptionVariables`` are read beside two
+of these and carry no text at all, so a reader gets the build's own copy of
+them and nothing is fetched twice.
+"""
+
+READ_IN_ONE_LANGUAGE = {
+    # The area's map button is the map NAMED THE SAME as the area, so resolving
+    # it compares two translated strings -- but what it produces is an id, and
+    # an id is not language. It is resolved once for the build and every
+    # language is handed the answer, so no language ever opens this table's
+    # translated copy. See `routes.areas.read_zone_maps`.
+    "UiMap": "the zone-map match is resolved once for the build",
+}
+"""Tables a route reads a translated column from in ONE language only.
+
+Named so the roster and the routes can still be reconciled mechanically: the
+rule is that a `_lang` column is read per language, and these are the declared
+exceptions rather than omissions nobody noticed. Making one of these
+per-language again means moving it into `LOCALIZED_TABLES` -- and the reason it
+was here says what would break if that happened for the wrong reason.
+"""
+
+
+def _export(table: str, version: str, locale: str = "") -> Part:
     """One table's export, as a part of the directory it lands in.
 
     Optionality is per table rather than per build: a table the client
     predates answers 404, and which tables may is what ``OPTIONAL_TABLES``
     declares.
+
+    Args:
+        table: the db2 table to export.
+        version: the build to export it from.
+        locale: the language to write its text in; empty for the build's own.
     """
-    return Part(origin=Origin(WAGO_CSV_URL.format(table=table, version=version)),
+    url = WAGO_CSV_URL.format(table=table, version=version)
+    return Part(origin=Origin(f"{url}&locale={locale}" if locale else url),
                 name=f"{table}.csv", optional=table in OPTIONAL_TABLES)
+
+
+def locale_dir(version: str, locale: str) -> Path:
+    """Where one language's copies of the translated tables land.
+
+    Inside the build's own cache directory, so that everything one build
+    downloaded is one directory: the cache rotation sweeps by build, and a
+    language cached somewhere else would outlive the tables it belongs to.
+    """
+    return CACHE_DIR / version / f"locale-{locale}"
 
 
 def tables_source(version: str) -> Source:
@@ -141,6 +206,19 @@ def tables_source(version: str) -> Source:
     return Gathered(name=f"tables (wago.tools, build {version})",
                     into=CACHE_DIR / version, fetch=Pinned(),
                     parts=[_export(table, version) for table in TABLES])
+
+
+def locale_tables_source(version: str, locale: str) -> Source:
+    """The translated tables for one language, as their own directory.
+
+    Read over the build's own tables rather than instead of them: a provider
+    serves these where they exist and the build's copy everywhere else, so a
+    route asks for a table and never learns which of the two answered.
+    """
+    return Gathered(
+        name=f"tables (wago.tools, build {version}, locale {locale})",
+        into=locale_dir(version, locale), fetch=Pinned(),
+        parts=[_export(table, version, locale) for table in LOCALIZED_TABLES])
 
 
 def pinned_tables_source() -> Source:

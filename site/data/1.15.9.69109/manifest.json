@@ -1,7 +1,7 @@
 {
   "pack": "1.15.9.69109",
   "meta": {
-    "format": 52,
+    "format": 53,
     "version": "1.15.9.69109",
     "label": "Vanilla Classic 1.15.9",
     "built": "2026-08-15",
@@ -422,14 +422,48 @@
     "universal": {
       "file": "data/modules/universal-d3add882f171.json.gz",
       "bytes": 25191
+    }
+  },
+  "locales": {
+    "enUS": {
+      "names": {
+        "file": "data/modules/names-ce7f74416cdf.json.gz",
+        "bytes": 146653
+      },
+      "text": {
+        "file": "data/modules/text-67d78bc7ae7a.json.gz",
+        "bytes": 358836
+      }
     },
-    "names": {
-      "file": "data/modules/names-ce7f74416cdf.json.gz",
-      "bytes": 146653
+    "ruRU": {
+      "names": {
+        "file": "data/modules/names-e0d8aa928fc5.json.gz",
+        "bytes": 209847
+      },
+      "text": {
+        "file": "data/modules/text-22ce5fed2bad.json.gz",
+        "bytes": 497320
+      }
     },
-    "text": {
-      "file": "data/modules/text-67d78bc7ae7a.json.gz",
-      "bytes": 358836
+    "frFR": {
+      "names": {
+        "file": "data/modules/names-7a8ad7010efd.json.gz",
+        "bytes": 169357
+      },
+      "text": {
+        "file": "data/modules/text-240b505d9d42.json.gz",
+        "bytes": 418880
+      }
+    },
+    "esES": {
+      "names": {
+        "file": "data/modules/names-e9b97a3e6488.json.gz",
+        "bytes": 167274
+      },
+      "text": {
+        "file": "data/modules/text-b4d0dd361d38.json.gz",
+        "bytes": 395579
+      }
     }
   },
   "absentSections": []

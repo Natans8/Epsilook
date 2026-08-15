@@ -27,14 +27,11 @@ set -eu
 
 root=${1:-site}
 
-# A pointer is caught by its CONTENT, not its size: a locale overlay is
-# legitimately tiny (an enUS one is 283 bytes, since it diffs English against
-# English), so "small" stopped meaning "stub" the moment overlays existed.
-#
-# The floor applies to a MODULE, and it is low because modules are not all one
-# size: `universal` is the eleven build-independent vocabularies and comes to
-# about 25 KB, where `core` is megabytes. What it still catches is the failure
-# it was written for — a file that is a few bytes of nothing rather than data.
+# A pointer is caught by its CONTENT, not its size. The floor applies to a
+# module and is low because modules are not all one size: `universal` is the
+# build-independent vocabularies and comes to about 25 KB, where `core` is
+# megabytes. What it catches is the failure it was written for — a file that is
+# a few bytes of nothing rather than data.
 MIN_PACK_BYTES=4096
 
 fail=0
@@ -102,17 +99,11 @@ for pack in "$root"/data/*/manifest.json; do
 done
 
 modules=0
-overlays=0
-for pack in "$root"/data/modules/*.gz "$root"/data/*/spelldata.*.json.gz; do
+for pack in "$root"/data/modules/*.gz; do
     [ -e "$pack" ] || continue
     bytes=$(size_of "$pack")
     name=${pack#"$root"/}
-    # A module carries a pack's data and has a meaningful size floor; a
-    # spelldata.<locale>.json.gz is a sparse overlay on one and does not.
-    case "$pack" in
-        */data/modules/*) is_base=1; modules=$((modules + 1)) ;;
-        *) is_base=0; overlays=$((overlays + 1)) ;;
-    esac
+    modules=$((modules + 1))
 
     if [ "$(magic_of "$pack")" != "1f8b" ]; then
         if head -c 23 <"$pack" 2>/dev/null | grep -q 'version https://git-lfs'; then
@@ -120,7 +111,7 @@ for pack in "$root"/data/modules/*.gz "$root"/data/*/spelldata.*.json.gz; do
         else
             bad "$name is $bytes bytes and does not start with the gzip magic — corrupt"
         fi
-    elif [ "$is_base" -eq 1 ] && [ "$bytes" -lt "$MIN_PACK_BYTES" ]; then
+    elif [ "$bytes" -lt "$MIN_PACK_BYTES" ]; then
         bad "$name is $bytes bytes — truncated, not a pack"
     else
         note "$name  $bytes bytes"
@@ -139,5 +130,4 @@ if [ "$fail" -ne 0 ]; then
     exit 1
 fi
 
-printf '\n%s is servable — %s packs over %s modules, %s locale overlays\n' \
-    "$root" "$packs" "$modules" "$overlays"
+printf '\n%s is servable — %s packs over %s modules\n' "$root" "$packs" "$modules"

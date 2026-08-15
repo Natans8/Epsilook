@@ -21,8 +21,8 @@ a **TDB** release covers the patch (without one the build succeeds with morph
 displays empty and no hotfix overlay — Midnight ships exactly that way).
 
 WHY IT EXISTS. A pack's identity (build id, label, default flag) used to be an
-ARGUMENT to build_data.py and nowhere else, recovered afterwards by reading
-site/data/versions.json — the file build_data.py itself WRITES. So the input was
+ARGUMENT to the builder and nowhere else, recovered afterwards by reading
+site/data/versions.json — the file the builder itself WRITES. So the input was
 recovered from the output, and bumping a patch meant: run the build with a
 hand-typed label, then hand-delete the previous entry and its data directory,
 because write_pack() replaces by EXACT build id and a bump changes that id.
@@ -87,7 +87,7 @@ SUMMARY_URL = "https://us.version.battle.net/v2/summary"
 VERSIONS_URL = "https://us.version.battle.net/v2/products/{product}/versions"
 UA = {"User-Agent": "Epsilook-build (github.com/Natans8/Epsilook)"}
 
-# The cheapest table build_data.py reads (a ~500-row index), used only to ask
+# The cheapest table the build reads (a ~500-row index), used only to ask
 # whether wago can serve a build at all. Same URL shape as the real fetch.
 WAGO_PROBE_URL = "https://wago.tools/db2/SpellCastTimes/csv?build={build}"
 
@@ -159,7 +159,15 @@ def schema_name(pack_id: str) -> str:
 
 @dataclass(frozen=True)
 class Pack:
-    """One shipped game version. A patch bump edits `build` and nothing else."""
+    """One shipped game version. A patch bump edits `build` and nothing else.
+
+    ⚠ NOT EVERY CLIENT PUBLISHES EVERY LANGUAGE. Blizzard's own builds do, so
+    `locales` is empty on all of them and they get whatever the build declares.
+    A private client need not: Epsilon ships English alone, and asking its
+    tables for another language would fetch nothing and leave the pack claiming
+    a language it has not got. Naming the languages on the roster row is what
+    keeps that a declaration rather than a per-build branch in the builder.
+    """
 
     key: str  # stable short name; what you type on the CLI
     name: str  # "Vanilla Classic" — the label is this plus the patch
@@ -169,6 +177,7 @@ class Pack:
     hidden: bool = False  # resolvable by ?v= but kept out of the dropdown
     source: str = WAGO  # WAGO or ARCHIVE — which downloader reads it
     tag: str = ""  # marks a pack whose PATCH another pack also ships (see `id`)
+    locales: tuple[str, ...] = ()  # which languages to build; empty = all of them
 
     @property
     def patch(self) -> str:
@@ -272,20 +281,20 @@ def builds() -> list[str]:
     return list(seen)
 
 
-def _build_data():
-    """build/build_data.py as a module, or None. It is not on the path by default.
+def _tdb_release():
+    """The build's own release lookup, or None. It is not on the path by default.
 
-    ⚠ It returns None on a BARE interpreter whatever the file says, because it
-    reaches the acquisition layer and that imports sqlglot. Every caller has to
-    treat None as "I could not find out" and fail safe -- never as "there is
-    nothing to keep".
+    ⚠ It returns None on a BARE interpreter whatever the file says, because the
+    module reaches the acquisition layer and that imports sqlglot. Every caller
+    has to treat None as "I could not find out" and fail safe -- never as
+    "there is nothing to keep".
     """
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
-        import build_data
+        from pack.sources.tdb import tdb_release
     except ImportError:
         return None
-    return build_data
+    return tdb_release
 
 
 SOUNDKITNAME_BUILD = "8.3.0.32218"
@@ -297,7 +306,7 @@ interpreter, and `tools/rebuild.py` runs on one. `check_soundkit_declaration`
 reconciles the two.
 
 ⛔ AND THE IMPORT IS EXACTLY HOW THIS BROKE. The sweeper used to read the
-constant out of build/build_data.py, which now imports sqlglot through the
+constant out of the build package, which imports sqlglot through the
 acquisition layer. Under `uv run` that import succeeds and under a bare
 interpreter it raises — so check.py saw the constant and rebuild.py, which is
 the tool that actually deletes things, silently did not. The pinned directory
@@ -438,7 +447,7 @@ def wago_has(build: str) -> bool | None:
     start a rebuild, and it 404s partway through every table.
 
     Probed with the smallest table the build actually reads, through the exact
-    URL build_data.py will use, so a 200 here means that build is fetchable
+    URL the build will use, so a 200 here means that build is fetchable
     rather than merely listed somewhere.
     """
     url = WAGO_PROBE_URL.format(build=build)
@@ -457,15 +466,15 @@ def wago_has(build: str) -> bool | None:
 def tdb_tag(build: str) -> str:
     """The TDB release tag covering this build's PATCH, or "".
 
-    Imported from build_data.py rather than restated — two copies of this
-    mapping would drift, and the whole point is to answer the same question the
-    build will answer. Matching is per patch (the user's call): a TDB tracks
-    9.2.7, not 9.2.7.45745, so a hotfix bump keeps its server-side data.
+    Imported from the build rather than restated — two copies of this mapping
+    would drift, and the whole point is to answer the same question the build
+    will answer. Matching is per patch (the user's call): a TDB tracks 9.2.7,
+    not 9.2.7.45745, so a hotfix bump keeps its server-side data.
     """
-    module = _build_data()
-    if module is None:
+    release = _tdb_release()
+    if release is None:
         return ""
-    return (module.tdb_release(build) or {}).get("tag", "")
+    return (release(build) or {}).get("tag", "")
 
 
 def availability(build: str) -> str:

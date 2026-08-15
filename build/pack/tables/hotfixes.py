@@ -20,7 +20,7 @@ from ..drift import SPELL_NAME_SOURCES
 from ..sources.tdb import STAMP_COLUMN, TDB_LOSSY_COLUMNS, TDB_TABLES
 from ..supplements import at_least
 from ..targets import VISUAL_REDIRECTS
-from .overlay import Overlay
+from .overlay import Overlay, reconcile
 
 SPELL_EFFECT_COLUMNS = {
     "ID": "ID",
@@ -120,28 +120,11 @@ def check_overlay_declaration() -> list[str]:
     """Ways this map and the distiller's column list could have drifted apart.
 
     Neither can be derived from the other: only this one knows the client's
-    spelling.
+    spelling. A lossy column is excused from the unread half -- it is kept so
+    the overlay can refuse it, which is the one reason to distil a column
+    nothing goes on to read.
 
     Returns:
         One message per disagreement; empty when the two agree.
     """
-    problems: list[str] = []
-    kept = TDB_TABLES["hotfixes"]
-    for base, overlay in _HOTFIXES.items():
-        if overlay.table not in kept:
-            problems.append(f"{base} is overlaid from {overlay.table}, which the "
-                            f"distiller does not keep")
-            continue
-        available = set(kept[overlay.table])
-        for column, spelling in overlay.columns.items():
-            if spelling not in available:
-                problems.append(f"{base}.{column} reads {overlay.table}.{spelling}, "
-                                f"which the distiller does not keep")
-        for spelling in available - {STAMP_COLUMN} - set(overlay.columns.values()):
-            if (overlay.table, spelling) in TDB_LOSSY_COLUMNS:
-                continue
-            problems.append(f"{overlay.table}.{spelling} is distilled but no client "
-                            f"column reads it, and it is not declared lossy")
-    for table in set(kept) - {o.table for o in _HOTFIXES.values()}:
-        problems.append(f"{table} is distilled but overlays nothing")
-    return problems
+    return reconcile(_HOTFIXES, TDB_TABLES["hotfixes"], TDB_LOSSY_COLUMNS)

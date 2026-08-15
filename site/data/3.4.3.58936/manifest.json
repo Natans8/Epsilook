@@ -1,7 +1,7 @@
 {
   "pack": "3.4.3.58936",
   "meta": {
-    "format": 52,
+    "format": 53,
     "version": "3.4.3.58936",
     "label": "WotLK Classic 3.4.3",
     "built": "2026-08-15",
@@ -433,14 +433,48 @@
     "universal": {
       "file": "data/modules/universal-d3add882f171.json.gz",
       "bytes": 25191
+    }
+  },
+  "locales": {
+    "enUS": {
+      "names": {
+        "file": "data/modules/names-e82d11e938f0.json.gz",
+        "bytes": 295949
+      },
+      "text": {
+        "file": "data/modules/text-580670deeeeb.json.gz",
+        "bytes": 684905
+      }
     },
-    "names": {
-      "file": "data/modules/names-e82d11e938f0.json.gz",
-      "bytes": 295949
+    "ruRU": {
+      "names": {
+        "file": "data/modules/names-35d039d86362.json.gz",
+        "bytes": 427533
+      },
+      "text": {
+        "file": "data/modules/text-02fdb4df2adb.json.gz",
+        "bytes": 936236
+      }
     },
-    "text": {
-      "file": "data/modules/text-580670deeeeb.json.gz",
-      "bytes": 684905
+    "frFR": {
+      "names": {
+        "file": "data/modules/names-e8b1fb64c2ee.json.gz",
+        "bytes": 344035
+      },
+      "text": {
+        "file": "data/modules/text-970b2739e545.json.gz",
+        "bytes": 773212
+      }
+    },
+    "esES": {
+      "names": {
+        "file": "data/modules/names-a421c6207c42.json.gz",
+        "bytes": 338429
+      },
+      "text": {
+        "file": "data/modules/text-8a053783aaba.json.gz",
+        "bytes": 734257
+      }
     }
   },
   "absentSections": []

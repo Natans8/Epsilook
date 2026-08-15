@@ -1,7 +1,7 @@
 {
   "pack": "4.4.2.60895",
   "meta": {
-    "format": 52,
+    "format": 53,
     "version": "4.4.2.60895",
     "label": "Cataclysm Classic 4.4.2",
     "built": "2026-08-15",
@@ -430,14 +430,48 @@
     "universal": {
       "file": "data/modules/universal-d3add882f171.json.gz",
       "bytes": 25191
+    }
+  },
+  "locales": {
+    "enUS": {
+      "names": {
+        "file": "data/modules/names-4648e1e0d12e.json.gz",
+        "bytes": 421191
+      },
+      "text": {
+        "file": "data/modules/text-6f2a7b9f0a17.json.gz",
+        "bytes": 905178
+      }
     },
-    "names": {
-      "file": "data/modules/names-4648e1e0d12e.json.gz",
-      "bytes": 421191
+    "ruRU": {
+      "names": {
+        "file": "data/modules/names-5698aa7ebd67.json.gz",
+        "bytes": 592644
+      },
+      "text": {
+        "file": "data/modules/text-5c6092a825b9.json.gz",
+        "bytes": 1227881
+      }
     },
-    "text": {
-      "file": "data/modules/text-6f2a7b9f0a17.json.gz",
-      "bytes": 905178
+    "frFR": {
+      "names": {
+        "file": "data/modules/names-fb47457ff4a3.json.gz",
+        "bytes": 489973
+      },
+      "text": {
+        "file": "data/modules/text-62b37ff06445.json.gz",
+        "bytes": 1007260
+      }
+    },
+    "esES": {
+      "names": {
+        "file": "data/modules/names-133c75d548f6.json.gz",
+        "bytes": 479707
+      },
+      "text": {
+        "file": "data/modules/text-ce18a5ab20b4.json.gz",
+        "bytes": 961826
+      }
     }
   },
   "absentSections": []

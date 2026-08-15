@@ -11,7 +11,7 @@ everything else under `.cache/`. It is not part of the product, nothing in
 `site/` reads it, and deleting it costs only the time to rebuild.
 
 WHY IT EXISTS
-    `build/build_data.py` walks the game tables and bakes exactly the ~44 pack
+    `build/pack` walks the game tables and bakes exactly the pack
     sections the app needs. That walk is the product; it is not a place to ask
     questions. Answering "how many spells reach a screen effect through a kit
     rather than an aura" meant writing a throwaway script that re-parsed 180 MB
@@ -24,7 +24,7 @@ SHAPE
     Version schemas hold the client db2 tables under their real names
     (`v9_2_7."SpellEffect"`) plus the TrinityCore server tables under a `tdb_`
     prefix (`v9_2_7.tdb_creature_template`). Column names are the CSV's
-    verbatim, so anything you read in build_data.py is spelled the same here.
+    verbatim, so anything you read in `build/pack` is spelled the same here.
 
 THREE DECISIONS WORTH KNOWING BEFORE YOU CHANGE ANYTHING
 
@@ -43,7 +43,7 @@ THREE DECISIONS WORTH KNOWING BEFORE YOU CHANGE ANYTHING
        recorded in `ref.column_info` / `ref.relation`, where it can be queried,
        joined and counted. Adding real FK constraints WILL break the build.
 
-    3. NOTHING IS DOWNLOADED THAT build_data.py ALREADY CACHES. This reads
+    3. NOTHING IS DOWNLOADED THAT THE PACK BUILD ALREADY CACHES. This reads
        `.cache/` in place. The only things it fetches are the `.dbd`
        schema definitions, the enum tables, and the few EXTRA_TABLES below that
        the pack does not need but exploration does.
@@ -107,13 +107,13 @@ USER_AGENT = "Epsilook-devdb (github.com/Natans8/Epsilook)"
 STORAGE_VERSION = "v1.0.0"
 
 # Tables worth having in the database that the PACK does not need, so
-# build_data.py never downloads them. Fetched into the same per-version cache
+# the build never downloads them. Fetched into the same per-version cache
 # directory, after which the ordinary CSV sweep picks them up for free.
 #
 # This list is the answer to "if we don't have all the data, rethink how we
 # fetch it": adding a name here is the whole change.
 EXTRA_TABLES = {
-    # The kit table itself. build_data.py reaches kits through
+    # The kit table itself. The build reaches kits through
     # SpellVisualEvent -> SpellVisualKitEffect and never reads SpellVisualKit,
     # so its own columns (flags, anim ids, the kit's own name) are invisible to
     # every question asked so far. 6.65% of SpellVisualKitEffect rows point at a
@@ -202,7 +202,7 @@ EXTRA_TABLES = {
     # normal CSV sweep, and 9.2.7's names come from the pinned 8.3.0 download
     # the pack build makes. Nothing was missing; do not add it back.
     # SpellCastTimes, SpellDuration and SpellInterrupts USED to be listed here.
-    # They are build_data.py TABLES now (the delivery line reads all three), so
+    # They are build TABLES now (the delivery line reads all three), so
     # the normal CSV sweep already caches them and repeating them here would
     # only be a second place to keep in step.
 }
@@ -210,7 +210,7 @@ EXTRA_TABLES = {
 # ---------------------------------------------------------------- enum linkage
 #
 # WoWDBDefs ships ~169 enum tables but nothing says WHICH COLUMN uses WHICH
-# enum — that mapping exists only in readers like build_data.py. Declared here
+# enum — that mapping exists only in readers like `build/pack`. Declared here
 # so `ref.enum_column` can join a raw value to its name.
 #
 # EXTENSION POINT: one line per (table, column) -> enum name.
@@ -454,7 +454,7 @@ def build_version(con: "duckdb.DuckDBPyConnection", build_id: str,
     build = dbd.parse_build(build_id)
     source = CACHE / build_id
     if build is None or not source.is_dir():
-        log(f"  ! {build_id}: no cache directory — run build/build_data.py first")
+        log(f"  ! {build_id}: no cache directory — run tools/rebuild.py first")
         return 0, 0, 0
 
     con.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
@@ -535,7 +535,7 @@ def load_tdb(con: "duckdb.DuckDBPyConnection", build_id: str, tdb_tag: str | Non
 def fetch_extra_tables(build_id: str) -> None:
     """Download the EXTRA_TABLES this build has, into its normal cache dir.
 
-    They then look exactly like anything build_data.py cached, so the CSV sweep
+    They then look exactly like anything the build cached, so the CSV sweep
     picks them up with no special case. A table that postdates the build 404s
     and is remembered as absent.
     """
@@ -601,7 +601,7 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
     # `SoundKitName` was last shipped at 8.3.0.32218 and exists in NO 9.x+
     # build, so one pinned copy names kits for every schema here. Kit ids are
     # stable across builds (99.65% identical file sets), which is what makes the
-    # join sound. See build_data.SOUNDKITNAME_BUILD.
+    # join sound. See pack.sources.wago.SOUNDKITNAME_BUILD.
     skn = CACHE / "8.3.0.32218" / "SoundKitName.csv"
     if skn.exists():
         literal = str(skn).replace("'", "''")
@@ -624,23 +624,25 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
                         list(enumerate(names)))
         log(f"  ref.anim_name                   {len(names):>9,}")
 
-    # -- hardcoded client tables, imported from build_data.py -----------------
+    # -- hardcoded client tables, imported from the build --------------------
     # Imported rather than re-typed: a second copy of a table is a copy waiting
-    # to drift, and build_data.py is already where both are maintained.
+    # to drift, and the build package is already where both are maintained.
     try:
-        import build_data
+        from pack.routes.attachments import (  # pylint: disable=import-outside-toplevel
+            M2_ATTACHMENT_NAMES, VEHICLE_GEO_COMPONENT_LINKS)
+        from pack.sources import load_local_enum  # pylint: disable=import-outside-toplevel
 
         con.execute("CREATE OR REPLACE TABLE ref.m2_attachment "
                     "(attachment_id INTEGER PRIMARY KEY, name VARCHAR)")
         con.executemany("INSERT INTO ref.m2_attachment VALUES (?, ?)",
-                        sorted(build_data.M2_ATTACHMENT_NAMES.items()))
+                        sorted(M2_ATTACHMENT_NAMES.items()))
         log(f"  ref.m2_attachment               "
-            f"{len(build_data.M2_ATTACHMENT_NAMES):>9,}")
+            f"{len(M2_ATTACHMENT_NAMES):>9,}")
 
         # VehicleSeat.AttachmentID is an INDEX into a table hardcoded in the
         # client binary, not an M2 attachment id (DATA_ROUTES 3i). Shipping the
         # decode makes that join possible in SQL instead of in prose.
-        links = build_data.VEHICLE_GEO_COMPONENT_LINKS
+        links = VEHICLE_GEO_COMPONENT_LINKS
         pairs = (sorted(links.items()) if isinstance(links, dict)
                  else list(enumerate(links)))
         con.execute("CREATE OR REPLACE TABLE ref.vehicle_geo_component_link "
@@ -654,7 +656,7 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
         # unreadable without this: attr_column + mask are the two things a query
         # needs. `handler` marks the bits the pack ships as pills, `requires` the
         # one intersection rule (160 only means anything AND 34).
-        attrs = build_data.load_local_enum("spell_attributes")
+        attrs = load_local_enum("spell_attributes")
         con.execute("CREATE OR REPLACE TABLE ref.spell_attribute ("
                     " bit INTEGER PRIMARY KEY, name VARCHAR, label VARCHAR,"
                     " attr_column VARCHAR, mask BIGINT,"
@@ -681,7 +683,7 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
         interrupt_rows = []
         for enum_file, applies in (("spell_interrupts_interrupt_flags", "InterruptFlags"),
                                    ("spell_interrupt_flags", "AuraInterruptFlags / ChannelInterruptFlags")):
-            enum = build_data.load_local_enum(enum_file)
+            enum = load_local_enum(enum_file)
             interrupt_rows += [
                 (enum_file, applies, bit, meta["name"], meta["label"],
                  1 << (bit % 32), meta.get("handler"))
@@ -690,7 +692,7 @@ def build_reference(con: "duckdb.DuckDBPyConnection", manifest: list[dict],
                         interrupt_rows)
         log(f"  ref.spell_interrupt_flag        {len(interrupt_rows):>9,}")
     except (ImportError, AttributeError) as exc:
-        log(f"  ! build_data.py tables unavailable ({exc})")
+        log(f"  ! the build's declared tables are unavailable ({exc})")
 
     # -- enums ----------------------------------------------------------------
     enum_names = fetch_enums(refresh)
@@ -798,10 +800,10 @@ def build_catalog(con: "duckdb.DuckDBPyConnection", catalog: list[tuple]) -> Non
 #
 # The altitude here is deliberate: these views cover the SPINE — the joins every
 # question repeats — and stop short of the payload routes. Reimplementing
-# build_data.py's six model routes in SQL would be a second copy of the hardest
+# the build's six model routes in SQL would be a second copy of the hardest
 # logic in the project, guaranteed to drift from the one the app actually ships.
 # So: getting from a spell to its kits is a view; deciding what a kit MEANS
-# stays in build_data.py.
+# stays in `build/pack`.
 
 def has_tables(con: "duckdb.DuckDBPyConnection", schema: str, *tables: str) -> bool:
     placeholders = ",".join("?" * len(tables))
@@ -940,7 +942,7 @@ def main() -> int:
     args = parser.parse_args()
 
     # ONE SCHEMA PER BUILD, NOT PER PACK. The roster is the input (it is what
-    # build_data.py is driven from), and two packs can ship one build — a test
+    # the build is driven from), and two packs can ship one build — a test
     # line is level with live until it moves ahead, and versions.json would
     # therefore ask for the same tables twice under a schema name that is not a
     # game version. What this database is FOR is the game data, so the
@@ -951,11 +953,11 @@ def main() -> int:
          "default": any(p.default for p in PACKS if p.build == build)}
         for build in builds()]
 
-    # TDB tags come from build_data.py so the mapping is not written down twice.
+    # TDB tags come from the build so the mapping is not written down twice.
     try:
-        import build_data
+        from pack.sources.tdb import tdb_release  # pylint: disable=import-outside-toplevel
         for entry in manifest:
-            release = build_data.tdb_release(entry["id"])
+            release = tdb_release(entry["id"])
             entry["tdb_tag"] = release.get("tag") if release else None
     except (ImportError, AttributeError):
         for entry in manifest:

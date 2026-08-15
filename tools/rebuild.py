@@ -41,6 +41,7 @@ from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+import packfile
 from packs import PACKS, Pack, select, stale_cache
 from repo import DIM, GREEN, RED, RESET, YELLOW
 
@@ -81,6 +82,10 @@ def build_argv(pack: Pack, refresh: bool, timing: bool = False) -> list[str]:
     argv = [*UV_RUN, "-m", BUILD, "--version", pack.build, "--label", pack.label]
     if pack.id != pack.build:
         argv += ["--id", pack.id]
+    # Named only where the roster names them: a client that publishes every
+    # language says nothing, and gets every language the build declares.
+    for locale in pack.locales:
+        argv += ["--locale", locale]
     if pack.default:
         argv.append("--default")
     if pack.hidden:
@@ -122,19 +127,31 @@ def prewarm(chosen: Sequence[Pack], refresh: bool) -> int:
     Deduplicated by build id, because that is what a cache directory is keyed
     by: a test line sharing a patch with live reads exactly the same sources, so
     warming them twice would only pay the interpreter's startup again.
+
+    What a build's languages are is the UNION over the packs on it, not the
+    first one's. Two packs can sit on one build and want different languages,
+    and warming only one of the two would leave the other's fetched by the
+    build itself -- concurrently, into the one path, which is the race this
+    exists to remove.
     """
-    seen: set[str] = set()
+    by_build: dict[str, list[Pack]] = {}
     for pack in chosen:
-        if pack.build in seen:
-            continue
-        seen.add(pack.build)
-        argv = [*UV_RUN, "-m", BUILD, "--version", pack.build, "--sources-only"]
+        by_build.setdefault(pack.build, []).append(pack)
+
+    for build, packs in by_build.items():
+        # Empty means every declared language here exactly as it does on a
+        # roster row, so one pack asking for all of them settles the build.
+        locales = (set() if any(not pack.locales for pack in packs)
+                   else {code for pack in packs for code in pack.locales})
+        argv = [*UV_RUN, "-m", BUILD, "--version", build, "--sources-only"]
+        for locale in sorted(locales):
+            argv += ["--locale", locale]
         if refresh:
             argv.append("--refresh")
         proc = subprocess.run(argv, cwd=BUILD_ROOT, capture_output=True,
                               encoding="utf-8", errors="replace", check=False)
         if proc.returncode != 0:
-            print(f"{RED}fetch failed{RESET} {pack.build} exit {proc.returncode}")
+            print(f"{RED}fetch failed{RESET} {build} exit {proc.returncode}")
             print(proc.stdout or "", proc.stderr or "", sep="")
             return proc.returncode
     return 0
@@ -291,8 +308,7 @@ def prune_modules() -> tuple[int, int]:
     named: set[str] = set()
     for manifest_path in DATA.glob("*/manifest.json"):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        for module in manifest.get("modules", {}).values():
-            named.add(Path(module["file"]).name)
+        named.update(Path(file).name for file in packfile.files(manifest))
 
     gone, freed = 0, 0
     for path in sorted(directory.iterdir()):

@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 
 from . import pipeline
+from .derive import locales_named
 from .emit import versions
 from .emit.module import Module
 from .progress import log, phase, report
@@ -140,6 +141,11 @@ def main() -> None:
     parser.add_argument("--id", dest="pack_id",
                         help="the pack's identity, when it differs from the "
                              "build -- a test line sharing a patch with live")
+    parser.add_argument("--locale", action="append", default=[], metavar="CODE",
+                        help="a language this client publishes, repeatable; "
+                             "the default one is built whether or not it is "
+                             "named. Omit to build every declared language, "
+                             "which is right for any Blizzard build")
     parser.add_argument("--refresh", action="store_true",
                         help="re-fetch every source even where a cached copy "
                              "would do")
@@ -157,8 +163,9 @@ def main() -> None:
                              "builds sharing them can then run at once")
     args = parser.parse_args()
 
+    locales = locales_named(args.locale)
     if args.sources_only:
-        pipeline.acquire(args.version, refresh=args.refresh)
+        pipeline.acquire(args.version, refresh=args.refresh, locales=locales)
         return
 
     started = time.perf_counter()
@@ -166,7 +173,8 @@ def main() -> None:
     pack_id = args.pack_id or args.version
     modules, manifest = pipeline.modules(args.version, label,
                                          refresh=args.refresh, pack_id=pack_id,
-                                         location=MODULE_LOCATION)
+                                         location=MODULE_LOCATION,
+                                         locales=locales)
 
     with phase("write modules"):
         written = write_modules(modules)

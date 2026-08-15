@@ -8,7 +8,7 @@ from pack.routes.items import ItemModels
 from pack.routes.models import (MODEL_CAT_ATTACH, MODEL_CAT_DISPLAY, MODEL_CAT_ITEM, WEAPON_FID_MAIN, WEAPON_FID_OFF,
                                 read_effect_names, read_model_sources)
 from support import BuildTables
-from build_data import read_gob_displays
+from pack.sources.gobs import read_gob_displays
 
 # Type 0 names a file, 1 an item, 2 a creature display, 3/4 a weapon slot.
 # Name 5 is a weapon row whose file id names nothing -- the Classic placeholder.

@@ -67,10 +67,9 @@ site/                    the site — published to GitHub Pages by .github/workf
   js/                    BUILD OUTPUT, gitignored: app.js and its sourcemap
   dev/oracle.js          console measurement helpers — a dev tool, never bundled
   data/versions.json     the roster: every shipped build, pointing at its manifest
-  data/<version>/        manifest.json — which modules that build's pack is made of
+  data/<version>/        manifest.json — which modules that build's pack is made of, per language
   data/modules/          the modules themselves, each named by its own content hash
 build/                   the pack generator (Python 3) — source and its tracked inputs, nothing generated
-  build_data.py          the builder the package replaced; nothing runs it
   enums/                 checked-in enum tables, each with its attribution
   expansion_ids.json.gz  which expansion introduced each spell (tools/expansions.py writes it)
   sources/               a vendored era client table no public archive serves
@@ -83,6 +82,7 @@ build/                   the pack generator (Python 3) — source and its tracke
     routes/              the readers: tables in, typed bundles out
     derive/              the graph walk and every cross-route derivation
       spelltext.py       the description template language, cooked to prose
+      locales.py         which languages a pack is built in
     model/               the section registry
     encode/              how a column is laid out
     emit/                module files, the manifest, hashes
@@ -120,7 +120,7 @@ convention. It is possible because Pages builds from `.github/workflows/pages.ym
 no repo setting names either directory.
 
 `build/pack` walks the game's own tables — spell → visual → kit → model/sound/animkit/effect — and bakes the result
-into one column-oriented JSON pack per version. The browser fetches that pack once, builds its search indexes in
+into one column-oriented JSON pack per version, in every language it is built in. The browser fetches that pack once, builds its search indexes in
 `data.ts`, and every query after that is pure in-memory set intersection. Joins and search logic live in the app, not in
 SQL.
 

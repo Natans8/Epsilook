@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..derive import CONTEXT_FIELDS
+from ..derive import CONTEXT_FIELDS, SPOKEN_FIELDS
 from .section import Layout, Section
 
 SECTIONS: list[Section] = []
@@ -27,9 +27,16 @@ def register(section: Section) -> Section:
             The declaration is what the section is handed, so a name that
             resolves to nothing would read as an empty input rather than as a
             typo.
-        ValueError: `encoding` names a column the section does not produce.
+        ValueError: `encoding` or `localizable` names a column the section does
+            not produce.
         ValueError: a bare section does not have exactly one column. The
             payload is that column, so there is nothing for a second one to be.
+        ValueError: a bare section declares a localizable column. A language is
+            split out of the payload by column name, and a bare payload has
+            none -- it IS the column.
+        ValueError: a localizable section reads no field that carries the
+            game's own language. Its column would then be identical in every
+            language, shipped once per language, with nothing to say so.
     """
     if any(existing.name == section.name for existing in SECTIONS):
         raise ValueError(f"duplicate section: {section.name}")
@@ -50,9 +57,27 @@ def register(section: Section) -> Section:
         raise ValueError(
             f"{section.name} encodes {', '.join(stray)}, which it does not produce")
 
-    if section.layout is Layout.BARE and len(section.columns) != 1:
+    unspoken = sorted(set(section.localizable) - set(section.columns))
+    if unspoken:
         raise ValueError(
-            f"{section.name} is bare but declares {len(section.columns)} columns")
+            f"{section.name} declares {', '.join(unspoken)} localizable, which "
+            f"it does not produce")
+
+    if section.layout is Layout.BARE:
+        if len(section.columns) != 1:
+            raise ValueError(
+                f"{section.name} is bare but declares {len(section.columns)} columns")
+        if section.localizable:
+            raise ValueError(
+                f"{section.name} is bare and localizable; a language is split "
+                f"out by column name and a bare payload has none")
+
+    if section.localizable and not set(section.reads) & SPOKEN_FIELDS:
+        raise ValueError(
+            f"{section.name} ships {', '.join(section.localizable)} as language "
+            f"but reads none of {', '.join(sorted(SPOKEN_FIELDS))}; either the "
+            f"column is the same in every language or the field it comes from "
+            f"is missing from `Spoken` and no locale pass rebuilds it")
 
     SECTIONS.append(section)
     return section

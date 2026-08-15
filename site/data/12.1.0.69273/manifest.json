@@ -1,7 +1,7 @@
 {
   "pack": "12.1.0.69273",
   "meta": {
-    "format": 52,
+    "format": 53,
     "version": "12.1.0.69273",
     "label": "Midnight 12.1.0",
     "built": "2026-08-15",
@@ -420,14 +420,48 @@
     "universal": {
       "file": "data/modules/universal-d3add882f171.json.gz",
       "bytes": 25191
+    }
+  },
+  "locales": {
+    "enUS": {
+      "names": {
+        "file": "data/modules/names-292feb76b23d.json.gz",
+        "bytes": 2539839
+      },
+      "text": {
+        "file": "data/modules/text-437a05a9a3b2.json.gz",
+        "bytes": 4515700
+      }
     },
-    "names": {
-      "file": "data/modules/names-292feb76b23d.json.gz",
-      "bytes": 2539839
+    "ruRU": {
+      "names": {
+        "file": "data/modules/names-237dda2c158d.json.gz",
+        "bytes": 3472719
+      },
+      "text": {
+        "file": "data/modules/text-f209b5756032.json.gz",
+        "bytes": 5877485
+      }
     },
-    "text": {
-      "file": "data/modules/text-437a05a9a3b2.json.gz",
-      "bytes": 4515700
+    "frFR": {
+      "names": {
+        "file": "data/modules/names-808bdf35e285.json.gz",
+        "bytes": 2916851
+      },
+      "text": {
+        "file": "data/modules/text-d306eaf8c66e.json.gz",
+        "bytes": 5125976
+      }
+    },
+    "esES": {
+      "names": {
+        "file": "data/modules/names-a13173cf70ef.json.gz",
+        "bytes": 2869201
+      },
+      "text": {
+        "file": "data/modules/text-2d96e73e4a14.json.gz",
+        "bytes": 4806746
+      }
     }
   },
   "absentSections": []

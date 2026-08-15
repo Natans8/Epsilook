@@ -116,6 +116,10 @@ dropping data is worse than failing loudly. See [Drift between builds](#drift-be
 Everything lands in a cache keyed by build, so a rebuild re-reads rather than re-downloads, and the cache rotates
 against the shipped roster so an abandoned version stops costing disk.
 
+Two of these are read again per language: wago serves any of its exports in one, and the server release carries its
+own `*_locale` tables in the same dump the world tables come from. Both land beside the build's own copies rather than
+anywhere else, so everything one build downloaded rotates as one unit.
+
 ### What a source is
 
 A source does three jobs, and the interface names them separately because each one varies on its own — and because a
@@ -966,6 +970,60 @@ The manifest names each module by file and size, states the pack's format and bu
 committing to a download, and lists the sections this build ships without — so "this build never had it" is
 distinguishable from "this pack is broken". Every module file lives in one shared directory, because a module is named
 by its own content and two packs land on one file exactly when their bytes agree.
+
+### Languages
+
+**The language is an axis of the build beside the game version, and English is one value of it rather than the base.**
+The manifest names the structure modules apart from the ones holding a language, and keys the second group by language
+code, so choosing a language is choosing one entry of `locales` and changes nothing about `modules`:
+
+```json
+{
+  "modules": {"core": {"file": "…"}, "universal": {"file": "…"}},
+  "locales": {"enUS": {"names": {"file": "…"}, "text": {"file": "…"}},
+              "ruRU": {"names": {"file": "…"}, "text": {"file": "…"}}}
+}
+```
+
+A language costs a second pass over the nine tables a route reads translated text from, and nothing else. The ids, the
+graph walk and the listfile resolution are the build's own, read once — which is what lets the two halves of a split
+section be joined by position. The build checks that outright: a language pass produces every column of every section
+that ships language, and a column the language does not touch coming out different fails the build rather than shipping
+names that belong to other ids.
+
+Three things in the pipeline follow from that and are worth knowing before adding a language or a route:
+
+- **A table is fetched per language because a route reads a `_lang` column from it**, not because the pack ships that
+  column. The area's map button is the map *named the same* as the area, so reading one of those two names in a
+  different language than the other matches nothing at all. `check_localized_tables` holds the roster and the routes
+  together.
+- **A derived id must not be re-derived per language.** The same map join is the case: two maps of one place tie, and
+  the tie breaks on the spelling. The build's own answer is handed to every language.
+- **The server's own names are a keyed overlay, not a substitution.** Its `*_locale` tables hold every language at
+  once, so reading one is refusing the rest — the same merge that applies a hotfix, with the admission rule reading a
+  language code instead of a build stamp. A row that carries no translation leaves the untranslated name standing,
+  because a translation table has a row per entry per language whether or not anyone got to it.
+
+**Not every client publishes every language.** Blizzard's do, and say nothing; a private client need not — one that
+ships English alone names that on its roster row, and asking its tables for another would fetch nothing and leave the
+pack claiming a language it has not got. So which languages a pack ships is a declaration beside its build id rather
+than something the builder probes for, and the default language is built whether or not the row names it — every pack
+has it, which is what lets a reader fall back to it without checking.
+
+**What a language is CALLED is the interface's business, not the pack's.** The artifact carries codes and string
+values; naming a language in the reader's own language is the interface saying something about itself, and it has its
+own string catalogue for that.
+
+⚠ **One thing that looks like the interface's job and is not: the unit word inside a cooked description.** A duration
+on an axis ships as a number with a declared unit and is formatted by whoever draws it. A duration inside a
+description was resolved at build time, because descriptions are cooked to prose so they can be searched as text — so
+the word sits in the middle of a sentence the game wrote, and it has to be in that sentence's language. Which word
+each client uses is read from how its own templates word a duration beside a number; the same measurement over the
+English templates returns what the English cooker already supplied, which is what makes it evidence rather than a
+guess.
+
+Adding a language is one row in the build's locale roster, plus a grammar for the cooker where its plural rules or its
+duration words are not already covered.
 
 Beside the sections, `meta` ships the facts nothing downstream should have to re-derive:
 

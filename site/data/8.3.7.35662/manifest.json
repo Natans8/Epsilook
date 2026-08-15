@@ -1,7 +1,7 @@
 {
   "pack": "8.3.7.35662",
   "meta": {
-    "format": 52,
+    "format": 53,
     "version": "8.3.7.35662",
     "label": "Battle for Azeroth 8.3.7",
     "built": "2026-08-15",
@@ -461,14 +461,48 @@
     "universal": {
       "file": "data/modules/universal-d3add882f171.json.gz",
       "bytes": 25191
+    }
+  },
+  "locales": {
+    "enUS": {
+      "names": {
+        "file": "data/modules/names-702d499b4984.json.gz",
+        "bytes": 1392638
+      },
+      "text": {
+        "file": "data/modules/text-5d83a6a1b1d8.json.gz",
+        "bytes": 2459818
+      }
     },
-    "names": {
-      "file": "data/modules/names-702d499b4984.json.gz",
-      "bytes": 1392638
+    "ruRU": {
+      "names": {
+        "file": "data/modules/names-abc616fd77e5.json.gz",
+        "bytes": 1938603
+      },
+      "text": {
+        "file": "data/modules/text-7ef9ab928aca.json.gz",
+        "bytes": 3276600
+      }
     },
-    "text": {
-      "file": "data/modules/text-5d83a6a1b1d8.json.gz",
-      "bytes": 2459818
+    "frFR": {
+      "names": {
+        "file": "data/modules/names-5c746ed64d08.json.gz",
+        "bytes": 1611687
+      },
+      "text": {
+        "file": "data/modules/text-8911ceb406f5.json.gz",
+        "bytes": 2767347
+      }
+    },
+    "esES": {
+      "names": {
+        "file": "data/modules/names-c2e76b03e2a0.json.gz",
+        "bytes": 1577694
+      },
+      "text": {
+        "file": "data/modules/text-7e4c49fe53df.json.gz",
+        "bytes": 2598389
+      }
     }
   },
   "absentSections": []

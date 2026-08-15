@@ -16,6 +16,11 @@ game's own language go to the locale module and the rest stay with the
 structure, so a reader wanting Russian fetches one file instead of a second
 copy of every id. The section keeps its name in both, and joining them is
 reading two objects with the same key.
+
+That split is also what makes a second language cost only what it says: the
+structure modules are built once, and each language contributes its own pair of
+locale modules beside them. Which language a module holds is a fact the module
+carries, so the manifest can group them without reading a byte.
 """
 
 from __future__ import annotations
@@ -52,6 +57,16 @@ class Module:
 
     payload: bytes
     """The gzipped bytes, as they land on disk."""
+
+    locale: str = ""
+    """Which language this module holds, empty where it holds none.
+
+    Not part of the file name, which stays the content hash alone. Two
+    languages that serialise to the same bytes are the same file, and that is
+    the sharing mechanism doing what it does everywhere else rather than a
+    coincidence to be guarded against -- what each file IS gets said once, in
+    the manifest.
+    """
 
     @property
     def digest(self) -> str:
@@ -135,17 +150,25 @@ def split(section: Section, payload: object) -> list[tuple[str, object]]:
 
     A section with no localizable columns is one entry. A section with some is
     two: the structure in its own module and the language in the locale one,
-    under the same section name in both.
+    under the same section name in both. A section already declared into a
+    locale module keeps it -- prose belongs with prose rather than with the
+    names -- and is one entry again, because everything in it is language.
     """
     if not section.localizable or not isinstance(payload, dict):
         return [(section.module, payload)]
-    if section.module in LOCALE_MODULES:
+    spoken_module = (section.module if section.module in LOCALE_MODULES
+                     else LOCALE_MODULE)
+    if spoken_module == section.module:
+        # Already declared into a module that holds a language, so everything
+        # in it is language and there is no structure half to leave behind.
+        # Splitting it anyway would put two entries under one module name, and
+        # the assembler would keep only the last.
         return [(section.module, payload)]
     spoken = {name: column for name, column in payload.items()
               if name in section.localizable}
     rest = {name: column for name, column in payload.items()
             if name not in section.localizable}
-    placed: list[tuple[str, object]] = [(LOCALE_MODULE, spoken)]
+    placed: list[tuple[str, object]] = [(spoken_module, spoken)]
     # A section that is ALL language contributes nothing to its own module, and
     # shipping an empty object there would make a reader think it had checked.
     if rest:
@@ -153,17 +176,21 @@ def split(section: Section, payload: object) -> list[tuple[str, object]]:
     return placed
 
 
-def assemble(sections: Sequence[Section],
-             produced: Mapping[str, object]) -> list[Module]:
+def assemble(sections: Sequence[Section], produced: Mapping[str, object],
+             *, locale: str = "") -> list[Module]:
     """Group produced sections into the modules that will be written.
 
     Args:
         sections: the registered sections, in registry order.
         produced: each section's encoded payload, by section name. A section
-            with no entry was switched off by a table its build lacks, and is
-            left out rather than shipped empty -- an empty column reads as
-            "nothing matches", which is a different claim from "this build
-            never had it". `absent_sections` is what reports the difference.
+            with no entry was switched off by a table its build lacks, or was
+            not part of this pass, and is left out rather than shipped empty --
+            an empty column reads as "nothing matches", which is a different
+            claim from "this build never had it". `absent_sections` is what
+            reports the difference, over the pass that produced everything.
+        locale: which language `produced` was read in. It stamps the modules
+            that hold a language and nothing else, since the structure modules
+            say the same thing whoever is reading them.
 
     Returns:
         One `Module` per module named by the produced sections, ordered by
@@ -173,6 +200,9 @@ def assemble(sections: Sequence[Section],
         ValueError: `produced` holds a section the registry does not declare.
             Ignoring it would drop a route's whole output with nothing to
             notice: the section would appear in no module and no manifest.
+        ValueError: a module holding a language was assembled without one being
+            named. The manifest groups these by language, so an unstamped one
+            would be a file no reader could ask for.
     """
     undeclared = set(produced) - {section.name for section in sections}
     if undeclared:
@@ -183,6 +213,13 @@ def assemble(sections: Sequence[Section],
         if section.name in produced:
             for module, payload in split(section, produced[section.name]):
                 payloads.setdefault(module, {})[section.name] = payload
+
+    spoken = sorted(set(payloads) & set(LOCALE_MODULES))
+    if spoken and not locale:
+        raise ValueError(f"assembled {', '.join(spoken)} without naming a "
+                         f"language; nothing downstream could say what is in them")
+
     with phase("serialize modules (json+gzip)"):
-        return [Module(name=name, payload=serialize(payload))
+        return [Module(name=name, payload=serialize(payload),
+                       locale=locale if name in LOCALE_MODULES else "")
                 for name, payload in payloads.items()]

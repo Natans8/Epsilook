@@ -20,8 +20,14 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 52
+PACK_FORMAT = 53
 """What shape the artifact is in.
+
+53 makes the language an axis of the artifact: the manifest names the structure
+modules apart from the ones holding a language, and the second group is keyed
+by language code. English stops being the base and becomes the first entry of
+that group, which is why a reader of 52 would find no `names` module at all
+rather than a differently-shaped one.
 
 52 finishes the reshape: the visual-effect and mechanics columns ship rows too,
 so every column a spell carries more than one of is a row table and the
@@ -104,6 +110,13 @@ def meta(build: Build, label: str, listfile_tag: str,
          counts: Mapping[str, int],
          domains: Mapping[str, Mapping[str, object]]) -> dict[str, object]:
     """The pack's own header.
+
+    The counts and domains are the default language's, because that is the pass
+    they are gathered from. Only the counts over cooked prose could differ at
+    all -- how many distinct strings a redirect chain collapses to is a fact
+    about the wording -- and nothing reads them per language: what the drift
+    tables and the numeric controls describe is the build, which is one thing
+    whoever is reading it.
 
     Args:
         build: what is being packed, and what it was found to lack.

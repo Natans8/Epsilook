@@ -684,7 +684,7 @@ class Dossier:
     def delivery(self, sid: int, misc: dict[str, Any], bits: set[int]) -> dict[str, Any]:
         """How the spell is delivered — the resolved cast time and channel.
 
-        Mirrors derive_delivery in build_data.py: it is NOT a partition, so a
+        Mirrors the build's delivery route: it is NOT a partition, so a
         spell can carry both a cast time and a channel (3,148 do on 9.2.7, and
         they cast and THEN channel — verified in game). `cast_ms` 0 means no cast
         bar, including the -1000000 "ranged weapon speed" sentinel, which Epsilon

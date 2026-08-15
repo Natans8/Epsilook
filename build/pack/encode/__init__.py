@@ -23,6 +23,7 @@ __all__ = [
     "deduped",
     "encode_column",
     "encode_section",
+    "layout_for",
     "layout_of",
     "sparse",
 ]

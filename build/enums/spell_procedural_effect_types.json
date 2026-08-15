@@ -1,6 +1,6 @@
 {
   "enum": "SpellProceduralEffect.Type",
-  "description": "SpellProceduralEffect.Type IS the client 'character procedure' index (m_characterProcedure) — one continuous, append-only enum from classic to modern. It selects both the handler and which Value_N column carries the payload. Decoded and verified against real data (FK joins / spell-name semantics); see CLAUDE.md 'Proc type decode' for the evidence per type. 'handler' names the build_data bucket a type feeds (absent = not surfaced: renderer/gameplay state, or too rare). Value gotchas: colors are packed 0xRRGGBB (high byte = red); INT_MIN (-2147483648) = 'unset' sentinel.",
+  "description": "SpellProceduralEffect.Type IS the client 'character procedure' index (m_characterProcedure) — one continuous, append-only enum from classic to modern. It selects both the handler and which Value_N column carries the payload. Decoded and verified against real data (FK joins / spell-name semantics); see CLAUDE.md 'Proc type decode' for the evidence per type. 'handler' names the build bucket a type feeds (absent = not surfaced: renderer/gameplay state, or too rare). Value gotchas: colors are packed 0xRRGGBB (high byte = red); INT_MIN (-2147483648) = 'unset' sentinel.",
   "source": [
     "https://wowdev.wiki/DB/SpellVisualKit"
   ],

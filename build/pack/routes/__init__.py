@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from .anims import (read_anim_replacements, read_animkit_anims,
                     read_animkit_bonesets)
-from .areas import Area, AreaGates, read_area_gates
+from .areas import Area, AreaGates, read_area_gates, read_zone_maps
 from .assets import resolve_paths
 from .attributes import attribute_bit, read_spell_attributes
 from .creatures import CreatureModels, read_creature_models
@@ -66,6 +66,7 @@ __all__ = [
     "read_animkit_anims",
     "read_animkit_bonesets",
     "read_area_gates",
+    "read_zone_maps",
     "read_creature_models",
     "read_fx_payloads",
     "read_gameobjects",

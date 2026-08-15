@@ -1,7 +1,7 @@
 {
   "pack": "10.2.7.55664",
   "meta": {
-    "format": 52,
+    "format": 53,
     "version": "10.2.7.55664",
     "label": "Dragonflight 10.2.7",
     "built": "2026-08-15",
@@ -444,14 +444,48 @@
     "universal": {
       "file": "data/modules/universal-d3add882f171.json.gz",
       "bytes": 25191
+    }
+  },
+  "locales": {
+    "enUS": {
+      "names": {
+        "file": "data/modules/names-98f3ae46f61b.json.gz",
+        "bytes": 1990161
+      },
+      "text": {
+        "file": "data/modules/text-7144f8be2eb3.json.gz",
+        "bytes": 3573711
+      }
     },
-    "names": {
-      "file": "data/modules/names-98f3ae46f61b.json.gz",
-      "bytes": 1990161
+    "ruRU": {
+      "names": {
+        "file": "data/modules/names-a195ec0cc4d1.json.gz",
+        "bytes": 2736027
+      },
+      "text": {
+        "file": "data/modules/text-64839cafbf92.json.gz",
+        "bytes": 4680585
+      }
     },
-    "text": {
-      "file": "data/modules/text-7144f8be2eb3.json.gz",
-      "bytes": 3573711
+    "frFR": {
+      "names": {
+        "file": "data/modules/names-998d54ab2faa.json.gz",
+        "bytes": 2292018
+      },
+      "text": {
+        "file": "data/modules/text-dd03fe50ffe4.json.gz",
+        "bytes": 4029670
+      }
+    },
+    "esES": {
+      "names": {
+        "file": "data/modules/names-78d2e046b49e.json.gz",
+        "bytes": 2252997
+      },
+      "text": {
+        "file": "data/modules/text-191dcf3a9a10.json.gz",
+        "bytes": 3784401
+      }
     }
   },
   "absentSections": []

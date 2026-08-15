@@ -8,6 +8,7 @@ can, and a file tracked in this repository is not fetched at all.
 from __future__ import annotations
 
 import sys
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
@@ -48,6 +49,29 @@ and reads as 403. Which codes mean absent is declared where a source is wired,
 so a policy never has to guess.
 """
 
+BUSY = 500
+"""The status at and above which a server is reporting about itself.
+
+A 5xx says nothing about the thing asked for -- it says the service could not
+answer just now -- so it is worth asking again, where a 4xx never is.
+"""
+
+ATTEMPTS = 4
+"""How many times one address is asked for before the build gives up.
+
+The build asks a public service for several hundred files, and it now asks for
+them once per language, so a transient gateway timeout partway through is an
+ordinary event rather than a rare one. Giving up on the first would abandon a
+roster-wide rebuild over one request.
+"""
+
+BACKOFF = 5.0
+"""Seconds before the first retry, doubled each time.
+
+The service is somebody else's and a 5xx means it is already struggling, so the
+wait grows rather than the rate.
+"""
+
 
 def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
              optional: bool = False, absent: tuple[int, ...] = ABSENT) -> bool:
@@ -67,6 +91,11 @@ def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
         True once the source is cached; False when an `optional` source is
         absent, which is how a build that predates a db2 table reports it. Any
         other error raises.
+
+    Raises:
+        urllib.error.HTTPError: the server answered something other than the
+            bytes. A 5xx is asked again first, since it describes the service
+            rather than what was asked for; a 4xx is final.
     """
     if cached(dest) and not refresh:
         log(f"  cached   {dest.name} ({dest.stat().st_size:,} bytes)")
@@ -75,17 +104,24 @@ def download(url: str, dest: Path, refresh: bool, headers: dict | None = None,
     req = urllib.request.Request(url, headers={"User-Agent": "epsilook-build", **(headers or {})})
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
-    try:
-        with urllib.request.urlopen(req, timeout=600) as resp, open(tmp, "wb") as out:
-            while chunk := resp.read(1 << 20):
-                out.write(chunk)
-    except urllib.error.HTTPError as e:
-        tmp.unlink(missing_ok=True)
-        if optional and e.code in absent:
-            dest.unlink(missing_ok=True)  # a stale pack's table must not linger
-            log(f"  absent   {dest.name} (this build predates the table)")
-            return False
-        raise
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=600) as resp, open(tmp, "wb") as out:
+                while chunk := resp.read(1 << 20):
+                    out.write(chunk)
+            break
+        except urllib.error.HTTPError as e:
+            tmp.unlink(missing_ok=True)
+            if optional and e.code in absent:
+                dest.unlink(missing_ok=True)  # a stale pack's table must not linger
+                log(f"  absent   {dest.name} (this build predates the table)")
+                return False
+            if e.code < BUSY or attempt == ATTEMPTS:
+                raise
+            pause = BACKOFF * 2 ** (attempt - 1)
+            log(f"  busy     HTTP {e.code}; asking again in {pause:.0f}s "
+                f"({attempt} of {ATTEMPTS - 1})")
+            time.sleep(pause)
     tmp.replace(dest)
     log(f"  saved    {dest.name} ({dest.stat().st_size:,} bytes)")
     return True

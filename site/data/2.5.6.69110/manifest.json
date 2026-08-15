@@ -1,7 +1,7 @@
 {
   "pack": "2.5.6.69110",
   "meta": {
-    "format": 52,
+    "format": 53,
     "version": "2.5.6.69110",
     "label": "TBC Classic 2.5.6",
     "built": "2026-08-15",
@@ -425,14 +425,48 @@
     "universal": {
       "file": "data/modules/universal-d3add882f171.json.gz",
       "bytes": 25191
+    }
+  },
+  "locales": {
+    "enUS": {
+      "names": {
+        "file": "data/modules/names-3b5dc857bd63.json.gz",
+        "bytes": 151805
+      },
+      "text": {
+        "file": "data/modules/text-99ef8602e719.json.gz",
+        "bytes": 357487
+      }
     },
-    "names": {
-      "file": "data/modules/names-3b5dc857bd63.json.gz",
-      "bytes": 151805
+    "ruRU": {
+      "names": {
+        "file": "data/modules/names-406def7694e8.json.gz",
+        "bytes": 218275
+      },
+      "text": {
+        "file": "data/modules/text-60b5880fbd81.json.gz",
+        "bytes": 473748
+      }
     },
-    "text": {
-      "file": "data/modules/text-99ef8602e719.json.gz",
-      "bytes": 357487
+    "frFR": {
+      "names": {
+        "file": "data/modules/names-5a5ebc5c10c3.json.gz",
+        "bytes": 174568
+      },
+      "text": {
+        "file": "data/modules/text-908821bf6008.json.gz",
+        "bytes": 404528
+      }
+    },
+    "esES": {
+      "names": {
+        "file": "data/modules/names-0ab106947d49.json.gz",
+        "bytes": 171150
+      },
+      "text": {
+        "file": "data/modules/text-173f25b32fb0.json.gz",
+        "bytes": 386426
+      }
     }
   },
   "absentSections": []

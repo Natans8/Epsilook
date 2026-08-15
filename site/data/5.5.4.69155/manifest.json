@@ -1,7 +1,7 @@
 {
   "pack": "5.5.4.69155",
   "meta": {
-    "format": 52,
+    "format": 53,
     "version": "5.5.4.69155",
     "label": "MoP Classic 5.5.4",
     "built": "2026-08-15",
@@ -453,14 +453,48 @@
     "universal": {
       "file": "data/modules/universal-d3add882f171.json.gz",
       "bytes": 25191
+    }
+  },
+  "locales": {
+    "enUS": {
+      "names": {
+        "file": "data/modules/names-e8175c793764.json.gz",
+        "bytes": 582169
+      },
+      "text": {
+        "file": "data/modules/text-cde73d93db9b.json.gz",
+        "bytes": 1208868
+      }
     },
-    "names": {
-      "file": "data/modules/names-e8175c793764.json.gz",
-      "bytes": 582169
+    "ruRU": {
+      "names": {
+        "file": "data/modules/names-614ab0d4737f.json.gz",
+        "bytes": 812890
+      },
+      "text": {
+        "file": "data/modules/text-8a5c6c7d7ca6.json.gz",
+        "bytes": 1634872
+      }
     },
-    "text": {
-      "file": "data/modules/text-cde73d93db9b.json.gz",
-      "bytes": 1208868
+    "frFR": {
+      "names": {
+        "file": "data/modules/names-3aa3dfb5b5b3.json.gz",
+        "bytes": 678604
+      },
+      "text": {
+        "file": "data/modules/text-8a14a83d8ca5.json.gz",
+        "bytes": 1357266
+      }
+    },
+    "esES": {
+      "names": {
+        "file": "data/modules/names-422963848aab.json.gz",
+        "bytes": 662183
+      },
+      "text": {
+        "file": "data/modules/text-118b188ba6e5.json.gz",
+        "bytes": 1277484
+      }
     }
   },
   "absentSections": []

@@ -212,9 +212,29 @@ class _RussianTextLocale(TextLocale):
         return nforms - 1
 
 
+class _FrenchTextLocale(TextLocale):
+    def plural_index(self, n: float | None, nforms: int) -> int:
+        """French singular covers nought as well as one, and a fraction below
+        two with it."""
+        if n is None:
+            return nforms - 1
+        return 0 if n < 2 and nforms > 1 else nforms - 1
+
+
 ENGLISH = TextLocale()
 RUSSIAN = _RussianTextLocale(seconds=("сек",), minutes=("мин",),
                              hours=("ч",), days=("дн.",))
+# Read from how each client's own templates word a duration beside a number,
+# rather than guessed. The same measurement over the English templates returns
+# `sec`, `min`, `hour`/`hours` and `day`/`days`, which is exactly what this
+# file already supplied for English -- so it recovers a known answer, and the
+# convention it recovers is the one applied here: the short unit abbreviates
+# for seconds and minutes and is spelled out from hours up.
+FRENCH = _FrenchTextLocale(seconds=("s",), minutes=("min",),
+                           hours=("heure", "heures"), days=("jour", "jours"))
+# Spanish pluralises as English does -- one is one, everything else is not.
+SPANISH = TextLocale(seconds=("s",), minutes=("min",),
+                     hours=("hora", "horas"), days=("día", "días"))
 
 
 def format_duration(ms: int, locale: TextLocale = ENGLISH) -> str:

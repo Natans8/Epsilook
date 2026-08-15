@@ -12,6 +12,13 @@ weld the provider seam exists to cut.
 
 The order below is a dependency order, not a preference: a route appearing
 before another is one whose bundle the next one reads.
+
+A build has two axes and both are wired here. The version decides which tables
+are read; the language decides which copy of the nine translated ones. A
+language costs a second pass over those nine routes and nothing else -- the
+graph walk, the listfile resolution and every id in the pack are one build's,
+read once, and `check_parallel` is what proves the second pass did not move
+them.
 """
 
 from __future__ import annotations
@@ -21,14 +28,15 @@ from collections.abc import Mapping, Sequence
 
 from .build import Build, Line
 from .declarations import Declarations
-from .derive import (DeriveContext, build_icon_index, build_rows,
-                     collect_references, cook_text, resolve_displays,
-                     walk_spells)
+from .derive import (DEFAULT_LOCALE, LOCALES, DeriveContext, Locale, Spoken,
+                     build_icon_index, build_rows, collect_references, cook_text,
+                     locale_of, resolve_displays, walk_spells)
 from .drift import OPTIONAL_TABLES
 from .emit.manifest import manifest
 from .emit.meta import gathered, meta
 from .emit.module import Module, absent_sections, assemble
-from .encode import FEWEST_BYTES, encode_section
+from .encode import (EMPTY_SLOT, FEWEST_BYTES, encode_column,
+                     encode_section, layout_for)
 from .model import SECTIONS, Cardinality, Encoding, Section, SectionColumns
 from .progress import detail, log, phase, step
 from .routes import (implicit_target_bits, read_anim_replacements,
@@ -42,8 +50,9 @@ from .routes import (implicit_target_bits, read_anim_replacements,
                      read_spell_delivery, read_spell_effect_rows,
                      read_spell_names, read_spell_properties, read_spell_text,
                      read_spell_values, read_vehicle_seats, read_visual_graph,
-                     resolve_paths)
+                     read_zone_maps, resolve_paths)
 from .routes.anims import read_anim_emotes
+from .routes.values import DescriptionValues
 from .sources import (Sources, fetch_sources, load_expansions,
                       load_local_enum, read_anim_names, read_enum_names)
 from .sources.cache import CACHE_DIR
@@ -51,8 +60,9 @@ from .sources.gobs import read_gob_displays
 from .sources.listfile import release_tag
 from .sources.scaling import read_scaling, scaling_source
 from .sources.tdb import tdb_release
+from .sources.wago import LOCALIZED_TABLES
 from .tables import (CsvTables, ListfileTables, OverlaidTables, Tables,
-                     hotfix_overlays)
+                     hotfix_overlays, locale_overlays, translated_exports)
 
 SOUNDKIT_NAME_TABLE = "SoundKitName"
 """The pinned build's table of human names for sound kits.
@@ -70,13 +80,17 @@ class Providers:
     them itself would be making it again.
     """
 
-    def __init__(self, sources: Sources, *, build: int) -> None:
-        """Wire the providers for one build.
+    def __init__(self, sources: Sources, *, build: int, locale: str = "") -> None:
+        """Wire the providers for one build, in one language.
 
         Args:
             sources: where acquisition left each source.
             build: the client build being packed, which decides how far down
                 the hotfix stamp a revision is still accepted.
+            locale: the language to read the translated tables in, or empty for
+                the build's own export. Naming one composes two more sources in
+                under the ones already here, so that every route above still
+                asks for a table and gets one.
 
         TODO: compose the listfile with the vendored asset-name supplement.
             It is an `Overlay` admitted `above(SUPPLEMENT_FLOOR)`, and turning
@@ -84,20 +98,39 @@ class Providers:
             change, not inside the stage that has to reproduce a pack built
             before it existed.
         """
-        self.base: Tables = CsvTables(sources.tables)
+        client: Tables = CsvTables(sources.tables)
+        if locale:
+            # UNDER the hotfix overlay rather than over it, which is what keeps
+            # the two languages' row sets identical: the server's rows are
+            # unioned in either way, so a spell the client lacks and the dump
+            # supplies exists in both, carrying the one name anybody wrote for
+            # it. Restating on top would have dropped it from the translated
+            # pass alone, and the two halves of a section no longer line up.
+            client = OverlaidTables(
+                base=client, overlays=translated_exports(LOCALIZED_TABLES),
+                source=CsvTables(sources.locale_tables[locale]))
+
+        self.base: Tables = client
         """The client's own tables, unrevised. What a printed number reads."""
 
-        self.tables: Tables = CsvTables(sources.tables)
+        self.tables: Tables = client
         self.pinned: Tables = CsvTables(sources.pinned_tables)
         self.world: Tables | None = None
         if sources.tdb is not None:
-            world = CsvTables(sources.tdb)
+            world: Tables = CsvTables(sources.tdb)
+            if locale:
+                # The creature and object names are the server's alone, so the
+                # language they are read in is the server's too. Its own
+                # `*_locale` tables hold every language at once, and reading one
+                # is refusing the rest.
+                world = OverlaidTables(base=world, overlays=locale_overlays(locale),
+                                       source=world)
             self.world = world
             # The hotfixes revise the client's own tables, so the overlay wraps
             # the build's provider rather than standing beside it: a route
             # reading `SpellEffect` cannot tell whether a row was revised, and
             # that is the point.
-            self.tables = OverlaidTables(base=self.base,
+            self.tables = OverlaidTables(base=client,
                                          overlays=hotfix_overlays(build),
                                          source=world)
         self.listfile: Tables = ListfileTables(sources.listfile)
@@ -130,12 +163,18 @@ def read_kit_names(pinned: Tables, used: set[int]) -> list[tuple[int, str]]:
 
 def read_all(providers: Providers, build: Build,
              ladder: tuple[list[dict], dict[int, int]],
-             scaling: Mapping[int, Mapping[str, float]]) -> DeriveContext:
+             values: DescriptionValues,
+             zone_maps: Mapping[int, int]) -> DeriveContext:
     """Run every route and every derivation, and return what a section reads.
 
     The order is the dependency graph: creature displays before the model
     sources that resolve against them, the payload tables before the kits that
     dispatch into them, and the graph walk after everything it unions.
+
+    `values` and `zone_maps` arrive rather than being read here because they
+    are what the language cannot touch: a number is a number in every language,
+    and a map id is a map id. Reading them once is what lets a second language
+    cost the nine routes that do change rather than all of them.
     """
     tables, world = providers.tables, providers.world
 
@@ -173,22 +212,12 @@ def read_all(providers: Providers, build: Build,
         props = read_spell_properties(tables, names.names)
         attributes = read_spell_attributes(props.attribute_words)
         delivery = read_spell_delivery(tables, props)
-        areas = read_area_gates(tables)
+        areas = read_area_gates(tables, zone_maps)
         forms = read_shapeshift_forms(tables)
         vehicles = read_vehicle_seats(tables)
         templates = read_spell_text(tables)
 
     log("Cooking spell descriptions ...")
-    # The COOKED numbers come from the client alone, never the server's
-    # revisions. A hotfix table prints a float at six significant digits and
-    # carries only the integer spelling of an amount, so on a build whose
-    # client exports only the float column the overlay would replace a precise
-    # value with a coarse one -- a degradation, not a correction. The overlaid
-    # provider is right for everything that asks what a spell IS; this asks
-    # what number to print.
-    with phase("read spell values"):
-        values = read_spell_values(providers.base, level=build.max_level,
-                                   scaling=scaling)
     with phase("cook descriptions"):
         prose = cook_text(templates, values, names)
 
@@ -253,6 +282,55 @@ def read_all(providers: Providers, build: Build,
         declared=declared)
 
 
+def read_spoken(providers: Providers, locale: Locale, *,
+                altnames: Mapping[int, set[int]],
+                zone_maps: Mapping[int, int],
+                values: DescriptionValues) -> Spoken:
+    """Read everything the language changes, and nothing else.
+
+    The second half of `read_all`, and a much smaller one: nine routes carry
+    every word the game translates, and the rest of the build says the same
+    thing whoever is reading it. So a language is these routes over
+    locale-qualified tables, and the ids, the graph walk and the listfile
+    resolution are the build's own, read once.
+
+    Args:
+        providers: the sources wired for this language.
+        locale: which language, and the wording the cooker contributes to it.
+        altnames: which override names each spell can take, from the build's
+            own effect rows. Which names -- the text of them is what localizes,
+            and that is read here.
+        zone_maps: each area's map, as the build's own read resolved it. It is
+            an id, and it comes from comparing two translated names, so a
+            language deriving its own would sometimes open a different map for
+            the same place.
+        values: the numbers a description asks for, read once for the build.
+
+    Returns:
+        The slice of the derive context this language replaces.
+    """
+    tables, world = providers.tables, providers.world
+
+    with step(f"read {locale.code} names",
+              f"Reading the tables the game writes in {locale.code} ..."):
+        names = read_spell_names(tables)
+        creatures = read_creature_models(tables, world)
+        items = read_item_models(tables)
+        mounts = read_mounts(tables, names.names, creatures)
+        objects = read_gameobjects(tables, world)
+        forms = read_shapeshift_forms(tables)
+        areas = read_area_gates(tables, zone_maps)
+        alt_names = read_override_names(tables, altnames)
+        templates = read_spell_text(tables)
+
+    with phase(f"cook {locale.code} descriptions"):
+        prose = cook_text(templates, values, names, locale.text)
+
+    return Spoken(names=names, alt_names=alt_names, templates=templates,
+                  creatures=creatures, items=items, mounts=mounts,
+                  objects=objects, forms=forms, areas=areas, prose=prose)
+
+
 def switched_off(section: Section, tables: Tables) -> bool:
     """Whether this build lacks a table the section cannot do without."""
     return any(not tables.available(table) for table in section.needs)
@@ -284,6 +362,73 @@ def produce(context: DeriveContext, tables: Tables,
         with phase("encode columns"), detail("encode columns", section.name):
             encoded[section.name] = encode_section(section, produced, policy)
     return columns, encoded
+
+
+def check_parallel(section: Section, spoken: SectionColumns,
+                   built: SectionColumns) -> None:
+    """Fail unless a language pass produced the structure the build did.
+
+    The two halves of a split section ship in different files and are joined by
+    position under one section name, so a language may change what a column
+    SAYS and never how many entries it has or what the entries beside it are.
+    Everything that could break that is upstream and quiet -- a translated
+    export with a row the build's own has not, a route that filters on a name
+    -- and the failure it produces is a pack whose names belong to other ids.
+
+    Raises:
+        ValueError: a column the language does not touch came out different,
+            or one it does came out a different length.
+    """
+    for column in section.columns:
+        if column in section.localizable:
+            if len(spoken[column]) != len(built[column]):
+                raise ValueError(
+                    f"{section.name}.{column}: the language pass produced "
+                    f"{len(spoken[column])} entries against the build's "
+                    f"{len(built[column])}; the two would not line up")
+        elif spoken[column] != built[column]:
+            raise ValueError(
+                f"{section.name}.{column} is not language and came out "
+                f"different anyway; the language pass has moved something the "
+                f"pack joins on")
+
+
+def produce_spoken(context: DeriveContext, built: Mapping[str, SectionColumns],
+                   policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES
+                   ) -> dict[str, object]:
+    """Every section that ships language, re-produced in one, encoded.
+
+    Which sections this build has is read off `built` rather than asked of the
+    language's provider: a provider reading a language answers `available` from
+    the build's own tables, so the two could only ever agree, and asking twice
+    would leave a `KeyError` waiting on the day they somehow did not.
+
+    Args:
+        context: the build's context with this language's routes spliced in.
+        built: what the build's own pass produced, to check each section
+            against.
+        policy: how a column's declared kind becomes a layout.
+
+    Returns:
+        The localizable columns alone, by section name. A section is PRODUCED
+        whole, because that is what makes the check possible; only the columns
+        that ship are laid out, since encoding the rest would be per-language
+        work on a quarter of a million rows that nothing writes down.
+    """
+    encoded: dict[str, object] = {}
+    for section in SECTIONS:
+        if not section.localizable or section.name not in built:
+            continue
+        with phase("produce language"), detail("produce language", section.name):
+            produced = section.produce(context.reads(section.reads))
+        check_parallel(section, produced, built[section.name])
+        with phase("encode language"), detail("encode language", section.name):
+            encoded[section.name] = {
+                name: encode_column(produced[name],
+                                    layout_for(section, name, policy),
+                                    section.absent.get(name, EMPTY_SLOT))
+                for name in section.localizable}
+    return encoded
 
 
 def absent_tables(tables: Tables) -> list[str]:
@@ -335,10 +480,21 @@ def build_for(version: str, tables: Tables, rungs: Sequence[Mapping[str, object]
                  max_level=level_cap(version, rungs))
 
 
+def beside_default(locales: Sequence[Locale]) -> list[str]:
+    """The languages that need sources of their own.
+
+    Every one but the default, whose tables the build already downloaded: an
+    exporter asked for no language answers in that one, so it costs no request
+    and no second read.
+    """
+    return [locale.code for locale in locales if locale.code != DEFAULT_LOCALE]
+
+
 def packed(version: str, label: str, *, refresh: bool = False,
            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
-           key: str = "", line: Line = Line.RETAIL
-           ) -> tuple[dict[str, object], dict[str, object]]:
+           key: str = "", line: Line = Line.RETAIL,
+           locales: Sequence[Locale] = LOCALES
+           ) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
     """Build one pack, from acquiring its sources to its encoded sections.
 
     Everything up to the point where the artifact takes a shape, which is the
@@ -351,30 +507,70 @@ def packed(version: str, label: str, *, refresh: bool = False,
         policy: how a column's declared kind becomes a layout.
         key: the roster key, when the caller has one.
         line: which distribution line the build ships on.
+        locales: the languages to build. The default one is the build's own
+            pass whether or not it is named, so naming none builds that alone.
 
     Returns:
-        The header and the encoded sections, both by name.
+        The header, and what each language produced, by language code. The
+        default language's entry holds every encoded section; each further
+        one holds its localizable columns alone, since everything else about
+        the build is the same in all of them.
     """
+    beside = beside_default(locales)
     with phase("acquire sources"):
-        sources = fetch_sources(version, refresh)
+        sources = fetch_sources(version, refresh, beside)
+    build_id = int(version.rsplit(".", 1)[-1])
     with phase("wire providers"):
-        providers = Providers(sources, build=int(version.rsplit(".", 1)[-1]))
+        providers = Providers(sources, build=build_id)
     with phase("load expansions"):
         ladder = load_expansions()
     with phase("probe absent tables"):
         build = build_for(version, providers.tables, ladder[0], key=key, line=line)
     with phase("read scaling table"):
         scaling = read_scaling(scaling_source(version, CACHE_DIR).acquire(refresh))
+    # The COOKED numbers come from the client alone, never the server's
+    # revisions. A hotfix table prints a float at six significant digits and
+    # carries only the integer spelling of an amount, so on a build whose
+    # client exports only the float column the overlay would replace a precise
+    # value with a coarse one -- a degradation, not a correction. The overlaid
+    # provider is right for everything that asks what a spell IS; this asks
+    # what number to print.
+    with phase("read spell values"):
+        values = read_spell_values(providers.base, level=build.max_level,
+                                   scaling=scaling)
+    # An id derived by matching two translated names, so it is the build's
+    # answer and every language is handed it. See `read_zone_maps`.
+    with phase("read zone maps"):
+        zone_maps = read_zone_maps(providers.tables)
 
-    context = read_all(providers, build, ladder, scaling)
+    context = read_all(providers, build, ladder, values, zone_maps)
     columns, encoded = produce(context, providers.tables, policy)
     with phase("gather counts and domains"):
         counts, domains = gathered(columns, context)
     log(f"  {len(encoded)} sections, {len(counts)} counts, {len(domains)} domains")
-    return meta(build, label, release_tag(), counts, domains), encoded
+
+    # Every route bundle is filled by the time `read_all` returns; the context
+    # types them optional for a partially built one, which this is not.
+    assert context.effects is not None
+
+    # Whatever landed beside the build's own tables IS the set of further
+    # languages: acquisition asked for the ones the roster named and reports
+    # what came back, so there is nothing here to decide again.
+    produced = {DEFAULT_LOCALE: encoded}
+    for code in sources.locale_tables:
+        locale = locale_of(code)
+        with phase("wire providers"):
+            spoken_providers = Providers(sources, build=build_id, locale=code)
+        said = read_spoken(spoken_providers, locale, values=values,
+                           altnames=context.effects.altnames,
+                           zone_maps=zone_maps)
+        produced[code] = produce_spoken(context.spoken_in(said), columns, policy)
+        log(f"  {code}: {len(produced[code])} sections of language")
+    return meta(build, label, release_tag(), counts, domains), produced
 
 
-def acquire(version: str, *, refresh: bool = False) -> None:
+def acquire(version: str, *, refresh: bool = False,
+            locales: Sequence[Locale] = LOCALES) -> None:
     """Fetch everything one build reads, and produce nothing.
 
     Acquisition separated from execution, so that builds may then run at the
@@ -390,14 +586,15 @@ def acquire(version: str, *, refresh: bool = False) -> None:
     because it IS the build's own acquisition: nothing here decides separately
     what a version needs.
     """
-    fetch_sources(version, refresh)
+    fetch_sources(version, refresh, beside_default(locales))
     scaling_source(version, CACHE_DIR).acquire(refresh)
 
 
 def modules(version: str, label: str, *, refresh: bool = False,
             policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
             key: str = "", line: Line = Line.RETAIL, pack_id: str = "",
-            location: str = "") -> tuple[list[Module], dict[str, object]]:
+            location: str = "", locales: Sequence[Locale] = LOCALES
+            ) -> tuple[list[Module], dict[str, object]]:
     """Build one pack as the module set it ships as.
 
     Args:
@@ -411,6 +608,7 @@ def modules(version: str, label: str, *, refresh: bool = False,
             line sharing a patch with live.
         location: where the writer will put the modules, relative to the site
             root, so the manifest can name them where they actually are.
+        locales: the languages to build.
 
     Returns:
         The modules, each named by its own content, and the manifest naming
@@ -418,11 +616,15 @@ def modules(version: str, label: str, *, refresh: bool = False,
         nothing here arranges the sharing, and nothing has to.
     """
     started = time.monotonic()
-    header, encoded = packed(version, label, refresh=refresh, policy=policy,
-                             key=key, line=line)
-    assembled = assemble(SECTIONS, encoded)
-    absent = absent_sections(SECTIONS, encoded)
-    log(f"  {len(encoded)} sections in {len(assembled)} modules "
+    header, produced = packed(version, label, refresh=refresh, policy=policy,
+                              key=key, line=line, locales=locales)
+    assembled = [module for code, sections in produced.items()
+                 for module in assemble(SECTIONS, sections, locale=code)]
+    # Off the build's own pass alone. A further language produces the sections
+    # that ship language and no others, so asking one what is absent would name
+    # every section that merely has nothing to translate.
+    absent = absent_sections(SECTIONS, produced[DEFAULT_LOCALE])
+    log(f"  {len(produced[DEFAULT_LOCALE])} sections in {len(assembled)} modules "
         f"[{time.monotonic() - started:.1f}s]")
     return assembled, manifest(pack_id or version, assembled, header,
                                absent=absent, location=location)

@@ -15,7 +15,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..drift import TDB_OPTIONAL_COLUMNS, TDB_OPTIONAL_TABLES
+from ..drift import (TDB_CANDIDATE_TABLES, TDB_OPTIONAL_COLUMNS,
+                     TDB_OPTIONAL_TABLES)
 from ..progress import log
 from ..targets import VISUAL_REDIRECTS
 from .archive import read_member
@@ -134,6 +135,30 @@ TDB_TABLES = {
 TDB_TABLES["hotfixes"] = {table: [*columns, STAMP_COLUMN]
                           for table, columns in TDB_TABLES["hotfixes"].items()}
 
+LOCALE_COLUMN = "locale"
+"""The column a ``*_locale`` row names the language it is written in.
+
+One row per entry per language, so reading one language means refusing the
+rest -- which is what the overlay's own admission rule does.
+"""
+
+TDB_LOCALE_TABLES: Mapping[str, Wanted] = {
+    "world": {
+        # The same two names the pack's own world tables carry, in the
+        # languages the server has them in. Spelled as each table spells them:
+        # the creature side capitalises `Name` and the gameobject side does
+        # not, and a join on the wrong spelling is a table that reads empty.
+        "creature_template_locale": ["entry", LOCALE_COLUMN, "Name"],
+        "gameobject_template_locale": ["entry", LOCALE_COLUMN, "name"],
+    },
+}
+"""What a language reads out of the same world dump the pack's tables come from.
+
+A roster of its own rather than more columns on ``TDB_TABLES``, so that a build
+shipping one language never distils them: the archive is a hundred megabytes
+and a re-scan is minutes, and completeness is compared per roster.
+"""
+
 TDB_LOSSY_COLUMNS = frozenset({
     # A FLOAT in a modern dump, so its text is printed rounded against the
     # client's value. The oldest releases type the same column INT, where it is
@@ -210,9 +235,8 @@ def distill_dump(lines: Iterable[str], name: str, want: Wanted,
             is the only source of what the table carries, as it is for the
             pack's own world tables and is not for their `*_locale`
             counterparts, which a release may predate.
-        overlay: this dump revises data the client already has. Only an overlay
-            has its column types checked against TDB_LOSSY_COLUMNS, and only for
-            an overlay does an absent table get a header-only stand-in.
+        overlay: this dump revises data the client already has, so its column
+            types are checked against TDB_LOSSY_COLUMNS.
     """
     schemas: dict[str, list[Column]] = {}
     writers: dict[str, tuple] = {}
@@ -259,10 +283,9 @@ def distill_dump(lines: Iterable[str], name: str, want: Wanted,
                 sys.exit(f"error: table {table} not found in {name}")
             why = TDB_OPTIONAL_TABLES.get(table, "no overrides")
             log(f"    {table}: absent from this dump — {why}")
-            if not overlay:
-                # The creature-display route picks the first candidate table
-                # that exists, so an empty stand-in would win that race and
-                # silently blank every morph.
+            if table in TDB_CANDIDATE_TABLES:
+                # A reader picks between these by which one exists, so an empty
+                # stand-in would win that race and silently blank every morph.
                 continue
         if table not in writers:
             # No hotfixed rows, or no such table in this release: for an overlay
@@ -276,13 +299,15 @@ def distilled(into: Path, want: Wanted) -> bool:
     """Check whether the cache holds exactly the tables and columns wanted.
 
     The header is compared, not the file's existence, which would leave a widened
-    column list looking complete. A table absent from an older release is
-    excluded by the declaration that let it be absent.
+    column list looking complete. Every table a distillation writes leaves a file
+    behind even where the dump had none, so a missing one means the scan has not
+    run -- except for the candidates, which are the tables deliberately left
+    absent so that a reader picking between them picks the one with rows.
     """
     for table, columns in want.items():
         path = into / f"{table}.csv"
         if not path.exists():
-            if table in TDB_OPTIONAL_TABLES:
+            if table in TDB_CANDIDATE_TABLES:
                 continue
             return False
         with path.open(newline="", encoding="utf-8") as handle:
@@ -356,8 +381,9 @@ class Distill:
     overlay: frozenset[str] = frozenset({"hotfixes"})
     """The kinds revising data the client already has.
 
-    Only an overlay has its column types checked against TDB_LOSSY_COLUMNS, and
-    only for an overlay does an absent table get a header-only stand-in.
+    An overlay's column types are checked against TDB_LOSSY_COLUMNS, so a
+    column the dump prints rounded cannot be applied over the client's own
+    exact value without being declared.
     """
 
     def wanted(self) -> dict[str, list[str]]:
@@ -427,4 +453,26 @@ def tdb_source(version: str) -> Source | None:
     return tdb_extraction(
         release, f"TDB ({release['tag']})",
         Distill(kinds=kinds, members={kind: release[kind] for kind in kinds}))
+
+
+def tdb_locale_source(version: str) -> Source | None:
+    """The translated creature and object names, from the same world dump.
+
+    Landing in the release's one directory beside the pack's own tables, so a
+    provider reading either is pointed at the same place.
+
+    Not required: a release may predate a ``*_locale`` table, and those names
+    then stay in the language the world dump itself carries.
+
+    Returns:
+        The source, or None when no release maps to this version -- the Classic
+        re-releases, whose creature names are raw ids in every language.
+    """
+    release = tdb_release(version)
+    if release is None:
+        return None
+    return tdb_extraction(
+        release, f"TDB translations ({release['tag']})",
+        Distill(kinds=("world",), members={"world": release["world"]},
+                want=TDB_LOCALE_TABLES, required=frozenset()))
 

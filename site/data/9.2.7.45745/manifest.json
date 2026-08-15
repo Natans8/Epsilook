@@ -1,7 +1,7 @@
 {
   "pack": "9.2.7.45745",
   "meta": {
-    "format": 52,
+    "format": 53,
     "version": "9.2.7.45745",
     "label": "Shadowlands 9.2.7",
     "built": "2026-08-15",
@@ -465,14 +465,48 @@
     "universal": {
       "file": "data/modules/universal-d3add882f171.json.gz",
       "bytes": 25191
+    }
+  },
+  "locales": {
+    "enUS": {
+      "names": {
+        "file": "data/modules/names-e5e6844390f2.json.gz",
+        "bytes": 1681101
+      },
+      "text": {
+        "file": "data/modules/text-90793747bacf.json.gz",
+        "bytes": 3012503
+      }
     },
-    "names": {
-      "file": "data/modules/names-e5e6844390f2.json.gz",
-      "bytes": 1681101
+    "ruRU": {
+      "names": {
+        "file": "data/modules/names-03ab4cab9965.json.gz",
+        "bytes": 2323330
+      },
+      "text": {
+        "file": "data/modules/text-8fc0899cf6cf.json.gz",
+        "bytes": 3963513
+      }
     },
-    "text": {
-      "file": "data/modules/text-90793747bacf.json.gz",
-      "bytes": 3012503
+    "frFR": {
+      "names": {
+        "file": "data/modules/names-7b23e1e320a0.json.gz",
+        "bytes": 1941849
+      },
+      "text": {
+        "file": "data/modules/text-74fa7fb81169.json.gz",
+        "bytes": 3381814
+      }
+    },
+    "esES": {
+      "names": {
+        "file": "data/modules/names-d30be2dc9555.json.gz",
+        "bytes": 1905548
+      },
+      "text": {
+        "file": "data/modules/text-33d0aea94588.json.gz",
+        "bytes": 3180881
+      }
     }
   },
   "absentSections": []

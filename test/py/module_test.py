@@ -17,15 +17,17 @@ from pack.emit.module import DIGEST_LENGTH, absent_sections, assemble, serialize
 from pack.model.section import Scope, Section
 
 
-def a_section(name: str, module: str, scope: Scope = Scope.PER_BUILD) -> Section:
+def a_section(name: str, module: str, scope: Scope = Scope.PER_BUILD, *,
+              columns: tuple[str, ...] = (),
+              localizable: tuple[str, ...] = ()) -> Section:
     """A section carrying only what emit reads off it."""
-    return Section(name=name, doc="", module=module,
-                   produce=lambda _: {}, columns=(), scope=scope)
+    return Section(name=name, doc="", module=module, produce=lambda _: {},
+                   columns=columns, localizable=localizable, scope=scope)
 
 
 def test_a_module_is_named_by_its_own_bytes() -> None:
-    modules = assemble([a_section("animNames", "names")], {"animNames": ["Stand"]})
-    assert modules[0].filename == f"names-{modules[0].digest}.json.gz"
+    modules = assemble([a_section("animNames", "core")], {"animNames": ["Stand"]})
+    assert modules[0].filename == f"core-{modules[0].digest}.json.gz"
     assert len(modules[0].digest) == DIGEST_LENGTH
 
 
@@ -35,7 +37,7 @@ def test_two_builds_with_the_same_content_produce_the_same_file() -> None:
     name one file; different bytes name two, so a build that diverges keeps
     working with no special case.
     """
-    sections = [a_section("animNames", "names", Scope.UNIVERSAL)]
+    sections = [a_section("animNames", "universal", Scope.UNIVERSAL)]
     agreed = assemble(sections, {"animNames": ["Stand", "Death"]})
     same = assemble(sections, {"animNames": ["Stand", "Death"]})
     diverged = assemble(sections, {"animNames": ["Stand", "Fidget"]})
@@ -45,7 +47,7 @@ def test_two_builds_with_the_same_content_produce_the_same_file() -> None:
 
 
 def test_sections_sharing_a_module_land_in_one_file() -> None:
-    sections = [a_section("animNames", "names"), a_section("auraNames", "names")]
+    sections = [a_section("animNames", "core"), a_section("auraNames", "core")]
     modules = assemble(sections, {"animNames": ["Stand"], "auraNames": {"1": "Haste"}})
     assert len(modules) == 1
     # the payload is what ships, so read it back the way the app would
@@ -57,9 +59,9 @@ def test_a_section_its_build_lacks_is_left_out_rather_than_shipped_empty() -> No
     """An empty column reads as "nothing matches", which is a different claim
     from "this build never had it".
     """
-    sections = [a_section("animNames", "names"), a_section("spellAreas", "core")]
+    sections = [a_section("animNames", "core"), a_section("spellAreas", "universal")]
     modules = assemble(sections, {"animNames": ["Stand"]})
-    assert [module.name for module in modules] == ["names"]
+    assert [module.name for module in modules] == ["core"]
     assert absent_sections(sections, {"animNames": ["Stand"]}) == ["spellAreas"]
 
 
@@ -74,8 +76,73 @@ def test_a_produced_section_the_registry_does_not_declare_is_an_error() -> None:
     notice: the section would appear in no module and no manifest.
     """
     with pytest.raises(ValueError, match="spellAreas"):
-        assemble([a_section("animNames", "names")],
+        assemble([a_section("animNames", "core")],
                  {"animNames": [], "spellAreas": [1, 2]})
+
+
+def a_spoken_section(name: str, module: str = "core") -> Section:
+    """A section whose names ship in one language and whose ids ship in all."""
+    return a_section(name, module, columns=("ids", "names"), localizable=("names",))
+
+
+def test_a_localizable_section_splits_between_its_module_and_the_language() -> None:
+    """The ids stay with the structure and the names leave for the language, so
+    a reader wanting Russian fetches one file rather than a second copy of every
+    id.
+    """
+    modules = assemble([a_spoken_section("mounts")],
+                       {"mounts": {"ids": [1, 2], "names": ["Steed", "Drake"]}},
+                       locale="enUS")
+    held = {}
+    for module in modules:
+        with gzip.open(io.BytesIO(module.payload), "rt", encoding="utf-8") as handle:
+            held[module.name] = json.load(handle)
+    assert held == {"core": {"mounts": {"ids": [1, 2]}},
+                    "names": {"mounts": {"names": ["Steed", "Drake"]}}}
+
+
+def test_a_section_already_in_a_language_module_stays_whole() -> None:
+    """Prose belongs with prose rather than with the names, and everything in it
+    is language, so there is no structure half to leave behind.
+    """
+    modules = assemble([a_section("spellText", "text", columns=("descriptions",),
+                                  localizable=("descriptions",))],
+                       {"spellText": {"descriptions": ["burns"]}}, locale="ruRU")
+    assert [module.name for module in modules] == ["text"]
+
+
+def test_a_language_module_carries_the_language_and_a_structural_one_does_not() -> None:
+    """Which file a language is in is said once, by the module itself: its own
+    name is a content hash and says nothing about what is inside.
+    """
+    modules = assemble([a_spoken_section("mounts")],
+                       {"mounts": {"ids": [1], "names": ["Steed"]}}, locale="ruRU")
+    assert {module.name: module.locale for module in modules} == {
+        "core": "", "names": "ruRU"}
+
+
+def test_a_language_module_assembled_without_a_language_is_an_error() -> None:
+    """The manifest groups these by language, so an unstamped one would be a
+    file no reader could ask for.
+    """
+    with pytest.raises(ValueError, match="names"):
+        assemble([a_spoken_section("mounts")],
+                 {"mounts": {"ids": [1], "names": ["Steed"]}})
+
+
+def test_two_languages_of_one_build_share_its_structure() -> None:
+    """The point of the split, measured in files: the structure is assembled
+    once and only the language is assembled twice.
+    """
+    sections = [a_spoken_section("mounts")]
+    english = assemble(sections, {"mounts": {"ids": [1], "names": ["Steed"]}},
+                       locale="enUS")
+    russian = assemble(sections, {"mounts": {"names": ["Скакун"]}}, locale="ruRU")
+    structure = {module.name: module.filename for module in english
+                 if not module.locale}
+    assert structure == {"core": next(m.filename for m in english if m.name == "core")}
+    assert [module.name for module in russian] == ["names"]
+    assert russian[0].filename != next(m.filename for m in english if m.name == "names")
 
 
 def test_the_same_payload_serialises_to_the_same_bytes() -> None:

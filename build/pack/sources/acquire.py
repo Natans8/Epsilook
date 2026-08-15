@@ -11,8 +11,8 @@ where each of it comes from, with no request made and no network needed.
 from __future__ import annotations
 
 import sys
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..progress import log
@@ -20,8 +20,8 @@ from .enums import enum_sources
 from .expansions import expansions_source
 from .listfile import listfile_source, supplement_source
 from .source import Source
-from .tdb import tdb_source
-from .wago import pinned_tables_source, tables_source
+from .tdb import tdb_locale_source, tdb_source
+from .wago import locale_tables_source, pinned_tables_source, tables_source
 
 
 @dataclass(frozen=True)
@@ -53,6 +53,18 @@ class Roster:
     tdb: Source | None
     """The TrinityCore release for this build, or None when none maps to it."""
 
+    locale_tables: Mapping[str, Source] = field(default_factory=dict)
+    """Language code -> that language's copies of the translated tables.
+
+    The build's own export is one language already -- asking for none is
+    asking for the exporter's default -- so this holds the languages BESIDE
+    that one and is empty for a build shipping only it.
+    """
+
+    translations: Source | None = None
+    """The server dump's ``*_locale`` tables, or None when no release maps here
+    or no second language was asked for."""
+
 
 @dataclass(frozen=True)
 class Sources:
@@ -74,16 +86,39 @@ class Sources:
     tdb: Path | None
     """The distilled TrinityCore tables, or None when no release maps here."""
 
+    locale_tables: Mapping[str, Path] = field(default_factory=dict)
+    """Language code -> the directory holding that language's tables.
 
-def source_roster(version: str) -> Roster:
-    """What one build reads, declared without fetching any of it."""
+    Only the languages beside the build's own, and only those whose export
+    landed: a language nothing came back for is left out rather than pointed
+    at an empty directory. It is also the roster of further languages this
+    build can be read in, which is why nothing else records that.
+
+    The server's own translations need no entry: they are distilled into the
+    release directory `tdb` already names, so acquiring them is the whole of
+    what the build needs from them.
+    """
+
+
+def source_roster(version: str, locales: Sequence[str] = ()) -> Roster:
+    """What one build reads, declared without fetching any of it.
+
+    Args:
+        version: the build id.
+        locales: the languages to read BESIDE the build's own export, which is
+            already one. Naming none is what every pack did before there was a
+            second language, and it costs nothing.
+    """
     return Roster(tables=tables_source(version),
                   pinned_tables=pinned_tables_source(),
                   enums=enum_sources(),
                   listfile=listfile_source(),
                   supplement=supplement_source(),
                   expansions=expansions_source(),
-                  tdb=tdb_source(version))
+                  tdb=tdb_source(version),
+                  locale_tables={locale: locale_tables_source(version, locale)
+                                 for locale in locales},
+                  translations=tdb_locale_source(version) if locales else None)
 
 
 def acquired(source: Source, refresh: bool) -> Path | None:
@@ -99,8 +134,14 @@ def acquired(source: Source, refresh: bool) -> Path | None:
     return source.acquire(refresh)
 
 
-def fetch_sources(version: str, refresh: bool) -> Sources:
+def fetch_sources(version: str, refresh: bool,
+                  locales: Sequence[str] = ()) -> Sources:
     """Ensure every source this build needs is cached, and say where it is.
+
+    Args:
+        version: the build id.
+        locales: the languages to read beside the build's own export.
+        refresh: re-fetch every source even where a cached copy would do.
 
     Raises:
         SystemExit: if a source the build cannot do without came back absent.
@@ -108,7 +149,7 @@ def fetch_sources(version: str, refresh: bool) -> Sources:
             is not an error on its own -- but a whole directory of them means
             the version was never published rather than that it degraded.
     """
-    roster = source_roster(version)
+    roster = source_roster(version, locales)
     tables = acquired(roster.tables, refresh)
     pinned_tables = acquired(roster.pinned_tables, refresh)
     for source in roster.enums:
@@ -126,6 +167,13 @@ def fetch_sources(version: str, refresh: bool) -> Sources:
     else:
         tdb = acquired(roster.tdb, refresh)
 
+    landed = {locale: path for locale, source in roster.locale_tables.items()
+              if (path := acquired(source, refresh)) is not None}
+    # Acquired for its effect: the distillation lands beside the release's own
+    # tables, which `tdb` already points at.
+    if roster.translations is not None:
+        acquired(roster.translations, refresh)
+
     if tables is None or pinned_tables is None or listfile is None:
         absent = [name for name, path in (("tables", tables),
                                           ("sound-kit names", pinned_tables),
@@ -133,4 +181,4 @@ def fetch_sources(version: str, refresh: bool) -> Sources:
         sys.exit(f"error: {', '.join(absent)} came back absent for build "
                  f"{version}; check the build id is one that was published")
     return Sources(tables=tables, pinned_tables=pinned_tables,
-                   listfile=listfile, tdb=tdb)
+                   listfile=listfile, tdb=tdb, locale_tables=landed)

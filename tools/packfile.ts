@@ -32,8 +32,17 @@ interface PackManifest {
     pack: string;
     meta: SpellPack["meta"];
     modules: Record<string, ManifestModule>;
+    locales: Record<string, Record<string, ManifestModule>>;
     absentSections?: string[];
 }
+
+/**
+ * The language a reader gets when it asks for none.
+ *
+ * Every pack ships it, which is what lets a caller fall back to it without checking. Declared again in
+ * `tools/packfile.py` and `build/pack/derive/locales.py`; `check_locale_declaration` reconciles all three.
+ */
+export const DEFAULT_LOCALE = "enUS";
 
 /** Every version the site ships, newest roster order. */
 export function readVersions(): VersionEntry[] {
@@ -67,12 +76,14 @@ export function pickVersion(want?: string, versions: VersionEntry[] = readVersio
  * A section that is a bare array or an id-keyed table lives in exactly one module, so it is taken as it comes.
  *
  * @param entry The roster entry to read.
+ * @param locale Which language's names and prose to read; a pack that does not carry it falls back to the default.
  * @returns The pack as one object, the shape `buildIndexes` takes.
  */
-export function readPack(entry: VersionEntry): SpellPack {
+export function readPack(entry: VersionEntry, locale: string = DEFAULT_LOCALE): SpellPack {
     const manifest = JSON.parse(readFileSync(resolve(SITE, entry.file), "utf8")) as PackManifest;
+    const spoken = manifest.locales[locale] ?? manifest.locales[DEFAULT_LOCALE] ?? {};
     const pack: Record<string, unknown> = {meta: manifest.meta};
-    for (const module of Object.values(manifest.modules)) {
+    for (const module of [...Object.values(manifest.modules), ...Object.values(spoken)]) {
         const loaded = JSON.parse(
             gunzipSync(readFileSync(resolve(SITE, module.file))).toString("utf8")) as Record<string, unknown>;
         for (const [section, payload] of Object.entries(loaded)) {
