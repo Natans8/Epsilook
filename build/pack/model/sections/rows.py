@@ -30,18 +30,8 @@ from ..registry import register
 from ..section import (CountFamily, Domain, Layout, Scope, Section,
                        SectionColumns)
 
-Placed = tuple[int, str, int]
-"""One row as the counts see it: which spell, which kind, which pool slot.
-
-A slot rather than the row's values, because materialising a mapping per row
-allocates one dict for every (spell, row) pair in the column -- the largest of
-which runs to hundreds of thousands -- and most counts read no value at all.
-Whoever wants one reads it out of the column at the slot.
-"""
-
-Reader = Mapping[str, Mapping[str, Sequence[RowValue]]]
-"""Per kind, its columns by name: the declared properties and the carried ones
-together, which is what a count reads a placed row through."""
+Triple = tuple[int, str, Mapping[str, RowValue]]
+"""One row as the counts see it: which spell, which kind, and its values."""
 
 
 def columns_of(rows: ColumnRows) -> SectionColumns:
@@ -82,16 +72,8 @@ def produce(column: str) -> Callable[[Reads], SectionColumns]:
     return run
 
 
-def reading(columns: SectionColumns) -> Reader:
-    """Each kind's columns, declared and carried, by name."""
-    kinds = cast(Sequence[str], columns["kinds"])
-    values = cast(Reader, columns["values"])
-    carried = cast(Reader, columns["carried"])
-    return {kind: {**values[kind], **carried.get(kind, {})} for kind in kinds}
-
-
-def walk(columns: SectionColumns) -> Iterator[Placed]:
-    """Every (spell, kind, slot) placement the produced table encodes.
+def walk(columns: SectionColumns) -> Iterator[Triple]:
+    """Every (spell, kind, values) triple the produced table encodes.
 
     The counts run through this rather than over the pools, because a pool holds
     DISTINCT rows: counting it would answer how many different missiles the
@@ -103,7 +85,10 @@ def walk(columns: SectionColumns) -> Iterator[Placed]:
     """
     kinds = cast(Sequence[str], columns["kinds"])
     sizes = cast(Sequence[int], columns["sizes"])
+    values = cast(Mapping[str, Mapping[str, Sequence[RowValue]]], columns["values"])
+    carried = cast(Mapping[str, Mapping[str, Sequence[RowValue]]], columns["carried"])
     refs = cast(Sequence[int], columns["refs"])
+    read = {kind: {**values[kind], **carried.get(kind, {})} for kind in kinds}
 
     # Reference to kind by position: the pools are numbered end to end, so one
     # array as long as the pools answers it without a search per reference.
@@ -117,29 +102,30 @@ def walk(columns: SectionColumns) -> Iterator[Placed]:
     for spell, count in enumerate(cast(Sequence[int], columns["counts"])):
         for ref in refs[at:at + count]:
             kind = owner[ref]
-            yield spell, kind, ref - base[kind]
+            slot = ref - base[kind]
+            yield spell, kind, {name: column[slot]
+                                for name, column in read[kind].items()}
         at += count
 
 
-def counted(compute: Callable[[list[Placed], Reader], Mapping[str, int]]
-            ) -> CountFamily:
+def counted(compute: Callable[[list[Triple]], Mapping[str, int]]) -> CountFamily:
     """One section's counts, all from a single walk of its rows."""
-    return CountFamily(lambda columns, _reads: compute(*walked(columns)))
+    return CountFamily(lambda columns, _reads: compute(walked(columns)))
 
 
-_WALKED: tuple[SectionColumns, list[Placed], Reader] | None = None
-"""The last table walked, its placements, and how to read them.
+_WALKED: tuple[SectionColumns, list[Triple]] | None = None
+"""The last table walked, and its triples.
 
 One entry, holding the table ITSELF rather than its id: a section's counts and
 its domains are handed the same object one after the other, and nothing else is
 walked in between. Keeping the reference is what makes the identity test safe --
 an id alone can be reused once the table it named is collected, which would hand
-one section's placements to the next.
+one section's triples to the next.
 """
 
 
-def walked(columns: SectionColumns) -> tuple[list[Placed], Reader]:
-    """The section's placements and column reader, made once per table.
+def walked(columns: SectionColumns) -> list[Triple]:
+    """The section's triples, materialised once per produced table.
 
     Counts and domains both want every row, and walking twice rebuilds the
     kind-per-reference array and re-reads every reference for an answer already
@@ -147,16 +133,16 @@ def walked(columns: SectionColumns) -> tuple[list[Placed], Reader]:
     """
     global _WALKED
     if _WALKED is None or _WALKED[0] is not columns:
-        _WALKED = (columns, list(walk(columns)), reading(columns))
-    return _WALKED[1], _WALKED[2]
+        _WALKED = (columns, list(walk(columns)))
+    return _WALKED[1]
 
 
-def per_spell(rows: Sequence[Placed], kinds: frozenset[str]) -> Counter[int]:
+def per_spell(rows: Sequence[Triple], kinds: frozenset[str]) -> Counter[int]:
     """How many rows of the named kinds each spell has, for a count domain."""
-    return Counter(spell for spell, kind, _slot in rows if kind in kinds)
+    return Counter(spell for spell, kind, _values in rows if kind in kinds)
 
 
-def per_spell_distinct(rows: Sequence[Placed], read: Reader, kind: str,
+def per_spell_distinct(rows: Sequence[Triple], kind: str,
                        *keys: str) -> Counter[int]:
     """How many DISTINCT rows of one kind each spell reaches.
 
@@ -169,7 +155,7 @@ def per_spell_distinct(rows: Sequence[Placed], read: Reader, kind: str,
     Read off the same keys the count uses, so a domain and the count it
     describes cannot come to disagree about what one row is.
     """
-    return Counter(spell for spell, _key in entries(rows, read, kind, *keys))
+    return Counter(spell for spell, _key in entries(rows, kind, *keys))
 
 
 MODEL_KINDS = frozenset({"missile", "barrage", "ground", "attached", "trail",
@@ -179,20 +165,9 @@ from the mount table rather than through a visual, which is why it was never in
 the `spellModels` count and is not in the model count domain."""
 
 
-def points_at(read: Reader, kind: str, slot: int) -> RowValue:
-    """The file one model row points at, whichever property names it.
-
-    A carried weapon has no model of its own, so its file is the slot marker
-    under `slot`; every other model kind names its asset under `file`.
-    """
-    columns = read[kind]
-    column = columns.get("slot") or columns.get("file")
-    return 0 if column is None else column[slot]
-
-
-def model_counts(rows: Sequence[Placed], read: Reader) -> Mapping[str, int]:
+def model_counts(rows: Sequence[Triple]) -> Mapping[str, int]:
     """The counts the retired model sections carried."""
-    kinds = Counter(kind for _spell, kind, _slot in rows)
+    kinds = Counter(kind for _spell, kind, _values in rows)
     return {
         "spellModels": sum(kinds[kind] for kind in MODEL_KINDS),
         "spellDisplayModels": kinds["display"],
@@ -202,33 +177,32 @@ def model_counts(rows: Sequence[Placed], read: Reader) -> Mapping[str, int]:
         # and trailing categories too, and the count has always been about the
         # file, not about the kind that happens to show it.
         "spellWeaponModels": sum(
-            1 for _spell, kind, slot in rows
-            if points_at(read, kind, slot) in SYNTHETIC_MODEL_FILES),
-        "spellMissileMotions": sum(
-            1 for _spell, kind, slot in rows
-            if kind == "missile" and read["missile"]["motion"][slot]),
+            1 for _spell, _kind, values in rows
+            if values.get("slot", values.get("file", 0)) in SYNTHETIC_MODEL_FILES),
+        "spellMissileMotions": sum(1 for _spell, kind, values in rows
+                                   if kind == "missile" and values["motion"]),
         "spellMounts": kinds["mount"],
     }
 
 
-def anim_counts(rows: Sequence[Placed], read: Reader) -> Mapping[str, int]:
+def anim_counts(rows: Sequence[Triple]) -> Mapping[str, int]:
     """The counts the retired animation sections carried.
 
     A kit is counted by its distinct (spell, kit) pairs, which is what the count
     has always reported: the rows outnumber the pairs now that a kit ships one
     row per animation and region.
     """
-    kinds = Counter(kind for _spell, kind, _slot in rows)
+    kinds = Counter(kind for _spell, kind, _values in rows)
     return {
-        "spellAnimKits": len({(spell, read["kit"]["id"][slot])
-                              for spell, kind, slot in rows if kind == "kit"}),
+        "spellAnimKits": len({(spell, values["id"])
+                              for spell, kind, values in rows if kind == "kit"}),
         "spellVisualAnims": kinds["loose"],
         "spellReplaceAnims": kinds["replace"],
         "spellPassengerAnims": kinds["passenger"],
     }
 
 
-def entries(rows: Sequence[Placed], read: Reader, kind: str,
+def entries(rows: Sequence[Triple], kind: str,
             *keys: str) -> set[tuple[int, tuple[RowValue, ...]]]:
     """The distinct rows of one kind the named columns identify, by spell.
 
@@ -238,9 +212,8 @@ def entries(rows: Sequence[Placed], read: Reader, kind: str,
     are what the retired section's rows were keyed by, which is the only thing
     that keeps the count meaning what it always meant.
     """
-    columns = read[kind]
-    return {(spell, tuple(columns[key][slot] for key in keys))
-            for spell, word, slot in rows if word == kind}
+    return {(spell, tuple(values[key] for key in keys))
+            for spell, word, values in rows if word == kind}
 
 
 CHAIN_KEYS = ("chain", "from", "to", "target")
@@ -252,13 +225,13 @@ paints with stay one.
 """
 
 
-def fx_counts(rows: Sequence[Placed], read: Reader) -> Mapping[str, int]:
+def fx_counts(rows: Sequence[Triple]) -> Mapping[str, int]:
     """The counts the retired visual-effect sections carried."""
-    kinds = Counter(kind for _spell, kind, _slot in rows)
+    kinds = Counter(kind for _spell, kind, _values in rows)
     return {
-        "spellFx": len(entries(rows, read, "chain", *CHAIN_KEYS)),
-        "spellDissolves": len(entries(rows, read, "dissolve", "dissolve")),
-        "spellScreens": len(entries(rows, read, "screen", "screen")),
+        "spellFx": len(entries(rows, "chain", *CHAIN_KEYS)),
+        "spellDissolves": len(entries(rows, "dissolve", "dissolve")),
+        "spellScreens": len(entries(rows, "screen", "screen")),
         "spellGlows": kinds["glow"],
         "spellShadowies": kinds["shadowy"],
         "spellGhostMats": kinds["ghost"],
@@ -275,14 +248,14 @@ def fx_counts(rows: Sequence[Placed], read: Reader) -> Mapping[str, int]:
     }
 
 
-def mech_counts(rows: Sequence[Placed], read: Reader) -> Mapping[str, int]:
+def mech_counts(rows: Sequence[Triple]) -> Mapping[str, int]:
     """The counts the retired mechanics, gate and modifier sections carried.
 
     A vehicle is counted by its distinct (spell, vehicle) pairs: a seat is a row
     here, and the count has always been how many vehicles a spell puts its
     subject in.
     """
-    kinds = Counter(kind for _spell, kind, _slot in rows)
+    kinds = Counter(kind for _spell, kind, _values in rows)
     return {
         "spellMechanics": kinds["effect"],
         # One direction, which is what the retired section held: the other is
@@ -290,20 +263,18 @@ def mech_counts(rows: Sequence[Placed], read: Reader) -> Mapping[str, int]:
         "spellLinks": kinds["triggers"],
         "spellAreas": kinds["location"],
         "spellInvis": kinds["invis"],
-        "invisChannels": len({read["invis"]["channel"][slot]
-                              for _spell, kind, slot in rows if kind == "invis"}),
+        "invisChannels": len({values["channel"] for _spell, kind, values in rows
+                              if kind == "invis"}),
         "spellDetects": kinds["detect"],
-        "spellVehicles": len(entries(rows, read, "seats", "vehicle")),
+        "spellVehicles": len(entries(rows, "seats", "vehicle")),
         "spellSpeeds": kinds["speed"],
         "spellKeybinds": kinds["keybind"],
     }
 
 
-def amounts(rows: Sequence[Placed], read: Reader, kind: str,
-            prop: str) -> list[RowValue]:
+def amounts(rows: Sequence[Triple], kind: str, prop: str) -> list[RowValue]:
     """One property's value on every row of one kind, for a numeric domain."""
-    column = read[kind][prop]
-    return [column[slot] for _spell, word, slot in rows if word == kind]
+    return [values[prop] for _spell, word, values in rows if word == kind]
 
 
 ROW_COLUMNS = ("kinds", "sizes", "values", "carried", "vocab", "absent",
@@ -318,7 +289,7 @@ MODEL_ROWS = register(Section(
     reads=COLUMN_READS["model"],
     counts=(counted(model_counts),),
     domains=(Domain("count.model", lambda columns, _r: numeric_domain(
-        per_spell(walked(columns)[0], MODEL_KINDS).values())),),
+        per_spell(walked(columns), MODEL_KINDS).values())),),
 ))
 
 SOUND_ROWS = register(Section(
@@ -328,9 +299,9 @@ SOUND_ROWS = register(Section(
     produce=produce("sound"),
     columns=ROW_COLUMNS,
     reads=COLUMN_READS["sound"],
-    counts=(counted(lambda rows, _read: {"spellSounds": len(rows)}),),
+    counts=(counted(lambda rows: {"spellSounds": len(rows)}),),
     domains=(Domain("count.sound", lambda columns, _r: numeric_domain(
-        per_spell(walked(columns)[0], frozenset({"sound"})).values())),),
+        per_spell(walked(columns), frozenset({"sound"})).values())),),
 ))
 
 ANIM_ROWS = register(Section(
@@ -342,7 +313,7 @@ ANIM_ROWS = register(Section(
     reads=COLUMN_READS["anim"],
     counts=(counted(anim_counts),),
     domains=(Domain("count.anim", lambda columns, _r: numeric_domain(
-        per_spell_distinct(*walked(columns), "kit", "id").values())),),
+        per_spell_distinct(walked(columns), "kit", "id").values())),),
 ))
 
 FX_ROWS = register(Section(
@@ -359,14 +330,14 @@ FX_ROWS = register(Section(
         # in one column, and folding them in would change what the control
         # measures rather than widen it.
         Domain("count.fx", lambda columns, _r: numeric_domain(
-            per_spell_distinct(*walked(columns), "chain",
+            per_spell_distinct(walked(columns), "chain",
                                *CHAIN_KEYS).values())),
         Domain("desaturate", lambda columns, _r: numeric_domain(
-            amounts(*walked(columns), "desaturate", "percent")), unit="%"),
+            amounts(walked(columns), "desaturate", "percent")), unit="%"),
         Domain("transparency", lambda columns, _r: numeric_domain(
-            amounts(*walked(columns), "transparency", "percent")), unit="%"),
+            amounts(walked(columns), "transparency", "percent")), unit="%"),
         Domain("scale", lambda columns, _r: numeric_domain(
-            amounts(*walked(columns), "scale", "amount")), unit="%"),
+            amounts(walked(columns), "scale", "amount")), unit="%"),
     ),
 ))
 
@@ -380,11 +351,11 @@ MECH_ROWS = register(Section(
     counts=(counted(mech_counts),),
     domains=(
         Domain("count.mech", lambda columns, _r: numeric_domain(
-            per_spell(walked(columns)[0], frozenset({"effect"})).values())),
+            per_spell(walked(columns), frozenset({"effect"})).values())),
         Domain("invis", lambda columns, _r: numeric_domain(
-            amounts(*walked(columns), "invis", "channel"))),
+            amounts(walked(columns), "invis", "channel"))),
         Domain("speed", lambda columns, _r: numeric_domain(
-            amounts(*walked(columns), "speed", "amount")), unit="%"),
+            amounts(walked(columns), "speed", "amount")), unit="%"),
     ),
 ))
 

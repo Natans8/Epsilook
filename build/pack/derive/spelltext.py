@@ -264,20 +264,11 @@ class DescriptionCooker:
         self.stats = {"elided": 0, "resolved": 0}
 
     def cook(self, spell: int, template: str) -> str:
-        """One template, rendered in `spell`'s context and tidied.
-
-        A template carrying neither a `$` nor a `|` has nothing for any pass in
-        `_render` to find: every construct the renderer resolves is introduced
-        by one of those two characters, and the markup stripper reads only the
-        second. Such a template is most of what the game ships, so it takes the
-        one scan that proves it rather than the dozen that would find nothing.
-        The tidy still runs, because whitespace needs closing up either way.
-        """
+        """One template, rendered in `spell`'s context and tidied."""
         if not template:
             return ""
-        if "$" not in template and "|" not in template:
-            return _tidy(template)
         return _tidy(self._render(template, spell, 0, ()))
+
 
     def _render(self, text: str, spell: int, depth: int, seen: tuple[int, ...]) -> str:
         """Resolve every construct in `text`, reading values from `spell`.

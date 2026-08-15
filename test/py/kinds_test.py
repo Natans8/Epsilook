@@ -14,7 +14,7 @@ import pytest
 
 from pack.derive.context import Reads
 from pack.derive.kinds import ABSENT, Family, SpellRow, build_column
-from pack.model.sections.rows import columns_of, entries, reading, walk
+from pack.model.sections.rows import columns_of, entries, walk
 
 
 NO_READS = cast(Reads, None)
@@ -166,6 +166,4 @@ def test_a_count_reads_the_effect_rather_than_the_texture() -> None:
         reads=NO_READS, spell_ids=[1, 2]))
     rows = list(walk(table))
     assert len(rows) == 3
-    # Two spells reach dissolve 40, and spell 1 paints it with two textures:
-    # three rows, two dissolves, which is what the retired count reported.
-    assert len(entries(rows, reading(table), "dissolve", "dissolve")) == 2
+    assert len(entries(rows, "dissolve", "dissolve")) == 2
