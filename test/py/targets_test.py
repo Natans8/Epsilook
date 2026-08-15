@@ -1,87 +1,91 @@
-"""Who a spell is aimed at: the classification, and how the two phases fold.
+"""Building one module must produce the module the whole pack ships.
 
-The implicit-target names are the game's own and there are ~150 of them, so the
-classification is by substring and the ORDER of the tests is the rule. These
-pin the order rather than the list -- a new name is data, a reordering is a
-behaviour change.
+The build derives what the selected sections declared reading, and everything
+those derivations need comes with them because one asks another by name. This
+pins the two things that can break: a section naming a field nothing produces,
+and the closure quietly coming out short.
 """
 
 from __future__ import annotations
 
-from pack.targets import (NO_TARGET, TARGET_AREA, TARGET_BITS, TARGET_CASTER,
-                          TARGET_TARGET, implicit_target_bit, resolve_target_mask)
+import json
+import os
+from pathlib import Path
+
+import pytest
+
+from pack import pipeline
+from pack.derive import CONTEXT_FIELDS
+from pack.model import SECTIONS
+from pack.sources.cache import CACHE_DIR
+
+MODULES = sorted({section.module for section in SECTIONS})
 
 
-def test_a_place_beats_the_unit_it_is_anchored_to() -> None:
-    """A spread, a cone or a ground point is somewhere rather than someone,
-    whoever it hangs off -- which is why the area hints are tested first."""
-    assert implicit_target_bit("TARGET_UNIT_TARGET_AREA_ENEMY_DST") == TARGET_AREA
-    assert implicit_target_bit("TARGET_UNIT_CONE_ENEMY_24") == TARGET_AREA
-    assert implicit_target_bit("TARGET_DEST_CASTER_FRONT") == TARGET_AREA
+def test_every_declared_read_is_a_field_the_build_can_derive() -> None:
+    """The failure this replaces is an AttributeError forty seconds into a
+    build, naming a property rather than the section that asked for it."""
+    for section in SECTIONS:
+        for name in section.reads:
+            assert name in CONTEXT_FIELDS, f"{section.name} reads {name!r}"
+            assert name == "build" or hasattr(pipeline.Derivations, name), (
+                f"{section.name} reads {name!r}, which no derivation produces")
 
 
-def test_the_selected_unit_beats_the_casters_own_sphere() -> None:
-    assert implicit_target_bit("TARGET_UNIT_TARGET_ALLY") == TARGET_TARGET
-    assert implicit_target_bit("TARGET_UNIT_NEARBY_ENEMY") == TARGET_TARGET
+def test_every_module_selects_at_least_one_section() -> None:
+    """A module nothing ships in would build empty and report success."""
+    for module in MODULES:
+        assert pipeline.selected((module,)), module
 
 
-def test_the_caster_and_what_belongs_to_them() -> None:
-    assert implicit_target_bit("TARGET_UNIT_CASTER") == TARGET_CASTER
-    assert implicit_target_bit("TARGET_UNIT_PET") == TARGET_CASTER
-    assert implicit_target_bit("TARGET_UNIT_VEHICLE") == TARGET_CASTER
+def test_selecting_everything_is_selecting_nothing() -> None:
+    """Naming every module and naming none must be the same build."""
+    assert pipeline.selected(tuple(MODULES)) == pipeline.selected()
 
 
-def test_a_bare_destination_is_a_place() -> None:
-    """Tested last, because the word appears inside names the rows above have
-    already claimed."""
-    assert implicit_target_bit("TARGET_DEST_DEST") == TARGET_AREA
-    assert implicit_target_bit("TARGET_DEST_DB") == TARGET_AREA
+def test_an_unknown_module_is_refused() -> None:
+    """Rather than producing nothing and calling it a build."""
+    with pytest.raises(ValueError, match="no section ships in"):
+        pipeline.selected(("prose",))
 
 
-def test_a_name_that_names_no_anchor_contributes_no_bit() -> None:
-    """The classification is near-total on 9.2.7 -- 133 of the enum's 134 names
-    reach a bit, and the one that does not is `NONE`. So this is the guard on
-    an absent value rather than on a long tail: anything without the prefix
-    anchors to nothing, and inventing a bit for it would put an icon on a pill
-    with nothing to point at.
+def test_a_narrower_selection_reads_no_more_than_a_wider_one() -> None:
+    """The union is monotone, which is what makes a partial build a subset of
+    the whole one rather than a different one."""
+    everything = pipeline.declared_reads(pipeline.selected())
+    for module in MODULES:
+        assert pipeline.declared_reads(pipeline.selected((module,))) <= everything
+
+
+def test_text_reads_far_less_than_the_whole_pack() -> None:
+    """The claim the whole item rests on: prose does not need the visual graph.
+
+    Asserted as a gap rather than an exact set, since the point is that one is
+    much smaller and a new section may legitimately widen either.
     """
-    assert implicit_target_bit("NONE") == NO_TARGET
-    assert implicit_target_bit("") == NO_TARGET
+    text = pipeline.declared_reads(pipeline.selected(("text",)))
+    everything = pipeline.declared_reads(pipeline.selected())
+    assert len(text) * 3 < len(everything), f"text reads {sorted(text)}"
 
 
-def test_a_word_anywhere_in_the_name_counts() -> None:
-    """Substrings, not tokens: `TARGET_GAMEOBJECT_ITEM_TARGET` is a selected
-    thing because the word is in there, wherever it sits."""
-    assert implicit_target_bit("TARGET_GAMEOBJECT_ITEM_TARGET") == TARGET_TARGET
+PACK = "9.2.7.45745"
+MANIFEST = Path(__file__).resolve().parents[2] / "site" / "data" / PACK / "manifest.json"
 
 
-def test_the_bits_are_the_visual_graphs_own() -> None:
-    """Not a parallel vocabulary: an effect's implicit target and a visual
-    event's TargetType answer the same question of different tables, and
-    resolve_target_mask can only compare them because they share bits."""
-    classified = {implicit_target_bit(f"TARGET_{word}")
-                  for word in ("UNIT_CASTER", "UNIT_TARGET_ALLY", "DEST_DEST")}
-    assert classified <= set(TARGET_BITS.values())
+@pytest.mark.skipif(
+    not os.environ.get("EPSILOOK_MODULE_TARGETS")
+    or not (CACHE_DIR / PACK).is_dir() or not MANIFEST.exists(),
+    reason="set EPSILOOK_MODULE_TARGETS=1 with a warm cache; it builds a pack")
+def test_building_text_alone_reproduces_the_shipped_text_modules() -> None:
+    """The end-to-end proof, opt-in because it is a real build.
 
-
-def test_a_self_cast_spell_reads_target_as_caster() -> None:
-    """The client writes "Target" whenever a spell is cast at a unit, including
-    when that unit is the caster, so a self-buff would otherwise show a target
-    icon for content that plays on the caster."""
-    assert resolve_target_mask(TARGET_TARGET, NO_TARGET,
-                               TARGET_CASTER, TARGET_CASTER) == TARGET_CASTER
-
-
-def test_the_aura_phase_is_judged_on_its_own_effects() -> None:
-    """An aura-phase visual belongs to the aura, so it plays on whoever carries
-    it -- even where the spell as a whole is aimed elsewhere."""
-    assert resolve_target_mask(TARGET_TARGET, NO_TARGET, TARGET_CASTER,
-                               TARGET_CASTER | TARGET_TARGET) == TARGET_CASTER
-
-
-def test_a_mixed_spell_keeps_both_readings() -> None:
-    """The reason the two phases are carried apart at all: a self-aura riding
-    alongside effects aimed at someone else."""
-    assert resolve_target_mask(TARGET_TARGET, TARGET_TARGET, TARGET_CASTER,
-                               TARGET_CASTER | TARGET_TARGET) == (
-        TARGET_CASTER | TARGET_TARGET)
+    A module is named by the hash of its own content, so an equal name IS equal
+    bytes: if a skipped derivation had mattered, the name would move.
+    """
+    shipped = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    _modules, manifest = pipeline.modules(PACK, "Shadowlands 9.2.7",
+                                          location="data/modules", want=("text",))
+    built = manifest["locales"]
+    assert isinstance(built, dict)
+    for code, kinds in shipped["locales"].items():
+        assert built[code]["text"]["file"] == kinds["text"]["file"], code

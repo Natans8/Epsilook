@@ -24,11 +24,14 @@ them.
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from functools import cached_property
+from typing import Any
 
 from .build import Build
 from .declarations import Declarations
-from .derive import (DEFAULT_LOCALE, LOCALES, DeriveContext, Locale, Spoken,
+from .derive import (CONTEXT_FIELDS, DEFAULT_LOCALE, LOCALES, DeriveContext,
+                     Locale, Spoken,
                      build_icon_index, build_rows, collect_references, cook_text,
                      locale_of, resolve_displays, walk_spells)
 from .drift import OPTIONAL_TABLES
@@ -189,125 +192,319 @@ def read_kit_names(pinned: Tables, used: set[int]) -> list[tuple[int, str]]:
                   if name.strip() and kit in used)
 
 
+class Derivations:
+    """Every context field, computed on first ask and remembered.
+
+    One method per field, and a field asking for another is an ordinary
+    attribute access -- so the dependency graph IS the call graph, and there is
+    no second account of it to keep in step. That is the whole reason this is
+    not a straight-line function any more: a build asked for one module has to
+    know that wanting `visuals` means wanting the graph, the missiles, the kits
+    and the effects, and the only place that was ever written down was the
+    ORDER of the statements that produced them.
+
+    Nothing here is a route's business: a route is still handed a `Tables` and
+    still knows nothing about what else is being read.
+    """
+
+    def __init__(self, providers: Providers, build: Build,
+                 ladder: tuple[list[dict], dict[int, int]],
+                 values: DescriptionValues,
+                 zone_maps: Mapping[int, int]) -> None:
+        """Hold what every derivation reads from, and derive nothing yet."""
+        self.providers = providers
+        self.build = build
+        self.ladder = ladder
+        self.values = values
+        self.zone_maps = zone_maps
+        self.tables = providers.tables
+        self.world = providers.world
+
+    # The routes, each timed under its own name.
+
+    @cached_property
+    def names(self) -> Any:
+        with phase("read spell names"):
+            return read_spell_names(self.tables)
+
+    @cached_property
+    def spell_ids(self) -> Any:
+        return sorted(self.names.names)
+
+    @cached_property
+    def graph(self) -> Any:
+        with phase("read visual graph"):
+            return read_visual_graph(self.tables)
+
+    @cached_property
+    def creatures(self) -> Any:
+        with phase("read creature models"):
+            return read_creature_models(self.tables, self.world)
+
+    @cached_property
+    def items(self) -> Any:
+        with phase("read item models"):
+            return read_item_models(self.tables)
+
+    @cached_property
+    def mounts(self) -> Any:
+        with phase("read mounts"):
+            return read_mounts(self.tables, self.names.names, self.creatures)
+
+    @cached_property
+    def objects(self) -> Any:
+        with phase("read gameobjects"):
+            return read_gameobjects(self.tables, self.world)
+
+    @cached_property
+    def models(self) -> Any:
+        with phase("read model sources"):
+            return read_model_sources(self.tables, self.creatures, self.items,
+                                      self.providers.named)
+
+    @cached_property
+    def missiles(self) -> Any:
+        with phase("read missiles"):
+            return read_missiles(self.tables, self.models)
+
+    @cached_property
+    def motions(self) -> Any:
+        with phase("read missile motions"):
+            return read_missile_motions(self.tables)
+
+    @cached_property
+    def procs(self) -> Any:
+        with phase("read proc effects"):
+            return read_proc_effects(self.tables, self.models)
+
+    @cached_property
+    def fx(self) -> Any:
+        with phase("read fx payloads"):
+            return read_fx_payloads(self.tables)
+
+    @cached_property
+    def kits(self) -> Any:
+        with phase("read kit effects"):
+            return read_kit_effects(self.tables, self.models, self.procs, self.fx)
+
+    @cached_property
+    def soundkit_files(self) -> Any:
+        with phase("read soundkit files"):
+            return read_soundkit_files(self.tables)
+
+    @cached_property
+    def anim_names(self) -> Any:
+        """Not a context field: the three animation routes and the declarations
+        all resolve ids through it, and it is a checked-in list rather than a
+        table."""
+        with phase("read anim names"):
+            return read_anim_names()
+
+    @cached_property
+    def emotes(self) -> tuple[Any, Any]:
+        """The one-shot and looping emote columns, which arrive together."""
+        with phase("read anim emotes"):
+            return read_anim_emotes(self.anim_names)
+
+    @cached_property
+    def animkit_anims(self) -> Any:
+        with phase("read animkit anims"):
+            return read_animkit_anims(self.tables, self.anim_names)
+
+    @cached_property
+    def animkit_bonesets(self) -> Any:
+        with phase("read animkit bonesets"):
+            return read_animkit_bonesets(self.tables)
+
+    @cached_property
+    def anim_replacements(self) -> Any:
+        with phase("read anim replacements"):
+            return read_anim_replacements(self.tables, self.anim_names)
+
+    @cached_property
+    def keybinds(self) -> Any:
+        with phase("read keybound overrides"):
+            return read_keybound_overrides(self.tables)
+
+    @cached_property
+    def effects(self) -> Any:
+        with phase("read spell effect rows"):
+            return read_spell_effect_rows(
+                self.tables, self.names.names,
+                {"screens": self.fx.screens, "keybounds": self.keybinds},
+                implicit_target_bits(self.build.version))
+
+    @cached_property
+    def alt_names(self) -> Any:
+        with phase("read override names"):
+            return read_override_names(self.tables, self.effects.altnames)
+
+    @cached_property
+    def props(self) -> Any:
+        with phase("read spell properties"):
+            return read_spell_properties(self.tables, self.names.names)
+
+    @cached_property
+    def attributes(self) -> Any:
+        with phase("read spell attributes"):
+            return read_spell_attributes(self.props.attribute_words)
+
+    @cached_property
+    def delivery(self) -> Any:
+        with phase("read spell delivery"):
+            return read_spell_delivery(self.tables, self.props)
+
+    @cached_property
+    def areas(self) -> Any:
+        with phase("read area gates"):
+            return read_area_gates(self.tables, self.zone_maps)
+
+    @cached_property
+    def forms(self) -> Any:
+        with phase("read shapeshift forms"):
+            return read_shapeshift_forms(self.tables)
+
+    @cached_property
+    def vehicles(self) -> Any:
+        with phase("read vehicle seats"):
+            return read_vehicle_seats(self.tables)
+
+    @cached_property
+    def templates(self) -> Any:
+        with phase("read spell text"):
+            return read_spell_text(self.tables)
+
+    # What this layer derives from them.
+
+    @cached_property
+    def prose(self) -> Any:
+        with phase("cook descriptions"):
+            return cook_text(self.templates, self.values, self.names)
+
+    @cached_property
+    def visuals(self) -> Any:
+        with phase("walk_spells"):
+            return walk_spells(self.names.names, self.graph, self.missiles,
+                               self.kits, self.soundkit_files, self.fx,
+                               self.effects)
+
+    @cached_property
+    def displays(self) -> Any:
+        with phase("resolve_displays"):
+            return resolve_displays(self.effects, self.creatures, self.forms)
+
+    @cached_property
+    def references(self) -> Any:
+        with phase("collect_references"):
+            return collect_references(self.visuals, self.effects, self.fx,
+                                      self.displays, self.mounts, self.objects,
+                                      self.items, self.props.icon_fid)
+
+    @cached_property
+    def paths(self) -> Any:
+        wanted = self.references.wanted
+        log(f"Resolving {len(wanted):,} referenced file ids against the listfile ...")
+        with phase("resolve paths (listfile)"):
+            return resolve_paths(self.providers.listfile, wanted)
+
+    @cached_property
+    def declared(self) -> Any:
+        rungs, era_of = self.ladder
+        oneshots, loops = self.emotes
+        with phase("read declarations"):
+            return Declarations(
+                anim_names=self.anim_names, anim_emote_oneshots=oneshots,
+                anim_emote_loops=loops, gobs=read_gob_displays(),
+                expansions=rungs, era_of=era_of,
+                effect_names=read_enum_names("SpellEffect", self.build.version),
+                aura_names=read_enum_names("SpellEffectAura", self.build.version),
+                target_names=read_enum_names("Target", self.build.version),
+                target_bits=implicit_target_bits(self.build.version),
+                item_quality_names=load_local_enum("item_quality"),
+                attachment_names=load_local_enum("m2_attachments"),
+                summon_control_names=load_local_enum("summon_properties_control"))
+
+    @cached_property
+    def rows(self) -> Any:
+        # After the declarations, because the flattening names the edges between
+        # spells and the words it names them with are resolved per build.
+        with phase("build_rows"):
+            return build_rows(self.visuals, self.effects, self.vehicles,
+                              self.declared.effect_names,
+                              self.declared.aura_names, self.animkit_bonesets)
+
+    @cached_property
+    def icons(self) -> Any:
+        with phase("build_icon_index"):
+            return build_icon_index(self.spell_ids, self.props.icon_fid, self.paths)
+
+    @cached_property
+    def kit_names(self) -> Any:
+        with phase("read kit names"):
+            return read_kit_names(self.providers.pinned,
+                                  {kit for pairs in self.visuals.sounds.values()
+                                   for kit, _file in pairs})
+
+
+DERIVED_FIELDS = CONTEXT_FIELDS - {"build"}
+"""Every context field a build produces, which is all of them but the build id.
+
+`build` is handed in rather than derived, so it is the one field that is not a
+property on `Derivations` and the one a caller always supplies.
+"""
+
+
+def selected(want: Sequence[str] = ()) -> tuple[Section, ...]:
+    """The sections landing in the named modules, or every section.
+
+    Raises:
+        ValueError: a module nothing declares, which is a typo rather than an
+            empty build -- the alternative is producing nothing and reporting
+            success.
+    """
+    if not want:
+        return tuple(SECTIONS)
+    known = {section.module for section in SECTIONS}
+    unknown = sorted(set(want) - known)
+    if unknown:
+        raise ValueError(f"no section ships in {', '.join(unknown)}; "
+                         f"the modules are {', '.join(sorted(known))}")
+    return tuple(section for section in SECTIONS if section.module in want)
+
+
+def declared_reads(sections: Iterable[Section]) -> frozenset[str]:
+    """The context fields these sections declared, unioned.
+
+    Only what they NAMED: everything those fields are derived from comes with
+    them, because `Derivations` resolves a dependency by asking for it. That is
+    the whole reason this can be a union rather than a graph -- the graph is
+    already the call graph.
+    """
+    return frozenset(name for section in sections for name in section.reads)
+
+
 def read_all(providers: Providers, build: Build,
              ladder: tuple[list[dict], dict[int, int]],
              values: DescriptionValues,
-             zone_maps: Mapping[int, int]) -> DeriveContext:
-    """Run every route and every derivation, and return what a section reads.
+             zone_maps: Mapping[int, int],
+             wanted: Iterable[str] | None = None) -> DeriveContext:
+    """Derive what a section reads, and no more than that.
 
-    The order is the dependency graph: creature displays before the model
-    sources that resolve against them, the payload tables before the kits that
-    dispatch into them, and the graph walk after everything it unions.
+    `wanted` names the context fields the selected sections declared; anything
+    they depend on comes with them, because `Derivations` resolves a dependency
+    by asking for it. Naming none derives everything, which is what a whole
+    pack needs.
 
     `values` and `zone_maps` arrive rather than being read here because they
     are what the language cannot touch: a number is a number in every language,
     and a map id is a map id. Reading them once is what lets a second language
     cost the nine routes that do change rather than all of them.
     """
-    tables, world = providers.tables, providers.world
-
-    with step("read spell names", "Reading spell names ..."):
-        names = read_spell_names(tables)
-
-    with step("read visual chain", "Reading spell visual chain tables ..."):
-        graph = read_visual_graph(tables)
-        creatures = read_creature_models(tables, world)
-        items = read_item_models(tables)
-        mounts = read_mounts(tables, names.names, creatures)
-        objects = read_gameobjects(tables, world)
-        models = read_model_sources(tables, creatures, items, providers.named)
-        missiles = read_missiles(tables, models)
-        motions = read_missile_motions(tables)
-        procs = read_proc_effects(tables, models)
-        fx = read_fx_payloads(tables)
-        kits = read_kit_effects(tables, models, procs, fx)
-        soundkit_files = read_soundkit_files(tables)
-
-    with step("read animations", "Reading animation tables ..."):
-        anim_names = read_anim_names()
-        oneshots, loops = read_anim_emotes(anim_names)
-        animkit_anims = read_animkit_anims(tables, anim_names)
-        animkit_bonesets = read_animkit_bonesets(tables)
-        anim_replacements = read_anim_replacements(tables, anim_names)
-
-    with step("read spell rows", "Reading spell effect and property tables ..."):
-        keybinds = read_keybound_overrides(tables)
-        effects = read_spell_effect_rows(
-            tables, names.names,
-            {"screens": fx.screens, "keybounds": keybinds},
-            implicit_target_bits(build.version))
-        alt_names = read_override_names(tables, effects.altnames)
-        props = read_spell_properties(tables, names.names)
-        attributes = read_spell_attributes(props.attribute_words)
-        delivery = read_spell_delivery(tables, props)
-        areas = read_area_gates(tables, zone_maps)
-        forms = read_shapeshift_forms(tables)
-        vehicles = read_vehicle_seats(tables)
-        templates = read_spell_text(tables)
-
-    log("Cooking spell descriptions ...")
-    with phase("cook descriptions"):
-        prose = cook_text(templates, values, names)
-
-    log("Walking spell -> model/sound/animkit/chain chains ...")
-    with phase("walk_spells"):
-        visuals = walk_spells(names.names, graph, missiles, kits, soundkit_files,
-                              fx, effects)
-    with phase("resolve_displays"):
-        displays = resolve_displays(effects, creatures, forms)
-    with phase("collect_references"):
-        references = collect_references(visuals, effects, fx, displays, mounts,
-                                        objects, items, props.icon_fid)
-
-    wanted = references.wanted
-    log(f"Resolving {len(wanted):,} referenced file ids against the listfile ...")
-    with phase("resolve paths (listfile)"):
-        paths = resolve_paths(providers.listfile, wanted)
-
-    log("Assembling pack ...")
-    spell_ids = sorted(names.names)
-    rungs, era_of = ladder
-    # Hoisted out of the constructor call below so each is a phase of its own.
-    # They are the two most expensive arguments it takes, and inside the call
-    # they would be timed as whatever surrounds it.
-    with phase("read declarations"):
-        declared = Declarations(
-            anim_names=anim_names, anim_emote_oneshots=oneshots,
-            anim_emote_loops=loops, gobs=read_gob_displays(),
-            expansions=rungs, era_of=era_of,
-            effect_names=read_enum_names("SpellEffect", build.version),
-            aura_names=read_enum_names("SpellEffectAura", build.version),
-            target_names=read_enum_names("Target", build.version),
-            target_bits=implicit_target_bits(build.version),
-            item_quality_names=load_local_enum("item_quality"),
-            attachment_names=load_local_enum("m2_attachments"),
-            summon_control_names=load_local_enum("summon_properties_control"))
-    # After the declarations, because the flattening names the edges between
-    # spells and the words it names them with are resolved per build.
-    with phase("build_rows"):
-        rows = build_rows(visuals, effects, vehicles, declared.effect_names,
-                          declared.aura_names, animkit_bonesets)
-    with phase("build_icon_index"):
-        icons = build_icon_index(spell_ids, props.icon_fid, paths)
-    with phase("read kit names"):
-        kit_names = read_kit_names(providers.pinned,
-                                   {kit for pairs in visuals.sounds.values()
-                                    for kit, _file in pairs})
-
-    return DeriveContext(
-        build=build, spell_ids=spell_ids,
-        names=names, props=props, templates=templates, effects=effects,
-        graph=graph, creatures=creatures, items=items, mounts=mounts,
-        objects=objects, models=models, procs=procs, fx=fx, kits=kits,
-        forms=forms, vehicles=vehicles, areas=areas,
-        missiles=missiles, motions=motions, soundkit_files=soundkit_files,
-        animkit_anims=animkit_anims, animkit_bonesets=animkit_bonesets,
-        anim_replacements=anim_replacements, keybinds=keybinds,
-        delivery=delivery, attributes=attributes, alt_names=alt_names,
-        kit_names=kit_names, rows=rows,
-        visuals=visuals, icons=icons,
-        paths=paths, references=references, displays=displays, prose=prose,
-        declared=declared)
+    derive = Derivations(providers, build, ladder, values, zone_maps)
+    asked = DERIVED_FIELDS if wanted is None else DERIVED_FIELDS & set(wanted)
+    log(f"Deriving {len(asked)} of {len(DERIVED_FIELDS)} context fields ...")
+    return DeriveContext(build=build,
+                         **{name: getattr(derive, name) for name in sorted(asked)})
 
 
 def read_spoken(providers: Providers, locale: Locale, *,
@@ -365,7 +562,8 @@ def switched_off(section: Section, tables: Tables) -> bool:
 
 
 def produce(context: DeriveContext, tables: Tables,
-            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES
+            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
+            sections: Sequence[Section] = SECTIONS
             ) -> tuple[dict[str, SectionColumns], dict[str, object]]:
     """Every section this build ships: what it produced, and what it encodes to.
 
@@ -381,7 +579,7 @@ def produce(context: DeriveContext, tables: Tables,
     """
     columns: dict[str, SectionColumns] = {}
     encoded: dict[str, object] = {}
-    for section in SECTIONS:
+    for section in sections:
         if switched_off(section, tables):
             continue
         with timed("produce sections", section.name):
@@ -520,7 +718,7 @@ def beside_default(locales: Sequence[Locale]) -> list[str]:
 def packed(version: str, label: str, *, refresh: bool = False,
            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
            locales: Sequence[Locale] = LOCALES, client: str = "",
-           provider: Provider = CsvTables
+           provider: Provider = CsvTables, want: Sequence[str] = ()
            ) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
     """Build one pack, from acquiring its sources to its encoded sections.
 
@@ -539,6 +737,11 @@ def packed(version: str, label: str, *, refresh: bool = False,
         provider: the `Tables` implementation to read every source through.
             Peers by construction, so this decides how the build reads and
             nothing about what it produces.
+        want: which artifact modules to build, by name. Empty means all of
+            them. Naming one derives only what its sections declared reading,
+            plus whatever that transitively needs -- so a prose-only rebuild
+            skips the graph walk and the listfile pass rather than repeating
+            them to change two files.
 
     Returns:
         The header, and what each language produced, by language code. The
@@ -573,8 +776,10 @@ def packed(version: str, label: str, *, refresh: bool = False,
     with phase("read zone maps"):
         zone_maps = read_zone_maps(providers.tables)
 
-    context = read_all(providers, build, ladder, values, zone_maps)
-    columns, encoded = produce(context, providers.tables, policy)
+    chosen = selected(want)
+    context = read_all(providers, build, ladder, values, zone_maps,
+                       declared_reads(chosen))
+    columns, encoded = produce(context, providers.tables, policy, chosen)
     with phase("gather counts and domains"):
         counts, domains = gathered(columns, context)
     log(f"  {len(encoded)} sections, {len(counts)} counts, {len(domains)} domains")
@@ -621,7 +826,7 @@ def modules(version: str, label: str, *, refresh: bool = False,
             policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
             pack_id: str = "", location: str = "",
             locales: Sequence[Locale] = LOCALES, client: str = "",
-            provider: Provider = CsvTables
+            provider: Provider = CsvTables, want: Sequence[str] = ()
             ) -> tuple[list[Module], dict[str, object]]:
     """Build one pack as the module set it ships as.
 
@@ -637,6 +842,9 @@ def modules(version: str, label: str, *, refresh: bool = False,
         locales: the languages to build.
         client: the private client to read this build's tables out of, if any.
         provider: the `Tables` implementation to read every source through.
+        want: which modules to build. Empty means all of them; naming some
+            derives only what they read, and the manifest that comes back
+            names only what was built.
 
     Returns:
         The modules, each named by its own content, and the manifest naming
@@ -645,7 +853,8 @@ def modules(version: str, label: str, *, refresh: bool = False,
     """
     started = time.monotonic()
     header, produced = packed(version, label, refresh=refresh, policy=policy,
-                              locales=locales, client=client, provider=provider)
+                              locales=locales, client=client, provider=provider,
+                              want=want)
     assembled = [module for code, sections in produced.items()
                  for module in assemble(SECTIONS, sections, locale=code)]
     # Off the build's own pass alone. A further language produces the sections
