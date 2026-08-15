@@ -262,6 +262,15 @@ class MaskedIds:
         key = (spell, payload)
         self.masks[key] = self.masks.get(key, NO_TARGET) | mask
 
+    def distinct(self) -> list[int]:
+        """Every payload named, sorted and deduplicated.
+
+        The row order each of these sections builds its parallel columns
+        against, so it is derived once here rather than by each of them.
+        """
+        return sorted({payload for payloads in self.ids.values()
+                       for payload in payloads})
+
 
 @dataclass
 class SpellEffectRows:

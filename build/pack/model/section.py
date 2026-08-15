@@ -114,6 +114,16 @@ class Count:
     compute: Callable[[SectionColumns, Reads], int]
 
 
+def size(key: str, column: str) -> Count:
+    """The commonest count: how many rows one of the section's columns has.
+
+    Named rather than written out, because a count spelled as a closure over a
+    column name is the shape most likely to be copied to a section it does not
+    describe.
+    """
+    return Count(key, lambda columns, _reads: len(columns[column]))
+
+
 @dataclass(frozen=True)
 class CountFamily:
     """Several ``meta.counts`` entries one section computes together.

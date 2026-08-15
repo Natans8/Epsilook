@@ -8,7 +8,7 @@ are one fact: this spell plays this file, from this kit, at this audience.
 from __future__ import annotations
 
 from ..registry import register
-from ..section import Count, Section
+from ..section import (Section, size)
 
 
 SOUND_KIT_NAMES = register(Section(
@@ -20,6 +20,5 @@ SOUND_KIT_NAMES = register(Section(
         "names": [name for _kit, name in reads.kit_names]},
     columns=("soundKitIds", "names"),
     reads=("kit_names",),
-    counts=(Count("soundKitNames",
-                  lambda columns, _r: len(columns["soundKitIds"])),),
+    counts=(size("soundKitNames", "soundKitIds"),),
 ))

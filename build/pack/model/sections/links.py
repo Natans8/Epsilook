@@ -10,7 +10,7 @@ fact. What stays is the pool those rows store a number into.
 from __future__ import annotations
 
 from ..registry import register
-from ..section import Count, Layout, Section
+from ..section import (Layout, Section, size)
 
 
 LINK_KIND_NAMES = register(Section(
@@ -21,5 +21,5 @@ LINK_KIND_NAMES = register(Section(
     columns=("names",),
     layout=Layout.BARE,
     reads=("rows",),
-    counts=(Count("linkKinds", lambda columns, _r: len(columns["names"])),),
+    counts=(size("linkKinds", "names"),),
 ))

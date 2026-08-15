@@ -15,7 +15,7 @@ from __future__ import annotations
 from ...derive import Reads
 from ...targets import IMPLICIT_PREFIX
 from ..registry import register
-from ..section import Count, Layout, Scope, Section, SectionColumns
+from ..section import (Layout, Scope, Section, SectionColumns, size)
 
 
 def used_targets(reads: Reads) -> list[int]:
@@ -78,7 +78,7 @@ IMPLICIT_TARGET_NAMES = register(Section(
     columns=("names",),
     layout=Layout.BARE,
     reads=("rows", "declared"),
-    counts=(Count("implicitTargets", lambda columns, _r: len(columns["names"])),),
+    counts=(size("implicitTargets", "names"),),
 ))
 
 IMPLICIT_TARGET_BITS = register(Section(

@@ -9,13 +9,12 @@ from __future__ import annotations
 
 from ...derive import Reads
 from ..registry import register
-from ..section import Count, Section, SectionColumns
+from ..section import (Section, SectionColumns, size)
 
 
 def keybinds(reads: Reads) -> SectionColumns:
     """Each referenced override's key, its timing word, and what it casts."""
-    used = sorted({override for overrides in reads.effects.keybinds.ids.values()
-                   for override in overrides})
+    used = reads.effects.keybinds.distinct()
     rows = [reads.keybinds[override] for override in used]
     return {"ids": used,
             "functions": [row.function for row in rows],
@@ -38,5 +37,5 @@ KEYBINDS = register(Section(
     produce=keybinds,
     columns=("ids", "functions", "whens", "keys", "spells"),
     reads=("effects", "keybinds"),
-    counts=(Count("keybinds", lambda columns, _r: len(columns["ids"])),),
+    counts=(size("keybinds", "ids"),),
 ))

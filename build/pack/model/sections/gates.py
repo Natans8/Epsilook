@@ -10,8 +10,7 @@ from ...derive import Reads
 from ...measure import numeric_domain
 from ...routes.delivery import BREAKS_ON_MOVE, CHANNELLED
 from ..registry import register
-from ..section import (Cardinality, Count, CountFamily, Domain, Layout, Section,
-                       SectionColumns)
+from ..section import (Cardinality, Count, CountFamily, Domain, Layout, Section, SectionColumns, size)
 
 
 def attribute_lists(reads: Reads) -> SectionColumns:
@@ -81,7 +80,7 @@ SPELL_DELIVERY = register(Section(
     columns=("spellIds", "castMs", "durMs", "flags"),
     reads=("delivery", "spell_ids"),
     counts=(
-        Count("spellDelivery", lambda columns, _r: len(columns["spellIds"])),
+        size("spellDelivery", "spellIds"),
         Count("delivery.casttime", lambda columns, _r: sum(
             1 for cast in columns["castMs"] if cast > 0)),
         Count("delivery.channelled", lambda columns, _r: sum(
@@ -116,6 +115,6 @@ AREAS = register(Section(
     reads=("areas",),
     cardinality={"mapIds": Cardinality.PARTIAL},
     absent={"mapIds": 0},
-    counts=(Count("areas", lambda columns, _r: len(columns["ids"])),),
+    counts=(size("areas", "ids"),),
     localizable=('names',),
 ))

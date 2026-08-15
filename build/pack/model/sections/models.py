@@ -11,8 +11,7 @@ from ...derive import Reads, build_item_icons
 from ...routes.models import MODEL_CAT_NAMES
 from ...targets import TARGET_NAMES
 from ..registry import register
-from ..section import (Cardinality, Count, Layout, Scope, Section,
-                       SectionColumns)
+from ..section import (Cardinality, Count, Layout, Scope, Section, SectionColumns, size)
 
 NO_QUALITY = -1
 """What an item with no searchable row carries, which is not quality zero."""
@@ -42,7 +41,7 @@ MISSILE_MOTIONS = register(Section(
         "names": [reads.motions.get(motion, "") for motion in reads.rows.motions]},
     columns=("ids", "names"),
     reads=("rows", "motions"),
-    counts=(Count("missileMotions", lambda columns, _r: len(columns["ids"])),),
+    counts=(size("missileMotions", "ids"),),
 ))
 
 ITEMS = register(Section(
@@ -54,7 +53,7 @@ ITEMS = register(Section(
     reads=("rows", "items", "paths"),
     cardinality={"names": Cardinality.PARTIAL, "icons": Cardinality.PARTIAL},
     absent={"icons": 0},
-    counts=(Count("items", lambda columns, _r: len(columns["ids"])),
+    counts=(size("items", "ids"),
             Count("namedItems", lambda columns, _r: sum(
                 1 for name in columns["names"] if name))),
     localizable=('names',),

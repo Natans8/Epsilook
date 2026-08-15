@@ -14,7 +14,7 @@ from collections.abc import Callable
 from ...derive import Reads, spell_rows
 from ...measure import numeric_domain
 from ..registry import register
-from ..section import Count, Domain, Section, SectionColumns
+from ..section import (Domain, Section, SectionColumns, size)
 
 
 def seats(reads: Reads) -> SectionColumns:
@@ -63,7 +63,7 @@ VEHICLES = register(Section(
                   for vehicle in reads.rows.vehicle_ids]},
     columns=("vehicleIds", "seats"),
     reads=("rows", "vehicles"),
-    counts=(Count("vehicles", lambda columns, _r: len(columns["vehicleIds"])),),
+    counts=(size("vehicles", "vehicleIds"),),
 ))
 
 VEHICLE_SEATS = register(Section(
@@ -73,8 +73,7 @@ VEHICLE_SEATS = register(Section(
     produce=seats,
     columns=("vehicleIds", "attachments"),
     reads=("rows",),
-    counts=(Count("vehicleSeats",
-                  lambda columns, _r: len(columns["vehicleIds"])),),
+    counts=(size("vehicleSeats", "vehicleIds"),),
     domains=(Domain("seat", lambda columns, _r: numeric_domain(
         Counter(columns["vehicleIds"]).values())),),
 ))
@@ -86,8 +85,7 @@ SPELL_VEHICLE_ANIMS = register(Section(
     produce=ridden("vehicle_anims", "animIds"),
     columns=("spellIds", "animIds"),
     reads=("rows", "vehicles", "declared"),
-    counts=(Count("spellVehicleAnims",
-                  lambda columns, _r: len(columns["spellIds"])),),
+    counts=(size("spellVehicleAnims", "spellIds"),),
 ))
 
 SPELL_VEHICLE_ANIMKITS = register(Section(
@@ -97,6 +95,5 @@ SPELL_VEHICLE_ANIMKITS = register(Section(
     produce=ridden("animkits", "animKitIds", bounded=False),
     columns=("spellIds", "animKitIds"),
     reads=("rows", "vehicles"),
-    counts=(Count("spellVehicleAnimKits",
-                  lambda columns, _r: len(columns["spellIds"])),),
+    counts=(size("spellVehicleAnimKits", "spellIds"),),
 ))

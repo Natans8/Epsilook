@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from ...derive import Reads, boneset_rows
 from ..registry import register
-from ..section import Count, Layout, Scope, Section, SectionColumns
+from ..section import (Count, Layout, Scope, Section, SectionColumns, size)
 
 
 def animkit_anims(reads: Reads) -> SectionColumns:
@@ -36,7 +36,7 @@ ANIMKIT_ANIMS = register(Section(
     produce=animkit_anims,
     columns=("animKitIds", "animIds"),
     reads=("rows", "animkit_anims"),
-    counts=(Count("animKitAnims", lambda columns, _r: len(columns["animKitIds"])),),
+    counts=(size("animKitAnims", "animKitIds"),),
 ))
 
 BONESET_NAMES = register(Section(
@@ -57,8 +57,7 @@ ANIMKIT_BONESETS = register(Section(
     produce=boneset_columns,
     columns=("animKitIds", "animIds", "bonesets"),
     reads=("rows", "animkit_bonesets"),
-    counts=(Count("animKitAnimBoneset",
-                  lambda columns, _r: len(columns["animKitIds"])),),
+    counts=(size("animKitAnimBoneset", "animKitIds"),),
 ))
 
 ANIM_NAMES = register(Section(

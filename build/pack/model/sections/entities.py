@@ -12,8 +12,7 @@ from collections.abc import Callable
 
 from ...derive import Reads
 from ..registry import register
-from ..section import (Count, Layout, Scope, Section,
-                       SectionColumns)
+from ..section import (Layout, Scope, Section, SectionColumns, size)
 
 NO_TYPE = -1
 """What an object with no resolved row carries, which is not type zero."""
@@ -39,8 +38,7 @@ def morphs(reads: Reads) -> SectionColumns:
     ordering per column would leave them agreeing by luck, and any narrowing of
     one comprehension would misalign the rest with nothing to say so.
     """
-    ids = sorted({creature for creatures in reads.effects.morphs.ids.values()
-                  for creature in creatures})
+    ids = reads.effects.morphs.distinct()
     return {"creatureIds": ids,
             "names": [reads.creatures.names.get(creature, "")
                       for creature in ids]}
@@ -56,8 +54,7 @@ def mounts(reads: Reads) -> SectionColumns:
 
 def shapeshifts(reads: Reads) -> SectionColumns:
     """The name of each shapeshift form a spell reaches."""
-    ids = sorted({form for forms in reads.effects.forms.ids.values()
-                  for form in forms})
+    ids = reads.effects.forms.distinct()
     return {"ids": ids,
             "names": [reads.forms.names.get(form, "") for form in ids]}
 
@@ -90,7 +87,7 @@ MORPHS = register(Section(
     columns=("creatureIds", "names"),
     reads=("effects", "creatures"),
     degraded_without=("creature_template",),
-    counts=(Count("morphs", lambda columns, _r: len(columns["creatureIds"])),),
+    counts=(size("morphs", "creatureIds"),),
     localizable=('names',),
 ))
 
@@ -101,8 +98,7 @@ MORPH_DISPLAYS = register(Section(
     produce=display_rows("morphs", "creatureIds"),
     columns=("creatureIds", "displayIds", "fids"),
     reads=("displays",),
-    counts=(Count("morphDisplays",
-                  lambda columns, _r: len(columns["creatureIds"])),),
+    counts=(size("morphDisplays", "creatureIds"),),
 ))
 
 MOUNTS = register(Section(
@@ -112,7 +108,7 @@ MOUNTS = register(Section(
     produce=mounts,
     columns=("displayIds", "names", "fids"),
     reads=("mounts", "references"),
-    counts=(Count("mounts", lambda columns, _r: len(columns["displayIds"])),),
+    counts=(size("mounts", "displayIds"),),
     localizable=('names',),
 ))
 
@@ -133,8 +129,7 @@ SHAPESHIFT_DISPLAYS = register(Section(
     produce=display_rows("forms", "formIds"),
     columns=("formIds", "displayIds", "fids"),
     reads=("displays",),
-    counts=(Count("shapeshiftDisplays",
-                  lambda columns, _r: len(columns["formIds"])),),
+    counts=(size("shapeshiftDisplays", "formIds"),),
 ))
 
 SUMMONS = register(Section(
@@ -145,7 +140,7 @@ SUMMONS = register(Section(
     columns=("creatureIds", "names"),
     reads=("effects", "creatures"),
     degraded_without=("creature_template",),
-    counts=(Count("summons", lambda columns, _r: len(columns["creatureIds"])),),
+    counts=(size("summons", "creatureIds"),),
     localizable=('names',),
 ))
 
@@ -168,6 +163,6 @@ OBJECTS = register(Section(
     columns=("ids", "names", "fids", "types"),
     reads=("references", "objects"),
     degraded_without=("gameobject_template",),
-    counts=(Count("objects", lambda columns, _r: len(columns["ids"])),),
+    counts=(size("objects", "ids"),),
     localizable=('names',),
 ))

@@ -10,7 +10,7 @@ from __future__ import annotations
 from ...derive import Reads
 from ...routes.colors import hue_words
 from ..registry import register
-from ..section import Count, Section, SectionColumns
+from ..section import (Section, SectionColumns, size)
 
 TEX_OVERLAY = 0
 """Finished art, drawn in its own colours.
@@ -56,7 +56,7 @@ SCREENS = register(Section(
     columns=("ids", "names", "fogColors", "fogAlphas", "mulColors", "addColors",
              "maskOffsetY", "maskSize", "maskPower", "hues"),
     reads=("references", "fx"),
-    counts=(Count("screens", lambda columns, _r: len(columns["ids"])),),
+    counts=(size("screens", "ids"),),
 ))
 
 SCREEN_TEXTURES = register(Section(

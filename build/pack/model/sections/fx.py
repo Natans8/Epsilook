@@ -15,7 +15,7 @@ from ...derive import Reads
 from ...derive.kinds import WHOLE_MODEL
 from ...routes.colors import hue_word, hue_words, pack_rgb
 from ..registry import register
-from ..section import (Column, Count, Layout, Scope, Section, SectionColumns)
+from ..section import (Column, Layout, Scope, Section, SectionColumns, size)
 
 WHOLE_MODEL_WORD = "full body"
 """What an overlay anchored to no point covers, and searches under.
@@ -86,7 +86,7 @@ FX_CHAINS = register(Section(
     produce=fx_chains,
     columns=("ids", "colors", "hues"),
     reads=("references", "fx"),
-    counts=(Count("fxChains", lambda columns, _r: len(columns["ids"])),),
+    counts=(size("fxChains", "ids"),),
 ))
 
 FX_TEXTURES = register(Section(
@@ -105,7 +105,7 @@ DISSOLVES = register(Section(
     produce=dissolves,
     columns=("ids", "durations", "attaches"),
     reads=("references", "fx"),
-    counts=(Count("dissolves", lambda columns, _r: len(columns["ids"])),),
+    counts=(size("dissolves", "ids"),),
 ))
 
 DISSOLVE_TEXTURES = register(Section(
@@ -126,7 +126,7 @@ GLOWS = register(Section(
                      "alphas": lambda reads, row: reads.fx.glow_alphas[row]}),
     columns=("ids", "colors", "alphas", "hues"),
     reads=("visuals", "fx"),
-    counts=(Count("glows", lambda columns, _r: len(columns["ids"])),),
+    counts=(size("glows", "ids"),),
 ))
 
 SHADOWIES = register(Section(
@@ -140,7 +140,7 @@ SHADOWIES = register(Section(
                      "attaches": lambda reads, row: reads.fx.shadowies[row][2]}),
     columns=("ids", "primaryColors", "secondaryColors", "hues", "attaches"),
     reads=("visuals", "fx"),
-    counts=(Count("shadowies", lambda columns, _r: len(columns["ids"])),),
+    counts=(size("shadowies", "ids"),),
 ))
 
 GHOST_MATS = register(Section(
@@ -151,7 +151,7 @@ GHOST_MATS = register(Section(
                     {"colors": lambda reads, row: reads.procs.ghost_mats[row]}),
     columns=("ids", "colors", "hues"),
     reads=("visuals", "procs"),
-    counts=(Count("ghostMats", lambda columns, _r: len(columns["ids"])),),
+    counts=(size("ghostMats", "ids"),),
 ))
 
 TINTS = register(Section(
@@ -162,7 +162,7 @@ TINTS = register(Section(
                     {"colors": lambda reads, row: reads.procs.tints[row]}),
     columns=("ids", "colors", "hues"),
     reads=("visuals", "procs"),
-    counts=(Count("tints", lambda columns, _r: len(columns["ids"])),),
+    counts=(size("tints", "ids"),),
 ))
 
 ANCHOR_NAMES = register(Section(
