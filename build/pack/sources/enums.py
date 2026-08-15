@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .cache import BUILD_DIR, CACHE_DIR, Volatile
+from .dbd import WOWDBDEFS_RAW
 from .source import Fetched, Origin, Source
 
 ENUMS_DIR = BUILD_DIR / "enums"
@@ -25,7 +26,7 @@ ANIMS_JS_URL = "https://raw.githubusercontent.com/Marlamin/wow.tools.local/main/
 # Enum value names from WoWDBDefs meta/enums. SpellEffect names
 # SpellEffect.Effect (SPELL_EFFECT_* without the prefix), SpellEffectAura names
 # SpellEffect.EffectAura (SPELL_AURA_*).
-WOWDBDEFS_ENUM_URL = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/meta/enums/{name}.dbde"
+WOWDBDEFS_ENUM_URL = WOWDBDEFS_RAW + "meta/enums/{name}.dbde"
 ENUM_FILES = ["SpellEffect", "SpellEffectAura", "Target"]
 
 ANIMS_FILE = CACHE_DIR / "anims.js"

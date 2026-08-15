@@ -40,6 +40,19 @@ paths folds case at the comparison, so this constant cannot decide whether a
 search finds something.
 """
 
+LISTFILE_DIR = CACHE_DIR / "listfile"
+"""Where the listfile and its release token land."""
+
+RELEASE_TOKEN = LISTFILE_DIR / "release-tag.txt"
+"""Which release the cached listfile came from.
+
+Named once so the fetch that writes it and the reader that reports it cannot
+point at different files. The divergence would be silent rather than loud: the
+reader answers "" for a missing token by design, so a pack would ship an empty
+`meta.listfileTag` and the staleness check that rests on it would have nothing
+to compare.
+"""
+
 SUPPLEMENT = BUILD_DIR / "sources" / "epsilon-listfile-supplement.csv.gz"
 """The vendored asset-name supplement: a private client's own names for the
 assets it adds.
@@ -113,13 +126,11 @@ def listfile_source() -> Source:
     address itself: which asset url serves this file changes with every
     release, and the endpoint is the fixed thing a reader can go and look at.
     """
-    into = CACHE_DIR / "listfile"
     return Fetched(
         name="listfile (wowdev/wow-listfile)",
         origin=Origin(LISTFILE_RELEASE_API, f"the {LISTFILE_ASSET} asset"),
-        dest=into / LISTFILE_ASSET,
-        fetch=Revalidated(resolve=latest_release,
-                          token_file=into / "release-tag.txt"))
+        dest=LISTFILE_DIR / LISTFILE_ASSET,
+        fetch=Revalidated(resolve=latest_release, token_file=RELEASE_TOKEN))
 
 
 def release_tag() -> str:
@@ -130,8 +141,8 @@ def release_tag() -> str:
     answer rather than a failure: a build reading a vendored listfile has no
     release to name.
     """
-    token = CACHE_DIR / "listfile" / "release-tag.txt"
-    return token.read_text(encoding="utf-8").strip() if token.exists() else ""
+    return (RELEASE_TOKEN.read_text(encoding="utf-8").strip()
+            if RELEASE_TOKEN.exists() else "")
 
 
 def supplement_source() -> Source:

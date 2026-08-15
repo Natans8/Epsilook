@@ -56,7 +56,10 @@ from pathlib import Path
 
 from .wdc3 import ColumnSpec
 
-DBD_URL = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/definitions/{table}.dbd"
+WOWDBDEFS_RAW = "https://raw.githubusercontent.com/wowdev/WoWDBDefs/master/"
+"""The definition repository's raw root, named once for everything under it."""
+
+DBD_URL = WOWDBDEFS_RAW + "definitions/{table}.dbd"
 
 # A build id: "9.2.7.45745". Compared componentwise, so 10.x sorts after 9.x
 # (the same trap version_key() fixes for the roster — a string sort puts
