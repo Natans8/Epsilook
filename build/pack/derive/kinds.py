@@ -796,6 +796,33 @@ the spell's own name and its id -- carry exactly one row each and are read off
 the per-spell columns directly.
 """
 
+COLUMN_READS: Mapping[str, tuple[str, ...]] = {
+    "model": ("spell_ids", "rows", "mounts"),
+    "sound": ("spell_ids", "rows"),
+    "anim": ("spell_ids", "rows", "visuals", "effects", "declared", "vehicles",
+             "attributes", "anim_replacements", "animkit_anims",
+             "animkit_bonesets"),
+    "fx": ("spell_ids", "rows", "visuals", "effects", "declared", "attributes",
+           "fx", "procs", "references", "paths"),
+    "mech": ("spell_ids", "rows", "visuals", "effects", "declared", "vehicles",
+             "attributes", "areas"),
+}
+"""What each column's families map FROM, per column rather than in one union.
+
+A section is handed a `Reads` narrowed to what it declares, and reaching past it
+raises -- which is the guard that catches an undeclared input. One union across
+every row section defeats that for the largest sections in the pack: the sound
+column would declare it reads vehicles and animation replacements when it reads
+neither.
+
+Per COLUMN and not per family because a family's rows are often a closure a
+shared helper returned, so the reads belong to the helper rather than to the
+record naming it. The column is the smallest grain that is honest.
+
+It is also what `Per-module build targets` is specified to union, so a column
+whose module is not being built can have its derivations skipped.
+"""
+
 VOCABULARIES: Mapping[str, Mapping[str, str]] = {
     "files": {"in": "files", "keys": "fids", "values": "paths"},
     "attachments": {"in": "attachmentNames"},

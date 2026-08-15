@@ -21,20 +21,14 @@ from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import cast
 
-from ...derive import COLUMN_FAMILIES, VOCABULARIES, Reads, build_column
+from ...derive import (COLUMN_FAMILIES, COLUMN_READS, VOCABULARIES, Reads,
+                       build_column)
 from ...derive.kinds import ColumnRows, RowValue
 from ...measure import numeric_domain
 from ...routes.models import SYNTHETIC_MODEL_FILES
 from ..registry import register
 from ..section import (CountFamily, Domain, Layout, Scope, Section,
                        SectionColumns)
-
-READS = ("spell_ids", "rows", "mounts", "visuals", "effects", "declared",
-         "anim_replacements", "animkit_anims", "animkit_bonesets",
-         "attributes", "vehicles", "areas", "fx", "procs", "paths",
-         "references")
-"""What the families map from, declared once: every row section reads the same
-context, since which of it a column touches is the families' business."""
 
 Placed = tuple[int, str, int]
 """One row as the counts see it: which spell, which kind, which pool slot.
@@ -321,7 +315,7 @@ MODEL_ROWS = register(Section(
     module="core",
     produce=produce("model"),
     columns=ROW_COLUMNS,
-    reads=READS,
+    reads=COLUMN_READS["model"],
     counts=(counted(model_counts),),
     domains=(Domain("count.model", lambda columns, _r: numeric_domain(
         per_spell(walked(columns)[0], MODEL_KINDS).values())),),
@@ -333,7 +327,7 @@ SOUND_ROWS = register(Section(
     module="core",
     produce=produce("sound"),
     columns=ROW_COLUMNS,
-    reads=READS,
+    reads=COLUMN_READS["sound"],
     counts=(counted(lambda rows, _read: {"spellSounds": len(rows)}),),
     domains=(Domain("count.sound", lambda columns, _r: numeric_domain(
         per_spell(walked(columns)[0], frozenset({"sound"})).values())),),
@@ -345,7 +339,7 @@ ANIM_ROWS = register(Section(
     module="core",
     produce=produce("anim"),
     columns=ROW_COLUMNS,
-    reads=READS,
+    reads=COLUMN_READS["anim"],
     counts=(counted(anim_counts),),
     domains=(Domain("count.anim", lambda columns, _r: numeric_domain(
         per_spell_distinct(*walked(columns), "kit", "id").values())),),
@@ -357,7 +351,7 @@ FX_ROWS = register(Section(
     module="core",
     produce=produce("fx"),
     columns=ROW_COLUMNS,
-    reads=READS,
+    reads=COLUMN_READS["fx"],
     counts=(counted(fx_counts),),
     domains=(
         # The beams alone, which is what this axis has always counted: the
@@ -382,7 +376,7 @@ MECH_ROWS = register(Section(
     module="core",
     produce=produce("mech"),
     columns=ROW_COLUMNS,
-    reads=READS,
+    reads=COLUMN_READS["mech"],
     counts=(counted(mech_counts),),
     domains=(
         Domain("count.mech", lambda columns, _r: numeric_domain(
