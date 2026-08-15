@@ -162,18 +162,22 @@ def read_spell_values(tables: Tables, *, level: int = 0,
 
     # Zero is not a cap, a charge count or a chance, so it is left out and the
     # cooker elides the code that would have read it.
-    caps: list[tuple[str, list[str], list[dict[int, int]]]] = [
-        ("SpellAuraOptions", ["CumulativeAura", "ProcCharges", "ProcChance"],
-         [values.max_stacks, values.charges, values.proc_chance]),
-        ("SpellTargetRestrictions", ["MaxTargets", "MaxTargetLevel"],
-         [values.max_targets, values.max_target_level]),
+    # Each column names the dict it fills, so the read order and the
+    # destinations are one declaration rather than two lists that have to stay
+    # index-aligned.
+    caps: list[tuple[str, dict[str, dict[int, int]]]] = [
+        ("SpellAuraOptions", {"CumulativeAura": values.max_stacks,
+                              "ProcCharges": values.charges,
+                              "ProcChance": values.proc_chance}),
+        ("SpellTargetRestrictions", {"MaxTargets": values.max_targets,
+                                     "MaxTargetLevel": values.max_target_level}),
     ]
-    for table, columns, into in caps:
-        for row in tables.rows(table, ["SpellID", "DifficultyID", *columns]):
+    for table, into in caps:
+        for row in tables.rows(table, ["SpellID", "DifficultyID", *into]):
             if to_int(row[1]) != BASE_DIFFICULTY:
                 continue
             spell = to_int(row[0])
-            for text, target in zip(row[2:], into):
+            for text, target in zip(row[2:], into.values()):
                 if count := to_int(text):
                     target[spell] = count
     return values

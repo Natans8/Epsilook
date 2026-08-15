@@ -73,7 +73,7 @@ def summons(reads: Reads) -> SectionColumns:
 
 def objects(reads: Reads) -> SectionColumns:
     """Each placed object's name, model file and type."""
-    ids = sorted({entry for _spell, entry in reads.references.object_rows})
+    ids = reads.references.objects
     return {"ids": ids,
             "names": [reads.objects.name.get(entry, "") for entry in ids],
             "fids": [reads.objects.fid.get(entry, 0) for entry in ids],

@@ -62,22 +62,30 @@ def build_icon_index(spells: Sequence[int],
     seen: dict[str, int] = {}
     for spell in spells:
         fid = icon_fid.get(spell, 0)
-        path = paths.get(fid, "")
-        # Both folds are the comparison's, not the data's: the directory test
-        # cannot assume a casing, and the name is lowercased because it is a
-        # url key rather than something read.
-        name = (path.rsplit("/", 1)[-1].rsplit(".", 1)[0].lower()
-                if path.lower().startswith(ICON_DIRECTORY) else "")
+        name = icon_name(paths.get(fid, ""))
         if not name:
             index.spells.append(NO_ICON)
             continue
-        at = seen.get(name)
-        if at is None:
-            at = seen[name] = len(index.names)
-            index.names.append(name)
+        place, claimed = _place(name, index.names, seen)
+        if claimed:
             index.fids.append(fid)
-        index.spells.append(at + 1)
+        index.spells.append(place)
     return index
+
+
+def _place(name: str, names: list[str], seen: dict[str, int]) -> tuple[int, bool]:
+    """A name's 1-based place in `names`, and whether this call claimed it.
+
+    First claim wins, which is what lets a caller record something else about
+    the claimant -- the file id the name arrived under -- in a list parallel to
+    `names` without checking twice.
+    """
+    at = seen.get(name)
+    claimed = at is None
+    if at is None:
+        at = seen[name] = len(names)
+        names.append(name)
+    return at + 1, claimed
 
 
 def icon_name(path: str) -> str:

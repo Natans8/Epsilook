@@ -38,6 +38,7 @@ absent.
 from __future__ import annotations
 
 import struct
+import threading
 import urllib.error
 import urllib.request
 import zlib
@@ -397,23 +398,29 @@ def _decode_chunk(chunk: bytes, skip_encrypted: bool) -> bytes:
 def find_encoding_keys(blob: bytes, wanted: set[bytes]) -> dict[bytes, bytes]:
     """Map the wanted content keys to encoding keys.
 
-    Targeted rather than exhaustive. The whole table runs to millions of entries
-    and half a gigabyte of dictionary, while every caller here wants a few dozen
-    keys, so it stops as soon as it has them.
+    Targeted rather than exhaustive: the table runs to millions of entries and
+    half a gigabyte of dictionary, while every caller here wants a few dozen
+    keys. Each is found through the sorted page index, so the cost is one page
+    per key rather than a share of the file, and a key the table does not carry
+    costs the same as one it does.
 
     Args:
         blob: the decoded encoding file.
         wanted: content keys to resolve.
 
     Returns:
-        Content key to its first encoding key, for those found.
+        Content key to its first encoding key, for those found. A key the table
+        does not carry is absent from the result rather than raising.
     """
+    layout = _layout(blob)
     found: dict[bytes, bytes] = {}
-    for content_key, encoding_key in _encoding_entries(blob):
-        if content_key in wanted:
-            found[content_key] = encoding_key
-            if len(found) == len(wanted):
-                break
+    for target in wanted:
+        page = _page_holding(blob, layout, target)
+        if page is None:
+            continue
+        encoding_key = _key_in_page(blob, layout, page, target)
+        if encoding_key is not None:
+            found[target] = encoding_key
     return found
 
 
@@ -422,33 +429,96 @@ def count_encoding_keys(blob: bytes) -> int:
     return sum(1 for _ in _encoding_entries(blob))
 
 
-def _encoding_entries(blob: bytes) -> Iterator[tuple[bytes, bytes]]:
-    """Yield every ``(content key, first encoding key)`` pair, page by page.
+@dataclass(frozen=True)
+class _EncodingLayout:
+    """Where an encoding file keeps its two tables, read from the header once."""
 
-    The header offsets are the part that fails quietly: a page count read at the
-    wrong offset comes out in the billions, and the walk then looks like a hang
-    rather than a malformed read.
+    content_key_size: int
+    encoding_key_size: int
+    page_bytes: int
+    pages: int
+    index_at: int
+    """The page index: one ``(first content key, page hash)`` per page, sorted."""
+    pages_at: int
+    """The pages themselves, each holding entries sorted by content key."""
+
+    @property
+    def stride(self) -> int:
+        """One page-index entry: the key it opens with, then its 16-byte hash."""
+        return self.content_key_size + 16
+
+
+def _layout(blob: bytes) -> _EncodingLayout:
+    """Read the header once.
+
+    The offsets are the part that fails quietly: a page count read at the wrong
+    offset comes out in the billions, and a walk then looks like a hang rather
+    than a malformed read.
     """
     if blob[:2] != b"EN":
         raise ValueError(f"not an encoding file: {blob[:2]!r}")
     content_key_size = blob[3]
-    encoding_key_size = blob[4]
-    page_bytes = struct.unpack_from(">H", blob, 5)[0] * 1024
     pages = struct.unpack_from(">I", blob, 9)[0]
-    especs = struct.unpack_from(">I", blob, 18)[0]
+    index_at = 22 + struct.unpack_from(">I", blob, 18)[0]
+    return _EncodingLayout(
+        content_key_size=content_key_size,
+        encoding_key_size=blob[4],
+        page_bytes=struct.unpack_from(">H", blob, 5)[0] * 1024,
+        pages=pages,
+        index_at=index_at,
+        pages_at=index_at + pages * (content_key_size + 16))
 
-    start = 22 + especs + pages * (content_key_size + 16)
-    for page in range(pages):
-        at = start + page * page_bytes
-        end = at + page_bytes
+
+def _page_holding(blob: bytes, layout: _EncodingLayout,
+                  target: bytes) -> int | None:
+    """The one page that could hold a content key, or `None` if none can.
+
+    The page index is sorted and names the first key of each page, so the page
+    wanted is the last one opening at or before the target. Bisecting it is what
+    keeps a lookup to a single page: walking the file instead costs its whole
+    length per absent key, since nothing tells the walk to stop early.
+    """
+    low, high = 0, layout.pages
+    while low < high:
+        middle = (low + high) // 2
+        at = layout.index_at + middle * layout.stride
+        if blob[at:at + layout.content_key_size] <= target:
+            low = middle + 1
+        else:
+            high = middle
+    return low - 1 if low else None
+
+
+def _key_in_page(blob: bytes, layout: _EncodingLayout, page: int,
+                 target: bytes) -> bytes | None:
+    """One page's entry for a content key, or `None` if the page lacks it."""
+    at = layout.pages_at + page * layout.page_bytes
+    end = at + layout.page_bytes
+    while at < end:
+        keys = blob[at]
+        if keys == 0:
+            break  # the page is padding from here on
+        first = at + 6 + layout.content_key_size
+        if blob[at + 6:first] == target:
+            return blob[first:first + layout.encoding_key_size]
+        at = first + keys * layout.encoding_key_size
+    return None
+
+
+def _encoding_entries(blob: bytes) -> Iterator[tuple[bytes, bytes]]:
+    """Yield every ``(content key, first encoding key)`` pair, page by page."""
+    layout = _layout(blob)
+    for page in range(layout.pages):
+        at = layout.pages_at + page * layout.page_bytes
+        end = at + layout.page_bytes
         while at < end:
             keys = blob[at]
             if keys == 0:
                 break  # the page is padding from here on
-            content_key = blob[at + 6:at + 6 + content_key_size]
-            first = at + 6 + content_key_size
-            yield content_key, blob[first:first + encoding_key_size]
-            at = first + keys * encoding_key_size
+            content_key = blob[at + 6:at + 6 + layout.content_key_size]
+            first = at + 6 + layout.content_key_size
+            yield content_key, blob[first:first + layout.encoding_key_size]
+            at = first + keys * layout.encoding_key_size
 
 
 @dataclass(frozen=True)
@@ -779,6 +849,7 @@ class Storage:
         self.cdn_config_digest = row["CDNConfig"]
         self.cdn = service.cdn(self._document)
         self._archives: dict[bytes, Located] | None = None
+        self._archive_lock = threading.Lock()
         self.blobs = Stored(self.cdn, self.archives)
         log(f"  {service.label}: build {self.build} on {self.cdn.host}, "
             f"config {self.build_config_digest}")
@@ -897,13 +968,18 @@ class Storage:
         back real and fail to decode.
         """
         if self._archives is None:
-            found: dict[bytes, Located] = {}
-            names = self.cdn_config.get("archives", [])
-            log(f"  indexing {len(names):,} archives")
-            for name in names:
-                found.update(self._read_archive_index(name))
-            log(f"  {len(found):,} archived files")
-            self._archives = found
+            with self._archive_lock:
+                # Checked again inside the lock: two callers can both find it
+                # unbuilt, and without this both index every archive the
+                # configuration names, one of them to throw the result away.
+                if self._archives is None:
+                    found: dict[bytes, Located] = {}
+                    names = self.cdn_config.get("archives", [])
+                    log(f"  indexing {len(names):,} archives")
+                    for name in names:
+                        found.update(self._read_archive_index(name))
+                    log(f"  {len(found):,} archived files")
+                    self._archives = found
         return self._archives
 
     def _read_archive_index(self, name: str) -> dict[bytes, Located]:

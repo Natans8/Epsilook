@@ -68,9 +68,11 @@ OPTIONAL_COLUMNS = {
     ("SpellEffect", "EffectBasePointsF"): "",
     # Modern scaling: an effect declaring a class and a coefficient reads its
     # amount from the spell-scaling game table instead of from its base points.
-    # Absent on the older clients entirely, and 0 is what "does not scale"
-    # already means on the builds that do carry them -- so the default is the
-    # same answer either way.
+    # Only the class is a modern column -- the coefficient predates it and every
+    # rostered build exports one. Both are declared because 0 is what "does not
+    # scale" already means where they are present, so the default is the same
+    # answer either way, and a build that ever drops the coefficient degrades
+    # rather than failing.
     ("SpellEffect", "ScalingClass"): "0",
     ("SpellEffect", "Coefficient"): "0",
     # The Classic re-release clients carry the effect tables but not their

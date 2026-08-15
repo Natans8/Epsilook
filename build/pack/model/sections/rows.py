@@ -157,11 +157,15 @@ def per_spell_distinct(rows: Sequence[Triple], kind: str,
     return Counter(spell for spell, _key in entries(rows, kind, *keys))
 
 
-MODEL_KINDS = frozenset({"missile", "barrage", "ground", "attached", "trail",
-                         "display", "item", "equipped"})
-"""The model kinds a visual reaches. A mount is the one that does not: it comes
-from the mount table rather than through a visual, which is why it was never in
-the `spellModels` count and is not in the model count domain."""
+MOUNT_KIND = "mount"
+"""The one model kind a visual does not reach: it comes from the mount table
+rather than through a visual, which is why it was never in the `spellModels`
+count and is not in the model count domain."""
+
+MODEL_KINDS = frozenset(family.kind for family in COLUMN_FAMILIES["model"]
+                        ) - {MOUNT_KIND}
+"""The model kinds a visual reaches, derived so a family added to the column
+cannot be left out of the counts that describe it."""
 
 
 def model_counts(rows: Sequence[Triple]) -> Mapping[str, int]:
