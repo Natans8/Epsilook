@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import csv
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from operator import itemgetter
 from pathlib import Path
 
 from ..drift import OPTIONAL_COLUMNS, OPTIONAL_TABLES
@@ -76,6 +77,19 @@ class CsvTables:
                              f"not declared in OPTIONAL_COLUMNS; header = {header}")
             stand_ins = [self.defaults.get((table, column), "") for column in columns]
             width = len(header)
+
+            # Picking the wanted columns is the innermost thing this build does
+            # -- several million rows, several columns each -- so where every
+            # column is present it is done by one C-level call rather than by a
+            # generator that rebuilds the same tuple a row at a time. A single
+            # column is the one case `itemgetter` answers with a bare value
+            # instead of a tuple, so it keeps its own shape.
+            picked = [i for i in index if i is not None]
+            pick: Callable[[Sequence[str]], tuple[str, ...]] | None = None
+            if len(picked) == len(index):
+                pick = (itemgetter(*picked) if len(picked) > 1
+                        else lambda row, at=picked[0]: (row[at],))
+
             for row in reader:
                 # A row narrower than the header is a truncated file, and
                 # indexing it would raise naming neither the table nor where it
@@ -84,5 +98,8 @@ class CsvTables:
                     sys.exit(f"error: {table}.csv in {self.directory} has a row "
                              f"of {len(row)} fields against a {width}-column "
                              f"header; the cached copy is truncated")
-                yield tuple(row[i] if i is not None else stand_in
-                            for i, stand_in in zip(index, stand_ins))
+                if pick is not None:
+                    yield pick(row)
+                else:
+                    yield tuple(row[i] if i is not None else stand_in
+                                for i, stand_in in zip(index, stand_ins))
