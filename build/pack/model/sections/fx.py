@@ -9,43 +9,27 @@ reader that merged them could not say which table a row came from.
 
 from __future__ import annotations
 
-from collections import Counter
-
 from collections.abc import Callable
 
-from ...derive import Reads, masked_rows
+from ...derive import Reads
+from ...derive.kinds import WHOLE_MODEL
 from ...routes.colors import hue_word, hue_words, pack_rgb
-from ...measure import numeric_domain
 from ..registry import register
-from ..section import Column, Count, Domain, Section, SectionColumns
+from ..section import (Column, Count, Layout, Scope, Section, SectionColumns)
 
+WHOLE_MODEL_WORD = "full body"
+"""What an overlay anchored to no point covers, and searches under.
 
-def links(bucket: str, id_column: str) -> Callable[[Reads], SectionColumns]:
-    """One family's spell-to-row links, each with the audience it was aimed at."""
-
-    def produce(reads: Reads) -> SectionColumns:
-        rows = masked_rows(getattr(reads.visuals, bucket))
-        return {"spellIds": [row[0] for row in rows],
-                id_column: [row[1] for row in rows],
-                "targets": [row[2] for row in rows]}
-
-    return produce
+A word rather than a blank, because "anchored nowhere" and "anchored
+everywhere" are the same row in the game data and only the second is true of
+what a player sees.
+"""
 
 
 def used(reads: Reads, bucket: str) -> list[int]:
     """The distinct rows of one family some spell reaches, sorted."""
     return sorted({row for rows in getattr(reads.visuals, bucket).values()
                    for row in rows})
-
-
-def spell_fx(reads: Reads) -> SectionColumns:
-    """Which chain effects a spell draws, and where the beam attaches."""
-    rows = reads.rows.chains
-    return {"spellIds": [row[0] for row in rows],
-            "chainIds": [row[1] for row in rows],
-            "targets": [row[2] for row in rows],
-            "srcAttach": [row[3] for row in rows],
-            "dstAttach": [row[4] for row in rows]}
 
 
 def fx_chains(reads: Reads) -> SectionColumns:
@@ -95,40 +79,6 @@ def colored(bucket: str, colors_of: Callable[[Reads, int], tuple[int, ...]],
     return produce
 
 
-def percents(bucket: str, value_of: Callable[[Reads, int], int]
-             ) -> Callable[[Reads], SectionColumns]:
-    """A percent-only family: the percent IS the row, so there is no id table.
-
-    Two rows resolving to one percent are one row wearing both audiences, so
-    the masks union rather than splitting the percent in two.
-    """
-
-    def produce(reads: Reads) -> SectionColumns:
-        masks: dict[tuple[int, int], int] = {}
-        for spell, rows in getattr(reads.visuals, bucket).items():
-            for row, mask in rows.items():
-                key = (spell, value_of(reads, row))
-                masks[key] = masks.get(key, 0) | mask
-        pairs = sorted(masks)
-        return {"spellIds": [pair[0] for pair in pairs],
-                "percents": [pair[1] for pair in pairs],
-                "targets": [masks[pair] for pair in pairs]}
-
-    return produce
-
-
-SPELL_FX = register(Section(
-    name="spellFx",
-    doc="Which chain effects a spell draws, and where the beam attaches.",
-    module="core",
-    produce=spell_fx,
-    columns=("spellIds", "chainIds", "targets", "srcAttach", "dstAttach"),
-    reads=("rows",),
-    counts=(Count("spellFx", lambda columns, _r: len(columns["spellIds"])),),
-    domains=(Domain("count.fx", lambda columns, _r: numeric_domain(
-        Counter(columns["spellIds"]).values())),),
-))
-
 FX_CHAINS = register(Section(
     name="fxChains",
     doc="Each drawn chain's tint, and the hue word it is searched by.",
@@ -146,17 +96,6 @@ FX_TEXTURES = register(Section(
     produce=fx_textures,
     columns=("chainIds", "fids"),
     reads=("references", "fx"),
-))
-
-SPELL_DISSOLVES = register(Section(
-    name="spellDissolves",
-    doc="Which dissolve effects a spell applies.",
-    module="core",
-    produce=links("dissolves", "dissolveIds"),
-    columns=("spellIds", "dissolveIds", "targets"),
-    reads=("visuals",),
-    counts=(Count("spellDissolves",
-                  lambda columns, _r: len(columns["spellIds"])),),
 ))
 
 DISSOLVES = register(Section(
@@ -178,16 +117,6 @@ DISSOLVE_TEXTURES = register(Section(
     reads=("references", "fx"),
 ))
 
-SPELL_GLOWS = register(Section(
-    name="spellGlows",
-    doc="Which edge glows a spell applies.",
-    module="core",
-    produce=links("glows", "glowIds"),
-    columns=("spellIds", "glowIds", "targets"),
-    reads=("visuals",),
-    counts=(Count("spellGlows", lambda columns, _r: len(columns["spellIds"])),),
-))
-
 GLOWS = register(Section(
     name="glows",
     doc="Each edge glow's colour and opacity.",
@@ -198,17 +127,6 @@ GLOWS = register(Section(
     columns=("ids", "colors", "alphas", "hues"),
     reads=("visuals", "fx"),
     counts=(Count("glows", lambda columns, _r: len(columns["ids"])),),
-))
-
-SPELL_SHADOWIES = register(Section(
-    name="spellShadowies",
-    doc="Which shadowy recolours a spell applies.",
-    module="core",
-    produce=links("shadowies", "shadowyIds"),
-    columns=("spellIds", "shadowyIds", "targets"),
-    reads=("visuals",),
-    counts=(Count("spellShadowies",
-                  lambda columns, _r: len(columns["spellIds"])),),
 ))
 
 SHADOWIES = register(Section(
@@ -225,17 +143,6 @@ SHADOWIES = register(Section(
     counts=(Count("shadowies", lambda columns, _r: len(columns["ids"])),),
 ))
 
-SPELL_GHOST_MATS = register(Section(
-    name="spellGhostMats",
-    doc="Which ghost materials a spell applies.",
-    module="core",
-    produce=links("ghost_mats", "ghostIds"),
-    columns=("spellIds", "ghostIds", "targets"),
-    reads=("visuals",),
-    counts=(Count("spellGhostMats",
-                  lambda columns, _r: len(columns["spellIds"])),),
-))
-
 GHOST_MATS = register(Section(
     name="ghostMats",
     doc="Each ghost material's colour.",
@@ -245,16 +152,6 @@ GHOST_MATS = register(Section(
     columns=("ids", "colors", "hues"),
     reads=("visuals", "procs"),
     counts=(Count("ghostMats", lambda columns, _r: len(columns["ids"])),),
-))
-
-SPELL_TINTS = register(Section(
-    name="spellTints",
-    doc="Which model tints a spell applies.",
-    module="core",
-    produce=links("tints", "tintIds"),
-    columns=("spellIds", "tintIds", "targets"),
-    reads=("visuals",),
-    counts=(Count("spellTints", lambda columns, _r: len(columns["spellIds"])),),
 ))
 
 TINTS = register(Section(
@@ -268,48 +165,15 @@ TINTS = register(Section(
     counts=(Count("tints", lambda columns, _r: len(columns["ids"])),),
 ))
 
-SPELL_DESATURATES = register(Section(
-    name="spellDesaturates",
-    doc="How far a spell drains the colour from its subject.",
-    module="core",
-    produce=percents("desats", lambda reads, row: reads.procs.desats[row]),
-    columns=("spellIds", "percents", "targets"),
-    reads=("visuals", "procs"),
-    counts=(Count("spellDesaturates",
-                  lambda columns, _r: len(columns["spellIds"])),),
-    domains=(Domain("desaturate", lambda columns, _r: numeric_domain(
-        columns["percents"]), unit="%"),),
+ANCHOR_NAMES = register(Section(
+    name="anchorNames",
+    doc="Where an overlay is anchored: a point on the model, or the whole of it.",
+    module="universal",
+    produce=lambda reads: {"names": {**reads.declared.attachment_names,
+                                     WHOLE_MODEL: WHOLE_MODEL_WORD}},
+    columns=("names",),
+    layout=Layout.BARE,
+    reads=("declared",),
+    scope=Scope.UNIVERSAL,
 ))
 
-SPELL_TRANSPARENCIES = register(Section(
-    name="spellTransparencies",
-    doc="How far a spell fades its subject.",
-    module="core",
-    produce=percents("transps", lambda reads, row: reads.procs.transps[row]),
-    columns=("spellIds", "percents", "targets"),
-    reads=("visuals", "procs"),
-    counts=(Count("spellTransparencies",
-                  lambda columns, _r: len(columns["spellIds"])),),
-    domains=(Domain("transparency", lambda columns, _r: numeric_domain(
-        columns["percents"]), unit="%"),),
-))
-
-SPELL_FREEZES = register(Section(
-    name="spellFreezes",
-    doc="The spells that freeze their subject's animation outright.",
-    module="core",
-    produce=lambda reads: {"spellIds": sorted(reads.visuals.freezes)},
-    columns=("spellIds",),
-    reads=("visuals",),
-    counts=(Count("spellFreezes", lambda columns, _r: len(columns["spellIds"])),),
-))
-
-SPELL_CAMOS = register(Section(
-    name="spellCamos",
-    doc="The spells that camouflage their subject.",
-    module="core",
-    produce=lambda reads: {"spellIds": sorted(reads.visuals.camos)},
-    columns=("spellIds",),
-    reads=("visuals",),
-    counts=(Count("spellCamos", lambda columns, _r: len(columns["spellIds"])),),
-))

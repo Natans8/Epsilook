@@ -10,7 +10,7 @@ import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
 import type {RowTable} from "../../src/packrows";
-import {distinct, expand, indexRows, passengerRows, rowsAt, storedAt} from "../../src/packrows";
+import {distinct, expand, expandAll, indexRows, passengerRows, rowsAt, storedAt} from "../../src/packrows";
 
 /**
  * A model column holding a missile, an attached model and a carried weapon.
@@ -128,6 +128,78 @@ describe("the kit expansion", () => {
         assert.deepEqual(kits.spellIds, [10]);
         assert.deepEqual(kits.id, [55]);
         assert.deepEqual(kits.targets, [4]);
+    });
+});
+
+describe("the columns a row carries for the bridge", () => {
+    /**
+     * A dissolve painting two textures, and a screen painting none.
+     *
+     * Both carry the id of the effect they are, which no property of either kind declares: the evaluator has no use
+     * for it and the section they replaced was one row per effect rather than one per texture.
+     */
+    const FX: RowTable = {
+        kinds: ["dissolve", "screen"],
+        sizes: [2, 1],
+        values: {
+            dissolve: {attach: [-1, -1], texture: [70, 71], target: [1, 1]},
+            screen: {texture: [0], target: [2]},
+        },
+        carried: {dissolve: {dissolve: [40, 40]}, screen: {screen: [90]}},
+        vocab: {dissolve: {attach: "anchors", texture: "files"}, screen: {texture: "files"}},
+        absent: {dissolve: {attach: -2}, screen: {}},
+        counts: [3],
+        refs: [0, 1, 2],
+    };
+
+    it("keeps a carried column off the evaluator's reading of the row", () => {
+        const index = indexRows(FX);
+        const [first] = rowsAt(index, 0);
+        assert.equal(storedAt(FX, first, "dissolve"), undefined);
+        assert.equal(storedAt(FX, first, "texture"), 70);
+    });
+
+    it("collapses the texture expansion back to one row per effect", () => {
+        const {dissolves, screens} = expandAll(FX, [10], {
+            dissolves: {
+                kinds: {dissolve: 0}, unique: ["dissolve"],
+                columns: {
+                    dissolveIds: {from: ["dissolve"], missing: 0},
+                    targets: {from: ["target"], missing: 0},
+                },
+            },
+            screens: {
+                kinds: {screen: 0}, unique: ["screen"],
+                columns: {screenIds: {from: ["screen"], missing: 0}},
+            },
+        });
+        assert.deepEqual(dissolves.spellIds, [10]);
+        assert.deepEqual(dissolves.dissolveIds, [40]);
+        assert.deepEqual(dissolves.targets, [1]);
+        assert.deepEqual(screens.screenIds, [90]);
+    });
+
+    it("builds every section from one walk, and each holds only its own kinds", () => {
+        const both = expandAll(FX, [10], {
+            dissolves: {kinds: {dissolve: 0}, columns: {}},
+            screens: {kinds: {screen: 0}, columns: {}},
+        });
+        // Without `unique`, the dissolve's two textures are two rows again — the expansion is not lost, only folded
+        // where a caller asks for the effect rather than the painting.
+        assert.deepEqual(both.dissolves.spellIds, [10, 10]);
+        assert.deepEqual(both.screens.spellIds, [10]);
+    });
+
+    it("starts each spell's uniqueness afresh, so two spells sharing an effect both keep it", () => {
+        const shared: RowTable = {...FX, counts: [1, 1], refs: [0, 0]};
+        const {dissolves} = expandAll(shared, [10, 20], {
+            dissolves: {
+                kinds: {dissolve: 0}, unique: ["dissolve"],
+                columns: {dissolveIds: {from: ["dissolve"], missing: 0}},
+            },
+        });
+        assert.deepEqual(dissolves.spellIds, [10, 20]);
+        assert.deepEqual(dissolves.dissolveIds, [40, 40]);
     });
 });
 

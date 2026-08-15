@@ -93,6 +93,15 @@ because the aura name does not carry it: a decrease aura may hold a positive
 value and an increase aura a negative one.
 """
 
+MOVEMENT_NAMES: tuple[str, ...] = tuple(sorted(set(SPEED_AURAS.values())))
+"""The movements, in the order a row stores them by.
+
+Read off the aura map rather than listed again, so a movement added there gets
+its number here with nothing to keep in step. Sorted rather than first-seen,
+because the aura map is written by aura id and a row's stored number must not
+change when an unrelated aura is added above it.
+"""
+
 SCALE_AURAS = frozenset({61, 239, 591})
 """The object-scale auras. The amount is a signed percentage.
 

@@ -32,11 +32,13 @@ throw away whatever was there.
 from __future__ import annotations
 
 import argparse
-import gzip
 import json
 import shutil
 import subprocess
 import sys
+import time
+from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from packs import PACKS, Pack, select, stale_cache
@@ -68,7 +70,7 @@ def git(*args: str) -> str:
     return out.stdout or ""
 
 
-def build_argv(pack: Pack, refresh: bool) -> list[str]:
+def build_argv(pack: Pack, refresh: bool, timing: bool = False) -> list[str]:
     """The command that builds one pack, run through the pinned environment.
 
     `uv run` rather than this script's own interpreter: the build takes runtime
@@ -85,7 +87,145 @@ def build_argv(pack: Pack, refresh: bool) -> list[str]:
         argv.append("--hidden")
     if refresh:
         argv.append("--refresh")
+    if timing:
+        argv.append("--timing")
     return argv
+
+
+def jobs_for(asked: int, chosen: Sequence[Pack]) -> int:
+    """How many builds to run at once.
+
+    Defaults to every chosen pack rather than to a core count, because the
+    roster is smaller than the machine: twelve independent programs against far
+    more logical cores than that, so a pool sized from cores would only make
+    packs queue for slots that are not scarce.
+
+    Each build holds its own spell graph, so the resource that could bind this
+    is memory rather than cores. `--jobs` is the knob for a machine where it
+    does; nothing here measures it, so a build host with less headroom than the
+    roster needs is expected to say so rather than to be detected.
+    """
+    if asked > 0:
+        return min(asked, len(chosen))
+    return max(1, len(chosen))
+
+
+def prewarm(chosen: Sequence[Pack], refresh: bool) -> int:
+    """Fetch every chosen pack's sources, one at a time. Non-zero on failure.
+
+    THE FETCH PHASE, AND IT RUNS SERIALLY ON PURPOSE -- separating acquisition
+    from execution is what makes the fan-out safe. Builds share sources, and two
+    of them downloading one file into one path is the race this removes: the
+    loser reads a half-written file as though it were the source, which is a
+    wrong pack rather than a failed one.
+
+    Deduplicated by build id, because that is what a cache directory is keyed
+    by: a test line sharing a patch with live reads exactly the same sources, so
+    warming them twice would only pay the interpreter's startup again.
+    """
+    seen: set[str] = set()
+    for pack in chosen:
+        if pack.build in seen:
+            continue
+        seen.add(pack.build)
+        argv = [*UV_RUN, "-m", BUILD, "--version", pack.build, "--sources-only"]
+        if refresh:
+            argv.append("--refresh")
+        proc = subprocess.run(argv, cwd=BUILD_ROOT, capture_output=True,
+                              encoding="utf-8", errors="replace", check=False)
+        if proc.returncode != 0:
+            print(f"{RED}fetch failed{RESET} {pack.build} exit {proc.returncode}")
+            print(proc.stdout or "", proc.stderr or "", sep="")
+            return proc.returncode
+    return 0
+
+
+def build_one(pack: Pack, refresh: bool, timing: bool,
+              capture: bool) -> tuple[Pack, int, str]:
+    """Run one pack's build to completion, and bring back what it said.
+
+    `capture` is false for a lone build, which is the development loop: its
+    output goes straight to the terminal so a build in progress can be watched,
+    exactly as it did before there was a pool. Captured output would turn a
+    twenty-five second build into twenty-five seconds of silence.
+    """
+    proc = subprocess.run(build_argv(pack, refresh, timing), cwd=BUILD_ROOT,
+                          capture_output=capture, encoding="utf-8",
+                          errors="replace", check=False)
+    if not capture:
+        return pack, proc.returncode, ""
+    return pack, proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+
+
+def run_serially(chosen: Sequence[Pack], refresh: bool, timing: bool) -> int:
+    """Build the packs one after another, streaming. How many failed.
+
+    Stops at the first failure, which is what a single-pack development loop
+    wants: the next pack's output would only bury the traceback.
+    """
+    for at, pack in enumerate(chosen, 1):
+        print(f"{DIM}[{at}/{len(chosen)}] {pack.id}  {pack.label}{RESET}")
+        _pack, code, _output = build_one(pack, refresh, timing, capture=False)
+        if code != 0:
+            print(f"{RED}build failed{RESET} {pack.id} exit {code}")
+            return 1
+    return 0
+
+
+def run_together(chosen: Sequence[Pack], refresh: bool, timing: bool,
+                 jobs: int) -> int:
+    """Build the packs at once, printing each whole. How many failed.
+
+    Every pack is attempted even after one fails, because they are independent
+    and a fan-out that abandoned the rest would leave the tree holding some
+    packs from this build and some from the last.
+    """
+    failed = 0
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        running = [pool.submit(build_one, pack, refresh, timing, True)
+                   for pack in chosen]
+        for done, future in enumerate(as_completed(running), 1):
+            pack, code, output = future.result()
+            print(f"{DIM}[{done}/{len(chosen)}] {pack.id}  {pack.label}{RESET}")
+            print(output, end="" if output.endswith("\n") else "\n")
+            if code != 0:
+                print(f"{RED}build failed{RESET} {pack.id} exit {code}")
+                failed += 1
+    return failed
+
+
+def build_all(chosen: Sequence[Pack], refresh: bool, timing: bool,
+              jobs: int) -> int:
+    """Build every chosen pack. Zero when they all succeeded.
+
+    Subprocesses supervised by threads rather than a process pool: a build is
+    already a separate program, so a pool of Python workers would only be
+    processes that go on to start these ones. The threads do nothing but wait,
+    which is work the interpreter lock does not hold.
+
+    Fanned out, output is captured per build and printed whole when that build
+    finishes: twelve builds writing to one terminal at once interleave into
+    something nobody can read, and a phase table is worth nothing shredded. One
+    at a time it streams instead, because that path is the development loop and
+    watching a build is the point of its progress lines.
+    """
+    started = time.monotonic()
+    if jobs == 1:
+        failed = run_serially(chosen, refresh, timing)
+    else:
+        print(f"{DIM}fetching sources for {len(chosen)} pack(s) ...{RESET}")
+        fetched = time.monotonic()
+        if (code := prewarm(chosen, refresh)) != 0:
+            return code
+        print(f"{DIM}sources ready [{time.monotonic() - fetched:.1f}s]{RESET}")
+        failed = run_together(chosen, refresh, timing, jobs)
+    elapsed = time.monotonic() - started
+    if failed:
+        print(f"{RED}{failed} of {len(chosen)} build(s) failed{RESET}")
+        return 1
+    print(f"{DIM}built {len(chosen)} pack(s) across {jobs} job(s) "
+          f"[{elapsed:.1f}s]{RESET}")
+    return 0
 
 
 def retire_superseded(built: list[Pack]) -> list[str]:
@@ -186,11 +326,22 @@ def prune_cache() -> int:
 
 
 def payload(path: Path) -> dict:
-    """The pack as JSON, with the build date removed."""
-    with gzip.open(path, "rt", encoding="utf-8") as fh:
-        pack = json.load(fh)
-    pack.get("meta", {}).pop("built", None)
-    return pack
+    """The pack's manifest as JSON, with the build date removed.
+
+    THE MANIFEST IS ENOUGH TO PROVE THE WHOLE PACK. A module is named by the
+    hash of its own bytes, so two manifests naming the same files name modules
+    whose contents are identical -- there is nothing left to compare. Reading
+    the modules as well would re-derive hashes the filenames already state.
+
+    Only `meta.built` is normalised away, and only because it is today's date:
+    it rides in the manifest rather than in a module precisely so that a rebuild
+    on a later day leaves every module's name untouched.
+    """
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    meta = manifest.get("meta")
+    if isinstance(meta, dict):
+        meta.pop("built", None)
+    return manifest
 
 
 def describe_difference(before: dict, after: dict) -> list[str]:
@@ -213,7 +364,7 @@ def describe_difference(before: dict, after: dict) -> list[str]:
     return notes
 
 
-def verify(pack: Pack, refresh: bool) -> bool:
+def verify(pack: Pack, refresh: bool, timing: bool = False) -> bool:
     """Rebuild into a scratch copy, compare, restore. True when reproducible."""
     pack_rel = f"site/data/{pack.id}/manifest.json"
     pack_path = ROOT / pack_rel
@@ -226,14 +377,16 @@ def verify(pack: Pack, refresh: bool) -> bool:
         print(f"{RED}refusing{RESET} {pack_rel} does not exist yet - build it first")
         return False
 
-    keep = pack_path.with_suffix(".gz.committed")
+    # Named so the manifest glob elsewhere in this file cannot pick it up: a
+    # scratch copy counted as a pack would speak for modules twice.
+    keep = pack_path.with_name("manifest.committed.json")
     shutil.copy2(pack_path, keep)
     try:
         before_bytes = keep.read_bytes()
         before = payload(keep)
 
         print(f"{DIM}rebuilding {pack.id} ...{RESET}")
-        proc = subprocess.run(build_argv(pack, refresh), cwd=BUILD_ROOT, check=False)
+        proc = subprocess.run(build_argv(pack, refresh, timing), cwd=BUILD_ROOT, check=False)
         if proc.returncode != 0:
             print(f"{RED}build failed{RESET} exit {proc.returncode}")
             return False
@@ -266,6 +419,11 @@ def main() -> int:
                     help="deterministic-build oracle: rebuild, compare, restore")
     ap.add_argument("--refresh", action="store_true", help="re-download sources even if cached")
     ap.add_argument("--list", action="store_true", help="print the commands, run nothing")
+    ap.add_argument("--timing", action="store_true",
+                    help="have each build print where its time went, phase by phase")
+    ap.add_argument("--jobs", type=int, default=0, metavar="N",
+                    help="how many packs to build at once (default: all of "
+                         "them; 1 builds one after another)")
     ap.add_argument("--prune-cache", action="store_true",
                     help="delete the download caches no pack needs, and stop "
                          "(a rebuild does this for you)")
@@ -293,19 +451,15 @@ def main() -> int:
     if args.list:
         for pack in chosen:
             printable = " ".join(f'"{a}"' if " " in a else a
-                                 for a in build_argv(pack, args.refresh))
+                                 for a in build_argv(pack, args.refresh, args.timing))
             print(printable)
         return 0
 
     if args.verify:
-        return 0 if all([verify(pack, args.refresh) for pack in chosen]) else 1
+        return 0 if all([verify(pack, args.refresh, args.timing) for pack in chosen]) else 1
 
-    for i, pack in enumerate(chosen, 1):
-        print(f"{DIM}[{i}/{len(chosen)}] {pack.id}  {pack.label}{RESET}")
-        proc = subprocess.run(build_argv(pack, args.refresh), cwd=BUILD_ROOT, check=False)
-        if proc.returncode != 0:
-            print(f"{RED}build failed{RESET} {pack.id} exit {proc.returncode}")
-            return 1
+    if build_all(chosen, args.refresh, args.timing, jobs_for(args.jobs, chosen)) != 0:
+        return 1
 
     # Only after every requested build SUCCEEDED. Retiring first would delete a
     # shipped pack and then leave nothing in its place if the build then failed.

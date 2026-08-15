@@ -14,6 +14,7 @@ import pytest
 
 from pack.derive.context import Reads
 from pack.derive.kinds import ABSENT, Family, SpellRow, build_column
+from pack.model.sections.rows import columns_of, entries, walk
 
 
 NO_READS = cast(Reads, None)
@@ -114,3 +115,55 @@ def test_the_pool_keeps_one_column_per_property(props: tuple[str, ...]) -> None:
                         reads=NO_READS, spell_ids=[1])
     assert len(rows.pools["k"].columns) == len(props)
     assert rows.pools["k"].props == props
+
+
+def test_a_carried_column_is_not_one_of_the_properties() -> None:
+    """The whole point of the split: what the evaluator reads is exactly what
+    the catalogue declares, and a bridge column cannot pass for a property."""
+    rows = build_column(
+        [family("dissolve", ("texture",), [(1, (70, 40))], carried=("dissolve",))],
+        reads=NO_READS, spell_ids=[1])
+    pool = rows.pools["dissolve"]
+    assert dict(pool.values) == {"texture": [70]}
+    assert dict(pool.extras) == {"dissolve": [40]}
+
+
+def test_a_carried_column_still_keys_the_row() -> None:
+    """Two effects that look alike stay two rows, which is what keeps a pooled
+    row and the legacy row it replaced one to one."""
+    rows = build_column(
+        [family("dissolve", ("texture",),
+                [(1, (70, 40)), (1, (70, 41))], carried=("dissolve",))],
+        reads=NO_READS, spell_ids=[1])
+    assert rows.pools["dissolve"].rows == 2
+    assert dict(rows.pools["dissolve"].extras) == {"dissolve": [40, 41]}
+
+
+def test_a_float_survives_the_pooling() -> None:
+    """A size change and a movement change are signed percentages, and
+    forty-four of them carry a fraction."""
+    rows = build_column([family("scale", ("amount",), [(1, (-99.5,))])],
+                        reads=NO_READS, spell_ids=[1])
+    assert rows.pools["scale"].columns == ([-99.5],)
+
+
+def test_a_family_naming_an_undeclared_vocabulary_fails_the_build() -> None:
+    """Left to the reader it is silent: the lookup misses, the property keeps
+    the raw number, and every query on it answers nothing forever."""
+    with pytest.raises(ValueError, match="nowhere"):
+        build_column(
+            [family("tint", ("colour",), [(1, (5,))], vocab={"colour": "nowhere"})],
+            reads=NO_READS, spell_ids=[1])
+
+
+def test_a_count_reads_the_effect_rather_than_the_texture() -> None:
+    """One dissolve painting two textures is two rows and one dissolve, and the
+    count the section carried has always been the second."""
+    table = columns_of(build_column(
+        [family("dissolve", ("texture",),
+                [(1, (70, 40)), (1, (71, 40)), (2, (70, 40))],
+                carried=("dissolve",))],
+        reads=NO_READS, spell_ids=[1, 2]))
+    rows = list(walk(table))
+    assert len(rows) == 3
+    assert len(entries(rows, "dissolve", "dissolve")) == 2

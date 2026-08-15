@@ -107,16 +107,6 @@ SPELL_DELIVERY = register(Section(
     ),
 ))
 
-SPELL_AREAS = register(Section(
-    name="spellAreas",
-    doc="One row per place a spell may be cast.",
-    module="core",
-    produce=area_gates,
-    columns=("spellIds", "areaIds"),
-    reads=("areas",),
-    counts=(Count("spellAreas", lambda columns, _r: len(columns["spellIds"])),),
-))
-
 AREAS = register(Section(
     name="areas",
     doc="Each gated area's own name, its root zone, and the map that shows it.",

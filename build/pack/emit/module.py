@@ -28,6 +28,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from ..model.section import Section
+from ..progress import phase
 
 DIGEST_LENGTH = 12
 """How much of the content hash names a module.
@@ -182,5 +183,6 @@ def assemble(sections: Sequence[Section],
         if section.name in produced:
             for module, payload in split(section, produced[section.name]):
                 payloads.setdefault(module, {})[section.name] = payload
-    return [Module(name=name, payload=serialize(payload))
-            for name, payload in payloads.items()]
+    with phase("serialize modules (json+gzip)"):
+        return [Module(name=name, payload=serialize(payload))
+                for name, payload in payloads.items()]

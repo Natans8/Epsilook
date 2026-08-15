@@ -1,8 +1,8 @@
 """The keys an aura stops working while it holds.
 
-Two sections in the usual pairing: which override each spell suppresses, and
-what each override actually is. Kept apart from the mechanics rows because the
-payload is a keybinding rather than anything the spell does to a target.
+What each suppressed override actually is. Which spell suppresses it is a thing
+the spell does, so those rows are in the mech column; this is what the number
+one of them stores resolves to.
 """
 
 from __future__ import annotations
@@ -12,45 +12,31 @@ from ..registry import register
 from ..section import Count, Section, SectionColumns
 
 
-def spell_keybinds(reads: Reads) -> SectionColumns:
-    """Which keybound override an aura suppresses."""
-    rows = sorted((spell, override)
-                  for spell, overrides in reads.effects.keybinds.ids.items()
-                  for override in overrides)
-    return {"spellIds": [row[0] for row in rows],
-            "overrideIds": [row[1] for row in rows],
-            "targets": [reads.effects.keybinds.masks.get(row, 0) for row in rows]}
-
-
 def keybinds(reads: Reads) -> SectionColumns:
     """Each referenced override's key, its timing word, and what it casts."""
     used = sorted({override for overrides in reads.effects.keybinds.ids.values()
                    for override in overrides})
+    rows = [reads.keybinds[override] for override in used]
     return {"ids": used,
-            "functions": [reads.keybinds[override].function for override in used],
+            "functions": [row.function for row in rows],
             # "" is an ordinary press; the other value is the airborne one.
-            "whens": [reads.keybinds[override].when for override in used],
+            "whens": [row.when for row in rows],
+            # The two above as the one string a row names the key by. Cooked
+            # here rather than joined by each reader, because a key and when it
+            # applies are one answer to "which key" and two readers joining
+            # them their own way is two spellings of it.
+            "keys": [f"{row.function} {row.when}".strip() for row in rows],
             # What retail casts in the key's place. Shipped for a later pass
             # and not displayed, since Epsilon only disables the key.
-            "spells": [reads.keybinds[override].spell for override in used]}
+            "spells": [row.spell for row in rows]}
 
-
-SPELL_KEYBINDS = register(Section(
-    name="spellKeybinds",
-    doc="Which keybound override an aura suppresses while it holds.",
-    module="core",
-    produce=spell_keybinds,
-    columns=("spellIds", "overrideIds", "targets"),
-    reads=("effects",),
-    counts=(Count("spellKeybinds", lambda columns, _r: len(columns["spellIds"])),),
-))
 
 KEYBINDS = register(Section(
     name="keybinds",
     doc="Each suppressed key, when it is suppressed, and what replaces it.",
     module="core",
     produce=keybinds,
-    columns=("ids", "functions", "whens", "spells"),
+    columns=("ids", "functions", "whens", "keys", "spells"),
     reads=("effects", "keybinds"),
     counts=(Count("keybinds", lambda columns, _r: len(columns["ids"])),),
 ))

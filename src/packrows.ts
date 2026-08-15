@@ -30,11 +30,16 @@ export interface KindPool {
  * both the kind and the row within it. `counts` is how many rows each spell has, in spell order — a count rather than
  * an offset because the counts are almost all nought, one or two and compress to nothing, where a running offset is a
  * rising six-digit number. The offsets are the prefix sum, computed once by {@link indexRows}.
+ *
+ * `carried` holds columns no property of the kind declares — which dissolve a row is, the aura sharing an effect's
+ * row. They are what the 1.0 bridge below rebuilds its arrays from, and they sit apart from `values` so that what the
+ * evaluator reads stays exactly what the catalogue declares.
  */
 export interface RowTable {
     readonly kinds: readonly string[];
     readonly sizes: readonly number[];
     readonly values: Readonly<Record<string, Readonly<Record<string, readonly number[]>>>>;
+    readonly carried?: Readonly<Record<string, Readonly<Record<string, readonly number[]>>>>;
     readonly vocab: Readonly<Record<string, Readonly<Record<string, string>>>>;
     readonly absent: Readonly<Record<string, Readonly<Record<string, number>>>>;
     readonly counts: readonly number[];
@@ -47,7 +52,12 @@ export interface VocabWhere {
     readonly in: string;
     /** The column holding the keys, where the vocabulary is two parallel arrays. Absent means index by the number. */
     readonly keys?: string;
-    /** The column holding the values. Required with `keys`. */
+    /**
+     * The column holding the values.
+     *
+     * With `keys`, the two are parallel arrays a reader pairs into a map. Without it, this column is itself indexed
+     * by the stored number. Absent altogether, the section IS the lookup.
+     */
     readonly values?: string;
 }
 
@@ -151,13 +161,87 @@ interface Legacy {
     readonly columns: Readonly<Record<string, LegacyColumn>>;
     /** Whether the legacy shape carries a `cats` array naming which kind each row came from. */
     readonly cats?: boolean;
+    /**
+     * The columns that identify one legacy row, where the rows expand past it.
+     *
+     * Three fx families expand one effect into a row per texture it paints with, so the rows outnumber the effects and
+     * the section they replaced had one row per effect. Naming what identified a row there collapses them back, and
+     * every other column is taken from the first row of the run — which is sound because the expansion varies nothing
+     * else.
+     *
+     * It is a LIST because that is what a legacy row was keyed by: `spellFx` held one row per (chain, attach pair,
+     * mask), so a beam drawn between two different attachment points was two rows and naming the chain alone would
+     * silently lose one of them.
+     */
+    readonly unique?: readonly string[];
+}
+
+/** One column of one kind's pool, wherever it lives: a declared property, or a column the row carries. */
+function columnOf(table: RowTable, kind: string, name: string): readonly number[] | undefined {
+    return table.values[kind]?.[name] ?? table.carried?.[kind]?.[name];
+}
+
+/**
+ * The columns several legacy sections were made of, rebuilt from the rows that replaced them.
+ *
+ * One walk for all of them, because the walk is the expensive half: the mech table holds three quarters of a million
+ * references and the eight sections it replaced would otherwise each sweep every one.
+ *
+ * Absence is written back as the legacy sentinel rather than dropped: `data.ts` reads `-1` for an unset attachment and
+ * `0` for an unset file, and a shorter array would silently shift every row after the gap.
+ *
+ * @param table The column's row table.
+ * @param spellIds Every spell id, in the pack's own order — the order `counts` is parallel to.
+ * @param specs Per section name, which kinds fill it and what each of its arrays reads.
+ * @returns Per section name, the legacy arrays, `spellIds` first and each parallel to the others.
+ */
+export function expandAll<K extends string>(
+    table: RowTable, spellIds: readonly number[], specs: Readonly<Record<K, Legacy>>,
+): Record<K, LegacyColumns> {
+    const index = indexRows(table);
+    const entries = Object.entries(specs) as [K, Legacy][];
+    const out = {} as Record<K, LegacyColumns>;
+    for (const [name, spec] of entries) {
+        const columns: LegacyColumns = {spellIds: []};
+        for (const column of Object.keys(spec.columns)) columns[column] = [];
+        if (spec.cats) columns.cats = [];
+        out[name] = columns;
+    }
+
+    // Per spell, the keys already taken for each `unique` section — allocated once and cleared, because a spell's
+    // rows are a handful and a fresh set per spell per section is a quarter of a million allocations.
+    const seen = entries.map(() => new Set<string>());
+    for (let i = 0; i < spellIds.length; i++) {
+        for (const set of seen) set.clear();
+        for (let at = index.at[i]; at < index.at[i + 1]; at++) {
+            const row = index.owner[table.refs[at]];
+            for (let s = 0; s < entries.length; s++) {
+                const [name, spec] = entries[s];
+                const cat = spec.kinds[row.kind];
+                if (cat === undefined) continue;
+                if (spec.unique !== undefined) {
+                    const key = spec.unique
+                        .map((one) => columnOf(table, row.kind, one)?.[row.slot]).join("|");
+                    if (seen[s].has(key)) continue;
+                    seen[s].add(key);
+                }
+                const columns = out[name];
+                columns.spellIds.push(spellIds[i]);
+                if (spec.cats) columns.cats.push(cat);
+                for (const [column, source] of Object.entries(spec.columns)) {
+                    const found = source.from
+                        .map((one) => columnOf(table, row.kind, one))
+                        .find((column_) => column_ !== undefined);
+                    columns[column].push(found === undefined ? source.missing : found[row.slot]);
+                }
+            }
+        }
+    }
+    return out;
 }
 
 /**
  * The columns one legacy section was made of, rebuilt from the rows that replaced it.
- *
- * Absence is written back as the legacy sentinel rather than dropped: `data.ts` reads `-1` for an unset attachment and
- * `0` for an unset file, and a shorter array would silently shift every row after the gap.
  *
  * @param table The column's row table.
  * @param spellIds Every spell id, in the pack's own order — the order `counts` is parallel to.
@@ -167,26 +251,7 @@ interface Legacy {
 export function expand(
     table: RowTable, spellIds: readonly number[], spec: Legacy,
 ): LegacyColumns {
-    const index = indexRows(table);
-    const out: LegacyColumns = {spellIds: []};
-    for (const name of Object.keys(spec.columns)) out[name] = [];
-    if (spec.cats) out.cats = [];
-
-    for (let i = 0; i < spellIds.length; i++) {
-        for (const row of rowsAt(index, i)) {
-            const cat = spec.kinds[row.kind];
-            if (cat === undefined) continue;
-            out.spellIds.push(spellIds[i]);
-            if (spec.cats) out.cats.push(cat);
-            for (const [name, column] of Object.entries(spec.columns)) {
-                const prop = column.from.find((one) => table.values[row.kind]?.[one] !== undefined);
-                out[name].push(prop === undefined
-                    ? column.missing
-                    : table.values[row.kind][prop][row.slot]);
-            }
-        }
-    }
-    return out;
+    return expandAll(table, spellIds, {only: spec}).only;
 }
 
 /**

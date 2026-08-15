@@ -54,6 +54,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import mermaid
+import packs
 from repo import (BUMP_PATHS, CACHE, DIM, GREEN, LISTFILE_ASSET, RED, RESET, ROOT, YELLOW,
                   changed_under, git, have_ref, survive_console_encoding)
 
@@ -1147,6 +1148,40 @@ def check_listfile_declaration(rep: Report) -> None:
     rep.ok("listfile declaration", f"build and tools agree on {theirs}")
 
 
+def check_soundkit_declaration(rep: Report) -> None:
+    """The build and the cache sweeper must agree which build is pinned.
+
+    Sound-kit names come from one frozen build that no roster row names, so the
+    sweeper has to be told to spare its cache directory. It repeats the constant
+    rather than importing it, because `tools/rebuild.py` -- the tool that does
+    the deleting -- runs on a bare interpreter, and the build's own module
+    reaches the acquisition layer's dependencies.
+
+    The drift deletes data rather than reporting it: an out-of-step constant
+    makes the pinned directory look like a retired build's leftovers, the sweep
+    removes it after every rebuild, and the next build fails on a missing
+    SoundKitName.csv naming a directory nothing in the roster explains.
+    """
+    if not (ROOT / BUILD_PACKAGE / "sources" / "wago.py").exists():
+        rep.skip("sound-kit declaration", "build/pack/sources/wago.py not present yet")
+        return
+    # Read as text rather than imported: this check must answer the same way on
+    # the bare interpreter the sweeper runs on, and importing would make it
+    # agree with an oracle the sweeper cannot reach.
+    source = (ROOT / BUILD_PACKAGE / "sources" / "wago.py").read_text(encoding="utf-8")
+    found = re.search(r'^SOUNDKITNAME_BUILD\s*=\s*"([^"]+)"', source, re.MULTILINE)
+    if found is None:
+        rep.fail("sound-kit declaration",
+                 "build/pack/sources/wago.py no longer declares SOUNDKITNAME_BUILD")
+        return
+    if found.group(1) != packs.SOUNDKITNAME_BUILD:
+        rep.fail("sound-kit declaration",
+                 f"the build pins {found.group(1)}, the sweeper spares "
+                 f"{packs.SOUNDKITNAME_BUILD}")
+        return
+    rep.ok("sound-kit declaration", f"build and sweeper agree on {found.group(1)}")
+
+
 def check_supplement(rep: Report) -> None:
     """The vendored asset-name supplement must hold what the build assumes it does.
 
@@ -1573,6 +1608,7 @@ def main() -> int:
     check_cli_entries(rep)
     check_license_scope(rep)
     check_listfile_declaration(rep)
+    check_soundkit_declaration(rep)
     check_supplement(rep)
     check_arcanum(rep)
     check_pack_freshness(rep)

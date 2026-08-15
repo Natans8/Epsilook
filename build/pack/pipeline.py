@@ -30,7 +30,7 @@ from .emit.meta import gathered, meta
 from .emit.module import Module, absent_sections, assemble
 from .encode import FEWEST_BYTES, encode_section
 from .model import SECTIONS, Cardinality, Encoding, Section, SectionColumns
-from .progress import log
+from .progress import detail, log, phase, step
 from .routes import (implicit_target_bits, read_anim_replacements,
                      read_animkit_anims, read_animkit_bonesets,
                      read_area_gates, read_creature_models, read_fx_payloads,
@@ -108,7 +108,11 @@ class Providers:
         Handed to the model routes so they can tell a placeholder from a file,
         without any of them learning what a listfile is.
         """
-        return set(resolve_paths(self.listfile, fids))
+        # Timed under the same name as the pack's own resolution because it is
+        # the same work over the same source: the phase table should say what
+        # the listfile costs this build, not what one of its two readers did.
+        with phase("resolve paths (listfile)"):
+            return set(resolve_paths(self.listfile, fids))
 
 
 def read_kit_names(pinned: Tables, used: set[int]) -> list[tuple[int, str]]:
@@ -135,42 +139,44 @@ def read_all(providers: Providers, build: Build,
     """
     tables, world = providers.tables, providers.world
 
-    log("Reading spell names ...")
-    names = read_spell_names(tables)
+    with step("read spell names", "Reading spell names ..."):
+        names = read_spell_names(tables)
 
-    log("Reading spell visual chain tables ...")
-    graph = read_visual_graph(tables)
-    creatures = read_creature_models(tables, world)
-    items = read_item_models(tables)
-    mounts = read_mounts(tables, names.names, creatures)
-    objects = read_gameobjects(tables, world)
-    models = read_model_sources(tables, creatures, items, providers.named)
-    missiles = read_missiles(tables, models)
-    motions = read_missile_motions(tables)
-    procs = read_proc_effects(tables, models)
-    fx = read_fx_payloads(tables)
-    kits = read_kit_effects(tables, models, procs, fx)
-    soundkit_files = read_soundkit_files(tables)
+    with step("read visual chain", "Reading spell visual chain tables ..."):
+        graph = read_visual_graph(tables)
+        creatures = read_creature_models(tables, world)
+        items = read_item_models(tables)
+        mounts = read_mounts(tables, names.names, creatures)
+        objects = read_gameobjects(tables, world)
+        models = read_model_sources(tables, creatures, items, providers.named)
+        missiles = read_missiles(tables, models)
+        motions = read_missile_motions(tables)
+        procs = read_proc_effects(tables, models)
+        fx = read_fx_payloads(tables)
+        kits = read_kit_effects(tables, models, procs, fx)
+        soundkit_files = read_soundkit_files(tables)
 
-    anim_names = read_anim_names()
-    oneshots, loops = read_anim_emotes(anim_names)
-    animkit_anims = read_animkit_anims(tables, anim_names)
-    animkit_bonesets = read_animkit_bonesets(tables)
-    anim_replacements = read_anim_replacements(tables, anim_names)
+    with step("read animations", "Reading animation tables ..."):
+        anim_names = read_anim_names()
+        oneshots, loops = read_anim_emotes(anim_names)
+        animkit_anims = read_animkit_anims(tables, anim_names)
+        animkit_bonesets = read_animkit_bonesets(tables)
+        anim_replacements = read_anim_replacements(tables, anim_names)
 
-    keybinds = read_keybound_overrides(tables)
-    effects = read_spell_effect_rows(
-        tables, names.names,
-        {"screens": fx.screens, "keybounds": keybinds},
-        implicit_target_bits(build.version))
-    alt_names = read_override_names(tables, effects.altnames)
-    props = read_spell_properties(tables, names.names)
-    attributes = read_spell_attributes(props.attribute_words)
-    delivery = read_spell_delivery(tables, props)
-    areas = read_area_gates(tables)
-    forms = read_shapeshift_forms(tables)
-    vehicles = read_vehicle_seats(tables)
-    templates = read_spell_text(tables)
+    with step("read spell rows", "Reading spell effect and property tables ..."):
+        keybinds = read_keybound_overrides(tables)
+        effects = read_spell_effect_rows(
+            tables, names.names,
+            {"screens": fx.screens, "keybounds": keybinds},
+            implicit_target_bits(build.version))
+        alt_names = read_override_names(tables, effects.altnames)
+        props = read_spell_properties(tables, names.names)
+        attributes = read_spell_attributes(props.attribute_words)
+        delivery = read_spell_delivery(tables, props)
+        areas = read_area_gates(tables)
+        forms = read_shapeshift_forms(tables)
+        vehicles = read_vehicle_seats(tables)
+        templates = read_spell_text(tables)
 
     log("Cooking spell descriptions ...")
     # The COOKED numbers come from the client alone, never the server's
@@ -180,25 +186,57 @@ def read_all(providers: Providers, build: Build,
     # value with a coarse one -- a degradation, not a correction. The overlaid
     # provider is right for everything that asks what a spell IS; this asks
     # what number to print.
-    prose = cook_text(templates,
-                      read_spell_values(providers.base, level=build.max_level,
-                                        scaling=scaling),
-                      names)
+    with phase("read spell values"):
+        values = read_spell_values(providers.base, level=build.max_level,
+                                   scaling=scaling)
+    with phase("cook descriptions"):
+        prose = cook_text(templates, values, names)
 
     log("Walking spell -> model/sound/animkit/chain chains ...")
-    visuals = walk_spells(names.names, graph, missiles, kits, soundkit_files,
-                          fx, effects)
-    displays = resolve_displays(effects, creatures, forms)
-    references = collect_references(visuals, effects, fx, displays, mounts,
-                                    objects, items, props.icon_fid)
+    with phase("walk_spells"):
+        visuals = walk_spells(names.names, graph, missiles, kits, soundkit_files,
+                              fx, effects)
+    with phase("resolve_displays"):
+        displays = resolve_displays(effects, creatures, forms)
+    with phase("collect_references"):
+        references = collect_references(visuals, effects, fx, displays, mounts,
+                                        objects, items, props.icon_fid)
 
     wanted = references.assets | references.icons
     log(f"Resolving {len(wanted):,} referenced file ids against the listfile ...")
-    paths = resolve_paths(providers.listfile, wanted)
+    with phase("resolve paths (listfile)"):
+        paths = resolve_paths(providers.listfile, wanted)
 
     log("Assembling pack ...")
     spell_ids = sorted(names.names)
     rungs, era_of = ladder
+    # Hoisted out of the constructor call below so each is a phase of its own.
+    # They are the two most expensive arguments it takes, and inside the call
+    # they would be timed as whatever surrounds it.
+    with phase("read declarations"):
+        declared = Declarations(
+            anim_names=anim_names, anim_emote_oneshots=oneshots,
+            anim_emote_loops=loops, gobs=read_gob_displays(),
+            expansions=rungs, era_of=era_of,
+            effect_names=read_enum_names("SpellEffect", build.version),
+            aura_names=read_enum_names("SpellEffectAura", build.version),
+            target_names=read_enum_names("Target", build.version),
+            target_bits=implicit_target_bits(build.version),
+            item_quality_names=load_local_enum("item_quality"),
+            attachment_names=load_local_enum("m2_attachments"),
+            summon_control_names=load_local_enum("summon_properties_control"))
+    # After the declarations, because the flattening names the edges between
+    # spells and the words it names them with are resolved per build.
+    with phase("build_rows"):
+        rows = build_rows(visuals, effects, vehicles, declared.effect_names,
+                          declared.aura_names)
+    with phase("build_icon_index"):
+        icons = build_icon_index(spell_ids, props.icon_fid, paths)
+    with phase("read kit names"):
+        kit_names = read_kit_names(providers.pinned,
+                                   {kit for pairs in visuals.sounds.values()
+                                    for kit, _file in pairs})
+
     return DeriveContext(
         build=build, spell_ids=spell_ids,
         names=names, props=props, templates=templates, effects=effects,
@@ -209,23 +247,10 @@ def read_all(providers: Providers, build: Build,
         animkit_anims=animkit_anims, animkit_bonesets=animkit_bonesets,
         anim_replacements=anim_replacements, keybinds=keybinds,
         delivery=delivery, attributes=attributes, alt_names=alt_names,
-        kit_names=read_kit_names(providers.pinned,
-                                 {kit for pairs in visuals.sounds.values()
-                                  for kit, _file in pairs}),
-        rows=build_rows(visuals, effects, vehicles),
-        visuals=visuals, icons=build_icon_index(spell_ids, props.icon_fid, paths),
+        kit_names=kit_names, rows=rows,
+        visuals=visuals, icons=icons,
         paths=paths, references=references, displays=displays, prose=prose,
-        declared=Declarations(
-            anim_names=anim_names, anim_emote_oneshots=oneshots,
-            anim_emote_loops=loops, gobs=read_gob_displays(),
-            expansions=rungs, era_of=era_of,
-            effect_names=read_enum_names("SpellEffect", build.version),
-            aura_names=read_enum_names("SpellEffectAura", build.version),
-            target_names=read_enum_names("Target", build.version),
-            target_bits=implicit_target_bits(build.version),
-            item_quality_names=load_local_enum("item_quality"),
-            attachment_names=load_local_enum("m2_attachments"),
-            summon_control_names=load_local_enum("summon_properties_control")))
+        declared=declared)
 
 
 def switched_off(section: Section, tables: Tables) -> bool:
@@ -253,9 +278,11 @@ def produce(context: DeriveContext, tables: Tables,
     for section in SECTIONS:
         if switched_off(section, tables):
             continue
-        produced = section.produce(context.reads(section.reads))
+        with phase("produce sections"), detail("produce sections", section.name):
+            produced = section.produce(context.reads(section.reads))
         columns[section.name] = produced
-        encoded[section.name] = encode_section(section, produced, policy)
+        with phase("encode columns"), detail("encode columns", section.name):
+            encoded[section.name] = encode_section(section, produced, policy)
     return columns, encoded
 
 
@@ -328,17 +355,43 @@ def packed(version: str, label: str, *, refresh: bool = False,
     Returns:
         The header and the encoded sections, both by name.
     """
-    sources = fetch_sources(version, refresh)
-    providers = Providers(sources, build=int(version.rsplit(".", 1)[-1]))
-    ladder = load_expansions()
-    build = build_for(version, providers.tables, ladder[0], key=key, line=line)
+    with phase("acquire sources"):
+        sources = fetch_sources(version, refresh)
+    with phase("wire providers"):
+        providers = Providers(sources, build=int(version.rsplit(".", 1)[-1]))
+    with phase("load expansions"):
+        ladder = load_expansions()
+    with phase("probe absent tables"):
+        build = build_for(version, providers.tables, ladder[0], key=key, line=line)
+    with phase("read scaling table"):
+        scaling = read_scaling(scaling_source(version, CACHE_DIR).acquire(refresh))
 
-    scaling = read_scaling(scaling_source(version, CACHE_DIR).acquire(refresh))
     context = read_all(providers, build, ladder, scaling)
     columns, encoded = produce(context, providers.tables, policy)
-    counts, domains = gathered(columns, context)
+    with phase("gather counts and domains"):
+        counts, domains = gathered(columns, context)
     log(f"  {len(encoded)} sections, {len(counts)} counts, {len(domains)} domains")
     return meta(build, label, release_tag(), counts, domains), encoded
+
+
+def acquire(version: str, *, refresh: bool = False) -> None:
+    """Fetch everything one build reads, and produce nothing.
+
+    Acquisition separated from execution, so that builds may then run at the
+    same time. Concurrent builds share sources -- the listfile, the pinned
+    sound-kit table,
+    the enum lists, and for two packs on one patch the client tables and the TDB
+    as well -- and a download is the one step they must not both take: two
+    writers into one cache path race, and the loser goes on to read a
+    half-written file as if it were the source. Running this serially over every
+    pack first leaves the fan-out with nothing left to fetch, only to read.
+
+    It follows the same order and the same policies an ordinary build does,
+    because it IS the build's own acquisition: nothing here decides separately
+    what a version needs.
+    """
+    fetch_sources(version, refresh)
+    scaling_source(version, CACHE_DIR).acquire(refresh)
 
 
 def modules(version: str, label: str, *, refresh: bool = False,

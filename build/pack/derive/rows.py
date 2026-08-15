@@ -14,12 +14,13 @@ layer and never on another section.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from ..routes import MaskedIds, SpellEffectRows, VehicleSeats
 from ..routes.colors import hue_words
 from ..routes.models import MODEL_CAT_ITEM
+from .links import link_kind_word
 from .walk import Bucket, SpellVisuals
 
 ModelRow = tuple[int, int, int, int, int, int, int, int]
@@ -88,6 +89,24 @@ class PackRows:
     used_animkits: set[int] = field(default_factory=set)
     """Anim kits some spell reaches, whether through a visual or a seat."""
 
+    links: list[tuple[int, int, int, int]] = field(default_factory=list)
+    """(source, destination, word, mask) for every edge between two spells.
+
+    The word is an index into `link_words`, pooled here rather than by whoever
+    ships it: the link section and the mechanics rows both name the same words,
+    and a second pool would number them differently while looking identical.
+    """
+
+    link_words: list[str] = field(default_factory=list)
+    """The distinct words the edges print, in first-seen order."""
+
+    seats: list[tuple[int, str]] = field(default_factory=list)
+    """(vehicle, attachment name) for every seat, in artifact order.
+
+    One flat list because that is how the seats ship, and a row referring to
+    one seat refers to it by its place here.
+    """
+
 
 def spell_rows(per_vehicle: Mapping[int, set[int]],
                vehicles: list[tuple[int, int]], limit: int | None = None
@@ -118,8 +137,41 @@ def spell_role_rows(per_vehicle: Mapping[int, set[tuple[int, int]]],
                    if anim < limit})
 
 
+def link_rows(effects: SpellEffectRows, effect_names: Mapping[int, str],
+              aura_names: Mapping[int, str]
+              ) -> tuple[list[tuple[int, int, int, int]], list[str]]:
+    """Every edge between two spells, and the words they print.
+
+    The word replaces the effect and aura the edge came from, so two rows that
+    differ only in a column the pack does not ship become one edge. The words
+    are pooled in first-seen order over the sorted edges, which is what makes
+    the numbering stable without a sort over unrelated strings.
+    """
+    words: dict[str, int] = {}
+    rows = {(source, destination,
+             words.setdefault(link_kind_word(effect, aura, effect_names,
+                                             aura_names), len(words)))
+            for source, destination, effect, aura in sorted(effects.links)}
+    return ([(source, destination, word,
+              effects.link_targets.get((source, destination), 0))
+             for source, destination, word in sorted(rows)], list(words))
+
+
+def seat_rows(vehicle_ids: Sequence[int],
+              seats: Mapping[int, Sequence[str]]) -> list[tuple[int, str]]:
+    """One row per seat, in the order the artifact ships them.
+
+    Both the seat table and the rows that point into it are laid out from this,
+    because a row names a seat by its POSITION here: two accounts of that order
+    would send a query about one seat to another vehicle's.
+    """
+    return [(vehicle, name) for vehicle in vehicle_ids
+            for name in seats[vehicle]]
+
+
 def build_rows(visuals: SpellVisuals, effects: SpellEffectRows,
-               seats: VehicleSeats) -> PackRows:
+               seats: VehicleSeats, effect_names: Mapping[int, str],
+               aura_names: Mapping[int, str]) -> PackRows:
     """Flatten everything at least two sections read, once."""
     models = sorted(
         (spell, file, category, mask, source, destination, ref, motion)
@@ -132,6 +184,8 @@ def build_rows(visuals: SpellVisuals, effects: SpellEffectRows,
     animkits = masked_rows(visuals.animkits)
     used = {kit for _spell, kit, _mask in animkits}
     used |= {kit for _spell, kit in spell_rows(seats.animkits, vehicles)}
+    vehicle_ids = sorted({vehicle for _spell, vehicle in vehicles})
+    edges, words = link_rows(effects, effect_names, aura_names)
     return PackRows(
         models=models,
         sounds=sorted((spell, kit, file, mask)
@@ -151,8 +205,11 @@ def build_rows(visuals: SpellVisuals, effects: SpellEffectRows,
         items=sorted({row[6] for row in models
                       if row[2] == MODEL_CAT_ITEM and row[6]}),
         vehicles=vehicles,
-        vehicle_ids=sorted({vehicle for _spell, vehicle in vehicles}),
-        used_animkits=used)
+        vehicle_ids=vehicle_ids,
+        used_animkits=used,
+        links=edges,
+        link_words=words,
+        seats=seat_rows(vehicle_ids, seats.seats))
 
 
 def boneset_rows(bonesets: Mapping[int, Mapping[int, list[str]]],

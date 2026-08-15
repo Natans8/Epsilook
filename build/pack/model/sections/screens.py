@@ -72,16 +72,6 @@ def textures(reads: Reads) -> SectionColumns:
             "fids": [row[2] for row in rows]}
 
 
-SPELL_SCREENS = register(Section(
-    name="spellScreens",
-    doc="Which screen effect a spell grades the frame with.",
-    module="core",
-    produce=screens,
-    columns=("spellIds", "screenIds", "targets"),
-    reads=("effects", "visuals"),
-    counts=(Count("spellScreens", lambda columns, _r: len(columns["spellIds"])),),
-))
-
 SCREENS = register(Section(
     name="screens",
     doc="What each screen effect paints, and the vignette that shapes it.",

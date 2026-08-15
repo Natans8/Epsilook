@@ -273,13 +273,37 @@ def builds() -> list[str]:
 
 
 def _build_data():
-    """build/build_data.py as a module, or None. It is not on the path by default."""
+    """build/build_data.py as a module, or None. It is not on the path by default.
+
+    ⚠ It returns None on a BARE interpreter whatever the file says, because it
+    reaches the acquisition layer and that imports sqlglot. Every caller has to
+    treat None as "I could not find out" and fail safe -- never as "there is
+    nothing to keep".
+    """
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
         import build_data
     except ImportError:
         return None
     return build_data
+
+
+SOUNDKITNAME_BUILD = "8.3.0.32218"
+"""The frozen build the sound-kit names come from, repeated for the sweeper.
+
+Declared here rather than imported, for the same reason the listfile asset is:
+reaching the build's own copy drags the acquisition layer onto a bare
+interpreter, and `tools/rebuild.py` runs on one. `check_soundkit_declaration`
+reconciles the two.
+
+⛔ AND THE IMPORT IS EXACTLY HOW THIS BROKE. The sweeper used to read the
+constant out of build/build_data.py, which now imports sqlglot through the
+acquisition layer. Under `uv run` that import succeeds and under a bare
+interpreter it raises — so check.py saw the constant and rebuild.py, which is
+the tool that actually deletes things, silently did not. The pinned directory
+was swept after every rebuild, and the next build that could not re-fetch it
+died on a missing SoundKitName.csv rather than on anything to do with itself.
+"""
 
 
 def stale_cache() -> list[tuple[Path, int]]:
@@ -293,19 +317,21 @@ def stale_cache() -> list[tuple[Path, int]]:
     tools/rebuild.py sweeps after every successful build and tools/check.py
     reports what is left, so neither depends on a human remembering.
 
-    ⛔ A BUILD NO PACK NAMES IS NOT AUTOMATICALLY STALE. build_data.py pins
-    SoundKitName to a frozen 8.3.0 build (see SOUNDKITNAME_BUILD) that no Pack
-    row mentions and re-downloading it costs 5 MB for nothing, so the pinned
-    builds are read from the builder rather than assumed absent. TDB dumps are
-    keyed by RELEASE TAG and shared between packs, so they are matched through
-    the same mapping the build uses instead of by name.
+    ⛔ A BUILD NO PACK NAMES IS NOT AUTOMATICALLY STALE. The sound-kit names
+    come from a frozen 8.3.0 build (SOUNDKITNAME_BUILD) that no Pack row
+    mentions, and TDB dumps are keyed by RELEASE TAG and shared between packs,
+    so both are spared by name rather than by being in the roster.
+
+    ⛔ AND BOTH MUST FAIL SAFE, because this function DELETES. The pinned build
+    was read out of the builder, which cannot be imported on a bare interpreter
+    -- so check.py, which runs under `uv run`, saw it and rebuild.py, which is
+    what actually sweeps, did not. The directory was removed after every
+    rebuild and the next build died on a missing SoundKitName.csv. It is
+    declared here now, and the TDB branch keeps anything it cannot classify.
     """
     if not CACHE.is_dir():
         return []
-    module = _build_data()
-    keep = set(builds())
-    if module is not None:
-        keep.add(getattr(module, "SOUNDKITNAME_BUILD", ""))
+    keep = set(builds()) | {SOUNDKITNAME_BUILD}
     keep_tdb = {tdb_tag(build) for build in builds()} - {""}
 
     stale = []
@@ -314,8 +340,13 @@ def stale_cache() -> list[tuple[Path, int]]:
             continue
         tdb = TDB_DIR_RE.match(directory.name)
         if tdb:
-            if module is None or tdb.group(1) in keep_tdb:
-                continue  # unknown mapping: keep, rather than guess it away
+            # No mapping means the question could not be answered, not that the
+            # answer is "none of them" -- on a bare interpreter `tdb_tag` cannot
+            # reach the builder and returns nothing for every build. Keeping is
+            # the only safe reading, and it costs disk where the alternative
+            # costs a re-download of hundreds of megabytes.
+            if not keep_tdb or tdb.group(1) in keep_tdb:
+                continue
         elif not BUILD_DIR_RE.match(directory.name) or directory.name in keep:
             continue
         size = sum(f.stat().st_size for f in directory.rglob("*") if f.is_file())

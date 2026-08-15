@@ -437,15 +437,15 @@ flowchart TD
         A1["spells<br/>ids · names · subtexts · altNames<br/>icons · schools · eras<br/><br/>every array the same length,<br/>index-aligned, one entry per spell"]
     end
     subgraph B["2 · Link rows: one per (spell, payload)"]
-        B1["spellMorphs<br/>spellIds · creatureIds · targets"]
+        B1["spellVehicleAnims<br/>spellIds · animIds"]
     end
     subgraph R["2b · Row tables: pooled rows, referenced per spell"]
-        R1["modelRows · soundRows · animRows<br/>kinds · sizes · values · vocab · absent<br/>counts (per spell) · refs (flat)"]
+        R1["modelRows · soundRows · animRows · fxRows · mechRows<br/>kinds · sizes · values · carried · vocab · absent<br/>counts (per spell) · refs (flat)"]
     end
     subgraph C["3 · Value tables the links point into"]
-        C1["morphs<br/>creatureIds · names"]
+        C1["animNames<br/>indexed by animation id"]
         C2["files<br/>fids · paths"]
-        C3["soundKitNames<br/>soundKitIds · names"]
+        C3["morphs<br/>creatureIds · names"]
     end
     A1 -. "spellIds index back into the dense columns" .-> B
     A1 -. "counts is parallel to the dense columns" .-> R
@@ -469,6 +469,13 @@ flowchart TD
 | **link rows**   | The many-to-many the graph walk flattened, with the target mask on the row that earned it       |
 | **row tables**  | What a spell HAS, as rows of a named kind: the distinct rows pooled once, referenced per spell  |
 | **value table** | A name or path stored once and referenced by id, instead of repeated on every link row          |
+
+**Every column a spell carries more than one of is a row table.** Five of them, one per query column, and they replaced
+thirty per-spell sections: a row arrives already being the kind it is, and a reader walks it instead of joining the
+half-dozen tables the same facts used to arrive in. A row property stores the id its vocabulary is keyed by — `rowVocabs`
+says where each vocabulary lives — so a path, an attachment word and a packed colour each stay in the one place they were
+already written. `carried` is the exception that proves the rule: columns no property of the kind declares, shipped apart
+from the values so an evaluator reads exactly what the catalogue says a kind has.
 
 Columns are parallel arrays rather than a list of objects, because the app wants a whole column at a time and repeated
 keys cost more than they explain. What each column costs to store is decided in one place, and [Emit](#emit) is where
@@ -655,12 +662,12 @@ the route that knows what a type means is the one that decided, and the walk doe
 | **missiles**   | A projectile, its flight path and its two anchors   | `modelRows`, `missileMotions`                                                                     |
 | **sounds**     | A sound kit, and through it the audio files         | `soundRows`, `soundKitNames`                                                                      |
 | **animations** | An animation, an anim kit, or a body region         | `animRows`, `animKitAnims`, `animNames`, `bonesetNames`, `animEmoteOneshots`, `animEmoteLoops` |
-| **chains**     | A beam: colour, textures, a sound, nested chains    | `spellFx`, `fxChains`, `fxTextures`                                                                 |
-| **dissolves**  | A duration, textures and an anchor                  | `spellDissolves`, `dissolves`                                                                       |
-| **glows**      | A packed colour and an alpha                        | `spellGlows`, `glows`                                                                               |
-| **ghosts**     | Two packed colours and an anchor                    | `spellShadowies`, `shadowies`                                                                       |
-| **screens**    | A full-frame colour grade, vignette and textures    | `spellScreens`, `screens`                                                                           |
-| **procedures** | Whatever its type says: thirteen different meanings | `spellTints`, `spellFreezes`, and more                                                              |
+| **chains**     | A beam: colour, textures, a sound, nested chains    | `fxRows`, `fxChains`, `fxTextures`                                                                 |
+| **dissolves**  | A duration, textures and an anchor                  | `fxRows`, `dissolves`                                                                       |
+| **glows**      | A packed colour and an alpha                        | `fxRows`, `glows`                                                                               |
+| **ghosts**     | Two packed colours and an anchor                    | `fxRows`, `shadowies`                                                                       |
+| **screens**    | A full-frame colour grade, vignette and textures    | `fxRows`, `screens`                                                                           |
+| **procedures** | Whatever its type says: thirteen different meanings | `fxRows`, and the tables it points into                                                              |
 
 **Seven routes end in a model file and share almost nothing upstream.** What they share is the ending, so they carry a
 category, and the category is not decoration: it says *which id space the row's reference is in*, so a creature display
@@ -752,16 +759,16 @@ effect and aura remains searchable and the mechanics column is always the whole 
 
 | selector               | misc value is     | ships as                                    |
 |------------------------|-------------------|---------------------------------------------|
-| transform aura         | a creature        | `spellMorphs`, `morphs`, `morphDisplays`    |
-| shapeshift aura        | a form            | `spellShapeshifts`, `shapeshifts`           |
-| set-vehicle aura       | a vehicle         | `spellVehicles`, `vehicles`, `vehicleSeats`, and the three ridden animation sets |
-| screen-effect aura     | a screen effect   | `spellScreens`                              |
-| invisibility auras     | a channel number  | `spellInvis`, `spellDetects`                |
-| keybound-override aura | a key override    | `spellKeybinds`, `keybinds`                 |
+| transform aura         | a creature        | `fxRows`, `morphs`, `morphDisplays`    |
+| shapeshift aura        | a form            | `fxRows`, `shapeshifts`           |
+| set-vehicle aura       | a vehicle         | `mechRows`, `vehicles`, `vehicleSeats`, and the three ridden animation sets |
+| screen-effect aura     | a screen effect   | `fxRows`, `screens`                         |
+| invisibility auras     | a channel number  | `mechRows` (`invis` and `detect` kinds)                |
+| keybound-override aura | a key override    | `mechRows`, `keybinds`                 |
 | anim-replacement aura  | a replacement set | `animRows` (`replace`)                         |
 | override-name aura     | an override name  | folded into the search corpus               |
-| summon effect          | a creature        | `spellSummons`, `summons`                   |
-| gameobject effects     | a gameobject      | `spellObjects`, `objects`                   |
+| summon effect          | a creature        | `fxRows`, `summons`                   |
+| gameobject effects     | a gameobject      | `fxRows`, `objects`                   |
 | play-sound effects     | a sound kit       | folded into `soundRows`                   |
 
 Four do not fit that shape:
@@ -779,8 +786,9 @@ carry it: a decrease aura may hold a positive value. An amount of zero is droppe
 number.
 
 **Spell links are the one route whose payload is another spell.** A link to a spell the pack cannot name is dropped,
-because the chip is an icon and a name; so is a self-link. Only one direction is stored, and the reverse index is
-derived in the browser.
+because the chip is an icon and a name; so is a self-link. The two directions are the same edges read from either end,
+so they ship as `mechRows`' `triggers` and `origin` kinds and nowhere else — what a row stores is the word the edge
+prints, whose pool is `linkKindNames`.
 
 **Mechanics rows are what is left.** Every effect and aura a spell has, paired with the implicit targets of the row that
 carried it and with both of its raw misc values. The granularity is per effect and that is a correctness property: a
@@ -809,7 +817,7 @@ missing, and promoting one takes it out of that column on its own.
 | **attributes**  | `spellAttrs`                | Which flags ship is a declaration, not code                  |
 | **delivery**    | `spellDelivery`             | Cast and channel are not a partition; many spells do both    |
 | **description** | `spellText`                 | A template, cooked to prose. See below                       |
-| **area gate**   | `spellAreas`, `areas`       | Where a spell may be cast at all                             |
+| **area gate**   | `mechRows`, `areas`         | Where a spell may be cast at all                             |
 | **expansion**   | `spells.eras`, `expansions` | The only route with no column in any shipped build           |
 
 **Which table carries the name is the oldest drift in the project.** The name table was split out of the spell table
@@ -1020,7 +1028,7 @@ A polymorph turns its target into a sheep, and the app shows the sheep's model. 
 | **read**    | The creature's display resolves through display to model data to a file id — two hops, because several displays share one model      |
 | **derive**  | The walk records the pair against the spell, unioning the target mask from the effect's implicit targets                             |
 | **derive**  | The file id is resolved to an asset path through the listfile                                                                        |
-| **declare** | It belongs to `spellMorphs`, whose companions `morphs` and `morphDisplays` carry the name and the display                            |
+| **declare** | It belongs to the `morph` kind of `fxRows`, whose companions `morphs` and `morphDisplays` carry the name and the display                            |
 | **emit**    | Those become parallel columns, gzipped, hashed into `versions.json`                                                                  |
 | **index**   | The browser indexes the path and the creature name alongside every other model's                                                     |
 | **query**   | `model:sheep` matches the *path*, because category searches match filenames as well as the category word                             |

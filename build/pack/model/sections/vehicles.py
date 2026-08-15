@@ -24,10 +24,8 @@ def seats(reads: Reads) -> SectionColumns:
     An empty attachment means the seat row was missing or its attachment
     unset, which is a different thing from a seat that sits nowhere.
     """
-    return {"vehicleIds": [vehicle for vehicle in reads.rows.vehicle_ids
-                           for _seat in reads.vehicles.seats[vehicle]],
-            "attachments": [name for vehicle in reads.rows.vehicle_ids
-                            for name in reads.vehicles.seats[vehicle]]}
+    return {"vehicleIds": [vehicle for vehicle, _name in reads.rows.seats],
+            "attachments": [name for _vehicle, name in reads.rows.seats]}
 
 
 def ridden(which: str, id_column: str,
@@ -56,22 +54,6 @@ def ridden(which: str, id_column: str,
     return produce
 
 
-SPELL_VEHICLES = register(Section(
-    name="spellVehicles",
-    doc="Which vehicle a spell turns its caster into.",
-    module="core",
-    produce=lambda reads: {
-        "spellIds": [row[0] for row in reads.rows.vehicles],
-        "vehicleIds": [row[1] for row in reads.rows.vehicles],
-        # Becoming the vehicle is something the caster does to itself, so this
-        # is the caster wherever the aura bothers to say.
-        "targets": [reads.effects.vehicles.masks.get(row, 0)
-                    for row in reads.rows.vehicles]},
-    columns=("spellIds", "vehicleIds", "targets"),
-    reads=("rows", "effects"),
-    counts=(Count("spellVehicles", lambda columns, _r: len(columns["spellIds"])),),
-))
-
 VEHICLES = register(Section(
     name="vehicles",
     doc="How many seats each reached vehicle has.",
@@ -91,7 +73,7 @@ VEHICLE_SEATS = register(Section(
     module="core",
     produce=seats,
     columns=("vehicleIds", "attachments"),
-    reads=("rows", "vehicles"),
+    reads=("rows",),
     counts=(Count("vehicleSeats",
                   lambda columns, _r: len(columns["vehicleIds"])),),
     domains=(Domain("seat", lambda columns, _r: numeric_domain(

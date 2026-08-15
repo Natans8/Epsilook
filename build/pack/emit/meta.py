@@ -18,14 +18,21 @@ from collections.abc import Mapping
 from ..build import Build
 from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
+from ..progress import detail
 
-PACK_FORMAT = 51
+PACK_FORMAT = 52
 """What shape the artifact is in.
 
-51 ships rows. The model, sound and animation columns carry the distinct rows
-of each kind pooled once, plus per spell a count and its references, in place
-of the seven per-spell sections they were assembled from. A reader that
-understood 50 finds none of those sections at all.
+52 finishes the reshape: the visual-effect and mechanics columns ship rows too,
+so every column a spell carries more than one of is a row table and the
+twenty-three per-spell sections they were assembled from are gone. A row may
+now carry columns no property of its kind declares -- which dissolve it is, the
+aura sharing an effect's row -- shipped apart from the values so the evaluator
+still sees exactly what the catalogue declares.
+
+51 shipped rows for the model, sound and animation columns: the distinct rows of
+each kind pooled once, plus per spell a count and its references, in place of
+the seven per-spell sections they were assembled from.
 
 50 was the row's CONTENT: a mask on every row the game aims somewhere, the role
 a rider's animation plays in, and the storage unit each numeric axis is
@@ -87,8 +94,9 @@ def gathered(produced: Mapping[str, SectionColumns], context: DeriveContext
     for section in SECTIONS:
         if section.name not in produced:
             continue
-        counted.update(counts_of(section, produced[section.name], context))
-        measured.update(domains_of(section, produced[section.name], context))
+        with detail("gather counts and domains", section.name):
+            counted.update(counts_of(section, produced[section.name], context))
+            measured.update(domains_of(section, produced[section.name], context))
     return counted, measured
 
 

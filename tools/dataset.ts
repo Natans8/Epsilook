@@ -1,9 +1,13 @@
 /**
  * @file The pack-backed {@link Dataset}: search 2.0's row model, read out of the shipped pack.
  *
- * A temporary bridge: it reshapes 1.0's loaded indexes ({@link SpellData}) into the rows the kernel evaluates, so
- * the battery and the bench can run the real pack through `run()` before the pack itself ships rows. Once it does,
- * `rows()` becomes a read and the reshaping half of this file goes away.
+ * Every column a spell can carry more than one of is now READ rather than reshaped: the pack ships those rows and
+ * {@link PackRowSource} hands them over as the kinds they already are. What is left of the old bridge is the two
+ * columns that are one row per spell — its name and its number — which are read off the per-spell columns because
+ * there is nothing to pool.
+ *
+ * The inverted side below is still built from 1.0's indexes. That is what `candidates()` narrows with, and porting it
+ * is its own step.
  *
  * It lives in tools/ for the reason tools/query.ts does: everything under src/ must be reachable from src/main.ts,
  * and nothing in the app drives the 2.0 engine yet.
@@ -68,7 +72,7 @@ class PackRowSource implements RowSource {
     private readonly built: (Row | undefined)[];
 
     constructor(private readonly table: RowTable, private readonly kinds: Map<string, Kind>,
-                private readonly vocabs: Record<string, (value: number) => string | undefined>) {
+                private readonly vocabs: Record<string, (value: number) => string | number | undefined>) {
         this.index = indexRows(table);
         this.built = Array.from<Row | undefined>({length: this.index.owner.length});
     }
@@ -94,6 +98,10 @@ class PackRowSource implements RowSource {
      * an id and a name carries both, one whose first notation is textual carries the text alone, and anything else is
      * the number itself. That split is read off the declaration, so a property that gains a notation needs no edit
      * here.
+     *
+     * A vocabulary may resolve to a NUMBER as well as a word — a tint row stores which tint it is and its vocabulary
+     * gives back the packed colour — which needs no case of its own: the resolved value is the property's value
+     * whatever type it has, and only the id-and-name pair asks what it got.
      */
     private materialise(at: RowAt): Row {
         const kind = this.kinds.get(at.kind);
@@ -103,11 +111,11 @@ class PackRowSource implements RowSource {
             const stored = storedAt(this.table, at, name);
             if (stored === undefined) continue;
             const lookup = this.vocabs[this.table.vocab[at.kind]?.[name] ?? ""];
-            const text = lookup?.(stored);
+            const resolved = lookup?.(stored);
             if (prop.types[0] === idType && prop.types[1] === textType) {
-                props[name] = text === undefined ? stored : {id: stored, text};
+                props[name] = typeof resolved === "string" ? {id: stored, text: resolved} : stored;
             } else if (lookup !== undefined) {
-                if (text !== undefined && text !== "") props[name] = text;
+                if (resolved !== undefined) props[name] = resolved;
             } else {
                 props[name] = stored;
             }
@@ -120,12 +128,6 @@ class PackRowSource implements RowSource {
 function kindsByWord(column: Column): Map<string, Kind> {
     return new Map(kindsOf(column).map((kind) => [wordOf(kind), kind]));
 }
-
-/** A mask joins a row's props only when it says something: 0 means the pack has no answer, not "plays on nobody". */
-const withMask = (props: Record<string, Stored>, mask: number | undefined): Record<string, Stored> => {
-    if (mask) props.target = mask;
-    return props;
-};
 
 /* ------------------------------------------------------------------- the row sources, one builder per column */
 
@@ -188,173 +190,6 @@ function catKinds(d: SpellData): Map<number, Kind> {
         out.set(Number(cat), kind);
     }
     return out;
-}
-
-function fxRows(d: SpellData, i: number): Row[] {
-    const id = d.ids[i];
-    const rows: Row[] = [];
-    /** One row per texture, sharing the entry's other props; one row with none when the entry has no texture. */
-    const perTexture = (kind: Kind, fids: readonly number[] | undefined,
-                        props: Record<string, Stored>, mask: number | undefined): void => {
-        const paths = (fids ?? []).map((fid) => d.files.get(fid)?.path).filter((p): p is string => !!p);
-        if (paths.length === 0) {
-            rows.push(row(kind, withMask({...props}, mask)));
-            return;
-        }
-        for (const path of paths) rows.push(row(kind, withMask({...props, texture: path}, mask)));
-    };
-    const attachName = (a: number | undefined): string | null =>
-        a === undefined ? null : (a < 0 ? "full body" : (d.attachmentNames[a] || null));
-
-    for (const r of d.spellChainRows.get(id) ?? []) {
-        const props: Record<string, Stored> = {};
-        if (r.src >= 0 && d.attachmentNames[r.src]) props.from = d.attachmentNames[r.src];
-        if (r.dst >= 0 && d.attachmentNames[r.dst]) props.to = d.attachmentNames[r.dst];
-        const info = d.fxChains.get(r.chain);
-        // 0xFFFFFF means untinted — the texture's own colour, which is no colour to search by.
-        if (info && info.color !== 0xffffff) props.colour = info.color;
-        perTexture(chain, d.fxTextures.get(r.chain), props, d.fxTargets.get(id)?.get(r.chain));
-    }
-    for (const dis of d.spellDissolves.get(id) ?? []) {
-        const props: Record<string, Stored> = {};
-        const at = attachName(d.dissolveAttach.get(dis));
-        if (at) props.attach = at;
-        perTexture(dissolve, d.dissolveTextures.get(dis), props, d.dissolveTargets.get(id)?.get(dis));
-    }
-    for (const sh of d.spellShadowies.get(id) ?? []) {
-        const props: Record<string, Stored> = {};
-        const at = attachName(d.shadowyAttach.get(sh));
-        if (at) props.attach = at;
-        // The primary of the two: the secondary is the pass's falloff, not a second answer to "what colour".
-        const tone = d.shadowyColors.get(sh);
-        if (tone) props.colour = tone.primary;
-        rows.push(row(shadowy, withMask(props, d.shadowyTargets.get(id)?.get(sh))));
-    }
-    for (const gm of d.spellGhostMats.get(id) ?? []) {
-        const props: Record<string, Stored> = {};
-        const tone = d.ghostMatColors.get(gm);
-        if (tone !== undefined) props.colour = tone;
-        rows.push(row(ghost, withMask(props, d.ghostMatTargets.get(id)?.get(gm))));
-    }
-    for (const g of d.spellGlows.get(id) ?? []) {
-        const props: Record<string, Stored> = {};
-        const colour = d.glowColors.get(g);
-        if (colour !== undefined) props.colour = colour;
-        rows.push(row(glow, withMask(props, d.glowTargets.get(id)?.get(g))));
-    }
-    for (const t of d.spellTints.get(id) ?? []) {
-        const colour = d.tintColors.get(t);
-        rows.push(row(tint, withMask(colour === undefined ? {} : {colour},
-            d.tintTargets.get(id)?.get(t))));
-    }
-    for (const pct of d.spellTransps.get(id) ?? []) {
-        rows.push(row(transparency, withMask({percent: pct},
-            d.transparencyTargets.get(id)?.get(pct))));
-    }
-    for (const pct of d.spellDesaturates.get(id) ?? []) {
-        rows.push(row(desaturate, withMask({percent: pct},
-            d.desaturateTargets.get(id)?.get(pct))));
-    }
-    if (d.spellFreezes.has(id)) rows.push(row(freeze, {}));
-    if (d.spellCamos.has(id)) rows.push(row(camo, {}));
-    for (const c of d.spellMorphs.get(id) ?? []) {
-        const named = d.morphNames.get(c);
-        rows.push(row(morph, withMask(
-            {display: named ? {id: c, text: named} : c}, d.morphTargets.get(id)?.get(c))));
-    }
-    for (const f of d.spellShapeshifts.get(id) ?? []) {
-        const form = d.shapeshiftNames.get(f);
-        rows.push(row(shapeshift, withMask(form ? {form} : {},
-            d.shapeshiftTargets.get(id)?.get(f))));
-    }
-    for (const e of d.spellScaleMods.get(id) ?? []) {
-        rows.push(row(scale, withMask({amount: e.pct}, e.mask)));
-    }
-    for (const e of d.spellSummons.get(id) ?? []) {
-        const named = d.summonNames.get(e.creatureId);
-        const props: Record<string, Stored> = {
-            creature: named ? {id: e.creatureId, text: named} : e.creatureId,
-        };
-        const control = d.summonControlNames[e.control];
-        if (control) props.control = control;
-        rows.push(row(summon, withMask(props, d.summonTargets.get(id)?.get(e.creatureId))));
-    }
-    for (const obj of d.spellObjects.get(id) ?? []) {
-        const named = d.objectNames.get(obj);
-        rows.push(row(gameObject, withMask(
-            {object: named ? {id: obj, text: named} : obj}, d.objectTargets.get(id)?.get(obj))));
-    }
-    for (const sc of d.spellScreens.get(id) ?? []) {
-        perTexture(screen, (d.screenTextures.get(sc) ?? []).map((t) => t.fid), {},
-            d.screenTargets.get(id)?.get(sc));
-    }
-    if (d.spellAttrs.get("tracktargetinchannel")?.has(id)) rows.push(row(tracking, {}));
-    return rows;
-}
-
-function mechRows(d: SpellData, i: number): Row[] {
-    const id = d.ids[i];
-    const rows: Row[] = [];
-    // One 1.0 mechanic row is one SpellEffect carrying both halves; the 2.0 kinds split them, so an APPLY_AURA row
-    // yields an effect row and an aura row sharing the mask.
-    for (const m of d.spellMechanics.get(id) ?? []) {
-        if (m.effect) {
-            const named = d.effectNames.get(m.effect);
-            rows.push(row(effect, withMask(named ? {name: named} : {}, m.mask)));
-        }
-        if (m.aura) {
-            const named = d.auraNames.get(m.aura);
-            rows.push(row(aura, withMask(named ? {name: named} : {}, m.mask)));
-        }
-    }
-    const linkName = (other: number): string => {
-        const at = d.spellIndex.get(other);
-        return at === undefined ? "" : d.names[at];
-    };
-    for (const [kind, links] of [[triggers, d.spellTriggers], [origin, d.spellOrigins]] as const) {
-        for (const l of links.get(id) ?? []) {
-            const named = linkName(l.spell);
-            const spell: Stored = named ? {id: l.spell, text: named} : l.spell;
-            // One row per word the edge prints: a pair joined two ways is two facts, which is the grain the pack
-            // ships and the only one on which `how:periodically` can select.
-            if (l.kinds.length === 0) rows.push(row(kind, withMask({spell}, l.mask)));
-            for (const word of l.kinds) rows.push(row(kind, withMask({spell, how: word}, l.mask)));
-        }
-    }
-    for (const areaId of d.spellAreas.get(id) ?? []) {
-        const named = d.areaNames.get(areaId);
-        rows.push(row(location, named ? {area: named} : {}));
-    }
-    for (const e of d.spellInvisTypes.get(id) ?? []) {
-        rows.push(row(invis, withMask({channel: e.type}, d.invisTargets.get(id)?.get(e.type))));
-    }
-    for (const e of d.spellDetectTypes.get(id) ?? []) {
-        rows.push(row(detect, withMask(
-            {channel: e.type, count: d.invisTypeSpells.get(e.type)?.length ?? 0},
-            d.detectTargets.get(id)?.get(e.type))));
-    }
-    for (const v of d.spellVehicles.get(id) ?? []) {
-        const seatNames = d.vehicleSeats.get(v) ?? [];
-        // Each row carries the vehicle's whole seat count beside one seat's attachment, so a scope can bind both.
-        const mask = d.vehicleTargets.get(id)?.get(v);
-        if (seatNames.length === 0) rows.push(row(seats, withMask({count: 0}, mask)));
-        for (const attach of seatNames) {
-            rows.push(row(seats, withMask(
-                attach ? {count: seatNames.length, attach} : {count: seatNames.length}, mask)));
-        }
-    }
-    for (const e of d.spellSpeedMods.get(id) ?? []) {
-        rows.push(row(speed, withMask({amount: e.pct, mode: e.move}, e.mask)));
-    }
-    for (const o of d.spellKeybinds.get(id) ?? []) {
-        const kb = d.keybinds.get(o);
-        if (kb) {
-            rows.push(row(keybind, withMask({key: `${kb.fn} ${kb.when}`.trim()},
-                d.keybindTargets.get(id)?.get(o))));
-        }
-    }
-    if (d.spellAttrs.get("auraisdebuff")?.has(id)) rows.push(row(debuff, {}));
-    return rows;
 }
 
 /* ------------------------------------------------------------------- the inverted side: candidates() */
@@ -697,20 +532,19 @@ export function packDataset(d: SpellData): Dataset {
     // once must not interleave ordinal queries across them. Every current caller builds and queries one at a time.
     setOrdinalLadder(d.expansions.map((xp) => [xp.key, ...xp.aliases].join(" ")));
     const cats = catKinds(d);
+    // The spell's own name and its number are the two columns the pack does not ship rows for: a spell has exactly
+    // one of each, so there is nothing to pool and they are read off the per-spell columns directly.
     const builders = new Map<Column, (i: number) => Row[]>([
         [spellColumn, (i) => spellRows(d, i)],
         [idColumn, (i) => idRows(d, i)],
-        [fxColumn, (i) => fxRows(d, i)],
-        [mechColumn, (i) => mechRows(d, i)],
     ]);
 
-    // The three columns the pack ships as rows are read; the two that do not yet
-    // ship rows are still built per call, which is what remains of the bridge.
-    const packed = new Map<Column, RowSource>([
-        [modelColumn, new PackRowSource(d.rowTables.model, kindsByWord(modelColumn), d.rowVocabs)],
-        [soundColumn, new PackRowSource(d.rowTables.sound, kindsByWord(soundColumn), d.rowVocabs)],
-        [animColumn, new PackRowSource(d.rowTables.anim, kindsByWord(animColumn), d.rowVocabs)],
-    ]);
+    // Every column a spell can carry more than one of is READ. Nothing here reshapes a row any more.
+    const packed = new Map<Column, RowSource>(
+        ([[modelColumn, "model"], [soundColumn, "sound"], [animColumn, "anim"],
+            [fxColumn, "fx"], [mechColumn, "mech"]] as const).map(
+            ([column, key]) =>
+                [column, new PackRowSource(d.rowTables[key], kindsByWord(column), d.rowVocabs)]));
 
     let inverted: Inverted | null = null;
     const invertedSide = (): Inverted => (inverted ??= invert(d, cats));
