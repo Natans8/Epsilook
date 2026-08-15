@@ -232,11 +232,18 @@ def build_column(families: Sequence[Family], reads: Reads,
         pools[family.kind] = _pool(family, family.rows(reads), per_spell, base)
         base += pools[family.kind].rows
 
+    # Most spells carry no row at all in a given column, so the empty case skips
+    # the sort rather than building a throwaway list a quarter of a million
+    # times over.
     counts, refs = [], []
     for spell in spell_ids:
-        mine = sorted(per_spell.get(spell, ()))
-        counts.append(len(mine))
-        refs.extend(mine)
+        mine = per_spell.get(spell)
+        if not mine:
+            counts.append(0)
+            continue
+        ordered = sorted(mine)
+        counts.append(len(ordered))
+        refs.extend(ordered)
     return ColumnRows(kinds=tuple(family.kind for family in families),
                       pools=pools, counts=counts, refs=refs)
 
@@ -622,9 +629,13 @@ FX_FAMILIES: tuple[Family, ...] = (
 
 # The mech column.
 
-def _mask_of(reads: Reads, first: int, second: int) -> int:
-    """The audience one effect row plays to, from its two implicit targets."""
-    bits = reads.declared.target_bits
+def _mask_of(bits: Mapping[int, int], first: int, second: int) -> int:
+    """The audience one effect row plays to, from its two implicit targets.
+
+    Handed the bits rather than the context, because the table is the build's
+    and the callers walk a million rows against it: resolving it per row would
+    be the same lookup answered over and over.
+    """
     return bits.get(first, 0) | bits.get(second, 0)
 
 
@@ -643,12 +654,13 @@ def _effects(reads: Reads) -> Iterable[SpellRow]:
             the whole row and this family would never yield it, so the
             mechanics section would silently lose a row rather than fail.
     """
+    bits = reads.declared.target_bits
     for spell, effect, aura, first, second, misc_a, misc_b in reads.rows.mechanics:
         if not effect:
             raise ValueError(
                 f"spell {spell} has an effect row with aura {aura} and no "
                 f"effect; the row model carries the row on its effect")
-        yield spell, (effect, _mask_of(reads, first, second),
+        yield spell, (effect, _mask_of(bits, first, second),
                       aura, first, second, misc_a, misc_b)
 
 
@@ -658,9 +670,10 @@ def _auras(reads: Reads) -> Iterable[SpellRow]:
     Apart from the effect that applies it, because a scope binds its axes to
     one row and "an aura aimed this way" is a question about the aura.
     """
+    bits = reads.declared.target_bits
     for spell, _effect, aura, first, second, _a, _b in reads.rows.mechanics:
         if aura:
-            yield spell, (aura, _mask_of(reads, first, second))
+            yield spell, (aura, _mask_of(bits, first, second))
 
 
 def _links(forward: bool) -> Callable[[Reads], Iterable[SpellRow]]:

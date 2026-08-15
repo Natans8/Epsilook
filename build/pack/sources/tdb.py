@@ -475,4 +475,3 @@ def tdb_locale_source(version: str) -> Source | None:
         release, f"TDB translations ({release['tag']})",
         Distill(kinds=("world",), members={"world": release["world"]},
                 want=TDB_LOCALE_TABLES, required=frozenset()))
-

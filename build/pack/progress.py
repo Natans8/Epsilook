@@ -20,13 +20,11 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 _ELAPSED: dict[str, float] = {}
-"""Seconds spent per phase name, summed over every span recorded under it."""
+"""Seconds spent per phase name, summed over every span recorded under it.
 
-_ORDER: list[str] = []
-"""Phase names in the order first seen, which is the order the build runs them.
-
-Sorting by duration would rank them, but the build is a pipeline and reading it
-in the order it happens is what makes a number explicable.
+Read back in insertion order, which is the order the build first reached each
+phase. Sorting by duration would rank them, but the build is a pipeline and
+reading it in the order it happens is what makes a number explicable.
 """
 
 _DETAIL: dict[str, dict[str, float]] = {}
@@ -50,10 +48,7 @@ def log(message: str) -> None:
 
 def record(name: str, seconds: float) -> None:
     """Add one span to a phase's running total."""
-    if name not in _ELAPSED:
-        _ORDER.append(name)
-        _ELAPSED[name] = 0.0
-    _ELAPSED[name] += seconds
+    _ELAPSED[name] = _ELAPSED.get(name, 0.0) + seconds
 
 
 @contextmanager
@@ -101,7 +96,7 @@ def step(name: str, message: str) -> Iterator[None]:
 
 def timings() -> list[tuple[str, float]]:
     """Each phase and its seconds, in the order the build ran them."""
-    return [(name, _ELAPSED[name]) for name in _ORDER]
+    return list(_ELAPSED.items())
 
 
 def report(total: float) -> None:

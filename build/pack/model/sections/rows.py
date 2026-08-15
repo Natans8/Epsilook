@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from itertools import accumulate, chain, repeat
 from typing import cast
 
 from ...derive import (COLUMN_FAMILIES, COLUMN_READS, VOCABULARIES, Reads,
@@ -92,11 +93,9 @@ def walk(columns: SectionColumns) -> Iterator[Triple]:
 
     # Reference to kind by position: the pools are numbered end to end, so one
     # array as long as the pools answers it without a search per reference.
-    owner: list[str] = []
-    for kind, size in zip(kinds, sizes):
-        owner.extend([kind] * size)
-    base = {kind: at for kind, at in
-            zip(kinds, [sum(sizes[:k]) for k in range(len(kinds))])}
+    owner = list(chain.from_iterable(repeat(kind, size)
+                                     for kind, size in zip(kinds, sizes)))
+    base = dict(zip(kinds, accumulate(sizes, initial=0)))
 
     at = 0
     for spell, count in enumerate(cast(Sequence[int], columns["counts"])):

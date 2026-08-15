@@ -41,4 +41,3 @@ def load_expansions() -> tuple[list[dict[str, Any]], dict[int, int]]:
     index = {sid: i for i, rung in enumerate(rungs)
              for sid in data["ids"][rung["key"]]}
     return rungs, index
-

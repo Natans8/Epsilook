@@ -26,7 +26,7 @@ from __future__ import annotations
 import time
 from collections.abc import Mapping, Sequence
 
-from .build import Build, Line
+from .build import Build
 from .declarations import Declarations
 from .derive import (DEFAULT_LOCALE, LOCALES, DeriveContext, Locale, Spoken,
                      build_icon_index, build_rows, collect_references, cook_text,
@@ -231,7 +231,7 @@ def read_all(providers: Providers, build: Build,
         references = collect_references(visuals, effects, fx, displays, mounts,
                                         objects, items, props.icon_fid)
 
-    wanted = references.assets | references.icons
+    wanted = references.wanted
     log(f"Resolving {len(wanted):,} referenced file ids against the listfile ...")
     with phase("resolve paths (listfile)"):
         paths = resolve_paths(providers.listfile, wanted)
@@ -465,8 +465,8 @@ def level_cap(version: str, rungs: Sequence[Mapping[str, object]]) -> int:
     return 0
 
 
-def build_for(version: str, tables: Tables, rungs: Sequence[Mapping[str, object]],
-              *, key: str = "", line: Line = Line.RETAIL) -> Build:
+def build_for(version: str, tables: Tables,
+              rungs: Sequence[Mapping[str, object]]) -> Build:
     """The `Build` value for one pack, once its sources have been probed.
 
     What a build IS to the code, rather than the version string every layer
@@ -474,8 +474,8 @@ def build_for(version: str, tables: Tables, rungs: Sequence[Mapping[str, object]
     """
     patch = ".".join(version.split(".")[:3])
     release = tdb_release(version)
-    return Build(key=key or patch, version=version, patch=patch, line=line,
-                 tdb=(release or {}).get("tag"),
+    return Build(version=version, patch=patch,
+                 tdb=release["tag"] if release else None,
                  absent_tables=frozenset(absent_tables(tables)),
                  max_level=level_cap(version, rungs))
 
@@ -492,7 +492,6 @@ def beside_default(locales: Sequence[Locale]) -> list[str]:
 
 def packed(version: str, label: str, *, refresh: bool = False,
            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
-           key: str = "", line: Line = Line.RETAIL,
            locales: Sequence[Locale] = LOCALES
            ) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
     """Build one pack, from acquiring its sources to its encoded sections.
@@ -505,8 +504,6 @@ def packed(version: str, label: str, *, refresh: bool = False,
         label: the human name the version picker shows.
         refresh: re-fetch every source even where a cached copy would do.
         policy: how a column's declared kind becomes a layout.
-        key: the roster key, when the caller has one.
-        line: which distribution line the build ships on.
         locales: the languages to build. The default one is the build's own
             pass whether or not it is named, so naming none builds that alone.
 
@@ -525,7 +522,7 @@ def packed(version: str, label: str, *, refresh: bool = False,
     with phase("load expansions"):
         ladder = load_expansions()
     with phase("probe absent tables"):
-        build = build_for(version, providers.tables, ladder[0], key=key, line=line)
+        build = build_for(version, providers.tables, ladder[0])
     with phase("read scaling table"):
         scaling = read_scaling(scaling_source(version, CACHE_DIR).acquire(refresh))
     # The COOKED numbers come from the client alone, never the server's
@@ -548,10 +545,6 @@ def packed(version: str, label: str, *, refresh: bool = False,
     with phase("gather counts and domains"):
         counts, domains = gathered(columns, context)
     log(f"  {len(encoded)} sections, {len(counts)} counts, {len(domains)} domains")
-
-    # Every route bundle is filled by the time `read_all` returns; the context
-    # types them optional for a partially built one, which this is not.
-    assert context.effects is not None
 
     # Whatever landed beside the build's own tables IS the set of further
     # languages: acquisition asked for the ones the roster named and reports
@@ -592,7 +585,7 @@ def acquire(version: str, *, refresh: bool = False,
 
 def modules(version: str, label: str, *, refresh: bool = False,
             policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
-            key: str = "", line: Line = Line.RETAIL, pack_id: str = "",
+            pack_id: str = "",
             location: str = "", locales: Sequence[Locale] = LOCALES
             ) -> tuple[list[Module], dict[str, object]]:
     """Build one pack as the module set it ships as.
@@ -602,8 +595,6 @@ def modules(version: str, label: str, *, refresh: bool = False,
         label: the human name the version picker shows.
         refresh: re-fetch every source even where a cached copy would do.
         policy: how a column's declared kind becomes a layout.
-        key: the roster key, when the caller has one.
-        line: which distribution line the build ships on.
         pack_id: the pack's identity, when it is not the build id -- a test
             line sharing a patch with live.
         location: where the writer will put the modules, relative to the site
@@ -617,7 +608,7 @@ def modules(version: str, label: str, *, refresh: bool = False,
     """
     started = time.monotonic()
     header, produced = packed(version, label, refresh=refresh, policy=policy,
-                              key=key, line=line, locales=locales)
+                              locales=locales)
     assembled = [module for code, sections in produced.items()
                  for module in assemble(SECTIONS, sections, locale=code)]
     # Off the build's own pass alone. A further language produces the sections
@@ -628,5 +619,3 @@ def modules(version: str, label: str, *, refresh: bool = False,
         f"[{time.monotonic() - started:.1f}s]")
     return assembled, manifest(pack_id or version, assembled, header,
                                absent=absent, location=location)
-
-

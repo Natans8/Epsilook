@@ -20,30 +20,6 @@ than the texture the colours are painted onto.
 """
 
 
-def screens(reads: Reads) -> SectionColumns:
-    """Each screen effect a spell grades the frame with.
-
-    Two routes reach one: an aura naming the effect, and a visual kit playing
-    it. They are unioned here because they are the same fact about the spell --
-    the frame is graded either way -- and a reader given them apart would have
-    to union them itself to answer the only question anyone asks.
-
-    The audience comes from the aura, which is the route that records one. A
-    kit-sourced screen carries the walk's mask, which is a better answer and
-    not yet the shipped one.
-    """
-    reached = {(spell, screen)
-               for spell, ids in reads.effects.screens.ids.items()
-               for screen in ids}
-    reached |= {(spell, screen)
-                for spell, screens_of in reads.visuals.screens.items()
-                for screen in screens_of}
-    rows = sorted(reached)
-    return {"spellIds": [row[0] for row in rows],
-            "screenIds": [row[1] for row in rows],
-            "targets": [reads.effects.screens.masks.get(row, 0) for row in rows]}
-
-
 def payloads(reads: Reads) -> SectionColumns:
     """What each used screen effect paints, and how it is shaped."""
     ids = sorted(reads.references.screens)

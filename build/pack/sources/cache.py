@@ -305,4 +305,3 @@ class Revalidated:
             log(f"  current  {dest.name} (token {token}, "
                 f"{dest.stat().st_size:,} bytes)")
         return True
-

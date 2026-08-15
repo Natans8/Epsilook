@@ -14,21 +14,16 @@ layer and never on another section.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 from ..routes import MaskedIds, SpellEffectRows, VehicleSeats
-from ..routes.colors import hue_words
 from ..routes.models import MODEL_CAT_ITEM
 from .links import link_kind_word
 from .walk import Bucket, SpellVisuals
 
 ModelRow = tuple[int, int, int, int, int, int, int, int]
 """(spell, file, category, mask, source attach, dest attach, ref id, motion)."""
-
-ColorRows = tuple[list[tuple[int, int, int]], list[int], list[str]]
-"""One colour family's spell pairs, its distinct row ids, and their hue words."""
-
 
 def masked_rows(bucket: Bucket) -> list[tuple[int, int, int]]:
     """One masked bucket as (spell, payload, mask) rows, sorted."""
@@ -45,20 +40,6 @@ def id_rows(ids: MaskedIds) -> list[tuple[int, int]]:
     """
     return sorted((spell, payload) for spell, payloads in ids.ids.items()
                   for payload in payloads)
-
-
-def color_rows(bucket: Bucket,
-               colors_of: Callable[[int], tuple[int, ...]]) -> ColorRows:
-    """Flatten one colour-only family into the three columns its sections need.
-
-    Every colour-only family -- glow, tint, shadowy, ghost material -- has the
-    same shape: the spell-to-row pairs with their masks, the distinct row ids,
-    and one hue-word string per id. What differs is only where the colours come
-    from, which is why that is the argument: a shadowy row carries two colours
-    and the rest carry one.
-    """
-    ids = sorted({row for rows in bucket.values() for row in rows})
-    return masked_rows(bucket), ids, [hue_words(colors_of(row)) for row in ids]
 
 
 @dataclass

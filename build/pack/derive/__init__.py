@@ -21,8 +21,8 @@ from .locales import (DEFAULT_LOCALE, LOCALES, Locale, locale_of,
                       locales_named)
 from .prose import CookedText, cook_text
 from .references import References, collect_references
-from .rows import (PackRows, boneset_rows, build_rows, color_rows, id_rows,
-                   masked_rows, replacement_rows, spell_role_rows, spell_rows)
+from .rows import (PackRows, boneset_rows, build_rows, id_rows, masked_rows,
+                   replacement_rows, spell_role_rows, spell_rows)
 from .walk import KIT_BUCKETS, SpellVisuals, walk_spells
 
 __all__ = [
@@ -53,7 +53,6 @@ __all__ = [
     "build_icon_index",
     "build_item_icons",
     "build_rows",
-    "color_rows",
     "collect_references",
     "cook_text",
     "icon_name",

@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from ..sources import enum_id_where, load_local_enum
 from ..tables import Tables, array_columns
-from .attributes import attribute_bit
+from .attributes import bit_test, carries
 from .columns import BASE_DIFFICULTY, to_int
 from .spells import SpellProperties
 
@@ -34,6 +34,10 @@ CHANNEL_BITS = (34, 38)
 The second is the self-channelled flag, a channel that targets the caster. It
 is still a channel, so delivery treats the pair as one.
 """
+
+CHANNEL_TESTS = tuple(bit_test(bit) for bit in CHANNEL_BITS)
+"""`CHANNEL_BITS` resolved to word and mask, since every spell tests the same
+two and the arithmetic does not depend on the spell."""
 
 DURATION_UNLIMITED = 100_000_000
 """`SpellDuration.Duration` at or beyond this is the client's "no limit".
@@ -91,7 +95,8 @@ def _breaks_on_move(tables: Tables, spells: SpellProperties) -> set[int]:
     """
     if not tables.available("SpellInterrupts"):
         return set()
-    moving = enum_id_where(load_local_enum(CHANNEL_INTERRUPT_ENUM), "moving")
+    moving = bit_test(
+        enum_id_where(load_local_enum(CHANNEL_INTERRUPT_ENUM), "moving"))
     columns = array_columns(tables, "SpellInterrupts", "ChannelInterruptFlags",
                             INTERRUPT_COLUMNS_MAX)
     breaks: set[int] = set()
@@ -105,7 +110,7 @@ def _breaks_on_move(tables: Tables, spells: SpellProperties) -> set[int]:
         if base:
             seen_base.add(spell)
         words = tuple(to_int(value) for value in row[2:])
-        if attribute_bit(words, moving):
+        if carries(words, moving):
             breaks.add(spell)
         elif base:
             # The base row is the spell's answer, so it overrides whatever a
@@ -142,7 +147,7 @@ def read_spell_delivery(tables: Tables,
         # bar, so they read as instant here.
         cast = max(cast_of.get(spells.cast_index.get(spell, 0), 0), 0)
         flags, duration = 0, 0
-        if any(attribute_bit(words, bit) for bit in CHANNEL_BITS):
+        if any(carries(words, test) for test in CHANNEL_TESTS):
             flags = CHANNELLED | (BREAKS_ON_MOVE if spell in breaks else 0)
             raw = duration_of.get(spells.duration_index.get(spell, 0))
             if raw is not None:

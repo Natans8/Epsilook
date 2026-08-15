@@ -85,19 +85,19 @@ class DeriveContext:
     templates: SpellText = field(default_factory=SpellText)
     """The raw description templates, before the cooker runs."""
 
-    effects: SpellEffectRows | None = None
-    graph: VisualGraph | None = None
-    creatures: CreatureModels | None = None
-    items: ItemModels | None = None
-    mounts: MountData | None = None
-    objects: GameObjectData | None = None
-    models: ModelSources | None = None
-    procs: ProcEffects | None = None
-    fx: FxPayloads | None = None
-    kits: KitEffects | None = None
-    forms: ShapeshiftForms | None = None
-    vehicles: VehicleSeats | None = None
-    areas: AreaGates | None = None
+    effects: SpellEffectRows = field(default_factory=SpellEffectRows)
+    graph: VisualGraph = field(default_factory=VisualGraph)
+    creatures: CreatureModels = field(default_factory=CreatureModels)
+    items: ItemModels = field(default_factory=ItemModels)
+    mounts: MountData = field(default_factory=MountData)
+    objects: GameObjectData = field(default_factory=GameObjectData)
+    models: ModelSources = field(default_factory=ModelSources)
+    procs: ProcEffects = field(default_factory=ProcEffects)
+    fx: FxPayloads = field(default_factory=FxPayloads)
+    kits: KitEffects = field(default_factory=KitEffects)
+    forms: ShapeshiftForms = field(default_factory=ShapeshiftForms)
+    vehicles: VehicleSeats = field(default_factory=VehicleSeats)
+    areas: AreaGates = field(default_factory=AreaGates)
 
     missiles: Mapping[int, VisualMissiles] = field(default_factory=dict)
     motions: Mapping[int, str] = field(default_factory=dict)

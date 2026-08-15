@@ -176,4 +176,3 @@ ANCHOR_NAMES = register(Section(
     reads=("declared",),
     scope=Scope.UNIVERSAL,
 ))
-

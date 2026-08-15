@@ -19,13 +19,12 @@ NO_TYPE = -1
 """What an object with no resolved row carries, which is not type zero."""
 
 
-def display_rows(which: str) -> Callable[[Reads], SectionColumns]:
+def display_rows(which: str, id_column: str) -> Callable[[Reads], SectionColumns]:
     """One display route flattened to (subject, display, model file) rows."""
 
     def produce(reads: Reads) -> SectionColumns:
         rows = getattr(reads.displays, which)
-        return {"creatureIds" if which == "morphs" else "formIds":
-                    [row.subject for row in rows],
+        return {id_column: [row.subject for row in rows],
                 "displayIds": [row.display for row in rows],
                 "fids": [row.fid for row in rows]}
 
@@ -99,7 +98,7 @@ MORPH_DISPLAYS = register(Section(
     name="morphDisplays",
     doc="The models each morphed creature can wear.",
     module="core",
-    produce=display_rows("morphs"),
+    produce=display_rows("morphs", "creatureIds"),
     columns=("creatureIds", "displayIds", "fids"),
     reads=("displays",),
     counts=(Count("morphDisplays",
@@ -131,7 +130,7 @@ SHAPESHIFT_DISPLAYS = register(Section(
     name="shapeshiftDisplays",
     doc="The models each shapeshift form can wear.",
     module="core",
-    produce=display_rows("forms"),
+    produce=display_rows("forms", "formIds"),
     columns=("formIds", "displayIds", "fids"),
     reads=("displays",),
     counts=(Count("shapeshiftDisplays",
