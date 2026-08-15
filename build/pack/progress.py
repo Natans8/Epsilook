@@ -82,6 +82,17 @@ def detail(phase_name: str, item: str) -> Iterator[None]:
 
 
 @contextmanager
+def timed(name: str, item: str) -> Iterator[None]:
+    """Time a phase and one item within it, naming the phase once.
+
+    The two are always entered together where a phase runs per item, and naming
+    it twice is how the item ends up filed under a phase that does not exist.
+    """
+    with phase(name), detail(name, item):
+        yield
+
+
+@contextmanager
 def step(name: str, message: str) -> Iterator[None]:
     """Announce a step and time it under `name`.
 

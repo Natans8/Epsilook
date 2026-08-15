@@ -38,7 +38,7 @@ from .emit.module import Module, absent_sections, assemble
 from .encode import (EMPTY_SLOT, FEWEST_BYTES, encode_column,
                      encode_section, layout_for)
 from .model import SECTIONS, Cardinality, Encoding, Section, SectionColumns
-from .progress import detail, log, phase, step
+from .progress import log, phase, step, timed
 from .routes import (implicit_target_bits, read_anim_replacements,
                      read_animkit_anims, read_animkit_bonesets,
                      read_area_gates, read_creature_models, read_fx_payloads,
@@ -371,10 +371,10 @@ def produce(context: DeriveContext, tables: Tables,
     for section in SECTIONS:
         if switched_off(section, tables):
             continue
-        with phase("produce sections"), detail("produce sections", section.name):
+        with timed("produce sections", section.name):
             produced = section.produce(context.reads(section.reads))
         columns[section.name] = produced
-        with phase("encode columns"), detail("encode columns", section.name):
+        with timed("encode columns", section.name):
             encoded[section.name] = encode_section(section, produced, policy)
     return columns, encoded
 
@@ -434,10 +434,10 @@ def produce_spoken(context: DeriveContext, built: Mapping[str, SectionColumns],
     for section in SECTIONS:
         if not section.localizable or section.name not in built:
             continue
-        with phase("produce language"), detail("produce language", section.name):
+        with timed("produce language", section.name):
             produced = section.produce(context.reads(section.reads))
         check_parallel(section, produced, built[section.name])
-        with phase("encode language"), detail("encode language", section.name):
+        with timed("encode language", section.name):
             encoded[section.name] = {
                 name: encode_column(produced[name],
                                     layout_for(section, name, policy),
