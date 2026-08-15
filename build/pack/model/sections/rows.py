@@ -137,6 +137,18 @@ def per_spell(rows: Sequence[Triple], kinds: frozenset[str]) -> Counter[int]:
     return Counter(spell for spell, kind, _values in rows if kind in kinds)
 
 
+def per_spell_distinct(rows: Sequence[Triple], kind: str, prop: str) -> Counter[int]:
+    """How many DISTINCT values of one property each spell reaches.
+
+    What a kit domain has to measure. A kit ships expanded into one row per
+    animation and region, so counting rows would describe how finely the build
+    segments a kit rather than how many kits a spell plays -- and it is the
+    second that every reader of this axis, and the count beside it, means.
+    """
+    seen = {(spell, values[prop]) for spell, word, values in rows if word == kind}
+    return Counter(spell for spell, _value in seen)
+
+
 MODEL_KINDS = frozenset({"missile", "barrage", "ground", "attached", "trail",
                          "display", "item", "equipped"})
 """The model kinds a visual reaches. A mount is the one that does not: it comes
@@ -216,7 +228,7 @@ ANIM_ROWS = register(Section(
     reads=READS,
     counts=(counted(anim_counts),),
     domains=(Domain("count.anim", lambda columns, _r: numeric_domain(
-        per_spell(walked(columns), frozenset({"kit"})).values())),),
+        per_spell_distinct(walked(columns), "kit", "id").values())),),
 ))
 
 EQUIPPED_SLOTS = register(Section(

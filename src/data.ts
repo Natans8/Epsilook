@@ -2335,9 +2335,16 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const passengerRoleNames = pack.passengerRoleNames || NO_WORDS;
     {
         const {spellIds, animIds, roles} = spellPassengers;
+        // An animation serving two roles is two rows, so the inverted index is
+        // deduped: it answers "which spells reach this animation", and a spell
+        // that reaches it twice is still one answer.
+        const seen = new Set<string>();
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellPassengerAnims, spellIds[i],
                 {anim: animIds[i], role: roles ? roles[i] : -1});
+            const pair = `${animIds[i]}:${spellIds[i]}`;
+            if (seen.has(pair)) continue;
+            seen.add(pair);
             pushTo(passengerAnimSpells, animIds[i], spellIds[i]);
         }
     }

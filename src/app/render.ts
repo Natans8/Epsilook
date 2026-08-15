@@ -829,7 +829,13 @@ const ANIM_GROUPS: {
 }[] = [
     {
         id: PASSENGER_GROUP, word: "passenger",
-        animsOf: (d, s) => d.spellPassengerAnims.get(s)?.map((played) => played.anim),
+        // Deduped on the animation: a rider's animation carries the role it plays in, so one
+        // animation serving both entering and leaving is two entries. The cell renders no role,
+        // so without this the same pill is drawn twice with nothing to tell the two apart.
+        animsOf: (d, s) => {
+            const played = d.spellPassengerAnims.get(s);
+            return played && [...new Set(played.map((one) => one.anim))];
+        },
     },
 ];
 

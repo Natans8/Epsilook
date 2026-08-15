@@ -37,7 +37,8 @@ from ..routes.models import (MODEL_CAT_AREA, MODEL_CAT_ATTACH, MODEL_CAT_BARRAGE
                              MODEL_CAT_TRAIL)
 from ..routes.vehicles import PASSENGER_ROLE_NAMES
 from .context import Reads
-from .rows import boneset_rows, replacement_rows, spell_role_rows
+from .rows import (boneset_rows, replacement_rows, spell_role_rows,
+                   spell_rows)
 
 RowValues = tuple[int, ...]
 """One row's property values, in the family's declared property order."""
@@ -282,12 +283,26 @@ def _animkits(reads: Reads) -> Iterable[SpellRow]:
 
 
 def _loose(reads: Reads) -> Iterable[SpellRow]:
-    """The animations a spell's kits play on the unit directly."""
+    """Every animation played on the unit directly, from both routes.
+
+    A vehicle's OWN animations are loose too -- they are the vehicle's
+    behaviour rather than the rider's, so they belong beside the animations a
+    kit plays and not under the passenger kind. They carry no mask, and one
+    already reached through a visual is not repeated: the two routes describe
+    the same animation playing, and a reader asking which spells play it wants
+    one row, not one per route that found it.
+    """
     limit = len(reads.declared.anim_names)
+    seen: dict[int, set[int]] = {}
     for spell, anims in reads.visuals.visual_anims.items():
         for anim, mask in anims.items():
             if anim < limit:
+                seen.setdefault(spell, set()).add(anim)
                 yield spell, (anim, mask)
+    for spell, anim in spell_rows(reads.vehicles.vehicle_anims,
+                                  reads.rows.vehicles, limit):
+        if anim not in seen.get(spell, ()):
+            yield spell, (anim, 0)
 
 
 def _replacements(reads: Reads) -> Iterable[SpellRow]:

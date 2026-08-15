@@ -531,9 +531,14 @@ function invert(d: SpellData, cats: Map<number, Kind>): Inverted {
     corpusVocab(soundVocab, d.soundKitName, d.soundKitSpells);
 
     const animVocab: Vocab[] = [];
+    // Every route an animation NAME reaches a spell by. The passenger half is load-bearing: a rider's
+    // animation carries its name under the role it plays in, and those properties declare themselves
+    // plain, so a seed built without them is UNDERSIZED — and an undersized seed silently loses
+    // answers rather than costing time, because the kernel never verifies a spell it did not seed.
     vocab(animVocab, d.animNames.map((animName, animId): [string, Iterable<number>] => [animName, [
         ...(d.visualAnimSpells.get(animId) ?? []),
         ...(d.replaceSpells.get(animId) ?? []),
+        ...(d.passengerAnimSpells.get(animId) ?? []),
         ...(d.animAnimKits.get(animId) ?? []).flatMap((kitId) => d.animKitSpells.get(kitId) ?? []),
     ]]));
     // A boneset match is per row, but a seed only needs "some kit of this spell animates the region" — the

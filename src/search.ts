@@ -132,7 +132,9 @@ export const COUNT_SOURCES: Record<string, (data: SpellData, spellId: number) =>
     // the headless "replace" / "passenger" groups
     anim: (d, s) => (d.spellVisualAnims.get(s) || []).length
         + (d.spellReplaceAnims.get(s) || []).length
-        + (d.spellPassengerAnims.get(s) || []).length
+        // Distinct animations, matching what the cell draws: a rider's animation
+        // used for two roles is two rows but one pill.
+        + new Set((d.spellPassengerAnims.get(s) || []).map((one) => one.anim)).size
         + (d.spellAnimKits.get(s) || [])
             .reduce((n, k) => n + (d.animKitAnims.get(k) || []).length, 0),
 };
