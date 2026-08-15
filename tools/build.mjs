@@ -62,7 +62,9 @@ const options = {
  *                 src/search/, so it is unreached exactly as long as that tree
  *                 is. DELETE THIS ENTRY together with the one above.
  */
-const UNREACHED = ["src/search/", "src/i18n/"];
+// Search 2.0 and what it reads. The shipped 1.0 engine imports none of it and never will:
+// 2.0 replaces the app rather than joining it, so these stay unreferenced until it takes over.
+const UNREACHED = ["src/search/", "src/i18n/", "src/packrows.ts"];
 
 /** Every non-declaration .ts under src/, relative to the repo root. */
 function sourceFiles(dir = resolve(root, "src")) {

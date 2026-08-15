@@ -132,11 +132,7 @@ export interface ExportRow {
         emote?: { oneshot?: number; loop?: number };
     }[];
     animKits?: { id: number; anims: string[]; targets: string[] }[];
-    replaceAnims?: { from: string; to: string; targets: string[] }[];
-    /** What a rider plays entering, sitting in and leaving a seat. `role` is
-     *  absent on a pack older than format 50, which carried the animations
-     *  without saying which act each belonged to. */
-    passengerAnims?: { name: string; role?: string }[];
+    replaceAnims?: { from: string; to: string }[];
     fx?: ExportFxEntry[];
     mechanics?: string[];
     /** Areas the spell is gated to, by name, absent when it is gated to none.
@@ -289,18 +285,7 @@ function exportRows(): ExportRow[] {
             if (swaps.length) {
                 row.replaceAnims = swaps.map((sw) => ({
                     from: d.animNames[sw.src], to: d.animNames[sw.dst],
-                    targets: targetWordsOf(sw.mask),
                 }));
-            }
-            const ridden = d.spellPassengerAnims.get(id) || [];
-            if (ridden.length) {
-                row.passengerAnims = ridden.map((played) => {
-                    const entry: NonNullable<ExportRow["passengerAnims"]>[number] =
-                        {name: d.animNames[played.anim]};
-                    const role = d.passengerRoleNames[played.role];
-                    if (role) entry.role = role;
-                    return entry;
-                });
             }
         }
         if (!hc.fx) {

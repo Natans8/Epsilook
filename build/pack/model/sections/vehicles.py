@@ -13,9 +13,8 @@ from collections.abc import Callable
 
 from ...derive import Reads, spell_rows
 from ...measure import numeric_domain
-from ...routes.vehicles import PASSENGER_ROLE_NAMES
 from ..registry import register
-from ..section import (Count, Domain, Layout, Scope, Section, SectionColumns)
+from ..section import Count, Domain, Section, SectionColumns
 
 
 def seats(reads: Reads) -> SectionColumns:
@@ -78,16 +77,6 @@ VEHICLE_SEATS = register(Section(
                   lambda columns, _r: len(columns["vehicleIds"])),),
     domains=(Domain("seat", lambda columns, _r: numeric_domain(
         Counter(columns["vehicleIds"]).values())),),
-))
-
-PASSENGER_ROLE_WORDS = register(Section(
-    name="passengerRoleNames",
-    doc="The word each passenger animation role renders and searches under.",
-    module="universal",
-    produce=lambda _reads: {"names": dict(PASSENGER_ROLE_NAMES)},
-    columns=("names",),
-    layout=Layout.BARE,
-    scope=Scope.UNIVERSAL,
 ))
 
 SPELL_VEHICLE_ANIMS = register(Section(

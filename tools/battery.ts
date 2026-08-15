@@ -135,11 +135,11 @@ The canonical battery through both engines — a diff instrument, not a pass gat
     process.exit(0);
 }
 
-const {data, entry} = loadPack(values.packs || undefined);
+const {data, pack, entry} = loadPack(values.packs || undefined);
 toStderr(`battery on ${entry.label || entry.id} — ${data.ids.length.toLocaleString("en-US")} spells`);
 
 const t0 = performance.now();
-const dataset = packDataset(data);
+const dataset = packDataset(data, pack);
 const bare: Dataset = {spells: dataset.spells, source: (column) => dataset.source(column)};
 toStderr(`dataset ready in ${(performance.now() - t0).toFixed(0)} ms`);
 

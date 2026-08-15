@@ -5,8 +5,6 @@
  * This module also owns the two data shapes that flow through the app:
  * the JSON pack baked by build/build_data.py (SpellPack) and the in-memory
  * indexes built from it (SpellData). */
-import type {LegacyColumns, RowTable, VocabWhere} from "./packrows";
-import {expand, expandAll, passengerRows} from "./packrows";
 import {hexColor} from "./util";
 
 /* ----------------------------------------------------------- the pack */
@@ -129,24 +127,20 @@ export interface SpellPack {
      *  means a gameobject_template entry instead. */
     files: { fids: number[]; paths: string[]; gobs?: number[] };
 
-    /** Per column, the rows a spell has (format 52+ for fx and mech, 51+ for the
-     *  other three): the distinct rows of each kind pooled once, and per spell
-     *  how many it has and which they are. `src/packrows.ts` reads them, and the
-     *  thirty per-spell sections they replaced are gone. */
-    modelRows: RowTable;
-    soundRows: RowTable;
-    animRows: RowTable;
-    fxRows: RowTable;
-    mechRows: RowTable;
-    /** Where each row property's vocabulary lives, and how it is keyed. */
-    rowVocabs?: Record<string, VocabWhere>;
-    /** The weapon slot each fileless model marker stands for. */
-    equippedSlots?: { fids: number[]; slots: string[] };
-    /** Where an overlay is anchored: an M2 attachment point, or -1 for the
-     *  whole model, which reads as a word rather than as no answer. */
-    anchorNames?: Record<number, string>;
-    /** The movement a speed row scales, by the number the row stores. */
-    speedModeNames?: string[];
+    /** Spell -> model file; cats (format 15+) = usage category per row. */
+    spellModels: {
+        spellIds: number[]; fids: number[]; cats?: number[]; targets?: number[];
+        /** Raw M2 attachment ids, -1 = unset (pack format 24+). Attached models
+         *  use src only; missiles use both (launch -> impact). */
+        srcAttach?: number[]; dstAttach?: number[];
+        /** Ref id: CreatureDisplayID (display cat) or Item::ID (item cat), 0 else
+         *  (format 28+). Format 27 shipped it as displayIds (display rows only). */
+        refIds?: number[]; displayIds?: number[]
+        /** SpellMissileMotion id, 0 = none (format 34+). Missile rows only —
+         *  the arc the projectile flies. Part of the row key like the attach
+         *  pair, so one model flown two ways is two rows. */
+        motions?: number[]
+    };
     /** Flight paths "motions" points at (format 34+), parallel by motion id. */
     missileMotions?: { ids: number[]; names: string[] };
     /** Items reached by "item"-category rows (format 28+), parallel by item id.
@@ -162,6 +156,9 @@ export interface SpellPack {
     /** mask bit -> search word ("caster"/"target"/"area"); format 22+ */
     targetNames?: Record<number, string>;
 
+    /** Spell -> (SoundKit, sound file) rows. */
+    spellSounds: { spellIds: number[]; soundKitIds: number[]; fids: number[]; targets?: number[] };
+
     /**
      * Human names for the sound kits this pack reaches, from the pinned 8.3.0
      * `SoundKitName` (see build_data.SOUNDKITNAME_BUILD). Sparse on purpose —
@@ -170,6 +167,7 @@ export interface SpellPack {
      */
     soundKitNames?: { soundKitIds: number[]; names: string[] };
 
+    spellAnimKits: { spellIds: number[]; animKitIds: number[]; targets?: number[] };
     /** Animation names indexed by AnimID. */
     animNames: string[];
     /** The Epsilon emote that performs each animation, indexed by AnimID like
@@ -188,25 +186,32 @@ export interface SpellPack {
     animKitAnimBoneset?: { animKitIds: number[]; animIds: number[]; bonesets: number[][] };
     /** Animation replacements — proc Type 7 + aura 312 merged (format 32+):
      *  one row per (base anim -> replacement anim). */
-    spellReplaceAnims?: {
-        spellIds: number[]; srcAnims: number[]; dstAnims: number[]; targets?: number[]
-    };
+    spellReplaceAnims?: { spellIds: number[]; srcAnims: number[]; dstAnims: number[] };
     /** Animations the kits play directly, SpellVisualAnim ET 6 (format 21+). */
     spellVisualAnims?: { spellIds: number[]; animIds: number[]; targets?: number[] };
 
     /* --- visual fx sections (the Effects column) --- */
 
+    /** Spell -> SpellChainEffects (chain/beam) rows. */
+    spellFx: {
+        spellIds: number[]; chainIds: number[]; targets?: number[];
+        /** The drawing beam's attach points (format 24+), -1 = unset. */
+        srcAttach?: number[]; dstAttach?: number[]
+    };
     /** Chain tint as packed 0xRRGGBB (0xFFFFFF = untinted) + baked hue word. */
     fxChains: { ids: number[]; colors: number[]; hues: string[] };
     fxTextures: { chainIds: number[]; fids: number[] };
 
+    spellDissolves: { spellIds: number[]; dissolveIds: number[]; targets?: number[] };
     /** durations in seconds, 0 = unspecified; attaches = M2 attach id, -1 = full body (format 33+). */
     dissolves: { ids: number[]; durations: number[]; attaches?: number[] };
     dissolveTextures: { dissolveIds: number[]; fids: number[] };
 
+    spellGlows: { spellIds: number[]; glowIds: number[]; targets?: number[] };
     /** EdgeGlowEffect colors; alphas (format 17+) = GlowAlpha as 0..255. */
     glows: { ids: number[]; colors: number[]; hues: string[]; alphas?: number[] };
 
+    spellShadowies: { spellIds: number[]; shadowyIds: number[]; targets?: number[] };
     /** ShadowyEffect primary/secondary packed RGB pairs. */
     shadowies: {
         ids: number[];
@@ -217,9 +222,20 @@ export interface SpellPack {
         attaches?: number[];
     };
 
+    /** Ghost material recolors, proc Type 22 (format 14+). */
+    spellGhostMats?: { spellIds: number[]; ghostIds: number[]; targets?: number[] };
     ghostMats?: { ids: number[]; colors: number[]; hues: string[] };
 
+    /** Model tints, proc Types 1/23 (format 13+). */
+    spellTints?: { spellIds: number[]; tintIds: number[] };
     tints?: { ids: number[]; colors: number[]; hues: string[] };
+
+    /** Percent-payload procs (format 14+): the percent IS the pill id. */
+    spellDesaturates?: { spellIds: number[]; percents: number[] };
+    spellTransparencies?: { spellIds: number[]; percents: number[] };
+    /** Valueless procs (format 14+): membership is the whole payload. */
+    spellFreezes?: { spellIds: number[] };
+    spellCamos?: { spellIds: number[] };
 
     /**
      * SpellMisc attribute flags (format 37+), keyed by the `handler` declared
@@ -240,6 +256,10 @@ export interface SpellPack {
         flags: number[];
     };
 
+    /** The area gate (format 40+): where a spell REFUSES to cast, one row per
+     *  (spell, area) pair — a spell gated to four areas ships four rows and
+     *  there is deliberately no "primary" area. */
+    spellAreas?: { spellIds: number[]; areaIds: number[] };
     /** The areas those rows point at. `names` is the area's OWN name, never its
      *  parent's — see DATA_ROUTES §3t for why the parent-zone rollup is wrong.
      *  `roots` is the top-level ancestor, because Wowhead only has pages for
@@ -249,6 +269,7 @@ export interface SpellPack {
     /** ScreenEffect rows (format 16+). Colors are packed RGB, -1 = none
      *  (0 is a real black). mask* (format 18+) = the radial vignette params,
      *  maskSize 0 = the row has no FullScreenEffect. */
+    spellScreens?: { spellIds: number[]; screenIds: number[] };
     screens?: {
         ids: number[];
         names: string[];
@@ -265,10 +286,13 @@ export interface SpellPack {
      *  overlays first. */
     screenTextures?: { screenIds: number[]; fids: number[]; roles?: number[] };
 
+    /** Morph (transform aura) creatures; names/displays come from the TDB. */
+    spellMorphs: { spellIds: number[]; creatureIds: number[] };
     morphs: { creatureIds: number[]; names: string[] };
     morphDisplays: { creatureIds: number[]; displayIds: number[]; fids: number[] };
 
     /** Shapeshift forms (format 19+); a form may have no display at all. */
+    spellShapeshifts?: { spellIds: number[]; formIds: number[] };
     shapeshifts?: { ids: number[]; names: string[] };
     shapeshiftDisplays?: { formIds: number[]; displayIds: number[]; fids: number[] };
 
@@ -279,16 +303,18 @@ export interface SpellPack {
 
     /** GameObject spawners (format 32+): spell -> gameobject_template entry.
      *  Names/models come from the TDB world dump, so both are "" / 0 without one. */
+    spellObjects?: { spellIds: number[]; objectIds: number[]; targets?: number[] };
     objects?: { ids: number[]; names: string[]; fids: number[]; types?: number[] };
 
+    /** Summoned creatures with their SummonProperties control per row. */
+    spellSummons: { spellIds: number[]; creatureIds: number[]; controls: number[] };
     summons: { creatureIds: number[]; names: string[] };
     /** Control id -> word (1 guardian, 2 pet, ...; 0 shows no word). */
     summonControlNames?: Record<number, string>;
-    /** What a rider is doing while an animation plays, by role id. */
-    passengerRoleNames?: Record<number, string>;
 
     /** Vehicles (SET_VEHICLE_ID auras): spell -> Vehicle.db2 id, and each
      *  vehicle's seat count. 0-seat vehicles are dropped at build. */
+    spellVehicles?: { spellIds: number[]; vehicleIds: number[] };
     vehicles?: { vehicleIds: number[]; seats: number[] };
     /** One row per seat in SeatID_0..7 order: which vehicle it belongs to and
      *  the M2 attachment point it sits at ("" when unset/unknown). */
@@ -296,10 +322,11 @@ export interface SpellPack {
     /** Invisibility / detection channels (pack format 26). `types` is the
      *  invisibility TYPE — the pairing key. Only channels with an invis side are
      *  built, so every detect row here has ≥1 invis counterpart. */
+    spellInvis?: { spellIds: number[]; types: number[]; targets: number[] };
+    spellDetects?: { spellIds: number[]; types: number[]; targets: number[] };
     /** The rider's animations while entering/seated/exiting (a vehicle seat's
-     *  passenger AnimationData). animIds index animNames; roles index
-     *  passengerRoleNames, and are absent on a pack older than format 50. */
-    spellPassengerAnims?: { spellIds: number[]; animIds: number[]; roles?: number[] };
+     *  passenger AnimationData). animIds index animNames. */
+    spellPassengerAnims?: { spellIds: number[]; animIds: number[] };
     /** The vehicle's own animations — rendered as loose pills, not under
      *  "passenger". Same id space. */
     spellVehicleAnims?: { spellIds: number[]; animIds: number[] };
@@ -308,6 +335,18 @@ export interface SpellPack {
 
     /* --- mechanics --- */
 
+    /**
+     * One row per distinct SpellEffect: what it does (effect + aura enum ids,
+     * 0 = neither) and who it is aimed at (ImplicitTarget_0/_1, 0 = unset).
+     * Pack format 29+; older packs ship spellEffects/spellAuras instead.
+     */
+    spellMechanics?: {
+        spellIds: number[]; effects: number[]; auras: number[];
+        targetsA: number[]; targetsB: number[];
+    };
+    /** Flat per-spell sets, pack format <= 28 only. */
+    spellEffects?: { spellIds: number[]; effects: number[] };
+    spellAuras?: { spellIds: number[]; auras: number[] };
     /** SpellEffect enum id -> name without the SPELL_EFFECT_ prefix. */
     effectNames: Record<string, string>;
     /** SpellEffectAura enum id -> name without the SPELL_AURA_ prefix. */
@@ -319,30 +358,53 @@ export interface SpellPack {
 
     /* --- keybound overrides (aura 406) --- */
 
+    spellKeybinds?: { spellIds: number[]; overrideIds: number[]; targets: number[] };
     /**
      * Per SpellKeyboundOverride row: the client keybinding name, the word for
      * when it applies ("" = ordinary press, "mid-air" = airborne) and the
      * Spell::ID the retail client casts in its place (which this build may no
      * longer ship, and which the app deliberately does not display).
      */
-    keybinds?: {
-        ids: number[]; functions: string[]; whens: string[]; spells: number[];
-        /** The key and its timing word as one string, which a keybind row stores
-         *  the override id to reach (format 52+). */
-        keys?: string[];
+    keybinds?: { ids: number[]; functions: string[]; whens: string[]; spells: number[] };
+
+    /* --- movement-speed modifiers (SPEED_AURAS) --- */
+
+    /**
+     * One row per (spell, movement, percent). `movements` is the movement the
+     * aura scales — "run", "mounted", "swim", "flight", or "all" for the one
+     * aura that reaches every type — and `percents` the signed change.
+     */
+    spellSpeeds?: {
+        spellIds: number[]; movements: string[]; percents: number[]; targets: number[];
     };
+
+    /* --- object-scale modifiers (SCALE_AURAS) --- */
+
+    /**
+     * One row per (spell, percent). `percents` is the signed change to the
+     * unit's scale — there is only one thing these auras scale, so unlike
+     * spellSpeeds there is no word beside the number.
+     */
+    spellScales?: { spellIds: number[]; percents: number[]; targets: number[] };
 
     /* --- spell -> spell links (SpellEffect.EffectTriggerSpell) --- */
 
     /**
-     * The word each spell-to-spell edge prints ("on cast", "periodically",
-     * "removes", ...), by the number a `triggers` or `origin` row stores.
+     * One row per edge: `srcIds[i]` is joined to `dstIds[i]` in the way
+     * `kindNames[kinds[i]]` names ("on cast", "periodically", "removes", ...).
      *
-     * The edges themselves are those rows: both directions are the same edges
-     * read from either end, so the pack ships them once as rows rather than a
-     * third time as a section of its own.
+     * ONE DIRECTION ONLY — the reverse ("origin") index is built at load rather
+     * than shipped twice. Both ends are always spells this pack names, and a
+     * self-link never appears; the build drops both cases.
+     *
+     * `targets[i]` is the ImplicitTarget mask of the effect carrying the
+     * trigger — the edge's own target, read exactly like every other
+     * effect-driven route's (pack format 36).
      */
-    linkKindNames?: string[];
+    spellLinks?: {
+        srcIds: number[]; dstIds: number[]; kinds: number[];
+        targets?: number[]; kindNames: string[];
+    };
 }
 
 /* ------------------------------------------------- in-memory indexes */
@@ -613,14 +675,6 @@ export interface SpellData {
     objectTargets: Map<number, Map<number, number>>;
     vehicleTargets: Map<number, Map<number, number>>;
     shapeshiftTargets: Map<number, Map<number, number>>;
-    /** Format 50's masks, keyed the way every other category is: spell -> the
-     *  row's own id (a tint id, a percent, a channel) -> mask. Empty on an
-     *  older pack, which is how "the pack has no answer" reads. */
-    tintTargets: Map<number, Map<number, number>>;
-    transparencyTargets: Map<number, Map<number, number>>;
-    desaturateTargets: Map<number, Map<number, number>>;
-    invisTargets: Map<number, Map<number, number>>;
-    detectTargets: Map<number, Map<number, number>>;
     screenTargets: Map<number, Map<number, number>>;
 
     spellSounds: Map<number, { soundKitId: number; fid: number; targets: number }[]>;
@@ -654,7 +708,7 @@ export interface SpellData {
     spellBonesets: Map<number, string[]>;
     /** Animation replacements: spell -> [{src,dst}] pairs, and each anim id
      *  (either side) -> the spells whose swaps touch it. */
-    spellReplaceAnims: Map<number, { src: number; dst: number; mask: number }[]>;
+    spellReplaceAnims: Map<number, { src: number; dst: number }[]>;
     replaceSpells: Map<number, Set<number>>;
     /** Animations the kits play directly (SpellVisualAnim) — loose pills. */
     spellVisualAnims: Map<number, number[]>;
@@ -834,22 +888,9 @@ export interface SpellData {
     scaleSearchL: Map<number, string>;
     scaleTargets: Map<number, Map<number, number>>;
 
-    /** spell id -> the rider's animations, each with the role it plays in;
-     *  the "passenger" anim group. `role` indexes {@link passengerRoleNames},
-     *  and is -1 on a pack older than format 50. */
-    spellPassengerAnims: Map<number, { anim: number; role: number }[]>;
-
-    /**
-     * The pack's row tables, by column key, and the vocabularies their properties resolve through.
-     *
-     * Carried untouched for the readers that want rows rather than the maps above. Nothing in 1.0 reads them; search
-     * 2.0 evaluates them directly, which is what makes a row source a read rather than a reshape.
-     */
-    rowTables: Record<string, RowTable>;
-    /** A colour resolves to a NUMBER: the row stores which tint it is, and its vocabulary says what that means. */
-    rowVocabs: Record<string, (value: number) => string | number | undefined>;
+    /** spell id -> [animId] the rider plays; the "passenger" anim group. */
+    spellPassengerAnims: Map<number, number[]>;
     passengerAnimSpells: Map<number, number[]>;
-    passengerRoleNames: Record<number, string>;
 
     /** spell id -> [overrideId] the keybind fx category renders. */
     spellKeybinds: Map<number, number[]>;
@@ -952,17 +993,6 @@ export async function loadPack(
     return JSON.parse(text);
 }
 
-/**
- * One resolved vocabulary value, with the empty string read as no value at all.
- *
- * A name table carries "" for an entry it could not name — a creature with no server dump behind it — and a row
- * property with no name is a row that shows its raw id, not one that shows a blank. Numbers pass through untouched,
- * because nought is a real colour.
- */
-function blank(value: string | number | undefined): string | number | undefined {
-    return value === "" ? undefined : value;
-}
-
 /** The part of a listfile path after the last "/". */
 function basename(path: string): string {
     const i = path.lastIndexOf("/");
@@ -993,253 +1023,6 @@ export function buildIndexes(pack: SpellPack): SpellData {
         const alt = sp.altNames ? sp.altNames[i] : "";
         namesL[i] = [sp.names[i], sp.subtexts[i], alt]
             .filter(Boolean).join(" ").toLowerCase();
-    }
-
-    // The pack ships rows now (format 51+): per column, the distinct rows of
-    // each kind pooled once, and per spell which of them it has. Every reader
-    // below was written against the old per-spell sections, so the rows are put
-    // back into exactly those arrays here, once — the same walk `buildIndexes`
-    // did anyway, one step earlier. PHASE 14 deletes the readers and this with
-    // them; nothing new should be written against these shapes.
-    // Kind word -> the category number the readers below switch on, read off
-    // the pack's own `modelCatNames` rather than restated here. The unnamed
-    // category is the plain attached model, and the carried weapon shares it:
-    // the row model tells them apart by the file being a slot marker, which is
-    // a distinction the category number never carried.
-    const catOf: Record<string, number> = {};
-    for (const [cat, word] of Object.entries(pack.modelCatNames || NO_WORDS)) {
-        catOf[word || "attached"] = Number(cat);
-    }
-    catOf.equipped = catOf.attached;
-
-    const NO_ATTACH = {missing: -1};
-    const NONE = {missing: 0};
-    // One walk per table, not one per section: each of these tables holds
-    // hundreds of thousands of references, and a section that swept its own
-    // would sweep every one of them again for the sections beside it.
-    const models = expandAll(pack.modelRows, sp.ids, {
-        spellModels: {
-            kinds: catOf,
-            cats: true,
-            columns: {
-                // A carried weapon's file is the slot marker it points at,
-                // which is `slot` here and was always a negative file id there.
-                fids: {from: ["file", "slot"], ...NONE},
-                targets: {from: ["target"], ...NONE},
-                srcAttach: {from: ["from", "attach"], ...NO_ATTACH},
-                dstAttach: {from: ["to"], ...NO_ATTACH},
-                refIds: {from: ["id"], ...NONE},
-                motions: {from: ["motion"], ...NONE},
-            },
-        },
-        spellMounts: {kinds: {mount: 0},
-                      columns: {displayIds: {from: ["name"], ...NONE}}},
-    });
-    const modelColumns = models.spellModels;
-    const spellMountRows = models.spellMounts;
-
-    const spellSoundRows = expand(pack.soundRows, sp.ids, {
-        kinds: {sound: 0},
-        columns: {
-            soundKitIds: {from: ["kit"], ...NONE}, fids: {from: ["file"], ...NONE},
-            targets: {from: ["target"], ...NONE},
-        },
-    });
-
-    const anims = expandAll(pack.animRows, sp.ids, {
-        // A kit ships one row per animation and region, so its rows repeat the
-        // kit id; the section it replaced held each kit once.
-        spellAnimKits: {kinds: {kit: 0}, unique: ["id"],
-                        columns: {id: {from: ["id"], ...NONE},
-                                  targets: {from: ["target"], ...NONE}}},
-        spellVisualAnims: {kinds: {loose: 0},
-                           columns: {animIds: {from: ["anim"], ...NONE},
-                                     targets: {from: ["target"], ...NONE}}},
-        spellReplaceAnims: {kinds: {replace: 0},
-                            columns: {srcAnims: {from: ["from"], ...NONE},
-                                      dstAnims: {from: ["to"], ...NONE},
-                                      targets: {from: ["target"], ...NONE}}},
-    });
-    const spellAnimKitRows = anims.spellAnimKits;
-    const spellLooseAnims = anims.spellVisualAnims;
-    const spellReplacements = anims.spellReplaceAnims;
-
-    const spellPassengers = passengerRows(
-        pack.animRows, sp.ids, Object.values(pack.passengerRoleNames || NO_WORDS));
-
-    // The seventeen visual families, from one walk of the fx table. Each row
-    // stores WHICH effect it is where the effect has an id table — a tint id, a
-    // creature, an object entry — so the arrays below come back holding what
-    // they always held. The three that expand one effect into a row per texture
-    // name the column that identifies the effect, which collapses them back.
-    const NO_CHANNEL = {missing: -1};
-    const fx = expandAll(pack.fxRows, sp.ids, {
-        chains: {
-            kinds: {chain: 0}, unique: ["chain", "from", "to", "target"],
-            columns: {
-                chainIds: {from: ["chain"], ...NONE}, targets: {from: ["target"], ...NONE},
-                srcAttach: {from: ["from"], ...NO_ATTACH}, dstAttach: {from: ["to"], ...NO_ATTACH},
-            },
-        },
-        dissolves: {
-            kinds: {dissolve: 0}, unique: ["dissolve"],
-            columns: {dissolveIds: {from: ["dissolve"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-        screens: {
-            kinds: {screen: 0}, unique: ["screen"],
-            columns: {screenIds: {from: ["screen"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-        shadowies: {
-            kinds: {shadowy: 0},
-            columns: {shadowyIds: {from: ["colour"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-        ghostMats: {
-            kinds: {ghost: 0},
-            columns: {ghostIds: {from: ["colour"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-        glows: {
-            kinds: {glow: 0},
-            columns: {glowIds: {from: ["colour"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-        tints: {
-            kinds: {tint: 0},
-            columns: {tintIds: {from: ["colour"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-        transparencies: {
-            kinds: {transparency: 0},
-            columns: {percents: {from: ["percent"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-        desaturates: {
-            kinds: {desaturate: 0},
-            columns: {percents: {from: ["percent"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-        freezes: {kinds: {freeze: 0}, columns: {}},
-        camos: {kinds: {camo: 0}, columns: {}},
-        morphs: {
-            kinds: {morph: 0},
-            columns: {creatureIds: {from: ["display"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-        shapeshifts: {
-            kinds: {shapeshift: 0},
-            columns: {formIds: {from: ["form"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-        scales: {
-            kinds: {scale: 0},
-            columns: {percents: {from: ["amount"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-        summons: {
-            kinds: {summon: 0},
-            columns: {
-                creatureIds: {from: ["creature"], ...NONE}, controls: {from: ["control"], ...NONE},
-                targets: {from: ["target"], ...NONE},
-            },
-        },
-        objects: {
-            kinds: {object: 0},
-            columns: {objectIds: {from: ["object"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-    });
-
-    // The eight mechanics families, from one walk of the mech table. A 1.0
-    // mechanic row is one SpellEffect carrying both halves and the row model
-    // splits them, so the section is rebuilt from the EFFECT rows alone — they
-    // carry the aura and the two implicit targets beside them, which is the
-    // pairing the section exists for and what an aura row on its own cannot say.
-    const mech = expandAll(pack.mechRows, sp.ids, {
-        mechanics: {
-            kinds: {effect: 0},
-            columns: {
-                effects: {from: ["name"], ...NONE}, auras: {from: ["aura"], ...NONE},
-                targetsA: {from: ["targetA"], ...NONE}, targetsB: {from: ["targetB"], ...NONE},
-                misc0: {from: ["misc0"], ...NONE}, misc1: {from: ["misc1"], ...NONE},
-            },
-        },
-        areas: {kinds: {location: 0}, columns: {areaIds: {from: ["area"], ...NONE}}},
-        invis: {
-            kinds: {invis: 0},
-            columns: {types: {from: ["channel"], ...NO_CHANNEL}, targets: {from: ["target"], ...NONE}},
-        },
-        detects: {
-            kinds: {detect: 0},
-            columns: {types: {from: ["channel"], ...NO_CHANNEL}, targets: {from: ["target"], ...NONE}},
-        },
-        vehicles: {
-            kinds: {seats: 0}, unique: ["vehicle"],
-            columns: {vehicleIds: {from: ["vehicle"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-        speeds: {
-            kinds: {speed: 0},
-            columns: {
-                modes: {from: ["mode"], ...NONE}, percents: {from: ["amount"], ...NONE},
-                targets: {from: ["target"], ...NONE},
-            },
-        },
-        keybinds: {
-            kinds: {keybind: 0},
-            columns: {overrideIds: {from: ["key"], ...NONE}, targets: {from: ["target"], ...NONE}},
-        },
-        // The spell graph, one direction per kind. They are the same edges read
-        // from either end, which is why the pack ships no third copy of them.
-        triggers: {
-            kinds: {triggers: 0},
-            columns: {
-                others: {from: ["spell"], ...NONE}, hows: {from: ["how"], ...NONE},
-                targets: {from: ["target"], ...NONE},
-            },
-        },
-        origins: {
-            kinds: {origin: 0},
-            columns: {
-                others: {from: ["spell"], ...NONE}, hows: {from: ["how"], ...NONE},
-                targets: {from: ["target"], ...NONE},
-            },
-        },
-    });
-    // The movement is a word to every reader below and a number in the row, so
-    // it is named here rather than by each of them.
-    const speedModes = pack.speedModeNames || [];
-    const spellSpeedRows = {
-        spellIds: mech.speeds.spellIds, percents: mech.speeds.percents,
-        targets: mech.speeds.targets,
-        movements: mech.speeds.modes.map((mode) => speedModes[mode] ?? ""),
-    };
-
-    // The row tables themselves, carried through untouched for the readers that
-    // want rows rather than the columns above: search 2.0 evaluates these.
-    // Each vocabulary becomes one lookup from a stored number to what it means,
-    // in whichever of the three shapes the pack says it is. A colour resolves to
-    // a NUMBER through the same mechanism a name resolves to a word through —
-    // the row stores which tint it is, and this says what that id means.
-    const rowTables: Record<string, RowTable> = {
-        model: pack.modelRows, sound: pack.soundRows, anim: pack.animRows,
-        fx: pack.fxRows, mech: pack.mechRows,
-    };
-    const rowVocabs: Record<string, (value: number) => string | number | undefined> = {};
-    for (const [name, where] of Object.entries(pack.rowVocabs || {})) {
-        const section = (pack as unknown as Record<string, unknown>)[where.in];
-        if (!section) continue;
-        const block = section as Record<string, unknown>;
-        if (where.keys !== undefined && where.values !== undefined) {
-            // Paired columns. The map is built on FIRST USE, not at load: the
-            // spell-name vocabulary is a quarter of a million entries and most
-            // loads never resolve a single link.
-            let byKey: Map<number, string | number> | null = null;
-            rowVocabs[name] = (value) => {
-                if (!byKey) {
-                    byKey = new Map();
-                    const keys = block[where.keys!] as number[] | undefined;
-                    const values = block[where.values!] as (string | number)[] | undefined;
-                    if (keys && values) for (let i = 0; i < keys.length; i++) byKey.set(keys[i], values[i]);
-                }
-                return blank(byKey.get(value));
-            };
-        } else if (where.values !== undefined) {
-            const column = block[where.values] as (string | number)[] | undefined;
-            if (column) rowVocabs[name] = (value) => blank(column[value]);
-        } else {
-            const direct = section as Record<number, string | number>;
-            rowVocabs[name] = (value) => blank(direct[value]);
-        }
     }
 
     // §3x the cooked prose. It ships deduped and STAYS deduped — nothing is
@@ -1351,7 +1134,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // gate and its value-matching pool (format 34+; empty on older packs)
     const missileMotionNames = pack.missileMotions ? pack.missileMotions.names : [];
     {
-        const sm = modelColumns;
+        const sm = pack.spellModels;
         const {spellIds, fids, cats, targets, srcAttach, dstAttach} = sm;
         // ref id per row: the entity the model came from, in the id space its
         // category names (a CreatureDisplayID on display rows, an Item::ID on
@@ -1448,7 +1231,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const soundKitFiles = new Map<number, Set<number>>(); // soundKitId -> Set(fid)
     const soundKitName = new Map<number, string>();     // soundKitId -> human name
     {
-        const {spellIds, soundKitIds, fids, targets} = spellSoundRows;
+        const {spellIds, soundKitIds, fids, targets} = pack.spellSounds;
         for (let i = 0; i < spellIds.length; i++) {
             const s = spellIds[i], k = soundKitIds[i], f = fids[i];
             pushTo(spellSounds, s, {soundKitId: k, fid: f, targets: targets ? targets[i] : 0});
@@ -1479,35 +1262,27 @@ export function buildIndexes(pack: SpellPack): SpellData {
 
     // target masks for the id-keyed sections — who each row's content plays
     // on (pack format 22; empty for older packs, which renders as no icons)
-    const animKitTargets = maskIndex(spellAnimKitRows, "id");
-    const visualAnimTargets = maskIndex(spellLooseAnims, "animIds");
-    const fxTargets = maskIndex(fx.chains, "chainIds");
-    const dissolveTargets = maskIndex(fx.dissolves, "dissolveIds");
-    const glowTargets = maskIndex(fx.glows, "glowIds");
-    const shadowyTargets = maskIndex(fx.shadowies, "shadowyIds");
-    const ghostMatTargets = maskIndex(fx.ghostMats, "ghostIds");
+    const animKitTargets = maskIndex(pack.spellAnimKits, "animKitIds");
+    const visualAnimTargets = maskIndex(pack.spellVisualAnims, "animIds");
+    const fxTargets = maskIndex(pack.spellFx, "chainIds");
+    const dissolveTargets = maskIndex(pack.spellDissolves, "dissolveIds");
+    const glowTargets = maskIndex(pack.spellGlows, "glowIds");
+    const shadowyTargets = maskIndex(pack.spellShadowies, "shadowyIds");
+    const ghostMatTargets = maskIndex(pack.spellGhostMats, "ghostIds");
     // effect-driven fx (pack format 25): masks from SpellEffect.ImplicitTarget
     // rather than the visual-event graph — who a morph/summon/vehicle/screen/
     // shapeshift lands on (a polymorph's morph is on the target, not the caster)
-    const morphTargets = maskIndex(fx.morphs, "creatureIds");
-    const summonTargets = maskIndex(fx.summons, "creatureIds");
+    const morphTargets = maskIndex(pack.spellMorphs, "creatureIds");
+    const summonTargets = maskIndex(pack.spellSummons, "creatureIds");
     // where a spawned gameobject is placed — usually a ground point
-    const objectTargets = maskIndex(fx.objects, "objectIds");
-    const vehicleTargets = maskIndex(mech.vehicles, "vehicleIds");
-    const shapeshiftTargets = maskIndex(fx.shapeshifts, "formIds");
-    const screenTargets = maskIndex(fx.screens, "screenIds");
+    const objectTargets = maskIndex(pack.spellObjects, "objectIds");
+    const vehicleTargets = maskIndex(pack.spellVehicles, "vehicleIds");
+    const shapeshiftTargets = maskIndex(pack.spellShapeshifts, "formIds");
+    const screenTargets = maskIndex(pack.spellScreens, "screenIds");
     // scale's id IS its percent, so the "id array" is `percents` — the mask was
     // already on the pill (it rides spellScaleMods); this indexes it the way
     // every other category is indexed, so the SEARCH can read it too
-    const scaleTargets = maskIndex(fx.scales, "percents");
-    // Format 50 carries a mask on the families that always had one to carry:
-    // a tint, a fade and a drain are aimed like every other overlay, and an
-    // invisibility channel like every other aura.
-    const tintTargets = maskIndex(fx.tints, "tintIds");
-    const transparencyTargets = maskIndex(fx.transparencies, "percents");
-    const desaturateTargets = maskIndex(fx.desaturates, "percents");
-    const invisTargets = maskIndex(mech.invis, "types");
-    const detectTargets = maskIndex(mech.detects, "types");
+    const scaleTargets = maskIndex(pack.spellScales, "percents");
     // mask bit -> search word
     const targetNames = pack.targetNames || NO_WORDS;
 
@@ -1515,7 +1290,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const spellAnimKits = new Map<number, number[]>(); // spell id -> [animKitId]
     const animKitSpells = new Map<number, number[]>(); // animKitId -> [spell id]
     {
-        const {spellIds, id: animKitIds} = spellAnimKitRows;
+        const {spellIds, animKitIds} = pack.spellAnimKits;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellAnimKits, spellIds[i], animKitIds[i]);
             pushTo(animKitSpells, animKitIds[i], spellIds[i]);
@@ -1591,7 +1366,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const fxSearchL = new Map<number, string>();    // chainId -> search corpus
     const spellChainRows = new Map<number, { chain: number; src: number; dst: number }[]>();
     {
-        const {spellIds, chainIds, srcAttach, dstAttach} = fx.chains;
+        const {spellIds, chainIds, srcAttach, dstAttach} = pack.spellFx;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(fxSpells, chainIds[i], spellIds[i]);
             // spellFx stays deduped chain ids for search/filters/export; the row
@@ -1639,7 +1414,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const dissolveAttach = new Map<number, number>();    // dissolveId -> M2 attach id (-1 = full body)
     const dissolveSearchL = new Map<number, string>();   // dissolveId -> search corpus
     {
-        const {spellIds, dissolveIds} = fx.dissolves;
+        const {spellIds, dissolveIds} = pack.spellDissolves;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellDissolves, spellIds[i], dissolveIds[i]);
             pushTo(dissolveSpells, dissolveIds[i], spellIds[i]);
@@ -1669,7 +1444,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const glowAlphas = new Map<number, number>();   // glowId -> alpha 0..255 (pack format 17+)
     const glowSearchL = new Map<number, string>();  // glowId -> search corpus
     {
-        const {spellIds, glowIds} = fx.glows;
+        const {spellIds, glowIds} = pack.spellGlows;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellGlows, spellIds[i], glowIds[i]);
             pushTo(glowSpells, glowIds[i], spellIds[i]);
@@ -1691,7 +1466,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const shadowyAttach = new Map<number, number>();    // shadowyId -> M2 attach id (-1 = full body)
     const shadowySearchL = new Map<number, string>();   // shadowyId -> search corpus
     {
-        const {spellIds, shadowyIds} = fx.shadowies;
+        const {spellIds, shadowyIds} = pack.spellShadowies;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellShadowies, spellIds[i], shadowyIds[i]);
             pushTo(shadowySpells, shadowyIds[i], spellIds[i]);
@@ -1717,8 +1492,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const ghostMatSpells = new Map<number, number[]>(); // ghostMatId -> [spell id]
     const ghostMatColors = new Map<number, number>();   // ghostMatId -> packed RGB
     const ghostMatSearchL = new Map<number, string>();  // ghostMatId -> search corpus
-    if (fx.ghostMats) {
-        const {spellIds, ghostIds} = fx.ghostMats;
+    if (pack.spellGhostMats) {
+        const {spellIds, ghostIds} = pack.spellGhostMats;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellGhostMats, spellIds[i], ghostIds[i]);
             pushTo(ghostMatSpells, ghostIds[i], spellIds[i]);
@@ -1737,8 +1512,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const spellDesaturates = new Map<number, number[]>(); // spell id -> [percent]
     const desatSpells = new Map<number, number[]>();      // percent -> [spell id]
     const desatSearchL = new Map<number, string>();       // percent -> corpus
-    if (fx.desaturates) {
-        const {spellIds, percents} = fx.desaturates;
+    if (pack.spellDesaturates) {
+        const {spellIds, percents} = pack.spellDesaturates;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellDesaturates, spellIds[i], percents[i]);
             pushTo(desatSpells, percents[i], spellIds[i]);
@@ -1749,8 +1524,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const spellTransps = new Map<number, number[]>(); // spell id -> [percent]
     const transpSpells = new Map<number, number[]>(); // percent -> [spell id]
     const transpSearchL = new Map<number, string>();  // percent -> corpus
-    if (fx.transparencies) {
-        const {spellIds, percents} = fx.transparencies;
+    if (pack.spellTransparencies) {
+        const {spellIds, percents} = pack.spellTransparencies;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellTransps, spellIds[i], percents[i]);
             pushTo(transpSpells, percents[i], spellIds[i]);
@@ -1760,8 +1535,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     }
 
     // freeze (Type 11) / camo (Type 18): valueless standalone pills
-    const spellFreezes = new Set<number>(fx.freezes ? fx.freezes.spellIds : []);
-    const spellCamos = new Set<number>(fx.camos ? fx.camos.spellIds : []);
+    const spellFreezes = new Set<number>(pack.spellFreezes ? pack.spellFreezes.spellIds : []);
+    const spellCamos = new Set<number>(pack.spellCamos ? pack.spellCamos.spellIds : []);
 
     // attribute flags: whatever handlers the pack carries. A pack older than
     // format 37 has none, which switches every flag pill off through its
@@ -1854,8 +1629,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const areaRoots = new Map<number, number>();
     const areaMapIds = new Map<number, number>();
     const areaSearchL = new Map<number, string>();
-    if (mech.areas && pack.areas) {
-        const {spellIds, areaIds} = mech.areas;
+    if (pack.spellAreas && pack.areas) {
+        const {spellIds, areaIds} = pack.spellAreas;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellAreas, spellIds[i], areaIds[i]);
             pushTo(areaSpells, areaIds[i], spellIds[i]);
@@ -1885,8 +1660,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // mul/add colors paint; overlays (mask false) carry their own colors.
     const screenTextures = new Map<number, { fid: number; mask: boolean }[]>();
     const screenSearchL = new Map<number, string>();  // screenId -> search corpus
-    if (fx.screens) {
-        const {spellIds, screenIds} = fx.screens;
+    if (pack.spellScreens) {
+        const {spellIds, screenIds} = pack.spellScreens;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellScreens, spellIds[i], screenIds[i]);
             pushTo(screenSpells, screenIds[i], spellIds[i]);
@@ -1927,17 +1702,13 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // plus the word "replace" itself. ("stance" was the proc-7 form's name
     // before the merge and is NOT an alias — it is in no corpus and
     // anim:stance returns nothing.)
-    const spellReplaceAnims =
-        new Map<number, { src: number; dst: number; mask: number }[]>();
+    const spellReplaceAnims = new Map<number, { src: number; dst: number }[]>();
     const replaceSpells = new Map<number, Set<number>>(); // animId (either side) -> spell ids
-    {
-        const {spellIds, srcAnims, dstAnims, targets} = spellReplacements;
+    if (pack.spellReplaceAnims) {
+        const {spellIds, srcAnims, dstAnims} = pack.spellReplaceAnims;
         for (let i = 0; i < spellIds.length; i++) {
             const s = spellIds[i], src = srcAnims[i], dst = dstAnims[i];
-            // The mask rides the entry rather than a parallel index, because a
-            // replacement is keyed by BOTH animations and every other index is
-            // keyed by one id.
-            pushTo(spellReplaceAnims, s, {src, dst, mask: targets ? targets[i] : 0});
+            pushTo(spellReplaceAnims, s, {src, dst});
             for (const a of [src, dst]) {
                 let set = replaceSpells.get(a);
                 if (!set) replaceSpells.set(a, set = new Set());
@@ -1951,8 +1722,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     // rendered as loose pills in the Animations column
     const spellVisualAnims = new Map<number, number[]>(); // spell id -> [animId]
     const visualAnimSpells = new Map<number, number[]>(); // animId -> [spell id]
-    {
-        const {spellIds, animIds} = spellLooseAnims;
+    if (pack.spellVisualAnims) {
+        const {spellIds, animIds} = pack.spellVisualAnims;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellVisualAnims, spellIds[i], animIds[i]);
             pushTo(visualAnimSpells, animIds[i], spellIds[i]);
@@ -1978,8 +1749,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const tintSpells = new Map<number, number[]>(); // tintId -> [spell id]
     const tintColors = new Map<number, number>();   // tintId -> packed RGB
     const tintSearchL = new Map<number, string>();  // tintId -> search corpus
-    if (fx.tints) {
-        const {spellIds, tintIds} = fx.tints;
+    if (pack.spellTints) {
+        const {spellIds, tintIds} = pack.spellTints;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellTints, spellIds[i], tintIds[i]);
             pushTo(tintSpells, tintIds[i], spellIds[i]);
@@ -1997,9 +1768,12 @@ export function buildIndexes(pack: SpellPack): SpellData {
      * it is aimed at (ImplicitTarget_0/_1). Keeping the two together is the
      * whole point of the section: a spell whose effects aim at different
      * things — 10.4% of them — cannot say which target belongs to which effect
-     * from per-spell sets alone. That pairing is why the section is rebuilt
-     * from the mech column's EFFECT rows: the two halves are separate rows to
-     * the evaluator, and only the effect row carries the aura beside it. */
+     * from per-spell sets alone.
+     *
+     * Format <= 28 packs ship flat spellEffects/spellAuras sets instead; they
+     * are read into the same row shape with no targets, so every consumer
+     * below sees one structure and stale packs simply render no target
+     * segment or icons. */
     const spellMechanics = new Map<number, MechanicRow[]>();
     const implicitTargetBits = new Map<number, number>(
         Object.entries(pack.implicitTargetBits || {}).map(([k, v]) => [Number(k), v]));
@@ -2009,13 +1783,39 @@ export function buildIndexes(pack: SpellPack): SpellData {
      * index could only answer "has this name somewhere", which is exactly the
      * question the pairing exists to stop asking — and sweeping the flat
      * arrays is ~10x faster than walking the Map's row objects (measured on
-     * 9.2.7: 372k rows, 170 ms -> 15-25 ms per query). */
-    const {spellIds: mechSpells, effects, auras, targetsA, targetsB} = mech.mechanics;
-    const mechanicCols: MechanicColumns = {
-        spellIds: mechSpells, effects, auras, targetsA, targetsB,
-    };
+     * 9.2.7: 372k rows, 170 ms -> 15-25 ms per query), for no extra memory
+     * when the pack ships them, since these are its own arrays by reference. */
+    let mechanicCols: MechanicColumns = pack.spellMechanics
+        ? {...pack.spellMechanics}
+        : {spellIds: [], effects: [], auras: [], targetsA: [], targetsB: []};
     {
-        const {spellIds} = mechanicCols;
+        // stale packs (format <= 28): concatenate the two flat sets into the
+        // same column shape, target-less, so both consumers see one structure
+        if (!pack.spellMechanics) {
+            const eff = pack.spellEffects, aur = pack.spellAuras;
+            const n = (eff ? eff.spellIds.length : 0) + (aur ? aur.spellIds.length : 0);
+            const cols: MechanicColumns = {
+                spellIds: new Array(n), effects: new Array(n), auras: new Array(n),
+                targetsA: new Array(n).fill(0), targetsB: new Array(n).fill(0),
+            };
+            let k = 0;
+            if (eff) {
+                for (let i = 0; i < eff.spellIds.length; i++, k++) {
+                    cols.spellIds[k] = eff.spellIds[i];
+                    cols.effects[k] = eff.effects[i];
+                    cols.auras[k] = 0;
+                }
+            }
+            if (aur) {
+                for (let i = 0; i < aur.spellIds.length; i++, k++) {
+                    cols.spellIds[k] = aur.spellIds[i];
+                    cols.effects[k] = 0;
+                    cols.auras[k] = aur.auras[i];
+                }
+            }
+            mechanicCols = cols;
+        }
+        const {spellIds, effects, auras, targetsA, targetsB} = mechanicCols;
         for (let i = 0; i < spellIds.length; i++) {
             const tA = targetsA[i] || 0, tB = targetsB[i] || 0;
             pushTo(spellMechanics, spellIds[i], {
@@ -2047,7 +1847,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const morphDisplays = new Map<number, DisplayRef[]>();
     const morphSearchL = new Map<number, string>();  // creatureId -> search corpus
     {
-        const {spellIds, creatureIds} = fx.morphs;
+        const {spellIds, creatureIds} = pack.spellMorphs;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellMorphs, spellIds[i], creatureIds[i]);
             pushTo(morphSpells, creatureIds[i], spellIds[i]);
@@ -2077,8 +1877,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const shapeshiftNames = new Map<number, string>();    // formId -> form name
     const shapeshiftDisplays = new Map<number, DisplayRef[]>();
     const shapeshiftSearchL = new Map<number, string>();  // formId -> search corpus
-    if (fx.shapeshifts) {
-        const {spellIds, formIds} = fx.shapeshifts;
+    if (pack.spellShapeshifts) {
+        const {spellIds, formIds} = pack.spellShapeshifts;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellShapeshifts, spellIds[i], formIds[i]);
             pushTo(shapeshiftSpells, formIds[i], spellIds[i]);
@@ -2116,7 +1916,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         }
         // pack rows are unique (spell, creature, control) triples, so the
         // pair maps need no dedupe
-        const {spellIds, creatureIds, controls} = fx.summons;
+        const {spellIds, creatureIds, controls} = pack.spellSummons;
         for (let i = 0; i < spellIds.length; i++) {
             const c = creatureIds[i], ctrl = controls[i];
             pushTo(spellSummons, spellIds[i], {creatureId: c, control: ctrl});
@@ -2140,8 +1940,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const mountNames = new Map<number, string>();    // displayId -> mount name ("" = unnamed)
     const mountFids = new Map<number, number>();     // displayId -> model fid (0 = unresolved)
     const mountSearchL = new Map<number, string>();  // displayId -> search corpus
-    {
-        const {spellIds, displayIds} = spellMountRows;
+    if (pack.spellMounts) {
+        const {spellIds, displayIds} = pack.spellMounts;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellMounts, spellIds[i], displayIds[i]);
             pushTo(mountSpells, displayIds[i], spellIds[i]);
@@ -2170,8 +1970,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const objectFids = new Map<number, number>();     // entry -> model fid (0 = unresolved)
     const objectTypes = new Map<number, number>();    // entry -> GAMEOBJECT_TYPE (gates the Wowhead link)
     const objectSearchL = new Map<number, string>();  // entry -> search corpus
-    if (fx.objects) {
-        const {spellIds, objectIds} = fx.objects;
+    if (pack.spellObjects) {
+        const {spellIds, objectIds} = pack.spellObjects;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellObjects, spellIds[i], objectIds[i]);
             pushTo(objectSpells, objectIds[i], spellIds[i]);
@@ -2207,8 +2007,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const spellVehicles = new Map<number, number[]>(); // spell id -> [vehicle id]
     const vehicleSpells = new Map<number, number[]>(); // vehicle id -> [spell id]
     const vehicleSearchL = new Map<number, string>();  // vehicle id -> lowercased search corpus
-    if (mech.vehicles) {
-        const {spellIds, vehicleIds} = mech.vehicles;
+    if (pack.spellVehicles) {
+        const {spellIds, vehicleIds} = pack.spellVehicles;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellVehicles, spellIds[i], vehicleIds[i]);
             pushTo(vehicleSpells, vehicleIds[i], spellIds[i]);
@@ -2247,8 +2047,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const spellKeybinds = new Map<number, number[]>(); // spell id -> [override id]
     const keybindSpells = new Map<number, number[]>(); // override id -> [spell id]
     const keybindSearchL = new Map<number, string>();  // override id -> lowercased search corpus
-    if (mech.keybinds) {
-        const {spellIds, overrideIds} = mech.keybinds;
+    if (pack.spellKeybinds) {
+        const {spellIds, overrideIds} = pack.spellKeybinds;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellKeybinds, spellIds[i], overrideIds[i]);
             pushTo(keybindSpells, overrideIds[i], spellIds[i]);
@@ -2260,7 +2060,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
                 `keybind ${row.fn} ${row.when}`.replace(/\s+/g, " ").trim().toLowerCase());
         }
     }
-    const keybindTargets = maskIndex(mech.keybinds, "overrideIds");
+    const keybindTargets = maskIndex(pack.spellKeybinds, "overrideIds");
 
     /* Spell -> spell links (pack format 35). The pack ships ONE direction; both
      * are built here, because "what triggers this" is the same edge list read
@@ -2281,8 +2081,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const originSpells = new Map<number, number[]>();
     const triggersSearchL = new Map<number, string>();
     const originSearchL = new Map<number, string>();
-    {
-        const kindNames = pack.linkKindNames || [];
+    if (pack.spellLinks) {
+        const {srcIds, dstIds, kinds, targets, kindNames} = pack.spellLinks;
         // one entry per (row spell, other end), collecting the words — a pair
         // joined two ways is ONE chip listing both, not two chips, so its mask
         // is the union of the ways too
@@ -2300,16 +2100,11 @@ export function buildIndexes(pack: SpellPack): SpellData {
                 prev.mask |= mask;
             }
         };
-        // The two kinds are the same edges read from either end, so each
-        // direction is filled from its own rows rather than from one list
-        // walked twice — which is what let the edge stop shipping a third time
-        // as a section of its own.
-        for (const [rows, into] of [[mech.triggers, spellTriggers],
-            [mech.origins, spellOrigins]] as const) {
-            const {spellIds, others, hows, targets} = rows;
-            for (let i = 0; i < spellIds.length; i++) {
-                push(into, spellIds[i], others[i], kindNames[hows[i]] || "", targets[i]);
-            }
+        for (let i = 0; i < srcIds.length; i++) {
+            const word = kindNames[kinds[i]] || "";
+            const mask = targets ? targets[i] : 0;
+            push(spellTriggers, srcIds[i], dstIds[i], word, mask);
+            push(spellOrigins, dstIds[i], srcIds[i], word, mask);
         }
         /* The two directions are DUALS, which is what makes the search side
          * free: the spells whose row shows "triggers X" are exactly the spells
@@ -2360,17 +2155,18 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const invisTypeSpells = new Map<number, number[]>();  // invisibility type -> [invis spell id]
     const detectTypeSpells = new Map<number, number[]>(); // invisibility type -> [detect spell id]
     const loadChannels = (
-        section: LegacyColumns,
+        section: { spellIds: number[]; types: number[]; targets: number[] } | undefined,
         spellPills: Map<number, { type: number; mask: number }[]>,
         typeSpells: Map<number, number[]>): void => {
+        if (!section) return;
         const {spellIds, types, targets} = section;
         for (let i = 0; i < spellIds.length; i++) {
             pushTo(spellPills, spellIds[i], {type: types[i], mask: targets[i]});
             pushTo(typeSpells, types[i], spellIds[i]);
         }
     };
-    loadChannels(mech.invis, spellInvisTypes, invisTypeSpells);
-    loadChannels(mech.detects, spellDetectTypes, detectTypeSpells);
+    loadChannels(pack.spellInvis, spellInvisTypes, invisTypeSpells);
+    loadChannels(pack.spellDetects, spellDetectTypes, detectTypeSpells);
 
     // movement-speed modifiers (pack format 30). A pill is a (movement,
     // percent) pair, so that pair is the id the search matches on and it
@@ -2383,8 +2179,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const speedSpells = new Map<string, number[]>();  // "move|pct" -> [spell id]
     const speedSearchL = new Map<string, string>();   // "move|pct" -> lowercase haystack
     const speedPercents = new Map<string, number>();  // "move|pct" -> the percent, for the numeric axis
-    if (spellSpeedRows) {
-        const {spellIds, movements, percents, targets} = spellSpeedRows;
+    if (pack.spellSpeeds) {
+        const {spellIds, movements, percents, targets} = pack.spellSpeeds;
         for (let i = 0; i < spellIds.length; i++) {
             const move = movements[i], pct = percents[i];
             const key = `${move}|${pct}`;
@@ -2405,8 +2201,8 @@ export function buildIndexes(pack: SpellPack): SpellData {
     const spellScaleMods = new Map<number, { pct: number; amount: string; mask: number }[]>();
     const scaleSpells = new Map<number, number[]>(); // percent -> [spell id]
     const scaleSearchL = new Map<number, string>();  // percent -> lowercase haystack
-    if (fx.scales) {
-        const {spellIds, percents, targets} = fx.scales;
+    if (pack.spellScales) {
+        const {spellIds, percents, targets} = pack.spellScales;
         for (let i = 0; i < spellIds.length; i++) {
             const pct = percents[i], amount = signedPercent(pct);
             pushTo(spellScaleMods, spellIds[i], {pct, amount, mask: targets[i]});
@@ -2417,21 +2213,12 @@ export function buildIndexes(pack: SpellPack): SpellData {
 
     // the rider's own animations while entering/seated/exiting — their own
     // "passenger" group in the Animations column
-    const spellPassengerAnims = new Map<number, { anim: number; role: number }[]>();
+    const spellPassengerAnims = new Map<number, number[]>(); // spell id -> [animId]
     const passengerAnimSpells = new Map<number, number[]>(); // animId -> [spell id]
-    const passengerRoleNames = pack.passengerRoleNames || NO_WORDS;
-    {
-        const {spellIds, animIds, roles} = spellPassengers;
-        // An animation serving two roles is two rows, so the inverted index is
-        // deduped: it answers "which spells reach this animation", and a spell
-        // that reaches it twice is still one answer.
-        const seen = new Set<string>();
+    if (pack.spellPassengerAnims) {
+        const {spellIds, animIds} = pack.spellPassengerAnims;
         for (let i = 0; i < spellIds.length; i++) {
-            pushTo(spellPassengerAnims, spellIds[i],
-                {anim: animIds[i], role: roles ? roles[i] : -1});
-            const pair = `${animIds[i]}:${spellIds[i]}`;
-            if (seen.has(pair)) continue;
-            seen.add(pair);
+            pushTo(spellPassengerAnims, spellIds[i], animIds[i]);
             pushTo(passengerAnimSpells, animIds[i], spellIds[i]);
         }
     }
@@ -2455,7 +2242,6 @@ export function buildIndexes(pack: SpellPack): SpellData {
         iconNames, iconFids, iconOf,
         namesL, descriptionText, descriptionOf, auraText, auraOf, encounterText, encounterOf,
         spellIndex, files, hasSyntheticFiles,
-        rowTables, rowVocabs,
         spellModels, modelSpells, modelFids, attachmentNames,
         spellModelCats, modelCatSpells, modelCatFidSpells, modelCatNames,
         items, itemSearchL, itemSpells, itemCat, missileMotionNames,
@@ -2482,7 +2268,6 @@ export function buildIndexes(pack: SpellPack): SpellData {
         targetNames, animKitTargets, visualAnimTargets, fxTargets,
         dissolveTargets, glowTargets, shadowyTargets, ghostMatTargets,
         morphTargets, summonTargets, objectTargets, vehicleTargets, shapeshiftTargets,
-        tintTargets, transparencyTargets, desaturateTargets, invisTargets, detectTargets,
         screenTargets,
         spellMounts, mountSpells, mountNames, mountFids, mountSearchL,
         spellObjects, objectSpells, objectNames, objectFids, objectTypes, objectSearchL,
@@ -2495,7 +2280,7 @@ export function buildIndexes(pack: SpellPack): SpellData {
         spellInvisTypes, spellDetectTypes, invisTypeSpells, detectTypeSpells,
         spellSpeedMods, speedSpells, speedSearchL, speedPercents,
         spellScaleMods, scaleSpells, scaleSearchL, scaleTargets,
-        spellPassengerAnims, passengerAnimSpells, passengerRoleNames,
+        spellPassengerAnims, passengerAnimSpells,
         spellKeybinds, keybindSpells, keybinds, keybindSearchL, keybindTargets,
         spellTriggers, spellOrigins,
         triggersSpells, triggersSearchL, originSpells, originSearchL,

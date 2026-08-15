@@ -43,6 +43,7 @@ import "../src/pilltypes";     // side effect: registers every pill type
 import type {Dataset} from "../src/search/index";
 import {parse, run as runKernel} from "../src/search/index";
 import {packDataset} from "./dataset";
+import type {RowPack} from "../src/packrows";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -124,26 +125,26 @@ const COLUMNS: ColumnSpec[] = [
 interface Engine {
     name: string;
 
-    run(d: SpellData, query: string): number;
+    run(d: SpellData, pack: RowPack, query: string): number;
 }
 
 /* The 2.0 dataset is built once per pack and reused across keystrokes — the same lifetime the app would give it —
  * so the bench times evaluation, not index construction. Construction is reported by the battery tool instead. */
 const datasets = new WeakMap<SpellData, Dataset>();
-const dataset = (d: SpellData): Dataset => {
+const dataset = (d: SpellData, pack: RowPack): Dataset => {
     let ds = datasets.get(d);
-    if (!ds) datasets.set(d, ds = packDataset(d));
+    if (!ds) datasets.set(d, ds = packDataset(d, pack));
     return ds;
 };
 
 const ENGINES: Engine[] = [
     {
         name: "1.0 searchGroups",
-        run: (d, q) => searchGroups(groupsOf(parseQueryParts(q)), d).spellIds.length,
+        run: (d, _pack, q) => searchGroups(groupsOf(parseQueryParts(q)), d).spellIds.length,
     },
     {
         name: "2.0 kernel",
-        run: (d, q) => runKernel(parse(q), dataset(d)).size,
+        run: (d, pack, q) => runKernel(parse(q), dataset(d, pack)).size,
     },
 ];
 
@@ -174,14 +175,14 @@ interface Bench {
     samples: number;
 }
 
-function bench(e: Engine, d: SpellData, reps: number): Bench {
-    for (const w of WORDS) for (const k of keystrokes(w)) e.run(d, k);   // warm
+function bench(e: Engine, d: SpellData, pack: RowPack, reps: number): Bench {
+    for (const w of WORDS) for (const k of keystrokes(w)) e.run(d, pack, k);   // warm
     const s: number[] = [];
     for (let r = 0; r < reps; r++) {
         for (const w of WORDS) {
             for (const k of keystrokes(w)) {
                 const t = performance.now();
-                e.run(d, k);
+                e.run(d, pack, k);
                 s.push(performance.now() - t);
             }
         }
@@ -265,7 +266,8 @@ for (const entry of wanted) {
      * eleven packs. */
     if (sections.has("bench")) {
         const d = buildIndexes(pack);
-        rec.bench = ENGINES.map((e) => bench(e, d, Number(values.reps)));
+        rec.bench = ENGINES.map((e) => bench(
+            e, d, pack as unknown as RowPack, Number(values.reps)));
     }
 
     report.push(rec);

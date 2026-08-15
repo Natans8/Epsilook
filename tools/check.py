@@ -102,11 +102,18 @@ DOC_TRIGGERS = (
 # the failure a human does not notice. 2026-08-05: `spellAttrs` shipped and
 # dossier.py and export.ts were both forgotten until the user asked.
 FORMAT_CONSUMERS = (
-    "src/data.ts",
-    "src/export.ts",
+    "src/packrows.ts",
+    "tools/dataset.ts",
     "tools/dossier.py",
     "docs/DATA_ROUTES.md",
 )
+"""What has to move when the artifact's shape does.
+
+The shipped 1.0 engine is deliberately absent. It is being replaced rather than
+carried, so a pack shape it cannot read is not a defect and warning that it did
+not follow the format would be asking for exactly the bridging that is not
+wanted.
+"""
 
 # Where PACK_FORMAT is declared. Named because the guard above reads the diff
 # of this file and nothing else: point it at a file the number has moved out
@@ -580,7 +587,7 @@ def pack_sections() -> tuple[dict[str, object] | None, str]:
 
 
 def check_pack_sections(rep: Report) -> None:
-    """Every section the pack SHIPS must be named in src/data.ts.
+    """Every section the pack SHIPS must be reached by some reader.
 
     Mechanical, and its failure is invisible in the worst way: a route can be
     built, gzipped and deployed to ten packs while the app never reads a byte
@@ -592,12 +599,31 @@ def check_pack_sections(rep: Report) -> None:
         rep.skip("pack sections", why)
         return
     sections = set(loaded)
-    source = (ROOT / "src" / "data.ts").read_text(encoding="utf-8")
-    unread = sorted(s for s in sections if s not in source)
+
+    # The readers, which are no longer one file: the shipped engine reads the
+    # vocabularies it always did, and search 2.0 reads the row tables.
+    source = "".join(
+        (ROOT / part).read_text(encoding="utf-8")
+        for part in ("src/data.ts", "src/packrows.ts", "tools/dataset.ts"))
+
+    # Two kinds of section are reached by DECLARATION rather than by name, so
+    # no reader mentions them and searching the source for one would report a
+    # section that is read on every query as dead. A row table is addressed by
+    # its column, and a vocabulary is named by the row table pointing at it.
+    vocabs = loaded.get("rowVocabs")
+    declared = {str(where.get("in", ""))
+                for where in (vocabs.values() if isinstance(vocabs, dict) else ())
+                if isinstance(where, dict)}
+    rows = {name for name, block in loaded.items()
+            if isinstance(block, dict) and {"kinds", "sizes", "refs"} <= set(block)}
+
+    unread = sorted(sections - rows - declared - {s for s in sections if s in source})
     if unread:
-        rep.fail("pack sections", f"shipped but unread by data.ts: {', '.join(unread)}")
+        rep.fail("pack sections", f"shipped but read by nothing: {', '.join(unread)}")
     else:
-        rep.ok("pack sections", f"all {len(sections)} read by data.ts")
+        rep.ok("pack sections",
+               f"all {len(sections)} read: {len(rows)} row tables, "
+               f"{len(declared)} vocabularies they name, the rest by name")
 
 
 def _blank(text: str) -> str:

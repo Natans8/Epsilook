@@ -4,13 +4,8 @@
  * The pack ships rows now: per column, the distinct rows of each kind pooled once, and per spell how many rows it has
  * and which pooled rows they are. That is the shape search 2.0 evaluates, and the shape this file exists to read.
  *
- * It also exists to keep the shipped app working without rewriting it. Every 1.0 reader in `data.ts` was written
- * against parallel arrays with the spell repeated beside each value, so {@link expand} puts the rows back into exactly
- * that shape once at load. The reader above it is unchanged; only where it gets its arrays from moved. When PHASE 14
- * deletes 1.0, this half of the file goes with it and the row reading stays.
- *
- * The expansion is not a cost the old shape avoided: `buildIndexes` walked those same arrays into maps anyway, so the
- * work is the same walk one step earlier.
+ * Nothing here serves the shipped 1.0 engine. That engine is dead code being replaced, not a compatibility target,
+ * so a pack shape it cannot read is not a problem this file solves.
  */
 
 /** One kind's pooled rows: its property columns, and how each property resolves. */
@@ -124,163 +119,30 @@ export function storedAt(table: RowTable, row: RowAt, prop: string): number | un
     return value === (table.absent[row.kind]?.[prop] ?? 0) ? undefined : value;
 }
 
-/* ------------------------------------------------------------------ the 1.0 bridge */
-
 /**
- * The arrays one legacy section was made of: `spellIds` and the rest, all parallel.
+ * What a loaded pack looks like to the row reader.
  *
- * Named rather than left a bare record of arrays so the readers that take one keep their own shape check: a caller
- * handing over something with no `spellIds` finds out here rather than at runtime.
+ * Declared here rather than taken from the shipped engine's `SpellPack`, because that type describes the sections the
+ * OLD app reads and this reads the ones it does not. The index signature is the honest form: a pack is a bag of
+ * sections by name, and which of them a vocabulary points at is the pack's own business.
  */
-export type LegacyColumns = { spellIds: number[] } & Record<string, number[]>;
+export interface RowPack {
+    readonly rowVocabs?: Readonly<Record<string, VocabWhere>>;
 
-/**
- * One legacy array: where its value comes from, and what it holds when a row has none.
- *
- * `from` is a list because one legacy array often served several properties the row model names apart — `srcAttach`
- * held a missile's launch point and everything else's single attachment, which are `from` and `attach` here. The first
- * property the row's kind actually declares wins.
- */
-interface LegacyColumn {
-    readonly from: readonly string[];
-    /**
-     * What to write where the kind declares none of `from`.
-     *
-     * Declared per array rather than read off the kind, because the kind has nothing to say about a property it does
-     * not have: an unset attachment is `-1` to every reader below and an unset file is `0`, and guessing one would
-     * quietly turn the other into a real value.
-     */
-    readonly missing: number;
-}
-
-/** One legacy section: which kinds' rows filled it, and what each of its arrays read. */
-interface Legacy {
-    /** The kinds contributing rows, and the value the `cats` array carries for each where one is wanted. */
-    readonly kinds: Readonly<Record<string, number>>;
-    /** The legacy array name, and where it came from. */
-    readonly columns: Readonly<Record<string, LegacyColumn>>;
-    /** Whether the legacy shape carries a `cats` array naming which kind each row came from. */
-    readonly cats?: boolean;
-    /**
-     * The columns that identify one legacy row, where the rows expand past it.
-     *
-     * Three fx families expand one effect into a row per texture it paints with, so the rows outnumber the effects and
-     * the section they replaced had one row per effect. Naming what identified a row there collapses them back, and
-     * every other column is taken from the first row of the run — which is sound because the expansion varies nothing
-     * else.
-     *
-     * It is a LIST because that is what a legacy row was keyed by: `spellFx` held one row per (chain, attach pair,
-     * mask), so a beam drawn between two different attachment points was two rows and naming the chain alone would
-     * silently lose one of them.
-     */
-    readonly unique?: readonly string[];
-}
-
-/** One column of one kind's pool, wherever it lives: a declared property, or a column the row carries. */
-function columnOf(table: RowTable, kind: string, name: string): readonly number[] | undefined {
-    return table.values[kind]?.[name] ?? table.carried?.[kind]?.[name];
+    readonly [section: string]: unknown;
 }
 
 /**
- * The columns several legacy sections were made of, rebuilt from the rows that replaced them.
+ * One query column's row table.
  *
- * One walk for all of them, because the walk is the expensive half: the mech table holds three quarters of a million
- * references and the eight sections it replaced would otherwise each sweep every one.
- *
- * Absence is written back as the legacy sentinel rather than dropped: `data.ts` reads `-1` for an unset attachment and
- * `0` for an unset file, and a shorter array would silently shift every row after the gap.
- *
- * @param table The column's row table.
- * @param spellIds Every spell id, in the pack's own order — the order `counts` is parallel to.
- * @param specs Per section name, which kinds fill it and what each of its arrays reads.
- * @returns Per section name, the legacy arrays, `spellIds` first and each parallel to the others.
+ * @param pack The loaded pack.
+ * @param column The column key, as the pack names it: `model`, `sound`, `anim`, `fx`, `mech`.
+ * @returns The table.
+ * @throws If the pack ships none — a pack too old to carry rows cannot be read at all, and saying so beats every
+ *   column quietly answering nothing.
  */
-export function expandAll<K extends string>(
-    table: RowTable, spellIds: readonly number[], specs: Readonly<Record<K, Legacy>>,
-): Record<K, LegacyColumns> {
-    const index = indexRows(table);
-    const entries = Object.entries(specs) as [K, Legacy][];
-    const out = {} as Record<K, LegacyColumns>;
-    for (const [name, spec] of entries) {
-        const columns: LegacyColumns = {spellIds: []};
-        for (const column of Object.keys(spec.columns)) columns[column] = [];
-        if (spec.cats) columns.cats = [];
-        out[name] = columns;
-    }
-
-    // Per spell, the keys already taken for each `unique` section — allocated once and cleared, because a spell's
-    // rows are a handful and a fresh set per spell per section is a quarter of a million allocations.
-    const seen = entries.map(() => new Set<string>());
-    for (let i = 0; i < spellIds.length; i++) {
-        for (const set of seen) set.clear();
-        for (let at = index.at[i]; at < index.at[i + 1]; at++) {
-            const row = index.owner[table.refs[at]];
-            for (let s = 0; s < entries.length; s++) {
-                const [name, spec] = entries[s];
-                const cat = spec.kinds[row.kind];
-                if (cat === undefined) continue;
-                if (spec.unique !== undefined) {
-                    const key = spec.unique
-                        .map((one) => columnOf(table, row.kind, one)?.[row.slot]).join("|");
-                    if (seen[s].has(key)) continue;
-                    seen[s].add(key);
-                }
-                const columns = out[name];
-                columns.spellIds.push(spellIds[i]);
-                if (spec.cats) columns.cats.push(cat);
-                for (const [column, source] of Object.entries(spec.columns)) {
-                    const found = source.from
-                        .map((one) => columnOf(table, row.kind, one))
-                        .find((column_) => column_ !== undefined);
-                    columns[column].push(found === undefined ? source.missing : found[row.slot]);
-                }
-            }
-        }
-    }
-    return out;
-}
-
-/**
- * The columns one legacy section was made of, rebuilt from the rows that replaced it.
- *
- * @param table The column's row table.
- * @param spellIds Every spell id, in the pack's own order — the order `counts` is parallel to.
- * @param spec Which kinds fill the section and what each of its arrays reads.
- * @returns The legacy arrays, `spellIds` first, each parallel to the others.
- */
-export function expand(
-    table: RowTable, spellIds: readonly number[], spec: Legacy,
-): LegacyColumns {
-    return expandAll(table, spellIds, {only: spec}).only;
-}
-
-/**
- * The rider's animations as (spell, anim, role) rows.
- *
- * A passenger row carries one property per role and sets exactly one of them, so the role is which property is set —
- * the shape 1.0 reads as a role number is recovered from the property's position.
- *
- * @param table The anim column's row table.
- * @param spellIds Every spell id, in the pack's own order.
- * @param roles The role words in role order, from the pack's own `passengerRoleNames`.
- * @returns The legacy arrays.
- */
-export function passengerRows(
-    table: RowTable, spellIds: readonly number[], roles: readonly string[],
-): { spellIds: number[]; animIds: number[]; roles: number[] } {
-    const index = indexRows(table);
-    const out = {spellIds: [] as number[], animIds: [] as number[], roles: [] as number[]};
-    for (let i = 0; i < spellIds.length; i++) {
-        for (const row of rowsAt(index, i)) {
-            if (row.kind !== "passenger") continue;
-            for (let role = 0; role < roles.length; role++) {
-                const anim = storedAt(table, row, roles[role]);
-                if (anim === undefined) continue;
-                out.spellIds.push(spellIds[i]);
-                out.animIds.push(anim);
-                out.roles.push(role);
-            }
-        }
-    }
-    return out;
+export function rowTableOf(pack: RowPack, column: string): RowTable {
+    const table = pack[`${column}Rows`] as RowTable | undefined;
+    if (table === undefined) throw new Error(`pack ships no ${column}Rows`);
+    return table;
 }

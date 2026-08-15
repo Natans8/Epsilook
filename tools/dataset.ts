@@ -16,8 +16,8 @@
  * here: an alternative name (SpellOverrideName) reaches 1.0's corpus but no 2.0 row, because SpellData folds it
  * into `namesL` and keeps no per-spell list to build a row from.
  */
-import type {RowAt, RowIndex, RowTable} from "../src/packrows";
-import {indexRows, storedAt} from "../src/packrows";
+import type {RowAt, RowIndex, RowPack, RowTable} from "../src/packrows";
+import {indexRows, rowTableOf, storedAt} from "../src/packrows";
 import type {SpellData, VersionEntry} from "../src/data";
 import {buildIndexes, DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED} from "../src/data";
 import {pickVersion, readPack} from "./packfile";
@@ -48,9 +48,38 @@ const {
  * @returns The indexed data and its roster entry.
  * @throws If no pack matches.
  */
-export function loadPack(want?: string): { data: SpellData; entry: VersionEntry } {
+export function loadPack(want?: string): { data: SpellData; pack: RowPack; entry: VersionEntry } {
     const entry = pickVersion(want);
-    return {data: buildIndexes(readPack(entry)), entry};
+    const pack = readPack(entry);
+    return {data: buildIndexes(pack), pack: pack as unknown as RowPack, entry};
+}
+
+/**
+ * Each vocabulary a row property resolves through, as one lookup from a stored number to its text.
+ *
+ * The pack says where each lives and how it is keyed, and there are only two shapes: two parallel columns a reader
+ * pairs into a map, or a section indexed by the stored number itself. Reading that here rather than off the loaded
+ * 1.0 indexes is the point — the row tables are the pack's, and nothing about them goes through the old engine.
+ */
+function rowVocabularies(pack: RowPack): Record<string, (value: number) => string | undefined> {
+    const found: Record<string, (value: number) => string | undefined> = {};
+    for (const [name, where] of Object.entries(pack.rowVocabs ?? {})) {
+        const section = (pack as unknown as Record<string, unknown>)[where.in];
+        if (!section) continue;
+        if (where.keys !== undefined && where.values !== undefined) {
+            const block = section as Record<string, unknown>;
+            const keys = block[where.keys] as number[] | undefined;
+            const values = block[where.values] as string[] | undefined;
+            if (!keys || !values) continue;
+            const byKey = new Map<number, string>();
+            for (let i = 0; i < keys.length; i++) byKey.set(keys[i], values[i]);
+            found[name] = (value) => byKey.get(value);
+        } else {
+            const direct = section as Record<number, string>;
+            found[name] = (value) => direct[value];
+        }
+    }
+    return found;
 }
 
 const row = (kind: Kind, props: Record<string, Stored>): Row => ({kind, props});
@@ -527,7 +556,7 @@ function probeTokens(expr: ValueExpr): string[] | null {
  * @param d 1.0's loaded indexes.
  * @returns The dataset, with row sources for all seven columns and an inverted `candidates()`.
  */
-export function packDataset(d: SpellData): Dataset {
+export function packDataset(d: SpellData, pack: RowPack): Dataset {
     // The ordinal ladder is module-level state, so the last dataset built owns it: a caller holding two datasets at
     // once must not interleave ordinal queries across them. Every current caller builds and queries one at a time.
     setOrdinalLadder(d.expansions.map((xp) => [xp.key, ...xp.aliases].join(" ")));
@@ -540,11 +569,13 @@ export function packDataset(d: SpellData): Dataset {
     ]);
 
     // Every column a spell can carry more than one of is READ. Nothing here reshapes a row any more.
+    const vocabularies = rowVocabularies(pack);
     const packed = new Map<Column, RowSource>(
         ([[modelColumn, "model"], [soundColumn, "sound"], [animColumn, "anim"],
             [fxColumn, "fx"], [mechColumn, "mech"]] as const).map(
             ([column, key]) =>
-                [column, new PackRowSource(d.rowTables[key], kindsByWord(column), d.rowVocabs)]));
+                [column, new PackRowSource(rowTableOf(pack, key), kindsByWord(column),
+                    vocabularies)]));
 
     let inverted: Inverted | null = null;
     const invertedSide = (): Inverted => (inverted ??= invert(d, cats));
