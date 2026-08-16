@@ -7,6 +7,7 @@
   "scripts": {
     "build": "node tools/build.mjs",
     "dev": "node tools/build.mjs --serve",
+    "harness": "node tools/build.mjs --harness",
     "typecheck": "tsc --noEmit",
     "test": "node tools/build.mjs --test && node --enable-source-maps --test \"test/.bundle/**/*.test.mjs\"",
     "query": "node tools/build.mjs --cli && node tools/query.mjs",

@@ -1,0 +1,37 @@
+/* The bar: one continuous text rendered as committed chips around a single open segment. */
+
+.wrap { position: relative; }
+
+.bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 7px 10px;
+    background: var(--bg-row);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 8px;
+    cursor: text;
+    min-height: 44px;
+}
+.bar:focus-within { border-color: var(--gold-dim); box-shadow: 0 0 0 2px rgba(var(--gold-rgb), 0.12); }
+
+.grow { flex: 1 1 40px; min-width: 40px; align-self: stretch; }
+
+.tools { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+
+.tool {
+    background: none;
+    border: 1px solid var(--border-ctrl);
+    border-radius: 999px;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 12.5px;
+    padding: 3px 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.tool:hover { border-color: var(--gold-dim); color: var(--gold); }
+.tool:disabled { opacity: 0.5; cursor: default; }
+
+.placeholder { color: var(--text-muted); font-size: 14px; }

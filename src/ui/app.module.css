@@ -1,0 +1,74 @@
+/* The harness page: header with the pack-side knobs, the bar with its tray, the count standing in for the whole
+ * output side, and the app-side language knob apart in the footer — the split the geography is meant to show. */
+
+.page {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+    color: var(--text);
+}
+
+.header {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.title { font-size: 20px; font-weight: 600; color: var(--text-strong); margin: 0; }
+.subtitle { font-size: 13px; color: var(--text-dim); }
+
+.knobs { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.knob { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-dim); }
+.knob select {
+    background: var(--bg-panel);
+    color: var(--text);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 6px;
+    font: inherit;
+    padding: 3px 6px;
+}
+.knob select:disabled { opacity: 0.6; }
+
+.count {
+    margin: 18px 2px;
+    font-size: 15px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+.countNumber { font-size: 26px; font-weight: 600; color: var(--gold); }
+.countStale { opacity: 0.45; }
+.countMs { font-size: 12px; color: var(--text-muted); }
+
+.footer {
+    margin-top: 48px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+}
+
+.loading {
+    max-width: 520px;
+    margin: 18vh auto 0;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 15px;
+}
+.loadingBar {
+    margin: 14px auto 0;
+    width: 320px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+.loadingFill { height: 100%; background: var(--gold-dim); transition: width 0.2s; }
+.error { color: rgb(var(--danger-rgb)); }

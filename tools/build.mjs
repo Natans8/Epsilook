@@ -8,6 +8,11 @@
  *                                    reload is always the current source
  *   node tools/build.mjs --cli       the command-line entry points -> tools/*.mjs
  *   node tools/build.mjs --test      the test suite -> test/.bundle/ (npm test)
+ *   node tools/build.mjs --harness[=PORT]
+ *                                    the search 2.0 input-layer harness: bundles
+ *                                    src/ui/harness.tsx and serves the repo root
+ *                                    (default 8436) so the page can fetch the
+ *                                    shipped packs from /site/data/
  *
  * The build also guards the module graph: every .ts under src/ must be
  * reachable from the entry, or the build fails naming the orphan. That is the
@@ -16,7 +21,7 @@
  * loses its import would otherwise vanish from the bundle silently.
  */
 import * as esbuild from "esbuild";
-import {readdirSync, rmSync} from "node:fs";
+import {mkdirSync, readdirSync, rmSync, writeFileSync} from "node:fs";
 import {relative, resolve, sep} from "node:path";
 import {parseArgs} from "node:util";
 
@@ -68,7 +73,7 @@ const options = {
  */
 // Search 2.0 and what it reads. The shipped 1.0 engine imports none of it and never will:
 // 2.0 replaces the app rather than joining it, so these stay unreferenced until it takes over.
-const UNREACHED = ["src/search/", "src/i18n/", "src/ui/", "src/packrows.ts"];
+const UNREACHED = ["src/search/", "src/i18n/", "src/ui/", "src/packrows.ts", "src/dataset.ts"];
 
 /** Every non-declaration .ts under src/, relative to the repo root. */
 function sourceFiles(dir = resolve(root, "src")) {
@@ -115,6 +120,39 @@ const cliOptions = CLI_ENTRIES.map((name) => ({
     external: ["fs"],
 }));
 
+/* THE INPUT-LAYER HARNESS — the search 2.0 presentation layer, mounted on a page of its own. A further entry point
+ * exactly like the CLI ones: it drives the same engine and is by definition not reachable from src/main.ts. The
+ * bundle and its page live under dev/ (untracked, in .git/info/exclude) so nothing of the harness ships with the
+ * site; the page is regenerated on every run, so the generator here is the tracked source of it. */
+const HARNESS_DIR = resolve(root, "dev/harness");
+
+const HARNESS_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Epsilook — search 2.0 harness</title>
+<link rel="stylesheet" href="/site/css/app.css">
+<link rel="stylesheet" href="/dev/harness/harness.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="/dev/harness/harness.js"></script>
+</body>
+</html>
+`;
+
+const harnessOptions = {
+    entryPoints: [resolve(root, "src/ui/harness.tsx")],
+    outfile: resolve(HARNESS_DIR, "harness.js"),
+    bundle: true,
+    format: "iife",
+    target: "es2022",
+    sourcemap: true,
+    logLevel: "info",
+    external: ["fs"],
+};
+
 /* THE TEST SUITE — bundled, for one blunt reason: Node's own TypeScript
  * support strips TYPES but does not resolve EXTENSIONLESS imports, and every
  * module in this repo writes `import {x} from "./y"`. Running `node --test`
@@ -159,13 +197,15 @@ const testOptions = () => ({
 const {values} = parseArgs({
     options: {
         serve: {type: "string", default: undefined},
+        harness: {type: "string", default: undefined},
         cli: {type: "boolean", default: false},
         test: {type: "boolean", default: false},
     },
-    // let --serve appear with no port
+    // let --serve and --harness appear with no port
     tokens: false,
     allowNegative: false,
-    args: process.argv.slice(2).map((a) => (a === "--serve" ? "--serve=8378" : a)),
+    args: process.argv.slice(2)
+        .map((a) => (a === "--serve" ? "--serve=8378" : a === "--harness" ? "--harness=8436" : a)),
 });
 
 if (values.test) {
@@ -176,6 +216,13 @@ if (values.test) {
     await esbuild.build(testOptions());
 } else if (values.cli) {
     await Promise.all(cliOptions.map((o) => esbuild.build(o)));
+} else if (values.harness !== undefined) {
+    const port = Number(values.harness);
+    mkdirSync(HARNESS_DIR, {recursive: true});
+    writeFileSync(resolve(HARNESS_DIR, "index.html"), HARNESS_HTML);
+    const ctx = await esbuild.context(harnessOptions);
+    await ctx.serve({servedir: root, port, host: "127.0.0.1"});
+    console.log(`harness on http://127.0.0.1:${port}/dev/harness/ — rebuild on every request`);
 } else if (values.serve !== undefined) {
     const port = Number(values.serve);
     const ctx = await esbuild.context(options);

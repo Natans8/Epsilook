@@ -7,5 +7,50 @@
     "anim": "Animations",
     "fx": "Effects",
     "mech": "Mechanics"
+  },
+  "harness": {
+    "title": "Epsilook — search 2.0",
+    "subtitle": "input-layer harness",
+    "loading": "Loading {{pack}}…",
+    "modules": "{{done}} of {{total}} modules",
+    "failed": "The pack failed to load: {{error}}",
+    "packLanguage": "Pack language",
+    "appLanguage": "Interface language",
+    "version": "Game version",
+    "onlyLanguage": "This pack ships only one language."
+  },
+  "count": {
+    "result_one": "spell",
+    "result_other": "spells",
+    "searching": "searching…",
+    "elapsed": "{{ms}} ms"
+  },
+  "bar": {
+    "placeholder": "Search spells — a word, or an axis like scale:",
+    "simplify": "Simplify",
+    "help": "Help",
+    "delete": "Delete",
+    "add": "Add a condition",
+    "editHint": "Enter commits · Esc closes"
+  },
+  "surface": {
+    "history": "Recent searches",
+    "noHistory": "No recent searches yet — anything you run lands here.",
+    "axes": "Search by axis",
+    "kinds": "Kinds of row",
+    "words": "Words",
+    "sentinels": "Special values",
+    "roles": "Targets",
+    "notation": "Also reads: {{forms}}",
+    "range": "{{min}} to {{max}} in this pack",
+    "clipped": "outliers beyond this range exist",
+    "empty": "Keep typing — a value, or one of the words above.",
+    "incomplete": "The value is not finished yet.",
+    "unit": "Notation"
+  },
+  "tray": {
+    "apply": "Apply",
+    "simplifyNone": "Nothing to simplify — the query is already in its simplest form.",
+    "simplified": "Simpler spelling: {{query}}"
   }
 }

@@ -7,5 +7,50 @@
     "anim": "",
     "fx": "",
     "mech": ""
+  },
+  "harness": {
+    "title": "",
+    "subtitle": "",
+    "loading": "",
+    "modules": "",
+    "failed": "",
+    "packLanguage": "",
+    "appLanguage": "",
+    "version": "",
+    "onlyLanguage": ""
+  },
+  "count": {
+    "result_one": "",
+    "result_other": "",
+    "searching": "",
+    "elapsed": ""
+  },
+  "bar": {
+    "placeholder": "",
+    "simplify": "",
+    "help": "",
+    "delete": "",
+    "add": "",
+    "editHint": ""
+  },
+  "surface": {
+    "history": "",
+    "noHistory": "",
+    "axes": "",
+    "kinds": "",
+    "words": "",
+    "sentinels": "",
+    "roles": "",
+    "notation": "",
+    "range": "",
+    "clipped": "",
+    "empty": "",
+    "incomplete": "",
+    "unit": ""
+  },
+  "tray": {
+    "apply": "",
+    "simplifyNone": "",
+    "simplified": ""
   }
 }

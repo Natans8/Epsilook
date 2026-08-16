@@ -1,0 +1,44 @@
+/* The diagnostics tray: attached to the bar, flush — the one engine-speaks channel. Each row is the template:
+ * offending text verbatim, one-line reason, then the fix buttons immediately after the text. */
+
+.tray { margin-top: 4px; display: flex; flex-direction: column; gap: 4px; }
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 5px 9px;
+    font-size: 13px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid rgb(var(--danger-rgb));
+    border-radius: 6px;
+}
+.row.warn { border-left-color: var(--gold-dim); }
+.row.note { border-left-color: var(--border-ctrl); }
+.row.linked { background: var(--bg-row-hover); border-color: var(--border-ctrl); }
+
+.code {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 12.5px;
+    background: var(--bg-row);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+}
+
+.text { color: var(--text-dim); }
+
+.fix {
+    background: none;
+    cursor: pointer;
+    border: 1px solid var(--gold-dim);
+    color: var(--gold);
+    border-radius: 999px;
+    font: inherit;
+    font-size: 12.5px;
+    padding: 2px 10px;
+    flex-shrink: 0;
+}
+.fix:hover { background: rgba(var(--gold-rgb), 0.08); }
