@@ -318,28 +318,32 @@ python tools/docker_smoke.py                   # build the image, run it, prove 
 
 ### Running queries without a browser
 
-The search engine is a layer of its own — `data.ts` + `query.ts` + `search.ts` know how to answer a query and nothing
-about how it is shown — so the same engine drives a shell:
+The search engine is a layer of its own — `src/search/` answers a query and knows nothing about how it is shown — so
+the same engine drives a shell:
 
 ```bash
-npm run query -- 'fx:chain mech:channeled'
+npm run query -- 'model:fir'
 ```
 
-The query language is the app's own, because it *is* the app's own code: field prefixes, quoted phrases, `|`
-alternation, `-` exclusion and numeric comparisons all behave exactly as they do in the search bar. A result that
-differs between the two is a bug, not two implementations drifting apart — there is only one.
+The query language is the app's own, because it *is* the app's own code: `parse()` is the declarative core and `run()`
+the kernel, over the same pack-backed dataset the battery and the bench read. A result that differs between the shell
+and the page is a bug, not two implementations drifting apart — there is only one.
 
 ```bash
-npm run query -- 'model:"attach chest"' --limit=5
-npm run query -- 'model:missile' --count
-npm run query -- 'anim:replace' --json | jq '.spellIds | length'
-npm run query -- --version=3.4.3 'fx:tint'
+npm run query -- 'model:{fire -missile}' --limit=20
+npm run query -- 'anim:replace' --json | jq '.count'
+npm run query -- 'scale:>=x5' --version=9.2.7.45745
+npm run query -- 'model:missile' --locale=ruRU
 ```
 
-`--count` prints the number alone and `--json` the full result, both on stdout with every diagnostic on stderr, so
-either pipes cleanly. `--version=` picks a pack by id prefix or label (default: the pack marked `default`). Loading a
-pack costs about a second and the query itself a few tens of milliseconds, so it is one command per question rather than
-a session.
+Stdout carries the result and every diagnostic stderr, so either pipes cleanly. Plain output is the count on the first
+line and then `--limit` rows (default 10) of id and name; `--json` prints the count and ids as one object. `--version=`
+picks a pack by id prefix or label and `--locale=` one of the languages that pack ships — a pack that ships neither
+refuses by name rather than falling back. Loading a pack costs a few seconds and the query itself tens of milliseconds,
+so it is one command per question rather than a session.
+
+The prefix in `--version=` matches the first roster entry it fits, so `9.2.7` finds `9.2.7-epsilon.45745` before
+`9.2.7.45745`; name the id in full when the distinction matters.
 
 ### Measuring what the app does
 
