@@ -1361,6 +1361,103 @@ def check_locale_declaration(rep: Report) -> None:
            f"{len(LOCALES)} language(s) built")
 
 
+def check_delivery_declaration(rep: Report) -> None:
+    """The delivery flag bits must agree between the build and the app's readers.
+
+    The build writes `spellDelivery.flags`; the row reader decodes it. The bits
+    are declared apart because nothing above the pack may import the build, so
+    the drift this reconciles is quiet: a renumbered bit makes cast-and-channel
+    queries answer with the wrong rows while everything still runs.
+    """
+    try:
+        sys.path.insert(0, str(ROOT / "build"))
+        from pack.routes.delivery import BREAKS_ON_MOVE, CHANNELLED  # pylint: disable=import-outside-toplevel
+    except ImportError as exc:
+        rep.fail("delivery flag bits", f"could not read the build's declaration: {exc}")
+        return
+    source = (ROOT / "src" / "packrows.ts").read_text(encoding="utf-8")
+    found: dict[str, int] = {}
+    for name in ("DELIVERY_CHANNELLED", "DELIVERY_BREAKS_ON_MOVE"):
+        match = re.search(rf"^export const {name} = 1 << (\d+);", source, re.MULTILINE)
+        if match is None:
+            rep.fail("delivery flag bits", f"src/packrows.ts no longer declares {name}")
+            return
+        found[name] = 1 << int(match.group(1))
+    if found["DELIVERY_CHANNELLED"] != CHANNELLED or found["DELIVERY_BREAKS_ON_MOVE"] != BREAKS_ON_MOVE:
+        rep.fail("delivery flag bits",
+                 f"the build writes CHANNELLED={CHANNELLED} BREAKS_ON_MOVE={BREAKS_ON_MOVE}, "
+                 f"packrows.ts reads {found['DELIVERY_CHANNELLED']}/{found['DELIVERY_BREAKS_ON_MOVE']}")
+        return
+    rep.ok("delivery flag bits", "build and row reader agree on both bits")
+
+
+def check_locale_catalogs(rep: Report) -> None:
+    """Every interface language mirrors the English catalogs and registers itself.
+
+    English is the source language: its namespace files define which catalogs
+    exist and which keys they may hold. A translation may be incomplete —
+    missing keys fall back per key at runtime — but a key English does not
+    declare is one no call site can ever read, so it can only be a typo or a
+    leftover, and it fails here. `query.json` is the one non-catalog file a
+    locale may carry: the query-word table, validated against the schema by
+    the search tests rather than against English keys.
+
+    Registration is checked by mention because a locale directory nothing
+    imports is invisible at runtime: the bundle only carries what
+    `src/i18n/resources.ts` and the query-word registry name.
+    """
+    base = ROOT / "src" / "locales"
+    english = base / "en"
+    if not english.is_dir():
+        rep.fail("locale catalogs", "src/locales/en/ is missing")
+        return
+
+    def keys_of(path: Path) -> set[str]:
+        def walk(node: object, prefix: str) -> set[str]:
+            if not isinstance(node, dict):
+                return {prefix}
+            found: set[str] = set()
+            for name, child in node.items():
+                found |= walk(child, f"{prefix}.{name}" if prefix else str(name))
+            return found
+        return walk(json.loads(path.read_text(encoding="utf-8")), "")
+
+    namespaces = {path.stem: keys_of(path)
+                  for path in sorted(english.glob("*.json")) if path.stem != "query"}
+    if not namespaces:
+        rep.fail("locale catalogs", "src/locales/en/ holds no catalogs")
+        return
+
+    registry = (ROOT / "src" / "i18n" / "resources.ts").read_text(encoding="utf-8")
+    word_registry = ROOT / "src" / "search" / "language" / "query-words.ts"
+    if not word_registry.exists():
+        rep.fail("locale catalogs", "the query-word registry moved — update this check's path to it")
+        return
+    words = word_registry.read_text(encoding="utf-8")
+    problems: list[str] = []
+    declared = set(namespaces)
+    others = [path for path in sorted(base.iterdir()) if path.is_dir() and path.name != "en"]
+    for locale in others:
+        if f"locales/{locale.name}/" not in registry:
+            problems.append(f"{locale.name}/ exists but resources.ts never imports it")
+        found = {path.stem for path in locale.glob("*.json")}
+        for namespace in sorted(declared - found):
+            problems.append(f"{locale.name}/{namespace}.json is missing")
+        for extra in sorted(found - declared - {"query"}):
+            problems.append(f"{locale.name}/{extra}.json has no English namespace")
+        if "query" in found and f"locales/{locale.name}/query.json" not in words:
+            problems.append(f"{locale.name}/query.json exists but the query-word registry never imports it")
+        for namespace in sorted(declared & found):
+            stale = keys_of(locale / f"{namespace}.json") - namespaces[namespace]
+            for key in sorted(stale):
+                problems.append(f"{locale.name}/{namespace}.json key \"{key}\" is not in English — never read")
+    if problems:
+        rep.fail("locale catalogs", "; ".join(problems))
+        return
+    rep.ok("locale catalogs",
+           f"{len(others)} language(s) beside English, every key within the English set")
+
+
 def check_listfile_declaration(rep: Report) -> None:
     """The build and its tooling must read the same listfile asset.
 
@@ -1861,6 +1958,8 @@ def main() -> int:
     check_listfile_declaration(rep)
     check_localized_tables(rep)
     check_locale_declaration(rep)
+    check_locale_catalogs(rep)
+    check_delivery_declaration(rep)
     check_soundkit_declaration(rep)
     check_supplement(rep)
     check_arcanum(rep)

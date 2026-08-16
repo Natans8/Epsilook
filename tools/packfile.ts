@@ -49,6 +49,31 @@ export function readVersions(): VersionEntry[] {
     return JSON.parse(readFileSync(resolve(SITE, "data", "versions.json"), "utf8")) as VersionEntry[];
 }
 
+/** One version's manifest, read off disk. */
+function readManifest(entry: VersionEntry): PackManifest {
+    return JSON.parse(readFileSync(resolve(SITE, entry.file), "utf8")) as PackManifest;
+}
+
+/**
+ * The languages a pack ships, in manifest order.
+ *
+ * What a locale selector may offer for the pack: {@link readPack} serves any of these without falling back, and not
+ * every pack ships every language — Epsilon publishes English alone.
+ */
+export function shippedLocales(entry: VersionEntry): string[] {
+    return Object.keys(readManifest(entry).locales);
+}
+
+/**
+ * The language a pack will actually serve for a request: the asked-for one where shipped, else the default.
+ *
+ * The lenient half of the policy split — a sweep that must not stop on one pack resolves through this and reports
+ * what it got, while a tool measuring one pack refuses instead ({@link import("./dataset").loadPack}).
+ */
+export function servedLocale(entry: VersionEntry, want: string): string {
+    return shippedLocales(entry).includes(want) ? want : DEFAULT_LOCALE;
+}
+
 /**
  * Picks one roster entry by a version prefix or a label fragment.
  *
@@ -80,7 +105,7 @@ export function pickVersion(want?: string, versions: VersionEntry[] = readVersio
  * @returns The pack as one object, the shape `buildIndexes` takes.
  */
 export function readPack(entry: VersionEntry, locale: string = DEFAULT_LOCALE): SpellPack {
-    const manifest = JSON.parse(readFileSync(resolve(SITE, entry.file), "utf8")) as PackManifest;
+    const manifest = readManifest(entry);
     const spoken = manifest.locales[locale] ?? manifest.locales[DEFAULT_LOCALE] ?? {};
     const pack: Record<string, unknown> = {meta: manifest.meta};
     for (const module of [...Object.values(manifest.modules), ...Object.values(spoken)]) {

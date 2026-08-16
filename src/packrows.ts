@@ -8,6 +8,18 @@
  * so a pack shape it cannot read is not a problem this file solves.
  */
 
+/**
+ * The `spellDelivery.flags` bit marking a channel, explicit rather than inferred from `durMs` because a channel is
+ * allowed to carry no duration row at all, and such a channel is not the same thing as an unlimited one.
+ *
+ * The bits are declared where the build writes them too, since nothing here may import the build;
+ * `check_delivery_declaration` reconciles the two.
+ */
+export const DELIVERY_CHANNELLED = 1 << 0;
+
+/** The `spellDelivery.flags` bit for a channel that ends when the caster walks. */
+export const DELIVERY_BREAKS_ON_MOVE = 1 << 1;
+
 /** One kind's pooled rows: its property columns, and how each property resolves. */
 export interface KindPool {
     /** Per property, one value per pooled row. A kind carrying no property has no entry at all. */

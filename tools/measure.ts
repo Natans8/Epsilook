@@ -26,23 +26,20 @@
  *
  * It lives in tools/ rather than src/ for the reason tools/query.ts does:
  * everything under src/ must be reachable from src/main.ts, and a second entry
- * point is by definition not. The bench imports the shipped search.ts, so it
- * times the real engine rather than a copy of it.
+ * point is by definition not. The bench imports the real kernel and dataset,
+ * so it times the engine rather than a copy of it.
  */
 import {readFileSync} from "node:fs";
 import {fileURLToPath} from "node:url";
 import {dirname, resolve} from "node:path";
 import {parseArgs} from "node:util";
 
-import {buildIndexes} from "../src/data";
-import type {PackDomain, SpellData, SpellPack, VersionEntry} from "../src/data";
-import {readPack} from "./packfile";
-import {groupsOf, parseQueryParts} from "../src/query";
-import {searchGroups} from "../src/search";
-import "../src/pilltypes";     // side effect: registers every pill type
+import type {PackDomain, SpellPack, VersionEntry} from "../src/data";
+import {DEFAULT_LOCALE, readPack, servedLocale} from "./packfile";
 import type {Dataset} from "../src/search/index";
 import {parse, run as runKernel} from "../src/search/index";
-import {packDataset} from "./dataset";
+import type {LoadedPack} from "./dataset";
+import {fromPack, packDataset} from "./dataset";
 import type {RowPack} from "../src/packrows";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -107,44 +104,30 @@ const COLUMNS: ColumnSpec[] = [
 /**
  * A search engine, as far as this tool is concerned: text in, a count out.
  *
- * ⭐ THIS IS THE EXTENSION POINT FOR THE SEARCH 2.0 REWRITE. The new kernel
- * registers here beside the old one and the same keystrokes are timed through
- * both, which is what makes "is the new engine fast enough" a measurement
- * rather than an argument.
- *
- * ⛔ THERE IS NO PERFORMANCE BUDGET — the user's call, 2026-08-11: *"we don't
- * have a hard performance requirement."* So this prints a COMPARISON and never
- * a verdict. ENGINES[0] is the reference only because it is what ships today,
- * and the ratio is there for a human to read; a regression is a FINDING to
- * explain, exactly like a moved count in the canonical battery.
- *
- * (It also has to be relative to be worth anything: 1.0 measures 48 ms on an
- * idle machine and 75 ms while a pack is rebuilding, so no absolute number
- * survives contact with a dev box.)
+ * There is no performance budget: this prints a comparison and never a verdict, and a regression is a finding to
+ * explain, exactly like a moved count in the canonical battery. The retired 1.0 engine no longer registers here —
+ * it cannot load a module-set pack, so its last recorded figures are history rather than a run this tool can
+ * reproduce. A second engine is one more row.
  */
 interface Engine {
     name: string;
 
-    run(d: SpellData, pack: RowPack, query: string): number;
+    run(l: LoadedPack, query: string): number;
 }
 
 /* The 2.0 dataset is built once per pack and reused across keystrokes — the same lifetime the app would give it —
  * so the bench times evaluation, not index construction. Construction is reported by the battery tool instead. */
-const datasets = new WeakMap<SpellData, Dataset>();
-const dataset = (d: SpellData, pack: RowPack): Dataset => {
-    let ds = datasets.get(d);
-    if (!ds) datasets.set(d, ds = packDataset(d, pack));
+const datasets = new WeakMap<LoadedPack, Dataset>();
+const dataset = (l: LoadedPack): Dataset => {
+    let ds = datasets.get(l);
+    if (!ds) datasets.set(l, ds = packDataset(l));
     return ds;
 };
 
 const ENGINES: Engine[] = [
     {
-        name: "1.0 searchGroups",
-        run: (d, _pack, q) => searchGroups(groupsOf(parseQueryParts(q)), d).spellIds.length,
-    },
-    {
         name: "2.0 kernel",
-        run: (d, pack, q) => runKernel(parse(q), dataset(d, pack)).size,
+        run: (l, q) => runKernel(parse(q), dataset(l)).size,
     },
 ];
 
@@ -175,14 +158,14 @@ interface Bench {
     samples: number;
 }
 
-function bench(e: Engine, d: SpellData, pack: RowPack, reps: number): Bench {
-    for (const w of WORDS) for (const k of keystrokes(w)) e.run(d, pack, k);   // warm
+function bench(e: Engine, l: LoadedPack, reps: number): Bench {
+    for (const w of WORDS) for (const k of keystrokes(w)) e.run(l, k);   // warm
     const s: number[] = [];
     for (let r = 0; r < reps; r++) {
         for (const w of WORDS) {
             for (const k of keystrokes(w)) {
                 const t = performance.now();
-                e.run(d, pack, k);
+                e.run(l, k);
                 s.push(performance.now() - t);
             }
         }
@@ -197,6 +180,7 @@ function bench(e: Engine, d: SpellData, pack: RowPack, reps: number): Bench {
 const {values} = parseArgs({
     options: {
         packs: {type: "string", default: "all"},
+        locale: {type: "string", default: DEFAULT_LOCALE},
         only: {type: "string", default: "rows,domains,bench"},
         reps: {type: "string", default: "3"},
         json: {type: "boolean", default: false},
@@ -211,12 +195,13 @@ Measure every pack — row counts, numeric domains, search latency.
 
   npm run measure                      every pack, every section
   npm run measure -- --packs=9.2.7     one pack (prefix match, comma-separated)
+  npm run measure -- --locale=ruRU     load each pack in another language, where it ships
   npm run measure -- --only=bench      rows | domains | bench
   npm run measure -- --reps=10         more timing repetitions
   npm run measure -- --json            machine-readable, for diffing two runs
 
 rows and domains are READ from the pack the build shipped; only bench runs
-anything. Budget: p95 <= 50 ms per keystroke on the largest pack.
+anything. The bench prints numbers, never a verdict — there is no budget.
 `.trim());
     process.exit(0);
 }
@@ -237,11 +222,15 @@ const n = (x: number): string =>
 const report: Record<string, unknown>[] = [];
 
 for (const entry of wanted) {
-    const pack: SpellPack = readPack(entry);
+    /* A pack that does not ship the asked-for language falls back to the default rather than dropping out of the
+     * sweep, and the record says which language was actually served — a bench figure with no language on it would
+     * read as comparable to one measured in another. */
+    const spoken = servedLocale(entry, values.locale);
+    const pack: SpellPack = readPack(entry, spoken);
     const label = entry.label || entry.id;
     const counts = pack.meta.counts;
     const rec: Record<string, unknown> = {
-        pack: entry.id, label, format: pack.meta.format, spells: counts.spells,
+        pack: entry.id, label, format: pack.meta.format, spells: counts.spells, locale: spoken,
     };
 
     if (sections.has("rows")) {
@@ -261,13 +250,10 @@ for (const entry of wanted) {
 
     if (sections.has("domains")) rec.domains = pack.meta.domains ?? null;
 
-    /* ⚠ ONLY the bench needs the indexes built, and building them is the
-     * expensive part — so `--only=rows,domains` stays instant across all
-     * eleven packs. */
+    // Only the bench runs the engine over the pack — `--only=rows,domains` stays instant across the whole roster.
     if (sections.has("bench")) {
-        const d = buildIndexes(pack);
-        rec.bench = ENGINES.map((e) => bench(
-            e, d, pack as unknown as RowPack, Number(values.reps)));
+        const l = fromPack(pack as unknown as RowPack, entry, spoken);
+        rec.bench = ENGINES.map((e) => bench(e, l, Number(values.reps)));
     }
 
     report.push(rec);
@@ -320,14 +306,12 @@ for (const entry of wanted) {
 
     if (rec.bench) {
         const runs = rec.bench as Bench[];
-        out(`\n  PLAIN-SEARCH LATENCY   ms per keystroke`
-            + `   (compared with ${runs[0].engine}, same run — no pass mark)`);
+        out(`\n  PLAIN-SEARCH LATENCY   ms per keystroke   (no pass mark)`);
         for (const b of runs) {
             out(`    ${b.engine.padEnd(24)} p50 ${b.p50.toFixed(1).padStart(7)} · `
                 + `p95 ${b.p95.toFixed(1).padStart(7)} · max ${b.max.toFixed(1).padStart(7)}`
                 + `   (${b.samples} keystrokes)`
-                + (b === runs[0] ? "   reference"
-                    : `   ${(b.p95 / runs[0].p95).toFixed(2)}x`));
+                + (runs.length > 1 && b !== runs[0] ? `   ${(b.p95 / runs[0].p95).toFixed(2)}x vs ${runs[0].engine}` : ""));
         }
     }
 }

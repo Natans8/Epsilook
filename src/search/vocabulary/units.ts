@@ -17,6 +17,7 @@
  * -1 meaning "unlimited" is never read as minus one millisecond.
  */
 import {fold} from "../text/normalize";
+import {localeUnitWords, queryWordsGeneration} from "./locale-words";
 
 /**
  * Which numbers written without a symbol a notation claims.
@@ -109,14 +110,28 @@ const UNIT_AFTER = /^([+-]?)(\d+(?:\.\d+)?|\.\d+)(.*)$/;
 /** A sign, a symbol, then the number: `x2`, `-x1.5`. */
 const UNIT_BEFORE = /^([+-]?)([^\d.]+)(\d+(?:\.\d+)?|\.\d+)$/;
 
+/** {@link spellings} per notation, valid for one query-word table — readers run per candidate row, folding is not. */
+const spellingCache = new WeakMap<Notation, { generation: number; spellings: string[] }>();
+
 /**
  * Every spelling a notation answers to, folded.
  *
+ * The active language's unit words join here, keyed by the symbol itself, so they read wherever the symbol does and
+ * enter the same ambiguity checks — a locale word colliding with another notation's spelling refuses to parse
+ * exactly as a declared alias would. Cached per notation until the language's table changes, because readers are
+ * built once when a type is defined and the table arrives later.
+ *
  * @param notation The notation.
- * @returns Its symbol and aliases, with the empty symbol dropped.
+ * @returns Its symbol, aliases and locale words, with the empty symbol dropped.
  */
 function spellings(notation: Notation): string[] {
-    return [notation.unit, ...(notation.aliases ?? [])].filter((s) => s !== "").map(fold);
+    const generation = queryWordsGeneration();
+    const held = spellingCache.get(notation);
+    if (held !== undefined && held.generation === generation) return held.spellings;
+    const built = [notation.unit, ...(notation.aliases ?? []), ...localeUnitWords(notation.unit)]
+        .filter((s) => s !== "").map(fold);
+    spellingCache.set(notation, {generation, spellings: built});
+    return built;
 }
 
 /**
@@ -166,7 +181,6 @@ function sharesBare(a: Notation, b: Notation): boolean {
  * @returns A function converting text to a stored value, or `null` when the text is not written in this notation.
  */
 function readNotation(notation: Notation, storage: "int" | "float"): (text: string) => number | null {
-    const accepted = spellings(notation);
     const before = notation.position === "before";
 
     return (text: string): number | null => {
@@ -185,7 +199,7 @@ function readNotation(notation: Notation, storage: "int" | "float"): (text: stri
                 const size = Number(digits);
                 if ("atMost" in bare ? size > bare.atMost : size <= bare.above) return null;
             }
-        } else if (!accepted.includes(symbol)) {
+        } else if (!spellings(notation).includes(symbol)) {
             return null;
         }
 
@@ -198,6 +212,28 @@ function readNotation(notation: Notation, storage: "int" | "float"): (text: stri
         const scaled = magnitude * notation.factor + (notation.offset ?? 0);
         return storage === "int" ? Math.round(scaled) : scaled;
     };
+}
+
+/**
+ * Whether any two of the notations could both accept one operand, which would make that text mean two things.
+ *
+ * Checked when a numeric type is built, and again whenever the active language's unit words change: a locale word
+ * enters {@link spellings} after the types exist, so a colliding one can only be caught by re-running this.
+ *
+ * @param notations The notations of one type.
+ * @returns One line per colliding pair, or an empty array when every operand reads one way.
+ */
+export function notationProblems(notations: readonly Notation[]): string[] {
+    const problems: string[] = [];
+    for (let i = 0; i < notations.length; i++) {
+        for (let j = i + 1; j < notations.length; j++) {
+            if (overlap(notations[i], notations[j])) {
+                problems.push("has two notations that would both accept one operand: "
+                    + `"${notations[i].unit}" and "${notations[j].unit}"`);
+            }
+        }
+    }
+    return problems;
 }
 
 /**
@@ -222,15 +258,8 @@ export function notationsOf(spec: NumericSpec): Notation[] {
  */
 export function parseNumber(spec: NumericSpec): (text: string) => number | null {
     const all = notationsOf(spec);
-    for (let i = 0; i < all.length; i++) {
-        for (let j = i + 1; j < all.length; j++) {
-            if (overlap(all[i], all[j])) {
-                throw new Error(
-                    "numeric type has two notations that would both accept one operand: "
-                    + `"${all[i].unit}" and "${all[j].unit}"`);
-            }
-        }
-    }
+    const problems = notationProblems(all);
+    if (problems.length > 0) throw new Error(`numeric type ${problems[0]}`);
 
     const readers = all.map((notation) => readNotation(notation, spec.storage));
 

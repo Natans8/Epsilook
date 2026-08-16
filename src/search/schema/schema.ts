@@ -27,6 +27,7 @@ import {COLUMNS} from "./columns";
 import type {Kind, Prop} from "./kinds";
 import {doorOf, KINDS, operatorsOf, wordOf} from "./kinds";
 import {fold} from "../text/normalize";
+import {localeColumnWords, localeKindWords, localePropWords} from "../vocabulary/locale-words";
 import {TYPES} from "../vocabulary/value-types";
 
 /**
@@ -57,6 +58,17 @@ export const HEADS = new Map<string, Head>();
 /** The alternative spellings a declaration reads besides its own word: its full name, then its synonyms. */
 function alternates(full: string | undefined, synonyms: readonly string[] | undefined): string[] {
     return [...(full === undefined ? [] : [full]), ...(synonyms ?? [])];
+}
+
+/** The active language's extra spellings, minus any the declaration already carries itself. */
+function localeExtras(declared: readonly string[], locale: readonly string[]): string[] {
+    return locale.filter((word) => !declared.includes(word));
+}
+
+/** Every spelling a kind's word reads by: the word, its declared alternates, then the active language's words. */
+function kindSpellings(kind: Kind): string[] {
+    return kind.word === undefined ? []
+        : [kind.word, ...alternates(kind.full, kind.synonyms), ...localeKindWords(kind.id)];
 }
 
 /**
@@ -98,6 +110,9 @@ export function schemaProblems(): string[] {
             }
             claim(topLevel, synonym, `column ${column.key}`);
         }
+        for (const word of localeExtras([column.key, ...(column.synonyms ?? [])], localeColumnWords(column.key))) {
+            claim(topLevel, word, `column ${column.key}`);
+        }
     }
 
     // Chipless search answers a bare number as one identity, the spell's own id. A second plain notation that can
@@ -113,7 +128,8 @@ export function schemaProblems(): string[] {
         if (kind.word !== undefined) {
             claim(columnWords(kind.column.key), kind.word, `kind ${kind.id}`);
             if (kind.global === true) claim(topLevel, kind.word, `kind ${kind.id}`);
-            for (const spelling of alternates(kind.full, kind.synonyms)) {
+            const alts = alternates(kind.full, kind.synonyms);
+            for (const spelling of [...alts, ...localeExtras([kind.word, ...alts], localeKindWords(kind.id))]) {
                 if (spelling === kind.word) {
                     problems.push(`kind ${kind.id} respells its own word "${spelling}"`);
                     continue;
@@ -126,6 +142,9 @@ export function schemaProblems(): string[] {
             if (kind.full !== undefined || kind.synonyms !== undefined) {
                 problems.push(`kind ${kind.id} declares alternative spellings but no word for them to spell`);
             }
+            if (localeKindWords(kind.id).length > 0) {
+                problems.push(`kind ${kind.id} has locale words but no word of its own for them to respell`);
+            }
         }
 
         const propWords = new Map<string, string>();
@@ -133,7 +152,8 @@ export function schemaProblems(): string[] {
         for (const [name, prop] of Object.entries(kind.props)) {
             const where = `${kind.id}.${name}`;
             claim(propWords, name, `property ${where}`);
-            for (const spelling of alternates(prop.full, prop.synonyms)) {
+            const alts = alternates(prop.full, prop.synonyms);
+            for (const spelling of [...alts, ...localeExtras([name, ...alts], localePropWords(where))]) {
                 if (spelling === name) {
                     problems.push(`property ${where} respells its own name "${spelling}"`);
                     continue;
@@ -170,7 +190,7 @@ export function schemaProblems(): string[] {
     // sits. Checked after every claim above, so declaration order cannot decide whether it fires.
     for (const kind of KINDS.values()) {
         if (kind.word === undefined || kind.global === true) continue;
-        for (const word of [kind.word, ...alternates(kind.full, kind.synonyms)]) {
+        for (const word of kindSpellings(kind)) {
             const holder = topLevel.get(word);
             if (holder !== undefined && holder !== `kind ${kind.id}`) {
                 problems.push(`"${word}" of kind ${kind.id} shadows the top-level word of ${holder}`);
@@ -267,19 +287,20 @@ export function buildSchema(): void {
     HEADS.clear();
     for (const column of COLUMNS.values()) {
         if (column.head === false) continue;
-        for (const word of [column.key, ...(column.synonyms ?? [])]) {
+        for (const word of [column.key, ...(column.synonyms ?? []), ...localeColumnWords(column.key)]) {
             HEADS.set(word, {role: "column", column});
         }
     }
     for (const kind of KINDS.values()) {
         if (kind.word !== undefined && kind.global === true) {
-            for (const word of [kind.word, ...alternates(kind.full, kind.synonyms)]) {
+            for (const word of kindSpellings(kind)) {
                 HEADS.set(word, {role: "kind", kind});
             }
         }
         for (const [name, prop] of Object.entries(kind.props)) {
             if (prop.prefix === undefined) continue;
-            for (const word of [prop.prefix, ...alternates(prop.full, prop.synonyms)]) {
+            for (const word of [prop.prefix, ...alternates(prop.full, prop.synonyms),
+                ...localePropWords(`${kind.id}.${name}`)]) {
                 HEADS.set(word, {role: "prop", kind, name, prop});
             }
         }
@@ -309,7 +330,8 @@ export function kindsOf(column: Column): Kind[] {
 export function kindIn(column: Column, word: string): Kind | undefined {
     for (const kind of KINDS.values()) {
         if (kind.column !== column || kind.word === undefined) continue;
-        if (kind.word === word || kind.full === word || (kind.synonyms?.includes(word) ?? false)) return kind;
+        if (kind.word === word || kind.full === word || (kind.synonyms?.includes(word) ?? false)
+            || localeKindWords(kind.id).includes(word)) return kind;
     }
     return undefined;
 }
@@ -323,7 +345,8 @@ export function kindIn(column: Column, word: string): Kind | undefined {
  */
 export function propIn(kind: Kind, word: string): string | undefined {
     for (const [name, prop] of Object.entries(kind.props)) {
-        if (name === word || prop.full === word || (prop.synonyms?.includes(word) ?? false)) return name;
+        if (name === word || prop.full === word || (prop.synonyms?.includes(word) ?? false)
+            || localePropWords(`${kind.id}.${name}`).includes(word)) return name;
     }
     return undefined;
 }

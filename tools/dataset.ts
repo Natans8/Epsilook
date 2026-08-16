@@ -1,26 +1,22 @@
 /**
  * @file The pack-backed {@link Dataset}: search 2.0's row model, read out of the shipped pack.
  *
- * Every column a spell can carry more than one of is now READ rather than reshaped: the pack ships those rows and
- * {@link PackRowSource} hands them over as the kinds they already are. What is left of the old bridge is the two
- * columns that are one row per spell — its name and its number — which are read off the per-spell columns because
- * there is nothing to pool.
+ * Every column a spell can carry more than one of is READ rather than reshaped: the pack ships those rows and
+ * {@link PackRowSource} hands them over as the kinds they already are. The two columns that are one row per spell —
+ * its name and its number — are read off the per-spell columns, because there is nothing to pool.
  *
- * The inverted side below is still built from 1.0's indexes. That is what `candidates()` narrows with, and porting it
- * is its own step.
+ * The inverted side `candidates()` narrows with is built from the same materialised rows the verifier walks: every
+ * textual value a row can match seeds by the text its vocabulary resolves, every id-typed property answers a whole
+ * number by identity, and presence falls out of the same walk. Building the seed from what the verifier reads is
+ * what makes it sound by construction — a seed built from any other source could disagree with the match.
  *
  * It lives in tools/ for the reason tools/query.ts does: everything under src/ must be reachable from src/main.ts,
  * and nothing in the app drives the 2.0 engine yet.
- *
- * One deliberate gap remains, waiting on data the pack does not carry in the needed shape rather than on code
- * here: an alternative name (SpellOverrideName) reaches 1.0's corpus but no 2.0 row, because SpellData folds it
- * into `namesL` and keeps no per-spell list to build a row from.
  */
 import type {RowAt, RowIndex, RowPack, RowTable} from "../src/packrows";
-import {indexRows, rowTableOf, storedAt} from "../src/packrows";
-import type {SpellData, VersionEntry} from "../src/data";
-import {buildIndexes, DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED} from "../src/data";
-import {pickVersion, readPack} from "./packfile";
+import {DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED, indexRows, rowTableOf, storedAt} from "../src/packrows";
+import type {VersionEntry} from "../src/data";
+import {DEFAULT_LOCALE, pickVersion, readPack, shippedLocales} from "./packfile";
 
 import type {
     Ask, Column, Dataset, Kind, Row, RowSource, RowTest, ScopeTerm, Stored, ValueExpr,
@@ -32,26 +28,142 @@ import {
 } from "../src/search/index";
 
 // The kinds this file builds rows for, under their own names. Taken off the catalogue rather than off the door, which
-// carries it as a namespace so the game's nouns do not crowd out the language's.
-const {
-    animKit, attached, aura, barrage, camo, chain, debuff, delivery, description, desaturate, detect, display,
-    dissolve, effect, equipped, expansion, freeze, gameObject, ghost, glow, ground, icon, invis, item, keybind,
-    location, loose, missile, morph, mount, name: nameKind, origin, passenger, pose, replace, scale, screen,
-    seats, shadowy, shapeshift, sound: soundKind, speed, spellId: spellIdKind, summon, tint, tracking, trail,
-    transparency, triggers,
-} = catalogue;
+// carries it as a namespace so the game's nouns do not crowd out the language's. Only the spell and id columns need
+// their kinds by name — every pooled column's rows arrive under the kind word the pack ships.
+const {delivery, description, expansion, icon, name: nameKind, spellId: spellIdKind} = catalogue;
+
+/** One deduplicated prose pool and the per-spell indexes into it; `of[i]` of nought means the spell has none. */
+interface TextPool {
+    readonly text: readonly string[];
+    readonly of: readonly number[];
+}
+
+/** The per-spell columns of the `spells` section, the core and locale halves already merged by the pack reader. */
+interface SpellsSection {
+    readonly ids: readonly number[];
+    /** One-based index into the icon pool; nought means no icon. */
+    readonly icons: readonly number[];
+    /** Index into the expansion ladder; negative means unplaced. */
+    readonly eras: readonly number[];
+    readonly names: readonly string[];
+    readonly subtexts: readonly string[];
+    readonly altNames: readonly string[];
+}
+
+/** The three cooked prose pools of the `spellText` section. */
+interface SpellTextSection {
+    readonly descriptions: TextPool;
+    readonly auras: TextPool;
+    readonly encounters: TextPool;
+}
+
+/** The expansion ladder the pack ships, parallel arrays in rung order. */
+interface ExpansionsSection {
+    readonly keys: readonly string[];
+    readonly aliases: readonly (readonly string[])[];
+}
+
+/** One spell's cast-and-channel shape, keyed off the `spellDelivery` section. */
+interface Delivery {
+    readonly castMs: number;
+    readonly durMs: number;
+    readonly flags: number;
+}
 
 /**
- * Loads one shipped pack and builds 1.0's indexes over it.
+ * One loaded pack, viewed through the sections the dataset reads.
+ *
+ * The row tables stay on {@link LoadedPack.pack} and are reached by {@link rowTableOf}; what this resolves up front
+ * is the per-spell columns, the prose pools and the two id-keyed side tables, so the row builders read fields rather
+ * than fishing sections out of an untyped bag.
+ */
+export interface LoadedPack {
+    readonly pack: RowPack;
+    readonly entry: VersionEntry;
+    /** The language the pack was loaded in. */
+    readonly locale: string;
+    readonly spells: SpellsSection;
+    readonly text: SpellTextSection;
+    readonly iconNames: readonly string[];
+    readonly iconFids: readonly number[];
+    /** Cast-and-channel per spell id; empty where the pack ships no delivery section. */
+    readonly delivery: ReadonlyMap<number, Delivery>;
+    /** Spell ids per attribute-flag word. */
+    readonly attrs: ReadonlyMap<string, ReadonlySet<number>>;
+    readonly expansions: ExpansionsSection;
+    /** Spell id to its dense position. */
+    readonly index: ReadonlyMap<number, number>;
+}
+
+/** One section, or a loud refusal — a pack too old for the row model cannot be read at all. */
+function sectionOf(pack: RowPack, name: string): unknown {
+    const held = pack[name];
+    if (held === undefined) throw new Error(`pack ships no ${name} — packs older than the row model are unreadable`);
+    return held;
+}
+
+/**
+ * Resolves the sections the dataset reads out of one loaded pack.
+ *
+ * @param pack The pack, as {@link readPack} returns it.
+ * @param entry Its roster entry.
+ * @param locale The language it was loaded in.
+ * @returns The typed view.
+ * @throws If a section the row builders need is absent.
+ */
+export function fromPack(pack: RowPack, entry: VersionEntry, locale: string): LoadedPack {
+    const spells = sectionOf(pack, "spells") as SpellsSection;
+    const deliverySection = pack.spellDelivery as
+        { spellIds: number[]; castMs: number[]; durMs: number[]; flags: number[] } | undefined;
+    const deliveries = new Map<number, Delivery>();
+    if (deliverySection) {
+        for (let k = 0; k < deliverySection.spellIds.length; k++) {
+            deliveries.set(deliverySection.spellIds[k], {
+                castMs: deliverySection.castMs[k], durMs: deliverySection.durMs[k],
+                flags: deliverySection.flags[k],
+            });
+        }
+    }
+    const attrs = new Map<string, ReadonlySet<number>>(
+        Object.entries((pack.spellAttrs ?? {}) as Record<string, number[]>)
+            .map(([word, ids]) => [word, new Set(ids)]));
+    const index = new Map<number, number>();
+    for (let at = 0; at < spells.ids.length; at++) index.set(spells.ids[at], at);
+    return {
+        pack, entry, locale, spells,
+        text: sectionOf(pack, "spellText") as SpellTextSection,
+        iconNames: sectionOf(pack, "iconNames") as readonly string[],
+        iconFids: sectionOf(pack, "iconFids") as readonly number[],
+        delivery: deliveries, attrs,
+        expansions: sectionOf(pack, "expansions") as ExpansionsSection,
+        index,
+    };
+}
+
+/**
+ * Loads one shipped pack in one language.
+ *
+ * The pack's names and prose come out in the loaded language, so the corpora the engine matches against do too —
+ * choosing a language here is what makes a Russian query find spells. Asking for a language the pack does not ship
+ * throws rather than falling back, for the reason {@link pickVersion} throws on a version: in a measuring tool a
+ * silent fall back to English reads as "the Russian query works". The graceful fallback stays in {@link readPack},
+ * where a surface that would rather degrade than refuse can have it.
  *
  * @param want A version prefix such as `9.2.7`, or nothing for the default pack.
- * @returns The indexed data and its roster entry.
- * @throws If no pack matches.
+ * @param locale A language the pack ships, or nothing for the default.
+ * @returns The loaded pack and its typed view.
+ * @throws If no pack matches, or the pack does not ship the asked-for language.
  */
-export function loadPack(want?: string): { data: SpellData; pack: RowPack; entry: VersionEntry } {
+export function loadPack(want?: string, locale?: string): LoadedPack {
     const entry = pickVersion(want);
-    const pack = readPack(entry);
-    return {data: buildIndexes(pack), pack: pack as unknown as RowPack, entry};
+    if (locale !== undefined) {
+        const shipped = shippedLocales(entry);
+        if (!shipped.includes(locale)) {
+            throw new Error(`${entry.id} ships no "${locale}" — have: ${shipped.join(", ")}`);
+        }
+    }
+    const spoken = locale ?? DEFAULT_LOCALE;
+    return fromPack(readPack(entry, spoken) as unknown as RowPack, entry, spoken);
 }
 
 /**
@@ -83,6 +195,11 @@ function rowVocabularies(pack: RowPack): Record<string, (value: number) => strin
                 }
                 return byKey.get(value);
             };
+        } else if (where.values !== undefined) {
+            // The middle shape: one named column of the section, itself indexed by the stored number.
+            const column = (section as Record<string, unknown>)[where.values] as string[] | undefined;
+            if (!column) continue;
+            found[name] = (value) => column[value];
         } else {
             const direct = section as Record<number, string>;
             found[name] = (value) => direct[value];
@@ -118,8 +235,7 @@ class PackRowSource implements RowSource {
     rows(spell: number): readonly Row[] {
         const out: Row[] = [];
         for (let i = this.index.at[spell]; i < this.index.at[spell + 1]; i++) {
-            const ref = this.table.refs[i];
-            out.push(this.built[ref] ??= this.materialise(this.index.owner[ref]));
+            out.push(this.rowByRef(this.table.refs[i]));
         }
         return out;
     }
@@ -127,6 +243,28 @@ class PackRowSource implements RowSource {
     /** How many rows the spell has, straight off the shipped counts. */
     size(spell: number): number {
         return this.table.counts[spell];
+    }
+
+    /** One pooled row by its column-wide reference, materialised once and shared with every other reader. */
+    rowByRef(ref: number): Row {
+        return this.built[ref] ??= this.materialise(this.index.owner[ref]);
+    }
+
+    /**
+     * The spell indexes holding each pooled row, one list per column-wide reference.
+     *
+     * This is the pooling read backwards — `refs` says which rows a spell has, this says which spells a row is on —
+     * and it is what lets the inverted side attribute a row's text to its owners in one walk instead of one walk
+     * per vocabulary.
+     */
+    owners(): readonly (readonly number[])[] {
+        const owners: number[][] = Array.from({length: this.index.owner.length}, () => []);
+        const {at} = this.index;
+        const refs = this.table.refs;
+        for (let spell = 0; spell + 1 < at.length; spell++) {
+            for (let j = at[spell]; j < at[spell + 1]; j++) owners[refs[j]].push(spell);
+        }
+        return owners;
     }
 
     /**
@@ -169,19 +307,27 @@ function kindsByWord(column: Column): Map<string, Kind> {
 
 /* ------------------------------------------------------------------- the row sources, one builder per column */
 
-function spellRows(d: SpellData, i: number): Row[] {
-    const id = d.ids[i];
-    const rows: Row[] = [row(nameKind, {text: d.names[i]})];
-    if (d.subtexts[i]) rows.push(row(nameKind, {text: d.subtexts[i]}));
-    for (const [pool, of] of [
-        [d.descriptionText, d.descriptionOf], [d.encounterText, d.encounterOf], [d.auraText, d.auraOf],
-    ] as const) {
-        const at = of[i];
-        if (at) rows.push(row(description, {text: pool[at]}));
+/**
+ * The spell column's rows: its names, its prose, its icon, its delivery.
+ *
+ * The alternative names are deliberately NOT a row: the pack joins a spell's override names into one searchable
+ * string, and a row made of that blob would anchor-match a name no spell has. They stay in the seed corpus, where
+ * matching is substring.
+ *
+ * TODO: one name row per override name needs the pack to ship them as a list rather than joined.
+ */
+function spellRows(l: LoadedPack, i: number): Row[] {
+    const {spells, text} = l;
+    const id = spells.ids[i];
+    const rows: Row[] = [row(nameKind, {text: spells.names[i]})];
+    if (spells.subtexts[i]) rows.push(row(nameKind, {text: spells.subtexts[i]}));
+    for (const pool of [text.descriptions, text.encounters, text.auras]) {
+        const at = pool.of[i];
+        if (at) rows.push(row(description, {text: pool.text[at]}));
     }
-    if (d.icons[i]) {
-        const props: Record<string, Stored> = {name: d.icons[i]};
-        const fid = d.iconFids[d.iconOf[i] - 1];
+    if (spells.icons[i]) {
+        const props: Record<string, Stored> = {name: l.iconNames[spells.icons[i] - 1]};
+        const fid = l.iconFids[spells.icons[i] - 1];
         if (fid) props.fid = fid;
         rows.push(row(icon, props));
     }
@@ -189,8 +335,8 @@ function spellRows(d: SpellData, i: number): Row[] {
     // Delivery exists only where the pack ships it; on such packs every spell has one row, because "instant" is the
     // complement, not a shipped list. A channel-only spell carries no cast value at all — `cast:instant` means "no
     // bar", and a channel is not a bar.
-    if (d.spellDelivery.size) {
-        const del = d.spellDelivery.get(id);
+    if (l.delivery.size) {
+        const del = l.delivery.get(id);
         const props: Record<string, Stored> = {};
         if (!del) props.cast = 0;
         else {
@@ -198,36 +344,18 @@ function spellRows(d: SpellData, i: number): Row[] {
             if (del.flags & DELIVERY_CHANNELLED) props.channel = del.durMs;
             if (del.flags & DELIVERY_BREAKS_ON_MOVE) props.breaksmove = 1;
         }
-        if (d.spellAttrs.get("unbreakablechannel")?.has(id)) props.unbreakable = 1;
-        if (d.spellAttrs.get("actionsduringchannel")?.has(id)) props.unhindered = 1;
+        if (l.attrs.get("unbreakablechannel")?.has(id)) props.unbreakable = 1;
+        if (l.attrs.get("actionsduringchannel")?.has(id)) props.unhindered = 1;
         rows.push(row(delivery, props));
     }
     return rows;
 }
 
-function idRows(d: SpellData, i: number): Row[] {
-    const rows: Row[] = [row(spellIdKind, {value: d.ids[i]})];
-    const era = d.eras[i];
-    if (era >= 0 && d.expansions[era]) rows.push(row(expansion, {rung: d.expansions[era].key}));
+function idRows(l: LoadedPack, i: number): Row[] {
+    const rows: Row[] = [row(spellIdKind, {value: l.spells.ids[i]})];
+    const era = l.spells.eras[i];
+    if (era >= 0 && l.expansions.keys[era]) rows.push(row(expansion, {rung: l.expansions.keys[era]}));
     return rows;
-}
-
-/**
- * The model categories the pack numbers, resolved to kinds once. The unnamed category is the plain attached model.
- *
- * @throws If a category word matches no kind — a new pack category or a renamed kind word must fail loudly, because
- *   the silent alternative is rows evaluating under the wrong kind.
- */
-function catKinds(d: SpellData): Map<number, Kind> {
-    const byWord = new Map<string, Kind>(
-        [missile, ground, trail, barrage, display, item].map((kind) => [kind.word ?? "", kind]));
-    const out = new Map<number, Kind>();
-    for (const [cat, word] of Object.entries(d.modelCatNames)) {
-        const kind = word === "" ? attached : byWord.get(word);
-        if (!kind) throw new Error(`no model kind for pack category "${word}"`);
-        out.set(Number(cat), kind);
-    }
-    return out;
 }
 
 /* ------------------------------------------------------------------- the inverted side: candidates() */
@@ -271,232 +399,84 @@ interface Inverted {
     /** The three prose pools, squashed, with their per-spell index arrays. */
     readonly pools: readonly { sq: readonly string[]; of: readonly number[] }[];
     readonly iconsSq: readonly string[];
-    /** Every corpus vocabulary that can answer a plain term, one flat list. */
-    readonly plainVocab: readonly Vocab[];
-    /** Content vocabularies per column, for the columns whose whole content surface is enumerable. */
+    /** Content vocabularies per column; their union is every corpus vocabulary that can answer a plain term. */
     readonly content: ReadonlyMap<Column, readonly Vocab[]>;
-    /** Column content that answers a whole number by identity: linked spells, channels, kit ids, refs. */
-    readonly digits: ReadonlyMap<Column, (n: number) => Iterable<number>[]>;
+    /** Column content answering a whole number by identity: every stored value of an id-declaring property. */
+    readonly digits: ReadonlyMap<Column, ReadonlyMap<number, ReadonlySet<number>>>;
     /** Kinds whose rows carry a quantity a numeric-looking token could match, per column. */
     readonly numericKinds: ReadonlyMap<Column, readonly Kind[]>;
     /** Kinds whose rows carry a colour a hex triplet or colour name could match, per column. */
     readonly colourKinds: ReadonlyMap<Column, readonly Kind[]>;
 }
 
-function invert(d: SpellData, cats: Map<number, Kind>): Inverted {
-    const index = (spell: number): number => d.spellIndex.get(spell) ?? -1;
-    const indexes = (spellIds: Iterable<number>): number[] =>
-        [...spellIds].map(index).filter((at) => at >= 0);
-
+function invert(l: LoadedPack, sources: ReadonlyMap<Column, PackRowSource>): Inverted {
     const presence = new Map<Column, Set<number>>();
     const kindPresence = new Map<Kind, Set<number>>();
-    const mark = (column: Column, kind: Kind, spell: number): void => {
-        const at = index(spell);
-        if (at < 0) return;
-        let col = presence.get(column);
-        if (!col) presence.set(column, col = new Set());
-        col.add(at);
-        let per = kindPresence.get(kind);
-        if (!per) kindPresence.set(kind, per = new Set());
-        per.add(at);
-    };
-    const markAll = (column: Column, kind: Kind, spellIds: Iterable<number>): void => {
-        for (const spellId of spellIds) mark(column, kind, spellId);
+    const content = new Map<Column, readonly Vocab[]>();
+    const digits = new Map<Column, ReadonlyMap<number, ReadonlySet<number>>>();
+    // Squashing goes through the spelling-fold regexes, so it is memoised across rows: the pools deduplicate
+    // values, but many rows still resolve one file path or one name.
+    const squashed = new Map<string, string>();
+    const sq = (text: string): string => {
+        let held = squashed.get(text);
+        if (held === undefined) squashed.set(text, held = squash(text));
+        return held;
     };
 
-    for (const [spellId, entries] of d.spellModelCats) {
-        for (const e of entries) {
-            const kind = cats.get(e.cat) ?? attached;
-            mark(modelColumn, kind === attached && e.fid < 0 ? equipped : kind, spellId);
-        }
-    }
-    markAll(modelColumn, mount, d.spellMounts.keys());
-    markAll(soundColumn, soundKind, d.spellSounds.keys());
-    markAll(animColumn, animKit, d.spellAnimKits.keys());
-    markAll(animColumn, loose, d.spellVisualAnims.keys());
-    markAll(animColumn, replace, d.spellReplaceAnims.keys());
-    markAll(animColumn, passenger, d.spellPassengerAnims.keys());
-    markAll(animColumn, pose, d.spellAttrs.get("preventsanim") ?? []);
-    markAll(fxColumn, chain, d.spellChainRows.keys());
-    markAll(fxColumn, dissolve, d.spellDissolves.keys());
-    markAll(fxColumn, shadowy, d.spellShadowies.keys());
-    markAll(fxColumn, ghost, d.spellGhostMats.keys());
-    markAll(fxColumn, glow, d.spellGlows.keys());
-    markAll(fxColumn, tint, d.spellTints.keys());
-    markAll(fxColumn, transparency, d.spellTransps.keys());
-    markAll(fxColumn, desaturate, d.spellDesaturates.keys());
-    markAll(fxColumn, freeze, d.spellFreezes);
-    markAll(fxColumn, camo, d.spellCamos);
-    markAll(fxColumn, morph, d.spellMorphs.keys());
-    markAll(fxColumn, shapeshift, d.spellShapeshifts.keys());
-    markAll(fxColumn, scale, d.spellScaleMods.keys());
-    markAll(fxColumn, summon, d.spellSummons.keys());
-    markAll(fxColumn, gameObject, d.spellObjects.keys());
-    markAll(fxColumn, screen, d.spellScreens.keys());
-    markAll(fxColumn, tracking, d.spellAttrs.get("tracktargetinchannel") ?? []);
-    for (const [spellId, rows] of d.spellMechanics) {
-        for (const m of rows) {
-            if (m.effect) mark(mechColumn, effect, spellId);
-            if (m.aura) mark(mechColumn, aura, spellId);
-        }
-    }
-    markAll(mechColumn, triggers, d.spellTriggers.keys());
-    markAll(mechColumn, origin, d.spellOrigins.keys());
-    markAll(mechColumn, location, d.spellAreas.keys());
-    markAll(mechColumn, invis, d.spellInvisTypes.keys());
-    markAll(mechColumn, detect, d.spellDetectTypes.keys());
-    markAll(mechColumn, seats, d.spellVehicles.keys());
-    markAll(mechColumn, speed, d.spellSpeedMods.keys());
-    markAll(mechColumn, keybind, d.spellKeybinds.keys());
-    markAll(mechColumn, debuff, d.spellAttrs.get("auraisdebuff") ?? []);
-
-    const namesSq = d.namesL.map(squash);
-    const pools = [
-        {sq: d.descriptionText.map(squash), of: d.descriptionOf},
-        {sq: d.encounterText.map(squash), of: d.encounterOf},
-        {sq: d.auraText.map(squash), of: d.auraOf},
-    ];
-    const iconsSq = d.iconNames.map(squash);
-
-    /* The vocabularies. Each is a SUPERSET of what its rows' textual props can match — 1.0's per-category corpora
-     * carry extra words (hues, hexes, category words) beyond what a 2.0 row stores, which costs verification time
-     * and never answers. What a seed must never be is UNDERSIZED, so a column's list includes every vocabulary any
-     * of its textual props reads. */
-    const vocab = (into: Vocab[], haystacks: Iterable<[string, Iterable<number>]>): void => {
-        for (const [text, spellIds] of haystacks) {
-            const sq = squash(text);
-            if (sq) into.push({sq, spells: indexes(spellIds)});
-        }
-    };
-    /** One corpus map — key to 1.0 search haystack — joined with its parallel key-to-spells map. */
-    const corpusVocab = <K, >(into: Vocab[], corpora: ReadonlyMap<K, string>,
-                              spells: ReadonlyMap<K, Iterable<number>>): void => {
-        vocab(into, [...corpora].map(([key, corpus]): [string, Iterable<number>] =>
-            [corpus, spells.get(key) ?? []]));
-    };
-
-    const modelVocab: Vocab[] = [];
-    vocab(modelVocab, d.modelFids.map((fid) =>
-        [d.files.get(fid)?.path ?? "", d.modelSpells.get(fid) ?? []]));
-    corpusVocab(modelVocab, d.itemSearchL, d.itemSpells);
-    corpusVocab(modelVocab, d.mountSearchL, d.mountSpells);
-    // Attachment points and motions are enum props, so a content term reaches them, and a display/item ref is an
-    // identity a whole number names; all three index in the same walk.
-    const modelRefs = new Map<number, Set<number>>();
-    {
-        const byAttach = new Map<string, Set<number>>();
-        const byMotion = new Map<string, Set<number>>();
-        for (const [spellId, entries] of d.spellModelCats) {
-            for (const e of entries) {
-                if (e.src >= 0 && d.attachmentNames[e.src]) addTo(byAttach, d.attachmentNames[e.src], spellId);
-                if (e.dst >= 0 && d.attachmentNames[e.dst]) addTo(byAttach, d.attachmentNames[e.dst], spellId);
-                if (e.motion) addTo(byMotion, e.motion, spellId);
-                if (e.ref) addTo(modelRefs, e.ref, spellId);
-            }
-        }
-        vocab(modelVocab, byAttach);
-        vocab(modelVocab, byMotion);
-    }
-
-    const soundVocab: Vocab[] = [];
-    vocab(soundVocab, d.soundFids.map((fid) =>
-        [d.files.get(fid)?.path ?? "", d.soundSpells.get(fid) ?? []]));
-    corpusVocab(soundVocab, d.soundKitName, d.soundKitSpells);
-
-    const animVocab: Vocab[] = [];
-    // Every route an animation NAME reaches a spell by. The passenger half is load-bearing: a rider's
-    // animation carries its name under the role it plays in, and those properties declare themselves
-    // plain, so a seed built without them is UNDERSIZED — and an undersized seed silently loses
-    // answers rather than costing time, because the kernel never verifies a spell it did not seed.
-    vocab(animVocab, d.animNames.map((animName, animId): [string, Iterable<number>] => [animName, [
-        ...(d.visualAnimSpells.get(animId) ?? []),
-        ...(d.replaceSpells.get(animId) ?? []),
-        ...(d.passengerAnimSpells.get(animId) ?? []),
-        ...(d.animAnimKits.get(animId) ?? []).flatMap((kitId) => d.animKitSpells.get(kitId) ?? []),
-    ]]));
-    // A boneset match is per row, but a seed only needs "some kit of this spell animates the region" — the
-    // verification walk answers the per-row half.
-    vocab(animVocab, d.bonesetNames.map((boneset): [string, Iterable<number>] => [boneset, (() => {
-        const spells: number[] = [];
-        for (const [kitId, byAnim] of d.animKitAnimBoneset) {
-            for (const names of byAnim.values()) {
-                if (names.includes(boneset)) {
-                    spells.push(...(d.animKitSpells.get(kitId) ?? []));
-                    break;
+    /* ONE walk over each column's materialised pools builds everything the seeds read. The rows are exactly what the
+     * verifier walks, so a seed built here is a superset of any answer by construction: a textual value seeds under
+     * the text its vocabulary resolved, an id-and-name pair seeds under both, and a bare number seeds by identity
+     * wherever its property declares the id notation. Distinct texts MERGE across rows — two rows resolving one file
+     * path become one haystack carrying both owner lists — which keeps the scan the size of the vocabulary rather
+     * than the size of the pool. */
+    for (const [column, source] of sources) {
+        const owners = source.owners();
+        const colPresence = new Set<number>();
+        presence.set(column, colPresence);
+        const byText = new Map<string, Set<number>>();
+        const byId = new Map<number, Set<number>>();
+        const textual = (text: string, own: readonly number[]): void => {
+            const folded = sq(text);
+            if (!folded) return;
+            for (const at of own) addTo(byText, folded, at);
+        };
+        const identity = (id: number, own: readonly number[]): void => {
+            for (const at of own) addTo(byId, id, at);
+        };
+        for (let ref = 0; ref < owners.length; ref++) {
+            const own = owners[ref];
+            if (own.length === 0) continue;
+            const r = source.rowByRef(ref);
+            for (const at of own) colPresence.add(at);
+            let per = kindPresence.get(r.kind);
+            if (!per) kindPresence.set(r.kind, per = new Set());
+            for (const at of own) per.add(at);
+            for (const [name, value] of Object.entries(r.props)) {
+                if (typeof value === "string") {
+                    textual(value, own);
+                } else if (typeof value === "object") {
+                    // The record form is keyed by type name; its strings seed as text, and its numbers seed by
+                    // identity exactly when the property declares the id notation.
+                    const ids = r.kind.props[name].types.includes(idType);
+                    for (const held of Object.values(value)) {
+                        if (typeof held === "string") textual(held, own);
+                        else if (ids) identity(held, own);
+                    }
+                } else if (r.kind.props[name].types.includes(idType)) {
+                    identity(value, own);
                 }
             }
         }
-        return spells;
-    })()]));
-
-    const mechVocab: Vocab[] = [];
-    // One pass over the flat mechanic arrays builds both reverse maps; a per-name scan would visit them once per
-    // enum entry — hundreds of full sweeps of ~372k rows.
-    {
-        const effectSpells = new Map<number, Set<number>>();
-        const auraSpells = new Map<number, Set<number>>();
-        const {spellIds, effects, auras} = d.mechanicCols;
-        for (let k = 0; k < spellIds.length; k++) {
-            if (effects[k]) addTo(effectSpells, effects[k], spellIds[k]);
-            if (auras[k]) addTo(auraSpells, auras[k], spellIds[k]);
-        }
-        corpusVocab(mechVocab, d.effectNames, effectSpells);
-        corpusVocab(mechVocab, d.auraNames, auraSpells);
+        content.set(column, [...byText].map(([text, spells]) => ({sq: text, spells: [...spells]})));
+        digits.set(column, byId);
     }
-    corpusVocab(mechVocab, d.triggersSearchL, d.triggersSpells);
-    corpusVocab(mechVocab, d.originSearchL, d.originSpells);
-    corpusVocab(mechVocab, d.areaSearchL, d.areaSpells);
-    corpusVocab(mechVocab, d.speedSearchL, d.speedSpells);
-    corpusVocab(mechVocab, d.vehicleSearchL, d.vehicleSpells);
-    corpusVocab(mechVocab, d.keybindSearchL, d.keybindSpells);
 
-    const fxVocab: Vocab[] = [];
-    corpusVocab(fxVocab, d.fxSearchL, d.fxSpells);
-    // The chain corpus carries hue and textures but not the beam's attach pair, which is a pair of enum props here.
-    {
-        const byAttach = new Map<string, Set<number>>();
-        for (const [spellId, chainRows] of d.spellChainRows) {
-            for (const r of chainRows) {
-                for (const at of [r.src, r.dst]) {
-                    const word = at >= 0 ? d.attachmentNames[at] : "";
-                    if (word) addTo(byAttach, word, spellId);
-                }
-            }
-        }
-        vocab(fxVocab, byAttach);
-    }
-    corpusVocab(fxVocab, d.shadowySearchL, d.shadowySpells);
-    corpusVocab(fxVocab, d.dissolveSearchL, d.dissolveSpells);
-    corpusVocab(fxVocab, d.screenSearchL, d.screenSpells);
-    corpusVocab(fxVocab, d.morphSearchL, d.morphSpells);
-    corpusVocab(fxVocab, d.shapeshiftSearchL, d.shapeshiftSpells);
-    corpusVocab(fxVocab, d.summonPairSearchL, d.summonPairSpells);
-    corpusVocab(fxVocab, d.objectSearchL, d.objectSpells);
-
-    // Plain search reads only the props declared plain, a subset of each column's content, so the union of the
-    // content vocabularies is a sound plain seed.
-    const plainVocab = [...modelVocab, ...soundVocab, ...animVocab, ...mechVocab, ...fxVocab];
-
-    /* The identity answers for a digit token, per column. A bare number in content dispatches to an id/count
-     * notation before text, so a sound seed must answer by identity as well as by substring. The count-typed props
-     * (seats, detect) answer with their kind's whole presence: small sets, and a count has no index. */
-    const digits = new Map<Column, (n: number) => Iterable<number>[]>();
-    digits.set(modelColumn, (n) => [indexes(modelRefs.get(n) ?? [])]);
-    digits.set(soundColumn, (n) => [indexes(d.soundKitSpells.get(n) ?? [])]);
-    digits.set(animColumn, (n) => [indexes(d.animKitSpells.get(n) ?? [])]);
-    digits.set(mechColumn, (n) => [
-        indexes(d.triggersSpells.get(n) ?? []),
-        indexes(d.originSpells.get(n) ?? []),
-        indexes(d.invisTypeSpells.get(n) ?? []),
-        indexes(d.detectTypeSpells.get(n) ?? []),
-    ]);
-    digits.set(fxColumn, (n) => [
-        indexes(d.morphSpells.get(n) ?? []),
-        indexes(d.objectSpells.get(n) ?? []),
-        // A summon's creature id keys the pair map as "creature:control".
-        ...[...d.summonPairSpells].filter(([key]) => key.startsWith(`${n}:`))
-            .map(([, spellIds]) => indexes(spellIds)),
-    ]);
+    const namesSq = l.spells.names.map((name, i) =>
+        squash([name, l.spells.subtexts[i], l.spells.altNames[i]].filter(Boolean).join(" ")));
+    const pools = [l.text.descriptions, l.text.encounters, l.text.auras].map((pool) => ({
+        sq: pool.text.map(squash), of: pool.of,
+    }));
+    const iconsSq = l.iconNames.map(squash);
 
     /* Which kinds a numeric-looking or colour token could match, derived from the declarations rather than listed:
      * a hand list would go quietly stale the day a kind gains such a property, and a stale list here is an
@@ -513,11 +493,7 @@ function invert(d: SpellData, cats: Map<number, Kind>): Inverted {
         }
     }
 
-    const content = new Map<Column, readonly Vocab[]>([
-        [modelColumn, modelVocab], [soundColumn, soundVocab], [animColumn, animVocab],
-        [mechColumn, mechVocab], [fxColumn, fxVocab],
-    ]);
-    return {presence, kindPresence, namesSq, pools, iconsSq, plainVocab, content, digits, numericKinds, colourKinds};
+    return {presence, kindPresence, namesSq, pools, iconsSq, content, digits, numericKinds, colourKinds};
 }
 
 /**
@@ -558,36 +534,36 @@ function probeTokens(expr: ValueExpr): string[] | null {
 /**
  * Builds the {@link Dataset} the kernel runs against, over one loaded pack.
  *
- * Rows are materialised per call rather than held: the honest cost of the reshaping this file exists to retire, and
- * what `candidates()` keeps off the common path. Loads the pack's expansion ladder as the ordinal vocabulary, keys
- * and aliases both, so `xpac:classic` ranks against a pack whose key for it is `vanilla`.
+ * Row materialisation is lazy and cached per pool slot; the first `candidates()` call walks every pool to build the
+ * inverted side, so it materialises and retains the lot — a deliberate trade, since the seeds must read every row
+ * once anyway and later queries then allocate nothing. Loads the pack's expansion ladder as the ordinal vocabulary,
+ * keys and aliases both, so `xpac:classic` ranks against a pack whose key for it is `vanilla`.
  *
- * @param d 1.0's loaded indexes.
+ * @param l The loaded pack.
  * @returns The dataset, with row sources for all seven columns and an inverted `candidates()`.
  */
-export function packDataset(d: SpellData, pack: RowPack): Dataset {
+export function packDataset(l: LoadedPack): Dataset {
     // The ordinal ladder is module-level state, so the last dataset built owns it: a caller holding two datasets at
     // once must not interleave ordinal queries across them. Every current caller builds and queries one at a time.
-    setOrdinalLadder(d.expansions.map((xp) => [xp.key, ...xp.aliases].join(" ")));
-    const cats = catKinds(d);
+    setOrdinalLadder(l.expansions.keys.map((key, i) => [key, ...(l.expansions.aliases[i] ?? [])].join(" ")));
     // The spell's own name and its number are the two columns the pack does not ship rows for: a spell has exactly
     // one of each, so there is nothing to pool and they are read off the per-spell columns directly.
     const builders = new Map<Column, (i: number) => Row[]>([
-        [spellColumn, (i) => spellRows(d, i)],
-        [idColumn, (i) => idRows(d, i)],
+        [spellColumn, (i) => spellRows(l, i)],
+        [idColumn, (i) => idRows(l, i)],
     ]);
 
     // Every column a spell can carry more than one of is READ. Nothing here reshapes a row any more.
-    const vocabularies = rowVocabularies(pack);
-    const packed = new Map<Column, RowSource>(
+    const vocabularies = rowVocabularies(l.pack);
+    const packed = new Map<Column, PackRowSource>(
         ([[modelColumn, "model"], [soundColumn, "sound"], [animColumn, "anim"],
             [fxColumn, "fx"], [mechColumn, "mech"]] as const).map(
             ([column, key]) =>
-                [column, new PackRowSource(rowTableOf(pack, key), kindsByWord(column),
+                [column, new PackRowSource(rowTableOf(l.pack, key), kindsByWord(column),
                     vocabularies)]));
 
     let inverted: Inverted | null = null;
-    const invertedSide = (): Inverted => (inverted ??= invert(d, cats));
+    const invertedSide = (): Inverted => (inverted ??= invert(l, packed));
 
     const plainSeed = (value: ValueExpr): Set<number> | null => {
         const tokens = probeTokens(value);
@@ -602,11 +578,12 @@ export function packDataset(d: SpellData, pack: RowPack): Dataset {
             }
             {
                 const hit = inv.iconsSq.map((sq) => sq.includes(token));
-                for (let i = 0; i < d.iconOf.length; i++) if (d.iconOf[i] && hit[d.iconOf[i] - 1]) seed.add(i);
+                const icons = l.spells.icons;
+                for (let i = 0; i < icons.length; i++) if (icons[i] && hit[icons[i] - 1]) seed.add(i);
             }
-            probeVocab(inv.plainVocab, token, seed);
+            for (const vocabs of inv.content.values()) probeVocab(vocabs, token, seed);
             if (/^\d+$/.test(token)) {
-                const at = d.spellIndex.get(Number(token));
+                const at = l.index.get(Number(token));
                 if (at !== undefined) seed.add(at);
             }
         }
@@ -631,9 +608,7 @@ export function packDataset(d: SpellData, pack: RowPack): Dataset {
             if (TARGET_ROLES.includes(token)) return null;
             probeVocab(vocabs, token, seed);
             if (/^\d+$/.test(token)) {
-                for (const found of inv.digits.get(column)?.(Number(token)) ?? []) {
-                    for (const at of found) if (at >= 0) seed.add(at);
-                }
+                for (const at of inv.digits.get(column)?.get(Number(token)) ?? []) seed.add(at);
             }
             if (/\d/.test(token)) {
                 for (const kind of inv.numericKinds.get(column) ?? []) {
@@ -699,7 +674,7 @@ export function packDataset(d: SpellData, pack: RowPack): Dataset {
     };
 
     return {
-        spells: d.ids.length,
+        spells: l.spells.ids.length,
         source(column: Column) {
             const read = packed.get(column);
             if (read) return read;

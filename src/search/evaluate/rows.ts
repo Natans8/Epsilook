@@ -189,6 +189,9 @@ export function matchProp(
  *
  * That is what lets a bare `unbreakable` select the rows that carry the flag, on a type that stores no value at all.
  * The words are compared as text, so anchoring and patterns keep their usual meanings.
+ *
+ * TODO: fold the active language's property words in when a translated query-word table lands — this reader is not
+ * handed the kind, which the locale lookup is keyed by.
  */
 function matchesFlagWord(
     name: string, prop: Prop, stored: Stored,
