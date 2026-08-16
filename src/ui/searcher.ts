@@ -35,6 +35,8 @@ export interface LoadHandlers {
 /** One page's search worker. */
 export class Searcher {
     private seq = 0;
+    private inFlight = false;
+    private pending: { text: string; mode: "typing" | "final" } | null = null;
     private onCount: ((count: number, ms: number) => void) | null = null;
 
     constructor(private readonly worker: WorkerLike, handlers: LoadHandlers) {
@@ -47,7 +49,13 @@ export class Searcher {
                     versions: said.versions, domains: said.domains, spells: said.spells,
                 });
             } else if (said.is === "failed") handlers.failed(said.error);
-            else if (said.seq === this.seq) this.onCount?.(said.count, said.ms);
+            else {
+                // An answer frees the pipeline. A newer ask waiting makes this answer stale by definition; with
+                // none waiting, the newest sent ask's answer surfaces.
+                this.inFlight = false;
+                if (this.pending !== null) this.pump();
+                else if (said.seq === this.seq) this.onCount?.(said.count, said.ms);
+            }
         });
     }
 
@@ -56,8 +64,24 @@ export class Searcher {
         this.send({is: "load", base, version, locale});
     }
 
-    /** Asks for the count of one query. Only the newest ask's answer reaches the listener. */
+    /**
+     * Asks for the count of one query.
+     *
+     * At most ONE ask is ever in flight: a burst of edits keeps replacing the single pending ask, so the worker
+     * never builds a backlog of counts nobody will see — a held undo would otherwise queue seconds of stale work.
+     * Only the newest ask's answer reaches the listener.
+     */
     query(text: string, mode: "typing" | "final"): void {
+        this.pending = {text, mode};
+        this.pump();
+    }
+
+    /** Sends the pending ask when the pipeline is free. */
+    private pump(): void {
+        if (this.inFlight || this.pending === null) return;
+        const {text, mode} = this.pending;
+        this.pending = null;
+        this.inFlight = true;
         this.seq += 1;
         this.send({is: "query", seq: this.seq, text, mode});
     }

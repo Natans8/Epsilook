@@ -5,7 +5,7 @@
  * Deliberately nothing else: no chips, no transformation, no completion, no controls. Each of those arrives as
  * its own increment, tested and judged, per the rebuild ruling.
  */
-import type {ReactElement} from "react";
+import type {MouseEvent as ReactMouseEvent, ReactElement} from "react";
 import {useEffect, useRef, useState} from "react";
 import {useTranslation} from "react-i18next";
 import type {PackInfo, Searcher} from "./searcher";
@@ -61,6 +61,16 @@ export function App({info, searcher}: {
     }, [text]);
 
     const stale = result === null || result.for !== text;
+    const input = useRef<HTMLInputElement>(null);
+
+    /** The whole bar is the input's click target — a press on its padding focuses without stealing the caret. */
+    const onBarPress = (e: ReactMouseEvent<HTMLDivElement>): void => {
+        if (e.target !== input.current) {
+            e.preventDefault();
+            input.current?.focus();
+        }
+    };
+
     return (
         <div className={styles.page}>
             <header className={styles.header}>
@@ -98,8 +108,9 @@ export function App({info, searcher}: {
 
             <section className={styles.searchbox}>
                 <div className={styles.barRow}>
-                    <div className={styles.qbar}>
+                    <div className={styles.qbar} onMouseDown={onBarPress}>
                         <input
+                            ref={input}
                             className={styles.q}
                             type="text"
                             value={text}

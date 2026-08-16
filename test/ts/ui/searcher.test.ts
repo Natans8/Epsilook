@@ -35,15 +35,21 @@ class FakeWorker implements WorkerLike {
 
 const silent: LoadHandlers = {progress: () => {}, ready: () => {}, failed: () => {}};
 
-test("each query carries the next sequence number", () => {
+test("one ask in flight: a burst of edits reaches the worker as the first ask plus only the newest follow-up", () => {
     const worker = new FakeWorker();
     const searcher = new Searcher(worker, silent);
+    searcher.query("f", "final");
+    searcher.query("fi", "final");
+    searcher.query("fir", "final");
     searcher.query("fire", "final");
-    searcher.query("fireball", "final");
-    assert.deepEqual(worker.asks.map((ask) => (ask.is === "query" ? ask.seq : null)), [1, 2]);
+    // Nothing has answered yet, so exactly one ask is in flight; the middle edits were replaced unseen.
+    assert.deepEqual(worker.asks.map((ask) => (ask.is === "query" ? ask.text : null)), ["f"]);
+
+    worker.say({is: "result", seq: 1, count: 1, ms: 1});
+    assert.deepEqual(worker.asks.map((ask) => (ask.is === "query" ? ask.text : null)), ["f", "fire"]);
 });
 
-test("only the newest ask's answer surfaces — a stale count can never overwrite a fresh one", () => {
+test("an answer superseded by a waiting ask is dropped; the waiting ask's answer surfaces", () => {
     const worker = new FakeWorker();
     const searcher = new Searcher(worker, silent);
     const heard: number[] = [];
@@ -51,10 +57,20 @@ test("only the newest ask's answer surfaces — a stale count can never overwrit
 
     searcher.query("fire", "final");
     searcher.query("fireball", "final");
-    // The slow answer for the FIRST ask lands after the second was sent: it must be dropped.
+    // The first ask answers while "fireball" waits: stale by definition, dropped, and the wait is released.
     worker.say({is: "result", seq: 1, count: 999, ms: 5});
     worker.say({is: "result", seq: 2, count: 42, ms: 5});
     assert.deepEqual(heard, [42]);
+});
+
+test("a lone ask's answer surfaces immediately", () => {
+    const worker = new FakeWorker();
+    const searcher = new Searcher(worker, silent);
+    const heard: number[] = [];
+    searcher.counts((count) => heard.push(count));
+    searcher.query("fire", "final");
+    worker.say({is: "result", seq: 1, count: 7, ms: 2});
+    assert.deepEqual(heard, [7]);
 });
 
 test("load handlers route progress, ready and failure", () => {

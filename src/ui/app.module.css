@@ -73,6 +73,11 @@
 }
 .q::placeholder { color: var(--text-dim); }
 
+/* The site stylesheet draws a hard gold outline on every focused input for Tab navigation; the bar shows focus
+ * through its enclosure ring instead, exactly as 1.0 exempts its own #q. The pseudo-class must be restated here
+ * or the global rule wins on specificity. */
+.q:focus-visible { outline: none; }
+
 .status {
     margin-top: 0.4rem;
     font-size: 0.85rem;
