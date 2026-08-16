@@ -16,11 +16,33 @@
     margin-bottom: 4px;
 }
 
-.title { font-size: 20px; font-weight: 600; color: var(--text-strong); margin: 0; }
-.subtitle { font-size: 13px; color: var(--text-dim); }
+.title {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-strong);
+    margin: 0;
+}
 
-.knobs { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-.knob { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-dim); }
+.subtitle {
+    font-size: 13px;
+    color: var(--text-dim);
+}
+
+.knobs {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.knob {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+}
+
 .knob select {
     background: var(--bg-panel);
     color: var(--text);
@@ -29,10 +51,16 @@
     font: inherit;
     padding: 3px 6px;
 }
-.knob select:disabled { opacity: 0.6; }
+
+.knob select:disabled {
+    opacity: 0.6;
+}
 
 /* --- the bar, at 1.0's metrics --- */
-.searchbox { padding: 0.8rem 0 0.4rem; position: relative; }
+.searchbox {
+    padding: 0.8rem 0 0.4rem;
+    position: relative;
+}
 
 .barRow {
     display: flex;
@@ -53,6 +81,7 @@
     border-radius: 10px;
     cursor: text;
 }
+
 .qbar:focus-within {
     border-color: var(--gold-dim);
     box-shadow: 0 0 0 3px rgba(var(--gold-rgb), 0.12);
@@ -64,19 +93,75 @@
     max-width: 100%;
     font-family: inherit;
     font-size: 1.1rem;
-    line-height: 1.2;
+    /* `normal` on input and backdrop alike: Firefox clamps an input's line-height up to the font's normal, so
+     * any smaller ratio here would slide the backdrop's glyphs off the caret's line. Equal by construction. */
+    line-height: normal;
     padding: 0.15rem 0;
     color: var(--text);
     background: none;
     border: none;
     outline: none;
 }
-.q::placeholder { color: var(--text-dim); }
+
+.q::placeholder {
+    color: var(--text-dim);
+}
 
 /* The site stylesheet draws a hard gold outline on every focused input for Tab navigation; the bar shows focus
  * through its enclosure ring instead, exactly as 1.0 exempts its own #q. The pseudo-class must be restated here
  * or the global rule wins on specificity. */
-.q:focus-visible { outline: none; }
+.q:focus-visible {
+    outline: none;
+}
+
+/* --- the highlight backdrop: 1.0's mechanism. The input's own glyphs go transparent while the backdrop draws
+ * the same characters classed; the caret and the native selection follow the input's unstyled text, so METRICS
+ * ARE OFF-LIMITS here — colour only, never weight, spacing or padding of its own. --- */
+.editwrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: inline-flex;
+    align-items: baseline;
+}
+
+.qhl {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+    white-space: pre;
+    font-size: 1.1rem;
+    line-height: normal;
+    padding: 0.15rem 0;
+    color: var(--text);
+}
+
+/* only while there is something to draw: an empty input must keep its placeholder */
+.q.hl {
+    position: relative;
+    z-index: 1;
+    color: transparent;
+    caret-color: var(--text);
+}
+
+/* selected text redraws itself above the backdrop, so a selection shows the words, not a bare block */
+.q.hl::selection {
+    color: var(--text);
+}
+
+.runHead {
+    color: var(--gold);
+}
+
+.runOp {
+    color: var(--gold-dim);
+}
+
+.runNumber {
+    color: var(--gold);
+}
 
 .status {
     margin-top: 0.4rem;
@@ -85,7 +170,10 @@
     font-variant-numeric: tabular-nums;
     min-height: 1.2em;
 }
-.statusStale { opacity: 0.55; }
+
+.statusStale {
+    opacity: 0.55;
+}
 
 .footer {
     margin-top: 3rem;
@@ -105,6 +193,7 @@
     color: var(--text-dim);
     font-size: 15px;
 }
+
 .loadingBar {
     margin: 14px auto 0;
     width: 320px;
@@ -114,5 +203,13 @@
     border: 1px solid var(--border);
     overflow: hidden;
 }
-.loadingFill { height: 100%; background: var(--gold-dim); transition: width 0.2s; }
-.error { color: rgb(var(--danger-rgb)); }
+
+.loadingFill {
+    height: 100%;
+    background: var(--gold-dim);
+    transition: width 0.2s;
+}
+
+.error {
+    color: rgb(var(--danger-rgb));
+}

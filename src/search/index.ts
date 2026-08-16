@@ -67,6 +67,9 @@ export {anyOfExpr, COUNT_PROP, propOf} from "./language/ast";
 
 export {parse} from "./language/parse";
 
+export type {Run, RunKind} from "./language/classify";
+export {classify} from "./language/classify";
+
 export type {QueryWords} from "./vocabulary/locale-words";
 export {applyQueryWords, QUERY_WORD_LANGUAGES} from "./language/query-words";
 
