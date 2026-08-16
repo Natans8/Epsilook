@@ -115,11 +115,11 @@ export function CommittedClause({view, span, state, actions}: {
     const open = (): void => { actions.open(span.start, span.end); };
 
     if (view.is === "raw") {
-        return <span className={styles.rawErr} onClick={open}>{view.text}</span>;
+        return <span className={styles.rawErr} data-own-press="" onClick={open}>{view.text}</span>;
     }
     if (view.is === "text") {
         return (
-            <span className={`${styles.freeText} ${view.negated ? styles.neg : ""}`} onClick={open}>
+            <span className={`${styles.freeText} ${view.negated ? styles.neg : ""}`} data-own-press="" onClick={open}>
                 <Segs segments={view.segments} negated={view.negated}/>
             </span>
         );
@@ -145,7 +145,10 @@ export function CommittedClause({view, span, state, actions}: {
 
     if (view.is === "chip") {
         return (
-            <span className={enclosureClass(styles.chip, view, state)} style={toneStyle(view.tone)} onClick={open}>
+            <span
+                className={enclosureClass(styles.chip, view, state)} style={toneStyle(view.tone)}
+                data-own-press="" onClick={open}
+            >
                 <span className={styles.sect}>
                     {x}
                     <span className={styles.head}>{head}</span>
@@ -159,7 +162,10 @@ export function CommittedClause({view, span, state, actions}: {
     }
 
     return (
-        <span className={enclosureClass(styles.lane, view, state)} style={toneStyle(view.tone)} onClick={open}>
+        <span
+            className={enclosureClass(styles.lane, view, state)} style={toneStyle(view.tone)}
+            data-own-press="" onClick={open}
+        >
             <span className={styles.sect}>
                 {x}
                 <span className={styles.head}>{head}</span>

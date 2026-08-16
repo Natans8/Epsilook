@@ -4,19 +4,32 @@
 .surface {
     position: absolute;
     top: 100%;
-    left: 0;
     margin-top: 6px;
     z-index: 30;
-    min-width: 280px;
-    max-width: 460px;
+    min-width: 300px;
+    max-width: 480px;
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 8px 0;
+    padding: 6px 0;
     box-shadow: 0 12px 30px rgba(var(--shadow-rgb), 0.45);
     font-size: 13px;
     color: var(--text);
+    animation: settle 120ms ease-out;
+    transform-origin: top left;
 }
+
+@keyframes settle {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .surface { animation: none; }
+}
+
+/* long lists scroll inside the surface; controls and footnotes stay pinned below */
+.scroll { max-height: 340px; overflow-y: auto; overscroll-behavior: contain; }
 
 .section { padding: 4px 0; }
 .section + .section { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; }
@@ -32,27 +45,30 @@
 .row {
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    gap: 10px;
     width: 100%;
-    padding: 5px 12px;
+    padding: 4px 12px;
     background: none;
     border: none;
     text-align: left;
     font: inherit;
     color: var(--text);
     cursor: pointer;
+    white-space: nowrap;
 }
-.row:hover, .row.active { background: var(--bg-row-hover); }
-.rowWord { color: var(--text-strong); font-weight: 500; }
-.rowNote { color: var(--text-dim); font-size: 12px; }
+.row:hover { background: var(--bg-row-hover); }
+.row:focus-visible { outline: none; background: var(--bg-row-hover); box-shadow: inset 2px 0 0 var(--gold-dim); }
+.rowWord { color: var(--text-strong); font-weight: 500; flex-shrink: 0; }
+.rowNote { color: var(--text-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 
 .message { padding: 4px 12px; color: var(--text-dim); }
-.footnote { padding: 6px 12px 0; color: var(--text-muted); font-size: 12px; }
+.footnote { padding: 6px 12px 2px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border); margin-top: 4px; }
 
 /* --- the number control: a clean track between the pack's bounds, sentinel words on the control --- */
-.control { padding: 6px 12px; display: flex; flex-direction: column; gap: 8px; }
+.control { padding: 8px 12px; display: flex; flex-direction: column; gap: 10px; }
+.section + .control, .scroll + .control { border-top: 1px solid var(--border); }
 
-.slider { width: 100%; accent-color: var(--gold); }
+.slider { width: 100%; accent-color: var(--gold); margin: 2px 0; }
 
 .bounds {
     display: flex;
@@ -61,7 +77,7 @@
     font-size: 11.5px;
 }
 
-.controlRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.controlRow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 .wordBtn {
     background: none;
@@ -72,8 +88,9 @@
     font-size: 12.5px;
     padding: 2px 10px;
     cursor: pointer;
+    transition: border-color 120ms, color 120ms;
 }
-.wordBtn:hover { border-color: var(--gold-dim); color: var(--gold); }
+.wordBtn:hover, .wordBtn:focus-visible { border-color: var(--gold-dim); color: var(--gold); outline: none; }
 
 .segmented { display: inline-flex; border: 1px solid var(--border-ctrl); border-radius: 6px; overflow: hidden; }
 .segBtn {
@@ -81,12 +98,15 @@
     border: none;
     color: var(--text-dim);
     font: inherit;
-    font-size: 12.5px;
-    padding: 2px 9px;
+    font-size: 13px;
+    line-height: 1;
+    padding: 5px 9px;
     cursor: pointer;
+    transition: background 120ms, color 120ms;
 }
 .segBtn + .segBtn { border-left: 1px solid var(--border-ctrl); }
-.segBtn.on { background: var(--bg-row-hover); color: var(--gold); }
+.segBtn:hover, .segBtn:focus-visible { color: var(--text-strong); outline: none; }
+.segBtn.on { background: rgba(var(--gold-rgb), 0.12); color: var(--gold); }
 
 .stepper { display: inline-flex; flex-direction: column; }
 .stepBtn {
@@ -94,26 +114,73 @@
     border: none;
     color: var(--text-dim);
     font-size: 9px;
-    line-height: 1;
-    padding: 1px 4px;
+    line-height: 1.2;
+    padding: 1px 5px;
     cursor: pointer;
 }
 .stepBtn:hover { color: var(--gold); }
+
+/* a range's two bounds: typed slots joined by the dash, riding over the dual track */
+.bound {
+    width: 84px;
+    background: var(--bg-row);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 6px;
+    color: var(--text-strong);
+    font: inherit;
+    font-size: 13px;
+    padding: 3px 8px;
+}
+.bound:focus-visible { outline: none; border-color: var(--gold-dim); }
+.boundDash { color: var(--text-dim); }
+
+/* the dual-handle track: two native sliders overlaid; only the thumbs take the mouse */
+.dual { position: relative; height: 22px; }
+.dual::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 4px;
+    transform: translateY(-50%);
+    border-radius: 2px;
+    background: var(--border-ctrl);
+}
+.dual input[type="range"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    margin: 0;
+    appearance: none;
+    background: transparent;
+    pointer-events: none;
+    accent-color: var(--gold);
+}
+.dual input[type="range"]::-moz-range-thumb {
+    pointer-events: auto;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid var(--gold-dim);
+    background: var(--gold);
+    cursor: grab;
+}
+.dual input[type="range"]::-webkit-slider-thumb {
+    pointer-events: auto;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid var(--gold-dim);
+    background: var(--gold);
+    cursor: grab;
+}
+.dual input[type="range"]::-moz-range-track { background: transparent; }
 
 .colour { width: 46px; height: 28px; padding: 0; border: 1px solid var(--border-ctrl); border-radius: 6px;
     background: none; cursor: pointer; }
 
 .check { display: flex; align-items: center; gap: 8px; padding: 3px 12px; cursor: pointer; }
+.check:hover { background: var(--bg-row-hover); }
 .check input { accent-color: var(--gold); }
-
-.fix {
-    background: none;
-    cursor: pointer;
-    border: 1px solid var(--gold-dim);
-    color: var(--gold);
-    border-radius: 999px;
-    font: inherit;
-    font-size: 12.5px;
-    padding: 2px 10px;
-    margin: 2px 12px;
-}

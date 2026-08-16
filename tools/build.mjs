@@ -142,9 +142,12 @@ const HARNESS_HTML = `<!DOCTYPE html>
 </html>
 `;
 
+// Two entries: the page and its search worker — the pack and every kernel run live in the worker, so the page
+// never blocks on a keystroke.
 const harnessOptions = {
-    entryPoints: [resolve(root, "src/ui/harness.tsx")],
-    outfile: resolve(HARNESS_DIR, "harness.js"),
+    entryPoints: [resolve(root, "src/ui/harness.tsx"), resolve(root, "src/ui/worker.ts")],
+    outdir: HARNESS_DIR,
+    entryNames: "[name]",
     bundle: true,
     format: "iife",
     target: "es2022",

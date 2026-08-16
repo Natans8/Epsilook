@@ -3,11 +3,14 @@
  *
  * The bar renders the parse of the query text. Clauses outside the open region are committed — chips, lanes,
  * freeform text or raw error text per {@link clauseView} — and the open region renders as the {@link Editor}.
- * Every gesture maps to a transition on {@link QueryState}: arrows flow through chips by committing one segment
- * and opening its neighbour, Backspace at a boundary arms before it deletes, a chip click opens its span.
+ *
+ * The session model: a press anywhere on the bar's empty ground opens the end; a press outside the whole wrap —
+ * bar and surface together — commits and closes. Arrows flow through chips, opening each neighbour with the caret
+ * on the entering side; Backspace at a boundary arms before it deletes; `/` reaches the bar from anywhere on the
+ * page; Ctrl+Z steps operations whether or not a slot is open.
  */
-import type {ReactElement} from "react";
-import {useMemo} from "react";
+import type {MouseEvent as ReactMouseEvent, ReactElement} from "react";
+import {useEffect, useLayoutEffect, useMemo, useRef, useState} from "react";
 import {useTranslation} from "react-i18next";
 import type {PackDomain} from "../../data";
 import type {Clause, Head, Parsed} from "../../search/index";
@@ -56,6 +59,11 @@ export function Bar({state, parsed, domains, history, linked, onSimplify}: {
     readonly onSimplify: () => void;
 }): ReactElement {
     const {t} = useTranslation();
+    const wrap = useRef<HTMLDivElement>(null);
+    const editorHost = useRef<HTMLSpanElement>(null);
+    const [anchorLeft, setAnchorLeft] = useState(0);
+    const caretHint = useRef<"start" | "end">("end");
+
     const editStart = state.pieces.before.length;
     const editEnd = editStart + state.pieces.edit.length;
 
@@ -67,13 +75,65 @@ export function Bar({state, parsed, domains, history, linked, onSimplify}: {
     const views = useMemo(() => new Map(parsed.clauses.map((clause) =>
         [clause, clauseView(clause, state.text)])), [parsed, state.text]);
 
+    /** The slot's input element, for every gesture that returns focus to it. */
+    const slotInput = (): HTMLInputElement | null =>
+        editorHost.current?.querySelector("input") ?? null;
+
+    // The surface anchors to the open chip: measure where the editor sits whenever it moves.
+    useLayoutEffect(() => {
+        if (!state.editing) return;
+        const host = editorHost.current;
+        const box = wrap.current;
+        if (host === null || box === null) return;
+        const left = host.offsetLeft;
+        setAnchorLeft(Math.max(0, Math.min(left, box.clientWidth - 320)));
+    }, [state.editing, state.pieces.before, state.pieces.edit]);
+
+    // A press outside the wrap — bar and surface together — ends the editing session.
+    useEffect(() => {
+        if (!state.editing) return;
+        const outside = (event: globalThis.MouseEvent): void => {
+            if (wrap.current !== null && !wrap.current.contains(event.target as Node)) state.close();
+        };
+        document.addEventListener("mousedown", outside);
+        return (): void => { document.removeEventListener("mousedown", outside); };
+    }, [state.editing, state]);
+
+    // `/` reaches the bar from anywhere; Ctrl+Z and Ctrl+Y step operations even with no slot open.
+    useEffect(() => {
+        const keys = (event: globalThis.KeyboardEvent): void => {
+            const target = event.target as HTMLElement;
+            const typing = target instanceof HTMLInputElement || target instanceof HTMLSelectElement;
+            if (event.key === "/" && !typing) {
+                event.preventDefault();
+                caretHint.current = "end";
+                state.openEnd();
+                return;
+            }
+            if (typing) return;
+            if (event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === "z") {
+                event.preventDefault();
+                state.undo();
+            } else if (event.ctrlKey && (event.key.toLowerCase() === "y"
+                || (event.shiftKey && event.key.toLowerCase() === "z"))) {
+                event.preventDefault();
+                state.redo();
+            }
+        };
+        document.addEventListener("keydown", keys);
+        return (): void => { document.removeEventListener("keydown", keys); };
+    }, [state]);
+
     const actions = {
-        open: state.openSpan,
+        open: (start: number, end: number) => {
+            caretHint.current = "end";
+            state.openSpan(start, end);
+        },
         remove: (start: number, end: number) => { state.deleteSpan(start, end); },
         grow: (start: number, end: number) => {
             const raw = state.text.slice(start, end);
             const grown = grownText(raw);
-            // Replace the span with its grown spelling, then open it with the caret in the new slot.
+            caretHint.current = "end";
             state.openSpan(start, end);
             state.type(grown);
         },
@@ -113,12 +173,20 @@ export function Bar({state, parsed, domains, history, linked, onSimplify}: {
 
     const leaveLeft = (): void => {
         const previous = beforeClauses.at(-1);
-        if (previous !== undefined) state.openSpan(previous.span.start, previous.span.end);
+        if (previous !== undefined) {
+            caretHint.current = "end";
+            state.openSpan(previous.span.start, previous.span.end);
+        }
     };
     const leaveRight = (): void => {
         const next = afterClauses[0];
-        if (next !== undefined) state.openSpan(next.span.start, next.span.end);
-        else if (state.pieces.after.trim() === "" && state.pieces.edit !== "") state.commit(true);
+        if (next !== undefined) {
+            caretHint.current = "start";
+            state.openSpan(next.span.start, next.span.end);
+        } else if (state.pieces.after.trim() === "" && state.pieces.edit !== "") {
+            caretHint.current = "end";
+            state.commit(true);
+        }
     };
     const backspaceAtStart = (): void => {
         const previous = beforeClauses.at(-1);
@@ -126,6 +194,7 @@ export function Bar({state, parsed, domains, history, linked, onSimplify}: {
         const span = {start: previous.span.start, end: previous.span.end};
         if (state.armed !== null && state.armed.start === span.start && state.armed.end === span.end) {
             state.deleteSpan(span.start, span.end);
+            caretHint.current = "end";
             state.openEnd();
         } else {
             state.arm(span);
@@ -139,7 +208,10 @@ export function Bar({state, parsed, domains, history, linked, onSimplify}: {
         onLeaveLeft: leaveLeft,
         onLeaveRight: leaveRight,
         onBackspaceAtStart: backspaceAtStart,
-        onArrowDown: () => {},
+        onArrowDown: () => {
+            const surface = wrap.current?.querySelector<HTMLElement>("[data-surface]");
+            surface?.querySelector<HTMLElement>("button, input")?.focus();
+        },
         onUndo: state.undo,
         onRedo: state.redo,
     };
@@ -151,6 +223,7 @@ export function Bar({state, parsed, domains, history, linked, onSimplify}: {
         },
         openAxis: (word: string) => { state.type(`${word}:`); },
         recall: (query: string) => { state.replaceAll(query); },
+        focusSlot: () => { slotInput()?.focus(); },
     };
 
     const committed = (clause: Clause): ReactElement => (
@@ -163,31 +236,37 @@ export function Bar({state, parsed, domains, history, linked, onSimplify}: {
         />
     );
 
+    /** Empty ground anywhere on the bar opens the end; interactive children swallow their own presses. */
+    const onBarGround = (e: ReactMouseEvent<HTMLDivElement>): void => {
+        const target = e.target as HTMLElement;
+        if (target.closest("button, input, [data-own-press]") !== null) return;
+        e.preventDefault();
+        caretHint.current = "end";
+        state.openEnd();
+        requestAnimationFrame(() => slotInput()?.focus());
+    };
+
     return (
-        <div className={styles.wrap}>
-            <div
-                className={styles.bar}
-                onMouseDown={(e) => {
-                    if (e.target === e.currentTarget) { e.preventDefault(); state.openEnd(); }
-                }}
-            >
+        <div ref={wrap} className={styles.wrap}>
+            <div className={styles.bar} onMouseDown={onBarGround}>
                 {beforeClauses.map(committed)}
                 {state.editing && (
-                    <Editor
-                        value={state.pieces.edit}
-                        ghost={ghostFor(state.pieces.edit)}
-                        events={editorEvents}
-                        placeholder={state.text.trim() === "" ? t("bar.placeholder") : undefined}
-                    />
+                    <span ref={editorHost} data-own-press="">
+                        <Editor
+                            key={editStart}
+                            value={state.pieces.edit}
+                            ghost={ghostFor(state.pieces.edit)}
+                            initialCaret={caretHint.current}
+                            events={editorEvents}
+                            placeholder={state.text.trim() === "" ? t("bar.placeholder") : undefined}
+                        />
+                    </span>
                 )}
                 {!state.editing && state.text.trim() === "" && (
                     <span className={styles.placeholder}>{t("bar.placeholder")}</span>
                 )}
                 {afterClauses.map(committed)}
-                <span
-                    className={styles.grow}
-                    onMouseDown={(e) => { e.preventDefault(); state.openEnd(); }}
-                />
+                <span className={styles.grow}/>
                 <span className={styles.tools}>
                     <button type="button" className={styles.tool} onClick={onSimplify}>
                         {t("bar.simplify")}
@@ -198,13 +277,16 @@ export function Bar({state, parsed, domains, history, linked, onSimplify}: {
                 </span>
             </div>
             {surfaceContext !== null && (
-                <Surface
-                    context={surfaceContext}
-                    domains={domains}
-                    history={history}
-                    messages={surfaceMessages}
-                    actions={surfaceActions}
-                />
+                <div data-surface="">
+                    <Surface
+                        context={surfaceContext}
+                        domains={domains}
+                        history={history}
+                        messages={surfaceMessages}
+                        actions={surfaceActions}
+                        left={anchorLeft}
+                    />
+                </div>
             )}
         </div>
     );

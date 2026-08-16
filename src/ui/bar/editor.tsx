@@ -54,11 +54,13 @@ export interface EditorEvents {
  *
  * @returns The editor, focused on mount.
  */
-export function Editor({value, ghost, events, placeholder}: {
+export function Editor({value, ghost, initialCaret, events, placeholder}: {
     /** The verbatim edit text, head included. */
     readonly value: string;
     /** The one inline completion candidate — the text that Tab would append. */
     readonly ghost: string;
+    /** Which side the caret enters on — the side the reader arrived from. */
+    readonly initialCaret: "start" | "end";
     readonly events: EditorEvents;
     readonly placeholder?: string;
 }): ReactElement {
@@ -69,7 +71,14 @@ export function Editor({value, ghost, events, placeholder}: {
     const prefix = head === null ? "" : value.slice(0, head.consumed);
     const rest = head === null ? value : head.rest;
 
-    useEffect(() => { input.current?.focus(); }, []);
+    useEffect(() => {
+        const el = input.current;
+        if (el === null) return;
+        el.focus();
+        // The caret side matters on entry alone; later renders leave the caret where typing put it.
+        const at = initialCaret === "start" ? 0 : el.value.length;
+        el.setSelectionRange(at, at);
+    }, []);
     useLayoutEffect(() => {
         if (caretTo.current !== null && input.current !== null) {
             input.current.setSelectionRange(caretTo.current, caretTo.current);

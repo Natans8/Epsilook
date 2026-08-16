@@ -4,16 +4,19 @@
  *
  * The governing principle, the user's own words: the query is aware of syntax and enums, not of data. An empty bar
  * offers history and the axis doors; free typing offers axis shortcuts only; an open chip offers whatever control
- * its slot's type asks for — words for a picker, a clean track for a number, the native picker for a colour. Soft
- * hints for the value being composed render here too, in the message section; committed diagnostics stay in the
- * tray.
+ * its slot's type asks for. Every operator the comparison segment shows comes from the property's OWN declaration —
+ * an axis that refuses ordering shows no ordering, exactly as the parser would refuse it.
+ *
+ * Focus law: the chip and this surface are ONE editing session. A button steals no focus (its mousedown is
+ * swallowed), while a slider or a bound slot takes focus legitimately — both live inside the bar's wrap, and only
+ * a press outside the wrap ends the session.
  */
-import type {ReactElement} from "react";
+import type {KeyboardEvent, ReactElement} from "react";
 import {useTranslation} from "react-i18next";
 import type {PackDomain} from "../../data";
 import type {Head, Kind, Prop} from "../../search/index";
 import {
-    doorOf, formatValue, HEADS, hintOf, kindsOf, nameOf, parseValue, propNameOf, sentinelOf, TARGET_ROLES, wordOf,
+    doorOf, formatValue, HEADS, hintOf, kindsOf, nameOf, operatorsOf, parseValue, propNameOf, TARGET_ROLES, wordOf,
 } from "../../search/index";
 import styles from "./surface.module.css";
 
@@ -34,6 +37,8 @@ export interface SurfaceActions {
     readonly openAxis: (word: string) => void;
     /** Replaces the whole query — a history entry. */
     readonly recall: (query: string) => void;
+    /** Returns focus to the editing slot — Escape from anywhere in the surface. */
+    readonly focusSlot: () => void;
 }
 
 /** The principal spelling of every top-level door, deduplicated — synonyms are ways in, not rows. */
@@ -62,7 +67,7 @@ function propOfHead(head: Head): { kind: Kind; name: string; prop: Prop } | null
     return null;
 }
 
-/** Keeps focus in the editing session: a mousedown on a control must not blur the slot. */
+/** Swallows a button press before it can steal the slot's focus. Buttons only — a slider needs its mouse. */
 const keepFocus = (e: { preventDefault: () => void }): void => { e.preventDefault(); };
 
 /** One clickable row: a word and its one-line note. */
@@ -104,21 +109,48 @@ function domainOf(
     return undefined;
 }
 
-/** The trailing number in the slot, with what surrounds it, so steppers and sliders can rewrite it in place. */
-function splitNumber(rest: string): { prefix: string; num: number; suffix: string } | null {
-    const match = /^(.*?)(-?\d+(?:\.\d+)?)([^\d]*)$/.exec(rest);
-    if (match === null) return null;
-    return {prefix: match[1], num: Number(match[2]), suffix: match[3]};
+/* ------------------------------------------------------------------- the number control */
+
+/** The comparison spellings, in number-line order. Offered only where the property's operators include them. */
+const COMPARISONS = [
+    {name: "lt", symbol: "<", written: "<"},
+    {name: "lte", symbol: "≤", written: "<="},
+    {name: "exact", symbol: "=", written: "="},
+    {name: "gte", symbol: "≥", written: ">="},
+    {name: "gt", symbol: ">", written: ">"},
+] as const;
+
+/** How the slot text currently reads: its comparison, its range split, and its bare value text. */
+interface SlotShape {
+    readonly op: (typeof COMPARISONS)[number] | null;
+    /** The text after any comparison symbol. */
+    readonly bare: string;
+    /** The two bound texts, when the bare text is a range. */
+    readonly bounds: readonly [string, string] | null;
 }
 
-/** The comparison the slot opens with, for the operator segment. */
-const OPS: readonly { symbol: string; written: string }[] = [
-    {symbol: "≥", written: ">="}, {symbol: "=", written: "="}, {symbol: "≤", written: "<="},
-];
+/** Reads the slot. The range split ignores a leading minus, which is a sign rather than the separator. */
+function slotShape(rest: string): SlotShape {
+    const trimmed = rest.trim();
+    const op = COMPARISONS.filter((c) => trimmed.startsWith(c.written))
+        .toSorted((a, b) => b.written.length - a.written.length)[0] ?? null;
+    const bare = op === null ? trimmed : trimmed.slice(op.written.length).trim();
+    const range = /^(.+?[^-\s])-(.+)$/.exec(bare);
+    const bounds = op === null && range !== null ? [range[1], range[2]] as const : null;
+    return {op, bare, bounds};
+}
+
+/** The stored value a bound's text reads as, or null. */
+function storedOf(prop: Prop, text: string): number | null {
+    if (text.trim() === "") return null;
+    const parsed = parseValue(prop, text.trim());
+    return typeof parsed?.value === "number" ? parsed.value : null;
+}
 
 /**
- * The number control: a clean track between the pack's measured bounds, sentinel words on the control, stepper
- * arrows beside the value, the comparison segment, and the unit selector where the type reads several notations.
+ * The number control: the property's own comparisons, a clean track between the pack's measured bounds, sentinel
+ * words on the control, steppers beside an integer value, and the unit selector where several notations read.
+ * A range ask gets both bounds as typed slots over a dual-handle track.
  */
 function NumberControl({head, rest, domain, actions}: {
     readonly head: Head; readonly rest: string;
@@ -128,96 +160,145 @@ function NumberControl({head, rest, domain, actions}: {
     const at = propOfHead(head);
     if (at === null) return null;
     const type = at.prop.types[0];
-    const split = splitNumber(rest);
-    const opNow = OPS.find((op) => rest.trimStart().startsWith(op.written))
-        ?? (rest.trimStart().startsWith(">") ? OPS[0] : rest.trimStart().startsWith("<") ? OPS[2] : null);
-    // The slider moves in STORED units — the domain's space — so the slot is read back through the property's own
-    // notations, never as its bare display number: "2.5s" is 2500, not 2.5.
-    const bare = rest.replace(/^\s*[<>=]+/, "").trim();
-    const parsed = bare === "" ? null : parseValue(at.prop, bare);
-    const stored = typeof parsed?.value === "number" ? parsed.value : null;
+    const offered = operatorsOf(at.prop);
+    const comparisons = COMPARISONS.filter((c) => offered.includes(c.name));
+    const rangeOffered = offered.includes("range");
+    const shape = slotShape(rest);
+    const stored = shape.bounds === null ? storedOf(at.prop, shape.bare) : null;
+    const lo = shape.bounds === null ? null : storedOf(at.prop, shape.bounds[0]);
+    const hi = shape.bounds === null ? null : storedOf(at.prop, shape.bounds[1]);
+    const write = (value: number): string => formatValue(at.prop, value);
 
-    /** Writes a stored value into the slot in the canonical spelling, keeping the comparison already there. */
-    const write = (stored: number): void => {
-        const op = opNow?.written ?? "";
-        actions.setRest(op + formatValue(at.prop, stored));
+    /** Rewrites the slot with a comparison, keeping the value; the active comparison toggles off. */
+    const setOp = (written: string): void => {
+        const value = shape.bounds === null ? shape.bare : shape.bounds[0];
+        if (shape.op?.written === written) actions.setRest(value);
+        else actions.setRest(written + value);
+    };
+    const toRange = (): void => {
+        if (shape.bounds !== null) { actions.setRest(shape.bare.split("-")[0]); return; }
+        const from = shape.bare !== "" ? shape.bare : write(domain?.p1 ?? 0);
+        const to = domain !== undefined ? write(domain.p99) : from;
+        actions.setRest(`${from}-${to}`);
+    };
+    const setBound = (which: 0 | 1, text: string): void => {
+        const bounds = shape.bounds ?? [shape.bare, shape.bare];
+        const next = which === 0 ? [text, bounds[1]] : [bounds[0], text];
+        actions.setRest(`${next[0]}-${next[1]}`);
     };
 
     const sentinels = Object.entries(at.prop.sentinels ?? {});
     const notations = type.notations ?? [];
+    const showOps = comparisons.length > 1 || rangeOffered;
     return (
-        <div className={styles.control} onMouseDown={keepFocus}>
-            <div className={styles.controlRow}>
-                <span className={styles.segmented}>
-                    {OPS.map((op) => (
-                        <button
-                            key={op.symbol} type="button"
-                            className={`${styles.segBtn} ${opNow?.symbol === op.symbol ? styles.on : ""}`}
-                            onClick={() => {
-                                const bare = split === null ? rest.replace(/^[<>=]+/, "") : rest;
-                                const stripped = bare.replace(/^\s*[<>=]+/, "");
-                                actions.setRest((op.written === "=" ? "=" : op.written) + stripped);
-                            }}
-                        >
-                            {op.symbol}
-                        </button>
-                    ))}
-                </span>
-                {split !== null && type.storage === "int" && (
-                    <span className={styles.stepper}>
-                        <button
-                            type="button" className={styles.stepBtn}
-                            onClick={() => { actions.setRest(`${split.prefix}${String(split.num + 1)}${split.suffix}`); }}
-                        >
-                            ▲
-                        </button>
-                        <button
-                            type="button" className={styles.stepBtn}
-                            onClick={() => { actions.setRest(`${split.prefix}${String(split.num - 1)}${split.suffix}`); }}
-                        >
-                            ▼
-                        </button>
-                    </span>
-                )}
-                {notations.length > 1 && (
-                    <span className={styles.segmented} title={t("surface.unit")}>
-                        {notations.map((notation) => (
+        <div className={styles.control}>
+            {showOps && (
+                <div className={styles.controlRow}>
+                    <span className={styles.segmented}>
+                        {comparisons.map((c) => (
                             <button
-                                key={notation.unit} type="button" className={styles.segBtn}
-                                onClick={() => {
-                                    const held = split?.num;
-                                    if (held === undefined) return;
-                                    const shown = notation.position === "before"
-                                        ? `${notation.unit}${String(held)}` : `${String(held)}${notation.unit}`;
-                                    actions.setRest((opNow?.written ?? "") + shown);
-                                }}
+                                key={c.name} type="button" onMouseDown={keepFocus}
+                                className={`${styles.segBtn} ${shape.op?.name === c.name ? styles.on : ""}`}
+                                onClick={() => { setOp(c.written); }}
                             >
-                                {notation.unit === "" ? "·" : notation.unit}
+                                {c.symbol}
                             </button>
                         ))}
+                        {rangeOffered && (
+                            <button
+                                type="button" onMouseDown={keepFocus}
+                                className={`${styles.segBtn} ${shape.bounds !== null ? styles.on : ""}`}
+                                onClick={toRange}
+                            >
+                                –
+                            </button>
+                        )}
                     </span>
-                )}
-            </div>
-            {domain !== undefined && (
-                <>
+                    {shape.bounds === null && /^-?\d+$/.test(shape.bare) && type.storage === "int" && (
+                        <span className={styles.stepper}>
+                            <button
+                                type="button" className={styles.stepBtn} onMouseDown={keepFocus}
+                                onClick={() => { actions.setRest((shape.op?.written ?? "") + String(Number(shape.bare) + 1)); }}
+                            >
+                                ▲
+                            </button>
+                            <button
+                                type="button" className={styles.stepBtn} onMouseDown={keepFocus}
+                                onClick={() => { actions.setRest((shape.op?.written ?? "") + String(Number(shape.bare) - 1)); }}
+                            >
+                                ▼
+                            </button>
+                        </span>
+                    )}
+                    {notations.length > 1 && shape.bounds === null && (
+                        <span className={styles.segmented} title={t("surface.unit")}>
+                            {notations.map((notation) => (
+                                <button
+                                    key={notation.unit} type="button" className={styles.segBtn} onMouseDown={keepFocus}
+                                    onClick={() => {
+                                        const held = /-?\d+(?:\.\d+)?/.exec(shape.bare)?.[0];
+                                        if (held === undefined) return;
+                                        const shown = notation.position === "before"
+                                            ? `${notation.unit}${held}` : `${held}${notation.unit}`;
+                                        actions.setRest((shape.op?.written ?? "") + shown);
+                                    }}
+                                >
+                                    {notation.unit === "" ? "·" : notation.unit}
+                                </button>
+                            ))}
+                        </span>
+                    )}
+                </div>
+            )}
+            {shape.bounds !== null && (
+                <div className={styles.controlRow}>
                     <input
-                        type="range" className={styles.slider}
-                        min={domain.p1} max={domain.p99} step={domain.step}
-                        value={stored ?? domain.median}
-                        onChange={(e) => { write(Number(e.target.value)); }}
+                        className={styles.bound} value={shape.bounds[0]}
+                        onChange={(e) => { setBound(0, e.target.value); }}
+                        spellCheck={false} autoComplete="off"
                     />
-                    <div className={styles.bounds}>
-                        <span>{formatValue(at.prop, domain.p1)}</span>
-                        {domain.clipped && <span>{t("surface.clipped")}</span>}
-                        <span>{formatValue(at.prop, domain.p99)}</span>
-                    </div>
-                </>
+                    <span className={styles.boundDash}>–</span>
+                    <input
+                        className={styles.bound} value={shape.bounds[1]}
+                        onChange={(e) => { setBound(1, e.target.value); }}
+                        spellCheck={false} autoComplete="off"
+                    />
+                </div>
+            )}
+            {domain !== undefined && shape.bounds === null && (
+                <input
+                    type="range" className={styles.slider}
+                    min={domain.p1} max={domain.p99} step={domain.step}
+                    value={stored ?? domain.median}
+                    onChange={(e) => { actions.setRest((shape.op?.written ?? "") + write(Number(e.target.value))); }}
+                />
+            )}
+            {domain !== undefined && shape.bounds !== null && (
+                <div className={styles.dual}>
+                    <input
+                        type="range" min={domain.p1} max={domain.p99} step={domain.step}
+                        value={Math.min(lo ?? domain.p1, hi ?? domain.p99)}
+                        onChange={(e) => { setBound(0, write(Number(e.target.value))); }}
+                    />
+                    <input
+                        type="range" min={domain.p1} max={domain.p99} step={domain.step}
+                        value={hi ?? domain.p99}
+                        onChange={(e) => { setBound(1, write(Number(e.target.value))); }}
+                    />
+                </div>
+            )}
+            {domain !== undefined && (
+                <div className={styles.bounds}>
+                    <span>{write(domain.p1)}</span>
+                    {domain.clipped && <span>{t("surface.clipped")}</span>}
+                    <span>{write(domain.p99)}</span>
+                </div>
             )}
             {sentinels.length > 0 && (
                 <div className={styles.controlRow}>
                     {sentinels.map(([, word]) => (
                         <button
-                            key={word} type="button" className={styles.wordBtn}
+                            key={word} type="button" className={styles.wordBtn} onMouseDown={keepFocus}
                             onClick={() => { actions.setRest(word); }}
                         >
                             {word}
@@ -258,7 +339,7 @@ function GlyphControl({rest, actions}: {
         actions.setRest(words.length > 1 ? `(${words.join("|")})` : words[0] ?? "");
     };
     return (
-        <div className={styles.section} onMouseDown={keepFocus}>
+        <div className={styles.section}>
             {TARGET_ROLES.map((role) => (
                 <label key={role} className={styles.check}>
                     <input type="checkbox" checked={picked.has(role)} onChange={() => { toggle(role); }}/>
@@ -272,7 +353,7 @@ function GlyphControl({rest, actions}: {
 /** The native colour picker, our tokens on its chrome; matching is exact, so a miss is the ordinary zero-result. */
 function ColourControl({actions}: { readonly actions: SurfaceActions }): ReactElement {
     return (
-        <div className={styles.control} onMouseDown={keepFocus}>
+        <div className={styles.control}>
             <input
                 type="color" className={styles.colour}
                 onChange={(e) => { actions.setRest(e.target.value.slice(1)); }}
@@ -281,39 +362,71 @@ function ColourControl({actions}: { readonly actions: SurfaceActions }): ReactEl
     );
 }
 
+/** Focus walking inside the surface: the arrows move across its buttons, Escape returns to the slot. */
+function onSurfaceKeys(e: KeyboardEvent<HTMLDivElement>, focusSlot: () => void): void {
+    if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        focusSlot();
+        return;
+    }
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const target = e.target as HTMLElement;
+    // A slider or a text slot owns its own arrow keys.
+    if (target instanceof HTMLInputElement && target.type !== "checkbox") return;
+    const focusable = [...e.currentTarget.querySelectorAll<HTMLElement>("button, input")];
+    const from = focusable.indexOf(target);
+    const next = focusable[from + (e.key === "ArrowDown" ? 1 : -1)];
+    if (next !== undefined) {
+        e.preventDefault();
+        next.focus();
+    } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        focusSlot();
+    }
+}
+
 /**
  * The floating control surface.
  *
  * @returns The dropdown, or null when the context offers nothing.
  */
-export function Surface({context, domains, history, messages, actions}: {
+export function Surface({context, domains, history, messages, actions, left}: {
     readonly context: SurfaceContext;
     readonly domains: Record<string, PackDomain> | undefined;
     readonly history: readonly string[];
     /** Soft hints for the value being composed — the silent-while-typing channel. */
     readonly messages: readonly string[];
     readonly actions: SurfaceActions;
+    /** Where the open chip sits, so the surface anchors to it rather than to the bar. */
+    readonly left: number;
 }): ReactElement | null {
     const {t} = useTranslation();
+    const anchor = {left};
 
     if (context.at === "menu") {
         return (
-            <div className={styles.surface} onMouseDown={keepFocus}>
-                <div className={styles.section}>
-                    <div className={styles.heading}>{t("surface.history")}</div>
-                    {history.length === 0 && <div className={styles.message}>{t("surface.noHistory")}</div>}
-                    {history.map((query) => (
-                        <Row key={query} word={query} onPick={() => { actions.recall(query); }}/>
-                    ))}
-                </div>
-                <div className={styles.section}>
-                    <div className={styles.heading}>{t("surface.axes")}</div>
-                    {axisDoors().map((door) => (
-                        <Row
-                            key={door.word} word={door.word} note={door.hint}
-                            onPick={() => { actions.openAxis(door.word); }}
-                        />
-                    ))}
+            <div
+                className={styles.surface} style={anchor}
+                onKeyDown={(e) => { onSurfaceKeys(e, actions.focusSlot); }}
+            >
+                <div className={styles.scroll}>
+                    <div className={styles.section}>
+                        <div className={styles.heading}>{t("surface.history")}</div>
+                        {history.length === 0 && <div className={styles.message}>{t("surface.noHistory")}</div>}
+                        {history.map((query) => (
+                            <Row key={query} word={query} onPick={() => { actions.recall(query); }}/>
+                        ))}
+                    </div>
+                    <div className={styles.section}>
+                        <div className={styles.heading}>{t("surface.axes")}</div>
+                        {axisDoors().map((door) => (
+                            <Row
+                                key={door.word} word={door.word} note={door.hint}
+                                onPick={() => { actions.openAxis(door.word); }}
+                            />
+                        ))}
+                    </div>
                 </div>
             </div>
         );
@@ -323,15 +436,20 @@ export function Surface({context, domains, history, messages, actions}: {
         const matches = axisDoors().filter((door) => door.word.startsWith(context.word.toLowerCase()));
         if (matches.length === 0 || context.word === "") return null;
         return (
-            <div className={styles.surface} onMouseDown={keepFocus}>
-                <div className={styles.section}>
-                    <div className={styles.heading}>{t("surface.axes")}</div>
-                    {matches.map((door) => (
-                        <Row
-                            key={door.word} word={`${door.word}:`} note={door.hint}
-                            onPick={() => { actions.openAxis(door.word); }}
-                        />
-                    ))}
+            <div
+                className={styles.surface} style={anchor}
+                onKeyDown={(e) => { onSurfaceKeys(e, actions.focusSlot); }}
+            >
+                <div className={styles.scroll}>
+                    <div className={styles.section}>
+                        <div className={styles.heading}>{t("surface.axes")}</div>
+                        {matches.map((door) => (
+                            <Row
+                                key={door.word} word={`${door.word}:`} note={door.hint}
+                                onPick={() => { actions.openAxis(door.word); }}
+                            />
+                        ))}
+                    </div>
                 </div>
             </div>
         );
@@ -343,29 +461,34 @@ export function Surface({context, domains, history, messages, actions}: {
     const type = at === null ? undefined : at.prop.types[0];
 
     return (
-        <div className={styles.surface} onMouseDown={keepFocus}>
-            {head.role === "column" && (
-                <div className={styles.section}>
-                    <div className={styles.heading}>{t("surface.kinds")}</div>
-                    {kindsOf(head.column).filter((kind) => kind.word !== undefined).map((kind) => (
-                        <Row
-                            key={kind.id} word={wordOf(kind)} note={kind.hint}
-                            onPick={() => { actions.setRest(wordOf(kind)); }}
-                        />
-                    ))}
-                </div>
-            )}
-            {head.role === "kind" && (
-                <div className={styles.section}>
-                    <div className={styles.heading}>{nameOf(head.kind)}</div>
-                    {Object.entries(head.kind.props).map(([name, prop]) => (
-                        <Row
-                            key={name} word={propNameOf(name, prop)} note={hintOf(prop)}
-                            onPick={() => { actions.setRest(`{${name}: }`); }}
-                        />
-                    ))}
-                </div>
-            )}
+        <div
+            className={styles.surface} style={anchor}
+            onKeyDown={(e) => { onSurfaceKeys(e, actions.focusSlot); }}
+        >
+            <div className={styles.scroll}>
+                {head.role === "column" && (
+                    <div className={styles.section}>
+                        <div className={styles.heading}>{t("surface.kinds")}</div>
+                        {kindsOf(head.column).filter((kind) => kind.word !== undefined).map((kind) => (
+                            <Row
+                                key={kind.id} word={wordOf(kind)} note={kind.hint}
+                                onPick={() => { actions.setRest(wordOf(kind)); }}
+                            />
+                        ))}
+                    </div>
+                )}
+                {head.role === "kind" && (
+                    <div className={styles.section}>
+                        <div className={styles.heading}>{nameOf(head.kind)}</div>
+                        {Object.entries(head.kind.props).map(([name, prop]) => (
+                            <Row
+                                key={name} word={propNameOf(name, prop)} note={hintOf(prop)}
+                                onPick={() => { actions.setRest(`{${name}: }`); }}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
             {(ui === "number" || ui === "range" || ui === "dial") && (
                 <NumberControl head={head} rest={context.rest} domain={domainOf(domains, head)} actions={actions}/>
             )}
@@ -387,8 +510,6 @@ export function Surface({context, domains, history, messages, actions}: {
                     })}
                 </div>
             )}
-            {at !== null && sentinelOf(at.prop, context.rest.trim()) === null && context.rest.trim() === ""
-                && <div className={styles.footnote}>{t("surface.empty")}</div>}
         </div>
     );
 }

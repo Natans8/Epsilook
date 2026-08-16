@@ -4,30 +4,20 @@
  *
  * The URL carries the whole view: `q` the query, `v` the version, `lang` the pack language, `lng` the interface
  * language (the i18n detector's own key). Changing a knob rewrites the URL and reloads, because a pack switch is a
- * refetch and the engine's language tables resolve at import time.
+ * refetch and the engine's language tables resolve at import time. Counting happens in the search worker, so the
+ * page never blocks on a keystroke; a stale count dims until its replacement lands.
  */
 import type {ReactElement} from "react";
 import {useEffect, useMemo, useRef, useState} from "react";
 import {useTranslation} from "react-i18next";
-import type {PackDomain, VersionEntry} from "../data";
 import type {Parsed, Suggestion} from "../search/index";
-import {formatQuery, parse, run, suggestions} from "../search/index";
-import type {Dataset} from "../search/index";
-import type {LoadedPack} from "../dataset";
+import {formatQuery, parse, suggestions} from "../search/index";
+import type {PackInfo, Searcher} from "./searcher";
 import {useQueryState} from "./bar/state";
 import {Bar} from "./bar/bar";
 import {Tray, trayRows} from "./bar/tray";
 import {recentQueries, rememberQuery} from "./history";
 import styles from "./app.module.css";
-
-/** Everything the harness loaded before mounting the page. */
-export interface HarnessData {
-    readonly dataset: Dataset;
-    readonly loaded: LoadedPack;
-    /** The languages the loaded pack ships. */
-    readonly locales: readonly string[];
-    readonly versions: readonly VersionEntry[];
-}
 
 /** The query the URL carries, or nothing. */
 const urlQuery = (): string => new URLSearchParams(location.search).get("q") ?? "";
@@ -42,43 +32,52 @@ function reloadWith(param: string, value: string): void {
 /** The interface languages a catalog is bundled for. */
 const APP_LANGUAGES = ["en", "ru"];
 
+/** The written tier is what every surface handing a query back prints. */
+const formatWritten = (offer: Suggestion): string => formatQuery(offer.parsed, "written");
+
 /**
  * The page.
  */
-export function App({data}: { readonly data: HarnessData }): ReactElement {
+export function App({info, searcher}: {
+    readonly info: PackInfo;
+    readonly searcher: Searcher;
+}): ReactElement {
     const {t, i18n} = useTranslation();
     const state = useQueryState(urlQuery());
     const [linked, setLinked] = useState<number | null>(null);
     const [offers, setOffers] = useState<readonly Suggestion[] | null>(null);
     const [history, setHistory] = useState<readonly string[]>(recentQueries);
-    const [result, setResult] = useState<{ count: number; ms: number; key: string } | null>(null);
+    const [result, setResult] = useState<{ count: number; ms: number; seq: number } | null>(null);
+    const asked = useRef(0);
 
     const parsed: Parsed = useMemo(
         () => parse(state.text, {mode: state.editing ? "typing" : "final"}),
         [state.text, state.editing]);
 
-    // The count is the whole results placeholder: parse and run, debounced so typing stays responsive. The engine
-    // is slower per keystroke than 1.0 was — a standing expectation, not a defect to fix here.
-    const runSeq = useRef(0);
+    // The count runs in the worker; the page only debounces the ask and drops answers that are no longer newest.
     useEffect(() => {
-        const seq = runSeq.current += 1;
+        searcher.counts((seq, count, ms) => {
+            if (seq === asked.current) setResult({count, ms, seq});
+        });
+    }, [searcher]);
+    useEffect(() => {
         const timer = setTimeout(() => {
-            if (seq !== runSeq.current) return;
-            const t0 = performance.now();
-            const found = run(parsed, data.dataset);
-            setResult({count: found.size, ms: Math.round(performance.now() - t0), key: state.text});
-        }, 250);
+            asked.current = searcher.query(state.text, state.editing ? "typing" : "final");
+        }, 120);
         return (): void => { clearTimeout(timer); };
-    }, [parsed, data.dataset, state.text]);
+    }, [searcher, state.text, state.editing]);
 
-    // A committed query lands in the URL and the history — the URL is the source of truth for the view.
+    // A committed query lands in the URL and the history — on the commit transition, not on every keystroke.
+    const wasEditing = useRef(false);
     useEffect(() => {
+        const committed = wasEditing.current && !state.editing;
+        wasEditing.current = state.editing;
         if (state.editing) return;
         const url = new URL(location.href);
         if (state.text.trim() === "") url.searchParams.delete("q");
         else url.searchParams.set("q", state.text);
         window.history.replaceState(null, "", url);
-        if (state.text.trim() !== "" && parsed.groups.length > 0) {
+        if (committed && state.text.trim() !== "" && parsed.groups.length > 0) {
             rememberQuery(state.text);
             setHistory(recentQueries());
         }
@@ -87,17 +86,13 @@ export function App({data}: { readonly data: HarnessData }): ReactElement {
     // The simplify offers describe one query; edit it and they are stale.
     useEffect(() => { setOffers(null); }, [state.text]);
 
-    const meta = (data.loaded.pack as unknown as {
-        meta?: { domains?: Record<string, PackDomain> };
-    }).meta;
-
     const editStart = state.pieces.before.length;
     const editEnd = editStart + state.pieces.edit.length;
     const editedClause = state.editing
         ? parsed.clauses.findIndex((clause) => clause.span.start < editEnd && clause.span.end > editStart)
         : -1;
 
-    const stale = result === null || result.key !== state.text;
+    const stale = result === null || result.seq !== asked.current;
     return (
         <div className={styles.page}>
             <header className={styles.header}>
@@ -107,25 +102,25 @@ export function App({data}: { readonly data: HarnessData }): ReactElement {
                     <label className={styles.knob}>
                         {t("harness.version")}
                         <select
-                            value={data.loaded.entry.id}
+                            value={info.version.id}
                             onChange={(e) => { reloadWith("v", e.target.value); }}
                         >
-                            {data.versions.filter((v) => v.hidden !== true).map((v) => (
-                                <option key={v.id} value={v.id}>{v.label} {v.id}</option>
+                            {info.versions.filter((v) => v.hidden !== true).map((v) => (
+                                <option key={v.id} value={v.id}>{v.label}</option>
                             ))}
                         </select>
                     </label>
                     <label
                         className={styles.knob}
-                        title={data.locales.length < 2 ? t("harness.onlyLanguage") : undefined}
+                        title={info.locales.length < 2 ? t("harness.onlyLanguage") : undefined}
                     >
                         {t("harness.packLanguage")}
                         <select
-                            value={data.loaded.locale}
-                            disabled={data.locales.length < 2}
+                            value={info.locale}
+                            disabled={info.locales.length < 2}
                             onChange={(e) => { reloadWith("lang", e.target.value); }}
                         >
-                            {data.locales.map((locale) => (
+                            {info.locales.map((locale) => (
                                 <option key={locale} value={locale}>{locale}</option>
                             ))}
                         </select>
@@ -136,10 +131,10 @@ export function App({data}: { readonly data: HarnessData }): ReactElement {
             <Bar
                 state={state}
                 parsed={parsed}
-                domains={meta?.domains}
+                domains={info.domains}
                 history={history}
                 linked={linked}
-                onSimplify={() => { setOffers(suggestions(parsed)); }}
+                onSimplify={() => { setOffers(suggestions(parse(state.text, {mode: "final"}))); }}
             />
             <Tray
                 diagnostics={trayRows(parsed, state.text, editedClause >= 0 ? editedClause : null)}
@@ -157,7 +152,7 @@ export function App({data}: { readonly data: HarnessData }): ReactElement {
                 <span className={`${styles.countNumber} ${stale ? styles.countStale : ""}`}>
                     {result === null ? "…" : result.count.toLocaleString()}
                 </span>
-                <span>{stale ? t("count.searching") : t("count.result", {count: result.count})}</span>
+                <span>{result === null || stale ? t("count.searching") : t("count.result", {count: result.count})}</span>
                 {result !== null && !stale && (
                     <span className={styles.countMs}>{t("count.elapsed", {ms: result.ms})}</span>
                 )}
@@ -177,6 +172,3 @@ export function App({data}: { readonly data: HarnessData }): ReactElement {
         </div>
     );
 }
-
-/** The written tier is what every surface handing a query back prints. */
-const formatWritten = (offer: Suggestion): string => formatQuery(offer.parsed, "written");
