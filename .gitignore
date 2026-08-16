@@ -15,6 +15,7 @@ tools/equal.mjs
 tools/surface.mjs
 tools/battery.mjs
 tools/simplify.mjs
+tools/translate.mjs
 
 # the test bundles esbuild emits from test/*.test.ts (npm test builds them)
 test/.bundle/

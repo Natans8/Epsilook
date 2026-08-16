@@ -47,6 +47,10 @@ void i18n.init({
     ns: Object.keys(resources.en),
     resources,
     initAsync: false,
+    // An empty string means "not translated yet", not "say nothing". A translation skeleton carries every key of
+    // the source language with empty values, so without this the interface would go blank for a language nobody
+    // had finished rather than falling back key by key.
+    returnEmptyString: false,
     interpolation: {escapeValue: false},
     detection: {caches: ["localStorage"]},
 });

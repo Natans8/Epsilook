@@ -1,1 +1,64 @@
-{}
+{
+  "clause": {
+    "negatesNothing": "",
+    "empty": "",
+    "emptySubject": "",
+    "emptyIgnored": ""
+  },
+  "why": {
+    "noValue": "",
+    "nothingToCompare": "",
+    "emptyGroup": ""
+  },
+  "bind": {
+    "noValue": "",
+    "noValueIgnored": "",
+    "valueNotScope": "",
+    "countsRows": ""
+  },
+  "axis": {
+    "noOrdering": "",
+    "cannotAnswer": "",
+    "takes": "",
+    "takesQuoted": "",
+    "noPatterns": "",
+    "noRegex": ""
+  },
+  "pattern": {
+    "invalid": "",
+    "pathWeak": "",
+    "unclosed": ""
+  },
+  "value": {
+    "differentQuestions": "",
+    "glued": "",
+    "groupUnclosed": "",
+    "exactPattern": "",
+    "anchorPattern": "",
+    "trailingRange": ""
+  },
+  "scope": {
+    "innerBindScope": "",
+    "nested": "",
+    "emptyMeansAny": "",
+    "unclosedBeforeNext": "",
+    "unclosedAtEnd": "",
+    "needsPositive": "",
+    "contentNegation": "",
+    "qualifierAlone": "",
+    "spaceAfterClose": "",
+    "foreignProperty": "",
+    "foreignAxis": ""
+  },
+  "fix": {
+    "closeScope": "",
+    "ownClause": "",
+    "insertSpace": "",
+    "withoutSymbol": "",
+    "dropQuotes": ""
+  },
+  "simplify": {
+    "allDead": "",
+    "matchesEverything": ""
+  }
+}

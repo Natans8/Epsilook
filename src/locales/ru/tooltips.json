@@ -1,1 +1,313 @@
-{}
+{
+  "column": {
+    "spell": "",
+    "id": "",
+    "model": "",
+    "sound": "",
+    "anim": "",
+    "fx": "",
+    "mech": ""
+  },
+  "operator": {
+    "exact": "",
+    "lt": "",
+    "lte": "",
+    "gt": "",
+    "gte": "",
+    "range": "",
+    "contains": "",
+    "glob": "",
+    "regex": "",
+    "present": "",
+    "anyOf": "",
+    "not": "",
+    "and": "",
+    "or": ""
+  },
+  "type": {
+    "text": "",
+    "path": "",
+    "enum": "",
+    "ordinal": "",
+    "id": "",
+    "count": "",
+    "seconds": "",
+    "percent": "",
+    "percentChange": "",
+    "length": "",
+    "angle": "",
+    "colour": "",
+    "offset": "",
+    "bitmask": "",
+    "flag": ""
+  },
+  "target": "",
+  "kind": {
+    "name": {
+      "hint": ""
+    },
+    "description": {
+      "hint": ""
+    },
+    "icon": {
+      "hint": "",
+      "props": {
+        "fid": ""
+      }
+    },
+    "delivery": {
+      "hint": "",
+      "props": {
+        "cast": "",
+        "channel": "",
+        "breaksmove": "",
+        "unbreakable": "",
+        "unhindered": ""
+      }
+    },
+    "spellId": {
+      "hint": ""
+    },
+    "expansion": {
+      "hint": ""
+    },
+    "missile": {
+      "hint": "",
+      "props": {
+        "from": "",
+        "to": "",
+        "motion": "",
+        "projectiles": ""
+      }
+    },
+    "barrage": {
+      "hint": "",
+      "props": {
+        "attach": ""
+      }
+    },
+    "ground": {
+      "hint": ""
+    },
+    "attached": {
+      "hint": "",
+      "props": {
+        "attach": ""
+      }
+    },
+    "trail": {
+      "hint": ""
+    },
+    "display": {
+      "hint": "",
+      "props": {
+        "id": "",
+        "attach": ""
+      }
+    },
+    "item": {
+      "hint": "",
+      "props": {
+        "id": "",
+        "name": "",
+        "attach": ""
+      }
+    },
+    "equipped": {
+      "hint": "",
+      "props": {
+        "slot": "",
+        "attach": ""
+      }
+    },
+    "mount": {
+      "hint": ""
+    },
+    "sound": {
+      "hint": "",
+      "props": {
+        "kit": ""
+      }
+    },
+    "animKit": {
+      "hint": "",
+      "props": {
+        "id": "",
+        "boneset": ""
+      }
+    },
+    "loose": {
+      "hint": "",
+      "props": {
+        "boneset": ""
+      }
+    },
+    "replace": {
+      "hint": "",
+      "props": {
+        "from": "",
+        "to": ""
+      }
+    },
+    "pose": {
+      "hint": ""
+    },
+    "passenger": {
+      "hint": "",
+      "props": {
+        "enter": "",
+        "sit": "",
+        "exit": ""
+      }
+    },
+    "chain": {
+      "hint": "",
+      "props": {
+        "from": "",
+        "to": "",
+        "colour": ""
+      }
+    },
+    "dissolve": {
+      "hint": "",
+      "props": {
+        "attach": ""
+      }
+    },
+    "shadowy": {
+      "hint": "",
+      "props": {
+        "attach": "",
+        "colour": ""
+      }
+    },
+    "ghost": {
+      "hint": "",
+      "props": {
+        "colour": ""
+      }
+    },
+    "glow": {
+      "hint": "",
+      "props": {
+        "colour": ""
+      }
+    },
+    "tint": {
+      "hint": "",
+      "props": {
+        "colour": ""
+      }
+    },
+    "transparency": {
+      "hint": ""
+    },
+    "desaturate": {
+      "hint": ""
+    },
+    "freeze": {
+      "hint": ""
+    },
+    "camo": {
+      "hint": ""
+    },
+    "morph": {
+      "hint": "",
+      "props": {
+        "display": ""
+      }
+    },
+    "shapeshift": {
+      "hint": ""
+    },
+    "scale": {
+      "hint": "",
+      "props": {
+        "amount": ""
+      }
+    },
+    "summon": {
+      "hint": "",
+      "props": {
+        "creature": "",
+        "control": ""
+      }
+    },
+    "gameObject": {
+      "hint": "",
+      "props": {
+        "object": ""
+      }
+    },
+    "screen": {
+      "hint": ""
+    },
+    "tracking": {
+      "hint": ""
+    },
+    "effect": {
+      "hint": "",
+      "props": {
+        "name": ""
+      }
+    },
+    "aura": {
+      "hint": "",
+      "props": {
+        "name": ""
+      }
+    },
+    "triggers": {
+      "hint": "",
+      "props": {
+        "spell": "",
+        "how": "",
+        "target": ""
+      }
+    },
+    "origin": {
+      "hint": "",
+      "props": {
+        "spell": "",
+        "how": "",
+        "target": ""
+      }
+    },
+    "location": {
+      "hint": ""
+    },
+    "invis": {
+      "hint": "",
+      "props": {
+        "channel": ""
+      }
+    },
+    "detect": {
+      "hint": "",
+      "props": {
+        "channel": "",
+        "count": ""
+      }
+    },
+    "seats": {
+      "hint": "",
+      "props": {
+        "count": "",
+        "attach": ""
+      }
+    },
+    "speed": {
+      "hint": "",
+      "props": {
+        "amount": "",
+        "mode": ""
+      }
+    },
+    "keybind": {
+      "hint": ""
+    },
+    "debuff": {
+      "hint": ""
+    }
+  }
+}
