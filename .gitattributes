@@ -28,3 +28,13 @@ site/data/**/*.gz filter=lfs diff=lfs merge=lfs -text
 # source that no public archive serves. Frozen, committed once, and small
 # enough not to want LFS; `binary` only keeps autocrlf away from them.
 *.7z binary
+
+# The manifest and the roster are HASHED AS BYTES. `pack/__main__.py` writes
+# both with `write_bytes` and LF for exactly that reason -- `write_text` would
+# translate newlines on Windows and the file on disk would stop being what
+# versions.json says it is. core.autocrlf (true here) wants to convert them
+# back on every checkout, which left all thirteen permanently reported as
+# modified with an empty diff, and made `rebuild.py --verify` refuse twelve of
+# them: the oracle checks for a clean file before it will trust a comparison.
+site/data/**/manifest.json -text
+site/data/versions.json -text

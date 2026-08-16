@@ -383,18 +383,26 @@ def describe_difference(before: dict, after: dict) -> list[str]:
     return notes
 
 
-def verify(pack: Pack, refresh: bool, timing: bool = False) -> bool:
-    """Rebuild into a scratch copy, compare, restore. True when reproducible."""
+def verify(pack: Pack, refresh: bool, timing: bool = False) -> bool | None:
+    """Rebuild into a scratch copy, compare, restore.
+
+    Returns:
+        True when the pack reproduced, False when its content moved, and
+        None when the oracle would not look. A dirty or missing manifest is
+        a question it declines to answer, not an answer -- they were one
+        value until a checkout quirk made twelve packs unverifiable and the
+        summary reported them as thirteen failures.
+    """
     pack_rel = f"site/data/{pack.id}/manifest.json"
     pack_path = ROOT / pack_rel
 
     if git("status", "--porcelain", "--", pack_rel).strip():
         print(f"{RED}refusing{RESET} {pack_rel} has uncommitted changes - "
               f"commit or stash them first")
-        return False
+        return None
     if not pack_path.exists():
         print(f"{RED}refusing{RESET} {pack_rel} does not exist yet - build it first")
-        return False
+        return None
 
     # Named so the manifest glob elsewhere in this file cannot pick it up: a
     # scratch copy counted as a pack would speak for modules twice.
@@ -485,14 +493,18 @@ def main() -> int:
               f"{', '.join(p.id for p in chosen)}"
               + ("" if args.all or args.version
                  else f"  {DIM}(--all for the whole roster){RESET}"))
-        failed = [pack.id for pack in chosen
-                  if not verify(pack, args.refresh, args.timing)]
+        answers = {pack.id: verify(pack, args.refresh, args.timing)
+                   for pack in chosen}
+        failed = [i for i, ok in answers.items() if ok is False]
+        declined = [i for i, ok in answers.items() if ok is None]
         # Said again at the end, because a rebuild prints thousands of lines
         # and the verdict is the one thing a reader scrolls to.
-        verdict = RED if failed else GREEN
-        print(f"\n{verdict}{len(chosen) - len(failed)}/{len(chosen)} reproduced{RESET}"
-              + (f" - differs: {', '.join(failed)}" if failed else ""))
-        return 1 if failed else 0
+        verdict = RED if failed or declined else GREEN
+        reproduced = len(chosen) - len(failed) - len(declined)
+        print(f"\n{verdict}{reproduced}/{len(chosen)} reproduced{RESET}"
+              + (f" - differs: {', '.join(failed)}" if failed else "")
+              + (f" - not checked: {', '.join(declined)}" if declined else ""))
+        return 1 if failed or declined else 0
 
     if build_all(chosen, args.refresh, args.timing, jobs_for(args.jobs, chosen)) != 0:
         return 1
