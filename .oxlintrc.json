@@ -5,7 +5,8 @@
     "unicorn",
     "oxc",
     "promise",
-    "jsdoc"
+    "jsdoc",
+    "react"
   ],
   "env": {
     "es2024": true,
@@ -39,6 +40,8 @@
     {
       "files": [
         "src/search/**/*.ts",
+        "src/ui/**/*.ts",
+        "src/ui/**/*.tsx",
         "test/**/*.ts"
       ],
       "rules": {

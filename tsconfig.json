@@ -12,6 +12,9 @@
     "moduleResolution": "bundler",
     "noEmit": true,
     "strict": true,
+    // the presentation layer (src/ui) is React written as .tsx; the automatic
+    // runtime, so components never import React for the JSX alone
+    "jsx": "react-jsx",
     // esbuild compiles one file at a time, so every file must be checkable
     // alone, and type-only imports must say so (`import type`)
     "isolatedModules": true,

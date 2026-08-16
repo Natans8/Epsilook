@@ -178,6 +178,21 @@ SEARCH_SURFACE = "index"
 # one would then have to satisfy.
 MATCHER_NAMES = ("Row", "candidates")
 
+# The presentation layer: the one tree that may import React, and the one where
+# .tsx is a legal extension. Everything else in src/ stays framework-free — the
+# engine must keep running headless in Node (the CLIs, the tests, check.py).
+UI_TREE = "src/ui/"
+
+# The framework's packages, matched as the specifier root: "react",
+# "react-dom", and any subpath of either ("react-dom/client",
+# "react/jsx-runtime" — the automatic runtime esbuild injects).
+REACT_PACKAGES = ("react", "react-dom")
+
+# Engine trees that must never depend on the presentation layer. The app shell
+# (src/main.ts) legitimately imports the ui door at takeover; the engine never
+# does in any future.
+ENGINE_TREES = ("src/search/", "src/i18n/")
+
 # Browser globals and DOM types. Matched as whole words on code with comments
 # and strings stripped — several of these words (`document`, `Element`) are
 # ordinary English and appear in the prose above them constantly.
@@ -967,6 +982,43 @@ def check_layers(rep: Report) -> None:
         rep.ok("layer boundary", f"{len(DATA_MODULES)} data/query modules free of DOM + app imports")
 
     check_matcher_seam(rep, imports)
+    check_react_seam(rep, imports)
+
+
+def check_react_seam(rep: Report, imports: re.Pattern[str]) -> None:
+    """React stays inside the presentation layer.
+
+    The engine's portability rests on the framework never reaching it: a React
+    import outside src/ui welds that module to the view layer's runtime, and an
+    engine module importing from src/ui inverts the dependency the seams keep
+    one-way. Both are silent — the bundle builds either way. A .tsx extension
+    is the same claim made by filename, so it is held to the same boundary.
+    """
+    react_roots = tuple(p + "/" for p in REACT_PACKAGES)
+    problems: list[str] = []
+    scanned = 0
+    for mod in sorted((ROOT / "src").rglob("*.ts*")):
+        rel = mod.relative_to(ROOT).as_posix()
+        if rel.startswith((UI_TREE, "src/vendor/")) or rel.endswith(".d.ts"):
+            continue
+        scanned += 1
+        if rel.endswith(".tsx"):
+            problems.append(f"{rel} is .tsx outside {UI_TREE}")
+            continue
+        src = mod.read_text(encoding="utf-8")
+        for target in imports.findall(strip_ts_comments(src)):
+            if target in REACT_PACKAGES or target.startswith(react_roots):
+                problems.append(f"{rel} imports {target}")
+            elif rel.startswith(ENGINE_TREES) and "/ui/" in f"/{target}/":
+                problems.append(f"{rel} imports presentation module {target}")
+
+    if problems:
+        for p in problems[:6]:
+            rep.fail("react seam", p)
+        if len(problems) > 6:
+            rep.fail("react seam", f"...and {len(problems) - 6} more")
+    else:
+        rep.ok("react seam", f"{scanned} modules outside {UI_TREE} free of React")
 
 
 def check_matcher_seam(rep: Report, imports: re.Pattern[str]) -> None:

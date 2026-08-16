@@ -61,10 +61,14 @@ const options = {
  *   src/i18n/     The string registry. Its only importers today live in
  *                 src/search/, so it is unreached exactly as long as that tree
  *                 is. DELETE THIS ENTRY together with the one above.
+ *
+ *   src/ui/       The 2.0 presentation layer — React components, written as
+ *                 .tsx. It renders what src/search answers, so it joins the
+ *                 bundle the same day the engine does. DELETE with the above.
  */
 // Search 2.0 and what it reads. The shipped 1.0 engine imports none of it and never will:
 // 2.0 replaces the app rather than joining it, so these stay unreferenced until it takes over.
-const UNREACHED = ["src/search/", "src/i18n/", "src/packrows.ts"];
+const UNREACHED = ["src/search/", "src/i18n/", "src/ui/", "src/packrows.ts"];
 
 /** Every non-declaration .ts under src/, relative to the repo root. */
 function sourceFiles(dir = resolve(root, "src")) {
@@ -72,7 +76,7 @@ function sourceFiles(dir = resolve(root, "src")) {
     for (const entry of readdirSync(dir, {withFileTypes: true})) {
         const path = resolve(dir, entry.name);
         if (entry.isDirectory()) out.push(...sourceFiles(path));
-        else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".d.ts"))
+        else if (/\.tsx?$/.test(entry.name) && !entry.name.endsWith(".d.ts"))
             out.push(relative(root, path).split(sep).join("/"));
     }
     return out;
@@ -133,7 +137,7 @@ function testFiles(dir = resolve(root, "test/ts")) {
     for (const entry of readdirSync(dir, {withFileTypes: true})) {
         const path = resolve(dir, entry.name);
         if (entry.isDirectory()) out.push(...testFiles(path));
-        else if (entry.name.endsWith(".test.ts")) out.push(path);
+        else if (/\.test\.tsx?$/.test(entry.name)) out.push(path);
     }
     return out;
 }

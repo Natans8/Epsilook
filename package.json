@@ -25,6 +25,8 @@
   "devDependencies": {
     "@types/color-name": "^2.0.0",
     "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "esbuild": "^0.28.2",
     "oxlint": "^1.78.0",
     "oxlint-tsgolint": "^7.0.2001",
@@ -34,6 +36,8 @@
   "dependencies": {
     "color-name": "^2.1.1",
     "i18next": "^26.3.6",
-    "i18next-browser-languagedetector": "^8.2.1"
+    "i18next-browser-languagedetector": "^8.2.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }
