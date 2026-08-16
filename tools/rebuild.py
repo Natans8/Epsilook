@@ -4,8 +4,9 @@
     python tools/rebuild.py --list           # what would run, for every pack
     python tools/rebuild.py 9.2.7            # rebuild one pack (prefix match)
     python tools/rebuild.py                  # rebuild the whole roster
-    python tools/rebuild.py --verify         # the deterministic-build oracle
+    python tools/rebuild.py --verify         # the oracle, on the DEFAULT pack
     python tools/rebuild.py --verify 11.2.7  # ... against another pack
+    python tools/rebuild.py --verify --all   # ... against every pack
 
 WHY IT EXISTS. The build takes --label and --default on every invocation and
 forgets them otherwise, so a rebuild that omits them silently renames a pack to
@@ -433,6 +434,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("version", nargs="?", help="pack id or a prefix of one (default: all)")
+    ap.add_argument("--all", action="store_true",
+                    help="with --verify, check every pack rather than the "
+                         "default one")
     ap.add_argument("--verify", action="store_true",
                     help="deterministic-build oracle: rebuild, compare, restore")
     ap.add_argument("--refresh", action="store_true", help="re-download sources even if cached")
@@ -463,7 +467,10 @@ def main() -> int:
         return 0
 
     chosen = select(args.version)
-    if args.verify and not args.version:
+    if args.verify and not args.version and not args.all:
+        # One pack by default because a rebuild is minutes and the oracle is
+        # usually asked about a change just made. Narrowing SILENTLY was the
+        # bug: the run then looks like a whole-roster proof it never was.
         chosen = [p for p in chosen if p.default] or chosen[:1]
 
     if args.list:
@@ -474,7 +481,18 @@ def main() -> int:
         return 0
 
     if args.verify:
-        return 0 if all([verify(pack, args.refresh, args.timing) for pack in chosen]) else 1
+        print(f"verifying {len(chosen)} of {len(PACKS)} pack(s): "
+              f"{', '.join(p.id for p in chosen)}"
+              + ("" if args.all or args.version
+                 else f"  {DIM}(--all for the whole roster){RESET}"))
+        failed = [pack.id for pack in chosen
+                  if not verify(pack, args.refresh, args.timing)]
+        # Said again at the end, because a rebuild prints thousands of lines
+        # and the verdict is the one thing a reader scrolls to.
+        verdict = RED if failed else GREEN
+        print(f"\n{verdict}{len(chosen) - len(failed)}/{len(chosen)} reproduced{RESET}"
+              + (f" - differs: {', '.join(failed)}" if failed else ""))
+        return 1 if failed else 0
 
     if build_all(chosen, args.refresh, args.timing, jobs_for(args.jobs, chosen)) != 0:
         return 1
