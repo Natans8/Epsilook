@@ -14,6 +14,7 @@ nothing to do.
 from __future__ import annotations
 
 import io
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -78,6 +79,32 @@ LISTFILE_ASSET = "community-listfile-withcapitals.csv"
 # is why src/ is watched instead of the bundle it produces. An html-only or
 # data-only change needs nothing (data packs self-bust via versions.json).
 BUMP_PATHS = ("site/css", "src", "tools/build.mjs")
+
+# The workflow that publishes the site, and the branch list inside it. Which
+# branch deploys is read from the thing that does the deploying rather than
+# written down again here, because a branch name copied into a tool is one that
+# outlives its rename - and this repo already spells `origin/main` in three
+# scripts. pages.yml holds exactly one `branches:` line; the inline form is the
+# only one it has ever used.
+PAGES_WORKFLOW = ROOT / ".github" / "workflows" / "pages.yml"
+BRANCHES_RE = re.compile(r"^\s*branches:\s*\[([^\]]+)\]", re.MULTILINE)
+
+
+def deploy_branches() -> tuple[str, ...]:
+    """The branches whose pushes publish the site; empty when nothing says.
+
+    Empty is the honest answer for a checkout without the workflow, and callers
+    treat it as "cannot tell" rather than as "no branch deploys" - a guard that
+    protects the deploy should fire when it does not know, not go quiet.
+    """
+    try:
+        text = PAGES_WORKFLOW.read_text(encoding="utf-8")
+    except OSError:
+        return ()
+    found = BRANCHES_RE.search(text)
+    if not found:
+        return ()
+    return tuple(name.strip().strip("\"'") for name in found.group(1).split(",") if name.strip())
 
 
 def git(*args: str) -> str:

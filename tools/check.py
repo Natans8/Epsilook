@@ -58,7 +58,7 @@ import mermaid
 import packfile
 import packs
 from repo import (BUMP_PATHS, CACHE, DIM, GREEN, LISTFILE_ASSET, RED, RESET, ROOT, YELLOW,
-                  changed_under, git, have_ref, survive_console_encoding)
+                  changed_under, deploy_branches, git, have_ref, survive_console_encoding)
 
 # A failure detail quotes whatever the failing tool printed, and node --test
 # opens every line with U+25B6.
@@ -336,10 +336,44 @@ def check_assets(rep: Report, built: bool) -> str | None:
     return version
 
 
+def deploying_ref() -> str | None:
+    """The branch this run's changes are headed for, or None when nothing says.
+
+    A pull request names its target in GITHUB_BASE_REF, and it is asked first:
+    on a push that variable is empty, so the order costs nothing and a PR into
+    the deploying branch is judged against the branch it will land on rather
+    than against its own name. A CI push names itself in GITHUB_REF_NAME, and
+    off CI the answer is whatever is checked out. A detached HEAD reports
+    "HEAD", which names no branch and so decides nothing.
+    """
+    for variable in ("GITHUB_BASE_REF", "GITHUB_REF_NAME"):
+        ref = os.environ.get(variable, "").strip()
+        if ref:
+            return ref
+    branch = git("rev-parse", "--abbrev-ref", "HEAD").strip()
+    return branch if branch and branch != "HEAD" else None
+
+
 def check_bump(rep: Report, base: str, version: str | None) -> None:
-    """A css/js change against the deployed tree must move the ?v= string."""
+    """A css/js change against the deployed tree must move the ?v= string.
+
+    Only where the change actually deploys. This is the one check that gates a
+    deploy rather than describing the tree, so on a branch that publishes
+    nothing it measures against a deployment that will never happen: a long
+    feature branch would fail every push touching src/, and the mail it sent
+    would say a stylesheet is stale on a site that has not seen the commit.
+    The bump such a branch owes is one bump for the whole branch, and it comes
+    due against origin/main at the merge, where this check is what collects it.
+    """
     if version is None:
         return
+
+    deploys = deploy_branches()
+    ref = deploying_ref()
+    if deploys and ref and ref not in deploys:
+        rep.skip("?v= bump", f"{ref} does not deploy - {', '.join(deploys)} does")
+        return
+
     if not have_ref(base):
         rep.skip("?v= bump", f"{base} not available here")
         return
