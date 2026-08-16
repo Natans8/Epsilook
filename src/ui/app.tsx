@@ -128,7 +128,7 @@ export function App({info, searcher}: {
                 >
                     {result !== null && (
                         `${result.count.toLocaleString()} ${t("count.result", {count: result.count})}`
-                        + ` · ${String(result.ms)} ms`
+                        + ` · ${t("count.elapsed", {ms: result.ms})}`
                     )}
                 </div>
             </section>
