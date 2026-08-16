@@ -1236,16 +1236,21 @@ duration words are not already covered.
 
 Beside the sections, `meta` ships the facts nothing downstream should have to re-derive:
 
-| key            | is                                                                   |
-|----------------|----------------------------------------------------------------------|
-| `format`       | The pack format; a bump means every consumer is re-read              |
-| `version`      | The game build packed, and `label` its human name                    |
-| `built`        | When, so a rebuild is visible                                        |
-| `listfileTag`  | Which listfile release named the files                               |
-| `tdbTag`       | Which server release supplied names and hotfixes, if any             |
-| `absentTables` | What this build did not have, so absence is reportable               |
-| `counts`       | Every population, so nothing counts a column at load                 |
-| `domains`      | The measured range of each numeric axis, so no control re-derives it |
+| key                | is                                                                     |
+|--------------------|------------------------------------------------------------------------|
+| `format`           | The pack format; a bump means every consumer is re-read                |
+| `version`          | The game build packed, and `label` its human name                      |
+| `built`            | When, so a rebuild is visible                                          |
+| `listfileTag`      | Which listfile release named the files                                 |
+| `tdbTag`           | Which server release supplied names and hotfixes, if any               |
+| `absentTables`     | What this build did not have, so absence is reportable                 |
+| `degradedSections` | Per shipped section, the absent tables thinning it below its full self |
+| `counts`           | Every population, so nothing counts a column at load                   |
+| `domains`          | The measured range of each numeric axis, so no control re-derives it   |
+
+A section may also be absent outright rather than thin: one whose declared `needs` a build predates ships absent, and
+the manifest's `absentSections` names it — so "this build never had it" and "this pack is broken" stay two different
+claims, and a section that merely matched nothing keeps shipping as the empty answer it is.
 
 `versions.json` names every shipped build and points each at its manifest, with a content hash over that manifest —
 which is what busts a cache without a version string to bump. The modules underneath need no busting at all, since their

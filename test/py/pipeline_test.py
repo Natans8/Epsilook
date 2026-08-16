@@ -6,6 +6,7 @@ is under test is the decision, not any route behind it.
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Sequence
 from typing import cast
 
 from pack.build import Build
@@ -30,13 +31,24 @@ def a_build(*absent: str) -> Build:
 
 
 class WorldWithout:
-    """A world source lacking the named tables and holding every other."""
+    """A world source lacking the named tables and holding every other.
+
+    Only availability is ever asked of it here; the other two answers exist to
+    satisfy the provider contract, not any case below.
+    """
 
     def __init__(self, *absent: str) -> None:
         self.absent = set(absent)
 
     def available(self, table: str) -> bool:
         return table not in self.absent
+
+    def header(self, table: str) -> list[str]:
+        return []
+
+    def rows(self, table: str,
+             columns: Sequence[str]) -> Iterator[tuple[str, ...]]:
+        return iter(())
 
 
 def test_the_clients_probed_absences_carry_over() -> None:

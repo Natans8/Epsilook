@@ -628,7 +628,7 @@ describe("the count desugar", () => {
     });
 
     it("a kind with no ordering property falls back to counting its rows", () => {
-        const [term] = termsOf(ok("missile:{>2}"));
+        const [term] = termsOf(ok("morph:{>2}"));
         assert.ok(term.ask !== null && term.ask.on === "count");
     });
 
@@ -641,6 +641,11 @@ describe("the count desugar", () => {
         assert.deepEqual(seats, {op: "gt", operand: {type: "count", value: 2, written: "2"}});
         assert.equal((ok("seats:>2") as KindAsk).test?.is, "props");
         assert.deepEqual(valueOf(ok("cast:>2")), {op: "gt", operand: {type: "seconds", value: 2000, written: "2"}});
+        // The volley size, since format 54: the salient number about a missile
+        // is how many fly, so the bare comparison stopped counting rows.
+        const missiles = valueOf(ok("missile:>2"));
+        assert.deepEqual(missiles, {op: "gt", operand: {type: "count", value: 2, written: "2"}});
+        assert.equal((ok("missile:>2") as KindAsk).test?.is, "props");
     });
 });
 

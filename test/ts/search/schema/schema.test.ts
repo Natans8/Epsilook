@@ -160,7 +160,7 @@ describe("the shipped schema", () => {
         assert.deepEqual(Object.keys(KINDS.get("fx.chain")!.props),
             ["texture", "from", "to", "colour", "target"]);
         assert.deepEqual(Object.keys(KINDS.get("model.missile")!.props),
-            ["file", "from", "to", "motion", "target"]);
+            ["file", "from", "to", "motion", "projectiles", "target"]);
     });
 
     it("gives every kind a hint and every property a declared type", () => {
