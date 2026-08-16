@@ -1,10 +1,10 @@
-/* The harness page: header with the pack-side knobs, the bar with its tray, the count standing in for the whole
- * output side, and the app-side language knob apart in the footer — the split the geography is meant to show. */
+/* Increment 1 — the bar shell. The bar's metrics are 1.0's own (#qbar / #q in site/css/app.css): same padding,
+ * radius, focus ring and type size, so the polish baseline is met by construction before anything is added. */
 
 .page {
-    max-width: 960px;
+    max-width: 1200px;
     margin: 0 auto;
-    padding: 28px 20px 60px;
+    padding: 1rem 1.5rem 4rem;
     color: var(--text);
 }
 
@@ -13,7 +13,7 @@
     align-items: baseline;
     gap: 14px;
     flex-wrap: wrap;
-    margin-bottom: 18px;
+    margin-bottom: 4px;
 }
 
 .title { font-size: 20px; font-weight: 600; color: var(--text-strong); margin: 0; }
@@ -31,21 +31,59 @@
 }
 .knob select:disabled { opacity: 0.6; }
 
-.count {
-    margin: 18px 2px;
-    font-size: 15px;
-    color: var(--text-dim);
+/* --- the bar, at 1.0's metrics --- */
+.searchbox { padding: 0.8rem 0 0.4rem; position: relative; }
+
+.barRow {
     display: flex;
-    align-items: baseline;
-    gap: 10px;
+    gap: 0.5rem;
+    align-items: center;
 }
-.countNumber { font-size: 26px; font-weight: 600; color: var(--gold); font-variant-numeric: tabular-nums;
-    transition: opacity 120ms; }
-.countStale { opacity: 0.45; }
-.countMs { font-size: 12px; color: var(--text-muted); }
+
+.qbar {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 10px;
+    cursor: text;
+}
+.qbar:focus-within {
+    border-color: var(--gold-dim);
+    box-shadow: 0 0 0 3px rgba(var(--gold-rgb), 0.12);
+}
+
+.q {
+    flex: 1;
+    min-width: 6rem;
+    max-width: 100%;
+    font-family: inherit;
+    font-size: 1.1rem;
+    line-height: 1.2;
+    padding: 0.15rem 0;
+    color: var(--text);
+    background: none;
+    border: none;
+    outline: none;
+}
+.q::placeholder { color: var(--text-dim); }
+
+.status {
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    min-height: 1.2em;
+}
+.statusStale { opacity: 0.55; }
 
 .footer {
-    margin-top: 48px;
+    margin-top: 3rem;
     padding-top: 14px;
     border-top: 1px solid var(--border);
     display: flex;

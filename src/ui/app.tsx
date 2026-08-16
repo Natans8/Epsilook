@@ -1,22 +1,14 @@
 /**
- * @file The harness page: the bar with its tray, a live count standing in for the whole output side, and the two
- * language knobs split by geography — the pack's beside the version selector, the interface's in the footer.
+ * @file Increment 1 of the input layer: the bar shell — one plain input at 1.0's metrics, a live worker-backed
+ * count in a 1.0-style status line, and the URL carrying the query.
  *
- * The URL carries the whole view: `q` the query, `v` the version, `lang` the pack language, `lng` the interface
- * language (the i18n detector's own key). Changing a knob rewrites the URL and reloads, because a pack switch is a
- * refetch and the engine's language tables resolve at import time. Counting happens in the search worker, so the
- * page never blocks on a keystroke; a stale count dims until its replacement lands.
+ * Deliberately nothing else: no chips, no transformation, no completion, no controls. Each of those arrives as
+ * its own increment, tested and judged, per the rebuild ruling.
  */
 import type {ReactElement} from "react";
-import {useEffect, useMemo, useRef, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import {useTranslation} from "react-i18next";
-import type {Parsed, Suggestion} from "../search/index";
-import {formatQuery, parse, suggestions} from "../search/index";
 import type {PackInfo, Searcher} from "./searcher";
-import {useQueryState} from "./bar/state";
-import {Bar} from "./bar/bar";
-import {Tray, trayRows} from "./bar/tray";
-import {recentQueries, rememberQuery} from "./history";
 import styles from "./app.module.css";
 
 /** The query the URL carries, or nothing. */
@@ -32,9 +24,6 @@ function reloadWith(param: string, value: string): void {
 /** The interface languages a catalog is bundled for. */
 const APP_LANGUAGES = ["en", "ru"];
 
-/** The written tier is what every surface handing a query back prints. */
-const formatWritten = (offer: Suggestion): string => formatQuery(offer.parsed, "written");
-
 /**
  * The page.
  */
@@ -43,56 +32,35 @@ export function App({info, searcher}: {
     readonly searcher: Searcher;
 }): ReactElement {
     const {t, i18n} = useTranslation();
-    const state = useQueryState(urlQuery());
-    const [linked, setLinked] = useState<number | null>(null);
-    const [offers, setOffers] = useState<readonly Suggestion[] | null>(null);
-    const [history, setHistory] = useState<readonly string[]>(recentQueries);
-    const [result, setResult] = useState<{ count: number; ms: number; seq: number } | null>(null);
-    const asked = useRef(0);
+    const [text, setText] = useState(urlQuery);
+    const [result, setResult] = useState<{ count: number; ms: number; for: string } | null>(null);
+    const asked = useRef("");
 
-    const parsed: Parsed = useMemo(
-        () => parse(state.text, {mode: state.editing ? "typing" : "final"}),
-        [state.text, state.editing]);
-
-    // The count runs in the worker; the page only debounces the ask and drops answers that are no longer newest.
+    // The count runs in the worker; the page debounces the ask and shows the last answer dimmed until the
+    // current one lands.
     useEffect(() => {
-        searcher.counts((seq, count, ms) => {
-            if (seq === asked.current) setResult({count, ms, seq});
-        });
+        searcher.counts((count, ms) => { setResult({count, ms, for: asked.current}); });
     }, [searcher]);
     useEffect(() => {
         const timer = setTimeout(() => {
-            asked.current = searcher.query(state.text, state.editing ? "typing" : "final");
+            asked.current = text;
+            searcher.query(text, "final");
         }, 120);
         return (): void => { clearTimeout(timer); };
-    }, [searcher, state.text, state.editing]);
+    }, [searcher, text]);
 
-    // A committed query lands in the URL and the history — on the commit transition, not on every keystroke.
-    const wasEditing = useRef(false);
+    // The URL is the view: the query lands in it once typing pauses.
     useEffect(() => {
-        const committed = wasEditing.current && !state.editing;
-        wasEditing.current = state.editing;
-        if (state.editing) return;
-        const url = new URL(location.href);
-        if (state.text.trim() === "") url.searchParams.delete("q");
-        else url.searchParams.set("q", state.text);
-        window.history.replaceState(null, "", url);
-        if (committed && state.text.trim() !== "" && parsed.groups.length > 0) {
-            rememberQuery(state.text);
-            setHistory(recentQueries());
-        }
-    }, [state.editing, state.text, parsed]);
+        const timer = setTimeout(() => {
+            const url = new URL(location.href);
+            if (text.trim() === "") url.searchParams.delete("q");
+            else url.searchParams.set("q", text);
+            window.history.replaceState(null, "", url);
+        }, 400);
+        return (): void => { clearTimeout(timer); };
+    }, [text]);
 
-    // The simplify offers describe one query; edit it and they are stale.
-    useEffect(() => { setOffers(null); }, [state.text]);
-
-    const editStart = state.pieces.before.length;
-    const editEnd = editStart + state.pieces.edit.length;
-    const editedClause = state.editing
-        ? parsed.clauses.findIndex((clause) => clause.span.start < editEnd && clause.span.end > editStart)
-        : -1;
-
-    const stale = result === null || result.seq !== asked.current;
+    const stale = result === null || result.for !== text;
     return (
         <div className={styles.page}>
             <header className={styles.header}>
@@ -128,35 +96,31 @@ export function App({info, searcher}: {
                 </span>
             </header>
 
-            <Bar
-                state={state}
-                parsed={parsed}
-                domains={info.domains}
-                history={history}
-                linked={linked}
-                onSimplify={() => { setOffers(suggestions(parse(state.text, {mode: "final"}))); }}
-            />
-            <Tray
-                diagnostics={trayRows(parsed, state.text, editedClause >= 0 ? editedClause : null)}
-                offers={offers}
-                linked={linked}
-                onLink={setLinked}
-                onApply={state.replaceAll}
-                onApplyOffer={(offer) => {
-                    setOffers(null);
-                    state.replaceAll(formatWritten(offer));
-                }}
-            />
-
-            <div className={styles.count}>
-                <span className={`${styles.countNumber} ${stale ? styles.countStale : ""}`}>
-                    {result === null ? "…" : result.count.toLocaleString()}
-                </span>
-                <span>{result === null || stale ? t("count.searching") : t("count.result", {count: result.count})}</span>
-                {result !== null && !stale && (
-                    <span className={styles.countMs}>{t("count.elapsed", {ms: result.ms})}</span>
-                )}
-            </div>
+            <section className={styles.searchbox}>
+                <div className={styles.barRow}>
+                    <div className={styles.qbar}>
+                        <input
+                            className={styles.q}
+                            type="text"
+                            value={text}
+                            onChange={(e) => { setText(e.target.value); }}
+                            placeholder={t("bar.placeholder")}
+                            autoComplete="off"
+                            spellCheck={false}
+                            aria-label={t("bar.placeholder")}
+                        />
+                    </div>
+                </div>
+                <div
+                    className={`${styles.status} ${stale ? styles.statusStale : ""}`}
+                    role="status"
+                >
+                    {result !== null && (
+                        `${result.count.toLocaleString()} ${t("count.result", {count: result.count})}`
+                        + ` · ${String(result.ms)} ms`
+                    )}
+                </div>
+            </section>
 
             <footer className={styles.footer}>
                 <label className={styles.knob}>

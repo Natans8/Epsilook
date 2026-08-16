@@ -32,7 +32,7 @@ function Harness(): ReactElement {
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
-        const held = new Searcher("/dev/harness/worker.js", {
+        const held = new Searcher(new Worker("/dev/harness/worker.js"), {
             progress: (pack, done, total) => { setState({is: "loading", pack, done, total}); },
             ready: (info) => { setState({is: "ready", info}); },
             failed: (error) => { setState({is: "failed", error}); },

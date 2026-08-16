@@ -2,8 +2,8 @@
  * @file The search worker: the pack, the dataset and every kernel run live here, off the main thread.
  *
  * Typing must never wait on a count. The page keeps only what rendering needs — the parse is cheap and runs on the
- * main thread for the chips — while the megabytes and the row walks stay behind this message boundary. One worker
- * per page; the pack is fetched exactly once.
+ * main thread — while the megabytes and the row walks stay behind this message boundary. One worker per page; the
+ * pack is fetched exactly once.
  */
 import type {PackDomain, VersionEntry} from "../data";
 import type {Dataset} from "../search/index";
@@ -25,8 +25,14 @@ export type WorkerSay =
     | { readonly is: "result"; readonly seq: number; readonly count: number; readonly ms: number }
     | { readonly is: "failed"; readonly error: string };
 
-// The DOM lib types postMessage with a window signature; a worker's takes the message alone.
-const say = (message: WorkerSay): void => { (postMessage as (m: WorkerSay) => void)(message); };
+// The worker global scope, addressed explicitly: this module also compiles under the Node target (its message
+// types are imported by the page and the tests), where neither DOM nor worker globals exist.
+const scope = globalThis as unknown as {
+    postMessage(message: WorkerSay): void;
+    addEventListener(type: "message", listener: (event: { data: WorkerAsk }) => void): void;
+};
+
+const say = (message: WorkerSay): void => { scope.postMessage(message); };
 
 let dataset: Dataset | null = null;
 
@@ -45,7 +51,7 @@ async function load(ask: Extract<WorkerAsk, { is: "load" }>): Promise<void> {
     });
 }
 
-addEventListener("message", (event: MessageEvent<WorkerAsk>) => {
+scope.addEventListener("message", (event) => {
     const ask = event.data;
     if (ask.is === "load") {
         load(ask).catch((error: unknown) => { say({is: "failed", error: String(error)}); });

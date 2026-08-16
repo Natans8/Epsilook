@@ -2,9 +2,9 @@
  * @file Fetching a shipped pack in the browser: the fetch counterpart of `tools/packfile.ts`.
  *
  * A pack is a module set: `data/<id>/manifest.json` names content-addressed module files, and reassembling them into
- * one flat pack object is the same walk the Node reader does — fetch each module, gunzip it, merge column dicts per
- * column. The transport differs (fetch and DecompressionStream against readFileSync and gunzipSync), the logic does
- * not, and everything downstream of the assembled pack is `src/dataset.ts`, shared with the tools.
+ * one flat pack object is the same walk the Node reader does. The transport differs (fetch and DecompressionStream
+ * against readFileSync and gunzipSync), the logic does not — and the logic lives in {@link mergeSections}, a pure
+ * function the test suite pins with fixtures.
  */
 import type {VersionEntry} from "../data";
 import type {RowPack} from "../packrows";
@@ -24,8 +24,50 @@ interface PackManifest {
     locales: Record<string, Record<string, ManifestModule>>;
 }
 
-/** Where the harness reaches the site's files from, ending in a slash. */
-const asUrl = (base: string, path: string): string => base + path;
+/** Whether a payload is a column dict, the one shape two modules can each hold half of. */
+function isColumns(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Reassembles module payloads into one flat pack, exactly as the Node reader does.
+ *
+ * A section can be SPLIT across modules: `spells` keeps its ids in `core` while its names ride in the locale
+ * module, so two column dicts merge per COLUMN. A section that is a bare array or an id-keyed table lives in
+ * exactly one module and the later payload replaces the earlier wholesale.
+ *
+ * @param meta The manifest's own `meta`, the one per-pack value no module carries.
+ * @param payloads Each module's decoded JSON, core modules first, the locale's after.
+ * @returns The flat pack object.
+ */
+export function mergeSections(
+    meta: Record<string, unknown>, payloads: readonly Record<string, unknown>[],
+): Record<string, unknown> {
+    const pack: Record<string, unknown> = {meta};
+    for (const payload of payloads) {
+        for (const [section, held] of Object.entries(payload)) {
+            const existing = pack[section];
+            pack[section] = isColumns(existing) && isColumns(held) ? {...existing, ...held} : held;
+        }
+    }
+    return pack;
+}
+
+/**
+ * Picks one roster entry by a version prefix or a label fragment, or the default pack.
+ *
+ * @param versions The roster.
+ * @param want A prefix such as `9.2.7`, a label fragment, or nothing for the default pack.
+ * @returns The entry.
+ * @throws If nothing matches — a typo'd version silently falling back to the default would misreport every count.
+ */
+export function pickEntry(versions: readonly VersionEntry[], want?: string | null): VersionEntry {
+    const entry = want
+        ? versions.find((v) => v.id.startsWith(want) || v.label.includes(want))
+        : versions.find((v) => v.default) ?? versions[0];
+    if (!entry) throw new Error(`no pack matches "${want ?? ""}"`);
+    return entry;
+}
 
 /** Fetches a URL or throws with the status in the message — a silent 404 would read as an empty pack. */
 async function fetchOk(url: string, init?: RequestInit): Promise<Response> {
@@ -49,28 +91,7 @@ async function fetchGzJson(url: string): Promise<Record<string, unknown>> {
 
 /** Every version the site ships, newest roster order. */
 export async function fetchVersions(base: string): Promise<VersionEntry[]> {
-    return fetchJson<VersionEntry[]>(asUrl(base, "data/versions.json"));
-}
-
-/**
- * Picks one roster entry by a version prefix or a label fragment, or the default pack.
- *
- * @param versions The roster.
- * @param want A prefix such as `9.2.7`, a label fragment, or nothing for the default pack.
- * @returns The entry.
- * @throws If nothing matches — a typo'd version silently falling back to the default would misreport every count.
- */
-export function pickEntry(versions: VersionEntry[], want?: string | null): VersionEntry {
-    const entry = want
-        ? versions.find((v) => v.id.startsWith(want) || v.label.includes(want))
-        : versions.find((v) => v.default) ?? versions[0];
-    if (!entry) throw new Error(`no pack matches "${want ?? ""}"`);
-    return entry;
-}
-
-/** Whether a payload is a column dict, the one shape two modules can each hold half of. */
-function isColumns(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
+    return fetchJson<VersionEntry[]>(`${base}data/versions.json`);
 }
 
 /** What one pack fetch hands back: the typed view plus the languages the manifest offered. */
@@ -80,11 +101,10 @@ export interface FetchedPack {
 }
 
 /**
- * Fetches one version's pack, reassembled from its modules.
+ * Fetches one version's pack, reassembled from its modules by {@link mergeSections}.
  *
- * The merge is per COLUMN where two modules each hold half of a section — `spells` keeps its ids in `core` while its
- * names ride in the locale module — exactly as the Node reader merges. A language the pack does not ship falls back
- * to the manifest's first locale, which the build writes first because every pack ships it.
+ * A language the pack does not ship falls back to the manifest's first locale, which the build writes first
+ * because every pack ships it.
  *
  * @param base The URL prefix the site's files live under, ending in a slash.
  * @param entry The roster entry to fetch.
@@ -96,25 +116,19 @@ export async function fetchPack(
     base: string, entry: VersionEntry, locale?: string,
     onProgress?: (done: number, total: number) => void,
 ): Promise<FetchedPack> {
-    const manifest = await fetchJson<PackManifest>(asUrl(base, entry.file));
+    const manifest = await fetchJson<PackManifest>(base + entry.file);
     const shipped = Object.keys(manifest.locales);
     const spoken = locale !== undefined && shipped.includes(locale) ? locale : shipped[0];
     const modules = [...Object.values(manifest.modules), ...Object.values(manifest.locales[spoken] ?? {})];
 
     let done = 0;
-    const loaded = await Promise.all(modules.map(async (module) => {
-        const payload = await fetchGzJson(asUrl(base, module.file));
+    const payloads = await Promise.all(modules.map(async (module) => {
+        const payload = await fetchGzJson(base + module.file);
         done += 1;
         onProgress?.(done, modules.length);
         return payload;
     }));
 
-    const pack: Record<string, unknown> = {meta: manifest.meta};
-    for (const payload of loaded) {
-        for (const [section, held] of Object.entries(payload)) {
-            const existing = pack[section];
-            pack[section] = isColumns(existing) && isColumns(held) ? {...existing, ...held} : held;
-        }
-    }
+    const pack = mergeSections(manifest.meta, payloads);
     return {loaded: fromPack(pack as unknown as RowPack, entry, spoken), locales: shipped};
 }

@@ -1,11 +1,19 @@
 /**
  * @file The page's handle on the search worker: load once, ask for counts, never block.
  *
- * Queries are sequenced; a result for anything but the newest ask is dropped, so a slow count can never overwrite
- * a fresh one. The worker owns the pack — the page holds only what {@link PackInfo} carries.
+ * Queries are sequenced and only the newest ask's answer surfaces, so a slow count can never overwrite a fresh
+ * one — the invariant the unit test pins. The worker arrives through the {@link WorkerLike} seam, which is what
+ * makes that test possible without a browser.
  */
 import type {PackDomain, VersionEntry} from "../data";
 import type {WorkerAsk, WorkerSay} from "./worker";
+
+/** The slice of the Worker interface this module touches, injectable for tests. */
+export interface WorkerLike {
+    postMessage(message: unknown): void;
+    addEventListener(type: "message", listener: (event: { data: WorkerSay }) => void): void;
+    terminate(): void;
+}
 
 /** What the page knows about the loaded pack — everything rendering needs, nothing the worker keeps. */
 export interface PackInfo {
@@ -26,22 +34,20 @@ export interface LoadHandlers {
 
 /** One page's search worker. */
 export class Searcher {
-    private readonly worker: Worker;
     private seq = 0;
-    private onCount: ((seq: number, count: number, ms: number) => void) | null = null;
+    private onCount: ((count: number, ms: number) => void) | null = null;
 
-    constructor(url: string, handlers: LoadHandlers) {
-        this.worker = new Worker(url);
-        this.worker.addEventListener("message", (event: MessageEvent<WorkerSay>) => {
-            const say = event.data;
-            if (say.is === "progress") handlers.progress(say.pack, say.done, say.total);
-            else if (say.is === "ready") {
+    constructor(private readonly worker: WorkerLike, handlers: LoadHandlers) {
+        worker.addEventListener("message", (event) => {
+            const said = event.data;
+            if (said.is === "progress") handlers.progress(said.pack, said.done, said.total);
+            else if (said.is === "ready") {
                 handlers.ready({
-                    version: say.version, locale: say.locale, locales: say.locales,
-                    versions: say.versions, domains: say.domains, spells: say.spells,
+                    version: said.version, locale: said.locale, locales: said.locales,
+                    versions: said.versions, domains: said.domains, spells: said.spells,
                 });
-            } else if (say.is === "failed") handlers.failed(say.error);
-            else if (say.seq === this.seq) this.onCount?.(say.seq, say.count, say.ms);
+            } else if (said.is === "failed") handlers.failed(said.error);
+            else if (said.seq === this.seq) this.onCount?.(said.count, said.ms);
         });
     }
 
@@ -50,15 +56,14 @@ export class Searcher {
         this.send({is: "load", base, version, locale});
     }
 
-    /** Asks for the count of one query; the sequence number identifies the answer. */
-    query(text: string, mode: "typing" | "final"): number {
+    /** Asks for the count of one query. Only the newest ask's answer reaches the listener. */
+    query(text: string, mode: "typing" | "final"): void {
         this.seq += 1;
         this.send({is: "query", seq: this.seq, text, mode});
-        return this.seq;
     }
 
     /** Registers the one count listener. */
-    counts(listener: (seq: number, count: number, ms: number) => void): void {
+    counts(listener: (count: number, ms: number) => void): void {
         this.onCount = listener;
     }
 
