@@ -21,7 +21,8 @@ from .gameobjects import GameObjectData, read_gameobjects
 from .items import ItemModels, read_item_models
 from .keybinds import KeyboundOverride, read_keybound_overrides
 from .kits import KitEffects, read_kit_effects
-from .missiles import VisualMissiles, read_missile_motions, read_missiles
+from .missiles import (MissileMotion, VisualMissiles, read_missile_motions,
+                       read_missiles)
 from .models import ModelSources, read_model_sources
 from .mounts import MountData, read_mounts
 from .names import SpellNames, read_override_names, read_spell_names
@@ -47,6 +48,7 @@ __all__ = [
     "KeyboundOverride",
     "KitEffects",
     "MaskedIds",
+    "MissileMotion",
     "ModelSources",
     "MountData",
     "ProcEffects",

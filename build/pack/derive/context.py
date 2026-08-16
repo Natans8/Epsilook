@@ -10,9 +10,10 @@ from ..build import Build
 from ..declarations import Declarations
 from ..routes import (AreaGates, CreatureModels, Delivery, FxPayloads,
                       GameObjectData, ItemModels, KeyboundOverride, KitEffects,
-                      ModelSources, MountData, ProcEffects, ShapeshiftForms,
-                      SpellEffectRows, SpellNames, SpellProperties, SpellText,
-                      VehicleSeats, VisualGraph, VisualMissiles)
+                      MissileMotion, ModelSources, MountData, ProcEffects,
+                      ShapeshiftForms, SpellEffectRows, SpellNames,
+                      SpellProperties, SpellText, VehicleSeats, VisualGraph,
+                      VisualMissiles)
 from .displays import ResolvedDisplays
 from .icons import IconIndex
 from .prose import CookedText
@@ -100,7 +101,7 @@ class DeriveContext:
     areas: AreaGates = field(default_factory=AreaGates)
 
     missiles: Mapping[int, VisualMissiles] = field(default_factory=dict)
-    motions: Mapping[int, str] = field(default_factory=dict)
+    motions: Mapping[int, MissileMotion] = field(default_factory=dict)
     soundkit_files: Mapping[int, set[int]] = field(default_factory=dict)
     animkit_anims: Mapping[int, set[int]] = field(default_factory=dict)
     animkit_bonesets: Mapping[int, dict[int, list[str]]] = field(default_factory=dict)

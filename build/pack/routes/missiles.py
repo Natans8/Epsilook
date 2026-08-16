@@ -35,13 +35,30 @@ class VisualMissiles:
         return bool(self.models or self.soundkits or self.animkits)
 
 
-def read_missile_motions(tables: Tables) -> dict[int, str]:
-    """Missile motion id -> its name: the arc a projectile flies.
+@dataclass(frozen=True)
+class MissileMotion:
+    """One flight path: what it is called, and how many projectiles fly it."""
 
-    Name only; the table's other real column is a script nothing renders.
+    name: str
+    """The arc's name, as the client spells it."""
+
+    projectiles: int
+    """How many projectiles the path is written for.
+
+    The path's own script reads this as an input and spaces the volley by it
+    (`Spiral Vortex` fans seven with `(missileIndex / missileCount) * 360`), so
+    it is the count the arc was authored around rather than a label beside it.
     """
-    return {to_int(motion_id): name
-            for motion_id, name in tables.rows("SpellMissileMotion", ["ID", "Name"])
+
+
+def read_missile_motions(tables: Tables) -> dict[int, MissileMotion]:
+    """Missile motion id -> the arc a projectile flies.
+
+    The table's remaining column is the path's script, which nothing renders.
+    """
+    return {to_int(motion_id): MissileMotion(name, to_int(projectiles))
+            for motion_id, name, projectiles in tables.rows(
+                "SpellMissileMotion", ["ID", "Name", "MissileCount"])
             if name}
 
 

@@ -76,7 +76,8 @@
       "props": {
         "from": "where the missile launches from",
         "to": "where the missile lands",
-        "motion": "the trajectory it flies — parabola, forward spin, follow ground"
+        "motion": "the trajectory it flies — parabola, forward spin, follow ground",
+        "projectiles": "how many projectiles the flight path is written for"
       }
     },
     "barrage": {

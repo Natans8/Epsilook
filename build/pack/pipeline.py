@@ -26,7 +26,6 @@ from __future__ import annotations
 import time
 from collections.abc import Iterable, Mapping, Sequence
 from functools import cached_property
-from typing import Any
 
 from .build import Build
 from .declarations import Declarations
@@ -45,8 +44,9 @@ from .model import SECTIONS, Cardinality, Encoding, Section, SectionColumns
 from .progress import log, phase, step, timed
 from .routes import (AreaGates, CreatureModels, Delivery, FxPayloads,
                      GameObjectData, ItemModels, KeyboundOverride, KitEffects,
-                     ModelSources, MountData, ProcEffects, ShapeshiftForms,
-                     SpellEffectRows, SpellNames, SpellProperties, SpellText,
+                     MissileMotion, ModelSources, MountData, ProcEffects,
+                     ShapeshiftForms, SpellEffectRows, SpellNames,
+                     SpellProperties, SpellText,
                      VehicleSeats, VisualGraph, VisualMissiles,
                      implicit_target_bits, read_anim_replacements,
                      read_animkit_anims, read_animkit_bonesets,
@@ -255,7 +255,7 @@ class Derivations:
             return read_missiles(self.tables, self.models)
 
     @cached_property
-    def motions(self) -> Mapping[int, Any]:
+    def motions(self) -> Mapping[int, MissileMotion]:
         with phase("read missile motions"):
             return read_missile_motions(self.tables)
 

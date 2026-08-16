@@ -787,7 +787,7 @@ the route that knows what a type means is the one that decided, and the walk doe
 | route          | ends at                                             | ships as                                                                                       |
 |----------------|-----------------------------------------------------|------------------------------------------------------------------------------------------------|
 | **models**     | A model file plus the category naming its kind      | `modelRows`, `files`                                                                           |
-| **missiles**   | A projectile, its flight path and its two anchors   | `modelRows`, `missileMotions`                                                                  |
+| **missiles**   | A projectile, its flight path and its two anchors   | `modelRows`, `missileMotions` (each path's name and its projectile count)                      |
 | **sounds**     | A sound kit, and through it the audio files         | `soundRows`, `soundKitNames`                                                                   |
 | **animations** | An animation, an anim kit, or a body region         | `animRows`, `animKitAnims`, `animNames`, `bonesetNames`, `animEmoteOneshots`, `animEmoteLoops` |
 | **chains**     | A beam: colour, textures, a sound, nested chains    | `fxRows`, `fxChains`, `fxTextures`                                                             |
@@ -801,17 +801,17 @@ the route that knows what a type means is the one that decided, and the walk doe
 tells them apart, and it is not decoration: it says which id space the row's reference is in and which properties the
 row has, so a creature display and an item can share one field instead of each adding their own.
 
-| kind       | reached by                                           | what the row carries beside its file |
-|------------|------------------------------------------------------|--------------------------------------|
-| `attached` | A kit attaching a model to a unit                    | an attachment point                  |
-| `missile`  | A visual's missile set                               | a motion, and an anchor at each end  |
-| `ground`   | A kit's emitter, or a procedure naming an area model | nothing                              |
-| `trail`    | A procedure naming a weapon trail                    | nothing                              |
-| `barrage`  | A kit effect naming a volley                         | an attachment point                  |
-| `display`  | An effect name typed as a creature display           | the display id, and an attachment    |
-| `item`     | An effect name typed as an item                      | the item id and its name             |
-| `equipped` | An effect name typed as a weapon slot                | the slot, and no file at all         |
-| `mount`    | `Mount.SourceSpellID`, so not a targeted row at all  | the mount's name, and no target mask |
+| kind       | reached by                                           | what the row carries beside its file                  |
+|------------|------------------------------------------------------|-------------------------------------------------------|
+| `attached` | A kit attaching a model to a unit                    | an attachment point                                   |
+| `missile`  | A visual's missile set                               | a motion, its projectile count, an anchor at each end |
+| `ground`   | A kit's emitter, or a procedure naming an area model | nothing                                               |
+| `trail`    | A procedure naming a weapon trail                    | nothing                                               |
+| `barrage`  | A kit effect naming a volley                         | an attachment point                                   |
+| `display`  | An effect name typed as a creature display           | the display id, and an attachment                     |
+| `item`     | An effect name typed as an item                      | the item id and its name                              |
+| `equipped` | An effect name typed as a weapon slot                | the slot, and no file at all                          |
+| `mount`    | `Mount.SourceSpellID`, so not a targeted row at all  | the mount's name, and no target mask                  |
 
 A **weapon slot is a model with no file**: eight of the effect-name types name the caster's own main hand, off hand,
 ranged or ammo rather than an asset. Those carry a negative sentinel and a stand-in name, so nothing downstream needs a

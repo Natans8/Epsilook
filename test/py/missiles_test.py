@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from pack.routes.attachments import DEFAULT_MISSILE_SOURCE
-from pack.routes.missiles import read_missile_motions, read_missiles
+from pack.routes.missiles import (MissileMotion, read_missile_motions,
+                                  read_missiles)
 from pack.routes.models import WEAPON_FID_RANGED, ModelSources
 from support import BuildTables
 
@@ -29,10 +30,10 @@ ID,SpellVisualMissileSetID,SpellVisualEffectNameID,SoundEntriesID,AnimKitID,Spel
 """
 
 SPELL_MISSILE_MOTION = """\
-ID,Name
-7,Arc
-8,Straight
-9,
+ID,Name,MissileCount
+7,Arc,1
+8,Straight,7
+9,,3
 """
 
 MODELS = ModelSources(effect_name_fid={1: 8000, 2: 0},
@@ -107,5 +108,12 @@ def test_a_missile_row_belonging_to_no_set_is_skipped(
 
 def test_a_motion_with_no_name_is_not_a_motion(tables: BuildTables) -> None:
     """A motion the table cannot name is not carried."""
-    assert read_missile_motions(
-        tables(SpellMissileMotion=SPELL_MISSILE_MOTION)) == {7: "Arc", 8: "Straight"}
+    assert read_missile_motions(tables(SpellMissileMotion=SPELL_MISSILE_MOTION)) == {
+        7: MissileMotion("Arc", 1), 8: MissileMotion("Straight", 7)}
+
+
+def test_a_motion_carries_the_projectile_count_it_is_written_for(
+        tables: BuildTables) -> None:
+    """The count rides the motion, so a row naming it needs no copy of its own."""
+    motions = read_missile_motions(tables(SpellMissileMotion=SPELL_MISSILE_MOTION))
+    assert motions[8].projectiles == 7

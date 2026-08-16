@@ -169,6 +169,10 @@ export const missile = defineKind({
             types: [enumeration],
             hint: t("tooltips:kind.missile.props.motion"),
         },
+        projectiles: {
+            types: [count],
+            hint: t("tooltips:kind.missile.props.projectiles"),
+        },
         target: target(),
     },
 });

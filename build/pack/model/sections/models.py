@@ -34,12 +34,17 @@ def items(reads: Reads) -> SectionColumns:
 
 MISSILE_MOTIONS = register(Section(
     name="missileMotions",
-    doc="The flight paths missile rows name, by motion id.",
+    doc="The flight paths missile rows name, by motion id: what each is called, "
+        "and how many projectiles it is written for.",
     module="core",
     produce=lambda reads: {
         "ids": list(reads.rows.motions),
-        "names": [reads.motions.get(motion, "") for motion in reads.rows.motions]},
-    columns=("ids", "names"),
+        "names": [reads.motions[motion].name if motion in reads.motions else ""
+                  for motion in reads.rows.motions],
+        "projectiles": [reads.motions[motion].projectiles
+                        if motion in reads.motions else 0
+                        for motion in reads.rows.motions]},
+    columns=("ids", "names", "projectiles"),
     reads=("rows", "motions"),
     counts=(size("missileMotions", "ids"),),
 ))

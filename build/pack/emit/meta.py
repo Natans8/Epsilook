@@ -20,8 +20,13 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 53
+PACK_FORMAT = 54
 """What shape the artifact is in.
+
+54 gives a missile row how many projectiles its flight path is written for.
+`missileMotions` gains a `projectiles` column beside the names it carried,
+and the row stores its motion id twice -- once read as a name, once as that
+count -- so the number stays one copy per motion rather than one per row.
 
 53 makes the language an axis of the artifact: the manifest names the structure
 modules apart from the ones holding a language, and the second group is keyed

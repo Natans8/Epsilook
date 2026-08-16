@@ -280,7 +280,8 @@ def _models(kind: str, cat: int, props: tuple[str, ...],
         kind=kind, props=props, rows=rows,
         vocab={"file": "files", "slot": "slots", "attach": "attachments",
                "from": "attachments", "to": "attachments",
-               "motion": "motions", "name": "items"},
+               "motion": "motions", "projectiles": "motionProjectiles",
+               "name": "items"},
         absent={"attach": ABSENT, "from": ABSENT, "to": ABSENT})
 
 
@@ -296,8 +297,14 @@ def _mounts(reads: Reads) -> Iterable[SpellRow]:
 
 
 MODEL_FAMILIES: tuple[Family, ...] = (
-    _models("missile", MODEL_CAT_MISSILE, ("file", "from", "to", "motion", "target"),
-            lambda row: (row.file, row.source, row.destination, row.motion, row.mask)),
+    # `motion` and `projectiles` both store the flight path's id and differ only in
+    # which vocabulary reads it -- its name, or how many projectiles it is
+    # written for. The count stays one copy in the motion table that way, the
+    # same trade `tint.colour` makes.
+    _models("missile", MODEL_CAT_MISSILE,
+            ("file", "from", "to", "motion", "projectiles", "target"),
+            lambda row: (row.file, row.source, row.destination,
+                         row.motion, row.motion, row.mask)),
     _models("barrage", MODEL_CAT_BARRAGE, ("file", "attach", "target"),
             lambda row: (row.file, row.source, row.mask)),
     _models("ground", MODEL_CAT_AREA, ("file", "target"),
@@ -842,6 +849,8 @@ VOCABULARIES: Mapping[str, Mapping[str, str]] = {
     "files": {"in": "files", "keys": "fids", "values": "paths"},
     "attachments": {"in": "attachmentNames"},
     "motions": {"in": "missileMotions", "keys": "ids", "values": "names"},
+    "motionProjectiles": {"in": "missileMotions", "keys": "ids",
+                          "values": "projectiles"},
     "items": {"in": "items", "keys": "ids", "values": "names"},
     "mounts": {"in": "mounts", "keys": "displayIds", "values": "names"},
     "kits": {"in": "soundKitNames", "keys": "soundKitIds", "values": "names"},
