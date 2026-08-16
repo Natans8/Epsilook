@@ -60,7 +60,7 @@ test("only the newest ask's answer surfaces — a stale count can never overwrit
 test("load handlers route progress, ready and failure", () => {
     const worker = new FakeWorker();
     const seen: string[] = [];
-    new Searcher(worker, {
+    const searcher = new Searcher(worker, {
         progress: (pack, done, total) => seen.push(`progress ${pack} ${String(done)}/${String(total)}`),
         ready: (info) => seen.push(`ready ${String(info.spells)}`),
         failed: (error) => seen.push(`failed ${error}`),
@@ -72,10 +72,12 @@ test("load handlers route progress, ready and failure", () => {
     });
     worker.say({is: "failed", error: "boom"});
     assert.deepEqual(seen, ["progress 9.2.7 1/4", "ready 7", "failed boom"]);
+    assert.ok(searcher instanceof Searcher);
 });
 
 test("dispose terminates the worker", () => {
     const worker = new FakeWorker();
-    new Searcher(worker, silent).dispose();
+    const searcher = new Searcher(worker, silent);
+    searcher.dispose();
     assert.equal(worker.terminated, true);
 });
