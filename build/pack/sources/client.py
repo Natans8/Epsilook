@@ -218,6 +218,17 @@ routes, the sections and the artifact are the build's own either way.
 """
 
 
+def client_tables_dir(client: str, version: str) -> Path:
+    """Where one private client's decoded tables land.
+
+    Named here because this is the layer that decides it, and read by the
+    exploration database as well: a client build's tables are not in the cache
+    directory a published build of the same number uses, and a tool guessing
+    the shape would be a second copy of it.
+    """
+    return CACHE_DIR / f"{version}-{client}"
+
+
 def client_tables_source(client: str, version: str) -> Source:
     """One private client's tables, as the directory a provider reads.
 
@@ -232,5 +243,5 @@ def client_tables_source(client: str, version: str) -> Source:
     return ClientTables(
         name=f"tables ({client} client, build {version})",
         service=CLIENTS[client], version=version, tables=TABLES,
-        into=CACHE_DIR / f"{version}-{client}", listfile=listfile_source(),
+        into=client_tables_dir(client, version), listfile=listfile_source(),
         definitions=DEFINITIONS)

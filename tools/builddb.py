@@ -67,8 +67,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
 
 from pack.sources import dbd  # noqa: E402  (path set above)
+from pack.sources.client import client_tables_dir  # noqa: E402  (path set above)
 from pack.sources.tdb import tdb_dir_name  # noqa: E402  (path set above)
-from packs import PACKS, builds, schema_name  # noqa: E402  (path set above)
+from packs import schema_name, table_sets  # noqa: E402  (path set above)
 
 from repo import CACHE, LISTFILE_ASSET
 
@@ -447,14 +448,20 @@ def load_csv_table(con: "duckdb.DuckDBPyConnection", schema: str, table: str,
     return scalar(con, f"SELECT count(*) FROM {qualified}"), bool(types)
 
 
-def build_version(con: "duckdb.DuckDBPyConnection", build_id: str,
-                  catalog: list[tuple], refresh_dbd: bool) -> tuple[int, int, int]:
-    """Load every CSV in one version's cache directory into its own schema."""
-    schema = schema_name(build_id)
+def build_version(con: "duckdb.DuckDBPyConnection", pack_id: str, build_id: str,
+                  source: Path, catalog: list[tuple],
+                  refresh_dbd: bool) -> tuple[int, int, int]:
+    """Load every CSV in one table set's cache directory into its own schema.
+
+    The schema is the PACK's, the column types are the BUILD's and the files
+    are wherever that set was cached -- three answers that used to be one
+    string, and stopped being one the day a private client shipped its own
+    9.2.7.
+    """
+    schema = schema_name(pack_id)
     build = dbd.parse_build(build_id)
-    source = CACHE / build_id
     if build is None or not source.is_dir():
-        log(f"  ! {build_id}: no cache directory — run tools/rebuild.py first")
+        log(f"  ! {pack_id}: no cache directory — run tools/rebuild.py first")
         return 0, 0, 0
 
     con.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
@@ -532,14 +539,13 @@ def load_tdb(con: "duckdb.DuckDBPyConnection", build_id: str, tdb_tag: str | Non
     return loaded
 
 
-def fetch_extra_tables(build_id: str) -> None:
+def fetch_extra_tables(build_id: str, directory: Path) -> None:
     """Download the EXTRA_TABLES this build has, into its normal cache dir.
 
     They then look exactly like anything the build cached, so the CSV sweep
     picks them up with no special case. A table that postdates the build 404s
     and is remembered as absent.
     """
-    directory = CACHE / build_id
     if not directory.is_dir():
         return
     for table in EXTRA_TABLES:
@@ -947,17 +953,21 @@ def main() -> int:
     # therefore ask for the same tables twice under a schema name that is not a
     # game version. What this database is FOR is the game data, so the
     # distinction the app makes between those packs does not exist here.
+    # One entry per distinct set of game tables, not per build: two packs on
+    # one build read one downloaded export, but a private client's decode is a
+    # set of its own at the same build number.
     manifest: list[dict[str, Any]] = [
-        {"id": build,
-         "label": next(p.label for p in PACKS if p.build == build),
-         "default": any(p.default for p in PACKS if p.build == build)}
-        for build in builds()]
+        {"id": pack.id, "build": pack.build, "label": pack.label,
+         "default": pack.default,
+         "dir": str(client_tables_dir(pack.client, pack.build) if pack.client
+                    else CACHE / pack.build)}
+        for pack in table_sets()]
 
     # TDB tags come from the build so the mapping is not written down twice.
     try:
         from pack.sources.tdb import tdb_release  # pylint: disable=import-outside-toplevel
         for entry in manifest:
-            release = tdb_release(entry["id"])
+            release = tdb_release(entry["build"])
             entry["tdb_tag"] = release.get("tag") if release else None
     except (ImportError, AttributeError):
         for entry in manifest:
@@ -974,7 +984,7 @@ def main() -> int:
 
     if args.list:
         for entry in manifest:
-            directory = CACHE / entry["id"]
+            directory = Path(entry["dir"])
             csvs = len(list(directory.glob("*.csv"))) if directory.is_dir() else 0
             mark = "*" if entry in selected else " "
             log(f" {mark} {schema_name(entry['id']):<9} {entry['id']:<14} "
@@ -999,13 +1009,14 @@ def main() -> int:
     catalog: list[tuple] = []
     total_tables = total_rows = total_views = 0
     for entry in progress(selected, "versions", "pack", len(selected)):
-        build_id = entry["id"]
-        log(f"\n{schema_name(build_id)}  ({entry.get('label', build_id)})")
-        fetch_extra_tables(build_id)
+        pack_id, build_id = entry["id"], entry["build"]
+        directory = Path(entry["dir"])
+        log(f"\n{schema_name(pack_id)}  ({entry.get('label', pack_id)})")
+        fetch_extra_tables(build_id, directory)
         tables, rows, fallbacks = build_version(
-            con, build_id, catalog, args.refresh_dbd)
-        tdb = load_tdb(con, build_id, entry.get("tdb_tag"))
-        views = build_views(con, schema_name(build_id))
+            con, pack_id, build_id, directory, catalog, args.refresh_dbd)
+        tdb = load_tdb(con, pack_id, entry.get("tdb_tag"))
+        views = build_views(con, schema_name(pack_id))
         total_tables += tables + tdb
         total_rows += rows
         total_views += views

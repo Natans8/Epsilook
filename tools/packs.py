@@ -146,10 +146,34 @@ def is_internal(product: str) -> bool:
 # 3.4.3 pack answers "5.5.4.69155", which is not a newer WotLK at all. `wow` is
 # on Midnight (12.x), so it would tell the same lie about all five pinned retail
 # packs. Only a pack whose line is still shipping ITS patch may be tracked.
-FLAVOURS = ("wow", "wowt", "wow_classic", "wow_classic_era", "wow_anniversary",
-            "epsilon")
-"""Every line the roster ships, newest-facing first. A closed vocabulary, so a
-typo is a failed build rather than a pack nothing can find."""
+@dataclass(frozen=True)
+class Flavour:
+    """One client line, named the way its vendor names it."""
+
+    code: str
+    """The TACT product code, or ours where no product path can tell it apart."""
+
+    mark: str = ""
+    """What a pack id and a database schema call this line.
+
+    Empty for a line that never shares a build with another, which is most of
+    them: an unmarked pack is its build id and nothing more. A line that CAN
+    collide carries a short word instead of the product code, because the id is
+    read by people and lives in a url -- `12.1.0-ptr.69273` rather than
+    `12.1.0-wowt.69273`.
+    """
+
+
+FLAVOURS: dict[str, Flavour] = {f.code: f for f in (
+    Flavour("wow"),
+    Flavour("wowt", mark="ptr"),
+    Flavour("wow_classic"),
+    Flavour("wow_classic_era"),
+    Flavour("wow_anniversary"),
+    Flavour("epsilon", mark="epsilon"),
+)}
+"""Every line the roster ships. A closed vocabulary, so a typo is a failed build
+rather than a pack nothing can find."""
 
 # Where the bytes come from. wago serves CASC-era builds only — its oldest of
 # any kind is 1.13.0.28211 — so a genuine pre-Cata client comes from the
@@ -193,7 +217,6 @@ class Pack:
     default: bool = False  # the pack the app loads when the URL names none
     hidden: bool = False  # resolvable by ?v= but kept out of the dropdown
     source: str = WAGO  # WAGO or ARCHIVE — which downloader reads it
-    tag: str = ""  # marks a pack whose PATCH another pack also ships (see `id`)
     locales: tuple[str, ...] = ()  # which languages to build; empty = all of them
     client: str = ""  # a private client to read the tables out of; see below
 
@@ -229,9 +252,19 @@ class Pack:
         is most confusable, so the tag rides in the patch segment permanently
         rather than appearing and vanishing with each divergence.
         """
-        if not self.tag:
+        if not self.mark:
             return self.build
-        return f"{self.patch}-{self.tag}.{self.build.split('.')[3]}"
+        return f"{self.patch}-{self.mark}.{self.build.split('.')[3]}"
+
+    @property
+    def mark(self) -> str:
+        """What this pack's line is called where a build id would be ambiguous.
+
+        Derived rather than declared: it was a `tag` field beside the flavour
+        until they were noticed to be one fact said twice, and a pack that
+        disagreed with its own line could not be told from one that did.
+        """
+        return FLAVOURS[self.flavour].mark
 
     @property
     def label(self) -> str:
@@ -258,8 +291,7 @@ PACKS: tuple[Pack, ...] = (
     # names and are written once — both manifests then name the same files.
     # The condition is the shared build, not the roster row: move this to a
     # build of its own and the modules diverge with it, needing no edit here.
-    Pack("midnight-ptr", "Midnight PTR", "wowt", "12.1.0.69273", tracked=True,
-         tag="ptr"),
+    Pack("midnight-ptr", "Midnight PTR", "wowt", "12.1.0.69273", tracked=True),
     # Lines that moved on, and pinned retail. Historical artifacts: their build
     # is final, so untracked rather than polling a line that would answer
     # about a different expansion entirely.
@@ -277,7 +309,7 @@ PACKS: tuple[Pack, ...] = (
     # because no public service answers what build it is on: the build's own
     # acquisition checks the live service against this row and refuses to pack
     # a different one.
-    Pack("epsilon", "Epsilon", "epsilon", "9.2.7.45745", tag="epsilon",
+    Pack("epsilon", "Epsilon", "epsilon", "9.2.7.45745",
          default=True, locales=("enUS",), client="epsilon"),
 )
 
