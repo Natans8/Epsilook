@@ -786,6 +786,60 @@ def check_row_schema(rep: Report) -> None:
         rep.ok("row schema", f"{shipped} shipped kinds declared in the catalogue")
 
 
+def check_row_vocabularies(rep: Report) -> None:
+    """Every vocabulary the shipped rows resolve through must resolve.
+
+    A row property stores a number and names a vocabulary; the vocabulary names
+    a section and, inside it, the columns a reader pairs into a map. That chain
+    is internal to the pack, so `check_row_schema`'s catalogue reconciliation
+    never sees it -- and a broken link is silent in the worst way: the lookup
+    misses, the property keeps the raw number a name was meant to replace, and
+    every query on it answers nothing forever. The registry-side half of this
+    guard is `test/py/sections_test.py`; this one reads the built artifact, so
+    it also catches a pack out of step with the tree that would rebuild it.
+    """
+    sections, why = pack_sections()
+    if sections is None:
+        rep.skip("row vocabularies", why)
+        return
+    vocabs = sections.get("rowVocabs")
+    if not isinstance(vocabs, dict):
+        rep.skip("row vocabularies", "pack ships no rowVocabs")
+        return
+
+    problems: list[str] = []
+    for table, block in sorted(sections.items()):
+        if not table.endswith("Rows") or not isinstance(block, dict):
+            continue
+        for kind, named in sorted(block.get("vocab", {}).items()):
+            for prop, vocab in sorted(named.items()):
+                if vocab not in vocabs:
+                    problems.append(f"{table}.{kind}.{prop} resolves through "
+                                    f"{vocab!r}, which rowVocabs does not declare")
+
+    for name, where in sorted(vocabs.items()):
+        if not isinstance(where, dict):
+            problems.append(f"rowVocabs.{name} is not a mapping")
+            continue
+        home = sections.get(str(where.get("in", "")))
+        if home is None:
+            problems.append(f"rowVocabs.{name} lives in {where.get('in')!r}, "
+                            f"which the pack does not ship")
+            continue
+        for half in ("keys", "values"):
+            if half in where and (not isinstance(home, dict)
+                                  or where[half] not in home):
+                problems.append(f"rowVocabs.{name} reads {where['in']}."
+                                f"{where[half]}, which the shipped section "
+                                f"does not carry")
+
+    if problems:
+        rep.fail("row vocabularies", "; ".join(problems))
+    else:
+        rep.ok("row vocabularies",
+               f"{len(vocabs)} vocabularies resolve in the shipped pack")
+
+
 MODULE_GZIP_FINGERPRINT = "18bfeb6a365aa843"
 """What this repository's packs were compressed by.
 
@@ -1796,6 +1850,7 @@ def main() -> int:
     check_format_declaration(rep)
     check_pack_sections(rep)
     check_row_schema(rep)
+    check_row_vocabularies(rep)
     check_gzip_flavour(rep)
     check_layers(rep)
     check_cache_declaration(rep)

@@ -1,10 +1,11 @@
 """Tables served from the same CSV files, read through DuckDB.
 
-A peer of `CsvTables`, not a replacement: the two answer every question in the
-contract suite identically, which is the whole claim the provider seam makes.
-What this one adds is an engine underneath -- the reads are expressions, so the
-joins, aggregates and typing a route cannot express today are one layer away
-rather than one rewrite away.
+A peer of `CsvTables` in contract, a development instrument in role: the two
+answer every question in the contract suite identically, which is what makes
+this a second, independent reading of the same sources -- exploration and
+validation, while `csv` is what ships. Nothing in the shipped path reads
+through it, and that is the settled division of labour rather than a stage
+still pending.
 
 Two decisions are worth knowing before changing anything here.
 

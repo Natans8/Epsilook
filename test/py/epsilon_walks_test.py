@@ -13,9 +13,17 @@ import struct
 
 import pytest
 
+import epsilon_tables
+import epsilon_walks
 from epsilon_storage import chunks
-from epsilon_walks import (MODEL_CHILDREN, WORLD_MODEL_CHILDREN, TILE_SLOTS,
-                           stem_of, walk_parents)
+from epsilon_tables import Table
+from epsilon_walks import (MODEL_CHILDREN, NEIGHBOUR_CAP, TILE_SLOTS,
+                           WORLD_MODEL_CHILDREN, _model_children,
+                           _world_model_children, customization_names,
+                           ground_texture_names, model_name, model_self_names,
+                           neighbour_names, placement_names, reskin_names,
+                           slug, stem_of, terrain_names, walk_parents,
+                           world_model_id)
 
 FLOOR = 18_000_000
 
@@ -96,8 +104,6 @@ class FakeStorage:
 
 
 def model_walk(files: dict[int, bytes], known: dict[int, str], unnamed: set[int]):
-    from epsilon_walks import _model_children  # pylint: disable=import-outside-toplevel
-
     return walk_parents(FakeStorage(files), known, unnamed, suffix=".m2",
                         reader=_model_children, kinds=MODEL_CHILDREN,
                         local_only=True, label="models")
@@ -124,14 +130,11 @@ def test_a_child_is_only_as_real_as_the_parent_that_names_it() -> None:
 
 
 def test_a_world_model_group_sits_beside_its_root() -> None:
-    from epsilon_walks import (WORLD_MODEL_CHILDREN as KINDS,  # pylint: disable=import-outside-toplevel
-                               _world_model_children)
-
     parent = FLOOR + 1
     files = {parent: chunk(b"GFID", ids(FLOOR + 10, FLOOR + 11), reversed_tags=True)}
     walk = walk_parents(FakeStorage(files), {parent: "world/wmo/azeroth/keep.wmo"},
                         {FLOOR + 10, FLOOR + 11}, suffix=".wmo",
-                        reader=_world_model_children, kinds=KINDS,
+                        reader=_world_model_children, kinds=WORLD_MODEL_CHILDREN,
                         local_only=True, label="world models")
     assert walk.names == {FLOOR + 10: "world/wmo/azeroth/keep_000.wmo",
                           FLOOR + 11: "world/wmo/azeroth/keep_001.wmo"}
@@ -201,9 +204,6 @@ TABLES: dict[str, tuple[list[str], list[tuple[str, ...]]]] = {
 def fake_tables(monkeypatch: pytest.MonkeyPatch,
                 tables: dict[str, tuple[list[str], list[tuple[str, ...]]]]) -> None:
     """Serve the customization chain from literals instead of the client."""
-    from epsilon_tables import Table  # pylint: disable=import-outside-toplevel
-    import epsilon_tables  # pylint: disable=import-outside-toplevel
-
     built = {name: Table(columns, rows) for name, (columns, rows) in tables.items()}
     monkeypatch.setattr(epsilon_tables, "table_ids", dict)
     monkeypatch.setattr(epsilon_tables, "open_table",
@@ -211,8 +211,6 @@ def fake_tables(monkeypatch: pytest.MonkeyPatch,
 
 
 def test_a_texture_is_named_by_what_it_customises(monkeypatch: pytest.MonkeyPatch) -> None:
-    from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
-
     fake_tables(monkeypatch, TABLES)
     assert customization_names(FakeStorage({}), FLOOR) == {
         FLOOR + 1: f"epsilon/chrcustomization/eye_color/trollmaleeyecolor04/{FLOOR + 1}.blp"}
@@ -221,8 +219,6 @@ def test_a_texture_is_named_by_what_it_customises(monkeypatch: pytest.MonkeyPatc
 def test_the_lowest_id_wins_where_a_join_is_many_to_one(monkeypatch: pytest.MonkeyPatch) -> None:
     """Two materials share the resource and two elements share the material, so
     without this the path depends on which row the reader happened to see last."""
-    from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
-
     fake_tables(monkeypatch, TABLES)
     first = customization_names(FakeStorage({}), FLOOR)
     reversed_rows = {name: (columns, list(reversed(rows)))
@@ -233,16 +229,12 @@ def test_the_lowest_id_wins_where_a_join_is_many_to_one(monkeypatch: pytest.Monk
 
 def test_an_unreadable_table_names_nothing_rather_than_guessing(monkeypatch: pytest.MonkeyPatch) -> None:
     """A partial chain would name a texture after the wrong thing."""
-    from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
-
     fake_tables(monkeypatch, {k: v for k, v in TABLES.items()
                               if k != "ChrCustomizationOption"})
     assert customization_names(FakeStorage({}), FLOOR) == {}
 
 
 def test_ids_below_the_floor_are_not_named(monkeypatch: pytest.MonkeyPatch) -> None:
-    from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
-
     fake_tables(monkeypatch, TABLES)
     assert 12 not in customization_names(FakeStorage({}), FLOOR)
 
@@ -255,8 +247,6 @@ def test_ids_below_the_floor_are_not_named(monkeypatch: pytest.MonkeyPatch) -> N
     ("Horn Style / Colour", "horn_style_colour"),
 ])
 def test_slug_makes_one_path_segment(name: str, expected: str) -> None:
-    from epsilon_walks import slug  # pylint: disable=import-outside-toplevel
-
     assert slug(name) == expected
 
 
@@ -264,8 +254,6 @@ def test_a_nameless_choice_becomes_its_place_in_the_option(monkeypatch: pytest.M
     """Most choices this client adds carry no display name, and their position
     is what the character creator shows instead -- the numbered swatches. That
     is worth more than the row id and more than dropping the texture."""
-    from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
-
     nameless = dict(TABLES)
     nameless["ChrCustomizationChoice"] = (["Name_lang", "ID",
                                            "ChrCustomizationOptionID", "OrderIndex"],
@@ -277,8 +265,6 @@ def test_a_nameless_choice_becomes_its_place_in_the_option(monkeypatch: pytest.M
 
 def test_a_texture_with_no_option_is_still_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     """The option is the half worth having; without it there is nothing to say."""
-    from epsilon_walks import customization_names  # pylint: disable=import-outside-toplevel
-
     nameless = dict(TABLES)
     nameless["ChrCustomizationOption"] = (["Name_lang", "ID", "ChrModelID"],
                                           [("", "9", "12")])
@@ -300,15 +286,11 @@ def world_model(wmo_id: int, *, header: bool = True) -> bytes:
 
 
 def test_a_world_model_reports_the_retail_id_it_carries() -> None:
-    from epsilon_walks import world_model_id  # pylint: disable=import-outside-toplevel
-
     assert world_model_id(world_model(1375)) == 1375
 
 
 def test_only_a_world_model_root_reports_one() -> None:
     """A group carries no MOHD, and a model is not chunked this way at all."""
-    from epsilon_walks import world_model_id  # pylint: disable=import-outside-toplevel
-
     assert world_model_id(world_model(1375, header=False)) is None
     assert world_model_id(b"MD21" + b"\x00" * 64) is None
     assert world_model_id(None) is None
@@ -318,14 +300,10 @@ def test_only_a_world_model_root_reports_one() -> None:
 def test_an_unset_retail_id_names_nothing() -> None:
     """Zero is absence, not a model. Treating it as one collapses every
     file that declares nothing onto whichever retail root also declares zero."""
-    from epsilon_walks import world_model_id  # pylint: disable=import-outside-toplevel
-
     assert world_model_id(world_model(0)) is None
 
 
 def test_a_reskin_is_named_after_the_root_sharing_its_id() -> None:
-    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
-
     custom = FLOOR + 5
     storage = FakeStorage({custom: world_model(1375), 900: world_model(1375),
                            901: world_model(42)})
@@ -337,8 +315,6 @@ def test_a_reskin_is_named_after_the_root_sharing_its_id() -> None:
 
 def test_a_reskin_matching_no_retail_root_is_left_alone() -> None:
     """An unmatched id says nothing, and a guess would say something wrong."""
-    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
-
     custom = FLOOR + 5
     storage = FakeStorage({custom: world_model(7777), 900: world_model(1375)})
     assert reskin_names(storage, {custom},
@@ -348,8 +324,6 @@ def test_a_reskin_matching_no_retail_root_is_left_alone() -> None:
 def test_group_files_are_never_read_for_a_header_they_cannot_have() -> None:
     """Forty thousand groups sit in the listfile beside the roots, and reading
     one costs a fetch that can never contribute."""
-    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
-
     custom = FLOOR + 5
     storage = FakeStorage({custom: world_model(1375), 900: world_model(1375)})
     names = reskin_names(storage, {custom},
@@ -361,8 +335,6 @@ def test_group_files_are_never_read_for_a_header_they_cannot_have() -> None:
 def test_no_readable_retail_root_names_nothing_rather_than_silently_none() -> None:
     """Without the retail side there is nothing to match, and an empty result
     would otherwise read as the custom files carrying no id at all."""
-    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
-
     custom = FLOOR + 5
     storage = FakeStorage({custom: world_model(1375)})
     assert reskin_names(storage, {custom}, {900: "World/WMO/Absent.wmo"}) == {}
@@ -379,16 +351,12 @@ def model(name: bytes, *, chunked: bool = True) -> bytes:
 
 
 def test_a_model_reports_the_name_it_carries() -> None:
-    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
-
     assert model_name(model(b"TheWorldTree")) == "TheWorldTree"
 
 
 def test_both_container_shapes_read_the_same() -> None:
     """The modern wrapper keeps the old magic inside it, so the only difference
     is the chunk around it."""
-    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
-
     assert model_name(model(b"UI_Alliance", chunked=False)) == "UI_Alliance"
     assert model_name(model(b"UI_Alliance", chunked=True)) == "UI_Alliance"
 
@@ -396,16 +364,12 @@ def test_both_container_shapes_read_the_same() -> None:
 def test_a_model_naming_a_texture_names_nothing() -> None:
     """Some models hold a texture path in the name field. Taking it would name
     the model after its own texture, which is a confident wrong answer."""
-    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
-
     assert model_name(model(rb"DUNGEONS\BUILDINGS\DARKPORTAL_STONE.BLP")) is None
 
 
 def test_a_length_that_does_not_fit_is_refused() -> None:
     """A misread length would otherwise slice an arbitrary run of bytes out of
     the file and call it a name."""
-    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
-
     body = b"MD20" + struct.pack("<III", 272, 40, 9_000) + b"\x00" * 32
     assert model_name(chunk(b"MD21", body)) is None
     assert model_name(b"REVM" + b"\x00" * 32) is None
@@ -415,8 +379,6 @@ def test_a_length_that_does_not_fit_is_refused() -> None:
 def test_models_sharing_a_name_are_told_apart_by_id() -> None:
     """A name is the artist's, not the file's, so several models legitimately
     share one -- but only those need the id."""
-    from epsilon_walks import model_self_names  # pylint: disable=import-outside-toplevel
-
     a, b, alone = FLOOR + 1, FLOOR + 2, FLOOR + 3
     storage = FakeStorage({a: model(b"Cloak_A"), b: model(b"Cloak_A"),
                            alone: model(b"Banner_B")})
@@ -430,8 +392,6 @@ def test_models_sharing_a_name_are_told_apart_by_id() -> None:
 def test_the_name_keeps_the_casing_it_was_written_with() -> None:
     """The listfile carries capitals because the names are shown to a person,
     and a name folded here would be the one row that disagrees."""
-    from epsilon_walks import model_self_names  # pylint: disable=import-outside-toplevel
-
     fid = FLOOR + 7
     storage = FakeStorage({fid: model(b"Collections_Cloth_RaidMage_Q_01_Hu_M")})
     assert model_self_names(storage, {fid}) == {
@@ -461,8 +421,6 @@ class HeadStorage(FakeStorage):
 
 def test_a_networked_header_read_is_capped() -> None:
     """The name sits in the header, so the tail is bought and thrown away."""
-    from epsilon_walks import model_self_names  # pylint: disable=import-outside-toplevel
-
     fid = FLOOR + 1
     storage = HeadStorage({fid: model(b"Tiny") + b"\x00" * 100_000}, cap=200)
     assert model_self_names(storage, {fid}, local_only=False) == {
@@ -473,8 +431,6 @@ def test_a_networked_header_read_is_capped() -> None:
 def test_a_local_run_never_asks_for_a_capped_read() -> None:
     """A file already on disk costs nothing to read whole, and a cap could
     only lose chunks."""
-    from epsilon_walks import model_self_names  # pylint: disable=import-outside-toplevel
-
     fid = FLOOR + 1
     storage = HeadStorage({fid: model(b"Tiny")})
     assert model_self_names(storage, {fid}, local_only=True) == {}
@@ -484,8 +440,6 @@ def test_a_local_run_never_asks_for_a_capped_read() -> None:
 def test_the_retail_side_of_a_reskin_stays_on_disk() -> None:
     """Fifty thousand roots might each hold the wanted id, so fetching them is
     a gigabyte spent on the half of the join that is not the point."""
-    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
-
     custom = FLOOR + 5
     storage = HeadStorage({custom: world_model(1375), 900: world_model(1375)})
     assert reskin_names(storage, {custom}, {900: "World/WMO/Bridge.wmo"},
@@ -495,8 +449,6 @@ def test_the_retail_side_of_a_reskin_stays_on_disk() -> None:
 
 def test_a_name_that_carries_its_own_extension_does_not_gain_a_second() -> None:
     """Most models spell the extension in the name, and the path adds one."""
-    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
-
     assert model_name(model(b"dal_bazaar_stall.m2")) == "dal_bazaar_stall"
     assert model_name(model(b"old_thing.mdx")) == "old_thing"
 
@@ -504,23 +456,17 @@ def test_a_name_that_carries_its_own_extension_does_not_gain_a_second() -> None:
 def test_an_authoring_path_keeps_the_part_the_game_would_use() -> None:
     """A few models carry the whole path they were built at. What follows the
     archive is a game-relative path the author used; the drive letter is not."""
-    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
-
     raw = rb"D:\Work\World of Warcraft\Data\patch-s.mpq\World\Custom\Deco\wallset_01.m2"
     assert model_name(model(raw)) == "World/Custom/Deco/wallset_01"
 
 
 def test_a_path_with_no_archive_in_it_falls_back_to_the_filename() -> None:
-    from epsilon_walks import model_name  # pylint: disable=import-outside-toplevel
-
     assert model_name(model(rb"C:\models\thing.m2")) == "thing"
 
 
 def test_a_model_the_head_cannot_name_is_re_read_whole() -> None:
     """The cap is right for most models and wrong for some, and which is which
     cannot be known without asking."""
-    from epsilon_walks import model_self_names  # pylint: disable=import-outside-toplevel
-
     fid = FLOOR + 1
     whole = model(b"alterac_pine04")
     # A head that keeps the container's magic but not the name it points at.
@@ -540,8 +486,6 @@ def tile(*ids: int) -> bytes:
 def test_a_world_model_is_named_by_the_map_that_places_it() -> None:
     """For a model nothing else reaches, where it stands is the one thing
     anybody knows about it."""
-    from epsilon_walks import placement_names  # pylint: disable=import-outside-toplevel
-
     placed, other = FLOOR + 9, FLOOR + 10
     known = {500: "world/maps/prophecylordaeron/prophecylordaeron_35_29_obj0.adt"}
     storage = FakeStorage({500: tile(placed, other)})
@@ -552,8 +496,6 @@ def test_a_world_model_is_named_by_the_map_that_places_it() -> None:
 def test_only_the_object_tiles_are_opened() -> None:
     """Six of a tile's eight files record no placement, and opening them is a
     fetch that can never contribute."""
-    from epsilon_walks import placement_names  # pylint: disable=import-outside-toplevel
-
     placed = FLOOR + 9
     known = {500: "world/maps/m/m_35_29_tex0.adt", 501: "world/maps/m/m_35_29.blp"}
     storage = FakeStorage({500: tile(placed), 501: tile(placed)})
@@ -561,8 +503,6 @@ def test_only_the_object_tiles_are_opened() -> None:
 
 
 def test_a_placement_of_something_already_named_is_left_alone() -> None:
-    from epsilon_walks import placement_names  # pylint: disable=import-outside-toplevel
-
     known = {500: "world/maps/m/m_35_29_obj0.adt"}
     storage = FakeStorage({500: tile(FLOOR + 9)})
     assert placement_names(storage, known, set()) == {}
@@ -572,8 +512,6 @@ def test_a_missing_origin_is_found_by_bracketing_rather_than_by_sweeping() -> No
     """The id tracks file id, so the ids either side of a missing one bound the
     region it lives in -- which is why this reads a few roots and not fifty
     thousand."""
-    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
-
     custom = FLOOR + 5
     # 10 and 30 are on disk and bracket id 20, which is only on the service.
     files = {10: world_model(10), 30: world_model(30), custom: world_model(20)}
@@ -600,61 +538,45 @@ def test_a_missing_origin_is_found_by_bracketing_rather_than_by_sweeping() -> No
 def test_bracketing_never_runs_on_a_local_only_pass() -> None:
     """It is a network search by construction; without one there is nothing to
     search."""
-    from epsilon_walks import reskin_names  # pylint: disable=import-outside-toplevel
-
     custom = FLOOR + 5
     storage = FakeStorage({10: world_model(10), custom: world_model(20)})
     assert reskin_names(storage, {custom}, {10: "World/WMO/Low.wmo"},
                         local_only=True) == {}
 
 
-def test_a_map_names_its_own_auxiliary_files() -> None:
+def test_a_map_names_its_own_auxiliary_files(
+        monkeypatch: pytest.MonkeyPatch) -> None:
     """The header's positions determine which file each id is, and the game's
     convention determines what it is called -- so these are real names."""
-    from epsilon_walks import terrain_names  # pylint: disable=import-outside-toplevel
-
     wdt = FLOOR + 1
     lgt, wdl = FLOOR + 2, FLOOR + 7
     header = struct.pack("<8I", 970, lgt, 0, 0, 0, 0, wdl, 0)
     raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
           chunk(b"MPHD", header, reversed_tags=True)
-    storage = FakeStorage({wdt: raw})
-
-    import epsilon_walks
-    original = epsilon_walks.custom_maps
-    epsilon_walks.custom_maps = lambda storage, floor: [("mymap", wdt)]
-    try:
-        names = terrain_names(storage, FLOOR)
-    finally:
-        epsilon_walks.custom_maps = original
+    monkeypatch.setattr(epsilon_walks, "custom_maps",
+                        lambda storage, floor: [("mymap", wdt)])
+    names = terrain_names(FakeStorage({wdt: raw}), FLOOR)
     assert names[lgt] == "world/maps/mymap/mymap.lgt"
     assert names[wdl] == "world/maps/mymap/mymap.wdl"
     assert names[wdt] == "world/maps/mymap/mymap.wdt"
 
 
-def test_an_unset_auxiliary_slot_names_nothing() -> None:
+def test_an_unset_auxiliary_slot_names_nothing(
+        monkeypatch: pytest.MonkeyPatch) -> None:
     """A map that has no fog volume stores a zero, and zero is not a file."""
-    from epsilon_walks import terrain_names  # pylint: disable=import-outside-toplevel
-
     wdt = FLOOR + 1
     raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
           chunk(b"MPHD", struct.pack("<8I", 970, 0, 0, 0, 0, 0, 0, 0),
                 reversed_tags=True)
-    import epsilon_walks
-    original = epsilon_walks.custom_maps
-    epsilon_walks.custom_maps = lambda storage, floor: [("mymap", wdt)]
-    try:
-        names = terrain_names(FakeStorage({wdt: raw}), FLOOR)
-    finally:
-        epsilon_walks.custom_maps = original
+    monkeypatch.setattr(epsilon_walks, "custom_maps",
+                        lambda storage, floor: [("mymap", wdt)])
+    names = terrain_names(FakeStorage({wdt: raw}), FLOOR)
     assert names == {wdt: "world/maps/mymap/mymap.wdt"}
 
 
 def test_low_detail_terrain_places_world_models_too() -> None:
     """A map's distance geometry names the same kind of file its tiles do, and
     is only reachable because the map header names it."""
-    from epsilon_walks import placement_names  # pylint: disable=import-outside-toplevel
-
     placed = FLOOR + 11
     body = struct.pack("<I", placed) + b"\x00" * 60
     raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
@@ -667,8 +589,6 @@ def test_low_detail_terrain_places_world_models_too() -> None:
 def test_a_ground_texture_is_named_by_the_map_that_paints_with_it() -> None:
     """It hangs off no model, so no parentage walk reaches it; a tile is the
     only thing that refers to it at all."""
-    from epsilon_walks import ground_texture_names  # pylint: disable=import-outside-toplevel
-
     painted = FLOOR + 3
     body = struct.pack("<I", painted)
     raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
@@ -679,8 +599,6 @@ def test_a_ground_texture_is_named_by_the_map_that_paints_with_it() -> None:
 
 
 def test_only_the_texture_tile_records_the_painting() -> None:
-    from epsilon_walks import ground_texture_names  # pylint: disable=import-outside-toplevel
-
     painted = FLOOR + 3
     raw = chunk(b"MVER", struct.pack("<I", 18), reversed_tags=True) + \
           chunk(b"MDID", struct.pack("<I", painted), reversed_tags=True)
@@ -697,8 +615,6 @@ ORPHAN = FLOOR + 500
 
 def neighbour_walk(files: dict[int, bytes], known: dict[int, str]):
     """The adjacency route over a handful of files, naming ORPHAN or nothing."""
-    from epsilon_walks import neighbour_names  # pylint: disable=import-outside-toplevel
-
     return neighbour_names(FakeStorage(files), known, {ORPHAN})
 
 
@@ -713,8 +629,6 @@ def test_a_file_is_named_by_the_art_it_arrived_beside() -> None:
 def test_a_distant_neighbour_says_nothing_and_names_nothing() -> None:
     """Adjacency is the whole claim, so a file that merely outlived the art
     around it must not be named after it."""
-    from epsilon_walks import NEIGHBOUR_CAP  # pylint: disable=import-outside-toplevel
-
     known = {ORPHAN - NEIGHBOUR_CAP - 1: "epsilon/texture/far/x.blp"}
     assert neighbour_walk({ORPHAN: BLP}, known) == {}
 

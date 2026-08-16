@@ -5,8 +5,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from pack.routes.assets import resolve_paths
-from pack.sources.listfile import (LISTFILE_ASSET, SUPPLEMENT,
+from pack.sources.listfile import (LISTFILE_ASSET, LISTFILE_DIR, SUPPLEMENT,
                                    SUPPLEMENT_FLOOR)
 from pack.supplements import above
 from pack.tables.listfile_tables import ID, PATH, TABLE, ListfileTables
@@ -140,11 +142,19 @@ def test_the_vendored_supplement_loads_and_is_wholly_admitted() -> None:
     assert ids == sorted(ids), "the vendored supplement is not sorted by file id"
 
 
-def test_the_vendored_supplement_names_nothing_the_community_listfile_names(
-        tmp_path: Path) -> None:
-    """Its whole purpose is to reach what the community listfile cannot, so an
-    overlap would mean the floor had moved rather than that a name was gained."""
-    community = listfile(tmp_path, name="community.csv")
-    named = {int(fid) for fid, _ in community.rows(TABLE, [ID, PATH])}
-    vendored = {int(fid) for fid, _ in ListfileTables(SUPPLEMENT).rows(TABLE, [ID, PATH])}
-    assert not (named & vendored)
+def test_no_community_id_reaches_the_supplement_floor() -> None:
+    """The other half of the floor rule, and the half a fixture cannot state.
+
+    The supplement may only name ids above the floor, which keeps it from
+    shadowing a community name exactly as long as everything Blizzard ships
+    sits below the floor -- a claim about the real file. Read whole, because
+    the one id that crossed is what a sample misses. Skipped when the cache is
+    absent, which is every CI run."""
+    cached = LISTFILE_DIR / LISTFILE_ASSET
+    if not cached.exists():
+        pytest.skip("the community listfile is not cached; build a pack first")
+    ceiling = max(int(fid) for fid, _path
+                  in ListfileTables(cached).rows(TABLE, [ID, PATH]))
+    assert ceiling <= SUPPLEMENT_FLOOR, (
+        f"community id {ceiling} sits at or above the supplement floor "
+        f"{SUPPLEMENT_FLOOR}; the disjointness the floor rule promises is gone")

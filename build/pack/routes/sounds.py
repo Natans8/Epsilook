@@ -9,6 +9,30 @@ from __future__ import annotations
 from ..tables import Tables
 from .columns import to_int
 
+SOUNDKIT_NAME_TABLE = "SoundKitName"
+"""The pinned build's table of human names for sound kits.
+
+Read from `SOUNDKITNAME_BUILD` whatever pack is building: no later client ships
+it, so the alternative to another build's copy is no names at all.
+"""
+
+
+def read_kit_names(pinned: Tables, used: set[int]) -> list[tuple[int, str]]:
+    """The names of the sound kits this pack reaches, sorted.
+
+    Purely additive: a kit keeps its id and its files, and one with no name
+    renders exactly as it would without this. Kits added after the pinned build
+    have no name anywhere and are left unnamed rather than given a made-up one.
+
+    Args:
+        pinned: the pinned build's tables, not the pack's own.
+        used: the kit ids the pack actually reaches.
+    """
+    return sorted((kit, name.strip()) for kit, name in (
+        (int(kit_id), name)
+        for kit_id, name in pinned.rows(SOUNDKIT_NAME_TABLE, ["ID", "Name"]))
+                  if name.strip() and kit in used)
+
 
 def read_soundkit_files(tables: Tables) -> dict[int, set[int]]:
     """Sound kit -> the sound files it plays.

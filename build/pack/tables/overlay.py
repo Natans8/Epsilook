@@ -167,6 +167,17 @@ class OverlaidTables:
     source: Tables | None = None
     """Where the revisions come from; `None` means every table passes through."""
 
+    _buffered: dict[tuple[str, tuple[str, ...]], dict[str, tuple[str, dict[str, str]]]] = \
+        field(default_factory=dict, init=False, repr=False, compare=False)
+    """Each buffered overlay read, by (base table, columns asked).
+
+    A translated export restates every row of a large table, and the routes
+    read some tables more than once per pass -- so the buffer is kept rather
+    than rebuilt, trading the memory it already cost once for not paying its
+    construction again. The dict is mutated, which a frozen instance permits:
+    frozen guards the fields, and this one never changes what a read answers.
+    """
+
     def available(self, table: str) -> bool:
         """Whether the base has the table. An overlay cannot introduce one."""
         return self.base.available(table)
@@ -193,7 +204,8 @@ class OverlaidTables:
         half a gigabyte for a source of well over a million. A supplement whose
         rule confines it to ids the base cannot reach is disjoint from the base
         by construction and so needs no join at all -- that is the shape to
-        reach for when one of those arrives.
+        reach for when one of those arrives. `rows` keeps each buffer it builds,
+        so the limit is paid once per (table, columns) rather than per read.
         """
         supplied = [column for column in columns
                     if overlay.spelling(column) is not None and column != overlay.key]
@@ -242,7 +254,11 @@ class OverlaidTables:
             yield from self.base.rows(table, columns)
             return
 
-        revisions = self._revisions(source, overlay, columns)
+        buffered = (table, tuple(columns))
+        revisions = self._buffered.get(buffered)
+        if revisions is None:
+            revisions = self._buffered.setdefault(
+                buffered, self._revisions(source, overlay, columns))
         if not revisions:
             # An overlay ships only the rows it revised, so a table it revised
             # none of still leaves a header-only file behind.

@@ -30,8 +30,9 @@ from typing import Any
 
 from .build import Build
 from .declarations import Declarations
-from .derive import (CONTEXT_FIELDS, DEFAULT_LOCALE, LOCALES, DeriveContext,
-                     Locale, Spoken,
+from .derive import (CONTEXT_FIELDS, DEFAULT_LOCALE, LOCALES, CookedText,
+                     DeriveContext, IconIndex, Locale, PackRows, References,
+                     ResolvedDisplays, Spoken, SpellVisuals,
                      build_icon_index, build_rows, collect_references, cook_text,
                      locale_of, resolve_displays, walk_spells)
 from .drift import OPTIONAL_TABLES
@@ -42,7 +43,12 @@ from .encode import (EMPTY_SLOT, FEWEST_BYTES, encode_column,
                      encode_section, layout_for)
 from .model import SECTIONS, Cardinality, Encoding, Section, SectionColumns
 from .progress import log, phase, step, timed
-from .routes import (implicit_target_bits, read_anim_replacements,
+from .routes import (AreaGates, CreatureModels, Delivery, FxPayloads,
+                     GameObjectData, ItemModels, KeyboundOverride, KitEffects,
+                     ModelSources, MountData, ProcEffects, ShapeshiftForms,
+                     SpellEffectRows, SpellNames, SpellProperties, SpellText,
+                     VehicleSeats, VisualGraph, VisualMissiles,
+                     implicit_target_bits, read_anim_replacements,
                      read_animkit_anims, read_animkit_bonesets,
                      read_area_gates, read_creature_models, read_fx_payloads,
                      read_gameobjects, read_item_models, read_keybound_overrides,
@@ -55,6 +61,7 @@ from .routes import (implicit_target_bits, read_anim_replacements,
                      read_spell_values, read_vehicle_seats, read_visual_graph,
                      read_zone_maps, resolve_paths)
 from .routes.anims import read_anim_emotes
+from .routes.sounds import read_kit_names
 from .routes.values import DescriptionValues
 from .sources import (Sources, fetch_sources, load_expansions,
                       load_local_enum, read_anim_names, read_enum_names)
@@ -74,13 +81,6 @@ PROVIDERS: dict[str, Provider] = {"csv": CsvTables, "sql": SqlTables}
 
 A roster rather than a branch: the seam's whole claim is that these are peers,
 so choosing one is a lookup and adding one is an entry.
-"""
-
-SOUNDKIT_NAME_TABLE = "SoundKitName"
-"""The pinned build's table of human names for sound kits.
-
-Read from `SOUNDKITNAME_BUILD` whatever pack is building: no later client ships
-it, so the alternative to another build's copy is no names at all.
 """
 
 
@@ -179,19 +179,6 @@ def client_keys() -> list[str]:
     return sorted(CLIENTS)
 
 
-def read_kit_names(pinned: Tables, used: set[int]) -> list[tuple[int, str]]:
-    """The names of the sound kits this pack reaches, sorted.
-
-    Purely additive: a kit keeps its id and its files, and one with no name
-    renders exactly as it would without this. Kits added after the pinned build
-    have no name anywhere and are left unnamed rather than given a made-up one.
-    """
-    return sorted((kit, name.strip()) for kit, name in (
-        (int(kit_id), name)
-        for kit_id, name in pinned.rows(SOUNDKIT_NAME_TABLE, ["ID", "Name"]))
-                  if name.strip() and kit in used)
-
-
 class Derivations:
     """Every context field, computed on first ask and remembered.
 
@@ -223,77 +210,77 @@ class Derivations:
     # The routes, each timed under its own name.
 
     @cached_property
-    def names(self) -> Any:
+    def names(self) -> SpellNames:
         with phase("read spell names"):
             return read_spell_names(self.tables)
 
     @cached_property
-    def spell_ids(self) -> Any:
+    def spell_ids(self) -> list[int]:
         return sorted(self.names.names)
 
     @cached_property
-    def graph(self) -> Any:
+    def graph(self) -> VisualGraph:
         with phase("read visual graph"):
             return read_visual_graph(self.tables)
 
     @cached_property
-    def creatures(self) -> Any:
+    def creatures(self) -> CreatureModels:
         with phase("read creature models"):
             return read_creature_models(self.tables, self.world)
 
     @cached_property
-    def items(self) -> Any:
+    def items(self) -> ItemModels:
         with phase("read item models"):
             return read_item_models(self.tables)
 
     @cached_property
-    def mounts(self) -> Any:
+    def mounts(self) -> MountData:
         with phase("read mounts"):
             return read_mounts(self.tables, self.names.names, self.creatures)
 
     @cached_property
-    def objects(self) -> Any:
+    def objects(self) -> GameObjectData:
         with phase("read gameobjects"):
             return read_gameobjects(self.tables, self.world)
 
     @cached_property
-    def models(self) -> Any:
+    def models(self) -> ModelSources:
         with phase("read model sources"):
             return read_model_sources(self.tables, self.creatures, self.items,
                                       self.providers.named)
 
     @cached_property
-    def missiles(self) -> Any:
+    def missiles(self) -> dict[int, VisualMissiles]:
         with phase("read missiles"):
             return read_missiles(self.tables, self.models)
 
     @cached_property
-    def motions(self) -> Any:
+    def motions(self) -> Mapping[int, Any]:
         with phase("read missile motions"):
             return read_missile_motions(self.tables)
 
     @cached_property
-    def procs(self) -> Any:
+    def procs(self) -> ProcEffects:
         with phase("read proc effects"):
             return read_proc_effects(self.tables, self.models)
 
     @cached_property
-    def fx(self) -> Any:
+    def fx(self) -> FxPayloads:
         with phase("read fx payloads"):
             return read_fx_payloads(self.tables)
 
     @cached_property
-    def kits(self) -> Any:
+    def kits(self) -> KitEffects:
         with phase("read kit effects"):
             return read_kit_effects(self.tables, self.models, self.procs, self.fx)
 
     @cached_property
-    def soundkit_files(self) -> Any:
+    def soundkit_files(self) -> dict[int, set[int]]:
         with phase("read soundkit files"):
             return read_soundkit_files(self.tables)
 
     @cached_property
-    def anim_names(self) -> Any:
+    def anim_names(self) -> list[str]:
         """Not a context field: the three animation routes and the declarations
         all resolve ids through it, and it is a checked-in list rather than a
         table."""
@@ -301,33 +288,33 @@ class Derivations:
             return read_anim_names()
 
     @cached_property
-    def emotes(self) -> tuple[Any, Any]:
+    def emotes(self) -> tuple[list[int], list[int]]:
         """The one-shot and looping emote columns, which arrive together."""
         with phase("read anim emotes"):
             return read_anim_emotes(self.anim_names)
 
     @cached_property
-    def animkit_anims(self) -> Any:
+    def animkit_anims(self) -> dict[int, set[int]]:
         with phase("read animkit anims"):
             return read_animkit_anims(self.tables, self.anim_names)
 
     @cached_property
-    def animkit_bonesets(self) -> Any:
+    def animkit_bonesets(self) -> dict[int, dict[int, list[str]]]:
         with phase("read animkit bonesets"):
             return read_animkit_bonesets(self.tables)
 
     @cached_property
-    def anim_replacements(self) -> Any:
+    def anim_replacements(self) -> dict[int, set[tuple[int, int]]]:
         with phase("read anim replacements"):
             return read_anim_replacements(self.tables, self.anim_names)
 
     @cached_property
-    def keybinds(self) -> Any:
+    def keybinds(self) -> dict[int, KeyboundOverride]:
         with phase("read keybound overrides"):
             return read_keybound_overrides(self.tables)
 
     @cached_property
-    def effects(self) -> Any:
+    def effects(self) -> SpellEffectRows:
         with phase("read spell effect rows"):
             return read_spell_effect_rows(
                 self.tables, self.names.names,
@@ -335,80 +322,80 @@ class Derivations:
                 implicit_target_bits(self.build.version))
 
     @cached_property
-    def alt_names(self) -> Any:
+    def alt_names(self) -> dict[int, str]:
         with phase("read override names"):
             return read_override_names(self.tables, self.effects.altnames)
 
     @cached_property
-    def props(self) -> Any:
+    def props(self) -> SpellProperties:
         with phase("read spell properties"):
             return read_spell_properties(self.tables, self.names.names)
 
     @cached_property
-    def attributes(self) -> Any:
+    def attributes(self) -> dict[str, list[int]]:
         with phase("read spell attributes"):
             return read_spell_attributes(self.props.attribute_words)
 
     @cached_property
-    def delivery(self) -> Any:
+    def delivery(self) -> list[Delivery]:
         with phase("read spell delivery"):
             return read_spell_delivery(self.tables, self.props)
 
     @cached_property
-    def areas(self) -> Any:
+    def areas(self) -> AreaGates:
         with phase("read area gates"):
             return read_area_gates(self.tables, self.zone_maps)
 
     @cached_property
-    def forms(self) -> Any:
+    def forms(self) -> ShapeshiftForms:
         with phase("read shapeshift forms"):
             return read_shapeshift_forms(self.tables)
 
     @cached_property
-    def vehicles(self) -> Any:
+    def vehicles(self) -> VehicleSeats:
         with phase("read vehicle seats"):
             return read_vehicle_seats(self.tables)
 
     @cached_property
-    def templates(self) -> Any:
+    def templates(self) -> SpellText:
         with phase("read spell text"):
             return read_spell_text(self.tables)
 
     # What this layer derives from them.
 
     @cached_property
-    def prose(self) -> Any:
+    def prose(self) -> CookedText:
         with phase("cook descriptions"):
             return cook_text(self.templates, self.values, self.names)
 
     @cached_property
-    def visuals(self) -> Any:
+    def visuals(self) -> SpellVisuals:
         with phase("walk_spells"):
             return walk_spells(self.names.names, self.graph, self.missiles,
                                self.kits, self.soundkit_files, self.fx,
                                self.effects)
 
     @cached_property
-    def displays(self) -> Any:
+    def displays(self) -> ResolvedDisplays:
         with phase("resolve_displays"):
             return resolve_displays(self.effects, self.creatures, self.forms)
 
     @cached_property
-    def references(self) -> Any:
+    def references(self) -> References:
         with phase("collect_references"):
             return collect_references(self.visuals, self.effects, self.fx,
                                       self.displays, self.mounts, self.objects,
                                       self.items, self.props.icon_fid)
 
     @cached_property
-    def paths(self) -> Any:
+    def paths(self) -> dict[int, str]:
         wanted = self.references.wanted
         log(f"Resolving {len(wanted):,} referenced file ids against the listfile ...")
         with phase("resolve paths (listfile)"):
             return resolve_paths(self.providers.listfile, wanted)
 
     @cached_property
-    def declared(self) -> Any:
+    def declared(self) -> Declarations:
         rungs, era_of = self.ladder
         oneshots, loops = self.emotes
         with phase("read declarations"):
@@ -425,7 +412,7 @@ class Derivations:
                 summon_control_names=load_local_enum("summon_properties_control"))
 
     @cached_property
-    def rows(self) -> Any:
+    def rows(self) -> PackRows:
         # After the declarations, because the flattening names the edges between
         # spells and the words it names them with are resolved per build.
         with phase("build_rows"):
@@ -434,12 +421,12 @@ class Derivations:
                               self.declared.aura_names, self.animkit_bonesets)
 
     @cached_property
-    def icons(self) -> Any:
+    def icons(self) -> IconIndex:
         with phase("build_icon_index"):
             return build_icon_index(self.spell_ids, self.props.icon_fid, self.paths)
 
     @cached_property
-    def kit_names(self) -> Any:
+    def kit_names(self) -> list[tuple[int, str]]:
         with phase("read kit names"):
             return read_kit_names(self.providers.pinned,
                                   {kit for pairs in self.visuals.sounds.values()
@@ -777,8 +764,15 @@ def packed(version: str, label: str, *, refresh: bool = False,
         zone_maps = read_zone_maps(providers.tables)
 
     chosen = selected(want)
-    context = read_all(providers, build, ladder, values, zone_maps,
-                       declared_reads(chosen))
+    asked = set(declared_reads(chosen))
+    # The locale pass below reads the build's own effect rows for the override
+    # names each spell can take. That consumer is not a section, so no
+    # section's declaration brings the field in -- and an underived field
+    # defaults to empty, which here would mean every language silently losing
+    # its alternate names.
+    if sources.locale_tables:
+        asked.add("effects")
+    context = read_all(providers, build, ladder, values, zone_maps, asked)
     columns, encoded = produce(context, providers.tables, policy, chosen)
     with phase("gather counts and domains"):
         counts, domains = gathered(columns, context)

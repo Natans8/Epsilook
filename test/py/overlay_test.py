@@ -6,11 +6,14 @@ from pathlib import Path
 
 import pytest
 
+from collections.abc import Iterator, Sequence
+
 from pack.drift import SPELL_NAME_SOURCES
 from pack.supplements import above, at_least
 from pack.tables.csv_tables import CsvTables
 from pack.tables.hotfixes import check_overlay_declaration, hotfix_overlays
 from pack.tables.overlay import OverlaidTables, Overlay
+from pack.tables.provider import Tables
 
 BASE = """\
 ID,Name,Amount,Note
@@ -209,6 +212,35 @@ def test_naming_the_key_column_means_what_omitting_it_means(tmp_path: Path) -> N
                           judged_on="Id", admits=above(1000))},
         CsvTables(source))
     assert by_id(named, "Name")["5000.0"] == "Beyond The Base"
+
+
+class Counted:
+    """A `Tables` that counts how often its rows are pulled."""
+
+    def __init__(self, inner: Tables) -> None:
+        self.inner = inner
+        self.reads = 0
+
+    def available(self, table: str) -> bool:
+        return self.inner.available(table)
+
+    def header(self, table: str) -> list[str]:
+        return self.inner.header(table)
+
+    def rows(self, table: str, columns: Sequence[str]) -> Iterator[tuple[str, ...]]:
+        self.reads += 1
+        return self.inner.rows(table, columns)
+
+
+def test_one_read_shape_buffers_the_overlay_once(tmp_path: Path) -> None:
+    """A translated export restates every row of a large table, and the routes
+    read some tables more than once per pass -- so the buffer built for one
+    (table, columns) shape has to be kept, not rebuilt per read."""
+    base, source = written(tmp_path)
+    counted = Counted(CsvTables(source))
+    tables = OverlaidTables(CsvTables(base), {"Spell": STAMPED}, counted)
+    assert by_id(tables, "Name") == by_id(tables, "Name")
+    assert counted.reads == 1
 
 
 def test_a_build_of_zero_is_refused_rather_than_obeyed() -> None:
