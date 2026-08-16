@@ -105,6 +105,7 @@ DISSOLVES = register(Section(
     produce=dissolves,
     columns=("ids", "durations", "attaches"),
     reads=("references", "fx"),
+    needs=("DissolveEffect",),
     counts=(size("dissolves", "ids"),),
 ))
 
@@ -115,6 +116,8 @@ DISSOLVE_TEXTURES = register(Section(
     produce=dissolve_textures,
     columns=("dissolveIds", "fids"),
     reads=("references", "fx"),
+    needs=("DissolveEffect",),
+    degraded_without=("TextureBlendSet",),
 ))
 
 GLOWS = register(Section(
@@ -126,6 +129,7 @@ GLOWS = register(Section(
                      "alphas": lambda reads, row: reads.fx.glow_alphas[row]}),
     columns=("ids", "colors", "alphas", "hues"),
     reads=("visuals", "fx"),
+    needs=("EdgeGlowEffect",),
     counts=(size("glows", "ids"),),
 ))
 
@@ -140,6 +144,7 @@ SHADOWIES = register(Section(
                      "attaches": lambda reads, row: reads.fx.shadowies[row][2]}),
     columns=("ids", "primaryColors", "secondaryColors", "hues", "attaches"),
     reads=("visuals", "fx"),
+    needs=("ShadowyEffect",),
     counts=(size("shadowies", "ids"),),
 ))
 

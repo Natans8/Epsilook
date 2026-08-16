@@ -56,6 +56,8 @@ SCREENS = register(Section(
     columns=("ids", "names", "fogColors", "fogAlphas", "mulColors", "addColors",
              "maskOffsetY", "maskSize", "maskPower", "hues"),
     reads=("references", "fx"),
+    needs=("ScreenEffect",),
+    degraded_without=("FullScreenEffect", "SpellVisualScreenEffect"),
     counts=(size("screens", "ids"),),
 ))
 
@@ -66,4 +68,6 @@ SCREEN_TEXTURES = register(Section(
     produce=textures,
     columns=("screenIds", "roles", "fids"),
     reads=("references", "fx"),
+    needs=("ScreenEffect",),
+    degraded_without=("FullScreenEffect", "TextureBlendSet"),
 ))

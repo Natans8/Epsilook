@@ -202,9 +202,16 @@ def _pool(family: Family, rows: Iterable[SpellRow],
         into.setdefault(spell, []).append(base + slot)
     columns = tuple([values[at] for values in slots]
                     for at in range(len(family.props) + len(family.carried)))
-    return KindPool(props=family.props, columns=columns, vocab=family.vocab,
-                    absent=family.absent, rows=len(slots),
-                    carried=family.carried)
+    # Only this kind's own properties: a shared helper hands every kind it
+    # builds one vocabulary map, so without the cut a kind ships entries for
+    # properties it does not have.
+    own = set(family.props)
+    return KindPool(props=family.props, columns=columns,
+                    vocab={prop: where for prop, where in family.vocab.items()
+                           if prop in own},
+                    absent={prop: gap for prop, gap in family.absent.items()
+                            if prop in own},
+                    rows=len(slots), carried=family.carried)
 
 
 def build_column(families: Sequence[Family], reads: Reads,

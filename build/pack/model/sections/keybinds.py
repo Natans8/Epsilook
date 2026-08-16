@@ -37,5 +37,6 @@ KEYBINDS = register(Section(
     produce=keybinds,
     columns=("ids", "functions", "whens", "keys", "spells"),
     reads=("effects", "keybinds"),
+    needs=("SpellKeyboundOverride",),
     counts=(size("keybinds", "ids"),),
 ))

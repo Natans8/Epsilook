@@ -27,6 +27,10 @@ PACK_FORMAT = 54
 `missileMotions` gains a `projectiles` column beside the names it carried,
 and the row stores its motion id twice -- once read as a name, once as that
 count -- so the number stays one copy per motion rather than one per row.
+It also makes absence a section-level fact: a section whose `needs` a build
+lacks ships absent instead of empty, `meta.degradedSections` names the
+sections shipping thinner than usual and the table that thinned each, and a
+row's per-kind `vocab` and `absent` name only that kind's own properties.
 
 53 makes the language an axis of the artifact: the manifest names the structure
 modules apart from the ones holding a language, and the second group is keyed
@@ -113,7 +117,8 @@ def gathered(produced: Mapping[str, SectionColumns], context: DeriveContext
 
 def meta(build: Build, label: str, listfile_tag: str,
          counts: Mapping[str, int],
-         domains: Mapping[str, Mapping[str, object]]) -> dict[str, object]:
+         domains: Mapping[str, Mapping[str, object]], *,
+         degraded: Mapping[str, list[str]] | None = None) -> dict[str, object]:
     """The pack's own header.
 
     The counts and domains are the default language's, because that is the pass
@@ -129,6 +134,9 @@ def meta(build: Build, label: str, listfile_tag: str,
         listfile_tag: which listfile release named this pack's assets.
         counts: the assembled `meta.counts`.
         domains: the assembled `meta.domains`.
+        degraded: per shipped section, the absent tables thinning it. The
+            claim `absentTables` cannot make on its own: which of the
+            sections that DID ship hold less than they would, and why.
     """
     return {
         "format": PACK_FORMAT,
@@ -140,6 +148,7 @@ def meta(build: Build, label: str, listfile_tag: str,
         "listfileTag": listfile_tag,
         "tdbTag": build.tdb or "",
         "absentTables": sorted(build.absent_tables),
+        "degradedSections": dict(degraded or {}),
         "counts": dict(counts),
         "domains": dict(domains),
     }

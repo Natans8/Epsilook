@@ -79,6 +79,7 @@ SPELL_DELIVERY = register(Section(
     produce=delivery,
     columns=("spellIds", "castMs", "durMs", "flags"),
     reads=("delivery", "spell_ids"),
+    degraded_without=("SpellDuration", "SpellInterrupts"),
     counts=(
         size("spellDelivery", "spellIds"),
         Count("delivery.casttime", lambda columns, _r: sum(
@@ -113,6 +114,7 @@ AREAS = register(Section(
     produce=areas,
     columns=("ids", "names", "roots", "mapIds"),
     reads=("areas",),
+    degraded_without=("UiMap", "UiMapAssignment"),
     cardinality={"mapIds": Cardinality.PARTIAL},
     absent={"mapIds": 0},
     counts=(size("areas", "ids"),),

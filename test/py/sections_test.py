@@ -8,7 +8,9 @@ vocabulary chain the row tables resolve stored numbers through.
 from __future__ import annotations
 
 from pack.derive.kinds import COLUMN_FAMILIES, VOCABULARIES
+from pack.drift import OPTIONAL_TABLES, TDB_OPTIONAL_TABLES
 from pack.model import SECTIONS
+from pack.sources.tdb import TDB_TABLES
 
 REGISTERED_ORDER = (
     "animKitAnims", "bonesetNames", "animKitAnimBoneset", "animNames",
@@ -63,6 +65,20 @@ def test_every_vocabulary_points_at_a_registered_section() -> None:
         assert "keys" not in where or "values" in where, (
             f"vocabulary {name} names keys and no values, which is none of the "
             f"three declared shapes")
+
+
+def test_every_needed_table_is_one_some_build_can_lack() -> None:
+    """`needs` and `degraded_without` only fire on a table that can be absent,
+    so an entry no drift declaration covers is dead: a typo there means the
+    section never switches off and nothing ever says so.
+    """
+    absentable = (set(OPTIONAL_TABLES) | set(TDB_OPTIONAL_TABLES)
+                  | set(TDB_TABLES["world"]))
+    for section in SECTIONS:
+        for table in (*section.needs, *section.degraded_without):
+            assert table in absentable, (
+                f"{section.name} names {table!r}, which no drift declaration "
+                f"covers and so is never absent")
 
 
 def test_every_family_resolves_through_a_declared_vocabulary() -> None:

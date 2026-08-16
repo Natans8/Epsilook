@@ -17,13 +17,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
 from . import pipeline
 from .derive import locales_named
 from .emit import versions
+from .emit.manifest import carry_forward, rendered
 from .emit.module import Module
+from .model import SECTIONS
 from .progress import log, phase, report
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "site" / "data"
@@ -156,6 +159,12 @@ def main() -> None:
                         help="which implementation reads the tables. Peers: "
                              "both produce the same pack, and `sql` is how "
                              "that stays true")
+    parser.add_argument("--module", action="append", default=[], metavar="NAME",
+                        help="build only the named artifact module, repeatable. "
+                             "Everything else -- module entries, counts, "
+                             "absence -- is carried forward from the pack's "
+                             "existing manifest, so what is written is still "
+                             "a whole pack")
     parser.add_argument("--refresh", action="store_true",
                         help="re-fetch every source even where a cached copy "
                              "would do")
@@ -182,11 +191,25 @@ def main() -> None:
     started = time.perf_counter()
     label = args.label or args.version
     pack_id = args.pack_id or args.version
+    destination = DATA_DIR / pack_id / "manifest.json"
+    if args.module and not destination.exists():
+        # A partial manifest would replace a whole pack with a partial one, so
+        # there has to be a whole one to complete.
+        sys.exit(f"error: {destination} does not exist; a partial build "
+                 f"completes a pack that has already been built whole")
+
     modules, manifest = pipeline.modules(args.version, label,
                                          refresh=args.refresh, pack_id=pack_id,
                                          location=MODULE_LOCATION,
                                          locales=locales, client=args.client,
-                                         provider=pipeline.PROVIDERS[args.provider])
+                                         provider=pipeline.PROVIDERS[args.provider],
+                                         want=tuple(args.module))
+    if args.module:
+        existing = json.loads(destination.read_text(encoding="utf-8"))
+        manifest = carry_forward(
+            manifest, existing, frozenset(args.module),
+            {section.name: section.module for section in SECTIONS})
+        log(f"  carried the other modules forward from {destination.name}")
 
     with phase("write modules"):
         written = write_modules(modules)
@@ -194,12 +217,11 @@ def main() -> None:
     log(f"Wrote {written} module(s) to {MODULE_DIR}"
         + (f", {shared} already shared" if shared else ""))
 
-    destination = DATA_DIR / pack_id / "manifest.json"
     destination.parent.mkdir(parents=True, exist_ok=True)
     # Bytes rather than text, and the same bytes that get hashed. `write_text`
     # translates newlines on Windows, so the file on disk would not be what the
     # roster says it is -- a hash that can never match, on every pack.
-    payload = (json.dumps(manifest, indent=2) + "\n").encode("utf-8")
+    payload = rendered(manifest).encode("utf-8")
     destination.write_bytes(payload)
     total = sum(len(module.payload) for module in modules)
     log(f"Wrote {destination}  ({total:,} gzipped across {len(modules)} modules)")

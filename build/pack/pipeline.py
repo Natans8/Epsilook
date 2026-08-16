@@ -24,7 +24,7 @@ them.
 from __future__ import annotations
 
 import time
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Container, Iterable, Mapping, Sequence
 from functools import cached_property
 
 from .build import Build
@@ -34,7 +34,7 @@ from .derive import (CONTEXT_FIELDS, DEFAULT_LOCALE, LOCALES, CookedText,
                      ResolvedDisplays, Spoken, SpellVisuals,
                      build_icon_index, build_rows, collect_references, cook_text,
                      locale_of, resolve_displays, walk_spells)
-from .drift import OPTIONAL_TABLES
+from .drift import OPTIONAL_TABLES, TDB_OPTIONAL_TABLES
 from .emit.manifest import manifest
 from .emit.meta import gathered, meta
 from .emit.module import Module, absent_sections, assemble
@@ -70,7 +70,7 @@ from .sources.client import CLIENTS
 from .sources.gobs import read_gob_displays
 from .sources.listfile import SUPPLEMENT, SUPPLEMENT_FLOOR, release_tag
 from .sources.scaling import read_scaling, scaling_source
-from .sources.tdb import tdb_release
+from .sources.tdb import TDB_TABLES, tdb_release
 from .sources.wago import LOCALIZED_TABLES
 from .tables import (CsvTables, ListfileTables, OverlaidTables, Provider,
                      SqlTables, Tables, hotfix_overlays, locale_overlays,
@@ -543,12 +543,43 @@ def read_spoken(providers: Providers, locale: Locale, *,
                   objects=objects, forms=forms, areas=areas, prose=prose)
 
 
-def switched_off(section: Section, tables: Tables) -> bool:
+def unavailable_tables(build: Build, world: Tables | None) -> frozenset[str]:
+    """Every declared-optional table this build cannot read, client or server.
+
+    The client's own absences were probed once when the `Build` was made. The
+    server's are the release's: a build with no dump at all lacks every world
+    table, which is what makes a section naming one degrade on the four packs
+    that ship without one.
+    """
+    absent = set(build.absent_tables)
+    if world is None:
+        absent |= set(TDB_TABLES["world"]) | set(TDB_OPTIONAL_TABLES)
+    else:
+        absent |= {table for table in TDB_OPTIONAL_TABLES
+                   if not world.available(table)}
+    return frozenset(absent)
+
+
+def switched_off(section: Section, unavailable: frozenset[str]) -> bool:
     """Whether this build lacks a table the section cannot do without."""
-    return any(not tables.available(table) for table in section.needs)
+    return bool(set(section.needs) & unavailable)
 
 
-def produce(context: DeriveContext, tables: Tables,
+def degraded_sections(sections: Iterable[Section], produced: Container[str],
+                      unavailable: frozenset[str]) -> dict[str, list[str]]:
+    """Which shipped sections are thinner than usual, and what thinned each.
+
+    The difference `absentSections` cannot state: these sections ship, holding
+    less than they would -- morph names falling back to raw ids on a build with
+    no server dump. Only the shipped ones are reported, since a section that is
+    absent outright is already named where absence is.
+    """
+    return {section.name: missing for section in sections
+            if section.name in produced
+            and (missing := sorted(set(section.degraded_without) & unavailable))}
+
+
+def produce(context: DeriveContext, unavailable: frozenset[str],
             policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES,
             sections: Sequence[Section] = SECTIONS
             ) -> tuple[dict[str, SectionColumns], dict[str, object]]:
@@ -567,7 +598,7 @@ def produce(context: DeriveContext, tables: Tables,
     columns: dict[str, SectionColumns] = {}
     encoded: dict[str, object] = {}
     for section in sections:
-        if switched_off(section, tables):
+        if switched_off(section, unavailable):
             continue
         with timed("produce sections", section.name):
             produced = section.produce(context.reads(section.reads))
@@ -773,10 +804,13 @@ def packed(version: str, label: str, *, refresh: bool = False,
     if sources.locale_tables:
         asked.add("effects")
     context = read_all(providers, build, ladder, values, zone_maps, asked)
-    columns, encoded = produce(context, providers.tables, policy, chosen)
+    unavailable = unavailable_tables(build, providers.world)
+    columns, encoded = produce(context, unavailable, policy, chosen)
+    degraded = degraded_sections(chosen, encoded, unavailable)
     with phase("gather counts and domains"):
         counts, domains = gathered(columns, context)
-    log(f"  {len(encoded)} sections, {len(counts)} counts, {len(domains)} domains")
+    log(f"  {len(encoded)} sections, {len(counts)} counts, {len(domains)} domains"
+        + (f", {len(degraded)} degraded" if degraded else ""))
 
     # Whatever landed beside the build's own tables IS the set of further
     # languages: acquisition asked for the ones the roster named and reports
@@ -792,7 +826,8 @@ def packed(version: str, label: str, *, refresh: bool = False,
                            zone_maps=zone_maps)
         produced[code] = produce_spoken(context.spoken_in(said), columns, policy)
         log(f"  {code}: {len(produced[code])} sections of language")
-    return meta(build, label, release_tag(), counts, domains), produced
+    return meta(build, label, release_tag(), counts, domains,
+                degraded=degraded), produced
 
 
 def acquire(version: str, *, refresh: bool = False,
@@ -851,10 +886,12 @@ def modules(version: str, label: str, *, refresh: bool = False,
                               want=want)
     assembled = [module for code, sections in produced.items()
                  for module in assemble(SECTIONS, sections, locale=code)]
-    # Off the build's own pass alone. A further language produces the sections
-    # that ship language and no others, so asking one what is absent would name
-    # every section that merely has nothing to translate.
-    absent = absent_sections(SECTIONS, produced[DEFAULT_LOCALE])
+    # Off the build's own pass alone, over the sections that were asked for. A
+    # further language produces the sections that ship language and no others,
+    # so asking one what is absent would name every section that merely has
+    # nothing to translate -- and a partial build left out whole modules on
+    # purpose, so only the chosen sections can be reported at all.
+    absent = absent_sections(selected(want), produced[DEFAULT_LOCALE])
     log(f"  {len(produced[DEFAULT_LOCALE])} sections in {len(assembled)} modules "
         f"[{time.monotonic() - started:.1f}s]")
     return assembled, manifest(pack_id or version, assembled, header,

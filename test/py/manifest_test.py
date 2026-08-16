@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pack.emit.manifest import manifest
+import json
+
+from pack.emit.manifest import carry_forward, manifest, rendered
 from pack.emit.module import absent_sections, assemble
 from pack.model.section import Section
 
@@ -118,6 +120,107 @@ def test_what_the_build_lacks_is_read_from_the_one_place_that_knows() -> None:
     entry = manifest("1.15.9.69109", assemble(sections, produced),
                      absent=absent_sections(sections, produced))
     assert entry["absentSections"] == ["spellAreas"]
+
+
+WHOLE = {
+    "pack": "9.2.7.45745",
+    "meta": {"format": 54, "built": "2026-08-01",
+             "counts": {"spells": 276332, "spellDescriptions": 128374},
+             "domains": {"casttime": {"min": 0}},
+             "degradedSections": {"morphs": ["creature_template"],
+                                  "spellText": ["SpellScaling"]}},
+    "modules": {"core": {"file": "core-aa.json.gz", "bytes": 7},
+                "universal": {"file": "universal-bb.json.gz", "bytes": 3}},
+    "locales": {"enUS": {"names": {"file": "names-cc.json.gz", "bytes": 2},
+                         "text": {"file": "text-dd.json.gz", "bytes": 4}}},
+    "absentSections": ["keybinds", "spellText"],
+}
+"""A whole pack's manifest, as a partial build would find it on disk."""
+
+HOME = {"keybinds": "core", "spellText": "text", "morphs": "core",
+        "spells": "core"}
+"""Which module each section ships in, as the registry would answer."""
+
+
+def test_a_partial_build_keeps_every_claim_about_what_it_did_not_touch() -> None:
+    """The unbuilt modules' files are untouched on disk, so their entries, their
+    counts and what is absent or thin in them are all still true and must all
+    survive -- writing the partial manifest alone would replace a whole pack
+    with a partial one."""
+    fresh = {"pack": "9.2.7.45745",
+             "meta": {"format": 54, "built": "2026-08-16",
+                      "counts": {"spellDescriptions": 130000},
+                      "domains": {}, "degradedSections": {}},
+             "modules": {},
+             "locales": {"enUS": {"text": {"file": "text-ee.json.gz", "bytes": 5}}},
+             "absentSections": []}
+    merged = carry_forward(fresh, WHOLE, frozenset({"text"}), HOME)
+    assert merged["modules"] == WHOLE["modules"]
+    locales = merged["locales"]
+    assert isinstance(locales, dict)
+    assert locales["enUS"]["names"]["file"] == "names-cc.json.gz"
+    assert locales["enUS"]["text"]["file"] == "text-ee.json.gz"
+    meta = merged["meta"]
+    assert isinstance(meta, dict)
+    assert meta["built"] == "2026-08-16"
+    assert meta["counts"] == {"spells": 276332, "spellDescriptions": 130000}
+    assert meta["domains"] == {"casttime": {"min": 0}}
+    # The morphs claim stands -- core was not rebuilt -- and the spellText one
+    # is the fresh pass's to make, which made none.
+    assert meta["degradedSections"] == {"morphs": ["creature_template"]}
+    # keybinds ships in core, untouched, so its absence is carried; spellText
+    # was just rebuilt and produced, so its absence is gone.
+    assert merged["absentSections"] == ["keybinds"]
+
+
+def test_a_rebuilt_module_speaks_for_itself() -> None:
+    """Whatever the fresh pass says about a module it built replaces the old
+    claim outright, absence included."""
+    fresh = {"pack": "9.2.7.45745",
+             "meta": {"format": 54, "counts": {}, "domains": {},
+                      "degradedSections": {"morphs": ["creature_template",
+                                                      "GameObjectDisplayInfo"]}},
+             "modules": {"core": {"file": "core-ff.json.gz", "bytes": 9}},
+             "locales": {"enUS": {"names": {"file": "names-gg.json.gz", "bytes": 1}}},
+             "absentSections": ["morphDisplays"]}
+    merged = carry_forward(fresh, WHOLE, frozenset({"core", "names"}), HOME)
+    modules = merged["modules"]
+    assert isinstance(modules, dict)
+    assert modules["core"]["file"] == "core-ff.json.gz"
+    assert modules["universal"]["file"] == "universal-bb.json.gz"
+    meta = merged["meta"]
+    assert isinstance(meta, dict)
+    assert meta["degradedSections"]["morphs"] == ["creature_template",
+                                                  "GameObjectDisplayInfo"]
+    # keybinds ships in the rebuilt core and the fresh pass did not call it
+    # absent, so the carried claim is dropped; spellText's module was untouched.
+    assert merged["absentSections"] == ["morphDisplays", "spellText"]
+
+
+def test_the_rendered_manifest_parses_back_to_the_same_document() -> None:
+    """The shape on disk is a presentation choice and nothing else: a reader
+    must get the identical document however it was laid out."""
+    entry = manifest("9.2.7.45745", a_pack("enUS"),
+                     {"format": 54, "counts": {"spells": 276332, "morphs": 9},
+                      "domains": {"scale": {"min": -99, "max": 900}}})
+    assert json.loads(rendered(entry)) == entry
+
+
+def test_a_leaf_sits_on_one_line_and_the_skeleton_is_still_indented() -> None:
+    """The manifest is the one artifact file the repository diffs, so a rebuild
+    must show one changed line per entry that moved -- not hundreds of lines of
+    re-indented counts. The skeleton stays open so the file is still a document
+    a person can skim."""
+    entry = manifest("9.2.7.45745", a_pack("enUS"),
+                     {"format": 54, "counts": {"spells": 276332, "morphs": 9},
+                      "domains": {"scale": {"min": -99}, "speed": {"min": 0}}})
+    lines = rendered(entry).splitlines()
+    counts, = (line for line in lines if '"counts"' in line)
+    assert '"spells": 276332' in counts and '"morphs": 9' in counts
+    core, = (line for line in lines if '"core"' in line)
+    assert '"file"' in core and '"bytes"' in core
+    assert sum(1 for line in lines if '"min"' in line) == 2
+    assert '"meta": {' in "\n".join(lines)
 
 
 def test_two_packs_that_serialised_alike_name_the_same_file() -> None:

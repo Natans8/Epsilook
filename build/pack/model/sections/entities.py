@@ -108,6 +108,8 @@ MOUNTS = register(Section(
     produce=mounts,
     columns=("displayIds", "names", "fids"),
     reads=("mounts", "references"),
+    needs=("Mount",),
+    degraded_without=("MountXDisplay",),
     counts=(size("mounts", "displayIds"),),
     localizable=('names',),
 ))
@@ -119,6 +121,7 @@ SHAPESHIFTS = register(Section(
     produce=shapeshifts,
     columns=("ids", "names"),
     reads=("effects", "forms"),
+    needs=("SpellShapeshiftForm",),
     localizable=('names',),
 ))
 
@@ -129,6 +132,7 @@ SHAPESHIFT_DISPLAYS = register(Section(
     produce=display_rows("forms", "formIds"),
     columns=("formIds", "displayIds", "fids"),
     reads=("displays",),
+    needs=("SpellShapeshiftForm",),
     counts=(size("shapeshiftDisplays", "formIds"),),
 ))
 
@@ -162,7 +166,7 @@ OBJECTS = register(Section(
     produce=objects,
     columns=("ids", "names", "fids", "types"),
     reads=("references", "objects"),
-    degraded_without=("gameobject_template",),
+    degraded_without=("gameobject_template", "GameObjectDisplayInfo"),
     counts=(size("objects", "ids"),),
     localizable=('names',),
 ))

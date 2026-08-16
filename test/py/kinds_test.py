@@ -147,6 +147,20 @@ def test_a_float_survives_the_pooling() -> None:
     assert rows.pools["scale"].columns == ([-99.5],)
 
 
+def test_a_pool_keeps_only_its_own_properties_vocabularies() -> None:
+    """A shared helper hands every kind it builds one vocabulary map, so the
+    pool is where the cut happens: a kind must not ship entries for properties
+    it does not have."""
+    rows = build_column(
+        [family("ground", ("file",), [(1, (7,))],
+                vocab={"file": "files", "motion": "motions"},
+                absent={"attach": ABSENT})],
+        reads=NO_READS, spell_ids=[1])
+    pool = rows.pools["ground"]
+    assert dict(pool.vocab) == {"file": "files"}
+    assert dict(pool.absent) == {}
+
+
 def test_a_family_naming_an_undeclared_vocabulary_fails_the_build() -> None:
     """Left to the reader it is silent: the lookup misses, the property keeps
     the raw number, and every query on it answers nothing forever."""

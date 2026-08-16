@@ -63,6 +63,7 @@ VEHICLES = register(Section(
                   for vehicle in reads.rows.vehicle_ids]},
     columns=("vehicleIds", "seats"),
     reads=("rows", "vehicles"),
+    needs=("Vehicle", "VehicleSeat"),
     counts=(size("vehicles", "vehicleIds"),),
 ))
 
@@ -73,6 +74,7 @@ VEHICLE_SEATS = register(Section(
     produce=seats,
     columns=("vehicleIds", "attachments"),
     reads=("rows",),
+    needs=("Vehicle", "VehicleSeat"),
     counts=(size("vehicleSeats", "vehicleIds"),),
     domains=(Domain("seat", lambda columns, _r: numeric_domain(
         Counter(columns["vehicleIds"]).values())),),
@@ -85,6 +87,7 @@ SPELL_VEHICLE_ANIMS = register(Section(
     produce=ridden("vehicle_anims", "animIds"),
     columns=("spellIds", "animIds"),
     reads=("rows", "vehicles", "declared"),
+    needs=("Vehicle", "VehicleSeat"),
     counts=(size("spellVehicleAnims", "spellIds"),),
 ))
 
@@ -95,5 +98,6 @@ SPELL_VEHICLE_ANIMKITS = register(Section(
     produce=ridden("animkits", "animKitIds", bounded=False),
     columns=("spellIds", "animKitIds"),
     reads=("rows", "vehicles"),
+    needs=("Vehicle", "VehicleSeat"),
     counts=(size("spellVehicleAnimKits", "spellIds"),),
 ))
