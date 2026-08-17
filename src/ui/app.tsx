@@ -5,17 +5,12 @@
  * Deliberately nothing else: no chips, no transformation, no completion, no controls. Each of those arrives as
  * its own increment, tested and judged, per the rebuild ruling.
  */
-import type {MouseEvent as ReactMouseEvent, ReactElement} from "react";
-import {useEffect, useLayoutEffect, useMemo, useRef, useState} from "react";
+import type {ReactElement} from "react";
+import {useEffect, useRef, useState} from "react";
 import {useTranslation} from "react-i18next";
-import {classify} from "../search/index";
 import type {PackInfo, Searcher} from "./searcher";
+import {Bar} from "./bar/bar";
 import styles from "./app.module.css";
-
-/** The backdrop colour class per run kind; a plain word paints nothing and inherits the text colour. */
-const RUN_CLASS: Record<string, string | undefined> = {
-    head: styles.runHead, op: styles.runOp, delim: styles.runOp, quote: styles.runOp, number: styles.runNumber,
-};
 
 /** The query the URL carries, or nothing. */
 const urlQuery = (): string => new URLSearchParams(location.search).get("q") ?? "";
@@ -73,26 +68,6 @@ export function App({info, searcher}: {
     }, [text]);
 
     const stale = result === null || result.for !== text;
-    const input = useRef<HTMLInputElement>(null);
-    const backdrop = useRef<HTMLSpanElement>(null);
-
-    /** The whole bar is the input's click target — a press on its padding focuses without stealing the caret. */
-    const onBarPress = (e: ReactMouseEvent<HTMLDivElement>): void => {
-        if (e.target !== input.current) {
-            e.preventDefault();
-            input.current?.focus();
-        }
-    };
-
-    // The highlight backdrop: the same characters, classed by the engine's own grammar, drawn under a
-    // transparent-text input. The input keeps the caret, the clicks and the selection; this only supplies colour.
-    const runs = useMemo(() => classify(text), [text]);
-    const syncScroll = (): void => {
-        if (backdrop.current !== null && input.current !== null) {
-            backdrop.current.scrollLeft = input.current.scrollLeft;
-        }
-    };
-    useLayoutEffect(syncScroll, [text]);
 
     return (
         <div className={styles.page}>
@@ -135,31 +110,7 @@ export function App({info, searcher}: {
 
             <section className={styles.searchbox}>
                 <div className={styles.barRow}>
-                    <div className={styles.qbar} onMouseDown={onBarPress}>
-                        <span className={styles.editwrap}>
-                            <span ref={backdrop} className={styles.qhl} aria-hidden="true">
-                                {runs.map((run, i) => (
-                                    <span key={i} className={RUN_CLASS[run.kind]}>
-                                        {text.slice(run.start, run.end)}
-                                    </span>
-                                ))}
-                            </span>
-                            <input
-                                ref={input}
-                                className={`${styles.q} ${text === "" ? "" : styles.hl}`}
-                                type="text"
-                                value={text}
-                                onChange={(e) => {
-                                    setText(e.target.value);
-                                }}
-                                onScroll={syncScroll}
-                                placeholder={t("bar.placeholder")}
-                                autoComplete="off"
-                                spellCheck={false}
-                                aria-label={t("bar.placeholder")}
-                            />
-                        </span>
-                    </div>
+                    <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}/>
                 </div>
                 <div
                     className={`${styles.status} ${stale ? styles.statusStale : ""}`}

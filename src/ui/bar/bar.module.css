@@ -1,0 +1,137 @@
+/* The bar: settled text, then the open segment — plain while it is text, a head cell and value slot the moment
+ * the bind lands. Metrics are 1.0's own (#qbar / #q); the backdrop rules from the shell apply unchanged: colour
+ * only, the input keeps caret, clicks and selection. */
+
+.qbar {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 10px;
+    cursor: text;
+}
+
+.qbar:focus-within {
+    border-color: var(--gold-dim);
+    box-shadow: 0 0 0 3px rgba(var(--gold-rgb), 0.12);
+}
+
+/* settled text: the query already typed, drawn classed. Inert this increment — chips take it over next. */
+.settled {
+    white-space: pre-wrap;
+    font-size: 1.1rem;
+    line-height: normal;
+    color: var(--text);
+}
+
+/* the open segment's enclosure once a head transforms: the editing look — a quiet ring, never the page's hard
+ * focus outline */
+.openChip {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid var(--gold-dim);
+    border-radius: 6px;
+    box-shadow: 0 0 0 2px rgba(var(--gold-rgb), 0.12);
+    overflow: hidden;
+    max-width: 100%;
+}
+
+/* the head cell: a darker inset, the split carried by structure — no delimiter shown */
+.headCell {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.55rem;
+    background: rgba(0, 0, 0, 0.25);
+    border-right: 1px solid var(--border-ctrl);
+    font-size: 0.95rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
+.headCell.neg {
+    color: rgb(var(--danger-rgb));
+}
+
+/* the slot: the same transparent-input-over-backdrop pair the whole bar was in increment 2 */
+.editwrap {
+    position: relative;
+    display: inline-flex;
+    align-items: baseline;
+    flex: 1;
+    min-width: 6rem;
+    max-width: 100%;
+}
+
+.openChip .editwrap {
+    padding: 0 0.55rem;
+    min-width: 3rem;
+}
+
+.qhl {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+    white-space: pre;
+    font-size: 1.1rem;
+    line-height: normal;
+    padding: 0.15rem 0;
+    color: var(--text);
+}
+
+.openChip .qhl {
+    inset: 0 0.55rem;
+}
+
+.q {
+    flex: 1;
+    min-width: 2rem;
+    max-width: 100%;
+    font-family: inherit;
+    font-size: 1.1rem;
+    /* `normal` on input and backdrop alike: Firefox clamps an input's line-height up to the font's normal. */
+    line-height: normal;
+    padding: 0.15rem 0;
+    color: var(--text);
+    background: none;
+    border: none;
+    outline: none;
+}
+
+.q::placeholder {
+    color: var(--text-dim);
+}
+
+/* the site stylesheet's Tab-navigation outline is exempted exactly as 1.0 exempts its own #q */
+.q:focus-visible {
+    outline: none;
+}
+
+.q.hl {
+    position: relative;
+    z-index: 1;
+    color: transparent;
+    caret-color: var(--text);
+}
+
+.q.hl::selection {
+    color: var(--text);
+}
+
+.runHead {
+    color: var(--gold);
+}
+
+.runOp {
+    color: var(--gold-dim);
+}
+
+.runNumber {
+    color: var(--gold);
+}
