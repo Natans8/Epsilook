@@ -35,6 +35,16 @@ test("a head wears the tone of the column it reaches, whichever door it went thr
     assert.equal(runFor("nonsense:fire", "nonsense").tone, undefined);
 });
 
+test("a clause's delimiters wear its tone — a brace belongs to the head it encloses", () => {
+    const runs = paint("model:{fire|frost} sound:bell");
+    for (const delim of ["{", "|", "}"]) {
+        assert.equal(runs.find((run) => run.start === "model:{fire|frost} sound:bell".indexOf(delim))?.tone,
+            "model", `the ${delim} wears the model tone`);
+    }
+    // A delimiter no clause claims keeps the neutral colouring every structural character shares.
+    assert.equal(paint("{").find((run) => run.start === 0)?.tone, undefined);
+});
+
 test("a clause that failed carries its state, and one merely warned carries the lighter one", () => {
     assert.equal(runFor("scale:abc", "scale").state, "error");
     assert.equal(runFor("model:", "model").state, "error");

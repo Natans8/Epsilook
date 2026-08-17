@@ -68,8 +68,14 @@
     align-items: center;
 }
 
-.status {
+.statusRow {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
     margin-top: 0.4rem;
+}
+
+.status {
     font-size: 0.85rem;
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
@@ -119,28 +125,75 @@
     color: rgb(var(--danger-rgb));
 }
 
-/* The plaintext toggle: a view the reader chooses, so it sits beside the bar rather than inside it — nothing
- * in the bar should look like part of the query. */
+/* The plaintext switch: a view the reader chooses, so it stands beside the count rather than on the bar —
+ * nothing next to the bar should read as part of the query. A switch and not a button, because it has a state
+ * a reader needs to see without pressing it, and it is sized by its own content so a bar that wraps to three
+ * lines never stretches it. */
 .viewToggle {
     flex: none;
-    align-self: stretch;
-    padding: 0 0.7rem;
-    background: var(--bg-panel);
-    border: 1px solid var(--border-ctrl);
-    border-radius: 10px;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0.5rem 0.15rem 0.35rem;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 999px;
     color: var(--text-dim);
     font: inherit;
     font-size: 0.85rem;
     cursor: pointer;
 }
 
+.switchTrack {
+    display: inline-flex;
+    align-items: center;
+    width: 26px;
+    height: 14px;
+    padding: 2px;
+    border-radius: 999px;
+    background: rgba(var(--overlay-rgb), calc(0.25 * var(--wash-strength)));
+    border: 1px solid var(--border-ctrl);
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.switchKnob {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: transform 0.12s ease, background 0.12s ease;
+}
+
 .viewToggle:hover {
     color: var(--text);
+}
+
+.viewToggle:hover .switchTrack {
+    border-color: var(--gold-dim);
+}
+
+.viewToggle:focus-visible {
     border-color: var(--gold-dim);
 }
 
 .viewOn {
     color: var(--gold);
+}
+
+.viewOn .switchTrack {
+    background: rgba(var(--gold-rgb), calc(0.35 * var(--wash-strength)));
     border-color: var(--gold-dim);
-    background: rgba(var(--gold-rgb), calc(0.1 * var(--wash-strength)));
+}
+
+.viewOn .switchKnob {
+    background: var(--gold);
+    transform: translateX(12px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .switchTrack,
+    .switchKnob {
+        transition: none;
+    }
 }

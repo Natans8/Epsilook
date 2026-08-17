@@ -2,13 +2,29 @@
  * the bind lands. Metrics are 1.0's own (#qbar / #q); the backdrop rules from the shell apply unchanged: colour
  * only, the input keeps caret, clicks and selection. */
 
+/* The children sit FLUSH — no flex gap. What separates two of them is the query's own separator, drawn like
+ * any other character, because that is what it is: a space between two words is one character of the text and
+ * has to select, delete and read as one. A gap wide enough to see but made of nothing turned every word into
+ * an object. */
 .qbar {
+    /* The height every chip takes and every selection band paints, so a row of them reads as one line of
+     * objects and a selection crosses them without stepping. A text band reaches the same height by padding
+     * out from the line box its own characters occupy, which is what `lh` measures. */
+    --band-h: 1.8rem;
+    --band-pad: calc((var(--band-h) - 1lh) / 2);
+    /* One selection wash for the whole bar: a band over settled text, a chip and the plain view are one
+     * gesture's result and may not read as three different highlights. */
+    --select-a: 0.42;
     flex: 1;
     min-width: 0;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.35rem;
+    /* No gap ACROSS: what separates two children is the query's own separator. Between rows there is no such
+     * character — a wrap is the bar's doing, not the reader's — so the rows get the air they need to read as
+     * separate lines. */
+    column-gap: 0;
+    row-gap: 0.4rem;
     padding: 0.5rem 1rem;
     background: var(--bg-panel);
     border: 1px solid var(--border-ctrl);
@@ -21,12 +37,32 @@
     box-shadow: 0 0 0 3px rgba(var(--gold-rgb), 0.12);
 }
 
-/* settled text: the query already typed, drawn classed. Inert this increment — chips take it over next. */
-.settled {
+/* The bar takes focus while a selection stands, so its keys reach it; that is bookkeeping, not a control the
+ * reader aimed at, and the ring belongs to the slot. */
+.qbar:focus {
+    outline: none;
+}
+
+/* settled text: the query already typed, drawn classed — chips, and the reader's own characters between them */
+.settled,
+.sep {
     white-space: pre-wrap;
     font-size: 1.1rem;
     line-height: normal;
     color: var(--text);
+}
+
+/* A chip's wrapper is a BOX, not a line of text: an inline box paints its background over the text's own
+ * height, which is shorter than the pill it holds, so the selection band would sit inside the chip. Text keeps
+ * its inline flow, because text has to wrap. */
+.chipHost {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* the separator between two chips: one character of the query, drawn as itself */
+.sep {
+    white-space: pre;
 }
 
 /* the headless open segment as the true tail: fills the bar like 1.0's own input */
@@ -46,14 +82,14 @@
     max-width: 100%;
 }
 
-/* the GAP between chips: a caret rest that displaces NOTHING — two flex gaps flank the rest where the baseline
- * separator is one, so the margins swallow the extra gap and the sliver itself and total width stays the
- * baseline's. The interior needs no rules of its own: the hug slot's min-width-0 mirror shrinks into the
- * sliver, and the input rides absolute over the full 3px, which is caret enough. */
+/* the GAP between chips: a caret rest that displaces NOTHING — the sliver is swallowed by its own negative
+ * margins, so the separator either side of it keeps the width it has when no caret rests there. The interior
+ * needs no rules of its own: the hug slot's min-width-0 mirror shrinks into the sliver, and the input rides
+ * absolute over the full 3px, which is caret enough. */
 .gapRest {
     width: 3px;
     min-width: 3px;
-    margin: 0 calc(-0.175rem - 1.5px);
+    margin: 0 -1.5px;
 }
 
 /* the enclosure a HEAD earns: the editing look — a quiet ring, never the page's hard focus outline */
@@ -206,6 +242,17 @@
     color: var(--gold);
 }
 
+/* A word ABOUT the query rather than one of the data — the any-word, a property standing in a value. The chip
+ * draws it loud, so the raw text does too: one language, two surfaces. */
+.runMeta {
+    font-weight: 700;
+}
+
+/* what a clause or a term EXCLUDES: the minus and the word it binds to, in one colour */
+.runNeg {
+    color: rgb(var(--danger-rgb));
+}
+
 /* the rich painting: a head wears the tone of the column it reaches, so raw text and chips speak one language */
 .runModel {
     color: rgb(var(--model-rgb));
@@ -255,12 +302,20 @@
 .chip,
 .lane {
     --chip-rgb: var(--overlay-rgb);
+    /* The EDGE is its own colour: a chip's border says what state it is in — its column tone at rest, danger
+     * when it excludes, gold when it carries a reservation — and hover deepens whatever that is rather than
+     * replacing it. A hover that repainted the edge in the tone would erase the very thing the edge says. */
+    --edge-rgb: var(--chip-rgb);
     --chip-border-a: 0.5;
+    --chip-hover-a: 0.85;
     --chip-wash-a: 0.1;
     display: inline-flex;
     align-items: stretch;
+    /* Every chip stands the same height whatever it holds — a lane with an inner bind included — so a row of
+     * them reads as one line of objects and a selection band crosses them without stepping. */
+    min-height: var(--band-h);
     max-width: 100%;
-    border: 1px solid rgba(var(--chip-rgb), var(--chip-border-a));
+    border: 1px solid rgba(var(--edge-rgb), var(--chip-border-a));
     border-radius: 999px;
     background: rgba(var(--chip-rgb), calc(var(--chip-wash-a) * var(--wash-strength)));
     overflow: hidden;
@@ -274,7 +329,7 @@
 
 .chip:hover,
 .lane:hover {
-    border-color: rgba(var(--chip-rgb), 0.75);
+    border-color: rgba(var(--edge-rgb), var(--chip-hover-a));
 }
 
 .toneModel {
@@ -306,11 +361,13 @@
 
 /* negation and warning are states over the tone: the border says it, the head's red unit carries the minus */
 .chipNegated {
-    border-color: rgba(var(--danger-rgb), 0.6);
+    --edge-rgb: var(--danger-rgb);
+    --chip-border-a: 0.6;
 }
 
 .chipWarned {
-    border-color: var(--gold-dim);
+    --edge-rgb: var(--gold-rgb);
+    --chip-border-a: 0.75;
     box-shadow: 0 0 0 1px rgba(var(--gold-rgb), 0.15);
 }
 
@@ -333,6 +390,27 @@
     color: rgb(var(--danger-rgb));
 }
 
+/* Every part of a chip that does something answers the pointer, and each says which thing: the head flips
+ * exclusion, so it lights as a control; the body opens the chip for editing, so it takes the text cursor. A
+ * chip whose frame was the only thing to react read as a picture with a live border. */
+.chipSect:hover,
+.bindSect:hover {
+    background: rgba(var(--shadow-rgb), 0.2);
+    color: var(--text-strong);
+}
+
+.chipBody,
+.bindBody,
+.laneTerm {
+    cursor: text;
+}
+
+.chipBody:hover,
+.bindBody:hover,
+.laneTerm:hover {
+    background: rgba(var(--overlay-rgb), calc(0.12 * var(--wash-strength)));
+}
+
 .chipBody {
     display: inline-block;
     padding: 0.2rem 0.55rem;
@@ -342,12 +420,26 @@
     color: var(--text-strong);
 }
 
-/* × lives left in the sect, + at the tail — destructive left, additive right */
+/* × lives left in the sect, + at the tail — destructive left, additive right.
+ *
+ * A mark is a glyph, not text, so it is centred rather than sat on the baseline — 1.0's own rule. What is new
+ * here is that the cell is TALLER than the text it holds, so centring it in the CELL no longer centres it on
+ * the word beside it: the eye reads a lowercase word from its x-height, and a mark on the box's middle floats
+ * above that. Each mark therefore sits in a slot carrying the neighbouring text's own line box, where
+ * `vertical-align: middle` means exactly what is wanted — the baseline plus half an x-height, measured by the
+ * font itself, with no metric guessed and nothing to re-tune when the size or the face changes. */
+.markSlot {
+    display: inline-block;
+    align-self: center;
+    line-height: normal;
+}
+
 .chipX,
 .chipAdd {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    vertical-align: middle;
     background: none;
     border: none;
     padding: 0;
@@ -384,7 +476,6 @@
 }
 
 .chipAdd {
-    align-self: center;
     width: 15px;
     height: 15px;
     /* the pair is matched in size and weight; the breathing room is the chip's, not the button's */
@@ -533,22 +624,30 @@
     cursor: text;
 }
 
-/* A selected segment wears the app's own selection tokens, so a run of selected chips reads as one highlighted
- * stretch of the query — the same thing the platform's selection does to text, said in the chips' own terms. */
-/* A run of selected chips reads as ONE band, not as a row of separately highlighted blocks: the shadow
- * carries the wash across the flex gap between neighbours, so adjacent selections meet. */
+/* The selection is ONE continuous band over the stretch of query it covers — never a row of separate blocks.
+ * Two things make it continuous: the children sit flush, so neighbouring bands meet with nothing between them,
+ * and the padding brings a text band to the same height as a chip's, which is the one measurement here. A chip
+ * carries the band on its whole box, because a chip is selected whole; text carries it on the characters
+ * covered, because text is selected by the character. */
 .selected {
-    background: rgba(var(--select-rgb), 0.4);
-    border-radius: 2px;
-    box-shadow: 0 0 0 3px rgba(var(--select-rgb), 0.4);
+    background: rgba(var(--select-rgb), var(--select-a));
+    padding-block: var(--band-pad);
+}
+
+/* A chip's wrapper already stands a band high, so it needs no padding to reach one. */
+.settled.selected {
+    padding-block: 0;
 }
 
 /* A selection recolours what it covers, exactly as the platform's own does to text: a semantic colour chosen
  * against the chip's ground cannot be trusted against the selection's — the negated head measures 2.9:1 there.
  * The negation still reads from the chip's border, which the selection does not paint over. */
 .selected .negHead,
-.selected .vOr {
+.selected .vOr,
+.selected .vNot,
+.selected .vNot .vWord {
     color: var(--text-strong);
+    border-bottom-color: var(--text-strong);
 }
 
 /* the resting bar's input: out of sight, still in the tab order, so focus can come back to the caret's place */

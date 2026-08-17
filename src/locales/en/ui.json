@@ -32,7 +32,10 @@
     "delete": "Delete",
     "add": "Add a condition",
     "editHint": "Enter commits · Esc closes",
-    "plaintext": "Show the query as plain text",
+    "exclude": "Exclude what this asks for",
+    "include": "Ask for this again",
+    "plaintext": "Plain text",
+    "plaintextHint": "Show the query as the text you typed",
     "plaintextShort": "text"
   },
   "surface": {

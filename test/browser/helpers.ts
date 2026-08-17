@@ -28,6 +28,16 @@ export function settledSegments(page: Page): Locator {
     return page.locator("[class*='qbar'] > [class*='settled']");
 }
 
+/** The plaintext view's own field: one text area holding the query verbatim. */
+export function plainField(page: Page): Locator {
+    return page.locator("[class*='qbar'] textarea");
+}
+
+/** The plaintext view's switch, which lives beside the count. */
+export function plainSwitch(page: Page): Locator {
+    return page.getByRole("switch", {name: /plain text/i});
+}
+
 /**
  * The bar, when it holds a selection: the element stamps the selected chips' own query text, which is what a
  * copy puts on the clipboard. Absent entirely while nothing is selected.

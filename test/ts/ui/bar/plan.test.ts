@@ -8,27 +8,52 @@ import test from "node:test";
 
 import {
     backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, grownSegment, insertAtGap, openHead, planAt,
-    removeSegment, removeSelection, removeTerm, scopedForm, scopeGesture, segmentAt, segmentIndex,
-    segmentStarts, selectionOfSegments, selectionOver, slotStart,
+    removeSegment, removeSelection, removeTerm, scopedForm, scopeGesture, segmentAt, segmentsOf,
+    selectionOver, selectionStep, slotStart, termStarts,
 } from "../../../../src/ui/bar/plan";
 
-test("segments start at zero and after each balanced space; a trailing space opens an empty tail", () => {
-    assert.deepEqual(segmentStarts(""), [0]);
-    assert.deepEqual(segmentStarts("fire"), [0]);
-    assert.deepEqual(segmentStarts("model:fire scale:>50"), [0, 11]);
-    assert.deepEqual(segmentStarts("model:fire "), [0, 11]);
+test("terms start at zero and after each balanced space; a trailing space opens an empty tail", () => {
+    assert.deepEqual(termStarts(""), [0]);
+    assert.deepEqual(termStarts("fire"), [0]);
+    assert.deepEqual(termStarts("model:fire scale:>50"), [0, 11]);
+    assert.deepEqual(termStarts("model:fire "), [0, 11]);
+    assert.deepEqual(termStarts("big red dragon"), [0, 4, 8]);
 });
 
-test("a space inside a phrase or a scope separates nothing — those segments stay whole", () => {
-    assert.deepEqual(segmentStarts('name:"blood pool'), [0]);
-    assert.deepEqual(segmentStarts("model:{fire ball} next"), [0, 18]);
-    assert.deepEqual(segmentStarts('name:"a\\" b'), [0]);
+test("a space inside a phrase or a scope separates nothing — those terms stay whole", () => {
+    assert.deepEqual(termStarts('name:"blood pool'), [0]);
+    assert.deepEqual(termStarts("model:{fire ball} next"), [0, 18]);
+    assert.deepEqual(termStarts('name:"a\\" b'), [0]);
+});
+
+test("neighbouring plain words are ONE segment — the space between them is a character, not a boundary", () => {
+    assert.deepEqual(segmentsOf("big red dragon"), [{start: 0, end: 14, plain: true}]);
+    // A chip breaks a run; the text either side of it is one segment each.
+    assert.deepEqual(segmentsOf("big red model:fire cold one"), [
+        {start: 0, end: 7, plain: true},
+        {start: 8, end: 18, plain: false},
+        {start: 19, end: 27, plain: true},
+    ]);
+    // An unknown head is text, and so is a negated word. A delimiter alone does not make a chip either — the
+    // display model is asked, and it draws a bare phrase as the text it is.
+    assert.deepEqual(segmentsOf("foo:bar -big red").length, 1);
+    assert.deepEqual(segmentsOf('big "blood pool" red').length, 1);
+    // A resolved head with its glue is a chip on sight, so it splits the run either side of it.
+    assert.deepEqual(segmentsOf('big name:"blood pool" red').map((seg) => seg.start), [0, 4, 22]);
+    // The empty tail a commit leaves belongs to the run before it, so its trailing space stays editable text.
+    assert.deepEqual(segmentsOf("big red "), [{start: 0, end: 8, plain: true}]);
+    assert.deepEqual(segmentsOf("model:fire "), [
+        {start: 0, end: 10, plain: false},
+        {start: 11, end: 11, plain: true},
+    ]);
 });
 
 test("segmentAt clamps to the segment containing the offset, the text's end included", () => {
-    assert.deepEqual(segmentAt("model:fire scale:>50", 0), {start: 0, end: 10});
-    assert.deepEqual(segmentAt("model:fire scale:>50", 15), {start: 11, end: 20});
-    assert.deepEqual(segmentAt("model:fire ", 99), {start: 11, end: 11});
+    assert.deepEqual(segmentAt("model:fire scale:>50", 0), {start: 0, end: 10, plain: false});
+    assert.deepEqual(segmentAt("model:fire scale:>50", 15), {start: 11, end: 20, plain: false});
+    assert.deepEqual(segmentAt("model:fire ", 99), {start: 11, end: 11, plain: true});
+    // Inside a run of words, any offset — the separators included — answers with the whole run.
+    assert.deepEqual(segmentAt("big red dragon", 7), {start: 0, end: 14, plain: true});
 });
 
 test("reconstruction is verbatim whichever segment is open", () => {
@@ -205,10 +230,13 @@ test("delete at the slot's end mirrors the boundary backspace: pair-dissolve on 
     const scoped = deleteAtEnd(planAt("model:{fire}", 8));
     assert.equal(scoped?.text, "model:fire");
     assert.equal(scoped?.caret, 10);
-    const merge = deleteAtEnd(planAt("fire abc", 0));
-    assert.equal(merge?.text, "fireabc");
-    assert.equal(merge?.caret, 4);
+    // Past a chip's own end sits the separator, which deletes plainly and merges what follows into it.
+    const merge = deleteAtEnd(planAt("model:fire abc", 0));
+    assert.equal(merge?.text, "model:fireabc");
+    assert.equal(merge?.caret, 10);
     assert.equal(deleteAtEnd(planAt("fire", 0)), null);
+    // Two words are one segment, so their separator is inside the slot and the input owns that Delete.
+    assert.equal(deleteAtEnd(planAt("fire abc", 0)), null);
 });
 
 test("firstDiff finds where an undo landed; equal texts answer their length", () => {
@@ -331,49 +359,44 @@ test("a commit prefers the spelling that parses: the editing braces never break 
     assert.equal(commitSegment("model:{attach:chest}", 0).text, "model:{attach:chest}");
 });
 
-test("a bar selection snaps outwards to whole segments — half a chip cannot be shown or copied", () => {
-    const text = "model:fire sound:bell cast:2s";
-    // An offset anywhere inside a segment takes that whole segment.
-    assert.deepEqual(selectionOver(text, 3, 3), {from: 0, to: 10});
-    assert.deepEqual(selectionOver(text, 13, 13), {from: 11, to: 21});
-    // A range across two takes both, whichever way it was dragged.
-    assert.deepEqual(selectionOver(text, 3, 13), {from: 0, to: 21});
-    assert.deepEqual(selectionOver(text, 13, 3), {from: 0, to: 21});
-    // The whole query.
-    assert.deepEqual(selectionOver(text, 0, text.length), {from: 0, to: text.length});
-});
-
-test("a selection never takes the empty trailing segment a commit leaves", () => {
-    assert.deepEqual(selectionOver("model:fire ", 0, 11), {from: 0, to: 10});
+test("a selection takes text by the character and a chip whole", () => {
+    const text = "model:fire big red sound:bell";
+    // Inside text it is exactly what was covered — the space between two words included.
+    assert.deepEqual(selectionOver(text, 11, 14), {from: 11, to: 14});
+    assert.deepEqual(selectionOver(text, 14, 15), {from: 14, to: 15});
+    // Reaching into a chip takes the whole chip, whichever way the gesture was dragged.
+    assert.deepEqual(selectionOver(text, 3, 14), {from: 0, to: 14});
+    assert.deepEqual(selectionOver(text, 14, 3), {from: 0, to: 14});
+    assert.deepEqual(selectionOver(text, 16, 22), {from: 16, to: 29});
+    // A collapsed gesture is a press, not a selection.
+    assert.equal(selectionOver(text, 3, 3), null);
     assert.equal(selectionOver("", 0, 0), null);
-    assert.equal(selectionOver("   ", 0, 3), null);
 });
 
-test("a selection counts SEGMENTS, so growing it never stalls at a boundary offset", () => {
-    // The end of one segment and the start of the next are one offset; numbering the segments is what lets a
-    // selection tell the two apart and keep growing.
-    const text = "model:fire sound:bell cast:2s ";
-    assert.equal(segmentIndex(text, 0), 0);
-    assert.equal(segmentIndex(text, 10), 0);
-    assert.equal(segmentIndex(text, 11), 1);
-    assert.equal(segmentIndex(text, 30), 3);
-
-    // Anchored in the empty tail, each press takes one more segment behind it, then gives them back.
-    assert.deepEqual(selectionOfSegments(text, 3, 2), {from: 22, to: 29});
-    assert.deepEqual(selectionOfSegments(text, 3, 1), {from: 11, to: 29});
-    assert.deepEqual(selectionOfSegments(text, 3, 0), {from: 0, to: 29});
-    assert.deepEqual(selectionOfSegments(text, 3, 3), null);
-
-    // And anchored at the front, growing forwards.
-    assert.deepEqual(selectionOfSegments(text, 0, 0), {from: 0, to: 10});
-    assert.deepEqual(selectionOfSegments(text, 0, 1), {from: 0, to: 21});
-    assert.deepEqual(selectionOfSegments(text, 0, 3), {from: 0, to: 29});
+test("a selection step walks one character through text and one whole chip past a chip", () => {
+    const text = "model:fire big sound:bell";
+    // Through the text between the two chips, character by character.
+    assert.equal(selectionStep(text, 11, 1), 12);
+    assert.equal(selectionStep(text, 13, -1), 12);
+    // A separator that joins a chip goes with the chip: the language put it there, not the reader.
+    assert.equal(selectionStep(text, 11, -1), 0);
+    assert.equal(selectionStep(text, 14, 1), 25);
+    // And leaving a chip clears its own separator too, so the step never strands one inside the selection.
+    assert.equal(selectionStep("model:fire sound:bell cast:2s ", 11, 1), 22);
+    // The text's own ends clamp.
+    assert.equal(selectionStep(text, 0, -1), 0);
+    assert.equal(selectionStep(text, text.length, 1), text.length);
 });
 
-test("removing a selection takes its separator with it, so no double gap remains", () => {
+test("removing a selection leaves no stranded separator", () => {
     const text = "model:fire sound:bell cast:2s";
     assert.deepEqual(removeSelection(text, {from: 0, to: 10}), {text: "sound:bell cast:2s", caret: 0, removed: true});
     assert.deepEqual(removeSelection(text, {from: 11, to: 21}),
         {text: "model:fire cast:2s", caret: 11, removed: true});
     assert.deepEqual(removeSelection(text, {from: 0, to: 29}), {text: "", caret: 0, removed: true});
+    // Inside text exactly the characters go, because a selection over text is a selection of characters.
+    assert.deepEqual(removeSelection("big red dragon", {from: 3, to: 7}),
+        {text: "big dragon", caret: 3, removed: true});
+    assert.deepEqual(removeSelection("big red dragon", {from: 4, to: 7}),
+        {text: "big  dragon", caret: 4, removed: true});
 });

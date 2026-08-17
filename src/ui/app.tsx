@@ -10,6 +10,7 @@ import {useEffect, useRef, useState} from "react";
 import {useTranslation} from "react-i18next";
 import type {PackInfo, Searcher} from "./searcher";
 import {Bar} from "./bar/bar";
+import {PlainBar} from "./bar/plain";
 import styles from "./app.module.css";
 
 /** The query the URL carries, or nothing. */
@@ -118,28 +119,39 @@ export function App({info, searcher}: {
                 {/* data-query mirrors the state so a browser assertion can read the text without racing the
                   * debounced URL sync */}
                 <div className={styles.barRow} data-query={text}>
-                    <Bar text={text} onText={setText} placeholder={t("bar.placeholder")} plain={plain}/>
+                    {plain
+                        ? <PlainBar text={text} onText={setText} placeholder={t("bar.placeholder")}
+                                    label={t("bar.placeholder")}/>
+                        : <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}/>}
+                </div>
+                <div className={styles.statusRow}>
+                    <div
+                        className={`${styles.status} ${stale ? styles.statusStale : ""}`}
+                        role="status"
+                    >
+                        {result !== null && (
+                            `${result.count.toLocaleString()} ${t("count.result", {count: result.count})}`
+                            + ` · ${t("count.elapsed", {ms: result.ms})}`
+                        )}
+                    </div>
+                    {/* A view switch, not a command: it changes how the query is shown and never what it says.
+                        Its home is this row rather than the bar, because nothing beside the bar should read as
+                        part of the ask. */}
                     <button
                         type="button"
+                        role="switch"
+                        aria-checked={plain}
                         className={`${styles.viewToggle} ${plain ? styles.viewOn : ""}`}
-                        aria-pressed={plain}
-                        aria-label={t("bar.plaintext")}
-                        title={t("bar.plaintext")}
+                        title={t("bar.plaintextHint")}
                         onClick={() => {
                             setPlain((was) => !was);
                         }}
                     >
-                        {t("bar.plaintextShort")}
+                        <span className={styles.switchTrack} aria-hidden="true">
+                            <span className={styles.switchKnob}/>
+                        </span>
+                        {t("bar.plaintext")}
                     </button>
-                </div>
-                <div
-                    className={`${styles.status} ${stale ? styles.statusStale : ""}`}
-                    role="status"
-                >
-                    {result !== null && (
-                        `${result.count.toLocaleString()} ${t("count.result", {count: result.count})}`
-                        + ` · ${t("count.elapsed", {ms: result.ms})}`
-                    )}
                 </div>
             </section>
 

@@ -17,7 +17,7 @@ import {HEADS} from "../schema/schema";
 import {fold, foldTypography} from "../text/normalize";
 
 /** The role one run of query text plays. */
-export type RunKind = "head" | "op" | "delim" | "quote" | "number" | "word" | "space";
+export type RunKind = "head" | "meta" | "op" | "delim" | "quote" | "number" | "word" | "space";
 
 /**
  * One classed run. Runs abut: each starts where the previous ended, and together they cover the text.
@@ -36,6 +36,10 @@ export interface Run {
     readonly state?: "error" | "warning";
     /** Whether the run is a word from a closed vocabulary rather than corpus text. */
     readonly vocab?: boolean;
+    /** Whether the run is part of what a clause EXCLUDES — the minus and the head it binds to. */
+    readonly negated?: boolean;
+    /** Whether the run names a PROPERTY — a word about the thing asked about, which a chip draws loud. */
+    readonly door?: boolean;
 }
 
 /** The structural single characters beyond the operators: scopes, groups, alternation. */
@@ -96,6 +100,13 @@ export function classify(text: string): Run[] {
             at += 1;
             continue;
         }
+        // The any-word's symbol is a word ABOUT the query rather than one of the data, which is what a chip
+        // draws loud; the two surfaces say it the same way.
+        if (ch === GRAMMAR.wildcard) {
+            push(at, at + 1, "meta");
+            at += 1;
+            continue;
+        }
         if (OPS.has(ch)) {
             push(at, at + 1, "op");
             at += 1;
@@ -109,9 +120,17 @@ export function classify(text: string): Run[] {
         const word = WORD.exec(folded.slice(at));
         if (word !== null) {
             const end = at + word[0].length;
-            const isHead = folded[end] === GRAMMAR.bind && HEADS.has(fold(word[0]));
-            push(at, end, isHead ? "head" : /^\d/.test(word[0]) ? "number" : "word");
-            at = end;
+            const known = HEADS.has(fold(word[0]));
+            const isHead = folded[end] === GRAMMAR.bind && known;
+            // A word about the query rather than of the data: the any-word, and a property door standing in a
+            // value where its own comparison follows it (`sound:count>2`). Both are what a chip draws loud.
+            const meta = fold(word[0]) === GRAMMAR.anyWord
+                || (known && !isHead && OPS.has(folded[end] ?? ""));
+            // The bind belongs to the head: `model:` is one token. The word alone is text on its way to being
+            // something and the colon is what makes it a door, so the two are read — and coloured — as one.
+            push(at, isHead ? end + 1 : end,
+                isHead ? "head" : meta ? "meta" : /^\d/.test(word[0]) ? "number" : "word");
+            at = isHead ? end + 1 : end;
             continue;
         }
         push(at, at + 1, "word");
@@ -147,6 +166,31 @@ export function paint(text: string): Run[] {
         }
     };
 
+    /**
+     * Marks what a negated clause or term excludes: the minus, and the word it binds to.
+     *
+     * The same unit a chip draws in one red — the minus and its head, or the minus and the word it excludes —
+     * because a reader looking at the raw text is reading the same query.
+     */
+    /**
+     * Marks the door a PROPERTY opens: `attach:` inside a model scope, `count` before its comparison.
+     *
+     * A property is not a head — it is a word about the thing being asked about, which a chip draws loud — and
+     * it is the same word wherever it stands, so the raw text says it the same way and in the column's tone.
+     */
+    const door = (span: Span, tone: string | null): void => {
+        const word = runs.find((run) => run.start >= span.start && run.start < span.end && run.kind === "word");
+        if (word === undefined) return;
+        runs[runs.indexOf(word)] = {...word, door: true, tone: tone ?? word.tone};
+    };
+
+    const negate = (span: Span): void => {
+        over({start: span.start, end: span.start + 1}, (run) => ({...run, negated: true}));
+        const word = runs.find((run) => run.start >= span.start && run.start < span.end
+            && (run.kind === "head" || run.kind === "word" || run.kind === "meta"));
+        if (word !== undefined) runs[runs.indexOf(word)] = {...word, negated: true};
+    };
+
     for (const [index, clause] of parsed.clauses.entries()) {
         const worst = parsed.diagnostics
             .filter((d) => d.clause === index)
@@ -162,15 +206,31 @@ export function paint(text: string): Run[] {
             : ask.on === "column" ? ask.column
                 : ask.on === "kind" ? ask.kind.column : ask.ref.kind.column;
         if (column !== null) {
-            over(clause.span, (run) => (run.kind === "head" ? {...run, tone: column.key} : run));
+            // The delimiters go with the head: a brace or a group belongs to the clause it encloses, so it
+            // wears that clause's colour rather than the neutral one every structural character shares.
+            over(clause.span, (run) => (run.kind === "head" || run.kind === "delim"
+                ? {...run, tone: column.key} : run));
         }
+        if (clause.not) negate(clause.span);
         // A kind word IS the vocabulary — `model:missile` names a kind rather than searching for the letters.
         if (ask.on === "kind" && ask.test?.is === "exists") {
             over(clause.span, (run) => (run.kind === "word" ? {...run, vocab: true} : run));
         }
+        // A property standing at the head of its own comparison — `sound:count>2`, `model:{seat>=2}` — is a
+        // door like any other: the word is followed by the operator it opens, which is what tells it from a
+        // value word beside it.
+        if (column !== null) {
+            for (const [i, run] of runs.entries()) {
+                const next = runs[i + 1];
+                if (run.kind !== "word" || run.door === true) continue;
+                if (run.start < clause.span.start || run.end > clause.span.end) continue;
+                if (next?.kind === "op" && next.start === run.end) door(run, column.key);
+            }
+        }
         const test = ask.on === "column" || ask.on === "kind" ? ask.test : null;
         if (test?.is !== "scope") continue;
         for (const term of test.terms.flat()) {
+            if (term.not) negate(term.span);
             const inner = term.ask;
             if (inner === null) continue;
             if (inner.on === "kindWord" || (inner.on === "props" && wordValued(inner.value))) {

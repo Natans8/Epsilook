@@ -32,7 +32,10 @@
     "delete": "",
     "add": "",
     "editHint": "",
+    "exclude": "",
+    "include": "",
     "plaintext": "",
+    "plaintextHint": "",
     "plaintextShort": ""
   },
   "surface": {

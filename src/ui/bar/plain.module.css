@@ -1,0 +1,59 @@
+/* The plaintext view: the query as its own characters, one field over one coloured backdrop and nothing
+ * between them. The pair wraps together because both are `pre-wrap` at the same width and font, and the
+ * backdrop is what sets the height — so the text is always whole and always inside the bar, however long the
+ * query runs. The bar's own frame comes from `bar.module.css`, which both views wear. */
+
+.plainBar {
+    display: block;
+    cursor: text;
+}
+
+.plainWrap {
+    position: relative;
+    display: block;
+    width: 100%;
+}
+
+.plainInk,
+.plainField {
+    font-family: inherit;
+    font-size: 1.1rem;
+    /* `normal` on both: Firefox clamps a field's line-height up to the font's own, and the two must wrap and
+     * sit line for line. */
+    line-height: normal;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+.plainInk {
+    display: block;
+    min-height: 1lh;
+    color: var(--text);
+}
+
+.plainField {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: transparent;
+    caret-color: var(--text);
+    resize: none;
+    overflow: hidden;
+    outline: none;
+}
+
+.plainField::placeholder {
+    color: var(--text-dim);
+}
+
+/* The selection keeps the colouring underneath rather than painting over it: what is selected is still query
+ * text, and a reader who chose this view chose to see what it says. */
+.plainField::selection {
+    background: rgba(var(--select-rgb), var(--select-a));
+    color: transparent;
+}

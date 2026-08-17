@@ -12,7 +12,7 @@
  */
 import type {Span} from "../../search/index";
 import {
-    equivalent, fold, GRAMMAR, HEADS, parse, PREFIX_OPERATORS, spellingsOf,
+    describe, equivalent, fold, GRAMMAR, HEADS, parse, PREFIX_OPERATORS, spellingsOf,
 } from "../../search/index";
 
 /** The transformed head of the open segment, when it has one. */
@@ -46,15 +46,19 @@ export interface BarPlan {
 }
 
 /**
- * The start offset of every segment: zero, then after each space at balanced depth.
+ * The start offset of every TERM: zero, then after each space at balanced depth.
  *
- * A trailing balanced space therefore yields a final empty segment at the text's end — the fresh slot a commit
+ * A term is what a space separates, which is the grain the query language itself works in — a scope's interior
+ * counts its terms this way, and so does everything that asks how many things a spelling holds. What the BAR
+ * draws is coarser: see {@link segmentsOf}, which merges runs of plain text back into one.
+ *
+ * A trailing balanced space therefore yields a final empty term at the text's end — the fresh slot a commit
  * leaves the caret in.
  *
  * @param text The query text.
  * @returns The starts, ascending, always beginning with zero.
  */
-export function segmentStarts(text: string): number[] {
+export function termStarts(text: string): number[] {
     const starts = [0];
     let quote = false;
     let depth = 0;
@@ -76,10 +80,74 @@ export function segmentStarts(text: string): number[] {
     return starts;
 }
 
-/** One segment's bounds: its start, and its end at the next boundary's space or the text's end. */
-export interface Segment {
+/** The characters that make a term structure rather than text — anything a chip could be drawn from. */
+const STRUCTURE = new Set<string>([
+    GRAMMAR.scope.open, GRAMMAR.scope.close, GRAMMAR.group.open, GRAMMAR.group.close,
+    GRAMMAR.or, GRAMMAR.phrase,
+]);
+
+/** Whether the display model draws a chip for one term, remembered per spelling — the answer is pure. */
+const DRAWN = new Map<string, boolean>();
+
+/**
+ * Whether a term is plain text — something the bar draws as the characters themselves rather than as a chip.
+ *
+ * Two questions, cheapest first. A resolved head with its glue is a chip on sight, which is what lets the
+ * transformation fire on the keystroke that lands it, before anything parses. Everything without a delimiter is
+ * text by construction. What is left — a bare phrase, an alternation of words — is the display model's own call
+ * and nothing else can answer it: a split that disagreed with the drawing would chip a stretch of text, or
+ * merge a chip into one.
+ *
+ * @param term One term's text.
+ * @returns True when the term draws as text.
+ */
+function plainTerm(term: string): boolean {
+    if (openHead(term) !== null) return false;
+    let structural = false;
+    for (const ch of term) {
+        structural ||= STRUCTURE.has(ch);
+    }
+    if (!structural) return true;
+    const held = DRAWN.get(term);
+    if (held !== undefined) return held;
+    const plain = !describe(parse(term)).some((view) => view.form === "chip" || view.form === "lane");
+    // A bar holds few spellings; the cap is there so a long editing session cannot grow the map without end.
+    if (DRAWN.size > 500) DRAWN.clear();
+    DRAWN.set(term, plain);
+    return plain;
+}
+
+/** One segment's bounds — its start, its end at the next boundary's space or the text's end — and how it draws. */
+export interface BarSegment {
     readonly start: number;
     readonly end: number;
+    /** True where the segment is plain text; false where it draws as a chip or a lane. */
+    readonly plain: boolean;
+}
+
+/**
+ * Every segment of the query, in order, covering it exactly.
+ *
+ * A segment is one term that draws as a chip, or a maximal run of neighbouring PLAIN terms — one piece of text,
+ * drawn, selected and edited as one. Words are not objects: the space between two of them is an ordinary
+ * character of the query, and a run split into a chiplet per word makes that character neither selectable nor
+ * deletable.
+ *
+ * @param text The query text.
+ * @returns The segments, ascending, always beginning at zero.
+ */
+export function segmentsOf(text: string): BarSegment[] {
+    const terms = termStarts(text);
+    const out: BarSegment[] = [];
+    for (const [i, start] of terms.entries()) {
+        const end = i + 1 < terms.length ? terms[i + 1] - 1 : text.length;
+        const plain = plainTerm(text.slice(start, end));
+        const last = out.at(-1);
+        // A plain term following a plain one extends it; the separator between them stays inside the segment.
+        if (plain && last?.plain === true) out[out.length - 1] = {start: last.start, end, plain};
+        else out.push({start, end, plain});
+    }
+    return out;
 }
 
 /**
@@ -89,15 +157,9 @@ export interface Segment {
  * @param at Any offset into it; past the end clamps to the last segment.
  * @returns The segment's bounds.
  */
-export function segmentAt(text: string, at: number): Segment {
-    const starts = segmentStarts(text);
-    let start = starts[0];
-    for (const held of starts) {
-        if (held <= at) start = held;
-        else break;
-    }
-    const next = starts.find((held) => held > start);
-    return {start, end: next === undefined ? text.length : next - 1};
+export function segmentAt(text: string, at: number): BarSegment {
+    const segments = segmentsOf(text);
+    return segments.findLast((seg) => seg.start <= at) ?? segments[0];
 }
 
 /**
@@ -438,7 +500,7 @@ export function commitSegment(text: string, at: number): Commit {
     // through the engine rather than guessed from the text. Two spellings that both ask nothing count as
     // agreeing, which returns a broken segment to the raw text it was typed as instead of stranding it in an
     // editing form it can never leave.
-    const single = segmentStarts(interior).length === 1 && sameAsk(shed, kept);
+    const single = termStarts(interior).length === 1 && sameAsk(shed, kept);
     const open = single ? shed : kept;
     return {
         text: plan.before + open + plan.after,
@@ -448,12 +510,10 @@ export function commitSegment(text: string, at: number): Commit {
 }
 
 /**
- * A bar-wide selection: a range of the query TEXT, always snapped to segment boundaries.
+ * A bar-wide selection: a range of the query TEXT.
  *
- * The text is the truth here as everywhere, which is what makes the copy trivial — the selected text IS the
- * query those segments spell, so nothing has to be serialised back out of a rendering. Character-level work
- * inside one segment stays the platform's, in the open slot; this covers only what crosses a boundary, which
- * is the same escalation the bar already uses for Ctrl+A and for undo.
+ * The text is the truth here as everywhere, which is what makes the copy trivial — the selected range IS the
+ * query it spells, so nothing has to be serialised back out of a rendering.
  */
 export interface BarSelection {
     /** The first selected character's offset. */
@@ -463,70 +523,85 @@ export interface BarSelection {
 }
 
 /**
- * The selection covering everything between two offsets, snapped outwards to whole segments.
+ * The selection covering everything between two offsets, snapped outwards over every chip it touches.
  *
- * A chip draws its parse rather than its characters, so half a chip cannot be shown selected and could not be
- * copied as anything typeable — the snap is what keeps the selection representable in both directions.
+ * Text selects by the character, because text IS characters — the space between two words included. A chip
+ * draws its parse rather than its characters, so half of one could neither be shown selected nor copied as
+ * anything typeable: a range reaching into a chip takes the whole chip.
  *
  * @param text The query text.
  * @param anchor Where the gesture began.
  * @param focus Where it has reached.
- * @returns The snapped range, or null when it covers no segment at all.
+ * @returns The snapped range, or null when the two ends meet.
  */
 export function selectionOver(text: string, anchor: number, focus: number): BarSelection | null {
-    const lo = Math.min(anchor, focus);
-    const hi = Math.max(anchor, focus);
-    const first = segmentAt(text, lo);
-    const last = segmentAt(text, hi);
-    const from = first.start;
-    // An empty trailing segment has nothing to select, so the range ends at the last segment holding text.
-    const to = last.end > last.start ? last.end : Math.max(from, last.start - 1);
-    // Whitespace is not a thing to select: a range covering none of the query selects nothing at all.
-    return to > from && text.slice(from, to).trim() !== "" ? {from, to} : null;
+    // The separator a commit leaves at the end belongs to the tail's caret rest, not to the query: a selection
+    // stops at the last thing the reader actually wrote.
+    const content = text.trimEnd().length;
+    let from = Math.max(0, Math.min(anchor, focus, content));
+    let to = Math.min(content, Math.max(anchor, focus));
+    if (to <= from) return null;
+    for (const seg of segmentsOf(text)) {
+        if (seg.plain || seg.start >= to || seg.end <= from) continue;
+        from = Math.min(from, seg.start);
+        to = Math.max(to, seg.end);
+    }
+    return {from, to};
 }
 
 /**
- * Which segment an offset falls in, counted from zero.
+ * The offset one step of a selection gesture reaches, from a caret at `at` moving one place in `dir`.
  *
- * A selection's two ends are held as segment NUMBERS rather than offsets, because an offset at a boundary is
- * ambiguous — the end of one segment and the start of the next are the same character — and a selection that
- * cannot tell them apart stops growing at the second press.
- *
- * @param text The query text.
- * @param at Any offset into it.
- * @returns The segment's index into {@link segmentStarts}.
- */
-export function segmentIndex(text: string, at: number): number {
-    const starts = segmentStarts(text);
-    const found = starts.findLastIndex((start) => start <= at);
-    return found < 0 ? 0 : found;
-}
-
-/**
- * The offsets a selection between two segment numbers covers, snapped as {@link selectionOver} snaps.
+ * One character through text, one whole chip past a chip — the same escalation the caret itself makes when it
+ * walks, said for a growing selection.
  *
  * @param text The query text.
- * @param a One end's segment number.
- * @param b The other end's.
- * @returns The range, or null when it covers nothing selectable.
+ * @param at The moving end's current offset.
+ * @param dir Which way it moves.
+ * @returns The next offset, clamped to the text.
  */
-export function selectionOfSegments(text: string, a: number, b: number): BarSelection | null {
-    const starts = segmentStarts(text);
-    const lo = starts[Math.max(0, Math.min(a, b, starts.length - 1))];
-    const hi = starts[Math.max(0, Math.min(Math.max(a, b), starts.length - 1))];
-    return selectionOver(text, lo, hi);
+export function selectionStep(text: string, at: number, dir: -1 | 1): number {
+    // Stepping starts from the last thing written, so the first press out of the tail takes what stands there
+    // rather than the separator the tail rests on.
+    const content = text.trimEnd().length;
+    const from = Math.min(at, content);
+    const probe = dir === -1 ? from - 1 : from;
+    if (probe < 0 || probe >= content) return Math.max(0, Math.min(content, from + dir));
+    const segments = segmentsOf(text);
+    /** The far side of a chip the step goes over, its own separator included. */
+    const past = (seg: BarSegment): number =>
+        dir === -1 ? seg.start : Math.min(text[seg.end] === " " ? seg.end + 1 : seg.end, content);
+    // The segment the probe falls in, or — when it falls on the separator between two — the one beyond it.
+    // A separator that joins a chip goes with the chip: the language put it there, not the reader.
+    const seg = segments.find((held) => held.start <= probe && probe < held.end)
+        ?? segments.find((held) => (dir === -1 ? held.end === probe : held.start === probe + 1));
+    return seg === undefined || seg.plain ? from + dir : past(seg);
 }
 
 /**
  * Removes a bar selection, tidying the separator it leaves behind.
+ *
+ * Exactly the selected characters go, because a selection over text is a selection of characters. The one
+ * tidy-up is a doubled separator: a whole segment lifted from between two others leaves a space on each side of
+ * the hole, and the query language reads the pair as an empty term.
  *
  * @param text The query text.
  * @param sel The selection.
  * @returns The new text with the caret where the selection stood.
  */
 export function removeSelection(text: string, sel: BarSelection): Commit {
-    return spliceOut(text, sel.from, sel.to);
+    const before = text.slice(0, sel.from);
+    const after = text.slice(sel.to);
+    // Whole segments taken from a row of them leave a separator on each side of the hole, and a query opening
+    // with one would draw a space before its first chip; one of the pair goes. Inside text nothing is tidied,
+    // because there the separator is a character the reader put there and chose not to select — except at the
+    // very end, where what follows is only the tail's own rest.
+    const inText = segmentsOf(text).some((seg) => seg.plain && seg.start <= sel.from && sel.to <= seg.end);
+    const strand = (!inText || after.trim() === "")
+        && (before.endsWith(" ") || before === "") && after.startsWith(" ");
+    return {text: before + (strand ? after.slice(1) : after), caret: sel.from, removed: true};
 }
+
 
 /**
  * Flips exclusion at one offset: the `-` a clause or a scope term carries before its head.

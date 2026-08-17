@@ -16,36 +16,19 @@ import type {KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent,
 import {Fragment, useMemo, useRef, useState} from "react";
 import type {Span} from "../../search/index";
 import {describe, parse} from "../../search/index";
-import type {BarPlan, BarSelection, Commit, Keystroke} from "./plan";
+import type {BarPlan, BarSegment, BarSelection, Commit, Keystroke} from "./plan";
 import {
     commitSegment, firstDiff, grownSegment, insertAtGap, planAt, removeSegment, removeSelection, removeTerm,
-    scopedForm, scopeGesture, segmentAt, segmentIndex, segmentStarts, selectionOfSegments, slotStart,
-    toggleNegation,
+    scopedForm, scopeGesture, segmentAt, segmentsOf, selectionOver, selectionStep, slotStart, toggleNegation,
 } from "./plan";
+import type {Aim} from "./aim";
+import {groundAim, offsetAtPoint} from "./aim";
 import type {CaretRequest} from "./open";
 import {OpenSegment} from "./open";
 import type {SegmentActions} from "./chip";
 import {SettledSegment} from "./chip";
 import {Classed} from "./classed";
 import styles from "./bar.module.css";
-
-/**
- * The character offset inside a settled span at a client point — what lets a press land the caret on the
- * character it aimed at, from the DOM's own caret hit test.
- *
- * @param span The settled segment's element.
- * @param x The press's client x.
- * @param y The press's client y.
- * @returns The offset into the span's text, or null where the platform cannot say.
- */
-function caretOffset(span: Element, x: number, y: number): number | null {
-    const at = document.caretPositionFromPoint?.(x, y);
-    if (at == null || !span.contains(at.offsetNode)) return null;
-    const range = document.createRange();
-    range.selectNodeContents(span);
-    range.setEnd(at.offsetNode, at.offset);
-    return range.toString().length;
-}
 
 /**
  * One lane item of a settled segment, re-read from that segment's own text.
@@ -65,18 +48,10 @@ function laneItemAt(segment: string, index: number): { span: Span; lone: boolean
 /**
  * The bar.
  */
-export function Bar({text, onText, placeholder, plain = false}: {
+export function Bar({text, onText, placeholder}: {
     readonly text: string;
     readonly onText: (text: string) => void;
     readonly placeholder: string;
-    /**
-     * The plaintext view: the query exactly as it is, with no chips and no corrections.
-     *
-     * A view the reader chooses, so nothing here rewrites what they typed — the commit simplification, the
-     * editing rewrap and the bind's scope gesture are all chip-view behaviour. The highlighting still reads
-     * the parse, which is the point of looking at the raw text at all.
-     */
-    readonly plain?: boolean;
 }): ReactElement {
     // The open position: a segment (by any offset inside it), or a gap (by the start of the segment it sits
     // before). The tail on first load; clamped per render because the text can change underneath.
@@ -91,32 +66,26 @@ export function Bar({text, onText, placeholder, plain = false}: {
     const undos = useRef<string[]>([]);
     const redos = useRef<string[]>([]);
 
-    // The whole query as one flat raw-text session — what Ctrl+A escalates to. No transformation, no
-    // segments: the truth of the text, natively selected.
-    const [allMode, setAllMode] = useState(false);
-
     // Whether the bar holds the focus. At rest every segment renders committed — the editing form exists only
     // under the caret — while the input stays mounted, hidden, so the bar keeps its place in the tab order and
     // focus returning to it re-opens the remembered position.
     const [focused, setFocused] = useState(false);
 
-    // The bar-wide selection, kept as the two SEGMENT NUMBERS the gesture moves: an anchor that stays put and
-    // a focus that walks. Numbers rather than offsets, because the end of one segment and the start of the
-    // next are the same offset and a selection that cannot tell them apart stops growing. Character-level work
-    // inside one segment stays the platform's, in the open slot; this covers only what crosses a boundary.
+    // The bar-wide selection, kept as the two OFFSETS the gesture moves: an anchor that stays put and a focus
+    // that walks. Offsets, because text selects by the character and the space between two words is a
+    // character of the query like any other; `selectionOver` is what snaps the range over the chips it
+    // touches, which are the only things in the bar that cannot be half-selected.
     const [range, setRange] = useState<{ anchor: number; focus: number } | null>(null);
-    // Which segment a drag began in, while the button is down.
+    // Where a drag began, while the button is down, and whether it has moved off that offset yet.
     const dragFrom = useRef<number | null>(null);
+    const dragged = useRef(false);
 
     const clamped = Math.min(openAt, text.length);
-    const sel: BarSelection | null = range === null ? null
-        : selectionOfSegments(text, range.anchor, range.focus);
-    const flat = allMode || plain;
+    const sel: BarSelection | null = range === null ? null : selectionOver(text, range.anchor, range.focus);
     const at: BarPlan = useMemo(() => {
-        if (flat) return {before: "", open: text, after: "", head: null, slot: text, suffix: ""};
         if (gapAt === null) return planAt(text, clamped);
         return {before: text.slice(0, gapAt), open: "", after: text.slice(gapAt), head: null, slot: "", suffix: ""};
-    }, [text, clamped, gapAt, flat]);
+    }, [text, clamped, gapAt]);
 
     /** One operation boundary: the state before it becomes an undo step. */
     const pushUndo = (before: string): void => {
@@ -142,7 +111,6 @@ export function Bar({text, onText, placeholder, plain = false}: {
     const openSession = (next: string, at: number, caretAt: number, gap: number | null, restore: string): void => {
         setFocused(true);
         setRange(null);
-        setAllMode(false);
         setGapAt(gap);
         setOpenAt(at);
         setCaret({at: caretAt});
@@ -173,16 +141,6 @@ export function Bar({text, onText, placeholder, plain = false}: {
 
     /** Runs one text state through the open-position bookkeeping — the shared tail of every keystroke path. */
     const applyStep = (step: Keystroke, reset: boolean, held: string): void => {
-        if (flat) {
-            // The whole query IS the slot here, so there are no segment boundaries to re-plan around and
-            // nothing to reset against: the input holds the truth until something outside it writes.
-            if (reset) {
-                setCaret({at: step.caret});
-                setSession((n) => n + 1);
-            }
-            onText(step.text);
-            return;
-        }
         const grown = scopeGesture(at, step);
         if (grown !== step || step.operation === true) pushUndo(text);
         // A fresh session wherever the derived slot stops matching the input: an external rewrite, the gesture,
@@ -205,7 +163,6 @@ export function Bar({text, onText, placeholder, plain = false}: {
 
     /** Every mutation from the slot: gap insertions get their separator, everything else applies as it came. */
     const onKeystroke = (step: Keystroke, reset: boolean, held: string): void => {
-        setAllMode(false);
         if (gapAt !== null && !reset) {
             if (held === "") return;
             const step2 = insertAtGap(text, gapAt, held);
@@ -223,7 +180,7 @@ export function Bar({text, onText, placeholder, plain = false}: {
     };
 
     /**
-     * Ctrl+A past the slot: every chip selected, in the bar's own selection.
+     * Ctrl+A past the slot: the whole query selected, in the bar's own selection.
      *
      * Not a flattening — the query stays the chips it is, and the reader gets a selection they can copy, cut or
      * delete. Reading the raw text is a view they choose, not something a keystroke does to them.
@@ -237,13 +194,11 @@ export function Bar({text, onText, placeholder, plain = false}: {
             return;
         }
         if (step.text !== text) onText(step.text);
-        setAllMode(false);
-        setRange({anchor: 0, focus: segmentStarts(step.text).length - 1});
+        setRange({anchor: 0, focus: step.text.trimEnd().length});
     };
 
     /** Commits the open segment — the simplifying rewrite — pushing an undo step when it changed anything. */
     const commitOpen = (): Commit => {
-        if (flat) return {text, caret: text.length, removed: false};
         if (gapAt !== null) return {text, caret: gapAt, removed: false};
         const step = commitSegment(text, clamped);
         if (step.text !== text) pushUndo(text);
@@ -362,18 +317,18 @@ export function Bar({text, onText, placeholder, plain = false}: {
     };
 
     /**
-     * Extends the selection by one segment.
+     * Extends the selection past the slot's own edge — one character through text, one whole chip past a chip.
      *
-     * With no selection yet the anchor is the open position, so the first press takes the segment the caret was
+     * With no selection yet the anchor is the caret's own offset, so the first press takes what the caret was
      * about to leave — including from the empty tail, which has no segment of its own to grow from.
      */
-    const onSelectSegment = (dir: -1 | 1): void => {
+    const onSelectPast = (dir: -1 | 1, anchorInSlot: number): void => {
         const step = commitOpen();
         if (step.text !== text) onText(step.text);
-        const last = segmentStarts(step.text).length - 1;
-        const anchor = range?.anchor ?? segmentIndex(step.text, at.before.length);
-        const from = range?.focus ?? anchor;
-        setRange({anchor, focus: Math.max(0, Math.min(last, from + dir))});
+        const held = Math.min(slotStart(at) + anchorInSlot, step.text.length);
+        const anchor = range?.anchor ?? held;
+        const edge = Math.min(slotStart(at) + (dir === -1 ? 0 : at.slot.length), step.text.length);
+        setRange({anchor, focus: selectionStep(step.text, range?.focus ?? edge, dir)});
     };
 
     /** The shared front half of every press: commit the open position, shifting a later target by the change. */
@@ -382,14 +337,6 @@ export function Bar({text, onText, placeholder, plain = false}: {
         const step = commitOpen();
         const shifted = start > from ? start + (step.text.length - text.length) : start;
         return {step, shifted};
-    };
-
-    /** A press on a settled segment opens it with the caret on the character it aimed at. */
-    const pressSegment = (start: number) => (e: ReactMouseEvent): void => {
-        e.preventDefault();
-        const aim = caretOffset(e.currentTarget, e.clientX, e.clientY);
-        const {step, shifted} = pressCommit(start);
-        openSegment(step.text, shifted, aim ?? "end");
     };
 
     /** The rest after a rewrite that leaves a segment settled: the gap after it, or the one filling tail. */
@@ -456,49 +403,23 @@ export function Bar({text, onText, placeholder, plain = false}: {
         },
     });
 
-    /** The query position a bar child stands at — its stamped segment start, or the open position itself. */
-    const startOf = (child: Element): number => {
-        const held = (child as HTMLElement).dataset["start"];
-        return held === undefined ? at.before.length : Number(held);
-    };
-
     /**
-     * A press on the bar's own ground goes where it was aimed: the gap left of the child past the aim point —
-     * line by line, the way a caret lands in wrapped text — or the content's end when nothing is past it.
+     * Where a press landed in the query.
+     *
+     * A press ON the bar rather than on any of its children is read by line, because the platform's own caret
+     * hit test answers with the nearest text wherever it is.
      */
-    const onBarPress = (e: ReactMouseEvent<HTMLDivElement>): void => {
-        if (e.target !== e.currentTarget) return;
-        e.preventDefault();
-        let target: Element | null = null;
-        let row: DOMRect | null = null;
-        for (const child of text === "" ? [] : Array.from(e.currentTarget.children)) {
-            const box = child.getBoundingClientRect();
-            if (row === null && e.clientY >= box.bottom) continue;
-            // The child is past the aim when it starts a line below the aim's, or sits right of it on the
-            // aim's own line.
-            if (row !== null && box.top >= row.bottom) {
-                target = child;
-                break;
-            }
-            if (e.clientX < box.left) {
-                target = child;
-                break;
-            }
-            row = box;
-        }
-        if (target === null) {
-            openEnd(commitOpen().text);
-            return;
-        }
-        const {step, shifted} = pressCommit(startOf(target));
-        openGap(step.text, shifted);
+    const aimOf = (e: ReactMouseEvent<HTMLDivElement>): Aim => {
+        const ground = e.target === e.currentTarget;
+        const inside = ground ? null : offsetAtPoint(e.currentTarget, e.clientX, e.clientY);
+        return inside ?? {at: groundAim(e.currentTarget, e.clientX, e.clientY, text), exact: false};
     };
 
-    const starts = segmentStarts(text);
+    const segments = useMemo(() => segmentsOf(text), [text]);
     // At rest — no focus, or a bar-wide selection standing — the open position renders settled like every
-    // other segment. A selection spans whole segments, so no one of them can be in its editing form.
-    const rest = !plain && ((!focused && text !== "") || sel !== null);
-    const openStart = gapAt === null && !flat && !rest ? at.before.length : -1;
+    // other segment. A selection is a stretch of the settled query, so nothing inside it is in its editing form.
+    const rest = (!focused && text !== "") || sel !== null;
+    const openStart = gapAt === null && !rest ? at.before.length : -1;
     // The slot fills the bar only as the true tail; anywhere else — a mid-bar word, a gap — it hugs, or it
     // would shove every chip after it to the far edge.
     const mode: "fill" | "hug" | "gap" = gapAt !== null ? "gap"
@@ -511,7 +432,7 @@ export function Bar({text, onText, placeholder, plain = false}: {
             mode={mode}
             hidden={rest}
             seize={focused || text === ""}
-            highlight={<Classed text={at.slot} rich={flat}/>}
+            highlight={<Classed text={at.slot}/>}
             caret={caret}
             placeholder={text === "" ? placeholder : undefined}
             label={placeholder}
@@ -523,7 +444,7 @@ export function Bar({text, onText, placeholder, plain = false}: {
             onUndo={onUndo}
             onRedo={onRedo}
             onSelectAll={onSelectAll}
-            onSelectSegment={onSelectSegment}
+            onSelectPast={onSelectPast}
             onWake={() => {
                 setFocused(true);
             }}
@@ -538,104 +459,165 @@ export function Bar({text, onText, placeholder, plain = false}: {
         />
     );
 
-    // Every child is a keyed SIBLING of the bar — the open fragment included, wherever it sits. Nesting it
-    // inside a per-segment fragment made a gap's first keystroke a REMOUNT (the subtree changed parents, the
-    // key could not save it), which killed the input's caret mid-session.
-    const children: ReactElement[] = [];
-    if (flat && !rest) {
-        children.push(<Fragment key="open">{open}</Fragment>);
-    } else {
-        starts.forEach((start, i) => {
-            // The next boundary bounds this segment — no rescan; `starts` already encodes every split.
-            const end = i + 1 < starts.length ? starts[i + 1] - 1 : text.length;
-            if (!rest && (gapAt === start || (gapAt === null && start === openStart))) {
-                children.push(<Fragment key="open">{open}</Fragment>);
-                if (gapAt === null) return;
-            }
-            // An empty settled segment — a doubled separator's residue — draws nothing and takes no press:
-            // opening a zero-width nothing is how phantom chiplets appear.
-            if (start === end) return;
-            const inSel = sel !== null && start >= sel.from && end <= sel.to;
-            children.push(
-                <span
-                    key={start}
-                    className={inSel ? `${styles.settled} ${styles.selected}` : styles.settled}
-                    data-start={start}
-                    // A chip draws its parse, so its rendered text reads as one run of glued words. The label
-                    // is the segment's own query text, which says what it asks and is what a reader would
-                    // type to say it again.
-                    role="group"
-                    aria-label={text.slice(start, end)}
-                    onMouseDown={pressSegment(start)}
-                >
-                    <SettledSegment text={text.slice(start, end)} act={actionsFor(start)}/>
-                </span>,
-            );
-        });
-        // At rest the input stays mounted out of sight — same keyed sibling, so waking never remounts it —
-        // holding the bar's place in the tab order until focus brings the editing form back.
-        if (rest) children.push(<Fragment key="open">{open}</Fragment>);
-    }
     /**
-     * The segment number under a point, for a drag's two ends; null when the point is over none.
+     * One stretch of query text that no segment claims — the separator between two chips.
      *
-     * Only settled segments answer — the open one carries no stamp, and it is the anchor the drag began in
-     * anyway. The number is read against the text the stamps were rendered from, and a segment keeps its
-     * number through a settle, so it stays valid once the open segment commits.
+     * It is drawn rather than implied, because it is a character of the query: it can be selected, it can be
+     * deleted, and the space a reader sees between two chips is the one they typed. A gap between chips wide
+     * enough to read but not made of the query's own characters is what made words look like objects.
      */
-    const segmentUnder = (e: ReactMouseEvent): number | null => {
-        const bar = e.currentTarget as HTMLElement;
-        let best: number | null = null;
-        for (const child of Array.from(bar.children)) {
-            const stamp = (child as HTMLElement).dataset["start"];
-            if (stamp === undefined) continue;
-            const box = child.getBoundingClientRect();
-            if (e.clientY < box.top || e.clientY > box.bottom) continue;
-            if (e.clientX >= box.left - 4) best = Number(stamp);
-        }
-        return best === null ? null : segmentIndex(text, best);
+    const between = (from: number, to: number): ReactElement => {
+        const covered = sel !== null && sel.from <= from && sel.to >= to;
+        return (
+            <span
+                key={`sep-${String(from)}`}
+                className={covered ? `${styles.sep} ${styles.selected}` : styles.sep}
+                data-at={from}
+                data-plain=""
+            >
+                {text.slice(from, to)}
+            </span>
+        );
     };
 
+    /** One settled segment: a chip, or a stretch of the query's own text. */
+    const settled = (seg: BarSegment): ReactElement => {
+        const covered = sel !== null && sel.from <= seg.start && sel.to >= seg.end;
+        // Text paints its own selection character by character; a chip is atomic, so the whole of it paints.
+        const inside = sel === null || !seg.plain ? undefined
+            : {start: Math.max(sel.from, seg.start) - seg.start, end: Math.min(sel.to, seg.end) - seg.start};
+        const cls = [styles.settled, seg.plain ? "" : styles.chipHost,
+            covered && !seg.plain ? styles.selected : ""].filter((held) => held !== "").join(" ");
+        return (
+            <span
+                key={seg.start}
+                className={cls}
+                data-at={seg.start}
+                data-end={seg.end}
+                // Plain text draws its own characters, so a point inside it resolves to one of them; a chip
+                // draws its parse instead and can only answer with an edge.
+                data-plain={seg.plain ? "" : undefined}
+                // A chip draws its parse, so its rendered text reads as one run of glued words. The label is
+                // the segment's own query text, which says what it asks and is what a reader would type to
+                // say it again. Text needs none: it reads as itself.
+                role={seg.plain ? undefined : "group"}
+                aria-label={seg.plain ? undefined : text.slice(seg.start, seg.end)}
+            >
+                <SettledSegment
+                    text={text.slice(seg.start, seg.end)}
+                    at={seg.start}
+                    act={actionsFor(seg.start)}
+                    selected={inside}
+                />
+            </span>
+        );
+    };
+
+    // Every child is a keyed SIBLING of the bar — the open fragment included, wherever it sits. Nesting it
+    // inside a per-segment fragment made a gap's first keystroke a REMOUNT (the subtree changed parents, the
+    // key could not save it), which killed the input's caret mid-session. Together the children cover the
+    // query text exactly once, which is what lets a point resolve to an offset and back.
+    const children: ReactElement[] = [];
+    let drawn = 0;
+    for (const seg of segments) {
+        if (seg.start > drawn) children.push(between(drawn, seg.start));
+        drawn = seg.end;
+        if (!rest && (gapAt === seg.start || (gapAt === null && seg.start === openStart))) {
+            children.push(<Fragment key="open">{open}</Fragment>);
+            if (gapAt === null) continue;
+        }
+        // An empty settled segment — a doubled separator's residue — draws nothing and takes no press:
+        // opening a zero-width nothing is how phantom chiplets appear.
+        if (seg.start !== seg.end) children.push(settled(seg));
+    }
+    if (drawn < text.length) children.push(between(drawn, text.length));
+    // At rest the input stays mounted out of sight — same keyed sibling, so waking never remounts it —
+    // holding the bar's place in the tab order until focus brings the editing form back.
+    if (rest) children.push(<Fragment key="open">{open}</Fragment>);
+
     /**
-     * A drag across the bar selects whole segments.
+     * A press anchors a selection and settles whatever was open, so every offset the drag goes on to measure
+     * is one the query will still have when the button comes up.
      *
-     * The anchor is taken in capture, before a chip handles its own press, because the press that opens a chip
-     * and the press that begins a selection are the same event — which of the two it was is only known once
-     * the pointer has moved past the segment it started in.
+     * Taken in capture, before a chip sees its own press: which of the two a press was — placing a caret or
+     * beginning a selection — is only known once the pointer has moved, so the press itself does neither.
      */
     const onBarDown = (e: ReactMouseEvent<HTMLDivElement>): void => {
         if (e.button !== 0) return;
-        dragFrom.current = segmentUnder(e);
+        // The editing form owns its presses: it has its own caret, its own native selection, and a head that
+        // keeps the session alive. An affordance does not — a drag may begin on one, and its own click is what
+        // decides whether it was a press at all.
+        if ((e.target as Element).closest("[data-open]") !== null) return;
+        e.preventDefault();
+        const {step, shifted} = pressCommit(aimOf(e).at);
+        if (step.text !== text) onText(step.text);
+        dragFrom.current = shifted;
+        dragged.current = false;
         setRange(null);
     };
 
     const onBarMove = (e: ReactMouseEvent<HTMLDivElement>): void => {
         const from = dragFrom.current;
         if (from === null || e.buttons !== 1) return;
-        // The point is read against the DOM as it stands, before anything is asked to change: a settle is a
-        // state update the layout has not applied yet, so measuring after asking for one measures the old
-        // boxes. The segment NUMBER survives it either way.
-        const to = segmentUnder(e);
-        if (to === null || to === from) return;
+        const aim = aimOf(e);
+        // Reaching a chip takes it whole from its first pixel: the far edge is the one the gesture means.
+        const to = aim.span === undefined ? aim.at
+            : aim.span.start >= from ? aim.span.end : aim.span.start;
+        if (to === from && !dragged.current) return;
         e.preventDefault();
-        // The press that began the drag also opened a chip, which wears its editing braces. Settling it is
-        // what keeps those braces out of the selection — and out of whatever the reader copies.
-        const step = commitOpen();
-        if (step.text !== text) onText(step.text);
+        dragged.current = true;
         setRange({anchor: from, focus: to});
+        // While a selection stands the keys are the bar's, so it takes the focus the press denied it.
+        if (!e.currentTarget.contains(document.activeElement)) e.currentTarget.focus({preventScroll: true});
     };
 
     /**
-     * The selection's own keys, taken in CAPTURE so they never reach the input underneath: while several
-     * segments are selected, Escape, Delete and the clipboard belong to the bar rather than to any one slot.
+     * A press that did not drag places the caret where it aimed: inside text at that character, at a gap
+     * between chips, or at the query's end when it landed past everything.
+     *
+     * On the click rather than the press, because a press that turns into a drag must not open anything —
+     * and a chip's own click stops before this, so pressing a chip still opens the chip.
+     */
+    const onBarClick = (e: ReactMouseEvent<HTMLDivElement>): void => {
+        if (dragged.current) {
+            dragged.current = false;
+            return;
+        }
+        if ((e.target as Element).closest("[data-open],button") !== null) return;
+        const {at: aim, exact} = aimOf(e);
+        const seg = segmentAt(text, aim);
+        if (aim >= text.length) openEnd(text);
+        // Past a segment's own end sits the separator: the caret rests in the gap before what follows it.
+        else if (aim >= seg.end) openGap(text, aim + 1);
+            // Anything drawing its own characters — text, an erred clause, the glue between two of them — takes
+        // the caret at the character pressed. A chip's edge is not a character, so it takes the gap.
+        else if (exact) openSegment(text, seg.start, aim - seg.start);
+        else openGap(text, seg.start);
+    };
+
+    /**
+     * The selection's own keys, taken in CAPTURE so they never reach the input underneath: while a stretch of
+     * the query is selected, Escape, Delete and the clipboard belong to the bar rather than to any one slot.
+     *
+     * The bar also holds the focus when a press made a selection and no slot is open, so Ctrl+A answers there
+     * too — the slot's own Ctrl+A takes the slot's contents first, and only the bar can mean the whole query.
      */
     const onBarKeys = (e: ReactKeyboardEvent<HTMLDivElement>): void => {
-        if (sel === null) return;
         const key = e.key.toLowerCase();
+        if (sel === null) {
+            if (e.ctrlKey && key === "a" && !(e.target instanceof HTMLInputElement)) {
+                e.preventDefault();
+                onSelectAll();
+            }
+            return;
+        }
         if (e.key === "Escape") {
             e.preventDefault();
             e.stopPropagation();
+            // The caret goes back where the selection began: dropping a selection and leaving the bar with no
+            // caret at all is a dead end, and the next keystroke would have nowhere to land.
             setRange(null);
+            openGap(text, sel.from);
             return;
         }
         if (e.key === "Backspace" || e.key === "Delete") {
@@ -654,13 +636,14 @@ export function Bar({text, onText, placeholder, plain = false}: {
         if (e.ctrlKey && key === "a") {
             e.preventDefault();
             e.stopPropagation();
-            setRange({anchor: 0, focus: segmentStarts(text).length - 1});
+            onSelectAll();
             return;
         }
         if (e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
             e.preventDefault();
             e.stopPropagation();
-            onSelectSegment(e.key === "ArrowLeft" ? -1 : 1);
+            // A selection already stands, so its own anchor is what holds; the slot's is not consulted.
+            onSelectPast(e.key === "ArrowLeft" ? -1 : 1, 0);
             return;
         }
         if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
@@ -692,12 +675,16 @@ export function Bar({text, onText, placeholder, plain = false}: {
     return (
         <div
             className={styles.qbar}
-            onMouseDown={onBarPress}
+            // Focusable but never tabbed to: while a selection stands its keys are the bar's own, and the
+            // press that made it deliberately moved focus nowhere. Tab still reaches the slot, which is the
+            // one control a keyboard is looking for.
+            tabIndex={-1}
             onMouseDownCapture={onBarDown}
             onMouseMove={onBarMove}
             onMouseUp={() => {
                 dragFrom.current = null;
             }}
+            onClick={onBarClick}
             onKeyDownCapture={onBarKeys}
             data-selection={sel === null ? undefined : selectedText()}
         >

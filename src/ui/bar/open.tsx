@@ -40,7 +40,7 @@ export interface CaretRequest {
  */
 export function OpenSegment({
                                 at, mode, hidden, seize, highlight, caret, placeholder, label, onKeystroke, onArrow,
-                                onEdge, onCommit, onCancel, onUndo, onRedo, onSelectAll, onSelectSegment,
+                                onEdge, onCommit, onCancel, onUndo, onRedo, onSelectAll, onSelectPast,
                                 onWake, onSettle
                             }: {
     readonly at: BarPlan;
@@ -80,8 +80,11 @@ export function OpenSegment({
     readonly onRedo: () => void;
     /** Ctrl+A past the slot: every chip joins the bar's own selection. */
     readonly onSelectAll: () => void;
-    /** A Shift+arrow at the slot's edge: the selection leaves the slot and takes whole segments. */
-    readonly onSelectSegment: (dir: -1 | 1) => void;
+    /**
+     * A Shift+arrow whose moving end has reached the slot's edge: the selection leaves the slot and becomes
+     * the bar's own, anchored where the slot's own selection was anchored.
+     */
+    readonly onSelectPast: (dir: -1 | 1, anchorInSlot: number) => void;
     /** Focus arriving at the slot — the bar leaves its rest state. */
     readonly onWake: () => void;
     /** Focus leaving the bar entirely — the segment settles into its committed spelling. */
@@ -220,14 +223,18 @@ export function OpenSegment({
             return;
         }
         // A held Shift means selection. Inside the slot that is the platform's own, character by character;
-        // at the slot's edge there is nothing left to select here, so the bar takes over by whole segments —
-        // the same escalation the caret itself makes when it walks out.
+        // once the moving end has nothing left to take here, the bar takes over — by the character through
+        // text and by the whole chip past a chip, the same escalation the caret makes when it walks. The
+        // anchor goes with it, so a selection that grew inside the slot keeps everything it had.
         if (e.shiftKey) {
-            const atEdge = collapsed && ((e.key === "ArrowLeft" && a === 0)
-                || (e.key === "ArrowRight" && a === el.value.length));
+            const back = el.selectionDirection === "backward";
+            const anchor = collapsed ? a : back ? b : a;
+            const moving = collapsed ? a : back ? a : b;
+            const atEdge = (e.key === "ArrowLeft" && moving === 0 && (collapsed || back))
+                || (e.key === "ArrowRight" && moving === el.value.length && (collapsed || !back));
             if (atEdge) {
                 e.preventDefault();
-                onSelectSegment(e.key === "ArrowLeft" ? -1 : 1);
+                onSelectPast(e.key === "ArrowLeft" ? -1 : 1, anchor);
             }
             return;
         }
@@ -264,7 +271,9 @@ export function OpenSegment({
         : mode === "gap" ? `${styles.hug} ${styles.gapRest}`
             : at.head === null ? styles.hug : `${styles.hug} ${styles.openChip}`;
     return (
-        <span className={hidden ? `${wrap} ${styles.hiddenOpen}` : wrap}>
+        // Stamped as the open position: the bar's own press handling steps around this subtree, because the
+        // editing form owns its presses — the head keeps the session, the slot keeps its native caret.
+        <span className={hidden ? `${wrap} ${styles.hiddenOpen}` : wrap} data-open="">
             {at.head !== null && (
                 <span
                     key="cell"

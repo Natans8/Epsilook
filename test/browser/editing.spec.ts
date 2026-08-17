@@ -71,12 +71,14 @@ test("boundary Backspace peels the braces, then the bind, then merges the words"
     await page.keyboard.press("Backspace");
     await expectQuery(page, "model:fire soundbell ");
     expect(await openKind(page)).toBe("tail");
-    expect(await slot(page)).toMatchObject({value: "soundbell", start: 5});
+    // The trailing separator the commit left is inside the run now: neighbouring words are one piece of text,
+    // and the space between them is a character of it.
+    expect(await slot(page)).toMatchObject({value: "soundbell ", start: 5});
 
     // Then the word natively, and at its start the segments merge across the separator.
     for (let presses = 0; presses < 5; presses++) await page.keyboard.press("Backspace");
     await expectQuery(page, "model:fire bell ");
-    expect(await slot(page)).toMatchObject({value: "bell", start: 0});
+    expect(await slot(page)).toMatchObject({value: "bell ", start: 0});
     await page.keyboard.press("Backspace");
     await expectQuery(page, "model:firebell ");
     expect(await openKind(page)).toBe("chip");

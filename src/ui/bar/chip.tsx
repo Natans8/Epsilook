@@ -7,8 +7,9 @@
  * one accent per chip from its column tone, and the delimiter-free rendering the language rules.
  *
  * Freeform terms and invalid clauses render as classed raw text, exactly as the whole bar did before chips.
- * Every press is owned here rather than left to the bar's own hit test, because a segment's rendered text is no
- * longer its raw text: each run aims within the window of raw text it draws.
+ * A chip owns its own presses, because its rendered text is not its raw text: each part aims within the window
+ * of raw text it draws. Plain text owns none of them — it is text, so the bar's own hit test lands the caret on
+ * the character a press fell on, and a press that turns into a drag selects instead.
  */
 import type {MouseEvent as ReactMouseEvent, ReactElement, ReactNode} from "react";
 import {useMemo} from "react";
@@ -58,6 +59,10 @@ const TONES: Record<string, string | undefined> = {
 /**
  * A guarded press: the chip owns it — no bar-level aim, no focus theft before the open lands. The event is
  * handed on, because most of these presses read the point they landed on.
+ *
+ * On the CLICK rather than the mousedown, so that a press which turns into a drag selects instead of opening.
+ * A click fires on the nearest ancestor the press and the release share, so a drag that leaves the chip never
+ * reaches this at all — which is exactly the distinction the gesture needs.
  */
 const press = (act: (e: ReactMouseEvent) => void) => (e: ReactMouseEvent): void => {
     e.preventDefault();
@@ -116,25 +121,29 @@ function Affordance({kind, label, className, onPress}: {
     readonly onPress: () => void;
 }): ReactElement {
     return (
-        <button
-            type="button"
-            className={className}
-            aria-label={label}
-            // Out of the sequential tab order on purpose: a bar of six chips would otherwise put a dozen
-            // affordances between Tab and the query input, which is the one thing a keyboard reaches for.
-            // Their keyboard path is the bar's own — select a chip and press Delete.
-            tabIndex={-1}
-            onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-            }}
-            onClick={(e) => {
-                e.stopPropagation();
-                onPress();
-            }}
-        >
-            <Mark kind={kind}/>
-        </button>
+        // The slot is a line box of the neighbouring text's own metrics, so the mark inside it can align to
+        // that text rather than to a cell that is taller than the text: see the CSS for why that matters.
+        <span className={styles.markSlot}>
+            <button
+                type="button"
+                className={className}
+                aria-label={label}
+                // Out of the sequential tab order on purpose: a bar of six chips would otherwise put a dozen
+                // affordances between Tab and the query input, which is the one thing a keyboard reaches for.
+                // Their keyboard path is the bar's own — select a chip and press Delete.
+                tabIndex={-1}
+                onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onPress();
+                }}
+            >
+                <Mark kind={kind}/>
+            </button>
+        </span>
     );
 }
 
@@ -197,10 +206,12 @@ function Pieces({pieces, text}: { readonly pieces: readonly Piece[]; readonly te
  * The sectioned head cell every chip, lane and inner bind opens with: `[x -Head]`, the divider carried by
  * structure and the negation fused into the head as one red unit.
  */
-function Sect({head, not, label, className, onOpen, onRemove}: {
+function Sect({head, not, label, hint, className, onOpen, onRemove}: {
     readonly head: string;
     readonly not: boolean;
     readonly label: string;
+    /** What pressing the head does, said in words — the gesture has no other way to announce itself. */
+    readonly hint: string;
     /** Which cell this is — the outer chip's, or an inner bind's tighter one. */
     readonly className: string;
     /**
@@ -211,7 +222,11 @@ function Sect({head, not, label, className, onOpen, onRemove}: {
     readonly onRemove: () => void;
 }): ReactElement {
     return (
-        <span className={className} onMouseDown={onOpen === undefined ? undefined : press(onOpen)}>
+        <span
+            className={className}
+            title={onOpen === undefined ? undefined : hint}
+            onClick={onOpen === undefined ? undefined : press(onOpen)}
+        >
             <Affordance kind="remove" label={label} className={styles.chipX} onPress={onRemove}/>
             <span className={not ? styles.negHead : undefined}>
                 {not ? NEGATION : ""}{headCase(head)}
@@ -240,7 +255,7 @@ function ChipEl({chip, warned, notes, span, text, act}: {
         <span
             className={stateClass(styles.chip, chip.tone, chip.not, warned)}
             title={notes.length > 0 ? notes.join("\n") : undefined}
-            onMouseDown={press((e) => {
+            onClick={press((e) => {
                 act.open(aimAt(e, text, span) ?? "end");
             })}
         >
@@ -248,6 +263,7 @@ function ChipEl({chip, warned, notes, span, text, act}: {
                 head={chip.head}
                 not={chip.not}
                 label={t("bar.delete")}
+                hint={t(chip.not ? "bar.include" : "bar.exclude")}
                 className={styles.chipSect}
                 onOpen={act.negate}
                 onRemove={act.remove}
@@ -282,7 +298,7 @@ function LaneEl({lane, warned, notes, span, text, act}: {
         <span
             className={stateClass(styles.lane, lane.tone, lane.not, warned)}
             title={notes.length > 0 ? notes.join("\n") : undefined}
-            onMouseDown={press((e) => {
+            onClick={press((e) => {
                 act.open(aimAt(e, text, span) ?? "end");
             })}
         >
@@ -290,6 +306,7 @@ function LaneEl({lane, warned, notes, span, text, act}: {
                 head={lane.head}
                 not={lane.not}
                 label={t("bar.delete")}
+                hint={t(lane.not ? "bar.include" : "bar.exclude")}
                 className={styles.chipSect}
                 onOpen={act.negate}
                 onRemove={act.remove}
@@ -301,7 +318,7 @@ function LaneEl({lane, warned, notes, span, text, act}: {
                 });
                 if (item.is === "dead") {
                     return (
-                        <span key={i} className={styles.deadFrag} onMouseDown={openItem}>
+                        <span key={i} className={styles.deadFrag} onClick={openItem}>
                             <Classed text={text.slice(item.span.start, item.span.end)}/>
                         </span>
                     );
@@ -311,18 +328,19 @@ function LaneEl({lane, warned, notes, span, text, act}: {
                         <span
                             key={i}
                             className={item.not ? `${styles.laneTerm} ${styles.vNot}` : styles.laneTerm}
-                            onMouseDown={openItem}
+                            onClick={openItem}
                         >
                             {item.not ? NEGATION : ""}<Pieces pieces={item.body} text={text}/>
                         </span>
                     );
                 }
                 return (
-                    <span key={i} className={styles.laneBind} onMouseDown={openItem}>
+                    <span key={i} className={styles.laneBind} onClick={openItem}>
                         <Sect
                             head={item.head}
                             not={item.not}
                             label={t("bar.delete")}
+                            hint={t(item.not ? "bar.include" : "bar.exclude")}
                             className={styles.bindSect}
                             onOpen={() => {
                                 act.negateTerm(i);
@@ -342,25 +360,37 @@ function LaneEl({lane, warned, notes, span, text, act}: {
     );
 }
 
-/** One raw stretch of the segment — freeform text, an erred clause, inter-clause glue — drawn classed. */
-function Raw({text, span, whole, erred, act}: {
+/**
+ * One raw stretch of the segment — freeform text, an erred clause, inter-clause glue — drawn classed.
+ *
+ * Raw text takes no press of its own: it is text, so the bar's own hit test resolves a point inside it to the
+ * character it landed on, and a press that turns into a drag selects rather than opening.
+ */
+function Raw({text, span, at, erred, selected}: {
     readonly text: string;
-    /** Where this run sits in the segment's raw text — the window a press on it aims within. */
+    /** Where this run sits in the segment's raw text. */
     readonly span: Span;
-    /** The segment's whole raw text, which the aim is measured against. */
-    readonly whole: string;
+    /** Where the segment itself starts in the query, so the run can stamp its own place in it. */
+    readonly at: number;
     readonly erred: boolean;
-    readonly act: SegmentActions;
+    /** The bar's selection, in the segment's coordinates, or absent while nothing is selected. */
+    readonly selected?: Span;
 }): ReactElement | null {
     if (text === "") return null;
+    const covered = selected === undefined ? undefined
+        : {
+            start: Math.max(selected.start, span.start) - span.start,
+            end: Math.min(selected.end, span.end) - span.start
+        };
     return (
         <span
             className={erred ? styles.erred : undefined}
-            onMouseDown={press((e) => {
-                act.open(aimAt(e, whole, span) ?? span.start);
-            })}
+            // Its own characters, drawn verbatim: a press inside it resolves to the one it landed on, whether
+            // the run is freeform text or the raw spelling a broken clause fell back to.
+            data-at={at + span.start}
+            data-plain=""
         >
-            <Classed text={text}/>
+            <Classed text={text} selected={covered}/>
         </span>
     );
 }
@@ -369,26 +399,30 @@ function Raw({text, span, whole, erred, act}: {
  * A settled segment at rest: its clauses as chips, lanes and raw text, in written order, covering the segment's
  * text exactly.
  */
-export function SettledSegment({text, act}: {
+export function SettledSegment({text, at, act, selected}: {
     readonly text: string;
+    /** Where the segment starts in the query — what its raw runs stamp themselves with. */
+    readonly at: number;
     readonly act: SegmentActions;
+    /** The stretch of this segment the bar's selection covers, in the segment's own coordinates. */
+    readonly selected?: Span;
 }): ReactElement {
     const views = useMemo(() => describe(parse(text)), [text]);
     const parts: ReactNode[] = [];
-    let at = 0;
-    /** One stretch of raw text, keyed by where it starts — each run aims a press inside its own window. */
+    let drawn = 0;
+    /** One stretch of raw text, keyed by where it starts. */
     const raw = (from: number, to: number, erred: boolean): ReactElement | null => (
         <Raw
             key={`raw-${String(from)}`}
             text={text.slice(from, to)}
             span={{start: from, end: to}}
-            whole={text}
+            at={at}
             erred={erred}
-            act={act}
+            selected={selected}
         />
     );
     views.forEach((view, i) => {
-        if (view.span.start > at) parts.push(raw(at, view.span.start, false));
+        if (view.span.start > drawn) parts.push(raw(drawn, view.span.start, false));
         if (view.form === "chip") {
             parts.push(<ChipEl key={i} chip={view.chip} warned={view.warned} notes={view.notes}
                                span={view.span} text={text} act={act}/>);
@@ -402,8 +436,8 @@ export function SettledSegment({text, act}: {
                 </span>,
             );
         }
-        at = view.span.end;
+        drawn = view.span.end;
     });
-    if (at < text.length) parts.push(raw(at, text.length, false));
+    if (drawn < text.length) parts.push(raw(drawn, text.length, false));
     return <>{parts}</>;
 }

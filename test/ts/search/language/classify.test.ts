@@ -30,9 +30,10 @@ test("every text is covered exactly — no gap, no overlap, empty text included"
     }
 });
 
-test("a known word glued to the bind is a head; the same word bare is text", () => {
+test("a known word glued to the bind is a head, the bind included; the same word bare is text", () => {
+    // `model:` is one token: the word is text until the colon makes it a door, so the two class as one run.
     assert.deepEqual(spelled("model:fire"), [
-        ["model", "head"], [":", "op"], ["fire", "word"],
+        ["model:", "head"], ["fire", "word"],
     ]);
     assert.deepEqual(spelled("model fire"), [
         ["model", "word"], [" ", "space"], ["fire", "word"],
@@ -60,12 +61,12 @@ test("an escaped quote stays inside the phrase, and an unclosed phrase runs to t
 
 test("scopes, groups and alternation are delimiters; comparisons and the wildcard are operators", () => {
     assert.deepEqual(spelled("model:{fire|frost}"), [
-        ["model", "head"], [":", "op"], ["{", "delim"], ["fire", "word"],
+        ["model:", "head"], ["{", "delim"], ["fire", "word"],
         ["|", "delim"], ["frost", "word"], ["}", "delim"],
     ]);
-    // Adjacent runs of one kind merge — the bind and the comparison paint alike, so they are one run.
+    // The comparison stays an operator of its own: the bind opens the door, the comparison is the question.
     assert.deepEqual(spelled("scale:>=50"), [
-        ["scale", "head"], [":>=", "op"], ["50", "number"],
+        ["scale:", "head"], [">=", "op"], ["50", "number"],
     ]);
 });
 
@@ -73,10 +74,10 @@ test("typographic quotes fold to the parser's before classing, and spans still i
     const text = "name:“fire”";
     const runs = classify(text);
     covers(text, runs);
-    assert.deepEqual(runs.map((run) => run.kind), ["head", "op", "quote", "word", "quote"]);
+    assert.deepEqual(runs.map((run) => run.kind), ["head", "quote", "word", "quote"]);
 });
 
 test("a digit-led word is a number; digits inside a word are not", () => {
-    assert.deepEqual(spelled("id:133")[2], ["133", "number"]);
+    assert.deepEqual(spelled("id:133")[1], ["133", "number"]);
     assert.deepEqual(spelled("keg01")[0], ["keg01", "word"]);
 });

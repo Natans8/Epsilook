@@ -199,7 +199,7 @@ test("Shift+arrow at the slot's edge takes whole segments, one per press", async
 
 test("a drag across the bar selects the chips it crosses, and the copy is their own query text", async () => {
     await seed(page, "model:fire", "sound:bell", "cast:2s");
-    const first = await page.locator("[data-start]").nth(0).boundingBox();
+    const first = await page.locator("[data-at]").nth(0).boundingBox();
     const box = await bar(page).boundingBox();
     if (first === null || box === null) throw new Error("the bar has no box");
     await page.mouse.move(first.x + 4, first.y + first.height / 2);
@@ -240,10 +240,11 @@ test("the bar's affordances stay out of the tab order, and its input keeps its n
     await expect(barInput(page)).toHaveAttribute("aria-label", /search spells/i);
 });
 
-test("each settled segment announces the query text it stands for", async () => {
-    await seed(page, "model:fire", "-model:missile");
-    const labels = await page.locator("[data-start]").evaluateAll(
+test("each settled chip announces the query text it stands for; text announces nothing", async () => {
+    await seed(page, "model:fire", "-model:missile", "dragon");
+    const labels = await page.locator("[role='group']").evaluateAll(
         (els) => els.map((el) => el.getAttribute("aria-label")));
+    // A chip draws its parse, so it says what it asks. Plain text reads as itself and needs no second name.
     expect(labels).toEqual(["model:fire", "-model:missile"]);
 });
 
