@@ -164,8 +164,15 @@
     caret-color: var(--text);
 }
 
+/* selection wears the app's own selection tokens — the browser default is nearly invisible over the backdrop */
+.q::selection {
+    background: rgba(var(--select-rgb), 0.85);
+    color: var(--text-strong);
+}
+
 .q.hl::selection {
-    color: var(--text);
+    background: rgba(var(--select-rgb), 0.85);
+    color: var(--text-strong);
 }
 
 .runHead {

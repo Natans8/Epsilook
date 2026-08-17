@@ -96,12 +96,9 @@ export function OpenSegment({
             return;
         }
         if (e.ctrlKey && e.key.toLowerCase() === "a") {
-            // The first press selects the slot natively; from a full (or empty) selection the next press
-            // escalates to the whole query, the same shape as undo's escalation.
-            if (el.selectionStart === 0 && el.selectionEnd === el.value.length) {
-                e.preventDefault();
-                onSelectAll();
-            }
+            // One press, the whole query — select-all means all of what is actually typed, never a segment.
+            e.preventDefault();
+            onSelectAll();
             return;
         }
         if (e.ctrlKey && (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) {
