@@ -7,8 +7,6 @@
  *
  * Importing this validates the schema and throws if two declarations claim the same word, so a collision cannot
  * survive an import in the application, the command line tools or the tests.
- *
- * TODO: export `describe` once the chip renderer exists.
  */
 
 export type {Operator, OperatorForm, OperatorLevel} from "./vocabulary/operators";
@@ -57,7 +55,7 @@ export * as catalogue from "./schema/catalogue";
 export type {Head} from "./schema/schema";
 export {buildSchema, HEADS, kindIn, kindsOf, propIn, schemaProblems} from "./schema/schema";
 
-export {GRAMMAR, PREFIX_OPERATORS} from "./language/grammar";
+export {GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./language/grammar";
 
 export type {
     Ask, Clause, ClauseState, Diagnostic, Fix, Parsed, ParsedOperand, ParseMode, PropRef, RowTest,
@@ -70,10 +68,13 @@ export {parse} from "./language/parse";
 export type {Run, RunKind} from "./language/classify";
 export {classify} from "./language/classify";
 
+export type {ChipView, ClauseView, LaneItem, LaneView, Piece} from "./language/describe";
+export {describe, glyphOf, NEGATION} from "./language/describe";
+
 export type {QueryWords} from "./vocabulary/locale-words";
 export {applyQueryWords, QUERY_WORD_LANGUAGES} from "./language/query-words";
 
-export {formatQuery, queryKey} from "./language/format";
+export {formatQuery, operandText, queryKey, unbracedTerm} from "./language/format";
 
 export type {Boundary, Rule, RuleExample, RuleTier} from "./rewrite/rules";
 export {KEPT, RULES} from "./rewrite/rules";

@@ -64,12 +64,15 @@
     overflow: hidden;
 }
 
-/* the head cell: a darker inset, the split carried by structure — no delimiter shown */
+/* the head cell: a darker inset, the split carried by structure — no delimiter shown. The alpha is measured,
+ * not chosen: the deeper the inset, the darker the ground a LIGHT palette's danger red sits on, and a negated
+ * head reads 3.9:1 at 0.25 and 4.1:1 at 0.15 — both under AA. At 0.08 every palette clears it and the cell
+ * still recedes (0.85x the body's luminance in light, darker still in dark). */
 .headCell {
     display: inline-flex;
     align-items: center;
     padding: 0.15rem 0.55rem;
-    background: rgba(0, 0, 0, 0.25);
+    background: rgba(var(--shadow-rgb), 0.08);
     border-right: 1px solid var(--border-ctrl);
     font-size: 0.95rem;
     color: var(--text-dim);
@@ -195,4 +198,252 @@
 
 .runNumber {
     color: var(--gold);
+}
+
+/* ------------------------------------------------------------- the committed chip
+ * The at-rest visual mode: smaller and cooler than the editing form, same sectioned anatomy, so a commit reads
+ * as the same object changing state. One accent per chip — its column tone — carried as a triple so the wash
+ * scales with the theme; spacing sits on the 4/8 scale. */
+
+.chip,
+.lane {
+    --chip-rgb: var(--overlay-rgb);
+    --chip-border-a: 0.5;
+    --chip-wash-a: 0.1;
+    display: inline-flex;
+    align-items: stretch;
+    max-width: 100%;
+    border: 1px solid rgba(var(--chip-rgb), var(--chip-border-a));
+    border-radius: 999px;
+    background: rgba(var(--chip-rgb), calc(var(--chip-wash-a) * var(--wash-strength)));
+    overflow: hidden;
+    font-size: 0.875rem;
+    line-height: 1.35;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.chip:hover,
+.lane:hover {
+    border-color: rgba(var(--chip-rgb), 0.75);
+}
+
+.toneModel {
+    --chip-rgb: var(--model-rgb);
+}
+
+.toneSound {
+    --chip-rgb: var(--sound-rgb);
+}
+
+.toneAnim {
+    --chip-rgb: var(--anim-rgb);
+}
+
+.toneFx {
+    --chip-rgb: var(--fx-rgb);
+}
+
+.toneMech {
+    --chip-rgb: var(--mech-rgb);
+}
+
+/* gold is bright: the spell family wears it a step fainter, as the pills do */
+.toneSpell {
+    --chip-rgb: var(--gold-rgb);
+    --chip-border-a: 0.45;
+    --chip-wash-a: 0.07;
+}
+
+/* negation and warning are states over the tone: the border says it, the head's red unit carries the minus */
+.chipNegated {
+    border-color: rgba(var(--danger-rgb), 0.6);
+}
+
+.chipWarned {
+    border-color: var(--gold-dim);
+    box-shadow: 0 0 0 1px rgba(var(--gold-rgb), 0.15);
+}
+
+/* the sectioned head cell: `[× −Head |` — the darker inset the open chip already wears, divider by structure */
+.chipSect {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0.25rem 0.5rem;
+    background: rgba(var(--shadow-rgb), 0.08);
+    border-right: 1px solid var(--border-ctrl);
+    /* --text, not --text-dim: measured 4.4:1 over the inset, under AA. The head still reads quieter than the
+     * value through its smaller size and the cell's own recession. */
+    color: var(--text);
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.negHead {
+    color: rgb(var(--danger-rgb));
+}
+
+.chipBody {
+    display: inline-block;
+    padding: 0.25rem 0.625rem;
+    max-width: 24rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-strong);
+}
+
+/* × lives left in the sect, + at the tail — destructive left, additive right */
+.chipX,
+.chipAdd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    line-height: 1;
+    /* --text over the chip wash: --text-muted measured 4.0:1 there, under AA for a control glyph. */
+    color: var(--text);
+    cursor: pointer;
+}
+
+.chipX {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    font-size: 0.8rem;
+}
+
+.chipX:hover {
+    color: rgb(var(--danger-rgb));
+    background: rgba(var(--danger-rgb), calc(0.12 * var(--wash-strength)));
+}
+
+.chipAdd {
+    align-self: center;
+    padding: 0 0.5rem 0 0.125rem;
+    font-size: 0.95rem;
+}
+
+.chipAdd:hover {
+    color: var(--gold);
+}
+
+/* the lane: real terms inside the toned enclosure; gaps separate OBJECTS here, never continuous text */
+.lane {
+    gap: 6px;
+}
+
+.lane .chipSect {
+    align-self: stretch;
+}
+
+.laneTerm {
+    align-self: center;
+    color: var(--text-strong);
+}
+
+/* an inner bind: a chip of its own, neutral-surfaced so the lane's tone stays the one accent */
+.laneBind {
+    display: inline-flex;
+    align-items: stretch;
+    align-self: center;
+    border: 1px solid var(--border-ctrl);
+    border-radius: 999px;
+    background: var(--bg-panel);
+    overflow: hidden;
+}
+
+.bindSect {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0.15rem 0.4rem;
+    background: rgba(var(--shadow-rgb), 0.08);
+    border-right: 1px solid var(--border-ctrl);
+    color: var(--text-dim);
+    font-size: 0.8rem;
+}
+
+.bindBody {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.55rem;
+    color: var(--text-strong);
+}
+
+/* ------------------------------------------------- the three text classes inside a chip
+ * Corpus text is plain, a vocabulary word wears the dotted mark, a meta word is bold — all on one line metric. */
+
+.vWord {
+    border-bottom: 1px dotted var(--tag-btn);
+}
+
+.vMeta {
+    font-weight: 700;
+}
+
+/* the operator glyph carries meaning, so it meets AA like any value text; the value's weight tells them apart */
+.vOp {
+    color: var(--text);
+}
+
+.vOr {
+    font-style: italic;
+    color: var(--text);
+    font-size: 0.85em;
+    align-self: center;
+}
+
+/* a phrase's quotes display at rest, styled as the delimiters they are, glued to their literal */
+.vQuote {
+    color: var(--gold);
+    font-weight: 600;
+}
+
+/* a value group — a swatch and its word — reads as one object under one vocabulary mark */
+.vGroup {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    border-bottom: 1px dotted var(--tag-btn);
+    padding-bottom: 1px;
+}
+
+.swatch {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
+    border: 1px solid var(--border-ctrl);
+}
+
+/* the negated unit is ONE colour, its vocabulary mark included */
+.vNot,
+.vNot .vWord {
+    color: rgb(var(--danger-rgb));
+    border-bottom-color: rgba(var(--danger-rgb), 0.6);
+}
+
+/* a dead fragment and an erred clause stay raw, wearing the state where it lives */
+.deadFrag,
+.erred {
+    text-decoration: underline wavy rgba(var(--danger-rgb), 0.9);
+    text-underline-offset: 3px;
+}
+
+.deadFrag {
+    align-self: center;
+    cursor: text;
+}
+
+/* the resting bar's input: out of sight, still in the tab order, so focus can come back to the caret's place */
+.hiddenOpen {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
 }

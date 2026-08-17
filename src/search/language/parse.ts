@@ -28,7 +28,7 @@ import type {
     ValueExpr,
 } from "./ast";
 import {propOf} from "./ast";
-import {GRAMMAR, PREFIX_OPERATORS} from "./grammar";
+import {GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./grammar";
 import {wordOf} from "../schema/kinds";
 import type {Interp, Pending, ValueCtx} from "./operand";
 import {combineAlternatives, countCtx, ctxFor, kindCtx, propCtx, topCtx} from "./operand";
@@ -61,12 +61,12 @@ const HEAD_ENDS = new Set<string>([
 ]);
 
 /**
- * First characters of the prefix operators. Where one follows a known head word, the colon is implied: `model<=4`
- * reads as `model:<=4` — the family convention, and measured safe: no name glues a head word to a comparison.
- * An unknown word keeps the whole token as ordinary text, so `a=b` stays searchable.
+ * First characters of the prefix operators, aliases included. Where one follows a known head word, the colon is
+ * implied: `model<=4` reads as `model:<=4` — the family convention, and measured safe: no name glues a head word
+ * to a comparison. An unknown word keeps the whole token as ordinary text, so `a=b` stays searchable.
  */
 const COMPARISON_STARTS: ReadonlySet<string> = new Set(
-    PREFIX_OPERATORS.flatMap((op) => (typeof op.symbol === "string" ? [op.symbol[0]] : [])));
+    PREFIX_OPERATORS.flatMap((op) => spellingsOf(op).map((s) => s[0])));
 
 /** A run of numbers separated by the list character: the one shape a comma is structural in. */
 const NUMBER_LIST = new RegExp(String.raw`^\d+(${escapeRegExp(GRAMMAR.numberList)}\d+)+$`);
@@ -111,6 +111,12 @@ class Parser {
                 i++;
                 continue;
             }
+            const word = this.orWordEnd(i, n);
+            if (word > i) {
+                this.closeRun();
+                i = word;
+                continue;
+            }
             const next = this.clause(i, n);
             // Progress is structural, but a guard keeps a defect here from hanging the page rather than throwing.
             i = next > i ? next : i + 1;
@@ -126,6 +132,20 @@ class Parser {
     private closeRun(): void {
         this.runs.push(this.current);
         this.current = [];
+    }
+
+    /**
+     * The end of an or-word standing alone at `i`, or `i` where none stands.
+     *
+     * The word is the alternation symbol's typed synonym, so it reads exactly where the symbol would: whole,
+     * between terms. A word with anything glued to it — a bind, a comparison, more letters — is ordinary text.
+     */
+    private orWordEnd(i: number, limit: number): number {
+        const j = this.wordEnd(i, limit);
+        if (j <= i || fold(this.text.slice(i, j)) !== GRAMMAR.orWord) return i;
+        const next = j < limit ? this.text[j] : "";
+        const alone = next === "" || isWs(next) || next === GRAMMAR.or || next === GRAMMAR.scope.close;
+        return alone ? j : i;
     }
 
     /** Adds a clause, files it into the current alternation group, and attaches its findings. */
@@ -229,7 +249,9 @@ class Parser {
         const first = this.scan.token(vpos, limit, opts);
         if (this.mode !== "final" || !opts.inScope || first.segs.length !== 1) return first;
         const [only] = first.segs;
-        if (only.form !== "bare" || !PREFIX_OPERATORS.some((op) => op.symbol === only.text)) return first;
+        if (only.form !== "bare" || !PREFIX_OPERATORS.some((op) => spellingsOf(op).includes(only.text))) {
+            return first;
+        }
         const k = this.skipWs(first.end, limit);
         if (k === first.end || k >= limit) return first;
         const c = this.text[k];
@@ -436,6 +458,13 @@ class Parser {
                 scopeRuns.push(run);
                 run = [];
                 i++;
+                continue;
+            }
+            const word = this.orWordEnd(i, bodyEnd);
+            if (word > i) {
+                scopeRuns.push(run);
+                run = [];
+                i = word;
                 continue;
             }
             const termStart = i;
@@ -733,7 +762,7 @@ class Parser {
 
         const first = segs[0];
         if (segs.length >= 2 && first.form === "bare") {
-            const op = PREFIX_OPERATORS.find((o) => o.symbol === first.text);
+            const op = PREFIX_OPERATORS.find((o) => spellingsOf(o).includes(first.text));
             const operand = segs[1];
             if (op !== undefined && operand.form === "regex") {
                 // An anchor has nothing to anchor in a pattern, which carries its own anchors.
@@ -855,12 +884,15 @@ class Parser {
     private alternative(t: string, ctx: ValueCtx, alone: boolean): Interp {
         if (t === "") return {r: "empty", why: i18n.t("diagnostics:why.noValue")};
         if (t === GRAMMAR.wildcard) return ctx.star();
+        // The wildcard's word synonym — the spelling chips display for existence. Only where a bound value is
+        // being read: a bare top-level word is plain search content, whatever it spells.
+        if (ctx.wordStar && fold(t) === GRAMMAR.anyWord) return ctx.star();
         if (NUMBER_LIST.test(t)) {
             return combineAlternatives(t.split(GRAMMAR.numberList).map((n) => ctx.bare(n, false)));
         }
         for (const op of PREFIX_OPERATORS) {
-            const sym = op.symbol;
-            if (sym === null || !t.startsWith(sym)) continue;
+            const sym = spellingsOf(op).find((s) => t.startsWith(s));
+            if (sym === undefined) continue;
             const operand = t.slice(sym.length);
             if (operand === "") return {r: "empty", why: i18n.t("diagnostics:why.nothingToCompare")};
             if (op.name === "exact" && operand.includes(GRAMMAR.wildcard)) {

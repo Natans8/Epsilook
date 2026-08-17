@@ -42,6 +42,14 @@ export interface Notation {
     /** Further spellings of the same symbol, accepted on input and never written. */
     readonly aliases?: readonly string[];
 
+    /**
+     * The glyph a rich display surface draws for the symbol, where it differs — `×` for the factor's `x`.
+     *
+     * Display only: formatted queries write the symbol. Every glyph must read back, as one of {@link aliases} or
+     * through typography folding, because everything displayed must be typeable.
+     */
+    readonly glyph?: string;
+
     /** Which side of the number the symbol is written on. Defaults to after it. */
     readonly position?: "before" | "after";
 
@@ -327,6 +335,26 @@ export function parseNumberPair(spec: NumericSpec): (lo: string, hi: string) => 
 }
 
 /**
+ * Writes a stored value in one notation, symbol included.
+ *
+ * @param notation The notation to write in.
+ * @param value The stored value.
+ * @param symbol What to write for the notation's symbol; the symbol itself by default. A display surface passes
+ *   the notation's glyph to draw `×5` where the query writes `x5`.
+ * @returns The spelling.
+ */
+export function writeNotation(notation: Notation, value: number, symbol: string = notation.unit): string {
+    const {factor, offset, sign, position} = notation;
+    const shown = Number(((value - (offset ?? 0)) / factor).toFixed(PRECISION));
+    // A sign is written where the notation requires one, so that zero round-trips; where it is merely allowed,
+    // only a negative carries its own.
+    const plus = shown > 0 || (shown === 0 && sign === "required");
+    const written = sign === "required" && plus ? `+${shown}` : String(shown);
+
+    return position === "before" ? `${symbol}${written}` : `${written}${symbol}`;
+}
+
+/**
  * Builds the formatter for one numeric type.
  *
  * @param spec The numeric spec.
@@ -337,15 +365,28 @@ export function parseNumberPair(spec: NumericSpec): (lo: string, hi: string) => 
  * written.
  */
 export function formatNumber(spec: NumericSpec): (value: number) => string {
-    const {unit, factor, offset, sign, position} = spec.display;
+    return (value: number): string => writeNotation(spec.display, value);
+}
 
-    return (value: number): string => {
-        const shown = Number(((value - (offset ?? 0)) / factor).toFixed(PRECISION));
-        // A sign is written where the notation requires one, so that zero round-trips; where it is merely allowed,
-        // only a negative carries its own.
-        const plus = shown > 0 || (shown === 0 && sign === "required");
-        const written = sign === "required" && plus ? `+${shown}` : String(shown);
-
-        return position === "before" ? `${unit}${written}` : `${written}${unit}`;
-    };
+/**
+ * The notation one written operand was read in, for a surface upholding the reader's own family.
+ *
+ * The same dispatch {@link parseNumber} runs, answering with the notation rather than the value: the first
+ * notation to accept the text is the one the value arrived through. Takes the notation list rather than a spec so
+ * a caller holding only a type's declared notations — display first, exactly this order — can ask.
+ *
+ * @param notations The notations, in dispatch order.
+ * @param storage Whether the stored value is integral.
+ * @param text The operand as typed.
+ * @returns The notation that read it, or `null` when none did.
+ */
+export function notationOf(
+    notations: readonly Notation[], storage: "int" | "float", text: string,
+): Notation | null {
+    const folded = fold(text.trim());
+    if (folded.length === 0) return null;
+    for (const notation of notations) {
+        if (readNotation(notation, storage)(folded) !== null) return notation;
+    }
+    return null;
 }

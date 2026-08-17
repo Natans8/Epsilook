@@ -10,7 +10,7 @@
  * the query is valid — validity is the parser's answer, drawn elsewhere. It folds typography exactly as the
  * parser does, which is length-preserving, so every span indexes the reader's own text.
  */
-import {GRAMMAR, PREFIX_OPERATORS, spelling} from "./grammar";
+import {GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./grammar";
 import {HEADS} from "../schema/schema";
 import {fold, foldTypography} from "../text/normalize";
 
@@ -29,10 +29,10 @@ const DELIMS = new Set<string>([
     GRAMMAR.scope.open, GRAMMAR.scope.close, GRAMMAR.group.open, GRAMMAR.group.close, GRAMMAR.or,
 ]);
 
-/** Single characters that play an operator role wherever they stand. */
+/** Single characters that play an operator role wherever they stand, alias spellings included. */
 const OPS = new Set<string>([
     GRAMMAR.bind, GRAMMAR.wildcard, GRAMMAR.negate,
-    ...PREFIX_OPERATORS.flatMap((op) => spelling(op).split("")),
+    ...PREFIX_OPERATORS.flatMap((op) => spellingsOf(op).flatMap((s) => s.split(""))),
 ]);
 
 /** A word run: letters, digits and the joiners a value word may carry. */

@@ -10,7 +10,10 @@
  * a head cell plus a value slot, the bind consumed as a gesture. The text underneath never changes — a plan
  * reconstructs it verbatim, which the tests pin — so the round trip is unconditional.
  */
-import {fold, GRAMMAR, HEADS} from "../../search/index";
+import type {Span} from "../../search/index";
+import {
+    fold, GRAMMAR, HEADS, parse, PREFIX_OPERATORS, queryKey, spellingsOf, unbracedTerm,
+} from "../../search/index";
 
 /** The transformed head of the open segment, when it has one. */
 export interface OpenHead {
@@ -97,8 +100,18 @@ export function segmentAt(text: string, at: number): Segment {
     return {start, end: next === undefined ? text.length : next - 1};
 }
 
-/** A head opener: optional negation, a word, then the bind or a comparison glued to it. */
-const OPENER = /^(-?)([\p{L}\p{N}_]+)(:|>=|<=|>|<|=)/u;
+/**
+ * A head opener: optional negation, a word, then the bind or a comparison glued to it.
+ *
+ * The glues come off the operator registry, longest spelling first, so a comparison's alias — the very glyph a
+ * committed chip draws — opens a head exactly as its symbol does.
+ */
+const OPENER = new RegExp(
+    `^(-?)([\\p{L}\\p{N}_]+)(${[GRAMMAR.bind, ...PREFIX_OPERATORS.flatMap(spellingsOf)]
+        .toSorted((a, b) => b.length - a.length)
+        .map((glue) => glue.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`))
+        .join("|")})`,
+    "u");
 
 /**
  * The head the open segment starts with, or null while it is plain text.
@@ -153,7 +166,16 @@ export function planAt(text: string, openAt: number): BarPlan {
 
 /** Whether the interior's final character is the closer of the scope that was opened before it. */
 function closesAtEnd(interior: string): boolean {
-    if (!interior.endsWith(GRAMMAR.scope.close)) return false;
+    return closerAt(interior) === interior.length - 1;
+}
+
+/**
+ * Where the scope opened before an interior closes, or -1 when nothing in it does.
+ *
+ * @param interior The text after a scope's opening brace.
+ * @returns The closing brace's offset, or -1.
+ */
+function closerAt(interior: string): number {
     let quote = false;
     let depth = 1;
     for (let at = 0; at < interior.length; at++) {
@@ -170,10 +192,10 @@ function closesAtEnd(interior: string): boolean {
         if (ch === GRAMMAR.scope.open) depth += 1;
         else if (ch === GRAMMAR.scope.close) {
             depth -= 1;
-            if (depth === 0) return at === interior.length - 1;
+            if (depth === 0) return at;
         }
     }
-    return false;
+    return -1;
 }
 
 /** Where a plan's slot begins in text coordinates — what turns an input caret into a text offset and back. */
@@ -279,7 +301,9 @@ export function firstDiff(a: string, b: string): number {
  * The scope is the editing form: a space inside it is a character, never a commit, so `model:{fire frost}`
  * composes naturally and the simplification back to a single word happens at commit. The gesture fires only on
  * the transition — a segment that already had its bound head (deleting backwards through a value, say) is left
- * alone, or the brace pair would resurrect itself against every deletion.
+ * alone, or the brace pair would resurrect itself against every deletion — and only for a head a scope is legal
+ * after: a property door takes a value, so its slot stays braceless and a space commits, as a value's grammar
+ * says it should.
  *
  * @param was The plan the keystroke started from.
  * @param step The keystroke as applied.
@@ -291,6 +315,7 @@ export function scopeGesture(was: BarPlan, step: Keystroke): Keystroke {
         && step.caret === slotStart(next);
     const already = was.head !== null && was.head.bound;
     if (!landed || already) return step;
+    if (next.head !== null && HEADS.get(fold(next.head.word))?.role === "prop") return step;
     const open = GRAMMAR.scope.open + GRAMMAR.scope.close;
     return {
         text: step.text.slice(0, step.caret) + open + step.text.slice(step.caret),
@@ -302,18 +327,24 @@ export function scopeGesture(was: BarPlan, step: Keystroke): Keystroke {
  * The editing form of an already-simplified segment: `model:fire` re-wraps to `model:{fire}` when it opens.
  *
  * The symmetric half of the commit simplification — while a chip is open its braces are there, so a space typed
- * into a reopened chip behaves exactly as it did when the chip was first composed.
+ * into a reopened chip behaves exactly as it did when the chip was first composed. The wrap happens only where
+ * it preserves the ask, which the engine itself answers: a property door takes a value and never a scope, so
+ * `cast:2s` opens raw, and a segment that does not parse opens as the raw text it failed as.
  *
  * @param text The query text.
  * @param at Any offset inside the segment being opened.
  * @returns The rewrapped text with the caret at the interior's end, or null when the segment is not a bound,
- *   unscoped head with a value.
+ *   unscoped head with a value, or the braces would change what it asks.
  */
 export function scopedForm(text: string, at: number): Keystroke | null {
     const plan = planAt(text, at);
-    if (plan.head === null || !plan.head.bound || plan.head.scoped || plan.slot === "") return null;
-    const open = plan.open.slice(0, plan.head.consumed)
+    if (plan.head === null || plan.head.scoped || plan.slot === "") return null;
+    // An operator glue stays in the slot, so its segment carries no bind to wrap after — the scoped spelling
+    // grows the colon as well, which is the same desugar the parser reads `model>=4` through.
+    const bind = plan.head.bound ? "" : GRAMMAR.bind;
+    const open = plan.open.slice(0, plan.head.consumed) + bind
         + GRAMMAR.scope.open + plan.slot + GRAMMAR.scope.close;
+    if (!shedsBraces(open)) return null;
     return {
         text: plan.before + open + plan.after,
         caret: plan.before.length + open.length - 1,
@@ -326,12 +357,53 @@ export interface Commit extends Keystroke {
     readonly removed: boolean;
 }
 
+/** One segment's ask as a comparison key, or the empty string for a segment asking nothing evaluable. */
+const askKey = (segment: string): string => queryKey(parse(segment));
+
+/**
+ * Whether a scoped segment's braces may be shed — the ONE question the editing form asks in both directions.
+ *
+ * The formatter already owns the answer: `unbracedTerm` is the rule by which a scope of one term is written
+ * without its braces, and it is exported precisely so that everything deciding this reads the same decision.
+ * A textual comparison cannot stand in for it — `model:{fire|frost}` and `model:fire|frost` ask one question
+ * and canonicalise to two different strings, while `model:{attach:chest}` and `model:attach:chest` spell
+ * alike and ask two.
+ *
+ * @param segment One segment's text, in its scoped spelling.
+ * @returns True when the braces are the formatter's to drop.
+ */
+function shedsBraces(segment: string): boolean {
+    const [clause] = parse(segment).clauses;
+    const ask = clause?.ask;
+    if (clause === undefined || clause.state !== "ok" || ask == null || ask.on === "plain" || ask.on === "prop") {
+        return false;
+    }
+    const test = ask.test;
+    return test !== null && test.is === "scope" && unbracedTerm(test.terms) !== null;
+}
+
+/**
+ * Removes the character range `[from, to)` and one adjacent separator, so no double gap remains.
+ *
+ * @returns The new text with the caret where the removal stood, flagged as a removal.
+ */
+function spliceOut(text: string, from: number, to: number): Commit {
+    let a = from;
+    let b = to;
+    if (text[b] === " ") b += 1;
+    else if (a > 0 && text[a - 1] === " ") a -= 1;
+    return {text: text.slice(0, a) + text.slice(b), caret: a, removed: true};
+}
+
 /**
  * Commits one segment: the scope simplifies to its interior where a single term remains.
  *
  * A scoped chip with one interior term drops its braces (`model:{fire}` → `model:fire` — the kernel law
- * `{x} ≡ x` spelled the preferred way); several terms keep them, trimmed; an empty scope removes the segment
- * whole, separator included, because an empty ask is not a chip. A segment with no scope commits as it stands.
+ * `{x} ≡ x` spelled the preferred way) — but only where the shed spelling still asks the same question, which
+ * the engine itself answers: `model:{attach:chest}` keeps its braces, because the colon-glued spelling reads as
+ * content. Several terms keep them, trimmed; an empty scope removes the segment whole, separator included,
+ * because an empty ask is not a chip. A segment with no scope commits as it stands, shedding only a dangling
+ * alternation separator the grow gesture may have left.
  *
  * @param text The query text.
  * @param at Any offset inside the segment to commit.
@@ -339,7 +411,22 @@ export interface Commit extends Keystroke {
  */
 export function commitSegment(text: string, at: number): Commit {
     const plan = planAt(text, at);
-    if (plan.head === null || !plan.head.scoped) {
+    // A scope that closes BEFORE its segment ends (`model:{a b}c`) has text past the closer, so the slot is
+    // not an interior and re-wrapping it would write a second closing brace. A scope that never closes still
+    // commits as one — the missing brace is what the commit supplies.
+    const early = plan.head?.scoped === true && plan.suffix === "" && closerAt(plan.slot) >= 0;
+    if (plan.head === null || !plan.head.scoped || early) {
+        const end = plan.open.length > 0 ? plan.open[plan.open.length - 1] : "";
+        if (plan.head !== null && (end === GRAMMAR.or || end === GRAMMAR.numberList)) {
+            const trimmed = plan.open.slice(0, -1);
+            if (askKey(trimmed) === askKey(plan.open)) {
+                return {
+                    text: plan.before + trimmed + plan.after,
+                    caret: plan.before.length + trimmed.length,
+                    removed: false,
+                };
+            }
+        }
         return {text, caret: plan.before.length + plan.open.length, removed: false};
     }
     let interior = plan.slot.trim();
@@ -352,18 +439,101 @@ export function commitSegment(text: string, at: number): Commit {
     const prefix = plan.open.slice(0, plan.head.consumed - 1);
     if (interior === "") {
         // The segment goes whole; one adjacent separator goes with it so no double gap remains.
-        let from = plan.before.length;
-        let to = from + plan.open.length;
-        if (text[to] === " ") to += 1;
-        else if (from > 0 && text[from - 1] === " ") from -= 1;
-        return {text: text.slice(0, from) + text.slice(to), caret: from, removed: true};
+        return spliceOut(text, plan.before.length, plan.before.length + plan.open.length);
     }
-    const single = segmentStarts(interior).length === 1;
-    const open = single ? prefix + interior
-        : prefix + GRAMMAR.scope.open + interior + GRAMMAR.scope.close;
+    const shed = prefix + interior;
+    const kept = prefix + GRAMMAR.scope.open + interior + GRAMMAR.scope.close;
+    // A broken interior sheds too — two spellings that ask nothing alike return the segment to the raw text it
+    // was typed as, rather than stranding it in an editing form it can never leave.
+    const single = segmentStarts(interior).length === 1
+        && (shedsBraces(kept) || (askKey(shed) === "" && askKey(kept) === ""));
+    const open = single ? shed : kept;
     return {
         text: plan.before + open + plan.after,
         caret: plan.before.length + open.length,
         removed: false,
     };
+}
+
+/**
+ * The delete affordance: removes the segment at `at` whole, one adjacent separator with it.
+ *
+ * @param text The query text.
+ * @param at Any offset inside the segment to remove.
+ * @returns The new text with the caret where the segment stood.
+ */
+export function removeSegment(text: string, at: number): Commit {
+    const seg = segmentAt(text, at);
+    return spliceOut(text, seg.start, seg.end);
+}
+
+/**
+ * The per-term delete affordance: removes one term from inside a scoped segment.
+ *
+ * A term alone in its alternation run takes the stranded or-separator with it; a term with run siblings takes
+ * only its own space, so the alternation between the survivors stands. What remains re-commits, so a scope down
+ * to one term collapses back to the compact spelling and an emptied scope removes the segment whole.
+ *
+ * @param text The query text.
+ * @param segStart The segment's start offset.
+ * @param span The term's span, in segment coordinates.
+ * @param lone Whether the term is alone in its alternation run — the display model knows, the text alone cannot.
+ * @returns The new text with the caret at the re-committed segment's end — or, on a removal, where it stood.
+ */
+export function removeTerm(text: string, segStart: number, span: Span, lone: boolean): Commit {
+    let a = segStart + span.start;
+    let b = segStart + span.end;
+    if (lone) {
+        // Swallow the alternation edge the removal strands, spaces included — the following one first, so
+        // removing a leading run keeps the caret's frame of reference simple.
+        let right = b;
+        while (text[right] === " ") right += 1;
+        let left = a;
+        while (left > segStart && text[left - 1] === " ") left -= 1;
+        if (text[right] === GRAMMAR.or) {
+            b = right + 1;
+            while (text[b] === " ") b += 1;
+        } else if (left > segStart && text[left - 1] === GRAMMAR.or) {
+            a = left - 1;
+            while (a > segStart && text[a - 1] === " ") a -= 1;
+        }
+    }
+    if (!lone) {
+        if (text[b] === " ") b += 1;
+        else if (text[a - 1] === " ") a -= 1;
+    }
+    return commitSegment(text.slice(0, a) + text.slice(b), segStart);
+}
+
+/**
+ * The grow affordance: the segment's editing form with a fresh slot appended, as one operation.
+ *
+ * A `term` growth is the ruled lane gesture — the scoped form with a new term slot before the closing brace, so
+ * a chip grows into a lane the moment something is typed and collapses back if nothing is. An `alternative`
+ * growth appends the alternation separator instead, offering another value; abandoned, the commit trim takes the
+ * dangling separator back out.
+ *
+ * @param text The query text.
+ * @param at Any offset inside the segment to grow.
+ * @param flavour Which growth the chip offers — the display model declares it.
+ * @returns The new text with the caret in the fresh slot.
+ */
+export function grownSegment(text: string, at: number, flavour: "term" | "alternative"): Keystroke {
+    const seg = segmentAt(text, at);
+    if (flavour === "alternative") {
+        return {
+            text: text.slice(0, seg.end) + GRAMMAR.or + text.slice(seg.end),
+            caret: seg.end + 1,
+            operation: true,
+        };
+    }
+    const wrapped = scopedForm(text, at)?.text ?? text;
+    const plan = planAt(wrapped, seg.start);
+    if (plan.head === null || !plan.head.scoped) {
+        // A headless or unscoped segment has no term slot to offer; the caret lands at its end unchanged.
+        return {text, caret: seg.end, operation: true};
+    }
+    const cut = slotStart(plan) + plan.slot.length;
+    const grown = plan.slot === "" ? wrapped : wrapped.slice(0, cut) + " " + wrapped.slice(cut);
+    return {text: grown, caret: plan.slot === "" ? cut : cut + 1, operation: true};
 }

@@ -398,7 +398,7 @@ export const percentChange = numeric({
     display: {unit: "%", factor: 1, sign: "required"},
     accepts: [
         {
-            unit: "x", aliases: ["×"], position: "before", factor: 100, offset: -100,
+            unit: "x", aliases: ["×"], glyph: "×", position: "before", factor: 100, offset: -100,
             sign: "refused", bare: {atMost: 10}
         },
         {unit: "%", factor: 1, offset: -100, sign: "refused", bare: {above: 10}},

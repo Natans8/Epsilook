@@ -36,6 +36,14 @@ import {count as countType, path as pathType} from "../vocabulary/value-types";
 
 /** How one position reads an operand. Implementations differ by what the head resolved to. */
 export interface ValueCtx {
+    /**
+     * Whether the wildcard's word synonym reads as the wildcard here.
+     *
+     * True wherever a bound value is being read; false at the top level, where a bare word is plain search
+     * content whatever it spells — quoting stays the escape for a bound value that IS the word.
+     */
+    readonly wordStar: boolean;
+
     operator(op: Operator, operand: string, opts: { readonly whole: string; readonly phrase?: boolean }): Interp;
 
     /** Reads `lo-hi`, or null when nothing in this position orders. */
@@ -289,6 +297,7 @@ export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value
         return null;
     };
     return {
+        wordStar: true,
         operator: (op, operand, opts): Interp => {
             if (opts.phrase === true) {
                 const read = stringReading(operand, op.name);
@@ -381,6 +390,7 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
         return {r: "count", value: opExpr(op.name, {type: countType.name, value, written: operand})};
     };
     return {
+        wordStar: true,
         operator: (op, operand, opts): Interp => {
             let claimed = false;
             for (const ref of refs) {
@@ -479,6 +489,7 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
 export function columnCtx(column: Column, pend: Pending[]): ValueCtx {
     const kinds = kindsOf(column);
     return {
+        wordStar: true,
         operator: (op, operand, opts): Interp => {
             // A quoted operand is a string, so it can neither be the count question nor carry a live wildcard.
             const value = opts.phrase !== true && COMPARABLE.has(op.name) ? countType.parse?.(operand) : null;
@@ -526,6 +537,7 @@ export function columnCtx(column: Column, pend: Pending[]): ValueCtx {
  */
 export function topCtx(): ValueCtx {
     return {
+        wordStar: false,
         operator: (op, operand, opts): Interp => content({op: "contains", operand: {text: opts.whole}}),
         range: (): Interp | null => null,
         rangeParts: (): Interp | null => null,

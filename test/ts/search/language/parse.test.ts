@@ -2,7 +2,7 @@ import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
 import type {Ask, Clause, Diagnostic, Parsed, ScopeTerm, ValueExpr} from "../../../../src/search/index";
-import {fold, KINDS, parse} from "../../../../src/search/index";
+import {fold, formatQuery, KINDS, parse} from "../../../../src/search/index";
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -862,5 +862,55 @@ describe("whitespace bridging inside a scope", () => {
         const typing = parse("model:{count > 5}", {mode: "typing"});
         const terms = termsOf(typing.clauses[0].ask as Ask);
         assert.ok(terms.every((t) => t.ask?.on !== "count"), "typing keeps whitespace as the separator");
+    });
+});
+
+/* ------------------------------------------------------- the display words, typed back in */
+
+describe("the word synonyms — everything a chip displays parses in its place", () => {
+    it("reads the any-word as the wildcard wherever a bound value is read", () => {
+        assert.equal(formatQuery(parse("model:any")), formatQuery(parse("model:*")));
+        assert.equal(formatQuery(parse("cast:any")), formatQuery(parse("cast:*")));
+        assert.equal(formatQuery(parse("model:{any missile}")), formatQuery(parse("model:{* missile}")));
+    });
+
+    it("keeps a bare top-level any as plain search content", () => {
+        const clause = one("any");
+        assert.ok(clause.ask !== null && clause.ask.on === "plain");
+        assert.deepEqual(valueOf(clause.ask), {op: "contains", operand: {text: "any"}});
+    });
+
+    it("keeps a quoted any a literal — the phrase stays the escape", () => {
+        const quoted = one('name:"any"');
+        assert.ok(quoted.ask !== null && quoted.ask.on !== "plain");
+    });
+
+    it("reads the or-word as alternation between clauses, exactly as the symbol", () => {
+        const worded = parse("model:fire or model:frost");
+        assert.equal(worded.clauses.length, 2);
+        assert.deepEqual(worded.groups, [[0], [1]]);
+    });
+
+    it("reads the or-word between a scope's terms", () => {
+        assert.equal(formatQuery(parse("model:{fire or frost}")), formatQuery(parse("model:{fire | frost}")));
+    });
+
+    it("keeps a glued or ordinary text — only the standalone word is the connective", () => {
+        assert.equal(parse("orgrimmar portal").clauses.length, 2);
+        assert.deepEqual(parse("orgrimmar portal").groups, [[0, 1]]);
+        const bound = one("model:or");
+        assert.ok(bound.ask !== null && bound.ask.on === "column");
+    });
+});
+
+describe("operator aliases — the display glyphs read back", () => {
+    it("reads the comparison glyphs as their operators, the implied colon included", () => {
+        assert.equal(formatQuery(parse("scale:≥50")), formatQuery(parse("scale:>=50")));
+        assert.equal(formatQuery(parse("scale≥50")), formatQuery(parse("scale>=50")));
+        assert.equal(formatQuery(parse("cast:≤2s")), formatQuery(parse("cast:<=2s")));
+    });
+
+    it("reads a spaced glyph through the in-scope whitespace bridge", () => {
+        assert.equal(formatQuery(parse("model:{count ≥ 5}")), formatQuery(parse("model:{count >= 5}")));
     });
 });

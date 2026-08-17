@@ -20,6 +20,19 @@ export function spelling(op: Operator): string {
     return op.symbol;
 }
 
+/**
+ * Every spelling an operator answers to: the symbol, then its aliases.
+ *
+ * The reading direction of the spelling declaration — every module that recognises syntax reads this, while
+ * everything writing syntax stays with {@link spelling}, so an alias can never leak into a formatted query.
+ *
+ * @param op The operator.
+ * @returns Its spellings, or an empty list for an operator with no symbol.
+ */
+export function spellingsOf(op: Operator): string[] {
+    return op.symbol === null ? [] : [op.symbol, ...(op.aliases ?? [])];
+}
+
 /** The structural characters and words of the query language, by role. */
 export const GRAMMAR = {
     /** Binds an axis to its value: `model:fire`. */
@@ -42,6 +55,15 @@ export const GRAMMAR = {
 
     /** The cardinality axis. It has no top-level door; a scope is the only place the word exists. */
     countWord: "count",
+
+    /**
+     * The word synonym of the wildcard, in every position that reads a bound value — a typed way in, and the word
+     * chips display for existence. Plain search keeps it as text: a bare top-level word is content, always.
+     */
+    anyWord: "any",
+
+    /** The word synonym of alternation, standing alone between terms exactly as the symbol does. */
+    orWord: "or",
 
     /** Negates the clause it opens. Anywhere else the character is data or a range separator. */
     negate: spelling(not),

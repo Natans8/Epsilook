@@ -57,6 +57,23 @@ export interface Operator {
     /** The symbol, or `null` when the operator has no spelling because juxtaposition implies it. */
     readonly symbol: string | null;
 
+    /**
+     * Further spellings of the symbol, accepted on input and written by no surface — `≥` for `>=`.
+     *
+     * Reading and writing are declared apart because they are not symmetric, exactly as a numeric type's
+     * notations are: every spelling reads, the symbol is what formatted queries write, and {@link glyph} is what
+     * rich display surfaces draw.
+     */
+    readonly aliases?: readonly string[];
+
+    /**
+     * The glyph a rich display surface draws for this operator, where it differs from the symbol.
+     *
+     * A chip prints `≥` where the query writes `>=`. Every glyph must read back — as the symbol's own fold, or as
+     * one of {@link aliases} — because everything displayed must be typeable.
+     */
+    readonly glyph?: string;
+
     readonly form: OperatorForm;
 
     /** What the operator combines. Only a value operator may appear in a type's `accepts` list. */
@@ -77,6 +94,10 @@ export interface Operator {
 /** Every declared operator, keyed by abstract name. */
 export const OPERATORS = new Map<string, Operator>();
 
+/** An operator's spellings for the collision check: the symbol and its aliases are one namespace. */
+const spellings = (op: Operator): string[] =>
+    (op.symbol === null ? [] : [op.symbol, ...(op.aliases ?? [])]);
+
 /**
  * Registers an operator.
  *
@@ -93,12 +114,12 @@ export function defineOperator(op: Operator): Operator {
 
     // A symbol may be shared, but not by two operators the parser would have to choose between in one position at one
     // level. `glob` and `present` are both `*`, told apart by whether the star stands alone; `anyOf` and `or` are both
-    // `|`, told apart by whether it sits inside a value group.
+    // `|`, told apart by whether it sits inside a value group. Aliases enter the same check: an alias is a spelling.
     for (const other of OPERATORS.values()) {
-        if (op.symbol !== null && other.symbol === op.symbol
-            && other.form === op.form && other.level === op.level) {
+        const shared = spellings(op).find((s) => spellings(other).includes(s));
+        if (shared !== undefined && other.form === op.form && other.level === op.level) {
             throw new Error(
-                `operator "${op.name}" claims "${op.symbol}" as a ${op.level}-level ${op.form}, `
+                `operator "${op.name}" claims "${shared}" as a ${op.level}-level ${op.form}, `
                 + `already used by "${other.name}"`);
         }
     }
@@ -125,9 +146,9 @@ export const lt = defineOperator({
     hint: t("tooltips:operator.lt"),
 });
 
-/** Ordered comparison, at or below the operand. Written `<=`. */
+/** Ordered comparison, at or below the operand. Written `<=`, drawn `≤`. */
 export const lte = defineOperator({
-    name: "lte", symbol: "<=", form: "prefix", level: "value",
+    name: "lte", symbol: "<=", aliases: ["≤"], glyph: "≤", form: "prefix", level: "value",
     hint: t("tooltips:operator.lte"),
 });
 
@@ -137,9 +158,9 @@ export const gt = defineOperator({
     hint: t("tooltips:operator.gt"),
 });
 
-/** Ordered comparison, at or above the operand. Written `>=`. */
+/** Ordered comparison, at or above the operand. Written `>=`, drawn `≥`. */
 export const gte = defineOperator({
-    name: "gte", symbol: ">=", form: "prefix", level: "value",
+    name: "gte", symbol: ">=", aliases: ["≥"], glyph: "≥", form: "prefix", level: "value",
     hint: t("tooltips:operator.gte"),
 });
 
@@ -150,7 +171,8 @@ export const gte = defineOperator({
  * between two values it can only be a range.
  */
 export const range = defineOperator({
-    name: "range", symbol: "-", form: "infix", level: "value",
+    // The en dash folds to the hyphen on input, so the glyph needs no alias to stay typeable.
+    name: "range", symbol: "-", glyph: "–", form: "infix", level: "value",
     hint: t("tooltips:operator.range"),
 });
 
@@ -208,9 +230,10 @@ export const anyOf = defineOperator({
  * alternation.
  */
 
-/** Excludes what the clause selects. Written `-` before a clause. */
+/** Excludes what the clause selects. Written `-` before a clause, drawn as the true minus. */
 export const not = defineOperator({
-    name: "not", symbol: "-", form: "prefix", level: "clause", precedence: 3,
+    // The minus sign folds to the hyphen on input, so the glyph needs no alias to stay typeable.
+    name: "not", symbol: "-", glyph: "−", form: "prefix", level: "clause", precedence: 3,
     hint: t("tooltips:operator.not"),
 });
 
@@ -232,6 +255,15 @@ export const or = defineOperator({
  * A type accepting these asserts that its order is transitive, antisymmetric and consistent with `exact`.
  */
 export const ORDERING: readonly Operator[] = Object.freeze([lt, lte, gt, gte, range]);
+
+/**
+ * The ordered comparisons by the name their expression carries, for every surface that writes or draws one.
+ *
+ * Declared here rather than beside each surface: the formatter and the display model both turn an expression's
+ * `op` back into an operator, and two copies of that map would let a newly declared comparison render on one
+ * surface and vanish from the other.
+ */
+export const COMPARISONS = Object.freeze({lt, lte, gt, gte});
 
 /** Every operator that combines clauses, tightest-binding first. */
 export const CLAUSE_OPERATORS: readonly Operator[] = Object.freeze([not, and, or]);

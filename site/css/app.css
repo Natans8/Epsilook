@@ -87,12 +87,12 @@
 
     /* content families — one tone per kind of thing a column shows */
     --model-rgb: 127, 184, 240;
-    --sound: #8fd48f;
+    --sound-rgb: 143, 212, 143;
     --soundkit-rgb: 95, 175, 143;
     --animkit-rgb: 201, 154, 224;
     --fx-rgb: 127, 201, 208;
-    --anim: #d8b4e8;
-    --mech: #e0a878;
+    --anim-rgb: 216, 180, 232;
+    --mech-rgb: 224, 168, 120;
     /* auras sit one shade from the effects that deliver them */
     --mech-aura: #f0d68d;
     /* the priceless invisibility: a cool accent that never reads as a hit */
@@ -221,12 +221,12 @@
     --select-rgb: 136, 182, 252;
     --select-border-rgb: 21, 123, 245;
     --model-rgb: 32, 132, 214;
-    --sound: #229a30;
+    --sound-rgb: 34, 154, 48;
     --soundkit-rgb: 75, 144, 117;
     --animkit-rgb: 185, 40, 237;
     --fx-rgb: 34, 144, 153;
-    --anim: #9c67b3;
-    --mech: #c85c1d;
+    --anim-rgb: 156, 103, 179;
+    --mech-rgb: 200, 92, 29;
     --mech-aura: #a3772b;
     /* the priceless invisibility: light needs no separate solid — the ink is
        the fill's own colour, unlike dark where the text runs a shade paler */
@@ -280,12 +280,12 @@
     --select-rgb: 136, 182, 252;
     --select-border-rgb: 21, 123, 245;
     --model-rgb: 32, 132, 214;
-    --sound: #229a30;
+    --sound-rgb: 34, 154, 48;
     --soundkit-rgb: 75, 144, 117;
     --animkit-rgb: 185, 40, 237;
     --fx-rgb: 34, 144, 153;
-    --anim: #9c67b3;
-    --mech: #c85c1d;
+    --anim-rgb: 156, 103, 179;
+    --mech-rgb: 200, 92, 29;
     --mech-aura: #a3772b;
     /* the priceless invisibility: light needs no separate solid — the ink is
        the fill's own colour, unlike dark where the text runs a shade paler */
@@ -319,6 +319,9 @@
     --gold: rgb(var(--gold-rgb));
     --danger: rgb(var(--danger-rgb));
     --model: rgb(var(--model-rgb));
+    --sound: rgb(var(--sound-rgb));
+    --anim: rgb(var(--anim-rgb));
+    --mech: rgb(var(--mech-rgb));
     --soundkit: rgb(var(--soundkit-rgb));
     --animkit: rgb(var(--animkit-rgb));
     --fx: rgb(var(--fx-rgb));

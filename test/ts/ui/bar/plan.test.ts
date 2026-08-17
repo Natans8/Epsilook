@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-    backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, insertAtGap, openHead, planAt, scopedForm,
-    scopeGesture, segmentAt, segmentStarts, slotStart,
+    backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, grownSegment, insertAtGap, openHead, planAt,
+    removeSegment, removeTerm, scopedForm, scopeGesture, segmentAt, segmentStarts, slotStart,
 } from "../../../../src/ui/bar/plan";
 
 test("segments start at zero and after each balanced space; a trailing space opens an empty tail", () => {
@@ -214,4 +214,109 @@ test("firstDiff finds where an undo landed; equal texts answer their length", ()
     assert.equal(firstDiff("model:fire scale:5", "model:fire"), 10);
     assert.equal(firstDiff("model:fire", "model:{fire}"), 6);
     assert.equal(firstDiff("same", "same"), 4);
+});
+
+test("the brace shed is the engine's call: a spelling that would change the ask keeps its braces", () => {
+    // The colon-glued spelling reads as content, so shedding would silently change the question.
+    assert.equal(commitSegment("model:{attach:chest}", 0).text, "model:{attach:chest}");
+    // The operator-glued spelling reads back as the same one-term scope, so it sheds.
+    assert.equal(commitSegment("model:{count>=4}", 0).text, "model:count>=4");
+    assert.equal(commitSegment("model:{fire}", 0).text, "model:fire");
+});
+
+test("a commit takes a dangling alternation separator back out of a bound segment", () => {
+    assert.equal(commitSegment("model:fire|", 0).text, "model:fire");
+    assert.equal(commitSegment("cast:2s| next", 0).text, "cast:2s next");
+    // A separator that means something stays.
+    assert.equal(commitSegment("model:fire|frost", 0).text, "model:fire|frost");
+});
+
+test("removeSegment takes the chip and one adjacent separator, the caret landing where it stood", () => {
+    assert.deepEqual(removeSegment("model:fire scale:5", 0), {text: "scale:5", caret: 0, removed: true});
+    assert.deepEqual(removeSegment("model:fire scale:5", 12), {text: "model:fire", caret: 10, removed: true});
+    assert.deepEqual(removeSegment("a model:fire z", 3), {text: "a z", caret: 2, removed: true});
+    assert.deepEqual(removeSegment("model:fire", 0), {text: "", caret: 0, removed: true});
+});
+
+test("removeTerm keeps the alternation between survivors, and a lone run takes its or-edge with it", () => {
+    // `model:{fire ball | frost}`: fire 7..11, ball 12..16, frost 19..24.
+    const text = "model:{fire ball | frost}";
+    assert.equal(removeTerm(text, 0, {start: 12, end: 16}, false).text, "model:{fire | frost}");
+    assert.equal(removeTerm(text, 0, {start: 7, end: 11}, false).text, "model:{ball | frost}");
+    // `model:{fire | frost}`: fire 7..11, frost 14..19 — each alone in its run.
+    assert.equal(removeTerm("model:{fire | frost}", 0, {start: 14, end: 19}, true).text, "model:fire");
+    assert.equal(removeTerm("model:{fire | frost}", 0, {start: 7, end: 11}, true).text, "model:frost");
+});
+
+test("removeTerm collapses a two-term scope to the compact spelling, and an emptied scope goes whole", () => {
+    assert.equal(removeTerm("model:{fire ball}", 0, {start: 12, end: 16}, true).text, "model:fire");
+    assert.equal(removeTerm("model:{fire attach:chest}", 0, {start: 12, end: 24}, true).text, "model:fire");
+    const gone = removeTerm("model:{fire} next", 0, {start: 7, end: 11}, true);
+    assert.deepEqual(gone, {text: "next", caret: 0, removed: true});
+});
+
+test("grownSegment offers a fresh term slot inside the scoped form, or an alternative separator", () => {
+    assert.deepEqual(grownSegment("model:fire", 0, "term"),
+        {text: "model:{fire }", caret: 12, operation: true});
+    assert.deepEqual(grownSegment("model:{a b}", 0, "term"),
+        {text: "model:{a b }", caret: 11, operation: true});
+    assert.deepEqual(grownSegment("cast:2s", 0, "alternative"),
+        {text: "cast:2s|", caret: 8, operation: true});
+    assert.deepEqual(grownSegment("id:133,134 x", 0, "alternative"),
+        {text: "id:133,134| x", caret: 11, operation: true});
+});
+
+test("the editing wrap is ask-preserving: a prop door and a broken segment open raw, never braced", () => {
+    // A property takes a value, never a scope — `cast:{2s}` would be invalid, so no wrap.
+    assert.equal(scopedForm("cast:2s", 0), null);
+    // A segment that does not parse opens as the raw text it failed as.
+    assert.equal(scopedForm('scale:"50"', 0), null);
+    // The ordinary chip still wraps.
+    assert.equal(scopedForm("model:fire", 0)?.text, "model:{fire}");
+});
+
+test("the scope gesture skips a property door: its slot stays braceless and a space commits", () => {
+    const before = planAt("cast", 4);
+    const step = scopeGesture(before, {text: "cast:", caret: 5});
+    assert.deepEqual(step, {text: "cast:", caret: 5});
+    const model = scopeGesture(planAt("model", 5), {text: "model:", caret: 6});
+    assert.equal(model.text, "model:{}");
+});
+
+test("a shed that would change the ask is refused even when the interior is broken", () => {
+    // `scale:{"50"}` is a scope whose one term is dead — it means existence and runs; the braceless spelling
+    // is an error that asks nothing. Different questions, so the commit leaves the braces standing.
+    assert.equal(commitSegment('scale:{"50"}', 0).text, 'scale:{"50"}');
+});
+
+test("the brace shed asks the FORMATTER's rule, not two spellings: an alternation value sheds", () => {
+    // `model:{fire|frost}` and `model:fire|frost` ask one question and canonicalise to two different strings,
+    // so a textual comparison refuses a shed the language allows.
+    assert.equal(commitSegment("model:{fire|frost}", 0).text, "model:fire|frost");
+    assert.equal(commitSegment("id:{133,134}", 0).text, "id:133,134");
+    // And the reverse still holds: alike spellings that ask differently keep their braces.
+    assert.equal(commitSegment("model:{attach:chest}", 0).text, "model:{attach:chest}");
+});
+
+test("a scope closing before its segment ends never gains a second brace", () => {
+    // `model:{a b}c` — the closer is mid-segment, so the slot is not an interior.
+    assert.equal(commitSegment("model:{a b}c", 0).text, "model:{a b}c");
+    // The dangling separator is trimmed by the same commit, which is the point: no second brace either way.
+    assert.equal(commitSegment("model:{a b}|", 0).text, "model:{a b}");
+    // A scope that never closes still commits as one; the commit is what supplies the brace.
+    assert.equal(commitSegment("model:{fire", 0).text, "model:fire");
+});
+
+test("an operator-glued head opens scoped too, so its chip can grow a lane", () => {
+    // `model>=4` desugars to a one-term count scope, and `model:{>=4}` is that scope written out.
+    assert.equal(scopedForm("model>=4", 0)?.text, "model:{>=4}");
+    assert.equal(grownSegment("model>=4", 0, "term").text, "model:{>=4 }");
+    // An alternation chip grows the same way.
+    assert.equal(grownSegment("model:fire|frost", 0, "term").text, "model:{fire|frost }");
+});
+
+test("a head opens on a comparison ALIAS exactly as on its symbol — the glyph a chip draws is typeable", () => {
+    assert.deepEqual(openHead("model≥4"), openHead("model>=4"));
+    assert.deepEqual(openHead("scale≤2"), openHead("scale<=2"));
+    assert.equal(openHead("model≥4")?.word, "model");
 });

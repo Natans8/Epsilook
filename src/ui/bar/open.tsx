@@ -14,12 +14,10 @@
 import type {KeyboardEvent, ReactElement, ReactNode} from "react";
 import {useLayoutEffect, useRef} from "react";
 import {GRAMMAR} from "../../search/index";
+import {headCase} from "./chip";
 import type {BarPlan, Keystroke} from "./plan";
 import {backspaceAtStart, deleteAtEnd, slotStart} from "./plan";
 import styles from "./bar.module.css";
-
-/** Heads are capitalised everywhere: `Scale`, never `scale`. */
-const headCase = (word: string): string => (word === "" ? word : word[0].toUpperCase() + word.slice(1));
 
 /** Each opening delimiter and the closer it spawns — the enclosures the slot pairs like an IDE. */
 const PAIRS: Record<string, string | undefined> = {
@@ -41,13 +39,20 @@ export interface CaretRequest {
  * The open segment. Remounted per session — the mount is what seeds the input and places the caret.
  */
 export function OpenSegment({
-                                at, mode, highlight, caret, placeholder, onKeystroke, onArrow, onEdge, onCommit,
-                                onCancel, onUndo, onRedo, onSelectAll, onSettle
+                                at, mode, hidden, seize, highlight, caret, placeholder, onKeystroke, onArrow,
+                                onEdge, onCommit, onCancel, onUndo, onRedo, onSelectAll, onWake, onSettle
                             }: {
     readonly at: BarPlan;
     /** How the slot sits: filling the bar (the true tail), hugging content (chip, mid-bar word), or the
      * zero-displacement caret rest between chips. */
     readonly mode: "fill" | "hug" | "gap";
+    /**
+     * Whether the bar is at rest: the segment renders committed elsewhere, and this input hides — still
+     * mounted, still in the tab order, so focus can come back to the remembered place.
+     */
+    readonly hidden: boolean;
+    /** Whether this session's mount takes the focus. False for the mount a page load creates at rest. */
+    readonly seize: boolean;
     /** The classed rendering of the slot text — the bar supplies its one highlighter. */
     readonly highlight: ReactNode;
     /** Where the caret starts this session. */
@@ -72,6 +77,8 @@ export function OpenSegment({
     readonly onRedo: () => void;
     /** Ctrl+A past the slot: the whole query opens as one flat selected text. */
     readonly onSelectAll: () => void;
+    /** Focus arriving at the slot — the bar leaves its rest state. */
+    readonly onWake: () => void;
     /** Focus leaving the bar entirely — the segment settles into its committed spelling. */
     readonly onSettle: () => void;
 }): ReactElement {
@@ -82,7 +89,7 @@ export function OpenSegment({
 
     useLayoutEffect(() => {
         const el = input.current;
-        if (el === null) return;
+        if (el === null || !seize) return;
         el.focus();
         const to = caret?.at ?? el.value.length;
         el.setSelectionRange(caret?.anchor ?? to, to);
@@ -242,7 +249,7 @@ export function OpenSegment({
         : mode === "gap" ? `${styles.hug} ${styles.gapRest}`
             : at.head === null ? styles.hug : `${styles.hug} ${styles.openChip}`;
     return (
-        <span className={wrap}>
+        <span className={hidden ? `${wrap} ${styles.hiddenOpen}` : wrap}>
             {at.head !== null && (
                 <span
                     key="cell"
@@ -271,6 +278,7 @@ export function OpenSegment({
                         onChange(e.target.value, e.target.selectionStart ?? e.target.value.length);
                     }}
                     onKeyDown={onKeyDown}
+                    onFocus={onWake}
                     onBlur={onSettle}
                     onScroll={syncScroll}
                     placeholder={placeholder}

@@ -11,14 +11,13 @@
  * would run: the same subset the groups hold. That is what a chip bar commits, a URL carries and a JSON door would
  * echo.
  */
-import {GRAMMAR, PREFIX_OPERATORS, spelling} from "./grammar";
+import {GRAMMAR, PREFIX_OPERATORS, spelling, spellingsOf} from "./grammar";
 import {doorOf, formatValue, sentinelOf, wordOf} from "../schema/kinds";
-import {exact, gt, gte, lt, lte} from "../vocabulary/operators";
-import type {Ask, Clause, Parsed, PropRef, ScopeTerm, ValueExpr} from "./ast";
+import {COMPARISONS, exact} from "../vocabulary/operators";
+import type {Ask, Clause, Parsed, ParsedOperand, PropRef, ScopeTerm, ValueExpr} from "./ast";
 import {propOf} from "./ast";
 import {escapeRegExp} from "../text/patterns";
 import {TYPES} from "../vocabulary/value-types";
-import type {Value} from "../vocabulary/value-types";
 
 /** Characters that would change a bare value's reading, whatever its position or type. */
 const NEEDS_PHRASE = new RegExp(`[\\s${escapeRegExp([
@@ -28,7 +27,7 @@ const NEEDS_PHRASE = new RegExp(`[\\s${escapeRegExp([
 
 /** Leading characters that would open an operator, a pattern or a negation instead of text. */
 const OPENS_STRUCTURE = new RegExp(`^[${escapeRegExp([...new Set([
-    ...PREFIX_OPERATORS.map((op) => spelling(op)[0]), GRAMMAR.regex, GRAMMAR.negate,
+    ...PREFIX_OPERATORS.flatMap((op) => spellingsOf(op).map((s) => s[0])), GRAMMAR.regex, GRAMMAR.negate,
 ])].join(""))}]`);
 
 /** Digit shapes that could re-read as a number, a number list or a range rather than text. */
@@ -60,7 +59,7 @@ const NUMBER_STRUCTURE = new RegExp(`[${escapeRegExp(GRAMMAR.numberList + GRAMMA
 type Reading = "quantity" | "worded" | "raw";
 
 /** The reading of one operand: raw carried text, or the declared type's side of the quote law. */
-function readingOf(operand: { text: string } | { type: string; value: Value }): Reading {
+function readingOf(operand: ParsedOperand): Reading {
     if ("text" in operand) return "raw";
     return TYPES.get(operand.type)?.quantity === true ? "quantity" : "worded";
 }
@@ -82,14 +81,16 @@ type Spelling = "canonical" | "written" | "folded";
 /**
  * Writes one operand: the text as carried, or the stored value in its property's spelling.
  *
+ * Exported for the display model, which draws the same operands this writes — one rule for what an operand
+ * says, so a chip and a formatted query can never disagree about it.
+ *
  * @param operand The operand from a {@link ValueExpr}.
  * @param at The property the value belongs to, when the ask names one — it holds the sentinel words.
- * @param tier The output tier, per {@link Spelling}.
+ * @param tier The output tier, per {@link Spelling}. Only `written` and `canonical` are readable spellings.
  * @returns The operand's text in that tier.
  */
-function operandText(
-    operand: { text: string } | { type: string; value: Value; written?: string },
-    at?: PropRef, tier: Spelling = "canonical",
+export function operandText(
+    operand: ParsedOperand, at?: PropRef, tier: Spelling = "canonical",
 ): string {
     if ("text" in operand) return tier === "folded" ? operand.text.toLowerCase() : operand.text;
     if (tier === "written" && operand.written !== undefined) return operand.written;
@@ -125,8 +126,21 @@ function bound(text: string): string {
     return text.startsWith(GRAMMAR.negate) ? `${GRAMMAR.group.open}${text}${GRAMMAR.group.close}` : text;
 }
 
-/** The ordered comparisons by their expression name, for reading each spelling from the registry. */
-const COMPARISONS = {lt, lte, gt, gte} as const;
+/**
+ * Whether a rendering surface draws this operand quoted.
+ *
+ * The chip language shows a phrase's quotes at rest, and which values are phrases is the formatter's own quote
+ * law — exactly the operands whose bare spelling would re-read as something else. Exported so the display layer
+ * and the formatter can never disagree about where the quotes are.
+ *
+ * @param operand The operand from a {@link ValueExpr}.
+ * @param at The property the value belongs to, when the ask names one.
+ * @returns True when the spelling carries quotes.
+ */
+export function operandQuoted(operand: ParsedOperand, at?: PropRef): boolean {
+    const text = operandText(operand, at, "written");
+    return bareOrPhrase(text, readingOf(operand)) !== text;
+}
 
 /**
  * Writes one value expression in its canonical spelling.
