@@ -64,6 +64,14 @@
     },
     {
       "files": [
+        "test/browser/**/*.ts"
+      ],
+      "rules": {
+        "no-await-in-loop": "off"
+      }
+    },
+    {
+      "files": [
         "test/**/*.ts"
       ],
       "rules": {
