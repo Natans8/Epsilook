@@ -243,15 +243,20 @@ export function Bar({text, onText, placeholder}: {
             {starts.map((start) => {
                 const seg = segmentAt(text, start);
                 if (gapAt === null && seg.start === openStart) return <Fragment key="open">{open}</Fragment>;
+                // An empty settled segment — a doubled separator's residue — draws nothing and takes no press:
+                // opening a zero-width nothing is how phantom chiplets appear.
+                if (seg.start === seg.end && gapAt !== start) return null;
                 return (
                     <Fragment key={start}>
                         {gapAt === start && <Fragment key="open">{open}</Fragment>}
-                        <span
-                            className={styles.settled}
-                            onMouseDown={pressSegment(seg.start)}
-                        >
-                            <Classed text={text.slice(seg.start, seg.end)}/>
-                        </span>
+                        {seg.start !== seg.end && (
+                            <span
+                                className={styles.settled}
+                                onMouseDown={pressSegment(seg.start)}
+                            >
+                                <Classed text={text.slice(seg.start, seg.end)}/>
+                            </span>
+                        )}
                     </Fragment>
                 );
             })}

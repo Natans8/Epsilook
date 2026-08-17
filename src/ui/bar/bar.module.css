@@ -29,7 +29,7 @@
     color: var(--text);
 }
 
-/* the headless open segment: the tail, filling the bar like 1.0's own input */
+/* the headless open segment as the true tail: fills the bar like 1.0's own input */
 .tail {
     display: inline-flex;
     flex: 1;
@@ -37,17 +37,21 @@
     max-width: 100%;
 }
 
-/* the open segment's enclosure once a head transforms: the editing look — a quiet ring, never the page's hard
- * focus outline. It HUGS its content: the backdrop sits in flow and sets the width, the input rides above it,
- * so the chip grows with every typed character. */
-.openChip {
+/* the hugging open segment: the backdrop sits in flow and sets the width, the input rides above it, so the
+ * slot grows with every typed character. Layout only — a bare word or a gap hugs with NO chrome, because
+ * freeform terms are text by ruling and a gap is nothing but a caret rest. */
+.hug {
     display: inline-flex;
     align-items: stretch;
+    max-width: 100%;
+}
+
+/* the enclosure a HEAD earns: the editing look — a quiet ring, never the page's hard focus outline */
+.openChip {
     border: 1px solid var(--gold-dim);
     border-radius: 6px;
     box-shadow: 0 0 0 2px rgba(var(--gold-rgb), 0.12);
     overflow: hidden;
-    max-width: 100%;
 }
 
 /* the head cell: a darker inset, the split carried by structure — no delimiter shown */
@@ -76,10 +80,13 @@
     max-width: 100%;
 }
 
-.openChip .editwrap {
-    padding: 0 0.55rem;
+.hug .editwrap {
     flex: 0 1 auto;
     min-width: 0;
+}
+
+.openChip .editwrap {
+    padding: 0 0.55rem;
 }
 
 .qhl {
@@ -100,18 +107,23 @@
  * itself by the same amount. Three-class selectors on purpose: `.q.hl` sets position on the input too, and at
  * equal specificity the file order decides — which is exactly how the first version shipped an in-flow
  * "absolute" input beside a squeezed mirror. */
-.openChip .editwrap .qhl {
+.hug .editwrap .qhl {
     position: static;
     flex: 0 0 auto;
     min-width: 1ch;
 }
 
-.openChip .editwrap .q {
+.hug .editwrap .q {
     position: absolute;
     inset: 0;
     width: 100%;
     flex: none;
     min-width: 0;
+    padding: 0.15rem 0;
+}
+
+/* the head's enclosure pads its slot; the input pads itself by the same amount so the texts stay at one x */
+.openChip .editwrap .q {
     padding: 0.15rem 0.55rem;
 }
 

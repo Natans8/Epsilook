@@ -14,7 +14,7 @@
 import type {KeyboardEvent, ReactElement, ReactNode} from "react";
 import {useLayoutEffect, useRef} from "react";
 import type {BarPlan, Keystroke} from "./plan";
-import {backspaceAtStart, slotStart} from "./plan";
+import {backspaceAtStart, deleteAtEnd, slotStart} from "./plan";
 import styles from "./bar.module.css";
 
 /** Heads are capitalised everywhere: `Scale`, never `scale`. */
@@ -116,6 +116,13 @@ export function OpenSegment({
             onKeystroke(step, true, el.value);
             return;
         }
+        if (e.key === "Delete" && collapsed && el.selectionStart === el.value.length) {
+            const step = deleteAtEnd(at);
+            if (step === null) return;
+            e.preventDefault();
+            onKeystroke(step, true, el.value);
+            return;
+        }
         if (e.key === "ArrowLeft" && collapsed && el.selectionStart === 0) {
             e.preventDefault();
             onArrow(-1);
@@ -133,8 +140,12 @@ export function OpenSegment({
         }
     };
 
+    // Layout apart from chrome: hug or fill is geometry; the ring is the head's alone — a bare word or a gap
+    // is text with a caret, because freeform terms are text by ruling.
+    const wrap = mode === "fill" ? styles.tail
+        : at.head === null ? styles.hug : `${styles.hug} ${styles.openChip}`;
     return (
-        <span className={mode === "fill" ? styles.tail : styles.openChip}>
+        <span className={wrap}>
             {at.head !== null && (
                 <span key="cell" className={`${styles.headCell} ${at.head.negated ? styles.neg : ""}`}>
                     {at.head.negated ? "−" : ""}{headCase(at.head.word)}

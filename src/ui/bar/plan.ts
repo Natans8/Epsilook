@@ -179,6 +179,27 @@ function closesAtEnd(interior: string): boolean {
 /** Where a plan's slot begins in text coordinates — what turns an input caret into a text offset and back. */
 export const slotStart = (at: BarPlan): number => at.before.length + (at.head?.consumed ?? 0);
 
+/**
+ * Delete at the slot's end — the boundary backspace's mirror.
+ *
+ * On a scoped head the character to the right is the closing brace, and deleting a brace deletes its pair, so
+ * the scope dissolves with its interior kept as raw text. On anything else it is the separator (or the next
+ * segment's first character), which deletes plainly, merging what follows.
+ *
+ * @param at The current plan.
+ * @returns The new text with the caret where it stood, or null at the text's very end.
+ */
+export function deleteAtEnd(at: BarPlan): Keystroke | null {
+    if (at.head?.scoped === true && at.suffix !== "") {
+        const open = at.open.slice(0, at.head.consumed - 1) + at.slot;
+        return {text: at.before + open + at.after, caret: slotStart(at) - 1 + at.slot.length};
+    }
+    const cut = slotStart(at) + at.slot.length;
+    const text = at.before + at.open + at.after;
+    if (cut >= text.length) return null;
+    return {text: text.slice(0, cut) + text.slice(cut + 1), caret: cut};
+}
+
 /** One keystroke's outcome: the new text and the caret as a TEXT offset — the component re-plans around it. */
 export interface Keystroke {
     readonly text: string;

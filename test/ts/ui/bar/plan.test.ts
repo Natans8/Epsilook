@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-    backspaceAtStart, commitSegment, firstDiff, insertAtGap, openHead, planAt, scopedForm, scopeGesture, segmentAt,
-    segmentStarts, slotStart,
+    backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, insertAtGap, openHead, planAt, scopedForm,
+    scopeGesture, segmentAt, segmentStarts, slotStart,
 } from "../../../../src/ui/bar/plan";
 
 test("segments start at zero and after each balanced space; a trailing space opens an empty tail", () => {
@@ -179,6 +179,16 @@ test("openHead is the plan's own read exposed: null on the empty segment", () =>
 test("typing into a gap writes the value and the separator that keeps the next segment a segment", () => {
     assert.deepEqual(insertAtGap("model:fire scale:5", 11, "x"), {text: "model:fire x scale:5", caret: 12});
     assert.deepEqual(insertAtGap("fire", 0, "a"), {text: "a fire", caret: 1});
+});
+
+test("delete at the slot's end mirrors the boundary backspace: pair-dissolve on a scope, plain merge otherwise", () => {
+    const scoped = deleteAtEnd(planAt("model:{fire}", 8));
+    assert.equal(scoped?.text, "model:fire");
+    assert.equal(scoped?.caret, 10);
+    const merge = deleteAtEnd(planAt("fire abc", 0));
+    assert.equal(merge?.text, "fireabc");
+    assert.equal(merge?.caret, 4);
+    assert.equal(deleteAtEnd(planAt("fire", 0)), null);
 });
 
 test("firstDiff finds where an undo landed; equal texts answer their length", () => {
