@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-    backspaceAtStart, commitSegment, openHead, planAt, scopedForm, scopeGesture, segmentAt, segmentStarts, slotStart,
+    backspaceAtStart, commitSegment, firstDiff, insertAtGap, openHead, planAt, scopedForm, scopeGesture, segmentAt,
+    segmentStarts, slotStart,
 } from "../../../../src/ui/bar/plan";
 
 test("segments start at zero and after each balanced space; a trailing space opens an empty tail", () => {
@@ -173,4 +174,15 @@ test("a dissolved negated head keeps its glyph in the raw text", () => {
 
 test("openHead is the plan's own read exposed: null on the empty segment", () => {
     assert.equal(openHead(""), null);
+});
+
+test("typing into a gap writes the value and the separator that keeps the next segment a segment", () => {
+    assert.deepEqual(insertAtGap("model:fire scale:5", 11, "x"), {text: "model:fire x scale:5", caret: 12});
+    assert.deepEqual(insertAtGap("fire", 0, "a"), {text: "a fire", caret: 1});
+});
+
+test("firstDiff finds where an undo landed; equal texts answer their length", () => {
+    assert.equal(firstDiff("model:fire scale:5", "model:fire"), 10);
+    assert.equal(firstDiff("model:fire", "model:{fire}"), 6);
+    assert.equal(firstDiff("same", "same"), 4);
 });

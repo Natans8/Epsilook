@@ -197,6 +197,41 @@ export interface Keystroke {
  * @param at The current plan.
  * @returns The new text with the caret where the deleted character was, or null at the text's very start.
  */
+/**
+ * Types the first characters into a GAP — the empty caret position between two chips.
+ *
+ * A gap holds no text of its own, so the first insertion writes the value AND the separator that keeps the
+ * following segment a segment: typing `x` between `model:fire` and `scale:5` yields `model:fire x scale:5`,
+ * caret after the x, from where ordinary keystrokes continue.
+ *
+ * @param text The query text.
+ * @param gapAt The gap's offset — a segment start, meaning "insert before this segment".
+ * @param value What was typed into the gap.
+ * @returns The new text with the caret after the inserted value.
+ */
+export function insertAtGap(text: string, gapAt: number, value: string): Keystroke {
+    return {
+        text: text.slice(0, gapAt) + value + " " + text.slice(gapAt),
+        caret: gapAt + value.length,
+    };
+}
+
+/**
+ * The first offset where two texts disagree — where an undo or redo landed its change, and so where the caret
+ * belongs after one.
+ *
+ * @param a One text.
+ * @param b The other.
+ * @returns The first differing offset, clamped into both; equal texts answer their length.
+ */
+export function firstDiff(a: string, b: string): number {
+    const shorter = Math.min(a.length, b.length);
+    for (let at = 0; at < shorter; at++) {
+        if (a[at] !== b[at]) return at;
+    }
+    return shorter;
+}
+
 export function backspaceAtStart(at: BarPlan): Keystroke | null {
     const text = at.before + at.open + at.after;
     // Left of a scoped slot sits the opening brace; deleting an opener deletes its pair, the IDE convention —

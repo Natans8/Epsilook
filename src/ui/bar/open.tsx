@@ -29,10 +29,12 @@ export interface CaretRequest {
  * The open segment. Remounted per session — the mount is what seeds the input and places the caret.
  */
 export function OpenSegment({
-                                at, highlight, caret, placeholder, onKeystroke, onArrow, onCommit, onCancel, onUndo,
-                                onRedo
+                                at, mode, highlight, caret, placeholder, onKeystroke, onArrow, onCommit, onCancel,
+                                onUndo, onRedo
                             }: {
     readonly at: BarPlan;
+    /** Whether the slot fills the bar (the true tail) or hugs its content (a chip, a mid-bar word, a gap). */
+    readonly mode: "fill" | "hug";
     /** The classed rendering of the slot text — the bar supplies its one highlighter. */
     readonly highlight: ReactNode;
     /** Where the caret starts this session. */
@@ -132,7 +134,7 @@ export function OpenSegment({
     };
 
     return (
-        <span className={at.head === null ? styles.tail : styles.openChip}>
+        <span className={mode === "fill" ? styles.tail : styles.openChip}>
             {at.head !== null && (
                 <span key="cell" className={`${styles.headCell} ${at.head.negated ? styles.neg : ""}`}>
                     {at.head.negated ? "−" : ""}{headCase(at.head.word)}
