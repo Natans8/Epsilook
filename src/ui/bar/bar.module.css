@@ -97,14 +97,16 @@
 
 /* hug mode: the backdrop leaves the overlay and SIZES the slot; the input becomes the overlay instead. The
  * padding split keeps both texts at the same x: the wrap pads the in-flow backdrop, the absolute input pads
- * itself by the same amount. */
-.openChip .qhl {
+ * itself by the same amount. Three-class selectors on purpose: `.q.hl` sets position on the input too, and at
+ * equal specificity the file order decides — which is exactly how the first version shipped an in-flow
+ * "absolute" input beside a squeezed mirror. */
+.openChip .editwrap .qhl {
     position: static;
-    display: inline-block;
+    flex: 0 0 auto;
     min-width: 1ch;
 }
 
-.openChip .q {
+.openChip .editwrap .q {
     position: absolute;
     inset: 0;
     width: 100%;
