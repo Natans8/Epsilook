@@ -212,7 +212,12 @@ EXTRA_TABLES = {
 #
 # WoWDBDefs ships ~169 enum tables but nothing says WHICH COLUMN uses WHICH
 # enum — that mapping exists only in readers like `build/pack`. Declared here
-# so `ref.enum_column` can join a raw value to its name.
+# and shipped as `ref.column_info.enum_name`, which is what joins a raw value
+# to its name:
+#
+#   select ev.name from ref.column_info ci
+#   join ref.enum_value ev on ev.enum_name = ci.enum_name
+#   where ci.table_name = 'SpellEffect' and ci.column_name = 'Effect'
 #
 # EXTENSION POINT: one line per (table, column) -> enum name.
 ENUM_COLUMNS = {
