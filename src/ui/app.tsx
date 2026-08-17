@@ -15,6 +15,9 @@ import styles from "./app.module.css";
 /** The query the URL carries, or nothing. */
 const urlQuery = (): string => new URLSearchParams(location.search).get("q") ?? "";
 
+/** Whether the URL asks for the plaintext view — a view choice worth surviving a reload. */
+const urlPlain = (): boolean => new URLSearchParams(location.search).get("plain") === "1";
+
 /** Rewrites one URL parameter and reloads — the knob transitions that need a refetch. */
 function reloadWith(param: string, value: string): void {
     const url = new URL(location.href);
@@ -34,6 +37,7 @@ export function App({info, searcher}: {
 }): ReactElement {
     const {t, i18n} = useTranslation();
     const [text, setText] = useState(urlQuery);
+    const [plain, setPlain] = useState(urlPlain);
     const [result, setResult] = useState<{ count: number; ms: number; for: string } | null>(null);
     const asked = useRef("");
 
@@ -60,12 +64,14 @@ export function App({info, searcher}: {
             const url = new URL(location.href);
             if (text.trim() === "") url.searchParams.delete("q");
             else url.searchParams.set("q", text);
+            if (plain) url.searchParams.set("plain", "1");
+            else url.searchParams.delete("plain");
             window.history.replaceState(null, "", url);
         }, 400);
         return (): void => {
             clearTimeout(timer);
         };
-    }, [text]);
+    }, [text, plain]);
 
     const stale = result === null || result.for !== text;
 
@@ -112,7 +118,19 @@ export function App({info, searcher}: {
                 {/* data-query mirrors the state so a browser assertion can read the text without racing the
                   * debounced URL sync */}
                 <div className={styles.barRow} data-query={text}>
-                    <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}/>
+                    <Bar text={text} onText={setText} placeholder={t("bar.placeholder")} plain={plain}/>
+                    <button
+                        type="button"
+                        className={`${styles.viewToggle} ${plain ? styles.viewOn : ""}`}
+                        aria-pressed={plain}
+                        aria-label={t("bar.plaintext")}
+                        title={t("bar.plaintext")}
+                        onClick={() => {
+                            setPlain((was) => !was);
+                        }}
+                    >
+                        {t("bar.plaintextShort")}
+                    </button>
                 </div>
                 <div
                     className={`${styles.status} ${stale ? styles.statusStale : ""}`}

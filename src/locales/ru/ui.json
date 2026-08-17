@@ -31,7 +31,9 @@
     "help": "",
     "delete": "",
     "add": "",
-    "editHint": ""
+    "editHint": "",
+    "plaintext": "",
+    "plaintextShort": ""
   },
   "surface": {
     "history": "",

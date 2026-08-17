@@ -246,12 +246,20 @@ export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value
         }
         return null;
     };
+    /** Whether anything this property reads is a string, which is the only thing quotes can select. */
+    const worded = prop.types.some((type) => !quantity(type));
+
     /**
      * The quote law's refusal: a quoted operand that is neither a sentinel word nor readable as anything but a
      * quantity is refused, because a quantity has no string reading.
+     *
+     * Only where the axis HAS a string reading, though. Quotes say "read this as a string", so on an axis that
+     * reads nothing but quantities they select no alternative and carry no information — refusing them there
+     * would be refusing a value whose meaning is not in doubt. Where both readings exist the refusal stands and
+     * is load-bearing: `kit:150` is an id and `kit:"150"` is a name.
      */
     const refusesQuote = (t: string): boolean => {
-        if (isSentinel(t)) return false;
+        if (isSentinel(t) || !worded) return false;
         const pv = parseValue(prop, t);
         return pv !== null ? quantity(pv.type) : prop.types.some(quantity);
     };
@@ -468,6 +476,11 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
                 return pv !== null && !quantity(pv.type);
             });
             if (wordy.length > 0) return propCtx(wordy, word, pend).phrase(t);
+            // Same rule one level up, and by this point it is already established: neither a textual property
+            // nor a word vocabulary reads this operand, so the quotes select nothing. Where something can
+            // still read it as a quantity, they are inert rather than an error.
+            const readable = refs.filter((ref) => parseValue(propOf(ref), t) !== null);
+            if (readable.length > 0) return propCtx(readable, word, pend).bare(t, false);
             const numeric = refs.some((ref) => parseValue(propOf(ref), t) !== null
                 || propOf(ref).types.some(quantity));
             if (numeric) return quotedQuantity(word, subject);

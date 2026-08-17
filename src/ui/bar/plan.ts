@@ -481,28 +481,40 @@ export function selectionOver(text: string, anchor: number, focus: number): BarS
     const from = first.start;
     // An empty trailing segment has nothing to select, so the range ends at the last segment holding text.
     const to = last.end > last.start ? last.end : Math.max(from, last.start - 1);
-    return to > from ? {from, to} : null;
+    // Whitespace is not a thing to select: a range covering none of the query selects nothing at all.
+    return to > from && text.slice(from, to).trim() !== "" ? {from, to} : null;
 }
 
 /**
- * The selection extended by one segment in a direction, from an existing range or a caret.
+ * Which segment an offset falls in, counted from zero.
+ *
+ * A selection's two ends are held as segment NUMBERS rather than offsets, because an offset at a boundary is
+ * ambiguous — the end of one segment and the start of the next are the same character — and a selection that
+ * cannot tell them apart stops growing at the second press.
  *
  * @param text The query text.
- * @param anchor The end that stays put.
- * @param focus The end that moves.
- * @param dir Which way it moves.
- * @returns The new focus offset, clamped to the text.
+ * @param at Any offset into it.
+ * @returns The segment's index into {@link segmentStarts}.
  */
-export function extendBySegment(text: string, anchor: number, focus: number, dir: -1 | 1): number {
+export function segmentIndex(text: string, at: number): number {
     const starts = segmentStarts(text);
-    if (dir === -1) {
-        const prev = [...starts].reverse().find((start) => start < focus);
-        return prev ?? 0;
-    }
-    const seg = segmentAt(text, focus);
-    const next = starts.find((start) => start > focus);
-    // Past the last boundary the focus walks to the text's end, so the final segment can be taken whole.
-    return seg.end > focus ? seg.end : next ?? text.length;
+    const found = starts.findLastIndex((start) => start <= at);
+    return found < 0 ? 0 : found;
+}
+
+/**
+ * The offsets a selection between two segment numbers covers, snapped as {@link selectionOver} snaps.
+ *
+ * @param text The query text.
+ * @param a One end's segment number.
+ * @param b The other end's.
+ * @returns The range, or null when it covers nothing selectable.
+ */
+export function selectionOfSegments(text: string, a: number, b: number): BarSelection | null {
+    const starts = segmentStarts(text);
+    const lo = starts[Math.max(0, Math.min(a, b, starts.length - 1))];
+    const hi = starts[Math.max(0, Math.min(Math.max(a, b), starts.length - 1))];
+    return selectionOver(text, lo, hi);
 }
 
 /**

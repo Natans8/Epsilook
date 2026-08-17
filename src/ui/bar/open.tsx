@@ -40,7 +40,8 @@ export interface CaretRequest {
  */
 export function OpenSegment({
                                 at, mode, hidden, seize, highlight, caret, placeholder, onKeystroke, onArrow,
-                                onEdge, onCommit, onCancel, onUndo, onRedo, onSelectAll, onWake, onSettle
+                                onEdge, onCommit, onCancel, onUndo, onRedo, onSelectAll, onSelectSegment,
+                                onWake, onSettle
                             }: {
     readonly at: BarPlan;
     /** How the slot sits: filling the bar (the true tail), hugging content (chip, mid-bar word), or the
@@ -75,8 +76,10 @@ export function OpenSegment({
     /** Operation-level undo — reached only from the session's own start state. */
     readonly onUndo: () => void;
     readonly onRedo: () => void;
-    /** Ctrl+A past the slot: the whole query opens as one flat selected text. */
+    /** Ctrl+A past the slot: every chip joins the bar's own selection. */
     readonly onSelectAll: () => void;
+    /** A Shift+arrow at the slot's edge: the selection leaves the slot and takes whole segments. */
+    readonly onSelectSegment: (dir: -1 | 1) => void;
     /** Focus arriving at the slot — the bar leaves its rest state. */
     readonly onWake: () => void;
     /** Focus leaving the bar entirely — the segment settles into its committed spelling. */
@@ -214,8 +217,18 @@ export function OpenSegment({
             onKeystroke(step, true, el.value);
             return;
         }
-        // A held Shift means selection, which stays the platform's inside the slot — no walk, no jump.
-        if (e.shiftKey) return;
+        // A held Shift means selection. Inside the slot that is the platform's own, character by character;
+        // at the slot's edge there is nothing left to select here, so the bar takes over by whole segments —
+        // the same escalation the caret itself makes when it walks out.
+        if (e.shiftKey) {
+            const atEdge = collapsed && ((e.key === "ArrowLeft" && a === 0)
+                || (e.key === "ArrowRight" && a === el.value.length));
+            if (atEdge) {
+                e.preventDefault();
+                onSelectSegment(e.key === "ArrowLeft" ? -1 : 1);
+            }
+            return;
+        }
         if (e.key === "ArrowLeft" && collapsed && a === 0) {
             e.preventDefault();
             onArrow(-1);

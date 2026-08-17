@@ -44,7 +44,7 @@ test("an invalid clause never chipifies: it is the error form, its message carri
     const v = view("model:");
     assert.equal(v.form, "error");
     assert.equal(v.notes.length, 1);
-    assert.equal(view('scale:"50"').form, "error");
+    assert.equal(view("scale:abc").form, "error");
 });
 
 test("a content bind is a compact chip: head, column tone, plain value", () => {

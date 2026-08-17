@@ -10,18 +10,32 @@
  * the query is valid — validity is the parser's answer, drawn elsewhere. It folds typography exactly as the
  * parser does, which is length-preserving, so every span indexes the reader's own text.
  */
+import type {Span, ValueExpr} from "./ast";
 import {GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./grammar";
+import {parse} from "./parse";
 import {HEADS} from "../schema/schema";
 import {fold, foldTypography} from "../text/normalize";
 
 /** The role one run of query text plays. */
 export type RunKind = "head" | "op" | "delim" | "quote" | "number" | "word" | "space";
 
-/** One classed run. Runs abut: each starts where the previous ended, and together they cover the text. */
+/**
+ * One classed run. Runs abut: each starts where the previous ended, and together they cover the text.
+ *
+ * The lexical `kind` is what {@link classify} answers on its own. The rest is what {@link paint} adds by
+ * reading the parse, so a surface showing whole query text can colour it by what the engine UNDERSTOOD rather
+ * than by what the characters look like.
+ */
 export interface Run {
     readonly start: number;
     readonly end: number;
     readonly kind: RunKind;
+    /** The column key whose tone a head wears, where the head resolves to one. */
+    readonly tone?: string;
+    /** A clause-level finding covering this run. */
+    readonly state?: "error" | "warning";
+    /** Whether the run is a word from a closed vocabulary rather than corpus text. */
+    readonly vocab?: boolean;
 }
 
 /** The structural single characters beyond the operators: scopes, groups, alternation. */
@@ -105,3 +119,75 @@ export function classify(text: string): Run[] {
     }
     return runs;
 }
+
+
+/**
+ * Classifies one whole query, layering what the parse understood over the lexical runs.
+ *
+ * The difference from {@link classify} is the difference between spelling and meaning: the lexer can say a
+ * character is a head or a delimiter, and only the parse can say which column that head reached, whether the
+ * clause it opens is valid, and whether a word came from a closed vocabulary. Both are needed — the lexer
+ * covers the text exactly, including the parts no clause claims — so this reads the lexer's runs and annotates
+ * them rather than replacing them.
+ *
+ * Requires a whole query: a fragment such as one slot's contents has no clauses of its own, and
+ * {@link classify} is what those surfaces use.
+ *
+ * @param text The raw query text.
+ * @returns The runs, in order, covering the text exactly.
+ */
+export function paint(text: string): Run[] {
+    const runs: Run[] = classify(text);
+    const parsed = parse(text);
+
+    /** Rewrites every run overlapping a span. */
+    const over = (span: Span, mark: (run: Run) => Run): void => {
+        for (const [i, run] of runs.entries()) {
+            if (run.end > span.start && run.start < span.end) runs[i] = mark(run);
+        }
+    };
+
+    for (const [index, clause] of parsed.clauses.entries()) {
+        const worst = parsed.diagnostics
+            .filter((d) => d.clause === index)
+            .reduce<"error" | "warning" | null>(
+                (held, d) => (d.severity === "error" ? "error" : d.severity === "warning" ? held ?? "warning" : held),
+                null);
+        const state = clause.state === "invalid" ? "error" : worst;
+        if (state !== null) over(clause.span, (run) => ({...run, state}));
+
+        const ask = clause.ask;
+        if (ask === null) continue;
+        const column = ask.on === "plain" ? null
+            : ask.on === "column" ? ask.column
+                : ask.on === "kind" ? ask.kind.column : ask.ref.kind.column;
+        if (column !== null) {
+            over(clause.span, (run) => (run.kind === "head" ? {...run, tone: column.key} : run));
+        }
+        // A kind word IS the vocabulary — `model:missile` names a kind rather than searching for the letters.
+        if (ask.on === "kind" && ask.test?.is === "exists") {
+            over(clause.span, (run) => (run.kind === "word" ? {...run, vocab: true} : run));
+        }
+        const test = ask.on === "column" || ask.on === "kind" ? ask.test : null;
+        if (test?.is !== "scope") continue;
+        for (const term of test.terms.flat()) {
+            const inner = term.ask;
+            if (inner === null) continue;
+            if (inner.on === "kindWord" || (inner.on === "props" && wordValued(inner.value))) {
+                over(term.span, (run) => (run.kind === "word" ? {...run, vocab: true} : run));
+            }
+        }
+    }
+    return runs;
+}
+
+/** Whether every operand of a value came from a closed vocabulary rather than from the corpus. */
+function wordValued(value: ValueExpr): boolean {
+    if (value.op === "anyOf") return value.alternatives.every(wordValued);
+    if (!("operand" in value)) return false;
+    const operand = value.operand;
+    return !("text" in operand) && WORDED.has(operand.type);
+}
+
+/** The value types whose values are words from a closed set. */
+const WORDED: ReadonlySet<string> = new Set(["enum", "ordinal", "bitmask"]);

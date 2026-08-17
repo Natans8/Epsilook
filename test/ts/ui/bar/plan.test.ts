@@ -8,7 +8,8 @@ import test from "node:test";
 
 import {
     backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, grownSegment, insertAtGap, openHead, planAt,
-    removeSegment, removeTerm, scopedForm, scopeGesture, segmentAt, segmentStarts, slotStart,
+    removeSegment, removeSelection, removeTerm, scopedForm, scopeGesture, segmentAt, segmentIndex,
+    segmentStarts, selectionOfSegments, selectionOver, slotStart,
 } from "../../../../src/ui/bar/plan";
 
 test("segments start at zero and after each balanced space; a trailing space opens an empty tail", () => {
@@ -270,7 +271,7 @@ test("the editing wrap is ask-preserving: a prop door and a broken segment open 
     // A property takes a value, never a scope — `cast:{2s}` would be invalid, so no wrap.
     assert.equal(scopedForm("cast:2s", 0), null);
     // A segment that does not parse opens as the raw text it failed as.
-    assert.equal(scopedForm('scale:"50"', 0), null);
+    assert.equal(scopedForm("scale:abc", 0), null);
     // The ordinary chip still wraps.
     assert.equal(scopedForm("model:fire", 0)?.text, "model:{fire}");
 });
@@ -284,9 +285,9 @@ test("the scope gesture skips a property door: its slot stays braceless and a sp
 });
 
 test("a shed that would change the ask is refused even when the interior is broken", () => {
-    // `scale:{"50"}` is a scope whose one term is dead — it means existence and runs; the braceless spelling
-    // is an error that asks nothing. Different questions, so the commit leaves the braces standing.
-    assert.equal(commitSegment('scale:{"50"}', 0).text, 'scale:{"50"}');
+    // `scale:{abc}` is a scope whose one term is dead: the scope still runs, asking for any scale row at all,
+    // while the braceless `scale:abc` is an error that asks nothing. Different questions, so the braces stay.
+    assert.equal(commitSegment("scale:{abc}", 0).text, "scale:{abc}");
 });
 
 test("the brace shed asks the FORMATTER's rule, not two spellings: an alternation value sheds", () => {
@@ -328,4 +329,51 @@ test("a commit prefers the spelling that parses: the editing braces never break 
     assert.equal(commitSegment("scale:{-50}", 0).text, "scale:-50");
     // A braced form that asks something real still keeps its braces where shedding would change the ask.
     assert.equal(commitSegment("model:{attach:chest}", 0).text, "model:{attach:chest}");
+});
+
+test("a bar selection snaps outwards to whole segments — half a chip cannot be shown or copied", () => {
+    const text = "model:fire sound:bell cast:2s";
+    // An offset anywhere inside a segment takes that whole segment.
+    assert.deepEqual(selectionOver(text, 3, 3), {from: 0, to: 10});
+    assert.deepEqual(selectionOver(text, 13, 13), {from: 11, to: 21});
+    // A range across two takes both, whichever way it was dragged.
+    assert.deepEqual(selectionOver(text, 3, 13), {from: 0, to: 21});
+    assert.deepEqual(selectionOver(text, 13, 3), {from: 0, to: 21});
+    // The whole query.
+    assert.deepEqual(selectionOver(text, 0, text.length), {from: 0, to: text.length});
+});
+
+test("a selection never takes the empty trailing segment a commit leaves", () => {
+    assert.deepEqual(selectionOver("model:fire ", 0, 11), {from: 0, to: 10});
+    assert.equal(selectionOver("", 0, 0), null);
+    assert.equal(selectionOver("   ", 0, 3), null);
+});
+
+test("a selection counts SEGMENTS, so growing it never stalls at a boundary offset", () => {
+    // The end of one segment and the start of the next are one offset; numbering the segments is what lets a
+    // selection tell the two apart and keep growing.
+    const text = "model:fire sound:bell cast:2s ";
+    assert.equal(segmentIndex(text, 0), 0);
+    assert.equal(segmentIndex(text, 10), 0);
+    assert.equal(segmentIndex(text, 11), 1);
+    assert.equal(segmentIndex(text, 30), 3);
+
+    // Anchored in the empty tail, each press takes one more segment behind it, then gives them back.
+    assert.deepEqual(selectionOfSegments(text, 3, 2), {from: 22, to: 29});
+    assert.deepEqual(selectionOfSegments(text, 3, 1), {from: 11, to: 29});
+    assert.deepEqual(selectionOfSegments(text, 3, 0), {from: 0, to: 29});
+    assert.deepEqual(selectionOfSegments(text, 3, 3), null);
+
+    // And anchored at the front, growing forwards.
+    assert.deepEqual(selectionOfSegments(text, 0, 0), {from: 0, to: 10});
+    assert.deepEqual(selectionOfSegments(text, 0, 1), {from: 0, to: 21});
+    assert.deepEqual(selectionOfSegments(text, 0, 3), {from: 0, to: 29});
+});
+
+test("removing a selection takes its separator with it, so no double gap remains", () => {
+    const text = "model:fire sound:bell cast:2s";
+    assert.deepEqual(removeSelection(text, {from: 0, to: 10}), {text: "sound:bell cast:2s", caret: 0, removed: true});
+    assert.deepEqual(removeSelection(text, {from: 11, to: 21}),
+        {text: "model:fire cast:2s", caret: 11, removed: true});
+    assert.deepEqual(removeSelection(text, {from: 0, to: 29}), {text: "", caret: 0, removed: true});
 });

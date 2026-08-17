@@ -31,7 +31,9 @@
     "help": "Help",
     "delete": "Delete",
     "add": "Add a condition",
-    "editHint": "Enter commits · Esc closes"
+    "editHint": "Enter commits · Esc closes",
+    "plaintext": "Show the query as plain text",
+    "plaintextShort": "text"
   },
   "surface": {
     "history": "Recent searches",

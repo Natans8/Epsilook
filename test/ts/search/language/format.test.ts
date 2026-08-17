@@ -76,7 +76,7 @@ describe("formatQuery", () => {
     });
 
     it("writes only the evaluable query: broken clauses are not part of it", () => {
-        assert.equal(canonical('scale:"50" model:fire'), "model:fire");
+        assert.equal(canonical("scale:abc model:fire"), "model:fire");
         assert.equal(canonical("model:"), "");
     });
 });

@@ -6,7 +6,7 @@
  */
 import type {Page} from "@playwright/test";
 import {expect, test} from "@playwright/test";
-import {barInput, expectQuery, HARNESS_URL, openHarness, queryMirror, seed, slot} from "./helpers";
+import {bar, barInput, expectQuery, HARNESS_URL, openHarness, queryMirror, seed, slot} from "./helpers";
 
 let page: Page;
 
@@ -117,12 +117,12 @@ test("a commit keeps the braces where shedding them would change the ask", async
 });
 
 test("an invalid clause stays raw text and reopens raw, never wrapped", async () => {
-    await openWith('scale:"50"');
+    await openWith("scale:abc");
     await page.locator("[class*='settled']").first().click();
-    await expectQuery(page, 'scale:"50"');
-    expect(await slot(page)).toMatchObject({value: '"50"', focused: true});
+    await expectQuery(page, "scale:abc");
+    expect(await slot(page)).toMatchObject({value: "abc", focused: true});
     await barInput(page).blur();
-    await expectQuery(page, 'scale:"50"');
+    await expectQuery(page, "scale:abc");
 });
 
 test("focus returning to the resting bar brings the editing form back at the remembered place", async () => {
@@ -161,4 +161,71 @@ test("a comparison chip grows a lane too — its + is not a dead button", async 
     await page.keyboard.type("fire", {delay: 5});
     await page.keyboard.press("Enter");
     await expectQuery(page, "model:{>=4 fire} ");
+});
+
+test("Ctrl+A selects every chip rather than flattening the bar to raw text", async () => {
+    await seed(page, "model:fire", "sound:bell");
+    await page.keyboard.press("Control+a");
+    // The query is untouched and the chips are still chips: the selection is a selection, not a rewrite.
+    await expectQuery(page, "model:fire sound:bell ");
+    await expect(page.locator("[data-selection]")).toHaveAttribute("data-selection", "model:fire sound:bell");
+});
+
+test("Escape clears the selection, and Delete removes every selected chip as one undo step", async () => {
+    await seed(page, "model:fire", "sound:bell");
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("Escape");
+    await expect(page.locator("[data-selection]")).toHaveCount(0);
+
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("Delete");
+    await expectQuery(page, "");
+    await page.keyboard.press("Control+z");
+    await barInput(page).blur();
+    await expectQuery(page, "model:fire sound:bell ");
+});
+
+test("Shift+arrow at the slot's edge takes whole segments, one per press", async () => {
+    await seed(page, "model:fire", "sound:bell", "cast:2s");
+    // The caret rests in the fresh tail, so the first press takes the segment behind it.
+    await page.keyboard.press("Shift+ArrowLeft");
+    await expect(page.locator("[data-selection]")).toHaveAttribute("data-selection", "cast:2s");
+    await page.keyboard.press("Shift+ArrowLeft");
+    await expect(page.locator("[data-selection]")).toHaveAttribute("data-selection", "sound:bell cast:2s");
+    // And back: the anchor stays put while the focus walks.
+    await page.keyboard.press("Shift+ArrowRight");
+    await expect(page.locator("[data-selection]")).toHaveAttribute("data-selection", "cast:2s");
+});
+
+test("a drag across the bar selects the chips it crosses, and the copy is their own query text", async () => {
+    await seed(page, "model:fire", "sound:bell", "cast:2s");
+    const first = await page.locator("[data-start]").nth(0).boundingBox();
+    const box = await bar(page).boundingBox();
+    if (first === null || box === null) throw new Error("the bar has no box");
+    await page.mouse.move(first.x + 4, first.y + first.height / 2);
+    await page.mouse.down();
+    // To the bar's far edge: the anchor chip opens under the press, so every box right of it has moved.
+    await page.mouse.move(box.x + box.width - 8, first.y + first.height / 2, {steps: 8});
+    await page.mouse.up();
+    await expect(page.locator("[data-selection]"))
+        .toHaveAttribute("data-selection", "model:fire sound:bell cast:2s");
+
+    // Ctrl+C hands the clipboard exactly that text — the query those chips spell. The clipboard itself is
+    // stood in for: Firefox grants no read permission to a test, and what is asserted is what the bar handed
+    // over, which is the behaviour in question.
+    await page.evaluate(() => {
+        const held = window as unknown as { copied?: string };
+        held.copied = undefined;
+        Object.defineProperty(navigator, "clipboard", {
+            configurable: true,
+            value: {
+                writeText: (text: string) => {
+                    held.copied = text;
+                }
+            },
+        });
+    });
+    await page.keyboard.press("Control+c");
+    const copied = await page.evaluate(() => (window as unknown as { copied?: string }).copied);
+    expect(copied).toBe("model:fire sound:bell cast:2s");
 });

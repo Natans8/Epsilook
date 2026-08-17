@@ -333,29 +333,19 @@ describe("the quote law: a phrase is one literal string value", () => {
         assert.equal(valueOf(ok('name:"bee*"')).op, "contains");
     });
 
-    it("a quantity axis refuses a quoted number, with the drop-the-quotes fix", () => {
-        const [error] = invalid('scale:"50"');
-        assert.match(error.message, /a quoted value is text/);
-        assert.equal(error.fix?.label, "drop the quotes");
-        assert.equal(error.fix?.query, "scale:50");
-        const typing = parse('scale:"50"', {mode: "typing"});
-        assert.equal(typing.clauses[0].state, "incomplete");
-        assert.deepEqual(typing.diagnostics, []);
+    it("quotes are inert where the axis reads nothing but quantities — they select no other reading", () => {
+        // The quotes say "read this as a string". Where the axis has no string reading there is none to
+        // select, so they carry no information and the number is read as the number it is.
+        assert.deepEqual(valueOf(ok('scale:"50"')), valueOf(ok("scale:50")));
+        assert.deepEqual(valueOf(ok('scale:"x2"')), valueOf(ok("scale:x2")));
+        assert.deepEqual(valueOf(ok('cast:"5"')), valueOf(ok("cast:5")));
+        assert.deepEqual(valueOf(ok('scale:="50"')), valueOf(ok("scale:=50")));
     });
 
-    it("the anchor does not change that: scale:=50 is a value, scale:=\"50\" is refused", () => {
-        assert.deepEqual(valueOf(ok("scale:=50")), {
-            op: "exact",
-            operand: {type: "percentChange", value: -50, written: "50"}
-        });
-        const [error] = invalid('scale:="50"');
-        assert.equal(error.fix?.query, "scale:=50");
-    });
-
-    it("a property door refuses a quoted quantity the same way a kind head does", () => {
-        const [error] = invalid('cast:"5"');
-        assert.match(error.message, /a quoted value is text/);
-        assert.equal(error.fix?.query, "cast:5");
+    it("the axis must still be able to read it: a word that is no quantity stays an error", () => {
+        const [error] = invalid("scale:abc");
+        assert.match(error.message, /how much bigger or smaller/);
+        assert.equal(invalid('scale:"abc"').length, 1);
     });
 
     it("sentinel words are strings, so quoting one is harmless", () => {
@@ -740,7 +730,7 @@ describe("incomplete against invalid — the classifier", () => {
     });
 
     it("only ok clauses join the evaluable groups", () => {
-        const parsed = parse('scale:"50" model:fire');
+        const parsed = parse("scale:abc model:fire");
         assert.equal(parsed.clauses[0].state, "invalid");
         assert.deepEqual(parsed.groups, [[1]]);
     });

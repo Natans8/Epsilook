@@ -28,6 +28,14 @@ export function settledSegments(page: Page): Locator {
     return page.locator("[class*='qbar'] > [class*='settled']");
 }
 
+/**
+ * The bar, when it holds a selection: the element stamps the selected chips' own query text, which is what a
+ * copy puts on the clipboard. Absent entirely while nothing is selected.
+ */
+export function barSelection(page: Page): Locator {
+    return page.locator("[data-selection]");
+}
+
 /** The element mirroring the query text for scripted assertions. */
 export function queryMirror(page: Page): Locator {
     return page.locator("[data-query]");

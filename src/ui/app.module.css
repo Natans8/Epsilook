@@ -118,3 +118,29 @@
 .error {
     color: rgb(var(--danger-rgb));
 }
+
+/* The plaintext toggle: a view the reader chooses, so it sits beside the bar rather than inside it — nothing
+ * in the bar should look like part of the query. */
+.viewToggle {
+    flex: none;
+    align-self: stretch;
+    padding: 0 0.7rem;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-ctrl);
+    border-radius: 10px;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.viewToggle:hover {
+    color: var(--text);
+    border-color: var(--gold-dim);
+}
+
+.viewOn {
+    color: var(--gold);
+    border-color: var(--gold-dim);
+    background: rgba(var(--gold-rgb), calc(0.1 * var(--wash-strength)));
+}

@@ -1,10 +1,12 @@
 /**
  * @file The key cells of the interaction matrix: Home and End as the bar's own ends, the Ctrl+A escalation —
- * a chip's slot natively first, the whole query flat from a full selection — and the empty bar's inert keys.
+ * a chip's slot natively first, then every chip in the bar's own selection — and the empty bar's inert keys.
  */
 import type {Page} from "@playwright/test";
 import {expect, test} from "@playwright/test";
-import {clearBar, expectQuery, openHarness, openKind, seed, settledSegments, slot} from "./helpers";
+import {
+    barInput, barSelection, clearBar, expectQuery, openHarness, openKind, seed, settledSegments, slot,
+} from "./helpers";
 
 let page: Page;
 
@@ -31,7 +33,7 @@ test("Home commits and lands the front gap; End the last content's end", async (
     expect(await slot(page)).toMatchObject({value: ""});
 });
 
-test("Ctrl+A in a chip natively selects the slot first, then escalates to the flat query", async () => {
+test("Ctrl+A in a chip natively selects the slot first, then escalates to every chip", async () => {
     await seed(page, "model:fire", "sound:bell");
     await settledSegments(page).nth(1).click();
     await expectQuery(page, "model:fire sound:{bell} ");
@@ -42,48 +44,47 @@ test("Ctrl+A in a chip natively selects the slot first, then escalates to the fl
     expect(await openKind(page)).toBe("chip");
     expect(await slot(page)).toMatchObject({value: "bell", start: 0, end: 4});
 
-    // From a full selection it escalates: the whole query, flat and selected, in committed spelling.
+    // From a full selection it escalates to the bar's own selection: the chips stay chips, in committed
+    // spelling, and what is selected is the query they spell.
     await page.keyboard.press("Control+a");
     await expectQuery(page, "model:fire sound:bell ");
-    expect(await slot(page)).toMatchObject({
-        value: "model:fire sound:bell ", start: 0, end: "model:fire sound:bell ".length,
-    });
+    await expect(barSelection(page)).toHaveAttribute("data-selection", "model:fire sound:bell");
 });
 
-test("Ctrl+A from the tail goes flat in one press — text has no interior to claim", async () => {
+test("Ctrl+A from the tail selects every chip in one press — text has no interior to claim", async () => {
     await seed(page, "model:fire");
     expect(await openKind(page)).toBe("tail");
     await page.keyboard.press("Control+a");
-    expect(await slot(page)).toMatchObject({
-        value: "model:fire ", start: 0, end: "model:fire ".length,
-    });
+    await expect(barSelection(page)).toHaveAttribute("data-selection", "model:fire");
 });
 
-test("typing over the flat selection replaces the whole query and exits flat", async () => {
-    await seed(page, "model:fire");
+test("typing over the selection replaces every selected chip, as one undo step", async () => {
+    await seed(page, "model:fire", "sound:bell");
     await page.keyboard.press("Control+a");
     await page.keyboard.type("x", {delay: 5});
     await expectQuery(page, "x");
     expect(await slot(page)).toMatchObject({value: "x", start: 1});
+
+    await page.keyboard.press("Control+z");
+    await barInput(page).blur();
+    await expectQuery(page, "model:fire sound:bell ");
 });
 
-test("arrows exit flat mode to the bar's ends", async () => {
-    await seed(page, "model:fire");
-    await page.keyboard.press("Control+a");
+test("a plain arrow collapses the selection to the side it points at", async () => {
+    await seed(page, "model:fire", "sound:bell");
 
-    // The first press collapses the selection natively; the second, at the start, exits to the front gap.
+    await page.keyboard.press("Control+a");
     await page.keyboard.press("ArrowLeft");
-    await page.keyboard.press("ArrowLeft");
-    await expectQuery(page, "model:fire ");
+    await expect(page.locator("[data-selection]")).toHaveCount(0);
     expect(await openKind(page)).toBe("gap");
+    // The gap is the front one: what is typed lands ahead of everything.
+    await page.keyboard.type("x", {delay: 5});
+    await expectQuery(page, "x model:fire sound:bell ");
 
-    // A gap's Ctrl+A goes flat in one press too; rightward the flat exits to the tail.
     await page.keyboard.press("Control+a");
-    expect(await slot(page)).toMatchObject({value: "model:fire "});
     await page.keyboard.press("ArrowRight");
-    await page.keyboard.press("ArrowRight");
+    await expect(page.locator("[data-selection]")).toHaveCount(0);
     expect(await openKind(page)).toBe("tail");
-    expect(await slot(page)).toMatchObject({value: ""});
 });
 
 test("the empty bar is inert: Ctrl+A, Enter, Home, End, arrows do nothing; a character starts text", async () => {

@@ -200,6 +200,47 @@
     color: var(--gold);
 }
 
+/* the rich painting: a head wears the tone of the column it reaches, so raw text and chips speak one language */
+.runModel {
+    color: rgb(var(--model-rgb));
+}
+
+.runSound {
+    color: rgb(var(--sound-rgb));
+}
+
+.runAnim {
+    color: rgb(var(--anim-rgb));
+}
+
+.runFx {
+    color: rgb(var(--fx-rgb));
+}
+
+.runMech {
+    color: rgb(var(--mech-rgb));
+}
+
+.runSpell {
+    color: var(--gold);
+}
+
+/* a closed-vocabulary word, marked as the chips mark one */
+.runVocab {
+    border-bottom: 1px dotted var(--tag-btn);
+}
+
+/* what the parse could not read, and what it read with a reservation */
+.runError {
+    text-decoration: underline wavy rgba(var(--danger-rgb), 0.9);
+    text-underline-offset: 3px;
+}
+
+.runWarn {
+    text-decoration: underline wavy var(--gold-dim);
+    text-underline-offset: 3px;
+}
+
 /* ------------------------------------------------------------- the committed chip
  * The at-rest visual mode: smaller and cooler than the editing form, same sectioned anatomy, so a commit reads
  * as the same object changing state. One accent per chip — its column tone — carried as a triple so the wash
@@ -470,6 +511,14 @@
 .deadFrag {
     align-self: center;
     cursor: text;
+}
+
+/* A selected segment wears the app's own selection tokens, so a run of selected chips reads as one highlighted
+ * stretch of the query — the same thing the platform's selection does to text, said in the chips' own terms. */
+.selected {
+    background: rgba(var(--select-rgb), 0.4);
+    border-radius: 4px;
+    box-shadow: 0 0 0 2px rgba(var(--select-rgb), 0.4);
 }
 
 /* the resting bar's input: out of sight, still in the tab order, so focus can come back to the caret's place */
