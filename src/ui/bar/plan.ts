@@ -12,7 +12,7 @@
  */
 import type {Span} from "../../search/index";
 import {
-    fold, GRAMMAR, HEADS, parse, PREFIX_OPERATORS, queryKey, spellingsOf, unbracedTerm,
+    equivalent, fold, GRAMMAR, HEADS, parse, PREFIX_OPERATORS, spellingsOf,
 } from "../../search/index";
 
 /** The transformed head of the open segment, when it has one. */
@@ -344,7 +344,7 @@ export function scopedForm(text: string, at: number): Keystroke | null {
     const bind = plan.head.bound ? "" : GRAMMAR.bind;
     const open = plan.open.slice(0, plan.head.consumed) + bind
         + GRAMMAR.scope.open + plan.slot + GRAMMAR.scope.close;
-    if (!shedsBraces(open)) return null;
+    if (!sameAsk(plan.open, open)) return null;
     return {
         text: plan.before + open + plan.after,
         caret: plan.before.length + open.length - 1,
@@ -357,29 +357,20 @@ export interface Commit extends Keystroke {
     readonly removed: boolean;
 }
 
-/** One segment's ask as a comparison key, or the empty string for a segment asking nothing evaluable. */
-const askKey = (segment: string): string => queryKey(parse(segment));
-
 /**
- * Whether a scoped segment's braces may be shed — the ONE question the editing form asks in both directions.
+ * Whether two spellings of one segment ask the same question.
  *
- * The formatter already owns the answer: `unbracedTerm` is the rule by which a scope of one term is written
- * without its braces, and it is exported precisely so that everything deciding this reads the same decision.
- * A textual comparison cannot stand in for it — `model:{fire|frost}` and `model:fire|frost` ask one question
- * and canonicalise to two different strings, while `model:{attach:chest}` and `model:attach:chest` spell
- * alike and ask two.
+ * The engine's own equivalence, which is the only thing that can answer it: a textual comparison cannot,
+ * because one question has more than one canonical spelling (`model:{fire|frost}` writes its alternation
+ * parenthesised in one position and glued in the other), while two different questions can spell alike
+ * (`model:{attach:chest}` against `model:attach:chest`, where the braceless form reads as content).
  *
- * @param segment One segment's text, in its scoped spelling.
- * @returns True when the braces are the formatter's to drop.
+ * @param a One spelling.
+ * @param b The other.
+ * @returns True when both ask the same thing — including when both ask nothing at all.
  */
-function shedsBraces(segment: string): boolean {
-    const [clause] = parse(segment).clauses;
-    const ask = clause?.ask;
-    if (clause === undefined || clause.state !== "ok" || ask == null || ask.on === "plain" || ask.on === "prop") {
-        return false;
-    }
-    const test = ask.test;
-    return test !== null && test.is === "scope" && unbracedTerm(test.terms) !== null;
+function sameAsk(a: string, b: string): boolean {
+    return equivalent(parse(a), parse(b));
 }
 
 /**
@@ -419,7 +410,7 @@ export function commitSegment(text: string, at: number): Commit {
         const end = plan.open.length > 0 ? plan.open[plan.open.length - 1] : "";
         if (plan.head !== null && (end === GRAMMAR.or || end === GRAMMAR.numberList)) {
             const trimmed = plan.open.slice(0, -1);
-            if (askKey(trimmed) === askKey(plan.open)) {
+            if (sameAsk(trimmed, plan.open)) {
                 return {
                     text: plan.before + trimmed + plan.after,
                     caret: plan.before.length + trimmed.length,
@@ -443,16 +434,86 @@ export function commitSegment(text: string, at: number): Commit {
     }
     const shed = prefix + interior;
     const kept = prefix + GRAMMAR.scope.open + interior + GRAMMAR.scope.close;
-    // A broken interior sheds too — two spellings that ask nothing alike return the segment to the raw text it
-    // was typed as, rather than stranding it in an editing form it can never leave.
-    const single = segmentStarts(interior).length === 1
-        && (shedsBraces(kept) || (askKey(shed) === "" && askKey(kept) === ""));
+    // The braces go exactly when the bare spelling asks the same question — the kernel law `{x} = x` read
+    // through the engine rather than guessed from the text. Two spellings that both ask nothing count as
+    // agreeing, which returns a broken segment to the raw text it was typed as instead of stranding it in an
+    // editing form it can never leave.
+    const single = segmentStarts(interior).length === 1 && sameAsk(shed, kept);
     const open = single ? shed : kept;
     return {
         text: plan.before + open + plan.after,
         caret: plan.before.length + open.length,
         removed: false,
     };
+}
+
+/**
+ * A bar-wide selection: a range of the query TEXT, always snapped to segment boundaries.
+ *
+ * The text is the truth here as everywhere, which is what makes the copy trivial — the selected text IS the
+ * query those segments spell, so nothing has to be serialised back out of a rendering. Character-level work
+ * inside one segment stays the platform's, in the open slot; this covers only what crosses a boundary, which
+ * is the same escalation the bar already uses for Ctrl+A and for undo.
+ */
+export interface BarSelection {
+    /** The first selected character's offset. */
+    readonly from: number;
+    /** The offset just past the last selected character. */
+    readonly to: number;
+}
+
+/**
+ * The selection covering everything between two offsets, snapped outwards to whole segments.
+ *
+ * A chip draws its parse rather than its characters, so half a chip cannot be shown selected and could not be
+ * copied as anything typeable — the snap is what keeps the selection representable in both directions.
+ *
+ * @param text The query text.
+ * @param anchor Where the gesture began.
+ * @param focus Where it has reached.
+ * @returns The snapped range, or null when it covers no segment at all.
+ */
+export function selectionOver(text: string, anchor: number, focus: number): BarSelection | null {
+    const lo = Math.min(anchor, focus);
+    const hi = Math.max(anchor, focus);
+    const first = segmentAt(text, lo);
+    const last = segmentAt(text, hi);
+    const from = first.start;
+    // An empty trailing segment has nothing to select, so the range ends at the last segment holding text.
+    const to = last.end > last.start ? last.end : Math.max(from, last.start - 1);
+    return to > from ? {from, to} : null;
+}
+
+/**
+ * The selection extended by one segment in a direction, from an existing range or a caret.
+ *
+ * @param text The query text.
+ * @param anchor The end that stays put.
+ * @param focus The end that moves.
+ * @param dir Which way it moves.
+ * @returns The new focus offset, clamped to the text.
+ */
+export function extendBySegment(text: string, anchor: number, focus: number, dir: -1 | 1): number {
+    const starts = segmentStarts(text);
+    if (dir === -1) {
+        const prev = [...starts].reverse().find((start) => start < focus);
+        return prev ?? 0;
+    }
+    const seg = segmentAt(text, focus);
+    const next = starts.find((start) => start > focus);
+    // Past the last boundary the focus walks to the text's end, so the final segment can be taken whole.
+    return seg.end > focus ? seg.end : next ?? text.length;
+}
+
+/**
+ * Removes a bar selection, tidying the separator it leaves behind.
+ *
+ * @param text The query text.
+ * @param sel The selection.
+ * @returns The new text with the caret where the selection stood.
+ */
+export function removeSelection(text: string, sel: BarSelection): Commit {
+    return spliceOut(text, sel.from, sel.to);
 }
 
 /**

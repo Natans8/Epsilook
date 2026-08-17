@@ -18,8 +18,14 @@ import {describe, GRAMMAR, NEGATION, parse} from "../../search/index";
 import {Classed} from "./classed";
 import styles from "./bar.module.css";
 
-/** Heads are capitalised everywhere: `Scale`, never `scale`. */
-export const headCase = (word: string): string => (word === "" ? word : word[0].toUpperCase() + word.slice(1));
+/**
+ * Heads are lowercase everywhere: `scale`, never `Scale`.
+ *
+ * The head is the word the reader types, so it is spelled the way they would type it — which also means no
+ * acronym can ever be spelled wrong, because there is no capitalisation rule to get wrong. The value beside it
+ * carries the weight instead.
+ */
+export const headCase = (word: string): string => word.toLowerCase();
 
 /** What a settled segment can ask of the bar. Offsets are into the segment's own raw spelling. */
 export interface SegmentActions {
@@ -80,9 +86,27 @@ function aimAt(e: ReactMouseEvent, raw: string, window: Span): number | null {
     return window.start + found + Math.min(at.offset, piece.length);
 }
 
-/** The one delete/grow button shape: × and + never take the press as an open. */
-function Affordance({glyph, label, className, onPress}: {
-    readonly glyph: string;
+/**
+ * The affordance marks, drawn as geometry rather than typed as glyphs.
+ *
+ * A font's `×` and `+` are not centred on their line box — measured in the shipped face, the cross's ink sits
+ * 1.5px low at 12px and the plus 1.35px low at 14.25px, both a fraction of the font size rather than a fixed
+ * amount. Centring the box therefore cannot centre the mark, and a nudge measured for one size and face is
+ * wrong at the next: this is the bug that was fixed by hand in 1.0 and came back here. Two lines crossing at
+ * the middle of a square viewBox are centred by construction, at any size, in any face — and they let the two
+ * marks read as the matched pair they are, which two glyphs from different parts of a font never did.
+ */
+function Mark({kind}: { readonly kind: "remove" | "add" }): ReactElement {
+    return (
+        <svg className={styles.mark} viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+            <path d={kind === "remove" ? "M3.6 3.6 8.4 8.4 M8.4 3.6 3.6 8.4" : "M6 3.4 V8.6 M3.4 6 H8.6"}/>
+        </svg>
+    );
+}
+
+/** The one delete/grow button shape: the marks never take the press as an open. */
+function Affordance({kind, label, className, onPress}: {
+    readonly kind: "remove" | "add";
     readonly label: string;
     readonly className: string;
     readonly onPress: () => void;
@@ -101,7 +125,7 @@ function Affordance({glyph, label, className, onPress}: {
                 onPress();
             }}
         >
-            {glyph}
+            <Mark kind={kind}/>
         </button>
     );
 }
@@ -177,7 +201,7 @@ function Sect({head, not, label, className, onOpen, onRemove}: {
 }): ReactElement {
     return (
         <span className={className} onMouseDown={onOpen === undefined ? undefined : press(onOpen)}>
-            <Affordance glyph="×" label={label} className={styles.chipX} onPress={onRemove}/>
+            <Affordance kind="remove" label={label} className={styles.chipX} onPress={onRemove}/>
             <span className={not ? styles.negHead : undefined}>
                 {not ? NEGATION : ""}{headCase(head)}
             </span>
@@ -222,7 +246,7 @@ function ChipEl({chip, warned, notes, span, text, act}: {
             <span className={styles.chipBody}><Pieces pieces={chip.body} text={text}/></span>
             {chip.grow !== null && (
                 <Affordance
-                    glyph="+"
+                    kind="add"
                     label={t("bar.add")}
                     className={styles.chipAdd}
                     onPress={() => {
@@ -301,7 +325,7 @@ function LaneEl({lane, warned, notes, span, text, act}: {
                     </span>
                 );
             })}
-            <Affordance glyph="+" label={t("bar.add")} className={styles.chipAdd} onPress={() => {
+            <Affordance kind="add" label={t("bar.add")} className={styles.chipAdd} onPress={() => {
                 act.grow("term");
             }}/>
         </span>

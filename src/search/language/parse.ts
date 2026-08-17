@@ -71,6 +71,17 @@ const COMPARISON_STARTS: ReadonlySet<string> = new Set(
 /** A run of numbers separated by the list character: the one shape a comma is structural in. */
 const NUMBER_LIST = new RegExp(String.raw`^\d+(${escapeRegExp(GRAMMAR.numberList)}\d+)+$`);
 
+/**
+ * What makes a leading minus a SIGN rather than a negation: a digit, or a decimal point before one.
+ *
+ * Position decides where a minus negates — anywhere a clause may begin — and inside a scope every term begins
+ * one. That reading breaks the kernel law for signed values: `scale:-50%` is a value after its bind, so
+ * `scale:{-50%}` has to mean the same thing, or `{x}` and `x` are two different questions. A sign binds tighter
+ * than negation, which is how every language reads a signed literal; negating a bare number stays available by
+ * quoting it, where a phrase is a string and no sign can be read.
+ */
+const SIGNED = /^[\d.]/;
+
 /** A head that can open a row scope: a column or a kind. A property door takes a value, never a scope. */
 type ScopeHead = Exclude<Head, { role: "prop" }>;
 
@@ -469,7 +480,7 @@ class Parser {
             }
             const termStart = i;
             let termNot = false;
-            if (c === GRAMMAR.negate) {
+            if (c === GRAMMAR.negate && !SIGNED.test(this.text[i + 1] ?? "")) {
                 const next = i + 1 < bodyEnd ? this.text[i + 1] : "";
                 if (next === "" || isWs(next) || next === GRAMMAR.or) {
                     run.push({span: {start: termStart, end: i + 1}, not: true, state: "incomplete", ask: null});

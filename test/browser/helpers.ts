@@ -111,22 +111,26 @@ export async function seed(page: Page, ...terms: readonly string[]): Promise<voi
 /**
  * The page point inside one character of a settled segment, a quarter into its advance — far enough from the
  * glyph boundary that a caret hit test answers this character's own offset, not the next one's.
+ *
+ * The character is named by the RUN it belongs to rather than by an index into the segment, because a settled
+ * segment's rendered text is not its query text: a chip draws a head and a body and no delimiters, so counting
+ * characters across the whole segment would be counting a rendering. Naming the run is stable against that.
+ *
+ * @param segment The settled segment.
+ * @param run The exact text of the rendered run to aim inside — a chip's head or its value.
+ * @param index Which character of that run to aim at.
  */
-export async function charPoint(segment: Locator, index: number): Promise<{ x: number; y: number }> {
-    return segment.evaluate((el, at) => {
+export async function charPoint(segment: Locator, run: string, index: number): Promise<{ x: number; y: number }> {
+    return segment.evaluate((el: Element, [want, at]: [string, number]) => {
         const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-        let seen = 0;
         for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-            const length = node.textContent?.length ?? 0;
-            if (at < seen + length) {
-                const range = document.createRange();
-                range.setStart(node, at - seen);
-                range.setEnd(node, at - seen + 1);
-                const box = range.getBoundingClientRect();
-                return {x: box.x + box.width / 4, y: box.y + box.height / 2};
-            }
-            seen += length;
+            if (node.textContent !== want) continue;
+            const range = document.createRange();
+            range.setStart(node, at);
+            range.setEnd(node, at + 1);
+            const box = range.getBoundingClientRect();
+            return {x: box.x + box.width / 4, y: box.y + box.height / 2};
         }
-        throw new Error(`character ${String(at)} is past the segment text`);
-    }, index);
+        throw new Error(`no run reading "${want}" in the segment`);
+    }, [run, index] as [string, number]);
 }

@@ -217,8 +217,10 @@
     border-radius: 999px;
     background: rgba(var(--chip-rgb), calc(var(--chip-wash-a) * var(--wash-strength)));
     overflow: hidden;
-    font-size: 0.875rem;
-    line-height: 1.35;
+    /* close to the editing form's 1.1rem rather than a size down from it: the two modes are told apart by
+     * shape and colour, and a committed chip still has to be read at a glance */
+    font-size: 1rem;
+    line-height: 1.3;
     white-space: nowrap;
     cursor: pointer;
 }
@@ -270,13 +272,13 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 0.25rem 0.5rem;
+    padding: 0.2rem 0.5rem;
     background: rgba(var(--shadow-rgb), 0.08);
     border-right: 1px solid var(--border-ctrl);
     /* --text, not --text-dim: measured 4.4:1 over the inset, under AA. The head still reads quieter than the
      * value through its smaller size and the cell's own recession. */
     color: var(--text);
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     white-space: nowrap;
 }
 
@@ -286,7 +288,7 @@
 
 .chipBody {
     display: inline-block;
-    padding: 0.25rem 0.625rem;
+    padding: 0.2rem 0.55rem;
     max-width: 24rem;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -313,7 +315,6 @@
     width: 15px;
     height: 15px;
     border-radius: 50%;
-    font-size: 0.8rem;
 }
 
 .chipX:hover {
@@ -323,12 +324,26 @@
 
 .chipAdd {
     align-self: center;
-    padding: 0 0.5rem 0 0.125rem;
-    font-size: 0.95rem;
+    width: 15px;
+    height: 15px;
+    /* the pair is matched in size and weight; the breathing room is the chip's, not the button's */
+    margin: 0 0.375rem 0 0.125rem;
 }
 
 .chipAdd:hover {
     color: var(--gold);
+}
+
+/* the marks: two lines crossing at the centre of a square box, so they are centred by construction rather
+ * than by a font's vertical metrics — see the Mark component for what that dependency cost twice */
+.mark {
+    display: block;
+    width: 60%;
+    height: 60%;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
 }
 
 /* the lane: real terms inside the toned enclosure; gaps separate OBJECTS here, never continuous text */
@@ -360,17 +375,17 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 0.15rem 0.4rem;
+    padding: 0.1rem 0.4rem;
     background: rgba(var(--shadow-rgb), 0.08);
     border-right: 1px solid var(--border-ctrl);
-    color: var(--text-dim);
-    font-size: 0.8rem;
+    color: var(--text);
+    font-size: 0.85rem;
 }
 
 .bindBody {
     display: inline-flex;
     align-items: center;
-    padding: 0.15rem 0.55rem;
+    padding: 0.1rem 0.5rem;
     color: var(--text-strong);
 }
 
@@ -401,6 +416,24 @@
 .vQuote {
     color: var(--gold);
     font-weight: 600;
+}
+
+/* Every marked subject answers the pointer itself. Without this only the chip's border responded, which reads
+ * as the frame being the live thing and the word inside it being inert — and the word is what carries the
+ * explanation a hover is reaching for. The wash is 1.0's own token-hover value. */
+.vWord:hover,
+.vGroup:hover,
+.deadFrag:hover,
+.erred:hover {
+    background: rgba(var(--overlay-rgb), calc(0.16 * var(--wash-strength)));
+    border-radius: 3px;
+}
+
+/* a vocabulary word and a marked fragment both have something to say, so the pointer says so */
+.vWord,
+.deadFrag,
+.erred {
+    cursor: help;
 }
 
 /* a value group — a swatch and its word — reads as one object under one vocabulary mark */

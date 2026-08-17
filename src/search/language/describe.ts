@@ -139,10 +139,22 @@ const integral = (type: AxisType): "int" | "float" => (type.storage === "float" 
  */
 function numberText(type: AxisType, value: number, written: string | undefined): string {
     const notations = type.notations;
-    if (notations === undefined) return written ?? type.format?.(value) ?? String(value);
+    if (notations === undefined) return signed(written ?? type.format?.(value) ?? String(value));
     const read = written === undefined ? null : notationOf(notations, integral(type), written);
     const chosen = read ?? notations[0];
-    return writeNotation(chosen, value, chosen.glyph ?? chosen.unit);
+    return signed(writeNotation(chosen, value, chosen.glyph ?? chosen.unit));
+}
+
+/**
+ * A number's own minus drawn as the true minus sign rather than the hyphen the query is written with.
+ *
+ * The hyphen carries three jobs in this language — negation, a sign, and a range's separator — and a range of
+ * negative bounds writes all three within six characters. The glyph tells the sign apart from the separator on
+ * sight, and stays typeable: the minus sign folds to a hyphen on the way in, as every typographic substitute
+ * does.
+ */
+function signed(text: string): string {
+    return text.startsWith(GRAMMAR.negate) ? NEGATION + text.slice(1) : text;
 }
 
 /** The sentinel word a typed operand resolves to under its property, or null. */
@@ -270,7 +282,22 @@ function termItem(term: ScopeTerm, lone: boolean): LaneItem {
     if (ask.on === "kindWord") return {is: "term", ...at, body: [{is: "word", text: wordOf(ask.kind)}]};
     if (ask.on === "count") return {is: "bind", ...at, head: GRAMMAR.countWord, body: exprPieces(ask.value)};
     const ref = ask.props[0];
-    return {is: "bind", ...at, head: ref.prop, body: exprPieces(ask.value, ref)};
+    const body = exprPieces(ask.value, ref);
+    // The head is the door the ask went through, and a kind's word IS the door to its subject: `scale:` means
+    // the amount, so naming the amount again says nothing the head has not said. Everything else keeps its
+    // word, because without it the value would not say which aspect it constrains.
+    return subjectOf(ref) ? {is: "term", ...at, body} : {is: "bind", ...at, head: ref.prop, body};
+}
+
+/**
+ * Whether a property is the one its kind's own word reaches — the first declared, which is the order a kind
+ * offers its properties an operand in.
+ *
+ * @param ref The property reference.
+ * @returns True when the kind's word is already the door to it.
+ */
+function subjectOf(ref: PropRef): boolean {
+    return Object.keys(ref.kind.props)[0] === ref.prop;
 }
 
 /** A scope's lane items: terms in written order, the or-connective between non-empty runs. */

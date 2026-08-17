@@ -190,3 +190,8 @@ test("a lane item knows whether it stands alone in its run — the per-term dele
     const alternation = lane("model:{fire | frost}");
     assert.deepEqual(alternation.items.map((item) => "lone" in item && item.lone), [true, false, true]);
 });
+
+test("a value's own sign draws as the true minus, so it is not read as the range separator", () => {
+    assert.deepEqual(chip("scale:-50%").body, [{is: "value", text: "−50%"}]);
+    assert.deepEqual(chip("scale:{-50%--10%}").body, [{is: "value", text: "−50%–−10%"}]);
+});

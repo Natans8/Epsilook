@@ -2,7 +2,7 @@ import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
 import type {Ask, Clause, Diagnostic, Parsed, ScopeTerm, ValueExpr} from "../../../../src/search/index";
-import {fold, formatQuery, KINDS, parse} from "../../../../src/search/index";
+import {equivalent, fold, formatQuery, KINDS, parse} from "../../../../src/search/index";
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -912,5 +912,38 @@ describe("operator aliases — the display glyphs read back", () => {
 
     it("reads a spaced glyph through the in-scope whitespace bridge", () => {
         assert.equal(formatQuery(parse("model:{count ≥ 5}")), formatQuery(parse("model:{count >= 5}")));
+    });
+});
+
+describe("a sign binds tighter than negation inside a scope", () => {
+    it("reads a leading minus before a digit as the value's own sign, so `{x}` and `x` agree", () => {
+        // The two spellings write different canonical text — the braced form names the property it binds —
+        // so the law they must satisfy is equivalence, not identity.
+        assert.ok(equivalent(parse("scale:{-50%}"), parse("scale:-50%")));
+        assert.equal(one("scale:{-50%}").state, "ok");
+        assert.equal(errors(parse("scale:{-50%}")).length, 0);
+    });
+
+    it("negates a word exactly as before — position still decides everywhere else", () => {
+        const scope = one("model:{fire -missile}");
+        const terms = termsOf(scope.ask as Ask);
+        assert.equal(terms.filter((t) => t.not).length, 1);
+        // And the top level is untouched: a bare number there still excludes.
+        assert.equal(parse("fireball -50").clauses[1].not, true);
+    });
+
+    it("reads a range of negative bounds, which the negation reading could not express", () => {
+        const ranged = one("scale:{-50%--10%}");
+        assert.equal(ranged.state, "ok");
+        const [term] = termsOf(ranged.ask as Ask);
+        const ask = term.ask;
+        assert.ok(ask !== null && ask.on === "props");
+        assert.equal(ask.value.op, "range");
+    });
+
+    it("keeps the quoted escape for excluding a number, where a phrase can carry no sign", () => {
+        const scope = one('model:{fire -"50"}');
+        const terms = termsOf(scope.ask as Ask);
+        assert.equal(terms.filter((t) => t.not).length, 1);
     });
 });

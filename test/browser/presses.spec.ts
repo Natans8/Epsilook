@@ -53,8 +53,8 @@ test("a ground press past all content lands the content's end", async () => {
 
 test("a press on a settled segment opens it with the caret at the aimed character", async () => {
     await seed(page, "model:fire", "sound:bell");
-    // The aim maps through the raw spelling: past the head, "sound:bell" at 7 is slot offset 1.
-    const aimed = await charPoint(settledSegments(page).nth(1), 7);
+    // The aim maps through the raw spelling: the value's second character is slot offset 1.
+    const aimed = await charPoint(settledSegments(page).nth(1), "bell", 1);
     await page.mouse.click(aimed.x, aimed.y);
     await expectQuery(page, "model:fire sound:{bell} ");
     expect(await slot(page)).toMatchObject({value: "bell", start: 1, end: 1});
@@ -62,7 +62,7 @@ test("a press on a settled segment opens it with the caret at the aimed characte
 
 test("a press inside a settled segment's head clamps the caret to the value's start", async () => {
     await seed(page, "model:fire", "sound:bell");
-    const aimed = await charPoint(settledSegments(page).nth(1), 2);
+    const aimed = await charPoint(settledSegments(page).nth(1), "sound", 2);
     await page.mouse.click(aimed.x, aimed.y);
     await expectQuery(page, "model:fire sound:{bell} ");
     expect(await slot(page)).toMatchObject({value: "bell", start: 0, end: 0});

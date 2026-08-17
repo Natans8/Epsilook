@@ -320,3 +320,12 @@ test("a head opens on a comparison ALIAS exactly as on its symbol — the glyph 
     assert.deepEqual(openHead("scale≤2"), openHead("scale<=2"));
     assert.equal(openHead("model≥4")?.word, "model");
 });
+
+test("a commit prefers the spelling that parses: the editing braces never break a signed value", () => {
+    // `-50%` is a negation at a term's start and a signed value after a bind, so the editing form's own
+    // braces are what break `scale:-50%` — the commit gives back exactly what was typed.
+    assert.equal(commitSegment("scale:{-50%}", 0).text, "scale:-50%");
+    assert.equal(commitSegment("scale:{-50}", 0).text, "scale:-50");
+    // A braced form that asks something real still keeps its braces where shedding would change the ask.
+    assert.equal(commitSegment("model:{attach:chest}", 0).text, "model:{attach:chest}");
+});
