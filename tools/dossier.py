@@ -89,6 +89,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 
+from packs import schema_name
 from repo import CACHE
 
 try:
@@ -124,11 +125,6 @@ TABLE_RE = re.compile(r'\{V}\."(\w+)"')
 def packs() -> list[dict[str, Any]]:
     """site/data/versions.json - the same manifest tools/rebuild.py reads."""
     return json.loads(VERSIONS_JSON.read_text(encoding="utf-8"))
-
-
-def schema_for(build_id: str) -> str:
-    """`"9.2.7.45745"` -> `"v9_2_7"`, the naming tools/builddb.py writes."""
-    return "v" + "_".join(build_id.split(".")[:3])
 
 
 def select_pack(wanted: str | None) -> dict[str, Any]:
@@ -192,7 +188,7 @@ class Dossier:
                      f"build it first:  python tools/builddb.py")
         self.build: str = pack["id"]
         self.label: str = pack.get("label") or self.build
-        self.ver = schema_for(self.build)
+        self.ver = schema_name(self.build)
         self.con = duckdb.connect(str(DB_PATH), read_only=True)
         self.V = f'"{self.ver}"'
 
@@ -620,10 +616,10 @@ class Dossier:
         packs actually consulted are reported beside the verdict.
         """
         order = [(p["id"], p.get("label") or p["id"]) for p in packs()]
-        checked = [(b, lbl) for b, lbl in order if schema_for(b) in self.schemas]
+        checked = [(b, lbl) for b, lbl in order if schema_name(b) in self.schemas]
         present = []
         for build, label in checked:
-            hit = self.con.execute(f'SELECT count(*) FROM "{schema_for(build)}"."spells" '
+            hit = self.con.execute(f'SELECT count(*) FROM "{schema_name(build)}"."spells" '
                                    'WHERE spell_id = ?', [sid]).fetchone()
             if hit and hit[0]:
                 present.append(label)
@@ -1454,10 +1450,10 @@ def main() -> None:
         print(f"\n  {DB_PATH}"
               + ("" if con else f"  {DIM}(not built - run tools/builddb.py){RESET}"))
         for e in every:
-            here = schema_for(e["id"]) in cached
+            here = schema_name(e["id"]) in cached
             flag = "default" if e.get("default") else ""
-            print(f"    {'*' if here else ' '} {e['id']:<16} {e['label']:<26}"
-                  f" {schema_for(e['id']):<9} {flag}")
+            print(f"    {'*' if here else ' '} {e['id']:<20} {e['label']:<26}"
+                  f" {schema_name(e['id']):<15} {flag}")
         print(f"\n  {DIM}* = in the database; --version takes any id prefix{RESET}")
         return
 
