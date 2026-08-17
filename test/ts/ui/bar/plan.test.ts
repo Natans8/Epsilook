@@ -107,11 +107,15 @@ test("commit keeps the braces when several terms share the row, and trims the in
     const step = commitSegment("model:{fire frost } x", 4);
     assert.equal(step.text, "model:{fire frost} x");
     assert.equal(step.caret, 18);
+    assert.equal(step.removed, false);
 });
 
-test("committing an empty scope removes the chip whole, separator included", () => {
-    assert.deepEqual(commitSegment("model:{} fire", 4), {text: "fire", caret: 0});
-    assert.deepEqual(commitSegment("fire model:{}", 10), {text: "fire", caret: 4});
+test("committing an empty scope removes the chip whole, separator included, and says so", () => {
+    assert.deepEqual(commitSegment("model:{} fire", 4), {text: "fire", caret: 0, removed: true});
+    assert.deepEqual(commitSegment("fire model:{}", 10), {text: "fire", caret: 4, removed: true});
+    assert.deepEqual(commitSegment("model:{}", 4), {text: "", caret: 0, removed: true});
+    // A blank interior is as empty as none — spaces are not an ask.
+    assert.deepEqual(commitSegment("model:{  } fire", 4), {text: "fire", caret: 0, removed: true});
 });
 
 test("boundary backspace on a scoped head deletes the brace pair, interior kept as raw text", () => {
@@ -179,6 +183,21 @@ test("openHead is the plan's own read exposed: null on the empty segment", () =>
 test("typing into a gap writes the value and the separator that keeps the next segment a segment", () => {
     assert.deepEqual(insertAtGap("model:fire scale:5", 11, "x"), {text: "model:fire x scale:5", caret: 12});
     assert.deepEqual(insertAtGap("fire", 0, "a"), {text: "a fire", caret: 1});
+});
+
+test("a blank value writes nothing into a gap — a bare separator has no term to separate", () => {
+    assert.equal(insertAtGap("model:fire scale:5", 11, " "), null);
+    assert.equal(insertAtGap("model:fire scale:5", 11, "  "), null);
+});
+
+test("commit simplifies to its fixpoint: a whole-scope interior sheds every layer at once", () => {
+    assert.deepEqual(commitSegment("model:{{fire}}", 8), {text: "model:fire", caret: 10, removed: false});
+    assert.deepEqual(commitSegment("model:{{fire}", 8), {text: "model:fire", caret: 10, removed: false});
+    const multi = commitSegment("model:{{fire frost}}", 8);
+    assert.equal(multi.text, "model:{fire frost}");
+    assert.deepEqual(commitSegment("model:{{}}", 8), {text: "", caret: 0, removed: true});
+    // A pair that is not the WHOLE interior keeps its braces — only redundant outer layers shed.
+    assert.equal(commitSegment("model:{{a} b}", 8).text, "model:{{a} b}");
 });
 
 test("delete at the slot's end mirrors the boundary backspace: pair-dissolve on a scope, plain merge otherwise", () => {

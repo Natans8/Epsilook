@@ -46,6 +46,16 @@
     max-width: 100%;
 }
 
+/* the GAP between chips: a caret rest that displaces NOTHING — two flex gaps flank the rest where the baseline
+ * separator is one, so the margins swallow the extra gap and the sliver itself and total width stays the
+ * baseline's. The interior needs no rules of its own: the hug slot's min-width-0 mirror shrinks into the
+ * sliver, and the input rides absolute over the full 3px, which is caret enough. */
+.gapRest {
+    width: 3px;
+    min-width: 3px;
+    margin: 0 calc(-0.175rem - 1.5px);
+}
+
 /* the enclosure a HEAD earns: the editing look — a quiet ring, never the page's hard focus outline */
 .openChip {
     border: 1px solid var(--gold-dim);

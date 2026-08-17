@@ -204,6 +204,10 @@ export function deleteAtEnd(at: BarPlan): Keystroke | null {
 export interface Keystroke {
     readonly text: string;
     readonly caret: number;
+    /** A selection's other end, as a text offset — the step lands selected between anchor and caret. */
+    readonly anchor?: number;
+    /** Marks an operation boundary: the step pushes an undo state, so one Ctrl+Z takes it back whole. */
+    readonly operation?: boolean;
 }
 
 /**
@@ -218,6 +222,20 @@ export interface Keystroke {
  * @param at The current plan.
  * @returns The new text with the caret where the deleted character was, or null at the text's very start.
  */
+export function backspaceAtStart(at: BarPlan): Keystroke | null {
+    const text = at.before + at.open + at.after;
+    // Left of a scoped slot sits the opening brace; deleting an opener deletes its pair, the IDE convention —
+    // removing one side alone would leave the text unbalanced and the display lying about it.
+    if (at.head?.scoped === true) {
+        const cut = slotStart(at) - 1;
+        const open = at.open.slice(0, at.head.consumed - 1) + at.slot;
+        return {text: at.before + open + at.after, caret: cut};
+    }
+    const cut = slotStart(at) - 1;
+    if (cut < 0) return null;
+    return {text: text.slice(0, cut) + text.slice(cut + 1), caret: cut};
+}
+
 /**
  * Types the first characters into a GAP — the empty caret position between two chips.
  *
@@ -228,9 +246,11 @@ export interface Keystroke {
  * @param text The query text.
  * @param gapAt The gap's offset — a segment start, meaning "insert before this segment".
  * @param value What was typed into the gap.
- * @returns The new text with the caret after the inserted value.
+ * @returns The new text with the caret after the inserted value — or null for a blank value, because a bare
+ *   separator has no term to separate and writes nothing.
  */
-export function insertAtGap(text: string, gapAt: number, value: string): Keystroke {
+export function insertAtGap(text: string, gapAt: number, value: string): Keystroke | null {
+    if (value.trim() === "") return null;
     return {
         text: text.slice(0, gapAt) + value + " " + text.slice(gapAt),
         caret: gapAt + value.length,
@@ -251,20 +271,6 @@ export function firstDiff(a: string, b: string): number {
         if (a[at] !== b[at]) return at;
     }
     return shorter;
-}
-
-export function backspaceAtStart(at: BarPlan): Keystroke | null {
-    const text = at.before + at.open + at.after;
-    // Left of a scoped slot sits the opening brace; deleting an opener deletes its pair, the IDE convention —
-    // removing one side alone would leave the text unbalanced and the display lying about it.
-    if (at.head?.scoped === true) {
-        const cut = slotStart(at) - 1;
-        const open = at.open.slice(0, at.head.consumed - 1) + at.slot;
-        return {text: at.before + open + at.after, caret: cut};
-    }
-    const cut = slotStart(at) - 1;
-    if (cut < 0) return null;
-    return {text: text.slice(0, cut) + text.slice(cut + 1), caret: cut};
 }
 
 /**
@@ -314,6 +320,12 @@ export function scopedForm(text: string, at: number): Keystroke | null {
     };
 }
 
+/** A commit's outcome: a keystroke, plus whether the committed segment was removed outright. */
+export interface Commit extends Keystroke {
+    /** True when an empty scope took its segment with it — the caret then sits where the segment stood. */
+    readonly removed: boolean;
+}
+
 /**
  * Commits one segment: the scope simplifies to its interior where a single term remains.
  *
@@ -323,14 +335,20 @@ export function scopedForm(text: string, at: number): Keystroke | null {
  *
  * @param text The query text.
  * @param at Any offset inside the segment to commit.
- * @returns The new text with the caret at the committed segment's end.
+ * @returns The new text with the caret at the committed segment's end — or, on a removal, where it stood.
  */
-export function commitSegment(text: string, at: number): Keystroke {
+export function commitSegment(text: string, at: number): Commit {
     const plan = planAt(text, at);
     if (plan.head === null || !plan.head.scoped) {
-        return {text, caret: plan.before.length + plan.open.length};
+        return {text, caret: plan.before.length + plan.open.length, removed: false};
     }
-    const interior = plan.slot.trim();
+    let interior = plan.slot.trim();
+    // The simplification runs to its FIXPOINT: an interior that is itself one whole scope sheds that scope
+    // too, or `model:{{fire}}` would commit to the editing form's own spelling and lose a brace pair per
+    // pass instead of settling once.
+    while (interior.startsWith(GRAMMAR.scope.open) && closesAtEnd(interior.slice(1))) {
+        interior = interior.slice(1, -1).trim();
+    }
     const prefix = plan.open.slice(0, plan.head.consumed - 1);
     if (interior === "") {
         // The segment goes whole; one adjacent separator goes with it so no double gap remains.
@@ -338,7 +356,7 @@ export function commitSegment(text: string, at: number): Keystroke {
         let to = from + plan.open.length;
         if (text[to] === " ") to += 1;
         else if (from > 0 && text[from - 1] === " ") from -= 1;
-        return {text: text.slice(0, from) + text.slice(to), caret: from};
+        return {text: text.slice(0, from) + text.slice(to), caret: from, removed: true};
     }
     const single = segmentStarts(interior).length === 1;
     const open = single ? prefix + interior
@@ -346,5 +364,6 @@ export function commitSegment(text: string, at: number): Keystroke {
     return {
         text: plan.before + open + plan.after,
         caret: plan.before.length + open.length,
+        removed: false,
     };
 }

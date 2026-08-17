@@ -13,12 +13,23 @@
  */
 import type {KeyboardEvent, ReactElement, ReactNode} from "react";
 import {useLayoutEffect, useRef} from "react";
+import {GRAMMAR} from "../../search/index";
 import type {BarPlan, Keystroke} from "./plan";
 import {backspaceAtStart, deleteAtEnd, slotStart} from "./plan";
 import styles from "./bar.module.css";
 
 /** Heads are capitalised everywhere: `Scale`, never `scale`. */
 const headCase = (word: string): string => (word === "" ? word : word[0].toUpperCase() + word.slice(1));
+
+/** Each opening delimiter and the closer it spawns — the enclosures the slot pairs like an IDE. */
+const PAIRS: Record<string, string | undefined> = {
+    [GRAMMAR.phrase]: GRAMMAR.phrase,
+    [GRAMMAR.scope.open]: GRAMMAR.scope.close,
+    [GRAMMAR.group.open]: GRAMMAR.group.close,
+};
+
+/** The closing halves — what a keystroke steps over instead of doubling. */
+const CLOSERS = new Set<string>([GRAMMAR.phrase, GRAMMAR.scope.close, GRAMMAR.group.close]);
 
 /** Where the caret starts this session, in slot coordinates; an anchor makes it a selection. */
 export interface CaretRequest {
@@ -30,12 +41,13 @@ export interface CaretRequest {
  * The open segment. Remounted per session — the mount is what seeds the input and places the caret.
  */
 export function OpenSegment({
-                                at, mode, highlight, caret, placeholder, onKeystroke, onArrow, onCommit, onCancel,
-                                onUndo, onRedo, onSelectAll
+                                at, mode, highlight, caret, placeholder, onKeystroke, onArrow, onEdge, onCommit,
+                                onCancel, onUndo, onRedo, onSelectAll, onSettle
                             }: {
     readonly at: BarPlan;
-    /** Whether the slot fills the bar (the true tail) or hugs its content (a chip, a mid-bar word, a gap). */
-    readonly mode: "fill" | "hug";
+    /** How the slot sits: filling the bar (the true tail), hugging content (chip, mid-bar word), or the
+     * zero-displacement caret rest between chips. */
+    readonly mode: "fill" | "hug" | "gap";
     /** The classed rendering of the slot text — the bar supplies its one highlighter. */
     readonly highlight: ReactNode;
     /** Where the caret starts this session. */
@@ -49,6 +61,8 @@ export function OpenSegment({
     readonly onKeystroke: (step: Keystroke, reset: boolean, held: string) => void;
     /** The caret walking out of the slot at either end. */
     readonly onArrow: (dir: -1 | 1) => void;
+    /** Home and End: the jump to the bar's own ends. */
+    readonly onEdge: (side: -1 | 1) => void;
     /** Enter — commit the chip, simplified. */
     readonly onCommit: () => void;
     /** Escape — cancel back to what the segment held when it opened. */
@@ -58,6 +72,8 @@ export function OpenSegment({
     readonly onRedo: () => void;
     /** Ctrl+A past the slot: the whole query opens as one flat selected text. */
     readonly onSelectAll: () => void;
+    /** Focus leaving the bar entirely — the segment settles into its committed spelling. */
+    readonly onSettle: () => void;
 }): ReactElement {
     const input = useRef<HTMLInputElement>(null);
     const backdrop = useRef<HTMLSpanElement>(null);
@@ -73,15 +89,35 @@ export function OpenSegment({
         // Mount-only on purpose: this seeds the session; afterwards the caret is the browser's.
     }, []);
     useLayoutEffect(() => {
-        if (backdrop.current !== null && input.current !== null) {
-            backdrop.current.scrollLeft = input.current.scrollLeft;
-        }
+        const el = input.current;
+        if (el === null) return;
+        if (backdrop.current !== null) backdrop.current.scrollLeft = el.scrollLeft;
+        // A settle can tidy the text under an UNFOCUSED slot (a blur commit trimming a multi-term scope): an
+        // input the user is not in follows the plan; a focused one is the session's own truth.
+        if (document.activeElement !== el && el.value !== at.slot) el.value = at.slot;
     });
 
     const onChange = (value: string, caretInSlot: number): void => {
         // The slot edits only its slice: head prefix and closing suffix are structure and survive verbatim.
         const text = at.before + at.open.slice(0, at.head?.consumed ?? 0) + value + at.suffix + at.after;
         onKeystroke({text, caret: slotStart(at) + caretInSlot}, false, value);
+    };
+
+    /**
+     * A delimiter pairing lands as an OPERATION through the ordinary rewrite pipeline: its own session, its
+     * own undo step — one Ctrl+Z takes the whole pairing back. In a gap the insertion brings the separator
+     * that keeps the following segment a segment, as any gap insertion does.
+     */
+    const onPair = (value: string, caretInSlot: number, anchorInSlot?: number): void => {
+        const glue = mode === "gap" ? " " : "";
+        const text = at.before + at.open.slice(0, at.head?.consumed ?? 0) + value + at.suffix + glue + at.after;
+        const base = slotStart(at);
+        onKeystroke({
+            text,
+            caret: base + caretInSlot,
+            anchor: anchorInSlot === undefined ? undefined : base + anchorInSlot,
+            operation: true,
+        }, true, value);
     };
 
     const onKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
@@ -122,28 +158,75 @@ export function OpenSegment({
             onCancel();
             return;
         }
-        if (e.key === "Backspace" && collapsed && el.selectionStart === 0) {
+        const a = el.selectionStart ?? 0;
+        const b = el.selectionEnd ?? a;
+        // The delimiters pair like an IDE's: typed over a selection the pair ENCLOSES it, the selection
+        // surviving inside; typed alone the closer spawns with the caret in the middle; a closer typed
+        // against its own next character steps over instead of doubling; and the closing brace at a scoped
+        // slot's end steps over the chip's consumed closer — out of the chip.
+        const typed = !e.metaKey && e.ctrlKey === e.altKey ? e.key : "";
+        const close = PAIRS[typed];
+        if (close !== undefined && !collapsed) {
+            e.preventDefault();
+            onPair(el.value.slice(0, a) + typed + el.value.slice(a, b) + close + el.value.slice(b),
+                b + 1, a + 1);
+            return;
+        }
+        if (collapsed && typed !== "" && CLOSERS.has(typed) && el.value[a] === typed) {
+            e.preventDefault();
+            el.setSelectionRange(a + 1, a + 1);
+            return;
+        }
+        if (collapsed && typed === GRAMMAR.scope.close && a === el.value.length && at.suffix !== "") {
+            e.preventDefault();
+            onArrow(1);
+            return;
+        }
+        if (close !== undefined && collapsed) {
+            e.preventDefault();
+            onPair(el.value.slice(0, a) + typed + close + el.value.slice(a), a + 1);
+            return;
+        }
+        if (e.key === "Backspace" && collapsed && a === 0) {
             const step = backspaceAtStart(at);
             if (step === null) return;
             e.preventDefault();
             onKeystroke(step, true, el.value);
             return;
         }
-        if (e.key === "Delete" && collapsed && el.selectionStart === el.value.length) {
+        if (e.key === "Backspace" && collapsed && a > 0 && PAIRS[el.value[a - 1]] === el.value[a]) {
+            // Inside an empty pair the Backspace takes both halves — the other side of the spawn.
+            e.preventDefault();
+            onPair(el.value.slice(0, a - 1) + el.value.slice(a + 1), a - 1);
+            return;
+        }
+        if (e.key === "Delete" && collapsed && a === el.value.length) {
             const step = deleteAtEnd(at);
             if (step === null) return;
             e.preventDefault();
             onKeystroke(step, true, el.value);
             return;
         }
-        if (e.key === "ArrowLeft" && collapsed && el.selectionStart === 0) {
+        // A held Shift means selection, which stays the platform's inside the slot — no walk, no jump.
+        if (e.shiftKey) return;
+        if (e.key === "ArrowLeft" && collapsed && a === 0) {
             e.preventDefault();
             onArrow(-1);
             return;
         }
-        if (e.key === "ArrowRight" && collapsed && el.selectionStart === el.value.length) {
+        if (e.key === "ArrowRight" && collapsed && a === el.value.length) {
             e.preventDefault();
             onArrow(1);
+            return;
+        }
+        if (e.key === "Home") {
+            e.preventDefault();
+            onEdge(-1);
+            return;
+        }
+        if (e.key === "End") {
+            e.preventDefault();
+            onEdge(1);
         }
     };
 
@@ -156,11 +239,22 @@ export function OpenSegment({
     // Layout apart from chrome: hug or fill is geometry; the ring is the head's alone — a bare word or a gap
     // is text with a caret, because freeform terms are text by ruling.
     const wrap = mode === "fill" ? styles.tail
-        : at.head === null ? styles.hug : `${styles.hug} ${styles.openChip}`;
+        : mode === "gap" ? `${styles.hug} ${styles.gapRest}`
+            : at.head === null ? styles.hug : `${styles.hug} ${styles.openChip}`;
     return (
         <span className={wrap}>
             {at.head !== null && (
-                <span key="cell" className={`${styles.headCell} ${at.head.negated ? styles.neg : ""}`}>
+                <span
+                    key="cell"
+                    className={`${styles.headCell} ${at.head.negated ? styles.neg : ""}`}
+                    onMouseDown={(e) => {
+                        // The head is the chip's own chrome: pressing it keeps the session alive and puts the
+                        // caret at the value's start — never a blur, never a settle.
+                        e.preventDefault();
+                        input.current?.focus();
+                        input.current?.setSelectionRange(0, 0);
+                    }}
+                >
                     {at.head.negated ? "−" : ""}{headCase(at.head.word)}
                 </span>
             )}
@@ -177,6 +271,7 @@ export function OpenSegment({
                         onChange(e.target.value, e.target.selectionStart ?? e.target.value.length);
                     }}
                     onKeyDown={onKeyDown}
+                    onBlur={onSettle}
                     onScroll={syncScroll}
                     placeholder={placeholder}
                     autoComplete="off"

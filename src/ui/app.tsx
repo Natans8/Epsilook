@@ -109,7 +109,9 @@ export function App({info, searcher}: {
             </header>
 
             <section className={styles.searchbox}>
-                <div className={styles.barRow}>
+                {/* data-query mirrors the state so a browser assertion can read the text without racing the
+                  * debounced URL sync */}
+                <div className={styles.barRow} data-query={text}>
                     <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}/>
                 </div>
                 <div
