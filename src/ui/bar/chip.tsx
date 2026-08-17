@@ -116,6 +116,10 @@ function Affordance({kind, label, className, onPress}: {
             type="button"
             className={className}
             aria-label={label}
+            // Out of the sequential tab order on purpose: a bar of six chips would otherwise put a dozen
+            // affordances between Tab and the query input, which is the one thing a keyboard reaches for.
+            // Their keyboard path is the bar's own — select a chip and press Delete.
+            tabIndex={-1}
             onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();

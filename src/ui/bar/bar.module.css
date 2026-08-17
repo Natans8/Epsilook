@@ -358,6 +358,20 @@
     border-radius: 50%;
 }
 
+/* The mark stays small — a chip is a compact thing — while the target it answers to is not: the overlay
+ * carries the box out to 25px square, past the 24px minimum, without moving a pixel of the layout. */
+.chipX::after,
+.chipAdd::after {
+    content: "";
+    position: absolute;
+    inset: -5px;
+}
+
+.chipX,
+.chipAdd {
+    position: relative;
+}
+
 .chipX:hover {
     color: rgb(var(--danger-rgb));
     background: rgba(var(--danger-rgb), calc(0.12 * var(--wash-strength)));
@@ -519,6 +533,14 @@
     background: rgba(var(--select-rgb), 0.4);
     border-radius: 4px;
     box-shadow: 0 0 0 2px rgba(var(--select-rgb), 0.4);
+}
+
+/* A selection recolours what it covers, exactly as the platform's own does to text: a semantic colour chosen
+ * against the chip's ground cannot be trusted against the selection's — the negated head measures 2.9:1 there.
+ * The negation still reads from the chip's border, which the selection does not paint over. */
+.selected .negHead,
+.selected .vOr {
+    color: var(--text-strong);
 }
 
 /* the resting bar's input: out of sight, still in the tab order, so focus can come back to the caret's place */

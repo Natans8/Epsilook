@@ -496,6 +496,7 @@ export function Bar({text, onText, placeholder, plain = false}: {
             highlight={<Classed text={at.slot} rich={flat}/>}
             caret={caret}
             placeholder={text === "" ? placeholder : undefined}
+            label={placeholder}
             onKeystroke={onKeystroke}
             onArrow={onArrow}
             onEdge={onEdge}
@@ -542,6 +543,11 @@ export function Bar({text, onText, placeholder, plain = false}: {
                     key={start}
                     className={inSel ? `${styles.settled} ${styles.selected}` : styles.settled}
                     data-start={start}
+                    // A chip draws its parse, so its rendered text reads as one run of glued words. The label
+                    // is the segment's own query text, which says what it asks and is what a reader would
+                    // type to say it again.
+                    role="group"
+                    aria-label={text.slice(start, end)}
                     onMouseDown={pressSegment(start)}
                 >
                     <SettledSegment text={text.slice(start, end)} act={actionsFor(start)}/>

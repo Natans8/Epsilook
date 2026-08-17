@@ -229,3 +229,20 @@ test("a drag across the bar selects the chips it crosses, and the copy is their 
     const copied = await page.evaluate(() => (window as unknown as { copied?: string }).copied);
     expect(copied).toBe("model:fire sound:bell cast:2s");
 });
+
+test("the bar's affordances stay out of the tab order, and its input keeps its name", async () => {
+    await seed(page, "model:fire", "sound:bell", "cast:2s");
+    // Six chips carry a dozen buttons; none of them may stand between Tab and the query input.
+    const stops = await page.evaluate(() => Array.from(document.querySelectorAll("button, input, select"))
+        .filter((el) => (el as HTMLElement).tabIndex >= 0)
+        .map((el) => el.getAttribute("aria-label") ?? el.tagName));
+    expect(stops.filter((name) => name === "Delete" || name === "Add a condition")).toEqual([]);
+    await expect(barInput(page)).toHaveAttribute("aria-label", /search spells/i);
+});
+
+test("each settled segment announces the query text it stands for", async () => {
+    await seed(page, "model:fire", "-model:missile");
+    const labels = await page.locator("[data-start]").evaluateAll(
+        (els) => els.map((el) => el.getAttribute("aria-label")));
+    expect(labels).toEqual(["model:fire", "-model:missile"]);
+});

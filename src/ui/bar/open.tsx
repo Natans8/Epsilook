@@ -39,7 +39,7 @@ export interface CaretRequest {
  * The open segment. Remounted per session — the mount is what seeds the input and places the caret.
  */
 export function OpenSegment({
-                                at, mode, hidden, seize, highlight, caret, placeholder, onKeystroke, onArrow,
+                                at, mode, hidden, seize, highlight, caret, placeholder, label, onKeystroke, onArrow,
                                 onEdge, onCommit, onCancel, onUndo, onRedo, onSelectAll, onSelectSegment,
                                 onWake, onSettle
                             }: {
@@ -59,6 +59,8 @@ export function OpenSegment({
     /** Where the caret starts this session. */
     readonly caret: CaretRequest | null;
     readonly placeholder?: string;
+    /** The input's accessible name, which stands whether or not a placeholder is showing. */
+    readonly label: string;
     /**
      * Every text mutation leaves as a keystroke: the new text and the caret as a text offset. `reset` marks the
      * mutations that rewrite the slot from outside the input; `held` is what the input shows, so the bar can
@@ -297,7 +299,9 @@ export function OpenSegment({
                     placeholder={placeholder}
                     autoComplete="off"
                     spellCheck={false}
-                    aria-label={placeholder}
+                    // Always named: the placeholder only exists on an empty bar, and the input is the bar's
+                    // one control whatever it happens to be holding.
+                    aria-label={label}
                 />
             </span>
         </span>
