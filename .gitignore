@@ -20,6 +20,12 @@ tools/translate.mjs
 # the test bundles esbuild emits from test/*.test.ts (npm test builds them)
 test/.bundle/
 
+# Playwright's per-run output for the browser suite (npm run test:browser),
+# and the Playwright MCP's snapshot/log drops
+test-results/
+playwright-report/
+.playwright-mcp/
+
 node_modules/
 
 # the Python environment uv builds from pyproject.toml + uv.lock

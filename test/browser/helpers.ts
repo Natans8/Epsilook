@@ -1,0 +1,132 @@
+/**
+ * @file Shared plumbing for the interaction-matrix suite: loading the harness, seeding a query through real
+ * keystrokes, and reading the bar's semantic state.
+ *
+ * Assertions go through three reads only — the `data-query` mirror (the canonical query text), the input's
+ * value and selection, and the open position's kind from its wrapper class. Settled-segment DOM structure is
+ * off limits: the committed-chip rendering replaces it, and the matrix outcomes are about text, caret and
+ * position, not markup.
+ */
+import type {Locator, Page} from "@playwright/test";
+import {expect} from "@playwright/test";
+
+/** The harness page, served by `npm run harness` (the webServer in playwright.config.ts). */
+export const HARNESS_URL = "/dev/harness/";
+
+/** The bar's one input — the open position, whatever kind it currently is. */
+export function barInput(page: Page): Locator {
+    return page.locator("[class*='qbar'] input");
+}
+
+/** The bar element itself — ground presses land on it. */
+export function bar(page: Page): Locator {
+    return page.locator("[class*='qbar']");
+}
+
+/** The settled segments in bar order — press targets only, never a structural assertion. */
+export function settledSegments(page: Page): Locator {
+    return page.locator("[class*='qbar'] > [class*='settled']");
+}
+
+/** The element mirroring the query text for scripted assertions. */
+export function queryMirror(page: Page): Locator {
+    return page.locator("[data-query]");
+}
+
+/** Loads the harness and waits out the pack load, until the bar is interactive. */
+export async function openHarness(page: Page): Promise<void> {
+    await page.goto(HARNESS_URL);
+    await barInput(page).waitFor({state: "visible", timeout: 120_000});
+}
+
+/** Asserts the canonical query text, retrying until the bar settles on it. */
+export async function expectQuery(page: Page, text: string): Promise<void> {
+    await expect(queryMirror(page)).toHaveAttribute("data-query", text);
+}
+
+/** One snapshot of the input: its value, selection and focus. */
+export interface SlotState {
+    readonly value: string;
+    readonly start: number;
+    readonly end: number;
+    readonly focused: boolean;
+}
+
+/** Reads the input's live state in one evaluate, so the fields are one snapshot. */
+export async function slot(page: Page): Promise<SlotState> {
+    return barInput(page).evaluate((el) => {
+        const held = el as HTMLInputElement;
+        return {
+            value: held.value,
+            start: held.selectionStart ?? -1,
+            end: held.selectionEnd ?? -1,
+            focused: document.activeElement === held,
+        };
+    });
+}
+
+/** The open position's kinds a wrapper class can name. Flat mode shares the tail's geometry, so it is
+ * asserted through value and selection instead. */
+export type OpenKind = "tail" | "chip" | "gap" | "bare";
+
+/** Reads the open position's kind from the open wrapper's class. */
+export async function openKind(page: Page): Promise<OpenKind> {
+    return barInput(page).evaluate((el) => {
+        const wrap = el.closest("[class*='tail'], [class*='hug']");
+        const cls = wrap === null ? "" : wrap.className;
+        if (cls.includes("tail")) return "tail";
+        if (cls.includes("gapRest")) return "gap";
+        if (cls.includes("openChip")) return "chip";
+        return "bare";
+    });
+}
+
+/**
+ * Empties the bar through real input: commit and jump to the end, flatten (two presses cover every position:
+ * a chip's first Ctrl+A only claims its own slot), delete the selection. Leaves the focused empty tail.
+ */
+export async function clearBar(page: Page): Promise<void> {
+    await barInput(page).focus();
+    await page.keyboard.press("End");
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("Backspace");
+    await expectQuery(page, "");
+}
+
+/**
+ * Seeds the bar by typing each term and committing it with Enter — the way a query is actually composed: a
+ * bound term auto-spawns its scope and a space inside it composes rather than committing, so a multi-term
+ * query goes in term by term. The committed query is the terms joined by separators, with a trailing one.
+ */
+export async function seed(page: Page, ...terms: readonly string[]): Promise<void> {
+    await clearBar(page);
+    for (const term of terms) {
+        await page.keyboard.type(term, {delay: 5});
+        await page.keyboard.press("Enter");
+    }
+    await expectQuery(page, terms.map((term) => `${term} `).join(""));
+}
+
+/**
+ * The page point inside one character of a settled segment, a quarter into its advance — far enough from the
+ * glyph boundary that a caret hit test answers this character's own offset, not the next one's.
+ */
+export async function charPoint(segment: Locator, index: number): Promise<{ x: number; y: number }> {
+    return segment.evaluate((el, at) => {
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let seen = 0;
+        for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+            const length = node.textContent?.length ?? 0;
+            if (at < seen + length) {
+                const range = document.createRange();
+                range.setStart(node, at - seen);
+                range.setEnd(node, at - seen + 1);
+                const box = range.getBoundingClientRect();
+                return {x: box.x + box.width / 4, y: box.y + box.height / 2};
+            }
+            seen += length;
+        }
+        throw new Error(`character ${String(at)} is past the segment text`);
+    }, index);
+}

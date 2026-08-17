@@ -1,0 +1,21 @@
+{
+  // The browser suite is its own tsc target: Playwright specs run on Node but
+  // their evaluate callbacks execute in the page, so they need the DOM lib the
+  // Node target (tsconfig.tools.json) deliberately excludes. tools/check.py
+  // runs this target beside the other two.
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    ".",
+    "../../playwright.config.ts"
+  ]
+}

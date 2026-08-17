@@ -10,6 +10,7 @@
     "harness": "node tools/build.mjs --harness",
     "typecheck": "tsc --noEmit",
     "test": "node tools/build.mjs --test && node --enable-source-maps --test \"test/.bundle/**/*.test.mjs\"",
+    "test:browser": "playwright test",
     "query": "node tools/build.mjs --cli && node tools/query.mjs",
     "parse": "node tools/build.mjs --cli && node tools/parse.mjs",
     "equal": "node tools/build.mjs --cli && node tools/equal.mjs",
@@ -24,6 +25,7 @@
     "node": ">=22"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/color-name": "^2.0.0",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",

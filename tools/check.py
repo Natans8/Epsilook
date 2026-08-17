@@ -1819,6 +1819,43 @@ def run_tool(rep: Report, name: str, cmd: list[str], detail: str = "") -> None:
         print(f"        {DIM}... {len(output) - 12} more lines{RESET}")
 
 
+def check_browser_matrix(rep: Report) -> None:
+    """The input-layer interaction matrix, driven through a real browser.
+
+    test/browser/ encodes the ruled gesture-by-position matrix as Playwright
+    specs against the dev harness, with native keyboard and mouse input —
+    the half of the contract the Node test suite cannot exercise. It needs a
+    browser build that `npx playwright install firefox` puts under
+    Playwright's registry directory, which CI and a fresh machine do not
+    have, so this gate SKIPS when no Firefox is installed there — the same
+    shape as the pytest tests that need a local cache.
+
+    The suite owns its server: playwright.config.ts starts `npm run harness`
+    and probes the port first, reusing an instance another session already
+    runs (the harness rebuilds per request, so any instance serves current
+    source).
+    """
+    if not (ROOT / "node_modules" / "@playwright" / "test").is_dir():
+        rep.skip("browser matrix", "@playwright/test not installed")
+        return
+    registry: Path | None
+    held = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+    if held is not None:
+        registry = Path(held)
+    elif sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA")
+        registry = Path(base) / "ms-playwright" if base else None
+    elif sys.platform == "darwin":
+        registry = Path.home() / "Library" / "Caches" / "ms-playwright"
+    else:
+        registry = Path.home() / ".cache" / "ms-playwright"
+    if registry is None or not any(registry.glob("firefox-*")):
+        rep.skip("browser matrix", "no Playwright Firefox (npx playwright install firefox)")
+        return
+    run_tool(rep, "browser matrix", ["npx", "playwright", "test"],
+             "test/browser/ against the harness, real input, Firefox")
+
+
 def check_cli_entries(rep: Report) -> None:
     """Every command-line entry point is BUNDLED and TYPECHECKED, not one or
     the other.
@@ -1966,12 +2003,14 @@ def check_toolchain(rep: Report) -> None:
     """tsc needs `npm install` once (typescript and esbuild are pinned
     devDependencies); the build doubles as the module-graph guard.
 
-    TWO tsc targets, because there are two runtimes on one engine. tsconfig.json
-    is the browser (DOM lib, `types: []` so Node globals stay out of src/);
+    THREE tsc targets, one per runtime on the one engine. tsconfig.json is the
+    browser (DOM lib, `types: []` so Node globals stay out of src/);
     tsconfig.tools.json is everything that runs on NODE — the command-line entry
-    points and the test suite (Node types, no DOM). Checking only the first
-    would let them rot silently — and tools/query.ts is the proof that the
-    engine detaches, so it has to compile.
+    points and the test suite (Node types, no DOM); test/browser/tsconfig.json
+    is the Playwright suite, Node code whose evaluate callbacks execute in the
+    page and so need both. Checking only the first would let them rot
+    silently — and tools/query.ts is the proof that the engine detaches, so it
+    has to compile.
 
     The tests run here rather than in a habit anyone has to remember, so there
     is one definition of "does this pass" and CI runs the same one. `npm test`
@@ -1985,6 +2024,8 @@ def check_toolchain(rep: Report) -> None:
     run_tool(rep, "tsc", ["npx", "tsc"], "strict, tsconfig.json (browser)")
     run_tool(rep, "tsc (cli)", ["npx", "tsc", "-p", "tsconfig.tools.json"],
              "strict, tsconfig.tools.json (node)")
+    run_tool(rep, "tsc (browser suite)", ["npx", "tsc", "-p", "test/browser"],
+             "strict, test/browser/tsconfig.json (playwright)")
     run_tool(rep, "bundle", ["npm", "run", "--silent", "build"],
              "esbuild src/main.ts -> site/js/app.js")
     run_tool(rep, "cli bundle", ["node", "tools/build.mjs", "--cli"],
@@ -2005,6 +2046,7 @@ def check_toolchain(rep: Report) -> None:
                              "--recursive=y", *PYTHON_SOURCES],
              "errors only; style findings are advisory (.pylintrc)")
     run_tool(rep, "pytest", ["uv", "run", "pytest"], "test/py/*_test.py")
+    check_browser_matrix(rep)
     check_mermaid(rep)
 
 

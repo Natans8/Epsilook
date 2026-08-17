@@ -26,5 +26,11 @@
     // rather than a file list: tests are added constantly, and a test that
     // typechecks only by accident is worth less than no test.
     "test"
+  ],
+  "exclude": [
+    // The browser suite's evaluate callbacks run in the page and need the DOM
+    // lib this target deliberately lacks; test/browser/tsconfig.json is its
+    // own target and tools/check.py runs it too.
+    "test/browser"
   ]
 }
