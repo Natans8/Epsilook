@@ -113,6 +113,12 @@
     min-width: 1ch;
 }
 
+/* an empty mirror still holds one full text line, or the caret shrinks to the collapsed box's height — the
+ * zero-width space has the line's height and none of its width */
+.hug .editwrap .qhl::after {
+    content: "\200b";
+}
+
 .hug .editwrap .q {
     position: absolute;
     inset: 0;
