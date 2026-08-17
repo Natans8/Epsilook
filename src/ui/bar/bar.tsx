@@ -1,25 +1,27 @@
 /**
- * @file The bar: settled text, then the open segment — eagerly transformed into a head cell and value slot the
- * moment its bind lands.
+ * @file The bar: the query's segments in a row, one open as the editing form, the rest settled.
  *
- * Everything drawn here is a read of {@link plan} over the one query text; the component owns no state beyond
- * a pending caret. The slot is the bar's only input, carrying exactly the open segment's editable remainder; the
- * settled text is inert this increment and becomes chips in the next.
+ * The bar's one piece of state is WHICH segment is open, held as a text offset; everything else is a read of the
+ * query text through {@link planAt}. Arrows walk the open segment across its neighbours, a press on a settled
+ * segment opens it, and every text mutation arrives as a {@link Keystroke} whose caret offset decides both the
+ * next open segment and where the caret lands inside it — one rule for typing, committing, dissolving and
+ * merging alike.
+ *
+ * Settled segments render as classed raw text this increment; the committed-chip component replaces them next.
  */
-import type {KeyboardEvent, MouseEvent as ReactMouseEvent, ReactElement} from "react";
-import {useLayoutEffect, useMemo, useRef} from "react";
+import type {MouseEvent as ReactMouseEvent, ReactElement} from "react";
+import {useMemo, useRef, useState} from "react";
 import {classify} from "../../search/index";
-import type {BarPlan} from "./plan";
-import {backspaceAtStart, plan} from "./plan";
+import type {Keystroke} from "./plan";
+import {planAt, segmentAt, segmentStarts, slotStart} from "./plan";
+import type {CaretRequest} from "./open";
+import {OpenSegment} from "./open";
 import styles from "./bar.module.css";
 
 /** The backdrop colour class per run kind; a plain word paints nothing and inherits the text colour. */
 const RUN_CLASS: Record<string, string | undefined> = {
     head: styles.runHead, op: styles.runOp, delim: styles.runOp, quote: styles.runOp, number: styles.runNumber,
 };
-
-/** Heads are capitalised everywhere: `Scale`, never `scale`. */
-const headCase = (word: string): string => (word === "" ? word : word[0].toUpperCase() + word.slice(1));
 
 /** One stretch of text as classed spans — the highlight, wherever raw text shows. */
 function Classed({text}: { readonly text: string }): ReactElement {
@@ -41,89 +43,75 @@ export function Bar({text, onText, placeholder}: {
     readonly onText: (text: string) => void;
     readonly placeholder: string;
 }): ReactElement {
-    const input = useRef<HTMLInputElement>(null);
-    const backdrop = useRef<HTMLSpanElement>(null);
-    const caretTo = useRef<number | null>(null);
+    // The open segment, as an offset into the text; the tail on first load. Clamped on every render because the
+    // text can change under it.
+    const [openAt, setOpenAt] = useState(Number.MAX_SAFE_INTEGER);
+    const [caret, setCaret] = useState<CaretRequest | null>(null);
+    const wrap = useRef<HTMLDivElement>(null);
 
-    const at: BarPlan = useMemo(() => plan(text), [text]);
+    const clamped = Math.min(openAt, text.length);
+    const at = useMemo(() => planAt(text, clamped), [text, clamped]);
 
-    useLayoutEffect(() => {
-        if (caretTo.current !== null && input.current !== null) {
-            input.current.setSelectionRange(caretTo.current, caretTo.current);
-            caretTo.current = null;
-        }
-        if (backdrop.current !== null && input.current !== null) {
-            backdrop.current.scrollLeft = input.current.scrollLeft;
-        }
-    });
-
-    /** Rewrites the text around the slot's own value — the slot edits only its slice of the text. */
-    const onSlot = (value: string): void => {
-        onText(at.settled + at.open.slice(0, at.head?.consumed ?? 0) + value);
-    };
-
-    const onKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
-        const el = e.currentTarget;
-        if (e.key !== "Backspace" || el.selectionStart !== 0 || el.selectionEnd !== 0) return;
-        const step = backspaceAtStart(at);
-        if (step === null) return;
-        e.preventDefault();
-        caretTo.current = step.caret;
+    /** Applies one keystroke: the caret's text offset picks the open segment and the slot position at once. */
+    const onKeystroke = (step: Keystroke): void => {
+        const seg = segmentAt(step.text, step.caret);
+        const next = planAt(step.text, seg.start);
+        setOpenAt(seg.start);
+        setCaret({at: Math.max(0, step.caret - slotStart(next))});
         onText(step.text);
     };
 
-    /** The whole bar is the slot's click target — a press on its ground focuses without stealing the caret. */
+    /** The caret walking out at either end: the neighbouring segment opens with the caret on the entering side. */
+    const onArrow = (dir: -1 | 1): void => {
+        const starts = segmentStarts(text);
+        const here = starts.indexOf(segmentAt(text, clamped).start);
+        const target = starts[here + dir];
+        if (target === undefined) return;
+        setOpenAt(target);
+        setCaret({at: dir === -1 ? planAt(text, target).slot.length : 0});
+    };
+
+    /** A press on a settled segment opens it, caret at its end; a press on the ground opens the tail. */
+    const openSegmentAt = (offset: number) => (e: ReactMouseEvent): void => {
+        e.preventDefault();
+        setOpenAt(offset);
+        setCaret({at: planAt(text, offset).slot.length});
+    };
+
     const onBarPress = (e: ReactMouseEvent<HTMLDivElement>): void => {
-        if (e.target !== input.current) {
-            e.preventDefault();
-            input.current?.focus();
-        }
+        if (e.target === e.currentTarget) openSegmentAt(text.length)(e);
     };
 
-    const syncScroll = (): void => {
-        if (backdrop.current !== null && input.current !== null) {
-            backdrop.current.scrollLeft = input.current.scrollLeft;
-        }
-    };
-
-    const slot = (
-        <span className={styles.editwrap}>
-            <span ref={backdrop} className={styles.qhl} aria-hidden="true">
-                <Classed text={at.slot}/>
-            </span>
-            <input
-                ref={input}
-                className={`${styles.q} ${at.slot === "" ? "" : styles.hl}`}
-                type="text"
-                value={at.slot}
-                onChange={(e) => {
-                    onSlot(e.target.value);
-                }}
-                onKeyDown={onKeyDown}
-                onScroll={syncScroll}
-                placeholder={text === "" ? placeholder : undefined}
-                autoComplete="off"
-                spellCheck={false}
-                aria-label={placeholder}
-            />
-        </span>
-    );
+    const starts = segmentStarts(text);
+    const openStart = segmentAt(text, clamped).start;
 
     return (
-        <div className={styles.qbar} onMouseDown={onBarPress}>
-            {at.settled !== "" && (
-                <span className={styles.settled}>
-                    <Classed text={at.settled.trimEnd()}/>
-                </span>
-            )}
-            {at.head === null ? slot : (
-                <span className={styles.openChip}>
-                    <span className={`${styles.headCell} ${at.head.negated ? styles.neg : ""}`}>
-                        {at.head.negated ? "−" : ""}{headCase(at.head.word)}
+        <div ref={wrap} className={styles.qbar} onMouseDown={onBarPress}>
+            {starts.map((start) => {
+                const seg = segmentAt(text, start);
+                if (seg.start === openStart) {
+                    return (
+                        <OpenSegment
+                            key="open"
+                            at={at}
+                            highlight={<Classed text={at.slot}/>}
+                            caret={caret}
+                            placeholder={text === "" ? placeholder : undefined}
+                            onKeystroke={onKeystroke}
+                            onArrow={onArrow}
+                        />
+                    );
+                }
+                return (
+                    <span
+                        key={start}
+                        className={styles.settled}
+                        onMouseDown={openSegmentAt(seg.start)}
+                    >
+                        <Classed text={text.slice(seg.start, seg.end)}/>
                     </span>
-                    {slot}
-                </span>
-            )}
+                );
+            })}
         </div>
     );
 }

@@ -1,91 +1,111 @@
 /**
- * The display plan's contract: the split is a pure read of the text, `settled + open` reconstructs it verbatim,
- * the transformation fires exactly when a known head meets its glue, and the boundary backspace deletes the one
- * character left of the caret in the underlying text — with the caret landing where that character was.
+ * The display plan's contract: segments are a pure read of the text, `before + open + after` reconstructs it
+ * verbatim whichever segment is open, the transformation fires exactly when a known head meets its glue, and the
+ * boundary backspace deletes the one character left of the caret in the underlying text.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {backspaceAtStart, openHead, plan, splitAt} from "../../../../src/ui/bar/plan";
+import {backspaceAtStart, openHead, planAt, segmentAt, segmentStarts, slotStart} from "../../../../src/ui/bar/plan";
 
-test("the open segment is the text after the last balanced space, and reconstruction is verbatim", () => {
-    for (const text of ["", "fire", "model:fire ", "model:fire scale:>50",
-        'name:"blood pool', "model:{fire ball} more", "a  ", "-scale:5"]) {
-        const p = plan(text);
-        assert.equal(p.settled + p.open, text, `reconstruction of "${text}"`);
-        assert.equal(p.settled.length, splitAt(text));
+test("segments start at zero and after each balanced space; a trailing space opens an empty tail", () => {
+    assert.deepEqual(segmentStarts(""), [0]);
+    assert.deepEqual(segmentStarts("fire"), [0]);
+    assert.deepEqual(segmentStarts("model:fire scale:>50"), [0, 11]);
+    assert.deepEqual(segmentStarts("model:fire "), [0, 11]);
+});
+
+test("a space inside a phrase or a scope separates nothing — those segments stay whole", () => {
+    assert.deepEqual(segmentStarts('name:"blood pool'), [0]);
+    assert.deepEqual(segmentStarts("model:{fire ball} next"), [0, 18]);
+    assert.deepEqual(segmentStarts('name:"a\\" b'), [0]);
+});
+
+test("segmentAt clamps to the segment containing the offset, the text's end included", () => {
+    assert.deepEqual(segmentAt("model:fire scale:>50", 0), {start: 0, end: 10});
+    assert.deepEqual(segmentAt("model:fire scale:>50", 15), {start: 11, end: 20});
+    assert.deepEqual(segmentAt("model:fire ", 99), {start: 11, end: 11});
+});
+
+test("reconstruction is verbatim whichever segment is open", () => {
+    for (const text of ["", "fire", "model:fire scale:>50 x", 'name:"a b" next', "-scale:5"]) {
+        for (const at of [0, Math.floor(text.length / 2), text.length]) {
+            const p = planAt(text, at);
+            assert.equal(p.before + p.open + p.after, text, `reconstruction of "${text}" at ${String(at)}`);
+        }
     }
-    assert.deepEqual(plan("model:fire scale:>50").settled, "model:fire ");
-    assert.deepEqual(plan("model:fire ").open, "");
-});
-
-test("a space inside a phrase or a scope separates nothing — the segment stays whole while they are open", () => {
-    assert.equal(plan('name:"blood pool').open, 'name:"blood pool');
-    assert.equal(plan("model:{fire ball").open, "model:{fire ball");
-    assert.equal(plan("model:{fire ball} next").open, "next");
-    assert.equal(plan('name:"a b" next').open, "next");
-});
-
-test("an escaped quote does not close the phrase for the split", () => {
-    assert.equal(plan('name:"a\\" b').open, 'name:"a\\" b');
 });
 
 test("the transformation fires when a known head meets the bind, and consumes it", () => {
-    const p = plan("scale:");
+    const p = planAt("scale:", 6);
     assert.deepEqual(p.head, {word: "scale", negated: false, consumed: 6, bound: true});
     assert.equal(p.slot, "");
-    assert.equal(plan("scale:>50").slot, ">50");
+    assert.equal(planAt("scale:>50", 9).slot, ">50");
 });
 
 test("an operator glue transforms but stays in the slot; an unknown word never transforms", () => {
-    const p = plan("scale>50");
+    const p = planAt("scale>50", 8);
     assert.deepEqual(p.head, {word: "scale", negated: false, consumed: 5, bound: false});
     assert.equal(p.slot, ">50");
-    assert.equal(plan("bogus:50").head, null);
-    assert.equal(plan("scale").head, null);
+    assert.equal(planAt("bogus:50", 8).head, null);
+    assert.equal(planAt("scale", 5).head, null);
 });
 
 test("a negated head carries its glyph and consumes it into the cell", () => {
-    const p = plan("-model:fire");
+    const p = planAt("-model:fire", 11);
     assert.deepEqual(p.head, {word: "model", negated: true, consumed: 7, bound: true});
     assert.equal(p.slot, "fire");
 });
 
-test("the transformation only reads the OPEN segment — a head in settled text is not this plan's business", () => {
-    const p = plan("scale:5 fire");
-    assert.equal(p.settled, "scale:5 ");
-    assert.equal(p.head, null);
-    assert.equal(p.slot, "fire");
+test("a MIDDLE segment opens too, its neighbours settled on both sides", () => {
+    const p = planAt("model:fire scale:5 extra", 12);
+    assert.equal(p.before, "model:fire ");
+    assert.equal(p.open, "scale:5");
+    assert.equal(p.after, " extra");
+    assert.equal(p.head?.word, "scale");
+    assert.equal(p.slot, "5");
+});
+
+test("slotStart translates the input caret into a text offset", () => {
+    const p = planAt("model:fire scale:5", 12);
+    assert.equal(slotStart(p), 11 + 6);
+    assert.equal(slotStart(planAt("fire", 0)), 0);
 });
 
 test("boundary backspace on a bound head dissolves the bind, caret where it was", () => {
-    const step = backspaceAtStart(plan("scale:>50"));
+    const step = backspaceAtStart(planAt("scale:>50", 9));
     assert.equal(step?.text, "scale>50");
-    // The dissolved text still transforms through the operator glue, so the slot is ">50" and the caret sits at
-    // its start — exactly where the bind was.
-    assert.equal(plan(step?.text ?? "").slot, ">50");
-    assert.equal(step?.caret, 0);
+    assert.equal(step?.caret, 5);
+    // The dissolved text still transforms through the operator glue; the caret offset lands at its slot start.
+    const next = planAt(step?.text ?? "", step?.caret ?? 0);
+    assert.equal(next.slot, ">50");
+    assert.equal((step?.caret ?? 0) - slotStart(next), 0);
 });
 
 test("boundary backspace on an operator-glued head shrinks the word, untransforming when unknown", () => {
-    const step = backspaceAtStart(plan("scale>50"));
+    const step = backspaceAtStart(planAt("scale>50", 8));
     assert.equal(step?.text, "scal>50");
-    assert.equal(plan(step?.text ?? "").head, null);
+    assert.equal(planAt(step?.text ?? "", step?.caret ?? 0).head, null);
     assert.equal(step?.caret, 4);
 });
 
-test("boundary backspace with no head merges the settled tail back into the open segment", () => {
-    const step = backspaceAtStart(plan("model:fire "));
+test("boundary backspace on a headless segment deletes the separator, merging the segments", () => {
+    const step = backspaceAtStart(planAt("model:fire ", 11));
     assert.equal(step?.text, "model:fire");
-    // The merged segment transforms again; the caret sits at the end of its slot, where the space was.
-    assert.equal(step?.caret, 4);
-    assert.equal(backspaceAtStart(plan("")), null);
+    assert.equal(step?.caret, 10);
+    assert.equal(backspaceAtStart(planAt("", 0)), null);
+});
+
+test("boundary backspace on a MIDDLE segment merges it into its left neighbour", () => {
+    const step = backspaceAtStart(planAt("model:fire extra", 11));
+    assert.equal(step?.text, "model:fireextra");
+    assert.equal(step?.caret, 10);
 });
 
 test("a dissolved negated head keeps its glyph in the raw text", () => {
-    const step = backspaceAtStart(plan("-scale:5"));
+    const step = backspaceAtStart(planAt("-scale:5", 8));
     assert.equal(step?.text, "-scale5");
-    assert.equal(plan(step?.text ?? "").head, null);
+    assert.equal(planAt(step?.text ?? "", 0).head, null);
     assert.equal(step?.caret, 6);
 });
 

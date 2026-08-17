@@ -29,8 +29,17 @@
     color: var(--text);
 }
 
+/* the headless open segment: the tail, filling the bar like 1.0's own input */
+.tail {
+    display: inline-flex;
+    flex: 1;
+    min-width: 6rem;
+    max-width: 100%;
+}
+
 /* the open segment's enclosure once a head transforms: the editing look — a quiet ring, never the page's hard
- * focus outline */
+ * focus outline. It HUGS its content: the backdrop sits in flow and sets the width, the input rides above it,
+ * so the chip grows with every typed character. */
 .openChip {
     display: inline-flex;
     align-items: stretch;
@@ -69,7 +78,8 @@
 
 .openChip .editwrap {
     padding: 0 0.55rem;
-    min-width: 3rem;
+    flex: 0 1 auto;
+    min-width: 0;
 }
 
 .qhl {
@@ -85,8 +95,22 @@
     color: var(--text);
 }
 
+/* hug mode: the backdrop leaves the overlay and SIZES the slot; the input becomes the overlay instead. The
+ * padding split keeps both texts at the same x: the wrap pads the in-flow backdrop, the absolute input pads
+ * itself by the same amount. */
 .openChip .qhl {
-    inset: 0 0.55rem;
+    position: static;
+    display: inline-block;
+    min-width: 1ch;
+}
+
+.openChip .q {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    flex: none;
+    min-width: 0;
+    padding: 0.15rem 0.55rem;
 }
 
 .q {

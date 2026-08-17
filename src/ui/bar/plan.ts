@@ -1,14 +1,14 @@
 /**
- * @file The bar's display plan: where the open segment begins, and what of it is a transformed head.
+ * @file The bar's display plan: the query split into segments, one of them open, its head transformed.
  *
- * The query text is the single source of truth and the plan is a PURE READ of it — nothing here is state. The
- * open segment is the text after the last separator space at balanced depth (a space inside a phrase or a scope
- * separates nothing), so committing on space is emergent: the keystroke moves the boundary, and there is no
- * second copy of "committed" to fall out of sync.
+ * The query text is the single source of truth and everything here is a PURE READ of it — the only state the bar
+ * keeps is WHICH segment is open, as a character offset. Segments are separated by spaces at balanced depth (a
+ * space inside a phrase or a scope separates nothing), so committing on space is emergent: the keystroke moves a
+ * boundary, and there is no second copy of "committed" to fall out of sync.
  *
- * The eager transformation is the same read: the open segment starting with a known head and its bind is
- * displayed as a head cell plus a value slot, the bind consumed as a gesture. The text underneath never changes —
- * {@link BarPlan} reconstructs it verbatim, which the tests pin — so the round trip is unconditional.
+ * The eager transformation is the same read: an open segment starting with a known head and its bind displays as
+ * a head cell plus a value slot, the bind consumed as a gesture. The text underneath never changes — a plan
+ * reconstructs it verbatim, which the tests pin — so the round trip is unconditional.
  */
 import {fold, GRAMMAR, HEADS} from "../../search/index";
 
@@ -24,12 +24,14 @@ export interface OpenHead {
     readonly bound: boolean;
 }
 
-/** What the bar draws: settled text, then the open segment as an optional head cell and the slot. */
+/** What the bar draws: text before the open segment, the segment itself, text after, and the transformation. */
 export interface BarPlan {
-    /** Everything before the open segment, verbatim, its trailing separator included. */
-    readonly settled: string;
-    /** The whole open segment, verbatim — `settled + open` is the text. */
+    /** Everything before the open segment, verbatim, trailing separator included. */
+    readonly before: string;
+    /** The whole open segment, verbatim — `before + open + after` is the text. */
     readonly open: string;
+    /** Everything after the open segment, verbatim, leading separator included. */
+    readonly after: string;
     /** The transformed head, or null while the segment is plain text. */
     readonly head: OpenHead | null;
     /** What the input holds: the open segment after the consumed head characters. */
@@ -37,19 +39,18 @@ export interface BarPlan {
 }
 
 /**
- * Where the open segment begins: after the last separator space at balanced depth.
+ * The start offset of every segment: zero, then after each space at balanced depth.
  *
- * A space inside a phrase is content and a space inside a scope or group separates terms of one clause, so
- * neither ends the segment being typed — only a space with every quote closed and every bracket depth at zero
- * does.
+ * A trailing balanced space therefore yields a final empty segment at the text's end — the fresh slot a commit
+ * leaves the caret in.
  *
  * @param text The query text.
- * @returns The index the open segment starts at.
+ * @returns The starts, ascending, always beginning with zero.
  */
-export function splitAt(text: string): number {
+export function segmentStarts(text: string): number[] {
+    const starts = [0];
     let quote = false;
     let depth = 0;
-    let start = 0;
     for (let at = 0; at < text.length; at++) {
         const ch = text[at];
         if (ch === GRAMMAR.escape && quote) {
@@ -63,9 +64,33 @@ export function splitAt(text: string): number {
         if (quote) continue;
         if (ch === GRAMMAR.scope.open || ch === GRAMMAR.group.open) depth += 1;
         else if (ch === GRAMMAR.scope.close || ch === GRAMMAR.group.close) depth -= 1;
-        else if (ch === " " && depth <= 0) start = at + 1;
+        else if (ch === " " && depth <= 0) starts.push(at + 1);
     }
-    return start;
+    return starts;
+}
+
+/** One segment's bounds: its start, and its end at the next boundary's space or the text's end. */
+export interface Segment {
+    readonly start: number;
+    readonly end: number;
+}
+
+/**
+ * The segment containing one text offset.
+ *
+ * @param text The query text.
+ * @param at Any offset into it; past the end clamps to the last segment.
+ * @returns The segment's bounds.
+ */
+export function segmentAt(text: string, at: number): Segment {
+    const starts = segmentStarts(text);
+    let start = starts[0];
+    for (const held of starts) {
+        if (held <= at) start = held;
+        else break;
+    }
+    const next = starts.find((held) => held > start);
+    return {start, end: next === undefined ? text.length : next - 1};
 }
 
 /** A head opener: optional negation, a word, then the bind or a comparison glued to it. */
@@ -95,20 +120,25 @@ export function openHead(open: string): OpenHead | null {
 }
 
 /**
- * The display plan of one query text.
+ * The display plan with the segment at `openAt` open.
  *
  * @param text The query text, exactly as typed.
- * @returns The plan; `settled + open` reconstructs the text, and `slot` is `open` less the consumed head.
+ * @param openAt Any offset inside the segment to open; the text's end opens the tail.
+ * @returns The plan; `before + open + after` reconstructs the text.
  */
-export function plan(text: string): BarPlan {
-    const start = splitAt(text);
-    const settled = text.slice(0, start);
-    const open = text.slice(start);
+export function planAt(text: string, openAt: number): BarPlan {
+    const seg = segmentAt(text, openAt);
+    const before = text.slice(0, seg.start);
+    const open = text.slice(seg.start, seg.end);
+    const after = text.slice(seg.end);
     const head = openHead(open);
-    return {settled, open, head, slot: head === null ? open : open.slice(head.consumed)};
+    return {before, open, after, head, slot: head === null ? open : open.slice(head.consumed)};
 }
 
-/** One keystroke's outcome on the text, with where the caret lands in the NEW plan's slot. */
+/** Where a plan's slot begins in text coordinates — what turns an input caret into a text offset and back. */
+export const slotStart = (at: BarPlan): number => at.before.length + (at.head?.consumed ?? 0);
+
+/** One keystroke's outcome: the new text and the caret as a TEXT offset — the component re-plans around it. */
 export interface Keystroke {
     readonly text: string;
     readonly caret: number;
@@ -117,28 +147,18 @@ export interface Keystroke {
 /**
  * Backspace at the slot's start — the one keystroke the input cannot mean on its own.
  *
- * One rule for all three cases: the deletion happens on the character just left of the caret in the UNDERLYING
- * text. Left of a bound head's slot sits the consumed bind, so the head dissolves back into editable raw text;
- * left of an operator-glued head's slot sits the word's last letter, which shrinks — and stops transforming the
- * moment the schema no longer knows it; left of a headless slot sits the settled tail's separator, so the
- * previous segment merges back into the open one.
+ * One rule for every case: delete the character just left of the caret in the underlying text. Left of a bound
+ * head's slot sits the consumed bind, so the head dissolves back into editable raw text; left of an
+ * operator-glued head's slot sits the word's last letter, which shrinks — and stops transforming the moment the
+ * schema no longer knows it; left of a headless slot sits the previous segment's separator, so the segments
+ * merge.
  *
  * @param at The current plan.
- * @returns The new text and slot caret, or null when there is nothing left of the caret to delete.
+ * @returns The new text with the caret where the deleted character was, or null at the text's very start.
  */
 export function backspaceAtStart(at: BarPlan): Keystroke | null {
-    // The text index of the character to delete: just left of where the slot begins.
-    const cut = at.head === null
-        ? (at.settled === "" ? -1 : at.settled.length - 1)
-        : at.settled.length + at.head.consumed - 1;
+    const cut = slotStart(at) - 1;
     if (cut < 0) return null;
-    const text = at.settled + at.open;
-    return keystroke(text.slice(0, cut) + text.slice(cut + 1), cut);
-}
-
-/** The keystroke's outcome, the caret translated into the NEW plan's slot coordinates. */
-function keystroke(text: string, caret: number): Keystroke {
-    const next = plan(text);
-    const slotStart = next.settled.length + (next.head?.consumed ?? 0);
-    return {text, caret: Math.max(0, caret - slotStart)};
+    const text = at.before + at.open + at.after;
+    return {text: text.slice(0, cut) + text.slice(cut + 1), caret: cut};
 }
