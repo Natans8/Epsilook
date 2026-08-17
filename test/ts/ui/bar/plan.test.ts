@@ -6,7 +6,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {backspaceAtStart, openHead, planAt, segmentAt, segmentStarts, slotStart} from "../../../../src/ui/bar/plan";
+import {
+    backspaceAtStart, commitSegment, openHead, planAt, scopedForm, scopeGesture, segmentAt, segmentStarts, slotStart,
+} from "../../../../src/ui/bar/plan";
 
 test("segments start at zero and after each balanced space; a trailing space opens an empty tail", () => {
     assert.deepEqual(segmentStarts(""), [0]);
@@ -38,14 +40,14 @@ test("reconstruction is verbatim whichever segment is open", () => {
 
 test("the transformation fires when a known head meets the bind, and consumes it", () => {
     const p = planAt("scale:", 6);
-    assert.deepEqual(p.head, {word: "scale", negated: false, consumed: 6, bound: true});
+    assert.deepEqual(p.head, {word: "scale", negated: false, consumed: 6, bound: true, scoped: false});
     assert.equal(p.slot, "");
     assert.equal(planAt("scale:>50", 9).slot, ">50");
 });
 
 test("an operator glue transforms but stays in the slot; an unknown word never transforms", () => {
     const p = planAt("scale>50", 8);
-    assert.deepEqual(p.head, {word: "scale", negated: false, consumed: 5, bound: false});
+    assert.deepEqual(p.head, {word: "scale", negated: false, consumed: 5, bound: false, scoped: false});
     assert.equal(p.slot, ">50");
     assert.equal(planAt("bogus:50", 8).head, null);
     assert.equal(planAt("scale", 5).head, null);
@@ -53,8 +55,68 @@ test("an operator glue transforms but stays in the slot; an unknown word never t
 
 test("a negated head carries its glyph and consumes it into the cell", () => {
     const p = planAt("-model:fire", 11);
-    assert.deepEqual(p.head, {word: "model", negated: true, consumed: 7, bound: true});
+    assert.deepEqual(p.head, {word: "model", negated: true, consumed: 7, bound: true, scoped: false});
     assert.equal(p.slot, "fire");
+});
+
+test("a scoped head consumes both braces: the slot is the interior, spaces and all", () => {
+    const p = planAt("model:{fire frost}", 10);
+    assert.equal(p.head?.scoped, true);
+    assert.equal(p.slot, "fire frost");
+    assert.equal(p.suffix, "}");
+    assert.equal(p.before + p.open + p.after, "model:{fire frost}");
+    assert.equal(slotStart(p), 7);
+});
+
+test("an unclosed scope has no suffix yet; an interior whose brace closes early keeps its raw tail", () => {
+    const open = planAt("model:{fire fro", 10);
+    assert.equal(open.slot, "fire fro");
+    assert.equal(open.suffix, "");
+    const early = planAt("model:{a}x", 9);
+    assert.equal(early.slot, "a}x");
+    assert.equal(early.suffix, "");
+});
+
+test("the creation gesture: a bind that just landed opens a scope with the caret inside", () => {
+    const step = scopeGesture(planAt("model", 5), {text: "model:", caret: 6});
+    assert.equal(step.text, "model:{}");
+    assert.equal(step.caret, 7);
+});
+
+test("the gesture fires on the transition only — an existing bound head never re-grows braces", () => {
+    // Deleting the last interior character of an already-bound head leaves the text alone.
+    const was = planAt("model:{f}", 8);
+    const step = scopeGesture(was, {text: "model:", caret: 6});
+    assert.equal(step.text, "model:");
+    // And a plain value edit does not insert braces either.
+    const typing = scopeGesture(planAt("scale:5", 7), {text: "scale:", caret: 6});
+    assert.equal(typing.text, "scale:");
+});
+
+test("scopedForm rewraps a simplified chip for editing; commit simplifies a single term back", () => {
+    const wrapped = scopedForm("model:fire scale:5", 2);
+    assert.equal(wrapped?.text, "model:{fire} scale:5");
+    assert.equal(wrapped?.caret, 11);
+    const committed = commitSegment("model:{fire} scale:5", 2);
+    assert.equal(committed.text, "model:fire scale:5");
+    assert.equal(committed.caret, 10);
+});
+
+test("commit keeps the braces when several terms share the row, and trims the interior", () => {
+    const step = commitSegment("model:{fire frost } x", 4);
+    assert.equal(step.text, "model:{fire frost} x");
+    assert.equal(step.caret, 18);
+});
+
+test("committing an empty scope removes the chip whole, separator included", () => {
+    assert.deepEqual(commitSegment("model:{} fire", 4), {text: "fire", caret: 0});
+    assert.deepEqual(commitSegment("fire model:{}", 10), {text: "fire", caret: 4});
+});
+
+test("boundary backspace on a scoped head deletes the brace pair, interior kept as raw text", () => {
+    const step = backspaceAtStart(planAt("model:{fire frost}", 10));
+    assert.equal(step?.text, "model:fire frost");
+    assert.equal(step?.caret, 6);
 });
 
 test("a MIDDLE segment opens too, its neighbours settled on both sides", () => {

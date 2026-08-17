@@ -3,9 +3,13 @@
  *
  * The committed chip is a different component with a different look, arriving with its own increment; this one
  * is the segment under the caret: a head cell once the bind lands, and the value slot — the bar's only input —
- * over the same transparent-input-and-backdrop pair the whole bar used before it. The element tree keeps one
- * shape whether or not a head is present, so the input is never remounted mid-keystroke and the caret survives
- * the transformation.
+ * with the highlight backdrop under it.
+ *
+ * The input is UNCONTROLLED within one editing session, so the browser's own undo works natively inside the
+ * chip — a controlled input is what kills it. The bar remounts this component (a new session key) at every
+ * boundary that rewrites the slot from outside: opening, the bind gesture, commit, cancel, traversal. Plain
+ * Ctrl+Z is therefore the platform's; it escalates to the bar's operation undo only when the slot is back at
+ * the state this session started from — the beginning of the chip's stack undoes the chip.
  */
 import type {KeyboardEvent, ReactElement, ReactNode} from "react";
 import {useLayoutEffect, useRef} from "react";
@@ -16,35 +20,53 @@ import styles from "./bar.module.css";
 /** Heads are capitalised everywhere: `Scale`, never `scale`. */
 const headCase = (word: string): string => (word === "" ? word : word[0].toUpperCase() + word.slice(1));
 
-/** A caret request: slot coordinates, fresh object per request so an equal position still reapplies. */
+/** Where the caret starts this session, in slot coordinates. */
 export interface CaretRequest {
     readonly at: number;
 }
 
 /**
- * The open segment.
+ * The open segment. Remounted per session — the mount is what seeds the input and places the caret.
  */
-export function OpenSegment({at, highlight, caret, placeholder, onKeystroke, onArrow}: {
+export function OpenSegment({
+                                at, highlight, caret, placeholder, onKeystroke, onArrow, onCommit, onCancel, onUndo,
+                                onRedo
+                            }: {
     readonly at: BarPlan;
     /** The classed rendering of the slot text — the bar supplies its one highlighter. */
     readonly highlight: ReactNode;
-    /** Where to put the caret, applied and focused whenever the request object changes. */
+    /** Where the caret starts this session. */
     readonly caret: CaretRequest | null;
     readonly placeholder?: string;
-    /** Every text mutation leaves as a keystroke: the new text and the caret as a text offset. */
-    readonly onKeystroke: (step: Keystroke) => void;
+    /**
+     * Every text mutation leaves as a keystroke: the new text and the caret as a text offset. `reset` marks the
+     * mutations that rewrite the slot from outside the input; `held` is what the input shows, so the bar can
+     * also reset wherever its derived slot no longer matches — a committing space moving the boundary, say.
+     */
+    readonly onKeystroke: (step: Keystroke, reset: boolean, held: string) => void;
     /** The caret walking out of the slot at either end. */
     readonly onArrow: (dir: -1 | 1) => void;
+    /** Enter — commit the chip, simplified. */
+    readonly onCommit: () => void;
+    /** Escape — cancel back to what the segment held when it opened. */
+    readonly onCancel: () => void;
+    /** Operation-level undo — reached only from the session's own start state. */
+    readonly onUndo: () => void;
+    readonly onRedo: () => void;
 }): ReactElement {
     const input = useRef<HTMLInputElement>(null);
     const backdrop = useRef<HTMLSpanElement>(null);
+    // What the slot held when this session began — the boundary where Ctrl+Z stops being the platform's.
+    const sessionStart = useRef(at.slot);
 
     useLayoutEffect(() => {
-        if (caret !== null && input.current !== null) {
-            input.current.focus();
-            input.current.setSelectionRange(caret.at, caret.at);
-        }
-    }, [caret]);
+        const el = input.current;
+        if (el === null) return;
+        el.focus();
+        const to = caret?.at ?? el.value.length;
+        el.setSelectionRange(to, to);
+        // Mount-only on purpose: this seeds the session; afterwards the caret is the browser's.
+    }, []);
     useLayoutEffect(() => {
         if (backdrop.current !== null && input.current !== null) {
             backdrop.current.scrollLeft = input.current.scrollLeft;
@@ -52,18 +74,44 @@ export function OpenSegment({at, highlight, caret, placeholder, onKeystroke, onA
     });
 
     const onChange = (value: string, caretInSlot: number): void => {
-        const text = at.before + at.open.slice(0, at.head?.consumed ?? 0) + value + at.after;
-        onKeystroke({text, caret: slotStart(at) + caretInSlot});
+        // The slot edits only its slice: head prefix and closing suffix are structure and survive verbatim.
+        const text = at.before + at.open.slice(0, at.head?.consumed ?? 0) + value + at.suffix + at.after;
+        onKeystroke({text, caret: slotStart(at) + caretInSlot}, false, value);
     };
 
     const onKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
         const el = e.currentTarget;
         const collapsed = el.selectionStart === el.selectionEnd;
+        if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "z") {
+            // The platform undoes inside the chip; the beginning of the chip's stack undoes the chip.
+            if (el.value === sessionStart.current) {
+                e.preventDefault();
+                onUndo();
+            }
+            return;
+        }
+        if (e.ctrlKey && (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) {
+            if (el.value === sessionStart.current) {
+                e.preventDefault();
+                onRedo();
+            }
+            return;
+        }
+        if (e.key === "Enter") {
+            e.preventDefault();
+            onCommit();
+            return;
+        }
+        if (e.key === "Escape") {
+            e.preventDefault();
+            onCancel();
+            return;
+        }
         if (e.key === "Backspace" && collapsed && el.selectionStart === 0) {
             const step = backspaceAtStart(at);
             if (step === null) return;
             e.preventDefault();
-            onKeystroke(step);
+            onKeystroke(step, true, el.value);
             return;
         }
         if (e.key === "ArrowLeft" && collapsed && el.selectionStart === 0) {
@@ -83,8 +131,6 @@ export function OpenSegment({at, highlight, caret, placeholder, onKeystroke, onA
         }
     };
 
-    // One tree shape for both states: the cell comes and goes, the slot keeps its key and its element. The
-    // hugging class makes a transformed chip size to its content; the plain tail fills the bar instead.
     return (
         <span className={at.head === null ? styles.tail : styles.openChip}>
             {at.head !== null && (
@@ -100,7 +146,7 @@ export function OpenSegment({at, highlight, caret, placeholder, onKeystroke, onA
                     ref={input}
                     className={`${styles.q} ${at.slot === "" ? "" : styles.hl}`}
                     type="text"
-                    value={at.slot}
+                    defaultValue={at.slot}
                     onChange={(e) => {
                         onChange(e.target.value, e.target.selectionStart ?? e.target.value.length);
                     }}

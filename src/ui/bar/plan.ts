@@ -18,10 +18,12 @@ export interface OpenHead {
     readonly word: string;
     /** Whether a negation glyph precedes the word. */
     readonly negated: boolean;
-    /** The characters the head cell consumes: negation, word, and the bind where the glue is one. */
+    /** The characters the head cell consumes: negation, word, the bind, and the opening brace where one follows. */
     readonly consumed: number;
     /** Whether the glue was the bind character; an operator glue stays in the slot by design. */
     readonly bound: boolean;
+    /** Whether a scope brace follows the bind — the editing form, its braces consumed as structure. */
+    readonly scoped: boolean;
 }
 
 /** What the bar draws: text before the open segment, the segment itself, text after, and the transformation. */
@@ -34,8 +36,10 @@ export interface BarPlan {
     readonly after: string;
     /** The transformed head, or null while the segment is plain text. */
     readonly head: OpenHead | null;
-    /** What the input holds: the open segment after the consumed head characters. */
+    /** What the input holds: the scope's interior on a scoped head, the remainder otherwise. */
     readonly slot: string;
+    /** The consumed closing brace of a scoped head, when the segment carries one — display structure, not slot. */
+    readonly suffix: string;
 }
 
 /**
@@ -111,11 +115,15 @@ export function openHead(open: string): OpenHead | null {
     if (match === null) return null;
     if (!HEADS.has(fold(match[2]))) return null;
     const bound = match[3] === GRAMMAR.bind;
+    let consumed = match[1].length + match[2].length + (bound ? 1 : 0);
+    const scoped = bound && open[consumed] === GRAMMAR.scope.open;
+    if (scoped) consumed += 1;
     return {
         word: match[2],
         negated: match[1] === GRAMMAR.negate,
-        consumed: match[1].length + match[2].length + (bound ? 1 : 0),
+        consumed,
         bound,
+        scoped,
     };
 }
 
@@ -132,7 +140,40 @@ export function planAt(text: string, openAt: number): BarPlan {
     const open = text.slice(seg.start, seg.end);
     const after = text.slice(seg.end);
     const head = openHead(open);
-    return {before, open, after, head, slot: head === null ? open : open.slice(head.consumed)};
+    let slot = head === null ? open : open.slice(head.consumed);
+    let suffix = "";
+    // A scoped head consumes its closing brace too — when the one that opened it is the one the segment ends
+    // with. The interior between them is the slot, spaces and all.
+    if (head?.scoped === true && closesAtEnd(slot)) {
+        suffix = slot.slice(-1);
+        slot = slot.slice(0, -1);
+    }
+    return {before, open, after, head, slot, suffix};
+}
+
+/** Whether the interior's final character is the closer of the scope that was opened before it. */
+function closesAtEnd(interior: string): boolean {
+    if (!interior.endsWith(GRAMMAR.scope.close)) return false;
+    let quote = false;
+    let depth = 1;
+    for (let at = 0; at < interior.length; at++) {
+        const ch = interior[at];
+        if (ch === GRAMMAR.escape && quote) {
+            at += 1;
+            continue;
+        }
+        if (ch === GRAMMAR.phrase) {
+            quote = !quote;
+            continue;
+        }
+        if (quote) continue;
+        if (ch === GRAMMAR.scope.open) depth += 1;
+        else if (ch === GRAMMAR.scope.close) {
+            depth -= 1;
+            if (depth === 0) return at === interior.length - 1;
+        }
+    }
+    return false;
 }
 
 /** Where a plan's slot begins in text coordinates — what turns an input caret into a text offset and back. */
@@ -157,8 +198,97 @@ export interface Keystroke {
  * @returns The new text with the caret where the deleted character was, or null at the text's very start.
  */
 export function backspaceAtStart(at: BarPlan): Keystroke | null {
+    const text = at.before + at.open + at.after;
+    // Left of a scoped slot sits the opening brace; deleting an opener deletes its pair, the IDE convention —
+    // removing one side alone would leave the text unbalanced and the display lying about it.
+    if (at.head?.scoped === true) {
+        const cut = slotStart(at) - 1;
+        const open = at.open.slice(0, at.head.consumed - 1) + at.slot;
+        return {text: at.before + open + at.after, caret: cut};
+    }
     const cut = slotStart(at) - 1;
     if (cut < 0) return null;
-    const text = at.before + at.open + at.after;
     return {text: text.slice(0, cut) + text.slice(cut + 1), caret: cut};
+}
+
+/**
+ * The creation gesture: a bind that JUST landed opens a scope, the caret inside — `model:` becomes `model:{}`.
+ *
+ * The scope is the editing form: a space inside it is a character, never a commit, so `model:{fire frost}`
+ * composes naturally and the simplification back to a single word happens at commit. The gesture fires only on
+ * the transition — a segment that already had its bound head (deleting backwards through a value, say) is left
+ * alone, or the brace pair would resurrect itself against every deletion.
+ *
+ * @param was The plan the keystroke started from.
+ * @param step The keystroke as applied.
+ * @returns The step with the scope inserted, or the step untouched.
+ */
+export function scopeGesture(was: BarPlan, step: Keystroke): Keystroke {
+    const next = planAt(step.text, step.caret);
+    const landed = next.head !== null && next.head.bound && !next.head.scoped && next.slot === ""
+        && step.caret === slotStart(next);
+    const already = was.head !== null && was.head.bound;
+    if (!landed || already) return step;
+    const open = GRAMMAR.scope.open + GRAMMAR.scope.close;
+    return {
+        text: step.text.slice(0, step.caret) + open + step.text.slice(step.caret),
+        caret: step.caret + 1,
+    };
+}
+
+/**
+ * The editing form of an already-simplified segment: `model:fire` re-wraps to `model:{fire}` when it opens.
+ *
+ * The symmetric half of the commit simplification — while a chip is open its braces are there, so a space typed
+ * into a reopened chip behaves exactly as it did when the chip was first composed.
+ *
+ * @param text The query text.
+ * @param at Any offset inside the segment being opened.
+ * @returns The rewrapped text with the caret at the interior's end, or null when the segment is not a bound,
+ *   unscoped head with a value.
+ */
+export function scopedForm(text: string, at: number): Keystroke | null {
+    const plan = planAt(text, at);
+    if (plan.head === null || !plan.head.bound || plan.head.scoped || plan.slot === "") return null;
+    const open = plan.open.slice(0, plan.head.consumed)
+        + GRAMMAR.scope.open + plan.slot + GRAMMAR.scope.close;
+    return {
+        text: plan.before + open + plan.after,
+        caret: plan.before.length + open.length - 1,
+    };
+}
+
+/**
+ * Commits one segment: the scope simplifies to its interior where a single term remains.
+ *
+ * A scoped chip with one interior term drops its braces (`model:{fire}` → `model:fire` — the kernel law
+ * `{x} ≡ x` spelled the preferred way); several terms keep them, trimmed; an empty scope removes the segment
+ * whole, separator included, because an empty ask is not a chip. A segment with no scope commits as it stands.
+ *
+ * @param text The query text.
+ * @param at Any offset inside the segment to commit.
+ * @returns The new text with the caret at the committed segment's end.
+ */
+export function commitSegment(text: string, at: number): Keystroke {
+    const plan = planAt(text, at);
+    if (plan.head === null || !plan.head.scoped) {
+        return {text, caret: plan.before.length + plan.open.length};
+    }
+    const interior = plan.slot.trim();
+    const prefix = plan.open.slice(0, plan.head.consumed - 1);
+    if (interior === "") {
+        // The segment goes whole; one adjacent separator goes with it so no double gap remains.
+        let from = plan.before.length;
+        let to = from + plan.open.length;
+        if (text[to] === " ") to += 1;
+        else if (from > 0 && text[from - 1] === " ") from -= 1;
+        return {text: text.slice(0, from) + text.slice(to), caret: from};
+    }
+    const single = segmentStarts(interior).length === 1;
+    const open = single ? prefix + interior
+        : prefix + GRAMMAR.scope.open + interior + GRAMMAR.scope.close;
+    return {
+        text: plan.before + open + plan.after,
+        caret: plan.before.length + open.length,
+    };
 }
