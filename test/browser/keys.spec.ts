@@ -21,7 +21,7 @@ test.afterAll(async () => {
 
 test("Home commits and lands the front gap; End the last content's end", async () => {
     await seed(page, "model:fire", "sound:bell");
-    await settledSegments(page).nth(1).click();
+    await settledSegments(page).nth(1).locator("[class*='chipBody']").click();
     await expectQuery(page, "model:fire sound:{bell} ");
 
     await page.keyboard.press("Home");
@@ -35,7 +35,7 @@ test("Home commits and lands the front gap; End the last content's end", async (
 
 test("Ctrl+A in a chip natively selects the slot first, then escalates to every chip", async () => {
     await seed(page, "model:fire", "sound:bell");
-    await settledSegments(page).nth(1).click();
+    await settledSegments(page).nth(1).locator("[class*='chipBody']").click();
     await expectQuery(page, "model:fire sound:{bell} ");
 
     // The first press is the platform's own select-all, scoped to the slot — the chip stays a chip.

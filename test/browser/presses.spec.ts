@@ -60,17 +60,17 @@ test("a press on a settled segment opens it with the caret at the aimed characte
     expect(await slot(page)).toMatchObject({value: "bell", start: 1, end: 1});
 });
 
-test("a press inside a settled segment's head clamps the caret to the value's start", async () => {
+test("a press on a settled segment's head flips its exclusion, as the field label did in 1.0", async () => {
     await seed(page, "model:fire", "sound:bell");
     const aimed = await charPoint(settledSegments(page).nth(1), "sound", 2);
     await page.mouse.click(aimed.x, aimed.y);
-    await expectQuery(page, "model:fire sound:{bell} ");
-    expect(await slot(page)).toMatchObject({value: "bell", start: 0, end: 0});
+    await expectQuery(page, "model:fire -sound:bell ");
 });
 
 test("a press on the open chip's head keeps the session, caret at the value's start", async () => {
     await seed(page, "model:fire", "sound:bell");
-    await settledSegments(page).first().click();
+    // The body opens the chip; the head is the toggle.
+    await page.locator("[class*='chipBody']").first().click();
     await expectQuery(page, "model:{fire} sound:bell ");
 
     await page.locator("[class*='headCell']").click();

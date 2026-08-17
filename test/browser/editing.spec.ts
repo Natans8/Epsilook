@@ -150,7 +150,7 @@ test("Enter in a gap moves to a fresh tail; Enter on the tail is a no-op", async
 
 test("blur settles the committed spelling, and steals no focus back", async () => {
     await seed(page, "model:fire", "sound:bell");
-    await settledSegments(page).first().click();
+    await settledSegments(page).first().locator("[class*='chipBody']").click();
     await expectQuery(page, "model:{fire} sound:bell ");
 
     await page.locator("h1").click();

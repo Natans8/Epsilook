@@ -529,6 +529,24 @@ export function removeSelection(text: string, sel: BarSelection): Commit {
 }
 
 /**
+ * Flips exclusion at one offset: the `-` a clause or a scope term carries before its head.
+ *
+ * One helper for both levels, because it is one gesture — the minus sits in the same place and means the same
+ * thing whether it opens a clause or a term inside a scope.
+ *
+ * @param text The query text.
+ * @param at The offset the clause or term begins at.
+ * @returns The new text with the caret where the minus went, as one undoable operation.
+ */
+export function toggleNegation(text: string, at: number): Keystroke {
+    const negated = text[at] === GRAMMAR.negate;
+    const next = negated
+        ? text.slice(0, at) + text.slice(at + 1)
+        : text.slice(0, at) + GRAMMAR.negate + text.slice(at);
+    return {text: next, caret: at, operation: true};
+}
+
+/**
  * The delete affordance: removes the segment at `at` whole, one adjacent separator with it.
  *
  * @param text The query text.

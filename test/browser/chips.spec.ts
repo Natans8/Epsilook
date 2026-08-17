@@ -246,3 +246,59 @@ test("each settled segment announces the query text it stands for", async () => 
         (els) => els.map((el) => el.getAttribute("aria-label")));
     expect(labels).toEqual(["model:fire", "-model:missile"]);
 });
+
+/** Opens the first chip and parks the caret at the end of its value, using only the keyboard's own moves. */
+async function openAtValueEnd(): Promise<void> {
+    // The body, not the head: the head is the exclusion toggle.
+    await page.locator("[class*='chipBody']").first().click();
+    // Ctrl+A takes the slot's contents; the arrow collapses that selection to its right edge.
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("ArrowRight");
+}
+
+test("growth has a keyboard path: the + is a shortcut for what typing already does", async () => {
+    await seed(page, "model:fire");
+    await openAtValueEnd();
+    // A space and a term inside the chip is exactly the state the + reaches.
+    await page.keyboard.type(" frost", {delay: 5});
+    await page.keyboard.press("Enter");
+    await expectQuery(page, "model:{fire frost} ");
+});
+
+test("the other growth is a keystroke too: an alternative value is typed, not clicked", async () => {
+    await seed(page, "model:fire");
+    await openAtValueEnd();
+    await page.keyboard.type("|frost", {delay: 5});
+    await page.keyboard.press("Enter");
+    // A row matching either value, which is a different question from the lane's two conditions.
+    await expectQuery(page, "model:fire|frost ");
+});
+
+test("the head is the exclusion toggle, as it was in 1.0 — and it flips back", async () => {
+    await seed(page, "model:fire");
+    await page.locator("[class*='chipSect']").first().click();
+    await barInput(page).blur();
+    await expectQuery(page, "-model:fire ");
+
+    await page.locator("[class*='chipSect']").first().click();
+    await barInput(page).blur();
+    await expectQuery(page, "model:fire ");
+});
+
+test("an inner bind's head flips that term alone, leaving the lane's others as they are", async () => {
+    await openWith("model:{fire attach:chest}");
+    // The lane's own head is first; the inner bind's is second.
+    await page.locator("[class*='bindSect']").first().click();
+    await barInput(page).blur();
+    // The caret rests in a fresh tail afterwards, as it does after any commit.
+    await expectQuery(page, "model:{fire -attach:chest} ");
+});
+
+test("a flip is one undo step", async () => {
+    await seed(page, "model:fire");
+    await page.locator("[class*='chipSect']").first().click();
+    await expectQuery(page, "-model:fire ");
+    await page.keyboard.press("Control+z");
+    await barInput(page).blur();
+    await expectQuery(page, "model:fire ");
+});

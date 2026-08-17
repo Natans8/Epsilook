@@ -20,6 +20,7 @@ import type {BarPlan, BarSelection, Commit, Keystroke} from "./plan";
 import {
     commitSegment, firstDiff, grownSegment, insertAtGap, planAt, removeSegment, removeSelection, removeTerm,
     scopedForm, scopeGesture, segmentAt, segmentIndex, segmentStarts, selectionOfSegments, slotStart,
+    toggleNegation,
 } from "./plan";
 import type {CaretRequest} from "./open";
 import {OpenSegment} from "./open";
@@ -427,6 +428,23 @@ export function Bar({text, onText, placeholder, plain = false}: {
             const done = removeTerm(step.text, seg.start, item.span, item.lone);
             if (done.removed) restAt(done);
             else restAfter(done.text, done.caret);
+        },
+        negate: (): void => {
+            const {step, shifted} = pressCommit(start);
+            pushUndo(step.text);
+            const flipped = toggleNegation(step.text, segmentAt(step.text, shifted).start);
+            setRange(null);
+            restAfter(flipped.text, segmentAt(flipped.text, flipped.caret).end);
+        },
+        negateTerm: (index): void => {
+            const {step, shifted} = pressCommit(start);
+            const seg = segmentAt(step.text, shifted);
+            const item = laneItemAt(step.text.slice(seg.start, seg.end), index);
+            if (item === null) return;
+            pushUndo(step.text);
+            const flipped = toggleNegation(step.text, seg.start + item.span.start);
+            setRange(null);
+            restAfter(flipped.text, segmentAt(flipped.text, seg.start).end);
         },
         grow: (flavour): void => {
             const {step, shifted} = pressCommit(start);

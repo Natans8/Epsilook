@@ -103,6 +103,9 @@
 }
 
 .qhl {
+    /* Decoration only: the input above owns the selection, and a backdrop that could take it would paint one
+     * rectangle per classed run — a gap at every space, because a run boundary is not a character. */
+    user-select: none;
     position: absolute;
     inset: 0;
     z-index: 0;
@@ -192,8 +195,11 @@
     color: var(--gold);
 }
 
+/* Delimiters and operators recede but stay readable: --gold-dim measures 3.5:1 on a light palette's panel,
+ * under AA, and the gold belongs to the head anyway — a brace is not an axis. --text-dim is the quiet-text
+ * token and clears AA in every palette (4.69 dark, 8.73 moonwell, 8.71 vellum). */
 .runOp {
-    color: var(--gold-dim);
+    color: var(--text-dim);
 }
 
 .runNumber {
@@ -529,10 +535,12 @@
 
 /* A selected segment wears the app's own selection tokens, so a run of selected chips reads as one highlighted
  * stretch of the query — the same thing the platform's selection does to text, said in the chips' own terms. */
+/* A run of selected chips reads as ONE band, not as a row of separately highlighted blocks: the shadow
+ * carries the wash across the flex gap between neighbours, so adjacent selections meet. */
 .selected {
     background: rgba(var(--select-rgb), 0.4);
-    border-radius: 4px;
-    box-shadow: 0 0 0 2px rgba(var(--select-rgb), 0.4);
+    border-radius: 2px;
+    box-shadow: 0 0 0 3px rgba(var(--select-rgb), 0.4);
 }
 
 /* A selection recolours what it covers, exactly as the platform's own does to text: a semantic colour chosen

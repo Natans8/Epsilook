@@ -43,6 +43,10 @@ export interface SegmentActions {
     readonly removeTerm: (index: number) => void;
     /** Grows the segment: a fresh term slot, or a fresh value alternative. */
     readonly grow: (flavour: "term" | "alternative") => void;
+    /** Flips the whole segment between asking for and excluding what it names. */
+    readonly negate: () => void;
+    /** Flips one of a lane's terms, by its index among the items. */
+    readonly negateTerm: (index: number) => void;
 }
 
 /** The column tones, by key; a column without a declared tone renders neutral. */
@@ -199,7 +203,10 @@ function Sect({head, not, label, className, onOpen, onRemove}: {
     readonly label: string;
     /** Which cell this is — the outer chip's, or an inner bind's tighter one. */
     readonly className: string;
-    /** Where a press on the cell itself goes; an inner bind's cell leaves the press to the item around it. */
+    /**
+     * What a press on the cell does. The head is the exclusion toggle, as it was in 1.0: the word names what
+     * the chip asks, so flipping it is what says "not that". Opening the chip is the value's press.
+     */
     readonly onOpen?: (e: ReactMouseEvent) => void;
     readonly onRemove: () => void;
 }): ReactElement {
@@ -242,9 +249,7 @@ function ChipEl({chip, warned, notes, span, text, act}: {
                 not={chip.not}
                 label={t("bar.delete")}
                 className={styles.chipSect}
-                onOpen={() => {
-                    act.open("start");
-                }}
+                onOpen={act.negate}
                 onRemove={act.remove}
             />
             <span className={styles.chipBody}><Pieces pieces={chip.body} text={text}/></span>
@@ -286,9 +291,7 @@ function LaneEl({lane, warned, notes, span, text, act}: {
                 not={lane.not}
                 label={t("bar.delete")}
                 className={styles.chipSect}
-                onOpen={() => {
-                    act.open("start");
-                }}
+                onOpen={act.negate}
                 onRemove={act.remove}
             />
             {lane.items.map((item, i) => {
@@ -321,6 +324,9 @@ function LaneEl({lane, warned, notes, span, text, act}: {
                             not={item.not}
                             label={t("bar.delete")}
                             className={styles.bindSect}
+                            onOpen={() => {
+                                act.negateTerm(i);
+                            }}
                             onRemove={() => {
                                 act.removeTerm(i);
                             }}
