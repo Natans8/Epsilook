@@ -20,9 +20,10 @@ import styles from "./bar.module.css";
 /** Heads are capitalised everywhere: `Scale`, never `scale`. */
 const headCase = (word: string): string => (word === "" ? word : word[0].toUpperCase() + word.slice(1));
 
-/** Where the caret starts this session, in slot coordinates. */
+/** Where the caret starts this session, in slot coordinates; an anchor makes it a selection. */
 export interface CaretRequest {
     readonly at: number;
+    readonly anchor?: number;
 }
 
 /**
@@ -30,7 +31,7 @@ export interface CaretRequest {
  */
 export function OpenSegment({
                                 at, mode, highlight, caret, placeholder, onKeystroke, onArrow, onCommit, onCancel,
-                                onUndo, onRedo
+                                onUndo, onRedo, onSelectAll
                             }: {
     readonly at: BarPlan;
     /** Whether the slot fills the bar (the true tail) or hugs its content (a chip, a mid-bar word, a gap). */
@@ -55,6 +56,8 @@ export function OpenSegment({
     /** Operation-level undo — reached only from the session's own start state. */
     readonly onUndo: () => void;
     readonly onRedo: () => void;
+    /** Ctrl+A past the slot: the whole query opens as one flat selected text. */
+    readonly onSelectAll: () => void;
 }): ReactElement {
     const input = useRef<HTMLInputElement>(null);
     const backdrop = useRef<HTMLSpanElement>(null);
@@ -66,7 +69,7 @@ export function OpenSegment({
         if (el === null) return;
         el.focus();
         const to = caret?.at ?? el.value.length;
-        el.setSelectionRange(to, to);
+        el.setSelectionRange(caret?.anchor ?? to, to);
         // Mount-only on purpose: this seeds the session; afterwards the caret is the browser's.
     }, []);
     useLayoutEffect(() => {
@@ -89,6 +92,15 @@ export function OpenSegment({
             if (el.value === sessionStart.current) {
                 e.preventDefault();
                 onUndo();
+            }
+            return;
+        }
+        if (e.ctrlKey && e.key.toLowerCase() === "a") {
+            // The first press selects the slot natively; from a full (or empty) selection the next press
+            // escalates to the whole query, the same shape as undo's escalation.
+            if (el.selectionStart === 0 && el.selectionEnd === el.value.length) {
+                e.preventDefault();
+                onSelectAll();
             }
             return;
         }

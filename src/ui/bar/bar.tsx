@@ -59,11 +59,16 @@ export function Bar({text, onText, placeholder}: {
     const undos = useRef<string[]>([]);
     const redos = useRef<string[]>([]);
 
+    // The whole query as one flat raw-text session — what Ctrl+A escalates to. No transformation, no
+    // segments: the truth of the text, natively selected.
+    const [allMode, setAllMode] = useState(false);
+
     const clamped = Math.min(openAt, text.length);
     const at: BarPlan = useMemo(() => {
+        if (allMode) return {before: "", open: text, after: "", head: null, slot: text, suffix: ""};
         if (gapAt === null) return planAt(text, clamped);
         return {before: text.slice(0, gapAt), open: "", after: text.slice(gapAt), head: null, slot: "", suffix: ""};
-    }, [text, clamped, gapAt]);
+    }, [text, clamped, gapAt, allMode]);
 
     /** One operation boundary: the state before it becomes an undo step. */
     const pushUndo = (before: string): void => {
@@ -77,6 +82,7 @@ export function Bar({text, onText, placeholder}: {
         const wrapped = scopedForm(next, start);
         const settled = wrapped?.text ?? next;
         const plan = planAt(settled, start);
+        setAllMode(false);
         setGapAt(null);
         setOpenAt(segmentAt(settled, start).start);
         setCaret({at: side === "end" ? plan.slot.length : 0});
@@ -87,6 +93,7 @@ export function Bar({text, onText, placeholder}: {
 
     /** Moves the open position to the gap before the segment starting at `start`. */
     const openGap = (next: string, start: number): void => {
+        setAllMode(false);
         setGapAt(start);
         setOpenAt(start);
         setCaret({at: 0});
@@ -115,6 +122,7 @@ export function Bar({text, onText, placeholder}: {
 
     /** Every mutation from the slot: gap insertions get their separator, everything else applies as it came. */
     const onKeystroke = (step: Keystroke, reset: boolean, held: string): void => {
+        setAllMode(false);
         if (gapAt !== null && !reset) {
             if (held === "") return;
             setGapAt(null);
@@ -125,8 +133,20 @@ export function Bar({text, onText, placeholder}: {
         applyStep(step, reset, held);
     };
 
+    /** Ctrl+A past the slot: the whole query, flat and selected. */
+    const onSelectAll = (): void => {
+        if (text === "") return;
+        setAllMode(true);
+        setGapAt(null);
+        setOpenAt(0);
+        setCaret({at: text.length, anchor: 0});
+        setSession((s) => s + 1);
+        opened.current = text;
+    };
+
     /** Commits the open segment — the simplifying rewrite — pushing an undo step when it changed anything. */
     const commitOpen = (): Keystroke => {
+        if (allMode) return {text, caret: text.length};
         if (gapAt !== null) return {text, caret: gapAt};
         const step = commitSegment(text, clamped);
         if (step.text !== text) pushUndo(text);
@@ -216,7 +236,7 @@ export function Bar({text, onText, placeholder}: {
     };
 
     const starts = segmentStarts(text);
-    const openStart = gapAt === null ? segmentAt(text, clamped).start : -1;
+    const openStart = gapAt === null && !allMode ? segmentAt(text, clamped).start : -1;
     // The slot fills the bar only as the true tail; anywhere else — a mid-bar word, a gap — it hugs, or it
     // would shove every chip after it to the far edge.
     const mode: "fill" | "hug" = at.head === null && gapAt === null && at.after.trim() === "" ? "fill" : "hug";
@@ -235,12 +255,14 @@ export function Bar({text, onText, placeholder}: {
             onCancel={onCancel}
             onUndo={onUndo}
             onRedo={onRedo}
+            onSelectAll={onSelectAll}
         />
     );
 
     return (
         <div className={styles.qbar} onMouseDown={onBarPress}>
-            {starts.map((start) => {
+            {allMode && <Fragment key="open">{open}</Fragment>}
+            {!allMode && starts.map((start) => {
                 const seg = segmentAt(text, start);
                 if (gapAt === null && seg.start === openStart) return <Fragment key="open">{open}</Fragment>;
                 // An empty settled segment — a doubled separator's residue — draws nothing and takes no press:
