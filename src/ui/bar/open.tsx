@@ -96,9 +96,13 @@ export function OpenSegment({
             return;
         }
         if (e.ctrlKey && e.key.toLowerCase() === "a") {
-            // One press, the whole query — select-all means all of what is actually typed, never a segment.
-            e.preventDefault();
-            onSelectAll();
+            // Inside a chip the first press selects the chip's own contents; from a full selection it escalates
+            // to the whole query. Plain text has no interior to claim — one press is the whole query.
+            const fully = el.selectionStart === 0 && el.selectionEnd === el.value.length;
+            if (at.head === null || fully) {
+                e.preventDefault();
+                onSelectAll();
+            }
             return;
         }
         if (e.ctrlKey && (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) {
