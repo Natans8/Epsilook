@@ -6,10 +6,12 @@
  * its own increment, tested and judged, per the rebuild ruling.
  */
 import type {ReactElement} from "react";
-import {useEffect, useRef, useState} from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
 import {useTranslation} from "react-i18next";
 import type {PackInfo, Searcher} from "./searcher";
 import {expansionArt} from "./art";
+import {parse} from "../search/index";
+import type {Diagnostic} from "../search/index";
 import {recentQueries} from "./history";
 import {BASE} from "./pack";
 import {Bar} from "./bar/bar";
@@ -78,6 +80,13 @@ export function App({info, searcher}: {
     }, [text, plain]);
 
     const stale = result === null || result.for !== text;
+    // A query the parser REFUSES does not get to answer. An invalid clause is dropped from the evaluable
+    // groups, so `xpac:zzz` constrained nothing and reported the whole pack — a wrong answer wearing the
+    // authority of a number. The bar already squiggles the clause; the count says what is wrong instead of
+    // counting. Only in final text: while typing, anything a further keystroke could rescue stays quiet.
+    const broken = useMemo(
+        () => parse(text, {mode: "final"}).diagnostics.filter((d: Diagnostic) => d.severity === "error"),
+        [text]);
 
     return (
         <div className={styles.page}>
@@ -134,10 +143,11 @@ export function App({info, searcher}: {
                         className={`${styles.status} ${stale ? styles.statusStale : ""}`}
                         role="status"
                     >
-                        {result !== null && (
-                            `${result.count.toLocaleString()} ${t("count.result", {count: result.count})}`
-                            + `, ${t("count.elapsed", {ms: result.ms})}`
-                        )}
+                        {broken.length > 0 ? broken[0].message
+                            : result !== null && (
+                                `${result.count.toLocaleString()} ${t("count.result", {count: result.count})}`
+                                + `, ${t("count.elapsed", {ms: result.ms})}`
+                            )}
                     </div>
                     {/* A view switch, not a command: it changes how the query is shown and never what it says.
                         Its home is this row rather than the bar, because nothing beside the bar should read as

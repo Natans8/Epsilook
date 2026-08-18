@@ -7,7 +7,7 @@
 import type {Page} from "@playwright/test";
 import {expect, test} from "@playwright/test";
 import {
-    bar, barInput, expectQuery, HARNESS_URL, openHarness, queryMirror, seed, settledSegments, slot,
+    bar, barInput, clearBar, expectQuery, HARNESS_URL, openHarness, queryMirror, seed, settledSegments, slot,
 } from "./helpers";
 
 let page: Page;
@@ -262,4 +262,22 @@ test("two conditions of one row are joined, so a lane stops reading as a phrase"
     // chip that draws it has nothing to join.
     await seed(page, "model:fire|frost");
     await expect(settledSegments(page).first().locator("[class*='joint']")).toHaveCount(0);
+});
+
+test("a query the parser refuses says what is wrong instead of counting", async () => {
+    // An invalid clause is dropped from the evaluable groups, so `xpac:zzz` constrained nothing and reported the
+    // whole pack — a wrong answer wearing the authority of a number. The clause is squiggled either way; the
+    // status line now carries the reason in its place.
+    await clearBar(page);
+    await page.keyboard.type("xpac:zzz", {delay: 5});
+    await page.keyboard.press("Enter");
+    const status = page.locator("[role=status]");
+    await expect(status).toContainText("xpac takes one of");
+    await expect(status).not.toContainText("spells");
+
+    // A query that parses answers as it always did.
+    await clearBar(page);
+    await page.keyboard.type("xpac:legion", {delay: 5});
+    await page.keyboard.press("Enter");
+    await expect(status).toContainText("spells");
 });

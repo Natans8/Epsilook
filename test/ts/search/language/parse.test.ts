@@ -2,7 +2,7 @@ import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
 import type {Ask, Clause, Diagnostic, Parsed, ScopeTerm, ValueExpr} from "../../../../src/search/index";
-import {equivalent, fold, formatQuery, KINDS, parse} from "../../../../src/search/index";
+import {equivalent, fold, formatQuery, KINDS, parse, wordOf} from "../../../../src/search/index";
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -1017,3 +1017,20 @@ it("a bare duration splits at a hundred, which is the fastest cast that exists",
     assert.equal(stored("cast:1500"), 1500);
     assert.equal(stored("cast:1.5"), 1500, "which agrees with the seconds spelling of the same duration");
 });
+
+it("existence on a kind inside a scope is the kind word, not bare existence", () => {
+    // `model:{display:*}` says the row is a display row — exactly what `model:{display}` says. Answering a bare
+    // existence dropped WHICH kind was named and the term fell back to content, so the ask became "any model
+    // row at all": 130,512 rows where it names 955. A wrong ANSWER, not a wrong drawing.
+    const term = (query: string): {on: string; kind?: string} => {
+        const ask = parse(query).clauses[0].ask;
+        assert.ok(ask !== null && ask.on === "column" && ask.test?.is === "scope", query);
+        const only = ask.test.terms.flat()[0].ask;
+        assert.ok(only !== null, query);
+        return {on: only.on, kind: only.on === "kindWord" ? wordOf(only.kind) : undefined};
+    };
+    assert.deepEqual(term("model:{display}"), {on: "kindWord", kind: "display"});
+    assert.deepEqual(term("model:{display:*}"), {on: "kindWord", kind: "display"});
+    assert.deepEqual(term("model:{display:any}"), {on: "kindWord", kind: "display"});
+});
+

@@ -35,7 +35,8 @@
     "groupUnclosed": "the group was not closed",
     "exactPattern": "exact and a pattern cannot combine",
     "anchorPattern": "{{symbol}} and a pattern cannot combine",
-    "trailingRange": "{{written}} reads as at least {{bound}} — the same as {{wildcard}} for the upper bound"
+    "trailingRange": "{{written}} reads as at least {{bound}} — the same as {{wildcard}} for the upper bound",
+    "punctuationOnly": "punctuation is not matched — search it as a pattern"
   },
   "scope": {
     "innerBindScope": "an axis inside a scope takes a value, not a scope",
@@ -55,7 +56,8 @@
     "ownClause": "make it its own clause",
     "insertSpace": "insert the space",
     "withoutSymbol": "search for it without {{symbol}}",
-    "dropQuotes": "drop the quotes"
+    "dropQuotes": "drop the quotes",
+    "asPattern": "search it as a pattern"
   },
   "simplify": {
     "allDead": "every alternative of this query contradicts itself; it is returned as written",

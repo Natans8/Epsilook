@@ -135,9 +135,15 @@ define(["exact"], TEXTUAL, (stored, operand) => {
     const wanted = asText(operand);
     return wanted !== null && fold(String(stored)) === fold(wanted);
 });
+// An operand with nothing left after squashing selects NOTHING, not everything. `includes("")` is true of every
+// stored value, so `name:"---"` and `name:\"` answered the whole pack — the same hazard `asText` refuses a range
+// for, one step further in: punctuation is what squashing removes, so an operand made only of it has nothing to
+// match on. A pattern is how punctuation is searched, and it reads the stored text as written.
 define(["contains"], TEXTUAL, (stored, operand) => {
     const wanted = asText(operand);
-    return wanted !== null && squash(String(stored)).includes(squash(wanted));
+    if (wanted === null) return false;
+    const held = squash(wanted);
+    return held !== "" && squash(String(stored)).includes(held);
 });
 define(["glob"], TEXTUAL, (stored, operand) => {
     const wanted = asText(operand);
