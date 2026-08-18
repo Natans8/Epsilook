@@ -12,7 +12,7 @@
  * the character a press fell on, and a press that turns into a drag selects instead.
  */
 import type {MouseEvent as ReactMouseEvent, ReactElement, ReactNode} from "react";
-import {Fragment, useMemo} from "react";
+import {createContext, Fragment, useContext, useMemo} from "react";
 import {useTranslation} from "react-i18next";
 import type {ChipView, LaneView, Piece, Span} from "../../search/index";
 import {describe, GRAMMAR, NEGATION, parse} from "../../search/index";
@@ -182,11 +182,32 @@ function Or(): ReactElement {
  * A body's pieces as one continuous inline run: real spaces between pieces, never flex gaps, so the text reads
  * as text. A swatch stays tight against the word that follows it, grouped under one vocabulary mark.
  */
+/**
+ * The pictures a vocabulary word may carry, by the word that names it.
+ *
+ * A CONTEXT rather than a prop: every chip body can want one and nothing between the bar and a piece has any
+ * use for it, so drilling it through four components would be threading a value past the parts that ignore it.
+ * The map itself is declared beside the vocabulary in `art.ts`, exactly as the offers' badges are.
+ */
+export const ChipArt = createContext<Readonly<Record<string, string>>>({});
+
 function Pieces({pieces, text}: { readonly pieces: readonly Piece[]; readonly text: string }): ReactElement {
+    const art = useContext(ChipArt);
     const out: ReactNode[] = [];
     for (let i = 0; i < pieces.length; i++) {
         const piece = pieces[i];
         if (out.length > 0) out.push(" ");
+        if (piece.is === "word" && art[piece.text] !== undefined) {
+            // Grouped with its word under one mark, exactly as a swatch is: the picture is an attribute of the
+            // word, not a thing standing beside it.
+            out.push(
+                <span key={i} className={styles.vGroup}>
+                    <img className={styles.chipArt} src={art[piece.text]} alt="" aria-hidden="true"/>
+                    {piece.text}
+                </span>,
+            );
+            continue;
+        }
         if (piece.is === "swatch") {
             const word = pieces[i + 1];
             out.push(

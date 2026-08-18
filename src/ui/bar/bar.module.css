@@ -711,3 +711,14 @@
     color: var(--text);
     font-size: 0.82em;
 }
+
+/* A vocabulary's picture inside a chip. Sized on the LINE here rather than on a shared width: a chip carries one
+ * badge at a time, so what it has to agree with is the text beside it, not eleven siblings in a column. */
+.chipArt {
+    height: 1.05em;
+    width: auto;
+    max-width: 4.5em;
+    object-fit: contain;
+    vertical-align: middle;
+    margin-right: 0.25em;
+}

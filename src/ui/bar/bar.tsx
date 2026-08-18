@@ -27,7 +27,7 @@ import {groundAim, offsetAtPoint} from "./aim";
 import type {Assist, CaretRequest} from "./open";
 import {OpenSegment} from "./open";
 import type {SegmentActions} from "./chip";
-import {SettledSegment} from "./chip";
+import {ChipArt, SettledSegment} from "./chip";
 import {Classed} from "./classed";
 import type {Offer, Vocabulary} from "./offers";
 import {flatOffers, NO_OFFERS, NO_VOCABULARY, offerSlot, offersAt} from "./offers";
@@ -53,6 +53,9 @@ function laneItemAt(segment: string, index: number): { span: Span; lone: boolean
 /**
  * The bar.
  */
+/** One frozen empty map, so a bar with no art does not hand the context a fresh object each render. */
+const EMPTY_ART: Readonly<Record<string, string>> = Object.freeze({});
+
 export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY}: {
     readonly text: string;
     readonly onText: (text: string) => void;
@@ -819,6 +822,7 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY}: {
     };
 
     return (
+        <ChipArt value={vocab.art ?? EMPTY_ART}>
         <div
             className={styles.qbar}
             // Focusable but never tabbed to: while a selection stands its keys are the bar's own, and the
@@ -848,5 +852,6 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY}: {
                 />
             )}
         </div>
+        </ChipArt>
     );
 }
