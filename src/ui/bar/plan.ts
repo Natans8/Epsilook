@@ -229,6 +229,26 @@ export function planAt(text: string, openAt: number): BarPlan {
     return {before, open, after, head, slot, suffix};
 }
 
+/**
+ * One interior with its phrase closed, where the reader left one open.
+ *
+ * A phrase runs to the end of the input by the language's own rule, so an unclosed one swallows everything
+ * after it — the scope's closing brace, the separator a commit appends, and every term that follows. Closing it
+ * is the repair the auto-apply boundary licenses: the ask does not run as it stands, and what was meant is
+ * mechanically derivable rather than guessed. Nothing typed is discarded.
+ *
+ * @param interior The scope's interior, or a segment's value.
+ * @returns The interior, with a closing quote where one was missing.
+ */
+function closePhrase(interior: string): string {
+    let quote = false;
+    for (let at = 0; at < interior.length; at++) {
+        if (interior[at] === GRAMMAR.escape && quote) at += 1;
+        else if (interior[at] === GRAMMAR.phrase) quote = !quote;
+    }
+    return quote ? interior + GRAMMAR.phrase : interior;
+}
+
 /** Whether the interior's final character is the closer of the scope that was opened before it. */
 function closesAtEnd(interior: string): boolean {
     return closerAt(interior) === interior.length - 1;
@@ -260,6 +280,12 @@ function closerAt(interior: string): number {
             if (depth === 0) return at;
         }
     }
+    // An UNCLOSED phrase swallows everything after it, the scope's own closing brace included — so a chip whose
+    // value is mid-quote would have that brace read as part of the value, and the commit, seeing no closer,
+    // would write a second one. It compounds: every reopen wraps again. While a phrase is being typed the last
+    // character of the interior is still the scope's closer, and taking it as one is what keeps the editing
+    // form's braces from breeding.
+    if (quote && interior.endsWith(GRAMMAR.scope.close)) return interior.length - 1;
     return -1;
 }
 
@@ -326,6 +352,14 @@ export interface Keystroke {
  */
 export function backspaceAtStart(at: BarPlan): Keystroke | null {
     const text = at.before + at.open + at.after;
+    // An EMPTY chip goes whole, in one press. Every other case here deletes one character, and on an empty chip
+    // that meant three presses to be rid of a thing holding nothing — the brace pair, then the bind, then the
+    // word. One press is what a chip in any other field does, and there is nothing inside this one to lose.
+    if (at.head !== null && at.slot === "") {
+        const after = at.after.replace(/^ /, "");
+        const before = after === "" ? at.before.replace(/ $/, "") : at.before;
+        return {text: before + after, caret: before.length, operation: true};
+    }
     // Left of a scoped slot sits the opening brace; deleting an opener deletes its pair, the IDE convention —
     // removing one side alone would leave the text unbalanced and the display lying about it.
     if (at.head?.scoped === true) {
@@ -558,7 +592,7 @@ export function commitSegment(text: string, at: number): Commit {
         }
         return {text, caret: plan.before.length + plan.open.length, removed: false};
     }
-    let interior = plan.slot.trim();
+    let interior = closePhrase(plan.slot.trim());
     // The simplification runs to its FIXPOINT: an interior that is itself one whole scope sheds that scope
     // too, or `model:{{fire}}` would commit to the editing form's own spelling and lose a brace pair per
     // pass instead of settling once.

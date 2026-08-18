@@ -51,13 +51,14 @@ test("a ground press past all content lands the content's end", async () => {
     expect(await slot(page)).toMatchObject({focused: true});
 });
 
-test("a press on a settled segment opens it with the caret at the aimed character", async () => {
+test("a press on a CHIP opens it at the end of its value, wherever on the chip it landed", async () => {
     await seed(page, "model:fire", "sound:bell");
-    // The aim maps through the raw spelling: the value's second character is slot offset 1.
+    // Aimed at the value's second character; a chip draws its parse rather than its text, and the reader
+    // pressing one is continuing the ask rather than mending its middle.
     const aimed = await charPoint(settledSegments(page).nth(1), "bell", 1);
     await page.mouse.click(aimed.x, aimed.y);
     await expectQuery(page, "model:fire sound:{bell} ");
-    expect(await slot(page)).toMatchObject({value: "bell", start: 1, end: 1});
+    expect(await slot(page)).toMatchObject({value: "bell", start: 4, end: 4});
 });
 
 test("a press on a settled segment's head flips its exclusion, as the field label did in 1.0", async () => {

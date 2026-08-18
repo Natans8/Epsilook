@@ -42,8 +42,8 @@ test("an empty bar with nothing remembered still offers the axes", () => {
     assert.deepEqual(at("", 0).groups.map((group) => group.id), ["axes"]);
 });
 
-test("a top-level word offers nothing until its second character, then the doors it could open", () => {
-    assert.deepEqual(at("m", 1).groups, []);
+test("a top-level word offers the doors it could open, from its first character", () => {
+    assert.ok(words(at("m", 1), "axes").includes("model"));
     const offers = at("mo", 2);
     assert.deepEqual(offers.groups.map((group) => group.id), ["axes"]);
     // What starts with the word comes first; what merely contains it follows.
@@ -71,17 +71,19 @@ test("a minus before the word negates what the offers would ask, and is not part
     assert.equal(at("mod", 3).negated, false);
 });
 
-test("inside a column's scope: its kinds, its properties, and the count axis", () => {
+test("inside a column's scope: its kinds, the properties that read as the column's, and the count axis", () => {
     const offers = at("model:{}", 7);
     assert.deepEqual(offers.groups.map((group) => group.id), ["kinds", "props"]);
     assert.ok(words(offers, "kinds").includes("missile"));
-    assert.ok(words(offers, "props").includes("motion"));
     assert.ok(words(offers, "props").includes("count"));
-    // A kind word stands alone inside the scope; a property opens with its bind.
+    // A property most of the column's kinds declare stands here; one a single kind declares is that kind's,
+    // and is reached by opening it.
+    assert.ok(words(offers, "props").includes("target"));
+    assert.ok(!words(offers, "props").includes("motion"));
+    assert.ok(words(at("missile:{}", 9), "props").includes("motion"));
+    // A kind's word takes a value exactly as a property's does, so both are offered with their bind.
     const missile = offers.groups[0].offers.find((offer) => offer.word === "missile");
-    assert.equal(missile?.insert, "missile");
-    const motion = offers.groups[1].offers.find((offer) => offer.word === "motion");
-    assert.equal(motion?.insert, "motion:");
+    assert.equal(missile?.insert, "missile:");
 });
 
 test("inside a kind's scope: what its own word asks for, then that kind's properties", () => {
@@ -89,12 +91,15 @@ test("inside a kind's scope: what its own word asks for, then that kind's proper
     // The kind's word is the door to its subject, so the scope takes a value for it — and its other
     // properties are the same row said another way.
     assert.deepEqual(offers.groups.map((group) => group.id), ["words", "props"]);
+    // `file` is missing on purpose: the kind's own word asks for it and plain search reads it, so a row would
+    // only offer `missile:{file:...}` — the head said the same thing.
     assert.deepEqual(words(offers, "props").toSorted((a, b) => a.localeCompare(b)),
-        ["count", "file", "from", "motion", "projectiles", "target", "to"]);
+        ["count", "from", "motion", "projectiles", "target", "to"]);
 });
 
 test("a flag property is offered as the bare word it is written as", () => {
     const offers = at("spell:{}", 7);
+    // The delivery kind has no word to open, so the column's head is the only door to its properties.
     const flag = offers.groups.flatMap((group) => group.offers).find((offer) => offer.word === "unbreakable");
     assert.equal(flag?.insert, "unbreakable");
     assert.equal(flag?.shape, "word");
@@ -119,12 +124,16 @@ test("past an inner bind the property answers, not the scope it sits in", () => 
     // the bind it is composing that property's value.
     assert.deepEqual(words(at("spell:{cast}", 11), "props"), ["cast"]);
     assert.deepEqual(words(at("spell:{cast:}", 12), "sentinels"), ["instant"]);
+    // A KIND's word binds too, and what it takes is its own first property — not silence. It resolves in the
+    // parser's own order: inside the spell column `name:` is the name KIND, not the icon's name property.
+    assert.equal(at("spell:{name:}", 12).takes?.title, "name");
+    assert.match(at("spell:{name:}", 12).takes?.how ?? "", /matched anywhere/);
 });
 
 test("the offers narrow to the word under the caret, not to the whole slot", () => {
     // Two terms in one scope: the second is what is being typed.
     const offers = at("model:{missile mo}", 17);
-    assert.deepEqual(words(offers, "props"), ["motion"]);
+    assert.deepEqual(words(offers, "kinds"), ["mount"]);
     assert.deepEqual(offers.stub, {start: 8, end: 10});
 });
 
@@ -188,8 +197,12 @@ test("a value position says what it takes — the property, then how a value is 
     assert.equal(at("model:{}", 7).takes, null);
 });
 
-test("a bare number is ghosted with the unit its axis writes", () => {
+test("a number is ghosted with the unit its axis writes, and a half-typed unit with the rest of itself", () => {
     assert.equal(at("scale:15", 8).ghost, "%");
+    assert.equal(at("cast:15m", 8).ghost, "s");
+    // A range writes one notation, so the second bound takes the one the first bound set.
+    assert.equal(at("cast:2ms-5", 10).ghost, "ms");
+    assert.equal(at("cast:2s-5", 9).ghost, "s");
     // The unit only completes a number, and only at the value's end.
     assert.equal(at("scale:x", 7).ghost, "");
 });
@@ -198,14 +211,24 @@ test("a bind on a word the scope has no property for says so, and offers the one
     const offers = at("model:{blerg:}", 13);
     assert.equal(offers.takes?.title, "blerg");
     assert.match(offers.takes?.what ?? "", /blerg/);
-    assert.ok(words(offers, "props").includes("motion"));
+    assert.ok(words(offers, "props").includes("target"));
 });
 
-test("a property only some of a column's kinds declare names them", () => {
-    const offers = at("model:{}", 7);
-    const motion = offers.groups.flatMap((group) => group.offers).find((offer) => offer.word === "motion");
-    assert.equal(motion?.owner, "missile");
-    // A property every kind of the column has needs no owner: it IS the column's.
-    const target = offers.groups.flatMap((group) => group.offers).find((offer) => offer.word === "target");
-    assert.equal(target?.owner, undefined);
+test("a property not every kind of the column declares names the ones that do", () => {
+    const rows = at("model:{}", 7).groups.flatMap((group) => group.offers);
+    // Eight of the column's nine kinds play on a target; the ninth is named rather than assumed away.
+    assert.match(rows.find((offer) => offer.word === "target")?.owner ?? "", /missile/);
+    // A property every kind has needs no owner: it IS the column's.
+    assert.equal(rows.find((offer) => offer.word === "count")?.owner, undefined);
+});
+
+test("a property no other spelling reaches is still offered, subject or not", () => {
+    // The delivery kind is wordless and its cast length is not plain-searchable, so nothing else reaches it.
+    assert.ok(words(at("spell:{}", 7), "props").includes("cast"));
+    // The expansion's rung, and the id's own value, are both reached without naming them.
+    assert.ok(!words(at("id:{}", 4), "props").includes("rung"));
+    assert.ok(!words(at("id:{}", 4), "props").includes("value"));
+    // And counting is only a question where a spell can carry more than one row of the thing.
+    assert.ok(!words(at("id:{}", 4), "props").includes("count"));
+    assert.ok(words(at("model:{}", 7), "props").includes("count"));
 });

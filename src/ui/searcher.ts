@@ -11,7 +11,9 @@ import type {WorkerAsk, WorkerSay} from "./worker";
 /** The slice of the Worker interface this module touches, injectable for tests. */
 export interface WorkerLike {
     postMessage(message: unknown): void;
+
     addEventListener(type: "message", listener: (event: { data: WorkerSay }) => void): void;
+
     terminate(): void;
 }
 
@@ -23,6 +25,10 @@ export interface PackInfo {
     readonly versions: readonly VersionEntry[];
     readonly domains: Record<string, PackDomain> | undefined;
     readonly spells: number;
+    /** The ordered vocabulary the page reads a rung against, as the pack set it. */
+    readonly ladder: readonly string[];
+    /** The expansions as a reader spells them, lowest first. */
+    readonly rungs: readonly string[];
 }
 
 /** What a load reports as it progresses. */
@@ -47,6 +53,7 @@ export class Searcher {
                 handlers.ready({
                     version: said.version, locale: said.locale, locales: said.locales,
                     versions: said.versions, domains: said.domains, spells: said.spells,
+                    ladder: said.ladder, rungs: said.rungs,
                 });
             } else if (said.is === "failed") handlers.failed(said.error);
             else {

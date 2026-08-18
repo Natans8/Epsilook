@@ -9,6 +9,7 @@ import type {ReactElement} from "react";
 import {useEffect, useRef, useState} from "react";
 import {createRoot} from "react-dom/client";
 import {I18nextProvider, useTranslation} from "react-i18next";
+import {setOrdinalLadder} from "../search/index";
 import {i18n} from "../i18n";
 import {App} from "./app";
 import type {PackInfo} from "./searcher";
@@ -33,13 +34,25 @@ function Harness(): ReactElement {
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const held = new Searcher(new Worker("/dev/harness/worker.js"), {
-            progress: (pack, done, total) => { setState({is: "loading", pack, done, total}); },
-            ready: (info) => { setState({is: "ready", info}); },
-            failed: (error) => { setState({is: "failed", error}); },
+            progress: (pack, done, total) => {
+                setState({is: "loading", pack, done, total});
+            },
+            ready: (info) => {
+                // The ordinal type is read against a vocabulary the PACK carries, so the page has to be told
+                // it too: without this an expansion cannot be completed here, and a rung the worker refuses
+                // would be accepted by the page's own parse.
+                setOrdinalLadder(info.ladder);
+                setState({is: "ready", info});
+            },
+            failed: (error) => {
+                setState({is: "failed", error});
+            },
         });
         held.load(BASE, params.get("v"), params.get("lang"));
         searcher.current = held;
-        return (): void => { held.dispose(); };
+        return (): void => {
+            held.dispose();
+        };
     }, []);
 
     if (state.is === "failed") {
@@ -52,8 +65,10 @@ function Harness(): ReactElement {
                 <div className={styles.loadingBar}>
                     <div
                         className={styles.loadingFill}
-                        style={{width: `${String(Math.round(
-                            (state.is === "loading" ? state.done / Math.max(1, state.total) : 0) * 100))}%`}}
+                        style={{
+                            width: `${String(Math.round(
+                                (state.is === "loading" ? state.done / Math.max(1, state.total) : 0) * 100))}%`
+                        }}
                     />
                 </div>
             </div>

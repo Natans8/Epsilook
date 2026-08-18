@@ -122,7 +122,8 @@ export function App({info, searcher}: {
                     {plain
                         ? <PlainBar text={text} onText={setText} placeholder={t("bar.placeholder")}
                                     label={t("bar.placeholder")}/>
-                        : <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}/>}
+                        : <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}
+                               vocab={{rungs: info.rungs}}/>}
                 </div>
                 <div className={styles.statusRow}>
                     <div

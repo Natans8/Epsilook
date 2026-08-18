@@ -38,13 +38,12 @@ test("an empty bar offers every axis, and the field says a list is open", async 
     await expect(barInput(page)).toHaveRole("combobox");
 });
 
-test("a top-level word offers nothing until its second character", async () => {
+test("a top-level word offers the doors it could open, from its first character", async () => {
     await clearBar(page);
     await page.keyboard.type("m", {delay: 5});
-    await expect(surface(page)).toBeHidden();
-    await expect(barInput(page)).toHaveAttribute("aria-expanded", "false");
-    await page.keyboard.type("o", {delay: 5});
     await expect(surface(page)).toBeVisible();
+    expect(await offered()).toContain("model");
+    await page.keyboard.type("o", {delay: 5});
     expect((await offered())[0]).toBe("model");
 });
 
@@ -142,12 +141,13 @@ test("inside a column's scope the surface offers its kinds and properties", asyn
     expect(words).toContain("missile");
     expect(words).toContain("count");
 
-    // A kind word goes in bare; the chip commits to the compact spelling.
+    // A kind's word takes a value exactly as a property's does, so it goes in with its bind.
     await page.keyboard.type("miss", {delay: 5});
     await page.keyboard.press("Tab");
-    await expectQuery(page, "model:{missile}");
+    await expectQuery(page, "model:{missile:}");
+    await page.keyboard.type("fire", {delay: 5});
     await page.keyboard.press("Enter");
-    await expectQuery(page, "model:missile ");
+    await expectQuery(page, "model:{missile:fire} ");
 });
 
 test("a property goes in with its bind, and its value is what is offered next", async () => {

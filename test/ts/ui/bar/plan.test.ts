@@ -415,3 +415,24 @@ test("the delimiter pairing is one rule: enclose, spawn, step over, and take bot
     assert.equal(pairDelimiter("model:fire", 10, 10, "x"), null);
     assert.equal(pairDelimiter("model:fire", 10, 10, "Backspace"), null);
 });
+
+test("an unclosed phrase does not swallow the scope's own closing brace", () => {
+    // `name:"` spawns its pair inside the chip's scope; deleting the closing quote leaves the phrase open, and
+    // the brace after it is still the scope's. Read otherwise, the commit writes a second one — and every
+    // reopen writes another.
+    const plan = planAt('name:{"}', 7);
+    assert.equal(plan.slot, '"');
+    assert.equal(plan.suffix, "}");
+    // The commit closes the phrase rather than writing a second brace, and the result is stable: running the
+    // cycle twice was what caught the compounding, since one pass only added one brace.
+    const once = commitSegment('name:{"}', 7).text;
+    assert.equal(once, 'name:""');
+    assert.equal(commitSegment(once, 7).text, once);
+});
+
+test("committing a chip closes a phrase the reader left open", () => {
+    // A phrase runs to the end of the input, so an unclosed one swallows the separator the commit appends and
+    // every term after it. The commit supplies the closer, which discards nothing that was typed.
+    assert.equal(commitSegment('name:{"blood pool', 8).text, 'name:"blood pool"');
+    assert.equal(commitSegment('name:{"}', 7).text, 'name:""');
+});

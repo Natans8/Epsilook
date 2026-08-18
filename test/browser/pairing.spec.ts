@@ -5,7 +5,7 @@
  */
 import type {Page} from "@playwright/test";
 import {expect, test} from "@playwright/test";
-import {clearBar, expectQuery, openHarness, openKind, slot} from "./helpers";
+import {clearBar, expectQuery, openHarness, openKind, settledSegments, slot} from "./helpers";
 
 let page: Page;
 
@@ -85,4 +85,25 @@ test("one Ctrl+Z takes a spawn back whole", async () => {
 
     await page.keyboard.press("Control+z");
     await expectQuery(page, "fire");
+});
+
+test("an unclosed phrase inside a chip does not breed braces, however the chip is committed", async () => {
+    await clearBar(page);
+    // The pair spawns inside the chip's own scope; deleting the closer leaves the phrase open over the brace.
+    await page.keyboard.type('name:"', {delay: 5});
+    await expectQuery(page, 'name:{""}');
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("Backspace");
+    await expectQuery(page, 'name:{"}');
+
+    // Enter commits it: the phrase is closed rather than left to swallow the separator, no second brace is
+    // written, and the fresh tail is a tail rather than more of the phrase.
+    await page.keyboard.press("Enter");
+    await expectQuery(page, 'name:"" ');
+    expect(await openKind(page)).toBe("tail");
+
+    // And it is stable: reopening and committing again writes nothing further.
+    await settledSegments(page).first().click();
+    await page.keyboard.press("Enter");
+    await expectQuery(page, 'name:"" ');
 });

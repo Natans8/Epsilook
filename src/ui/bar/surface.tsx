@@ -125,7 +125,7 @@ export function Surface({offers, lit, listId, onPick, onLight}: {
             {offers.takes !== null && (
                 <div className={styles.takes}>
                     <div className={styles.takesTitle}>{offers.takes.title}</div>
-                    <div className={styles.takesWhat}>{offers.takes.what}</div>
+                    {offers.takes.what !== "" && <div className={styles.takesWhat}>{offers.takes.what}</div>}
                     <div className={styles.takesHow}>
                         <span className={styles.takesLabel}>{t("surface.takes")}</span>
                         {offers.takes.how}

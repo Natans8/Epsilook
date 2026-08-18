@@ -38,9 +38,21 @@
     border-bottom: 1px solid var(--border);
 }
 
+/* A heading, so it is capitalised like one: the query writes a head in lower case because that is what a
+ * reader types, and this is the surface NAMING the axis rather than spelling it. */
+.takesTitle::first-letter {
+    text-transform: uppercase;
+}
+
 .takesTitle {
     font-size: 1rem;
     color: var(--text);
+}
+
+/* The header's own lines wrap: it is prose about the axis, not a row in a list that has to stay one line. */
+.takesWhat,
+.takesHow {
+    white-space: normal;
 }
 
 .takesWhat {

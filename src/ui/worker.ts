@@ -7,7 +7,7 @@
  */
 import type {PackDomain, VersionEntry} from "../data";
 import type {Dataset} from "../search/index";
-import {parse, run} from "../search/index";
+import {ordinalRungs, parse, run} from "../search/index";
 import {packDataset} from "../dataset";
 import {fetchPack, fetchVersions, pickEntry} from "./pack";
 
@@ -19,9 +19,20 @@ export type WorkerAsk =
 /** What the worker sends back. */
 export type WorkerSay =
     | { readonly is: "progress"; readonly pack: string; readonly done: number; readonly total: number }
-    | { readonly is: "ready"; readonly version: VersionEntry; readonly locale: string;
-        readonly locales: readonly string[]; readonly versions: readonly VersionEntry[];
-        readonly domains: Record<string, PackDomain> | undefined; readonly spells: number }
+    | {
+    readonly is: "ready"; readonly version: VersionEntry; readonly locale: string;
+    readonly locales: readonly string[]; readonly versions: readonly VersionEntry[];
+    readonly domains: Record<string, PackDomain> | undefined; readonly spells: number;
+    /**
+     * The ordered vocabulary the ordinal type is read against, exactly as loading the pack set it here.
+     *
+     * The page parses and draws, so it needs the same ladder — without it a rung the worker matches would
+     * be refused by the page's own parse, and the chip would squiggle a query that runs.
+     */
+    readonly ladder: readonly string[];
+    /** The expansions as a reader spells them, lowest first — what the surface offers and completes to. */
+    readonly rungs: readonly string[]
+}
     | { readonly is: "result"; readonly seq: number; readonly count: number; readonly ms: number }
     | { readonly is: "failed"; readonly error: string };
 
@@ -32,7 +43,9 @@ const scope = globalThis as unknown as {
     addEventListener(type: "message", listener: (event: { data: WorkerAsk }) => void): void;
 };
 
-const say = (message: WorkerSay): void => { scope.postMessage(message); };
+const say = (message: WorkerSay): void => {
+    scope.postMessage(message);
+};
 
 let dataset: Dataset | null = null;
 
@@ -44,17 +57,23 @@ async function load(ask: Extract<WorkerAsk, { is: "load" }>): Promise<void> {
         say({is: "progress", pack: entry.id, done, total});
     });
     dataset = packDataset(loaded);
+    // Read back rather than rebuilt: loading the pack is what sets the ladder, so asking for it here cannot
+    // drift from the spellings the kernel matches against.
+    const expansions = (loaded.pack as unknown as { expansions?: { keys?: readonly string[] } }).expansions;
     const meta = (loaded.pack as unknown as { meta?: { domains?: Record<string, PackDomain> } }).meta;
     say({
         is: "ready", version: entry, locale: loaded.locale, locales, versions,
         domains: meta?.domains, spells: loaded.spells.ids.length,
+        ladder: ordinalRungs(), rungs: expansions?.keys ?? [],
     });
 }
 
 scope.addEventListener("message", (event) => {
     const ask = event.data;
     if (ask.is === "load") {
-        load(ask).catch((error: unknown) => { say({is: "failed", error: String(error)}); });
+        load(ask).catch((error: unknown) => {
+            say({is: "failed", error: String(error)});
+        });
         return;
     }
     if (dataset === null) return;

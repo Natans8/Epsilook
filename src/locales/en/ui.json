@@ -55,7 +55,8 @@
     "empty": "Keep typing — a value, or one of the words above.",
     "incomplete": "The value is not finished yet.",
     "unit": "Notation",
-    "takes": "Takes"
+    "takes": "Takes",
+    "rungNote": "Expansion {{number}}"
   },
   "tray": {
     "apply": "Apply",

@@ -14,8 +14,8 @@ import type {BarPlan} from "./plan";
 import {termStarts} from "./plan";
 import type {Column, Kind, Prop} from "../../search/index";
 import {
-    bitmask, COUNT_PROP, flag, fold, GRAMMAR, HEADS, headWord, hintOf, kindsOf, operatorsOf, propIn,
-    propNameOf, TARGET_ROLES, wordOf,
+    bitmask, COUNT_PROP, flag, fold, GRAMMAR, HEADS, headWord, hintOf, kindIn, kindsOf, operatorsOf, ordinal,
+    propIn, propNameOf, TARGET_ROLES, wordOf,
 } from "../../search/index";
 import {i18n} from "../../i18n";
 
@@ -90,9 +90,31 @@ export interface Offers {
     readonly stub: { readonly start: number; readonly end: number };
     /** The best candidate's remainder, drawn dim after the caret; empty when nothing completes what was typed. */
     readonly ghost: string;
+    /**
+     * What the ghost completes: the first offer's own remainder, or the UNIT a number is still missing.
+     *
+     * Two different things to take. An offer's ghost is that offer picked; a unit has no row of its own and is
+     * written straight into the slot, so the surface has to say which one is standing.
+     */
+    readonly ghostIs: "offer" | "unit" | null;
     /** Whether a minus already stands before the word, so every offer here excludes rather than asks. */
     readonly negated: boolean;
 }
+
+/**
+ * The closed vocabularies the PACK carries, which no declaration in the schema names.
+ *
+ * The schema declares that an expansion is an ordinal and an attachment point an enum; WHICH words either one
+ * reads is in the pack. Until a declaration ties a property to its vocabulary, the ones the surface can offer
+ * arrive here — where the page already had to learn them, because the ordinal type is parsed against them.
+ */
+export interface Vocabulary {
+    /** The expansions as a reader spells them, lowest first. */
+    readonly rungs: readonly string[];
+}
+
+/** No pack loaded: the surface offers the language alone. */
+export const NO_VOCABULARY: Vocabulary = {rungs: []};
 
 /** Every offer in draw order — the flat list the arrows walk and Enter picks from. */
 export function flatOffers(offers: Offers): Offer[] {
@@ -100,7 +122,9 @@ export function flatOffers(offers: Offers): Offer[] {
 }
 
 /** Nothing on offer — what a bar at rest has, since a caret it does not hold can be handed nothing. */
-export const NO_OFFERS: Offers = {groups: [], stub: {start: 0, end: 0}, ghost: "", negated: false, takes: null};
+export const NO_OFFERS: Offers = {
+    groups: [], stub: {start: 0, end: 0}, ghost: "", ghostIs: null, negated: false, takes: null,
+};
 
 /**
  * What the slot would hold once an offer is taken, and where the caret would then sit in it.
@@ -119,8 +143,13 @@ export function offerSlot(plan: BarPlan, offers: Offers, offer: Offer): { value:
     return {value, caret: offers.stub.start + offer.insert.length};
 }
 
-/** How much of a top-level word must be typed before the doors are offered — 1.0's own threshold. */
-const DOOR_THRESHOLD = 2;
+/**
+ * How much of a top-level word must be typed before the doors are offered.
+ *
+ * One character, because two was a rule with no reading: an empty bar offered the whole menu and one letter
+ * offered nothing, so the list appeared, vanished and came back as the reader typed.
+ */
+const DOOR_THRESHOLD = 1;
 
 /**
  * The order the doors are offered in: what a reader reaches for first.
@@ -196,14 +225,20 @@ function doorOffers(): Offer[] {
     return [...held.values()].sort((a, b) => menuRank(a.word) - menuRank(b.word) || a.word.localeCompare(b.word));
 }
 
-/** The kinds of one column, as the words that name them inside its scope. */
+/**
+ * The kinds of one column, as the words that name them inside its scope.
+ *
+ * Offered WITH the bind, because a kind's word takes a value exactly as a property's does — `name:fireball` is
+ * the same shape as `attach:chest`, and the two were being offered as though one were a flag and the other a
+ * door. The bare word still asks existence; it is one keystroke away, and the surface says what it takes.
+ */
 function kindOffers(column: Column): Offer[] {
     return kindsOf(column)
         .filter((kind): kind is Kind & { word: string } => kind.word !== undefined)
         .map((kind): Offer => ({
-            shape: "word",
+            shape: "door",
             word: kind.word,
-            insert: kind.word,
+            insert: kind.word + GRAMMAR.bind,
             note: kind.hint,
             tone: column.key,
         }))
@@ -241,20 +276,35 @@ function propOffers(context: { role: "column"; column: Column } | { role: "kind"
     for (const kind of kinds) {
         for (const [name, prop] of Object.entries(kind.props)) {
             const mine = owners.get(name) ?? [];
-            // Named only where naming it says something: one or two kinds is a fact a reader can use, and a
-            // property on eight kinds of nine is the column's own however the ninth is declared.
-            const owner = mine.length <= 2 && mine.length < kinds.length ? mine.join(" · ") : undefined;
-            if (!held.has(name)) held.set(name, propOffer(name, prop, tone, owner));
+            // A property MOST of a column's kinds declare reads as the column's own; one a single kind declares
+            // is that kind's, and offering it here is what put `motion` and `fid` beside `model:` and `spell:`.
+            // Those are reached by opening the kind — unless the kind has no word to open, in which case the
+            // column's own head is its only door and the property has to stand here.
+            const wordless = mine.length === 0 || kinds.some(
+                (held) => held.word === undefined && Object.hasOwn(held.props, name));
+            if (!wordless && mine.length * 2 <= kinds.length && kinds.length > 1) continue;
+            const owner = mine.length < kinds.length ? mine.join(" · ") : undefined;
+            // A kind's FIRST property is what its own word asks for, and it is offered as a row only where
+            // naming it adds a way in. It does not when the kind has a word — `xpac:legion` IS the rung, and
+            // the row would offer `xpac:{rung:legion}` — nor when plain search already reads the property, as
+            // `id:133` reads the id. What is left is a property no other spelling reaches, which stays.
+            const reached = kind.word !== undefined || prop.plain !== undefined;
+            const subject = reached && Object.keys(kind.props)[0] === name;
+            if (!held.has(name) && !subject) held.set(name, propOffer(name, prop, tone, owner));
         }
     }
-    // The count axis has no door of its own and every scope can ask it, so it is offered wherever a scope is open.
-    held.set(GRAMMAR.countWord, {
-        shape: "door",
-        word: GRAMMAR.countWord,
-        insert: GRAMMAR.countWord + GRAMMAR.bind,
-        note: hintOf(COUNT_PROP),
-        tone,
-    });
+    // The count axis has no door of its own and every scope can ask it — but counting is only a question where
+    // a spell can carry more than one row of the thing. A kind declared `single` has at most one, so `name:count`
+    // could only ever answer nought or one.
+    if (kinds.some((kind) => kind.single !== true)) {
+        held.set(GRAMMAR.countWord, {
+            shape: "door",
+            word: GRAMMAR.countWord,
+            insert: GRAMMAR.countWord + GRAMMAR.bind,
+            note: hintOf(COUNT_PROP),
+            tone,
+        });
+    }
     return [...held.values()].sort((a, b) => a.word.localeCompare(b.word));
 }
 
@@ -267,7 +317,8 @@ function propOffers(context: { role: "column"; column: Column } | { role: "kind"
  * whether to show one — wait on that link. The expansion ladder is the same gap seen from the other side: its
  * rungs are loaded from a pack, and the page never loads one.
  */
-function valueOffers(prop: Prop, tone: string): { sentinels: Offer[]; words: Offer[]; roles: Offer[] } {
+function valueOffers(prop: Prop, tone: string, vocab: Vocabulary, typed: string):
+    { sentinels: Offer[]; words: Offer[]; roles: Offer[] } {
     const word = (spelling: string, note: string): Offer =>
         ({shape: "word", word: spelling, insert: spelling, note, tone});
     const sentinels = Object.values(prop.sentinels ?? {})
@@ -277,7 +328,15 @@ function valueOffers(prop: Prop, tone: string): { sentinels: Offer[]; words: Off
     const roles = prop.types.includes(bitmask) ? TARGET_ROLES.map((role) => word(role, "")) : [];
     const any = operatorsOf(prop).includes("present")
         ? [word(GRAMMAR.anyWord, i18n.t("ui:surface.anyNote"))] : [];
-    return {sentinels, words: any, roles};
+    // An ordered vocabulary is small, closed and carried by the pack, so it lists itself. A number typed where
+    // a name belongs is the reader counting the ladder — the rung standing at that number answers first.
+    const at = Number(typed);
+    const rungs = prop.types.includes(ordinal)
+        ? vocab.rungs.map((rung, index) => ({rung, index}))
+            .sort((a, b) => Number(b.index + 1 === at) - Number(a.index + 1 === at))
+            .map(({rung, index}) => word(rung, i18n.t("ui:surface.rungNote", {number: index + 1})))
+        : [];
+    return {sentinels, words: [...rungs, ...any], roles};
 }
 
 /** One group's offers, narrowed by what has been typed: what starts with it first, then what merely contains it. */
@@ -310,6 +369,16 @@ function historyGroup(history: readonly string[]): OfferGroup[] {
     return [{id: "history", label: i18n.t("ui:surface.history"), offers}];
 }
 
+/** The property a value is being composed for, named and described as the reader reached it. */
+interface Composing {
+    readonly prop: Prop;
+    readonly tone: string;
+    /** The word that reached it — a property's name, or the kind's word where that is the door. */
+    readonly name: string;
+    /** What to say it is, where the door says it better than the property does. */
+    readonly what?: string;
+}
+
 /** What a head opens: a column's scope, a kind's scope, or one property's value. */
 type Context =
     | { readonly role: "column"; readonly column: Column }
@@ -333,11 +402,22 @@ function contextOf(plan: BarPlan): Context | null {
  * synonyms AND the active language's words, and a copy of that rule here would answer differently the moment a
  * localised word landed.
  */
-function innerProp(context: Context, word: string): { prop: Prop; tone: string; name: string } | null {
+function innerProp(context: Context, word: string): Composing | null {
     if (context.role === "prop") return null;
     const folded = fold(word);
     const tone = context.role === "column" ? context.column.key : context.kind.column.key;
     if (folded === GRAMMAR.countWord) return {prop: COUNT_PROP, tone, name: GRAMMAR.countWord};
+    // A KIND's word binds too — `spell:{name:hi}` asks the name kind for a value, which is its first property.
+    // Tried FIRST, because that is the order the parser resolves an inner bind in: inside the spell column
+    // `name:` is the name kind, even though the icon kind declares a property spelled the same way. Reading
+    // them in the other order made the surface answer about a different axis than the query would.
+    const named = context.role === "column" ? kindIn(context.column, folded) : undefined;
+    const subject = named === undefined ? undefined : Object.values(named.props)[0];
+    // Named by the word the reader typed and described by the KIND, not by the property behind it: `xpac:` is
+    // the expansion, and titling it `rung` names an internal that no reader has ever seen.
+    if (subject !== undefined && named !== undefined) {
+        return {prop: subject, tone, name: folded, what: named.hint};
+    }
     const kinds = context.role === "column" ? kindsOf(context.column) : [context.kind];
     for (const kind of kinds) {
         const name = propIn(kind, folded);
@@ -356,40 +436,63 @@ function innerProp(context: Context, word: string): { prop: Prop; tone: string; 
  * @param name Its own name, as the query writes it.
  * @returns The three lines the surface draws above the offers.
  */
-function takesOf(prop: Prop, name: string): Takes {
+function takesOf(prop: Prop, name: string, what?: string): Takes {
+    const how = prop.types.map((type) => type.hint).join(" · ");
+    const said = what ?? hintOf(prop);
     return {
         title: propNameOf(name, prop),
-        what: hintOf(prop),
+        // A property with no line of its own falls back to its type's, which is the line below — so it would be
+        // printed twice, once as what the axis is and once as how to write it.
+        what: said === how ? "" : said,
         // Every notation the property reads, in the order they are tried: a property with two of them takes
         // either, and saying only the first would teach half the axis.
-        how: prop.types.map((type) => type.hint).join(" · "),
+        how,
     };
 }
 
 /**
- * The unit a bare number is still missing, drawn as a ghost after it.
+ * The unit the number under the caret is still missing, drawn as a ghost after it.
  *
- * A quantity type declares the notation its values are WRITTEN in, and that notation is what the chip will
- * display the number as anyway — so offering it while the number is being typed is the same fact said a moment
- * earlier. Only a suffix can be ghosted: a symbol that stands before its number is not a completion of it.
+ * A quantity type declares the notations its values may be written in, and the first is the one they are
+ * written AS — so completing a number to it is the same fact the chip would have shown a moment later. Only a
+ * suffix can be ghosted: a symbol standing before its number is not a completion of it.
+ *
+ * What counts as "the number under the caret" is the tail of the value, not the whole of it: a range writes two
+ * of them (`2s-5` still wants its second `s`), and a unit half typed wants the rest of itself (`15m` wants the
+ * `s` of `ms`).
  *
  * @param prop The property being composed, where one is known.
  * @param typed What has been typed into the value so far.
- * @returns The symbol to draw after the caret, or an empty string.
+ * @returns The characters to draw after the caret, or an empty string.
  */
 function unitGhost(prop: Prop | null, typed: string): string {
-    if (prop === null || !/^-?\d+(\.\d+)?$/.test(typed)) return "";
+    // The last number of the value, with whatever letters have been typed after it.
+    const tail = /(\d)(?<started>[a-z]*)$/i.exec(typed);
+    if (prop === null || tail === null) return "";
+    const started = (tail.groups?.started ?? "").toLowerCase();
+    // Every suffix the property's notations read, the ones already used in this value FIRST: a range writes one
+    // notation, so the second bound of `2ms-5` wants the `ms` the first bound set, not the type's own default.
+    const spellings: string[] = [];
     for (const type of prop.types) {
-        const notation = type.notations?.[0];
-        if (notation === undefined || notation.unit === "" || notation.position === "before") continue;
-        return notation.glyph ?? notation.unit;
+        for (const notation of type.notations ?? []) {
+            if (notation.unit === "" || notation.position === "before") continue;
+            spellings.push(notation.unit, ...notation.aliases ?? []);
+        }
+    }
+    const used = new Set([...typed.slice(0, typed.length - started.length).matchAll(/\d([a-z]+)/gi)]
+        .map((hit) => hit[1].toLowerCase()));
+    const ranked = [...spellings].sort((a, b) => Number(used.has(b.toLowerCase())) - Number(used.has(a.toLowerCase())));
+    for (const spelling of ranked) {
+        if (spelling.length > started.length && spelling.toLowerCase().startsWith(started)) {
+            return spelling.slice(started.length);
+        }
     }
     return "";
 }
 
 /** The three value groups one property offers, in the order the surface draws them. */
-function valueGroups(prop: Prop, tone: string, typed: string): OfferGroup[] {
-    const {sentinels, words, roles} = valueOffers(prop, tone);
+function valueGroups(prop: Prop, tone: string, typed: string, vocab: Vocabulary): OfferGroup[] {
+    const {sentinels, words, roles} = valueOffers(prop, tone, vocab, typed);
     return [
         ...group("sentinels", sentinels, typed),
         ...group("roles", roles, typed),
@@ -405,7 +508,7 @@ function valueGroups(prop: Prop, tone: string, typed: string): OfferGroup[] {
  * @param history The remembered searches, newest first.
  * @returns The groups to draw, the slot characters an offer replaces, and the ghost the slot draws.
  */
-export function offersAt(plan: BarPlan, caret: number, history: readonly string[]): Offers {
+export function offersAt(plan: BarPlan, caret: number, history: readonly string[], vocab = NO_VOCABULARY): Offers {
     const slot = plan.slot;
     const at = Math.min(Math.max(caret, 0), slot.length);
     // An empty bar is the one position with nothing typed to narrow by: it offers the whole menu.
@@ -415,6 +518,7 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
             takes: null,
             stub: {start: at, end: at},
             ghost: "",
+            ghostIs: null,
             negated: false,
         };
     }
@@ -445,10 +549,13 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     // The property whose value is being composed, whichever door reached it: a property's own door, an inner
     // bind, or a KIND's word — which is the door to its subject, the first property it declares.
     const subject = context?.role === "kind" ? Object.entries(context.kind.props)[0] : undefined;
-    const composing = inner !== null ? inner
+    const composing: Composing | null = inner !== null ? inner
         : context?.role === "prop" ? {prop: context.prop, tone: context.tone, name: context.name}
-            : subject !== undefined && bind < 0
-                ? {prop: subject[1], tone: context?.role === "kind" ? context.kind.column.key : "", name: subject[0]}
+            : subject !== undefined && bind < 0 && context?.role === "kind"
+                ? {
+                    prop: subject[1], tone: context.kind.column.key,
+                    name: wordOf(context.kind), what: context.kind.hint,
+                }
                 : null;
     const groups = ((): OfferGroup[] => {
         // A kind's scope offers its properties as well as its subject's words: `scale:{}` takes an amount, and
@@ -456,11 +563,11 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
         // it does NOT: there the caret is inside that property's value, where a property name is not a value.
         if (context?.role === "kind" && composing !== null && inner === null) {
             return [
-                ...valueGroups(composing.prop, composing.tone, typed),
+                ...valueGroups(composing.prop, composing.tone, typed, vocab),
                 ...group("props", propOffers(context), typed),
             ];
         }
-        if (composing !== null) return valueGroups(composing.prop, composing.tone, typed);
+        if (composing !== null) return valueGroups(composing.prop, composing.tone, typed, vocab);
         if (context === null) return typed.length < DOOR_THRESHOLD ? [] : group("axes", doorOffers(), typed);
         if (context.role === "prop") return [];
         // The word before the bind is unknown here, so what is on offer is the properties it could have been.
@@ -481,7 +588,7 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
             }),
             how: "",
         }
-        : composing === null ? null : takesOf(composing.prop, composing.name);
+        : composing === null ? null : takesOf(composing.prop, composing.name, composing.what);
 
     // The ghost is drawn in the slot's own mirror, so it may only ever be appended: anywhere but the end it would
     // shift the mirrored text out from under the field's own caret.
@@ -490,5 +597,6 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     const completes = best !== undefined && best.shape !== "query" && typed !== ""
         && atEnd && best.insert.startsWith(typed);
     const unit = atEnd ? unitGhost(composing?.prop ?? null, typed) : "";
-    return {groups, takes, stub, ghost: completes ? best.insert.slice(typed.length) : unit, negated};
+    const ghost = completes ? best.insert.slice(typed.length) : unit;
+    return {groups, takes, stub, ghost, ghostIs: ghost === "" ? null : completes ? "offer" : "unit", negated};
 }

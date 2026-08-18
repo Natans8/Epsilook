@@ -29,8 +29,8 @@ import {OpenSegment} from "./open";
 import type {SegmentActions} from "./chip";
 import {SettledSegment} from "./chip";
 import {Classed} from "./classed";
-import type {Offer} from "./offers";
-import {flatOffers, NO_OFFERS, offerSlot, offersAt} from "./offers";
+import type {Offer, Vocabulary} from "./offers";
+import {flatOffers, NO_OFFERS, NO_VOCABULARY, offerSlot, offersAt} from "./offers";
 import {optionId, Surface} from "./surface";
 import {recentQueries, rememberQuery} from "../history";
 import styles from "./bar.module.css";
@@ -53,10 +53,12 @@ function laneItemAt(segment: string, index: number): { span: Span; lone: boolean
 /**
  * The bar.
  */
-export function Bar({text, onText, placeholder}: {
+export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY}: {
     readonly text: string;
     readonly onText: (text: string) => void;
     readonly placeholder: string;
+    /** The closed vocabularies the loaded pack carries — what the surface can offer beyond the language. */
+    readonly vocab?: Vocabulary;
 }): ReactElement {
     // The open position: a segment (by any offset inside it), or a gap (by the start of the segment it sits
     // before). The tail on first load; clamped per render because the text can change underneath.
@@ -437,7 +439,11 @@ export function Bar({text, onText, placeholder}: {
     // takes its own slice, which is what makes an open chip read exactly as the plain view reads.
     const painted = useMemo(() => paint(text), [text]);
     const slotRuns = useMemo(
-        () => runsWithin(painted, {start: slotStart(at), end: slotStart(at) + at.slot.length}),
+        () => runsWithin(painted, {start: slotStart(at), end: slotStart(at) + at.slot.length})
+            // Stripped of their state: a value half typed is not a value that failed, and `scale:x` on its way
+            // to `scale:x5` was being squiggled as though the reader had finished and got it wrong. Diagnostics
+            // belong to a committed query — which is the law's silent-while-typing half, drawn.
+            .map((run) => (run.state === undefined ? run : {...run, state: undefined})),
         [painted, at]);
     // At rest — no focus, or a bar-wide selection standing — the open position renders settled like every
     // other segment. A selection is a stretch of the settled query, so nothing inside it is in its editing form.
@@ -451,8 +457,8 @@ export function Bar({text, onText, placeholder}: {
     // What the caret can be handed. A bar at rest holds no caret, so there is nothing to offer and nothing to
     // compute; everywhere else the offers are a pure read of the open position.
     const offers = useMemo(
-        () => (rest ? NO_OFFERS : offersAt(at, caretInSlot, history)),
-        [rest, at, caretInSlot, history]);
+        () => (rest ? NO_OFFERS : offersAt(at, caretInSlot, history, vocab)),
+        [rest, at, caretInSlot, history, vocab]);
     const flat = useMemo(() => flatOffers(offers), [offers]);
     // One arrangement of query, position and caret — what the light and the dismissal were decided about.
     const stamp = `${text} ${String(clamped)} ${String(gapAt ?? -1)} ${String(caretInSlot)}`;
@@ -503,9 +509,22 @@ export function Bar({text, onText, placeholder}: {
             setDismissed(stamp);
             setLitAt({stamp: "", index: -1});
         },
-        // The ghost is the first offer's own completion, so taking it is picking that offer — and once the
-        // reader has lit another, that is the one they mean.
+        /**
+         * Takes the completion the slot is showing.
+         *
+         * A ghost is either an offer's own remainder or a UNIT the number is missing, and only the first has a
+         * row to pick: a unit is written straight into the slot, as the keystrokes it stands for.
+         */
         accept: (): void => {
+            if (lit < 0 && offers.ghostIs === "unit") {
+                const value = at.slot.slice(0, caretInSlot) + offers.ghost + at.slot.slice(caretInSlot);
+                applyStep({
+                    text: writeSlot(at, value),
+                    caret: slotStart(at) + caretInSlot + offers.ghost.length,
+                    operation: true,
+                }, true, value);
+                return;
+            }
             const best = lit >= 0 ? flat[lit] : flat[0];
             if (best !== undefined) applyOffer(best);
         },

@@ -28,7 +28,7 @@
     "text": "words, matched anywhere in the text unless anchored with =",
     "path": "part of a file path; file names run words together, so bee also finds beer",
     "enum": "one of a fixed list of names; pick one, or type part of it",
-    "ordinal": "a rung on a ladder; name one, or compare with < and >",
+    "ordinal": "one of an ordered set of names; name one, or compare with < and >",
     "id": "the exact id, matched whole",
     "count": "how many, as a whole number or a comparison such as >4",
     "seconds": "a duration in seconds, such as 1.5, 500ms, or 2-5",
@@ -274,7 +274,7 @@
       }
     },
     "location": {
-      "hint": "where the spell refuses to cast — Epsilon enforces this gate on .cast"
+      "hint": "the places the spell is allowed to work in — anywhere else it will not cast"
     },
     "invis": {
       "hint": "the invisibility channel the aura hides in",

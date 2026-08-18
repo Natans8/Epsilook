@@ -255,8 +255,11 @@ function ChipEl({chip, warned, notes, span, text, act}: {
         <span
             className={stateClass(styles.chip, chip.tone, chip.not, warned)}
             title={notes.length > 0 ? notes.join("\n") : undefined}
-            onClick={press((e) => {
-                act.open(aimAt(e, text, span) ?? "end");
+            // At the END, wherever on the chip the press landed. A chip draws its PARSE — a notated number, a
+            // desugared count, a display glyph — so aiming at a character means aiming at a rendering, and the
+            // reader who wants to change a chip is almost always continuing it rather than mending its middle.
+            onClick={press(() => {
+                act.open("end");
             })}
         >
             <Sect
@@ -286,8 +289,11 @@ function LaneEl({lane, warned, notes, span, text, act}: {
         <span
             className={stateClass(styles.lane, lane.tone, lane.not, warned)}
             title={notes.length > 0 ? notes.join("\n") : undefined}
-            onClick={press((e) => {
-                act.open(aimAt(e, text, span) ?? "end");
+            // At the END, wherever on the chip the press landed. A chip draws its PARSE — a notated number, a
+            // desugared count, a display glyph — so aiming at a character means aiming at a rendering, and the
+            // reader who wants to change a chip is almost always continuing it rather than mending its middle.
+            onClick={press(() => {
+                act.open("end");
             })}
         >
             <Sect
