@@ -10,3 +10,4 @@
 Reader.lua
 Data.lua
 API.lua
+SelfTest.lua
