@@ -11,6 +11,9 @@
      * objects and a selection crosses them without stepping. A text band reaches the same height by padding
      * out from the line box its own characters occupy, which is what `lh` measures. */
     --band-h: 1.8rem;
+    /* The control surface hangs from the bar, so the bar is what its left offset is measured against — and
+     * what the open segment's own offset is measured against, which is what lets the two line up. */
+    position: relative;
     --band-pad: calc((var(--band-h) - 1lh) / 2);
     /* One selection wash for the whole bar: a band over settled text, a chip and the plain view are one
      * gesture's result and may not read as three different highlights. */
@@ -662,4 +665,15 @@
     height: 1px;
     overflow: hidden;
     clip-path: inset(50%);
+}
+
+/* the inline completion: the rest of the one candidate, drawn faded past the caret. It is appended to the mirror
+ * and never inserted into it, so it moves no character the caret has to line up with — and it carries no weight
+ * or spacing of its own, for the same reason every other run under a field carries none.
+ *
+ * Faded toward the bar's own ground rather than set to --text-dim: that token is only quiet on the dark palette
+ * — in the two light ones it is a SIBLING of --text, chosen for contrast, and a ghost drawn in it reads as text
+ * the reader has already typed. The mix lands on dark's own dim colour, so nothing changes there. */
+.ghost {
+    color: color-mix(in srgb, var(--text) 55%, var(--bg-panel));
 }

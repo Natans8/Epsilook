@@ -53,7 +53,7 @@ export {
 export * as catalogue from "./schema/catalogue";
 
 export type {Head} from "./schema/schema";
-export {buildSchema, HEADS, kindIn, kindsOf, propIn, schemaProblems} from "./schema/schema";
+export {buildSchema, HEADS, headWord, kindIn, kindsOf, propIn, schemaProblems} from "./schema/schema";
 
 export {GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./language/grammar";
 

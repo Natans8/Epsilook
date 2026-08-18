@@ -57,6 +57,18 @@ const TONES: Record<string, string | undefined> = {
 };
 
 /**
+ * The tone one column wears, for any surface that draws in the chip language.
+ *
+ * The control surface draws the chip an offer would become, so it reads the tones from here rather than keeping
+ * a second table: a column added to one of them and not the other would show two colours for one axis.
+ *
+ * @param column The column's key.
+ * @returns Its tone class, or an empty string where the column declares none.
+ */
+export const toneOf = (column: string | undefined): string =>
+    (column === undefined ? "" : TONES[column] ?? "");
+
+/**
  * A guarded press: the chip owns it — no bar-level aim, no focus theft before the open lands. The event is
  * handed on, because most of these presses read the point they landed on.
  *

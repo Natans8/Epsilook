@@ -13,21 +13,26 @@
  * as rewrites of the text, each an undoable operation.
  */
 import type {KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactElement} from "react";
-import {Fragment, useMemo, useRef, useState} from "react";
+import {Fragment, useId, useMemo, useRef, useState} from "react";
 import type {Span} from "../../search/index";
 import {describe, paint, parse, runsWithin} from "../../search/index";
 import type {BarPlan, BarSegment, BarSelection, Commit, Keystroke} from "./plan";
 import {
     commitSegment, firstDiff, grownSegment, insertAtGap, planAt, removeSegment, removeSelection, removeTerm,
     scopedForm, scopeGesture, segmentAt, segmentsOf, selectionOver, selectionStep, slotStart, toggleNegation,
+    writeSlot,
 } from "./plan";
 import type {Aim} from "./aim";
 import {groundAim, offsetAtPoint} from "./aim";
-import type {CaretRequest} from "./open";
+import type {Assist, CaretRequest} from "./open";
 import {OpenSegment} from "./open";
 import type {SegmentActions} from "./chip";
 import {SettledSegment} from "./chip";
 import {Classed} from "./classed";
+import type {Offer} from "./offers";
+import {flatOffers, NO_OFFERS, offerSlot, offersAt} from "./offers";
+import {optionId, Surface} from "./surface";
+import {recentQueries, rememberQuery} from "../history";
 import styles from "./bar.module.css";
 
 /**
@@ -79,6 +84,16 @@ export function Bar({text, onText, placeholder}: {
     // Where a drag began, while the button is down, and whether it has moved off that offset yet.
     const dragFrom = useRef<number | null>(null);
     const dragged = useRef(false);
+
+    // Where the caret sits inside the slot, as the input reports it — what the surface can offer depends on it.
+    const [caretInSlot, setCaretInSlot] = useState(0);
+    // The lit offer, and the surface put away, each stamped with the situation they were decided in: both are
+    // answers about one arrangement of query, position and caret, and they lapse the moment that arrangement
+    // changes. Stamping is what keeps them out of the effects that would otherwise have to clear them.
+    const [litAt, setLitAt] = useState({stamp: "", index: -1});
+    const [dismissed, setDismissed] = useState("");
+    const [history, setHistory] = useState(recentQueries);
+    const listId = useId();
 
     const clamped = Math.min(openAt, text.length);
     const sel: BarSelection | null = range === null ? null : selectionOver(text, range.anchor, range.focus);
@@ -254,7 +269,9 @@ export function Bar({text, onText, placeholder}: {
 
     /** Enter: commit and open a FRESH tail — with a separator appended where the committed chip is the last. */
     const onCommit = (): void => {
-        openTail(commitOpen().text);
+        const step = commitOpen();
+        setHistory(rememberQuery(step.text));
+        openTail(step.text);
     };
 
     /** Escape: the segment goes back to what it held when it opened, the caret staying with it. */
@@ -431,6 +448,69 @@ export function Bar({text, onText, placeholder}: {
     const mode: "fill" | "hug" | "gap" = gapAt !== null ? "gap"
         : at.head === null && at.after.trim() === "" ? "fill" : "hug";
 
+    // What the caret can be handed. A bar at rest holds no caret, so there is nothing to offer and nothing to
+    // compute; everywhere else the offers are a pure read of the open position.
+    const offers = useMemo(
+        () => (rest ? NO_OFFERS : offersAt(at, caretInSlot, history)),
+        [rest, at, caretInSlot, history]);
+    const flat = useMemo(() => flatOffers(offers), [offers]);
+    // One arrangement of query, position and caret — what the light and the dismissal were decided about.
+    const stamp = `${text} ${String(clamped)} ${String(gapAt ?? -1)} ${String(caretInSlot)}`;
+    const shown = offers.groups.length > 0 && dismissed !== stamp;
+    const lit = shown && litAt.stamp === stamp ? litAt.index : -1;
+
+    /**
+     * Takes one offer into the query, exactly as the keystrokes that would have written it: the stub the offers
+     * were computed against gives way to what the offer spells, and the ordinary rewrite path does the rest —
+     * so a picked door opens its scope by the same gesture a typed colon does, in one undoable step.
+     */
+    const applyOffer = (offer: Offer): void => {
+        if (offer.shape === "query") {
+            pushUndo(text);
+            openTail(offer.insert);
+            return;
+        }
+        const {value, caret: within} = offerSlot(at, offers, offer);
+        if (gapAt !== null) {
+            const step = insertAtGap(text, gapAt, value);
+            if (step === null) return;
+            setGapAt(null);
+            applyStep({...step, operation: true}, true, value);
+            return;
+        }
+        applyStep({text: writeSlot(at, value), caret: slotStart(at) + within, operation: true}, true, value);
+    };
+
+    const assist: Assist = {
+        count: flat.length,
+        open: shown,
+        lit,
+        // The ghost and the light say the same thing in two places, so only one of them is ever drawn: the
+        // ghost while the reader types, the light once they have started steering the list.
+        ghost: shown && lit < 0 ? offers.ghost : "",
+        listId,
+        activeId: lit >= 0 ? optionId(listId, lit) : undefined,
+        move: (dir): void => {
+            if (flat.length === 0) return;
+            const next = lit < 0 ? (dir === 1 ? 0 : flat.length - 1) : (lit + dir + flat.length) % flat.length;
+            setDismissed("");
+            setLitAt({stamp, index: next});
+        },
+        pick: (): void => {
+            if (lit >= 0) applyOffer(flat[lit]);
+        },
+        close: (): void => {
+            setDismissed(stamp);
+            setLitAt({stamp: "", index: -1});
+        },
+        // The ghost is the first offer's own completion, so taking it is picking that offer — and once the
+        // reader has lit another, that is the one they mean.
+        accept: (): void => {
+            const best = lit >= 0 ? flat[lit] : flat[0];
+            if (best !== undefined) applyOffer(best);
+        },
+    };
+
     const open = (
         <OpenSegment
             key={`open-${String(session)}`}
@@ -442,6 +522,8 @@ export function Bar({text, onText, placeholder}: {
             caret={caret}
             placeholder={text === "" ? placeholder : undefined}
             label={placeholder}
+            assist={assist}
+            onCaret={setCaretInSlot}
             onKeystroke={onKeystroke}
             onArrow={onArrow}
             onEdge={onEdge}
@@ -461,6 +543,9 @@ export function Bar({text, onText, placeholder}: {
                 // session reset and no focus theft.
                 const step = commitOpen();
                 if (step.text !== text) onText(step.text);
+                // A search the reader has finished with is one they may want back, and its committed spelling
+                // is the one worth keeping — never the half-typed shape it passed through on the way.
+                setHistory(rememberQuery(step.text));
             }}
         />
     );
@@ -550,6 +635,12 @@ export function Bar({text, onText, placeholder}: {
      */
     const onBarDown = (e: ReactMouseEvent<HTMLDivElement>): void => {
         if (e.button !== 0) return;
+        // The control surface is part of this editing session, not a place in the query: a press on it settles
+        // nothing, anchors nothing, and the row itself keeps the focus in the slot.
+        if (e.target instanceof Element && e.target.closest("[data-surface]") !== null) {
+            dragFrom.current = null;
+            return;
+        }
         // The editing form owns its own presses — its caret, its native selection, and a head that keeps the
         // session alive — so nothing here is prevented while the press is inside it. The anchor is still
         // recorded: a drag that LEAVES the slot is a bar selection, and it must know where it began.
@@ -595,7 +686,7 @@ export function Bar({text, onText, placeholder}: {
             dragged.current = false;
             return;
         }
-        if (e.target instanceof Element && e.target.closest("[data-open],button") !== null) return;
+        if (e.target instanceof Element && e.target.closest("[data-open],[data-surface],button") !== null) return;
         const {at: aim, exact} = aimOf(e);
         const seg = segmentAt(text, aim);
         if (aim >= text.length) openEnd(text);
@@ -701,6 +792,18 @@ export function Bar({text, onText, placeholder}: {
             data-selection={sel === null ? undefined : selectedText()}
         >
             {children}
+            {shown && (
+                <Surface
+                    offers={offers}
+                    lit={lit}
+                    listId={listId}
+                    onPick={applyOffer}
+                    onLight={(index) => {
+                        // The pointer reports every move over a row; only a move to another row is news.
+                        setLitAt((was) => (was.index === index && was.stamp === stamp ? was : {stamp, index}));
+                    }}
+                />
+            )}
         </div>
     );
 }

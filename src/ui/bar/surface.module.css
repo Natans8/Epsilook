@@ -1,0 +1,123 @@
+/* The control surface: the floating panel under the bar. It is the ask side's second surface, so it borrows the
+ * bar's own frame — same panel ground, same border, same radius — and adds only the shadow that says it floats.
+ *
+ * It draws in the chip language rather than in prose: a door row wears the head cell it would become, a word row
+ * wears the dotted vocabulary mark it would carry inside a chip. One accent per row, its column's, exactly as the
+ * calm-palette rule has it. */
+
+.panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    /* The left edge is measured against the open segment and written as an inline style; this is the value it
+     * holds until the first measurement lands, so a panel is never drawn off its anchor. */
+    left: 0;
+    z-index: 30;
+    min-width: 15rem;
+    max-width: min(38rem, 100%);
+    /* Tall enough for the whole axis menu to read without scrolling on an ordinary window, capped so the panel
+     * can never own the page. The accepted cost of a floating surface is that it covers what is beneath it. */
+    max-height: 22rem;
+    overflow-y: auto;
+    padding: 0.25rem 0;
+    background: var(--bg-panel);
+    /* The quieter edge, not the bar's own control border: two heavy frames stacked read as two panels arguing.
+     * The strengths are the palette's — a light theme turns the shadow down and the washes up. */
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(var(--shadow-rgb), calc(0.5 * var(--shadow-strength)));
+    /* The bar's ground reads as text to press into; the panel is a list to point at. */
+    cursor: default;
+    user-select: none;
+}
+
+/* One hairline between sections — the label already separates them, so the rule only has to keep two lists of
+ * words from reading as one. */
+.group + .group {
+    border-top: 1px solid var(--border);
+}
+
+.section {
+    padding: 0.45rem 0.9rem 0.2rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    color: var(--text-dim);
+}
+
+/* One line per offer: the word, then what it means. Two lines would be the honest shape for the declared prose a
+ * picker's words will carry, but a hint is one clause and the axis menu is twenty-three rows — stacked, the list
+ * stops being something you can run your eye down. */
+.row {
+    /* The tone a row wears where its offer names no column: the chip's own neutral. A row that does carries the
+     * column's tone class on the cell itself, and an element's own declaration outranks what it inherits. */
+    --chip-rgb: var(--overlay-rgb);
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.28rem 0.9rem;
+    cursor: pointer;
+}
+
+/* The lit row is where the keyboard stands and where the pointer is; one state, because they are one idea. The
+ * wash is the app's own accent rather than the selection blue: this is a cursor over a list, not selected text. */
+.lit {
+    background: rgba(var(--gold-rgb), calc(0.14 * var(--wash-strength)));
+}
+
+/* The words share a column so the notes beside them line up — a ragged second column is what makes a list of
+ * pairs read as noise. A minimum rather than a fixed width: a long word takes the room it needs and only its own
+ * note moves. */
+.word {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 7rem;
+    font-size: 1rem;
+    color: var(--text);
+}
+
+/* A door draws the head cell it would become, standing alone: the divider a head carries inside a chip has
+ * nothing to divide here, so the cell closes into a rounded box wearing its column's tone. Two classes deep so
+ * it outranks the head cell's own rules whatever order the sheets land in. */
+.row .door {
+    border: 1px solid rgba(var(--chip-rgb), 0.5);
+    border-radius: 5px;
+    font-size: 0.95rem;
+    /* Full strength: inside a chip the head recedes because the value beside it carries the ask, and here the
+     * head IS the offer. */
+    color: var(--text);
+}
+
+/* A door under a minus asks for the opposite, and says so in the one semantic colour a chip carries: the minus
+ * and the word it excludes are one red unit, exactly as they are in the bar. */
+.row .excluded {
+    color: rgb(var(--danger-rgb));
+}
+
+/* A word offer wears the mark a vocabulary word wears inside a chip, and no tint — one accent per row. */
+.vocab {
+    border-bottom: 1px dotted var(--tag-btn);
+}
+
+/* A remembered search is painted by the bar's own highlighter, so it reads exactly as it will once it lands. */
+.query {
+    overflow: hidden;
+    white-space: pre;
+    text-overflow: ellipsis;
+}
+
+.note {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/* Under the lit wash the dim grey loses the contrast it has on the panel's own ground, so the lit row's note
+ * comes up to full strength — which is also what a row being pointed at should look like. */
+.lit .note {
+    color: var(--text);
+}

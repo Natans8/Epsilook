@@ -267,6 +267,21 @@ function closerAt(interior: string): number {
 export const slotStart = (at: BarPlan): number => at.before.length + (at.head?.consumed ?? 0);
 
 /**
+ * The whole query with the open slot rewritten.
+ *
+ * The slot edits only its own slice: the head prefix and the closing brace are structure and survive verbatim,
+ * whichever gesture did the writing — a typed character, a picked offer, a spawned delimiter pair.
+ *
+ * @param at The open position's plan.
+ * @param value What the slot now holds.
+ * @param glue What to put after the segment, for an insertion at a gap that needs a separator behind it.
+ * @returns The query text.
+ */
+export function writeSlot(at: BarPlan, value: string, glue = ""): string {
+    return at.before + at.open.slice(0, at.head?.consumed ?? 0) + value + at.suffix + glue + at.after;
+}
+
+/**
  * Delete at the slot's end — the boundary backspace's mirror.
  *
  * On a scoped head the character to the right is the closing brace, and deleting a brace deletes its pair, so

@@ -152,3 +152,23 @@ export async function charPoint(segment: Locator, run: string, index: number): P
         throw new Error(`no run reading "${want}" in the segment`);
     }, [run, index] as [string, number]);
 }
+
+/** The control surface's panel, present only while it has something to offer. */
+export function surface(page: Page): Locator {
+    return page.locator("[data-surface]");
+}
+
+/** The offers on the surface, in draw order. */
+export function offerRows(page: Page): Locator {
+    return page.locator("[data-surface] [role='option']");
+}
+
+/** The lit offer — where the keyboard stands in the list. */
+export function litOffer(page: Page): Locator {
+    return page.locator("[data-surface] [role='option'][aria-selected='true']");
+}
+
+/** The inline completion drawn past the caret, present only while one is on offer. */
+export function ghostText(page: Page): Locator {
+    return page.locator("[class*='ghost']");
+}

@@ -16,7 +16,7 @@ import {useLayoutEffect, useRef} from "react";
 import {GRAMMAR} from "../../search/index";
 import {headCase} from "./chip";
 import type {BarPlan, Keystroke} from "./plan";
-import {backspaceAtStart, deleteAtEnd, pairDelimiter, slotStart} from "./plan";
+import {backspaceAtStart, deleteAtEnd, pairDelimiter, slotStart, writeSlot} from "./plan";
 import styles from "./bar.module.css";
 
 /** Where the caret starts this session, in slot coordinates; an anchor makes it a selection. */
@@ -26,12 +26,41 @@ export interface CaretRequest {
 }
 
 /**
+ * The control surface as the slot sees it: what is on offer, and the four things a keyboard can do about it.
+ *
+ * The slot owns the keys because the caret never leaves it — a combobox steers its list from the field — so the
+ * surface's own gestures have to be answered here, before the bar's traversal claims the same keys.
+ */
+export interface Assist {
+    /** How many offers stand, whether or not the panel is drawn — what the arrows have to steer. */
+    readonly count: number;
+    /** Whether the panel is drawn. Escape puts it away without touching the offers behind it. */
+    readonly open: boolean;
+    /** The lit offer's index, or -1 when the reader has lit none. */
+    readonly lit: number;
+    /** The completion drawn dim after the caret, or empty. */
+    readonly ghost: string;
+    /** The panel's element id, which the field names in `aria-controls`. */
+    readonly listId: string;
+    /** The lit option's element id, which the field points at while the focus stays put. */
+    readonly activeId?: string;
+    /** Walks the light through the offers, wrapping at either end. */
+    readonly move: (dir: -1 | 1) => void;
+    /** Applies the lit offer. */
+    readonly pick: () => void;
+    /** Dismisses the surface until what is on offer changes. */
+    readonly close: () => void;
+    /** Takes the ghost into the slot. */
+    readonly accept: () => void;
+}
+
+/**
  * The open segment. Remounted per session — the mount is what seeds the input and places the caret.
  */
 export function OpenSegment({
-                                at, mode, hidden, seize, highlight, caret, placeholder, label, onKeystroke, onArrow,
-                                onEdge, onCommit, onCancel, onUndo, onRedo, onSelectAll, onSelectPast,
-                                onWake, onSettle
+                                at, mode, hidden, seize, highlight, caret, placeholder, label, assist, onKeystroke,
+                                onArrow, onEdge, onCommit, onCancel, onUndo, onRedo, onSelectAll, onSelectPast,
+                                onCaret, onWake, onSettle
                             }: {
     readonly at: BarPlan;
     /** How the slot sits: filling the bar (the true tail), hugging content (chip, mid-bar word), or the
@@ -51,6 +80,8 @@ export function OpenSegment({
     readonly placeholder?: string;
     /** The input's accessible name, which stands whether or not a placeholder is showing. */
     readonly label: string;
+    /** The control surface, and what the keyboard may do with it. */
+    readonly assist: Assist;
     /**
      * Every text mutation leaves as a keystroke: the new text and the caret as a text offset. `reset` marks the
      * mutations that rewrite the slot from outside the input; `held` is what the input shows, so the bar can
@@ -75,6 +106,15 @@ export function OpenSegment({
      * the bar's own, anchored where the slot's own selection was anchored.
      */
     readonly onSelectPast: (dir: -1 | 1, anchorInSlot: number) => void;
+    /**
+     * Where the caret now sits inside the slot.
+     *
+     * What the surface can offer depends on it — a caret before a term's bind is choosing a property, past it a
+     * value — and the caret belongs to the input, which the bar deliberately does not control. So it is reported
+     * from every gesture that can move it rather than derived, which would be a second copy of the browser's own
+     * answer and would drift from it.
+     */
+    readonly onCaret: (at: number) => void;
     /** Focus arriving at the slot — the bar leaves its rest state. */
     readonly onWake: () => void;
     /** Focus leaving the bar entirely — the segment settles into its committed spelling. */
@@ -87,10 +127,13 @@ export function OpenSegment({
 
     useLayoutEffect(() => {
         const el = input.current;
-        if (el === null || !seize) return;
-        el.focus();
+        if (el === null) return;
         const to = caret?.at ?? el.value.length;
-        el.setSelectionRange(caret?.anchor ?? to, to);
+        if (seize) {
+            el.focus();
+            el.setSelectionRange(caret?.anchor ?? to, to);
+        }
+        onCaret(to);
         // Mount-only on purpose: this seeds the session; afterwards the caret is the browser's.
     }, []);
     useLayoutEffect(() => {
@@ -103,9 +146,8 @@ export function OpenSegment({
     });
 
     const onChange = (value: string, caretInSlot: number): void => {
-        // The slot edits only its slice: head prefix and closing suffix are structure and survive verbatim.
-        const text = at.before + at.open.slice(0, at.head?.consumed ?? 0) + value + at.suffix + at.after;
-        onKeystroke({text, caret: slotStart(at) + caretInSlot}, false, value);
+        onCaret(caretInSlot);
+        onKeystroke({text: writeSlot(at, value), caret: slotStart(at) + caretInSlot}, false, value);
     };
 
     /**
@@ -114,8 +156,7 @@ export function OpenSegment({
      * that keeps the following segment a segment, as any gap insertion does.
      */
     const onPair = (value: string, caretInSlot: number, anchorInSlot?: number): void => {
-        const glue = mode === "gap" ? " " : "";
-        const text = at.before + at.open.slice(0, at.head?.consumed ?? 0) + value + at.suffix + glue + at.after;
+        const text = writeSlot(at, value, mode === "gap" ? " " : "");
         const base = slotStart(at);
         onKeystroke({
             text,
@@ -128,6 +169,38 @@ export function OpenSegment({
     const onKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
         const el = e.currentTarget;
         const collapsed = el.selectionStart === el.selectionEnd;
+        // The surface's own keys come first: while offers stand the arrows steer them, Enter takes what is lit,
+        // and Escape puts the panel away before it means anything to the segment underneath. The arrows answer
+        // even to a panel Escape has closed, which is the one keystroke that brings it back.
+        if (assist.count > 0) {
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                assist.move(e.key === "ArrowDown" ? 1 : -1);
+                return;
+            }
+            if (e.key === "Enter" && assist.lit >= 0) {
+                e.preventDefault();
+                assist.pick();
+                return;
+            }
+            if (e.key === "Escape" && assist.open) {
+                e.preventDefault();
+                assist.close();
+                return;
+            }
+        }
+        // The right arrow takes the ghost, which is where it sits: at the very end of the slot, so the arrow
+        // had nothing left to walk past anyway. Tab takes it too, and takes a lit offer where the reader has
+        // steered to one — a Tab that walked out of the bar mid-choice would be the surprising answer.
+        const bare = !e.shiftKey && !e.ctrlKey && !e.altKey;
+        const takes = e.key === "Tab" ? assist.ghost !== "" || assist.lit >= 0
+            : e.key === "ArrowRight" && assist.ghost !== "" && collapsed
+            && (el.selectionStart ?? 0) === el.value.length;
+        if (takes && bare) {
+            e.preventDefault();
+            assist.accept();
+            return;
+        }
         if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "z") {
             // The platform undoes inside the chip; the beginning of the chip's stack undoes the chip.
             if (el.value === sessionStart.current) {
@@ -269,6 +342,9 @@ export function OpenSegment({
             <span key="slot" className={styles.editwrap}>
                 <span ref={backdrop} className={styles.qhl} aria-hidden="true">
                     {highlight}
+                    {/* The ghost is APPENDED, never inserted: it lives past the last character the field holds,
+                        so it can shift nothing the caret has to line up with. */}
+                    {assist.ghost !== "" && <span className={styles.ghost}>{assist.ghost}</span>}
                 </span>
                 <input
                     ref={input}
@@ -279,7 +355,16 @@ export function OpenSegment({
                         onChange(e.target.value, e.target.selectionStart ?? e.target.value.length);
                     }}
                     onKeyDown={onKeyDown}
-                    onFocus={onWake}
+                    onKeyUp={(e) => {
+                        onCaret(e.currentTarget.selectionStart ?? e.currentTarget.value.length);
+                    }}
+                    onMouseUp={(e) => {
+                        onCaret(e.currentTarget.selectionStart ?? e.currentTarget.value.length);
+                    }}
+                    onFocus={(e) => {
+                        onCaret(e.currentTarget.selectionStart ?? e.currentTarget.value.length);
+                        onWake();
+                    }}
                     onBlur={onSettle}
                     onScroll={syncScroll}
                     placeholder={placeholder}
@@ -288,6 +373,13 @@ export function OpenSegment({
                     // Always named: the placeholder only exists on an empty bar, and the input is the bar's
                     // one control whatever it happens to be holding.
                     aria-label={label}
+                    // The combobox contract: the field keeps the focus and points at the option it has lit, so
+                    // a screen reader follows the list without the caret ever leaving the query.
+                    role="combobox"
+                    aria-expanded={assist.open}
+                    aria-controls={assist.open ? assist.listId : undefined}
+                    aria-activedescendant={assist.activeId}
+                    aria-autocomplete="both"
                 />
             </span>
         </span>

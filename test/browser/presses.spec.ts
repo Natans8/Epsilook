@@ -73,7 +73,7 @@ test("a press on the open chip's head keeps the session, caret at the value's st
     await page.locator("[class*='chipBody']").first().click();
     await expectQuery(page, "model:{fire} sound:bell ");
 
-    await page.locator("[class*='headCell']").click();
+    await page.locator("[data-open] [class*='headCell']").click();
     // No settle: the braces are still there, the input still focused, the caret at the value's start.
     await expectQuery(page, "model:{fire} sound:bell ");
     expect(await slot(page)).toMatchObject({value: "fire", start: 0, end: 0, focused: true});
