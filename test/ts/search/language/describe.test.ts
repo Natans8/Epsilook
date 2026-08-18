@@ -96,9 +96,10 @@ test("existence displays the any-word, from the star and from the word alike", (
 
 test("the chip displays the meaning, not the minimal spelling: an elided count surfaces as its word", () => {
     const c = chip("model>=4");
-    assert.deepEqual(c.body, [
-        {is: "meta", text: "count"}, {is: "op", text: "≥"}, {is: "value", text: "4"},
-    ]);
+    // The bound property is a CELL of its own — `model | count | ≥ 4` — rather than a loud word leading the
+    // body, which read as two things standing side by side rather than one saying what the other is.
+    assert.equal(c.sub, "count");
+    assert.deepEqual(c.body, [{is: "op", text: "≥"}, {is: "value", text: "4"}]);
     // The desugar's note rides along for the tooltip.
     assert.equal(view("model>=4").notes.length, 1);
 });
@@ -134,9 +135,16 @@ test("an identity list joins with commas, identical whatever separator was typed
 });
 
 test("a logical gate over words keeps its or-connective, each phrase wearing its own quotes", () => {
-    assert.deepEqual(chip("model:{attach:chest|head}").body, [
-        {is: "meta", text: "attach"}, {is: "word", text: "chest"}, {is: "or"}, {is: "word", text: "head"},
-    ]);
+    const c = chip("model:{attach:chest|head}");
+    assert.equal(c.sub, "attach");
+    assert.deepEqual(c.body, [{is: "word", text: "chest"}, {is: "or"}, {is: "word", text: "head"}]);
+});
+
+test("a bound property is a cell, and a chip with no bound property carries none", () => {
+    // `model:fire` binds nothing — the value is content over the column — so the key is ABSENT rather than
+    // present and empty, which is what a whole-view comparison reads.
+    assert.equal("sub" in chip("model:fire"), false);
+    assert.equal(chip("model:{attach:chest}").sub, "attach");
 });
 
 test("one condition is a compact chip whatever its spelling — the braced form converges", () => {

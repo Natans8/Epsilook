@@ -699,3 +699,15 @@
 .ghost {
     color: color-mix(in srgb, var(--text) 42%, var(--bg-panel));
 }
+
+/* The property a compact chip's value binds, drawn as its own cell. Same recession and same rule as the head it
+ * follows, so `attach | chest` reads as one thing saying what another is — which is what the lane's inner bind
+ * already looked like before the compact form flattened it to two words. */
+.chipSub {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.5rem;
+    border-right: 1px solid var(--border-ctrl);
+    color: var(--text);
+    font-size: 0.82em;
+}

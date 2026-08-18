@@ -58,6 +58,15 @@ export interface ChipView {
     readonly tone: string;
     /** Whether the clause is negated; the renderer fuses the minus into the head. */
     readonly not: boolean;
+    /**
+     * The property the value binds, where the chip carries one — drawn as a cell of its own between the head
+     * and the value.
+     *
+     * A lane already gives an inner bind its own pill, so `model:{missile from:chest}` reads as cells. Collapsed
+     * to the compact form the same bind became two words with a space between them, and `attach chest` read as
+     * two separate things rather than one saying what the other is.
+     */
+    readonly sub?: string;
     readonly body: readonly Piece[];
     /** How the chip grows: a further row condition, a further value alternative, or not at all. */
     readonly grow: "term" | "alternative" | null;
@@ -413,7 +422,14 @@ function askView(ask: Ask, not: boolean): AskView | null {
     if (items.length === 0) return chip([{is: "meta", text: GRAMMAR.anyWord}]);
     if (items.length === 1) {
         const word = promoted === null ? head : wordOf(promoted);
-        return {as: "chip", chip: {head: word, tone: column.key, not, body: compactBody(items[0]), grow: "term"}};
+        const only = items[0];
+        // A bind keeps its property as a cell rather than flattening to a loud word beside the value.
+        const bound = only.is === "bind" && promoted === null ? only : null;
+        const body = bound === null ? compactBody(only) : [...bound.body];
+        // The key is OMITTED where there is no bound property rather than set to nothing: a view is compared
+        // whole, and an absent property is not the same shape as one present and empty.
+        const sub = bound === null ? {} : {sub: bound.head};
+        return {as: "chip", chip: {head: word, tone: column.key, not, ...sub, body, grow: "term"}};
     }
     return {as: "lane", lane: {head, tone: column.key, not, items}};
 }
