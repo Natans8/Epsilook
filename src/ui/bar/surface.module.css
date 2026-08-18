@@ -148,19 +148,17 @@
     color: rgb(var(--danger-rgb));
 }
 
-/* A vocabulary's own picture, in a BOX of one size whatever the art measures. These are wordmarks at their own
- * aspects — vanilla and tbc are square sigils, everything from wrath on is a lockup — so a rule that fixed only
- * the height left twelve different widths and a ragged column of words beside them. The box is what the words
- * line up against; the art fits inside it, left-aligned and centred on the text's own line rather than sitting
- * on its baseline, which is where an image's bottom edge would put it. Held just short of full opacity so a
- * column of them reads as an attribute of the words rather than as twelve pieces of competing art. */
+/* A vocabulary's own picture, sized the way the source of this art sizes it. These are the wiki's own inline
+ * expansion icons, and the wiki draws every one of them at ONE WIDTH, letting the height follow the aspect —
+ * which is the opposite of fixing the height, and it is why fixing the height looked wrong: these marks are not
+ * one shape. A one-line wordmark and a two-line lockup only read as the same size when their widths agree.
+ * Held just short of full opacity so a column of them reads as an attribute of the words rather than as twelve
+ * pieces of competing art. */
 .art {
     flex: none;
     align-self: center;
-    width: 4.25rem;
-    height: 15px;
-    object-fit: contain;
-    object-position: center;
+    width: 3rem;
+    height: auto;
     opacity: 0.72;
 }
 

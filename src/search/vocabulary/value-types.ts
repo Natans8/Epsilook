@@ -20,7 +20,7 @@ import {t} from "../../i18n";
 import {COLOUR_NAMES} from "./colour-names";
 import type {Operator} from "./operators";
 import {anyOf, contains, exact, glob, OPERATORS, ORDERING, present, regex} from "./operators";
-import {fold, squash} from "../text/normalize";
+import {fold} from "../text/normalize";
 import type {Notation, NumericSpec} from "./units";
 import {formatNumber, notationsOf, parseNumber, parseNumberPair} from "./units";
 
@@ -295,23 +295,29 @@ export function ordinalRungs(): readonly Rung[] {
 /**
  * Finds the rung a spelling names.
  *
- * A whole spelling names its rung exactly; anything else names the first rung one of whose spellings contains it,
- * so a half-typed name means the rung the reader identified. Exactness is weighed across the whole ladder before
- * containment is, or a shorter rung standing earlier would swallow a longer one's own name.
+ * A spelling names its rung WHOLE or not at all. A partial one is not a weaker claim on a rung, it is a claim on
+ * every rung that happens to contain those letters -- `wo` is both WotLK and WoD, `a` is any rung with an A in it,
+ * and `0` is Dragonflight because its number is 10. There is nothing to rank between those, so the reader is
+ * offered the names instead and writes one.
  *
- * Nothing typed names nothing: every spelling contains the empty string, so a containment scan would hand an
- * empty operand the rung that happens to stand first.
- *
- * @param written A rung's name or any spelling that reaches it, whole or partial.
+ * @param written A rung's name, or any spelling the ladder declares for it.
  * @returns The rank, lowest first, or -1 when no rung answers to it.
  */
 export function ordinalRank(written: string): number {
-    const loose = squash(written);
-    if (loose === "") return -1;
-    const held = fold(written);
-    const whole = spellings.findIndex((reads) => reads.includes(held));
-    if (whole >= 0) return whole;
-    return spellings.findIndex((reads) => reads.some((read) => squash(read).includes(loose)));
+    return spellings.findIndex((reads) => reads.includes(fold(written)));
+}
+
+/**
+ * Every spelling one rung answers to, folded -- its name first, then the synonyms declared for it.
+ *
+ * A pattern is the one reading that is not a whole name, so it is matched against these rather than against the
+ * one spelling a row happens to store.
+ *
+ * @param at The rung's rank.
+ * @returns Its spellings, or empty when no rung stands there.
+ */
+export function ordinalSpellings(at: number): readonly string[] {
+    return spellings[at] ?? [];
 }
 
 /**

@@ -514,20 +514,25 @@ function probeTokens(expr: ValueExpr): string[] | null {
 /**
  * Reads the pack's expansion ladder as the ordered vocabulary the ordinal type is parsed and compared within.
  *
- * The SHORT is the name: the keys are inconsistent about it — `tbc` and `wotlk` are abbreviations where
- * `shadowlands` and `dragonflight` are spelled out — and the shorts are not. The key still reads, because it is
- * what a row stores, and so does every alias the pack declares, which is how `xpac:classic` and `xpac:6` both
- * reach the rung the pack keys as `vanilla` and `wod`.
+ * The name is the pack's own SPELLING OF THE KEY, which is the word the game says out loud: whichever of the short
+ * and the label reads as the key, else the short. That is `WotLK` and `WoD` where the key is an abbreviation, and
+ * `Shadowlands` rather than `SL` where it is not — the short is an initialism there, and nobody calls it that.
+ * Every alias the pack declares still reaches the rung, which is how `xpac:classic` and `xpac:6` both land.
  *
  * @param expansions The pack's ladder section.
  * @returns The rungs, lowest first.
  */
 function expansionLadder(expansions: ExpansionsSection): Rung[] {
-    return expansions.keys.map((key, i) => ({
-        word: expansions.shorts?.[i] ?? key,
-        reads: [key, ...(expansions.aliases?.[i] ?? [])],
-        note: expansions.labels?.[i],
-    }));
+    return expansions.keys.map((key, i) => {
+        const short = expansions.shorts?.[i];
+        const label = expansions.labels?.[i];
+        const spelled = [short, label].find((said) => said !== undefined && fold(said) === fold(key));
+        return {
+            word: spelled ?? short ?? key,
+            reads: [key, ...(expansions.aliases?.[i] ?? [])],
+            note: label,
+        };
+    });
 }
 
 /**

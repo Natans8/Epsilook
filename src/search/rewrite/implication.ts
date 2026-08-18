@@ -137,14 +137,14 @@ const TEXT_OPS: ReadonlySet<string> = new Set(["exact", "contains", "glob"]);
  * The family is exactly {@link SUBSTRING_TYPES}: stored text is matched by squash-substring, and squashing is a
  * congruence — two fold-equal values squash equally — so "a's operand contains b's operand" transfers to every
  * stored value a selects. A glob contributes through its literal runs: whatever matches the glob contains each
- * run, so a run containing b's operand carries the implication. Ordinals join only for `contains` against
- * `contains`; their anchored and ordered operators compare by rank on a ladder the pack supplies, which is a fact
- * about one dataset and out of bounds here.
+ * run, so a run containing b's operand carries the implication.
+ *
+ * An ordinal is deliberately outside it. Every one of its operators ranks against a ladder the pack supplies, so
+ * no substring relation between two operands says anything about the rungs they name.
  */
 function impliesText(type: AxisType, aOp: string, a: ParsedOperand, bOp: string, b: ParsedOperand): boolean {
     if (!SUBSTRING_TYPES.includes(type.name)) return false;
     if (!TEXT_OPS.has(aOp) || !TEXT_OPS.has(bOp)) return false;
-    if (type.name === "ordinal" && (aOp !== "contains" || bOp !== "contains")) return false;
     const test = (op: string, stored: string, operand: string): boolean =>
         matcher(op, type.name)?.(stored, operand) ?? false;
     const aText = textOf(a);

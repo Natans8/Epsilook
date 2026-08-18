@@ -182,11 +182,22 @@ describe("ordinals", () => {
         assert.equal(matcher("gt", "ordinal")!("Legion", "Midnight"), false);
     });
 
-    it("ranks a partial rung as the rung containing it", () => {
-        // A comparison against part of a name means the rung the reader identified: xpac:>leg is Legion.
+    it("refuses a partial rung rather than picking one of the rungs it could mean", () => {
+        // `leg` is not a weaker claim on Legion, it is a claim on every rung carrying those letters. There is
+        // nothing to rank between those, so the surface offers the names and the reader writes one.
         setOrdinalLadder(rungs("Classic", "Burning Crusade", "Legion"));
-        assert.equal(matcher("gt", "ordinal")!("Legion", "burning"), true);
-        assert.equal(matcher("exact", "ordinal")!("Legion", "leg"), true);
+        assert.equal(matcher("exact", "ordinal")!("Legion", "leg"), false);
+        assert.equal(matcher("gt", "ordinal")!("Legion", "burning"), false);
+        assert.equal(matcher("exact", "ordinal")!("Legion", "Legion"), true);
+    });
+
+    it("reads a bare rung as its name, not as a substring of the stored spelling", () => {
+        // The regression this pins: a rung whose name and stored key differ (SL against shadowlands) shares no
+        // substring with itself, so a `contains` doing text matching answered nought for a whole expansion.
+        setOrdinalLadder([{word: "Shadowlands", reads: ["sl", "9"]}, {word: "DF", reads: ["dragonflight"]}]);
+        assert.equal(matcher("contains", "ordinal")!("sl", "Shadowlands"), true);
+        assert.equal(matcher("contains", "ordinal")!("dragonflight", "DF"), true);
+        assert.equal(matcher("contains", "ordinal")!("sl", "DF"), false);
     });
 });
 

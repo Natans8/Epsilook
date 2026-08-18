@@ -74,6 +74,22 @@ const NUMBER_LIST = new RegExp(String.raw`^\d+(${escapeRegExp(GRAMMAR.numberList
  */
 const SIGNED = /^[\d.]/;
 
+/**
+ * Whether a scope term states a bare value of the row -- no negation, no operator.
+ *
+ * Content dispatches over the kind's own properties, so it states a bare value of that row exactly as a bound
+ * property does. A comparison is not one: two of those bound a single value from opposite sides.
+ *
+ * @param t One scope term.
+ * @returns True when the term is a plain positive value.
+ */
+function statesBareValue(t: ScopeTerm): boolean {
+    const ask = t.ask;
+    if (t.not || ask === null) return false;
+    if (ask.on !== "content" && ask.on !== "props") return false;
+    return ask.value.op === "exact" || ask.value.op === "contains";
+}
+
 /** A head that can open a row scope: a column or a kind. A property door takes a value, never a scope. */
 type ScopeHead = Exclude<Head, { role: "prop" }>;
 
@@ -506,7 +522,7 @@ class Parser {
         }
 
         const emptyBody = items === 0;
-        const terms = this.applyAnchorRule(scopeRuns, pend);
+        const terms = this.applyAnchorRule(this.alternateWhereSingle(head, scopeRuns), pend);
         if (terms === null) {
             this.push({start, end: after}, not, "invalid", this.incompleteAsk(head), pend);
             return after;
@@ -550,6 +566,33 @@ class Parser {
         const bind = this.text.slice(bindSpan.start, bindSpan.end);
         const replacement = `${negate}${headWord(head)}:${GRAMMAR.wildcard} ${bind}`;
         return {label: i18n.t("diagnostics:fix.ownClause"), query: this.splice(start, after, replacement)};
+    }
+
+    /**
+     * Reads juxtaposition as ALTERNATION where the kind cannot repeat.
+     *
+     * A scope binds its conditions to one row, so `model:{fire missile}` asks for a row that is both. A kind
+     * declared {@link Kind.single} has exactly one row, and two plain values of one property can never both
+     * describe it -- `xpac:{SL wod}` conjoined is unsatisfiable, and the reader plainly means either.
+     *
+     * An OPERATOR is the exception, because two comparisons bound one value from opposite sides:
+     * `xpac:{>wotlk <legion}` is satisfiable and stays a conjunction. So the split is by whether a term states a
+     * bare value, which is the same line the reader sees.
+     *
+     * @param head The scope's own head, which is what says whether its rows may repeat.
+     * @param runs The scope's alternation groups, each a conjunction of terms.
+     * @returns The groups, with a single kind's bare values moved into groups of their own.
+     */
+    private alternateWhereSingle(head: ScopeHead, runs: ScopeTerm[][]): ScopeTerm[][] {
+        if (head.role !== "kind" || head.kind.single !== true) return runs;
+        return runs.flatMap((run) => {
+            const loose = run.filter(statesBareValue);
+            if (loose.length < 2) return [run];
+            const rest = run.filter((t) => !statesBareValue(t));
+            // Each bare value becomes its own alternative; anything else the run stated keeps every one of them
+            // company, because it still has to hold whichever value the row turns out to carry.
+            return loose.map((t) => [t, ...rest]);
+        });
     }
 
     /**

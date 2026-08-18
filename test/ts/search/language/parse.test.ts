@@ -937,3 +937,22 @@ describe("a sign binds tighter than negation inside a scope", () => {
         assert.equal(terms.filter((t) => t.not).length, 1);
     });
 });
+
+it("reads juxtaposition as alternation on a kind that cannot repeat", () => {
+    // A scope binds its conditions to ONE row, so `model:{fire missile}` asks for a row that is both. An
+    // expansion is declared single: a spell has exactly one, so two bare values can never both describe it and
+    // the reader plainly means either. Drawn as a tidy two-part chip it read as an ordinary conjunction.
+    const runs = (query: string): number => {
+        const ask = parse(query).clauses[0].ask;
+        assert.ok(ask !== null && (ask.on === "kind" || ask.on === "column"), query);
+        assert.ok(ask.test?.is === "scope", query);
+        return ask.test.terms.length;
+    };
+    assert.equal(runs("xpac:{legion wotlk}"), 2, "two alternatives, not one conjunction");
+
+    // An OPERATOR is the exception: two comparisons bound one value from opposite sides, which is satisfiable.
+    assert.equal(runs("xpac:{>wotlk <legion}"), 1);
+
+    // A kind whose rows repeat is untouched — its lane is the whole point of the brace.
+    assert.equal(runs("model:{fire missile}"), 1);
+});

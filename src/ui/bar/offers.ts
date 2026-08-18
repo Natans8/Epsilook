@@ -513,21 +513,31 @@ function closerGhost(value: string): string {
  * of them (`2s-5` still wants its second `s`), and a unit half typed wants the rest of itself (`15m` wants the
  * `s` of `ms`).
  *
+ * A number that ALREADY carries a notation wants nothing: `x5` is written in the factor notation, whose symbol
+ * stands before its number, so offering it the proportion's `%` would be offering a second unit for one value.
+ *
  * @param prop The property being composed, where one is known.
  * @param typed What has been typed into the value so far.
  * @returns The characters to draw after the caret, or an empty string.
  */
 function unitGhost(prop: Prop | null, typed: string): string {
-    // The last number of the value, with whatever letters have been typed after it.
-    const tail = /(\d)(?<started>[a-z]*)$/i.exec(typed);
+    // The last number of the value, with whatever notation leads it and whatever letters have been typed after.
+    const tail = /(?<lead>[a-z]*)[\d.]*(\d)(?<started>[a-z]*)$/i.exec(typed);
     if (prop === null || tail === null) return "";
     const started = (tail.groups?.started ?? "").toLowerCase();
+    const lead = (tail.groups?.lead ?? "").toLowerCase();
     // Every suffix the property's notations read, the ones already used in this value FIRST: a range writes one
     // notation, so the second bound of `2ms-5` wants the `ms` the first bound set, not the type's own default.
     const spellings: string[] = [];
     for (const type of prop.types) {
         for (const notation of type.notations ?? []) {
-            if (notation.unit === "" || notation.position === "before") continue;
+            const symbol = notation.unit.toLowerCase();
+            if (notation.position === "before") {
+                const leads = [symbol, ...(notation.aliases ?? []).map((a) => a.toLowerCase())];
+                if (lead !== "" && leads.includes(lead)) return "";
+                continue;
+            }
+            if (notation.unit === "") continue;
             spellings.push(notation.unit, ...notation.aliases ?? []);
         }
     }
@@ -647,8 +657,11 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     // shift the mirrored text out from under the field's own caret.
     const atEnd = at === slot.length && stub.end === at;
     const best = groups[0]?.offers[0];
+    // Folded, because what the reader typed is a way IN and the offer's own spelling is the answer: `shado`
+    // completes to Shadowlands and `wo` to WotLK. Taking it replaces the stub, so the case corrects itself on
+    // accept -- the ghost can only ever append, and a remainder is all it has room to say.
     const completes = best !== undefined && best.shape !== "query" && typed !== ""
-        && atEnd && best.insert.startsWith(typed);
+        && atEnd && fold(best.insert).startsWith(fold(typed));
     // An enclosure left open outranks everything else: while one stands, what follows it is inside it, so no
     // other completion is the one the reader wants next.
     const closers = atEnd ? closerGhost(slot) : "";

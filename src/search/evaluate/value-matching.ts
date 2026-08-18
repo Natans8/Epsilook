@@ -15,7 +15,7 @@
 import {compilePattern} from "../text/patterns";
 import {fold, squash} from "../text/normalize";
 import type {Value} from "../vocabulary/value-types";
-import {ordinalRank, TYPES} from "../vocabulary/value-types";
+import {ordinalRank, ordinalSpellings, TYPES} from "../vocabulary/value-types";
 
 /**
  * An operand as the kernel supplies it: one value, or several.
@@ -90,11 +90,14 @@ const TEXTUAL = ["text", "path", "enum"];
 
 /**
  * The types whose bare reading is a substring test over stored text — the family for which a longer operand asks a
- * narrower question, which is what simplification's subsumption reasoning turns on. Ordinals join the textual three
- * because their `contains` is the same squash-substring test over the stored rung name. Declared here, beside the
+ * narrower question, which is what simplification's subsumption reasoning turns on. Declared here, beside the
  * matcher registrations that make it true.
+ *
+ * An ordinal is NOT one of them, though it reads as a word: every one of its operators ranks against the ladder,
+ * so a longer operand asks a DIFFERENT question rather than a narrower one, and `sl` and `shadowlands` name one
+ * rung while containing nothing of each other.
  */
-export const SUBSTRING_TYPES: readonly string[] = Object.freeze([...TEXTUAL, "ordinal"]);
+export const SUBSTRING_TYPES: readonly string[] = Object.freeze([...TEXTUAL]);
 
 /**
  * Reads an operand as text.
@@ -294,13 +297,17 @@ define(["lt"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (
 define(["lte"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (o) => o <= 0));
 define(["gt"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (o) => o > 0));
 define(["gte"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (o) => o >= 0));
-define(["contains"], ["ordinal"], (stored, operand) => {
-    const wanted = asText(operand);
-    return wanted !== null && squash(String(stored)).includes(squash(wanted));
-});
+// A rung is NAMED, so there is no substring reading of it: `sl` and `shadowlands` are two names for one rung and
+// neither contains the other, while `wo` contains nothing anybody meant. Both operators rank instead, which is
+// what makes the bare spelling a reader types agree with the name the ladder gives back.
+define(["contains"], ["ordinal"], (stored, operand) => compareRungs(stored, operand, (o) => o === 0));
 define(["glob"], ["ordinal"], (stored, operand) => {
     const wanted = asText(operand);
-    return wanted !== null && globToRegExp(wanted).test(squash(String(stored)));
+    if (wanted === null) return false;
+    const at = rank(stored);
+    // The pattern is matched against every spelling the rung answers to, so `xpac:sh*` finds Shadowlands
+    // through the key even though the ladder names it SL.
+    return at >= 0 && ordinalSpellings(at).some((name) => globToRegExp(wanted).test(squash(name)));
 });
 define(["present"], ["ordinal"], (stored) => String(stored).length > 0);
 

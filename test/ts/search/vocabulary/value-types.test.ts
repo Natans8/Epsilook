@@ -142,7 +142,7 @@ describe("the type registry", () => {
         // at parse; with nothing loaded there is nothing to refuse against.
         withLadder([{word: "Classic", reads: []}, {word: "Legion", reads: []}], () => {
             assert.equal(ordinal.parse!("Legion"), "Legion");
-            assert.equal(ordinal.parse!("leg"), "Legion", "a partial name reaches its rung");
+            assert.equal(ordinal.parse!("leg"), null, "a partial name reaches no rung");
             assert.equal(ordinal.parse!("Midnight"), null);
         });
         assert.equal(ordinal.parse!("Midnight"), "Midnight");
@@ -156,17 +156,18 @@ describe("the type registry", () => {
             assert.equal(ordinal.parse!("warlords"), "WoD");
             assert.equal(ordinal.parse!("wod"), "WoD");
             assert.equal(ordinal.parse!("WoD"), "WoD");
-            assert.equal(ordinal.parse!("draen"), "WoD", "a half-typed synonym reaches it too");
+            assert.equal(ordinal.parse!("draen"), null, "a half-typed synonym reaches nothing");
         });
     });
 
-    it("weighs a whole spelling before any partial one, across the whole ladder", () => {
-        // `1` is Vanilla's own alias and also sits inside `10`; a scan that took the first rung merely CONTAINING
-        // the text would hand `10` to Vanilla, since Vanilla stands first.
+    it("answers only to a whole spelling, so no rung swallows another's characters", () => {
+        // `1` is Vanilla's own alias and also sits inside `10`, and `wo` opens both WotLK and WoD. A containment
+        // scan answered all three from whichever rung stood first.
         withLadder(LADDER, () => {
             assert.equal(ordinal.parse!("1"), "Vanilla");
             assert.equal(ordinal.parse!("10"), "DF");
-            assert.equal(ordinal.parse!("bc"), "TBC", "an exact synonym beats an earlier rung containing it");
+            assert.equal(ordinal.parse!("0"), null, "and nought is nobody, though 10 carries the character");
+            assert.equal(ordinal.parse!("bc"), "TBC");
         });
     });
 
