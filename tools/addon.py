@@ -16,9 +16,8 @@ column, only spell one differently.
 Two variations, and the difference is what a running client can answer for
 itself. `full` carries every section and is what the query engine is tested
 against, since a gap there would look like an engine defect. `lean` leaves out
-whatever the supply table names, for an addon that asks the game instead. The
-table is empty today, so the two agree until a route is proven against the
-client and one row is added.
+whatever the supply table names, for an addon that asks the game instead.
+Clipping one more column is one row in that table.
 
 What lands on disk is a complete, installable set of addon directories. It is
 generated, so it is not tracked: a variation is tens of megabytes and rebuilds
@@ -35,6 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import packfile
+from packs import PACKS, select
 from repo import ROOT, log, survive_console_encoding
 
 sys.path.insert(0, str(ROOT / "build"))
@@ -55,22 +55,28 @@ player copies one of them into the client and gets a coherent set.
 """
 
 
-def chosen(prefix: str) -> Path:
-    """The pack directory to read, by an unambiguous prefix of its id.
+def chosen(wanted: str) -> Path:
+    """The pack directory to read, named the way every other tool names one.
+
+    The roster answers both halves of this: `select` matches a key or a build
+    prefix and exits naming what it knows, and the roster also says which pack
+    the app serves by default, which is the one the addon runs alongside. A
+    filename heuristic here would be a second, worse answer to a question the
+    declaration already settles.
 
     Raises:
-        SystemExit: no pack matches, or more than one does. Guessing which
-            was meant would silently build the addon from another client.
+        SystemExit: no pack matches, more than one does, or the one that
+            matched has never been built.
     """
-    packs = sorted(path for path in DATA.iterdir()
-                   if path.is_dir() and (path / "manifest.json").exists())
-    if not prefix:
-        return next((path for path in packs if "epsilon" in path.name), packs[0])
-    matched = [path for path in packs if path.name.startswith(prefix)]
-    if len(matched) != 1:
-        sys.exit(f"error: {prefix!r} matches {len(matched)} packs; "
-                 f"one of {', '.join(path.name for path in packs)}")
-    return matched[0]
+    hits = select(wanted) if wanted else [pack for pack in PACKS if pack.default]
+    if len(hits) != 1:
+        sys.exit(f"error: {wanted or 'the default'} matches {len(hits)} packs; "
+                 f"name one of {', '.join(pack.key for pack in PACKS)}")
+    pack_dir = DATA / hits[0].id
+    if not (pack_dir / "manifest.json").exists():
+        sys.exit(f"error: {hits[0].id} is on the roster but not built; "
+                 f"run python tools/rebuild.py {hits[0].key} first")
+    return pack_dir
 
 
 def write(chunk_files: dict[str, dict[str, bytes]], into: Path) -> int:
@@ -99,10 +105,21 @@ def build(pack_dir: Path, variation: Variation, *, dry: bool) -> None:
     """One variation of the addon data, from one shipped pack."""
     sections = packfile.load(pack_dir)
     meta = sections.pop("meta", {})
-    built = chunks(SECTIONS, sections, pack=pack_dir.name,
-                   version=str(meta.get("version", pack_dir.name)),
+    # Absence is a fact about the PACK, so the manifest states it beside the
+    # modules rather than inside `meta` -- and `packfile.load` carries only
+    # `meta` through. Reading it from there would report every build as
+    # complete, including the ones that ship without a section on purpose.
+    manifest = packfile.manifest_of(pack_dir)
+    version = meta.get("version")
+    if not version:
+        # The pack id is not a version: two of them carry a tag, so falling
+        # back to the directory name would fail while working out which
+        # client to advertise, on exactly the packs this tool is built for.
+        sys.exit(f"error: {pack_dir.name} has no meta.version to read the "
+                 f"client interface number from")
+    built = chunks(SECTIONS, sections, pack=pack_dir.name, version=str(version),
                    built=str(meta.get("built", "")), variation=variation,
-                   absent=tuple(meta.get("absentSections", ())))
+                   absent=tuple(manifest.get("absentSections", ())))
     total = sum(len(payload) for chunk in built
                 for payload in chunk.files.values())
     log(f"{variation.value}: {len(built)} addons, {total:,} bytes")
@@ -120,9 +137,9 @@ def main() -> None:
     """Build the variations named on the command line."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pack", default="", metavar="PREFIX",
-                        help="which shipped pack to read; defaults to the "
-                             "Epsilon one, which is the client the addon runs "
-                             "on")
+                        help="which pack to read, by roster key or build "
+                             "prefix; defaults to the one the app serves, "
+                             "which is the client the addon runs on")
     parser.add_argument("--variation", action="append", default=[],
                         choices=[member.value for member in Variation],
                         help="which variation to build, repeatable; both by "

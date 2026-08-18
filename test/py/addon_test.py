@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 from pack.emit.addon import (ADDON_FORMAT, AXES, AXIS_OF, DIGITS,
+                             LINE_LIMIT,
                              SUPPLIED_BY, Blob, Variation, chunks,
                              digits_for, interface_version, rendered, spelled,
                              supplies, wrapped)
@@ -85,12 +86,14 @@ def unwrap(value: Any) -> Any:
 
 def test_digits_round_trip() -> None:
     """Every number spells and re-reads at the width its span asks for."""
-    places = {digit: at for at, digit in enumerate(DIGITS)}
+    places = {ord(digit): at for at, digit in enumerate(DIGITS)}
     for value in (0, 1, 63, 64, 4095, 4096, 262143, 1_000_000):
         width = digits_for(value)
         spelling = spelled(value, width)
         assert len(spelling) == width
         back = 0
+        # Bytes, so iterating yields the byte value each digit was written as,
+        # which is what the reader indexes its own table by.
         for digit in spelling:
             back = back * 64 + places[digit]
         assert back == value
@@ -163,6 +166,36 @@ def test_the_bracket_level_clears_the_payload() -> None:
     # a nesting it dropped support for, so a payload holding `[[` does not
     # end the string early -- it fails to load at all.
     assert wrapped(b"holds [[ here").startswith(b"[=[\n")
+
+
+def test_a_long_payload_is_split_across_lines(lua: Any) -> None:
+    """A blob past the line limit is joined at load, byte for byte.
+
+    No line of an addon file may run to megabytes. The largest one this client
+    is known to accept is a little over four hundred thousand characters, and
+    an axis blob is twenty times that, so the source carries pieces and the
+    client joins them.
+    """
+    payload = bytes(DIGITS[at % 64].encode("ascii")[0]
+                    for at in range(LINE_LIMIT * 2 + 977))
+    source = b"local blob = " + wrapped(payload) + b"\nreturn blob\n"
+    assert b"table.concat" in source
+    assert max(len(line) for line in source.split(b"\n")) <= LINE_LIMIT + 8
+    assert lua.execute(source) == payload
+
+
+def test_a_fractional_value_in_a_whole_column_is_refused(lua: Any) -> None:
+    """A column classified whole by its first value refuses to round a later
+    one, rather than shipping a number the browser does not hold."""
+    with pytest.raises(ValueError, match="fractional"):
+        Blob().column([1, 2.5, 3])
+
+
+def test_a_value_the_client_cannot_read_back_is_refused() -> None:
+    """`tonumber` answers nothing for these, so they may not be written."""
+    for value in (float("inf"), float("-inf"), float("nan")):
+        with pytest.raises(ValueError, match="no spelling"):
+            Blob().column([0.5, value])
 
 
 def test_a_payload_holding_an_opening_bracket_still_loads(lua: Any) -> None:

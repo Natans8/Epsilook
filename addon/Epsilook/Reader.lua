@@ -40,6 +40,15 @@ end
 -- @param row which row, counted from zero
 -- @return the number
 function Reader.number(blob, node, row)
+	-- Bounds are checked because being outside them is not detectable
+	-- afterwards. Every byte of the blob is a valid digit, so a read past this
+	-- column lands in the next one and returns a number that looks entirely
+	-- ordinary. Reading a row's end as the next row's start needs no slack
+	-- here: an index column carries one more entry than the column it
+	-- indexes, so that read is already inside it.
+	if row < 0 or row >= node.n then
+		error("row " .. tostring(row) .. " is outside a column of " .. tostring(node.n))
+	end
 	local width = node.width
 	local at = node.at + row * width
 	local value = 0

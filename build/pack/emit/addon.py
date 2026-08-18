@@ -21,15 +21,15 @@ Text is not encoded, because it is already printable. A name blob is written
 as it stands and indexed by an offset column, which is what makes the largest
 columns in the pack cost their own length and nothing more.
 
-What ships is a variation. `SUPPLIED_BY` names the sections a running client
+What ships is a variation. `SUPPLIED_BY` names the columns a running client
 answers better than a payload can, and a lean build leaves those out for the
-addon to ask the game for instead. Moving a section between the two is one row
+addon to ask the game for instead. Moving a column between the two is one row
 there.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -53,6 +53,20 @@ reading one is a slice at a fixed stride rather than a bit offset.
 """
 
 BASE = len(DIGITS)
+
+DIGIT_BYTES = DIGITS.encode("ascii")
+"""The alphabet as bytes, so spelling a column never builds text first."""
+
+LINE_LIMIT = 262_144
+"""How many bytes of blob may sit on one line of the emitted source.
+
+The payload is one logical string, but it is written as several pieces joined
+at load, because a single line of it would otherwise run to megabytes. The
+largest line this client is known to accept is a little over four hundred
+thousand characters, in a library it already ships; this stays well inside
+that rather than assuming the lexer has no bound at all. Joining is one pass
+over bytes the client has just read anyway.
+"""
 
 AXES: Mapping[str, str] = {
     "model": ("modelRows morphs morphDisplays mounts shapeshifts "
@@ -145,23 +159,78 @@ def ships(section: str, column: str, variation: Variation) -> bool:
     return variation is Variation.FULL or not supplies(section, column)
 
 
-def spelled(value: int, width: int) -> str:
+def spelled(value: int, width: int) -> bytes:
     """One non-negative number as a fixed count of digits, most significant
     first.
+
+    Bytes rather than text, and written into place rather than reversed: this
+    runs once per value in the pack, several million times per build, so the
+    per-value list and the second pass over it are the whole cost of emitting.
 
     Raises:
         ValueError: the number needs more digits than the column reserved. A
             value that overflowed would run into the next one rather than
             wrap, so this can never be allowed to pass.
     """
-    out = []
+    out = bytearray(width)
     left = value
-    for _ in range(width):
-        out.append(DIGITS[left % BASE])
-        left //= BASE
+    for at in range(width - 1, -1, -1):
+        left, digit = divmod(left, BASE)
+        out[at] = DIGIT_BYTES[digit]
     if left:
         raise ValueError(f"{value} does not fit in {width} digits")
-    return "".join(reversed(out))
+    return bytes(out)
+
+
+def running(lengths: Iterable[int]) -> list[int]:
+    """Where each of a run of things starts, and where the last one ends.
+
+    One more entry than there are things, which is what lets a row end where
+    the next begins: text and ragged rows are indexed the same way, so neither
+    stores a length beside its values and neither costs a walk to reach row n.
+    """
+    offsets, at = [0], 0
+    for length in lengths:
+        at += length
+        offsets.append(at)
+    return offsets
+
+
+def whole(value: object) -> int:
+    """One value of a whole-number column, refusing anything that would round.
+
+    A column is classified by its first value that is not null, so a column
+    opening with a whole number takes this path for every later value too.
+    Converting a fraction here would ship a different number than the browser
+    holds, and nothing downstream compares the two, so the disagreement would
+    only ever surface as a search answering wrongly.
+
+    Raises:
+        ValueError: the value has a fractional part.
+    """
+    if value is None or value == "":
+        return 0
+    if isinstance(value, float) and value != int(value):
+        raise ValueError(f"{value!r} is fractional in a whole-number column; "
+                         f"the column's first value decided it was whole")
+    return int(value)  # type: ignore[call-overload]
+
+
+def spelled_float(value: object) -> str:
+    """One value of a float column, as the text the client reads back.
+
+    Refuses what has no spelling that survives the trip: the client's
+    `tonumber` answers nothing for an infinity or a missing number, so a
+    column carrying one would come back holding nil among its numbers and
+    fail somewhere far from here.
+
+    Raises:
+        ValueError: the value is not finite.
+    """
+    number = float(value or 0.0)  # type: ignore[arg-type]
+    if number != number or number in (float("inf"), float("-inf")):
+        raise ValueError(f"{value!r} has no spelling the client reads back")
+    return repr(number)
 
 
 def digits_for(span: int) -> int:
@@ -216,8 +285,8 @@ class Blob:
                     "width": 1, "base": 0}
         low, high = min(values), max(values)
         width = digits_for(high - low)
-        start = self.append("".join(spelled(value - low, width)
-                                    for value in values).encode("ascii"))
+        start = self.append(b"".join(spelled(value - low, width)
+                                     for value in values))
         return {"kind": "int", "at": start, "n": len(values),
                 "width": width, "base": low}
 
@@ -232,14 +301,9 @@ class Blob:
         ship exactly as it stands.
         """
         encoded = [value.encode("utf-8") for value in values]
-        offsets, at = [], 0
-        for cell in encoded:
-            offsets.append(at)
-            at += len(cell)
-        offsets.append(at)
         start = self.append(b"".join(encoded))
         return {"kind": kind, "at": start, "n": len(values),
-                "index": self.numbers(offsets)}
+                "index": self.numbers(running(len(cell) for cell in encoded))}
 
     def column(self, values: object) -> dict[str, object]:
         """Write one produced column, whatever shape it arrived in.
@@ -281,29 +345,20 @@ class Blob:
             return self.numbers([0] * len(values))
         if isinstance(head, (list, tuple)):
             rows = [list(row or ()) for row in values]
-            # Offsets rather than counts, and one more of them than there are
-            # rows, which is what text already does: a row's items begin where
-            # the row before them ended, so both composite shapes are indexed
-            # the same way and neither costs a walk to reach row n.
-            offsets, at = [], 0
-            for row in rows:
-                offsets.append(at)
-                at += len(row)
-            offsets.append(at)
             return {"kind": "list", "n": len(rows),
-                    "index": self.numbers(offsets),
+                    "index": self.numbers(running(len(row) for row in rows)),
                     "values": self.column([item for row in rows
                                            for item in row])}
         if isinstance(head, bool):
             return self.numbers([int(bool(value)) for value in values])
         if isinstance(head, int):
-            return self.numbers([int(value or 0) for value in values])
+            return self.numbers([whole(value) for value in values])
         if isinstance(head, float):
             # Their own spelling rather than a scaled whole number: five
             # columns in the pack carry a float, and a shared exponent would
             # be a mechanism the other four hundred would never use.
-            return self.strings([repr(float(value or 0.0))
-                                 for value in values], kind="float")
+            return self.strings([spelled_float(value) for value in values],
+                                kind="float")
         if isinstance(head, str):
             return self.strings([value if isinstance(value, str) else ""
                                  for value in values])
@@ -321,12 +376,15 @@ class Blob:
         Raises:
             KeyError: the payload is missing a part its layout ships.
         """
-        if layout is Encoding.DEDUP:
-            assert isinstance(shipped, Mapping)
-            return {"kind": "dedup", "pool": self.column(shipped["text"]),
-                    "of": self.column(shipped["of"])}
-        if layout is Encoding.SPARSE:
-            assert isinstance(shipped, Mapping)
+        if layout in (Encoding.DEDUP, Encoding.SPARSE):
+            if not isinstance(shipped, Mapping):
+                raise ValueError(
+                    f"a {layout.value} column ships a mapping, not "
+                    f"{type(shipped).__name__}; the registry and the pack "
+                    f"disagree about how this column was laid out")
+            if layout is Encoding.DEDUP:
+                return {"kind": "dedup", "pool": self.column(shipped["text"]),
+                        "of": self.column(shipped["of"])}
             return {"kind": "sparse", "at": self.column(shipped["at"]),
                     "is": self.column(shipped["is"])}
         return self.column(shipped)
@@ -351,9 +409,11 @@ def described(section: Section, payload: object, blob: Blob, *,
     """
     if section.layout is Layout.BARE:
         items = [(section.columns[0], payload)]
-    else:
-        assert isinstance(payload, Mapping)
+    elif isinstance(payload, Mapping):
         items = list(payload.items())
+    else:
+        raise ValueError(f"{section.name} declares columns but shipped a "
+                         f"{type(payload).__name__}")
     return {"columns": {str(name): blob.encoded(values,
                                                 layout_for(section, str(name),
                                                            policy))
@@ -446,8 +506,18 @@ def wrapped(payload: bytes) -> bytes:
     while (b"]" + b"=" * level + b"]" in payload
            or b"[" + b"=" * level + b"[" in payload):
         level += 1
-    return (b"[" + b"=" * level + b"[\n" + payload
-            + b"]" + b"=" * level + b"]")
+    opened = b"[" + b"=" * level + b"[\n"
+    closed = b"]" + b"=" * level + b"]"
+    # Several pieces joined at load rather than one string, so no line of the
+    # emitted source runs to megabytes. The level is chosen over the whole
+    # payload and then used for every piece: a cut can only remove a bracket
+    # sequence from a piece, never introduce one, so one level clears them all.
+    pieces = [payload[at: at + LINE_LIMIT]
+              for at in range(0, len(payload), LINE_LIMIT)] or [b""]
+    if len(pieces) == 1:
+        return opened + pieces[0] + closed
+    joined = (closed + b",\n" + opened).join(pieces)
+    return b"table.concat({" + opened + joined + closed + b"})"
 
 
 @dataclass(frozen=True)
@@ -485,12 +555,11 @@ def toc_file(addon: str, title: str, notes: str, *, version: str, pack: str,
              f"## Title: {title}",
              f"## Notes: {notes}",
              f"## Version: {pack}",
+             *(["## LoadOnDemand: 1"] if demand else []),
              f"## X-Epsilook-Pack: {pack}",
-             f"## X-Epsilook-Format: {ADDON_FORMAT}"]
-    if demand:
-        lines.insert(4, "## LoadOnDemand: 1")
-    lines.extend(f"## X-Epsilook-{key}: {value}" for key, value in extra)
-    lines.extend(("", f"{addon}.lua", ""))
+             f"## X-Epsilook-Format: {ADDON_FORMAT}",
+             *(f"## X-Epsilook-{key}: {value}" for key, value in extra),
+             "", f"{addon}.lua", ""]
     return "\n".join(lines).encode("utf-8")
 
 
@@ -512,12 +581,13 @@ def assignment(axis: str, header: Mapping[str, object],
 
 def axis_chunk(axis: str, holds: Sequence[Section],
                produced: Mapping[str, object], *, pack: str, version: str,
-               built: str, variation: Variation) -> Chunk:
+               built: str, variation: Variation,
+               policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES) -> Chunk:
     """Every section of one axis, as the addon directory carrying them."""
     blob = Blob()
     described_all = ((section.name,
                       described(section, produced[section.name], blob,
-                                variation=variation))
+                                variation=variation, policy=policy))
                      for section in holds)
     # A section every one of whose columns the client supplies contributes no
     # column at all, and an entry holding an empty set of them would read as a
@@ -567,7 +637,9 @@ def index_chunk(axes: Sequence[str], *, pack: str, version: str, built: str,
 
 def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
            pack: str, version: str, built: str, variation: Variation,
-           absent: Sequence[str] = ()) -> list[Chunk]:
+           absent: Sequence[str] = (),
+           policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES
+           ) -> list[Chunk]:
     """Every addon directory one variation of the data ships as.
 
     Args:
@@ -580,6 +652,9 @@ def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
             now, so emitting twice from one pack gives one answer.
         variation: whether a section a client route supplies is left out.
         absent: the sections this build has no data for at all.
+        policy: the one the pack was encoded under. It decides what layout a
+            column's declared kind ships in, so reading a pack under a
+            different policy than it was built with sees the wrong shape.
 
     Returns:
         The index first, then one chunk per axis that has anything in it.
@@ -606,5 +681,6 @@ def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
     return [index_chunk(ordered, pack=pack, version=version, built=built,
                         variation=variation, absent=absent),
             *(axis_chunk(axis, holding[axis], produced, pack=pack,
-                         version=version, built=built, variation=variation)
+                         version=version, built=built, variation=variation,
+                         policy=policy)
               for axis in ordered)]
