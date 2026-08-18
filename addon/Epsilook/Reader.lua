@@ -14,7 +14,15 @@
 -- and asking for row n slices it where it lies rather than turning the column
 -- into a table first. `Reader.all` exists for verification and says so.
 
+-- The private table an addon's files share. It arrives only when the client
+-- loads this as part of an addon; a test harness loads the file directly and
+-- is handed nothing, which is why every use of it is guarded.
+local _, ns = ...
+
 local Reader = {}
+if ns then
+	ns.Reader = Reader
+end
 
 local DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 local BASE = 64
@@ -116,7 +124,7 @@ function Reader.all(blob, node)
 		return out
 	elseif kind == "group" then
 		local out = {}
-		for name, sub_node in pairs(node.of) do
+		for name, sub_node in pairs(node.columns) do
 			out[name] = Reader.all(blob, sub_node)
 		end
 		return out
@@ -149,9 +157,11 @@ function Reader.section(chunk, name)
 	return out
 end
 
--- Both, because the two things that load this file read it differently. A test
--- harness takes what the chunk returns; the client discards that and gives an
--- addon file no other way to hand something to the addon that reads it, which
--- is why the data files assign a global of their own too.
-_G.EpsilookReader = Reader
+-- Three ways in, and each has a caller that cannot use the others. The addon's
+-- own files take it from the private table; another addon, or a macro, takes it
+-- from the one global this addon owns; and the test harness takes what the
+-- chunk returns, since it loads the file directly rather than as an addon.
+_G.Epsilook = _G.Epsilook or {}
+_G.Epsilook.Reader = Reader
+
 return Reader

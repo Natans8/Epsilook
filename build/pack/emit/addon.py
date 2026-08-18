@@ -328,9 +328,13 @@ class Blob:
             # large, and that is the one that does not go there.
             if values and all(isinstance(sub, (Mapping, list, tuple))
                               for sub in values.values()):
+                # `columns` rather than `of`, which a deduped column already
+                # uses for its index. One key meaning a table of columns in
+                # one kind and a single column in another is readable only
+                # while you remember which kind you are looking at.
                 return {"kind": "group",
-                        "of": {str(key): self.column(sub)
-                               for key, sub in values.items()}}
+                        "columns": {str(key): self.column(sub)
+                                    for key, sub in values.items()}}
             return {"kind": "map",
                     "keys": self.column([str(key) for key in values]),
                     "values": self.column(list(values.values()))}
@@ -421,14 +425,22 @@ def described(section: Section, payload: object, blob: Blob, *,
                         if ships(section.name, str(name), variation)}}
 
 
-NAMESPACE = "EpsilookData"
-"""The global the data files assign into.
+NAMESPACE = "Epsilook"
+"""The one global the addon owns, which the data files assign into.
 
-A data addon and the addon reading it are two addons, so the private table
-each is handed at load is not shared between them. A named global is how the
-data addons already on the client hand their payload over, and one is enough:
-an axis is a key inside it rather than a global of its own.
+An addon is meant to define a single global, and the private table a file is
+handed at load is shared only between files of the SAME addon -- so the data,
+which is its own load-on-demand addon, cannot reach the reader's table and has
+to hand its payload over through the global. One is enough for both: the
+payload lands under a key inside it rather than taking a global of its own.
+
+Written defensively, so the data loads whether or not the reader is there
+first. A player who enables the data addon by hand gets a table rather than an
+error, and the reader finds it already populated.
 """
+
+PAYLOAD = "data"
+"""The key inside the global that the axes land under."""
 
 ADDON_PREFIX = "Epsilook_Data"
 """What each emitted addon directory is called, before its axis.
@@ -572,10 +584,15 @@ def assignment(axis: str, header: Mapping[str, object],
     file back is then two independent things to get right instead of one that
     depends on where the table happened to end.
     """
+    # A local alias for the global, which is the convention wherever one is
+    # read more than once: a global read goes through the environment table
+    # and a local is a stack slot.
     opening = (f"-- Generated from pack {pack}. Do not edit.\n"
                f"{NAMESPACE} = {NAMESPACE} or {{}}\n"
-               f"{NAMESPACE}[{quoted(axis)}] = {rendered(header)}\n"
-               f"{NAMESPACE}[{quoted(axis)}].blob = ").encode("utf-8")
+               f"{NAMESPACE}.{PAYLOAD} = {NAMESPACE}.{PAYLOAD} or {{}}\n"
+               f"local held = {NAMESPACE}.{PAYLOAD}\n"
+               f"held[{quoted(axis)}] = {rendered(header)}\n"
+               f"held[{quoted(axis)}].blob = ").encode("utf-8")
     return opening + wrapped(blob) + b"\n"
 
 
@@ -619,6 +636,15 @@ def index_source(axes: Sequence[str], *, pack: str, built: str,
     return (f"-- Generated from pack {pack}. Do not edit.\n"
             f"{NAMESPACE} = {NAMESPACE} or {{}}\n"
             f"{NAMESPACE}.index = {rendered(header)}\n").encode("utf-8")
+
+
+def payload_path() -> str:
+    """Where a loaded axis lands, as a reader would spell it.
+
+    One place, because the emitter writes it and every reader has to find it,
+    and a path spelled twice is a path that can disagree with itself.
+    """
+    return f"{NAMESPACE}.{PAYLOAD}"
 
 
 def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
