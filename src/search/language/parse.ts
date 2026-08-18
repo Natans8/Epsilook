@@ -591,7 +591,7 @@ class Parser {
             const rest = run.filter((t) => !statesBareValue(t));
             // Each bare value becomes its own alternative; anything else the run stated keeps every one of them
             // company, because it still has to hold whichever value the row turns out to carry.
-            return loose.map((t) => [t, ...rest]);
+            return loose.map((t) => [t].concat(rest));
         });
     }
 
@@ -920,7 +920,10 @@ class Parser {
         const real = t.split(GRAMMAR.or).filter((p) => p !== "");
         if (real.length === 0) return {r: "empty", why: i18n.t("diagnostics:why.noValue")};
         if (real.length === 1) return this.alternative(real[0], ctx, true);
-        return combineAlternatives(real.map((p) => this.alternative(p, ctx, false)));
+        // A unit written on ONE alternative is the value's own: `200|500ms` is two readings in milliseconds,
+        // never one of each. The same rule a range's bounds follow.
+        const parts = ctx.unify(real);
+        return combineAlternatives(parts.map((p) => this.alternative(p, ctx, false)));
     }
 
     /**

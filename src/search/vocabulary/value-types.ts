@@ -409,8 +409,15 @@ function numeric(spec: NumericSpec & { name: string; hint: string; ui?: Affordan
  * A duration, stored in milliseconds and written in seconds.
  *
  * Durations in this data span three orders of magnitude — cast times below a second, cooldowns running to minutes —
- * so the smaller and larger units are worth accepting. Both require their symbol, leaving a bare number to mean
- * seconds.
+ * so the smaller and larger units are worth accepting.
+ *
+ * A BARE number is split between seconds and milliseconds at a hundred, the same way a size change splits factor
+ * from proportion at ten. The split is measured rather than chosen: on 9.2.7 the fastest cast in the game is
+ * exactly 100 ms, so a bare number under a hundred read as milliseconds selects nothing at all — while above it
+ * the seconds reading is nearly as empty, since only 24 of 48,873 cast times (0.049%) run past a minute. So `2`
+ * is two seconds and `1500` is a second and a half, which is what a reader who typed either one meant.
+ *
+ * Minutes keep their symbol: a bare number is already spoken for on both sides of the threshold.
  *
  * Words such as `unlimited` and `instant` are not here: a stored value that is not a quantity is the axis's
  * vocabulary, declared as a sentinel on the property.
@@ -418,9 +425,9 @@ function numeric(spec: NumericSpec & { name: string; hint: string; ui?: Affordan
 export const seconds = numeric({
     name: "seconds",
     storage: "int",
-    display: {unit: "s", factor: 1000},
+    display: {unit: "s", factor: 1000, bare: {atMost: 99}},
     accepts: [
-        {unit: "ms", factor: 1, bare: "never"},
+        {unit: "ms", factor: 1, bare: {above: 99}},
         {unit: "m", factor: 60_000, bare: "never"},
     ],
     hint: t("tooltips:type.seconds"),

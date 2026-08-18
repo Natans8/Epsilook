@@ -25,6 +25,7 @@ import type {Column} from "../schema/columns";
 import {GRAMMAR, PREFIX_OPERATORS} from "./grammar";
 import type {Kind, ParsedValue, Prop} from "../schema/kinds";
 import {hintOf, parseValue, sentinelOf, wordOf} from "../schema/kinds";
+import {spelledNotation, spellIn} from "../vocabulary/units";
 import type {Operator} from "../vocabulary/operators";
 import {ORDERING} from "../vocabulary/operators";
 import {compilePattern} from "../text/patterns";
@@ -62,6 +63,17 @@ export interface ValueCtx {
     regex(pattern: string): Interp;
 
     star(): Interp;
+
+    /**
+     * Re-spells a value's bare alternatives in the notation the phrase names, where one of them names it.
+     *
+     * A unit written anywhere in a value is the default for the whole of it: `200|500ms` is two millisecond
+     * readings, not one of each. The same rule a range's bounds follow, over alternatives instead of bounds.
+     *
+     * @param parts The alternatives, as written.
+     * @returns The alternatives, bare ones respelled; the same list where none names a notation.
+     */
+    unify(parts: readonly string[]): readonly string[];
 }
 
 /** What an operand resolved to, before it is shaped into a clause or a scope term. */
@@ -125,6 +137,45 @@ export const accepts = (type: AxisType, opName: string): boolean =>
  * notations, or edited as a bare number, holds quantities; everything read from words or text does not.
  */
 export const quantity = (type: AxisType): boolean => type.quantity === true;
+
+/**
+ * A range's bounds re-spelled so both read in the notation the PHRASE names, or null where none is named.
+ *
+ * A unit written anywhere in the range is the default for the whole of it, even when it stands on the other
+ * bound: `2-5ms` is two milliseconds to five. A bound that carries its own symbol is never reinterpreted, so
+ * only the bare side is respelled; with both bare there is nothing to take, and a type's own pair reader
+ * classifies them together.
+ *
+ * @param type The type reading the range.
+ * @param lo The lower bound, as written.
+ * @param hi The upper bound, as written.
+ * @returns Both bounds spelled in the phrase's notation, or null when neither bound spells one.
+ */
+function wornPair(type: AxisType, lo: string, hi: string): { lo: string; hi: string } | null {
+    const [a, b] = wornParts(type, [lo, hi]);
+    return a === lo && b === hi ? null : {lo: a, hi: b};
+}
+
+/**
+ * Every part of one value respelled in the notation the value names, where exactly some of them name it.
+ *
+ * A part carrying its own symbol is never reinterpreted; a bare part has no notation of its own and takes the
+ * one its neighbours spell. With none spelled — or all of them — there is nothing to carry across, and the
+ * parts come back untouched.
+ *
+ * @param type The type reading them.
+ * @param parts The bounds of a range, or the alternatives of a value, as written.
+ * @returns The parts, bare ones respelled.
+ */
+export function wornParts(type: AxisType, parts: readonly string[]): readonly string[] {
+    const notations = type.notations;
+    if (notations === undefined) return parts;
+    const storage = type.storage === "float" ? "float" : "int";
+    const spelled = parts.map((part) => spelledNotation(notations, storage, part));
+    const worn = spelled.find((notation) => notation !== null) ?? null;
+    if (worn === null || spelled.every((notation) => notation !== null)) return parts;
+    return parts.map((part, at) => (spelled[at] === null ? spellIn(worn, part) : part));
+}
 
 /**
  * Why a pattern will not compile, or null when it will.
@@ -292,8 +343,12 @@ export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value
                 });
             }
             if (!type.parse) continue;
-            const a = type.parse(lo);
-            const b = type.parse(hi);
+            // A unit written anywhere in the range is the phrase's default, so a bare bound beside a spelled
+            // one takes it: `2-5ms` is two MILLISECONDS to five, where reading the bare bound alone made it two
+            // seconds -- an inverted range nobody asked for, reported as nothing.
+            const worn = wornPair(type, lo, hi);
+            const a = type.parse(worn?.lo ?? lo);
+            const b = type.parse(worn?.hi ?? hi);
             if (a !== null && b !== null) {
                 return done({
                     op: "range",
@@ -372,6 +427,15 @@ export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value
             return bareValue(t);
         },
         star: (): Interp => done({op: "present"}),
+        unify: (parts) => {
+            // The one position that knows which type reads the value, so the one that can carry a
+            // notation across it.
+            for (const type of prop.types) {
+                const worn = wornParts(type, parts);
+                if (worn !== parts) return worn;
+            }
+            return parts;
+        },
     };
 }
 
@@ -487,6 +551,9 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
             return illTyped(word, subject);
         },
         star: (): Interp => ({r: "exists"}),
+        // Nothing to carry: these positions dispatch over many properties, so no one notation is
+        // the value's own.
+        unify: (parts) => parts,
     };
 }
 
@@ -539,6 +606,9 @@ export function columnCtx(column: Column, pend: Pending[]): ValueCtx {
         phrase: (t): Interp => content({op: "contains", operand: {text: t}}),
         regex: (pattern): Interp => badPattern(pattern) ?? content({op: "regex", operand: {text: pattern}}),
         star: (): Interp => ({r: "exists"}),
+        // Nothing to carry: these positions dispatch over many properties, so no one notation is
+        // the value's own.
+        unify: (parts) => parts,
     };
 }
 
@@ -563,5 +633,8 @@ export function topCtx(): ValueCtx {
             operand: {text: `${GRAMMAR.regex}${pattern}${GRAMMAR.regex}`},
         }),
         star: (): Interp => content({op: "present"}),
+        // Nothing to carry: these positions dispatch over many properties, so no one notation is
+        // the value's own.
+        unify: (parts) => parts,
     };
 }

@@ -335,6 +335,41 @@ export function parseNumberPair(spec: NumericSpec): (lo: string, hi: string) => 
 }
 
 /**
+ * The notation whose SYMBOL a bound actually carries, or null where it carries none.
+ *
+ * Apart from {@link notationOf}, which answers which notation READ the text and so names the default for a bare
+ * number. This asks the narrower question a range needs: did the reader spell a unit here, or leave it open?
+ *
+ * @param notations The type's notations.
+ * @param storage Whether the type stores whole numbers.
+ * @param text One bound, as written.
+ * @returns The notation it wears, or null when the bound is bare.
+ */
+export function spelledNotation(
+    notations: readonly Notation[], storage: "int" | "float", text: string,
+): Notation | null {
+    const folded = fold(text.trim());
+    if (folded === "") return null;
+    for (const notation of notations) {
+        const worn = [notation.unit, ...notation.aliases ?? []].map((unit) => fold(unit)).some((unit) => unit !== ""
+            && (notation.position === "before" ? folded.startsWith(unit) : folded.endsWith(unit)));
+        if (worn && readNotation(notation, storage)(folded) !== null) return notation;
+    }
+    return null;
+}
+
+/**
+ * Spells a bare bound in one notation, so it reads as the phrase's own.
+ *
+ * @param notation The notation to wear.
+ * @param bare The bound, carrying no unit.
+ * @returns The bound with the notation's symbol on its declared side.
+ */
+export function spellIn(notation: Notation, bare: string): string {
+    return notation.position === "before" ? `${notation.unit}${bare}` : `${bare}${notation.unit}`;
+}
+
+/**
  * Writes a stored value in one notation, symbol included.
  *
  * @param notation The notation to write in.

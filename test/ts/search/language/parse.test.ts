@@ -254,16 +254,25 @@ describe("binds and their values", () => {
         });
     });
 
-    it("a written unit is what it says: symbol bounds keep their own notations", () => {
+    it("a written unit is what it says, and a unit written anywhere is the phrase's own", () => {
+        // A bound carrying its symbol is never reinterpreted.
         assert.deepEqual(valueOf(ok("scale:x2-x5")), {
             op: "range",
             lo: {type: "percentChange", value: 100, written: "x2"},
             hi: {type: "percentChange", value: 400, written: "x5"},
         });
+        // The BARE bound beside it has no notation of its own, so it takes the one the phrase names -- `50`
+        // here is fifty times, not fifty percent. Read alone it was −50%, which made the range run backwards.
         assert.deepEqual(valueOf(ok("scale:x2-50")), {
             op: "range",
             lo: {type: "percentChange", value: 100, written: "x2"},
-            hi: {type: "percentChange", value: -50, written: "50"},
+            hi: {type: "percentChange", value: 4900, written: "50"},
+        });
+        // Whichever side wears it, and a range with no unit anywhere still reads its bounds together.
+        assert.deepEqual(valueOf(ok("scale:50-x2")), {
+            op: "range",
+            lo: {type: "percentChange", value: 4900, written: "50"},
+            hi: {type: "percentChange", value: 100, written: "x2"},
         });
     });
 
@@ -955,4 +964,56 @@ it("reads juxtaposition as alternation on a kind that cannot repeat", () => {
 
     // A kind whose rows repeat is untouched — its lane is the whole point of the brace.
     assert.equal(runs("model:{fire missile}"), 1);
+});
+
+it("a range's bare bound takes the unit its phrase names, on either side", () => {
+    const bounds = (query: string): [number, number] => {
+        const ask = parse(query).clauses[0].ask;
+        assert.ok(ask !== null && ask.on === "prop" && ask.value?.op === "range", query);
+        const {lo, hi} = ask.value;
+        assert.ok(!("text" in lo) && !("text" in hi), query);
+        return [Number(lo.value), Number(hi.value)];
+    };
+    assert.deepEqual(bounds("cast:2-5ms"), [2, 5], "the bare bound takes the spelled one's unit");
+    assert.deepEqual(bounds("cast:2ms-5"), [2, 5], "whichever side wears it");
+    assert.deepEqual(bounds("cast:500ms-2s"), [500, 2000], "two spelled bounds read as written");
+    assert.deepEqual(bounds("cast:2-5"), [2000, 5000], "no unit anywhere: the bounds read together");
+});
+
+it("a value's bare alternative takes the unit its phrase names", () => {
+    // The same rule over alternatives instead of bounds: `200|500ms` is two readings in milliseconds, never one
+    // of each. Without it a bare alternative fell back to the default and the two meant different units.
+    const alts = (query: string): number[] => {
+        const ask = parse(query).clauses[0].ask;
+        assert.ok(ask !== null && ask.on === "prop" && ask.value?.op === "anyOf", query);
+        return ask.value.alternatives.map((alt) => {
+            assert.ok(alt.op === "contains" || alt.op === "exact", query);
+            assert.ok(!("text" in alt.operand), query);
+            return Number(alt.operand.value);
+        });
+    };
+    assert.deepEqual(alts("cast:2|5ms"), [2, 5], "the bare alternative takes the spelled one's unit");
+    assert.deepEqual(alts("cast:2s|5s"), [2000, 5000], "two spelled alternatives read as written");
+    assert.deepEqual(alts("cast:2|5"), [2000, 5000], "no unit anywhere: both take the default");
+});
+
+it("a bare duration splits at a hundred, which is the fastest cast that exists", () => {
+    // Measured on 9.2.7: the quickest cast in the game is exactly 100 ms, so a bare number under a hundred read
+    // as milliseconds selects nothing — while above it the seconds reading is nearly as empty, only 24 of
+    // 48,873 cast times running past a minute. `1.5` and `1500` therefore name the same duration.
+    const stored = (query: string): number => {
+        const ask = parse(query).clauses[0].ask;
+        assert.ok(ask !== null, query);
+        // `cast:` is a KIND's door, so the value arrives on the row test rather than on a property ask.
+        const expr = ask.on === "prop" ? ask.value
+            : ask.on === "kind" && ask.test?.is === "props" ? ask.test.value : null;
+        assert.ok(expr !== null && "operand" in expr, query);
+        assert.ok(!("text" in expr.operand), query);
+        return Number(expr.operand.value);
+    };
+    assert.equal(stored("cast:2"), 2000, "under a hundred is seconds");
+    assert.equal(stored("cast:99"), 99_000);
+    assert.equal(stored("cast:100"), 100, "a hundred and over is milliseconds");
+    assert.equal(stored("cast:1500"), 1500);
+    assert.equal(stored("cast:1.5"), 1500, "which agrees with the seconds spelling of the same duration");
 });
