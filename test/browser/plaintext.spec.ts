@@ -113,9 +113,9 @@ test("the field and its backdrop wrap alike at every width, so the caret is wher
         for (let width = 1100; width >= 360; width -= 20) {
             wrap.style.width = `${String(width)}px`;
             void wrap.offsetHeight;
-            const field_ = JSON.stringify(starts(true));
-            const ink_ = JSON.stringify(starts(false));
-            if (field_ !== ink_) bad.push(`${String(width)}px: field ${field_} vs ink ${ink_}`);
+            const fromField = JSON.stringify(starts(true));
+            const fromInk = JSON.stringify(starts(false));
+            if (fromField !== fromInk) bad.push(`${String(width)}px: field ${fromField} vs ink ${fromInk}`);
         }
         wrap.style.width = "";
         return bad;
