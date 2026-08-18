@@ -16,18 +16,8 @@ import {useLayoutEffect, useRef} from "react";
 import {GRAMMAR} from "../../search/index";
 import {headCase} from "./chip";
 import type {BarPlan, Keystroke} from "./plan";
-import {backspaceAtStart, deleteAtEnd, slotStart} from "./plan";
+import {backspaceAtStart, deleteAtEnd, pairDelimiter, slotStart} from "./plan";
 import styles from "./bar.module.css";
-
-/** Each opening delimiter and the closer it spawns — the enclosures the slot pairs like an IDE. */
-const PAIRS: Record<string, string | undefined> = {
-    [GRAMMAR.phrase]: GRAMMAR.phrase,
-    [GRAMMAR.scope.open]: GRAMMAR.scope.close,
-    [GRAMMAR.group.open]: GRAMMAR.group.close,
-};
-
-/** The closing halves — what a keystroke steps over instead of doubling. */
-const CLOSERS = new Set<string>([GRAMMAR.phrase, GRAMMAR.scope.close, GRAMMAR.group.close]);
 
 /** Where the caret starts this session, in slot coordinates; an anchor makes it a selection. */
 export interface CaretRequest {
@@ -180,26 +170,11 @@ export function OpenSegment({
         // against its own next character steps over instead of doubling; and the closing brace at a scoped
         // slot's end steps over the chip's consumed closer — out of the chip.
         const typed = !e.metaKey && e.ctrlKey === e.altKey ? e.key : "";
-        const close = PAIRS[typed];
-        if (close !== undefined && !collapsed) {
-            e.preventDefault();
-            onPair(el.value.slice(0, a) + typed + el.value.slice(a, b) + close + el.value.slice(b),
-                b + 1, a + 1);
-            return;
-        }
-        if (collapsed && typed !== "" && CLOSERS.has(typed) && el.value[a] === typed) {
-            e.preventDefault();
-            el.setSelectionRange(a + 1, a + 1);
-            return;
-        }
+        // The chip's own closer walks OUT of it: at a scoped slot's end the brace the chip consumed is already
+        // there, so typing it steps over the chip rather than over a character.
         if (collapsed && typed === GRAMMAR.scope.close && a === el.value.length && at.suffix !== "") {
             e.preventDefault();
             onArrow(1);
-            return;
-        }
-        if (close !== undefined && collapsed) {
-            e.preventDefault();
-            onPair(el.value.slice(0, a) + typed + close + el.value.slice(a), a + 1);
             return;
         }
         if (e.key === "Backspace" && collapsed && a === 0) {
@@ -209,10 +184,12 @@ export function OpenSegment({
             onKeystroke(step, true, el.value);
             return;
         }
-        if (e.key === "Backspace" && collapsed && a > 0 && PAIRS[el.value[a - 1]] === el.value[a]) {
-            // Inside an empty pair the Backspace takes both halves — the other side of the spawn.
+        // Every other pairing is the shared rule, delivered as one undoable operation.
+        const paired = pairDelimiter(el.value, a, b, typed === "" ? e.key : typed);
+        if (paired !== null) {
             e.preventDefault();
-            onPair(el.value.slice(0, a - 1) + el.value.slice(a + 1), a - 1);
+            if (paired.value === el.value) el.setSelectionRange(paired.caret, paired.caret);
+            else onPair(paired.value, paired.caret, paired.anchor);
             return;
         }
         if (e.key === "Delete" && collapsed && a === el.value.length) {

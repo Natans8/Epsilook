@@ -96,27 +96,17 @@ function aimAt(e: ReactMouseEvent, raw: string, window: Span): number | null {
 }
 
 /**
- * The affordance marks, drawn as geometry rather than typed as glyphs.
+ * The delete button: one mark, drawn as geometry rather than typed as a glyph, and never taking the press as
+ * an open.
  *
- * A font's `×` and `+` are not centred on their line box — measured in the shipped face, the cross's ink sits
- * 1.5px low at 12px and the plus 1.35px low at 14.25px, both a fraction of the font size rather than a fixed
- * amount. Centring the box therefore cannot centre the mark, and a nudge measured for one size and face is
- * wrong at the next: this is the bug that was fixed by hand in 1.0 and came back here. Two lines crossing at
- * the middle of a square viewBox are centred by construction, at any size, in any face — and they let the two
- * marks read as the matched pair they are, which two glyphs from different parts of a font never did.
+ * A font's `×` is not centred on its line box — measured in the shipped face, the cross's ink sits 1.5px low
+ * at 12px, a fraction of the font size rather than a fixed amount. Centring the box therefore cannot centre
+ * the mark, and a nudge measured for one size and face is wrong at the next: this is the bug that was fixed by
+ * hand in 1.0 and came back here. Two lines crossing at the middle of a square viewBox are centred by
+ * construction, at any size, in any face.
  */
-function Mark(): ReactElement {
-    return (
-        <svg className={styles.mark} viewBox="0 0 12 12" aria-hidden="true" focusable="false">
-            <path d="M3.6 3.6 8.4 8.4 M8.4 3.6 3.6 8.4"/>
-        </svg>
-    );
-}
-
-/** The delete button: the mark never takes the press as an open. */
-function Affordance({label, className, onPress}: {
+function Affordance({label, onPress}: {
     readonly label: string;
-    readonly className: string;
     readonly onPress: () => void;
 }): ReactElement {
     return (
@@ -125,7 +115,7 @@ function Affordance({label, className, onPress}: {
         <span className={styles.markSlot}>
             <button
                 type="button"
-                className={className}
+                className={styles.chipX}
                 aria-label={label}
                 // Out of the sequential tab order on purpose: a bar of six chips would otherwise put a dozen
                 // affordances between Tab and the query input, which is the one thing a keyboard reaches for.
@@ -140,7 +130,9 @@ function Affordance({label, className, onPress}: {
                     onPress();
                 }}
             >
-                <Mark/>
+                <svg className={styles.mark} viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+                    <path d="M3.6 3.6 8.4 8.4 M8.4 3.6 3.6 8.4"/>
+                </svg>
             </button>
         </span>
     );
@@ -263,7 +255,7 @@ function ChipEl({chip, warned, notes, span, text, act}: {
                 onOpen={act.negate}
             />
             <span className={styles.chipBody}><Pieces pieces={chip.body} text={text}/></span>
-            <Affordance label={t("bar.delete")} className={styles.chipX} onPress={act.remove}/>
+            <Affordance label={t("bar.delete")} onPress={act.remove}/>
         </span>
     );
 }
@@ -328,17 +320,13 @@ function LaneEl({lane, warned, notes, span, text, act}: {
                             }}
                         />
                         <span className={styles.bindBody}><Pieces pieces={item.body} text={text}/></span>
-                        <Affordance
-                            label={t("bar.delete")}
-                            className={styles.chipX}
-                            onPress={() => {
-                                act.removeTerm(i);
-                            }}
-                        />
+                        <Affordance label={t("bar.delete")} onPress={() => {
+                            act.removeTerm(i);
+                        }}/>
                     </span>
                 );
             })}
-            <Affordance label={t("bar.delete")} className={styles.chipX} onPress={act.remove}/>
+            <Affordance label={t("bar.delete")} onPress={act.remove}/>
         </span>
     );
 }

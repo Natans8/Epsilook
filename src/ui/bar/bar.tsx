@@ -553,13 +553,14 @@ export function Bar({text, onText, placeholder}: {
         // The editing form owns its own presses — its caret, its native selection, and a head that keeps the
         // session alive — so nothing here is prevented while the press is inside it. The anchor is still
         // recorded: a drag that LEAVES the slot is a bar selection, and it must know where it began.
-        const inSlot = e.target instanceof Element && e.target.closest("[data-open]") !== null;
-        if (!inSlot) e.preventDefault();
-        const {step, shifted} = inSlot
-            ? {step: {text, caret: clamped, removed: false}, shifted: slotStart(at) + at.slot.length}
-            : pressCommit(aimOf(e).at);
-        if (step.text !== text) onText(step.text);
-        dragFrom.current = shifted;
+        if (e.target instanceof Element && e.target.closest("[data-open]") !== null) {
+            dragFrom.current = slotStart(at) + at.slot.length;
+        } else {
+            e.preventDefault();
+            const {step, shifted} = pressCommit(aimOf(e).at);
+            if (step.text !== text) onText(step.text);
+            dragFrom.current = shifted;
+        }
         dragged.current = false;
         setRange(null);
     };

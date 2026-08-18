@@ -442,9 +442,12 @@
     display: inline-block;
     align-self: center;
     line-height: normal;
+    /* the mark sits past the value, with the chip's own breathing room around it */
+    margin: 0 0.4rem 0 0.1rem;
 }
 
 .chipX {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -468,15 +471,6 @@
     content: "";
     position: absolute;
     inset: -5px;
-}
-
-.chipX {
-    position: relative;
-}
-
-/* the mark sits past the value, with the chip's own breathing room around it */
-.markSlot {
-    margin: 0 0.4rem 0 0.1rem;
 }
 
 .chipX:hover {

@@ -105,7 +105,10 @@ function plainTerm(term: string): boolean {
     if (openHead(term) !== null) return false;
     let structural = false;
     for (const ch of term) {
-        structural ||= STRUCTURE.has(ch);
+        if (STRUCTURE.has(ch)) {
+            structural = true;
+            break;
+        }
     }
     if (!structural) return true;
     const held = DRAWN.get(term);
@@ -339,6 +342,64 @@ export function insertAtGap(text: string, gapAt: number, value: string): Keystro
         text: text.slice(0, gapAt) + value + " " + text.slice(gapAt),
         caret: gapAt + value.length,
     };
+}
+
+/** Each opening delimiter and the closer it spawns — the enclosures a slot pairs like an IDE. */
+const PAIRS: Record<string, string | undefined> = {
+    [GRAMMAR.phrase]: GRAMMAR.phrase,
+    [GRAMMAR.scope.open]: GRAMMAR.scope.close,
+    [GRAMMAR.group.open]: GRAMMAR.group.close,
+};
+
+/** The closing halves — what a keystroke steps over instead of doubling. */
+const CLOSERS = new Set<string>(Object.values(PAIRS).filter((close) => close !== undefined));
+
+/** One pairing's outcome: the value the keystroke leaves, and where the caret and its anchor land in it. */
+export interface Pairing {
+    readonly value: string;
+    readonly caret: number;
+    /** The other end of a surviving selection, where the pairing enclosed one. */
+    readonly anchor?: number;
+}
+
+/**
+ * The delimiter pairing an editable value answers a keystroke with, as an IDE's does.
+ *
+ * Four rules, and they are the same wherever text is edited: typed over a selection the pair ENCLOSES it, the
+ * selection surviving inside; typed alone the closer spawns with the caret in the middle; a closer typed
+ * against its own next character STEPS OVER instead of doubling; and a Backspace between two halves of an
+ * empty pair takes both. Stated once here because the two surfaces that use it — the chip's slot and the plain
+ * view — differ only in how they DELIVER the result, one as an undoable operation and one as a plain write.
+ *
+ * @param value What the field holds.
+ * @param from The selection's start.
+ * @param to Its end; equal to `from` for a caret.
+ * @param key The key pressed, or `Backspace`.
+ * @returns The pairing, or null where the keystroke pairs nothing. A result whose value is unchanged is the
+ *   step-over: only the caret moves.
+ */
+export function pairDelimiter(value: string, from: number, to: number, key: string): Pairing | null {
+    const close = PAIRS[key];
+    if (close !== undefined && from !== to) {
+        return {
+            value: value.slice(0, from) + key + value.slice(from, to) + close + value.slice(to),
+            caret: to + 1,
+            anchor: from + 1,
+        };
+    }
+    if (from === to && CLOSERS.has(key) && value[from] === key) return {value, caret: from + 1};
+    if (close !== undefined) {
+        return {value: value.slice(0, from) + key + close + value.slice(from), caret: from + 1};
+    }
+    if (key === "Backspace" && from === to && from > 0) {
+        // An opener must actually be there: at the value's end both sides read `undefined`, and comparing them
+        // made an ordinary Backspace look like a pair-delete.
+        const opener = PAIRS[value[from - 1]];
+        if (opener !== undefined && opener === value[from]) {
+            return {value: value.slice(0, from - 1) + value.slice(from + 1), caret: from - 1};
+        }
+    }
+    return null;
 }
 
 /**

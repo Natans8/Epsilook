@@ -28,7 +28,7 @@ import type {
     ValueExpr,
 } from "./ast";
 import {propOf} from "./ast";
-import {GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./grammar";
+import {COMPARISON_STARTS, GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./grammar";
 import {wordOf} from "../schema/kinds";
 import type {Interp, Pending, ValueCtx} from "./operand";
 import {combineAlternatives, countCtx, ctxFor, kindCtx, propCtx, topCtx} from "./operand";
@@ -59,14 +59,6 @@ const HEAD_ENDS = new Set<string>([
     GRAMMAR.bind, GRAMMAR.phrase, GRAMMAR.scope.open, GRAMMAR.scope.close,
     GRAMMAR.group.open, GRAMMAR.group.close, GRAMMAR.or,
 ]);
-
-/**
- * First characters of the prefix operators, aliases included. Where one follows a known head word, the colon is
- * implied: `model<=4` reads as `model:<=4` — the family convention, and measured safe: no name glues a head word
- * to a comparison. An unknown word keeps the whole token as ordinary text, so `a=b` stays searchable.
- */
-const COMPARISON_STARTS: ReadonlySet<string> = new Set(
-    PREFIX_OPERATORS.flatMap((op) => spellingsOf(op).map((s) => s[0])));
 
 /** A run of numbers separated by the list character: the one shape a comma is structural in. */
 const NUMBER_LIST = new RegExp(String.raw`^\d+(${escapeRegExp(GRAMMAR.numberList)}\d+)+$`);

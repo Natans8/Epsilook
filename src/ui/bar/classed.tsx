@@ -50,8 +50,9 @@ export function Classed({text, rich, runs: given, mirrored, selected}: {
     /** The stretch of this text the bar's selection covers, in the text's own coordinates. */
     readonly selected?: Span;
 }): ReactElement {
-    const own = useMemo(() => (rich === true ? paint(text) : classify(text)), [text, rich]);
-    const runs = given ?? own;
+    // The caller's runs win where it has them: a slot cannot paint itself, and lexing the same characters a
+    // second time here would only produce the poorer answer.
+    const runs = useMemo(() => given ?? (rich === true ? paint(text) : classify(text)), [given, text, rich]);
     const out: ReactNode[] = [];
     for (const [i, run] of runs.entries()) {
         const classes = [

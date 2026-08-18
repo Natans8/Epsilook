@@ -11,7 +11,7 @@
  * parser does, which is length-preserving, so every span indexes the reader's own text.
  */
 import type {Span, ValueExpr} from "./ast";
-import {GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./grammar";
+import {COMPARISON_STARTS, GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./grammar";
 import {parse} from "./parse";
 import {HEADS} from "../schema/schema";
 import {fold, foldTypography} from "../text/normalize";
@@ -42,21 +42,25 @@ export interface Run {
     readonly door?: boolean;
 }
 
-/** The structural single characters beyond the operators: scopes, groups, alternation. */
-const DELIMS = new Set<string>([
-    GRAMMAR.scope.open, GRAMMAR.scope.close, GRAMMAR.group.open, GRAMMAR.group.close, GRAMMAR.or,
-]);
-
 /** The delimiters that ENCLOSE — the pair a clause opens and closes, as against the universal alternation. */
 const ENCLOSURES = new Set<string>([
     GRAMMAR.scope.open, GRAMMAR.scope.close, GRAMMAR.group.open, GRAMMAR.group.close,
 ]);
+
+/** The halves that OPEN one, which is what deepens the nesting. */
+const OPENERS = new Set<string>([GRAMMAR.scope.open, GRAMMAR.group.open]);
+
+/** The structural single characters beyond the operators: the enclosures, and alternation. */
+const DELIMS = new Set<string>([...ENCLOSURES, GRAMMAR.or]);
 
 /** Single characters that play an operator role wherever they stand, alias spellings included. */
 const OPS = new Set<string>([
     GRAMMAR.bind, GRAMMAR.wildcard, GRAMMAR.negate,
     ...PREFIX_OPERATORS.flatMap((op) => spellingsOf(op).flatMap((s) => s.split(""))),
 ]);
+
+/** What a property opens: the bind, or the comparison it is being measured by. */
+const DOOR_GLUES = new Set<string>([GRAMMAR.bind, ...COMPARISON_STARTS]);
 
 /** A word run: letters, digits and the joiners a value word may carry. */
 const WORD = /^[\p{L}\p{N}_.']+/u;
@@ -107,7 +111,9 @@ export function classify(text: string): Run[] {
         }
         if (DELIMS.has(ch)) {
             push(at, at + 1, "delim");
-            if (ENCLOSURES.has(ch)) depth += ch === GRAMMAR.scope.open || ch === GRAMMAR.group.open ? 1 : -1;
+            // Clamped: a stray closer would otherwise take the depth negative, and every head after it would
+            // stop reading as one.
+            if (ENCLOSURES.has(ch)) depth = Math.max(0, depth + (OPENERS.has(ch) ? 1 : -1));
             opening = true;
             at += 1;
             continue;
@@ -135,8 +141,8 @@ export function classify(text: string): Run[] {
         const word = WORD.exec(folded.slice(at));
         if (word !== null) {
             const end = at + word[0].length;
-            const glued = folded[end] === GRAMMAR.bind || OPS.has(folded[end] ?? "");
-            const known = HEADS.has(fold(word[0])) && glued;
+            // The bind is one of the operators, so a glue of any kind is one test.
+            const known = HEADS.has(fold(word[0])) && OPS.has(folded[end] ?? "");
             // A head opens its clause at the top level, whichever glue it takes: `model:fire` and `model>=4`
             // are the same door said two ways. The same word inside an enclosure, or standing after a value,
             // is a property of what is being asked about — a word ABOUT the query, which a chip draws loud.
@@ -229,9 +235,10 @@ export function paint(text: string): Run[] {
             for (const [i, run] of runs.entries()) {
                 const next = runs[i + 1];
                 if (run.kind !== "word" || run.start < clause.span.start || run.end > clause.span.end) continue;
-                if (next?.kind === "op" && next.start === run.end) {
-                    runs[i] = {...run, door: true, tone: column.key};
-                }
+                if (next?.kind !== "op" || next.start !== run.end) continue;
+                // The bind and the comparisons are what a property OPENS. A negation or a wildcard beside a
+                // word is part of the value — `model:fire-frost` names one thing, not a property and a term.
+                if (DOOR_GLUES.has(text[next.start])) runs[i] = {...run, door: true, tone: column.key};
             }
         }
         // A kind word IS the vocabulary — `model:missile` names a kind rather than searching for the letters.

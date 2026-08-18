@@ -91,3 +91,13 @@ export const PREFIX_OPERATORS: readonly Operator[] = Object.freeze(
         .filter((op) => op.level === "value" && op.form === "prefix" && op.symbol !== null)
         .toSorted((a, b) => spelling(b).length - spelling(a).length),
 );
+
+/**
+ * First characters of the prefix operators, aliases included — what a comparison BEGINS with.
+ *
+ * Where one follows a known head word the colon is implied, so `model<=4` reads as `model:<=4`; the parser
+ * resolves that and the highlighter reads the same characters, which is why the derivation is here rather than
+ * in either of them.
+ */
+export const COMPARISON_STARTS: ReadonlySet<string> = new Set(
+    PREFIX_OPERATORS.flatMap((op) => spellingsOf(op).map((held) => held[0])));

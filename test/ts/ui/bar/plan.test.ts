@@ -8,8 +8,8 @@ import test from "node:test";
 
 import {
     backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, grownSegment, insertAtGap, openHead, planAt,
-    removeSegment, removeSelection, removeTerm, scopedForm, scopeGesture, segmentAt, segmentsOf,
-    selectionOver, selectionStep, slotStart, termStarts,
+    pairDelimiter, removeSegment, removeSelection, removeTerm, scopedForm, scopeGesture, segmentAt,
+    segmentsOf, selectionOver, selectionStep, slotStart, termStarts,
 } from "../../../../src/ui/bar/plan";
 
 test("terms start at zero and after each balanced space; a trailing space opens an empty tail", () => {
@@ -399,4 +399,19 @@ test("removing a selection leaves no stranded separator", () => {
         {text: "big dragon", caret: 3, removed: true});
     assert.deepEqual(removeSelection("big red dragon", {from: 4, to: 7}),
         {text: "big  dragon", caret: 4, removed: true});
+});
+
+test("the delimiter pairing is one rule: enclose, spawn, step over, and take both halves back", () => {
+    // Over a selection the pair encloses it, and the selection survives inside.
+    assert.deepEqual(pairDelimiter("model:fire", 6, 10, '"'),
+        {value: 'model:"fire"', caret: 11, anchor: 7});
+    // Alone, the closer spawns with the caret between the halves.
+    assert.deepEqual(pairDelimiter("model:", 6, 6, "{"), {value: "model:{}", caret: 7});
+    // A closer against its own next character steps over it: the value is unchanged, only the caret moves.
+    assert.deepEqual(pairDelimiter("model:{}", 7, 7, "}"), {value: "model:{}", caret: 8});
+    // Backspace between two halves of an empty pair takes both.
+    assert.deepEqual(pairDelimiter("model:{}", 7, 7, "Backspace"), {value: "model:", caret: 6});
+    // Anything else pairs nothing.
+    assert.equal(pairDelimiter("model:fire", 10, 10, "x"), null);
+    assert.equal(pairDelimiter("model:fire", 10, 10, "Backspace"), null);
 });
