@@ -541,7 +541,11 @@ export function selectionOver(text: string, anchor: number, focus: number): BarS
     let from = Math.max(0, Math.min(anchor, focus, content));
     let to = Math.min(content, Math.max(anchor, focus));
     if (to <= from) return null;
-    for (const seg of segmentsOf(text)) {
+    const segments = segmentsOf(text);
+    // The separator between two chips is the join the language needs, not something the reader wrote there: a
+    // range covering nothing but that selects nothing, so it cannot be lifted out and glue two asks together.
+    if (segments.every((seg) => seg.end <= from || seg.start >= to)) return null;
+    for (const seg of segments) {
         if (seg.plain || seg.start >= to || seg.end <= from) continue;
         from = Math.min(from, seg.start);
         to = Math.max(to, seg.end);

@@ -142,6 +142,9 @@
     /* Decoration only: the input above owns the selection, and a backdrop that could take it would paint one
      * rectangle per classed run — a gap at every space, because a run boundary is not a character. */
     user-select: none;
+    /* Measured like the input beside it: see the plaintext sheet for why neither may kern or ligate. */
+    font-kerning: none;
+    font-variant-ligatures: none;
     position: absolute;
     inset: 0;
     z-index: 0;
@@ -191,6 +194,8 @@
     max-width: 100%;
     font-family: inherit;
     font-size: 1.1rem;
+    font-kerning: none;
+    font-variant-ligatures: none;
     /* `normal` on input and backdrop alike: Firefox clamps an input's line-height up to the font's normal. */
     line-height: normal;
     padding: 0.15rem 0;
@@ -236,10 +241,6 @@
  * token and clears AA in every palette (4.69 dark, 8.73 moonwell, 8.71 vellum). */
 .runOp {
     color: var(--text-dim);
-}
-
-.runNumber {
-    color: var(--gold);
 }
 
 /* A word ABOUT the query rather than one of the data — the any-word, a property standing in a value. The chip
@@ -420,7 +421,7 @@
     color: var(--text-strong);
 }
 
-/* × lives left in the sect, + at the tail — destructive left, additive right.
+/* The × lives at the chip's tail, past the value it removes.
  *
  * A mark is a glyph, not text, so it is centred rather than sat on the baseline — 1.0's own rule. What is new
  * here is that the cell is TALLER than the text it holds, so centring it in the CELL no longer centres it on
@@ -434,14 +435,16 @@
     line-height: normal;
 }
 
-.chipX,
-.chipAdd {
+.chipX {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     vertical-align: middle;
+    width: 15px;
+    height: 15px;
     background: none;
     border: none;
+    border-radius: 50%;
     padding: 0;
     font: inherit;
     line-height: 1;
@@ -450,40 +453,26 @@
     cursor: pointer;
 }
 
-.chipX {
-    width: 15px;
-    height: 15px;
-    border-radius: 50%;
-}
-
 /* The mark stays small — a chip is a compact thing — while the target it answers to is not: the overlay
  * carries the box out to 25px square, past the 24px minimum, without moving a pixel of the layout. */
-.chipX::after,
-.chipAdd::after {
+.chipX::after {
     content: "";
     position: absolute;
     inset: -5px;
 }
 
-.chipX,
-.chipAdd {
+.chipX {
     position: relative;
+}
+
+/* the mark sits past the value, with the chip's own breathing room around it */
+.markSlot {
+    margin: 0 0.4rem 0 0.1rem;
 }
 
 .chipX:hover {
     color: rgb(var(--danger-rgb));
     background: rgba(var(--danger-rgb), calc(0.12 * var(--wash-strength)));
-}
-
-.chipAdd {
-    width: 15px;
-    height: 15px;
-    /* the pair is matched in size and weight; the breathing room is the chip's, not the button's */
-    margin: 0 0.375rem 0 0.125rem;
-}
-
-.chipAdd:hover {
-    color: var(--gold);
 }
 
 /* the marks: two lines crossing at the centre of a square box, so they are centred by construction rather
@@ -512,14 +501,16 @@
     color: var(--text-strong);
 }
 
-/* an inner bind: a chip of its own, neutral-surfaced so the lane's tone stays the one accent */
+/* An inner bind is a chip of its own, neutral-surfaced so the lane's tone stays the one accent — and
+ * TRANSLUCENT, because the selection band runs behind the lane and an opaque pill would hide the stretch of it
+ * that crosses this term. */
 .laneBind {
     display: inline-flex;
     align-items: stretch;
     align-self: center;
     border: 1px solid var(--border-ctrl);
     border-radius: 999px;
-    background: var(--bg-panel);
+    background: rgba(var(--shadow-rgb), 0.12);
     overflow: hidden;
 }
 
@@ -648,6 +639,15 @@
 .selected .vNot .vWord {
     color: var(--text-strong);
     border-bottom-color: var(--text-strong);
+}
+
+/* The band is ONE flat colour across whatever it covers: a chip's own chrome — the head's inset, an inner
+ * bind's surface — would otherwise read as a notch in it, which is the ragged look a selection must never
+ * have. The borders stay, so the shapes are still legible through it. */
+.selected .chipSect,
+.selected .bindSect,
+.selected .laneBind {
+    background: none;
 }
 
 /* the resting bar's input: out of sight, still in the tab order, so focus can come back to the caret's place */

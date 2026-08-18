@@ -35,11 +35,11 @@ export interface Aim {
 export function offsetAtPoint(bar: HTMLElement, x: number, y: number): Aim | null {
     const hit = document.caretPositionFromPoint?.(x, y);
     const node = hit?.offsetNode;
-    const from = node == null ? null : node.nodeType === Node.TEXT_NODE ? node.parentElement : node as Element;
+    const from = node instanceof Element ? node : node?.parentElement;
     const child = from?.closest<HTMLElement>("[data-at]");
     if (child === null || child === undefined || !bar.contains(child)) return null;
     const at = Number(child.dataset["at"]);
-    if (child.dataset["plain"] === undefined || node == null) {
+    if (child.dataset["plain"] === undefined || node === undefined) {
         const box = child.getBoundingClientRect();
         const span = {start: at, end: Number(child.dataset["end"] ?? at)};
         return {at: x < box.left + box.width / 2 ? span.start : span.end, exact: false, span};
@@ -66,7 +66,10 @@ export function offsetAtPoint(bar: HTMLElement, x: number, y: number): Aim | nul
  */
 export function groundAim(bar: HTMLElement, x: number, y: number, text: string): number {
     const kids = Array.from(bar.children)
-        .map((child) => ({at: (child as HTMLElement).dataset["at"], box: child.getBoundingClientRect()}))
+        .map((child) => ({
+            at: child instanceof HTMLElement ? child.dataset["at"] : undefined,
+            box: child.getBoundingClientRect(),
+        }))
         .filter((child) => child.at !== undefined && child.box.width > 0);
     if (kids.length === 0) return text.length;
     // The press's own line, or the last one above it when it fell past the final row.

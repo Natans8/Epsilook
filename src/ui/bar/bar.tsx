@@ -15,7 +15,7 @@
 import type {KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactElement} from "react";
 import {Fragment, useMemo, useRef, useState} from "react";
 import type {Span} from "../../search/index";
-import {describe, parse} from "../../search/index";
+import {describe, paint, parse, runsWithin} from "../../search/index";
 import type {BarPlan, BarSegment, BarSelection, Commit, Keystroke} from "./plan";
 import {
     commitSegment, firstDiff, grownSegment, insertAtGap, planAt, removeSegment, removeSelection, removeTerm,
@@ -102,17 +102,17 @@ export function Bar({text, onText, placeholder}: {
      * rather than in each of them.
      *
      * @param next The text the session opens on.
-     * @param at Where the open position sits, as a text offset.
+     * @param where The open position, as a text offset.
      * @param caretAt Where the caret goes within the slot.
      * @param gap The gap's offset when the position is a gap, or null for a segment.
      * @param restore What Escape restores — the text this session started from, which a grow sets to the state
      *   before the growth so abandoning takes the whole gesture back.
      */
-    const openSession = (next: string, at: number, caretAt: number, gap: number | null, restore: string): void => {
+    const openSession = (next: string, where: number, caretAt: number, gap: number | null, restore: string): void => {
         setFocused(true);
         setRange(null);
         setGapAt(gap);
-        setOpenAt(at);
+        setOpenAt(where);
         setCaret({at: caretAt});
         setSession((s) => s + 1);
         opened.current = restore;
@@ -135,8 +135,8 @@ export function Bar({text, onText, placeholder}: {
 
     /** Moves the open position to the gap before the segment nearest `start` — a gap sits at a segment start. */
     const openGap = (next: string, start: number): void => {
-        const at = segmentAt(next, start).start;
-        openSession(next, at, 0, at, next);
+        const where = segmentAt(next, start).start;
+        openSession(next, where, 0, where, next);
     };
 
     /** Runs one text state through the open-position bookkeeping — the shared tail of every keystroke path. */
@@ -284,7 +284,7 @@ export function Bar({text, onText, placeholder}: {
     };
 
     /** Undo and redo land where the change happened — the first differing offset — as an open segment. */
-    const restore = (to: string): void => {
+    const restoreTo = (to: string): void => {
         openSegment(to, firstDiff(text, to), "end");
     };
 
@@ -293,7 +293,7 @@ export function Bar({text, onText, placeholder}: {
         if (prev === undefined) return;
         undos.current = undos.current.slice(0, -1);
         redos.current = [...redos.current, text];
-        restore(prev);
+        restoreTo(prev);
     };
 
     const onRedo = (): void => {
@@ -301,7 +301,7 @@ export function Bar({text, onText, placeholder}: {
         if (next === undefined) return;
         redos.current = redos.current.slice(0, -1);
         undos.current = [...undos.current, text];
-        restore(next);
+        restoreTo(next);
     };
 
     /** The selected segments' own text — the query they spell, which is what a copy puts on the clipboard. */
@@ -340,8 +340,8 @@ export function Bar({text, onText, placeholder}: {
     };
 
     /** The rest after a rewrite that leaves a segment settled: the gap after it, or the one filling tail. */
-    const restAfter = (next: string, caret: number): void => {
-        const after = caret + 1;
+    const restAfter = (next: string, from: number): void => {
+        const after = from + 1;
         const seg = segmentAt(next, Math.min(after, next.length));
         if (after > next.length || (seg.start === seg.end && seg.end === next.length)) openTail(next);
         else openGap(next, after);
@@ -416,6 +416,12 @@ export function Bar({text, onText, placeholder}: {
     };
 
     const segments = useMemo(() => segmentsOf(text), [text]);
+    // The slot holds a FRAGMENT, so it cannot paint itself: the whole query is painted once and each surface
+    // takes its own slice, which is what makes an open chip read exactly as the plain view reads.
+    const painted = useMemo(() => paint(text), [text]);
+    const slotRuns = useMemo(
+        () => runsWithin(painted, {start: slotStart(at), end: slotStart(at) + at.slot.length}),
+        [painted, at]);
     // At rest — no focus, or a bar-wide selection standing — the open position renders settled like every
     // other segment. A selection is a stretch of the settled query, so nothing inside it is in its editing form.
     const rest = (!focused && text !== "") || sel !== null;
@@ -432,7 +438,7 @@ export function Bar({text, onText, placeholder}: {
             mode={mode}
             hidden={rest}
             seize={focused || text === ""}
-            highlight={<Classed text={at.slot}/>}
+            highlight={<Classed text={at.slot} runs={slotRuns} mirrored/>}
             caret={caret}
             placeholder={text === "" ? placeholder : undefined}
             label={placeholder}
@@ -544,12 +550,14 @@ export function Bar({text, onText, placeholder}: {
      */
     const onBarDown = (e: ReactMouseEvent<HTMLDivElement>): void => {
         if (e.button !== 0) return;
-        // The editing form owns its presses: it has its own caret, its own native selection, and a head that
-        // keeps the session alive. An affordance does not — a drag may begin on one, and its own click is what
-        // decides whether it was a press at all.
-        if ((e.target as Element).closest("[data-open]") !== null) return;
-        e.preventDefault();
-        const {step, shifted} = pressCommit(aimOf(e).at);
+        // The editing form owns its own presses — its caret, its native selection, and a head that keeps the
+        // session alive — so nothing here is prevented while the press is inside it. The anchor is still
+        // recorded: a drag that LEAVES the slot is a bar selection, and it must know where it began.
+        const inSlot = e.target instanceof Element && e.target.closest("[data-open]") !== null;
+        if (!inSlot) e.preventDefault();
+        const {step, shifted} = inSlot
+            ? {step: {text, caret: clamped, removed: false}, shifted: slotStart(at) + at.slot.length}
+            : pressCommit(aimOf(e).at);
         if (step.text !== text) onText(step.text);
         dragFrom.current = shifted;
         dragged.current = false;
@@ -559,6 +567,9 @@ export function Bar({text, onText, placeholder}: {
     const onBarMove = (e: ReactMouseEvent<HTMLDivElement>): void => {
         const from = dragFrom.current;
         if (from === null || e.buttons !== 1) return;
+        // A drag still inside the slot is the platform's own, character by character; only one that has left
+        // it becomes the bar's.
+        if (!dragged.current && e.target instanceof Element && e.target.closest("[data-open]") !== null) return;
         const aim = aimOf(e);
         // Reaching a chip takes it whole from its first pixel: the far edge is the one the gesture means.
         const to = aim.span === undefined ? aim.at
@@ -583,7 +594,7 @@ export function Bar({text, onText, placeholder}: {
             dragged.current = false;
             return;
         }
-        if ((e.target as Element).closest("[data-open],button") !== null) return;
+        if (e.target instanceof Element && e.target.closest("[data-open],button") !== null) return;
         const {at: aim, exact} = aimOf(e);
         const seg = segmentAt(text, aim);
         if (aim >= text.length) openEnd(text);
@@ -665,9 +676,9 @@ export function Bar({text, onText, placeholder}: {
             setRange(null);
             // The character lands where the selection stood, keeping the separator that a following segment
             // needs — and growing none at the query's end, where the word is still being typed.
-            const rest = gone.text.slice(gone.caret);
-            const glue = rest.trim() === "" ? "" : " ";
-            const typed = gone.text.slice(0, gone.caret) + e.key + glue + rest;
+            const after = gone.text.slice(gone.caret);
+            const glue = after.trim() === "" ? "" : " ";
+            const typed = gone.text.slice(0, gone.caret) + e.key + glue + after;
             openSegment(typed, gone.caret + e.key.length, e.key.length);
         }
     };

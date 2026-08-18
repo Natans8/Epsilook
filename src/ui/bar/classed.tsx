@@ -6,13 +6,13 @@
  */
 import type {ReactElement, ReactNode} from "react";
 import {useMemo} from "react";
-import type {Span} from "../../search/index";
+import type {Run, Span} from "../../search/index";
 import {classify, paint} from "../../search/index";
 import styles from "./bar.module.css";
 
 /** The colour class per run kind; a plain word paints nothing and inherits the text colour. */
 const RUN_CLASS: Record<string, string | undefined> = {
-    head: styles.runHead, op: styles.runOp, delim: styles.runOp, quote: styles.runOp, number: styles.runNumber,
+    head: styles.runHead, op: styles.runOp, delim: styles.runOp, quote: styles.runOp,
 };
 
 /** The tone class per column key — the same families the chips wear, so one query reads one colour language. */
@@ -28,13 +28,30 @@ const TONE_CLASS: Record<string, string | undefined> = {
  * it reaches, a broken clause carries its squiggle and a vocabulary word is marked as one. It needs a whole
  * query to parse — the open slot holds a fragment, and paints lexically.
  */
-export function Classed({text, rich, selected}: {
+export function Classed({text, rich, runs: given, mirrored, selected}: {
     readonly text: string;
     readonly rich?: boolean;
+    /**
+     * Whether this painting sits UNDER a field rather than standing on its own.
+     *
+     * A mirror and its field must measure identically or the caret drifts from the text: the ink is a row of
+     * spans and the field is one string, so anything that changes a glyph's advance — weight above all — makes
+     * the two wrap at different words, and from the second line on the caret lands somewhere else entirely.
+     * Colour, decoration and background are free; weight is not.
+     */
+    readonly mirrored?: boolean;
+    /**
+     * The runs to paint, where the caller already has them.
+     *
+     * A slot holds a FRAGMENT, and the rich painting needs a whole query to know what a head reached — so the
+     * bar paints the query once and hands each surface its own slice, rather than each one guessing.
+     */
+    readonly runs?: readonly Run[];
     /** The stretch of this text the bar's selection covers, in the text's own coordinates. */
     readonly selected?: Span;
 }): ReactElement {
-    const runs = useMemo(() => (rich === true ? paint(text) : classify(text)), [text, rich]);
+    const own = useMemo(() => (rich === true ? paint(text) : classify(text)), [text, rich]);
+    const runs = given ?? own;
     const out: ReactNode[] = [];
     for (const [i, run] of runs.entries()) {
         const classes = [
@@ -42,8 +59,9 @@ export function Classed({text, rich, selected}: {
             // excludes are one red unit, and the tone says which column that unit reaches.
             run.negated === true ? styles.runNeg
                 : run.tone === undefined ? RUN_CLASS[run.kind] : TONE_CLASS[run.tone] ?? RUN_CLASS[run.kind],
-            // Loudness is not a colour: a word about the query keeps its column's tone and gains the weight.
-            run.kind === "meta" || run.door === true ? styles.runMeta : undefined,
+            // Loudness is not a colour: a word about the query keeps its column's tone and gains the weight —
+            // except under a field, where weight would move the text out from under the caret.
+            (run.kind === "meta" || run.door === true) && mirrored !== true ? styles.runMeta : undefined,
             run.vocab === true ? styles.runVocab : undefined,
             run.state === "error" ? styles.runError
                 : run.state === "warning" ? styles.runWarn : undefined,

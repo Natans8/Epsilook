@@ -18,11 +18,28 @@
 .plainField {
     font-family: inherit;
     font-size: 1.1rem;
-    /* `normal` on both: Firefox clamps a field's line-height up to the font's own, and the two must wrap and
-     * sit line for line. */
-    line-height: normal;
+    /* Read as PROSE, not as a bar: this view exists to be read, so it takes the line height WCAG's text-spacing
+     * criterion asks content to survive (1.5x) with a little over, and a wider word gap so the tokens of a
+     * dense query separate. Both surfaces take it identically or they stop wrapping alike — which is also why
+     * a textarea and not an input: a single-line field clamps its line height to the font's own. */
+    line-height: 1.6;
+    /* And AIR ACROSS: a query is a dense string of glued tokens, so the gap between two words does most of the
+     * separating work here — the reader is scanning for where one term ends and the next begins. Both figures
+     * are a balance a single field forces: one rule reaches every space, so the gap between two top-level terms
+     * cannot be wider than the gap between two words inside a scope, and the tracking has to unglue a token's
+     * own parts without making a word look airy. */
+    word-spacing: 0.26em;
+    /* Air INSIDE a token too, not only between them: `model:{fire` is four things glued, and the tracking is
+     * the only lever that reaches them — the field and its backdrop must measure identically, so a space
+     * added around a delimiter in the ink alone would walk the caret off the text. */
+    letter-spacing: 0.03em;
     white-space: pre-wrap;
     overflow-wrap: break-word;
+    /* The backdrop is a row of separate spans and the field is one string: kerning and ligatures apply across
+     * a boundary in the field and not in the ink, so the two drift apart by a fraction of a glyph and the
+     * caret lands inside the last letter. Neither surface may use either. */
+    font-kerning: none;
+    font-variant-ligatures: none;
 }
 
 .plainInk {

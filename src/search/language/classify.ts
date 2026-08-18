@@ -47,6 +47,11 @@ const DELIMS = new Set<string>([
     GRAMMAR.scope.open, GRAMMAR.scope.close, GRAMMAR.group.open, GRAMMAR.group.close, GRAMMAR.or,
 ]);
 
+/** The delimiters that ENCLOSE — the pair a clause opens and closes, as against the universal alternation. */
+const ENCLOSURES = new Set<string>([
+    GRAMMAR.scope.open, GRAMMAR.scope.close, GRAMMAR.group.open, GRAMMAR.group.close,
+]);
+
 /** Single characters that play an operator role wherever they stand, alias spellings included. */
 const OPS = new Set<string>([
     GRAMMAR.bind, GRAMMAR.wildcard, GRAMMAR.negate,
@@ -206,9 +211,11 @@ export function paint(text: string): Run[] {
             : ask.on === "column" ? ask.column
                 : ask.on === "kind" ? ask.kind.column : ask.ref.kind.column;
         if (column !== null) {
-            // The delimiters go with the head: a brace or a group belongs to the clause it encloses, so it
-            // wears that clause's colour rather than the neutral one every structural character shares.
-            over(clause.span, (run) => (run.kind === "head" || run.kind === "delim"
+            // An ENCLOSURE goes with the head: a brace or a group belongs to the clause it encloses, so it
+            // wears that clause's colour. The alternation does not — `|` means the same thing wherever it
+            // stands, and a universal token that changed colour by neighbourhood would be saying otherwise.
+            over(clause.span, (run) => (run.kind === "head"
+                || (run.kind === "delim" && ENCLOSURES.has(text[run.start]))
                 ? {...run, tone: column.key} : run));
         }
         if (clause.not) negate(clause.span);
@@ -251,3 +258,24 @@ function wordValued(value: ValueExpr): boolean {
 
 /** The value types whose values are words from a closed set. */
 const WORDED: ReadonlySet<string> = new Set(["enum", "ordinal", "bitmask"]);
+
+/**
+ * The runs covering one stretch of a painted query, rebased onto that stretch's own coordinates.
+ *
+ * A surface showing part of a query — an editing slot, say — cannot paint itself: {@link paint} needs the whole
+ * text to know which column a head reached or whether a clause is broken. It reads the whole and takes its own
+ * slice, so the two surfaces cannot disagree about the same characters.
+ *
+ * @param runs The whole query's runs.
+ * @param span The stretch to take, in the query's coordinates.
+ * @returns The runs covering that stretch exactly, starting at zero.
+ */
+export function runsWithin(runs: readonly Run[], span: Span): Run[] {
+    const out: Run[] = [];
+    for (const run of runs) {
+        const start = Math.max(run.start, span.start);
+        const end = Math.min(run.end, span.end);
+        if (end > start) out.push({...run, start: start - span.start, end: end - span.start});
+    }
+    return out;
+}

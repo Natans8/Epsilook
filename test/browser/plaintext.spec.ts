@@ -69,3 +69,56 @@ test("leaving the plain view keeps the text exactly as it was typed", async () =
     // the query.
     await expectQuery(page, "model:{fire}");
 });
+
+test("the field and its backdrop wrap alike at every width, so the caret is where the text is", async () => {
+    // A mirrored view drifts the moment the two surfaces measure differently — and the drift only shows from
+    // the SECOND line, because the first agrees until a wrap point does not. Weight is the metric that broke
+    // it: bold text is wider, so the ink wrapped a word earlier and every line below it moved.
+    await page.goto(`${HARNESS_URL}?q=${encodeURIComponent(
+        "model:{fire -missile attach:chest} big red dragon sound:count>2 fireball frost bolt wave blast burning"
+        + " ember cinder ash smoke flame torch lantern beacon glimmer")}&plain=1`);
+    await expect(plainField(page)).toBeVisible({timeout: 120_000});
+    const disagreeing = await page.evaluate(() => {
+        const field = document.querySelector("textarea");
+        const ink = document.querySelector("[class*='plainInk']");
+        if (field === null || ink === null) return ["no plaintext view"];
+        const wrap = ink.parentElement;
+        if (wrap === null) return ["no wrap"];
+        const lh = Number.parseFloat(getComputedStyle(field).lineHeight);
+        const starts = (fromField: boolean): (number | null)[] => {
+            const box = field.getBoundingClientRect();
+            const height = fromField ? field.scrollHeight : ink.getBoundingClientRect().height;
+            const out: (number | null)[] = [];
+            for (let line = 0; line < Math.round(height / lh); line++) {
+                const y = box.y + line * lh + lh / 2;
+                if (!fromField) field.style.pointerEvents = "none";
+                const hit = document.caretPositionFromPoint(box.x + 1, y);
+                field.style.pointerEvents = "";
+                if (fromField) {
+                    out.push(hit !== null && hit.offsetNode === field ? hit.offset : null);
+                    continue;
+                }
+                if (hit === null || !ink.contains(hit.offsetNode)) {
+                    out.push(null);
+                    continue;
+                }
+                const range = document.createRange();
+                range.selectNodeContents(ink);
+                range.setEnd(hit.offsetNode, hit.offset);
+                out.push(range.toString().length);
+            }
+            return out;
+        };
+        const bad: string[] = [];
+        for (let width = 1100; width >= 360; width -= 20) {
+            wrap.style.width = `${String(width)}px`;
+            void wrap.offsetHeight;
+            const field_ = JSON.stringify(starts(true));
+            const ink_ = JSON.stringify(starts(false));
+            if (field_ !== ink_) bad.push(`${String(width)}px: field ${field_} vs ink ${ink_}`);
+        }
+        wrap.style.width = "";
+        return bad;
+    });
+    expect(disagreeing).toEqual([]);
+});

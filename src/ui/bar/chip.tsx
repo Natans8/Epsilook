@@ -105,17 +105,16 @@ function aimAt(e: ReactMouseEvent, raw: string, window: Span): number | null {
  * the middle of a square viewBox are centred by construction, at any size, in any face — and they let the two
  * marks read as the matched pair they are, which two glyphs from different parts of a font never did.
  */
-function Mark({kind}: { readonly kind: "remove" | "add" }): ReactElement {
+function Mark(): ReactElement {
     return (
         <svg className={styles.mark} viewBox="0 0 12 12" aria-hidden="true" focusable="false">
-            <path d={kind === "remove" ? "M3.6 3.6 8.4 8.4 M8.4 3.6 3.6 8.4" : "M6 3.4 V8.6 M3.4 6 H8.6"}/>
+            <path d="M3.6 3.6 8.4 8.4 M8.4 3.6 3.6 8.4"/>
         </svg>
     );
 }
 
-/** The one delete/grow button shape: the marks never take the press as an open. */
-function Affordance({kind, label, className, onPress}: {
-    readonly kind: "remove" | "add";
+/** The delete button: the mark never takes the press as an open. */
+function Affordance({label, className, onPress}: {
     readonly label: string;
     readonly className: string;
     readonly onPress: () => void;
@@ -141,7 +140,7 @@ function Affordance({kind, label, className, onPress}: {
                     onPress();
                 }}
             >
-                <Mark kind={kind}/>
+                <Mark/>
             </button>
         </span>
     );
@@ -206,10 +205,9 @@ function Pieces({pieces, text}: { readonly pieces: readonly Piece[]; readonly te
  * The sectioned head cell every chip, lane and inner bind opens with: `[x -Head]`, the divider carried by
  * structure and the negation fused into the head as one red unit.
  */
-function Sect({head, not, label, hint, className, onOpen, onRemove}: {
+function Sect({head, not, hint, className, onOpen}: {
     readonly head: string;
     readonly not: boolean;
-    readonly label: string;
     /** What pressing the head does, said in words — the gesture has no other way to announce itself. */
     readonly hint: string;
     /** Which cell this is — the outer chip's, or an inner bind's tighter one. */
@@ -219,7 +217,6 @@ function Sect({head, not, label, hint, className, onOpen, onRemove}: {
      * the chip asks, so flipping it is what says "not that". Opening the chip is the value's press.
      */
     readonly onOpen?: (e: ReactMouseEvent) => void;
-    readonly onRemove: () => void;
 }): ReactElement {
     return (
         <span
@@ -227,7 +224,6 @@ function Sect({head, not, label, hint, className, onOpen, onRemove}: {
             title={onOpen === undefined ? undefined : hint}
             onClick={onOpen === undefined ? undefined : press(onOpen)}
         >
-            <Affordance kind="remove" label={label} className={styles.chipX} onPress={onRemove}/>
             <span className={not ? styles.negHead : undefined}>
                 {not ? NEGATION : ""}{headCase(head)}
             </span>
@@ -262,24 +258,12 @@ function ChipEl({chip, warned, notes, span, text, act}: {
             <Sect
                 head={chip.head}
                 not={chip.not}
-                label={t("bar.delete")}
                 hint={t(chip.not ? "bar.include" : "bar.exclude")}
                 className={styles.chipSect}
                 onOpen={act.negate}
-                onRemove={act.remove}
             />
             <span className={styles.chipBody}><Pieces pieces={chip.body} text={text}/></span>
-            {chip.grow !== null && (
-                <Affordance
-                    kind="add"
-                    label={t("bar.add")}
-                    className={styles.chipAdd}
-                    onPress={() => {
-                        const grow = chip.grow;
-                        if (grow !== null) act.grow(grow);
-                    }}
-                />
-            )}
+            <Affordance label={t("bar.delete")} className={styles.chipX} onPress={act.remove}/>
         </span>
     );
 }
@@ -305,11 +289,9 @@ function LaneEl({lane, warned, notes, span, text, act}: {
             <Sect
                 head={lane.head}
                 not={lane.not}
-                label={t("bar.delete")}
                 hint={t(lane.not ? "bar.include" : "bar.exclude")}
                 className={styles.chipSect}
                 onOpen={act.negate}
-                onRemove={act.remove}
             />
             {lane.items.map((item, i) => {
                 if (item.is === "or") return <Or key={i}/>;
@@ -339,23 +321,24 @@ function LaneEl({lane, warned, notes, span, text, act}: {
                         <Sect
                             head={item.head}
                             not={item.not}
-                            label={t("bar.delete")}
                             hint={t(item.not ? "bar.include" : "bar.exclude")}
                             className={styles.bindSect}
                             onOpen={() => {
                                 act.negateTerm(i);
                             }}
-                            onRemove={() => {
+                        />
+                        <span className={styles.bindBody}><Pieces pieces={item.body} text={text}/></span>
+                        <Affordance
+                            label={t("bar.delete")}
+                            className={styles.chipX}
+                            onPress={() => {
                                 act.removeTerm(i);
                             }}
                         />
-                        <span className={styles.bindBody}><Pieces pieces={item.body} text={text}/></span>
                     </span>
                 );
             })}
-            <Affordance kind="add" label={t("bar.add")} className={styles.chipAdd} onPress={() => {
-                act.grow("term");
-            }}/>
+            <Affordance label={t("bar.delete")} className={styles.chipX} onPress={act.remove}/>
         </span>
     );
 }

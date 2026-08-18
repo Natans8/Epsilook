@@ -34,7 +34,8 @@
     "typescript/no-unsafe-member-access": "off",
     "typescript/no-unsafe-call": "off",
     "typescript/no-unsafe-argument": "off",
-    "typescript/no-unsafe-return": "off"
+    "typescript/no-unsafe-return": "off",
+    "react/react-in-jsx-scope": "off"
   },
   "overrides": [
     {

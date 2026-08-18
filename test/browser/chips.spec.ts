@@ -30,11 +30,6 @@ function deletes(): ReturnType<Page["locator"]> {
     return page.getByRole("button", {name: "Delete"});
 }
 
-/** The grow affordances, in bar order. */
-function adds(): ReturnType<Page["locator"]> {
-    return page.getByRole("button", {name: "Add a condition"});
-}
-
 /**
  * Whether the bar is at rest — its input parked out of sight rather than drawn as the editing form. Read from
  * the open wrapper's class, the same way {@link openKind} reads the open position's kind.
@@ -60,50 +55,18 @@ test("x removes the chip with its separator; the caret rests where it stood; one
     await expectQuery(page, "model:fire sound:bell ");
 });
 
-test("+ grows a chip into the lane form with a fresh term slot; typing and Enter commit the lane", async () => {
-    await seed(page, "model:fire");
-    await adds().first().click();
-    await expectQuery(page, "model:{fire } ");
-    expect(await slot(page)).toMatchObject({value: "fire ", start: 5, end: 5, focused: true});
-
-    await page.keyboard.type("frost", {delay: 5});
-    await page.keyboard.press("Enter");
-    await expectQuery(page, "model:{fire frost} ");
-});
-
-test("Escape abandons a grow whole, typed condition included", async () => {
-    await seed(page, "model:fire");
-    await adds().first().click();
-    await page.keyboard.type("frost", {delay: 5});
-    await page.keyboard.press("Escape");
-    await expectQuery(page, "model:fire ");
-});
-
-test("+ on a property chip offers a value alternative; abandoning it trims the separator back out", async () => {
-    await seed(page, "cast:instant");
-    await adds().first().click();
-    await expectQuery(page, "cast:instant| ");
-    await page.keyboard.type("2s", {delay: 5});
-    await page.keyboard.press("Enter");
-    await expectQuery(page, "cast:instant|2s ");
-
-    await adds().first().click();
-    await barInput(page).blur();
-    await expectQuery(page, "cast:instant|2s ");
-});
-
 test("an inner bind's x removes just that term, and the lane collapses to the compact spelling", async () => {
     await openWith("model:{fire attach:chest}");
-    // The lane's own x is first; the inner bind's is second. The caret rests in a fresh tail afterwards, as
-    // after any commit, so the settled text carries its separator.
-    await deletes().nth(1).click();
+    // Each mark sits at the tail of the pill it removes, so an inner bind's comes before the lane's own. The
+    // caret rests in a fresh tail afterwards, as after any commit, so the settled text carries its separator.
+    await deletes().first().click();
     await barInput(page).blur();
     await expectQuery(page, "model:fire ");
 });
 
 test("a term alone in its alternation run takes the stranded or-edge with it", async () => {
     await openWith("model:{attach:chest | fire}");
-    await deletes().nth(1).click();
+    await deletes().first().click();
     await barInput(page).blur();
     await expectQuery(page, "model:fire ");
 });
@@ -138,29 +101,11 @@ test("an inner x is right even when settling the same segment shifts every span 
     // The URL text was never committed: settling it trims the scope's interior, so a span read from the render
     // points at the wrong characters. The term is named by index, so the removal lands where it was aimed.
     await openWith("model:{ attach:chest attach:head }");
-    await deletes().nth(2).click();
+    // The SECOND inner bind's mark: the marks read left to right, each at the tail of its own pill.
+    await deletes().nth(1).click();
     await barInput(page).blur();
     // The survivor keeps its braces: the colon-glued spelling would ask a different question.
     await expectQuery(page, "model:{attach:chest} ");
-});
-
-test("an alternation chip sheds its braces on commit and still grows a lane", async () => {
-    await seed(page, "model:fire|frost");
-    await expectQuery(page, "model:fire|frost ");
-    await adds().first().click();
-    await expectQuery(page, "model:{fire|frost } ");
-    await page.keyboard.type("missile", {delay: 5});
-    await page.keyboard.press("Enter");
-    await expectQuery(page, "model:{fire|frost missile} ");
-});
-
-test("a comparison chip grows a lane too — its + is not a dead button", async () => {
-    await seed(page, "model>=4");
-    await adds().first().click();
-    await expectQuery(page, "model:{>=4 } ");
-    await page.keyboard.type("fire", {delay: 5});
-    await page.keyboard.press("Enter");
-    await expectQuery(page, "model:{>=4 fire} ");
 });
 
 test("Ctrl+A selects every chip rather than flattening the bar to raw text", async () => {
@@ -236,7 +181,7 @@ test("the bar's affordances stay out of the tab order, and its input keeps its n
     const stops = await page.evaluate(() => Array.from(document.querySelectorAll("button, input, select"))
         .filter((el) => (el as HTMLElement).tabIndex >= 0)
         .map((el) => el.getAttribute("aria-label") ?? el.tagName));
-    expect(stops.filter((name) => name === "Delete" || name === "Add a condition")).toEqual([]);
+    expect(stops.filter((name) => name === "Delete")).toEqual([]);
     await expect(barInput(page)).toHaveAttribute("aria-label", /search spells/i);
 });
 

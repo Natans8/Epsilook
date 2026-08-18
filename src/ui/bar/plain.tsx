@@ -18,6 +18,11 @@ import {Classed} from "./classed";
 import frame from "./bar.module.css";
 import styles from "./plain.module.css";
 
+/** The search is live, so Enter has nothing to submit; it must not open a second line either. */
+function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (e.key === "Enter") e.preventDefault();
+}
+
 /**
  * The plaintext editor.
  */
@@ -49,11 +54,6 @@ export function PlainBar({text, onText, placeholder, label}: {
         onText(el.value);
     };
 
-    const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
-        // The search is live, so Enter has nothing to submit; it must not open a second line either.
-        if (e.key === "Enter") e.preventDefault();
-    };
-
     return (
         <div
             className={`${frame.qbar} ${styles.plainBar}`}
@@ -68,7 +68,7 @@ export function PlainBar({text, onText, placeholder, label}: {
                 {/* The backdrop sits in FLOW and sizes the wrap; the field rides above it, so the two wrap
                     identically and the text can never reach past the bar it is drawn in. */}
                 <span className={styles.plainInk} aria-hidden="true">
-                    <Classed text={text} rich/>
+                    <Classed text={text} rich mirrored/>
                     {/* A trailing newline keeps a text ending in a space from collapsing the last line. */}
                     {"\n"}
                 </span>
