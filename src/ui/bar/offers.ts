@@ -42,6 +42,14 @@ export interface Offer {
     /** The column whose tone the row wears, where the offer belongs to one. */
     readonly tone?: string;
     /**
+     * A small picture drawn beside the word, where the vocabulary has one.
+     *
+     * An expansion's badge is recognised faster than its word is read, and the same is true of the target
+     * glyphs and the colour swatches that will follow — so a cosmetic is part of what an offer may carry,
+     * declared beside the vocabulary it belongs to rather than invented by the surface.
+     */
+    readonly art?: string;
+    /**
      * Every spelling this offer answers to, where it answers to more than its own word.
      *
      * A door reads by its full name and its synonyms — `animation` reaches `anim` — so narrowing has to see
@@ -111,6 +119,8 @@ export interface Offers {
 export interface Vocabulary {
     /** The expansions as a reader spells them, lowest first. */
     readonly rungs: readonly string[];
+    /** The picture that belongs to a word, where one is shipped for it. */
+    readonly art?: Readonly<Record<string, string>>;
 }
 
 /** No pack loaded: the surface offers the language alone. */
@@ -320,7 +330,7 @@ function propOffers(context: { role: "column"; column: Column } | { role: "kind"
 function valueOffers(prop: Prop, tone: string, vocab: Vocabulary, typed: string):
     { sentinels: Offer[]; words: Offer[]; roles: Offer[] } {
     const word = (spelling: string, note: string): Offer =>
-        ({shape: "word", word: spelling, insert: spelling, note, tone});
+        ({shape: "word", word: spelling, insert: spelling, note, tone, art: vocab.art?.[spelling]});
     const sentinels = Object.values(prop.sentinels ?? {})
         .map((spelling) => word(spelling, i18n.t("ui:surface.sentinelNote")));
     // A role needs no note of its own: the section it sits under already says what it answers, and a note that
@@ -328,13 +338,14 @@ function valueOffers(prop: Prop, tone: string, vocab: Vocabulary, typed: string)
     const roles = prop.types.includes(bitmask) ? TARGET_ROLES.map((role) => word(role, "")) : [];
     const any = operatorsOf(prop).includes("present")
         ? [word(GRAMMAR.anyWord, i18n.t("ui:surface.anyNote"))] : [];
-    // An ordered vocabulary is small, closed and carried by the pack, so it lists itself. A number typed where
-    // a name belongs is the reader counting the ladder — the rung standing at that number answers first.
-    const at = Number(typed);
+    // An ordered vocabulary is small, closed and carried by the pack, so it lists itself. Its POSITION is a
+    // spelling it answers to as well: a reader who types 3 is counting the ladder, and the rung standing at
+    // three is what they mean — narrowed by the same rule that lets `animation` reach the anim door.
     const rungs = prop.types.includes(ordinal)
-        ? vocab.rungs.map((rung, index) => ({rung, index}))
-            .sort((a, b) => Number(b.index + 1 === at) - Number(a.index + 1 === at))
-            .map(({rung, index}) => word(rung, i18n.t("ui:surface.rungNote", {number: index + 1})))
+        ? vocab.rungs.map((rung, index) => ({
+            ...word(rung, i18n.t("ui:surface.rungNote", {number: index + 1})),
+            reads: [String(index + 1)],
+        }))
         : [];
     return {sentinels, words: [...rungs, ...any], roles};
 }

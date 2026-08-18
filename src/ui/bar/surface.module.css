@@ -148,6 +148,23 @@
     color: rgb(var(--danger-rgb));
 }
 
+/* A vocabulary's own picture, at 1.0's own treatment of the same art: a fixed HEIGHT and its own width, because
+ * these are wordmarks at their own aspects — vanilla and tbc are square sigils, everything from wrath on is a
+ * lockup, and squaring them all would shrink the wide ones to nothing. Held just short of full opacity so a
+ * column of them reads as an attribute of the words rather than as twelve pieces of competing art. */
+.art {
+    flex: none;
+    width: auto;
+    height: 15px;
+    max-width: 4.5rem;
+    object-fit: contain;
+    opacity: 0.72;
+}
+
+.lit .art {
+    opacity: 1;
+}
+
 /* A word offer wears the mark a vocabulary word wears inside a chip, and no tint — one accent per row. */
 .vocab {
     border-bottom: 1px dotted var(--tag-btn);

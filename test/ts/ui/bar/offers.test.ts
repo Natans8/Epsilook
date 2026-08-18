@@ -232,3 +232,18 @@ test("a property no other spelling reaches is still offered, subject or not", ()
     assert.ok(!words(at("id:{}", 4), "props").includes("count"));
     assert.ok(words(at("model:{}", 7), "props").includes("count"));
 });
+
+test("a vocabulary's own picture rides with its word", () => {
+    const rungs = ["vanilla", "tbc", "wotlk"];
+    const offers = offersAt(planAt("xpac:", 5), 0, [], {rungs, art: {wotlk: "/site/img/expansions/wotlk.png"}});
+    const rows = offers.groups.flatMap((group) => group.offers);
+    assert.equal(rows.find((offer) => offer.word === "wotlk")?.art, "/site/img/expansions/wotlk.png");
+    // A word with no picture shipped for it carries none, and says nothing about that.
+    assert.equal(rows.find((offer) => offer.word === "tbc")?.art, undefined);
+});
+
+test("a number typed where an expansion belongs finds the one standing at it", () => {
+    const rungs = ["vanilla", "tbc", "wotlk", "cata"];
+    const offers = offersAt(planAt("xpac:3", 6), 1, [], {rungs});
+    assert.equal(offers.groups.flatMap((group) => group.offers)[0].word, "wotlk");
+});

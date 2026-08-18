@@ -69,6 +69,8 @@ function Row({offer, negated, lit, id, onPick, onLight}: {
             onClick={onPick}
             onMouseMove={onLight}
         >
+            {/* The vocabulary's own picture, where it has one: read before the word rather than instead of it. */}
+            {offer.art !== undefined && <img className={styles.art} src={offer.art} alt="" aria-hidden="true"/>}
             <span className={styles.word}>{body}</span>
             {/* Which kinds actually declare this property, where the column's own scope reaches more than one. */}
             {offer.owner !== undefined && <span className={styles.owner}>{offer.owner}</span>}

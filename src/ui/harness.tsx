@@ -12,12 +12,10 @@ import {I18nextProvider, useTranslation} from "react-i18next";
 import {setOrdinalLadder} from "../search/index";
 import {i18n} from "../i18n";
 import {App} from "./app";
+import {BASE} from "./pack";
 import type {PackInfo} from "./searcher";
 import {Searcher} from "./searcher";
 import styles from "./app.module.css";
-
-/** Where the site's files live relative to the served root. */
-const BASE = "/site/";
 
 /** What the loader has so far. */
 type Loading =

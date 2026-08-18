@@ -9,6 +9,8 @@ import type {ReactElement} from "react";
 import {useEffect, useRef, useState} from "react";
 import {useTranslation} from "react-i18next";
 import type {PackInfo, Searcher} from "./searcher";
+import {expansionArt} from "./art";
+import {BASE} from "./pack";
 import {Bar} from "./bar/bar";
 import {PlainBar} from "./bar/plain";
 import styles from "./app.module.css";
@@ -123,7 +125,7 @@ export function App({info, searcher}: {
                         ? <PlainBar text={text} onText={setText} placeholder={t("bar.placeholder")}
                                     label={t("bar.placeholder")}/>
                         : <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}
-                               vocab={{rungs: info.rungs}}/>}
+                               vocab={{rungs: info.rungs, art: expansionArt(info.rungs, BASE)}}/>}
                 </div>
                 <div className={styles.statusRow}>
                     <div

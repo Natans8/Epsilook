@@ -6,6 +6,9 @@
  * against readFileSync and gunzipSync), the logic does not — and the logic lives in {@link mergeSections}, a pure
  * function the test suite pins with fixtures.
  */
+
+/** Where the site's files are served from — the packs, and the art an offer may draw beside a word. */
+export const BASE = "/site/";
 import type {VersionEntry} from "../data";
 import type {RowPack} from "../packrows";
 import type {LoadedPack} from "../dataset";
