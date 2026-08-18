@@ -24,6 +24,7 @@ from pack.emit.addon import (ADDON_FORMAT, AXES, AXIS_OF, DIGITS,
                              supplies, wrapped)
 from pack.model import SECTIONS
 from pack.model.section import Layout
+from support import unwrap
 
 lua51 = pytest.importorskip("lupa.lua51")
 
@@ -60,28 +61,6 @@ def round_trip(lua: Any, values: Any) -> Any:
               b"Blob = " + wrapped(blob.payload()) + b"\n")
     lua.execute(source)
     return unwrap(lua.eval(b"Reader.all(Blob, Node)"))
-
-
-def unwrap(value: Any) -> Any:
-    """A Lua value as the Python one it stands for.
-
-    A Lua table is a list where its keys are one to n and a mapping otherwise,
-    which is the same distinction the emitter made on the way in.
-
-    An empty table is read as an empty list, because Lua has one value for
-    both and nothing in it says which was meant. That ambiguity is the
-    language's rather than the layout's: a reader is handed a table with
-    nothing in it either way.
-    """
-    if not lua51.lua_type(value) == "table":
-        return value.decode("utf-8") if isinstance(value, bytes) else value
-    keys = list(value.keys())
-    if not keys:
-        return []
-    if keys == list(range(1, len(keys) + 1)):
-        return [unwrap(value[key]) for key in keys]
-    return {(key.decode("utf-8") if isinstance(key, bytes) else key):
-            unwrap(value[key]) for key in keys}
 
 
 def test_digits_round_trip() -> None:

@@ -59,6 +59,15 @@ The tier that exists because this project keeps building second implementations:
 `rebuild.py --verify` comparing manifests, `wdc3_oracle_test.py` decoding a db2 and comparing to the publisher's own
 export of that same db2, the row-diff that proved the B6 port by re-running the deleted reshapers.
 
+**The addon's two oracles are the cleanest instance, because the second implementation is in another language.**
+`addon_test.py` emits every column of a real pack and reads it back through `Reader.lua` under the interpreter the
+client runs, comparing against what the browser's modules hold. `addon_api_test.py` walks a sampled spell's parts
+through the addon's own surface and compares each against `walk`, the build's own account of the rows it had just
+assembled. Neither can be satisfied by one misunderstanding: the writer is Python and the reader is Lua, and nothing
+is shared between them but the artifact. Both are opt-in behind `EPSILOOK_ADDON_ORACLE=1`, since both want a built
+pack. They have caught, between them, an opening bracket Lua refuses inside a long string, a sparse vocabulary that
+ships as a mapping rather than a column, and a property whose column is float rather than whole.
+
 Its power and its limit are the same thing: **it proves agreement, never correctness.** Two implementations of one
 misunderstanding agree perfectly. So an oracle is worth building when a port or a second provider lands, and worth
 retiring when the first implementation goes — a spent oracle is maintenance with no question behind it.
@@ -192,6 +201,14 @@ unique, so nothing collides.
 is installed and `sys.path` is not rewritten. `conftest.py` holds the fixtures, and `support.py` the types they share:
 a fixture reaches a test through pytest and needs no import, but its type does, and importing a name out of `conftest`
 is not something pytest supports.
+
+**The addon's Lua is tested from here too, and there is no third suite.** `lupa` is a development dependency and it
+ships `lua51`, the client's own interpreter, so a pytest module can load `addon/Epsilook/*.lua` and ask it questions
+directly. That is what keeps the addon's reader the ONE account of its layout: a Python decoder written to check it
+would be a second account of one thing, and the two would drift. The addon files reference no game global outside
+`Client.lua`, which is what lets them run under a bare interpreter with no stubs at all — `check_addon_layers` is the
+guard that keeps it true, and it is complete because selene under `std = lua51` refuses a bare undefined global, so a
+client global has to be spelled through the globals table before it can be named.
 
 **No framework beyond `node:test` and `pytest`.** A suite with nothing on top cannot rot when the thing on top does, and
 this app is maintained solo: the tests are the handover.

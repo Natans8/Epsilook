@@ -24,9 +24,20 @@
 -- ## Records
 --
 -- SpellData   id, name, subtext, icon, iconName, iconIndex, schoolID, school
--- PartData    label, full, ids, detail
+-- PartData    axis, kind, values, named, ids
 -- Action      key, label, needs, effect, revert
 -- DataInfo    pack, built, variation, supplied, absent
+--
+-- A part carries its properties twice and neither is a spelling of the other.
+-- `values` holds what the pack stores, which is the id an action takes, and
+-- `named` holds what that number's vocabulary made of it, which is what a
+-- person reads. A property with no vocabulary appears only in `values`. They
+-- are flat tables of the same keys or fewer, so neither has a shape to test
+-- for, and a caller reads whichever half its question is about.
+--
+-- Property ORDER is not carried, because the payload does not carry it: the
+-- columns are a table and Lua does not order one. Which property leads is a
+-- rendering decision in any case, and rendering is not this file's business.
 
 local _, ns = ...
 
@@ -83,7 +94,7 @@ end
 
 --- One column of the spell section, by row.
 local function field(column, row, fallback)
-	local node, blob = Data.GetColumn("spell", "spells", column)
+	local node, blob = Data.GetColumn("spells", column)
 	if not node or row >= Reader.size(node) then
 		return fallback
 	end
@@ -92,7 +103,7 @@ end
 
 --- One row of a section that ships as a single bare column.
 local function bare(section, column, row)
-	local node, blob = Data.GetColumn("spell", section, column)
+	local node, blob = Data.GetColumn(section, column)
 	if not node or row < 0 or row >= Reader.size(node) then
 		return nil
 	end
@@ -131,7 +142,7 @@ function Epsilook:GetSpellDataByIndex(index, target)
 	if not Data then
 		return nil
 	end
-	local ids, blob = Data.GetColumn("spell", "spells", "ids")
+	local ids, blob = Data.GetColumn("spells", "ids")
 	if not ids or index < 0 or index >= Reader.size(ids) then
 		return nil
 	end
@@ -202,6 +213,10 @@ end
 -- disagree about what a model affords, nor about which of those changes the
 -- world. `effect` is "read" where repeating it is harmless and offering it from
 -- stale output is safe, and "world" where neither is true.
+--
+-- `needs` names the id the action takes, which `SUPPLIES` below says how a part
+-- of that axis produces. `GetPartActions` is what pairs the two; an action
+-- naming an id no part supplies could never be offered, and a test says so.
 -- @param axis one of GetAxes()
 -- @return an array of Action, empty where the axis affords nothing
 function Epsilook:GetActions(axis)
@@ -210,7 +225,7 @@ end
 
 Epsilook.ACTIONS = {
 	model = {
-		{ key = "spawn", label = "Spawn", needs = "display", effect = "world", revert = "" },
+		{ key = "spawn", label = "Spawn", needs = "gob", effect = "world", revert = "" },
 	},
 	sound = {
 		{ key = "play", label = "Play", needs = "file", effect = "read", revert = "stop" },
@@ -219,11 +234,26 @@ Epsilook.ACTIONS = {
 		{ key = "stopKit", label = "Stop Kit", needs = "kit", effect = "read", revert = "" },
 	},
 	anim = {
-		{ key = "anim", label = "Anim", needs = "emote", effect = "world", revert = "resetAnim" },
+		-- Two commands and two ids. One command plays an animation over
+		-- whatever the character is doing and the other sets the pose it
+		-- stands in, and the build ships an emote of each kind per animation,
+		-- most animations having both. So an interface offering one id to both
+		-- commands would be offering the wrong number to one of them.
+		--
+		-- TODO: settle which column feeds which command in game. That a
+		-- one-shot emote is what a one-shot command takes is read off the
+		-- column names and nothing else, and a name is not a measurement.
+		{
+			key = "anim",
+			label = "Anim",
+			needs = "emoteOneshot",
+			effect = "world",
+			revert = "resetAnim",
+		},
 		{
 			key = "stand",
 			label = "Stand",
-			needs = "emote",
+			needs = "emoteLoop",
 			effect = "world",
 			revert = "resetStand",
 		},
@@ -235,10 +265,226 @@ Epsilook.ACTIONS = {
 	mech = {},
 }
 
--- TODO: GetPartDataByIndex, FindParts, FindSpells, GetNumMatches, ParseQuery
--- and FormatQuery. The first two need the row families materialised through
--- `Data.GetRowRange`; the last four need the language and evaluate layers,
--- which are not written. Their shapes are settled, so a display can be built
--- against them before they answer.
+--- One id as an action can take it, which nought never is.
+-- Wherever the build has an id to give and none to give for a row, it writes
+-- nought, so a caller handed that number would act on whatever it names.
+-- @param found what the payload or a lookup answered
+-- @return the id, or nil
+local function real(found)
+	if not found or found == 0 then
+		return nil
+	end
+	return found
+end
+
+--- The emote that performs one animation, where the build knows of one.
+-- @param section which kind of emote, as the payload names the column
+-- @param anim the animation id, or nil where the row names none
+-- @return the emote id, or nil
+local function emote(section, anim)
+	local found = Data.GetIndexed(section)
+	return anim and found and real(found(anim)) or nil
+end
+
+--- How a part of one axis produces the id an action needs.
+-- Keyed the way `ACTIONS` is and by the same `needs` word, so the two are one
+-- declaration read from either end.
+--
+-- A part that yields nothing here is simply not offered that action, which is
+-- how a kind declines one without being named anywhere: a replacement row
+-- gives two animations and no single one to play, so it produces no emote.
+local SUPPLIES = {
+	model = {
+		-- The id is passed on exactly as the pack holds it, sign included: the
+		-- command reads that sign to tell a spawnable template from a display,
+		-- and a caller that tidied it away would spawn something else.
+		--
+		-- The lean variation leaves this column to the client, so nothing here
+		-- answers on that build and no model part offers a spawn. Closing that
+		-- is the client seam `Data.GetSupplier` names and nothing yet composes.
+		gob = function(values)
+			local gobs = Data.GetPaired("files", "fids", "gobs")
+			return values.file and gobs and real(gobs(values.file)) or nil
+		end,
+	},
+	sound = {
+		file = function(values)
+			return values.file
+		end,
+		kit = function(values)
+			return values.kit
+		end,
+	},
+	anim = {
+		-- One kind of this axis carries an `id` and it is the animation kit, so
+		-- naming that kind is not what makes this right today. It is what keeps
+		-- it right: `id` is the plainest name a property has, two model kinds
+		-- already use it for something else, and a kind of this axis gaining
+		-- one would otherwise be handed to the command as a kit.
+		animkit = function(values, kind)
+			return kind == "kit" and values.id or nil
+		end,
+		emoteOneshot = function(values)
+			return emote("animEmoteOneshots", values.anim)
+		end,
+		emoteLoop = function(values)
+			return emote("animEmoteLoops", values.anim)
+		end,
+	},
+}
+
+--- Which ids a part of one axis can ever produce.
+-- The other end of `ACTIONS`: an action needs one of these words or it can
+-- never be offered on anything. Derived from the one declaration rather than
+-- listed a second time, so the two cannot disagree.
+-- @param axis one of GetAxes()
+-- @return an array of `needs` words, in a stable order
+function Epsilook:GetSupplies(axis)
+	local out = {}
+	for need in pairs(SUPPLIES[axis] or {}) do
+		out[#out + 1] = need
+	end
+	table.sort(out)
+	return out
+end
+
+--- One of a reused record's tables, emptied.
+-- A caller passing a table to fill gets the part it asked for and nothing left
+-- over from the last one, which a property unset on this row would otherwise
+-- be indistinguishable from.
+-- @param held the table, or nil
+-- @return the same table with nothing in it, or nil
+local function wiped(held)
+	if not held then
+		return nil
+	end
+	for key in pairs(held) do
+		held[key] = nil
+	end
+	return held
+end
+
+--- What each of a row's stored numbers means, where a vocabulary says.
+-- @param axis the axis
+-- @param kind the row's kind
+-- @param values the row's stored numbers
+-- @param target an optional table to fill
+-- @return a table of property name to what its number is called
+local function named(axis, kind, values, target)
+	local out = target or {}
+	local vocab = Data.GetRowVocab(axis, kind)
+	for name, value in pairs(values) do
+		local which = vocab[name]
+		local look = which and Data.GetVocabulary(which)
+		local found = look and look(value)
+		if found ~= nil then
+			out[name] = found
+		end
+	end
+	return out
+end
+
+--- Which ids a row can hand to an action of its axis.
+-- @param axis the axis
+-- @param kind the row's kind
+-- @param values the row's stored numbers
+-- @param target an optional table to fill
+-- @return a table of an action's `needs` word to the id it takes
+local function supplied(axis, kind, values, target)
+	local out = target or {}
+	for need, supply in pairs(SUPPLIES[axis] or {}) do
+		local found = supply(values, kind)
+		if found ~= nil then
+			out[need] = found
+		end
+	end
+	return out
+end
+
+--- One part, by where it sits in the axis's whole row order.
+-- The position rather than the spell, because finding where a spell's rows
+-- begin means walking the counts forward from a checkpoint -- up to a thousand
+-- reads. A caller listing a spell's parts does that once and counts from
+-- there; doing it per part is what makes a long list cost the walk again for
+-- every row it shows.
+-- @param axis the axis
+-- @param at a position, as `Data.GetRowRange` counts them
+-- @param target an optional table to fill
+-- @return a PartData, or nil where the position names no row
+local function partAt(axis, at, target)
+	local kind, slot = Data.GetRowKind(axis, Data.GetRowRef(axis, at))
+	if not kind then
+		return nil
+	end
+	local out = target or {}
+	out.axis, out.kind = axis, kind
+	out.values = Data.GetRowValues(axis, kind, slot, wiped(out.values))
+	out.named = named(axis, kind, out.values, wiped(out.named))
+	out.ids = supplied(axis, kind, out.values, wiped(out.ids))
+	return out
+end
+
+--- One of a spell's parts on one axis.
+-- Counted from ONE, as a list is. A spell's own index is a row of the pack and
+-- counted from zero; this is a position among what a single spell has.
+-- @param spellID the spell id
+-- @param axis one of GetPartAxes()
+-- @param index which part, counted from one
+-- @param target an optional table to fill instead of allocating one
+-- @return a PartData, or nil where the spell, the axis or the part is absent
+function Epsilook:GetPartDataByIndex(spellID, axis, index, target)
+	local row = Data and self:GetSpellIndexByID(spellID)
+	if not row then
+		return nil
+	end
+	local at, count = Data.GetRowRange(axis, row)
+	if not at or index < 1 or index > count then
+		return nil
+	end
+	return partAt(axis, at + index - 1, target)
+end
+
+--- Every part a spell has on one axis, in the order the pack ships them.
+-- The spell is located once for the whole walk, and so is where its rows
+-- begin: both are searches, and a list of parts is exactly where paying for
+-- them per row adds up.
+-- @param spellID the spell id
+-- @param axis one of GetPartAxes()
+-- @return an iterator yielding an index and a PartData
+function Epsilook:IterateParts(spellID, axis)
+	local row = Data and self:GetSpellIndexByID(spellID)
+	local at, count
+	if row then
+		at, count = Data.GetRowRange(axis, row)
+	end
+	local index = 0
+	return function()
+		index = index + 1
+		if not at or index > count then
+			return nil
+		end
+		return index, partAt(axis, at + index - 1)
+	end
+end
+
+--- Which of its axis's actions a part can actually offer.
+-- The rule in one place: an action needs an id and the part either has it or
+-- does not, except for the ones that need nothing and are always offered.
+-- @param part a PartData
+-- @param target an optional table to fill instead of allocating one
+-- @return an array of Action
+function Epsilook:GetPartActions(part, target)
+	local out = wiped(target) or {}
+	for _, action in ipairs(self:GetActions(part.axis)) do
+		if action.needs == "" or part.ids[action.needs] ~= nil then
+			out[#out + 1] = action
+		end
+	end
+	return out
+end
+
+-- TODO: FindSpells, GetNumMatches, ParseQuery and FormatQuery. All four need
+-- the language and evaluate layers, which are not written. Their shapes are
+-- settled, so a display can be built against them before they answer.
 
 return Epsilook

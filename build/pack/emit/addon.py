@@ -104,7 +104,6 @@ AXIS_OF: Mapping[str, str] = {name: axis
 SUPPLIED_BY: Mapping[str, str] = {
     "spellText": "GetSpellDescription",
     "spells.names": "GetSpellInfo",
-    "spells.ids": "C_Spell.DoesSpellExist",
     "spells.icons": "GetSpellTexture",
     "soundKitNames": "C_Epsilon.SoundKit_Get",
     "files.gobs": "C_Epsilon.GODI_Get",
@@ -122,6 +121,13 @@ Keyed by a column, because that is the grain the answer has. A client knows a
 spell's name and its icon and says nothing about which expansion it came from,
 so declaring the whole of `spells` supplied would drop four columns nothing
 can replace. A bare section name is every column of it.
+
+A column the payload is ADDRESSED BY can never be supplied, however well the
+client answers about it. `spells.ids` is the one: every other column of every
+section is read at the row a spell sits at, and that column is what turns an
+id into that row. A route answers about one spell it is handed and cannot say
+which row a spell is at, so clipping it does not degrade the payload -- it
+leaves nothing able to find anything in it.
 
 Clipping one more is one row here. Adding a row is a claim that something
 outside the payload answers as well, and it is only worth making once the call
