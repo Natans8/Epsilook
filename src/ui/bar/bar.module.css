@@ -248,13 +248,12 @@
 
 /* The same tokens under a FIELD. Two things forced this apart from .runOp: a delimiter being placed is not
  * chrome, it is the thing the reader is aiming at; and --text-dim is where the GHOST lands on the dark palette,
- * so a quote already typed and a completion not yet accepted were drawn in one colour. Full text colour plus a
- * wash says "this character is here and it is structure". Colour and background only — a mirror may not move a
- * glyph, so no weight and no size. */
+ * so a quote already typed and a completion not yet accepted were drawn in one colour. The colour says both on
+ * its own — it clears AA against the panel in every palette, and no other run in this surface is gold. A fill
+ * behind a character is a band the height of the line, which is the weight of a selection and reads as one.
+ * Colour only — a mirror may not move a glyph, so no weight and no size either. */
 .runLive {
     color: var(--gold);
-    background: color-mix(in srgb, var(--gold) 26%, transparent);
-    border-radius: 2px;
 }
 
 /* A word ABOUT the query rather than one of the data — the any-word, a property standing in a value. The chip
