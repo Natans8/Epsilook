@@ -104,6 +104,21 @@ test("an unclosed scope has no suffix yet; an interior whose brace closes early 
     assert.equal(early.suffix, "");
 });
 
+test("a closer followed only by the separator is still the scope's, however the term split hid it", () => {
+    // An unclosed phrase runs to the end of the input, so the space a commit appended never separates a term:
+    // the segment arrives as `name:{"} ` and its closer is second-to-last. Requiring the brace to be FINAL left
+    // it inside the slot, where the next commit saw no closer and wrote another — one more per reopen.
+    const held = planAt('name:{"} ', 7);
+    assert.equal(held.slot, '"');
+    assert.equal(held.suffix, "}");
+    // The separator goes back to the query rather than into the slot, and the plan still reads verbatim.
+    assert.equal(held.after, " ");
+    assert.equal(held.before + held.open + held.after, 'name:{"} ');
+
+    // Content glued after the closer is NOT a separator: that stays raw, by the ruling above.
+    assert.equal(planAt("model:{a}x", 9).suffix, "");
+});
+
 test("the creation gesture: a bind that just landed opens a scope with the caret inside", () => {
     const step = scopeGesture(planAt("model", 5), {text: "model:", caret: 6});
     assert.equal(step.text, "model:{}");

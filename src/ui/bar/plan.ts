@@ -215,16 +215,29 @@ export function openHead(open: string): OpenHead | null {
 export function planAt(text: string, openAt: number): BarPlan {
     const seg = segmentAt(text, openAt);
     const before = text.slice(0, seg.start);
-    const open = text.slice(seg.start, seg.end);
-    const after = text.slice(seg.end);
+    let open = text.slice(seg.start, seg.end);
+    let after = text.slice(seg.end);
     const head = openHead(open);
     let slot = head === null ? open : open.slice(head.consumed);
     let suffix = "";
-    // A scoped head consumes its closing brace too — when the one that opened it is the one the segment ends
-    // with. The interior between them is the slot, spaces and all.
-    if (head?.scoped === true && closesAtEnd(slot)) {
-        suffix = slot.slice(-1);
-        slot = slot.slice(0, -1);
+    // A scoped head consumes its closing brace too. The interior between them is the slot, spaces and all.
+    //
+    // The closer need not be the segment's FINAL character, because an unclosed phrase hides the separator from
+    // the term split: `name:{"} ` arrives as one term, trailing space included, and a rule that required the
+    // brace to be last left it inside the slot — where the next commit saw no closer and wrote another, one
+    // more per reopen. Only WHITESPACE may follow it, though. A closer with content glued after it
+    // (`model:{a}x`) is not an interior at all, and stays raw in the slot by ruling: re-wrapping it would be
+    // the second brace this is here to prevent.
+    if (head?.scoped === true) {
+        const closes = closerAt(slot);
+        const tail = closes < 0 ? "" : slot.slice(closes + 1);
+        if (closes >= 0 && tail.trim() === "") {
+            suffix = slot.slice(closes, closes + 1);
+            slot = slot.slice(0, closes);
+            // `before + open + after` still reconstructs the text verbatim, which the plan's contract is.
+            open = open.slice(0, open.length - tail.length);
+            after = tail + after;
+        }
     }
     return {before, open, after, head, slot, suffix};
 }
@@ -282,10 +295,14 @@ function closerAt(interior: string): number {
     }
     // An UNCLOSED phrase swallows everything after it, the scope's own closing brace included — so a chip whose
     // value is mid-quote would have that brace read as part of the value, and the commit, seeing no closer,
-    // would write a second one. It compounds: every reopen wraps again. While a phrase is being typed the last
-    // character of the interior is still the scope's closer, and taking it as one is what keeps the editing
-    // form's braces from breeding.
-    if (quote && interior.endsWith(GRAMMAR.scope.close)) return interior.length - 1;
+    // would write a second one. It compounds: every reopen wraps again.
+    //
+    // The brace is the LAST one in the interior, not necessarily its final character: an unclosed phrase also
+    // swallows the separator that follows the segment, so the interior reads `"} ` rather than `"}`, and a rule
+    // that only looked at the final character stopped firing the moment a committed segment had a neighbour.
+    // Everything after the opening quote is literal, so the last brace the reader typed is the one that closed
+    // the scope.
+    if (quote) return interior.lastIndexOf(GRAMMAR.scope.close);
     return -1;
 }
 

@@ -5,7 +5,7 @@
  */
 import type {Page} from "@playwright/test";
 import {expect, test} from "@playwright/test";
-import {clearBar, expectQuery, openHarness, openKind, settledSegments, slot} from "./helpers";
+import {barInput, clearBar, expectQuery, openHarness, openKind, settledSegments, slot} from "./helpers";
 
 let page: Page;
 
@@ -106,4 +106,24 @@ test("an unclosed phrase inside a chip does not breed braces, however the chip i
     await settledSegments(page).first().click();
     await page.keyboard.press("Enter");
     await expectQuery(page, 'name:"" ');
+});
+
+test("an unclosed phrase's scope keeps one closer however many times it is reopened", async () => {
+    // The reported cycle, verbatim: type `name:"`, step over the spawned closer, delete it, then commit and
+    // reopen. Each reopen used to add a brace — the unclosed phrase hides the separator from the term split, so
+    // the segment reads `name:{"} `, its closer is no longer the final character, and the commit wrote another.
+    await clearBar(page);
+    await page.keyboard.type('name:"', {delay: 5});
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("Backspace");
+    await expectQuery(page, 'name:{"}');
+
+    for (let round = 1; round <= 4; round++) {
+        await page.keyboard.press("Enter");
+        await expectQuery(page, 'name:"" ');
+        await page.keyboard.press("ArrowLeft");
+        await page.keyboard.press("Backspace");
+        await expectQuery(page, 'name:{"} ');
+        expect(await barInput(page).inputValue(), `round ${String(round)}`).toBe('"');
+    }
 });
