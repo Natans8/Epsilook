@@ -12,7 +12,7 @@
  */
 import type {Span} from "../../search/index";
 import {
-    describe, equivalent, fold, GRAMMAR, HEADS, parse, PREFIX_OPERATORS, spellingsOf,
+    classify, describe, equivalent, fold, GRAMMAR, HEADS, parse, PREFIX_OPERATORS, spellingsOf,
 } from "../../search/index";
 
 /** The transformed head of the open segment, when it has one. */
@@ -413,9 +413,27 @@ export function insertAtGap(text: string, gapAt: number, value: string): Keystro
 /** Each opening delimiter and the closer it spawns — the enclosures a slot pairs like an IDE. */
 const PAIRS: Record<string, string | undefined> = {
     [GRAMMAR.phrase]: GRAMMAR.phrase,
+    [GRAMMAR.regex]: GRAMMAR.regex,
     [GRAMMAR.scope.open]: GRAMMAR.scope.close,
     [GRAMMAR.group.open]: GRAMMAR.group.close,
 };
+
+/**
+ * Whether the character at `at` is one the language reads as a delimiter, rather than as ordinary text.
+ *
+ * Two of these characters are only sometimes delimiters. A slash opens a pattern in value position and is an
+ * ordinary character everywhere else, which is what keeps a pasted path typeable; and either leaf delimiter
+ * preceded by the escape is the literal character, not a half of anything. Both readings already exist in the
+ * lexer, so this asks it rather than restating them — a pairing that disagreed with the highlight about what
+ * is a delimiter would be two answers to one question.
+ */
+function delimits(before: string, value: string, at: number): boolean {
+    // The run COVERING the character, not one starting on it: neighbouring runs of a kind are merged, so a
+    // brace beside its partner shares one run and starting-there would answer no for the second of any pair.
+    const run = classify(before + value).find((held) =>
+        held.start <= before.length + at && before.length + at < held.end);
+    return run !== undefined && (run.kind === "quote" || run.kind === "delim");
+}
 
 /** The closing halves — what a keystroke steps over instead of doubling. */
 const CLOSERS = new Set<string>(Object.values(PAIRS).filter((close) => close !== undefined));
@@ -441,27 +459,36 @@ export interface Pairing {
  * @param from The selection's start.
  * @param to Its end; equal to `from` for a caret.
  * @param key The key pressed, or `Backspace`.
+ * @param before What stands before this value in the query — the head cell's own characters, where a surface
+ *   has taken them out of the field. Whether a slash is a delimiter depends on the position it sits in, and a
+ *   slot holding only `fire` cannot tell that on its own; it is read for context and never written back.
  * @returns The pairing, or null where the keystroke pairs nothing. A result whose value is unchanged is the
  *   step-over: only the caret moves.
  */
-export function pairDelimiter(value: string, from: number, to: number, key: string): Pairing | null {
+export function pairDelimiter(
+    value: string, from: number, to: number, key: string, before = "",
+): Pairing | null {
     const close = PAIRS[key];
     if (close !== undefined && from !== to) {
-        return {
-            value: value.slice(0, from) + key + value.slice(from, to) + close + value.slice(to),
-            caret: to + 1,
-            anchor: from + 1,
-        };
+        const enclosed = value.slice(0, from) + key + value.slice(from, to) + close + value.slice(to);
+        if (!delimits(before, enclosed, from)) return null;
+        return {value: enclosed, caret: to + 1, anchor: from + 1};
     }
-    if (from === to && CLOSERS.has(key) && value[from] === key) return {value, caret: from + 1};
+    // The step-over reads the CURRENT value: the character already there has to be a closer, or a typed
+    // character would be swallowed by a slash that was only ever text.
+    if (from === to && CLOSERS.has(key) && value[from] === key && delimits(before, value, from)) {
+        return {value, caret: from + 1};
+    }
     if (close !== undefined) {
-        return {value: value.slice(0, from) + key + close + value.slice(from), caret: from + 1};
+        const spawned = value.slice(0, from) + key + close + value.slice(from);
+        if (!delimits(before, spawned, from)) return null;
+        return {value: spawned, caret: from + 1};
     }
     if (key === "Backspace" && from === to && from > 0) {
         // An opener must actually be there: at the value's end both sides read `undefined`, and comparing them
         // made an ordinary Backspace look like a pair-delete.
         const opener = PAIRS[value[from - 1]];
-        if (opener !== undefined && opener === value[from]) {
+        if (opener !== undefined && opener === value[from] && delimits(before, value, from - 1)) {
             return {value: value.slice(0, from - 1) + value.slice(from + 1), caret: from - 1};
         }
     }

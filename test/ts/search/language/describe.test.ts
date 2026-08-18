@@ -234,3 +234,9 @@ test("a value's own sign draws as the true minus, so it is not read as the range
     assert.deepEqual(chip("scale:-50%").body, [{is: "value", text: "−50%"}]);
     assert.deepEqual(chip("scale:{-50%--10%}").body, [{is: "value", text: "−50%–−10%"}]);
 });
+
+test("a pattern inside a scope is a pattern piece like any other, wherever the term sits", () => {
+    const pieces = JSON.stringify(view("model:{file:/beam/}"));
+    assert.ok(pieces.includes('"is":"regex"'), "a scoped pattern reaches the display model as a pattern");
+    assert.ok(pieces.includes('"pattern":"beam"'), "carrying the pattern without its slashes");
+});

@@ -451,3 +451,34 @@ test("committing a chip closes a phrase the reader left open", () => {
     assert.equal(commitSegment('name:{"blood pool', 8).text, 'name:"blood pool"');
     assert.equal(commitSegment('name:{"}', 7).text, 'name:""');
 });
+
+test("a slash pairs where it opens a pattern, and is ordinary text everywhere else", () => {
+    // In value position it is a delimiter like any other, so it spawns its own closer.
+    assert.deepEqual(pairDelimiter("name:", 5, 5, "/"), {value: "name://", caret: 6});
+    assert.deepEqual(pairDelimiter("model:{file:", 12, 12, "/"), {value: "model:{file://", caret: 13});
+    // In free text it is a character a pasted path is made of, and pairing one would break typing that path.
+    assert.equal(pairDelimiter("spells", 6, 6, "/"), null);
+    assert.equal(pairDelimiter("model:fire", 10, 10, "/"), null);
+});
+
+test("an escaped delimiter is the character itself, so it pairs nothing", () => {
+    // The user's rule: with a backslash before it, ONE delimiter is written, not two.
+    assert.equal(pairDelimiter("name:/a\\", 8, 8, "/"), null);
+    // The same holds for the phrase, which had the same defect: the escape is the language's, not the regex's.
+    assert.equal(pairDelimiter('name:"foo\\', 10, 10, '"'), null);
+});
+
+test("the step-over needs a real closer: a slash that is only text swallows nothing", () => {
+    assert.deepEqual(pairDelimiter("name:/fire/", 10, 10, "/"), {value: "name:/fire/", caret: 11});
+    // Here the slashes are ordinary characters, so the keystroke must insert rather than step over one.
+    assert.equal(pairDelimiter("a/b", 1, 1, "/"), null);
+});
+
+test("the slot reads its position from the head cell, which holds characters the field does not", () => {
+    // The field is empty and the head cell holds `name:` — a value position, so the slash is a delimiter.
+    assert.deepEqual(pairDelimiter("", 0, 0, "/", "name:"), {value: "//", caret: 1});
+    // A scoped head puts the slot inside the scope, where a term opens a value directly.
+    assert.deepEqual(pairDelimiter("", 0, 0, "/", "model:{"), {value: "//", caret: 1});
+    // With no head the segment is plain text, and a slash there is a character of a path.
+    assert.equal(pairDelimiter("spells", 6, 6, "/", ""), null);
+});

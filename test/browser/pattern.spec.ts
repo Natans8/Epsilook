@@ -7,7 +7,7 @@
  */
 import type {Locator, Page} from "@playwright/test";
 import {expect, test} from "@playwright/test";
-import {barInput, clearBar, openHarness, plainField, plainSwitch, seed} from "./helpers";
+import {barInput, clearBar, expectQuery, openHarness, plainField, plainSwitch, seed} from "./helpers";
 
 let page: Page;
 
@@ -69,4 +69,35 @@ test("the plaintext view colours a pattern the same way", async () => {
 test("a slash outside a value position stays an ordinary character, and is not coloured", async () => {
     await seed(page, "spells/fire");
     expect(await marked(bar(page))).toEqual([]);
+});
+
+test("a slash pairs itself where it opens a pattern, typed for real", async () => {
+    await clearBar(page);
+    await barInput(page).focus();
+    await page.keyboard.type("name:/", {delay: 20});
+    // ONE pair spawned, with the caret between its halves. The braces are the OPEN form's own doing -- a
+    // column's value is edited scoped and sheds them on commit -- so what this cell reads is the two slashes.
+    await expectQuery(page, "name:{//}");
+    await page.keyboard.type("fire", {delay: 20});
+    await expectQuery(page, "name:{/fire/}");
+    await page.keyboard.press("Enter");
+    await expectQuery(page, "name:/fire/ ");
+});
+
+test("a slash in free text pairs nothing, so a path stays typeable", async () => {
+    await clearBar(page);
+    await barInput(page).focus();
+    await page.keyboard.type("spells/fire", {delay: 20});
+    await expectQuery(page, "spells/fire");
+});
+
+test("an escaped slash writes ONE delimiter, not two", async () => {
+    await clearBar(page);
+    await barInput(page).focus();
+    await page.keyboard.type("name:/a", {delay: 20});
+    await expectQuery(page, "name:{/a/}");
+    // Inside the pair now: the escape makes the next slash a literal, so nothing new is spawned and the
+    // pattern still closes on the one slash that was already there.
+    await page.keyboard.type(String.raw`\/`, {delay: 20});
+    await expectQuery(page, String.raw`name:{/a\//}`);
 });

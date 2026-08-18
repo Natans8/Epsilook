@@ -271,7 +271,10 @@ export function OpenSegment({
             return;
         }
         // Every other pairing is the shared rule, delivered as one undoable operation.
-        const paired = pairDelimiter(el.value, a, b, typed === "" ? e.key : typed);
+        // The head cell holds characters the field does not, and they are what say whether a slash here opens a
+        // pattern or is one more character of a path.
+        const paired = pairDelimiter(el.value, a, b, typed === "" ? e.key : typed,
+            at.open.slice(0, at.head?.consumed ?? 0));
         if (paired !== null) {
             e.preventDefault();
             if (paired.value === el.value) el.setSelectionRange(paired.caret, paired.caret);
