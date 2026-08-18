@@ -19,9 +19,9 @@ against, since a gap there would look like an engine defect. `lean` leaves out
 whatever the supply table names, for an addon that asks the game instead.
 Clipping one more column is one row in that table.
 
-What lands on disk is a complete, installable set of addon directories. It is
-generated, so it is not tracked: a variation is tens of megabytes and rebuilds
-from the pack in seconds.
+What lands on disk is one installable addon directory per variation, holding a
+file per axis. It is generated, so it is not tracked: a variation is tens of
+megabytes and rebuilds from the pack in seconds.
 """
 
 from __future__ import annotations
@@ -47,11 +47,11 @@ survive_console_encoding()
 DATA = ROOT / "site" / "data"
 
 OUT = ROOT / "addon" / "build"
-"""Where a variation's addon directories land.
+"""Where a variation's addon directory lands.
 
 Under the sub-project rather than beside the pack, because these are the
-addon's files and nothing the site serves. One directory per variation, so a
-player copies one of them into the client and gets a coherent set.
+addon's files and nothing the site serves. One variation per directory, so
+installing one is copying one thing.
 """
 
 
@@ -80,11 +80,11 @@ def chosen(wanted: str) -> Path:
 
 
 def write(chunk_files: dict[str, dict[str, bytes]], into: Path) -> int:
-    """Replace a variation's directory with the chunks just built.
+    """Replace a variation's directory with what was just built.
 
     Replaced rather than merged: an axis that stopped being emitted would
     otherwise stay on disk and keep answering, which is exactly the failure a
-    clipped section is meant to produce visibly.
+    clipped column is meant to produce visibly.
     """
     if into.exists():
         shutil.rmtree(into)
@@ -98,6 +98,59 @@ def write(chunk_files: dict[str, dict[str, bytes]], into: Path) -> int:
             # written after it.
             (directory / name).write_bytes(payload)
             written += 1
+    return written
+
+
+CODE_ADDON = ROOT / "addon" / "Epsilook"
+"""The addon that reads the data, which an install needs beside it."""
+
+OWNED = "Epsilook"
+"""The prefix every directory this tool may create or replace starts with.
+
+An install writes into a live game folder holding somebody's other addons, so
+the rule is stated rather than trusted: nothing whose name does not begin with
+this is read, written or removed, and a target that would fall outside it is
+refused before anything is touched.
+"""
+
+
+def install(variation: Variation, into: Path) -> int:
+    """Put one variation, and the reader, into a client's addon folder.
+
+    Raises:
+        SystemExit: the target does not exist, or a directory that would be
+            replaced is not one of ours.
+    """
+    source = OUT / variation.value
+    if not source.is_dir():
+        sys.exit(f"error: {source} has not been built")
+    if not into.is_dir():
+        sys.exit(f"error: {into} is not a directory")
+    staged = [CODE_ADDON, *sorted(path for path in source.iterdir()
+                                  if path.is_dir())]
+    for directory in staged:
+        if not directory.name.startswith(OWNED):
+            sys.exit(f"error: refusing to install {directory.name}, which is "
+                     f"not one of ours")
+    written = 0
+    for directory in staged:
+        landing = into / directory.name
+        if landing.exists():
+            if not landing.name.startswith(OWNED):
+                sys.exit(f"error: refusing to replace {landing}")
+            shutil.rmtree(landing)
+        shutil.copytree(directory, landing)
+        written += 1
+    # Anything of ours the install no longer produces goes, or an earlier
+    # layout keeps sitting in somebody's addon list answering for a version
+    # that is gone. Scoped to our own prefix, so nothing else can be caught
+    # by it.
+    wanted = {directory.name for directory in staged}
+    for stale in sorted(into.iterdir()):
+        if (stale.is_dir() and stale.name.startswith(OWNED)
+                and stale.name not in wanted):
+            shutil.rmtree(stale)
+            log(f"  removed {stale.name}, which this layout no longer builds")
     return written
 
 
@@ -120,16 +173,15 @@ def build(pack_dir: Path, variation: Variation, *, dry: bool) -> None:
     built = chunks(SECTIONS, sections, pack=pack_dir.name, version=str(version),
                    built=str(meta.get("built", "")), variation=variation,
                    absent=tuple(manifest.get("absentSections", ())))
-    total = sum(len(payload) for chunk in built
-                for payload in chunk.files.values())
-    log(f"{variation.value}: {len(built)} addons, {total:,} bytes")
-    for chunk in built:
-        size = sum(len(payload) for payload in chunk.files.values())
-        log(f"    {chunk.addon:26} {size:>12,}")
+    total = sum(len(payload) for payload in built.files.values())
+    log(f"{variation.value}: {built.addon}, {len(built.files)} files, "
+        f"{total:,} bytes")
+    for name, payload in built.files.items():
+        log(f"    {name:26} {len(payload):>12,}")
     if dry:
         return
     into = OUT / variation.value
-    write({chunk.addon: dict(chunk.files) for chunk in built}, into)
+    write({built.addon: dict(built.files)}, into)
     log(f"  wrote {into}")
 
 
@@ -146,6 +198,11 @@ def main() -> None:
                              "default")
     parser.add_argument("--list", dest="dry", action="store_true",
                         help="report what would be written and write nothing")
+    parser.add_argument("--install", metavar="ADDONS", default="",
+                        help="copy one built variation into a client's addon "
+                             "folder, with the reader beside it. Only "
+                             "directories named for this addon are ever "
+                             "written or replaced")
     args = parser.parse_args()
 
     pack_dir = chosen(args.pack)
@@ -154,6 +211,14 @@ def main() -> None:
     log(f"Reading {pack_dir.name}")
     for variation in wanted:
         build(pack_dir, variation, dry=args.dry)
+
+    if args.install:
+        if len(wanted) != 1:
+            sys.exit("error: --install takes one --variation; two of them "
+                     "share every addon name and the second would replace "
+                     "the first")
+        count = install(wanted[0], Path(args.install))
+        log(f"Installed {count} addon(s) into {args.install}")
 
 
 if __name__ == "__main__":

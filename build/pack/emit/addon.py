@@ -522,34 +522,35 @@ def wrapped(payload: bytes) -> bytes:
 
 @dataclass(frozen=True)
 class Chunk:
-    """One emitted addon directory, ready to write.
+    """The emitted data addon, ready to write.
 
-    Both files are bytes rather than text: the blob is indexed by byte offset,
-    so a writer translating line endings on the way to disk would move every
-    column in it.
+    One directory, because a player installs one thing and sees one entry in
+    the addon list. Splitting the axes into an addon apiece was tried and is
+    what this record exists to prevent a second time: load-on-demand is per
+    addon rather than per file, so a directory per axis is the only way to
+    load them separately -- and measuring says there is nothing to gain, since
+    the whole payload loads in about a tenth of a second. That bought
+    granularity nobody asked for at the price of nine entries in a list of
+    somebody's real addons.
+
+    Files are bytes rather than text: a blob is indexed by byte offset, so a
+    writer translating line endings on the way to disk would move every column
+    in it.
     """
 
     addon: str
-    """The directory name, which every file in it is also named after."""
+    """The directory name, and the name of the toc inside it."""
 
-    toc: bytes
-    lua: bytes
-
-    @property
-    def files(self) -> Mapping[str, bytes]:
-        """What lands in the directory, by file name."""
-        return {f"{self.addon}.toc": self.toc, f"{self.addon}.lua": self.lua}
+    files: Mapping[str, bytes]
+    """What lands in the directory, by file name."""
 
 
 def toc_file(addon: str, title: str, notes: str, *, version: str, pack: str,
-             demand: bool, extra: Sequence[tuple[str, str]] = ()) -> bytes:
+             demand: bool, sources: Sequence[str]) -> bytes:
     """One addon's toc, as the client reads it.
 
     The interface number is taken from the build being packed rather than from
     a constant, so a pack of another client's tables advertises that client.
-    Nothing declares a dependency: every axis is loaded by name when a query
-    first needs it, and a required dependency would only decide an order that
-    an explicit load already fixes.
     """
     lines = [f"## Interface: {interface_version(version)}",
              f"## Title: {title}",
@@ -558,8 +559,7 @@ def toc_file(addon: str, title: str, notes: str, *, version: str, pack: str,
              *(["## LoadOnDemand: 1"] if demand else []),
              f"## X-Epsilook-Pack: {pack}",
              f"## X-Epsilook-Format: {ADDON_FORMAT}",
-             *(f"## X-Epsilook-{key}: {value}" for key, value in extra),
-             "", f"{addon}.lua", ""]
+             "", *sources, ""]
     return "\n".join(lines).encode("utf-8")
 
 
@@ -579,11 +579,11 @@ def assignment(axis: str, header: Mapping[str, object],
     return opening + wrapped(blob) + b"\n"
 
 
-def axis_chunk(axis: str, holds: Sequence[Section],
-               produced: Mapping[str, object], *, pack: str, version: str,
-               built: str, variation: Variation,
-               policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES) -> Chunk:
-    """Every section of one axis, as the addon directory carrying them."""
+def axis_source(axis: str, holds: Sequence[Section],
+                produced: Mapping[str, object], *, pack: str, built: str,
+                variation: Variation,
+                policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES) -> bytes:
+    """Every section of one axis, as the file carrying them."""
     blob = Blob()
     described_all = ((section.name,
                       described(section, produced[section.name], blob,
@@ -598,49 +598,34 @@ def axis_chunk(axis: str, holds: Sequence[Section],
     header = {"format": ADDON_FORMAT, "pack": pack, "built": built,
               "axis": axis, "variation": variation.value,
               "sections": sections}
-    addon = f"{ADDON_PREFIX}_{axis.capitalize()}"
-    return Chunk(
-        addon=addon,
-        toc=toc_file(addon, f"Epsilook Data: {axis}",
-                     f"Search data for the {axis} axis.", version=version,
-                     pack=pack, demand=True, extra=(("Axis", axis),)),
-        lua=assignment(axis, header, blob.payload(), pack))
+    return assignment(axis, header, blob.payload(), pack)
 
 
-def index_chunk(axes: Sequence[str], *, pack: str, version: str, built: str,
-                variation: Variation, absent: Sequence[str] = ()) -> Chunk:
-    """The small always-loaded addon that says what the rest of them hold.
+def index_source(axes: Sequence[str], *, pack: str, built: str,
+                 variation: Variation, absent: Sequence[str] = ()) -> bytes:
+    """The file saying what the rest of them hold.
 
     The peer of the browser's manifest, answering the same two questions:
-    which files exist, and what this build has no data for. The third state is
+    which axes exist, and what this build has no data for. The third state is
     one only an addon has, so it is stated here rather than there -- a section
     the supply table names is missing from the payload on purpose, and the
     reader is meant to ask the client for it instead of reporting a gap.
     """
     header = {"format": ADDON_FORMAT, "pack": pack, "built": built,
-              "variation": variation.value,
-              "axes": {axis: f"{ADDON_PREFIX}_{axis.capitalize()}"
-                       for axis in axes},
+              "variation": variation.value, "axes": list(axes),
               "supplied": (dict(SUPPLIED_BY) if variation is Variation.LEAN
                            else {}),
               "absent": list(absent)}
-    body = (f"-- Generated from pack {pack}. Do not edit.\n"
+    return (f"-- Generated from pack {pack}. Do not edit.\n"
             f"{NAMESPACE} = {NAMESPACE} or {{}}\n"
             f"{NAMESPACE}.index = {rendered(header)}\n").encode("utf-8")
-    return Chunk(
-        addon=ADDON_PREFIX,
-        toc=toc_file(ADDON_PREFIX, "Epsilook Data",
-                     "Says which Epsilook data addons exist and what they hold.",
-                     version=version, pack=pack, demand=False),
-        lua=body)
 
 
 def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
            pack: str, version: str, built: str, variation: Variation,
            absent: Sequence[str] = (),
-           policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES
-           ) -> list[Chunk]:
-    """Every addon directory one variation of the data ships as.
+           policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES) -> Chunk:
+    """The one addon directory a variation of the data ships as.
 
     Args:
         sections: the registered sections, in registry order.
@@ -657,7 +642,8 @@ def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
             different policy than it was built with sees the wrong shape.
 
     Returns:
-        The index first, then one chunk per axis that has anything in it.
+        One `Chunk`: the toc, the index, and a file per axis that has anything
+        in it.
 
     Raises:
         KeyError: a produced section belongs to no axis. Dropping it silently
@@ -678,9 +664,14 @@ def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
         holding.setdefault(axis, []).append(section)
 
     ordered = [axis for axis in AXES if axis in holding]
-    return [index_chunk(ordered, pack=pack, version=version, built=built,
-                        variation=variation, absent=absent),
-            *(axis_chunk(axis, holding[axis], produced, pack=pack,
-                         version=version, built=built, variation=variation,
-                         policy=policy)
-              for axis in ordered)]
+    files = {"index.lua": index_source(ordered, pack=pack, built=built,
+                                       variation=variation, absent=absent)}
+    for axis in ordered:
+        files[f"{axis}.lua"] = axis_source(axis, holding[axis], produced,
+                                           pack=pack, built=built,
+                                           variation=variation, policy=policy)
+    toc = toc_file(ADDON_PREFIX, "Epsilook Data",
+                   "Search data for Epsilook.", version=version, pack=pack,
+                   demand=True, sources=list(files))
+    return Chunk(addon=ADDON_PREFIX, files={f"{ADDON_PREFIX}.toc": toc,
+                                            **files})

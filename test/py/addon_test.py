@@ -297,7 +297,7 @@ def test_the_index_reports_the_format_and_the_supply(lua: Any) -> None:
     """The index says what exists and what was left to the game."""
     built = chunks([], {}, pack="9.2.7-epsilon.45745", version="9.2.7.45745",
                    built="2026-08-18", variation=Variation.LEAN)
-    lua.execute(built[0].lua)
+    lua.execute(built.files["index.lua"])
     index = unwrap(lua.globals()[b"EpsilookData"][b"index"])
     assert index["format"] == ADDON_FORMAT
     assert index["variation"] == "lean"
@@ -334,10 +334,14 @@ def test_the_whole_pack_round_trips_through_lua(lua: Any) -> None:
                    variation=Variation.FULL)
 
     checked = 0
-    for chunk in built[1:]:
-        lua.execute(chunk.lua)
-        axis = lua.globals()[b"EpsilookData"][chunk.addon.rsplit("_", 1)[1]
-                                              .lower().encode("ascii")]
+    for name, source in built.files.items():
+        if not name.endswith(".lua") or name == "index.lua":
+            continue
+        lua.execute(source)
+        # The file is named for the axis it carries, and the chunk it assigns
+        # states that name itself, so the key is read from the data rather
+        # than worked out again from the file name.
+        axis = lua.globals()[b"EpsilookData"][name[:-4].encode("ascii")]
         blob = axis[b"blob"]
         for name, entry in unwrap(axis[b"sections"]).items():
             for column in entry["columns"]:

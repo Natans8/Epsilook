@@ -149,4 +149,9 @@ function Reader.section(chunk, name)
 	return out
 end
 
+-- Both, because the two things that load this file read it differently. A test
+-- harness takes what the chunk returns; the client discards that and gives an
+-- addon file no other way to hand something to the addon that reads it, which
+-- is why the data files assign a global of their own too.
+_G.EpsilookReader = Reader
 return Reader

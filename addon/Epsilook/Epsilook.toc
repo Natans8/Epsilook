@@ -1,0 +1,7 @@
+## Interface: 90207
+## Title: Epsilook
+## Notes: Reads the Epsilook search data.
+## Version: 0
+## SavedVariables: EpsilookDB
+
+Reader.lua
