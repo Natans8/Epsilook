@@ -12,6 +12,7 @@ import test from "node:test";
 import {flatOffers, NO_OFFERS, offerSlot, offersAt} from "../../../../src/ui/bar/offers";
 import type {Offers} from "../../../../src/ui/bar/offers";
 import {planAt, slotStart, writeSlot} from "../../../../src/ui/bar/plan";
+import type {Rung} from "../../../../src/search/index";
 import {parse} from "../../../../src/search/index";
 
 /** The offers at one caret, addressed the way the bar addresses them: a text offset into the whole query. */
@@ -233,12 +234,12 @@ test("a property no other spelling reaches is still offered, subject or not", ()
     assert.ok(words(at("model:{}", 7), "props").includes("count"));
 });
 
-/** An expansion ladder as the pack ships one: the spelling to write, and the name it goes by. */
-const LADDER = [
-    {word: "Vanilla", note: "Classic"},
-    {word: "TBC", note: "The Burning Crusade"},
-    {word: "WotLK", note: "Wrath of the Lich King"},
-    {word: "Cata", note: "Cataclysm"},
+/** An expansion ladder as the pack ships one: the name, everything that reaches it, and what it is called. */
+const LADDER: Rung[] = [
+    {word: "Vanilla", reads: ["vanilla", "classic", "1"], note: "Classic"},
+    {word: "TBC", reads: ["tbc", "bc", "burning crusade", "2"], note: "The Burning Crusade"},
+    {word: "WotLK", reads: ["wotlk", "wrath", "3"], note: "Wrath of the Lich King"},
+    {word: "Cata", reads: ["cata", "cataclysm", "4"], note: "Cataclysm"},
 ];
 
 test("an expansion is offered as the pack spells it, named by what it is called", () => {
@@ -262,6 +263,17 @@ test("a vocabulary's own picture rides with its word", () => {
 test("a number typed where an expansion belongs finds the one standing at it", () => {
     const offers = offersAt(planAt("xpac:3", 6), 1, [], {rungs: LADDER});
     assert.equal(offers.groups.flatMap((group) => group.offers)[0].word, "WotLK");
+});
+
+test("every spelling that reaches a rung narrows to it, not the number alone", () => {
+    // The rung already carries the ways in, because the ordinal type parses against them. Reading the same list
+    // here is what stops the surface deciding separately which spellings exist.
+    const first = (typed: string, caret: number): string =>
+        offersAt(planAt(typed, caret), caret - 5, [], {rungs: LADDER})
+            .groups.flatMap((group) => group.offers)[0].word;
+    assert.equal(first("xpac:wrath", 10), "WotLK", "the key the pack stores");
+    assert.equal(first("xpac:burning", 12), "TBC", "a name spelled out");
+    assert.equal(first("xpac:cataclysm", 14), "Cata");
 });
 
 test("a column's scope never offers a word that belongs to one of its kinds", () => {

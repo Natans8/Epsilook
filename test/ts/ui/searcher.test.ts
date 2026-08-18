@@ -83,7 +83,7 @@ test("load handlers route progress, ready and failure", () => {
     });
     worker.say({is: "progress", pack: "9.2.7", done: 1, total: 4});
     worker.say({
-        is: "ready", locale: "enUS", locales: ["enUS"], versions: [], domains: undefined, ladder: [], rungs: [], spells: 7,
+        is: "ready", locale: "enUS", locales: ["enUS"], versions: [], domains: undefined, ladder: [], spells: 7,
         version: {id: "9.2.7", label: "SL", file: "x"},
     });
     worker.say({is: "failed", error: "boom"});

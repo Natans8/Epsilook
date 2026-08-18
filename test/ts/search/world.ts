@@ -19,7 +19,8 @@ import type {Parsed} from "../../../src/search/language/ast";
 import type {Dataset, Row, RowSource, Stored} from "../../../src/search/evaluate/rows";
 import {setOrdinalLadder} from "../../../src/search/vocabulary/value-types";
 
-setOrdinalLadder(["classic", "tbc", "wotlk", "cata", "legion", "bfa"]);
+setOrdinalLadder(["classic", "tbc", "wotlk", "cata", "legion", "bfa"]
+    .map((word) => ({word, reads: []})));
 
 const row = (kind: Kind, props: Record<string, Stored>): Row => ({kind, props});
 

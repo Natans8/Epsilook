@@ -117,6 +117,16 @@ export interface AxisType<V extends Value = Value> {
     readonly casing?: "upper" | "lower";
 
     /**
+     * Whether a value of this type has ONE name, so a synonym the reader wrote is not a spelling to uphold.
+     *
+     * A rendering surface echoes what the reader typed, because `x1.5` and `150%` are two ways of writing one
+     * number and which they chose says how they think of it. A named value has no such families: `6`, `warlords`
+     * and `wod` all reach one expansion, and that expansion is called `WoD`. Declared here, a surface draws the
+     * name — which is also what keeps the quote law off a numeral that was only ever a way in.
+     */
+    readonly named?: boolean;
+
+    /**
      * Reads a range's two bounds as one coherent notation — `10-90` must not read half factor, half proportion.
      * Declared by types with more than one way to write a bare number; a `null` sends the caller to `parse`,
      * bound by bound, which is the right reading when a bound carries its own symbol.
@@ -232,44 +242,94 @@ export const enumeration = defineType<string>({
 });
 
 /**
+ * One rung of an ordered vocabulary: what it is called, and everything that reaches it.
+ *
+ * A rung has ONE name. The pack that supplies the ladder also supplies the synonyms a reader may write — an
+ * expansion answers to its key, its abbreviations and its number — and every one of them names the same rung.
+ * Keeping them apart is what lets a parsed value be the name while the reader types whichever they know.
+ */
+export interface Rung {
+    /** The name: what a parsed value becomes, and what a surface draws. */
+    readonly word: string;
+
+    /** Every other spelling that reaches this rung. The name itself reads too, and need not be repeated here. */
+    readonly reads: readonly string[];
+
+    /**
+     * What the rung is called at length, where the name is an abbreviation.
+     *
+     * Never read here — matching and formatting want the name alone. It travels with the rung because the pack
+     * declares the two together, and a second array carrying it beside this one is a pair that drifts.
+     */
+    readonly note?: string;
+}
+
+/**
  * The ordered vocabulary ordinal values live in, lowest rank first.
  *
  * A declaration-side slot for data the pack supplies: the set of expansions differs between game versions, so the
- * ladder is loaded, never hard-coded. Parsing and matching both read it — the parser to refuse a rung the loaded
- * pack does not have, the matcher to compare by rank — which keeps the vocabulary one fact in one place while no
- * function crosses the seam.
+ * ladder is loaded, never hard-coded. Parsing and matching both read it — the parser to name the rung a reader
+ * reached, the matcher to compare by rank — which keeps the vocabulary one fact in one place while no function
+ * crosses the seam.
  */
-let ladder: readonly string[] = [];
+let ladder: readonly Rung[] = [];
+
+/** Every spelling that reaches a rung, folded: its name first, then the synonyms declared for it. */
+let spellings: readonly (readonly string[])[] = [];
 
 /**
  * Sets the ordered vocabulary ordinal values are parsed and compared within.
  *
- * @param rungs The vocabulary, lowest rank first. Compared case-insensitively.
+ * @param rungs The vocabulary, lowest rank first. Every spelling is matched case-insensitively.
  */
-export function setOrdinalLadder(rungs: readonly string[]): void {
-    ladder = rungs.map(fold);
+export function setOrdinalLadder(rungs: readonly Rung[]): void {
+    ladder = rungs;
+    spellings = rungs.map((rung) => [rung.word, ...rung.reads].map(fold));
 }
 
-/** The loaded ordinal vocabulary, lowest rank first, folded. Empty when no data has been loaded. */
-export function ordinalRungs(): readonly string[] {
+/** The loaded ordinal vocabulary, lowest rank first. Empty when no data has been loaded. */
+export function ordinalRungs(): readonly Rung[] {
     return ladder;
+}
+
+/**
+ * Finds the rung a spelling names.
+ *
+ * A whole spelling names its rung exactly; anything else names the first rung one of whose spellings contains it,
+ * so a half-typed name means the rung the reader identified. Exactness is weighed across the whole ladder before
+ * containment is, or a shorter rung standing earlier would swallow a longer one's own name.
+ *
+ * Nothing typed names nothing: every spelling contains the empty string, so a containment scan would hand an
+ * empty operand the rung that happens to stand first.
+ *
+ * @param written A rung's name or any spelling that reaches it, whole or partial.
+ * @returns The rank, lowest first, or -1 when no rung answers to it.
+ */
+export function ordinalRank(written: string): number {
+    const loose = squash(written);
+    if (loose === "") return -1;
+    const held = fold(written);
+    const whole = spellings.findIndex((reads) => reads.includes(held));
+    if (whole >= 0) return whole;
+    return spellings.findIndex((reads) => reads.some((read) => squash(read).includes(loose)));
 }
 
 /**
  * A named value from an ordered set, such as the expansion a spell was introduced in.
  *
  * Differs from {@link enumeration} only in accepting comparison and ranges. Once a ladder is loaded, an operand no
- * rung contains is refused at parse, so an unknown expansion is a diagnostic rather than a silent empty result; with
- * no ladder loaded there is nothing to refuse against, and any text is accepted.
+ * rung answers to is refused at parse, so an unknown expansion is a diagnostic rather than a silent empty result;
+ * with no ladder loaded there is nothing to refuse against, and any text is accepted.
  */
 export const ordinal = defineType<string>({
     name: "ordinal",
     storage: "int",
     parse: (s) => {
         if (ladder.length === 0) return s;
-        return ladder.some((rung) => squash(rung).includes(squash(s))) ? s : null;
+        return ladder[ordinalRank(s)]?.word ?? null;
     },
     format: (s) => s,
+    named: true,
     accepts: [exact, contains, glob, present, anyOf, ...ORDERING],
     hint: t("tooltips:type.ordinal"),
     ui: "picker",

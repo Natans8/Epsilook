@@ -414,6 +414,17 @@ def check_bump(rep: Report, base: str, version: str | None) -> None:
         rep.ok("?v= bump", f"{max(deployed)} -> {version}, {len(changed)} file(s)")
 
 
+# Every tracked text extension, so a new directory is covered without being listed.
+TEXT_EXTS = (".js", ".css", ".html", ".py", ".md", ".json", ".ts", ".tsx", ".svg",
+             ".yml", ".sh", ".conf", ".mjs")
+
+
+def text_files() -> list[str]:
+    """The tracked files whose line endings are meant to be LF."""
+    return [f for f in git("ls-files").splitlines()
+            if f.endswith(TEXT_EXTS) or Path(f).name == "Dockerfile" or f.endswith(".dockerignore")]
+
+
 def check_line_endings(rep: Report) -> None:
     """The committed blobs are LF. A scripted rewrite is what flips them.
 
@@ -424,11 +435,7 @@ def check_line_endings(rep: Report) -> None:
     if not have_ref("HEAD"):
         rep.skip("line endings", "no commits yet")
         return
-    # every tracked text file, so a new directory is covered without being listed
-    exts = (".js", ".css", ".html", ".py", ".md", ".json", ".ts", ".svg", ".yml",
-            ".sh", ".conf", ".mjs")
-    names = [f for f in git("ls-files").splitlines()
-             if f.endswith(exts) or Path(f).name == "Dockerfile" or f.endswith(".dockerignore")]
+    names = text_files()
     bad = []
     for name in names:
         blob = subprocess.run(["git", "-C", str(ROOT), "show", f"HEAD:{name}"],
@@ -439,6 +446,25 @@ def check_line_endings(rep: Report) -> None:
         rep.fail("line endings", f"CRLF in committed blobs: {', '.join(bad[:4])}")
     else:
         rep.ok("line endings", f"{len(names)} tracked text files are LF")
+
+
+def check_binary_text(rep: Report) -> None:
+    """A NUL byte in a text file turns the line-ending normalisation off.
+
+    core.autocrlf is true here, so a working copy is CRLF and git converts it
+    back on the way in -- for files it reads as TEXT. A NUL byte makes it read
+    the file as binary instead, the conversion stops, and the next tool that
+    rewrites the file stages every line as changed. The blob check above sees
+    that one commit too late; a NUL byte also defeats grep, which reports the
+    file as binary rather than searching it.
+    """
+    bad = [name for name in text_files()
+           if (ROOT / name).is_file() and b"\x00" in (ROOT / name).read_bytes()]
+    if bad:
+        rep.fail("binary text", "NUL byte in a text file, so its line endings stop being normalised: "
+                                f"{', '.join(bad[:4])}")
+    else:
+        rep.ok("binary text", "no tracked text file reads as binary")
 
 
 def pack_hash(path: Path) -> tuple[str, bool]:
@@ -2071,6 +2097,7 @@ def main() -> int:
     version = check_assets(rep, built=not args.fast)
     check_bump(rep, args.base, version)
     check_line_endings(rep)
+    check_binary_text(rep)
     check_manifest(rep)
     check_format_declaration(rep)
     check_pack_sections(rep)

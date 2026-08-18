@@ -6,7 +6,7 @@
  * pack is fetched exactly once.
  */
 import type {PackDomain, VersionEntry} from "../data";
-import type {Dataset} from "../search/index";
+import type {Dataset, Rung} from "../search/index";
 import {ordinalRungs, parse, run} from "../search/index";
 import {packDataset} from "../dataset";
 import {fetchPack, fetchVersions, pickEntry} from "./pack";
@@ -27,11 +27,10 @@ export type WorkerSay =
      * The ordered vocabulary the ordinal type is read against, exactly as loading the pack set it here.
      *
      * The page parses and draws, so it needs the same ladder — without it a rung the worker matches would
-     * be refused by the page's own parse, and the chip would squiggle a query that runs.
+     * be refused by the page's own parse, and the chip would squiggle a query that runs. It is also what the
+     * surface offers an expansion from, which is why one array carries the name, the synonyms and the title.
      */
-    readonly ladder: readonly string[];
-    /** The expansions the pack declares, lowest first: what to write, and what it is called. */
-    readonly rungs: readonly {readonly word: string; readonly note: string}[]
+    readonly ladder: readonly Rung[];
 }
     | { readonly is: "result"; readonly seq: number; readonly count: number; readonly ms: number }
     | { readonly is: "failed"; readonly error: string };
@@ -57,23 +56,13 @@ async function load(ask: Extract<WorkerAsk, { is: "load" }>): Promise<void> {
         say({is: "progress", pack: entry.id, done, total});
     });
     dataset = packDataset(loaded);
-    // Read back rather than rebuilt: loading the pack is what sets the ladder, so asking for it here cannot
-    // drift from the spellings the kernel matches against.
-    const expansions = (loaded.pack as unknown as {
-        expansions?: { keys?: readonly string[]; shorts?: readonly string[]; labels?: readonly string[] };
-    }).expansions;
-    // The SHORT is the spelling to offer: the keys are inconsistent about it — `tbc` and `wotlk` are
-    // abbreviations where `shadowlands` and `dragonflight` are spelled out — and the shorts are not. Both read,
-    // because a short is a declared alias of its key. The LABEL is what the expansion is actually called.
-    const rungs = (expansions?.keys ?? []).map((key, at) => ({
-        word: expansions?.shorts?.[at] ?? key,
-        note: expansions?.labels?.[at] ?? "",
-    }));
     const meta = (loaded.pack as unknown as { meta?: { domains?: Record<string, PackDomain> } }).meta;
     say({
         is: "ready", version: entry, locale: loaded.locale, locales, versions,
         domains: meta?.domains, spells: loaded.spells.ids.length,
-        ladder: ordinalRungs(), rungs,
+        // Read back rather than rebuilt: loading the pack is what sets the ladder, so asking for it here
+        // cannot drift from the spellings the kernel matches against.
+        ladder: ordinalRungs(),
     });
 }
 

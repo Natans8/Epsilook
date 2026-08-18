@@ -8,7 +8,8 @@
 import type {Page} from "@playwright/test";
 import {expect, test} from "@playwright/test";
 import {
-    barInput, clearBar, expectQuery, ghostText, litOffer, offerRows, openHarness, openKind, seed, slot, surface,
+    barInput, clearBar, expectQuery, ghostText, litOffer, offerRows, openHarness, openKind, plainField,
+    plainSwitch, seed, settledSegments, slot, surface,
 } from "./helpers";
 
 let page: Page;
@@ -212,4 +213,56 @@ test("every badge sits in one box, so the words beside them line up", async () =
     expect(new Set(boxes.map((box) => box.w)).size).toBe(1);
     expect(new Set(boxes.map((box) => box.h)).size).toBe(1);
     expect(new Set(boxes.map((box) => box.at)).size).toBe(1);
+});
+
+test("every spelling that reaches an expansion narrows to it, and picking one writes its name", async () => {
+    // The pack declares the ways in and the ordinal type parses against them; the surface reads that same list,
+    // so a reader who knows an expansion by its key, its long name or its number finds it either way.
+    // An expansion row leads with its badge, so the WORD is what is read rather than the row's first child.
+    for (const typed of ["xpac:warl", "xpac:draenor", "xpac:6"]) {
+        await clearBar(page);
+        await page.keyboard.type(typed, {delay: 5});
+        await expect(offerRows(page).first()).toBeVisible();
+        await expect(offerRows(page)).toHaveCount(1);
+        await expect(offerRows(page).first()).toContainText("WoD");
+    }
+
+    // Taking one writes the NAME, not the way in that found it.
+    await offerRows(page).first().click();
+    await expectQuery(page, "xpac:{WoD}");
+});
+
+test("a chip names the expansion, whichever way in the reader wrote", async () => {
+    // `6` is a way in, not a spelling to uphold: drawing it back would put a numeral on a worded axis, which the
+    // quote law then has to quote — `xpac:"6"`, which reads as nothing a reader meant.
+    for (const [typed, drawn] of [["xpac:6", "WoD"], ["xpac:classic", "Vanilla"], ["xpac:2-6", "TBC–WoD"]]) {
+        await seed(page, typed);
+        await expect(settledSegments(page).first()).toContainText(drawn);
+        await expect(settledSegments(page).first()).not.toContainText("\"");
+    }
+});
+
+test("an offer once taken is spent: the same text typed again is not silently lit", async () => {
+    // The light says which offer the reader is steering to. It was decided about one arrangement of query and
+    // caret — and an arrangement RETURNED TO is not the one that was left, so a light taken (or hovered) at
+    // `xpac:6` must not come back the next time those characters stand under the caret. It did, and Enter then
+    // applied an offer nobody chose instead of running the query.
+    await clearBar(page);
+    await page.keyboard.type("xpac:6", {delay: 5});
+    await expect(offerRows(page).first()).toBeVisible();
+    await offerRows(page).first().click();
+    await expectQuery(page, "xpac:{WoD}");
+
+    await clearBar(page);
+    await page.keyboard.type("xpac:6", {delay: 5});
+    await expect(barInput(page)).not.toHaveAttribute("aria-activedescendant", /./);
+    await page.keyboard.press("Enter");
+    await expectQuery(page, "xpac:6 ");
+});
+
+test("the plaintext view keeps the way in, because it shows what was typed", async () => {
+    await seed(page, "xpac:6");
+    await plainSwitch(page).click();
+    await expect(plainField(page)).toHaveValue("xpac:6 ");
+    await plainSwitch(page).click();
 });

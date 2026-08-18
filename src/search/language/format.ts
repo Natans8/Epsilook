@@ -71,7 +71,8 @@ function readingOf(operand: ParsedOperand): Reading {
  *   one question share. What {@link formatQuery} writes by default.
  * - `written` upholds the spelling the reader chose where the parse recorded one — `x1.5` stays `x1.5` rather than
  *   converging to `=+50%` — which is what a rendering surface echoes back. Structure still converges; only the
- *   value's own text is upheld.
+ *   value's own text is upheld, and only where the type has spellings to uphold: a `named` type's value has one
+ *   name, so a synonym that reached it (`xpac:6`) is a way in rather than a spelling, and converges here too.
  * - `folded` is the canonical spelling lowered for comparison, because case never distinguishes two queries —
  *   matching folds it. Regex operands are the one exception: folding a pattern flips character classes (`\D` to
  *   `\d`), so patterns compare as written and rely on their own case-insensitive matching.
@@ -93,9 +94,10 @@ export function operandText(
     operand: ParsedOperand, at?: PropRef, tier: Spelling = "canonical",
 ): string {
     if ("text" in operand) return tier === "folded" ? operand.text.toLowerCase() : operand.text;
-    if (tier === "written" && operand.written !== undefined) return operand.written;
+    const type = TYPES.get(operand.type);
+    if (tier === "written" && operand.written !== undefined && type?.named !== true) return operand.written;
     const text = at !== undefined ? formatValue(propOf(at), operand.value)
-        : TYPES.get(operand.type)?.format?.(operand.value) ?? String(operand.value);
+        : type?.format?.(operand.value) ?? String(operand.value);
     return tier === "folded" ? text.toLowerCase() : text;
 }
 

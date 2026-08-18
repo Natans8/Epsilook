@@ -125,9 +125,9 @@ export function App({info, searcher}: {
                     {plain
                         ? <PlainBar text={text} onText={setText} placeholder={t("bar.placeholder")}
                                     label={t("bar.placeholder")} history={recentQueries()}
-                                    vocab={{rungs: info.rungs, art: expansionArt(info.rungs, BASE)}}/>
+                                    vocab={{rungs: info.ladder, art: expansionArt(info.ladder, BASE)}}/>
                         : <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}
-                               vocab={{rungs: info.rungs, art: expansionArt(info.rungs, BASE)}}/>}
+                               vocab={{rungs: info.ladder, art: expansionArt(info.ladder, BASE)}}/>}
                 </div>
                 <div className={styles.statusRow}>
                     <div

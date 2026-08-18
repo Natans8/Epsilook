@@ -9,6 +9,7 @@ import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
 import {matcher, roleNames} from "../../../../src/search/evaluate/value-matching";
+import type {Rung} from "../../../../src/search/vocabulary/value-types";
 import {setOrdinalLadder, TARGET_ROLES, TYPES} from "../../../../src/search/vocabulary/value-types";
 
 describe("the textual family", () => {
@@ -164,23 +165,26 @@ describe("target roles", () => {
     });
 });
 
+/** A ladder of plain names, no rung answering to anything but itself. */
+const rungs = (...words: string[]): Rung[] => words.map((word) => ({word, reads: []}));
+
 describe("ordinals", () => {
     it("compares by rank once a ladder is supplied", () => {
-        setOrdinalLadder(["Classic", "Burning Crusade", "Wrath of the Lich King", "Legion"]);
+        setOrdinalLadder(rungs("Classic", "Burning Crusade", "Wrath of the Lich King", "Legion"));
         assert.equal(matcher("gt", "ordinal")!("Legion", "Classic"), true);
         assert.equal(matcher("lt", "ordinal")!("Classic", "Legion"), true);
         assert.equal(matcher("range", "ordinal")!("Burning Crusade", ["Classic", "Legion"]), true);
     });
 
     it("refuses a rung the ladder does not hold rather than guessing its place", () => {
-        setOrdinalLadder(["Classic", "Legion"]);
+        setOrdinalLadder(rungs("Classic", "Legion"));
         assert.equal(matcher("gt", "ordinal")!("Midnight", "Classic"), false);
         assert.equal(matcher("gt", "ordinal")!("Legion", "Midnight"), false);
     });
 
     it("ranks a partial rung as the rung containing it", () => {
         // A comparison against part of a name means the rung the reader identified: xpac:>leg is Legion.
-        setOrdinalLadder(["Classic", "Burning Crusade", "Legion"]);
+        setOrdinalLadder(rungs("Classic", "Burning Crusade", "Legion"));
         assert.equal(matcher("gt", "ordinal")!("Legion", "burning"), true);
         assert.equal(matcher("exact", "ordinal")!("Legion", "leg"), true);
     });

@@ -15,7 +15,7 @@
 import {compilePattern} from "../text/patterns";
 import {fold, squash} from "../text/normalize";
 import type {Value} from "../vocabulary/value-types";
-import {ordinalRungs, TYPES} from "../vocabulary/value-types";
+import {ordinalRank, TYPES} from "../vocabulary/value-types";
 
 /**
  * An operand as the kernel supplies it: one value, or several.
@@ -262,22 +262,17 @@ define(["present"], ["flag"], () => true);
 /* ---------------------------------------------------------------------- ordinals */
 
 /**
- * Finds a value's rank within the loaded ladder ({@link ordinalRungs} — declaration-side data, supplied per pack).
+ * Finds a value's rank on the loaded ladder, the vocabulary's own rule ({@link ordinalRank}) doing the reading.
  *
- * A whole rung name ranks exactly; anything else ranks as the first rung containing it, so a comparison against a
- * partial name means the rung the reader identified. Stored values are always whole names, so only operands take the
- * fallback.
+ * A stored value and an operand are ranked the same way on purpose: the pack stores whichever spelling it keys the
+ * expansion by, the reader writes whichever they know, and the ladder is what says those are one rung.
  *
- * @param value A rung name, whole or partial.
- * @returns The rank, or -1 when no rung matches or the operand is not a single value.
+ * @param value A rung's name, or any spelling that reaches it.
+ * @returns The rank, or -1 when no rung answers to it or the operand is not a single value.
  */
 const rank = (value: Operand): number => {
     const written = asText(value);
-    if (written === null) return -1;
-    const ladder = ordinalRungs();
-    const exactRank = ladder.indexOf(fold(written));
-    if (exactRank >= 0) return exactRank;
-    return ladder.findIndex((rung) => squash(rung).includes(squash(written)));
+    return written === null ? -1 : ordinalRank(written);
 };
 
 /**

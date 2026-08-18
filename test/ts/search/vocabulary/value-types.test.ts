@@ -10,10 +10,37 @@ import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
 import {exact, ORDERING, present} from "../../../../src/search/vocabulary/operators";
+import type {Rung} from "../../../../src/search/vocabulary/value-types";
 import {
     angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, offset,
     ordinal, path, percent, percentChange, seconds, setOrdinalLadder, TARGET_ROLES, text, TYPES,
 } from "../../../../src/search/vocabulary/value-types";
+
+/** Four rungs of a real ladder, synonyms and all — enough for every reading rule to have a case that separates it. */
+const LADDER: Rung[] = [
+    {word: "Vanilla", reads: ["vanilla", "classic", "1"]},
+    {word: "TBC", reads: ["tbc", "bc", "burning crusade", "2"]},
+    {word: "WoD", reads: ["wod", "warlords", "draenor", "6"]},
+    {word: "DF", reads: ["dragonflight", "10"]},
+];
+
+/**
+ * Runs a body against a loaded ladder, and puts the empty one back whatever happens.
+ *
+ * The ladder is module-level state the whole file shares, so a test that left one loaded would decide the
+ * outcome of every test declared after it.
+ *
+ * @param rungs The ladder to load.
+ * @param body What to run against it.
+ */
+function withLadder(rungs: Rung[], body: () => void): void {
+    setOrdinalLadder(rungs);
+    try {
+        body();
+    } finally {
+        setOrdinalLadder([]);
+    }
+}
 
 /** Canonical spellings. Every one is something `format` itself produces. */
 const CANONICAL: [string, string[]][] = [
@@ -110,18 +137,53 @@ describe("the type registry", () => {
         assert.deepEqual([...TARGET_ROLES].toSorted(), [...TARGET_ROLES]);
     });
 
-    it("refuses an ordinal no loaded rung contains, and accepts anything when no ladder is loaded", () => {
+    it("refuses an ordinal no loaded rung answers to, and accepts anything when no ladder is loaded", () => {
         // The ladder is pack data: once loaded, the pack defines the vocabulary and an unknown expansion is refused
         // at parse; with nothing loaded there is nothing to refuse against.
-        setOrdinalLadder(["Classic", "Legion"]);
-        try {
+        withLadder([{word: "Classic", reads: []}, {word: "Legion", reads: []}], () => {
             assert.equal(ordinal.parse!("Legion"), "Legion");
-            assert.equal(ordinal.parse!("leg"), "leg", "a partial rung still parses");
+            assert.equal(ordinal.parse!("leg"), "Legion", "a partial name reaches its rung");
             assert.equal(ordinal.parse!("Midnight"), null);
-        } finally {
-            setOrdinalLadder([]);
-        }
+        });
         assert.equal(ordinal.parse!("Midnight"), "Midnight");
+    });
+
+    it("names the rung a synonym reached, because a rung has one name", () => {
+        // Every spelling the pack declares is a way IN. What comes back is what the expansion is called, so the
+        // number that reached it never survives to be quoted as a string by the formatter.
+        withLadder(LADDER, () => {
+            assert.equal(ordinal.parse!("6"), "WoD");
+            assert.equal(ordinal.parse!("warlords"), "WoD");
+            assert.equal(ordinal.parse!("wod"), "WoD");
+            assert.equal(ordinal.parse!("WoD"), "WoD");
+            assert.equal(ordinal.parse!("draen"), "WoD", "a half-typed synonym reaches it too");
+        });
+    });
+
+    it("weighs a whole spelling before any partial one, across the whole ladder", () => {
+        // `1` is Vanilla's own alias and also sits inside `10`; a scan that took the first rung merely CONTAINING
+        // the text would hand `10` to Vanilla, since Vanilla stands first.
+        withLadder(LADDER, () => {
+            assert.equal(ordinal.parse!("1"), "Vanilla");
+            assert.equal(ordinal.parse!("10"), "DF");
+            assert.equal(ordinal.parse!("bc"), "TBC", "an exact synonym beats an earlier rung containing it");
+        });
+    });
+
+    it("names no rung for nothing typed, which every spelling would otherwise contain", () => {
+        // A containment scan takes the empty string as a substring of everything, so an empty operand would be
+        // handed whichever rung happens to stand first — silently, and as a valid ask.
+        withLadder(LADDER, () => {
+            assert.equal(ordinal.parse!(""), null);
+            assert.equal(ordinal.parse!("  "), null, "and neither does whitespace that squashes away");
+        });
+    });
+
+    it("declares its values named, which is what stops a surface upholding the way in", () => {
+        // The display rule reads this flag rather than the type's identity, so a second named vocabulary needs
+        // no change anywhere above it.
+        assert.equal(ordinal.named, true);
+        assert.notEqual(percent.named, true, "a notation IS information about how the reader thinks");
     });
 
     it("gives every type a hint, because diagnostics and help are built from it", () => {

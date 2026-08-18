@@ -20,7 +20,7 @@ import {DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED, indexRows, rowTableOf, sto
 import type {VersionEntry} from "./data";
 
 import type {
-    Ask, Column, Dataset, Kind, Row, RowSource, RowTest, ScopeTerm, Stored, ValueExpr,
+    Ask, Column, Dataset, Kind, Row, RowSource, RowTest, Rung, ScopeTerm, Stored, ValueExpr,
 } from "./search/index";
 import {
     animColumn, catalogue, colour as colourType, COLOUR_NAMES, fold, fxColumn, id as idType, idColumn, KINDS,
@@ -60,8 +60,13 @@ interface SpellTextSection {
 
 /** The expansion ladder the pack ships, parallel arrays in rung order. */
 interface ExpansionsSection {
+    /** What a row stores, and what the pack keys the expansion by. */
     readonly keys: readonly string[];
-    readonly aliases: readonly (readonly string[])[];
+    /** The abbreviation the game itself uses, where it has one. */
+    readonly shorts?: readonly string[];
+    /** The expansion's full title. */
+    readonly labels?: readonly string[];
+    readonly aliases?: readonly (readonly string[])[];
 }
 
 /** One spell's cast-and-channel shape, keyed off the `spellDelivery` section. */
@@ -507,12 +512,31 @@ function probeTokens(expr: ValueExpr): string[] | null {
 }
 
 /**
+ * Reads the pack's expansion ladder as the ordered vocabulary the ordinal type is parsed and compared within.
+ *
+ * The SHORT is the name: the keys are inconsistent about it — `tbc` and `wotlk` are abbreviations where
+ * `shadowlands` and `dragonflight` are spelled out — and the shorts are not. The key still reads, because it is
+ * what a row stores, and so does every alias the pack declares, which is how `xpac:classic` and `xpac:6` both
+ * reach the rung the pack keys as `vanilla` and `wod`.
+ *
+ * @param expansions The pack's ladder section.
+ * @returns The rungs, lowest first.
+ */
+function expansionLadder(expansions: ExpansionsSection): Rung[] {
+    return expansions.keys.map((key, i) => ({
+        word: expansions.shorts?.[i] ?? key,
+        reads: [key, ...(expansions.aliases?.[i] ?? [])],
+        note: expansions.labels?.[i],
+    }));
+}
+
+/**
  * Builds the {@link Dataset} the kernel runs against, over one loaded pack.
  *
  * Row materialisation is lazy and cached per pool slot; the first `candidates()` call walks every pool to build the
  * inverted side, so it materialises and retains the lot — a deliberate trade, since the seeds must read every row
- * once anyway and later queries then allocate nothing. Loads the pack's expansion ladder as the ordinal vocabulary,
- * keys and aliases both, so `xpac:classic` ranks against a pack whose key for it is `vanilla`.
+ * once anyway and later queries then allocate nothing. Loads the pack's expansion ladder as the ordinal vocabulary
+ * (see {@link expansionLadder}), so a rung answers to every spelling the pack declares for it.
  *
  * @param l The loaded pack.
  * @returns The dataset, with row sources for all seven columns and an inverted `candidates()`.
@@ -520,7 +544,7 @@ function probeTokens(expr: ValueExpr): string[] | null {
 export function packDataset(l: LoadedPack): Dataset {
     // The ordinal ladder is module-level state, so the last dataset built owns it: a caller holding two datasets at
     // once must not interleave ordinal queries across them. Every current caller builds and queries one at a time.
-    setOrdinalLadder(l.expansions.keys.map((key, i) => [key, ...(l.expansions.aliases[i] ?? [])].join(" ")));
+    setOrdinalLadder(expansionLadder(l.expansions));
     // The spell's own name and its number are the two columns the pack does not ship rows for: a spell has exactly
     // one of each, so there is nothing to pool and they are read off the per-spell columns directly.
     const builders = new Map<Column, (i: number) => Row[]>([

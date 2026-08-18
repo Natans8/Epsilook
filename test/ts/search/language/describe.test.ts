@@ -9,6 +9,23 @@ import test from "node:test";
 import type {ChipView, ClauseView, LaneView} from "../../../../src/search/language/describe";
 import {describe} from "../../../../src/search/language/describe";
 import {parse} from "../../../../src/search/language/parse";
+import type {Rung} from "../../../../src/search/vocabulary/value-types";
+import {setOrdinalLadder} from "../../../../src/search/vocabulary/value-types";
+
+/**
+ * Runs a body against a loaded expansion ladder, and puts the empty one back whatever happens.
+ *
+ * @param rungs The ladder to load.
+ * @param body What to run against it.
+ */
+function withLadder(rungs: Rung[], body: () => void): void {
+    setOrdinalLadder(rungs);
+    try {
+        body();
+    } finally {
+        setOrdinalLadder([]);
+    }
+}
 
 /** The views of one query's final-text parse. */
 const views = (query: string): ClauseView[] => describe(parse(query));
@@ -33,6 +50,18 @@ function lane(query: string): LaneView {
     assert.equal(v.form, "lane", `expected a lane for "${query}"`);
     return (v as ClauseView & { form: "lane" }).lane;
 }
+
+test("a named value draws the name, whichever way in the reader wrote", () => {
+    // `6` is a declared synonym of the rung, so it matches — and drawing it back would put a numeral on a worded
+    // axis, which the quote law then has to quote. Naming the rung is what removes the quote rather than
+    // excusing it. The ladder is the fixture world's, whose rungs answer only to themselves.
+    withLadder([{word: "WoD", reads: ["wod", "warlords", "6"]}], () => {
+        for (const query of ["xpac:6", "xpac:warlords", "xpac:wod", "xpac:WoD"]) {
+            const pieces = chip(query).body;
+            assert.deepEqual(pieces, [{is: "word", text: "WoD"}], query);
+        }
+    });
+});
 
 test("a freeform term stays text, negated or not — never a chip", () => {
     assert.equal(view("fireball").form, "text");

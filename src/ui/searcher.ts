@@ -6,6 +6,7 @@
  * makes that test possible without a browser.
  */
 import type {PackDomain, VersionEntry} from "../data";
+import type {Rung} from "../search/index";
 import type {WorkerAsk, WorkerSay} from "./worker";
 
 /** The slice of the Worker interface this module touches, injectable for tests. */
@@ -25,10 +26,13 @@ export interface PackInfo {
     readonly versions: readonly VersionEntry[];
     readonly domains: Record<string, PackDomain> | undefined;
     readonly spells: number;
-    /** The ordered vocabulary the page reads a rung against, as the pack set it. */
-    readonly ladder: readonly string[];
-    /** The expansions the pack declares, lowest first: what to write, and what it is called. */
-    readonly rungs: readonly {readonly word: string; readonly note: string}[];
+    /**
+     * The ordered vocabulary the page reads a rung against, as the pack set it.
+     *
+     * The page parses with it and the surface offers from it: a rung carries its name, the synonyms that reach
+     * it and its title, so what is matched and what is drawn cannot drift apart.
+     */
+    readonly ladder: readonly Rung[];
 }
 
 /** What a load reports as it progresses. */
@@ -53,7 +57,7 @@ export class Searcher {
                 handlers.ready({
                     version: said.version, locale: said.locale, locales: said.locales,
                     versions: said.versions, domains: said.domains, spells: said.spells,
-                    ladder: said.ladder, rungs: said.rungs,
+                    ladder: said.ladder,
                 });
             } else if (said.is === "failed") handlers.failed(said.error);
             else {

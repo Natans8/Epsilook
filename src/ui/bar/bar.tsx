@@ -461,7 +461,18 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY}: {
         [rest, at, caretInSlot, history, vocab]);
     const flat = useMemo(() => flatOffers(offers), [offers]);
     // One arrangement of query, position and caret — what the light and the dismissal were decided about.
-    const stamp = `${text} ${String(clamped)} ${String(gapAt ?? -1)} ${String(caretInSlot)}`;
+    //
+    // NUMBERED, because an arrangement returned to is not the arrangement that was left. A light steered
+    // to at `xpac:6` was decided about those characters under that caret; type them again later and a
+    // plain comparison hands back the light that was already spent, so Enter applies an offer the reader
+    // never chose instead of running their query. The count only has to DIFFER between visits, never to
+    // be sequential, so a render thrown away costs nothing.
+    const arrangement = JSON.stringify([text, clamped, gapAt ?? -1, caretInSlot]);
+    const visit = useRef({arrangement: "", count: 0});
+    if (visit.current.arrangement !== arrangement) {
+        visit.current = {arrangement, count: visit.current.count + 1};
+    }
+    const stamp = `${arrangement}#${String(visit.current.count)}`;
     const shown = (offers.groups.length > 0 || offers.takes !== null) && dismissed !== stamp;
     const lit = shown && litAt.stamp === stamp ? litAt.index : -1;
 

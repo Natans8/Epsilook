@@ -20,7 +20,7 @@ export {formatNumber, parseNumber} from "./vocabulary/units";
 
 export {fold, squash} from "./text/normalize";
 
-export type {Affordance, AxisType, Storage, Value} from "./vocabulary/value-types";
+export type {Affordance, AxisType, Rung, Storage, Value} from "./vocabulary/value-types";
 export {
     angle, bitmask, colour, composite, count, defineType, enumeration, flag, id, length, offset,
     ordinal, ordinalRungs, path, percent, percentChange, seconds, setOrdinalLadder, TARGET_ROLES, text,

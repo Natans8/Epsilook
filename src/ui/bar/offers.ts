@@ -12,7 +12,7 @@
  */
 import type {BarPlan} from "./plan";
 import {termStarts} from "./plan";
-import type {Column, Kind, Prop} from "../../search/index";
+import type {Column, Kind, Prop, Rung} from "../../search/index";
 import {
     bitmask, COUNT_PROP, flag, fold, GRAMMAR, HEADS, headWord, hintOf, kindIn, kindsOf, operatorsOf, ordinal,
     propIn, propNameOf, TARGET_ROLES, wordOf,
@@ -118,8 +118,8 @@ export interface Offers {
  * arrive here — where the page already had to learn them, because the ordinal type is parsed against them.
  */
 export interface Vocabulary {
-    /** The expansions, lowest first: the spelling to write, and the name it goes by. */
-    readonly rungs: readonly {readonly word: string; readonly note: string}[];
+    /** The expansions, lowest first, exactly as the ordinal type reads them. */
+    readonly rungs: readonly Rung[];
     /** The picture that belongs to a word, where one is shipped for it. */
     readonly art?: Readonly<Record<string, string>>;
 }
@@ -327,8 +327,15 @@ function propOffers(context: { role: "column"; column: Column } | { role: "kind"
  * vocabulary a property reads. Both halves of the ruled picker — the word list and the cardinality that decides
  * whether to show one — wait on that link. The expansion ladder is the same gap seen from the other side: its
  * rungs are loaded from a pack, and the page never loads one.
+ *
+ * Narrowing is not done here: each list is handed to {@link group}, which is where what has been typed applies.
+ *
+ * @param prop The property whose value is being composed.
+ * @param tone The column tone every offer wears.
+ * @param vocab The closed vocabularies the pack carries.
+ * @returns The three lists, each in its own group's order.
  */
-function valueOffers(prop: Prop, tone: string, vocab: Vocabulary, typed: string):
+function valueOffers(prop: Prop, tone: string, vocab: Vocabulary):
     { sentinels: Offer[]; words: Offer[]; roles: Offer[] } {
     const word = (spelling: string, note: string): Offer =>
         ({shape: "word", word: spelling, insert: spelling, note, tone, art: vocab.art?.[spelling]});
@@ -340,14 +347,11 @@ function valueOffers(prop: Prop, tone: string, vocab: Vocabulary, typed: string)
     const any = operatorsOf(prop).includes("present")
         ? [word(GRAMMAR.anyWord, i18n.t("ui:surface.anyNote"))] : [];
     // An ordered vocabulary is small, closed and carried by the pack, so it lists itself, spelled the way the
-    // pack spells it and named by what it is called. Its POSITION answers too: a reader who types 3 is counting
-    // the ladder, and the rung standing at three is what they mean — narrowed by the rule that lets
-    // `animation` reach the anim door.
+    // pack spells it and named by what it is called. Every spelling that REACHES a rung narrows to it too —
+    // the key the pack stores, the game's own abbreviations, and the number, so a reader counting the ladder
+    // finds the rung standing there — by the rule that lets `animation` reach the anim door.
     const rungs = prop.types.includes(ordinal)
-        ? vocab.rungs.map((rung, index) => ({
-            ...word(rung.word, rung.note),
-            reads: [String(index + 1)],
-        }))
+        ? vocab.rungs.map((rung) => ({...word(rung.word, rung.note ?? ""), reads: rung.reads}))
         : [];
     return {sentinels, words: [...rungs, ...any], roles};
 }
@@ -447,6 +451,7 @@ function innerProp(context: Context, word: string): Composing | null {
  *
  * @param prop The property being composed.
  * @param name Its own name, as the query writes it.
+ * @param what What it means, where the caller has a better word for it than the property's own hint.
  * @returns The three lines the surface draws above the offers.
  */
 function takesOf(prop: Prop, name: string, what?: string): Takes {
@@ -539,7 +544,7 @@ function unitGhost(prop: Prop | null, typed: string): string {
 
 /** The three value groups one property offers, in the order the surface draws them. */
 function valueGroups(prop: Prop, tone: string, typed: string, vocab: Vocabulary): OfferGroup[] {
-    const {sentinels, words, roles} = valueOffers(prop, tone, vocab, typed);
+    const {sentinels, words, roles} = valueOffers(prop, tone, vocab);
     return [
         ...group("sentinels", sentinels, typed),
         ...group("roles", roles, typed),
@@ -553,6 +558,7 @@ function valueGroups(prop: Prop, tone: string, typed: string, vocab: Vocabulary)
  * @param plan The open position's plan.
  * @param caret Where the caret sits inside the plan's slot.
  * @param history The remembered searches, newest first.
+ * @param vocab The closed vocabularies the loaded pack carries; none, when no pack is loaded.
  * @returns The groups to draw, the slot characters an offer replaces, and the ghost the slot draws.
  */
 export function offersAt(plan: BarPlan, caret: number, history: readonly string[], vocab = NO_VOCABULARY): Offers {
