@@ -2063,6 +2063,13 @@ def check_toolchain(rep: Report) -> None:
     # them, and they are worked down rather than blocking unrelated commits.
     run_tool(rep, "oxlint", ["npx", "oxlint", "--type-aware", "src/search", "test", "tools"],
              "correctness + type-aware rules, .oxlintrc.json")
+    # The addon's Lua, held to the client's own interpreter. selene.toml pins
+    # std = lua51, which is what stops a construct that parses on a modern Lua
+    # and fails in the game from reaching a commit. It skips when selene is
+    # not installed, like the browser matrix does: a single binary from winget,
+    # not something a checkout can assume.
+    run_tool(rep, "selene", ["selene", "addon"],
+             "lua 5.1 correctness over addon/, selene.toml")
     run_tool(rep, "mypy", ["uv", "run", "mypy", *PYTHON_SOURCES])
     run_tool(rep, "pyflakes", ["uv", "run", "pyflakes", *PYTHON_SOURCES])
     # --recursive walks a directory that is not an import package. test/py is

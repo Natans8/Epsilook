@@ -1,0 +1,16 @@
+# The client runs Lua 5.1, so that is what the addon is checked against. A
+# newer standard would accept goto, integer division and bitwise operators,
+# every one of which parses here and fails in the game.
+std = "lua51"
+
+# The emitted data is machine-written and megabytes wide: one long string and
+# one table of offsets per axis. Nothing in it is hand-maintained, so there is
+# nothing for a linter to find, and reading it costs more than the whole rest
+# of the run.
+exclude = ["addon/build/**"]
+
+[lints]
+# A global assignment is how a data addon hands its payload to the addon that
+# reads it: the two are separate addons and do not share a private table. The
+# emitted files are excluded above, but the reader that consumes them is not.
+global_usage = "allow"

@@ -1,0 +1,10 @@
+# Tabs and this width are what the client's own interface code uses, and what
+# every addon read for reference is written in. Matching them is what keeps a
+# diff against a Blizzard or a community file about the change rather than
+# about the whitespace.
+indent_type = "Tabs"
+indent_width = 4
+column_width = 100
+line_endings = "Unix"
+quote_style = "AutoPreferDouble"
+call_parentheses = "Always"

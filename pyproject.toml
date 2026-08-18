@@ -43,6 +43,13 @@ dev = [
     "pyflakes",
     "pylint",
     "pytest",
+    # A real Lua inside the test run. The addon's data is written here and read
+    # there, and the reader is the one account of that layout -- so the only
+    # way to check the two agree is to run the actual reader over an actual
+    # chunk. It ships every interpreter as its own module, and the client's is
+    # 5.1, so the tests can be exact about the one that matters rather than
+    # hoping a newer one behaves the same.
+    "lupa",
 ]
 
 [tool.pytest.ini_options]
