@@ -9,5 +9,6 @@
 
 Reader.lua
 Data.lua
+Client.lua
 API.lua
 SelfTest.lua
