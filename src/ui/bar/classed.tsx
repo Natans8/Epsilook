@@ -15,6 +15,17 @@ const RUN_CLASS: Record<string, string | undefined> = {
     head: styles.runHead, op: styles.runOp, delim: styles.runOp, quote: styles.runOp,
 };
 
+/**
+ * The same kinds under a FIELD, where the reader is placing these characters rather than reading past them.
+ *
+ * At rest a chip has already drawn the structure, so the raw delimiters recede. While editing they are the
+ * thing being manipulated — and they have to read apart from a GHOST, which is text that is not there yet and
+ * was landing on the same quiet colour.
+ */
+const LIVE_CLASS: Record<string, string | undefined> = {
+    head: styles.runHead, op: styles.runLive, delim: styles.runLive, quote: styles.runLive,
+};
+
 /** The tone class per column key — the same families the chips wear, so one query reads one colour language. */
 const TONE_CLASS: Record<string, string | undefined> = {
     model: styles.runModel, sound: styles.runSound, anim: styles.runAnim,
@@ -53,13 +64,14 @@ export function Classed({text, rich, runs: given, mirrored, selected}: {
     // The caller's runs win where it has them: a slot cannot paint itself, and lexing the same characters a
     // second time here would only produce the poorer answer.
     const runs = useMemo(() => given ?? (rich === true ? paint(text) : classify(text)), [given, text, rich]);
+    const byKind = mirrored === true ? LIVE_CLASS : RUN_CLASS;
     const out: ReactNode[] = [];
     for (const [i, run] of runs.entries()) {
         const classes = [
             // Exclusion outranks the column's tone, exactly as it does on a chip: the minus and the word it
             // excludes are one red unit, and the tone says which column that unit reaches.
             run.negated === true ? styles.runNeg
-                : run.tone === undefined ? RUN_CLASS[run.kind] : TONE_CLASS[run.tone] ?? RUN_CLASS[run.kind],
+                : run.tone === undefined ? byKind[run.kind] : TONE_CLASS[run.tone] ?? byKind[run.kind],
             // Loudness: a word about the query keeps its column's tone and gains the weight. Under a field it
             // gains a rule beneath it instead — weight would move the text out from under the caret, and a
             // decoration costs no advance width at all.

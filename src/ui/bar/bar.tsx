@@ -395,6 +395,17 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY}: {
             if (done.removed) restAt(done);
             else restAfter(done.text, done.caret);
         },
+        negateOpen: (): void => {
+            // The open form's own flip: the head means the same thing in both forms, and while a chip is being
+            // edited is exactly when a reader reaches for it. Committing first — which every settled action
+            // does — would end the session the reader is still in, so this rewrites in place and the caret
+            // rides the minus.
+            const seg = segmentAt(text, clamped);
+            const flipped = toggleNegation(text, seg.start);
+            const shift = flipped.text.length - text.length;
+            applyStep({text: flipped.text, caret: clamped + shift, operation: true}, true,
+                planAt(flipped.text, clamped + shift).slot);
+        },
         negate: (): void => {
             const {step, shifted} = pressCommit(start);
             pushUndo(step.text);
@@ -554,6 +565,7 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY}: {
             placeholder={text === "" ? placeholder : undefined}
             label={placeholder}
             assist={assist}
+            onFlip={actionsFor(at.before.length).negateOpen}
             onCaret={setCaretInSlot}
             onKeystroke={onKeystroke}
             onArrow={onArrow}

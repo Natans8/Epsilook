@@ -204,15 +204,25 @@ test("every badge sits in one box, so the words beside them line up", async () =
     await clearBar(page);
     await page.keyboard.type("xpac:", {delay: 5});
     await expect(offerRows(page).first()).toBeVisible();
-    const boxes = await offerRows(page).evaluateAll((rows) => rows.slice(0, 6).map((row) => {
+    // Measured only once the art has decoded: an image still loading has no height, and twelve zeroes agree
+    // with each other perfectly.
+    await page.waitForFunction(() => {
+        const art = [...document.querySelectorAll("[role=option] img")];
+        return art.length > 0 && art.every((img) => (img as HTMLImageElement).complete);
+    });
+    const boxes = await offerRows(page).evaluateAll((rows) => rows.slice(0, 12).map((row) => {
         const art = row.querySelector("img")?.getBoundingClientRect();
         const word = row.querySelector("[class*='word']")?.getBoundingClientRect();
         return {w: Math.round(art?.width ?? 0), h: Math.round(art?.height ?? 0), at: Math.round(word?.left ?? 0)};
     }));
-    // The art is wordmarks at their own aspects; the BOX is what makes a column of them read as one family.
+    // Sized on WIDTH, which is what the wiki this art comes from does. These are one-line wordmarks and
+    // two-line lockups: at a shared HEIGHT the two-line ones render their lettering at half the size, and only
+    // their widths can be made to agree. The words line up against that one width.
     expect(new Set(boxes.map((box) => box.w)).size).toBe(1);
-    expect(new Set(boxes.map((box) => box.h)).size).toBe(1);
     expect(new Set(boxes.map((box) => box.at)).size).toBe(1);
+    // The height follows each mark's own aspect, so it varies — asserting otherwise is asserting the rule that
+    // made them read as different sizes.
+    expect(new Set(boxes.map((box) => box.h)).size).toBeGreaterThan(1);
 });
 
 test("every spelling that reaches an expansion narrows to it, and picking one writes its name", async () => {

@@ -68,14 +68,18 @@ test("a press on a settled segment's head flips its exclusion, as the field labe
     await expectQuery(page, "model:fire -sound:bell ");
 });
 
-test("a press on the open chip's head keeps the session, caret at the value's start", async () => {
+test("a press on the open chip's head flips exclusion without ending the session", async () => {
     await seed(page, "model:fire", "sound:bell");
-    // The body opens the chip; the head is the toggle.
+    // The body opens the chip; the head is the exclusion toggle, in the open form exactly as on a settled one.
     await page.locator("[class*='chipBody']").first().click();
     await expectQuery(page, "model:{fire} sound:bell ");
 
     await page.locator("[data-open] [class*='headCell']").click();
-    // No settle: the braces are still there, the input still focused, the caret at the value's start.
+    // Flipped, and NOT settled: the editing braces are still there and the field still holds the caret.
+    await expectQuery(page, "-model:{fire} sound:bell ");
+    expect(await slot(page)).toMatchObject({value: "fire", focused: true});
+
+    // And it flips back, so the head is a toggle rather than a one-way door.
+    await page.locator("[data-open] [class*='headCell']").click();
     await expectQuery(page, "model:{fire} sound:bell ");
-    expect(await slot(page)).toMatchObject({value: "fire", start: 0, end: 0, focused: true});
 });

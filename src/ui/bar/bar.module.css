@@ -246,6 +246,17 @@
     color: var(--text-dim);
 }
 
+/* The same tokens under a FIELD. Two things forced this apart from .runOp: a delimiter being placed is not
+ * chrome, it is the thing the reader is aiming at; and --text-dim is where the GHOST lands on the dark palette,
+ * so a quote already typed and a completion not yet accepted were drawn in one colour. Full text colour plus a
+ * wash says "this character is here and it is structure". Colour and background only — a mirror may not move a
+ * glyph, so no weight and no size. */
+.runLive {
+    color: var(--gold);
+    background: color-mix(in srgb, var(--gold) 26%, transparent);
+    border-radius: 2px;
+}
+
 /* A word ABOUT the query rather than one of the data — the any-word, a property standing in a value. The chip
  * draws it loud, so the raw text does too: one language, two surfaces. */
 .runMeta {
@@ -686,5 +697,5 @@
  * — in the two light ones it is a SIBLING of --text, chosen for contrast, and a ghost drawn in it reads as text
  * the reader has already typed. The mix lands on dark's own dim colour, so nothing changes there. */
 .ghost {
-    color: color-mix(in srgb, var(--text) 55%, var(--bg-panel));
+    color: color-mix(in srgb, var(--text) 42%, var(--bg-panel));
 }

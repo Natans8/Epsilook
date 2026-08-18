@@ -306,6 +306,27 @@ function subjectOf(ref: PropRef): boolean {
 }
 
 /**
+ * The one kind a scope's single term belongs to, or null.
+ *
+ * Only where the scope holds exactly one term and that term names a kind with a word of its own -- which is
+ * what makes the word available as the chip's head in place of the column's.
+ *
+ * @param terms The scope's terms, by run.
+ * @returns The kind, or null where the scope holds more than one term or names no kind.
+ */
+function soleKind(terms: ReadonlyArray<readonly ScopeTerm[]>): Kind | null {
+    const flat = terms.flat();
+    if (flat.length !== 1) return null;
+    const ask = flat[0].ask;
+    if (ask === null) return null;
+    if (ask.on === "kindWord") return ask.kind.word === undefined ? null : ask.kind;
+    if (ask.on !== "props") return null;
+    const kinds = new Set(ask.props.map((ref) => ref.kind));
+    const only = kinds.size === 1 ? [...kinds][0] : null;
+    return only?.word === undefined ? null : only;
+}
+
+/**
  * A scope's lane items: terms in written order, the or-connective between non-empty runs.
  *
  * @param terms The scope's terms, by run.
@@ -382,9 +403,17 @@ function askView(ask: Ask, not: boolean): AskView | null {
         return chip(exprPieces(test.value, test.props[0]), isList(test.value) ? "alternative" : "term");
     }
 
-    const items = scopeItems(test.terms, kind);
+    // A column's scope holding ONE term names that term's kind: the reader wrote `model:{display:2}`, and
+    // heading it with the column throws the word they chose away -- leaving the term to say `id`, which is the
+    // schema's own field name and not an ask anybody typed. The kind's word is the door to its subject, so
+    // promoting it is also what lets the subject stop naming itself.
+    const promoted = kind === null ? soleKind(test.terms) : null;
+    const items = scopeItems(test.terms, kind ?? promoted);
     if (items.length === 0) return chip([{is: "meta", text: GRAMMAR.anyWord}]);
-    if (items.length === 1) return chip(compactBody(items[0]));
+    if (items.length === 1) {
+        const word = promoted === null ? head : wordOf(promoted);
+        return {as: "chip", chip: {head: word, tone: column.key, not, body: compactBody(items[0]), grow: "term"}};
+    }
     return {as: "lane", lane: {head, tone: column.key, not, items}};
 }
 

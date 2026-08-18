@@ -13,6 +13,7 @@
  */
 import type {KeyboardEvent, ReactElement, ReactNode} from "react";
 import {useLayoutEffect, useRef} from "react";
+import {useTranslation} from "react-i18next";
 import {GRAMMAR} from "../../search/index";
 import {headCase} from "./chip";
 import type {BarPlan, Keystroke} from "./plan";
@@ -58,7 +59,7 @@ export interface Assist {
  * The open segment. Remounted per session — the mount is what seeds the input and places the caret.
  */
 export function OpenSegment({
-                                at, mode, hidden, seize, highlight, caret, placeholder, label, assist, onKeystroke,
+                                at, mode, hidden, seize, highlight, caret, placeholder, label, assist, onFlip, onKeystroke,
                                 onArrow, onEdge, onCommit, onCancel, onUndo, onRedo, onSelectAll, onSelectPast,
                                 onCaret, onWake, onSettle
                             }: {
@@ -82,6 +83,8 @@ export function OpenSegment({
     readonly label: string;
     /** The control surface, and what the keyboard may do with it. */
     readonly assist: Assist;
+    /** Flips this segment's exclusion in place, without ending the editing session. */
+    readonly onFlip: () => void;
     /**
      * Every text mutation leaves as a keystroke: the new text and the caret as a text offset. `reset` marks the
      * mutations that rewrite the slot from outside the input; `held` is what the input shows, so the bar can
@@ -120,6 +123,7 @@ export function OpenSegment({
     /** Focus leaving the bar entirely — the segment settles into its committed spelling. */
     readonly onSettle: () => void;
 }): ReactElement {
+    const {t} = useTranslation();
     const input = useRef<HTMLInputElement>(null);
     const backdrop = useRef<HTMLSpanElement>(null);
     // What the slot held when this session began — the boundary where Ctrl+Z stops being the platform's.
@@ -329,12 +333,14 @@ export function OpenSegment({
                     key="cell"
                     className={`${styles.headCell} ${at.head.negated ? styles.neg : ""}`}
                     onMouseDown={(e) => {
-                        // The head is the chip's own chrome: pressing it keeps the session alive and puts the
-                        // caret at the value's start — never a blur, never a settle.
+                        // The head means the same thing in both forms: it is the exclusion toggle, as it is on
+                        // a settled chip and as the field label was in 1.0. Pressing it keeps the session alive
+                        // — never a blur, never a settle — and Home is still how the caret reaches the start.
                         e.preventDefault();
                         input.current?.focus();
-                        input.current?.setSelectionRange(0, 0);
+                        onFlip();
                     }}
+                    title={t(at.head.negated ? "bar.include" : "bar.exclude")}
                 >
                     {at.head.negated ? "−" : ""}{headCase(at.head.word)}
                 </span>

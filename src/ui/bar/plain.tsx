@@ -52,10 +52,40 @@ export function PlainBar({text, onText, placeholder, label, history = [], vocab 
     const shown = (offers.groups.length > 0 || offers.takes !== null) && dismissed !== stamp;
     const flat = useMemo(() => flatOffers(offers), [offers]);
     const here = shown && lit >= 0 && lit < flat.length ? lit : -1;
+    // The ghost may only be APPENDED, or it would shift the mirrored text out from under the field's caret --
+    // so it draws only with the caret at the very end of the text, and only while nothing is lit.
+    const ghosting = shown && here < 0 && offers.ghost !== "" && at === text.length;
 
-    /** Reports where the caret now sits, which is what decides what can be offered. */
+    /**
+     * Reports where the caret now sits, which is what decides what can be offered.
+     *
+     * A MOVE puts the light out, because what is offered has changed under it. Standing still does not: the
+     * arrows that steer the list are preventDefault'd, so their own keyup arrives with the caret exactly where
+     * it was -- and extinguishing it there put the light out before the reader could take it.
+     */
     const track = (el: HTMLTextAreaElement): void => {
-        setCaret(el.selectionStart);
+        const now = el.selectionStart;
+        setCaret(now);
+        if (now !== at) setLit(-1);
+    };
+
+    /**
+     * Writes the ghost's own characters at the caret -- the unit a number is missing, or the closers an
+     * enclosure still wants. Neither has a row to pick, so neither goes through {@link apply}.
+     */
+    const writeGhost = (): void => {
+        const el = field.current;
+        if (el === null) return;
+        // A unit finishes a number and so ends its term, exactly as a picked value does; a closer only closes
+        // an enclosure the value may continue past.
+        const ends = offers.ghostIs === "unit" && !text.slice(at).startsWith(" ");
+        const written = ends ? `${offers.ghost} ` : offers.ghost;
+        const next = text.slice(0, at) + written + text.slice(at);
+        const to = at + written.length;
+        el.value = next;
+        onText(next);
+        el.setSelectionRange(to, to);
+        setCaret(to);
         setLit(-1);
     };
 
@@ -72,8 +102,13 @@ export function PlainBar({text, onText, placeholder, label, history = [], vocab 
             return;
         }
         const written = offerSlot(plan, offers, offer);
-        const next = writeSlot(plan, written.value);
-        const to = slotStart(plan) + written.caret;
+        // A VALUE ends its term, so the caret leaves it ready for the next one. A door does not -- it opens an
+        // axis and the value follows it immediately. The chip view gets this from its commit; this view has no
+        // commit, so the separator is written here or not at all.
+        const ends = offer.shape === "word" && !plan.slot.slice(offers.stub.end).startsWith(" ");
+        const written2 = ends ? {value: `${written.value} `, caret: written.caret + 1} : written;
+        const next = writeSlot(plan, written2.value);
+        const to = slotStart(plan) + written2.caret;
         el.value = next;
         onText(next);
         el.setSelectionRange(to, to);
@@ -110,6 +145,16 @@ export function PlainBar({text, onText, placeholder, label, history = [], vocab 
         if (shown && here >= 0 && (e.key === "Enter" || e.key === "Tab")) {
             e.preventDefault();
             apply(flat[here]);
+            return;
+        }
+        // Tab with nothing lit takes the GHOST, exactly as the chip view's slot does. Without this it reached
+        // the platform, which moved the focus to the next control -- the view switch, which is the one thing a
+        // reader mid-query does not want. An offer's ghost is that offer; a unit or a closer has no row and is
+        // written straight in.
+        if (shown && e.key === "Tab" && ghosting) {
+            e.preventDefault();
+            if (offers.ghostIs === "offer" && flat.length > 0) apply(flat[0]);
+            else writeGhost();
             return;
         }
         if (shown && e.key === "Escape") {
@@ -164,6 +209,7 @@ export function PlainBar({text, onText, placeholder, label, history = [], vocab 
                     identically and the text can never reach past the bar it is drawn in. */}
                 <span className={styles.plainInk} aria-hidden="true">
                     <Classed text={text} rich mirrored/>
+                    {ghosting && <span className={styles.ghost}>{offers.ghost}</span>}
                     {/* A trailing newline keeps a text ending in a space from collapsing the last line. */}
                     {"\n"}
                 </span>

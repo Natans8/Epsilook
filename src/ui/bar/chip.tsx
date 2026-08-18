@@ -46,6 +46,13 @@ export interface SegmentActions {
     readonly grow: (flavour: "term" | "alternative") => void;
     /** Flips the whole segment between asking for and excluding what it names. */
     readonly negate: () => void;
+    /**
+     * The same flip on the segment currently being EDITED, in place.
+     *
+     * Apart from {@link negate} because every settled action commits the open segment before it acts, which
+     * would end the session the reader is still inside — and editing is when a reader most wants to invert.
+     */
+    readonly negateOpen: () => void;
     /** Flips one of a lane's terms, by its index among the items. */
     readonly negateTerm: (index: number) => void;
 }

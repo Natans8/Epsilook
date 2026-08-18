@@ -64,3 +64,10 @@
     background: rgba(var(--select-rgb), var(--select-a));
     color: transparent;
 }
+
+/* The completion not yet accepted, appended to the ink. Faint enough to read apart from a delimiter the reader
+ * has actually typed — the two were landing on one colour, which made a spawned quote look like a suggestion.
+ * Colour only: this ink is a mirror, and anything that moves a glyph moves the caret off its character. */
+.ghost {
+    color: color-mix(in srgb, var(--text) 42%, var(--bg-panel));
+}
