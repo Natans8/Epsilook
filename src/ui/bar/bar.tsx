@@ -456,7 +456,7 @@ export function Bar({text, onText, placeholder}: {
     const flat = useMemo(() => flatOffers(offers), [offers]);
     // One arrangement of query, position and caret — what the light and the dismissal were decided about.
     const stamp = `${text} ${String(clamped)} ${String(gapAt ?? -1)} ${String(caretInSlot)}`;
-    const shown = offers.groups.length > 0 && dismissed !== stamp;
+    const shown = (offers.groups.length > 0 || offers.takes !== null) && dismissed !== stamp;
     const lit = shown && litAt.stamp === stamp ? litAt.index : -1;
 
     /**

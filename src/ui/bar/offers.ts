@@ -15,7 +15,7 @@ import {termStarts} from "./plan";
 import type {Column, Kind, Prop} from "../../search/index";
 import {
     bitmask, COUNT_PROP, flag, fold, GRAMMAR, HEADS, headWord, hintOf, kindsOf, operatorsOf, propIn,
-    TARGET_ROLES,
+    propNameOf, TARGET_ROLES, wordOf,
 } from "../../search/index";
 import {i18n} from "../../i18n";
 
@@ -48,6 +48,14 @@ export interface Offer {
      * them, while every surface still writes the one spelling the language writes.
      */
     readonly reads?: readonly string[];
+    /**
+     * The kinds that declare this property, where they are not all of the column's.
+     *
+     * A column's scope reads a property from any of its kinds, so `model:{motion:...}` is legal — but motion is
+     * a MISSILE's property, and a list that shows it beside the column's own reads as though every model had
+     * one. Naming the owner is what keeps the taxonomy honest without taking the ask away.
+     */
+    readonly owner?: string;
 }
 
 /** One titled section of the surface. */
@@ -57,9 +65,27 @@ export interface OfferGroup {
     readonly offers: readonly Offer[];
 }
 
+/** What the position takes, said from the declarations: the subject, what it means, and how it is written. */
+export interface Takes {
+    /** The property's own name, as naming surfaces write it. */
+    readonly title: string;
+    /** What the property is — its declared description. */
+    readonly what: string;
+    /** How a value is written — the type's own line, which is where the examples live. */
+    readonly how: string;
+}
+
 /** What the caret can be handed, and where it would land. */
 export interface Offers {
     readonly groups: readonly OfferGroup[];
+    /**
+     * What this position takes, where the caret is composing a value.
+     *
+     * The offers alone can only ever list WORDS, so a numeric axis would read as though words were all it
+     * accepted. The two lines come from two declarations — the property says what it is, the type says how to
+     * write one — which is also the separation between a description and its examples.
+     */
+    readonly takes: Takes | null;
     /** The slot characters an offer replaces. */
     readonly stub: { readonly start: number; readonly end: number };
     /** The best candidate's remainder, drawn dim after the caret; empty when nothing completes what was typed. */
@@ -74,7 +100,7 @@ export function flatOffers(offers: Offers): Offer[] {
 }
 
 /** Nothing on offer — what a bar at rest has, since a caret it does not hold can be handed nothing. */
-export const NO_OFFERS: Offers = {groups: [], stub: {start: 0, end: 0}, ghost: "", negated: false};
+export const NO_OFFERS: Offers = {groups: [], stub: {start: 0, end: 0}, ghost: "", negated: false, takes: null};
 
 /**
  * What the slot would hold once an offer is taken, and where the caret would then sit in it.
@@ -95,6 +121,27 @@ export function offerSlot(plan: BarPlan, offers: Offers, offer: Offer): { value:
 
 /** How much of a top-level word must be typed before the doors are offered — 1.0's own threshold. */
 const DOOR_THRESHOLD = 2;
+
+/**
+ * The order the doors are offered in: what a reader reaches for first.
+ *
+ * Alphabetical is an ordering of the SPELLINGS, and a menu ordered by spelling teaches nothing — it opened on
+ * `anim`, `cast`, `chain` because those words happen to start with the first letters of the alphabet. This is
+ * the order of the questions instead: what the spell looks and sounds like, then what it is, then how it goes
+ * off, then the long tail. A door missing from this list still appears, after the ones named here.
+ */
+const MENU_ORDER: readonly string[] = [
+    "name", "model", "sound", "anim", "fx",
+    "desc", "icon", "id", "xpac",
+    "cast", "channel", "scale", "speed", "mech", "spell",
+    "missile", "chain", "morph", "summon", "seats", "location", "triggers", "origin",
+];
+
+/** Where one door sits in the menu — the unlisted ones after every listed one, in their own order. */
+const menuRank = (word: string): number => {
+    const at = MENU_ORDER.indexOf(word);
+    return at < 0 ? MENU_ORDER.length : at;
+};
 
 /** The term the caret sits in, in the coordinates of the text it was split from. */
 function termAt(text: string, caret: number): { start: number; end: number } {
@@ -128,7 +175,7 @@ function bindIn(term: string): number {
 
 /** Every door of the language, by the spelling it writes — the head index folded back onto the words it offers. */
 function doorOffers(): Offer[] {
-    const held = new Map<string, Offer & {reads: string[]}>();
+    const held = new Map<string, Offer & { reads: string[] }>();
     for (const [spelling, head] of HEADS) {
         const word = headWord(head);
         const found = held.get(word);
@@ -146,7 +193,7 @@ function doorOffers(): Offer[] {
             reads: [spelling],
         });
     }
-    return [...held.values()].sort((a, b) => a.word.localeCompare(b.word));
+    return [...held.values()].sort((a, b) => menuRank(a.word) - menuRank(b.word) || a.word.localeCompare(b.word));
 }
 
 /** The kinds of one column, as the words that name them inside its scope. */
@@ -164,7 +211,7 @@ function kindOffers(column: Column): Offer[] {
 }
 
 /** One property, as the offer that opens it: a flag word stands alone, everything else takes a bind. */
-function propOffer(name: string, prop: Prop, tone: string): Offer {
+function propOffer(name: string, prop: Prop, tone: string, owner?: string): Offer {
     const valueless = prop.types.includes(flag);
     return {
         shape: valueless ? "word" : "door",
@@ -172,17 +219,32 @@ function propOffer(name: string, prop: Prop, tone: string): Offer {
         insert: valueless ? name : name + GRAMMAR.bind,
         note: hintOf(prop),
         tone,
+        owner,
     };
 }
 
-/** Every property reachable inside one head's scope: a kind's own, or every kind's across a column. */
+/**
+ * Every property reachable inside one head's scope: a kind's own, or every kind's across a column.
+ *
+ * Under a COLUMN each property also names the kinds that declare it, unless every kind of the column does. The
+ * language reads `model:{motion:parabola}` because a column looks the word up across its kinds — but motion
+ * belongs to a MISSILE, and a flat list of every kind's properties reads as though the column had them all.
+ */
 function propOffers(context: { role: "column"; column: Column } | { role: "kind"; kind: Kind }): Offer[] {
     const tone = context.role === "column" ? context.column.key : context.kind.column.key;
     const kinds = context.role === "column" ? kindsOf(context.column) : [context.kind];
+    const owners = new Map<string, string[]>();
+    for (const kind of kinds) {
+        for (const name of Object.keys(kind.props)) owners.set(name, [...owners.get(name) ?? [], wordOf(kind)]);
+    }
     const held = new Map<string, Offer>();
     for (const kind of kinds) {
         for (const [name, prop] of Object.entries(kind.props)) {
-            if (!held.has(name)) held.set(name, propOffer(name, prop, tone));
+            const mine = owners.get(name) ?? [];
+            // Named only where naming it says something: one or two kinds is a fact a reader can use, and a
+            // property on eight kinds of nine is the column's own however the ninth is declared.
+            const owner = mine.length <= 2 && mine.length < kinds.length ? mine.join(" · ") : undefined;
+            if (!held.has(name)) held.set(name, propOffer(name, prop, tone, owner));
         }
     }
     // The count axis has no door of its own and every scope can ask it, so it is offered wherever a scope is open.
@@ -252,7 +314,7 @@ function historyGroup(history: readonly string[]): OfferGroup[] {
 type Context =
     | { readonly role: "column"; readonly column: Column }
     | { readonly role: "kind"; readonly kind: Kind }
-    | { readonly role: "prop"; readonly prop: Prop; readonly tone: string };
+    | { readonly role: "prop"; readonly prop: Prop; readonly tone: string; readonly name: string };
 
 /** The head the caret's own segment sits under, resolved through the schema exactly as the parser resolves it. */
 function contextOf(plan: BarPlan): Context | null {
@@ -261,7 +323,7 @@ function contextOf(plan: BarPlan): Context | null {
     if (head === undefined) return null;
     if (head.role === "column") return {role: "column", column: head.column};
     if (head.role === "kind") return {role: "kind", kind: head.kind};
-    return {role: "prop", prop: head.prop, tone: head.kind.column.key};
+    return {role: "prop", prop: head.prop, tone: head.kind.column.key, name: head.name};
 }
 
 /**
@@ -271,17 +333,58 @@ function contextOf(plan: BarPlan): Context | null {
  * synonyms AND the active language's words, and a copy of that rule here would answer differently the moment a
  * localised word landed.
  */
-function innerProp(context: Context, word: string): { prop: Prop; tone: string } | null {
+function innerProp(context: Context, word: string): { prop: Prop; tone: string; name: string } | null {
     if (context.role === "prop") return null;
     const folded = fold(word);
     const tone = context.role === "column" ? context.column.key : context.kind.column.key;
-    if (folded === GRAMMAR.countWord) return {prop: COUNT_PROP, tone};
+    if (folded === GRAMMAR.countWord) return {prop: COUNT_PROP, tone, name: GRAMMAR.countWord};
     const kinds = context.role === "column" ? kindsOf(context.column) : [context.kind];
     for (const kind of kinds) {
         const name = propIn(kind, folded);
-        if (name !== undefined) return {prop: kind.props[name], tone};
+        if (name !== undefined) return {prop: kind.props[name], tone, name};
     }
     return null;
+}
+
+/**
+ * What a value position takes: the property, what it is, and how a value is written.
+ *
+ * Two declarations rather than one string, which is also what separates a description from its examples: the
+ * PROPERTY says what it means, the TYPE says how to spell one — and the type's line is where the examples live.
+ *
+ * @param prop The property being composed.
+ * @param name Its own name, as the query writes it.
+ * @returns The three lines the surface draws above the offers.
+ */
+function takesOf(prop: Prop, name: string): Takes {
+    return {
+        title: propNameOf(name, prop),
+        what: hintOf(prop),
+        // Every notation the property reads, in the order they are tried: a property with two of them takes
+        // either, and saying only the first would teach half the axis.
+        how: prop.types.map((type) => type.hint).join(" · "),
+    };
+}
+
+/**
+ * The unit a bare number is still missing, drawn as a ghost after it.
+ *
+ * A quantity type declares the notation its values are WRITTEN in, and that notation is what the chip will
+ * display the number as anyway — so offering it while the number is being typed is the same fact said a moment
+ * earlier. Only a suffix can be ghosted: a symbol that stands before its number is not a completion of it.
+ *
+ * @param prop The property being composed, where one is known.
+ * @param typed What has been typed into the value so far.
+ * @returns The symbol to draw after the caret, or an empty string.
+ */
+function unitGhost(prop: Prop | null, typed: string): string {
+    if (prop === null || !/^-?\d+(\.\d+)?$/.test(typed)) return "";
+    for (const type of prop.types) {
+        const notation = type.notations?.[0];
+        if (notation === undefined || notation.unit === "" || notation.position === "before") continue;
+        return notation.glyph ?? notation.unit;
+    }
+    return "";
 }
 
 /** The three value groups one property offers, in the order the surface draws them. */
@@ -309,6 +412,7 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     if ((plan.before + plan.open + plan.after).trim() === "") {
         return {
             groups: [...historyGroup(history), ...group("axes", doorOffers(), "")],
+            takes: null,
             stub: {start: at, end: at},
             ghost: "",
             negated: false,
@@ -319,8 +423,9 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     const context = contextOf(plan);
     const bind = bindIn(slot.slice(term.start, term.end));
     // Past a term's own bind the caret is composing a VALUE, so the property that bind names is what answers.
-    const inner = bind < 0 || at <= term.start + bind || context === null
-        ? null : innerProp(context, slot.slice(term.start, term.start + bind));
+    const bound = bind >= 0 && at > term.start + bind && context !== null && context.role !== "prop";
+    const boundWord = bound ? slot.slice(term.start, term.start + bind) : "";
+    const inner = bound && context !== null ? innerProp(context, boundWord) : null;
     // A leading minus negates whatever follows it, so it is not part of the word an offer replaces — and every
     // offer made under one excludes rather than asks, which the rows say for themselves.
     const negated = inner === null && slot.startsWith(GRAMMAR.negate, term.start);
@@ -332,20 +437,58 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     // comes to open at every click, and it would be offering to replace the half of the word past the caret.
     if (at < stub.end) return NO_OFFERS;
 
+    // A bind whose word is not a property of what the scope asks about: the parse will say so at commit, and
+    // while the reader is still typing this surface is the channel that says it — with the properties that ARE
+    // there, which is the answer rather than the complaint.
+    const foreign = bound && inner === null;
+
+    // The property whose value is being composed, whichever door reached it: a property's own door, an inner
+    // bind, or a KIND's word — which is the door to its subject, the first property it declares.
+    const subject = context?.role === "kind" ? Object.entries(context.kind.props)[0] : undefined;
+    const composing = inner !== null ? inner
+        : context?.role === "prop" ? {prop: context.prop, tone: context.tone, name: context.name}
+            : subject !== undefined && bind < 0
+                ? {prop: subject[1], tone: context?.role === "kind" ? context.kind.column.key : "", name: subject[0]}
+                : null;
     const groups = ((): OfferGroup[] => {
-        if (inner !== null) return valueGroups(inner.prop, inner.tone, typed);
+        // A kind's scope offers its properties as well as its subject's words: `scale:{}` takes an amount, and
+        // `scale:{attach:...}` is the same scope saying something else about the same row. Past an inner bind
+        // it does NOT: there the caret is inside that property's value, where a property name is not a value.
+        if (context?.role === "kind" && composing !== null && inner === null) {
+            return [
+                ...valueGroups(composing.prop, composing.tone, typed),
+                ...group("props", propOffers(context), typed),
+            ];
+        }
+        if (composing !== null) return valueGroups(composing.prop, composing.tone, typed);
         if (context === null) return typed.length < DOOR_THRESHOLD ? [] : group("axes", doorOffers(), typed);
-        if (context.role === "prop") return valueGroups(context.prop, context.tone, typed);
+        if (context.role === "prop") return [];
+        // The word before the bind is unknown here, so what is on offer is the properties it could have been.
+        if (foreign) return group("props", propOffers(context), "");
+
         return [
             ...(context.role === "column" ? group("kinds", kindOffers(context.column), typed) : []),
             ...group("props", propOffers(context), typed),
         ];
     })();
+    const scope = context !== null && context.role !== "prop" ? context : null;
+    const takes = foreign && scope !== null
+        ? {
+            title: boundWord,
+            what: i18n.t("diagnostics:scope.foreignProperty", {
+                kind: scope.role === "column" ? scope.column.key : wordOf(scope.kind),
+                word: boundWord,
+            }),
+            how: "",
+        }
+        : composing === null ? null : takesOf(composing.prop, composing.name);
 
     // The ghost is drawn in the slot's own mirror, so it may only ever be appended: anywhere but the end it would
     // shift the mirrored text out from under the field's own caret.
+    const atEnd = at === slot.length && stub.end === at;
     const best = groups[0]?.offers[0];
     const completes = best !== undefined && best.shape !== "query" && typed !== ""
-        && at === slot.length && stub.end === at && best.insert.startsWith(typed);
-    return {groups, stub, ghost: completes ? best.insert.slice(typed.length) : "", negated};
+        && atEnd && best.insert.startsWith(typed);
+    const unit = atEnd ? unitGhost(composing?.prop ?? null, typed) : "";
+    return {groups, takes, stub, ghost: completes ? best.insert.slice(typed.length) : unit, negated};
 }

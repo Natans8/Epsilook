@@ -272,9 +272,11 @@ function listText(alt: ValueExpr): string | null {
  *
  * @param term The term.
  * @param lone Whether it stands alone in its alternation run.
+ * @param under The kind the scope was opened on, or null under a column — which decides whether a property's
+ *   own word has already been said by the head.
  * @returns The item.
  */
-function termItem(term: ScopeTerm, lone: boolean): LaneItem {
+function termItem(term: ScopeTerm, lone: boolean, under: Kind | null): LaneItem {
     const ask = term.ask;
     if (term.state !== "ok" || ask === null) return {is: "dead", span: term.span};
     const at = {not: term.not, span: term.span, lone};
@@ -283,10 +285,13 @@ function termItem(term: ScopeTerm, lone: boolean): LaneItem {
     if (ask.on === "count") return {is: "bind", ...at, head: GRAMMAR.countWord, body: exprPieces(ask.value)};
     const ref = ask.props[0];
     const body = exprPieces(ask.value, ref);
-    // The head is the door the ask went through, and a kind's word IS the door to its subject: `scale:` means
-    // the amount, so naming the amount again says nothing the head has not said. Everything else keeps its
-    // word, because without it the value would not say which aspect it constrains.
-    return subjectOf(ref) ? {is: "term", ...at, body} : {is: "bind", ...at, head: ref.prop, body};
+    // The head is the door the ask went through, and a KIND's word is the door to its subject: `scale:` means
+    // the amount, so naming the amount again says nothing the head has not said. That holds only where the
+    // enclosing head IS that kind — under a COLUMN the word carries no property, and dropping it turns
+    // `model:{file:*}` into the different ask `model:any`. Everything else keeps its word, because without it
+    // the value would not say which aspect it constrains.
+    return under === ref.kind && subjectOf(ref)
+        ? {is: "term", ...at, body} : {is: "bind", ...at, head: ref.prop, body};
 }
 
 /**
@@ -300,13 +305,19 @@ function subjectOf(ref: PropRef): boolean {
     return Object.keys(ref.kind.props)[0] === ref.prop;
 }
 
-/** A scope's lane items: terms in written order, the or-connective between non-empty runs. */
-function scopeItems(terms: ReadonlyArray<readonly ScopeTerm[]>): LaneItem[] {
+/**
+ * A scope's lane items: terms in written order, the or-connective between non-empty runs.
+ *
+ * @param terms The scope's terms, by run.
+ * @param under The kind the scope was opened on, or null for a column's scope — which decides whether a
+ *   property's own word has already been said by the head.
+ */
+function scopeItems(terms: ReadonlyArray<readonly ScopeTerm[]>, under: Kind | null): LaneItem[] {
     const items: LaneItem[] = [];
     for (const run of terms) {
         if (run.length === 0) continue;
         if (items.length > 0) items.push({is: "or"});
-        for (const term of run) items.push(termItem(term, run.length === 1));
+        for (const term of run) items.push(termItem(term, run.length === 1, under));
     }
     return items;
 }
@@ -371,7 +382,7 @@ function askView(ask: Ask, not: boolean): AskView | null {
         return chip(exprPieces(test.value, test.props[0]), isList(test.value) ? "alternative" : "term");
     }
 
-    const items = scopeItems(test.terms);
+    const items = scopeItems(test.terms, kind);
     if (items.length === 0) return chip([{is: "meta", text: GRAMMAR.anyWord}]);
     if (items.length === 1) return chip(compactBody(items[0]));
     return {as: "lane", lane: {head, tone: column.key, not, items}};

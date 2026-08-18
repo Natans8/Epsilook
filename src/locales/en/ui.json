@@ -54,7 +54,8 @@
     "clipped": "outliers beyond this range exist",
     "empty": "Keep typing — a value, or one of the words above.",
     "incomplete": "The value is not finished yet.",
-    "unit": "Notation"
+    "unit": "Notation",
+    "takes": "Takes"
   },
   "tray": {
     "apply": "Apply",

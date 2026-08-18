@@ -29,10 +29,11 @@ test("an empty bar offers the remembered searches, then every door", () => {
     const offers = at("", 0, ["model:fire", "scale:>50"]);
     assert.deepEqual(offers.groups.map((group) => group.id), ["history", "axes"]);
     assert.deepEqual(words(offers, "history"), ["model:fire", "scale:>50"]);
-    // The whole menu, alphabetical: this is the click-path for every axis the language has.
+    // The whole menu, in the order a reader reaches for them rather than by spelling: this is the click-path
+    // for every axis the language has, so what opens the list is what most searches start from.
     const doors = words(offers, "axes");
-    assert.deepEqual(doors.toSorted((a, b) => a.localeCompare(b)), doors);
-    assert.ok(doors.includes("model") && doors.includes("xpac") && doors.includes("cast"));
+    assert.deepEqual(doors.slice(0, 5), ["name", "model", "sound", "anim", "fx"]);
+    assert.ok(doors.includes("xpac") && doors.includes("cast"));
     // Nothing is typed, so nothing completes.
     assert.equal(offers.ghost, "");
 });
@@ -83,9 +84,11 @@ test("inside a column's scope: its kinds, its properties, and the count axis", (
     assert.equal(motion?.insert, "motion:");
 });
 
-test("inside a kind's scope: that kind's own properties and nothing else", () => {
+test("inside a kind's scope: what its own word asks for, then that kind's properties", () => {
     const offers = at("missile:{}", 9);
-    assert.deepEqual(offers.groups.map((group) => group.id), ["props"]);
+    // The kind's word is the door to its subject, so the scope takes a value for it — and its other
+    // properties are the same row said another way.
+    assert.deepEqual(offers.groups.map((group) => group.id), ["words", "props"]);
     assert.deepEqual(words(offers, "props").toSorted((a, b) => a.localeCompare(b)),
         ["count", "file", "from", "motion", "projectiles", "target", "to"]);
 });
@@ -173,4 +176,36 @@ test("a caret dropped into the middle of a word offers nothing — it is fixing,
     assert.deepEqual(at("model:{fire}", 9).groups, []);
     // At the word's own end the same caret is composing, and the offers stand.
     assert.ok(at("model:{fi}", 9).groups.length > 0);
+});
+
+test("a value position says what it takes — the property, then how a value is written", () => {
+    const takes = at("cast:", 5).takes;
+    assert.equal(takes?.title, "cast");
+    // Two declarations, two lines: the property says what it is, the type says how to spell one.
+    assert.match(takes?.what ?? "", /cast bar/);
+    assert.match(takes?.how ?? "", /seconds/);
+    // A scope is not composing a value, so it says nothing.
+    assert.equal(at("model:{}", 7).takes, null);
+});
+
+test("a bare number is ghosted with the unit its axis writes", () => {
+    assert.equal(at("scale:15", 8).ghost, "%");
+    // The unit only completes a number, and only at the value's end.
+    assert.equal(at("scale:x", 7).ghost, "");
+});
+
+test("a bind on a word the scope has no property for says so, and offers the ones it has", () => {
+    const offers = at("model:{blerg:}", 13);
+    assert.equal(offers.takes?.title, "blerg");
+    assert.match(offers.takes?.what ?? "", /blerg/);
+    assert.ok(words(offers, "props").includes("motion"));
+});
+
+test("a property only some of a column's kinds declare names them", () => {
+    const offers = at("model:{}", 7);
+    const motion = offers.groups.flatMap((group) => group.offers).find((offer) => offer.word === "motion");
+    assert.equal(motion?.owner, "missile");
+    // A property every kind of the column has needs no owner: it IS the column's.
+    const target = offers.groups.flatMap((group) => group.offers).find((offer) => offer.word === "target");
+    assert.equal(target?.owner, undefined);
 });

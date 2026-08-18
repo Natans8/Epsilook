@@ -9,8 +9,8 @@
 /** Where the list lives. Namespaced, because the harness and the site share an origin while both exist. */
 const KEY = "epsilook.search2.history";
 
-/** How many searches are kept. Enough to reach yesterday's work, few enough to read without scrolling. */
-const LIMIT = 8;
+/** How many searches are kept — few enough that the menu opens on a list, not on a history page. */
+const LIMIT = 5;
 
 /** The remembered searches, newest first. */
 export function recentQueries(): readonly string[] {

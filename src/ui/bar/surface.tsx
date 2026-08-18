@@ -70,6 +70,8 @@ function Row({offer, negated, lit, id, onPick, onLight}: {
             onMouseMove={onLight}
         >
             <span className={styles.word}>{body}</span>
+            {/* Which kinds actually declare this property, where the column's own scope reaches more than one. */}
+            {offer.owner !== undefined && <span className={styles.owner}>{offer.owner}</span>}
             {offer.note !== "" && <span className={styles.note}>{offer.note}</span>}
         </div>
     );
@@ -106,7 +108,7 @@ export function Surface({offers, lit, listId, onPick, onLight}: {
         if (el.style.left !== next) el.style.left = next;
     });
 
-    if (offers.groups.length === 0) return null;
+    if (offers.groups.length === 0 && offers.takes === null) return null;
     let index = -1;
     return (
         <div
@@ -117,6 +119,19 @@ export function Surface({offers, lit, listId, onPick, onLight}: {
             className={styles.panel}
             data-surface=""
         >
+            {/* What this position takes, before what it offers: the property, what it means, and how a value is
+                written. The offers can only ever list WORDS, so without this line a numeric axis reads as though
+                words were all it took. */}
+            {offers.takes !== null && (
+                <div className={styles.takes}>
+                    <div className={styles.takesTitle}>{offers.takes.title}</div>
+                    <div className={styles.takesWhat}>{offers.takes.what}</div>
+                    <div className={styles.takesHow}>
+                        <span className={styles.takesLabel}>{t("surface.takes")}</span>
+                        {offers.takes.how}
+                    </div>
+                </div>
+            )}
             {offers.groups.map((group) => (
                 <div key={group.id} role="group" aria-labelledby={`${listId}-${group.id}`} className={styles.group}>
                     <div id={`${listId}-${group.id}`} className={styles.section}>{group.label}</div>

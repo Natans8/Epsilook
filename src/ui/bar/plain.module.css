@@ -18,21 +18,11 @@
 .plainField {
     font-family: inherit;
     font-size: 1.1rem;
-    /* Read as PROSE, not as a bar: this view exists to be read, so it takes the line height WCAG's text-spacing
-     * criterion asks content to survive (1.5x) with a little over, and a wider word gap so the tokens of a
-     * dense query separate. Both surfaces take it identically or they stop wrapping alike — which is also why
-     * a textarea and not an input: a single-line field clamps its line height to the font's own. */
+    /* The query's own spacing, and nothing added to it: this view shows what was typed, and letters or words
+     * pushed apart are as much a change to that as a rewrite would be. The line height is the one exception —
+     * a wrapped query needs its lines told apart — and it is also why this is a textarea rather than an input,
+     * which would clamp its line height to the font's own. */
     line-height: 1.6;
-    /* And AIR ACROSS: a query is a dense string of glued tokens, so the gap between two words does most of the
-     * separating work here — the reader is scanning for where one term ends and the next begins. Both figures
-     * are a balance a single field forces: one rule reaches every space, so the gap between two top-level terms
-     * cannot be wider than the gap between two words inside a scope, and the tracking has to unglue a token's
-     * own parts without making a word look airy. */
-    word-spacing: 0.26em;
-    /* Air INSIDE a token too, not only between them: `model:{fire` is four things glued, and the tracking is
-     * the only lever that reaches them — the field and its backdrop must measure identically, so a space
-     * added around a delimiter in the ink alone would walk the caret off the text. */
-    letter-spacing: 0.03em;
     white-space: pre-wrap;
     overflow-wrap: break-word;
     /* The backdrop is a row of separate spans and the field is one string: kerning and ligatures apply across

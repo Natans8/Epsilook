@@ -30,6 +30,50 @@
     user-select: none;
 }
 
+/* What the position takes, above what it offers. Three declarations, three lines, each with its own job: the
+ * subject, what it means, and how a value is written — which is where the examples live, and where they stop
+ * being mixed into the prose that describes the thing. */
+.takes {
+    padding: 0.5rem 0.9rem 0.55rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.takesTitle {
+    font-size: 1rem;
+    color: var(--text);
+}
+
+.takesWhat {
+    padding-top: 0.1rem;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+.takesHow {
+    display: flex;
+    gap: 0.45rem;
+    align-items: baseline;
+    padding-top: 0.25rem;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+}
+
+/* The label is what makes the line read as a rule rather than as more prose about the axis. */
+.takesLabel {
+    flex: none;
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+
+/* The kinds a property belongs to, where the column's scope reaches more than its own. */
+.owner {
+    flex: none;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+
 /* One hairline between sections — the label already separates them, so the rule only has to keep two lists of
  * words from reading as one. */
 .group + .group {
@@ -52,7 +96,7 @@
     --chip-rgb: var(--overlay-rgb);
     display: flex;
     align-items: baseline;
-    gap: 0.6rem;
+    gap: 0.5rem;
     padding: 0.28rem 0.9rem;
     cursor: pointer;
 }
@@ -63,15 +107,13 @@
     background: rgba(var(--gold-rgb), calc(0.14 * var(--wash-strength)));
 }
 
-/* The words share a column so the notes beside them line up — a ragged second column is what makes a list of
- * pairs read as noise. A minimum rather than a fixed width: a long word takes the room it needs and only its own
- * note moves. */
+/* The note sits right beside its word. An aligned second column was tried and rejected on sight: the gap it
+ * opens between a short word and its own note is wide enough that the eye stops pairing them. */
 .word {
     display: flex;
     flex: none;
     align-items: center;
     gap: 0.4rem;
-    min-width: 7rem;
     font-size: 1rem;
     color: var(--text);
 }
@@ -104,6 +146,13 @@
     overflow: hidden;
     white-space: pre;
     text-overflow: ellipsis;
+}
+
+/* Prose, so it reads as prose: the declarations are written as fragments and the first letter is raised here
+ * rather than in a hundred and forty strings, which would also raise it wherever else a hint is shown. */
+.note::first-letter,
+.takesWhat::first-letter {
+    text-transform: uppercase;
 }
 
 .note {
