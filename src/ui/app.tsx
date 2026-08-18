@@ -10,6 +10,7 @@ import {useEffect, useRef, useState} from "react";
 import {useTranslation} from "react-i18next";
 import type {PackInfo, Searcher} from "./searcher";
 import {expansionArt} from "./art";
+import {recentQueries} from "./history";
 import {BASE} from "./pack";
 import {Bar} from "./bar/bar";
 import {PlainBar} from "./bar/plain";
@@ -123,7 +124,8 @@ export function App({info, searcher}: {
                 <div className={styles.barRow} data-query={text}>
                     {plain
                         ? <PlainBar text={text} onText={setText} placeholder={t("bar.placeholder")}
-                                    label={t("bar.placeholder")}/>
+                                    label={t("bar.placeholder")} history={recentQueries()}
+                                    vocab={{rungs: info.rungs, art: expansionArt(info.rungs, BASE)}}/>
                         : <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}
                                vocab={{rungs: info.rungs, art: expansionArt(info.rungs, BASE)}}/>}
                 </div>

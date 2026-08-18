@@ -122,3 +122,19 @@ test("the field and its backdrop wrap alike at every width, so the caret is wher
     });
     expect(disagreeing).toEqual([]);
 });
+
+test("the plaintext view offers the same words, and takes one without rewriting anything else", async () => {
+    // The view is a toggle the previous cell may have left either way; this one only cares that it is on.
+    if (await plainSwitch(page).getAttribute("aria-checked") !== "true") await plainSwitch(page).click();
+    await plainField(page).click();
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("Backspace");
+    await page.keyboard.type("mo", {delay: 5});
+    await expect(page.locator("[data-surface]")).toBeVisible();
+
+    // The same offers, applied as the characters they spell: no scope gesture, no rewrap, no commit — this
+    // view shows what was typed, so taking an offer adds a word and nothing else moves.
+    await page.locator("[data-surface] [role='option']").first().click();
+    await expectQuery(page, "model:");
+    expect(await plainField(page).inputValue()).toBe("model:");
+});

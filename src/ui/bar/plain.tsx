@@ -12,8 +12,11 @@
  * looking at it.
  */
 import type {ChangeEvent, KeyboardEvent, ReactElement} from "react";
-import {useLayoutEffect, useRef} from "react";
-import {pairDelimiter} from "./plan";
+import {useId, useLayoutEffect, useMemo, useRef, useState} from "react";
+import {pairDelimiter, planAt, slotStart, writeSlot} from "./plan";
+import type {Offer, Vocabulary} from "./offers";
+import {flatOffers, NO_VOCABULARY, offerSlot, offersAt} from "./offers";
+import {optionId, Surface} from "./surface";
 import {Classed} from "./classed";
 // Two sheets, two jobs: the bar's own frame is shared with the chip view, the rest is this view's alone.
 import frame from "./bar.module.css";
@@ -22,14 +25,61 @@ import styles from "./plain.module.css";
 /**
  * The plaintext editor.
  */
-export function PlainBar({text, onText, placeholder, label}: {
+export function PlainBar({text, onText, placeholder, label, history = [], vocab = NO_VOCABULARY}: {
     readonly text: string;
     readonly onText: (text: string) => void;
     readonly placeholder: string;
     /** The field's accessible name, which stands whether or not a placeholder is showing. */
     readonly label: string;
+    /** The remembered searches, newest first. */
+    readonly history?: readonly string[];
+    /** The closed vocabularies the loaded pack carries. */
+    readonly vocab?: Vocabulary;
 }): ReactElement {
     const field = useRef<HTMLTextAreaElement>(null);
+    // The same offers the chip view gets, read from the same plan: this view shows the query differently, it
+    // does not know less about it. What it does NOT take is the chip view's conveniences — no commit, no scope
+    // gesture, no rewrap — so a picked offer lands as the characters it spells and nothing else moves.
+    const [caret, setCaret] = useState(0);
+    const [lit, setLit] = useState(-1);
+    const [dismissed, setDismissed] = useState("");
+    const listId = useId();
+    const at = Math.min(caret, text.length);
+    const plan = useMemo(() => planAt(text, at), [text, at]);
+    const offers = useMemo(
+        () => offersAt(plan, at - slotStart(plan), history, vocab), [plan, at, history, vocab]);
+    const stamp = `${text} ${String(at)}`;
+    const shown = (offers.groups.length > 0 || offers.takes !== null) && dismissed !== stamp;
+    const flat = useMemo(() => flatOffers(offers), [offers]);
+    const here = shown && lit >= 0 && lit < flat.length ? lit : -1;
+
+    /** Reports where the caret now sits, which is what decides what can be offered. */
+    const track = (el: HTMLTextAreaElement): void => {
+        setCaret(el.selectionStart);
+        setLit(-1);
+    };
+
+    /** Writes one offer into the text, leaving the caret after what it spelled. */
+    const apply = (offer: Offer): void => {
+        const el = field.current;
+        if (el === null) return;
+        if (offer.shape === "query") {
+            el.value = offer.insert;
+            onText(offer.insert);
+            el.setSelectionRange(offer.insert.length, offer.insert.length);
+            setCaret(offer.insert.length);
+            setLit(-1);
+            return;
+        }
+        const written = offerSlot(plan, offers, offer);
+        const next = writeSlot(plan, written.value);
+        const to = slotStart(plan) + written.caret;
+        el.value = next;
+        onText(next);
+        el.setSelectionRange(to, to);
+        setCaret(to);
+        setLit(-1);
+    };
 
     useLayoutEffect(() => {
         const el = field.current;
@@ -48,6 +98,26 @@ export function PlainBar({text, onText, placeholder, label}: {
      */
     const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
         const el = e.currentTarget;
+        // The surface's own keys, while it stands: the arrows steer it, Enter and Tab take what is lit, and
+        // Escape puts it away — the same contract the chip view's slot answers to.
+        if (flat.length > 0 && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+            e.preventDefault();
+            const step = e.key === "ArrowDown" ? 1 : -1;
+            setDismissed("");
+            setLit(here < 0 ? (step === 1 ? 0 : flat.length - 1) : (here + step + flat.length) % flat.length);
+            return;
+        }
+        if (shown && here >= 0 && (e.key === "Enter" || e.key === "Tab")) {
+            e.preventDefault();
+            apply(flat[here]);
+            return;
+        }
+        if (shown && e.key === "Escape") {
+            e.preventDefault();
+            setDismissed(stamp);
+            setLit(-1);
+            return;
+        }
         // The search is live, so Enter has nothing to submit; it must not open a second line either.
         if (e.key === "Enter") {
             e.preventDefault();
@@ -63,6 +133,7 @@ export function PlainBar({text, onText, placeholder, label}: {
             onText(paired.value);
         }
         el.setSelectionRange(paired.anchor ?? paired.caret, paired.caret);
+        setCaret(paired.caret);
     };
 
     const onChange = (e: ChangeEvent<HTMLTextAreaElement>): void => {
@@ -75,6 +146,7 @@ export function PlainBar({text, onText, placeholder, label}: {
             el.setSelectionRange(caret, caret);
         }
         onText(el.value);
+        track(el);
     };
 
     return (
@@ -102,12 +174,38 @@ export function PlainBar({text, onText, placeholder, label}: {
                     rows={1}
                     onChange={onChange}
                     onKeyDown={onKeyDown}
+                    onKeyUp={(e) => {
+                        track(e.currentTarget);
+                    }}
+                    onMouseUp={(e) => {
+                        track(e.currentTarget);
+                    }}
+                    onFocus={(e) => {
+                        track(e.currentTarget);
+                    }}
+                    onBlur={() => {
+                        setLit(-1);
+                    }}
                     placeholder={text === "" ? placeholder : undefined}
                     autoComplete="off"
                     spellCheck={false}
                     aria-label={label}
+                    role="combobox"
+                    aria-expanded={shown}
+                    aria-controls={shown ? listId : undefined}
+                    aria-activedescendant={here >= 0 ? optionId(listId, here) : undefined}
+                    aria-autocomplete="list"
                 />
             </span>
+            {shown && (
+                <Surface
+                    offers={offers}
+                    lit={here}
+                    listId={listId}
+                    onPick={apply}
+                    onLight={setLit}
+                />
+            )}
         </div>
     );
 }

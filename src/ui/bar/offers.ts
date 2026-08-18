@@ -173,7 +173,7 @@ const MENU_ORDER: readonly string[] = [
     "name", "model", "sound", "anim", "fx",
     "desc", "icon", "id", "xpac",
     "cast", "channel", "scale", "speed", "mech", "spell",
-    "missile", "chain", "morph", "summon", "seats", "location", "triggers", "origin",
+    "missile", "chain", "morph", "summon", "vehicle", "location", "triggers", "origin",
 ];
 
 /** Where one door sits in the menu — the unlisted ones after every listed one, in their own order. */

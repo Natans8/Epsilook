@@ -247,3 +247,19 @@ test("a number typed where an expansion belongs finds the one standing at it", (
     const offers = offersAt(planAt("xpac:3", 6), 1, [], {rungs});
     assert.equal(offers.groups.flatMap((group) => group.offers)[0].word, "wotlk");
 });
+
+test("a column's scope never offers a word that belongs to one of its kinds", () => {
+    // Every one of these was a complaint about the surface teaching the schema's own shape: an id that is a
+    // creature display's, a file id that is an icon's, an attachment that only some models have, and an `anim`
+    // property inside the anim column. Each is reached by opening the kind that declares it.
+    const model = words(at("model:{}", 7), "props");
+    assert.ok(!model.includes("id"), "a creature display's id is not the model column's");
+    assert.ok(!model.includes("fid"), "an icon's file id is not the model column's");
+    assert.ok(!words(at("anim:{}", 6), "props").includes("anim"), "the anim column has no anim property");
+    assert.ok(!words(at("spell:{}", 7), "props").includes("fid"));
+    // What most of a column's kinds declare stays: five of the model column's nine put their model somewhere
+    // on the body, so where it attaches is the column's own question.
+    assert.ok(model.includes("attach"));
+    // And a kind's own property is there when the kind is the door.
+    assert.ok(words(at("icon:{}", 6), "props").includes("fid"));
+});
