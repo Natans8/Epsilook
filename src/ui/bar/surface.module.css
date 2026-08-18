@@ -148,16 +148,19 @@
     color: rgb(var(--danger-rgb));
 }
 
-/* A vocabulary's own picture, at 1.0's own treatment of the same art: a fixed HEIGHT and its own width, because
- * these are wordmarks at their own aspects — vanilla and tbc are square sigils, everything from wrath on is a
- * lockup, and squaring them all would shrink the wide ones to nothing. Held just short of full opacity so a
+/* A vocabulary's own picture, in a BOX of one size whatever the art measures. These are wordmarks at their own
+ * aspects — vanilla and tbc are square sigils, everything from wrath on is a lockup — so a rule that fixed only
+ * the height left twelve different widths and a ragged column of words beside them. The box is what the words
+ * line up against; the art fits inside it, left-aligned and centred on the text's own line rather than sitting
+ * on its baseline, which is where an image's bottom edge would put it. Held just short of full opacity so a
  * column of them reads as an attribute of the words rather than as twelve pieces of competing art. */
 .art {
     flex: none;
-    width: auto;
+    align-self: center;
+    width: 4.25rem;
     height: 15px;
-    max-width: 4.5rem;
     object-fit: contain;
+    object-position: center;
     opacity: 0.72;
 }
 

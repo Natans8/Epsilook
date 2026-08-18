@@ -118,8 +118,8 @@ export interface Offers {
  * arrive here — where the page already had to learn them, because the ordinal type is parsed against them.
  */
 export interface Vocabulary {
-    /** The expansions as a reader spells them, lowest first. */
-    readonly rungs: readonly string[];
+    /** The expansions, lowest first: the spelling to write, and the name it goes by. */
+    readonly rungs: readonly {readonly word: string; readonly note: string}[];
     /** The picture that belongs to a word, where one is shipped for it. */
     readonly art?: Readonly<Record<string, string>>;
 }
@@ -339,12 +339,13 @@ function valueOffers(prop: Prop, tone: string, vocab: Vocabulary, typed: string)
     const roles = prop.types.includes(bitmask) ? TARGET_ROLES.map((role) => word(role, "")) : [];
     const any = operatorsOf(prop).includes("present")
         ? [word(GRAMMAR.anyWord, i18n.t("ui:surface.anyNote"))] : [];
-    // An ordered vocabulary is small, closed and carried by the pack, so it lists itself. Its POSITION is a
-    // spelling it answers to as well: a reader who types 3 is counting the ladder, and the rung standing at
-    // three is what they mean — narrowed by the same rule that lets `animation` reach the anim door.
+    // An ordered vocabulary is small, closed and carried by the pack, so it lists itself, spelled the way the
+    // pack spells it and named by what it is called. Its POSITION answers too: a reader who types 3 is counting
+    // the ladder, and the rung standing at three is what they mean — narrowed by the rule that lets
+    // `animation` reach the anim door.
     const rungs = prop.types.includes(ordinal)
         ? vocab.rungs.map((rung, index) => ({
-            ...word(rung, i18n.t("ui:surface.rungNote", {number: index + 1})),
+            ...word(rung.word, rung.note),
             reads: [String(index + 1)],
         }))
         : [];

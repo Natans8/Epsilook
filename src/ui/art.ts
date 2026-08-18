@@ -21,15 +21,17 @@ const EXPANSION_ART: readonly string[] = [
  * The ladder arrives in order, so its position IS the expansion's number — the same key the art is filed
  * under. A ladder longer than the art we ship simply stops carrying badges at that point.
  *
- * @param rungs The expansions as the pack spells them, lowest first.
+ * @param rungs The expansions, lowest first, as the surface will spell them.
  * @param base Where the site's files are served from.
- * @returns The badge URL for every rung that has one.
+ * @returns The badge URL for every rung that has one, keyed by the spelling its row draws.
  */
-export function expansionArt(rungs: readonly string[], base: string): Readonly<Record<string, string>> {
+export function expansionArt(
+    rungs: readonly {readonly word: string}[], base: string,
+): Readonly<Record<string, string>> {
     const held: Record<string, string> = {};
     for (const [at, rung] of rungs.entries()) {
         const file = EXPANSION_ART[at];
-        if (file !== undefined) held[rung] = `${base}img/expansions/${file}`;
+        if (file !== undefined) held[rung.word] = `${base}img/expansions/${file}`;
     }
     return held;
 }

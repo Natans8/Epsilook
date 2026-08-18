@@ -27,8 +27,8 @@ export interface PackInfo {
     readonly spells: number;
     /** The ordered vocabulary the page reads a rung against, as the pack set it. */
     readonly ladder: readonly string[];
-    /** The expansions as a reader spells them, lowest first. */
-    readonly rungs: readonly string[];
+    /** The expansions the pack declares, lowest first: what to write, and what it is called. */
+    readonly rungs: readonly {readonly word: string; readonly note: string}[];
 }
 
 /** What a load reports as it progresses. */

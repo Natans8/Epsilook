@@ -198,3 +198,18 @@ test("what the bar has run is offered back on an empty bar", async () => {
     await offerRows(page).first().click();
     await expectQuery(page, "model:fire ");
 });
+
+test("every badge sits in one box, so the words beside them line up", async () => {
+    await clearBar(page);
+    await page.keyboard.type("xpac:", {delay: 5});
+    await expect(offerRows(page).first()).toBeVisible();
+    const boxes = await offerRows(page).evaluateAll((rows) => rows.slice(0, 6).map((row) => {
+        const art = row.querySelector("img")?.getBoundingClientRect();
+        const word = row.querySelector("[class*='word']")?.getBoundingClientRect();
+        return {w: Math.round(art?.width ?? 0), h: Math.round(art?.height ?? 0), at: Math.round(word?.left ?? 0)};
+    }));
+    // The art is wordmarks at their own aspects; the BOX is what makes a column of them read as one family.
+    expect(new Set(boxes.map((box) => box.w)).size).toBe(1);
+    expect(new Set(boxes.map((box) => box.h)).size).toBe(1);
+    expect(new Set(boxes.map((box) => box.at)).size).toBe(1);
+});

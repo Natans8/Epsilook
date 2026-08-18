@@ -128,10 +128,14 @@ export function Surface({offers, lit, listId, onPick, onLight}: {
                 <div className={styles.takes}>
                     <div className={styles.takesTitle}>{offers.takes.title}</div>
                     {offers.takes.what !== "" && <div className={styles.takesWhat}>{offers.takes.what}</div>}
-                    <div className={styles.takesHow}>
-                        <span className={styles.takesLabel}>{t("surface.takes")}</span>
-                        {offers.takes.how}
-                    </div>
+                    {/* The label exists to introduce the line beside it; with nothing to introduce — a word
+                        that names no property has no notation — it goes with it. */}
+                    {offers.takes.how !== "" && (
+                        <div className={styles.takesHow}>
+                            <span className={styles.takesLabel}>{t("surface.takes")}</span>
+                            {offers.takes.how}
+                        </div>
+                    )}
                 </div>
             )}
             {offers.groups.map((group) => (

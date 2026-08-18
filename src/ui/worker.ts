@@ -30,8 +30,8 @@ export type WorkerSay =
      * be refused by the page's own parse, and the chip would squiggle a query that runs.
      */
     readonly ladder: readonly string[];
-    /** The expansions as a reader spells them, lowest first — what the surface offers and completes to. */
-    readonly rungs: readonly string[]
+    /** The expansions the pack declares, lowest first: what to write, and what it is called. */
+    readonly rungs: readonly {readonly word: string; readonly note: string}[]
 }
     | { readonly is: "result"; readonly seq: number; readonly count: number; readonly ms: number }
     | { readonly is: "failed"; readonly error: string };
@@ -59,12 +59,21 @@ async function load(ask: Extract<WorkerAsk, { is: "load" }>): Promise<void> {
     dataset = packDataset(loaded);
     // Read back rather than rebuilt: loading the pack is what sets the ladder, so asking for it here cannot
     // drift from the spellings the kernel matches against.
-    const expansions = (loaded.pack as unknown as { expansions?: { keys?: readonly string[] } }).expansions;
+    const expansions = (loaded.pack as unknown as {
+        expansions?: { keys?: readonly string[]; shorts?: readonly string[]; labels?: readonly string[] };
+    }).expansions;
+    // The SHORT is the spelling to offer: the keys are inconsistent about it — `tbc` and `wotlk` are
+    // abbreviations where `shadowlands` and `dragonflight` are spelled out — and the shorts are not. Both read,
+    // because a short is a declared alias of its key. The LABEL is what the expansion is actually called.
+    const rungs = (expansions?.keys ?? []).map((key, at) => ({
+        word: expansions?.shorts?.[at] ?? key,
+        note: expansions?.labels?.[at] ?? "",
+    }));
     const meta = (loaded.pack as unknown as { meta?: { domains?: Record<string, PackDomain> } }).meta;
     say({
         is: "ready", version: entry, locale: loaded.locale, locales, versions,
         domains: meta?.domains, spells: loaded.spells.ids.length,
-        ladder: ordinalRungs(), rungs: expansions?.keys ?? [],
+        ladder: ordinalRungs(), rungs,
     });
 }
 

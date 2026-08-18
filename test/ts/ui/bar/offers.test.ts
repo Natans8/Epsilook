@@ -233,19 +233,35 @@ test("a property no other spelling reaches is still offered, subject or not", ()
     assert.ok(words(at("model:{}", 7), "props").includes("count"));
 });
 
+/** An expansion ladder as the pack ships one: the spelling to write, and the name it goes by. */
+const LADDER = [
+    {word: "Vanilla", note: "Classic"},
+    {word: "TBC", note: "The Burning Crusade"},
+    {word: "WotLK", note: "Wrath of the Lich King"},
+    {word: "Cata", note: "Cataclysm"},
+];
+
+test("an expansion is offered as the pack spells it, named by what it is called", () => {
+    const rows = offersAt(planAt("xpac:", 5), 0, [], {rungs: LADDER}).groups
+        .flatMap((group) => group.offers);
+    // The shorts are consistent where the keys are not — `shadowlands` is spelled out and `tbc` is not — and
+    // the note is the expansion's own name rather than a number nobody asked for.
+    assert.equal(rows[1].word, "TBC");
+    assert.equal(rows[1].note, "The Burning Crusade");
+});
+
 test("a vocabulary's own picture rides with its word", () => {
-    const rungs = ["vanilla", "tbc", "wotlk"];
-    const offers = offersAt(planAt("xpac:", 5), 0, [], {rungs, art: {wotlk: "/site/img/expansions/wotlk.png"}});
-    const rows = offers.groups.flatMap((group) => group.offers);
-    assert.equal(rows.find((offer) => offer.word === "wotlk")?.art, "/site/img/expansions/wotlk.png");
+    const art = {WotLK: "/site/img/expansions/wotlk.png"};
+    const rows = offersAt(planAt("xpac:", 5), 0, [], {rungs: LADDER, art}).groups
+        .flatMap((group) => group.offers);
+    assert.equal(rows.find((offer) => offer.word === "WotLK")?.art, "/site/img/expansions/wotlk.png");
     // A word with no picture shipped for it carries none, and says nothing about that.
-    assert.equal(rows.find((offer) => offer.word === "tbc")?.art, undefined);
+    assert.equal(rows.find((offer) => offer.word === "TBC")?.art, undefined);
 });
 
 test("a number typed where an expansion belongs finds the one standing at it", () => {
-    const rungs = ["vanilla", "tbc", "wotlk", "cata"];
-    const offers = offersAt(planAt("xpac:3", 6), 1, [], {rungs});
-    assert.equal(offers.groups.flatMap((group) => group.offers)[0].word, "wotlk");
+    const offers = offersAt(planAt("xpac:3", 6), 1, [], {rungs: LADDER});
+    assert.equal(offers.groups.flatMap((group) => group.offers)[0].word, "WotLK");
 });
 
 test("a column's scope never offers a word that belongs to one of its kinds", () => {
@@ -272,4 +288,10 @@ test("an enclosure left open is ghosted with what would close it", () => {
     // Innermost first, and nothing at all when the value is balanced.
     assert.equal(at("fx:{chain from:(a", 17).ghost, ")");
     assert.equal(at("model:{fire", 11).ghost, "");
+});
+
+test("a word that names no property has no notation line to introduce", () => {
+    const takes = at("model:{blerg:}", 13).takes;
+    assert.equal(takes?.how, "");
+    assert.match(takes?.what ?? "", /blerg/);
 });
