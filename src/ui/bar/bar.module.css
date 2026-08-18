@@ -493,11 +493,14 @@
     stroke-linecap: round;
 }
 
-/* The conjunction a lane leaves implicit: quiet, and not part of either term's reading line. Punctuation the
- * display adds — like the commas an identity list draws — so it takes no selection of its own. */
+/* The conjunction a lane leaves implicit, drawn as the same rule that divides the head from the body — no
+ * glyph, so nothing on screen can be mistaken for a character of the query. It takes no selection of its own. */
 .joint {
-    align-self: center;
-    color: var(--text-dim);
+    align-self: stretch;
+    width: 1px;
+    margin: 0.25rem 0;
+    background: var(--border-ctrl);
+    opacity: 0.55;
     user-select: none;
 }
 

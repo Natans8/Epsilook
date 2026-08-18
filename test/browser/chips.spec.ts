@@ -254,11 +254,12 @@ test("a flip is one undo step", async () => {
 test("two conditions of one row are joined, so a lane stops reading as a phrase", async () => {
     await seed(page, "model:{fire missile}");
     // Juxtaposition IS the conjunction, so the query writes a space and nothing else; the lane draws what the
-    // space means, the way the alternation draws its own word.
-    const lane = settledSegments(page).first();
-    await expect(lane).toContainText("·");
-    // It joins CONDITIONS. An alternation of values is one condition however many values it offers, so the
-    // chip that draws it has nothing to join and says nothing.
-    await seed(page, "model:fire|frost");
+    // space means, as a RULE rather than a character — nothing on screen may be mistaken for something typed.
+    const joints = settledSegments(page).first().locator("[class*='joint']");
+    await expect(joints).toHaveCount(1);
     expect((await settledSegments(page).first().innerText()).includes("·")).toBe(false);
+    // It joins CONDITIONS. An alternation of values is one condition however many values it offers, so the
+    // chip that draws it has nothing to join.
+    await seed(page, "model:fire|frost");
+    await expect(settledSegments(page).first().locator("[class*='joint']")).toHaveCount(0);
 });

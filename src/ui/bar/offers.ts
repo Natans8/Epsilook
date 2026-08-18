@@ -294,7 +294,7 @@ function propOffers(context: { role: "column"; column: Column } | { role: "kind"
             const wordless = mine.length === 0 || kinds.some(
                 (held) => held.word === undefined && Object.hasOwn(held.props, name));
             if (!wordless && mine.length * 2 <= kinds.length && kinds.length > 1) continue;
-            const owner = mine.length < kinds.length ? mine.join(" · ") : undefined;
+            const owner = mine.length < kinds.length ? mine.join(", ") : undefined;
             // A kind's FIRST property is what its own word asks for, and it is offered as a row only where
             // naming it adds a way in. It does not when the kind has a word — `xpac:legion` IS the rung, and
             // the row would offer `xpac:{rung:legion}` — nor when plain search already reads the property, as
@@ -450,7 +450,7 @@ function innerProp(context: Context, word: string): Composing | null {
  * @returns The three lines the surface draws above the offers.
  */
 function takesOf(prop: Prop, name: string, what?: string): Takes {
-    const how = prop.types.map((type) => type.hint).join(" · ");
+    const how = prop.types.map((type) => type.hint).join(" — ");
     const said = what ?? hintOf(prop);
     return {
         title: propNameOf(name, prop),

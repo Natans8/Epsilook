@@ -113,11 +113,14 @@ function aimAt(e: ReactMouseEvent, raw: string, window: Span): number | null {
  * Juxtaposition IS the conjunction in this language, so the query writes a space between two conditions and
  * nothing else — and a lane of bare terms copied that, drawing `model:{fire missile}` as a two-word phrase
  * rather than as two asks about one row. The alternation already draws its own word between runs; this is the
- * other half of that pair. It is a display separator rather than a character of the query, exactly as the
- * commas an identity list draws are.
+ * other half of that pair.
+ *
+ * Drawn as a RULE rather than as a glyph: the lane's head is already divided from its body by a line, so the
+ * same line between two conditions says they are separate cells of one enclosure — and it puts no character
+ * on screen that a reader could mistake for something they typed.
  */
 function Joint(): ReactElement {
-    return <span className={styles.joint} aria-hidden="true">·</span>;
+    return <span className={styles.joint} aria-hidden="true"/>;
 }
 
 /**

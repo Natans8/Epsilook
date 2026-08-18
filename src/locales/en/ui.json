@@ -31,7 +31,7 @@
     "help": "Help",
     "delete": "Delete",
     "add": "Add a condition",
-    "editHint": "Enter commits · Esc closes",
+    "editHint": "Enter commits, Esc closes",
     "exclude": "Exclude what this asks for",
     "include": "Ask for this again",
     "plaintext": "Plain text",

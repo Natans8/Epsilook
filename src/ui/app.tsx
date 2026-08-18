@@ -136,7 +136,7 @@ export function App({info, searcher}: {
                     >
                         {result !== null && (
                             `${result.count.toLocaleString()} ${t("count.result", {count: result.count})}`
-                            + ` · ${t("count.elapsed", {ms: result.ms})}`
+                            + `, ${t("count.elapsed", {ms: result.ms})}`
                         )}
                     </div>
                     {/* A view switch, not a command: it changes how the query is shown and never what it says.
