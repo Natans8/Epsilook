@@ -319,7 +319,8 @@ function soleKind(terms: ReadonlyArray<readonly ScopeTerm[]>): Kind | null {
     if (flat.length !== 1) return null;
     const ask = flat[0].ask;
     if (ask === null) return null;
-    if (ask.on === "kindWord") return ask.kind.word === undefined ? null : ask.kind;
+    // A term that IS the kind word needs no promotion: `model:{display}` already reads as `model | display`, and
+    // heading it with the kind would draw the word twice.
     if (ask.on !== "props") return null;
     const kinds = new Set(ask.props.map((ref) => ref.kind));
     const only = kinds.size === 1 ? [...kinds][0] : null;

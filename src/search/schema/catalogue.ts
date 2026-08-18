@@ -221,13 +221,17 @@ export const display = defineKind({
     },
 });
 
+// The declared ORDER is the reading order, and the first property is the kind's SUBJECT — the one its own word
+// reaches, and the one a compact chip stops naming because the word already said it. An item is known by its
+// NAME first and its id second; the file it happens to be drawn from is the last thing a reader means by
+// `model:{item:...}`, and naming it there read as though the item were a path.
 export const item = defineKind({
     column: modelColumn, word: "item", group: "worn",
     hint: t("tooltips:kind.item.hint"),
     props: {
-        file: corpus(TIER.asset, path),
-        id: {types: [id], hint: t("tooltips:kind.item.props.id")},
         name: corpus(TIER.asset, text),
+        id: {types: [id], hint: t("tooltips:kind.item.props.id")},
+        file: corpus(TIER.asset, path),
         attach: attachPoint(t("tooltips:kind.item.props.attach")),
         target: target(),
     },

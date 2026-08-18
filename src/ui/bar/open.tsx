@@ -254,6 +254,15 @@ export function OpenSegment({
             onArrow(1);
             return;
         }
+        // The keyboard's own path to the head's toggle. A minus before the value flips the whole segment, which
+        // is what the same character means before a head in the query's text — except before a DIGIT, where the
+        // ruled reading is a SIGN and `scale:{-50%}` has to keep agreeing with `scale:-50%`.
+        if (typed === GRAMMAR.negate && collapsed && a === 0 && at.head !== null
+            && !/^[\d.]/.test(el.value)) {
+            e.preventDefault();
+            onFlip();
+            return;
+        }
         if (e.key === "Backspace" && collapsed && a === 0) {
             const step = backspaceAtStart(at);
             if (step === null) return;

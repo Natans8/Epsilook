@@ -83,3 +83,24 @@ test("a press on the open chip's head flips exclusion without ending the session
     await page.locator("[data-open] [class*='headCell']").click();
     await expectQuery(page, "model:{fire} sound:bell ");
 });
+
+test("a minus at the value's start flips the segment, and a sign still reads as a sign", async () => {
+    // The keyboard's path to the head's toggle. A press on the body lands the caret at the value's END, and
+    // Home is query-wide by ruling, so the slot's own start is reached by walking one press per character.
+    const toStart = async (chars: number): Promise<void> => {
+        for (let i = 0; i < chars; i++) await page.keyboard.press("ArrowLeft");
+    };
+
+    await seed(page, "model:fire");
+    await page.locator("[class*='chipBody']").first().click();
+    await toStart(4);
+    await page.keyboard.type("-");
+    await expectQuery(page, "-model:{fire} ");
+
+    // Before a DIGIT it stays a sign, or `scale:{-50%}` would stop agreeing with `scale:-50%`.
+    await seed(page, "scale:50%");
+    await page.locator("[class*='chipBody']").first().click();
+    await toStart(3);
+    await page.keyboard.type("-");
+    await expect(page.locator("[data-query]")).toHaveAttribute("data-query", /-50/);
+});
