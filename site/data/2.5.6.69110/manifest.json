@@ -1,11 +1,11 @@
 {
   "pack": "2.5.6.69110",
   "meta": {
-    "format": 54,
+    "format": 55,
     "version": "2.5.6.69110",
     "label": "TBC Classic 2.5.6",
-    "built": "2026-08-16",
-    "listfileTag": "202608152232",
+    "built": "2026-08-18",
+    "listfileTag": "202608181116",
     "tdbTag": "",
     "absentTables": ["BarrageEffect", "BeamEffect", "DissolveEffect", "EdgeGlowEffect", "FullScreenEffect", "JournalEncounterSection", "Mount", "MountXDisplay", "ShadowyEffect", "SpellDescriptionVariables", "SpellEffectEmission", "SpellKeyboundOverride", "SpellOverrideName", "SpellVisualScreenEffect", "SpellXDescriptionVariables", "TextureBlendSet", "Vehicle", "VehicleSeat", "WeaponTrail"],
     "degradedSections": {
@@ -171,7 +171,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-873199acd6e9.json.gz", "bytes": 477480},
+    "core": {"file": "data/modules/core-7a4a1477c860.json.gz", "bytes": 477492},
     "universal": {"file": "data/modules/universal-2f3682aa3f9d.json.gz", "bytes": 25203}
   },
   "locales": {

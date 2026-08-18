@@ -1,11 +1,11 @@
 {
   "pack": "1.15.9.69109",
   "meta": {
-    "format": 54,
+    "format": 55,
     "version": "1.15.9.69109",
     "label": "Vanilla Classic 1.15.9",
-    "built": "2026-08-16",
-    "listfileTag": "202608152232",
+    "built": "2026-08-18",
+    "listfileTag": "202608181116",
     "tdbTag": "",
     "absentTables": ["BarrageEffect", "JournalEncounterSection", "Mount", "MountXDisplay", "ShadowyEffect", "SpellEffectEmission", "SpellKeyboundOverride", "SpellOverrideName", "SpellScaling", "SpellVisualScreenEffect", "WeaponTrail"],
     "degradedSections": {
@@ -153,7 +153,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-9a635b7c4e0e.json.gz", "bytes": 522984},
+    "core": {"file": "data/modules/core-8ac87be1bc2d.json.gz", "bytes": 522996},
     "universal": {"file": "data/modules/universal-2f3682aa3f9d.json.gz", "bytes": 25203}
   },
   "locales": {

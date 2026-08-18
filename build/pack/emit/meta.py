@@ -20,8 +20,15 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 54
+PACK_FORMAT = 55
 """What shape the artifact is in.
+
+55 renames the vehicle row kind and its subject. A spell that seats its
+subject ships as `vehicle` rather than `seats`, and the seat count that
+was `count` is now `seats` -- the axis reads `vehicle:{seats:4}`, where
+it read `seats:{count:4}`. A reader resolves a pooled row's kind by the
+word the pack ships and has no mapping layer, so 54's rows are unknown
+to it rather than differently shaped.
 
 54 gives a missile row how many projectiles its flight path is written for.
 `missileMotions` gains a `projectiles` column beside the names it carried,

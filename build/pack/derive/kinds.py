@@ -800,7 +800,7 @@ MECH_FAMILIES: tuple[Family, ...] = (
            rows=_channels("invis", paired=False), absent={"channel": ABSENT}),
     Family(kind="detect", props=("channel", "count", "target"),
            rows=_channels("detect", paired=True), absent={"channel": ABSENT}),
-    Family(kind="seats", props=("count", "attach", "target"), rows=_seats,
+    Family(kind="vehicle", props=("seats", "attach", "target"), rows=_seats,
            carried=("vehicle",), vocab={"attach": "seatAnchors"},
            absent={"attach": ABSENT}),
     Family(kind="speed", props=("amount", "mode", "target"), rows=_speeds,

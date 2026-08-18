@@ -69,9 +69,9 @@ const PROBES: Probe[] = [
     },
     {
         v1: "mech:seat",
-        v2: "mech:seats",
+        v2: "mech:vehicle",
         was: 358,
-        note: "the 2.0 word is seats; 1.0 seat also corpus-matches link/area names"
+        note: "the 2.0 word is vehicle; 1.0 seat also corpus-matches link/area names"
     },
     {v1: "anim:replace", v2: "anim:replace", was: 1100, note: ""},
     {v1: "mech:location", v2: "mech:location", was: 12423, note: "1.0 also matches Location in linked spell names"},
@@ -108,7 +108,7 @@ const PROBES: Probe[] = [
         note: "a rider animation carries its role now, so the seated ones are selectable apart"
     },
     {
-        v1: 'mech:"seat"', v2: "seats:{attach:*}", was: 232,
+        v1: 'mech:"seat"', v2: "vehicle:{attach:*}", was: 232,
         note: "the seat anchor resolves through the single-column vocabulary shape; 1.0 seat is a category word"
     },
     {v1: 'fx:"scale 50"', v2: "scale:+50", was: 352, note: "quote law: a quantity; +50 is the stored change"},
@@ -118,7 +118,7 @@ const PROBES: Probe[] = [
         was: 349,
         note: "bare number means = on a quantity, so both forms land here"
     },
-    {v1: 'mech:"seat >2"', v2: "seats:{count:>2}", was: 36, note: ""},
+    {v1: 'mech:"seat >2"', v2: "vehicle:{seats:>2}", was: 36, note: ""},
     {v1: 'mech:"speed 70"', v2: "speed:{amount:+70}", was: 76, note: "1.0 substring-matches 70 inside +70%/-70%/170%"},
     {v1: 'mech:"speed run 70"', v2: "speed:{amount:+70 mode:run}", was: 39, note: ""},
     {v1: 'mech:"invis 13"', v2: "mech:{invis channel:13}", was: 16, note: "1.0's extra hits are linked-name matches"},

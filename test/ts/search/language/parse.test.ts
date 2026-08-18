@@ -627,9 +627,9 @@ describe("the count desugar", () => {
             op: "gt",
             operand: {type: "percentChange", value: -50, written: "50"}
         });
-        const seats = valueOf(ok("seats:>2"));
-        assert.deepEqual(seats, {op: "gt", operand: {type: "count", value: 2, written: "2"}});
-        assert.equal((ok("seats:>2") as KindAsk).test?.is, "props");
+        const vehicles = valueOf(ok("vehicle:>2"));
+        assert.deepEqual(vehicles, {op: "gt", operand: {type: "count", value: 2, written: "2"}});
+        assert.equal((ok("vehicle:>2") as KindAsk).test?.is, "props");
         assert.deepEqual(valueOf(ok("cast:>2")), {op: "gt", operand: {type: "seconds", value: 2000, written: "2"}});
         // The volley size, since format 54: the salient number about a missile
         // is how many fly, so the bare comparison stopped counting rows.
@@ -757,7 +757,7 @@ const VALID_FIXTURES: readonly string[] = [
     'model:{target:"caster"}', 'fx:{tint:"red"}', 'sound:{kit:"150"}', "sound:{kit:150}",
     "model:{fire missile}", "model:{attach:(chest|head) fire}",
     'missile:{from:chest to:"right hand" motion:parabola}', "model:{foo:bar}",
-    "model:>4", "mech:2-4", "model:{fire >4}", "missile:{>2}", "seats:>2", "model:{}",
+    "model:>4", "mech:2-4", "model:{fire >4}", "missile:{>2}", "vehicle:>2", "model:{}",
     "model:(attach:chest)", "model:(fire missile)", "model:(fire|frost)", "model:(fire|frost)bolt",
     "description:kneel", "expansion:>wotlk", "models:fire", "fx:{camouflage}", "chain:{color:red}",
     "model:{fire count:>4", "model:{fire sound:ice",

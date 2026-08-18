@@ -116,10 +116,10 @@ describe("the shipped schema", () => {
         }
     });
 
-    it("puts seat, invis, detect, speed and keybind in mech rather than fx", () => {
+    it("puts vehicle, invis, detect, speed and keybind in mech rather than fx", () => {
         // A vehicle seat, an invisibility channel and a movement-speed change render nothing. The fx column is what a
         // spell looks like; mech is what it does.
-        for (const word of ["seats", "invis", "detect", "speed", "keybind"]) {
+        for (const word of ["vehicle", "invis", "detect", "speed", "keybind"]) {
             assert.equal(KINDS.get(`mech.${word}`)?.column.key, "mech", word);
         }
     });

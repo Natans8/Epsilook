@@ -289,10 +289,10 @@
         "count": "how many spells hide in that channel"
       }
     },
-    "seats": {
-      "hint": "the seats of the vehicle the caster becomes",
+    "vehicle": {
+      "hint": "the vehicle the caster becomes, and its seats",
       "props": {
-        "count": "how many seats the vehicle has",
+        "seats": "how many seats the vehicle has",
         "attach": "where the seat sits on the vehicle"
       }
     },

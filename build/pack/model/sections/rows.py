@@ -269,7 +269,7 @@ def mech_counts(rows: Sequence[Triple]) -> Mapping[str, int]:
         "invisChannels": len({values["channel"] for _spell, kind, values in rows
                               if kind == "invis"}),
         "spellDetects": kinds["detect"],
-        "spellVehicles": len(entries(rows, "seats", "vehicle")),
+        "spellVehicles": len(entries(rows, "vehicle", "vehicle")),
         "spellSpeeds": kinds["speed"],
         "spellKeybinds": kinds["keybind"],
     }

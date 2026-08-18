@@ -289,10 +289,10 @@
         "count": ""
       }
     },
-    "seats": {
+    "vehicle": {
       "hint": "",
       "props": {
-        "count": "",
+        "seats": "",
         "attach": ""
       }
     },

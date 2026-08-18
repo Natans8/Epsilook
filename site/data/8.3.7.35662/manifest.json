@@ -1,11 +1,11 @@
 {
   "pack": "8.3.7.35662",
   "meta": {
-    "format": 54,
+    "format": 55,
     "version": "8.3.7.35662",
     "label": "Battle for Azeroth 8.3.7",
-    "built": "2026-08-16",
-    "listfileTag": "202608152232",
+    "built": "2026-08-18",
+    "listfileTag": "202608181116",
     "tdbTag": "TDB837.20101",
     "absentTables": ["SpellVisualScreenEffect"],
     "degradedSections": {
@@ -133,7 +133,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-7f46690f9f6d.json.gz", "bytes": 5906216},
+    "core": {"file": "data/modules/core-1122977a0a00.json.gz", "bytes": 5906230},
     "universal": {"file": "data/modules/universal-2f3682aa3f9d.json.gz", "bytes": 25203}
   },
   "locales": {

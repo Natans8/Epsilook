@@ -550,12 +550,12 @@ export const detect = defineKind({
     },
 });
 
-export const seats = defineKind({
-    column: mechColumn, word: "seats", global: true, group: "vehicle",
-    hint: t("tooltips:kind.seats.hint"),
+export const vehicle = defineKind({
+    column: mechColumn, word: "vehicle", global: true, group: "vehicle",
+    hint: t("tooltips:kind.vehicle.hint"),
     props: {
-        count: {types: [count], hint: t("tooltips:kind.seats.props.count")},
-        attach: attachPoint(t("tooltips:kind.seats.props.attach")),
+        seats: {types: [count], hint: t("tooltips:kind.vehicle.props.seats")},
+        attach: attachPoint(t("tooltips:kind.vehicle.props.attach")),
         target: target(),
     },
 });
