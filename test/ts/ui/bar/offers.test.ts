@@ -263,3 +263,13 @@ test("a column's scope never offers a word that belongs to one of its kinds", ()
     // And a kind's own property is there when the kind is the door.
     assert.ok(words(at("icon:{}", 6), "props").includes("fid"));
 });
+
+test("an enclosure left open is ghosted with what would close it", () => {
+    // The pairing spawns closers as they are typed, so an open one means the reader deleted it or pasted
+    // around it — and until it closes, everything after it is inside it.
+    assert.equal(at('name:{"blood', 12).ghost, '"');
+    assert.equal(at('name:{"blood', 12).ghostIs, "closer");
+    // Innermost first, and nothing at all when the value is balanced.
+    assert.equal(at("fx:{chain from:(a", 17).ghost, ")");
+    assert.equal(at("model:{fire", 11).ghost, "");
+});

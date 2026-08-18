@@ -512,11 +512,12 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY}: {
         /**
          * Takes the completion the slot is showing.
          *
-         * A ghost is either an offer's own remainder or a UNIT the number is missing, and only the first has a
-         * row to pick: a unit is written straight into the slot, as the keystrokes it stands for.
+         * A ghost is an offer's own remainder, a UNIT the number is missing, or the CLOSERS an enclosure
+         * wants; only the first has a row to pick, and the others are written straight into the slot as the
+         * keystrokes they stand for.
          */
         accept: (): void => {
-            if (lit < 0 && offers.ghostIs === "unit") {
+            if (lit < 0 && offers.ghostIs !== null && offers.ghostIs !== "offer") {
                 const value = at.slot.slice(0, caretInSlot) + offers.ghost + at.slot.slice(caretInSlot);
                 applyStep({
                     text: writeSlot(at, value),

@@ -99,12 +99,13 @@ export interface Offers {
     /** The best candidate's remainder, drawn dim after the caret; empty when nothing completes what was typed. */
     readonly ghost: string;
     /**
-     * What the ghost completes: the first offer's own remainder, or the UNIT a number is still missing.
+     * What the ghost completes: the first offer's own remainder, the UNIT a number is missing, or the CLOSERS
+     * an enclosure the reader opened still wants.
      *
-     * Two different things to take. An offer's ghost is that offer picked; a unit has no row of its own and is
-     * written straight into the slot, so the surface has to say which one is standing.
+     * Three different things to take. An offer's ghost is that offer picked; the other two have no row of their
+     * own and are written straight into the slot, so the surface has to say which one is standing.
      */
-    readonly ghostIs: "offer" | "unit" | null;
+    readonly ghostIs: "offer" | "unit" | "closer" | null;
     /** Whether a minus already stands before the word, so every offer here excludes rather than asks. */
     readonly negated: boolean;
 }
@@ -462,6 +463,40 @@ function takesOf(prop: Prop, name: string, what?: string): Takes {
 }
 
 /**
+ * The closers an enclosure the reader opened still wants, innermost first.
+ *
+ * A phrase runs to the end of the input and a scope to its brace, so an unclosed one quietly swallows whatever
+ * follows — which is how a deleted quote came to eat a chip's own closing brace. The pairing spawns closers as
+ * they are typed, so an open one means the reader deleted it or pasted around it; drawing what is missing is
+ * the same repair the commit performs, said before it happens rather than after.
+ *
+ * @param value The value under the caret, as typed.
+ * @returns The characters that would balance it, or an empty string when nothing is open.
+ */
+function closerGhost(value: string): string {
+    const want: string[] = [];
+    let quote = false;
+    for (let at = 0; at < value.length; at++) {
+        const ch = value[at];
+        if (ch === GRAMMAR.escape && quote) {
+            at += 1;
+            continue;
+        }
+        if (ch === GRAMMAR.phrase) {
+            quote = !quote;
+            if (quote) want.push(GRAMMAR.phrase);
+            else want.pop();
+            continue;
+        }
+        if (quote) continue;
+        if (ch === GRAMMAR.scope.open) want.push(GRAMMAR.scope.close);
+        else if (ch === GRAMMAR.group.open) want.push(GRAMMAR.group.close);
+        else if (ch === GRAMMAR.scope.close || ch === GRAMMAR.group.close) want.pop();
+    }
+    return want.reverse().join("");
+}
+
+/**
  * The unit the number under the caret is still missing, drawn as a ghost after it.
  *
  * A quantity type declares the notations its values may be written in, and the first is the one they are
@@ -607,7 +642,11 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     const best = groups[0]?.offers[0];
     const completes = best !== undefined && best.shape !== "query" && typed !== ""
         && atEnd && best.insert.startsWith(typed);
-    const unit = atEnd ? unitGhost(composing?.prop ?? null, typed) : "";
-    const ghost = completes ? best.insert.slice(typed.length) : unit;
-    return {groups, takes, stub, ghost, ghostIs: ghost === "" ? null : completes ? "offer" : "unit", negated};
+    // An enclosure left open outranks everything else: while one stands, what follows it is inside it, so no
+    // other completion is the one the reader wants next.
+    const closers = atEnd ? closerGhost(slot) : "";
+    const unit = atEnd && closers === "" ? unitGhost(composing?.prop ?? null, typed) : "";
+    const ghost = closers !== "" ? closers : completes ? best.insert.slice(typed.length) : unit;
+    const ghostIs = ghost === "" ? null : closers !== "" ? "closer" : completes ? "offer" : "unit";
+    return {groups, takes, stub, ghost, ghostIs, negated};
 }
