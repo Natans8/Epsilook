@@ -119,6 +119,20 @@ function Data.GetSupplier(section, column)
 	return supplied[section .. "." .. column] or supplied[section]
 end
 
+--- The axes carrying a row family, which is what makes one inspectable.
+-- Read off the payload rather than listed, so an axis that stops shipping
+-- rows stops being offered without an edit here.
+function Data.GetPartAxes()
+	local out = {}
+	for _, axis in ipairs(Data.GetAxes()) do
+		local chunk = Data.GetAxis(axis)
+		if chunk and chunk.sections[axis .. "Rows"] then
+			out[#out + 1] = axis
+		end
+	end
+	return out
+end
+
 --- How many spells this build carries.
 function Data.GetNumSpells()
 	local node = Data.GetColumn("spell", "spells", "ids")

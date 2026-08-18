@@ -23,7 +23,7 @@
 --
 -- ## Records
 --
--- SpellData   id, name, subtext, icon, school, flags, delivery
+-- SpellData   id, name, subtext, icon, iconName, iconIndex, schoolID, school
 -- PartData    label, full, ids, detail
 -- Action      key, label, needs, effect, revert
 -- DataInfo    pack, built, variation, supplied, absent
@@ -50,13 +50,23 @@ end
 -- @param target an optional table to fill instead of allocating one
 -- @return a DataInfo, or nil before the payload is loaded
 function Epsilook:GetDataInfo(target)
-	return Data and Data.GetInfo(target) or nil
+	return Data and Data.GetInfo(target)
 end
 
---- The axes a spell can be inspected on, in the order a dossier shows them.
+--- Every axis the payload is split across, in the order it ships them.
+-- These are files, not questions: some carry a spell's parts and some carry
+-- the spell itself. `GetPartAxes` is the one a dossier walks.
 -- @return an array of axis names
 function Epsilook:GetAxes()
 	return Data and Data.GetAxes() or {}
+end
+
+--- The axes a spell can be inspected on, in the order a dossier shows them.
+-- An axis is inspectable when it carries a row family, which the payload says
+-- for itself rather than being listed here a second time.
+-- @return an array of axis names
+function Epsilook:GetPartAxes()
+	return Data and Data.GetPartAxes() or {}
 end
 
 --- How many spells this build carries.
@@ -68,17 +78,39 @@ end
 -- @param spellID the spell id
 -- @return a row counted from zero, or nil where this build has no such spell
 function Epsilook:GetSpellIndexByID(spellID)
-	return Data and Data.GetSpellIndexByID(spellID) or nil
+	return Data and Data.GetSpellIndexByID(spellID)
 end
 
---- One text column of the spell section, by row.
-local function spellText(column, row)
+--- One column of the spell section, by row.
+local function field(column, row, fallback)
 	local node, blob = Data.GetColumn("spell", "spells", column)
 	if not node or row >= Reader.size(node) then
-		return ""
+		return fallback
 	end
 	return Reader.value(blob, node, row)
 end
+
+--- One row of a section that ships as a single bare column.
+local function bare(section, column, row)
+	local node, blob = Data.GetColumn("spell", section, column)
+	if not node or row < 0 or row >= Reader.size(node) then
+		return nil
+	end
+	return Reader.value(blob, node, row)
+end
+
+--- What each bit of a spell's school mask is called.
+-- Seven values that have not changed since the game shipped, so they are a
+-- table here rather than a section in the payload.
+local SCHOOLS = {
+	[1] = "Physical",
+	[2] = "Holy",
+	[4] = "Fire",
+	[8] = "Nature",
+	[16] = "Frost",
+	[32] = "Shadow",
+	[64] = "Arcane",
+}
 
 --- One spell's name.
 -- @param spellID the spell id
@@ -88,7 +120,7 @@ function Epsilook:GetSpellNameByID(spellID)
 	if not row then
 		return nil
 	end
-	return spellText("names", row)
+	return field("names", row, nil)
 end
 
 --- One spell's whole record, by row.
@@ -105,12 +137,21 @@ function Epsilook:GetSpellDataByIndex(index, target)
 	end
 	local out = target or {}
 	out.id = Reader.number(blob, ids, index)
-	out.name = spellText("names", index)
-	out.subtext = spellText("subtexts", index)
-	out.school = spellText("schools", index)
-	out.icon = 0
-	out.flags = out.flags or {}
-	out.delivery = ""
+	out.name = field("names", index, "")
+	out.subtext = field("subtexts", index, "")
+	-- The spell carries an INDEX into the pack's icon pool rather than a file
+	-- id, because thousands of spells share a few thousand icons. Both the id
+	-- and the name are one lookup from it, and both are what a caller wants:
+	-- the id draws the texture, the name is what a person searches for.
+	-- Counted from one, so that nought can mean the spell has no icon at all.
+	-- Read as though it were counted from zero it is off by one, and the
+	-- wrong icon is not a thing anybody notices by looking.
+	out.iconIndex = field("icons", index, 0)
+	local at = out.iconIndex - 1
+	out.icon = out.iconIndex > 0 and bare("iconFids", "fids", at) or 0
+	out.iconName = out.iconIndex > 0 and bare("iconNames", "names", at) or ""
+	out.schoolID = field("schools", index, 0)
+	out.school = SCHOOLS[out.schoolID] or ""
 	return out
 end
 
@@ -138,11 +179,8 @@ function Epsilook:GetPartCounts(spellID, target)
 		return nil
 	end
 	local out = target or {}
-	for _, axis in ipairs(self:GetAxes()) do
-		local count = Data.GetNumRows(axis, row)
-		if count > 0 or out[axis] then
-			out[axis] = count
-		end
+	for _, axis in ipairs(self:GetPartAxes()) do
+		out[axis] = Data.GetNumRows(axis, row)
 	end
 	return out
 end
