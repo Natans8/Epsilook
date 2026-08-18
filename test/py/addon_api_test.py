@@ -321,6 +321,64 @@ def test_a_lean_build_leaves_the_spawn_id_to_the_client() -> None:
     assert not unwrap(held.GetPartActions(held, spawnable))
 
 
+TEXTS = {
+    "spells": spells([10, 20]),
+    "rowVocabs": {},
+    # Every one of these columns repeats across spells -- a redirect cooks to
+    # the same prose as its target -- so the pack pools the distinct strings
+    # and ships a number per spell. The empty string is pooled like any other,
+    # which is what makes "this spell has no aura line" an ordinary row.
+    "spellText": {
+        "descriptions": {"text": ["", "Throws a fiery ball."], "of": [1, 0]},
+        "auras": {"text": ["", "Attack power increased."], "of": [0, 1]},
+        "encounters": {"text": [""], "of": [0, 0]},
+    },
+}
+"""A build carrying prose, in the pooled shape the pack actually ships."""
+
+
+def test_a_spell_s_prose_is_read_through_the_pool() -> None:
+    """A deduped column is a number per row and the strings once."""
+    held = api(load(TEXTS))
+    assert unwrap(held.GetSpellTextDataByID(held, 10)) == {
+        "description": "Throws a fiery ball.", "aura": "", "encounter": ""}
+    assert unwrap(held.GetSpellTextDataByID(held, 20)) == {
+        "description": "", "aura": "Attack power increased.", "encounter": ""}
+
+
+def test_a_spell_the_build_does_not_carry_has_no_prose() -> None:
+    """Nothing to read at, rather than the row nought would give."""
+    held = api(load(TEXTS))
+    assert held.GetSpellTextDataByID(held, 15) is None
+
+
+def test_a_clipped_description_is_asked_of_the_client() -> None:
+    """The lean variation leaves the description out and the game answers.
+
+    This is the seam actually composed rather than merely named: nothing above
+    `Data` learns which of the two answered, and the client's is the better one
+    because it resolves at the player's own level rather than at the
+    expansion's cap.
+    """
+    runtime = load(TEXTS, Variation.LEAN)
+    # Straight onto the interpreter's globals, which is where the game puts its
+    # own API and therefore the only place the seam looks.
+    runtime.globals()[b"GetSpellDescription"] = lambda _id: b"as the client tells it"
+    held = api(runtime)
+    assert unwrap(held.GetSpellTextDataByID(held, 10)) == {
+        "description": "as the client tells it",
+        # Clipped columns the client cannot answer would be worse than absent
+        # if the description's route answered for them too, which is why the
+        # supply is keyed per column and these two still ship.
+        "aura": "", "encounter": ""}
+
+
+def test_a_clipped_description_with_no_client_is_empty() -> None:
+    """An unanswerable column is empty rather than an error or a nil field."""
+    held = api(load(TEXTS, Variation.LEAN))
+    assert unwrap(held.GetSpellTextDataByID(held, 10))["description"] == ""
+
+
 ANIMS = {
     "spells": spells([10]),
     "rowVocabs": {"anims": {"in": "animNames"}},

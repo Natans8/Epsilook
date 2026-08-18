@@ -102,7 +102,7 @@ AXIS_OF: Mapping[str, str] = {name: axis
 """The axis one section belongs to, by section name."""
 
 SUPPLIED_BY: Mapping[str, str] = {
-    "spellText": "GetSpellDescription",
+    "spellText.descriptions": "GetSpellDescription",
     "spells.names": "GetSpellInfo",
     "spells.icons": "GetSpellTexture",
     "soundKitNames": "C_Epsilon.SoundKit_Get",
@@ -128,6 +128,12 @@ section is read at the row a spell sits at, and that column is what turns an
 id into that row. A route answers about one spell it is handed and cannot say
 which row a spell is at, so clipping it does not degrade the payload -- it
 leaves nothing able to find anything in it.
+
+And a bare section name has to mean the route answers for EVERY column of it,
+which is why `spellText` is keyed per column. The client tells a spell's
+description and says nothing about its aura line or its encounter note, so
+clipping all three would not leave two columns unanswered -- it would answer
+them with the description, which is worse than leaving them out.
 
 Clipping one more is one row here. Adding a row is a claim that something
 outside the payload answers as well, and it is only worth making once the call

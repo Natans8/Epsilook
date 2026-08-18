@@ -102,6 +102,12 @@ function Reader.value(blob, node, row)
 			out[#out + 1] = Reader.value(blob, values, at)
 		end
 		return out
+	elseif kind == "dedup" then
+		-- A column whose rows repeat ships each distinct value once and a
+		-- number per row saying which. The pool holds the empty string like
+		-- any other value, so a row pointing at it has no value and is not a
+		-- row the reader has to tell apart from one that does.
+		return Reader.value(blob, node.pool, Reader.number(blob, node.of, row))
 	end
 	error("no reader for a " .. tostring(kind) .. " column")
 end

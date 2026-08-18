@@ -14,16 +14,17 @@
 -- the pack decided, so a section moving between them is a declaration edit in
 -- the emitter and no edit at all here.
 --
--- One thing it makes reachable rather than does. A column the payload leaves
--- out may still be answerable by the running game, and `GetSupplier` names the
--- call that answers it. It stops there: a route answers one row at a time and
--- a column is what this file hands back, so the two are not the same shape and
--- nothing here pretends otherwise. A caller asks for a column and either gets
--- one or does not.
+-- The client seam lives here, at the grain a route actually has. A column the
+-- payload leaves out may still be answerable by the running game;
+-- `GetSupplier` names the call and `GetSupplied` asks it for ONE row, because
+-- one row is what a route answers about. So a column is not what comes back
+-- from the client, and a caller that wants a value asks for the value rather
+-- than for the column it would have been read from.
 --
--- TODO: compose the two, so a lean build answers for what it clipped. What
--- unblocks it is knowing what each route takes and gives back on the live
--- client, which is a measurement in game rather than a thing to infer from a
+-- TODO: reach the two Epsilon routes. `GetSupplied` composes whatever the
+-- supply table names, but what `C_Epsilon.GODI_Get` and `SoundKit_Get` take
+-- and give back is unmeasured, so nothing asks them for a value yet. Settling
+-- that is a question for the running client rather than one to infer from a
 -- name.
 
 local _, ns = ...
@@ -182,6 +183,26 @@ function Data.GetSupplier(section, column)
 		return nil
 	end
 	return supplied[section .. "." .. column] or supplied[section]
+end
+
+--- What the running game answers for one row of a column the payload lacks.
+-- The other half of the variation, and the reason a caller above this file
+-- cannot tell where a value came from. A route answers about one identity at a
+-- time, which is why this takes a key rather than handing back a column.
+-- @param section the section name
+-- @param column the column name
+-- @param key the identity the column is keyed by, usually a spell id
+-- @return whatever the client answered, or nil where nothing does
+function Data.GetSupplied(section, column, key)
+	-- Reached when asked rather than captured at the top of this file, because
+	-- the client seam loads after it: a local bound at load time would be nil
+	-- for the whole session.
+	local client = _G.Epsilook.Client
+	local route = client and Data.GetSupplier(section, column)
+	if not route then
+		return nil
+	end
+	return client.Get(route, key)
 end
 
 --- The one column of a section that ships nothing else.

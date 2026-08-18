@@ -25,6 +25,7 @@
 --
 -- SpellData   id, name, subtext, icon, iconName, iconIndex, schoolID, school
 -- PartData    axis, kind, values, named, ids
+-- SpellText   description, aura, encounter
 -- Action      key, label, needs, effect, revert
 -- DataInfo    pack, built, variation, supplied, absent
 --
@@ -176,6 +177,41 @@ function Epsilook:GetSpellDataByID(spellID, target)
 		return nil
 	end
 	return self:GetSpellDataByIndex(row, target)
+end
+
+--- Which column of the text section each field of a text record comes from.
+-- One place, so the reader below is the same three lines whatever the payload
+-- carries and a fourth kind of text is a row here.
+local SPELL_TEXT = { description = "descriptions", aura = "auras", encounter = "encounters" }
+
+--- One spell's prose, as the pack cooked it or as the client tells it.
+-- The description the pack carries is cooked at the expansion's level cap; the
+-- one a running client gives back is resolved at the player's own level, so a
+-- variation that leaves the column out is not merely smaller here, it is more
+-- accurate. Which of the two answered is deliberately not said: a caller asks
+-- what a spell reads as and gets the best answer this build can give.
+--
+-- A client's answer arrives empty for a spell it has not cached yet, which
+-- means "not yet" rather than "none". A caller that must be sure asks again
+-- after the client has been told to load the spell.
+-- @param spellID the spell id
+-- @param target an optional table to fill instead of allocating one
+-- @return a SpellText, or nil where this build has no such spell
+function Epsilook:GetSpellTextDataByID(spellID, target)
+	local row = Data and self:GetSpellIndexByID(spellID)
+	if not row then
+		return nil
+	end
+	local out = target or {}
+	for name, column in pairs(SPELL_TEXT) do
+		local node, blob = Data.GetColumn("spellText", column)
+		if node then
+			out[name] = Reader.value(blob, node, row)
+		else
+			out[name] = Data.GetSupplied("spellText", column, spellID) or ""
+		end
+	end
+	return out
 end
 
 --- How many rows of each axis a spell has.

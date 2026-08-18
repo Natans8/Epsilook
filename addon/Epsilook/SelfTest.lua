@@ -69,6 +69,12 @@ function Epsilook:SelfTest()
 			say("model1=none")
 		end
 
+		-- The prose reads through a pooled column and, on a lean build, through
+		-- the client instead. Its length says both happened without printing a
+		-- sentence into a one-line report.
+		local text = self:GetSpellTextDataByID(133)
+		say("desc=%d", text and #text.description or 0)
+
 		say("engine=%s", self.FindSpells and "yes" or "not built")
 		return table.concat(said, " | ")
 	end)

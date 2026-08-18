@@ -246,8 +246,14 @@ def test_lean_drops_what_the_client_supplies() -> None:
     """The two variations differ by exactly the supply table."""
     assert supplies("spells", "names") == "GetSpellInfo"
     assert supplies("spells", "eras") == ""
-    # A bare section name covers every column of that section.
+    # A bare section name covers every column of that section, which is right
+    # only where the route answers for all of them.
+    assert supplies("soundKitNames", "names") == "C_Epsilon.SoundKit_Get"
+    # Keyed per column where it does not: a client tells a spell's description
+    # and says nothing about the aura line the pack carries beside it. Clipping
+    # all three would answer those two with the description.
     assert supplies("spellText", "descriptions") == "GetSpellDescription"
+    assert supplies("spellText", "auras") == ""
 
 
 def test_a_section_with_no_axis_stops_the_emitter() -> None:
