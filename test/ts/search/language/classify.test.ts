@@ -98,3 +98,46 @@ test("a head is what OPENS a clause, whichever glue it takes; the same word insi
     assert.deepEqual(spelled("-model:fire")[1], ["model:", "head"]);
 });
 
+
+test("a slash opens a pattern where a value opens, and is an ordinary character everywhere else", () => {
+    // After the glue that binds a value: the slashes class apart from the pattern between them.
+    assert.deepEqual(spelled("name:/^fire/"), [
+        ["name:", "head"], ["/", "quote"], ["^fire", "regex"], ["/", "quote"],
+    ]);
+    // Inside a row scope a term opens a value directly, so a slash there opens a pattern too.
+    assert.deepEqual(spelled("model:{/beam/}"), [
+        ["model:", "head"], ["{", "delim"], ["/", "quote"], ["beam", "regex"], ["/", "quote"], ["}", "delim"],
+    ]);
+    // Free text is where a pasted path has to stay searchable: nothing here is a pattern.
+    assert.deepEqual(spelled("spells/fire"), [["spells/fire", "word"]]);
+    assert.deepEqual(spelled("fire /bolt/"), [
+        ["fire", "word"], [" ", "space"], ["/bolt/", "word"],
+    ]);
+});
+
+test("a pattern is a leaf: its own escape survives, and an unclosed one stops at the term's end", () => {
+    assert.deepEqual(spelled(String.raw`name:/a\/b/`), [
+        ["name:", "head"], ["/", "quote"], [String.raw`a\/b`, "regex"], ["/", "quote"],
+    ]);
+    assert.deepEqual(spelled("name:/fire next"), [
+        ["name:", "head"], ["/", "quote"], ["fire", "regex"], [" ", "space"], ["next", "word"],
+    ]);
+});
+
+test("a group admits no pattern, so a slash inside one stays an ordinary character", () => {
+    assert.deepEqual(spelled("model:(/a/)"), [
+        ["model:", "head"], ["(", "delim"], ["/a/", "word"], [")", "delim"],
+    ]);
+});
+
+test("the coverage invariant holds over patterns too", () => {
+    for (const text of ["name:/^a(b|c)$/", "model:{/x/ /y/}", "name:/", "a/b//c"]) covers(text, classify(text));
+});
+
+test("inside a pattern the query's own metacharacters stop meaning anything", () => {
+    // The pipe is the query's alternation and the star its any-value, and neither is either here: the whole
+    // pattern is one run, so what those characters mean is regex's answer and not this lexer's.
+    assert.deepEqual(spelled("name:/a*b|c/"), [
+        ["name:", "head"], ["/", "quote"], ["a*b|c", "regex"], ["/", "quote"],
+    ]);
+});

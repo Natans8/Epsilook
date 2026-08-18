@@ -25,7 +25,11 @@
     // so it belongs to this target rather than to a third one. A directory
     // rather than a file list: tests are added constantly, and a test that
     // typechecks only by accident is worth less than no test.
-    "test"
+    "test",
+    // And src/ui's ambient declarations with it: a test may cover a module
+    // under src/ui that depends on one, and the browser target picks these up
+    // through its own `include: ["src"]` while this one lists its entries.
+    "src/ui/modules.d.ts"
   ],
   "exclude": [
     // The browser suite's evaluate callbacks run in the page and need the DOM

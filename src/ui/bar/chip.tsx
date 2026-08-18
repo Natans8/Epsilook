@@ -16,7 +16,7 @@ import {createContext, Fragment, useContext, useMemo} from "react";
 import {useTranslation} from "react-i18next";
 import type {ChipView, LaneView, Piece, Span} from "../../search/index";
 import {describe, GRAMMAR, NEGATION, parse} from "../../search/index";
-import {Classed} from "./classed";
+import {Classed, Pattern} from "./classed";
 import styles from "./bar.module.css";
 
 /**
@@ -227,6 +227,16 @@ function Pieces({pieces, text}: { readonly pieces: readonly Piece[]; readonly te
             out.push(
                 <span key={i} className={styles.deadFrag}>
                     <Classed text={text.slice(piece.span.start, piece.span.end)}/>
+                </span>,
+            );
+            continue;
+        }
+        if (piece.is === "regex") {
+            out.push(
+                <span key={i}>
+                    <span className={styles.vQuote}>{GRAMMAR.regex}</span>
+                    <Pattern pattern={piece.pattern}/>
+                    <span className={styles.vQuote}>{GRAMMAR.regex}</span>
                 </span>,
             );
             continue;

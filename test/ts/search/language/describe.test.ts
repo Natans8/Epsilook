@@ -197,7 +197,9 @@ test("a dead term stays a raw fragment inside a healthy scope, the clause warned
 
 test("a pattern displays as written — the glob's star and the regex's slashes are its spelling", () => {
     assert.deepEqual(chip("model:fi*e").body, [{is: "value", text: "fi*e"}]);
-    assert.deepEqual(chip("name:/^fire/").body, [{is: "value", text: "/^fire/"}]);
+    // A pattern is its own piece carrying the pattern alone: the slashes are the renderer's, exactly as a
+    // phrase's quotes are, because the surface colours what is between them by regex's own grammar.
+    assert.deepEqual(chip("name:/^fire/").body, [{is: "regex", pattern: "^fire"}]);
 });
 
 test("the anchor displays its glyph before the value", () => {

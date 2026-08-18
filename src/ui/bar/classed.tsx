@@ -8,6 +8,8 @@ import type {ReactElement, ReactNode} from "react";
 import {useMemo} from "react";
 import type {Run, Span} from "../../search/index";
 import {classify, paint} from "../../search/index";
+import type {PatternKind} from "./pattern";
+import {patternRuns} from "./pattern";
 import styles from "./bar.module.css";
 
 /** The colour class per run kind; a plain word paints nothing and inherits the text colour. */
@@ -26,11 +28,47 @@ const LIVE_CLASS: Record<string, string | undefined> = {
     head: styles.runHead, op: styles.runLive, delim: styles.runLive, quote: styles.runLive,
 };
 
+/**
+ * The colour class per part of a PATTERN — the second language a query can embed.
+ *
+ * Between the slashes the characters stop being a value and become regex syntax, so they are coloured by what
+ * that syntax says rather than by the column the clause reaches. Literal text takes nothing and keeps the
+ * value's own colour, which is what makes the marked parts read as the marked ones.
+ */
+const PATTERN_CLASS: Record<PatternKind, string | undefined> = {
+    literal: undefined, escaped: styles.rxEscaped, meta: styles.rxMeta, group: styles.rxGroup,
+    backref: styles.rxBackref, class: styles.rxClass, error: styles.rxError,
+    // A class's brackets, its range hyphen and a metasequence inside it are all the pattern saying something
+    // about itself rather than matching a character, which is the one thing the tone means here. The library
+    // keeps them apart and this palette does not; they are separate the moment a reason to separate them shows.
+    classBoundary: styles.rxMeta, classMeta: styles.rxMeta, classRange: styles.rxMeta,
+};
+
 /** The tone class per column key — the same families the chips wear, so one query reads one colour language. */
 const TONE_CLASS: Record<string, string | undefined> = {
     model: styles.runModel, sound: styles.runSound, anim: styles.runAnim,
     fx: styles.runFx, mech: styles.runMech, spell: styles.runSpell, id: styles.runSpell,
 };
+
+/**
+ * One pattern as coloured spans.
+ *
+ * The committed form of a regular expression, where the chip is selected whole and there is nothing to cut: the
+ * bar's raw surfaces paint the same colours through {@link Classed}, which splits them by character because a
+ * selection there is a range.
+ */
+export function Pattern({pattern}: { readonly pattern: string }): ReactElement {
+    const runs = useMemo(() => patternRuns(pattern), [pattern]);
+    return (
+        <>
+            {runs.map((run) => (
+                <span key={run.start} className={PATTERN_CLASS[run.kind]} title={run.note}>
+                    {pattern.slice(run.start, run.end)}
+                </span>
+            ))}
+        </>
+    );
+}
 
 /**
  * One stretch of text as classed spans.
@@ -82,25 +120,44 @@ export function Classed({text, rich, runs: given, mirrored, selected}: {
                 : run.state === "warning" ? styles.runWarn : undefined,
         ].filter((held) => held !== undefined);
         const cls = classes.length === 0 ? undefined : classes.join(" ");
-        if (selected === undefined) {
-            out.push(<span key={i} className={cls}>{text.slice(run.start, run.end)}</span>);
-            continue;
-        }
-        // A run is split where the selection starts or ends inside it: the selection is a range of characters,
-        // and a classed run is a range of characters, so neither can be made to respect the other's boundaries.
-        const cut = [
-            run.start,
-            ...[selected.start, selected.end].filter((edge) => edge > run.start && edge < run.end),
-            run.end,
-        ];
-        for (let piece = 0; piece + 1 < cut.length; piece++) {
-            const [from, to] = [cut[piece], cut[piece + 1]];
-            const inSel = from >= selected.start && to <= selected.end;
-            out.push(
-                <span key={`${String(i)}-${String(from)}`} className={inSel ? `${cls ?? ""} ${styles.selected}` : cls}>
-                    {text.slice(from, to)}
-                </span>,
-            );
+        // A pattern paints as its own parts, and ONLY as those: between the slashes the query's own colour
+        // language stops applying, so the clause's tone, its exclusion red and its vocabulary mark are all
+        // dropped rather than combined with. Two languages layered would say neither. Every other run paints
+        // as one piece, so the selection below has a single shape to cut.
+        const pieces = run.kind === "regex"
+            ? patternRuns(text.slice(run.start, run.end)).map((part) => ({
+                start: run.start + part.start,
+                end: run.start + part.end,
+                cls: PATTERN_CLASS[part.kind],
+                note: part.note,
+            }))
+            : [{start: run.start, end: run.end, cls, note: undefined}];
+        for (const piece of pieces) {
+            if (selected === undefined) {
+                out.push(
+                    <span key={`${String(i)}-${String(piece.start)}`} className={piece.cls} title={piece.note}>
+                        {text.slice(piece.start, piece.end)}
+                    </span>,
+                );
+                continue;
+            }
+            // A piece is split where the selection starts or ends inside it: the selection is a range of
+            // characters and so is a classed piece, so neither can be made to respect the other's boundaries.
+            const cut = [
+                piece.start,
+                ...[selected.start, selected.end].filter((edge) => edge > piece.start && edge < piece.end),
+                piece.end,
+            ];
+            for (let cutAt = 0; cutAt + 1 < cut.length; cutAt++) {
+                const [from, to] = [cut[cutAt], cut[cutAt + 1]];
+                const inSel = from >= selected.start && to <= selected.end;
+                out.push(
+                    <span key={`${String(i)}-${String(from)}`} title={piece.note}
+                          className={inSel ? `${piece.cls ?? ""} ${styles.selected}` : piece.cls}>
+                        {text.slice(from, to)}
+                    </span>,
+                );
+            }
         }
     }
     return <>{out}</>;

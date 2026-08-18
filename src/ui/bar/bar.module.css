@@ -300,6 +300,48 @@
     color: var(--gold);
 }
 
+/* ------------------------------------------------------------- a pattern's own syntax
+ * Between the slashes the query embeds a second language, so the characters are coloured by what REGEX says
+ * they mean rather than by the column the clause reaches. Which part is which is `regex-colorizer`'s reading;
+ * these are only the tones. Four of them, each an already-measured token rather than a new colour:
+ *
+ *   gold    the pattern talking about itself   anchors, quantifiers, metasequences, a class's brackets and hyphen
+ *   orange  the part that NESTS                a group, and the alternation inside one
+ *   teal    a character class's contents       the set of characters it stands for
+ *   dim     a literal said with an escape      it matches the character, so it recedes toward one
+ *
+ * Literal text takes no class at all and keeps the value's own colour, which is what makes the marked parts
+ * read as the marked ones. Colour only: these paint under a field as well as on a chip, and a mirror may not
+ * move a glyph. */
+
+.rxMeta {
+    color: var(--gold);
+}
+
+.rxGroup {
+    color: rgb(var(--mech-rgb));
+}
+
+.rxClass {
+    color: rgb(var(--fx-rgb));
+}
+
+.rxEscaped {
+    color: var(--tag-btn);
+}
+
+.rxBackref {
+    color: rgb(var(--anim-rgb));
+}
+
+/* What the pattern language itself refuses. The clause carries the parser's own squiggle already; this says
+ * WHICH character stopped it, and its title carries the library's reason. */
+.rxError {
+    color: rgb(var(--danger-rgb));
+    text-decoration: underline wavy rgba(var(--danger-rgb), 0.9);
+    text-underline-offset: 3px;
+}
+
 /* a closed-vocabulary word, marked as the chips mark one */
 .runVocab {
     border-bottom: 1px dotted var(--tag-btn);

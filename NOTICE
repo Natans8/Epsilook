@@ -24,10 +24,11 @@ part of it is not ours to license at all.
        src/vendor/bufo.js     Bufo    — Kruithne <kruithne@gmail.com> — MIT
        src/vendor/js-blp.js   js-blp  — Kruithne <kruithne@gmail.com> — MIT
        color-name (npm)       colorjs/color-name — MIT — bundled into site/js/
+       regex-colorizer (npm)  slevithan/regex-colorizer — MIT — bundled with src/ui/, site/js/ when 2.0 ships
 
    The MIT licence requires its copyright and permission notice to travel with redistributions. For the two
-   vendored files that notice is the header in each file, kept intact. For color-name the notice must reach
-   the BUNDLE, because the bundle is what visitors are served — see section 5.
+   vendored files that notice is the header in each file, kept intact. For the two npm packages the notice
+   must reach the BUNDLE, because the bundle is what visitors are served — see section 5.
 
 
 3. NOT LICENSED BY US — redistributed, not owned

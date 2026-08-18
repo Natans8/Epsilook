@@ -17,7 +17,7 @@ import {HEADS} from "../schema/schema";
 import {fold, foldTypography} from "../text/normalize";
 
 /** The role one run of query text plays. */
-export type RunKind = "head" | "meta" | "op" | "delim" | "quote" | "number" | "word" | "space";
+export type RunKind = "head" | "meta" | "op" | "delim" | "quote" | "regex" | "number" | "word" | "space";
 
 /**
  * One classed run. Runs abut: each starts where the previous ended, and together they cover the text.
@@ -62,6 +62,21 @@ const OPS = new Set<string>([
 /** What a property opens: the bind, or the comparison it is being measured by. */
 const DOOR_GLUES = new Set<string>([GRAMMAR.bind, ...COMPARISON_STARTS]);
 
+/**
+ * Whether a slash standing at `at` opens a pattern rather than being an ordinary character.
+ *
+ * The parser's rule, read off the same three facts it reads: a pattern is a value, so it opens where a VALUE
+ * does — straight after the glue that binds one, or, inside a row scope, wherever a term opens. Never inside a
+ * group, where a slash stays literal. Everywhere else a slash is a character like any other, which is what
+ * keeps a pasted path fragment searchable.
+ */
+function opensPattern(folded: string, at: number, scopes: number, groups: number): boolean {
+    if (groups > 0) return false;
+    const before = folded[at - 1] ?? "";
+    if (DOOR_GLUES.has(before)) return true;
+    return scopes > 0 && (/\s/.test(before) || before === GRAMMAR.scope.open);
+}
+
 /** A word run: letters, digits and the joiners a value word may carry. */
 const WORD = /^[\p{L}\p{N}_.']+/u;
 
@@ -89,8 +104,32 @@ export function classify(text: string): Run[] {
     // about anywhere else (`sound:count>2`, `model:{attach:chest}`). They read the same and mean differently.
     let opening = true;
     let depth = 0;
+    // A scope and a group nest alike but admit different things: only a scope opens a place where a pattern may
+    // stand, so the two are counted apart rather than read back off the text.
+    let scopes = 0;
+    let groups = 0;
     while (at < folded.length) {
         const ch = folded[at];
+        if (ch === GRAMMAR.regex && opensPattern(folded, at, scopes, groups)) {
+            // A pattern is a leaf like a phrase, with the phrase's own two differences: a backslash escapes
+            // whatever follows it, and the value ends at whitespace, so an unclosed pattern runs no further
+            // than the term it opened in.
+            push(at, at + 1, "quote");
+            let end = at + 1;
+            while (end < folded.length && folded[end] !== GRAMMAR.regex && !/\s/.test(folded[end])) {
+                end += folded[end] === GRAMMAR.escape ? 2 : 1;
+            }
+            end = Math.min(end, folded.length);
+            if (end > at + 1) push(at + 1, end, "regex");
+            if (folded[end] === GRAMMAR.regex) {
+                push(end, end + 1, "quote");
+                at = end + 1;
+            } else {
+                at = end;
+            }
+            opening = false;
+            continue;
+        }
         if (ch === GRAMMAR.phrase) {
             // A phrase is a leaf: nothing inside is structure. The quotes class apart from their content, and an
             // unclosed phrase runs to the end — the next keystroke may close it.
@@ -113,7 +152,12 @@ export function classify(text: string): Run[] {
             push(at, at + 1, "delim");
             // Clamped: a stray closer would otherwise take the depth negative, and every head after it would
             // stop reading as one.
-            if (ENCLOSURES.has(ch)) depth = Math.max(0, depth + (OPENERS.has(ch) ? 1 : -1));
+            if (ENCLOSURES.has(ch)) {
+                const step = OPENERS.has(ch) ? 1 : -1;
+                depth = Math.max(0, depth + step);
+                if (ch === GRAMMAR.scope.open || ch === GRAMMAR.scope.close) scopes = Math.max(0, scopes + step);
+                else groups = Math.max(0, groups + step);
+            }
             opening = true;
             at += 1;
             continue;

@@ -43,6 +43,8 @@ export type Piece =
     | { readonly is: "op"; readonly text: string }
     /** A quoted literal, quotes not included — the renderer draws them glued. */
     | { readonly is: "phrase"; readonly text: string }
+    /** A regular expression, slashes not included — the renderer draws them glued and colours the pattern. */
+    | { readonly is: "regex"; readonly pattern: string }
     /** The honest display of a colour value; `colour` is CSS-ready. The value's word follows as its own piece. */
     | { readonly is: "swatch"; readonly colour: string }
     /** A dead fragment kept as raw text — the renderer slices the query and marks it. */
@@ -220,10 +222,8 @@ function exprPieces(value: ValueExpr, at?: PropRef): Piece[] {
             return operandPieces(value.operand, at);
         case "glob":
             return [{is: "value", text: "text" in value.operand ? value.operand.text : ""}];
-        case "regex": {
-            const pattern = "text" in value.operand ? value.operand.text : "";
-            return [{is: "value", text: `${GRAMMAR.regex}${pattern}${GRAMMAR.regex}`}];
-        }
+        case "regex":
+            return [{is: "regex", pattern: "text" in value.operand ? value.operand.text : ""}];
         case "exact": {
             // A sentinel word already means the exact ask, so the anchor adds nothing to it — and neither does
             // it to a quantity, whose bare number is already the exact ask; the glyph displays only where it
