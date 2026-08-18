@@ -12,7 +12,7 @@
  * the character a press fell on, and a press that turns into a drag selects instead.
  */
 import type {MouseEvent as ReactMouseEvent, ReactElement, ReactNode} from "react";
-import {useMemo} from "react";
+import {Fragment, useMemo} from "react";
 import {useTranslation} from "react-i18next";
 import type {ChipView, LaneView, Piece, Span} from "../../search/index";
 import {describe, GRAMMAR, NEGATION, parse} from "../../search/index";
@@ -105,6 +105,19 @@ function aimAt(e: ReactMouseEvent, raw: string, window: Span): number | null {
     const found = raw.slice(window.start, window.end).indexOf(piece);
     if (found < 0) return null;
     return window.start + found + Math.min(at.offset, piece.length);
+}
+
+/**
+ * What joins two conditions that must both hold.
+ *
+ * Juxtaposition IS the conjunction in this language, so the query writes a space between two conditions and
+ * nothing else — and a lane of bare terms copied that, drawing `model:{fire missile}` as a two-word phrase
+ * rather than as two asks about one row. The alternation already draws its own word between runs; this is the
+ * other half of that pair. It is a display separator rather than a character of the query, exactly as the
+ * commas an identity list draws are.
+ */
+function Joint(): ReactElement {
+    return <span className={styles.joint} aria-hidden="true">·</span>;
 }
 
 /**
@@ -308,40 +321,51 @@ function LaneEl({lane, warned, notes, span, text, act}: {
                 const openItem = press((e) => {
                     act.open(aimAt(e, text, item.span) ?? item.span.start);
                 });
+                // Between two conditions that must both hold; never beside the alternation's own word, which
+                // already says what joins the runs it sits between.
+                const joint = i > 0 && lane.items[i - 1].is !== "or" ? <Joint/> : null;
                 if (item.is === "dead") {
                     return (
-                        <span key={i} className={styles.deadFrag} onClick={openItem}>
-                            <Classed text={text.slice(item.span.start, item.span.end)}/>
-                        </span>
+                        <Fragment key={i}>
+                            {joint}
+                            <span className={styles.deadFrag} onClick={openItem}>
+                                <Classed text={text.slice(item.span.start, item.span.end)}/>
+                            </span>
+                        </Fragment>
                     );
                 }
                 if (item.is === "term") {
                     return (
-                        <span
-                            key={i}
-                            className={item.not ? `${styles.laneTerm} ${styles.vNot}` : styles.laneTerm}
-                            onClick={openItem}
-                        >
-                            {item.not ? NEGATION : ""}<Pieces pieces={item.body} text={text}/>
-                        </span>
+                        <Fragment key={i}>
+                            {joint}
+                            <span
+                                className={item.not ? `${styles.laneTerm} ${styles.vNot}` : styles.laneTerm}
+                                onClick={openItem}
+                            >
+                                {item.not ? NEGATION : ""}<Pieces pieces={item.body} text={text}/>
+                            </span>
+                        </Fragment>
                     );
                 }
                 return (
-                    <span key={i} className={styles.laneBind} onClick={openItem}>
-                        <Sect
-                            head={item.head}
-                            not={item.not}
-                            hint={t(item.not ? "bar.include" : "bar.exclude")}
-                            className={styles.bindSect}
-                            onOpen={() => {
-                                act.negateTerm(i);
-                            }}
-                        />
-                        <span className={styles.bindBody}><Pieces pieces={item.body} text={text}/></span>
-                        <Affordance label={t("bar.delete")} onPress={() => {
-                            act.removeTerm(i);
-                        }}/>
-                    </span>
+                    <Fragment key={i}>
+                        {joint}
+                        <span className={styles.laneBind} onClick={openItem}>
+                            <Sect
+                                head={item.head}
+                                not={item.not}
+                                hint={t(item.not ? "bar.include" : "bar.exclude")}
+                                className={styles.bindSect}
+                                onOpen={() => {
+                                    act.negateTerm(i);
+                                }}
+                            />
+                            <span className={styles.bindBody}><Pieces pieces={item.body} text={text}/></span>
+                            <Affordance label={t("bar.delete")} onPress={() => {
+                                act.removeTerm(i);
+                            }}/>
+                        </span>
+                    </Fragment>
                 );
             })}
             <Affordance label={t("bar.delete")} onPress={act.remove}/>

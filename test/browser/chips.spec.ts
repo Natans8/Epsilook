@@ -6,7 +6,9 @@
  */
 import type {Page} from "@playwright/test";
 import {expect, test} from "@playwright/test";
-import {bar, barInput, expectQuery, HARNESS_URL, openHarness, queryMirror, seed, slot} from "./helpers";
+import {
+    bar, barInput, expectQuery, HARNESS_URL, openHarness, queryMirror, seed, settledSegments, slot,
+} from "./helpers";
 
 let page: Page;
 
@@ -247,4 +249,16 @@ test("a flip is one undo step", async () => {
     await page.keyboard.press("Control+z");
     await barInput(page).blur();
     await expectQuery(page, "model:fire ");
+});
+
+test("two conditions of one row are joined, so a lane stops reading as a phrase", async () => {
+    await seed(page, "model:{fire missile}");
+    // Juxtaposition IS the conjunction, so the query writes a space and nothing else; the lane draws what the
+    // space means, the way the alternation draws its own word.
+    const lane = settledSegments(page).first();
+    await expect(lane).toContainText("·");
+    // It joins CONDITIONS. An alternation of values is one condition however many values it offers, so the
+    // chip that draws it has nothing to join and says nothing.
+    await seed(page, "model:fire|frost");
+    expect((await settledSegments(page).first().innerText()).includes("·")).toBe(false);
 });

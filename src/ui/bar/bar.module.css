@@ -493,6 +493,14 @@
     stroke-linecap: round;
 }
 
+/* The conjunction a lane leaves implicit: quiet, and not part of either term's reading line. Punctuation the
+ * display adds — like the commas an identity list draws — so it takes no selection of its own. */
+.joint {
+    align-self: center;
+    color: var(--text-dim);
+    user-select: none;
+}
+
 /* the lane: real terms inside the toned enclosure; gaps separate OBJECTS here, never continuous text */
 .lane {
     gap: 6px;
