@@ -81,3 +81,20 @@ test("a digit-led word is a number; digits inside a word are not", () => {
     assert.deepEqual(spelled("id:133")[1], ["133", "number"]);
     assert.deepEqual(spelled("keg01")[0], ["keg01", "word"]);
 });
+
+test("a head is what OPENS a clause, whichever glue it takes; the same word inside one is a property", () => {
+    // `model:fire` and `model>=4` are the same door said two ways, so both class as the head they are — the
+    // comparison stays its own operator, because it is the question rather than the door.
+    assert.deepEqual(spelled("model>=4"), [["model", "head"], [">=", "op"], ["4", "number"]]);
+    // A word the schema knows only INSIDE a clause is not a head, so the lexer leaves it a word; what marks
+    // it as the property it is comes from the parse, which is what `paint` layers on.
+    assert.deepEqual(spelled("sound:count>2"), [
+        ["sound:", "head"], ["count", "word"], [">", "op"], ["2", "number"],
+    ]);
+    assert.deepEqual(spelled("model:{attach:chest}"), [
+        ["model:", "head"], ["{", "delim"], ["attach", "word"], [":", "op"], ["chest", "word"], ["}", "delim"],
+    ]);
+    // A negation opens the term it excludes, so the head after it is still a head.
+    assert.deepEqual(spelled("-model:fire")[1], ["model:", "head"]);
+});
+

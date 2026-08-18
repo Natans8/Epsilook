@@ -127,3 +127,31 @@ test("typing over a selection replaces it, and one undo brings the whole selecti
     await barInput(page).blur();
     await expectQuery(page, "model:fire big red");
 });
+
+test("the separator between two chips cannot be selected on its own", async () => {
+    await opened("model:fire sound:bell");
+    const sep = await page.locator('[data-at="10"]').first().boundingBox();
+    if (sep === null) throw new Error("no separator between the chips");
+    const y = sep.y + sep.height / 2;
+    // A drag over nothing but the join: it is what the language needs between two asks, not something the
+    // reader wrote there, and lifting it out would glue the two into one.
+    await page.mouse.move(sep.x, y);
+    await page.mouse.down();
+    await page.mouse.move(sep.x + sep.width, y, {steps: 3});
+    await page.mouse.up();
+    await expect(barSelection(page)).toHaveCount(0);
+});
+
+test("a chip joins the selection from its first pixel, never from its middle", async () => {
+    await opened("model:fire big red");
+    const chip = await page.locator('[data-at="0"]').first().boundingBox();
+    const text = await childBox(11);
+    if (chip === null) throw new Error("no chip");
+    await page.mouse.move(text.x + 30, text.y);
+    await page.mouse.down();
+    // Barely inside the chip's right edge — its value must not be left looking picked out.
+    await page.mouse.move(chip.x + chip.width - 3, text.y, {steps: 6});
+    const reached = await barSelection(page).getAttribute("data-selection");
+    await page.mouse.up();
+    expect(reached?.startsWith("model:fire")).toBe(true);
+});

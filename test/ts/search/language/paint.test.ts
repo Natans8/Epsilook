@@ -62,3 +62,18 @@ test("a closed-vocabulary word is marked as one; corpus text is not", () => {
     assert.equal(runFor("model:fire", "fire").vocab, undefined);
     assert.equal(runFor("model:{fire attach:chest}", "fire").vocab, undefined);
 });
+
+test("a property is marked as the door it is, in its column's tone; a head is not a property", () => {
+    const runs = paint("sound:count>2 model:{attach:chest}");
+    const at = (word: string): Run | undefined =>
+        runs.find((run) => run.start === "sound:count>2 model:{attach:chest}".indexOf(word));
+    expect: {
+        // `count` and `attach` open their own comparison and bind inside a clause, which is what a chip draws
+        // loud; the head that opened the clause is already a head and stays one.
+        assert.equal(at("count")?.door, true);
+        assert.equal(at("count")?.tone, "sound");
+        assert.equal(at("attach")?.door, true);
+        assert.equal(at("attach")?.tone, "model");
+        assert.equal(at("chest")?.door, undefined);
+    }
+});

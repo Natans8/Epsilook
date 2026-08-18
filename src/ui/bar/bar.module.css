@@ -249,6 +249,14 @@
     font-weight: 700;
 }
 
+/* The same word under a field, where weight is not available: a rule beneath it says the same thing and moves
+ * no glyph. Solid, so it reads apart from the dotted mark a closed vocabulary carries. */
+.runDoor {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
 /* what a clause or a term EXCLUDES: the minus and the word it binds to, in one colour */
 .runNeg {
     color: rgb(var(--danger-rgb));
@@ -312,9 +320,10 @@
     --chip-wash-a: 0.1;
     display: inline-flex;
     align-items: stretch;
-    /* Every chip stands the same height whatever it holds — a lane with an inner bind included — so a row of
-     * them reads as one line of objects and a selection band crosses them without stepping. */
-    min-height: var(--band-h);
+    /* Every chip stands EXACTLY the band's height, whatever it holds — a lane with an inner bind included. Not
+     * a minimum: a chip whose content pushed it half a pixel past the band left the separator beside it
+     * reading as a dip, which is invisible at one zoom and obvious at another. */
+    height: var(--band-h);
     max-width: 100%;
     border: 1px solid rgba(var(--edge-rgb), var(--chip-border-a));
     border-radius: 999px;
@@ -644,6 +653,8 @@
 /* The band is ONE flat colour across whatever it covers: a chip's own chrome — the head's inset, an inner
  * bind's surface — would otherwise read as a notch in it, which is the ragged look a selection must never
  * have. The borders stay, so the shapes are still legible through it. */
+.selected .chip,
+.selected .lane,
 .selected .chipSect,
 .selected .bindSect,
 .selected .laneBind {

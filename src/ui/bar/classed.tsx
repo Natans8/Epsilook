@@ -59,9 +59,11 @@ export function Classed({text, rich, runs: given, mirrored, selected}: {
             // excludes are one red unit, and the tone says which column that unit reaches.
             run.negated === true ? styles.runNeg
                 : run.tone === undefined ? RUN_CLASS[run.kind] : TONE_CLASS[run.tone] ?? RUN_CLASS[run.kind],
-            // Loudness is not a colour: a word about the query keeps its column's tone and gains the weight —
-            // except under a field, where weight would move the text out from under the caret.
-            (run.kind === "meta" || run.door === true) && mirrored !== true ? styles.runMeta : undefined,
+            // Loudness: a word about the query keeps its column's tone and gains the weight. Under a field it
+            // gains a rule beneath it instead — weight would move the text out from under the caret, and a
+            // decoration costs no advance width at all.
+            run.kind === "meta" || run.door === true
+                ? (mirrored === true ? styles.runDoor : styles.runMeta) : undefined,
             run.vocab === true ? styles.runVocab : undefined,
             run.state === "error" ? styles.runError
                 : run.state === "warning" ? styles.runWarn : undefined,

@@ -80,6 +80,11 @@ export function classify(text: string): Run[] {
     };
 
     let at = 0;
+    // Where a TERM opens, and how deep in enclosures it sits: a known word glued to its operator is the door
+    // of a clause when it opens one at the top level (`model>=4`), and a property of the thing being asked
+    // about anywhere else (`sound:count>2`, `model:{attach:chest}`). They read the same and mean differently.
+    let opening = true;
+    let depth = 0;
     while (at < folded.length) {
         const ch = folded[at];
         if (ch === GRAMMAR.phrase) {
@@ -102,6 +107,8 @@ export function classify(text: string): Run[] {
         }
         if (DELIMS.has(ch)) {
             push(at, at + 1, "delim");
+            if (ENCLOSURES.has(ch)) depth += ch === GRAMMAR.scope.open || ch === GRAMMAR.group.open ? 1 : -1;
+            opening = true;
             at += 1;
             continue;
         }
@@ -114,31 +121,39 @@ export function classify(text: string): Run[] {
         }
         if (OPS.has(ch)) {
             push(at, at + 1, "op");
+            // A negation opens the term it excludes; every other operator stands after something.
+            opening = ch === GRAMMAR.negate;
             at += 1;
             continue;
         }
         if (/\s/.test(ch)) {
             push(at, at + 1, "space");
+            opening = true;
             at += 1;
             continue;
         }
         const word = WORD.exec(folded.slice(at));
         if (word !== null) {
             const end = at + word[0].length;
-            const known = HEADS.has(fold(word[0]));
-            const isHead = folded[end] === GRAMMAR.bind && known;
-            // A word about the query rather than of the data: the any-word, and a property door standing in a
-            // value where its own comparison follows it (`sound:count>2`). Both are what a chip draws loud.
-            const meta = fold(word[0]) === GRAMMAR.anyWord
-                || (known && !isHead && OPS.has(folded[end] ?? ""));
-            // The bind belongs to the head: `model:` is one token. The word alone is text on its way to being
-            // something and the colon is what makes it a door, so the two are read — and coloured — as one.
-            push(at, isHead ? end + 1 : end,
+            const glued = folded[end] === GRAMMAR.bind || OPS.has(folded[end] ?? "");
+            const known = HEADS.has(fold(word[0])) && glued;
+            // A head opens its clause at the top level, whichever glue it takes: `model:fire` and `model>=4`
+            // are the same door said two ways. The same word inside an enclosure, or standing after a value,
+            // is a property of what is being asked about — a word ABOUT the query, which a chip draws loud.
+            const isHead = known && opening && depth === 0;
+            // The bind belongs to the head: `model:` is one token, because the word alone is text on its way
+            // to being something and the colon is what makes it a door. A comparison is the question rather
+            // than the door, and stays its own operator.
+            const takesBind = isHead && folded[end] === GRAMMAR.bind;
+            const meta = fold(word[0]) === GRAMMAR.anyWord || (known && !isHead);
+            push(at, takesBind ? end + 1 : end,
                 isHead ? "head" : meta ? "meta" : /^\d/.test(word[0]) ? "number" : "word");
-            at = isHead ? end + 1 : end;
+            at = takesBind ? end + 1 : end;
+            opening = false;
             continue;
         }
         push(at, at + 1, "word");
+        opening = false;
         at += 1;
     }
     return runs;
@@ -177,18 +192,6 @@ export function paint(text: string): Run[] {
      * The same unit a chip draws in one red — the minus and its head, or the minus and the word it excludes —
      * because a reader looking at the raw text is reading the same query.
      */
-    /**
-     * Marks the door a PROPERTY opens: `attach:` inside a model scope, `count` before its comparison.
-     *
-     * A property is not a head — it is a word about the thing being asked about, which a chip draws loud — and
-     * it is the same word wherever it stands, so the raw text says it the same way and in the column's tone.
-     */
-    const door = (span: Span, tone: string | null): void => {
-        const word = runs.find((run) => run.start >= span.start && run.start < span.end && run.kind === "word");
-        if (word === undefined) return;
-        runs[runs.indexOf(word)] = {...word, door: true, tone: tone ?? word.tone};
-    };
-
     const negate = (span: Span): void => {
         over({start: span.start, end: span.start + 1}, (run) => ({...run, negated: true}));
         const word = runs.find((run) => run.start >= span.start && run.start < span.end
@@ -214,25 +217,26 @@ export function paint(text: string): Run[] {
             // An ENCLOSURE goes with the head: a brace or a group belongs to the clause it encloses, so it
             // wears that clause's colour. The alternation does not — `|` means the same thing wherever it
             // stands, and a universal token that changed colour by neighbourhood would be saying otherwise.
-            over(clause.span, (run) => (run.kind === "head"
+            over(clause.span, (run) => (run.kind === "head" || run.kind === "meta"
                 || (run.kind === "delim" && ENCLOSURES.has(text[run.start]))
                 ? {...run, tone: column.key} : run));
         }
         if (clause.not) negate(clause.span);
-        // A kind word IS the vocabulary — `model:missile` names a kind rather than searching for the letters.
-        if (ask.on === "kind" && ask.test?.is === "exists") {
-            over(clause.span, (run) => (run.kind === "word" ? {...run, vocab: true} : run));
-        }
-        // A property standing at the head of its own comparison — `sound:count>2`, `model:{seat>=2}` — is a
-        // door like any other: the word is followed by the operator it opens, which is what tells it from a
-        // value word beside it.
+        // A PROPERTY of the thing being asked about — `sound:count>2`, `model:{attach:chest}` — is a word about
+        // the query rather than one of the data: the word is followed by the operator it opens, which is what
+        // tells it from a value word standing beside one. A head is already its own kind by here.
         if (column !== null) {
             for (const [i, run] of runs.entries()) {
                 const next = runs[i + 1];
-                if (run.kind !== "word" || run.door === true) continue;
-                if (run.start < clause.span.start || run.end > clause.span.end) continue;
-                if (next?.kind === "op" && next.start === run.end) door(run, column.key);
+                if (run.kind !== "word" || run.start < clause.span.start || run.end > clause.span.end) continue;
+                if (next?.kind === "op" && next.start === run.end) {
+                    runs[i] = {...run, door: true, tone: column.key};
+                }
             }
+        }
+        // A kind word IS the vocabulary — `model:missile` names a kind rather than searching for the letters.
+        if (ask.on === "kind" && ask.test?.is === "exists") {
+            over(clause.span, (run) => (run.kind === "word" ? {...run, vocab: true} : run));
         }
         const test = ask.on === "column" || ask.on === "kind" ? ask.test : null;
         if (test?.is !== "scope") continue;
