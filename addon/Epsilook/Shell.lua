@@ -1,15 +1,15 @@
 --- The chat shell: the slash command, the result lines, and the clicks.
 --
 -- The first interface over the API, and the one that mirrors `.lookup`: a
--- result is one line per spell, `id - [Name] - [Learn] - [Cast] - [Aura] -
--- [Inspect]`, where the name is the game's own spell link (it carries the
+-- result is two lines per spell, `id - [Name]` with what it is made of and
+-- then its actions `[Learn] - [Cast] - [Aura] - [Inspect]`, where the name is the game's own spell link (it carries the
 -- tooltip and links on shift-click) and the action words are this addon's own
 -- links, which EXECUTE when clicked rather than filling the chat box. Output
 -- accumulates in chat and is never replaced, so every link is absolute: it
 -- names the spell and the verb, and clicking it from old scrollback does
 -- exactly what it did the first time.
 --
--- Rendering is kept apart from printing. `Shell.ResultLine` and the dossier's
+-- Rendering is kept apart from printing. `Shell.ResultLines` and the dossier's
 -- lines are pure functions from API records to strings, so they are tested
 -- bare; only the dozen lines at the bottom touch the client.
 --
@@ -62,21 +62,19 @@ function Shell.SpellLink(spellID, name)
 	return WHITE .. "|Hspell:" .. spellID .. "|h[" .. name .. "]|h" .. END
 end
 
---- One result line for a spell, in `.lookup`'s grammar.
+--- One result for a spell, as two lines: the spell, then its actions.
+-- A result wraps in a chat frame more often than not, so the wrap is designed
+-- in rather than suffered: the first line is the id, the game's own spell link
+-- and what the spell is made of; the second, indented, is the actions, which
+-- then sit at the same place on every result. The aura word is offered only
+-- where the spell applies one, which the mech column says with a row of its
+-- aura kind.
 -- @param spell a SpellData
 -- @param counts the spell's part counts by axis, or nil to leave them off
 -- @param axes the axes to report, in order
--- @return the line
-function Shell.ResultLine(spell, counts, axes)
-	local parts = { GOLD .. spell.id .. END, Shell.SpellLink(spell.id, spell.name) }
-	for _, verb in ipairs(Shell.VERBS) do
-		-- The aura word is offered only where the spell applies one: the
-		-- mech column carries a row of its aura kind for every such effect.
-		if verb ~= "aura" or Epsilook:HasPartOfKind(spell.id, "mech", "aura") then
-			parts[#parts + 1] = Shell.Link(spell.id, verb)
-		end
-	end
-	local line = table.concat(parts, " - ")
+-- @return the two lines
+function Shell.ResultLines(spell, counts, axes)
+	local head = GOLD .. spell.id .. END .. " - " .. Shell.SpellLink(spell.id, spell.name)
 	if counts and axes then
 		local made = {}
 		for _, axis in ipairs(axes) do
@@ -86,10 +84,16 @@ function Shell.ResultLine(spell, counts, axes)
 			end
 		end
 		if #made > 0 then
-			line = line .. " " .. GREY .. table.concat(made, ", ") .. END
+			head = head .. "  " .. GREY .. table.concat(made, ", ") .. END
 		end
 	end
-	return line
+	local links = {}
+	for _, verb in ipairs(Shell.VERBS) do
+		if verb ~= "aura" or Epsilook:HasPartOfKind(spell.id, "mech", "aura") then
+			links[#links + 1] = Shell.Link(spell.id, verb)
+		end
+	end
+	return head, "      " .. table.concat(links, " - ")
 end
 
 --- The addon's own prefix on a line it prints about itself, rather than about a spell.
@@ -295,7 +299,9 @@ local function page(tree, text, fromIndex)
 			else
 				Epsilook:GetSpellDataByIndex(at, spell)
 				Epsilook:GetPartCounts(spellID, counts)
-				say(Shell.ResultLine(spell, counts, axes))
+				local head, actions = Shell.ResultLines(spell, counts, axes)
+				say(head)
+				say(actions)
 				shown, last = shown + 1, at
 			end
 		end

@@ -16,18 +16,22 @@ def method(table: LuaTable, name: bytes) -> LuaFunction:
     return cast(LuaFunction, table[name])
 
 
-def test_a_result_line_reads_like_lookup(engine: LuaRuntime) -> None:
+def result(engine: LuaRuntime, spell_id: int) -> tuple[str, str]:
     api = lua_table(engine, b"Epsilook")
-    spell = method(api, b"GetSpellDataByID")(api, 133)
-    counts = method(api, b"GetPartCounts")(api, 133)
+    spell = method(api, b"GetSpellDataByID")(api, spell_id)
+    counts = method(api, b"GetPartCounts")(api, spell_id)
     axes = method(api, b"GetPartAxes")(api)
-    line = lua_function(engine, b"Epsilook.Shell.ResultLine")(spell, counts, axes)
-    assert isinstance(line, bytes)
-    text = line.decode()
-    assert text.startswith("|cffffd100133|r - |cffffffff|Hspell:133|h[Fireball]|h|r - ")
+    head, actions = cast(tuple[bytes, bytes], lua_function(engine, b"Epsilook.Shell.ResultLines")(spell, counts, axes))
+    return head.decode(), actions.decode()
+
+
+def test_a_result_is_the_spell_then_its_actions(engine: LuaRuntime) -> None:
+    head, actions = result(engine, 133)
+    assert head.startswith("|cffffd100133|r - |cffffffff|Hspell:133|h[Fireball]|h|r")
+    assert "5 model" in head and "12 sound" in head
+    assert actions.startswith("      ")
     for verb, label in (("learn", "Learn"), ("cast", "Cast"), ("inspect", "Inspect")):
-        assert f"|Hepsilook:133:{verb}|h[{label}]|h" in text
-    assert "5 model" in text and "12 sound" in text
+        assert f"|Hepsilook:133:{verb}|h[{label}]|h" in actions
 
 
 def test_a_lone_spell_is_an_inspection(engine: LuaRuntime) -> None:
@@ -111,8 +115,5 @@ def test_the_aura_word_is_offered_only_where_an_aura_is_applied(engine: LuaRunti
     # Kneel 317228 applies an aura; Fireball 133 does not.
     assert has(api, 317228, b"mech", b"aura") is True
     assert has(api, 133, b"mech", b"aura") is False
-    axes = method(api, b"GetPartAxes")(api)
-    line = lua_function(engine, b"Epsilook.Shell.ResultLine")
-    fireball = cast(bytes, line(method(api, b"GetSpellDataByID")(api, 133), method(api, b"GetPartCounts")(api, 133), axes)).decode()
-    kneel = cast(bytes, line(method(api, b"GetSpellDataByID")(api, 317228), method(api, b"GetPartCounts")(api, 317228), axes)).decode()
-    assert "[Aura]" not in fireball and "[Aura]" in kneel
+    assert "[Aura]" not in result(engine, 133)[1]
+    assert "[Aura]" in result(engine, 317228)[1]
