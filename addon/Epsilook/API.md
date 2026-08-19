@@ -124,6 +124,7 @@ descending); a column door keys by how many rows the spell has, a spell-level co
 | `Epsilook:ParseQuery(text)`                    | the query (opaque) and a list of `Problem`; what parsed evaluates           |
 | `Epsilook:FormatQuery(query)`                  | the query written back as text                                              |
 | `Epsilook:IsQueryEmpty(query)`                 | `true` where no clause evaluates                                            |
+| `Epsilook:IsQuerySorted(query)`                | `true` where the query orders its answer (a walk over every spell first)    |
 | `Epsilook:GetQueryHelp()`                      | `{ columns, heads, operators }`, each with hints, read off the declarations |
 | `Epsilook:FindSpells(query, fromIndex, slice)` | an iterator; see below                                                      |
 | `Epsilook:GetNumMatches(query)`                | how many spells satisfy the query; a full walk                              |
