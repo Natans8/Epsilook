@@ -57,10 +57,14 @@ export const GRAMMAR = {
     countWord: "count",
 
     /**
-     * The ordering directive: `sort:<door>` orders the results by that door, `-sort:<door>` the other way, several
-     * applied in the order written. A directive, not a clause: it selects nothing.
+     * The ordering directive: `sort:<door>` orders the results by that door, `sort:-<door>` or `-sort:<door>` the
+     * other way (either exclusion, and both together, mean the same), several applied in the order written. A
+     * directive, not a clause: it selects nothing. Bare `sort` is `sort:` of the default door.
      */
     sortWord: "sort",
+
+    /** The door a bare `sort` orders by: the spell's id. */
+    sortDefault: "id",
 
     /**
      * The word synonym of the wildcard, in every position that reads a bound value — a typed way in, and the word

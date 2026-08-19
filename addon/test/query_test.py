@@ -75,11 +75,18 @@ def test_an_operator_glued_to_a_phrase_reads_the_phrase(engine: LuaRuntime) -> N
 
 
 def test_a_sort_directive_is_kept_apart_from_the_clauses(engine: LuaRuntime) -> None:
-    tree = parsed(engine, "name:fire sort:cast -sort:id")
+    tree = parsed(engine, "name:fire sort:cast sort:-id")
     sorts = cast(list[Record], tree["sorts"])
     assert [s["descending"] for s in sorts] == [False, True]
     assert len(cast(list[object], tree["groups"])) == 1
-    assert lua_function(engine, b"Epsilook.Query.Format")(lua_function(engine, b"Epsilook.Query.Parse")(b"name:fire -sort:id")) == b"name:fire -sort:id"
+    fmt = lua_function(engine, b"Epsilook.Query.Format")
+    parse = lua_function(engine, b"Epsilook.Query.Parse")
+    assert fmt(parse(b"name:fire sort:-id")) == b"name:fire sort:-id"
+    # Either exclusion, and both, mean the other way; bare sort is sort:id.
+    assert fmt(parse(b"-sort:id")) == b"sort:-id"
+    assert fmt(parse(b"-sort:-id")) == b"sort:-id"
+    assert fmt(parse(b"fire sort")) == b"fire sort:id"
+    assert fmt(parse(b"-sort")) == b"sort:-id"
     # A word that is no head is refused, and a sort alone still asks.
     assert parsed(engine, "sort:bogus")["problems"]
     api = lua_table(engine, b"Epsilook")

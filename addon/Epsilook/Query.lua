@@ -4,8 +4,8 @@
 -- the addon carries: plain terms, `head:value`, `-` to exclude, `|` or `or`
 -- between clauses, a quoted phrase, a comparison, a range, a comma list, `*`
 -- for existence, a row scope `head:{...}` whose terms one row must satisfy
--- together, and the ordering directive `sort:<door>`, `-sort:<door>` for the
--- other way, applied in the order written. Alternatives in parentheses and
+-- together, and the ordering directive `sort:<door>`, `sort:-<door>` for the
+-- other way, applied in the order written, bare `sort` ordering by id. Alternatives in parentheses and
 -- patterns are refused with a message rather than read, so a query that
 -- parses here means the same thing on the web.
 --
@@ -1315,25 +1315,46 @@ function Parser:bound(start, negated, head, vpos, limit)
 end
 
 --- An ordering directive: `sort:` and a door word, which must resolve to
--- a head -- a column, a kind or a property. The directive is kept apart
--- from the clauses, since it selects nothing: the exclusion on it means the
--- other way round.
+-- a head -- a column, a kind or a property. The exclusion before the word
+-- or before the sort word means the other way round, and both together mean
+-- it still: `sort:-cast`, `-sort:cast`, `-sort:-cast`. The directive is kept
+-- apart from the clauses, since it selects nothing. A bare `sort` orders by
+-- the default door, the spell's id.
+-- @param vpos where the door word starts, or nil for a bare sort
 -- @return the position to continue from
 function Parser:sorted(start, negated, vpos, limit)
-	local segs, stop = self:token(vpos, limit)
-	local word = segs[1] and segs[1].form == "bare" and Text.fold(segs[1].text) or ""
-	local head = word ~= "" and Schema.HeadOf(word) or nil
+	local grammar = Schema.grammar
+	local text, stop = grammar.sortDefault, vpos
+	if vpos then
+		local segs
+		segs, stop = self:token(vpos, limit)
+		text = segs[1] and segs[1].form == "bare" and segs[1].text or ""
+	else
+		stop = start + #grammar.sortWord + (negated and #grammar.negate or 0)
+	end
+	local descending = negated
+	if text:sub(1, #grammar.negate) == grammar.negate then
+		descending = true
+		text = text:sub(#grammar.negate + 1)
+	end
+	local head = text ~= "" and Schema.HeadOf(Text.fold(text)) or nil
 	local span = { start = start, stop = stop - 1 }
 	if not head then
+		local example = grammar.sortWord .. grammar.bind
 		self:push(span, negated, "invalid", nil, {
 			{
-				message = Schema.grammar.sortWord
-					.. " takes a head word, as in sort:name or -sort:model",
+				message = grammar.sortWord
+					.. " takes a head word, as in "
+					.. example
+					.. "name or "
+					.. example
+					.. grammar.negate
+					.. "model",
 			},
 		})
 		return stop
 	end
-	self.sorts[#self.sorts + 1] = { head = head, descending = negated, span = span }
+	self.sorts[#self.sorts + 1] = { head = head, descending = descending, span = span }
 	return stop
 end
 
@@ -1360,8 +1381,13 @@ function Parser:clause(i, limit)
 	local j = self:wordEnd(i, limit)
 	if j > i then
 		local word = Text.fold(sub(self.text, i, j - 1))
-		if word == grammar.sortWord and j <= limit and self:char(j) == grammar.bind then
-			return self:sorted(start, negated, j + 1, limit)
+		if word == grammar.sortWord then
+			local after = j <= limit and self:char(j) or ""
+			if after == grammar.bind then
+				return self:sorted(start, negated, j + 1, limit)
+			elseif after == "" or isWs(after) then
+				return self:sorted(start, negated, nil, limit)
+			end
 		end
 		local head = Schema.HeadOf(word)
 		if head then
@@ -1559,9 +1585,9 @@ function Query.Format(parsed)
 	end
 	local out = table.concat(groups, " " .. grammar["or"] .. " ")
 	for _, sort in ipairs(parsed.sorts or {}) do
-		local word = (sort.descending and grammar.negate or "")
-			.. grammar.sortWord
+		local word = grammar.sortWord
 			.. grammar.bind
+			.. (sort.descending and grammar.negate or "")
 			.. Schema.HeadWord(sort.head)
 		out = out == "" and word or (out .. " " .. word)
 	end

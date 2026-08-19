@@ -110,8 +110,8 @@ action needs and the list says which actions an axis affords, and doing one is t
 The query language is the web app's, read from the same declarations; `/elo help` prints it from the data. Plain
 terms, `head:value`, `-` to exclude, `|` or `or` between clauses, a quoted phrase, a comparison, a range, a comma
 list, `*` for existence, a row scope `head:{...}` whose terms one row must satisfy together, and the ordering
-directive `sort:<head>` (`-sort:<head>` for the other way), several applied in the order written. Alternatives in
-parentheses and regular expressions are refused with a message.
+directive `sort:<head>` (`sort:-<head>` or `-sort:<head>` for the other way; bare `sort` is `sort:id`), several
+applied in the order written. Alternatives in parentheses and regular expressions are refused with a message.
 
 A sort orders the whole answer, so under one the iterator walks every spell before it yields its first hit, keeps the
 order on the parsed query for later pages, and the index it hands back is a position in that order rather than a
@@ -138,7 +138,7 @@ function a driver may set (the shell sets a yield taken only inside a coroutine)
 through.
 
 ```lua
-local query, problems = Epsilook:ParseQuery("model:{fire missile} -anim:kit -sort:cast")
+local query, problems = Epsilook:ParseQuery("model:{fire missile} -anim:kit sort:-cast")
 local step = Epsilook:FindSpells(query, nil, 500)
 while true do
     local row, id, resume = step()
