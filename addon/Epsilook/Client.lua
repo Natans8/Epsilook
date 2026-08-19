@@ -59,6 +59,12 @@ Client.ROUTES = {
 		return get and get(spellID) or nil
 	end,
 
+	["C_Spell.DoesSpellExist"] = function(spellID)
+		local spell = _G.C_Spell
+		local exists = spell and spell.DoesSpellExist
+		return exists and exists(spellID) or nil
+	end,
+
 	["C_Epsilon.SoundKit_Get"] = function(index)
 		local epsilon = _G.C_Epsilon
 		local get = epsilon and epsilon.SoundKit_Get

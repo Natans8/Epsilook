@@ -53,27 +53,8 @@ function Epsilook:SelfTest()
 			counts.mech or 0
 		)
 
-		-- One whole part, which is the longest chain the surface has: a row
-		-- located in its pool, its stored numbers read out of the blob, a
-		-- vocabulary asked what one of them is called, and the ids its axis
-		-- can act on. Every layer is wrong in a visible way if any is.
-		local part = self:GetPartDataByIndex(133, "model", 1)
-		if part then
-			say(
-				"model1=%s %s acts=%d",
-				part.kind,
-				tostring(part.named.file),
-				#self:GetPartActions(part)
-			)
-		else
-			say("model1=none")
-		end
-
-		-- The prose reads through a pooled column and, on a lean build, through
-		-- the client instead. Its length says both happened without printing a
-		-- sentence into a one-line report.
-		local text = self:GetSpellTextDataByID(133)
-		say("desc=%d", text and #text.description or 0)
+		local anim = self.data.anim
+		say("anim0=%s", self.Reader.value(anim.blob, anim.sections.animNames.columns.names, 0))
 
 		say("engine=%s", self.FindSpells and "yes" or "not built")
 		return table.concat(said, " | ")

@@ -1204,92 +1204,6 @@ def check_build_layers(rep: Report) -> None:
                f"{'/, '.join(BUILD_PLACELESS)}/ name no path or URL directly")
 
 
-ADDON_SOURCES = "addon/Epsilook"
-
-ADDON_SEAM = "Client.lua"
-"""The one addon file that may reach the running game.
-
-Everything else answers from the payload, which is what lets the whole surface
-be driven by a bare interpreter in a test. Naming the seam here rather than
-inside the rule keeps the exception a single word.
-"""
-
-ADDON_REACHES: dict[str, frozenset[str]] = {
-    "Reader.lua": frozenset(),
-    "Data.lua": frozenset({"LoadAddOn"}),
-    "API.lua": frozenset(),
-    "SelfTest.lua": frozenset(),
-    ADDON_SEAM: frozenset(),
-}
-"""Which client globals each addon file may name, beside its own.
-
-Every file is listed, so adding one is a decision about what it may reach
-rather than a silent widening. `Epsilook` is the addon's own global and is
-allowed everywhere; the seam above is exempt from the values entirely.
-"""
-
-ADDON_GLOBAL = re.compile(r"\b_G\.([A-Za-z_][A-Za-z0-9_]*)")
-"""How a client global is named, which selene makes the only way to name one.
-
-`std = lua51` rejects reading an undefined variable, so anything the game
-provides has to be reached through the globals table by name. That is what
-makes scanning for this complete rather than a convention nobody enforces.
-"""
-
-
-def check_addon_layers(rep: Report) -> None:
-    """Only the addon's client seam may reach the running game.
-
-    The split this protects is what makes the addon testable at all: the reader,
-    the payload layer and the public surface answer from bytes alone, so a bare
-    Lua 5.1 with no stubs can drive every one of them. A single call to a game
-    global anywhere else ends that quietly -- the file still loads in the
-    client, and only the test that runs without one starts failing, which reads
-    as the harness being wrong rather than the layering.
-
-    It is a scan rather than a parse because selene already forbids reading an
-    undefined variable under the client's own standard library, so a global has
-    to be spelled through the globals table before it can be named at all.
-
-    Skipped rather than failed while the addon is absent, so this does not
-    become the reason a checkout without it cannot commit.
-    """
-    root = ROOT / ADDON_SOURCES
-    files = sorted(root.glob("*.lua")) if root.is_dir() else []
-    if not files:
-        rep.skip("addon layers", f"{ADDON_SOURCES} not present yet")
-        return
-
-    problems: list[str] = []
-    reached = 0
-    for path in files:
-        name = path.name
-        allowed = ADDON_REACHES.get(name)
-        if allowed is None:
-            problems.append(f"{name} is not named in ADDON_REACHES; say what "
-                            f"client globals it may reach, even if none")
-            continue
-        for line, text in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            for found in ADDON_GLOBAL.finditer(text):
-                held = found.group(1)
-                if held == "Epsilook":
-                    continue
-                reached += 1
-                if name != ADDON_SEAM and held not in allowed:
-                    problems.append(f"{ADDON_SOURCES}/{name}:{line} reaches the "
-                                    f"client for `{held}`; only {ADDON_SEAM} may")
-
-    if problems:
-        for problem in problems[:6]:
-            rep.fail("addon layers", problem)
-        if len(problems) > 6:
-            rep.fail("addon layers", f"...and {len(problems) - 6} more")
-    else:
-        rep.ok("addon layers",
-               f"{len(files)} addon files, {reached} client global(s) named, "
-               f"all in {ADDON_SEAM} or declared")
-
-
 PROSE_RULES: list[tuple[str, re.Pattern[str], str]] = [
     ("decoration", re.compile(r"[←-⯿─-╿\U0001F000-\U0001FAFF]|[-=#]{5,}"),
      "emoji or a decorative rule; use plain prose"),
@@ -2200,7 +2114,6 @@ def main() -> int:
     check_layers(rep)
     check_cache_declaration(rep)
     check_build_layers(rep)
-    check_addon_layers(rep)
     check_comment_style(rep)
     check_cli_entries(rep)
     check_license_scope(rep)

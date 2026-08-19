@@ -8,13 +8,6 @@
 Dockerfile      text eol=lf
 *.dockerignore  text eol=lf
 
-# The addon's Lua, for the same reason one layer along: stylua is configured
-# for Unix endings and rejects a whole file that carries anything else, so
-# without this the format gate fails on a fresh checkout here, having passed
-# for whoever committed it. The blobs are already LF; this keeps the working
-# tree that way too.
-*.lua           text eol=lf
-
 # The data packs live in Git LFS, and Pages is built by GitHub Actions.
 #
 # These two facts are COUPLED and must change together. Pages does NOT resolve
