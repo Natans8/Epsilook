@@ -50,7 +50,7 @@ def test_a_lone_spell_is_an_inspection(engine: LuaRuntime) -> None:
 def test_only_a_leading_subcommand_word_is_taken(engine: LuaRuntime) -> None:
     split = lua_function(engine, b"Epsilook.Shell.Split")
     assert split(b"Next") == (b"next", b"")
-    assert split(b"next") == (b"next", b"")
+    assert split(b"count model:missile") == (b"count", b"model:missile")
     assert split(b"nextdoor fire") == (None, b"nextdoor fire")
     assert split(b'name:"next fire"') == (None, b'name:"next fire"')
 
