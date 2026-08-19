@@ -516,8 +516,16 @@ local INSERTS = {
 			return gameLink("creature_entry", number, name)
 		end,
 	},
+	native = {
+		hint = "Shift-click to type this display id into chat, as .mod native takes it",
+		text = bare,
+	},
 	morph = {
 		hint = "Shift-click to type this display id into chat, as .morph takes it",
+		text = bare,
+	},
+	mount = {
+		hint = "Shift-click to type this display id into chat, as .mod mount takes it",
 		text = bare,
 	},
 	anim = {
@@ -889,7 +897,9 @@ local COMMANDS = {
 	add = "additem %s",
 	lookup = "lookup item %s",
 	summon = "npc spawn %s",
+	native = "mod native %s",
 	morph = "morph %s",
+	mount = "mod mount %s",
 	anim = "mod anim %s",
 	stand = "mod standstate %s",
 }
