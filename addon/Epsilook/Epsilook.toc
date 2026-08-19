@@ -14,4 +14,6 @@ Query.lua
 Match.lua
 Search.lua
 API.lua
+Shell.lua
+Inspect.lua
 SelfTest.lua
