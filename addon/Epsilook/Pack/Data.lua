@@ -122,7 +122,7 @@ function Data.GetInfo(target)
 	return out
 end
 
---- The query language's declarations, as the web engine exported them.
+--- The query language's declarations, as the data addon carries them.
 function Data.GetSchema()
 	return Epsilook.schema
 end

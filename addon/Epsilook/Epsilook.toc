@@ -7,16 +7,24 @@
 ## X-Website: https://natans8.github.io/Epsilook/
 ## SavedVariables: EpsilookSettings
 
-Config.lua
-Reader.lua
-Data.lua
-Text.lua
-Schema.lua
-Query.lua
-Match.lua
-Search.lua
+# The pack, read: bytes to values, and the mount that says where a column lives.
+Pack\Reader.lua
+Pack\Data.lua
+Pack\Text.lua
+
+# The query language and the kernel that answers it.
+Engine\Schema.lua
+Engine\Query.lua
+Engine\Match.lua
+Engine\Search.lua
+
+# The supported surface, which returns data and performs nothing.
 API.lua
-Shell.lua
-Inspect.lua
-Options.lua
+
+# The interfaces over it. Config is below them all and the engine never reads it.
+Interface\Config.lua
+Interface\Shell.lua
+Interface\Inspect.lua
+Interface\Options.lua
+
 SelfTest.lua

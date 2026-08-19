@@ -279,7 +279,7 @@ end
 
 --- One part of one spell: the n'th row it has on an axis.
 -- The row's properties are read by name as the catalogue declares them and
--- resolved the way the web engine resolves them: a property whose first two
+-- resolved the way the declarations call for: a property whose first two
 -- notations are an id and a name carries both, one whose number names a
 -- vocabulary entry carries that entry, and any other carries its number. One
 -- generic read, no per-kind code.

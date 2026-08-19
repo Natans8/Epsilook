@@ -1,13 +1,13 @@
 --- The parser: query text in, a tree of plain data out.
 --
--- The tree is the one the web engine's parser emits, cut down to the grammar
+-- The tree is the query language's, cut down to the grammar
 -- the addon carries: plain terms, `head:value`, `-` to exclude, `|` or `or`
 -- between clauses, a quoted phrase, a comparison, a range, a comma list, `*`
 -- for existence, a row scope `head:{...}` whose terms one row must satisfy
 -- together, and the ordering directive `sort:<door>`, `sort:-<door>` for the
 -- other way, applied in the order written, bare `sort` ordering by id. Alternatives in parentheses and
 -- patterns are refused with a message rather than read, so a query that
--- parses here means the same thing on the web.
+-- parses here means what the language says it means.
 --
 -- Every character and word the grammar uses is read off the exported schema at
 -- load -- the bind, the phrase quote, the wildcard, the count and or words --
@@ -47,7 +47,7 @@ local function linksToIds(text)
 	return out
 end
 
---- The interpretations of a value, as the web's parser names them.
+--- The interpretations of a value, as the language names them.
 local function content(value)
 	return { r = "content", value = value }
 end
@@ -579,7 +579,7 @@ local function alternative(text, ctx, alone)
 		return ranged
 	end
 	if find(text, grammar.wildcard, 1, true) then
-		return fail("patterns are not supported here; the web app reads them")
+		return fail("patterns are not supported here")
 	end
 	return ctx.bare(text, alone)
 end
@@ -1527,8 +1527,8 @@ end
 --- One clause written back as query text.
 -- The operator replaces the colon on a bind that has one: `cast>2s`, never
 -- `cast:>2s`. An inner bind keeps its property's name: `model:file=foo`. A
--- kind's existence is spelled through its column, the shortest form the web's
--- simplifier converges on.
+-- kind's existence is spelled through its column, which is the shortest form
+-- the language has for it.
 local function formatClause(clause)
 	local grammar = Schema.grammar
 	local ask = clause.ask

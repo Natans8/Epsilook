@@ -1,16 +1,16 @@
 --- The query language's declarations, made answerable.
 --
--- The data addon carries the declarations the web engine was built from: the
+-- The data addon carries the language's declarations: the
 -- grammar's own characters and words, its columns, the kinds each column
 -- yields, the properties a kind carries and the types those properties are
 -- read in. This file indexes them once and answers the questions the parser
 -- and the evaluator ask -- which word is a head, which kind a word names
 -- inside a column, how an operand reads against a property -- so that neither
 -- of those files holds a word of the language itself. A door renamed or a
--- kind added on the web reaches the addon through the data and an edit
+-- kind added to the language reaches this addon through the data and an edit
 -- nowhere here.
 --
--- Reading a value follows the web rule for rule: a sentinel word is read
+-- Reading a value follows one order: a sentinel word is read
 -- before any notation, the notations are then tried in declaration order and
 -- the first to accept the operand wins, and a range's two bounds are read in
 -- one notation or not at all.
@@ -374,7 +374,7 @@ local function wholeNumber(text)
 end
 
 --- One operand read as a value of one type, by the type's own rule.
--- Mirrors the web's per-type readers: text is itself, a whole number is an
+-- The per-type readers: text is itself, a whole number is an
 -- identity or a count, a numeric type dispatches over its notations, a colour
 -- is a hex triplet or a name, a role is one of the closed set, an ordinal is a
 -- rung of the ladder. A type with no reader here reads nothing.

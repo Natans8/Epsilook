@@ -36,12 +36,16 @@ TOC = CODE / "Epsilook.toc"
 
 
 def toc_files() -> list[Path]:
-    """The Lua files the toc loads, in order."""
+    """The Lua files the toc loads, in order.
+
+    A toc names a file the client's way, with backslashes, so the separator is
+    turned round before the path is built and the tree reads on any system.
+    """
     out = []
     for line in TOC.read_text(encoding="utf-8").splitlines():
         name = line.strip()
         if name and not name.startswith("#"):
-            out.append(CODE / name)
+            out.append(CODE.joinpath(*name.replace("\\", "/").split("/")))
     return out
 
 

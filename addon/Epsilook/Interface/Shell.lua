@@ -50,7 +50,7 @@ Shell.COLOURS = { gold = GOLD, white = WHITE, blue = BLUE, cyan = CYAN, grey = G
 
 --- The tone each axis wears: on a count in a result line, and on the label
 -- of every part line in the dossier, so a section reads as one by its
--- colour. The web app's own hue per column -- model blue, sound green, anim
+-- colour. One hue per column -- model blue, sound green, anim
 -- violet, fx teal, mech orange -- saturated for chat, and apart from the
 -- `.lookup` colours the ids, names, links and actions keep.
 Shell.AXIS_COLOURS = {
@@ -121,6 +121,13 @@ end
 
 --- The word at the bottom of a full page, which pages on.
 local NEXT = { key = "next", label = "Next", hint = "The next %d results" }
+
+--- The project's page, and the one place this addon names it.
+Shell.WEBSITE = "https://natans8.github.io/Epsilook/"
+
+--- The word on the help's last line, which hands the address over. A chat
+-- frame cannot be selected, so the address goes to a frame that can be.
+local SITE = { key = "website", label = "Website", hint = "Copy the address" }
 
 --- How tall an icon draws on a line, in pixels.
 Shell.ICON = 16
@@ -300,7 +307,7 @@ end
 -- message, followed by a space, puts everything after it inside that head's
 -- row scope, so `model fire missile` is `model:{fire missile}` and asks for
 -- one model with both. The leniency is the shell's, not the grammar's --
--- the query the engine sees is one the web reads the same way -- and a head
+-- the query the engine sees is one the language reads the same way -- and a head
 -- bound with the colon, as in `model:fire missile`, is left exactly as typed. A
 -- rest already in braces is bound as it is, and a property head, which takes
 -- one value and no scope, binds to the first token alone. A head word on its
@@ -524,10 +531,9 @@ function Shell.HelpLines()
 		.. grammar.scope.open
 		.. "fire missile"
 		.. grammar.scope.close
-		.. "; a head word alone asks for any: /elo model is model"
-		.. grammar.bind
-		.. grammar.wildcard
+		.. "; a kind word alone asks for any of it, and a column word alone prints its doors"
 		.. END
+	lines[#lines + 1] = GREY .. "Epsilook  " .. END .. Shell.Link(0, SITE.key, SITE.label)
 	return lines
 end
 
@@ -787,6 +793,8 @@ function Shell.Execute(spellID, verb, axis, n)
 	local action = not axis and spellAction(verb)
 	if axis then
 		Epsilook.Inspect.Execute(spellID, verb, axis, n, say)
+	elseif verb == SITE.key then
+		Shell.CopyWebsite()
 	elseif verb == NEXT.key then
 		Shell.SUBCOMMANDS.next()
 	elseif action and action.command then
@@ -838,6 +846,40 @@ function Shell.Type(text)
 	end
 end
 
+--- Put the address where it can be selected and copied: a chat frame cannot
+-- be. The copy frame most players here already have is asked first, and
+-- without it a dialog of our own holds the address highlighted, so the word
+-- works on a bare install too.
+function Shell.CopyWebsite()
+	local arc = _G.ARC
+	if arc and arc.COPY then
+		arc:COPY(Shell.WEBSITE)
+		return
+	end
+	local dialogs, show = _G.StaticPopupDialogs, _G.StaticPopup_Show
+	if not dialogs or not show then
+		return
+	end
+	dialogs.EPSILOOK_WEBSITE = {
+		text = "Epsilook",
+		button1 = _G.CLOSE or "Close",
+		hasEditBox = true,
+		editBoxWidth = 260,
+		timeout = 0,
+		whileDead = true,
+		hideOnEscape = true,
+		OnShow = function(dialog)
+			local box = dialog.editBox
+			if box then
+				box:SetText(Shell.WEBSITE)
+				box:HighlightText()
+				box:SetFocus()
+			end
+		end,
+	}
+	show("EPSILOOK_WEBSITE")
+end
+
 --- Send one dot-command to the server, without its leading dot.
 -- The command library this client ships carries the command as an addon
 -- message and hands its output back; where the library is absent the
@@ -871,7 +913,9 @@ function Shell.OnHyperlinkEnter(frame, link)
 	tooltip:SetOwner(frame, "ANCHOR_CURSOR")
 	local action = spellAction(verb)
 	local hint = action and action.hint
-	if verb == NEXT.key then
+	if verb == SITE.key then
+		tooltip:SetText(SITE.hint, 1, 1, 1)
+	elseif verb == NEXT.key then
 		tooltip:SetText(NEXT.hint:format(Shell.Page()), 1, 1, 1)
 	elseif axis and verb == Epsilook.Inspect.LIST then
 		Epsilook.Inspect.FillAxisTooltip(tooltip, id, axis)

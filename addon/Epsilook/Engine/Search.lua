@@ -6,7 +6,7 @@
 -- reading, which is why a query of nothing but exclusions starts from every
 -- spell. The kernel branches on the tree's structure and the declarations --
 -- never on a column's name, a kind's name or a type's name -- so a kind
--- added on the web reaches it through the data. The one place a kind is
+-- added to the language reaches it through the data. The one place a kind is
 -- named is the table of readers for the spell's own rows, which the pack
 -- ships as per-spell columns rather than as a row table, and that table is
 -- keyed by the kind's identity so that a renamed door does not move it.
@@ -65,9 +65,9 @@ local DELIVERY_CHANNELLED, DELIVERY_BREAKS_ON_MOVE = 1, 2
 
 --- Which attribute column of `spellAttrs` answers a flag property of the
 -- delivery kind. The catalogue names the property and the build names the
--- column, and neither declares the other; the web engine holds the same two
--- pairs, so a third would be a declaration on the property in the web's
--- catalogue, exported, and read here in its place.
+-- column, and neither declares the other, so the pair is stated here. A third
+-- would arrive as a declaration on the property and be read from the data in
+-- place of this table.
 local ATTRIBUTE_COLUMNS =
 	{ unbreakable = "unbreakablechannel", unhindered = "actionsduringchannel" }
 
@@ -772,8 +772,7 @@ end
 
 --- One scope conjunction compiled for one kind: the product of its row
 -- terms on one slot, a negated term negating per row. A term no row of the
--- kind can satisfy is false there, which a negation makes true, as it is on
--- the web.
+-- kind can satisfy is false there, which a negation makes true.
 local function conjunctionTest(cache, kind, rowTerms, virtual)
 	local tests, n = {}, #rowTerms
 	for i, term in ipairs(rowTerms) do

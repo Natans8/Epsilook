@@ -1,6 +1,6 @@
 --- How text is folded for matching, and how a folded operand becomes a pattern.
 --
--- The web engine folds both sides of a match: typography is normalised, case
+-- Matching folds both sides: typography is normalised, case
 -- is dropped, and for a substring test everything that is not a letter or a
 -- digit is removed, so `fire ball` finds `Fireball`. The addon cannot afford to
 -- fold a stored column -- the columns are one string each, and folding one
@@ -10,7 +10,7 @@
 -- anything that is not a letter or a digit. One `string.find` over a column
 -- then answers what folding both sides would have, at no copy.
 --
--- Two things the web does that this does not, deliberately. Letter case is
+-- Two narrowings, deliberate. Letter case is
 -- folded for the ASCII letters only, because that is the case the client's
 -- own `string.lower` knows; a name in another alphabet still matches when
 -- typed in its own case. And regional spellings are not folded: `colour` does

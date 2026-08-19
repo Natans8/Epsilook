@@ -120,7 +120,7 @@ action needs and the list says which actions an axis affords, and doing one is t
 
 ## Queries
 
-The query language is the web app's, read from the same declarations; `/elo help` prints it from the data. Plain terms,
+The query language is read from the declarations the data carries; `/elo help` prints it from them. Plain terms,
 `head:value`, `-` to exclude, `|` or `or` between clauses, a quoted phrase, a comparison, a range, a comma list, `*` for
 existence, a row scope `head:{...}` whose terms one row must satisfy together, and the ordering directive `sort:<head>`
 (`sort:-<head>` or `-sort:<head>` for the other way; bare `sort` is `sort:id`), several applied in the order written.
@@ -192,7 +192,7 @@ one reader. Values are saved account-wide in `EpsilookSettings`; `/elo options` 
 `Epsilook.data.<axis>` holds each axis file's payload as the emitter wrote it: a header describing columns and one long
 string per axis holding every value, numbers as fixed-stride base-64 groups and text verbatim. `Epsilook.Reader`
 reads a column by row from the header and the string; `Epsilook.Data` mounts the columns and answers the layer above
-(`GetColumn`, `ReadAll`, `GetRowTable`, `GetStored`, `GetCarried`, `Lookup`). `Epsilook.schema` is the web engine's
+(`GetColumn`, `ReadAll`, `GetRowTable`, `GetStored`, `GetCarried`, `Lookup`). `Epsilook.schema` is the language's
 declarations as exported: columns, kinds and properties, value types and their notations, operators, target roles and
 words, colour names, and the grammar's own characters and words. `Epsilook.index` is the data addon's manifest:
 pack, build date, format, and which columns the client could supply.

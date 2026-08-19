@@ -1511,10 +1511,11 @@ def check_delivery_declaration(rep: Report) -> None:
         return
     # The addon reads the same flags, and can import the build no more than the
     # app can; its declaration is one line and is reconciled here the same way.
-    lua = (ROOT / "addon" / "Epsilook" / "Search.lua").read_text(encoding="utf-8")
+    lua = (ROOT / "addon" / "Epsilook" / "Engine" / "Search.lua").read_text(encoding="utf-8")
     match = re.search(r"^local DELIVERY_CHANNELLED, DELIVERY_BREAKS_ON_MOVE = (\d+), (\d+)$", lua, re.MULTILINE)
     if match is None:
-        rep.fail("delivery flag bits", "addon/Epsilook/Search.lua no longer declares the two bits on one line")
+        rep.fail("delivery flag bits",
+                 "addon/Epsilook/Engine/Search.lua no longer declares the two bits on one line")
         return
     if int(match.group(1)) != CHANNELLED or int(match.group(2)) != BREAKS_ON_MOVE:
         rep.fail("delivery flag bits",
