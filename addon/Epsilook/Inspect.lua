@@ -89,10 +89,10 @@ end
 
 --- The values a part carries, each written, in the catalogue's order.
 -- @param part a PartData
--- @return a list of { name, text, id, path, colour, stored }: the property,
---   its value as written, the stored id where the value resolved from one,
---   whether it is a file path, the packed colour where it is one, and the
---   stored number itself
+-- @return a list of { name, text, id, path, number, colour, stored }: the
+--   property, its value as written, the stored id where the value resolved
+--   from one, whether it is a file path, whether it is a bare id, the packed
+--   colour where it is one, and the stored number itself
 function Inspect.Values(part)
 	local kind = Epsilook.Schema.kindById[part.axis .. "." .. part.kind]
 	local out = {}
@@ -104,6 +104,7 @@ function Inspect.Values(part)
 				text = Epsilook:FormatPartValue(part.axis, part.kind, prop.name, value),
 				id = type(value) == "table" and value.id or nil,
 				path = prop.types[1] == "path",
+				number = prop.types[1] == "id" and type(value) ~= "table",
 				colour = prop.types[1] == "colour" and value or nil,
 				stored = Epsilook.Data.GetStored(part.axis, part.kind, part.slot, prop.name),
 			}
@@ -199,23 +200,35 @@ local function itemShown(id, name)
 	return name, icon, colour
 end
 
---- The subject of a list of values: the first that says anything, moved to
--- the front, so a blank name yields to the id or the file beside it.
+--- The values with one moved to the front.
+local function leading(values, i)
+	if i == 1 then
+		return values
+	end
+	local out = { values[i] }
+	for j, other in ipairs(values) do
+		if j ~= i then
+			out[#out + 1] = other
+		end
+	end
+	return out
+end
+
+--- The subject of a list of values: the first that names something, moved
+-- to the front -- a bare id yields to a name beside it, so a kit shows by
+-- its animation rather than its number, and a blank name yields to the id
+-- or the file beside it.
 -- @param values as Inspect.Values gives them
 -- @return the values with the subject first, possibly empty
 local function led(values)
 	for i, value in ipairs(values) do
+		if value.text ~= "" and not value.number then
+			return leading(values, i)
+		end
+	end
+	for i, value in ipairs(values) do
 		if value.text ~= "" or value.id then
-			if i == 1 then
-				return values
-			end
-			local out = { value }
-			for j, other in ipairs(values) do
-				if j ~= i then
-					out[#out + 1] = other
-				end
-			end
-			return out
+			return leading(values, i)
 		end
 	end
 	return {}
@@ -519,7 +532,7 @@ local function line(spellID, part, n, indent, label, verb)
 		links = Shell.SpellActionLinks(subject.id)
 	elseif subject then
 		local shown, icon, colour = written(subject), nil, WHITE
-		local stated = nil
+		local stated = {}
 		if item then
 			-- A name the pack resolved is an id and a text; one it could not
 			-- is the bare stored number, and then the pack has no name.
@@ -530,10 +543,10 @@ local function line(spellID, part, n, indent, label, verb)
 			if name ~= "" then
 				shown = written({ text = name, id = id })
 			else
-				-- Nothing names the item; its model's name is what it goes by,
-				-- so the file beside it would say the same thing twice.
+				-- Nothing names the item; its model's name and id are what it
+				-- goes by, so the file and id beside it would say it twice.
 				shown = modelName(part) .. " - " .. id
-				stated = "file"
+				stated = { file = true, id = true }
 			end
 		end
 		local texture = Inspect.TEXTURES[part.axis .. "." .. part.kind]
@@ -555,7 +568,7 @@ local function line(spellID, part, n, indent, label, verb)
 			end
 			out = out .. colour .. shown .. END
 			for i = 2, #values do
-				if (values[i].text ~= "" or values[i].id) and values[i].name ~= stated then
+				if (values[i].text ~= "" or values[i].id) and not stated[values[i].name] then
 					out = out .. "  " .. beside(values[i])
 				end
 			end

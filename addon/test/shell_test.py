@@ -49,10 +49,10 @@ def test_a_lone_spell_is_an_inspection(engine: LuaRuntime) -> None:
 
 def test_only_a_leading_subcommand_word_is_taken(engine: LuaRuntime) -> None:
     split = lua_function(engine, b"Epsilook.Shell.Split")
-    assert split(b"count model:missile") == (b"count", b"model:missile")
-    assert split(b"More") == (b"more", b"")
-    assert split(b"countess fire") == (None, b"countess fire")
-    assert split(b'name:"more fire"') == (None, b'name:"more fire"')
+    assert split(b"Next") == (b"next", b"")
+    assert split(b"next") == (b"next", b"")
+    assert split(b"nextdoor fire") == (None, b"nextdoor fire")
+    assert split(b'name:"next fire"') == (None, b'name:"next fire"')
 
 
 def test_a_part_line_carries_its_actions(engine: LuaRuntime) -> None:
@@ -107,17 +107,17 @@ def test_the_spell_text_record_holds_the_pools(engine: LuaRuntime) -> None:
     assert method(api, b"GetSpellTextByID")(api, 0) is None
 
 
-def test_a_leading_head_word_binds_to_everything_after_it(engine: LuaRuntime) -> None:
+def test_a_leading_head_word_scopes_everything_after_it(engine: LuaRuntime) -> None:
     lenient = lua_function(engine, b"Epsilook.Shell.Lenient")
-    assert lenient(b"model 6dr") == b"model:6dr"
-    assert lenient(b"model 6dr fire") == b"model:6dr model:fire"
-    assert lenient(b"model 6dr -missile") == b"model:6dr -model:missile"
-    assert lenient(b"model 6dr | fire") == b"model:6dr | model:fire"
-    assert lenient(b"model 6dr sound:fire") == b"model:6dr sound:fire"
-    assert lenient(b'name "fire ball"') == b'name:"fire ball"'
+    assert lenient(b"model 6dr") == b"model:{6dr}"
+    assert lenient(b"model 6dr fire") == b"model:{6dr fire}"
+    assert lenient(b"model 6dr -missile") == b"model:{6dr -missile}"
+    assert lenient(b"model {6dr fire}") == b"model:{6dr fire}"
+    assert lenient(b'name "fire ball"') == b'name:{"fire ball"}'
     assert lenient(b"model:6dr fire") == b"model:6dr fire"
     assert lenient(b"fire model") == b"fire model"
     assert lenient(b"cast >2s") == b"cast:>2s"
+    assert lenient(b"cast >2s fire") == b"cast:>2s fire"
     assert lenient(b"fireball") == b"fireball"
 
 

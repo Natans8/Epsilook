@@ -15,7 +15,7 @@
 -- bare; only the dozen lines at the bottom touch the client.
 --
 -- Paging holds a cursor, not a result set: the last query's tree and the spell
--- row the page stopped at, so `more` resumes the walk from there. A search
+-- row the page stopped at, so `next` resumes the walk from there. A search
 -- runs as a job across frames, a budgeted slice of the walk per frame, so a
 -- query over every spell costs frames and never a freeze.
 
@@ -74,7 +74,7 @@ local function spellAction(verb)
 end
 
 --- The word at the bottom of a full page, which pages on.
-local NEXT = { key = "more", label = "Next", hint = "Click to view the next %d results" }
+local NEXT = { key = "next", label = "Next", hint = "Click to view the next %d results" }
 
 --- How tall an icon draws on a line, in pixels.
 Shell.ICON = 16
@@ -228,15 +228,13 @@ function Shell.Split(message)
 end
 
 --- A message read the way `.lookup` is typed: a head word that opens the
--- message, followed by a space, binds to everything after it, so
--- `model 6dr fire` is `model:6dr model:fire` and `model 6dr -missile` is
--- `model:6dr -model:missile`. The leniency is the shell's, not the grammar's
--- -- the query the engine sees is one the web reads the same way -- and a
--- head bound with the colon, as in `model:6dr fire`, is left exactly as
--- typed, as is any later token carrying its own head. An alternation symbol
--- or word between tokens stands as it is.
--- TODO: bind the rest as one row scope, `model:{6dr fire}`, once the engine
--- reads scopes; the kernel's row walk already takes tests per row.
+-- message, followed by a space, puts everything after it inside that head's
+-- row scope, so `model 6dr fire` is `model:{6dr fire}` and asks for one
+-- model with both. The leniency is the shell's, not the grammar's -- the
+-- query the engine sees is one the web reads the same way -- and a head
+-- bound with the colon, as in `model:6dr fire`, is left exactly as typed. A
+-- rest already in braces is bound as it is, and a property head, which takes
+-- one value and no scope, binds to the first token alone.
 -- @param message the query as typed
 -- @return the query as the engine reads it
 function Shell.Lenient(message)
@@ -245,35 +243,20 @@ function Shell.Lenient(message)
 	if not head or head:find(grammar.bind, 1, true) then
 		return message
 	end
-	if not Epsilook.Schema.HeadOf(Epsilook.Text.fold(head)) then
+	local resolved = Epsilook.Schema.HeadOf(Epsilook.Text.fold(head))
+	if not resolved then
 		return message
 	end
-	local out = { head }
-	local i, n = 1, #rest
-	while i <= n do
-		local token, after = rest:match('^(%b"")()', i)
-		if not token then
-			token, after = rest:match("^(%S+)()", i)
-		end
-		if not token then
-			i = rest:match("^%s*()", i)
-		else
-			i = after
-			local first = token:sub(1, 1)
-			if first == grammar["or"] or Epsilook.Text.fold(token) == grammar.orWord then
-				out[#out + 1] = token
-			elseif token:find(grammar.bind, 1, true) then
-				out[#out + 1] = token
-			elseif first == grammar.negate then
-				out[#out + 1] = grammar.negate .. head .. grammar.bind .. token:sub(2)
-			else
-				out[#out + 1] = head .. grammar.bind .. token
-			end
-		end
+	if resolved.role == "prop" then
+		-- A property takes one value and opens no scope: it binds to the
+		-- first token, and the rest stands as typed.
+		return head .. grammar.bind .. rest
 	end
-	-- The head itself is not a clause; it bound to what followed it.
-	table.remove(out, 1)
-	return table.concat(out, " ")
+	local open, close = grammar.scope.open, grammar.scope.close
+	if rest:sub(1, #open) == open and rest:sub(-#close) == close then
+		return head .. grammar.bind .. rest
+	end
+	return head .. grammar.bind .. open .. rest .. close
 end
 
 --- The help text: what the command takes, then the language read off the
@@ -292,10 +275,9 @@ function Shell.HelpLines()
 	end
 	local lines = {
 		title("Epsilook") .. GREY .. " searches Epsilon's spells from chat" .. END,
-		row("/elo <query>", "search; a page of " .. Shell.PAGE .. ", [Next] pages on"),
+		row("/elo <query>", "search; a page of " .. Shell.PAGE .. ", then how many match in all"),
 		row("/elo <id or spell link>", "inspect one spell"),
-		row("/elo count <query>", "how many match"),
-		row("/elo more", "the next page"),
+		row("/elo next", "the next page"),
 		row("/elo test", "the self-test"),
 		title("Columns")
 			.. GREY
@@ -419,10 +401,13 @@ local function run(job)
 	end)
 end
 
---- Where the last search stopped, for `more`.
+--- Where the last search stopped, for `next`.
 local paging
 
---- Print one page of results for a query, from a spell row, as a job.
+--- Print one page of results for a query, from a spell row, as a job, then
+-- walk on to the end for the total. The page prints as soon as it is full,
+-- the total arrives on its own line when the walk is done, so a wide query
+-- costs frames and never a wait before the first result.
 -- @param tree the parsed query
 -- @param text the query as typed, for the header
 -- @param fromIndex the spell row to resume from
@@ -450,30 +435,17 @@ local function page(tree, text, fromIndex)
 		if shown == 0 then
 			say(Shell.Said((fromIndex and "no more" or "nothing") .. " for " .. text))
 			paging = nil
-		elseif shown == Shell.PAGE then
-			paging = { tree = tree, text = text, index = last + 1 }
-			say(
-				Shell.Said(
-					shown
-						.. " shown - "
-						.. Shell.Link(0, NEXT.key, NEXT.label)
-						.. " - /elo count "
-						.. text
-						.. " for the total"
-				)
-			)
-		else
+			return
+		end
+		if shown < Shell.PAGE then
 			paging = nil
 			say(Shell.Said(shown .. " for " .. text))
+			return
 		end
-	end)
-end
-
---- Count a query's matches as a job, and print the total.
-local function count(tree, text)
-	run(function()
-		local step = Epsilook:FindSpells(tree, nil, Shell.SLICE)
-		local found = 0
+		paging = { tree = tree, text = text, index = last + 1 }
+		say(Shell.Said(shown .. " shown" .. Shell.DASH .. Shell.Link(0, NEXT.key, NEXT.label)))
+		-- The rest of the walk, for the total; the first page is already shown.
+		local total = shown
 		while true do
 			local at = step()
 			if at == nil then
@@ -481,10 +453,10 @@ local function count(tree, text)
 			elseif at == false then
 				coroutine.yield()
 			else
-				found = found + 1
+				total = total + 1
 			end
 		end
-		say(Shell.Said(found .. " match " .. text))
+		say(Shell.Said(total .. " match " .. text .. " in all"))
 	end)
 end
 
@@ -508,18 +480,12 @@ end
 
 --- The subcommands and what each does with the rest of the message.
 Shell.SUBCOMMANDS = {
-	more = function()
+	next = function()
 		if not paging then
 			say(Shell.Said("nothing to page; search first"))
 			return
 		end
 		page(paging.tree, paging.text, paging.index)
-	end,
-	count = function(rest)
-		local tree, text = parsed(rest)
-		if tree then
-			count(tree, text)
-		end
 	end,
 	inspect = function(rest)
 		local spellID = Shell.LoneSpell(rest) or tonumber(rest)
@@ -589,7 +555,7 @@ function Shell.Execute(spellID, verb, axis, n)
 	if axis then
 		Epsilook.Inspect.Execute(spellID, verb, axis, n, say)
 	elseif verb == NEXT.key then
-		Shell.SUBCOMMANDS.more()
+		Shell.SUBCOMMANDS.next()
 	elseif action and action.command then
 		Shell.Send(action.command .. " " .. spellID)
 	elseif action then
