@@ -384,9 +384,12 @@ end
 -- @return the number, or nil where the kind carries no such column
 function Data.GetCarried(axis, kind, slot, name)
 	local table_ = Data.GetRowTable(axis)
+	-- An axis whose rows carry nothing beyond their properties has no such
+	-- column at all, and a kind that carries nothing has no group.
 	local carried = table_ and table_.carried
-	local group = carried and carried.columns[kind]
-	local node = group and group.columns[name]
+	local groups = carried and carried.columns
+	local group = groups and groups[kind]
+	local node = group and group.columns and group.columns[name]
 	if not node then
 		return nil
 	end
