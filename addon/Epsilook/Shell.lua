@@ -391,6 +391,15 @@ Shell.SLICE = 500
 --- The job running across frames, if any, and the frame that drives it.
 local running, driver
 
+--- The engine pauses inside its heavy scans through this: a yield, taken
+-- only inside a coroutine, so a job gives the frame back mid-scan and a
+-- call from outside any job runs straight through.
+Epsilook.Search.Pauser = function()
+	if coroutine.running() then
+		coroutine.yield()
+	end
+end
+
 --- Run a function as a job across frames: it is resumed every frame for the
 -- budget's worth of time, and wherever it yields is where it continues. A new
 -- job replaces a running one. Under a bare interpreter, where there is no

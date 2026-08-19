@@ -62,7 +62,7 @@ Inspect.DETAILED = { mech = true }
 Inspect.TEXTURES = {
 	["fx.chain"] = { line = { height = 16, width = 64 }, tip = { height = 32, width = 128 } },
 	["fx.dissolve"] = { tip = { height = 96, width = 96 } },
-	["fx.screen"] = { tip = { height = 90, width = 160 } },
+	["fx.screen"] = { tip = { height = 90, width = 160 }, mask = { height = 45, width = 80 } },
 }
 
 --- A white square the client ships, painted by the colour arguments of the
@@ -274,17 +274,18 @@ end
 --- The subject of a list of values: the first that names something, moved
 -- to the front -- a bare id yields to a name beside it, so a kit shows by
 -- its animation rather than its number, and a blank name yields to the id
--- or the file beside it.
+-- or the file beside it. A target is who a part plays on, never what it is,
+-- and is not a subject.
 -- @param values as Inspect.Values gives them
 -- @return the values with the subject first, possibly empty
 local function led(values)
 	for i, value in ipairs(values) do
-		if value.text ~= "" and not value.number then
+		if value.text ~= "" and not value.number and value.name ~= "target" then
 			return leading(values, i)
 		end
 	end
 	for i, value in ipairs(values) do
-		if value.text ~= "" or value.id then
+		if (value.text ~= "" or value.id) and value.name ~= "target" then
 			return leading(values, i)
 		end
 	end
@@ -327,9 +328,9 @@ function Inspect.FillTooltip(tooltip, part)
 	Inspect.FillPalette(tooltip, part)
 end
 
---- The colours a screen effect paints the view with, as a palette line in
--- the tooltip: a swatch and its hex for the fog, the multiply and the add
--- colour, each where the effect has one, and the hue words after. Only a
+--- What a screen effect paints, in the tooltip: a palette line with a swatch
+-- and its hex for the fog, the multiply and the add colour, each where the
+-- effect has one, the hue words after, then the textures it draws. Only a
 -- screen part carries one.
 -- @param tooltip the GameTooltip, already owned
 -- @param part a PartData
@@ -350,6 +351,13 @@ function Inspect.FillPalette(tooltip, part)
 	end
 	if screen.hues ~= "" then
 		tooltip:AddLine(GREY .. "hues " .. END .. screen.hues, 1, 1, 1)
+	end
+	-- The effect's own textures: the finished art at the screen's size, the
+	-- masks that shape it at half.
+	local art, masks = Inspect.TEXTURES["fx.screen"].tip, Inspect.TEXTURES["fx.screen"].mask
+	for _, texture in ipairs(screen.textures) do
+		local size = texture.role == 0 and art or masks
+		tooltip:AddLine("|T" .. texture.fid .. ":" .. size.height .. ":" .. size.width .. "|t")
 	end
 end
 
@@ -653,8 +661,9 @@ local function line(spellID, part, n, indent, label, verb)
 				shown = written({ text = name, id = id })
 			else
 				-- Nothing names the item; its model's name and id are what it
-				-- goes by, so the file and id beside it would say it twice.
-				shown = modelName(part) .. " - " .. id
+				-- goes by, so the file and id beside it would say it twice. It
+				-- reads as an item, bracketed, even where it is no link.
+				shown = "[" .. modelName(part) .. " - " .. id .. "]"
 				stated = { file = true, id = true }
 			end
 		end
@@ -669,7 +678,7 @@ local function line(spellID, part, n, indent, label, verb)
 				.. texture.line.width
 				.. "|t "
 		end
-		local pictured = texture and texture.tip and fid
+		local pictured = texture and texture.tip and (fid or part.kind == "screen")
 		if Inspect.DETAILED[part.axis] or pictured or Inspect.ClipOf(part, actions, shown) then
 			out = out .. Shell.Link(spellID, verb, shown, part.axis, n, colour, icon)
 		else
@@ -685,6 +694,16 @@ local function line(spellID, part, n, indent, label, verb)
 		end
 		links = Inspect.ActionLinks(spellID, part, n, actions)
 	else
+		-- A part with no value of its own may still be named by what it
+		-- carries -- a screen part by its screen effect -- and that name is
+		-- its link, with the effect in the tooltip.
+		local extras = Epsilook:GetPartExtras(part)
+		if extras[1] and extras[1].text ~= "" then
+			if label then
+				out = out .. ":" .. " "
+			end
+			out = out .. Shell.Link(spellID, verb, extras[1].text, part.axis, n, WHITE)
+		end
 		links = Inspect.ActionLinks(spellID, part, n, actions)
 	end
 	if links ~= "" then

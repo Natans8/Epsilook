@@ -384,15 +384,27 @@ end
 
 --- What a screen effect paints, by its id: its name, the colour it fogs
 -- the view with and how strongly, the colour it multiplies over and the
--- one it adds, each -1 where the effect paints none, and the hue words the
--- build gave it. A screen part carries the id as an extra.
+-- one it adds, each -1 where the effect paints none, the hue words the
+-- build gave it, and the textures it draws. A screen part carries the id as
+-- an extra.
 -- @param screenID the screen effect id
--- @return a table with name, fog, fogAlpha, mul, add, hues; or nil where unknown
+-- @return a table with name, fog, fogAlpha, mul, add, hues, and textures, a
+--   list of { role, fid } with the finished art (role 0) before the masks
+--   it is shaped by (role 1); or nil where unknown
 function Epsilook:GetScreenEffect(screenID)
 	mounted(self)
 	local name = Data.Lookup("fx", "screens", "ids", "names", screenID)
 	if name == nil then
 		return nil
+	end
+	local textures = {}
+	local ids = Data.ReadAll("fx", "screenTextures", "screenIds") or {}
+	local roles = Data.ReadAll("fx", "screenTextures", "roles") or {}
+	local fids = Data.ReadAll("fx", "screenTextures", "fids") or {}
+	for i = 1, #ids do
+		if ids[i] == screenID then
+			textures[#textures + 1] = { role = roles[i], fid = fids[i] }
+		end
 	end
 	return {
 		name = name,
@@ -401,6 +413,7 @@ function Epsilook:GetScreenEffect(screenID)
 		mul = Data.Lookup("fx", "screens", "ids", "mulColors", screenID),
 		add = Data.Lookup("fx", "screens", "ids", "addColors", screenID),
 		hues = Data.Lookup("fx", "screens", "ids", "hues", screenID) or "",
+		textures = textures,
 	}
 end
 

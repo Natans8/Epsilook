@@ -41,8 +41,8 @@ Data.DATA_ADDON = "Epsilook_Data"
 -- The pack ships a count per spell rather than a running offset, because a
 -- rising six-digit number is what a compressed artifact cannot afford. Walking
 -- those counts from the start would be a quarter of a million steps per
--- lookup, so the walk happens once per axis and every 'th total is kept. A
--- lookup is then one index plus at most this many steps.
+-- lookup, so every 'th total is kept, built as far as lookups have reached.
+-- A lookup is then one index plus at most this many steps.
 local STRIDE = 1024
 
 --- Where the emitted axes land, and what the pack says about itself.
@@ -285,17 +285,29 @@ function Data.GetRowRange(axis, row)
 	local counts, blob = table_.counts, table_.countsBlob
 	local marks = table_.marks
 	if not marks then
-		marks = {}
-		local running = 0
-		for at = 0, Reader.size(counts) - 1 do
-			if at % STRIDE == 0 then
-				marks[floor(at / STRIDE)] = running
-			end
-			running = running + Reader.number(blob, counts, at)
-		end
+		marks = { [0] = 0 }
 		table_.marks = marks
+		-- The marks are built as far as a lookup needs and no further, so the
+		-- first walk of a session pays for them as it goes rather than all at
+		-- once before its first row.
+		table_.markedTo = 0
+		table_.markedSum = 0
 	end
 	local mark = floor(row / STRIDE)
+	local limit = Reader.size(counts)
+	while table_.markedTo < mark and table_.markedTo * STRIDE < limit do
+		local sum = table_.markedSum
+		local from = table_.markedTo * STRIDE
+		for at = from, from + STRIDE - 1 do
+			if at >= limit then
+				break
+			end
+			sum = sum + Reader.number(blob, counts, at)
+		end
+		table_.markedTo = table_.markedTo + 1
+		table_.markedSum = sum
+		marks[table_.markedTo] = sum
+	end
 	local at = marks[mark] or 0
 	for step = mark * STRIDE, row - 1 do
 		at = at + Reader.number(blob, counts, step)

@@ -24,7 +24,7 @@ local Reader = Epsilook.Reader
 local Schema = Epsilook.Schema
 local Text = Epsilook.Text
 
-local floor, abs, find = math.floor, math.abs, string.find
+local floor, abs, find, sub = math.floor, math.abs, string.find, string.sub
 
 local function always()
 	return true
@@ -197,17 +197,28 @@ function Match.Test(op, typeName, operand)
 	return never
 end
 
+--- How many characters of a column one window of a scan covers. A window is
+-- copied out and searched on its own, so a scan yields between windows
+-- whatever it finds in them; the size trades the copy against the number of
+-- pauses.
+Match.WINDOW = 65536
+
 --- Which rows of a text column an operator lands in.
--- One pass of the operand's pattern over the column's string. A row is
--- counted once and the scan resumes past it; a match that runs across the
--- boundary into the next row is not a hit in either, and the scan resumes one
--- character on so nothing in the second row is skipped.
+-- The operand's pattern is run over the column's string a window at a time,
+-- each window copied out with an overlap long enough for any match that
+-- begins inside it to end, so a match straddling the boundary is found by
+-- the window it begins in and no other. A row is counted once and the scan
+-- resumes past it; a match that runs across the boundary into the next row
+-- is not a hit in either, and the scan resumes one character on so nothing
+-- in the second row is skipped.
 -- @param blob the chunk's payload
 -- @param node the text column's header entry
 -- @param op "contains" or "exact"
 -- @param written the operand as typed
+-- @param tick a function called after each window, or nil; what lets a
+--   caller drive the scan across frames
 -- @return a set of rows counted from zero, empty where nothing matches
-function Match.ScanText(blob, node, op, written)
+function Match.ScanText(blob, node, op, written, tick)
 	local hits = {}
 	local pattern = op == "exact" and Text.exactPattern(written) or Text.containsPattern(written)
 	local rows = Reader.size(node)
@@ -217,22 +228,42 @@ function Match.ScanText(blob, node, op, written)
 	local index = node.index
 	local base = node.at
 	local last = base + Reader.number(blob, index, rows) - 1
+	-- A match is as long as the operand, folded character for character;
+	-- twice that is room for any folding that widens.
+	local overlap = #written * 2
 	local pos = base
 	while pos <= last do
-		local s, e = find(blob, pattern, pos)
-		if not s or s > last then
-			break
+		local windowEnd = pos + Match.WINDOW - 1
+		if windowEnd > last then
+			windowEnd = last
 		end
-		local row = Reader.rowAtMost(blob, index, s - base)
-		local rowStart = base + Reader.number(blob, index, row)
-		local rowEnd = base + Reader.number(blob, index, row + 1) - 1
-		if e <= rowEnd then
-			if op ~= "exact" or (s == rowStart and e == rowEnd) then
-				hits[row] = true
+		local reach = windowEnd + overlap
+		if reach > last then
+			reach = last
+		end
+		local text = sub(blob, pos, reach)
+		local at = 1
+		while true do
+			local s, e = find(text, pattern, at)
+			if not s or pos + s - 1 > windowEnd then
+				break
 			end
-			pos = rowEnd + 1
-		else
-			pos = s + 1
+			local from, to = pos + s - 1, pos + e - 1
+			local row = Reader.rowAtMost(blob, index, from - base)
+			local rowStart = base + Reader.number(blob, index, row)
+			local rowEnd = base + Reader.number(blob, index, row + 1) - 1
+			if to <= rowEnd then
+				if op ~= "exact" or (from == rowStart and to == rowEnd) then
+					hits[row] = true
+				end
+				at = rowEnd + 2 - pos
+			else
+				at = s + 1
+			end
+		end
+		pos = windowEnd + 1
+		if tick then
+			tick()
 		end
 	end
 	return hits

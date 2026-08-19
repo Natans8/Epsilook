@@ -60,6 +60,30 @@ local DELIVERY_CHANNELLED, DELIVERY_BREAKS_ON_MOVE = 1, 2
 local ATTRIBUTE_COLUMNS =
 	{ unbreakable = "unbreakablechannel", unhindered = "actionsduringchannel" }
 
+--- What the engine calls between slices of heavy work -- a scan that finds
+-- nearly every row, a vocabulary walked whole -- so a caller driving a search
+-- across frames can yield inside it; nil means run straight through. The
+-- chat shell sets it to a yield that runs only inside a coroutine, so a
+-- plain call from a macro is never interrupted.
+Search.Pauser = nil
+
+--- How many steps of heavy work pass between two calls of the pauser: a
+-- text scan ticks once per window, a vocabulary walk once per row.
+Search.PAUSE_EVERY = { window = 1, row = 2000 }
+
+--- A tick for a piece of heavy work: counts, and calls the pauser every so
+-- many steps.
+-- @param every how many ticks between pauses
+local function pacer(every)
+	local n = 0
+	return function()
+		n = n + 1
+		if n % every == 0 and Search.Pauser then
+			Search.Pauser()
+		end
+	end
+end
+
 local function never()
 	return false
 end
@@ -266,13 +290,15 @@ local function vocabHits(cache, vocab, plan)
 	local node, blob = found.values, found.blob
 	local rows
 	if plan.op and node.kind == "text" then
-		rows = Match.ScanText(blob, node, plan.op, plan.written)
+		rows = Match.ScanText(blob, node, plan.op, plan.written, pacer(Search.PAUSE_EVERY.window))
 	else
 		rows = {}
+		local tick = pacer(Search.PAUSE_EVERY.row)
 		for row = 0, Reader.size(node) - 1 do
 			if plan.test(Reader.value(blob, node, row)) then
 				rows[row] = true
 			end
+			tick()
 		end
 	end
 	for row in pairs(rows) do
@@ -338,7 +364,13 @@ local function textual(node, blob, plan, at)
 		local hits
 		return function(spell)
 			if not hits then
-				hits = Match.ScanText(blob, node, plan.op, plan.written)
+				hits = Match.ScanText(
+					blob,
+					node,
+					plan.op,
+					plan.written,
+					pacer(Search.PAUSE_EVERY.window)
+				)
 			end
 			local row = spell
 			if at then
