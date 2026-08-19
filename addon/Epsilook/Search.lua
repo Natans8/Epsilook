@@ -1104,13 +1104,26 @@ local function pooledValue(kind, prop, descending)
 				if stored ~= absent then
 					local value = stored
 					if textual_ then
+						-- A row whose stored number no vocabulary names has no
+						-- name to be ordered by, so it is passed over and the
+						-- spell sorts by its named rows alone -- nothing last,
+						-- as everywhere else. Keeping the raw number here would
+						-- put a number and a string in one key and the
+						-- comparison between two spells would raise.
 						local resolved = Data.ResolveVocab(vocab, stored)
-						value = type(resolved) == "string" and Text.fold(resolved) or stored
+						if type(resolved) ~= "string" then
+							value = nil
+						else
+							value = Text.fold(resolved)
+						end
 					end
 					if
-						best == nil
-						or (descending and value > best)
-						or (not descending and value < best)
+						value ~= nil
+						and (
+							best == nil
+							or (descending and value > best)
+							or (not descending and value < best)
+						)
 					then
 						best = value
 					end

@@ -2,9 +2,10 @@
 --
 -- The client half of `Config`: it names no setting of its own, but walks
 -- `Config.SETTINGS` and draws the control each one's kind calls for, so a
--- setting added there appears here with nothing written. Every client global
--- is reached through `_G` and guarded, so the file loads under a bare
--- interpreter and simply builds nothing.
+-- setting added there appears here with nothing written, and a kind nothing
+-- draws yet is passed over. Every client global is reached through `_G` and
+-- guarded, so the file loads under a bare interpreter and simply builds
+-- nothing.
 --
 -- The panel is registered with the client's own interface options, which is
 -- where a player looks for an addon's settings; the shell's `options` word
@@ -25,37 +26,6 @@ Options.STORE = "EpsilookSettings"
 
 --- How wide the panel's controls are drawn, and how far apart their rows sit.
 local WIDTH, ROW = 320, 64
-
---- The chat windows a player may send output to: the default, then each of
--- the client's own windows by its tab's name. A window with no name is one
--- the player has not made, and is left out.
--- @return a list of { value, text }
-function Options.Frames()
-	local out = { { value = Config.DEFAULT_FRAME, text = "Default" } }
-	local named, count = _G.GetChatWindowInfo, _G.NUM_CHAT_WINDOWS
-	if not named or not count then
-		return out
-	end
-	for i = 1, count do
-		local name = named(i)
-		if name and name ~= "" then
-			out[#out + 1] = { value = i, text = name }
-		end
-	end
-	return out
-end
-
---- What a frame setting reads as in words, for a menu's closed state.
--- @param value the stored window number
--- @return the window's name, or the default's word
-function Options.FrameText(value)
-	for _, frame in ipairs(Options.Frames()) do
-		if frame.value == value then
-			return frame.text
-		end
-	end
-	return "Default"
-end
 
 --- Store a chosen value and let the client save it.
 local function choose(key, value)
@@ -96,41 +66,6 @@ local function slider(panel, setting, y)
 	return control
 end
 
---- One dropdown for a chat-window setting. The menu is rebuilt every time it
--- opens, because a player may name a window while the panel is up.
-local function dropdown(panel, setting, y)
-	local name = Options.NAME .. "Option" .. setting.key
-	local control = _G.CreateFrame("Frame", name, panel, "UIDropDownMenuTemplate")
-	control:SetPoint("TOPLEFT", 0, y - 18)
-	local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-	title:SetPoint("BOTTOMLEFT", control, "TOPLEFT", 20, 2)
-	title:SetText(setting.label)
-	local set, text = _G.UIDropDownMenu_SetWidth, _G.UIDropDownMenu_SetText
-	if set then
-		set(control, WIDTH - 40)
-	end
-	if text then
-		text(control, Options.FrameText(Config.Get(setting.key)))
-	end
-	if _G.UIDropDownMenu_Initialize then
-		_G.UIDropDownMenu_Initialize(control, function()
-			for _, frame in ipairs(Options.Frames()) do
-				local info = _G.UIDropDownMenu_CreateInfo()
-				info.text = frame.text
-				info.checked = frame.value == Config.Get(setting.key)
-				info.func = function()
-					choose(setting.key, frame.value)
-					if text then
-						text(control, frame.text)
-					end
-				end
-				_G.UIDropDownMenu_AddButton(info)
-			end
-		end)
-	end
-	return control
-end
-
 --- The panel, built once.
 local panel
 
@@ -156,8 +91,6 @@ function Options.Panel()
 		y = y - 24
 		if setting.kind == "number" then
 			slider(panel, setting, y - 8)
-		else
-			dropdown(panel, setting, y)
 		end
 		y = y - ROW
 	end

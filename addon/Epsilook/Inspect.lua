@@ -567,9 +567,12 @@ local function takes(part, action)
 	return Inspect.ArgumentOf(part, action) ~= nil
 end
 
+--- The colour Epsilon's own `.lookup emote` draws an emote link in.
+local EMOTE = "|cffadffff"
+
 --- The game's own link, as the server prints one, around a number and a name.
-local function gameLink(linkType, number, name)
-	return WHITE .. "|H" .. linkType .. ":" .. number .. "|h[" .. name .. "]|h" .. END
+local function gameLink(linkType, number, name, colour)
+	return (colour or WHITE) .. "|H" .. linkType .. ":" .. number .. "|h[" .. name .. "]|h" .. END
 end
 
 --- A bare number for the chat box.
@@ -587,7 +590,7 @@ end
 -- bare number.
 local INSERTS = {
 	spawn = {
-		hint = "Shift-click to type this into chat, as .gob spawn takes it",
+		hint = "Shift-click for the id .gob spawn takes",
 		text = function(number, name, action)
 			if action.needs == "object" then
 				return gameLink("gameobject_entry", number, name)
@@ -596,26 +599,36 @@ local INSERTS = {
 		end,
 	},
 	add = {
-		hint = "Shift-click to link this item in chat, as .additem takes it",
+		hint = "Shift-click to link the item",
 		text = function(number, name)
 			return gameLink("item", number .. ":0:0:0:0:0:0:0:0", name)
 		end,
 	},
 	summon = {
-		hint = "Shift-click to link this creature in chat, as .npc spawn takes it",
+		hint = "Shift-click to link the creature",
 		text = function(number, name)
 			return gameLink("creature_entry", number, name)
 		end,
 	},
-	speed = { hint = "Shift-click to type this factor into chat, as .mod speed takes it" },
-	native = { hint = "Shift-click to type this display id into chat, as .mod native takes it" },
-	morph = { hint = "Shift-click to type this display id into chat, as .morph takes it" },
-	mount = { hint = "Shift-click to type this display id into chat, as .mod mount takes it" },
-	animKit = { hint = "Shift-click to type this anim kit id into chat, as .mod animkit takes it" },
-	anim = { hint = "Shift-click to type this emote id into chat, as .mod anim takes it" },
-	stand = { hint = "Shift-click to type this emote id into chat, as .mod standstate takes it" },
-	playKit = { hint = "Shift-click to type this kit id into chat, as .phase playsound takes it" },
-	play = { hint = "Shift-click to type this sound file id into chat" },
+	anim = {
+		hint = "Shift-click to link the emote in chat",
+		text = function(number, name)
+			return gameLink("emoteID", number, name, EMOTE)
+		end,
+	},
+	stand = {
+		hint = "Shift-click to link the emote in chat",
+		text = function(number, name)
+			return gameLink("emoteID", number, name, EMOTE)
+		end,
+	},
+	speed = { hint = "Shift-click for the factor" },
+	native = { hint = "Shift-click for the display id" },
+	morph = { hint = "Shift-click for the display id" },
+	mount = { hint = "Shift-click for the display id" },
+	animKit = { hint = "Shift-click for the kit id" },
+	playKit = { hint = "Shift-click for the kit id" },
+	play = { hint = "Shift-click for the file id" },
 }
 
 --- The server commands the actions send, by key, each taking the action's
@@ -888,14 +901,23 @@ end
 -- @return the hint, or nil for a verb the axis does not offer
 function Inspect.HintOf(axis, verb, part)
 	if verb == Inspect.LIST then
-		return "Click to print the spell's " .. Inspect.Label(axis):lower()
-	elseif verb == Inspect.PART or verb == Inspect.GROUP then
+		return "The spell's " .. Inspect.Label(axis):lower()
+	end
+	if not part then
+		-- A link out of old scrollback whose row the pack no longer carries.
+		-- The click path says so; a hover has nothing to say and must not
+		-- raise, since a throw here happens before the tooltip is shown.
+		return nil
+	end
+	if verb == Inspect.PART or verb == Inspect.GROUP then
 		local _, hint = Inspect.ClipOf(part, actionsFor(axis, verb), "")
 		return hint
 	elseif COPY_LINE[verb] then
 		local _, command = Inspect.CopyOf(part, actionsFor(axis, COPY_LINE[verb]))
-		return command and "Click to put this into your chat box, as ." .. command:gsub(" %%s", "") .. " takes it"
-			or nil
+		if not command then
+			return nil
+		end
+		return "Puts it in your chat box, for ." .. command:gsub(" %%s", "")
 	end
 	local action = actionOf(axis, verb, part)
 	return action and action.hint or nil
@@ -1064,7 +1086,12 @@ function Inspect.Execute(spellID, key, axis, n, say)
 	if COMMANDS[key] then
 		Shell.Send(COMMANDS[key]:format(argument))
 	elseif key == "play" or key == "playKit" then
-		local player = key == "play" and _G.PlaySoundFile or _G.PlaySound
+		local player
+		if key == "play" then
+			player = _G.PlaySoundFile
+		else
+			player = _G.PlaySound
+		end
 		if player then
 			local ok, handle = player(argument)
 			if ok then

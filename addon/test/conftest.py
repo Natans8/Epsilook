@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 lua51 = pytest.importorskip("lupa.lua51")
 
+# pylint: disable=wrong-import-position
 from support import LuaRuntime  # noqa: E402  (the path above is what makes this importable)
 
 ADDON = Path(__file__).resolve().parents[1]

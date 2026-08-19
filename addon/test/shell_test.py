@@ -294,7 +294,7 @@ def test_a_speed_change_is_offered_as_the_factor_the_command_takes(engine: LuaRu
     factor = lua_function(engine, b"Epsilook.Inspect.ArgumentOf")(part, speed)
     assert factor == 0.3
     line = cast(bytes, lua_function(engine, b"Epsilook.Inspect.PartLine")(2140, part, n)).decode()
-    assert "|Hgarrmission:epsilook:2140:speed:mech:%d|h[Speed]|h" % n in line
+    assert f"|Hgarrmission:epsilook:2140:speed:mech:{n}|h[Speed]|h" in line
 
 
 def test_a_group_tooltip_names_the_group_and_its_value(engine: LuaRuntime) -> None:
@@ -354,7 +354,7 @@ def test_a_copy_hint_names_the_command_it_feeds(engine: LuaRuntime) -> None:
     api = lua_table(engine, b"Epsilook")
     part = method(api, b"GetPartDataByIndex")(api, 133, b"model", 1)
     hint = lua_function(engine, b"Epsilook.Inspect.HintOf")(b"model", b"copy", part)
-    assert isinstance(hint, bytes) and ".gob spawn takes it" in hint.decode()
+    assert isinstance(hint, bytes) and "for .gob spawn" in hint.decode()
     # A sound line has no command behind it, so its copy has nothing to say.
     sound = method(api, b"GetPartDataByIndex")(api, 133, b"sound", 1)
     assert lua_function(engine, b"Epsilook.Inspect.HintOf")(b"sound", b"copy", sound) is None

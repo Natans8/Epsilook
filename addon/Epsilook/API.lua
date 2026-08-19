@@ -561,7 +561,7 @@ Epsilook.ACTIONS = {
 			kind = "item",
 			effect = "world",
 			revert = "",
-			hint = "Click to add this item to your bags",
+			hint = "Adds the item to your bags",
 		},
 		{
 			key = "lookup",
@@ -570,7 +570,7 @@ Epsilook.ACTIONS = {
 			kind = "item",
 			effect = "read",
 			revert = "",
-			hint = "Click to look the item up by its model's name, since nothing here names it",
+			hint = "Looks it up by its model's name, since nothing here names it",
 		},
 		{
 			key = "native",
@@ -579,7 +579,7 @@ Epsilook.ACTIONS = {
 			kind = "display",
 			effect = "world",
 			revert = "",
-			hint = "Click to make this display your native form",
+			hint = "Your native form",
 		},
 		{
 			key = "morph",
@@ -588,7 +588,7 @@ Epsilook.ACTIONS = {
 			kind = "display",
 			effect = "world",
 			revert = "",
-			hint = "Click to morph into this display",
+			hint = "Morph into it",
 		},
 		{
 			key = "mount",
@@ -597,7 +597,7 @@ Epsilook.ACTIONS = {
 			kind = "display",
 			effect = "world",
 			revert = "",
-			hint = "Click to mount this display",
+			hint = "Mount it",
 		},
 		{
 			key = "native",
@@ -606,7 +606,7 @@ Epsilook.ACTIONS = {
 			kind = "mount",
 			effect = "world",
 			revert = "",
-			hint = "Click to make this mount's display your native form",
+			hint = "Your native form",
 		},
 		{
 			key = "morph",
@@ -615,7 +615,7 @@ Epsilook.ACTIONS = {
 			kind = "mount",
 			effect = "world",
 			revert = "",
-			hint = "Click to morph into this mount's display",
+			hint = "Morph into it",
 		},
 		{
 			key = "mount",
@@ -624,7 +624,7 @@ Epsilook.ACTIONS = {
 			kind = "mount",
 			effect = "world",
 			revert = "",
-			hint = "Click to mount this",
+			hint = "Mount it",
 		},
 		{
 			key = "spawn",
@@ -633,7 +633,7 @@ Epsilook.ACTIONS = {
 			except = { item = true, mount = true, display = true },
 			effect = "world",
 			revert = "",
-			hint = "Click to spawn this model as a gameobject where you stand",
+			hint = "Spawns the model where you stand",
 		},
 	},
 	sound = {
@@ -643,7 +643,7 @@ Epsilook.ACTIONS = {
 			needs = "file",
 			effect = "read",
 			revert = "stop",
-			hint = "Click to play this sound file, for you only",
+			hint = "Plays the file, for you only",
 		},
 		{
 			key = "stop",
@@ -651,7 +651,7 @@ Epsilook.ACTIONS = {
 			needs = "file",
 			effect = "read",
 			revert = "",
-			hint = "Click to stop this sound file",
+			hint = "Stops it",
 		},
 		{
 			key = "playKit",
@@ -659,7 +659,7 @@ Epsilook.ACTIONS = {
 			needs = "kit",
 			effect = "read",
 			revert = "stopKit",
-			hint = "Click to play this sound kit, for you only",
+			hint = "Plays the kit, for you only",
 		},
 		{
 			key = "stopKit",
@@ -667,7 +667,7 @@ Epsilook.ACTIONS = {
 			needs = "kit",
 			effect = "read",
 			revert = "",
-			hint = "Click to stop this sound kit",
+			hint = "Stops it",
 		},
 	},
 	fx = {
@@ -677,7 +677,7 @@ Epsilook.ACTIONS = {
 			needs = "creature",
 			effect = "world",
 			revert = "",
-			hint = "Click to spawn this creature where you stand",
+			hint = "Spawns the creature where you stand",
 		},
 		{
 			key = "native",
@@ -686,7 +686,7 @@ Epsilook.ACTIONS = {
 			via = "creatureDisplay",
 			effect = "world",
 			revert = "",
-			hint = "Click to make this creature's first display your native form",
+			hint = "Your native form, the creature's first display",
 		},
 		{
 			key = "morph",
@@ -695,7 +695,7 @@ Epsilook.ACTIONS = {
 			via = "creatureDisplay",
 			effect = "world",
 			revert = "",
-			hint = "Click to morph into this creature's first display",
+			hint = "Morph into the creature's first display",
 		},
 		{
 			key = "mount",
@@ -704,7 +704,7 @@ Epsilook.ACTIONS = {
 			via = "creatureDisplay",
 			effect = "world",
 			revert = "",
-			hint = "Click to mount this creature's first display",
+			hint = "Mount it creature's first display",
 		},
 		{
 			key = "spawn",
@@ -713,7 +713,7 @@ Epsilook.ACTIONS = {
 			kind = "object",
 			effect = "world",
 			revert = "",
-			hint = "Click to spawn this object where you stand",
+			hint = "Spawns the object where you stand",
 		},
 	},
 	anim = {
@@ -724,7 +724,7 @@ Epsilook.ACTIONS = {
 			kind = "kit",
 			effect = "world",
 			revert = "",
-			hint = "Click to play this anim kit on yourself",
+			hint = "Plays the kit on you",
 		},
 		{
 			key = "anim",
@@ -732,7 +732,7 @@ Epsilook.ACTIONS = {
 			needs = "anim",
 			effect = "world",
 			revert = "",
-			hint = "Click to play this animation on yourself once",
+			hint = "Plays it on you, once",
 		},
 		{
 			key = "stand",
@@ -740,7 +740,7 @@ Epsilook.ACTIONS = {
 			needs = "anim",
 			effect = "world",
 			revert = "",
-			hint = "Click to hold this animation as your standing pose",
+			hint = "Holds it as your standing pose",
 		},
 		{
 			key = "anim",
@@ -749,7 +749,7 @@ Epsilook.ACTIONS = {
 			kind = "replace",
 			effect = "world",
 			revert = "",
-			hint = "Click to play the replacing animation on yourself once",
+			hint = "Plays the replacing animation, once",
 		},
 		{
 			key = "stand",
@@ -758,7 +758,7 @@ Epsilook.ACTIONS = {
 			kind = "replace",
 			effect = "world",
 			revert = "",
-			hint = "Click to hold the replacing animation as your standing pose",
+			hint = "Holds the replacing animation as your pose",
 		},
 		-- A passenger row carries one role, so each role takes both actions
 		-- and a line offers the pair for whichever role it has.
@@ -769,7 +769,7 @@ Epsilook.ACTIONS = {
 			kind = "passenger",
 			effect = "world",
 			revert = "",
-			hint = "Click to play the entering animation on yourself once",
+			hint = "Plays the entering animation, once",
 		},
 		{
 			key = "stand",
@@ -778,7 +778,7 @@ Epsilook.ACTIONS = {
 			kind = "passenger",
 			effect = "world",
 			revert = "",
-			hint = "Click to hold the entering animation as your standing pose",
+			hint = "Holds the entering animation as your pose",
 		},
 		{
 			key = "anim",
@@ -787,7 +787,7 @@ Epsilook.ACTIONS = {
 			kind = "passenger",
 			effect = "world",
 			revert = "",
-			hint = "Click to play the seated animation on yourself once",
+			hint = "Plays the seated animation, once",
 		},
 		{
 			key = "stand",
@@ -796,7 +796,7 @@ Epsilook.ACTIONS = {
 			kind = "passenger",
 			effect = "world",
 			revert = "",
-			hint = "Click to hold the seated animation as your standing pose",
+			hint = "Holds the seated animation as your pose",
 		},
 		{
 			key = "anim",
@@ -805,7 +805,7 @@ Epsilook.ACTIONS = {
 			kind = "passenger",
 			effect = "world",
 			revert = "",
-			hint = "Click to play the leaving animation on yourself once",
+			hint = "Plays the leaving animation, once",
 		},
 		{
 			key = "stand",
@@ -814,7 +814,7 @@ Epsilook.ACTIONS = {
 			kind = "passenger",
 			effect = "world",
 			revert = "",
-			hint = "Click to hold the leaving animation as your standing pose",
+			hint = "Holds the leaving animation as your pose",
 		},
 	},
 	mech = {
@@ -826,7 +826,7 @@ Epsilook.ACTIONS = {
 			via = "factor",
 			effect = "world",
 			revert = "",
-			hint = "Click to set your speed to this much of normal, in every mode",
+			hint = "Sets your speed, in every mode",
 		},
 	},
 }

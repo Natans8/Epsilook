@@ -17,16 +17,10 @@ local Epsilook = _G.Epsilook
 local Config = {}
 Epsilook.Config = Config
 
---- The chat window a line goes to, said as a number: nought is whichever
--- window the client calls the default, and one upwards are the player's own
--- windows in the order their tabs sit.
-Config.DEFAULT_FRAME = 0
-
 --- Every setting a player may change: the key it is stored under, the words
 -- a panel labels and explains it with, how it is chosen, and the value it
 -- has until they choose. A `number` carries the bounds it is clamped to and
--- the step a slider moves by; a `frame` is one of the client's chat windows.
--- The order is the order a panel lays them out.
+-- the step a slider moves by. The order is the order a panel lays them out.
 Config.SETTINGS = {
 	{
 		key = "page",
@@ -37,13 +31,6 @@ Config.SETTINGS = {
 		min = 5,
 		max = 60,
 		step = 5,
-	},
-	{
-		key = "frame",
-		label = "Chat window",
-		hint = "Which chat window Epsilook prints to, so its output need not share one with roleplay.",
-		kind = "frame",
-		default = Config.DEFAULT_FRAME,
 	},
 }
 
@@ -64,10 +51,9 @@ end
 local chosen = {}
 
 --- A value made fit for a setting, or nil where it cannot be: a number is
--- rounded to the setting's step and clamped to its bounds, a frame is a
--- whole number no smaller than the default one. A value that cannot be made
--- to fit is refused rather than corrected, so a store written by hand says
--- so instead of silently becoming something else.
+-- taken to the nearer of its setting's steps, and one outside the bounds is
+-- refused rather than corrected, so a store written by hand says so instead
+-- of silently becoming something else.
 -- @param setting a declaration from SETTINGS
 -- @param value the value offered
 -- @return the value to store, or nil
@@ -75,17 +61,14 @@ function Config.Fit(setting, value)
 	if type(value) ~= "number" or value ~= value then
 		return nil
 	end
-	if setting.kind == "number" then
-		if value < setting.min or value > setting.max then
-			return nil
-		end
-		local steps = math.floor((value - setting.min) / setting.step + 0.5)
-		return setting.min + steps * setting.step
-	end
-	if value < Config.DEFAULT_FRAME or math.floor(value) ~= value then
+	if value < setting.min or value > setting.max then
 		return nil
 	end
-	return value
+	-- The rounding runs after the bounds check, so a range that is not a whole
+	-- number of steps could carry a value past the top; the result is held
+	-- down to the bound rather than returned outside it.
+	local steps = math.floor((value - setting.min) / setting.step + 0.5)
+	return math.min(setting.min + steps * setting.step, setting.max)
 end
 
 --- What a setting reads as now: the value chosen, or its default.
@@ -134,9 +117,12 @@ function Config.Load(store)
 	store = store or {}
 	chosen = {}
 	for _, setting in ipairs(Config.SETTINGS) do
-		local fitted = store[setting.key] ~= nil and Config.Fit(setting, store[setting.key]) or nil
-		if fitted ~= nil then
-			chosen[setting.key] = fitted
+		local held = store[setting.key]
+		if held ~= nil then
+			local fitted = Config.Fit(setting, held)
+			if fitted ~= nil then
+				chosen[setting.key] = fitted
+			end
 		end
 		store[setting.key] = chosen[setting.key]
 	end

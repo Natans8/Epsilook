@@ -74,7 +74,7 @@ Shell.SPELL_ACTIONS = {
 		key = "learn",
 		label = "Learn",
 		command = "learn",
-		hint = "Click to learn the spell",
+		hint = "Learns the spell",
 		on = "both",
 		unknownOnly = true,
 	},
@@ -82,7 +82,7 @@ Shell.SPELL_ACTIONS = {
 		key = "unlearn",
 		label = "Unlearn",
 		command = "unlearn",
-		hint = "Click to unlearn the spell",
+		hint = "Unlearns the spell",
 		on = "both",
 		knownOnly = true,
 	},
@@ -90,21 +90,21 @@ Shell.SPELL_ACTIONS = {
 		key = "cast",
 		label = "Cast",
 		command = "cast",
-		hint = "Click to cast the spell",
+		hint = "Casts it",
 		on = "both",
 	},
 	{
 		key = "aura",
 		label = "Aura",
 		command = "aura",
-		hint = "Click to apply the aura to yourself",
+		hint = "Applies the aura to yourself",
 		auraOnly = true,
 		on = "both",
 	},
 	{
 		key = "inspect",
 		label = "Inspect",
-		hint = "Click to print everything the spell is made of",
+		hint = "Everything the spell is made of",
 		on = "result",
 	},
 }
@@ -120,7 +120,7 @@ local function spellAction(verb)
 end
 
 --- The word at the bottom of a full page, which pages on.
-local NEXT = { key = "next", label = "Next", hint = "Click to view the next %d results" }
+local NEXT = { key = "next", label = "Next", hint = "The next %d results" }
 
 --- How tall an icon draws on a line, in pixels.
 Shell.ICON = 16
@@ -825,14 +825,17 @@ end
 -- nothing.
 -- @param text the text to insert
 function Shell.Type(text)
-	local box = _G.ChatFrame1EditBox
-	if not box or not _G.ChatEdit_InsertLink then
-		return
+	-- The client's insert only lands in a box that is already ACTIVE, and a
+	-- click on a chat link is normally made with no box open at all, so where
+	-- none is active the client's own opener is what puts the text there.
+	-- Insert into an active box rather than opening one, or a player part-way
+	-- through a whisper would lose it.
+	local active = _G.ChatEdit_GetActiveWindow
+	if active and active() and _G.ChatEdit_InsertLink then
+		_G.ChatEdit_InsertLink(text)
+	elseif _G.ChatFrame_OpenChat then
+		_G.ChatFrame_OpenChat(text)
 	end
-	if not box:IsShown() and _G.ChatEdit_ActivateChat then
-		_G.ChatEdit_ActivateChat(box)
-	end
-	_G.ChatEdit_InsertLink(text)
 end
 
 --- Send one dot-command to the server, without its leading dot.

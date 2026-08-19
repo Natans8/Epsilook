@@ -142,3 +142,25 @@ def test_both_engines_answer_every_probe_alike(engine: LuaRuntime) -> None:
         if our_count != web_count or our_ids != web_ids:
             disagreements.append(f"{probe!r}: lua {our_count} {our_ids[:5]} / web {web_count} {web_ids[:5]}")
     assert not disagreements, "\n".join(disagreements)
+
+
+def test_a_sort_orders_the_answer_over_a_named_door(engine: LuaRuntime) -> None:
+    """A vocabulary-backed door keys by the resolved name, and a row whose
+    stored number nothing names has no name to be ordered by. Keeping the raw
+    number there would put a string and a number in one key, and the first
+    comparison between two spells would raise instead of ordering them."""
+    # Each door must ANSWER: before the fix a door whose vocabulary named only
+    # some of its rows raised on the first comparison instead of ordering.
+    for door in ("morph", "missile", "kit", "summon", "mount"):
+        assert first(engine, f"{door}:* sort:{door}", 20), door
+        assert first(engine, f"{door}:* sort:-{door}", 20), door
+    # And a door that does order must order both ways.
+    up = first(engine, "morph:* sort:morph", 20)
+    assert up != first(engine, "morph:* sort:-morph", 20)
+    # The id door is a plain number and must come back in order.
+    by_id = first(engine, "morph:* sort:id", 30)
+    assert by_id == sorted(by_id)
+    # Descending starts from the other end of the answer, not from this page.
+    down_id = first(engine, "morph:* sort:-id", 30)
+    assert down_id == sorted(down_id, reverse=True)
+    assert down_id[0] > by_id[-1]
