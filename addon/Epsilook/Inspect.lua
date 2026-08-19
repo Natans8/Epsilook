@@ -260,6 +260,17 @@ local function leading(values, i)
 	return out
 end
 
+--- The file id behind a list's path value, where it has one: what a texture
+-- escape draws.
+local function pathFid(values)
+	for _, value in ipairs(values) do
+		if value.path and value.stored then
+			return value.stored
+		end
+	end
+	return nil
+end
+
 --- The subject of a list of values: the first that names something, moved
 -- to the front -- a bare id yields to a name beside it, so a kit shows by
 -- its animation rather than its number, and a blank name yields to the id
@@ -306,11 +317,11 @@ function Inspect.FillTooltip(tooltip, part)
 		local text = extra.text ~= "" and extra.text or tostring(extra.value)
 		tooltip:AddLine(GREY .. extra.name .. END .. " " .. text, 1, 1, 1)
 	end
-	local texture = Inspect.TEXTURES[part.axis .. "." .. part.kind]
-	local subject = led(Inspect.Values(part))[1]
-	if texture and texture.tip and subject and subject.path and subject.stored then
+	local texture, fid =
+		Inspect.TEXTURES[part.axis .. "." .. part.kind], pathFid(Inspect.Values(part))
+	if texture and texture.tip and fid then
 		tooltip:AddLine(
-			"|T" .. subject.stored .. ":" .. texture.tip.height .. ":" .. texture.tip.width .. "|t"
+			"|T" .. fid .. ":" .. texture.tip.height .. ":" .. texture.tip.width .. "|t"
 		)
 	end
 end
@@ -620,18 +631,18 @@ local function line(spellID, part, n, indent, label, verb)
 				stated = { file = true, id = true }
 			end
 		end
-		local texture = Inspect.TEXTURES[part.axis .. "." .. part.kind]
-		if texture and texture.line and subject.path and subject.stored then
+		local texture, fid = Inspect.TEXTURES[part.axis .. "." .. part.kind], pathFid(values)
+		if texture and texture.line and fid then
 			out = out
 				.. "|T"
-				.. subject.stored
+				.. fid
 				.. ":"
 				.. texture.line.height
 				.. ":"
 				.. texture.line.width
 				.. "|t "
 		end
-		local pictured = texture and texture.tip and subject.path and subject.stored
+		local pictured = texture and texture.tip and fid
 		if Inspect.DETAILED[part.axis] or pictured or Inspect.ClipOf(part, actions, shown) then
 			out = out .. Shell.Link(spellID, verb, shown, part.axis, n, colour, icon)
 		else
