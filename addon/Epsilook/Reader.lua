@@ -14,15 +14,11 @@
 -- and asking for row n slices it where it lies rather than turning the column
 -- into a table first. `Reader.all` exists for verification and says so.
 
--- The private table an addon's files share. It arrives only when the client
--- loads this as part of an addon; a test harness loads the file directly and
--- is handed nothing, which is why every use of it is guarded.
-local _, ns = ...
+_G.Epsilook = _G.Epsilook or {}
+local Epsilook = _G.Epsilook
 
 local Reader = {}
-if ns then
-	ns.Reader = Reader
-end
+Epsilook.Reader = Reader
 
 local DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 local BASE = 64
@@ -33,7 +29,7 @@ for index = 1, #DIGITS do
 	PLACE[string.byte(DIGITS, index)] = index - 1
 end
 
-local byte, sub, tonumber = string.byte, string.sub, tonumber
+local byte, sub, tonumber, floor = string.byte, string.sub, tonumber, math.floor
 
 --- How many rows a column holds.
 -- @param node the header entry describing the column
@@ -141,27 +137,49 @@ function Reader.all(blob, node)
 	return out
 end
 
---- Every column of one section, by column name.
--- @param chunk the loaded axis table
--- @param name which section
--- @return a table of columns, or nil where the chunk does not carry it
-function Reader.section(chunk, name)
-	local held = chunk.sections[name]
-	if not held then
-		return nil
+--- The row a sorted whole-number column holds a value at.
+-- A binary search, so a column of a quarter of a million ids costs eighteen
+-- reads and no index is built at load.
+-- @param blob the chunk's payload
+-- @param node the header entry describing the column, whose values ascend
+-- @param value the number looked for
+-- @return the row counted from zero, or nil where the column lacks it
+function Reader.rowOf(blob, node, value)
+	local low, high = 0, node.n - 1
+	while low <= high do
+		local middle = floor((low + high) / 2)
+		local found = Reader.number(blob, node, middle)
+		if found == value then
+			return middle
+		elseif found < value then
+			low = middle + 1
+		else
+			high = middle - 1
+		end
 	end
-	local out = {}
-	for column, node in pairs(held.columns) do
-		out[column] = Reader.all(chunk.blob, node)
-	end
-	return out
+	return nil
 end
 
--- Three ways in, and each has a caller that cannot use the others. The addon's
--- own files take it from the private table; another addon, or a macro, takes it
--- from the one global this addon owns; and the test harness takes what the
--- chunk returns, since it loads the file directly rather than as an addon.
-_G.Epsilook = _G.Epsilook or {}
-_G.Epsilook.Reader = Reader
+--- The last row of a sorted whole-number column at or below a value.
+-- What finds the row an offset falls in, given the column of row starts.
+-- @param blob the chunk's payload
+-- @param node the header entry describing the column, whose values ascend
+-- @param value the number looked for
+-- @return the row counted from zero, or nil where every value is above it
+function Reader.rowAtMost(blob, node, value)
+	local low, high = 0, node.n - 1
+	if high < 0 or Reader.number(blob, node, 0) > value then
+		return nil
+	end
+	while low < high do
+		local middle = floor((low + high + 1) / 2)
+		if Reader.number(blob, node, middle) <= value then
+			low = middle
+		else
+			high = middle - 1
+		end
+	end
+	return low
+end
 
 return Reader

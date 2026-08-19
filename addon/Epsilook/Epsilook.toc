@@ -2,13 +2,16 @@
 ## Title: Epsilook
 ## Notes: Search and inspect Epsilon's spell data.
 ## Author: Nataari
-## Version: 0.1
-## SavedVariables: EpsilookDB
+## Version: 0.2
 ## OptionalDeps: Epsilook_Data
 ## X-Website: https://natans8.github.io/Epsilook/
 
 Reader.lua
 Data.lua
-Client.lua
+Text.lua
+Schema.lua
+Query.lua
+Match.lua
+Search.lua
 API.lua
 SelfTest.lua

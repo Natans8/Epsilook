@@ -36,11 +36,12 @@ from enum import Enum
 from ..encode import FEWEST_BYTES, layout_for
 from ..model.section import Cardinality, Encoding, Layout, Section
 
-ADDON_FORMAT = 1
+ADDON_FORMAT = 2
 """The shape of the emitted header and blob.
 
 Read by whatever loads these files, so a reader written against one layout
-refuses a payload written in another rather than misreading it.
+refuses a payload written in another rather than misreading it. Format 2
+added the schema file beside the axes.
 """
 
 DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -476,7 +477,9 @@ def rendered(value: object) -> str:
     of them is spelled like a Lua keyword.
 
     Raises:
-        TypeError: a value with no Lua spelling.
+        TypeError: a value with no Lua spelling, which includes None: an
+            unset field is left out by whoever built the table rather than
+            spelled as nil and discarded by the parser.
     """
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -575,6 +578,17 @@ def toc_file(addon: str, title: str, notes: str, *, version: str, pack: str,
     return "\n".join(lines).encode("utf-8")
 
 
+def preamble(pack: str) -> str:
+    """The lines every emitted file opens with: its provenance, and the global
+    it assigns into, created if the data loads before the reader does.
+
+    One place, because every reader depends on what these lines do, and a
+    header spelled per file is a header that drifts.
+    """
+    return (f"-- Generated from pack {pack}. Do not edit.\n"
+            f"{NAMESPACE} = {NAMESPACE} or {{}}\n")
+
+
 def assignment(axis: str, header: Mapping[str, object],
                blob: bytes, pack: str) -> bytes:
     """One axis file: the header as a table, then the blob beside it.
@@ -587,9 +601,8 @@ def assignment(axis: str, header: Mapping[str, object],
     # A local alias for the global, which is the convention wherever one is
     # read more than once: a global read goes through the environment table
     # and a local is a stack slot.
-    opening = (f"-- Generated from pack {pack}. Do not edit.\n"
-               f"{NAMESPACE} = {NAMESPACE} or {{}}\n"
-               f"{NAMESPACE}.{PAYLOAD} = {NAMESPACE}.{PAYLOAD} or {{}}\n"
+    opening = (preamble(pack)
+               + f"{NAMESPACE}.{PAYLOAD} = {NAMESPACE}.{PAYLOAD} or {{}}\n"
                f"local held = {NAMESPACE}.{PAYLOAD}\n"
                f"held[{quoted(axis)}] = {rendered(header)}\n"
                f"held[{quoted(axis)}].blob = ").encode("utf-8")
@@ -633,22 +646,29 @@ def index_source(axes: Sequence[str], *, pack: str, built: str,
               "supplied": (dict(SUPPLIED_BY) if variation is Variation.LEAN
                            else {}),
               "absent": list(absent)}
-    return (f"-- Generated from pack {pack}. Do not edit.\n"
-            f"{NAMESPACE} = {NAMESPACE} or {{}}\n"
-            f"{NAMESPACE}.index = {rendered(header)}\n").encode("utf-8")
+    return (preamble(pack) + f"{NAMESPACE}.index = {rendered(header)}\n").encode("utf-8")
 
 
-def payload_path() -> str:
-    """Where a loaded axis lands, as a reader would spell it.
+SCHEMA = "schema"
+"""The key inside the global that the query language's declarations land under."""
 
-    One place, because the emitter writes it and every reader has to find it,
-    and a path spelled twice is a path that can disagree with itself.
+
+def schema_source(schema: Mapping[str, object], pack: str) -> bytes:
+    """The file carrying the query language's declarations.
+
+    The kinds, types, operators and roles the web engine is declared with,
+    exported through its own door and rendered here as one table, so the
+    addon's engine parses the same words and compares the same numbers. It
+    rides in the data addon rather than the code addon because it is generated
+    and because it must agree with the row tables beside it, which name the
+    kinds it declares.
     """
-    return f"{NAMESPACE}.{PAYLOAD}"
+    return (preamble(pack) + f"{NAMESPACE}.{SCHEMA} = {rendered(schema)}\n").encode("utf-8")
 
 
 def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
            pack: str, version: str, built: str, variation: Variation,
+           schema: Mapping[str, object],
            absent: Sequence[str] = (),
            policy: Mapping[Cardinality, Encoding] = FEWEST_BYTES) -> Chunk:
     """The one addon directory a variation of the data ships as.
@@ -658,6 +678,8 @@ def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
         produced: each section's encoded payload, by section name, exactly as
             the browser's modules carry it.
         pack: the pack's identity, which each toc advertises as its version.
+        schema: the query language's declarations, as the web engine exports
+            them.
         version: the build being packed, which decides the interface number.
         built: the day the pack was built, carried through rather than taken
             now, so emitting twice from one pack gives one answer.
@@ -668,8 +690,8 @@ def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
             different policy than it was built with sees the wrong shape.
 
     Returns:
-        One `Chunk`: the toc, the index, and a file per axis that has anything
-        in it.
+        One `Chunk`: the toc, the index, the schema, and a file per axis that
+        has anything in it.
 
     Raises:
         KeyError: a produced section belongs to no axis. Dropping it silently
@@ -691,7 +713,8 @@ def chunks(sections: Sequence[Section], produced: Mapping[str, object], *,
 
     ordered = [axis for axis in AXES if axis in holding]
     files = {"index.lua": index_source(ordered, pack=pack, built=built,
-                                       variation=variation, absent=absent)}
+                                       variation=variation, absent=absent),
+             "schema.lua": schema_source(schema, pack)}
     for axis in ordered:
         files[f"{axis}.lua"] = axis_source(axis, holding[axis], produced,
                                            pack=pack, built=built,

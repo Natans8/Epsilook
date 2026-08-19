@@ -217,6 +217,13 @@ DOM_NAMES = (
 # that vocabulary is that it may import no layer at all.
 BUILD_PACKAGE = "build/pack"
 PYTHON_TESTS = "test/py"
+
+# The addon is a sub-project with its own test tree, written to depend on
+# nothing outside addon/ but the interpreter, so that the directory can move to
+# a repository of its own whole. It carries its own conftest.py and support.py,
+# the same names test/py carries, so every tool runs over it as a second
+# invocation rather than in one sweep with the repository's sources.
+ADDON_TESTS = "addon/test"
 BUILD_LAYERS = ("sources", "tables", "routes", "derive", "model", "encode",
                 "emit", "pipeline", "__main__")
 
@@ -1299,7 +1306,7 @@ def check_comment_style(rep: Report) -> None:
     Skipped rather than failed while the package is absent, so this does not
     become the reason a checkout without it cannot commit.
     """
-    roots = [ROOT / BUILD_PACKAGE, ROOT / PYTHON_TESTS]
+    roots = [ROOT / BUILD_PACKAGE, ROOT / PYTHON_TESTS, ROOT / ADDON_TESTS]
     modules = sorted(path for root in roots if root.is_dir()
                      for path in root.rglob("*.py"))
     if not modules:
@@ -1500,7 +1507,19 @@ def check_delivery_declaration(rep: Report) -> None:
                  f"the build writes CHANNELLED={CHANNELLED} BREAKS_ON_MOVE={BREAKS_ON_MOVE}, "
                  f"packrows.ts reads {found['DELIVERY_CHANNELLED']}/{found['DELIVERY_BREAKS_ON_MOVE']}")
         return
-    rep.ok("delivery flag bits", "build and row reader agree on both bits")
+    # The addon reads the same flags, and can import the build no more than the
+    # app can; its declaration is one line and is reconciled here the same way.
+    lua = (ROOT / "addon" / "Epsilook" / "Search.lua").read_text(encoding="utf-8")
+    match = re.search(r"^local DELIVERY_CHANNELLED, DELIVERY_BREAKS_ON_MOVE = (\d+), (\d+)$", lua, re.MULTILINE)
+    if match is None:
+        rep.fail("delivery flag bits", "addon/Epsilook/Search.lua no longer declares the two bits on one line")
+        return
+    if int(match.group(1)) != CHANNELLED or int(match.group(2)) != BREAKS_ON_MOVE:
+        rep.fail("delivery flag bits",
+                 f"the build writes CHANNELLED={CHANNELLED} BREAKS_ON_MOVE={BREAKS_ON_MOVE}, "
+                 f"Search.lua reads {match.group(1)}/{match.group(2)}")
+        return
+    rep.ok("delivery flag bits", "build, row reader and addon agree on both bits")
 
 
 def check_locale_catalogs(rep: Report) -> None:
@@ -2071,14 +2090,18 @@ def check_toolchain(rep: Report) -> None:
     run_tool(rep, "selene", ["selene", "addon"],
              "lua 5.1 correctness over addon/, selene.toml")
     run_tool(rep, "mypy", ["uv", "run", "mypy", *PYTHON_SOURCES])
-    run_tool(rep, "pyflakes", ["uv", "run", "pyflakes", *PYTHON_SOURCES])
+    run_tool(rep, "mypy addon", ["uv", "run", "mypy", ADDON_TESTS])
+    run_tool(rep, "pyflakes", ["uv", "run", "pyflakes", *PYTHON_SOURCES, ADDON_TESTS])
     # --recursive walks a directory that is not an import package. test/py is
     # deliberately one of those: pytest's importlib mode wants no __init__.py,
     # and without this pylint reports the absent file as a parse error.
     run_tool(rep, "pylint", ["uv", "run", "pylint", "--errors-only", "--score=n",
                              "--recursive=y", *PYTHON_SOURCES],
              "errors only; style findings are advisory (.pylintrc)")
+    run_tool(rep, "pylint addon", ["uv", "run", "pylint", "--errors-only", "--score=n",
+                                   "--recursive=y", ADDON_TESTS])
     run_tool(rep, "pytest", ["uv", "run", "pytest"], "test/py/*_test.py")
+    run_tool(rep, "pytest addon", ["uv", "run", "pytest", ADDON_TESTS], "addon/test/*_test.py, under lupa")
     check_browser_matrix(rep)
     check_mermaid(rep)
 

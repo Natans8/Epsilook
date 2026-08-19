@@ -19,7 +19,8 @@
     "battery": "node tools/build.mjs --cli && node tools/battery.mjs",
     "lint": "oxlint --type-aware",
     "surface": "node tools/build.mjs --cli && node tools/surface.mjs",
-    "translate": "node tools/build.mjs --cli && node tools/translate.mjs"
+    "translate": "node tools/build.mjs --cli && node tools/translate.mjs",
+    "schema": "node tools/build.mjs --cli && node tools/schema.mjs"
   },
   "engines": {
     "node": ">=22"

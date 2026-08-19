@@ -46,7 +46,8 @@ const dataset = packDataset(loaded);
 const parsed = parse(query, {mode: "final"});
 for (const d of parsed.diagnostics) toStderr("diagnostic:", JSON.stringify(d));
 
-const ids = [...run(parsed, dataset)].toSorted((a, b) => a - b);
+// The kernel answers in spell INDEXES, dense from zero; the ids are the pack's.
+const ids = [...run(parsed, dataset)].map((at) => loaded.spells.ids[at]).toSorted((a, b) => a - b);
 const limit = Math.max(0, Number(values.limit) || 0);
 const nameOf = (id: number): string => {
     const pos = loaded.index.get(id);

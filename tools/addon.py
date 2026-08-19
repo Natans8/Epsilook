@@ -27,7 +27,9 @@ megabytes and rebuilds from the pack in seconds.
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -154,7 +156,35 @@ def install(variation: Variation, into: Path) -> int:
     return written
 
 
-def build(pack_dir: Path, variation: Variation, *, dry: bool) -> None:
+def schema() -> dict[str, object]:
+    """The query language's declarations, read through the web engine's door.
+
+    The addon's engine is generic over these, so they are exported from the one
+    place they are declared rather than restated: `tools/schema.ts` prints the
+    catalogue, the types with their notations, the operators and the target
+    roles as JSON, and this hands them to the emitter to render as Lua. The
+    tool is bundled first because it is an entry point on the engine like the
+    other command-line tools, and nothing else on this path runs Node.
+
+    Raises:
+        SystemExit: Node is missing or the export failed, with its own message.
+    """
+    try:
+        subprocess.run(["node", "tools/build.mjs", "--cli"], cwd=ROOT,
+                       check=True)
+        printed = subprocess.run(["node", "tools/schema.mjs"], cwd=ROOT,
+                                 check=True, capture_output=True, text=True,
+                                 encoding="utf-8")
+    except FileNotFoundError:
+        sys.exit("error: node is not on the path; the schema export runs "
+                 "through the web engine")
+    except subprocess.CalledProcessError as failed:
+        sys.exit(f"error: the schema export failed ({failed.returncode})")
+    return json.loads(printed.stdout)
+
+
+def build(pack_dir: Path, variation: Variation, declared: dict[str, object],
+          *, dry: bool) -> None:
     """One variation of the addon data, from one shipped pack."""
     sections = packfile.load(pack_dir)
     meta = sections.pop("meta", {})
@@ -172,6 +202,7 @@ def build(pack_dir: Path, variation: Variation, *, dry: bool) -> None:
                  f"client interface number from")
     built = chunks(SECTIONS, sections, pack=pack_dir.name, version=str(version),
                    built=str(meta.get("built", "")), variation=variation,
+                   schema=declared,
                    absent=tuple(manifest.get("absentSections", ())))
     total = sum(len(payload) for payload in built.files.values())
     log(f"{variation.value}: {built.addon}, {len(built.files)} files, "
@@ -209,8 +240,9 @@ def main() -> None:
     wanted = ([Variation(name) for name in args.variation]
               or list(Variation))
     log(f"Reading {pack_dir.name}")
+    declared = schema()
     for variation in wanted:
-        build(pack_dir, variation, dry=args.dry)
+        build(pack_dir, variation, declared, dry=args.dry)
 
     if args.install:
         if len(wanted) != 1:

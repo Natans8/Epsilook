@@ -198,7 +198,8 @@ define(["range"], NUMERIC, (stored, operand) => {
 // Exact equality over sixteen million values answers almost nothing on its own.
 
 /** How far apart two colours may be, per channel, and still count as the same colour. */
-const COLOUR_TOLERANCE = 24;
+/** How far each channel may stray, in either direction, for a bare colour operand to match a stored colour. */
+export const COLOUR_TOLERANCE = 24;
 
 const channels = (packed: number): [number, number, number] =>
     [(packed >> 16) & 0xff, (packed >> 8) & 0xff, packed & 0xff];
@@ -222,7 +223,7 @@ define(["contains"], ["colour"], (stored, operand) => {
  * role spans two bits that mean the same thing from a reader's point of view, while "plays on caster and target
  * together" is a conjunction that no single bit spells.
  */
-interface BitTest {
+export interface BitTest {
     readonly any?: number;
     readonly all?: number;
 }
@@ -230,7 +231,8 @@ interface BitTest {
 /** The bits the build assigns to each role, and the roles a reader can name. */
 const ROLE_BITS = {caster: 1, target: 2, area: 4, notCaster: 8, missileDest: 16} as const;
 
-const ROLES: Readonly<Record<string, BitTest>> = {
+/** The bits each role name answers to: any of `any`, all of `all`. Exported so a second engine reads the one mapping. */
+export const ROLES: Readonly<Record<string, BitTest>> = {
     caster: {any: ROLE_BITS.caster},
     target: {any: ROLE_BITS.target | ROLE_BITS.notCaster},
     area: {any: ROLE_BITS.area | ROLE_BITS.missileDest},

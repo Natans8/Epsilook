@@ -30,7 +30,8 @@ export {
 export {COLOUR_NAMES} from "./vocabulary/colour-names";
 
 export type {Match, Operand} from "./evaluate/value-matching";
-export {coverage, matcher, roleNames} from "./evaluate/value-matching";
+export type {BitTest} from "./evaluate/value-matching";
+export {COLOUR_TOLERANCE, coverage, matcher, roleNames, ROLES} from "./evaluate/value-matching";
 
 export type {Column} from "./schema/columns";
 export {

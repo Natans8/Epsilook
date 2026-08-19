@@ -28,6 +28,19 @@ from pack.model.section import Layout
 lua51 = pytest.importorskip("lupa.lua51")
 
 ROOT = Path(__file__).resolve().parents[2]
+
+SCHEMA: dict[str, Any] = {
+    "format": 1,
+    "kinds": [{"id": "spell.name", "synonyms": [],
+               "props": [{"name": "text", "types": ["text"],
+                          "sentinels": [{"value": -1, "word": "unlimited"}]}]}],
+}
+"""A schema small enough to read in a test, of the shape the web engine exports.
+
+A stand-in, not the export: the tests here are about the files, and the real
+schema needs Node to produce. What it does carry is each shape the renderer
+has to spell.
+"""
 READER = ROOT / "addon" / "Epsilook" / "Reader.lua"
 DECLARED = {section.name: section for section in SECTIONS}
 
@@ -277,7 +290,8 @@ def test_a_section_with_no_axis_stops_the_emitter() -> None:
     with pytest.raises(KeyError, match="belongs to no axis"):
         chunks([_renamed(section, "notAnAxisMember")],
                {"notAnAxisMember": _empty_payload(section)},
-               pack="p", version="9.2.7.1", built="", variation=Variation.FULL)
+               pack="p", version="9.2.7.1", built="", variation=Variation.FULL,
+               schema=SCHEMA)
 
 
 def _renamed(section: Any, name: str) -> Any:
@@ -296,12 +310,28 @@ def _empty_payload(section: Any) -> Any:
 def test_the_index_reports_the_format_and_the_supply(lua: Any) -> None:
     """The index says what exists and what was left to the game."""
     built = chunks([], {}, pack="9.2.7-epsilon.45745", version="9.2.7.45745",
-                   built="2026-08-18", variation=Variation.LEAN)
+                   built="2026-08-18", variation=Variation.LEAN, schema=SCHEMA)
     lua.execute(built.files["index.lua"])
     index = unwrap(lua.globals()[b"Epsilook"][b"index"])
     assert index["format"] == ADDON_FORMAT
     assert index["variation"] == "lean"
     assert index["supplied"] == dict(SUPPLIED_BY)
+
+
+def test_the_schema_file_loads_and_reads_back(lua: Any) -> None:
+    """The declarations land under the global as the table they were exported as."""
+    built = chunks([], {}, pack="p", version="9.2.7.1", built="",
+                   variation=Variation.FULL, schema=SCHEMA)
+    lua.execute(built.files["schema.lua"])
+    held = unwrap(lua.globals()[b"Epsilook"][b"schema"])
+    kind = held["kinds"][0]
+    assert kind["id"] == "spell.name"
+    assert kind["props"][0]["sentinels"] == [{"value": -1, "word": "unlimited"}]
+    assert "schema.lua" in built.files["Epsilook_Data.toc"].decode()
+    # A null has no Lua spelling: the exporter leaves an unset field out, and
+    # the renderer refuses one rather than inventing a spelling.
+    with pytest.raises(TypeError):
+        rendered({"full": None})
 
 
 def test_axes_are_declared_in_a_stable_order() -> None:
@@ -331,7 +361,7 @@ def test_the_whole_pack_round_trips_through_lua(lua: Any) -> None:
     meta = sections.pop("meta", {})
     built = chunks(SECTIONS, sections, pack=pack_dir.name,
                    version=str(meta.get("version")), built=str(meta.get("built")),
-                   variation=Variation.FULL)
+                   variation=Variation.FULL, schema=SCHEMA)
 
     checked = 0
     for name, source in built.files.items():
