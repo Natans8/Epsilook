@@ -76,6 +76,21 @@ end
 --- The word at the bottom of a full page, which pages on.
 local NEXT = { key = "more", label = "Next", hint = "Click to view the next %d results" }
 
+--- How tall an icon draws on a line, in pixels.
+Shell.ICON = 16
+
+--- A bracketed word led by an icon where there is one, the icon against
+-- the bracket.
+-- @param label the word
+-- @param icon a texture's file id, or nil
+function Shell.Iconed(label, icon)
+	local shown = "[" .. label .. "]"
+	if icon then
+		shown = "|T" .. icon .. ":" .. Shell.ICON .. "|t" .. shown
+	end
+	return shown
+end
+
 --- One of this addon's links, shown as a bracketed word.
 -- The link names the spell, the verb and, for a part's action, the axis and
 -- the row, so that it is complete in itself: `...:133:spawn:model:1`.
@@ -85,13 +100,14 @@ local NEXT = { key = "more", label = "Next", hint = "Click to view the next %d r
 -- @param axis the axis of the part the action takes, or nil for a spell action
 -- @param n the part's row on that axis
 -- @param colour the colour code to draw it in, the action blue by default
+-- @param icon a texture's file id to lead the word with, or nil
 -- @return the link markup
-function Shell.Link(spellID, verb, label, axis, n, colour)
+function Shell.Link(spellID, verb, label, axis, n, colour, icon)
 	local target = Shell.LINK .. ":" .. spellID .. ":" .. verb
 	if axis then
 		target = target .. ":" .. axis .. ":" .. n
 	end
-	return (colour or BLUE) .. "|H" .. target .. "|h[" .. label .. "]|h" .. END
+	return (colour or BLUE) .. "|H" .. target .. "|h" .. Shell.Iconed(label, icon) .. "|h" .. END
 end
 
 --- The parts of one of this addon's links, or nil for any other link.
@@ -122,19 +138,29 @@ function Shell.Shown(spell)
 	return spell.name, spell.icon ~= 0 and spell.icon or nil
 end
 
---- How tall a spell's icon draws on a line, in pixels.
-Shell.ICON = 16
-
 --- The game's own link to a spell, as `.lookup` prints one, its icon inside
 -- the link against the name.
--- @param spell a SpellData
+-- @param spell a SpellData, or any record with the spell's id, name and icon
 function Shell.SpellLink(spell)
 	local name, icon = Shell.Shown(spell)
-	local shown = "[" .. name .. "]"
-	if icon then
-		shown = "|T" .. icon .. ":" .. Shell.ICON .. "|t" .. shown
+	return WHITE .. "|Hspell:" .. spell.id .. "|h" .. Shell.Iconed(name, icon) .. "|h" .. END
+end
+
+--- The separator between a link and its buttons, and between buttons, as
+-- `.lookup` draws it.
+Shell.DASH = " - "
+
+--- The spell actions a spell takes, as links joined.
+-- @param spellID the spell
+-- @return the links joined
+function Shell.SpellActionLinks(spellID)
+	local links = {}
+	for _, action in ipairs(Shell.SPELL_ACTIONS) do
+		if not action.auraOnly or Epsilook:HasPartOfKind(spellID, "mech", "aura") then
+			links[#links + 1] = Shell.Link(spellID, action.key, action.label)
+		end
 	end
-	return WHITE .. "|Hspell:" .. spell.id .. "|h" .. shown .. "|h" .. END
+	return table.concat(links, Shell.DASH)
 end
 
 --- One result for a spell, as two lines: the spell, then its actions.
@@ -148,7 +174,7 @@ end
 -- @param axes the axes to report, in order
 -- @return the two lines
 function Shell.ResultLines(spell, counts, axes)
-	local head = GOLD .. spell.id .. END .. " - " .. Shell.SpellLink(spell)
+	local head = GOLD .. spell.id .. END .. Shell.DASH .. Shell.SpellLink(spell)
 	if counts and axes then
 		local made = {}
 		for _, axis in ipairs(axes) do
@@ -159,16 +185,10 @@ function Shell.ResultLines(spell, counts, axes)
 			end
 		end
 		if #made > 0 then
-			head = head .. "  " .. table.concat(made, " ")
+			head = head .. Shell.DASH .. table.concat(made, " ")
 		end
 	end
-	local links = {}
-	for _, action in ipairs(Shell.SPELL_ACTIONS) do
-		if not action.auraOnly or Epsilook:HasPartOfKind(spell.id, "mech", "aura") then
-			links[#links + 1] = Shell.Link(spell.id, action.key, action.label)
-		end
-	end
-	return head, "      " .. table.concat(links, " - ")
+	return head, "      " .. Shell.SpellActionLinks(spell.id)
 end
 
 --- The addon's own prefix on a line it prints about itself, rather than about a spell.
@@ -207,59 +227,53 @@ function Shell.Split(message)
 	return nil, message
 end
 
---- A message read the way `.lookup` is typed: a head word followed by a space
--- and a token binds to that token, so `model 6dr` is `model:6dr`. The
--- leniency is the shell's, not the grammar's -- the query the engine sees is
--- one the web reads the same way. A head already bound, a head at the end,
--- and anything inside quotes are left alone, and the next token must be a
--- value rather than an exclusion or an alternation.
+--- A message read the way `.lookup` is typed: a head word that opens the
+-- message, followed by a space, binds to everything after it, so
+-- `model 6dr fire` is `model:6dr model:fire` and `model 6dr -missile` is
+-- `model:6dr -model:missile`. The leniency is the shell's, not the grammar's
+-- -- the query the engine sees is one the web reads the same way -- and a
+-- head bound with the colon, as in `model:6dr fire`, is left exactly as
+-- typed, as is any later token carrying its own head. An alternation symbol
+-- or word between tokens stands as it is.
+-- TODO: bind the rest as one row scope, `model:{6dr fire}`, once the engine
+-- reads scopes; the kernel's row walk already takes tests per row.
 -- @param message the query as typed
 -- @return the query as the engine reads it
 function Shell.Lenient(message)
 	local grammar = Epsilook.Schema.grammar
-	local out, i, n = {}, 1, #message
-	local pending
+	local head, rest = message:match("^(%S+)%s+(.+)$")
+	if not head or head:find(grammar.bind, 1, true) then
+		return message
+	end
+	if not Epsilook.Schema.HeadOf(Epsilook.Text.fold(head)) then
+		return message
+	end
+	local out = { head }
+	local i, n = 1, #rest
 	while i <= n do
-		local quoted, stop = message:match('^(%b"")()', i)
-		local token
-		if quoted then
-			token, i = quoted, stop
-		else
-			local word, after = message:match("^(%S+)()", i)
-			if word then
-				token, i = word, after
-			else
-				local space, after_ = message:match("^(%s+)()", i)
-				token, i = space, after_
-			end
+		local token, after = rest:match('^(%b"")()', i)
+		if not token then
+			token, after = rest:match("^(%S+)()", i)
 		end
-		if token:match("^%s+$") then
-			if not pending then
+		if not token then
+			i = rest:match("^%s*()", i)
+		else
+			i = after
+			local first = token:sub(1, 1)
+			if first == grammar["or"] or Epsilook.Text.fold(token) == grammar.orWord then
 				out[#out + 1] = token
-			end
-		elseif pending then
-			local value = token
-			if
-				value:sub(1, 1) == grammar.negate
-				or value:sub(1, 1) == grammar["or"]
-				or Epsilook.Text.fold(value) == grammar.orWord
-			then
-				out[#out + 1] = pending .. " " .. value
+			elseif token:find(grammar.bind, 1, true) then
+				out[#out + 1] = token
+			elseif first == grammar.negate then
+				out[#out + 1] = grammar.negate .. head .. grammar.bind .. token:sub(2)
 			else
-				out[#out + 1] = pending .. grammar.bind .. value
+				out[#out + 1] = head .. grammar.bind .. token
 			end
-			pending = nil
-		elseif not quoted and Epsilook.Schema.HeadOf(Epsilook.Text.fold(token)) then
-			-- A bare head word: bound to the next token if one comes.
-			pending = token
-		else
-			out[#out + 1] = token
 		end
 	end
-	if pending then
-		out[#out + 1] = pending
-	end
-	return table.concat(out)
+	-- The head itself is not a clause; it bound to what followed it.
+	table.remove(out, 1)
+	return table.concat(out, " ")
 end
 
 --- The help text, read off the declarations so it cannot fall behind them.

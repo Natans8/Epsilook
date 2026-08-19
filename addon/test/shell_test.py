@@ -106,15 +106,18 @@ def test_the_spell_text_record_holds_the_pools(engine: LuaRuntime) -> None:
     assert method(api, b"GetSpellTextByID")(api, 0) is None
 
 
-def test_a_head_word_then_a_space_binds_like_lookup(engine: LuaRuntime) -> None:
+def test_a_leading_head_word_binds_to_everything_after_it(engine: LuaRuntime) -> None:
     lenient = lua_function(engine, b"Epsilook.Shell.Lenient")
     assert lenient(b"model 6dr") == b"model:6dr"
-    assert lenient(b"model 6dr sound fire") == b"model:6dr sound:fire"
-    assert lenient(b"model:6dr") == b"model:6dr"
+    assert lenient(b"model 6dr fire") == b"model:6dr model:fire"
+    assert lenient(b"model 6dr -missile") == b"model:6dr -model:missile"
+    assert lenient(b"model 6dr | fire") == b"model:6dr | model:fire"
+    assert lenient(b"model 6dr sound:fire") == b"model:6dr sound:fire"
+    assert lenient(b'name "fire ball"') == b'name:"fire ball"'
+    assert lenient(b"model:6dr fire") == b"model:6dr fire"
     assert lenient(b"fire model") == b"fire model"
-    assert lenient(b"model -missile") == b"model -missile"
-    assert lenient(b'name "fire ball" model') == b'name:"fire ball" model'
     assert lenient(b"cast >2s") == b"cast:>2s"
+    assert lenient(b"fireball") == b"fireball"
 
 
 def test_the_aura_word_is_offered_only_where_an_aura_is_applied(engine: LuaRuntime) -> None:

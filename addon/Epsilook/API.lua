@@ -369,9 +369,10 @@ end
 -- disagree about what a model affords, nor about which of those changes the
 -- world. `effect` is "read" where repeating it is harmless and offering it from
 -- stale output is safe, and "world" where neither is true. `needs` names the
--- PartData value the action takes, and `kind`, where set, the one kind of
--- part that takes it; the order is the order a line offers them, and the
--- first action a part takes is the one a shift-click hands over.
+-- PartData value the action takes; `kind`, where set, the one kind of part
+-- that takes it, and `except` the one kind that does not. The order is the
+-- order a line offers them, and the first action a part takes is the one a
+-- shift-click hands over.
 -- @param axis one of GetPartAxes()
 -- @return an array of Action, empty where the axis affords nothing
 function Epsilook:GetActions(axis)
@@ -402,6 +403,7 @@ Epsilook.ACTIONS = {
 			key = "spawn",
 			label = "Spawn",
 			needs = "file",
+			except = "item",
 			effect = "world",
 			revert = "",
 			hint = "Click to spawn this model as a gameobject where you stand",
@@ -463,44 +465,20 @@ Epsilook.ACTIONS = {
 	},
 	anim = {
 		{
-			key = "animkit",
-			label = "Kit",
-			needs = "id",
-			effect = "world",
-			revert = "",
-			hint = "Click to play this animation kit on yourself",
-		},
-		{
 			key = "anim",
 			label = "Anim",
 			needs = "anim",
 			effect = "world",
-			revert = "resetAnim",
+			revert = "",
 			hint = "Click to play this animation on yourself once",
 		},
 		{
 			key = "stand",
-			label = "Stand",
+			label = "Emote",
 			needs = "anim",
 			effect = "world",
-			revert = "resetStand",
+			revert = "",
 			hint = "Click to hold this animation as your standing pose",
-		},
-		{
-			key = "resetAnim",
-			label = "Reset Anim",
-			needs = "",
-			effect = "world",
-			revert = "",
-			hint = "Click to stop the animation",
-		},
-		{
-			key = "resetStand",
-			label = "Reset Stand",
-			needs = "",
-			effect = "world",
-			revert = "",
-			hint = "Click to stand normally again",
 		},
 	},
 }

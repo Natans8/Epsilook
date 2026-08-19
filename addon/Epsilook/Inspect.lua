@@ -9,8 +9,10 @@
 -- for `.gob spawn`, an animation for `.mod anim`, a kit by its id -- carries
 -- it as a link: its tooltip holds every value the part has, and a shift-click
 -- hands the chat box the game's own link or the number, as a shift-click on
--- any link would. A part nothing takes by hand is plain text with its values
--- beside it. Every link is absolute -- spell, axis, row -- so a dossier in
+-- any link would. A part that names another spell shows the game's own
+-- spell link and that spell's actions; an item shows with the client's icon
+-- and quality colour. A part nothing takes by hand is plain text with its
+-- values beside it. Every link is absolute -- spell, axis, row -- so a dossier in
 -- old scrollback still does what it says, and a "world" action is exactly as
 -- dangerous from there as it was when printed, which is why the sound
 -- actions carry their stop beside them.
@@ -106,22 +108,53 @@ local function plain(value)
 	return value.text
 end
 
---- A value as one piece of text for a line: the plain text, with the id in
--- grey after a name that resolved from one.
+--- A value as one piece of text for a line: the plain text, and where a
+-- name resolved from an id both, written `name - id` as the server writes
+-- them.
 local function written(value)
 	if value.id and value.text ~= "" then
-		return value.text .. " " .. GREY .. value.id .. END
+		return value.text .. " - " .. value.id
 	end
 	return plain(value)
 end
+
+--- The values written bare beside a subject, without their name: a phrase
+-- that reads on its own.
+local BARE = { how = true }
 
 --- A value beside a subject on a line: its name in grey and the value, a
 -- target written as who it is on.
 local function beside(value)
 	if value.name == "target" then
 		return GREY .. "on " .. END .. value.text
+	elseif BARE[value.name] then
+		return written(value)
 	end
 	return GREY .. value.name .. " " .. END .. written(value)
+end
+
+--- What the client shows for an item: its name where the pack has none and
+-- the client has it loaded, its icon, and the colour of its quality. Each
+-- falls back to the pack's own where the client has nothing.
+-- @param id the item id
+-- @param name the pack's name for it
+-- @return the name, the icon's file id or nil, and the colour code or nil
+local function itemShown(id, name)
+	local icon, colour
+	if _G.GetItemInfoInstant then
+		icon = select(5, _G.GetItemInfoInstant(id))
+	end
+	if _G.GetItemInfo then
+		local known, _, quality = _G.GetItemInfo(id)
+		if known and name == "" then
+			name = known
+		end
+		if quality and _G.GetItemQualityColor then
+			local hex = select(4, _G.GetItemQualityColor(quality))
+			colour = hex and "|c" .. hex or nil
+		end
+	end
+	return name, icon, colour
 end
 
 --- The subject of a list of values: the first that says anything, moved to
@@ -220,7 +253,7 @@ end
 -- @param action an Action of the part's axis
 -- @return the number, or nil
 function Inspect.ArgumentOf(part, action)
-	if action.kind and action.kind ~= part.kind then
+	if action.kind and action.kind ~= part.kind or action.except == part.kind then
 		return nil
 	end
 	if action.needs == "" or part.values[action.needs] == nil then
@@ -234,71 +267,72 @@ function Inspect.ArgumentOf(part, action)
 	return needed(part, action.needs)
 end
 
---- Whether a part can take an action: it needs nothing and is of the
--- action's kind, or it has what the action sends.
+--- Whether a part can take an action: it is of the action's kind and not
+-- the kind it excepts, and it needs nothing or has what the action sends.
 local function takes(part, action)
-	if action.needs == "" then
-		return not action.kind or action.kind == part.kind
+	if action.kind and action.kind ~= part.kind or action.except == part.kind then
+		return false
 	end
-	return Inspect.ArgumentOf(part, action) ~= nil
+	return action.needs == "" or Inspect.ArgumentOf(part, action) ~= nil
 end
 
 --- The game's own link, as the server prints one, around a number and a name.
-local function gameLink(colour, linkType, number, name)
-	return colour .. "|H" .. linkType .. ":" .. number .. "|h[" .. name .. "]|h" .. END
+local function gameLink(linkType, number, name)
+	return WHITE .. "|H" .. linkType .. ":" .. number .. "|h[" .. name .. "]|h" .. END
+end
+
+--- A bare number for the chat box.
+local function bare(number)
+	return tostring(number)
 end
 
 --- What a shift-click on a part hands the chat box, by the action the part's
 -- line leads with: the game's own link where the server reads one back --
--- a gameobject entry for a model or an object, a creature entry, an item,
--- a display, an emote -- and the bare id where it reads a number. An action
--- not named here hands nothing over, and a line with no such action is no
--- link. Each carries the tooltip line that says so.
+-- an item, a creature entry, a gameobject entry for an object -- and the
+-- bare id elsewhere, which is what a model's spawn id, an emote, a kit and
+-- a sound file are typed as. An action not named here hands nothing over,
+-- and a line with no such action is no link. Each carries the tooltip line
+-- that says so.
 local INSERTS = {
 	spawn = {
-		hint = "Shift-click to link this in chat, as .gob spawn takes it",
-		text = function(number, name)
-			return gameLink(WHITE, "gameobject_entry", number, name)
+		hint = "Shift-click to type this into chat, as .gob spawn takes it",
+		text = function(number, name, action)
+			if action.needs == "object" then
+				return gameLink("gameobject_entry", number, name)
+			end
+			return bare(number)
 		end,
 	},
 	add = {
 		hint = "Shift-click to link this item in chat, as .additem takes it",
 		text = function(number, name)
-			return gameLink(WHITE, "item", number .. ":0:0:0:0:0:0:0:0", name)
+			return gameLink("item", number .. ":0:0:0:0:0:0:0:0", name)
 		end,
 	},
 	summon = {
 		hint = "Shift-click to link this creature in chat, as .npc spawn takes it",
 		text = function(number, name)
-			return gameLink(WHITE, "creature_entry", number, name)
+			return gameLink("creature_entry", number, name)
 		end,
 	},
 	morph = {
-		hint = "Shift-click to link this display in chat, as .morph takes it",
-		text = function(number, name)
-			return gameLink(WHITE, "displayID", number, name)
-		end,
+		hint = "Shift-click to type this display id into chat, as .morph takes it",
+		text = bare,
 	},
 	anim = {
-		hint = "Shift-click to link this emote in chat, as .mod anim takes it",
-		text = function(number, name)
-			return gameLink("|cffadffff", "emoteID", number, name)
-		end,
+		hint = "Shift-click to type this emote id into chat, as .mod anim takes it",
+		text = bare,
 	},
-	animkit = {
-		hint = "Shift-click to type this kit's id into chat, as .mod animkit takes it",
-		text = function(number)
-			return tostring(number)
-		end,
+	stand = {
+		hint = "Shift-click to type this emote id into chat, as .mod standstate takes it",
+		text = bare,
 	},
 	playKit = {
-		hint = "Shift-click to type this kit's id into chat, as .phase playsound takes it",
-		text = function(number)
-			return tostring(number)
-		end,
+		hint = "Shift-click to type this kit id into chat, as .phase playsound takes it",
+		text = bare,
 	},
+	play = { hint = "Shift-click to type this sound file id into chat", text = bare },
 }
-INSERTS.stand = INSERTS.anim
 
 --- What a shift-click on a part's line hands the chat box: the first of the
 -- line's actions that has something to hand over, rendered for the chat box.
@@ -311,7 +345,7 @@ function Inspect.ClipOf(part, actions, name)
 		local insert = INSERTS[action.key]
 		local argument = insert and Inspect.ArgumentOf(part, action)
 		if argument then
-			return insert.text(argument, name), insert.hint
+			return insert.text(argument, name, action), insert.hint
 		end
 	end
 	return nil
@@ -330,7 +364,7 @@ function Inspect.ActionLinks(spellID, part, n, actions)
 			out[#out + 1] = Shell.Link(spellID, action.key, action.label, part.axis, n)
 		end
 	end
-	return table.concat(out, " ")
+	return table.concat(out, Shell.DASH)
 end
 
 --- The actions of an axis split by whether they take the property the axis
@@ -390,20 +424,41 @@ local function line(spellID, part, n, indent, label, verb)
 	if label then
 		out = out .. CYAN .. label .. ":" .. END .. " "
 	end
-	if values[1] then
-		local shown = written(values[1])
+	local subject = values[1]
+	local vocab = subject and Epsilook.Data.GetVocabName(part.axis, part.kind, subject.name)
+	local links
+	if vocab == "spells" then
+		-- Another spell: the game's own link to it, and its own actions.
+		out = out .. Shell.SpellLink({ id = subject.id, name = subject.text, icon = 0 })
+		for i = 2, #values do
+			out = out .. "  " .. beside(values[i])
+		end
+		links = Shell.SpellActionLinks(subject.id)
+	elseif subject then
+		local shown, icon, colour = written(subject), nil, WHITE
+		if vocab == "items" then
+			local name
+			name, icon, colour = itemShown(subject.id, subject.text)
+			shown = written({ text = name, id = subject.id })
+			colour = colour or WHITE
+		end
 		if Inspect.ClipOf(part, actions, shown) then
-			out = out .. Shell.Link(spellID, verb, shown, part.axis, n, WHITE)
+			out = out .. Shell.Link(spellID, verb, shown, part.axis, n, colour, icon)
 		else
-			out = out .. WHITE .. shown .. END
+			if icon then
+				out = out .. "|T" .. icon .. ":" .. Shell.ICON .. "|t"
+			end
+			out = out .. colour .. shown .. END
 			for i = 2, #values do
 				out = out .. "  " .. beside(values[i])
 			end
 		end
+		links = Inspect.ActionLinks(spellID, part, n, actions)
+	else
+		links = Inspect.ActionLinks(spellID, part, n, actions)
 	end
-	local links = Inspect.ActionLinks(spellID, part, n, actions)
 	if links ~= "" then
-		out = out .. "  " .. links
+		out = out .. Shell.DASH .. links
 	end
 	return out
 end
