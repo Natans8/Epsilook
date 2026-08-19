@@ -145,8 +145,8 @@
     "replace": {
       "hint": "",
       "props": {
-        "from": "",
-        "to": ""
+        "to": "",
+        "from": ""
       }
     },
     "pose": {
@@ -214,7 +214,7 @@
     "morph": {
       "hint": "",
       "props": {
-        "display": ""
+        "creature": ""
       }
     },
     "shapeshift": {

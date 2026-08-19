@@ -1,9 +1,11 @@
-"""Creature displays, resolved for the two routes that show one.
+"""Creature displays, resolved for the routes that show one.
 
-A morph and a shapeshift form both name something the caster becomes, and both
-reach a model the same way: through a display id, which resolves one table
-further down. Flattening them here is what lets the pack ship a row rather than
-a chain the app would have to walk again.
+A morph, a summon and a shapeshift form all name something that appears -- the
+caster becomes it, or it is called up beside them -- and all reach a model the
+same way: through a display id, which resolves one table further down.
+Flattening them here is what lets the pack ship a row rather than a chain the
+app would have to walk again. A creature is one thing whichever effect names
+it, so the morph and summon routes land in one list keyed by the creature.
 
 A payload the build has no row for is dropped rather than shipped nameless,
 which is the same rule the dissolve and screen routes follow: a pill made of
@@ -35,8 +37,9 @@ class Display:
 class ResolvedDisplays:
     """Every display the morph and form routes reach, flattened to rows."""
 
-    morphs: list[Display] = field(default_factory=list)
-    """Creature displays, in creature order then slot order.
+    creatures: list[Display] = field(default_factory=list)
+    """Creature displays, for every creature a morph or a summon names, in
+    creature order then slot order.
 
     A creature can carry several, and the first is the one the pill shows.
     """
@@ -58,7 +61,7 @@ def resolve_displays(effects: SpellEffectRows, creatures: CreatureModels,
     """Flatten both display routes to rows, dropping what cannot be named.
 
     Args:
-        effects: the per-spell morph and form payloads.
+        effects: the per-spell morph, summon and form payloads.
         creatures: the display-to-model tables.
         forms: the shapeshift forms this build has, and what they wear. A
             spell naming a form absent from it keeps its others and loses that
@@ -72,7 +75,9 @@ def resolve_displays(effects: SpellEffectRows, creatures: CreatureModels,
     resolved = ResolvedDisplays()
 
     used_creatures = {c for reached in effects.morphs.ids.values() for c in reached}
-    resolved.morphs = [
+    used_creatures.update(creature for summoned in effects.summons.values()
+                          for creature, _control in summoned)
+    resolved.creatures = [
         Display(creature, display, creatures.fid_for_display(display))
         for creature in sorted(used_creatures)
         for _slot, display in creatures.displays.get(creature, ())]

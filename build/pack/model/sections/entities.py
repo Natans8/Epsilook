@@ -30,6 +30,19 @@ def display_rows(which: str, id_column: str) -> Callable[[Reads], SectionColumns
     return produce
 
 
+def display_skins(reads: Reads) -> SectionColumns:
+    """The textures each named display paints, one row per texture in slot order.
+
+    Keyed by the display rather than by what reached it, so a creature's, a
+    form's, a mount's and an attached display all read the one copy.
+    """
+    rows = [(display, fid)
+            for display in sorted(reads.references.displays)
+            for fid in reads.creatures.display_skins.get(display, ())]
+    return {"displayIds": [display for display, _fid in rows],
+            "fids": [fid for _display, fid in rows]}
+
+
 def morphs(reads: Reads) -> SectionColumns:
     """The name of each creature a spell morphs into.
 
@@ -91,14 +104,24 @@ MORPHS = register(Section(
     localizable=('names',),
 ))
 
-MORPH_DISPLAYS = register(Section(
-    name="morphDisplays",
-    doc="The models each morphed creature can wear.",
+CREATURE_DISPLAYS = register(Section(
+    name="creatureDisplays",
+    doc="The displays each morphed or summoned creature can wear, and their models.",
     module="core",
-    produce=display_rows("morphs", "creatureIds"),
+    produce=display_rows("creatures", "creatureIds"),
     columns=("creatureIds", "displayIds", "fids"),
     reads=("displays",),
-    counts=(size("morphDisplays", "creatureIds"),),
+    counts=(size("creatureDisplays", "creatureIds"),),
+))
+
+DISPLAY_SKINS = register(Section(
+    name="displaySkins",
+    doc="The textures each named creature display paints over its model.",
+    module="core",
+    produce=display_skins,
+    columns=("displayIds", "fids"),
+    reads=("references", "creatures"),
+    counts=(size("displaySkins", "displayIds"),),
 ))
 
 MOUNTS = register(Section(

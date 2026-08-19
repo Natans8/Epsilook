@@ -15,7 +15,8 @@ from pack.sources.tdb import TDB_TABLES
 REGISTERED_ORDER = (
     "animKitAnims", "bonesetNames", "animKitAnimBoneset", "animNames",
     "animEmoteOneshots", "animEmoteLoops", "iconNames", "iconFids", "files",
-    "morphs", "morphDisplays", "mounts", "shapeshifts", "shapeshiftDisplays",
+    "morphs", "creatureDisplays", "displaySkins", "mounts", "shapeshifts",
+    "shapeshiftDisplays",
     "summons", "summonControlNames", "objects", "expansions", "fxChains",
     "fxTextures", "dissolves", "dissolveTextures", "glows", "shadowies",
     "ghostMats", "tints", "anchorNames", "spellAttrs", "spellDelivery",

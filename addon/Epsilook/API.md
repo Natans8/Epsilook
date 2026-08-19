@@ -81,12 +81,24 @@ nothing here hard-codes a kind.
 | `Epsilook:GetPartExtras(part)`                              | list of `{ name, value, text }` the part carries beyond its declared properties |
 | `Epsilook:GetSpawnIDByFile(fid)`                            | what `.gob spawn` takes for a model's file id, or `nil`                         |
 | `Epsilook:GetEmotesByAnim(animID)`                          | the one-shot emote id and the looping emote id, each `0` where none exists      |
+| `Epsilook:GetDisplaysByCreature(creatureID)`                | list of `{ id, file }`: the displays a creature wears, in slot order            |
+| `Epsilook:GetDisplayByCreature(creatureID)`                 | the first of those, or `nil`: what a command is handed for a creature           |
+| `Epsilook:GetDisplaySkins(displayID)`                       | list of `{ id, text }`: the textures a display paints over its model            |
+| `Epsilook:GetPartDisplays(part)`                            | list of `{ id, file, skins }`: the displays a part names, however it names them |
 
 `GetPartExtras` names what the pack carries beside a part's properties and no query reads: for an `effect`, the two
 implicit targets it resolves (`targetA`, `targetB`) and the aura it applies (`aura`), each a number with its name.
 
 `GetSpawnIDByFile` is signed: a positive number is a gameobject template, a negative one a gameobject display, and
 `.gob spawn` reads the sign.
+
+A morph and a summon store a creature; the game shows one of the displays that creature wears, and `.morph` and its
+kin take a display. `GetDisplaysByCreature` resolves the one to the many, each display with its model file as
+`{ id, text }`; a creature can wear several, the game picks one when it appears, and the first is the one a command is
+handed. `GetPartDisplays` reads a part's own declarations to find the displays it names -- through a creature, or
+outright as a mount's or an attached display's id -- and returns each with its skins; `file` is left out where the
+part already carries the model itself. `Epsilook.DISPLAY_SOURCES` is the declaration of which vocabularies hold a
+creature, which a display, and which kinds carry a display as their own id.
 
 ## Actions
 
@@ -96,11 +108,12 @@ action needs and the list says which actions an axis affords, and doing one is t
 
 | field    | meaning                                                                                                                   |
 |----------|---------------------------------------------------------------------------------------------------------------------------|
-| `key`    | the action's identity: `spawn`, `add`, `lookup`, `morph`, `play`, `stop`, `playKit`, `stopKit`, `summon`, `anim`, `stand` |
+| `key`    | the action's identity: `spawn`, `add`, `lookup`, `native`, `morph`, `mount`, `play`, `stop`, `playKit`, `stopKit`, `summon`, `animKit`, `anim`, `stand`, `speed` |
 | `label`  | the word a surface shows                                                                                                  |
 | `needs`  | the `PartData.values` name the action takes; `""` for an action needing nothing                                           |
-| `kind`   | the one kind of part that takes it, where set                                                                             |
-| `except` | the one kind of part that does not take it, where set                                                                     |
+| `kind`   | the one kind of part that takes it, where set; an action naming none is taken by every kind carrying `needs`             |
+| `except` | the kinds of part that do not take it, where set                                                                          |
+| `via`    | how the value becomes the argument, where it is not the value itself: `creatureDisplay` is the first display of the creature the value names, `factor` a percent change as the multiplier a command takes |
 | `effect` | `read` where repeating it is harmless, `world` where it changes something outside the client                              |
 | `revert` | the key of the action that undoes it, or `""`                                                                             |
 | `hint`   | what a tooltip says a click will do                                                                                       |

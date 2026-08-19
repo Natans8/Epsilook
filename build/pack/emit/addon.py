@@ -70,7 +70,7 @@ over bytes the client has just read anyway.
 """
 
 AXES: Mapping[str, str] = {
-    "model": ("modelRows morphs morphDisplays mounts shapeshifts "
+    "model": ("modelRows morphs creatureDisplays displaySkins mounts shapeshifts "
               "shapeshiftDisplays summons summonControlNames objects files "
               "modelCatNames equippedSlots items itemIconNames "
               "itemQualityNames vehicles vehicleSeats"),
@@ -109,7 +109,7 @@ SUPPLIED_BY: Mapping[str, str] = {
     "spells.icons": "GetSpellTexture",
     "soundKitNames": "C_Epsilon.SoundKit_Get",
     "files.gobs": "C_Epsilon.GODI_Get",
-    "morphDisplays": "C_Epsilon.GODI_Get",
+    "creatureDisplays": "C_Epsilon.GODI_Get",
     "iconNames": "LibRPMedia",
 }
 """What a running client answers, and the call that answers it.

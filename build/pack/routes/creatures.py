@@ -34,6 +34,12 @@ class CreatureModels:
     model_fid: dict[int, int] = field(default_factory=dict)
     """CreatureModelData.ID -> the model's file id."""
 
+    display_skins: dict[int, tuple[int, ...]] = field(default_factory=dict)
+    """CreatureDisplayInfo.ID -> the texture files it paints its model with, in
+    slot order, for the displays that carry any. A display with none paints
+    the model's own textures, and a humanoid display's skin is a baked
+    customization rather than a file, so both are absent here."""
+
     def fid_for_display(self, display_id: int) -> int:
         """A display id resolved to its model file id, or 0 when unknown.
 
@@ -66,6 +72,18 @@ def read_creature_displays(world: Tables, into: dict[int, list[tuple[int, int]]]
                 into.setdefault(to_int(creature), []).append((position, display_id))
 
 
+SKIN_COLUMN = "TextureVariationFileDataID_"
+"""The stem of a display's texture columns, one per slot. How many a client has
+varies by build, so they are read by name off the header rather than declared."""
+
+
+def skin_columns(tables: Tables) -> list[str]:
+    """The texture-variation columns this build's display table has, in slot order."""
+    found = [column for column in tables.header("CreatureDisplayInfo")
+             if column.startswith(SKIN_COLUMN)]
+    return sorted(found, key=lambda column: int(column[len(SKIN_COLUMN):]))
+
+
 def read_creature_models(tables: Tables, world: Tables | None) -> CreatureModels:
     """Read the creature chain morphs, forms and mounts all end at.
 
@@ -83,8 +101,12 @@ def read_creature_models(tables: Tables, world: Tables | None) -> CreatureModels
         creatures.displays = {creature: sorted(rows)
                               for creature, rows in displays.items()}
 
-    for display_id, model_id in tables.rows("CreatureDisplayInfo", ["ID", "ModelID"]):
+    for display_id, model_id, *skins in tables.rows(
+            "CreatureDisplayInfo", ["ID", "ModelID", *skin_columns(tables)]):
         creatures.display_model[to_int(display_id)] = to_int(model_id)
+        # One texture named in two slots is one skin; the order is the slots'.
+        if painted := tuple(dict.fromkeys(fid for fid in map(to_int, skins) if fid)):
+            creatures.display_skins[to_int(display_id)] = painted
     for model_id, file_id in tables.rows("CreatureModelData", ["ID", "FileDataID"]):
         creatures.model_fid[to_int(model_id)] = to_int(file_id)
     return creatures

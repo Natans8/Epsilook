@@ -145,8 +145,8 @@
     "replace": {
       "hint": "an animation the spell swaps for another — Stand becomes StealthStand",
       "props": {
-        "from": "the animation being replaced",
-        "to": "what it is replaced with"
+        "to": "what it is replaced with",
+        "from": "the animation being replaced"
       }
     },
     "pose": {
@@ -214,7 +214,7 @@
     "morph": {
       "hint": "a morph or transform aura — the caster becomes something else",
       "props": {
-        "display": "the creature display, by name or by id"
+        "creature": "the creature the caster becomes, by name or by id"
       }
     },
     "shapeshift": {

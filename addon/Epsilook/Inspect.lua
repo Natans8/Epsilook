@@ -42,10 +42,30 @@ Inspect.PART = "part"
 Inspect.GROUP = "group"
 Inspect.LIST = "list"
 
---- The property an axis's parts are grouped under, where they are: the
--- group's line leads, with the actions that take that property, and the
--- parts follow indented with the rest.
-Inspect.GROUPS = { sound = "kit" }
+--- How an axis's parts are grouped, where they are: `prop` is the property
+-- whose value the group shares, and the group's line leads with the
+-- actions that take that property, the parts following indented with the
+-- rest. `kind`, where set, names the one kind that groups -- an anim kit's
+-- animations under their kit, while a loose animation stands on its own --
+-- and the group's label; without it the property is the label. Every
+-- sound comes from a kit; an animation comes from a kit or from nowhere.
+Inspect.GROUPS = {
+	sound = { prop = "kit" },
+	anim = { prop = "id", kind = "kit" },
+}
+
+--- The grouping a part falls under, or nil where it stands on its own.
+local function groupOf(part)
+	local group = Inspect.GROUPS[part.axis]
+	if
+		group
+		and (group.kind == nil or group.kind == part.kind)
+		and part.values[group.prop] ~= nil
+	then
+		return group
+	end
+	return nil
+end
 
 --- How many parts an axis's tooltip lists before it says how many more.
 Inspect.LISTED = 12
@@ -58,6 +78,12 @@ Inspect.BESIDE = { model = { attach = true } }
 -- the tooltip is where the part's detail lives: an effect's implicit targets
 -- and the aura it applies, an aura's own target.
 Inspect.DETAILED = { mech = true }
+
+--- The kinds whose row carries one of several same-shaped properties, so
+-- the property's NAME is part of what the line says: a passenger's
+-- animation is what it plays entering, sitting or leaving, and the line
+-- names the role after the animation.
+Inspect.ROLED = { ["anim.passenger"] = true }
 
 --- The kinds whose texture draws, and how large: on the line where the
 -- shape fits one -- a chain's strip is long and thin -- and in the part's
@@ -133,10 +159,11 @@ end
 
 --- The values a part carries, each written, in the catalogue's order.
 -- @param part a PartData
--- @return a list of { name, text, id, path, number, colour, stored }: the
---   property, its value as written, the stored id where the value resolved
---   from one, whether it is a file path, whether it is a bare id, the packed
---   colour where it is one, and the stored number itself
+-- @return a list of { name, text, id, path, number, colour, stored, vocab }:
+--   the property, its value as written, the stored id where the value
+--   resolved from one, whether it is a file path, whether it is a bare id,
+--   the packed colour where it is one, the stored number itself, and the
+--   vocabulary the number was read through, where it was
 function Inspect.Values(part)
 	local kind = Epsilook.Schema.kindById[part.axis .. "." .. part.kind]
 	local out = {}
@@ -151,6 +178,7 @@ function Inspect.Values(part)
 				number = prop.types[1] == "id" and type(value) ~= "table",
 				colour = prop.types[1] == "colour" and value or nil,
 				stored = Epsilook.Data.GetStored(part.axis, part.kind, part.slot, prop.name),
+				vocab = Epsilook.Data.GetVocabName(part.axis, part.kind, prop.name),
 			}
 		end
 	end
@@ -211,8 +239,9 @@ local function written(value)
 end
 
 --- The values written bare beside a subject, without their name: a phrase
--- that reads on its own.
-local BARE = { how = true }
+-- that reads on its own, and an attachment point, which can only be where
+-- the model hangs.
+local BARE = { how = true, attach = true }
 
 --- A value beside a subject on a line: its name in grey and the value, a
 -- target written as who it is on.
@@ -223,6 +252,12 @@ local function beside(value)
 		return written(value)
 	end
 	return GREY .. value.name .. " " .. END .. written(value)
+end
+
+--- A value joined to the line before it: one more field, after the dash
+-- the line's fields are split by.
+local function joined(value)
+	return Shell.DASH .. beside(value)
 end
 
 --- What the client shows for an item: its name where the pack has none and
@@ -303,24 +338,59 @@ function Inspect.Subject(part)
 	return first and written(first) or nil
 end
 
---- Fill a tooltip with a part: its kind as the title, then one line per
--- value, a path written whole, then what the part carries beyond its
--- properties -- an effect's implicit targets and the aura it applies. Each
--- is one unwrapped line rather than a double line, because a double line's
--- right half does not widen the tooltip and a long path would run past it,
--- and an unwrapped line always sizes the frame to itself.
+--- A value as the tooltip writes it: a path whole; a word the pack read
+-- out of a vocabulary with the number it stands for beside it, since the
+-- number is what the game's own tables hold and what another tool calls
+-- it; every other value as the line writes it.
+local function detailed(value)
+	if value.path then
+		return value.text
+	end
+	if value.vocab and not value.id and not value.colour and value.text ~= "" then
+		return value.text .. " - " .. value.stored
+	end
+	return written(value)
+end
+
+--- Fill a tooltip with a part: its kind as the title and what the kind
+-- means under it, then one line per value, a path written whole and a
+-- vocabulary word with its number, then what the part carries beyond its
+-- properties -- an effect's implicit targets and the aura it applies --
+-- then the creature displays it names, each with its model file and the
+-- textures it paints, so a creature reads down to what it looks like.
+-- Each is one unwrapped line rather than a double line, because a double
+-- line's right half does not widen the tooltip and a long path would run
+-- past it, and an unwrapped line always sizes the frame to itself.
 -- @param tooltip the GameTooltip, already owned
 -- @param part a PartData
 function Inspect.FillTooltip(tooltip, part)
 	tooltip:SetText(part.kind, 1, 1, 1)
+	local kind = Epsilook.Schema.kindById[part.axis .. "." .. part.kind]
+	if kind and kind.hint and kind.hint ~= "" then
+		tooltip:AddLine(kind.hint, 0.62, 0.62, 0.62)
+	end
 	local values = Inspect.Values(part)
 	for _, value in ipairs(values) do
-		local text = value.path and value.text or written(value)
-		tooltip:AddLine(GREY .. value.name .. END .. " " .. text, 1, 1, 1)
+		tooltip:AddLine(GREY .. value.name .. END .. " " .. detailed(value), 1, 1, 1)
 	end
 	for _, extra in ipairs(Epsilook:GetPartExtras(part)) do
 		local text = extra.text ~= "" and extra.text or tostring(extra.value)
 		tooltip:AddLine(GREY .. extra.name .. END .. " " .. text, 1, 1, 1)
+	end
+	for _, display in ipairs(Epsilook:GetPartDisplays(part)) do
+		-- A display the part carries itself is on the lines above already,
+		-- and only its skins follow; one reached through a creature is named
+		-- here, with the model it wears.
+		if display.file then
+			tooltip:AddLine(GREY .. "display" .. END .. " " .. display.id, 1, 1, 1)
+			if display.file.text ~= "" then
+				tooltip:AddLine(GREY .. "  model" .. END .. " " .. display.file.text, 1, 1, 1)
+			end
+		end
+		for _, skin in ipairs(display.skins) do
+			local indent = display.file and "  " or ""
+			tooltip:AddLine(GREY .. indent .. "skin" .. END .. " " .. skin.text, 1, 1, 1)
+		end
 	end
 	local texture, fid = Inspect.TEXTURES[part.axis .. "." .. part.kind], pathFid(values)
 	if texture and texture.tip and fid then
@@ -370,10 +440,10 @@ end
 -- @param tooltip the GameTooltip, already owned
 -- @param part the group's first part
 function Inspect.FillGroupTooltip(tooltip, part)
-	local key = Inspect.GROUPS[part.axis]
-	tooltip:SetText(key or part.kind, 1, 1, 1)
+	local group = groupOf(part)
+	tooltip:SetText(group and (group.kind or group.prop) or part.kind, 1, 1, 1)
 	for _, value in ipairs(Inspect.Values(part)) do
-		if value.name == key then
+		if group and value.name == group.prop then
 			tooltip:AddLine(written(value), 1, 1, 1)
 		end
 	end
@@ -431,7 +501,10 @@ end
 -- be added by id with any confidence and is looked up by its model instead.
 local function itemNamed(part)
 	local name = part.values.name
-	if type(name) == "table" and name.text ~= "" then
+	if type(name) == "table" then
+		name = name.text
+	end
+	if type(name) == "string" and name ~= "" then
 		return true
 	end
 	local id = needed(part, "id")
@@ -463,6 +536,10 @@ function Inspect.ArgumentOf(part, action)
 	if action.via == "creatureDisplay" then
 		local display = Epsilook:GetDisplayByCreature(needed(part, action.needs))
 		return display ~= nil and display ~= 0 and display or nil
+	elseif action.via == "factor" then
+		-- A change of -70% is the factor 0.3, which is what the command takes.
+		local change = needed(part, action.needs)
+		return change ~= nil and (100 + change) / 100 or nil
 	elseif action.needs == "file" and action.key == "spawn" then
 		return spawnOf(part)
 	elseif action.key == "anim" or action.key == "stand" then
@@ -520,9 +597,11 @@ local INSERTS = {
 			return gameLink("creature_entry", number, name)
 		end,
 	},
+	speed = { hint = "Shift-click to type this factor into chat, as .mod speed takes it" },
 	native = { hint = "Shift-click to type this display id into chat, as .mod native takes it" },
 	morph = { hint = "Shift-click to type this display id into chat, as .morph takes it" },
 	mount = { hint = "Shift-click to type this display id into chat, as .mod mount takes it" },
+	animKit = { hint = "Shift-click to type this anim kit id into chat, as .mod animkit takes it" },
 	anim = { hint = "Shift-click to type this emote id into chat, as .mod anim takes it" },
 	stand = { hint = "Shift-click to type this emote id into chat, as .mod standstate takes it" },
 	playKit = { hint = "Shift-click to type this kit id into chat, as .phase playsound takes it" },
@@ -566,7 +645,8 @@ end
 -- groups under.
 -- @return the group's actions, and the rest
 local function actionsSplit(axis)
-	local key = Inspect.GROUPS[axis]
+	local grouping = Inspect.GROUPS[axis]
+	local key = grouping and grouping.prop
 	local group, rest = {}, {}
 	for _, action in ipairs(Epsilook:GetActions(axis)) do
 		if action.needs == key then
@@ -582,7 +662,8 @@ end
 -- property alone, for a line under a group every other, for a part on its
 -- own all of them; the subject first.
 local function valuesFor(part, verb)
-	local key = Inspect.GROUPS[part.axis]
+	local grouping = groupOf(part)
+	local key = grouping and grouping.prop
 	local out = {}
 	for _, value in ipairs(Inspect.Values(part)) do
 		local grouped = value.name == key
@@ -617,10 +698,18 @@ local function line(spellID, part, n, indent, label, verb)
 	local values, actions = valuesFor(part, verb), actionsFor(part.axis, verb)
 	local out = indent
 	local subject = values[1]
+	local extras = Epsilook:GetPartExtras(part)
+	local named = extras[1] and extras[1].text ~= ""
 	if label then
-		-- A label on its own names a part that is nothing but its kind, and
-		-- takes no colon; one with a subject after it does.
-		out = out .. CYAN .. label .. (subject and ":" or "") .. END .. (subject and " " or "")
+		local tone = Shell.AXIS_COLOURS[part.axis] or CYAN
+		if subject or named then
+			-- A label with a subject after it takes a colon.
+			out = out .. tone .. label .. ":" .. END .. " "
+		else
+			-- A label on its own names a part that is nothing but its kind, and
+			-- is the part's link, so its tooltip can say what the kind means.
+			out = out .. Shell.Link(spellID, verb, label, part.axis, n, tone)
+		end
 	end
 	local vocab = subject and Epsilook.Data.GetVocabName(part.axis, part.kind, subject.name)
 	-- An item's name may be blank and yield the lead to its id; the item is
@@ -636,7 +725,7 @@ local function line(spellID, part, n, indent, label, verb)
 		-- Another spell: the game's own link to it, and its own actions.
 		out = out .. Shell.SpellLink({ id = subject.id, name = subject.text, icon = 0 })
 		for i = 2, #values do
-			out = out .. "  " .. beside(values[i])
+			out = out .. joined(values[i])
 		end
 		links = Shell.SpellActionLinks(subject.id, "result")
 	elseif subject then
@@ -647,7 +736,7 @@ local function line(spellID, part, n, indent, label, verb)
 			-- is the bare stored number, and then the pack has no name.
 			local id = item.id or item.stored
 			local name
-			name, icon, colour = itemShown(id, item.id and item.text or "")
+			name, icon, colour = itemShown(id, item.text)
 			colour = colour or WHITE
 			if name ~= "" then
 				shown = written({ text = name, id = id })
@@ -673,10 +762,13 @@ local function line(spellID, part, n, indent, label, verb)
 		local pictured = texture and texture.tip and (fid or part.kind == "screen")
 		if Inspect.DETAILED[part.axis] or pictured or Inspect.ClipOf(part, actions, shown) then
 			out = out .. Shell.Link(spellID, verb, shown, part.axis, n, colour, icon)
+			if Inspect.ROLED[part.axis .. "." .. part.kind] then
+				out = out .. Shell.DASH .. GREY .. subject.name .. END
+			end
 			local shownBeside = Inspect.BESIDE[part.axis]
 			for i = 2, #values do
 				if shownBeside and shownBeside[values[i].name] and values[i].text ~= "" then
-					out = out .. "  " .. beside(values[i])
+					out = out .. joined(values[i])
 				end
 			end
 		else
@@ -686,7 +778,7 @@ local function line(spellID, part, n, indent, label, verb)
 			out = out .. colour .. shown .. END
 			for i = 2, #values do
 				if (values[i].text ~= "" or values[i].id) and not stated[values[i].name] then
-					out = out .. "  " .. beside(values[i])
+					out = out .. joined(values[i])
 				end
 			end
 		end
@@ -695,11 +787,7 @@ local function line(spellID, part, n, indent, label, verb)
 		-- A part with no value of its own may still be named by what it
 		-- carries -- a screen part by its screen effect -- and that name is
 		-- its link, with the effect in the tooltip.
-		local extras = Epsilook:GetPartExtras(part)
-		if extras[1] and extras[1].text ~= "" then
-			if label then
-				out = out .. ":" .. " "
-			end
+		if named then
 			out = out .. Shell.Link(spellID, verb, extras[1].text, part.axis, n, WHITE)
 		end
 		links = Inspect.ActionLinks(spellID, part, n, actions)
@@ -721,7 +809,8 @@ end
 -- @param part the group's first part
 -- @param n that part's row
 function Inspect.GroupLine(spellID, part, n)
-	return line(spellID, part, n, "  ", Inspect.GROUPS[part.axis], Inspect.GROUP)
+	local group = groupOf(part)
+	return line(spellID, part, n, "  ", group and (group.kind or group.prop), Inspect.GROUP)
 end
 
 --- A part's line under its group: no label, the values but the group's.
@@ -783,16 +872,17 @@ function Inspect.PrintAxis(spellID, axis, say)
 		return
 	end
 	say(GOLD .. n .. " " .. Inspect.Label(axis) .. END)
-	local key = Inspect.GROUPS[axis]
 	local seen
 	for i = 1, n do
 		local part = Epsilook:GetPartDataByIndex(spellID, axis, i)
-		if not key then
+		local grouping = groupOf(part)
+		if not grouping then
+			seen = nil
 			say(Inspect.PartLine(spellID, part, i))
 		else
-			local group = part.values[key]
+			local group = part.values[grouping.prop]
 			local id = type(group) == "table" and group.id or group
-			if i == 1 or id ~= seen then
+			if id ~= seen then
 				seen = id
 				say(Inspect.GroupLine(spellID, part, i))
 			end
@@ -892,8 +982,10 @@ local COMMANDS = {
 	lookup = "lookup item %s",
 	summon = "npc spawn %s",
 	native = "mod native %s",
+	speed = "mod speed %s",
 	morph = "morph %s",
 	mount = "mod mount %s",
+	animKit = "mod animkit %s",
 	anim = "mod anim %s",
 	stand = "mod standstate %s",
 }

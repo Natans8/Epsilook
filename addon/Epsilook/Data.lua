@@ -551,6 +551,41 @@ function Data.Lookup(axis, section, keyColumn, valueColumn, key)
 	return map[key]
 end
 
+--- The rows of a section grouped by one column's value, built on first use.
+local groups = {}
+
+--- The rows of a section whose key column holds a key, in section order.
+-- For the sections that carry several rows per key: a creature's displays,
+-- a display's skins. The grouping is built once per key column and kept,
+-- so it is for small sections only.
+-- @param axis which axis file carries the section
+-- @param section the section name
+-- @param keyColumn the column holding the keys
+-- @param key the key
+-- @return a list of row numbers, counted from nought, empty where the key
+--   is absent or the column is
+function Data.RowsOf(axis, section, keyColumn, key)
+	local name = axis .. "." .. section .. "." .. keyColumn
+	local map = groups[name]
+	if not map then
+		map = {}
+		local keys, blob = Data.GetColumn(axis, section, keyColumn)
+		if keys then
+			for row = 0, Reader.size(keys) - 1 do
+				local value = Reader.value(blob, keys, row)
+				local rows = map[value]
+				if not rows then
+					rows = {}
+					map[value] = rows
+				end
+				rows[#rows + 1] = row
+			end
+		end
+		groups[name] = map
+	end
+	return map[key] or {}
+end
+
 --- Forget everything read off the payload, so a changed payload is not read
 -- through stale offsets. Called when the payload loads.
 function Data.Reset()
@@ -561,6 +596,7 @@ function Data.Reset()
 	located = {}
 	paired = {}
 	lookups = {}
+	groups = {}
 end
 
 return Data

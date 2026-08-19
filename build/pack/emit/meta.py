@@ -20,8 +20,18 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 55
+PACK_FORMAT = 56
 """What shape the artifact is in.
+
+56 names a morph's property for what it stores: the row's `display` is now
+`creature`, since a transform aura carries a creature entry and the display
+is what that creature wears. `morphDisplays` becomes `creatureDisplays` and
+takes in the summoned creatures' displays beside the morphed ones, keyed by
+the creature either way. A new `displaySkins` section carries the textures
+each named display paints over its model, one row per texture in slot
+order, for every display the pack names -- a creature's, a form's, a
+mount's, or one an effect name attaches -- and those textures join the
+named files.
 
 55 renames the vehicle row kind and its subject. A spell that seats its
 subject ships as `vehicle` rather than `seats`, and the seat count that

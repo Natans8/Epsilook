@@ -415,14 +415,100 @@ function Epsilook:GetScreenEffect(screenID)
 	}
 end
 
---- The display a creature wears, by creature id, where the pack carries the
--- pair: what a morph stores is the creature, what `.morph` and its kin take
--- is the display.
+--- A file the pack names: its id and its path, the path empty where the
+-- pack has none.
+local function file(fid)
+	local path = Data.ResolveVocab("files", fid)
+	return { id = fid, text = type(path) == "string" and path or "" }
+end
+
+--- The displays a creature wears, by creature id, where the pack carries
+-- the pairs: what a morph or a summon stores is the creature, what the
+-- game shows and what `.morph` and its kin take is a display. A creature
+-- can wear several; the game picks one when it appears, and the first is
+-- the one a click sends.
+-- @param creatureID the creature id
+-- @return a list of { id, file }, the display id and its model file as
+--   { id, text }, in slot order; empty where the creature is unknown here
+function Epsilook:GetDisplaysByCreature(creatureID)
+	mounted(self)
+	local out = {}
+	local displays, blob = Data.GetColumn("model", "creatureDisplays", "displayIds")
+	local fids = Data.GetColumn("model", "creatureDisplays", "fids")
+	for _, row in ipairs(Data.RowsOf("model", "creatureDisplays", "creatureIds", creatureID)) do
+		out[#out + 1] = {
+			id = Reader.value(blob, displays, row),
+			file = file(Reader.value(blob, fids, row)),
+		}
+	end
+	return out
+end
+
+--- The display a creature wears first, by creature id: the one a command
+-- is handed for a creature.
 -- @param creatureID the creature id
 -- @return the display id, or nil where the creature is unknown here
 function Epsilook:GetDisplayByCreature(creatureID)
+	local first = self:GetDisplaysByCreature(creatureID)[1]
+	return first and first.id or nil
+end
+
+--- The textures a display paints over its model, by display id: none for
+-- a display painting the model's own, and none for a humanoid display,
+-- whose skin is a customization rather than a file.
+-- @param displayID the display id
+-- @return a list of { id, text }, the texture files in slot order
+function Epsilook:GetDisplaySkins(displayID)
 	mounted(self)
-	return Data.Lookup("model", "morphDisplays", "creatureIds", "displayIds", creatureID)
+	local out = {}
+	local fids, blob = Data.GetColumn("model", "displaySkins", "fids")
+	for _, row in ipairs(Data.RowsOf("model", "displaySkins", "displayIds", displayID)) do
+		out[#out + 1] = file(Reader.value(blob, fids, row))
+	end
+	return out
+end
+
+--- How a part comes to name a creature display: through a creature that
+-- wears one, stored under a vocabulary of creatures, or the display
+-- itself, stored under a vocabulary of displays or as a kind's own id.
+Epsilook.DISPLAY_SOURCES = {
+	creatures = { morphs = true, creatures = true },
+	displays = { mounts = true },
+	kinds = { ["model.display"] = "id" },
+}
+
+--- The displays a part names, each with what the pack knows of it: a part
+-- naming a creature names every display the creature wears, with its
+-- model file; a part naming a display outright names that one, whose
+-- model the part already carries.
+-- @param part a PartData
+-- @return a list of { id, file, skins }: the display id, its model file
+--   as { id, text } or nil where the part carries it itself, and its
+--   textures as GetDisplaySkins gives them; empty for a part naming none
+function Epsilook:GetPartDisplays(part)
+	mounted(self)
+	local out = {}
+	local function display(id, modelFile)
+		out[#out + 1] = { id = id, file = modelFile, skins = self:GetDisplaySkins(id) }
+	end
+	local kind = Schema.kindById[part.axis .. "." .. part.kind]
+	local own = self.DISPLAY_SOURCES.kinds[part.axis .. "." .. part.kind]
+	for _, prop in ipairs(kind and kind.props or {}) do
+		-- The stored number, whichever way the value resolved: a vocabulary
+		-- of text hands the part the word alone.
+		local stored = Data.GetStored(part.axis, part.kind, part.slot, prop.name)
+		local vocab = Data.GetVocabName(part.axis, part.kind, prop.name)
+		if stored ~= nil and stored ~= 0 then
+			if self.DISPLAY_SOURCES.creatures[vocab] then
+				for _, worn in ipairs(self:GetDisplaysByCreature(stored)) do
+					display(worn.id, worn.file)
+				end
+			elseif self.DISPLAY_SOURCES.displays[vocab] or prop.name == own then
+				display(stored, nil)
+			end
+		end
+	end
+	return out
 end
 
 --- The id that places a model in the world, by its file id.
@@ -453,8 +539,11 @@ end
 -- PartData value the action takes; `kind`, where set, the one kind of part
 -- that takes it, and `except` the set of kinds that do not; `via`, where
 -- set, how the value becomes what the action sends -- `creatureDisplay` is
--- the display of the creature the value names, as a morph stores the
--- creature and the commands take its display. The order is the order a line
+-- the first display of the creature the value names, as a morph and a
+-- summon store the creature and the commands take a display, and `factor`
+-- is a percent change as the multiplier a command takes. An action
+-- naming a property and no kind is taken by every kind carrying that
+-- property. The order is the order a line
 -- offers them, and the first action a part takes is the one a shift-click
 -- hands over.
 -- @param axis one of GetPartAxes()
@@ -585,8 +674,7 @@ Epsilook.ACTIONS = {
 		{
 			key = "summon",
 			label = "Spawn",
-			needs = "display",
-			kind = "morph",
+			needs = "creature",
 			effect = "world",
 			revert = "",
 			hint = "Click to spawn this creature where you stand",
@@ -594,41 +682,29 @@ Epsilook.ACTIONS = {
 		{
 			key = "native",
 			label = "Native",
-			needs = "display",
-			kind = "morph",
+			needs = "creature",
 			via = "creatureDisplay",
 			effect = "world",
 			revert = "",
-			hint = "Click to make this creature's display your native form",
+			hint = "Click to make this creature's first display your native form",
 		},
 		{
 			key = "morph",
 			label = "Morph",
-			needs = "display",
-			kind = "morph",
+			needs = "creature",
 			via = "creatureDisplay",
 			effect = "world",
 			revert = "",
-			hint = "Click to morph into this creature's display",
+			hint = "Click to morph into this creature's first display",
 		},
 		{
 			key = "mount",
 			label = "Mount",
-			needs = "display",
-			kind = "morph",
+			needs = "creature",
 			via = "creatureDisplay",
 			effect = "world",
 			revert = "",
-			hint = "Click to mount this creature's display",
-		},
-		{
-			key = "summon",
-			label = "Spawn",
-			needs = "creature",
-			kind = "summon",
-			effect = "world",
-			revert = "",
-			hint = "Click to spawn this creature where you stand",
+			hint = "Click to mount this creature's first display",
 		},
 		{
 			key = "spawn",
@@ -641,6 +717,15 @@ Epsilook.ACTIONS = {
 		},
 	},
 	anim = {
+		{
+			key = "animKit",
+			label = "Kit",
+			needs = "id",
+			kind = "kit",
+			effect = "world",
+			revert = "",
+			hint = "Click to play this anim kit on yourself",
+		},
 		{
 			key = "anim",
 			label = "Anim",
@@ -675,6 +760,8 @@ Epsilook.ACTIONS = {
 			revert = "",
 			hint = "Click to hold the replacing animation as your standing pose",
 		},
+		-- A passenger row carries one role, so each role takes both actions
+		-- and a line offers the pair for whichever role it has.
 		{
 			key = "anim",
 			label = "Anim",
@@ -687,11 +774,59 @@ Epsilook.ACTIONS = {
 		{
 			key = "stand",
 			label = "Emote",
+			needs = "enter",
+			kind = "passenger",
+			effect = "world",
+			revert = "",
+			hint = "Click to hold the entering animation as your standing pose",
+		},
+		{
+			key = "anim",
+			label = "Anim",
+			needs = "sit",
+			kind = "passenger",
+			effect = "world",
+			revert = "",
+			hint = "Click to play the seated animation on yourself once",
+		},
+		{
+			key = "stand",
+			label = "Emote",
 			needs = "sit",
 			kind = "passenger",
 			effect = "world",
 			revert = "",
 			hint = "Click to hold the seated animation as your standing pose",
+		},
+		{
+			key = "anim",
+			label = "Anim",
+			needs = "exit",
+			kind = "passenger",
+			effect = "world",
+			revert = "",
+			hint = "Click to play the leaving animation on yourself once",
+		},
+		{
+			key = "stand",
+			label = "Emote",
+			needs = "exit",
+			kind = "passenger",
+			effect = "world",
+			revert = "",
+			hint = "Click to hold the leaving animation as your standing pose",
+		},
+	},
+	mech = {
+		{
+			key = "speed",
+			label = "Speed",
+			needs = "amount",
+			kind = "speed",
+			via = "factor",
+			effect = "world",
+			revert = "",
+			hint = "Click to set your speed to this much of normal, in every mode",
 		},
 	},
 }
@@ -731,7 +866,7 @@ function Epsilook:IsQuerySorted(query)
 end
 
 --- The query language as data, for a help surface: the columns with their
--- hints, every top-level head with its role and hint, and the operators.
+-- hints, every top-level head with its role, its column and hint, and the operators.
 -- Read off the declarations the data carries, so it cannot fall behind them.
 -- @return a table with columns, heads, operators
 function Epsilook:GetQueryHelp()
@@ -742,15 +877,15 @@ function Epsilook:GetQueryHelp()
 	end
 	local heads = {}
 	for word, head in pairs(Schema.heads) do
-		local hint
+		local hint, column
 		if head.role == "column" then
-			hint = Schema.columnByKey[head.column].hint
+			hint, column = Schema.columnByKey[head.column].hint, head.column
 		elseif head.role == "kind" then
-			hint = head.kind.hint
+			hint, column = head.kind.hint, head.kind.column
 		else
-			hint = head.prop.hint
+			hint, column = head.prop.hint, head.kind.column
 		end
-		heads[#heads + 1] = { word = word, role = head.role, hint = hint }
+		heads[#heads + 1] = { word = word, role = head.role, column = column, hint = hint }
 	end
 	table.sort(heads, function(a, b)
 		return a.word < b.word

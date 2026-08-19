@@ -1,4 +1,4 @@
-"""Morph and form displays, flattened to rows the pack can ship."""
+"""Creature and form displays, flattened to rows the pack can ship."""
 
 from __future__ import annotations
 
@@ -28,6 +28,13 @@ def morphing(*creature_ids: int) -> SpellEffectRows:
     return rows
 
 
+def summoning(*creature_ids: int) -> SpellEffectRows:
+    rows = SpellEffectRows()
+    for creature in creature_ids:
+        rows.summons.setdefault(500, set()).add((creature, 0))
+    return rows
+
+
 def shifting(*form_ids: int) -> SpellEffectRows:
     rows = SpellEffectRows()
     for form in form_ids:
@@ -38,20 +45,30 @@ def shifting(*form_ids: int) -> SpellEffectRows:
 def test_a_creature_contributes_one_row_per_display_in_slot_order() -> None:
     """The first is the one the pill shows, so the order is the contract."""
     found = resolve_displays(morphing(1), creatures(), forms())
-    assert [(row.subject, row.display, row.fid) for row in found.morphs] == [
+    assert [(row.subject, row.display, row.fid) for row in found.creatures] == [
         (1, 10, 900), (1, 11, 901)]
+
+
+def test_a_summoned_creature_resolves_like_a_morphed_one() -> None:
+    """A creature is one thing whichever effect names it, so both land in the
+    one list and a creature both morph and summon is one entry."""
+    rows = morphing(1)
+    rows.summons = summoning(1, 2).summons
+    found = resolve_displays(rows, creatures(), forms())
+    assert [(row.subject, row.display) for row in found.creatures] == [
+        (1, 10), (1, 11), (2, 12)]
 
 
 def test_a_display_that_resolves_to_no_model_still_makes_a_row() -> None:
     """Both hops can come up empty, and the row renders without a model rather
     than not existing."""
     found = resolve_displays(morphing(2), creatures(), forms())
-    assert [(row.display, row.fid) for row in found.morphs] == [(12, 0)]
+    assert [(row.display, row.fid) for row in found.creatures] == [(12, 0)]
 
 
-def test_the_morph_rows_come_back_in_creature_order() -> None:
+def test_the_creature_rows_come_back_in_creature_order() -> None:
     found = resolve_displays(morphing(2, 1), creatures(), forms())
-    assert [row.subject for row in found.morphs] == [1, 1, 2]
+    assert [row.subject for row in found.creatures] == [1, 1, 2]
 
 
 def test_a_form_the_build_has_no_row_for_is_dropped() -> None:

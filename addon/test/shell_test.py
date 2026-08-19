@@ -7,9 +7,10 @@ a decision, run bare.
 
 from __future__ import annotations
 
+import re
 from typing import cast
 
-from support import LuaFunction, LuaRuntime, LuaTable, lua_function, lua_table
+from support import LuaFunction, LuaRuntime, LuaTable, as_list, lua_function, lua_table, unwrap
 
 
 def method(table: LuaTable, name: bytes) -> LuaFunction:
@@ -73,7 +74,8 @@ def test_a_part_line_carries_its_actions(engine: LuaRuntime) -> None:
     assert "|Hgarrmission:epsilook:133:stop:sound:1|h[Stop]|h" in sound_line.decode()
 
 
-def test_the_dossier_prints_every_axis_the_spell_has(engine: LuaRuntime) -> None:
+def dossier(engine: LuaRuntime, spell_id: int) -> str:
+    """The dossier's lines, joined, as printed under a bare interpreter."""
     # language=Lua
     engine.execute(b"""
     function DOSSIER(id)
@@ -82,14 +84,16 @@ def test_the_dossier_prints_every_axis_the_spell_has(engine: LuaRuntime) -> None
       return table.concat(out, "\\n")
     end
     """)
-    printed = lua_function(engine, b"DOSSIER")(133)
-    assert isinstance(printed, bytes)
-    text = printed.decode()
+    return cast(bytes, lua_function(engine, b"DOSSIER")(spell_id)).decode()
+
+
+def test_the_dossier_prints_every_axis_the_spell_has(engine: LuaRuntime) -> None:
+    text = dossier(engine, 133)
     assert "[Fireball]" in text and "5 Models" in text and "12 Sounds" in text and "1 Mechanics" in text
     # Sounds are grouped under their kit: the kit's line, then its files indented.
-    assert "|cff00ccffkit:|r" in text
+    assert "|cff3ddc84kit:|r" in text
     assert "\n    |cffffffff|Hgarrmission:epsilook:133:part:sound:1|h[fx_fire_magic_loop_medium_01.ogg]|h" in text
-    assert "no spell" in str(lua_function(engine, b"DOSSIER")(0))
+    assert "no spell" in dossier(engine, 0)
 
 
 def test_help_comes_from_the_declarations(engine: LuaRuntime) -> None:
@@ -109,16 +113,120 @@ def test_the_spell_text_record_holds_the_pools(engine: LuaRuntime) -> None:
 
 def test_a_leading_head_word_scopes_everything_after_it(engine: LuaRuntime) -> None:
     lenient = lua_function(engine, b"Epsilook.Shell.Lenient")
-    assert lenient(b"model 6dr") == b"model:{6dr}"
-    assert lenient(b"model 6dr fire") == b"model:{6dr fire}"
-    assert lenient(b"model 6dr -missile") == b"model:{6dr -missile}"
-    assert lenient(b"model {6dr fire}") == b"model:{6dr fire}"
+    assert lenient(b"model fire") == b"model:{fire}"
+    assert lenient(b"model fire missile") == b"model:{fire missile}"
+    assert lenient(b"model fire -missile") == b"model:{fire -missile}"
+    assert lenient(b"model {fire missile}") == b"model:{fire missile}"
     assert lenient(b'name "fire ball"') == b'name:{"fire ball"}'
-    assert lenient(b"model:6dr fire") == b"model:6dr fire"
+    assert lenient(b"model:fire missile") == b"model:fire missile"
     assert lenient(b"fire model") == b"fire model"
     assert lenient(b"cast >2s") == b"cast:>2s"
     assert lenient(b"cast >2s fire") == b"cast:>2s fire"
     assert lenient(b"fireball") == b"fireball"
+
+
+def test_a_head_word_alone_asks_for_any_value_of_it(engine: LuaRuntime) -> None:
+    """`model` on its own is the spells with a model, not the spells whose text says model."""
+    lenient = lua_function(engine, b"Epsilook.Shell.Lenient")
+    assert lenient(b"model") == b"model:*"
+    assert lenient(b"model ") == b"model:*"
+    assert lenient(b"scale") == b"scale:*"
+    assert lenient(b"model:*") == b"model:*"
+    assert lenient(b"fireball") == b"fireball"
+
+
+def test_a_creature_resolves_to_its_displays_in_slot_order(engine: LuaRuntime) -> None:
+    """Polymorph's sheep wears two displays; the first is the one a command
+    is handed, and a lookup that kept the last would morph the wrong sheep."""
+    api = lua_table(engine, b"Epsilook")
+    worn = as_list(method(api, b"GetDisplaysByCreature")(api, 16372))
+    assert worn == [
+        {"id": 856, "file": {"id": 1377131, "text": "Creature/Sheep2/Sheep2.m2"}},
+        {"id": 857, "file": {"id": 1377131, "text": "Creature/Sheep2/Sheep2.m2"}},
+    ]
+    assert method(api, b"GetDisplayByCreature")(api, 16372) == 856
+    assert method(api, b"GetDisplayByCreature")(api, 0) is None
+    # A display's skins are its textures, in slot order, by display id.
+    skins = [cast(dict[str, object], skin)["text"]
+             for skin in as_list(method(api, b"GetDisplaySkins")(api, 856))]
+    assert skins == ["Creature/Sheep2/sheep2_white.blp"]
+    assert unwrap(method(api, b"GetDisplaySkins")(api, 0)) == {}
+
+
+def test_a_part_names_its_displays_through_a_creature_or_outright(engine: LuaRuntime) -> None:
+    api = lua_table(engine, b"Epsilook")
+    # A morph stores the creature, and names every display it wears with its model.
+    morph = method(api, b"GetPartDataByIndex")(api, 118, b"fx", 1)
+    named = [cast(dict[str, object], display)
+             for display in as_list(method(api, b"GetPartDisplays")(api, morph))]
+    assert [display["id"] for display in named] == [856, 857]
+    assert all("file" in display for display in named)
+    # A mount stores the display itself and carries its own model, so only the skins come back.
+    mount = method(api, b"GetPartDataByIndex")(api, 459, b"model", 2)
+    [wolf] = [cast(dict[str, object], display)
+              for display in as_list(method(api, b"GetPartDisplays")(api, mount))]
+    assert wolf["id"] == 2320 and "file" not in wolf
+    assert len(cast(list[object], wolf["skins"])) == 2
+    # A model that is no display names none.
+    missile = method(api, b"GetPartDataByIndex")(api, 133, b"model", 1)
+    assert unwrap(method(api, b"GetPartDisplays")(api, missile)) == {}
+
+
+def tooltip_lines(engine: LuaRuntime, spell_id: int, axis: bytes, n: int) -> list[str]:
+    """The lines a part's tooltip is filled with, markup stripped."""
+    # language=Lua
+    engine.execute(b"""
+    function TOOLTIP_LINES(id, axis, n)
+      local out = {}
+      local tip = {}
+      function tip:SetText(text) out[#out + 1] = text end
+      function tip:AddLine(text) out[#out + 1] = text end
+      Epsilook.Inspect.FillTooltip(tip, Epsilook:GetPartDataByIndex(id, axis, n))
+      return table.concat(out, "\\n")
+    end
+    """)
+    text = cast(bytes, lua_function(engine, b"TOOLTIP_LINES")(spell_id, axis, n)).decode()
+    return re.sub(r"\|c[0-9a-f]{8}|\|r", "", text).split("\n")
+
+
+def test_a_creatures_tooltip_reads_down_to_what_it_looks_like(engine: LuaRuntime) -> None:
+    """The creature and its id, then each display it wears with the model
+    file and the textures painted over it; the kind's meaning under the title."""
+    lines = tooltip_lines(engine, 118, b"fx", 1)
+    assert lines[0] == "morph"
+    assert lines[1].startswith("a morph or transform aura")
+    assert "creature Polymorphed Sheep - 16372" in lines
+    assert lines.index("display 856") < lines.index("  model Creature/Sheep2/Sheep2.m2")
+    assert "  skin Creature/Sheep2/sheep2_white.blp" in lines
+    assert lines.index("display 857") > lines.index("display 856")
+    # A display the part carries itself shows its own id and file, then its skins bare.
+    lines = tooltip_lines(engine, 459, b"model", 2)
+    assert "name Gray Wolf - 2320" in lines and "file Creature/DIREWOLF/RidingDireWolf.M2" in lines
+    assert "skin Creature/Direwolf/RidingDireWolfSkinLightGrey.blp" in lines
+    assert "display 2320" not in lines
+
+
+def test_a_vocabulary_word_carries_its_number_in_the_tooltip(engine: LuaRuntime) -> None:
+    """The number is what the game's own tables hold; the line keeps the word alone."""
+    assert "attach Chest - 34" in tooltip_lines(engine, 459, b"model", 1)
+    api = lua_table(engine, b"Epsilook")
+    part = method(api, b"GetPartDataByIndex")(api, 459, b"model", 1)
+    line = cast(bytes, lua_function(engine, b"Epsilook.Inspect.PartLine")(459, part, 1)).decode()
+    assert " - Chest - " in line and "attach Chest" not in line
+
+
+def test_an_anim_kits_animations_group_under_the_kit(engine: LuaRuntime) -> None:
+    """The kit's line offers the kit, its animations follow indented with their
+    own actions, and a loose animation stands on its own line."""
+    printed = dossier(engine, 133)
+    kit_line = ("|cffc77dffkit:|r |cffffffff|Hgarrmission:epsilook:133:group:anim:1|h[13464]|h|r - "
+                "|cff71d5ff|Hgarrmission:epsilook:133:animKit:anim:1|h[Kit]|h|r")
+    assert kit_line in printed
+    assert "\n    |cffffffff|Hgarrmission:epsilook:133:part:anim:1|h[SpellCastDirected]|h" in printed
+    printed = dossier(engine, 5106)
+    assert "\n  |cffc77dffloose:|r " in printed
+    # A valueless kind's label is its own link, so its tooltip can explain it.
+    assert "\n  |cffc77dff|Hgarrmission:epsilook:5106:part:anim:5|h[pose]|h|r" in printed
 
 
 def test_the_aura_word_is_offered_only_where_an_aura_is_applied(engine: LuaRuntime) -> None:
@@ -158,3 +266,50 @@ def test_every_part_tooltip_fills_on_every_axis(engine: LuaRuntime) -> None:
     # The ids cross as one string: a Python list arrives in Lua as userdata, not a table.
     failures = lua_function(engine, b"TOOLTIPS")(b"133 317228 32979 126 116 160955")
     assert failures == b"", failures
+
+
+def test_a_passenger_row_offers_both_actions_for_whichever_role_it_carries(engine: LuaRuntime) -> None:
+    """A row carries one of enter, sit or exit; a leaving animation used to
+    offer nothing. The line names the role, since the animation alone is
+    printed twice when a seat enters and leaves the same way."""
+    printed = dossier(engine, 65303)
+    assert "[JumpStart]|h|r - |cff9d9d9denter|r - " in printed
+    assert "[JumpStart]|h|r - |cff9d9d9dexit|r - " in printed
+    for line in printed.split("\n"):
+        if "passenger:" in line:
+            assert "[Anim]" in line and "[Emote]" in line, line
+
+
+def test_a_speed_change_is_offered_as_the_factor_the_command_takes(engine: LuaRuntime) -> None:
+    api = lua_table(engine, b"Epsilook")
+    for n in range(1, 4):
+        part = method(api, b"GetPartDataByIndex")(api, 2140, b"mech", n)
+        if cast(bytes, cast(LuaTable, part)[b"kind"]) == b"speed":
+            break
+    else:
+        raise AssertionError("2140 has no speed row")
+    actions = method(api, b"GetActions")(api, b"mech")
+    speed = cast(LuaTable, cast(LuaTable, actions)[1])
+    assert speed[b"key"] == b"speed"
+    factor = lua_function(engine, b"Epsilook.Inspect.ArgumentOf")(part, speed)
+    assert factor == 0.3
+    line = cast(bytes, lua_function(engine, b"Epsilook.Inspect.PartLine")(2140, part, n)).decode()
+    assert "|Hgarrmission:epsilook:2140:speed:mech:%d|h[Speed]|h" % n in line
+
+
+def test_a_group_tooltip_names_the_group_and_its_value(engine: LuaRuntime) -> None:
+    """A sound kit's group tooltip is the kit; an anim kit's is the kit's id."""
+    # language=Lua
+    engine.execute(b"""
+    function GROUP_TIP(id, axis, n)
+      local out = {}
+      local tip = {}
+      function tip:SetText(text) out[#out + 1] = text end
+      function tip:AddLine(text) out[#out + 1] = text end
+      Epsilook.Inspect.FillGroupTooltip(tip, Epsilook:GetPartDataByIndex(id, axis, n))
+      return table.concat(out, "\\n")
+    end
+    """)
+    tip = lua_function(engine, b"GROUP_TIP")
+    assert cast(bytes, tip(133, b"sound", 1)).decode().split("\n") == ["kit", "SPELL_Fire_Missile_Loop - 3011"]
+    assert cast(bytes, tip(133, b"anim", 1)).decode().split("\n") == ["kit", "13464"]

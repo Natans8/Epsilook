@@ -385,7 +385,8 @@ class Derivations:
         with phase("collect_references"):
             return collect_references(self.visuals, self.effects, self.fx,
                                       self.displays, self.mounts, self.objects,
-                                      self.items, self.props.icon_fid)
+                                      self.items, self.creatures,
+                                      self.props.icon_fid)
 
     @cached_property
     def paths(self) -> dict[int, str]:

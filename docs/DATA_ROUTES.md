@@ -455,6 +455,7 @@ erDiagram
     MountXDisplay ||--o| CreatureDisplayInfo:"CreatureDisplayInfoID"
     GameObjectDisplayInfo ||--|| FileDataID:"FileDataID"
     CreatureDisplayInfo }o--|| CreatureModelData:"ModelID, several displays share one model"
+    CreatureDisplayInfo ||--o{ FileDataID:"TextureVariationFileDataID, the skins over the model"
     CreatureModelData ||--|| FileDataID:"FileDataID"
     ItemModifiedAppearance }o--|| ItemAppearance:"ItemAppearanceID"
     ItemAppearance }o--|| ItemDisplayInfo:"ItemDisplayInfoID"
@@ -472,13 +473,14 @@ erDiagram
     CreatureDisplayInfo {
         int ID PK
         int ModelID FK
+        int TextureVariationFileDataID_n"three slots on retail, four on Classic, read by name"
     }
     ItemModifiedAppearance {
         int ItemID PK
         int ItemAppearanceID FK
     }
     MorphAura {
-        int EffectMiscValue_0"a creature, not a display"
+        int EffectMiscValue_0"a creature, not a display; a summon stores the same"
     }
     MountXDisplay {
         int MountID FK
@@ -903,7 +905,7 @@ effect and aura remains searchable and the mechanics column is always the whole 
 
 | selector               | misc value is     | ships as                                                                    |
 |------------------------|-------------------|-----------------------------------------------------------------------------|
-| transform aura         | a creature        | `fxRows`, `morphs`, `morphDisplays`                                         |
+| transform aura         | a creature        | `fxRows`, `morphs`, `creatureDisplays`, `displaySkins`                      |
 | shapeshift aura        | a form            | `fxRows`, `shapeshifts`                                                     |
 | set-vehicle aura       | a vehicle         | `mechRows`, `vehicles`, `vehicleSeats`, and the three ridden animation sets |
 | screen-effect aura     | a screen effect   | `fxRows`, `screens`                                                         |
@@ -911,7 +913,7 @@ effect and aura remains searchable and the mechanics column is always the whole 
 | keybound-override aura | a key override    | `mechRows`, `keybinds`                                                      |
 | anim-replacement aura  | a replacement set | `animRows` (`replace`)                                                      |
 | override-name aura     | an override name  | folded into the search corpus                                               |
-| summon effect          | a creature        | `fxRows`, `summons`                                                         |
+| summon effect          | a creature        | `fxRows`, `summons`, `creatureDisplays`, `displaySkins`                     |
 | gameobject effects     | a gameobject      | `fxRows`, `objects`                                                         |
 | play-sound effects     | a sound kit       | folded into `soundRows`                                                     |
 
@@ -1297,10 +1299,11 @@ A polymorph turns its target into a sheep, and the app shows the sheep's model. 
 | **provide** | Those tables are served as rows, with any hotfix rows merged in per column                                                           |
 | **read**    | The effect row's aura says *transform*, so its misc value is read as a creature rather than as a number                              |
 | **read**    | The creature's *name* comes from the server world table; without a release it stays a raw id, declared                               |
-| **read**    | The creature's display resolves through display to model data to a file id — two hops, because several displays share one model      |
+| **read**    | The creature's displays resolve through display to model data to a file id — two hops, because several displays share one model      |
+| **read**    | Each display's own texture slots name the skins it paints over that model, read off the header because their number varies by build  |
 | **derive**  | The walk records the pair against the spell, unioning the target mask from the effect's implicit targets                             |
 | **derive**  | The file id is resolved to an asset path through the listfile                                                                        |
-| **declare** | It belongs to the `morph` kind of `fxRows`, whose companions `morphs` and `morphDisplays` carry the name and the display             |
+| **declare** | It belongs to the `morph` kind of `fxRows`; `morphs` carries the name, `creatureDisplays` the displays and models, `displaySkins` the skins |
 | **emit**    | Those become parallel columns, gzipped, hashed into `versions.json`                                                                  |
 | **index**   | The browser indexes the path and the creature name alongside every other model's                                                     |
 | **query**   | `model:sheep` matches the *path*, because category searches match filenames as well as the category word                             |

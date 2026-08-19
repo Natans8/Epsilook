@@ -682,10 +682,12 @@ def check_pack_sections(rep: Report) -> None:
     sections = set(loaded)
 
     # The readers, which are no longer one file: the shipped engine reads the
-    # vocabularies it always did, and search 2.0 reads the row tables.
+    # vocabularies it always did, search 2.0 reads the row tables, and the
+    # addon reads the pack through its own API, by section name.
     source = "".join(
         (ROOT / part).read_text(encoding="utf-8")
-        for part in ("src/data.ts", "src/packrows.ts", "tools/dataset.ts"))
+        for part in ("src/data.ts", "src/packrows.ts", "tools/dataset.ts",
+                     "addon/Epsilook/API.lua"))
 
     # Two kinds of section are reached by DECLARATION rather than by name, so
     # no reader mentions them and searching the source for one would report a

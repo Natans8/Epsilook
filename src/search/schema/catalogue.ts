@@ -297,13 +297,13 @@ export const replace = defineKind({
     column: animColumn, word: "replace", group: "replaced",
     hint: t("tooltips:kind.replace.hint"),
     props: {
-        from: {
-            types: [enumeration], plain: [enumeration], tier: TIER.asset,
-            hint: t("tooltips:kind.replace.props.from")
-        },
         to: {
             types: [enumeration], plain: [enumeration], tier: TIER.asset,
             hint: t("tooltips:kind.replace.props.to")
+        },
+        from: {
+            types: [enumeration], plain: [enumeration], tier: TIER.asset,
+            hint: t("tooltips:kind.replace.props.from")
         },
         target: target(),
     },
@@ -432,7 +432,7 @@ export const camo = defineKind({
 export const morph = defineKind({
     column: fxColumn, word: "morph", global: true, group: "transform",
     hint: t("tooltips:kind.morph.hint"),
-    props: {display: named(t("tooltips:kind.morph.props.display"), TIER.asset), target: target()},
+    props: {creature: named(t("tooltips:kind.morph.props.creature"), TIER.asset), target: target()},
 });
 
 export const shapeshift = defineKind({

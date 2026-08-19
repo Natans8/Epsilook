@@ -16,9 +16,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from ..routes import (FxPayloads, GameObjectData, ItemModels, MountData,
-                      SpellEffectRows)
-from ..routes.models import MODEL_CAT_ITEM
+from ..routes import (CreatureModels, FxPayloads, GameObjectData, ItemModels,
+                      MountData, SpellEffectRows)
+from ..routes.models import MODEL_CAT_DISPLAY, MODEL_CAT_ITEM
 from .displays import ResolvedDisplays
 from .walk import SpellVisuals
 
@@ -45,6 +45,11 @@ class References:
     mount_displays: list[int] = field(default_factory=list)
     """The mount displays some spell seats a rider on, sorted."""
 
+    displays: set[int] = field(default_factory=set)
+    """Every creature display the pack names, whichever route reached it: a
+    creature's, a form's, a mount's, or one an effect name attaches outright.
+    What the skins section is keyed by."""
+
     object_rows: list[tuple[int, int]] = field(default_factory=list)
     """Sorted `(spell, entry)` pairs for the objects that survived.
 
@@ -68,7 +73,7 @@ class References:
 def collect_references(visuals: SpellVisuals, effects: SpellEffectRows,
                        fx: FxPayloads, displays: ResolvedDisplays,
                        mounts: MountData, objects: GameObjectData,
-                       items: ItemModels,
+                       items: ItemModels, creatures: CreatureModels,
                        spell_icons: Mapping[int, int]) -> References:
     """Gather every file id the build must resolve, split by what names it.
 
@@ -80,6 +85,7 @@ def collect_references(visuals: SpellVisuals, effects: SpellEffectRows,
         mounts: the mount links and their models.
         objects: the spawnable objects and their models.
         items: the item tables, for the inventory icon an item pill shows.
+        creatures: the display chain, for the textures a display paints.
         spell_icons: spell to its icon's file id.
 
     Returns:
@@ -108,6 +114,8 @@ def collect_references(visuals: SpellVisuals, effects: SpellEffectRows,
             # An item pill shows the icon the game shows in the bag.
             if model[1] == MODEL_CAT_ITEM and model[4]:
                 found.icons.add(items.icon_fid.get(model[4], 0))
+            if model[1] == MODEL_CAT_DISPLAY:
+                found.displays.add(model[4])
     for sounds in visuals.sounds.values():
         found.assets.update(file for _kit, file in sounds)
     for chain in found.chains:
@@ -116,13 +124,20 @@ def collect_references(visuals: SpellVisuals, effects: SpellEffectRows,
         found.assets.update(fx.dissolves[dissolve][1])
     for screen in found.screens:
         found.assets.update(file for file, _role in fx.screens[screen].textures)
-    for row in (*displays.morphs, *displays.forms):
+    for row in (*displays.creatures, *displays.forms):
         if row.fid:
             found.assets.add(row.fid)
+        found.displays.add(row.display)
 
     found.mount_displays = sorted({display for _spell, display in mounts.links})
     found.assets.update(file for display in found.mount_displays
                         if (file := mounts.fid.get(display, 0)))
+    found.displays.update(found.mount_displays)
+    found.displays.discard(0)
+    # A display's skins are textures like a chain's: named so a reader can see
+    # what a display paints, and only for the displays something reached.
+    for display in found.displays:
+        found.assets.update(creatures.display_skins.get(display, ()))
 
     found.object_rows = sorted(
         (spell, entry) for spell, entries in effects.objects.ids.items()

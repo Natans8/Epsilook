@@ -1,10 +1,10 @@
 {
   "pack": "5.5.4.69155",
   "meta": {
-    "format": 55,
+    "format": 56,
     "version": "5.5.4.69155",
     "label": "MoP Classic 5.5.4",
-    "built": "2026-08-18",
+    "built": "2026-08-19",
     "listfileTag": "202608181116",
     "tdbTag": "",
     "absentTables": ["BarrageEffect", "FullScreenEffect", "ShadowyEffect", "SpellOverrideName", "SpellVisualScreenEffect", "WeaponTrail"],
@@ -15,7 +15,7 @@
       "screens": ["FullScreenEffect", "SpellVisualScreenEffect"],
       "screenTextures": ["FullScreenEffect"]
     },
-    "counts": {"animKitAnims": 2786, "animKitAnimBoneset": 659, "animEmotes": 1730, "icons": 4742, "files": 10005, "gobModels": 4005, "morphs": 1128, "morphDisplays": 0, "mounts": 502, "shapeshiftDisplays": 16, "summons": 7596, "objects": 0, "expansion.vanilla": 7259, "expansion.tbc": 15756, "expansion.wotlk": 18447, "expansion.cata": 24945, "expansion.mop": 16568, "expansion.wod": 13062, "expansion.legion": 7, "expansion.bfa": 6, "expansion.shadowlands": 2, "expansion.dragonflight": 10, "expansion.tww": 19, "expansion.midnight": 41, "expansion.unknown": 2037, "fxChains": 2018, "dissolves": 1, "glows": 3, "ghostMats": 90, "tints": 867, "spellAttrs.actionsduringchannel": 429, "spellAttrs.auraisdebuff": 3110, "spellAttrs.preventsanim": 361, "spellAttrs.tracktargetinchannel": 1185, "spellAttrs.unbreakablechannel": 66, "spellDelivery": 22615, "delivery.casttime": 18738, "delivery.channelled": 4564, "delivery.both": 687, "delivery.breaksOnMove": 2401, "delivery.instant": 75544, "areas": 1158, "keybinds": 10, "linkKinds": 82, "implicitTargets": 123, "missileMotions": 430, "items": 0, "namedItems": 0, "spellModels": 126605, "spellDisplayModels": 48, "spellItemModels": 0, "spellWeaponModels": 357, "spellMissileMotions": 3973, "spellMounts": 530, "spellSounds": 183964, "spellAnimKits": 6158, "spellVisualAnims": 59862, "spellReplaceAnims": 1006, "spellPassengerAnims": 791, "spellFx": 5747, "spellDissolves": 1, "spellScreens": 405, "spellGlows": 4, "spellShadowies": 0, "spellGhostMats": 106, "spellTints": 3876, "spellDesaturates": 129, "spellTransparencies": 764, "spellFreezes": 356, "spellCamos": 38, "spellMorphs": 1420, "spellShapeshifts": 95, "spellScales": 1138, "spellSummons": 8612, "spellObjects": 0, "spellMechanics": 130182, "spellLinks": 16060, "spellAreas": 6265, "spellInvis": 489, "invisChannels": 37, "spellDetects": 1123, "spellVehicles": 121, "spellSpeeds": 2188, "spellKeybinds": 14, "screens": 184, "soundKitNames": 4228, "spells": 98159, "spellDescriptions": 48733, "descriptionTexts": 35310, "spellEncounterNotes": 0, "spellAuraTexts": 24681, "auraTexts": 15396, "encounterTexts": 0, "vehicles": 111, "vehicleSeats": 221, "spellVehicleAnims": 57, "spellVehicleAnimKits": 10},
+    "counts": {"animKitAnims": 2786, "animKitAnimBoneset": 659, "animEmotes": 1730, "icons": 4742, "files": 10822, "gobModels": 4005, "morphs": 1128, "creatureDisplays": 0, "displaySkins": 988, "mounts": 502, "shapeshiftDisplays": 16, "summons": 7596, "objects": 0, "expansion.vanilla": 7259, "expansion.tbc": 15756, "expansion.wotlk": 18447, "expansion.cata": 24945, "expansion.mop": 16568, "expansion.wod": 13062, "expansion.legion": 7, "expansion.bfa": 6, "expansion.shadowlands": 2, "expansion.dragonflight": 10, "expansion.tww": 19, "expansion.midnight": 41, "expansion.unknown": 2037, "fxChains": 2018, "dissolves": 1, "glows": 3, "ghostMats": 90, "tints": 867, "spellAttrs.actionsduringchannel": 429, "spellAttrs.auraisdebuff": 3110, "spellAttrs.preventsanim": 361, "spellAttrs.tracktargetinchannel": 1185, "spellAttrs.unbreakablechannel": 66, "spellDelivery": 22615, "delivery.casttime": 18738, "delivery.channelled": 4564, "delivery.both": 687, "delivery.breaksOnMove": 2401, "delivery.instant": 75544, "areas": 1158, "keybinds": 10, "linkKinds": 82, "implicitTargets": 123, "missileMotions": 430, "items": 0, "namedItems": 0, "spellModels": 126605, "spellDisplayModels": 48, "spellItemModels": 0, "spellWeaponModels": 357, "spellMissileMotions": 3973, "spellMounts": 530, "spellSounds": 183964, "spellAnimKits": 6158, "spellVisualAnims": 59862, "spellReplaceAnims": 1006, "spellPassengerAnims": 791, "spellFx": 5747, "spellDissolves": 1, "spellScreens": 405, "spellGlows": 4, "spellShadowies": 0, "spellGhostMats": 106, "spellTints": 3876, "spellDesaturates": 129, "spellTransparencies": 764, "spellFreezes": 356, "spellCamos": 38, "spellMorphs": 1420, "spellShapeshifts": 95, "spellScales": 1138, "spellSummons": 8612, "spellObjects": 0, "spellMechanics": 130182, "spellLinks": 16060, "spellAreas": 6265, "spellInvis": 489, "invisChannels": 37, "spellDetects": 1123, "spellVehicles": 121, "spellSpeeds": 2188, "spellKeybinds": 14, "screens": 184, "soundKitNames": 4228, "spells": 98159, "spellDescriptions": 48733, "descriptionTexts": 35310, "spellEncounterNotes": 0, "spellAuraTexts": 24681, "auraTexts": 15396, "encounterTexts": 0, "vehicles": 111, "vehicleSeats": 221, "spellVehicleAnims": 57, "spellVehicleAnimKits": 10},
     "domains": {
       "casttime": {"n": 18738, "min": 100, "max": 300000, "distinct": 70, "mean": 2833.3544, "median": 2000, "p1": 100, "p99": 15000, "clipped": true, "step": 25, "mode": 2000, "modeShare": 0.2323, "signed": false, "sentinels": 0, "ui": "range", "unit": "ms"},
       "channel": {"n": 2840, "min": 1, "max": 86400000, "distinct": 73, "mean": 93143.4511, "median": 6000, "p1": 500, "p99": 900000, "clipped": true, "step": 50, "mode": 5000, "modeShare": 0.157, "signed": false, "sentinels": 1480, "ui": "range", "unit": "ms"},
@@ -154,7 +154,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-7ee980d750cf.json.gz", "bytes": 2078049},
+    "core": {"file": "data/modules/core-853d596e303e.json.gz", "bytes": 2089892},
     "universal": {"file": "data/modules/universal-2f3682aa3f9d.json.gz", "bytes": 25203}
   },
   "locales": {

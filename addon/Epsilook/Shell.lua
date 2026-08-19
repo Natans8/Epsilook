@@ -45,6 +45,19 @@ local GOLD, WHITE, BLUE, CYAN, GREY, RED =
 local END = "|r"
 Shell.COLOURS = { gold = GOLD, white = WHITE, blue = BLUE, cyan = CYAN, grey = GREY, red = RED }
 
+--- The tone each axis wears: on a count in a result line, and on the label
+-- of every part line in the dossier, so a section reads as one by its
+-- colour. The web app's own hue per column -- model blue, sound green, anim
+-- violet, fx teal, mech orange -- saturated for chat, and apart from the
+-- `.lookup` colours the ids, names, links and actions keep.
+Shell.AXIS_COLOURS = {
+	model = "|cff3b9eff",
+	sound = "|cff3ddc84",
+	anim = "|cffc77dff",
+	fx = "|cff2ee6d6",
+	mech = "|cffff9f43",
+}
+
 --- The actions offered on a spell, in the order `.lookup` prints them: the
 -- word shown, what a tooltip says a click does, and the server command a
 -- click sends. Inspect sends nothing; it prints the dossier. The aura action
@@ -227,7 +240,14 @@ function Shell.ResultLines(spell, counts, axes)
 			local n = counts[axis] or 0
 			if n > 0 then
 				local label = n .. " " .. axis
-				made[#made + 1] = Shell.Link(spell.id, Epsilook.Inspect.LIST, label, axis, 0, GREY)
+				made[#made + 1] = Shell.Link(
+					spell.id,
+					Epsilook.Inspect.LIST,
+					label,
+					axis,
+					0,
+					Shell.AXIS_COLOURS[axis] or GREY
+				)
 			end
 		end
 		if #made > 0 then
@@ -275,23 +295,31 @@ end
 
 --- A message read the way `.lookup` is typed: a head word that opens the
 -- message, followed by a space, puts everything after it inside that head's
--- row scope, so `model 6dr fire` is `model:{6dr fire}` and asks for one
--- model with both. The leniency is the shell's, not the grammar's -- the
--- query the engine sees is one the web reads the same way -- and a head
--- bound with the colon, as in `model:6dr fire`, is left exactly as typed. A
+-- row scope, so `model fire missile` is `model:{fire missile}` and asks for
+-- one model with both. The leniency is the shell's, not the grammar's --
+-- the query the engine sees is one the web reads the same way -- and a head
+-- bound with the colon, as in `model:fire missile`, is left exactly as typed. A
 -- rest already in braces is bound as it is, and a property head, which takes
--- one value and no scope, binds to the first token alone.
+-- one value and no scope, binds to the first token alone. A head word on
+-- its own asks for any value of it -- `model` is `model:*`, the spells with
+-- a model -- rather than for the word as text.
 -- @param message the query as typed
 -- @return the query as the engine reads it
 function Shell.Lenient(message)
 	local grammar = Epsilook.Schema.grammar
 	local head, rest = message:match("^(%S+)%s+(.+)$")
+	if not head then
+		head, rest = message:match("^(%S+)%s*$"), nil
+	end
 	if not head or head:find(grammar.bind, 1, true) then
 		return message
 	end
 	local resolved = Epsilook.Schema.HeadOf(Epsilook.Text.fold(head))
 	if not resolved then
 		return message
+	end
+	if rest == nil then
+		return head .. grammar.bind .. grammar.wildcard
 	end
 	if resolved.role == "prop" then
 		-- A property takes one value and opens no scope: it binds to the
@@ -316,8 +344,8 @@ function Shell.HelpLines()
 	local function title(text)
 		return GOLD .. text .. END
 	end
-	local function row(left, right)
-		return "  " .. GOLD .. left .. END .. "  " .. right
+	local function row(left, right, tone)
+		return "  " .. (tone or GOLD) .. left .. END .. "  " .. right
 	end
 	local lines = {
 		title("Epsilook") .. GREY .. " searches Epsilon's spells from chat" .. END,
@@ -334,12 +362,15 @@ function Shell.HelpLines()
 			.. END,
 	}
 	for _, column in ipairs(help.columns) do
-		lines[#lines + 1] = row(column.key, column.hint)
+		lines[#lines + 1] = row(column.key, column.hint, Shell.AXIS_COLOURS[column.key])
 	end
+	-- Each door wears its column's tone, the one its parts' labels wear in
+	-- the dossier, so the help and the dossier colour one axis one way.
 	local doors = {}
 	for _, head in ipairs(help.heads) do
 		if head.role ~= "column" then
-			doors[#doors + 1] = head.word
+			local tone = Shell.AXIS_COLOURS[head.column]
+			doors[#doors + 1] = tone and tone .. head.word .. END or head.word
 		end
 	end
 	lines[#lines + 1] = title("Other heads")
@@ -392,11 +423,14 @@ function Shell.HelpLines()
 		row(grammar.negate .. grammar.sortWord .. grammar.bind .. "<head>", "the other way round")
 	lines[#lines + 1] = title("A head word then a space")
 		.. GREY
-		.. " binds to all that follows: /elo model 6dr fire is model"
+		.. " scopes all that follows: /elo model fire missile is model"
 		.. grammar.bind
-		.. "6dr model"
+		.. grammar.scope.open
+		.. "fire missile"
+		.. grammar.scope.close
+		.. "; a head word alone asks for any: /elo model is model"
 		.. grammar.bind
-		.. "fire"
+		.. grammar.wildcard
 		.. END
 	return lines
 end

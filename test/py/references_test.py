@@ -5,9 +5,9 @@ from __future__ import annotations
 from pack.derive.displays import Display, ResolvedDisplays
 from pack.derive.references import References, collect_references
 from pack.derive.walk import SpellVisuals
-from pack.routes import (FxPayloads, GameObjectData, ItemModels, MountData,
-                         ScreenRow, SpellEffectRows)
-from pack.routes.models import MODEL_CAT_ITEM
+from pack.routes import (CreatureModels, FxPayloads, GameObjectData, ItemModels,
+                         MountData, ScreenRow, SpellEffectRows)
+from pack.routes.models import MODEL_CAT_DISPLAY, MODEL_CAT_ITEM
 from pack.targets import NO_TARGET
 
 
@@ -25,13 +25,14 @@ def collect(*, visuals: SpellVisuals | None = None,
             mounts: MountData | None = None,
             objects: GameObjectData | None = None,
             items: ItemModels | None = None,
+            creatures: CreatureModels | None = None,
             spell_icons: dict[int, int] | None = None) -> References:
     """Run the collection with everything not under test left empty."""
     return collect_references(
         visuals or SpellVisuals(), effects or SpellEffectRows(),
         fx or FxPayloads(), displays or ResolvedDisplays(),
         mounts or MountData(), objects or GameObjectData(),
-        items or ItemModels(), spell_icons or {})
+        items or ItemModels(), creatures or CreatureModels(), spell_icons or {})
 
 
 def test_a_models_file_is_an_asset() -> None:
@@ -81,8 +82,22 @@ def test_a_display_row_with_no_model_adds_nothing() -> None:
     """A display can resolve to no model, which is a row that renders without
     one rather than a file to look for."""
     found = collect(displays=ResolvedDisplays(
-        morphs=[Display(1, 2, 800)], forms=[Display(3, 4, 0)]))
+        creatures=[Display(1, 2, 800)], forms=[Display(3, 4, 0)]))
     assert found.assets == {800}
+
+
+def test_every_named_display_is_collected_and_its_skins_are_assets() -> None:
+    """A creature's, a form's, a mount's and an attached display all count,
+    once each; the textures a display paints are named like a chain's, and
+    only for displays something reached."""
+    found = collect(
+        visuals=visuals(models={100: {(500, MODEL_CAT_DISPLAY, 0, 0, 6, 0): NO_TARGET}}),
+        displays=ResolvedDisplays(creatures=[Display(1, 2, 800)],
+                                  forms=[Display(3, 4, 0)]),
+        mounts=MountData(links=[(100, 7)], fid={7: 900}),
+        creatures=CreatureModels(display_skins={2: (801, 802), 6: (803,), 99: (804,)}))
+    assert found.displays == {2, 4, 6, 7}
+    assert found.assets == {500, 800, 801, 802, 803, 900}
 
 
 def test_a_mounts_model_is_an_asset() -> None:

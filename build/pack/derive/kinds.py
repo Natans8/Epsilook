@@ -392,11 +392,15 @@ def _loose(reads: Reads) -> Iterable[SpellRow]:
 
 
 def _replacements(reads: Reads) -> Iterable[SpellRow]:
-    """Every animation a spell wears in place of another."""
+    """Every animation a spell wears in place of another.
+
+    The replacement leads: it is what the character is seen doing, and the
+    one the kind's own word reaches.
+    """
     for spell, source, destination, mask in replacement_rows(
             reads.visuals, reads.effects, reads.anim_replacements,
             len(reads.declared.anim_names)):
-        yield spell, (source, destination, mask)
+        yield spell, (destination, source, mask)
 
 
 def _poses(reads: Reads) -> Iterable[SpellRow]:
@@ -435,9 +439,9 @@ ANIM_FAMILIES: tuple[Family, ...] = (
            absent={"anim": ABSENT, "boneset": ABSENT}),
     Family(kind="loose", props=("anim", "target"), rows=_loose,
            vocab={"anim": "anims"}, absent={"anim": ABSENT}),
-    Family(kind="replace", props=("from", "to", "target"), rows=_replacements,
-           vocab={"from": "anims", "to": "anims"},
-           absent={"from": ABSENT, "to": ABSENT}),
+    Family(kind="replace", props=("to", "from", "target"), rows=_replacements,
+           vocab={"to": "anims", "from": "anims"},
+           absent={"to": ABSENT, "from": ABSENT}),
     Family(kind="pose", props=(), rows=_poses),
     Family(kind="passenger", props=_ROLES, rows=_passengers,
            vocab={role: "anims" for role in _ROLES},
@@ -628,8 +632,8 @@ FX_FAMILIES: tuple[Family, ...] = (
            rows=_percents("desats", lambda reads, row: reads.procs.desats[row])),
     Family(kind="freeze", props=(), rows=_flagged("freezes")),
     Family(kind="camo", props=(), rows=_flagged("camos")),
-    Family(kind="morph", props=("display", "target"), rows=_entities("morphs"),
-           vocab={"display": "morphs"}),
+    Family(kind="morph", props=("creature", "target"), rows=_entities("morphs"),
+           vocab={"creature": "morphs"}),
     Family(kind="shapeshift", props=("form", "target"), rows=_entities("forms"),
            vocab={"form": "shapeshifts"}),
     Family(kind="scale", props=("amount", "target"), rows=_scales),

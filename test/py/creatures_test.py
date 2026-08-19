@@ -13,6 +13,15 @@ ID,ModelID
 52,999
 """
 
+# A client's display table carries as many texture slots as its build has;
+# the pair is the first two, the unpainted third is the gap a skin can leave.
+CREATURE_DISPLAY_INFO_SKINNED = """\
+ID,ModelID,TextureVariationFileDataID_0,TextureVariationFileDataID_2,TextureVariationFileDataID_1
+50,900,7100,0,7101
+51,901,0,0,0
+52,999,0,7102,7102
+"""
+
 CREATURE_MODEL_DATA = """\
 ID,FileDataID
 900,7000
@@ -46,6 +55,25 @@ def test_a_display_resolves_through_two_hops(tables: BuildTables) -> None:
                CreatureModelData=CREATURE_MODEL_DATA), None)
     assert creatures.fid_for_display(50) == 7000
     assert creatures.fid_for_display(51) == 7001
+
+
+def test_a_displays_skins_are_read_by_name_in_slot_order(tables: BuildTables) -> None:
+    """The slots are found off the header and ordered by their number, so a
+    build with four reads the same as one with three; a display painting
+    nothing is absent rather than empty, and one texture in two slots is one
+    skin."""
+    creatures = read_creature_models(
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO_SKINNED,
+               CreatureModelData=CREATURE_MODEL_DATA), None)
+    assert creatures.display_skins == {50: (7100, 7101), 52: (7102,)}
+
+
+def test_a_display_table_without_skin_columns_reads_as_unpainted(
+        tables: BuildTables) -> None:
+    creatures = read_creature_models(
+        tables(CreatureDisplayInfo=CREATURE_DISPLAY_INFO,
+               CreatureModelData=CREATURE_MODEL_DATA), None)
+    assert creatures.display_skins == {}
 
 
 def test_a_display_whose_model_has_no_file_resolves_to_nothing(
