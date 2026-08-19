@@ -31,7 +31,7 @@
 --   SpellText   description, aura, encounter
 --   PartData    axis, kind, slot, values (property name to value; a named
 --               property is a table of id and text)
---   Action      key, label, needs, effect, revert
+--   Action      key, label, needs, effect, revert, hint
 --   DataInfo    pack, built, format, variation, homes
 
 _G.Epsilook = _G.Epsilook or {}
@@ -378,20 +378,90 @@ end
 
 Epsilook.ACTIONS = {
 	model = {
-		{ key = "spawn", label = "Spawn", needs = "file", effect = "world", revert = "" },
+		{
+			key = "spawn",
+			label = "Spawn",
+			needs = "file",
+			effect = "world",
+			revert = "",
+			hint = "Click to spawn this model as a gameobject where you stand",
+		},
 	},
 	sound = {
-		{ key = "play", label = "Play", needs = "file", effect = "read", revert = "stop" },
-		{ key = "stop", label = "Stop", needs = "file", effect = "read", revert = "" },
-		{ key = "playKit", label = "Play Kit", needs = "kit", effect = "read", revert = "stopKit" },
-		{ key = "stopKit", label = "Stop Kit", needs = "kit", effect = "read", revert = "" },
+		{
+			key = "play",
+			label = "Play",
+			needs = "file",
+			effect = "read",
+			revert = "stop",
+			hint = "Click to play this sound file, for you only",
+		},
+		{
+			key = "stop",
+			label = "Stop",
+			needs = "file",
+			effect = "read",
+			revert = "",
+			hint = "Click to stop this sound file",
+		},
+		{
+			key = "playKit",
+			label = "Play Kit",
+			needs = "kit",
+			effect = "read",
+			revert = "stopKit",
+			hint = "Click to play this sound kit, for you only",
+		},
+		{
+			key = "stopKit",
+			label = "Stop Kit",
+			needs = "kit",
+			effect = "read",
+			revert = "",
+			hint = "Click to stop this sound kit",
+		},
 	},
 	anim = {
-		{ key = "anim", label = "Anim", needs = "anim", effect = "world", revert = "resetAnim" },
-		{ key = "stand", label = "Stand", needs = "anim", effect = "world", revert = "resetStand" },
-		{ key = "animkit", label = "Kit", needs = "id", effect = "world", revert = "" },
-		{ key = "resetAnim", label = "Reset", needs = "", effect = "world", revert = "" },
-		{ key = "resetStand", label = "Reset", needs = "", effect = "world", revert = "" },
+		{
+			key = "anim",
+			label = "Anim",
+			needs = "anim",
+			effect = "world",
+			revert = "resetAnim",
+			hint = "Click to play this animation on yourself once",
+		},
+		{
+			key = "stand",
+			label = "Stand",
+			needs = "anim",
+			effect = "world",
+			revert = "resetStand",
+			hint = "Click to hold this animation as your standing pose",
+		},
+		{
+			key = "animkit",
+			label = "Kit",
+			needs = "id",
+			effect = "world",
+			revert = "",
+			hint = "Click to play this animation kit on yourself",
+		},
+		{
+			key = "resetAnim",
+			label = "Reset",
+			needs = "",
+			effect = "world",
+			revert = "",
+			hint = "Click to stop the animation",
+		},
+		{
+			key = "resetStand",
+			label = "Reset",
+			needs = "",
+			effect = "world",
+			revert = "",
+			hint = "Click to stand normally again",
+		},
 	},
 }
 

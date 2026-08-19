@@ -468,11 +468,19 @@ function Shell.Send(text)
 	end
 end
 
+--- What a tooltip says a spell link's click will do.
+local HINTS = {
+	learn = "Click to learn the spell",
+	cast = "Click to cast the spell",
+	aura = "Click to apply the aura to your target",
+	inspect = "Click to print everything the spell is made of",
+}
+
 --- The tooltip a link shows while the mouse is over it.
 -- A spell link shows the game's own spell tooltip; the aura link shows what
 -- the aura says while it is on you, which is the pack's own text; a part's
--- action shows the part. Only this addon's links are handled: the chat frame
--- has other hands on the others.
+-- action shows the part; every one ends in what a click will do. Only this
+-- addon's links are handled: the chat frame has other hands on the others.
 -- @param frame the chat frame the link is in
 -- @param link the link's target
 function Shell.OnHyperlinkEnter(frame, link)
@@ -483,11 +491,19 @@ function Shell.OnHyperlinkEnter(frame, link)
 	end
 	id = tonumber(id)
 	tooltip:SetOwner(frame, "ANCHOR_CURSOR")
-	if axis ~= "" then
+	local hint = HINTS[verb]
+	if verb == "more" then
+		tooltip:SetText("Click to view the next " .. Shell.PAGE .. " results", 1, 1, 1)
+	elseif axis ~= "" then
 		local part = Epsilook:GetPartDataByIndex(id, axis, tonumber(n))
 		if part then
 			tooltip:SetText(part.kind, 1, 1, 1)
 			tooltip:AddLine(Epsilook.Inspect.ValuesText(part), nil, nil, nil, true)
+		end
+		for _, action in ipairs(Epsilook:GetActions(axis)) do
+			if action.key == verb then
+				hint = action.hint
+			end
 		end
 	elseif verb == "aura" then
 		local spell = Epsilook:GetSpellDataByID(id)
@@ -504,6 +520,9 @@ function Shell.OnHyperlinkEnter(frame, link)
 		end
 	else
 		tooltip:SetSpellByID(id)
+	end
+	if hint then
+		tooltip:AddLine(hint, 0.44, 0.84, 1)
 	end
 	tooltip:Show()
 end
