@@ -63,15 +63,52 @@ Inspect.TEXTURES = { ["fx.chain"] = { height = 16, width = 64 } }
 -- texture escape, so a colour shows as itself.
 local SWATCH = "Interface/Buttons/WHITE8X8"
 
---- The head line: the spell's name as a link, its id, school and expansion,
--- then the spell's own actions.
+--- A school's colour as the client's combat log paints it, by school mask:
+-- the player's own setting where the log is loaded, the client's defaults
+-- otherwise, nothing under a bare interpreter.
+-- @param mask the school mask
+-- @return r, g, b in 0..1, or nil
+local function schoolColour(mask)
+	local array
+	if _G.CombatLog_Color_ColorArrayBySchool then
+		array = _G.CombatLog_Color_ColorArrayBySchool(mask)
+	elseif _G.COMBATLOG_DEFAULT_COLORS then
+		local colours = _G.COMBATLOG_DEFAULT_COLORS.schoolColoring
+		array = colours and colours[mask]
+	end
+	if array then
+		return array.r, array.g, array.b
+	end
+	return nil
+end
+
+--- A swatch in a colour given as r, g, b in 0..1, then text in that colour.
+local function swatched(r, g, b, text)
+	local R, G, B = math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5)
+	return "|T"
+		.. SWATCH
+		.. ":12:12:0:0:8:8:0:8:0:8:"
+		.. R
+		.. ":"
+		.. G
+		.. ":"
+		.. B
+		.. "|t"
+		.. string.format("|cff%02x%02x%02x", R, G, B)
+		.. text
+		.. END
+end
+
+--- The head line: the spell's name as a link, its id, school in the school's
+-- own colour, and expansion, then the spell's own actions.
 function Inspect.HeadLine(spell)
 	local parts = { Shell.SpellLink(spell), GOLD .. spell.id .. END }
 	if spell.subtext ~= "" then
 		parts[#parts + 1] = GREY .. spell.subtext .. END
 	end
 	if spell.school ~= "" then
-		parts[#parts + 1] = spell.school
+		local r, g, b = schoolColour(spell.schoolID)
+		parts[#parts + 1] = r and swatched(r, g, b, spell.school) or spell.school
 	end
 	if spell.expansion ~= "" then
 		parts[#parts + 1] = spell.expansion
