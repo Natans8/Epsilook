@@ -585,9 +585,10 @@ end
 
 --- Whether a parsed query asks anything at all.
 -- @param query a query from ParseQuery
--- @return true where at least one clause evaluates
+-- @return true where no clause evaluates and nothing is sorted; a query of
+--   nothing but a sort asks for every spell, in that order
 function Epsilook:IsQueryEmpty(query)
-	return #query.groups == 0
+	return #query.groups == 0 and #(query.sorts or {}) == 0
 end
 
 --- The query language as data, for a help surface: the columns with their

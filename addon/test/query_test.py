@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from support import LuaRuntime, as_dict, lua_function
+from support import LuaFunction, LuaRuntime, as_dict, lua_function, lua_table
 
 Record = dict[str | int, object]
 
@@ -72,3 +72,16 @@ def test_an_operator_glued_to_a_phrase_reads_the_phrase(engine: LuaRuntime) -> N
     value = cast(Record, cast(Record, asks(engine, 'name:="Fire Ball"')[0]["test"])["value"])
     assert value["op"] == "exact" and cast(Record, value["operand"])["value"] == "Fire Ball"
     assert formatted(engine, 'name:="Fire Ball"') == 'name="Fire Ball"'
+
+
+def test_a_sort_directive_is_kept_apart_from_the_clauses(engine: LuaRuntime) -> None:
+    tree = parsed(engine, "name:fire sort:cast -sort:id")
+    sorts = cast(list[Record], tree["sorts"])
+    assert [s["descending"] for s in sorts] == [False, True]
+    assert len(cast(list[object], tree["groups"])) == 1
+    assert lua_function(engine, b"Epsilook.Query.Format")(lua_function(engine, b"Epsilook.Query.Parse")(b"name:fire -sort:id")) == b"name:fire -sort:id"
+    # A word that is no head is refused, and a sort alone still asks.
+    assert parsed(engine, "sort:bogus")["problems"]
+    api = lua_table(engine, b"Epsilook")
+    empty = cast(LuaFunction, api[b"IsQueryEmpty"])
+    assert empty(api, lua_function(engine, b"Epsilook.Query.Parse")(b"sort:id")) is False

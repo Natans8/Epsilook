@@ -3,10 +3,11 @@
 -- The tree is the one the web engine's parser emits, cut down to the grammar
 -- the addon carries: plain terms, `head:value`, `-` to exclude, `|` or `or`
 -- between clauses, a quoted phrase, a comparison, a range, a comma list, `*`
--- for existence, and a row scope `head:{...}` whose terms one row must
--- satisfy together. Alternatives in parentheses and patterns are refused with
--- a message rather than read, so a query that parses here means the same
--- thing on the web.
+-- for existence, a row scope `head:{...}` whose terms one row must satisfy
+-- together, and the ordering directive `sort:<door>`, `-sort:<door>` for the
+-- other way, applied in the order written. Alternatives in parentheses and
+-- patterns are refused with a message rather than read, so a query that
+-- parses here means the same thing on the web.
 --
 -- Every character and word the grammar uses is read off the exported schema at
 -- load -- the bind, the phrase quote, the wildcard, the count and or words --
@@ -705,6 +706,7 @@ local function newParser(text)
 	self.problems = {}
 	self.groups = {}
 	self.current = {}
+	self.sorts = {}
 	local grammar = Schema.grammar
 	-- Characters that end the word scanned as a possible head.
 	self.headEnds = {
@@ -1312,6 +1314,29 @@ function Parser:bound(start, negated, head, vpos, limit)
 	return stop
 end
 
+--- An ordering directive: `sort:` and a door word, which must resolve to
+-- a head -- a column, a kind or a property. The directive is kept apart
+-- from the clauses, since it selects nothing: the exclusion on it means the
+-- other way round.
+-- @return the position to continue from
+function Parser:sorted(start, negated, vpos, limit)
+	local segs, stop = self:token(vpos, limit)
+	local word = segs[1] and segs[1].form == "bare" and Text.fold(segs[1].text) or ""
+	local head = word ~= "" and Schema.HeadOf(word) or nil
+	local span = { start = start, stop = stop - 1 }
+	if not head then
+		self:push(span, negated, "invalid", nil, {
+			{
+				message = Schema.grammar.sortWord
+					.. " takes a head word, as in sort:name or -sort:model",
+			},
+		})
+		return stop
+	end
+	self.sorts[#self.sorts + 1] = { head = head, descending = negated, span = span }
+	return stop
+end
+
 --- One clause starting at `i`. Returns the position to continue from.
 function Parser:clause(i, limit)
 	local grammar = Schema.grammar
@@ -1334,7 +1359,11 @@ function Parser:clause(i, limit)
 	end
 	local j = self:wordEnd(i, limit)
 	if j > i then
-		local head = Schema.HeadOf(Text.fold(sub(self.text, i, j - 1)))
+		local word = Text.fold(sub(self.text, i, j - 1))
+		if word == grammar.sortWord and j <= limit and self:char(j) == grammar.bind then
+			return self:sorted(start, negated, j + 1, limit)
+		end
+		local head = Schema.HeadOf(word)
 		if head then
 			local c = j <= limit and self:char(j) or ""
 			if c == grammar.bind then
@@ -1376,6 +1405,7 @@ function Parser:run()
 		text = self.text,
 		clauses = self.clauses,
 		groups = self.groups,
+		sorts = self.sorts,
 		problems = self.problems,
 	}
 end
@@ -1383,8 +1413,8 @@ end
 --- Parse query text.
 -- @param text the query as typed
 -- @return the parse: clauses, the alternation groups over them (disjunctive
---   normal form, as indices into clauses), the problems found, and the text
---   the positions index
+--   normal form, as indices into clauses), the sort directives in order, the
+--   problems found, and the text the positions index
 function Query.Parse(text)
 	countCtx = countCtx or typedCtx(Schema.COUNT_PROP, Schema.grammar.countWord, counted)
 	return newParser(Text.foldTypography(linksToIds(text))):run()
@@ -1513,10 +1543,12 @@ local function formatClause(clause)
 	return out
 end
 
---- Write a parse back as query text, one clause a word, `|` between groups.
+--- Write a parse back as query text, one clause a word, `|` between groups,
+-- the sort directives after in their order.
 -- @param parsed a parse
 -- @return the text
 function Query.Format(parsed)
+	local grammar = Schema.grammar
 	local groups = {}
 	for _, group in ipairs(parsed.groups) do
 		local words = {}
@@ -1525,7 +1557,15 @@ function Query.Format(parsed)
 		end
 		groups[#groups + 1] = table.concat(words, " ")
 	end
-	return table.concat(groups, " " .. Schema.grammar["or"] .. " ")
+	local out = table.concat(groups, " " .. grammar["or"] .. " ")
+	for _, sort in ipairs(parsed.sorts or {}) do
+		local word = (sort.descending and grammar.negate or "")
+			.. grammar.sortWord
+			.. grammar.bind
+			.. Schema.HeadWord(sort.head)
+		out = out == "" and word or (out .. " " .. word)
+	end
+	return out
 end
 
 return Query

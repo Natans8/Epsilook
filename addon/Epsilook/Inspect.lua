@@ -50,6 +50,10 @@ Inspect.GROUPS = { sound = "kit" }
 --- How many parts an axis's tooltip lists before it says how many more.
 Inspect.LISTED = 12
 
+--- The values shown beside a linked subject on the line, by axis, where the
+-- line would be blind without them: where a model attaches.
+Inspect.BESIDE = { model = { attach = true } }
+
 --- The axes whose every part is a link whatever it can be handed, because
 -- the tooltip is where the part's detail lives: an effect's implicit targets
 -- and the aura it applies, an aura's own target.
@@ -681,6 +685,12 @@ local function line(spellID, part, n, indent, label, verb)
 		local pictured = texture and texture.tip and (fid or part.kind == "screen")
 		if Inspect.DETAILED[part.axis] or pictured or Inspect.ClipOf(part, actions, shown) then
 			out = out .. Shell.Link(spellID, verb, shown, part.axis, n, colour, icon)
+			local shownBeside = Inspect.BESIDE[part.axis]
+			for i = 2, #values do
+				if shownBeside and shownBeside[values[i].name] and values[i].text ~= "" then
+					out = out .. "  " .. beside(values[i])
+				end
+			end
 		else
 			if icon then
 				out = out .. "|T" .. icon .. ":" .. Shell.ICON .. "|t"

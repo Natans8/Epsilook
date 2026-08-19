@@ -359,6 +359,19 @@ function Shell.HelpLines()
 			.. "fire missile"
 			.. grammar.scope.close
 	)
+	lines[#lines + 1] = title("Ordering")
+	lines[#lines + 1] = row(
+		grammar.sortWord .. grammar.bind .. "<head>",
+		"order by it, as in "
+			.. grammar.sortWord
+			.. grammar.bind
+			.. "name or "
+			.. grammar.sortWord
+			.. grammar.bind
+			.. "cast; several apply in turn"
+	)
+	lines[#lines + 1] =
+		row(grammar.negate .. grammar.sortWord .. grammar.bind .. "<head>", "the other way round")
 	lines[#lines + 1] = title("A head word then a space")
 		.. GREY
 		.. " binds to all that follows: /elo model 6dr fire is model"
@@ -449,13 +462,23 @@ local paging
 -- @param text the query as typed, for the header
 -- @param fromIndex the spell row to resume from
 local function page(tree, text, fromIndex)
+	-- The answer to the command comes first, before the job does anything,
+	-- so a search that takes frames to find its first hit is never a silence.
+	local sorted = tree.sorts and #tree.sorts > 0
+	if fromIndex then
+		say(Shell.Said("next page of " .. text))
+	elseif sorted then
+		say(Shell.Said("searching and sorting " .. text))
+	else
+		say(Shell.Said("searching " .. text))
+	end
 	run(function()
 		local axes = Epsilook:GetPartAxes()
 		local step = Epsilook:FindSpells(tree, fromIndex, Shell.SLICE)
 		local spell, counts = {}, {}
-		local shown, last = 0, nil
+		local shown, resume = 0, nil
 		while shown < Shell.PAGE do
-			local at, spellID = step()
+			local at, spellID, after = step()
 			if at == nil then
 				break
 			elseif at == false then
@@ -466,7 +489,7 @@ local function page(tree, text, fromIndex)
 				local head, actions = Shell.ResultLines(spell, counts, axes)
 				say(head)
 				say(actions)
-				shown, last = shown + 1, at
+				shown, resume = shown + 1, after
 			end
 		end
 		if shown == 0 then
@@ -480,7 +503,7 @@ local function page(tree, text, fromIndex)
 			say(Shell.Said(seen .. " for " .. text))
 			return
 		end
-		paging = { tree = tree, text = text, index = last + 1, seen = seen }
+		paging = { tree = tree, text = text, index = resume, seen = seen }
 		say(Shell.Said(seen .. " shown" .. Shell.DASH .. Shell.Link(0, NEXT.key, NEXT.label)))
 	end)
 end
@@ -488,6 +511,7 @@ end
 --- Count a query's matches as a job, and print the total. A walk over every
 -- spell, which is why it is its own door rather than part of every search.
 local function count(tree, text)
+	say(Shell.Said("counting " .. text))
 	run(function()
 		local step = Epsilook:FindSpells(tree, nil, Shell.SLICE)
 		local found = 0

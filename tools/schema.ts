@@ -20,7 +20,7 @@ import {
 } from "../src/search/index";
 
 /** The shape of this output. A reader refuses another rather than misreading it. */
-const SCHEMA_FORMAT = 2;
+const SCHEMA_FORMAT = 3;
 
 /** A record with its undefined and null fields left out, so an absent declaration is an absent key. */
 function trimmed<T extends Record<string, unknown>>(record: T): Partial<T> {

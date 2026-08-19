@@ -109,8 +109,15 @@ action needs and the list says which actions an axis affords, and doing one is t
 
 The query language is the web app's, read from the same declarations; `/elo help` prints it from the data. Plain
 terms, `head:value`, `-` to exclude, `|` or `or` between clauses, a quoted phrase, a comparison, a range, a comma
-list, `*` for existence, and a row scope `head:{...}` whose terms one row must satisfy together. Alternatives in
+list, `*` for existence, a row scope `head:{...}` whose terms one row must satisfy together, and the ordering
+directive `sort:<head>` (`-sort:<head>` for the other way), several applied in the order written. Alternatives in
 parentheses and regular expressions are refused with a message.
+
+A sort orders the whole answer, so under one the iterator walks every spell before it yields its first hit, keeps the
+order on the parsed query for later pages, and the index it hands back is a position in that order rather than a
+row. A spell's key on a door is its extreme in the sort's direction over the rows it has there (smallest ascending,
+largest descending); a column door keys by how many rows the spell has, a spell-level column by its first kind's
+subject (`sort:id`, `sort:spell` by name); a spell with no value sorts last either way.
 
 | call                                          | returns                                                                     |
 |-----------------------------------------------|-----------------------------------------------------------------------------|
@@ -123,16 +130,18 @@ parentheses and regular expressions are refused with a message.
 | `Epsilook:IsMatch(query, spellID)`            | `true` or `false`                                                           |
 
 `query` is text or a parsed query; a parsed query is cheaper to page with. `FindSpells` returns an iterator yielding
-`row, spellID` for each hit in build order, then `nil`. With `slice` set, the iterator also yields `false` after
-examining that many spells without a hit, so a caller driving it from a frame's `OnUpdate` can yield between slices
-and never freeze the client; call it again to resume. `fromIndex` starts the walk at a row, which is how a page
-resumes from where the last one stopped.
+`row, spellID, resume` for each hit in build order (or the sort's order), then `nil`; `resume` is what to pass as
+`fromIndex` to continue after that hit. With `slice` set, the iterator also yields `false` after examining that many
+spells without a hit, so a caller driving it from a frame's `OnUpdate` can yield between slices and never freeze the
+client; call it again to resume. The engine also pauses inside its heavy scans through `Epsilook.Search.Pauser`, a
+function a driver may set (the shell sets a yield taken only inside a coroutine); nil, the default, runs straight
+through.
 
 ```lua
-local query, problems = Epsilook:ParseQuery("model:{fire missile} -anim:kit")
+local query, problems = Epsilook:ParseQuery("model:{fire missile} -anim:kit -sort:cast")
 local step = Epsilook:FindSpells(query, nil, 500)
 while true do
-    local row, id = step()
+    local row, id, resume = step()
     if row == nil then break end
     if row ~= false then print(id, Epsilook:GetSpellNameByID(id)) end
 end

@@ -18,6 +18,16 @@
 -- conjunction's row terms leave -- so it is lifted out and tested against
 -- that set's size, and a conjunction with no row terms counts every row.
 --
+-- A sorted query is the one thing that cannot stream: the directives order
+-- the whole answer, so the iterator first walks every spell, keying each hit
+-- as it is found, then orders the hits and pages through them, and keeps the
+-- order on the tree so a later page costs no second walk. A spell's key on a
+-- door is its extreme in the sort's direction over the rows it has there --
+-- the smallest ascending, the largest descending -- and a spell with no
+-- value sorts last either way. A column or a kind door keys by how many rows
+-- the spell has there; a property door by the property's value, a named
+-- value by its name.
+--
 -- Nothing is held. `Search.Find` returns an iterator that walks the spells in
 -- order and yields each one that passes, so a first page costs what it costs
 -- to reach the twentieth hit and a count costs the whole walk; a caller that
@@ -45,6 +55,7 @@ local Data = Epsilook.Data
 local Match = Epsilook.Match
 local Query = Epsilook.Query
 local Reader = Epsilook.Reader
+local Text = Epsilook.Text
 local Schema = Epsilook.Schema
 
 local floor = math.floor
@@ -526,6 +537,79 @@ SPELL_READERS["id.xpac"] = function(cols, _, plan)
 	end
 end
 
+--- The value readers for the kinds the pack carries per spell, by kind
+-- identity, each taking the located columns and the property and returning
+-- a function from a spell to its value or nil. The sort's counterpart of
+-- SPELL_READERS: one reads, the other tests.
+local SPELL_VALUES = {}
+
+SPELL_VALUES["spell.name"] = function(cols)
+	local names, blob = cols.names, cols.blob
+	return function(spell)
+		local name = Reader.value(blob, names, spell)
+		return name ~= "" and Text.fold(name) or nil
+	end
+end
+
+SPELL_VALUES["spell.icon"] = function(cols, prop)
+	if prop.name == "name" then
+		local names, blob = cols.iconNames, cols.iconBlob
+		return function(spell)
+			local row = Data.GetIconRow(spell)
+			return row ~= nil and Text.fold(Reader.value(blob, names, row)) or nil
+		end
+	elseif prop.name == "fid" and cols.iconFids then
+		local fids, blob = cols.iconFids, cols.iconFidBlob
+		return function(spell)
+			local row = Data.GetIconRow(spell)
+			return row ~= nil and Reader.number(blob, fids, row) or nil
+		end
+	end
+	return nil
+end
+
+SPELL_VALUES["spell.spell"] = function(cols, prop, cache)
+	local delivery = cols.delivery
+	if not delivery then
+		return nil
+	end
+	local ids, blob = cols.ids, cols.blob
+	local rowOf = keyedRows(cache, "delivery", delivery.ids, delivery.blob)
+	local deliveryBlob = delivery.blob
+	if prop.name == "cast" then
+		local castMs = delivery.castMs
+		return function(spell)
+			local at = rowOf(Reader.number(blob, ids, spell))
+			return at and Reader.number(deliveryBlob, castMs, at) or 0
+		end
+	elseif prop.name == "channel" then
+		local flags, durMs = delivery.flags, delivery.durMs
+		return function(spell)
+			local at = rowOf(Reader.number(blob, ids, spell))
+			if at and hasBit(Reader.number(deliveryBlob, flags, at), DELIVERY_CHANNELLED) then
+				return Reader.number(deliveryBlob, durMs, at)
+			end
+			return nil
+		end
+	end
+	return nil
+end
+
+SPELL_VALUES["id.id"] = function(cols)
+	local ids, blob = cols.ids, cols.blob
+	return function(spell)
+		return Reader.number(blob, ids, spell)
+	end
+end
+
+SPELL_VALUES["id.xpac"] = function(cols)
+	local eras, blob = cols.eras, cols.blob
+	return function(spell)
+		local era = Reader.number(blob, eras, spell)
+		return era >= 0 and era or nil
+	end
+end
+
 --- The test for one property of a kind the pack carries per spell, by spell.
 local function spellPropTest(cache, kind, prop, expr, notations)
 	local reader = SPELL_READERS[kind.id]
@@ -998,6 +1082,180 @@ local function advance(compiled, cursor, spell)
 	end
 end
 
+--- A key reader for a door no spell has a value on.
+local function nothing()
+	return nil
+end
+
+--- A reader of one spell's value on a pooled property: the extreme over the
+-- spell's rows of the kind, in the sort's direction. A named value reads as
+-- its name, a vocabulary-backed one as the entry, any other as the number.
+-- @param kind the kind
+-- @param prop the property
+-- @param descending whether the largest is wanted
+-- @return a function from a spell to its value or nil
+local function pooledValue(kind, prop, descending)
+	local axis = kind.column
+	local table_ = Data.GetRowTable(axis)
+	local node, blob, absent = Data.GetStoredColumn(axis, kind.word, prop.name)
+	if not table_ or not node then
+		return nothing
+	end
+	local vocab = Data.GetVocabName(axis, kind.word, prop.name)
+	local named = Schema.IsNamed(prop)
+	local textual_ = vocab ~= nil and (named or (prop.types[1] ~= "id"))
+	local refs, refsBlob = table_.refs, table_.refsBlob
+	local read = node.kind == "int" and Reader.number or Reader.value
+	return function(spell)
+		local at, count = Data.GetRowRange(axis, spell)
+		if not at then
+			return nil
+		end
+		local best
+		for i = at, at + count - 1 do
+			local word, slot = Data.LocateRow(axis, Reader.number(refsBlob, refs, i))
+			if word == kind.word then
+				local stored = read(blob, node, slot)
+				if stored ~= absent then
+					local value = stored
+					if textual_ then
+						local resolved = Data.ResolveVocab(vocab, stored)
+						value = type(resolved) == "string" and Text.fold(resolved) or stored
+					end
+					if
+						best == nil
+						or (descending and value > best)
+						or (not descending and value < best)
+					then
+						best = value
+					end
+				end
+			end
+		end
+		return best
+	end
+end
+
+--- A reader of one spell's key on a sort directive's door.
+-- @param sort a directive from the parse: head and descending
+-- @param cache the query's cache
+-- @return a function from a spell to a number, a string or nil
+local function keyReader(sort, cache)
+	local head, descending = sort.head, sort.descending
+	local kind, prop = head.kind, head.prop
+	if head.role == "column" then
+		local axis = head.column
+		if Data.GetRowTable(axis) then
+			return function(spell)
+				return Data.GetNumRows(axis, spell)
+			end
+		end
+		-- A column read per spell has no rows to count; its first kind's
+		-- subject is what it means to sort by it: the spell's name, its id.
+		kind = Schema.KindsOf(axis)[1]
+		if not kind then
+			return nothing
+		end
+		prop = kind.props[1]
+	elseif head.role == "kind" then
+		prop = kind.props[1]
+	end
+	if not prop then
+		-- A kind with no property is counted.
+		local table_ = Data.GetRowTable(kind.column)
+		if not table_ then
+			return nothing
+		end
+		return function(spell, cursor)
+			return countKind(kind.column, table_, spell, cursor, kind.word)
+		end
+	end
+	if Data.GetRowTable(kind.column) then
+		return pooledValue(kind, prop, descending)
+	end
+	local reader = SPELL_VALUES[kind.id]
+	local value = reader and reader(spellColumns(), prop, cache)
+	return value or nothing
+end
+
+--- The comparison between two hits under the directives: each key in turn,
+-- the direction's way, nothing before something; the spell row breaks a tie
+-- so the order is the same every time.
+local function comparator(sorts, keys)
+	local n = #sorts
+	return function(a, b)
+		for k = 1, n do
+			local ka, kb = keys[k][a], keys[k][b]
+			if ka ~= kb then
+				if ka == nil then
+					return false
+				elseif kb == nil then
+					return true
+				elseif sorts[k].descending then
+					return ka > kb
+				end
+				return ka < kb
+			end
+		end
+		return a < b
+	end
+end
+
+--- The ordered rows of every spell a query admits, walked and sorted once
+-- and kept on the tree; the walk yields through the iterator's pause
+-- protocol, so the collection runs across frames like any page.
+-- @return the iterator over the ordered rows, pausing as it collects
+local function sortedFind(compiled, tree, fromIndex, slice)
+	local order = tree.order
+	local position = fromIndex or 0
+	local collecting = order == nil
+	local rows, keys, readers, spell, cursor, examined
+	if collecting then
+		rows, keys, readers = {}, {}, {}
+		local cache = {}
+		for k, sort in ipairs(tree.sorts) do
+			keys[k] = {}
+			readers[k] = keyReader(sort, cache)
+		end
+		spell = 0
+		cursor = cursorAt(compiled, 0)
+		examined = 0
+	end
+	local total = Data.GetNumSpells()
+	local cols = spellColumns()
+	local ids, blob = cols.ids, cols.blob
+	return function()
+		if collecting then
+			while spell < total do
+				local at = spell
+				if passes(compiled, at, cursor) then
+					rows[#rows + 1] = at
+					for k = 1, #readers do
+						keys[k][at] = readers[k](at, cursor)
+					end
+				end
+				advance(compiled, cursor, at)
+				spell = spell + 1
+				examined = examined + 1
+				if slice and examined >= slice then
+					examined = 0
+					return false
+				end
+			end
+			table.sort(rows, comparator(tree.sorts, keys))
+			tree.order = rows
+			order = rows
+			collecting = false
+		end
+		if position < #order then
+			local at = order[position + 1]
+			position = position + 1
+			return at, Reader.number(blob, ids, at), position
+		end
+		return nil
+	end
+end
+
 --- The spells satisfying a query, in order, one per call.
 -- With a slice, a call that has examined that many spells without a hit
 -- returns false rather than going on, so a caller running the walk across
@@ -1006,9 +1264,16 @@ end
 -- @param query text, or a tree from `Query.Parse`
 -- @param fromIndex the spell row to start at, counted from zero; nil for the first
 -- @param slice how many spells one call may examine before pausing, or nil for no pause
--- @return an iterator yielding the spell's row and its id, false on a pause, and nil when done
+-- @return an iterator yielding the spell's row, its id and the index to
+--   resume from after it, false on a pause, and nil when done. Under a sort
+--   the index is a position in the order, not a row, and the first call walks
+--   every spell before it yields a hit.
 function Search.Find(query, fromIndex, slice)
 	local compiled = Search.Compile(query)
+	local tree = compiled.tree
+	if tree.sorts and #tree.sorts > 0 then
+		return sortedFind(compiled, tree, fromIndex, slice)
+	end
 	local cols = spellColumns()
 	local ids, blob = cols.ids, cols.blob
 	local total = Data.GetNumSpells()
@@ -1022,7 +1287,7 @@ function Search.Find(query, fromIndex, slice)
 			advance(compiled, cursor, at)
 			spell = spell + 1
 			if hit then
-				return at, Reader.number(blob, ids, at)
+				return at, Reader.number(blob, ids, at), spell
 			end
 			examined = examined + 1
 			if slice and examined >= slice then
