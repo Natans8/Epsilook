@@ -78,19 +78,24 @@ local ATTRIBUTE_COLUMNS =
 -- plain call from a macro is never interrupted.
 Search.Pauser = nil
 
---- How many steps of heavy work pass between two calls of the pauser: a
--- text scan ticks once per window, a vocabulary walk once per row.
-Search.PAUSE_EVERY = { window = 1, row = 2000 }
+--- How many rows of a vocabulary walk pass between two calls of the pauser;
+-- a text scan pauses after every window.
+Search.PAUSE_EVERY = 2000
 
---- A tick for a piece of heavy work: counts, and calls the pauser every so
--- many steps.
--- @param every how many ticks between pauses
-local function pacer(every)
+--- A call of the pauser, where one is set.
+local function pause()
+	if Search.Pauser then
+		Search.Pauser()
+	end
+end
+
+--- A tick for a walk: counts, and pauses every so many steps.
+local function pacer()
 	local n = 0
 	return function()
 		n = n + 1
-		if n % every == 0 and Search.Pauser then
-			Search.Pauser()
+		if n % Search.PAUSE_EVERY == 0 then
+			pause()
 		end
 	end
 end
@@ -301,10 +306,10 @@ local function vocabHits(cache, vocab, plan)
 	local node, blob = found.values, found.blob
 	local rows
 	if plan.op and node.kind == "text" then
-		rows = Match.ScanText(blob, node, plan.op, plan.written, pacer(Search.PAUSE_EVERY.window))
+		rows = Match.ScanText(blob, node, plan.op, plan.written, pause)
 	else
 		rows = {}
-		local tick = pacer(Search.PAUSE_EVERY.row)
+		local tick = pacer()
 		for row = 0, Reader.size(node) - 1 do
 			if plan.test(Reader.value(blob, node, row)) then
 				rows[row] = true
@@ -375,13 +380,7 @@ local function textual(node, blob, plan, at)
 		local hits
 		return function(spell)
 			if not hits then
-				hits = Match.ScanText(
-					blob,
-					node,
-					plan.op,
-					plan.written,
-					pacer(Search.PAUSE_EVERY.window)
-				)
+				hits = Match.ScanText(blob, node, plan.op, plan.written, pause)
 			end
 			local row = spell
 			if at then
@@ -687,32 +686,9 @@ local function anyRow(axis, table_, spell, cursor, kindFilter, rowTests)
 	return false
 end
 
---- How many rows of a spell on an axis are of one kind.
-local function countKind(axis, table_, spell, cursor, kindWord)
-	local at, count = rowRange(axis, table_, spell, cursor)
-	if not at then
-		return 0
-	end
-	local refs, blob = table_.refs, table_.refsBlob
-	local kinds, first = table_.kinds, table_.first
-	local found = 0
-	for i = at, at + count - 1 do
-		local ref = Reader.number(blob, refs, i)
-		for k = 1, #kinds do
-			if ref < first[k + 1] then
-				if kinds[k] == kindWord then
-					found = found + 1
-				end
-				break
-			end
-		end
-	end
-	return found
-end
-
 --- How many rows of a spell on an axis pass a kind-and-slot test.
 -- @param kindFilter a kind word, or nil for every kind
--- @param rowTests tests by kind word, each taking a slot
+-- @param rowTests tests by kind word, each taking a slot; nil counts every row
 local function countRows(axis, table_, spell, cursor, kindFilter, rowTests)
 	local at, count = rowRange(axis, table_, spell, cursor)
 	if not at then
@@ -727,9 +703,13 @@ local function countRows(axis, table_, spell, cursor, kindFilter, rowTests)
 			if ref < first[k + 1] then
 				local kind = kinds[k]
 				if kindFilter == nil or kind == kindFilter then
-					local test = rowTests[kind]
-					if test and test(ref - first[k]) then
+					if rowTests == nil then
 						found = found + 1
+					else
+						local test = rowTests[kind]
+						if test and test(ref - first[k]) then
+							found = found + 1
+						end
 					end
 				end
 				break
@@ -737,6 +717,11 @@ local function countRows(axis, table_, spell, cursor, kindFilter, rowTests)
 		end
 	end
 	return found
+end
+
+--- How many rows of a spell on an axis are of one kind.
+local function countKind(axis, table_, spell, cursor, kindWord)
+	return countRows(axis, table_, spell, cursor, kindWord, nil)
 end
 
 --- A count test on a number of rows.
@@ -1271,7 +1256,7 @@ end
 function Search.Find(query, fromIndex, slice)
 	local compiled = Search.Compile(query)
 	local tree = compiled.tree
-	if tree.sorts and #tree.sorts > 0 then
+	if #tree.sorts > 0 then
 		return sortedFind(compiled, tree, fromIndex, slice)
 	end
 	local cols = spellColumns()

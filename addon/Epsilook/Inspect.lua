@@ -182,9 +182,14 @@ end
 
 --- A value as plain text: a path cut to its file name, a colour painted, and
 -- the id where a name that resolved from one is blank.
+--- A path's last segment.
+local function basename(path)
+	return path:match("([^/\\]+)$") or path
+end
+
 local function plain(value)
 	if value.path then
-		return value.text:match("([^/\\]+)$") or value.text
+		return basename(value.text)
 	end
 	if value.colour then
 		return painted(value.colour)
@@ -308,7 +313,8 @@ end
 -- @param part a PartData
 function Inspect.FillTooltip(tooltip, part)
 	tooltip:SetText(part.kind, 1, 1, 1)
-	for _, value in ipairs(Inspect.Values(part)) do
+	local values = Inspect.Values(part)
+	for _, value in ipairs(values) do
 		local text = value.path and value.text or written(value)
 		tooltip:AddLine(GREY .. value.name .. END .. " " .. text, 1, 1, 1)
 	end
@@ -316,8 +322,7 @@ function Inspect.FillTooltip(tooltip, part)
 		local text = extra.text ~= "" and extra.text or tostring(extra.value)
 		tooltip:AddLine(GREY .. extra.name .. END .. " " .. text, 1, 1, 1)
 	end
-	local texture, fid =
-		Inspect.TEXTURES[part.axis .. "." .. part.kind], pathFid(Inspect.Values(part))
+	local texture, fid = Inspect.TEXTURES[part.axis .. "." .. part.kind], pathFid(values)
 	if texture and texture.tip and fid then
 		tooltip:AddLine(
 			"|T" .. fid .. ":" .. texture.tip.height .. ":" .. texture.tip.width .. "|t"
@@ -436,16 +441,14 @@ end
 --- A model's file name without its path or extension, what `.lookup item`
 -- finds an unnamed item's template by.
 local function modelName(part)
-	local path = part.values.file or ""
-	local name = path:match("([^/\\]+)$") or path
-	return (name:gsub("%.[^.]*$", ""))
+	return (basename(part.values.file or ""):gsub("%.[^.]*$", ""))
 end
 
 --- What an action sends for a part, or nil where the part cannot take the
 -- action: the spawn id for a model's file, the emote for an animation, the
 -- model's name for an item lookup, the stored value the action names
--- otherwise, and nil for an action needing nothing or one the part's kind
--- does not take. An item is added only where something names it and looked
+-- otherwise, and nil for an action the part's kind does not take or lacks
+-- the value for. An item is added only where something names it and looked
 -- up only where nothing does.
 -- @param part a PartData
 -- @param action an Action of the part's axis
@@ -454,7 +457,7 @@ function Inspect.ArgumentOf(part, action)
 	if action.kind and action.kind ~= part.kind or action.except and action.except[part.kind] then
 		return nil
 	end
-	if action.needs == "" or part.values[action.needs] == nil then
+	if part.values[action.needs] == nil then
 		return nil
 	end
 	if action.needs == "file" and action.key == "spawn" then
@@ -469,13 +472,9 @@ function Inspect.ArgumentOf(part, action)
 	return needed(part, action.needs)
 end
 
---- Whether a part can take an action: it is of the action's kind and not
--- the kind it excepts, and it needs nothing or has what the action sends.
+--- Whether a part can take an action: it has something to send for it.
 local function takes(part, action)
-	if action.kind and action.kind ~= part.kind or action.except and action.except[part.kind] then
-		return false
-	end
-	return action.needs == "" or Inspect.ArgumentOf(part, action) ~= nil
+	return Inspect.ArgumentOf(part, action) ~= nil
 end
 
 --- The game's own link, as the server prints one, around a number and a name.
@@ -491,10 +490,11 @@ end
 --- What a shift-click on a part hands the chat box, by the action the part's
 -- line leads with: the game's own link where the server reads one back --
 -- an item, a creature entry, a gameobject entry for an object -- and the
--- bare id elsewhere, which is what a model's spawn id, an emote, a kit and
--- a sound file are typed as. An action not named here hands nothing over,
--- and a line with no such action is no link. Each carries the tooltip line
--- that says so.
+-- bare number elsewhere, which is what a model's spawn id, an emote, a
+-- display, a kit and a sound file are typed as. An action not named here
+-- hands nothing over, and a line with no such action is no link. Each
+-- carries the tooltip line that says so; an entry with no `text` hands the
+-- bare number.
 local INSERTS = {
 	spawn = {
 		hint = "Shift-click to type this into chat, as .gob spawn takes it",
@@ -517,31 +517,13 @@ local INSERTS = {
 			return gameLink("creature_entry", number, name)
 		end,
 	},
-	native = {
-		hint = "Shift-click to type this display id into chat, as .mod native takes it",
-		text = bare,
-	},
-	morph = {
-		hint = "Shift-click to type this display id into chat, as .morph takes it",
-		text = bare,
-	},
-	mount = {
-		hint = "Shift-click to type this display id into chat, as .mod mount takes it",
-		text = bare,
-	},
-	anim = {
-		hint = "Shift-click to type this emote id into chat, as .mod anim takes it",
-		text = bare,
-	},
-	stand = {
-		hint = "Shift-click to type this emote id into chat, as .mod standstate takes it",
-		text = bare,
-	},
-	playKit = {
-		hint = "Shift-click to type this kit id into chat, as .phase playsound takes it",
-		text = bare,
-	},
-	play = { hint = "Shift-click to type this sound file id into chat", text = bare },
+	native = { hint = "Shift-click to type this display id into chat, as .mod native takes it" },
+	morph = { hint = "Shift-click to type this display id into chat, as .morph takes it" },
+	mount = { hint = "Shift-click to type this display id into chat, as .mod mount takes it" },
+	anim = { hint = "Shift-click to type this emote id into chat, as .mod anim takes it" },
+	stand = { hint = "Shift-click to type this emote id into chat, as .mod standstate takes it" },
+	playKit = { hint = "Shift-click to type this kit id into chat, as .phase playsound takes it" },
+	play = { hint = "Shift-click to type this sound file id into chat" },
 }
 
 --- What a shift-click on a part's line hands the chat box: the first of the
@@ -555,7 +537,7 @@ function Inspect.ClipOf(part, actions, name)
 		local insert = INSERTS[action.key]
 		local argument = insert and Inspect.ArgumentOf(part, action)
 		if argument then
-			return insert.text(argument, name, action), insert.hint
+			return (insert.text or bare)(argument, name, action), insert.hint
 		end
 	end
 	return nil
@@ -744,6 +726,18 @@ function Inspect.MemberLine(spellID, part, n)
 	return line(spellID, part, n, "    ", nil, Inspect.PART)
 end
 
+--- The action a part takes under a key, or nil. A key may be declared more
+-- than once on an axis, once per kind that takes it with the property it
+-- takes it by, so the part decides which entry is meant.
+local function actionOf(axis, key, part)
+	for _, action in ipairs(Epsilook:GetActions(axis)) do
+		if action.key == key and takes(part, action) then
+			return action
+		end
+	end
+	return nil
+end
+
 --- What a tooltip says a click on one of this file's links will do.
 -- @param axis the part's axis
 -- @param verb the link's verb
@@ -756,12 +750,8 @@ function Inspect.HintOf(axis, verb, part)
 		local _, hint = Inspect.ClipOf(part, actionsFor(axis, verb), "")
 		return hint
 	end
-	for _, action in ipairs(Epsilook:GetActions(axis)) do
-		if action.key == verb then
-			return action.hint
-		end
-	end
-	return nil
+	local action = actionOf(axis, verb, part)
+	return action and action.hint or nil
 end
 
 --- What a shift-click on a part's own link hands the chat box.
@@ -904,18 +894,6 @@ local COMMANDS = {
 	anim = "mod anim %s",
 	stand = "mod standstate %s",
 }
-
---- The action a part takes under a key, or nil. A key may be declared more
--- than once on an axis, once per kind that takes it with the property it
--- takes it by, so the part decides which entry is meant.
-local function actionOf(axis, key, part)
-	for _, action in ipairs(Epsilook:GetActions(axis)) do
-		if action.key == key and takes(part, action) then
-			return action
-		end
-	end
-	return nil
-end
 
 --- Execute one dossier action from its link. A part's own link does nothing
 -- on a plain click, as the game's own name links do; an axis's count prints

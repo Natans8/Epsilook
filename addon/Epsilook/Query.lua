@@ -1584,7 +1584,7 @@ function Query.Format(parsed)
 		groups[#groups + 1] = table.concat(words, " ")
 	end
 	local out = table.concat(groups, " " .. grammar["or"] .. " ")
-	for _, sort in ipairs(parsed.sorts or {}) do
+	for _, sort in ipairs(parsed.sorts) do
 		local word = grammar.sortWord
 			.. grammar.bind
 			.. (sort.descending and grammar.negate or "")

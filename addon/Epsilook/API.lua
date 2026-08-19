@@ -367,14 +367,14 @@ function Epsilook:GetPartExtras(part)
 	for _, extra in ipairs(EXTRAS) do
 		local value = Data.GetCarried(part.axis, part.kind, part.slot, extra.name)
 		if value and value ~= 0 then
-			local axis = Data.GetAxisOf(extra.section)
 			local text
 			if extra.section == "screens" then
 				text = Data.Lookup("fx", "screens", "ids", "names", value) or ""
 			else
+				local axis = Data.GetAxisOf(extra.section)
 				local names = axis and Data.ReadAll(axis, extra.section, "names") or {}
 				-- The map's keys are text, as the pack writes every key.
-				text = names[tostring(value)] or names[value] or ""
+				text = names[tostring(value)] or ""
 			end
 			out[#out + 1] = { name = extra.name, value = value, text = text }
 		end
@@ -383,14 +383,13 @@ function Epsilook:GetPartExtras(part)
 end
 
 --- What a screen effect paints, by its id: its name, the colour it fogs
--- the view with and how strongly, the colour it multiplies over and the
--- one it adds, each -1 where the effect paints none, the hue words the
--- build gave it, and the textures it draws. A screen part carries the id as
--- an extra.
+-- the view with, the colour it multiplies over and the one it adds, each -1
+-- where the effect paints none, the hue words the build gave it, and the
+-- textures it draws. A screen part carries the id as an extra.
 -- @param screenID the screen effect id
--- @return a table with name, fog, fogAlpha, mul, add, hues, and textures, a
---   list of { role, fid } with the finished art (role 0) before the masks
---   it is shaped by (role 1); or nil where unknown
+-- @return a table with name, fog, mul, add, hues, and textures, a list of
+--   { role, fid } with the finished art (role 0) before the masks it is
+--   shaped by (role 1); or nil where unknown
 function Epsilook:GetScreenEffect(screenID)
 	mounted(self)
 	local name = Data.Lookup("fx", "screens", "ids", "names", screenID)
@@ -409,7 +408,6 @@ function Epsilook:GetScreenEffect(screenID)
 	return {
 		name = name,
 		fog = Data.Lookup("fx", "screens", "ids", "fogColors", screenID),
-		fogAlpha = Data.Lookup("fx", "screens", "ids", "fogAlphas", screenID),
 		mul = Data.Lookup("fx", "screens", "ids", "mulColors", screenID),
 		add = Data.Lookup("fx", "screens", "ids", "addColors", screenID),
 		hues = Data.Lookup("fx", "screens", "ids", "hues", screenID) or "",
@@ -696,7 +694,7 @@ end
 -- @return true where no clause evaluates and nothing is sorted; a query of
 --   nothing but a sort asks for every spell, in that order
 function Epsilook:IsQueryEmpty(query)
-	return #query.groups == 0 and #(query.sorts or {}) == 0
+	return #query.groups == 0 and #query.sorts == 0
 end
 
 --- The query language as data, for a help surface: the columns with their

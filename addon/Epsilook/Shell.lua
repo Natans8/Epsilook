@@ -482,7 +482,7 @@ local paging
 local function page(tree, text, fromIndex)
 	-- The answer to the command comes first, before the job does anything,
 	-- so a search that takes frames to find its first hit is never a silence.
-	local sorted = tree.sorts and #tree.sorts > 0
+	local sorted = #tree.sorts > 0
 	if fromIndex then
 		say(Shell.Said("next page of " .. text))
 	elseif sorted then
