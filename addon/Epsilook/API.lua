@@ -31,7 +31,7 @@
 --   SpellText   description, aura, encounter
 --   PartData    axis, kind, slot, values (property name to value; a named
 --               property is a table of id and text)
---   Action      key, label, needs, kind, effect, revert, hint
+--   Action      key, label, needs, kind, except, via, effect, revert, hint
 --   DataInfo    pack, built, format, variation, homes
 
 _G.Epsilook = _G.Epsilook or {}
@@ -415,6 +415,16 @@ function Epsilook:GetScreenEffect(screenID)
 	}
 end
 
+--- The display a creature wears, by creature id, where the pack carries the
+-- pair: what a morph stores is the creature, what `.morph` and its kin take
+-- is the display.
+-- @param creatureID the creature id
+-- @return the display id, or nil where the creature is unknown here
+function Epsilook:GetDisplayByCreature(creatureID)
+	mounted(self)
+	return Data.Lookup("model", "morphDisplays", "creatureIds", "displayIds", creatureID)
+end
+
 --- The id that places a model in the world, by its file id.
 -- What `.gob spawn` takes, and nought where no gameobject display is known
 -- for the file. Negative where the command reads the sign: a positive number
@@ -441,9 +451,12 @@ end
 -- world. `effect` is "read" where repeating it is harmless and offering it from
 -- stale output is safe, and "world" where neither is true. `needs` names the
 -- PartData value the action takes; `kind`, where set, the one kind of part
--- that takes it, and `except` the set of kinds that do not. The order is the
--- order a line offers them, and the first action a part takes is the one a
--- shift-click hands over.
+-- that takes it, and `except` the set of kinds that do not; `via`, where
+-- set, how the value becomes what the action sends -- `creatureDisplay` is
+-- the display of the creature the value names, as a morph stores the
+-- creature and the commands take its display. The order is the order a line
+-- offers them, and the first action a part takes is the one a shift-click
+-- hands over.
 -- @param axis one of GetPartAxes()
 -- @return an array of Action, empty where the axis affords nothing
 function Epsilook:GetActions(axis)
@@ -570,31 +583,43 @@ Epsilook.ACTIONS = {
 	},
 	fx = {
 		{
-			key = "native",
-			label = "Native",
+			key = "summon",
+			label = "Spawn",
 			needs = "display",
 			kind = "morph",
 			effect = "world",
 			revert = "",
-			hint = "Click to make this display your native form",
+			hint = "Click to spawn this creature where you stand",
+		},
+		{
+			key = "native",
+			label = "Native",
+			needs = "display",
+			kind = "morph",
+			via = "creatureDisplay",
+			effect = "world",
+			revert = "",
+			hint = "Click to make this creature's display your native form",
 		},
 		{
 			key = "morph",
 			label = "Morph",
 			needs = "display",
 			kind = "morph",
+			via = "creatureDisplay",
 			effect = "world",
 			revert = "",
-			hint = "Click to morph into this display",
+			hint = "Click to morph into this creature's display",
 		},
 		{
 			key = "mount",
 			label = "Mount",
 			needs = "display",
 			kind = "morph",
+			via = "creatureDisplay",
 			effect = "world",
 			revert = "",
-			hint = "Click to mount this display",
+			hint = "Click to mount this creature's display",
 		},
 		{
 			key = "summon",

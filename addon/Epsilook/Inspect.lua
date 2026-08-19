@@ -460,7 +460,10 @@ function Inspect.ArgumentOf(part, action)
 	if part.values[action.needs] == nil then
 		return nil
 	end
-	if action.needs == "file" and action.key == "spawn" then
+	if action.via == "creatureDisplay" then
+		local display = Epsilook:GetDisplayByCreature(needed(part, action.needs))
+		return display ~= nil and display ~= 0 and display or nil
+	elseif action.needs == "file" and action.key == "spawn" then
 		return spawnOf(part)
 	elseif action.key == "anim" or action.key == "stand" then
 		return emoteOf(part, action.key, action.needs)
