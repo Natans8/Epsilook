@@ -443,7 +443,7 @@ end
 -- world. `effect` is "read" where repeating it is harmless and offering it from
 -- stale output is safe, and "world" where neither is true. `needs` names the
 -- PartData value the action takes; `kind`, where set, the one kind of part
--- that takes it, and `except` the one kind that does not. The order is the
+-- that takes it, and `except` the set of kinds that do not. The order is the
 -- order a line offers them, and the first action a part takes is the one a
 -- shift-click hands over.
 -- @param axis one of GetPartAxes()
@@ -500,10 +500,37 @@ Epsilook.ACTIONS = {
 			hint = "Click to mount this display",
 		},
 		{
+			key = "native",
+			label = "Native",
+			needs = "name",
+			kind = "mount",
+			effect = "world",
+			revert = "",
+			hint = "Click to make this mount's display your native form",
+		},
+		{
+			key = "morph",
+			label = "Morph",
+			needs = "name",
+			kind = "mount",
+			effect = "world",
+			revert = "",
+			hint = "Click to morph into this mount's display",
+		},
+		{
+			key = "mount",
+			label = "Mount",
+			needs = "name",
+			kind = "mount",
+			effect = "world",
+			revert = "",
+			hint = "Click to mount this",
+		},
+		{
 			key = "spawn",
 			label = "Spawn",
 			needs = "file",
-			except = "item",
+			except = { item = true, mount = true },
 			effect = "world",
 			revert = "",
 			hint = "Click to spawn this model as a gameobject where you stand",

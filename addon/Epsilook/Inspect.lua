@@ -450,7 +450,7 @@ end
 -- @param action an Action of the part's axis
 -- @return the number or text, or nil
 function Inspect.ArgumentOf(part, action)
-	if action.kind and action.kind ~= part.kind or action.except == part.kind then
+	if action.kind and action.kind ~= part.kind or action.except and action.except[part.kind] then
 		return nil
 	end
 	if action.needs == "" or part.values[action.needs] == nil then
@@ -471,7 +471,7 @@ end
 --- Whether a part can take an action: it is of the action's kind and not
 -- the kind it excepts, and it needs nothing or has what the action sends.
 local function takes(part, action)
-	if action.kind and action.kind ~= part.kind or action.except == part.kind then
+	if action.kind and action.kind ~= part.kind or action.except and action.except[part.kind] then
 		return false
 	end
 	return action.needs == "" or Inspect.ArgumentOf(part, action) ~= nil
