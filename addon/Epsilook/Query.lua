@@ -1129,11 +1129,11 @@ local function alternateWhereSingle(head, runs)
 			out[#out + 1] = run
 		else
 			for _, term in ipairs(loose) do
-				local alternative = { term }
+				local option = { term }
 				for _, other in ipairs(rest) do
-					alternative[#alternative + 1] = other
+					option[#option + 1] = other
 				end
-				out[#out + 1] = alternative
+				out[#out + 1] = option
 			end
 		end
 	end

@@ -324,6 +324,33 @@ function Inspect.FillTooltip(tooltip, part)
 			"|T" .. fid .. ":" .. texture.tip.height .. ":" .. texture.tip.width .. "|t"
 		)
 	end
+	Inspect.FillPalette(tooltip, part)
+end
+
+--- The colours a screen effect paints the view with, as a palette line in
+-- the tooltip: a swatch and its hex for the fog, the multiply and the add
+-- colour, each where the effect has one, and the hue words after. Only a
+-- screen part carries one.
+-- @param tooltip the GameTooltip, already owned
+-- @param part a PartData
+function Inspect.FillPalette(tooltip, part)
+	local screenID = Epsilook.Data.GetCarried(part.axis, part.kind, part.slot, "screen")
+	local screen = screenID and Epsilook:GetScreenEffect(screenID)
+	if not screen then
+		return
+	end
+	local swatches = {}
+	for _, entry in ipairs({ { "fog", screen.fog }, { "mul", screen.mul }, { "add", screen.add } }) do
+		if entry[2] and entry[2] >= 0 then
+			swatches[#swatches + 1] = GREY .. entry[1] .. " " .. END .. painted(entry[2])
+		end
+	end
+	if #swatches > 0 then
+		tooltip:AddLine(table.concat(swatches, "  "))
+	end
+	if screen.hues ~= "" then
+		tooltip:AddLine(GREY .. "hues " .. END .. screen.hues, 1, 1, 1)
+	end
 end
 
 --- Fill a tooltip with a group: the property it is grouped under as the

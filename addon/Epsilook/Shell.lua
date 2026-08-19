@@ -303,7 +303,7 @@ function Shell.HelpLines()
 	end
 	local lines = {
 		title("Epsilook") .. GREY .. " searches Epsilon's spells from chat" .. END,
-		row("/elo <query>", "search; a page of " .. Shell.PAGE .. ", then how many match in all"),
+		row("/elo <query>", "search; a page of " .. Shell.PAGE .. " and how many match in all"),
 		row("/elo <id or spell link>", "inspect one spell"),
 		row("/elo next", "the next page"),
 		row("/elo test", "the self-test"),
@@ -433,9 +433,10 @@ end
 local paging
 
 --- Print one page of results for a query, from a spell row, as a job, then
--- walk on to the end for the total. The page prints as soon as it is full,
--- the total arrives on its own line when the walk is done, so a wide query
--- costs frames and never a wait before the first result.
+-- walk on to the end for the total. The page prints as soon as it is full;
+-- the one closing line, with the total and the way on, comes when the walk
+-- is done, so a wide query costs frames and never a wait before the first
+-- result, and nothing arrives after the footer.
 -- @param tree the parsed query
 -- @param text the query as typed, for the header
 -- @param fromIndex the spell row to resume from
@@ -465,26 +466,37 @@ local function page(tree, text, fromIndex)
 			paging = nil
 			return
 		end
+		local seen = (fromIndex and paging and paging.seen or 0) + shown
 		if shown < Shell.PAGE then
 			paging = nil
-			say(Shell.Said(shown .. " for " .. text))
+			say(Shell.Said(seen .. " for " .. text))
 			return
 		end
-		paging = { tree = tree, text = text, index = last + 1 }
-		say(Shell.Said(shown .. " shown" .. Shell.DASH .. Shell.Link(0, NEXT.key, NEXT.label)))
-		-- The rest of the walk, for the total; the first page is already shown.
-		local total = shown
-		while true do
-			local at = step()
-			if at == nil then
-				break
-			elseif at == false then
-				coroutine.yield()
-			else
-				total = total + 1
+		-- The total is counted once, on the first page: the rest of the walk
+		-- after the page, which is already shown, so the one closing line can
+		-- carry the total and the way on. A later page knows it already.
+		local total = fromIndex and paging and paging.total or nil
+		if not total then
+			total = shown
+			while true do
+				local at = step()
+				if at == nil then
+					break
+				elseif at == false then
+					coroutine.yield()
+				else
+					total = total + 1
+				end
 			end
 		end
-		say(Shell.Said(total .. " match " .. text .. " in all"))
+		paging = { tree = tree, text = text, index = last + 1, seen = seen, total = total }
+		local footer = seen .. " of " .. total .. " shown"
+		if seen < total then
+			footer = footer .. Shell.DASH .. Shell.Link(0, NEXT.key, NEXT.label)
+		else
+			paging = nil
+		end
+		say(Shell.Said(footer))
 	end)
 end
 

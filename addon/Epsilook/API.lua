@@ -345,14 +345,15 @@ function Epsilook:FormatPartValue(axis, kindWord, propName, value)
 end
 
 --- The columns a part carries beyond its declared properties, each named by
--- the section the pack ships for it. Only an effect carries any: the two
--- implicit targets it resolves and the aura it applies. The catalogue does
--- not declare them, so no query reads them; a surface that shows a part in
--- full shows them.
+-- the section the pack ships for it: an effect carries the two implicit
+-- targets it resolves and the aura it applies, a screen part the screen
+-- effect it draws. The catalogue does not declare them, so no query reads
+-- them; a surface that shows a part in full shows them.
 local EXTRAS = {
 	{ name = "targetA", section = "implicitTargetNames" },
 	{ name = "targetB", section = "implicitTargetNames" },
 	{ name = "aura", section = "auraNames" },
+	{ name = "screen", section = "screens" },
 }
 
 --- What a part carries beyond its declared properties, named, in a fixed
@@ -367,13 +368,40 @@ function Epsilook:GetPartExtras(part)
 		local value = Data.GetCarried(part.axis, part.kind, part.slot, extra.name)
 		if value and value ~= 0 then
 			local axis = Data.GetAxisOf(extra.section)
-			local names = axis and Data.ReadAll(axis, extra.section, "names") or {}
-			-- The map's keys are text, as the pack writes every key.
-			local text = names[tostring(value)] or names[value] or ""
+			local text
+			if extra.section == "screens" then
+				text = Data.Lookup("fx", "screens", "ids", "names", value) or ""
+			else
+				local names = axis and Data.ReadAll(axis, extra.section, "names") or {}
+				-- The map's keys are text, as the pack writes every key.
+				text = names[tostring(value)] or names[value] or ""
+			end
 			out[#out + 1] = { name = extra.name, value = value, text = text }
 		end
 	end
 	return out
+end
+
+--- What a screen effect paints, by its id: its name, the colour it fogs
+-- the view with and how strongly, the colour it multiplies over and the
+-- one it adds, each -1 where the effect paints none, and the hue words the
+-- build gave it. A screen part carries the id as an extra.
+-- @param screenID the screen effect id
+-- @return a table with name, fog, fogAlpha, mul, add, hues; or nil where unknown
+function Epsilook:GetScreenEffect(screenID)
+	mounted(self)
+	local name = Data.Lookup("fx", "screens", "ids", "names", screenID)
+	if name == nil then
+		return nil
+	end
+	return {
+		name = name,
+		fog = Data.Lookup("fx", "screens", "ids", "fogColors", screenID),
+		fogAlpha = Data.Lookup("fx", "screens", "ids", "fogAlphas", screenID),
+		mul = Data.Lookup("fx", "screens", "ids", "mulColors", screenID),
+		add = Data.Lookup("fx", "screens", "ids", "addColors", screenID),
+		hues = Data.Lookup("fx", "screens", "ids", "hues", screenID) or "",
+	}
 end
 
 --- The id that places a model in the world, by its file id.
