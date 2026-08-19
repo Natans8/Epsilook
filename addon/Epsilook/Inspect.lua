@@ -248,19 +248,20 @@ end
 --- Fill a tooltip with a part: its kind as the title, then one line per
 -- value, a path written whole, then what the part carries beyond its
 -- properties -- an effect's implicit targets and the aura it applies. Each
--- is one wrapped line rather than a double line, because a double line's
--- right half does not widen the tooltip and a long path would run past it.
+-- is one unwrapped line rather than a double line, because a double line's
+-- right half does not widen the tooltip and a long path would run past it,
+-- and an unwrapped line always sizes the frame to itself.
 -- @param tooltip the GameTooltip, already owned
 -- @param part a PartData
 function Inspect.FillTooltip(tooltip, part)
 	tooltip:SetText(part.kind, 1, 1, 1)
 	for _, value in ipairs(Inspect.Values(part)) do
 		local text = value.path and value.text or written(value)
-		tooltip:AddLine(GREY .. value.name .. END .. " " .. text, 1, 1, 1, true)
+		tooltip:AddLine(GREY .. value.name .. END .. " " .. text, 1, 1, 1)
 	end
 	for _, extra in ipairs(Epsilook:GetPartExtras(part)) do
 		local text = extra.text ~= "" and extra.text or tostring(extra.value)
-		tooltip:AddLine(GREY .. extra.name .. END .. " " .. text, 1, 1, 1, true)
+		tooltip:AddLine(GREY .. extra.name .. END .. " " .. text, 1, 1, 1)
 	end
 end
 
@@ -275,13 +276,7 @@ function Inspect.FillAxisTooltip(tooltip, spellID, axis)
 	local part = {}
 	for i = 1, math.min(n, Inspect.LISTED) do
 		Epsilook:GetPartDataByIndex(spellID, axis, i, part)
-		tooltip:AddLine(
-			GREY .. part.kind .. END .. " " .. (Inspect.Subject(part) or ""),
-			1,
-			1,
-			1,
-			true
-		)
+		tooltip:AddLine(GREY .. part.kind .. END .. " " .. (Inspect.Subject(part) or ""), 1, 1, 1)
 	end
 	if n > Inspect.LISTED then
 		tooltip:AddLine("and " .. (n - Inspect.LISTED) .. " more", 0.62, 0.62, 0.62)

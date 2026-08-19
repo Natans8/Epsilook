@@ -129,3 +129,32 @@ def test_the_aura_word_is_offered_only_where_an_aura_is_applied(engine: LuaRunti
     assert has(api, 133, b"mech", b"aura") is False
     assert "[Aura]" not in result(engine, 133)[1]
     assert "[Aura]" in result(engine, 317228)[1]
+
+
+def test_every_part_tooltip_fills_on_every_axis(engine: LuaRuntime) -> None:
+    """A tooltip that throws half-filled never sizes itself; the filler must run clean on every axis."""
+    # language=Lua
+    engine.execute(b"""
+    function TOOLTIPS(list)
+      local ids = {}
+      for word in list:gmatch("%d+") do ids[#ids + 1] = tonumber(word) end
+      local tip = { n = 0 }
+      function tip:SetText() self.n = 1 end
+      function tip:AddLine() self.n = self.n + 1 end
+      local failures = {}
+      for _, id in ipairs(ids) do
+        for _, axis in ipairs(Epsilook:GetPartAxes()) do
+          for i = 1, Epsilook:GetPartCounts(id)[axis] or 0 do
+            local ok, err = pcall(Epsilook.Inspect.FillTooltip, tip, Epsilook:GetPartDataByIndex(id, axis, i))
+            if not ok then failures[#failures + 1] = axis .. " " .. id .. " " .. i .. ": " .. tostring(err) end
+          end
+          local ok, err = pcall(Epsilook.Inspect.FillAxisTooltip, tip, id, axis)
+          if not ok then failures[#failures + 1] = axis .. " " .. id .. ": " .. tostring(err) end
+        end
+      end
+      return table.concat(failures, "; ")
+    end
+    """)
+    # The ids cross as one string: a Python list arrives in Lua as userdata, not a table.
+    failures = lua_function(engine, b"TOOLTIPS")(b"133 317228 32979 126 116 160955")
+    assert failures == b"", failures
