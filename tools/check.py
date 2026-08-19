@@ -1525,6 +1525,47 @@ def check_delivery_declaration(rep: Report) -> None:
     rep.ok("delivery flag bits", "build, row reader and addon agree on both bits")
 
 
+def check_range_declaration(rep: Report) -> None:
+    """The reach flag bits must agree between the build and the app's readers.
+
+    The same reconciliation the delivery bits get, for the same reason: the
+    build writes `spellRanges.flags`, two readers decode it, and nothing above
+    the pack may import the build. A renumbered bit here would report melee
+    spells as weapon ones while everything still runs.
+    """
+    try:
+        sys.path.insert(0, str(ROOT / "build"))
+        from pack.routes.reach import MELEE, WEAPON  # pylint: disable=import-outside-toplevel
+    except ImportError as exc:
+        rep.fail("range flag bits", f"could not read the build's declaration: {exc}")
+        return
+    source = (ROOT / "src" / "packrows.ts").read_text(encoding="utf-8")
+    found: dict[str, int] = {}
+    for name in ("RANGE_MELEE", "RANGE_WEAPON"):
+        match = re.search(rf"^export const {name} = 1 << (\d+);", source, re.MULTILINE)
+        if match is None:
+            rep.fail("range flag bits", f"src/packrows.ts no longer declares {name}")
+            return
+        found[name] = 1 << int(match.group(1))
+    if found["RANGE_MELEE"] != MELEE or found["RANGE_WEAPON"] != WEAPON:
+        rep.fail("range flag bits",
+                 f"the build writes MELEE={MELEE} WEAPON={WEAPON}, "
+                 f"packrows.ts reads {found['RANGE_MELEE']}/{found['RANGE_WEAPON']}")
+        return
+    lua = (ROOT / "addon" / "Epsilook" / "Engine" / "Search.lua").read_text(encoding="utf-8")
+    match = re.search(r"^local RANGE_MELEE, RANGE_WEAPON = (\d+), (\d+)$", lua, re.MULTILINE)
+    if match is None:
+        rep.fail("range flag bits",
+                 "addon/Epsilook/Engine/Search.lua no longer declares the two bits on one line")
+        return
+    if int(match.group(1)) != MELEE or int(match.group(2)) != WEAPON:
+        rep.fail("range flag bits",
+                 f"the build writes MELEE={MELEE} WEAPON={WEAPON}, "
+                 f"Search.lua reads {match.group(1)}/{match.group(2)}")
+        return
+    rep.ok("range flag bits", "build, row reader and addon agree on both bits")
+
+
 def check_locale_catalogs(rep: Report) -> None:
     """Every interface language mirrors the English catalogs and registers itself.
 
@@ -2148,6 +2189,7 @@ def main() -> int:
     check_locale_declaration(rep)
     check_locale_catalogs(rep)
     check_delivery_declaration(rep)
+    check_range_declaration(rep)
     check_soundkit_declaration(rep)
     check_supplement(rep)
     check_arcanum(rep)

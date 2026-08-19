@@ -35,6 +35,7 @@
     "percent": "a percentage, such as 50 or 7.5, or a range like 10-90",
     "percentChange": "a change such as +50, a factor such as 2 or x1.5, or 150 as a proportion of the original",
     "length": "a distance in yards, such as 5 or 10-40",
+    "coordinate": "a distance along one axis in yards, which may be negative",
     "angle": "an angle in degrees, such as 60 or 27-60",
     "colour": "a colour as #rrggbb or a name such as red; a bare colour matches nearby shades too",
     "offset": "a point as x,y,z in yards; name one member such as z=3, or leave a component blank to ignore it",
@@ -62,7 +63,17 @@
         "channel": "the channel's length in seconds, or unlimited",
         "breaksmove": "the cast or channel breaks if the caster moves",
         "unbreakable": "the channel persists — moving and acting do not break it",
-        "unhindered": "the caster can act during the channel (the usual interrupts still break it)"
+        "unhindered": "the caster can act during the channel (the usual interrupts still break it)",
+        "tracking": "the caster stays facing the target for the whole channel"
+      }
+    },
+    "range": {
+      "hint": "how far the spell reaches — the band a target has to stand in",
+      "props": {
+        "yards": "the furthest a target can stand, in yards; self for no reach at all, unlimited for anywhere",
+        "min": "the closest a target can stand, in yards — a spell a target can be too close for",
+        "melee": "the reach is the caster's own combat reach rather than the distance shown",
+        "weapon": "the reach is whatever the caster's equipped ranged weapon reaches"
       }
     },
     "spellId": {
@@ -126,7 +137,8 @@
     "sound": {
       "hint": "a sound file the spell plays",
       "props": {
-        "kit": "the sound kit, by name or by id"
+        "kit": "the sound kit, by name or by id",
+        "type": "what the kit is for -- spells, emotes, death, tradeskills and the rest"
       }
     },
     "animKit": {
@@ -241,9 +253,6 @@
     },
     "screen": {
       "hint": "a full-screen tint or overlay while the aura holds"
-    },
-    "tracking": {
-      "hint": "caster stays facing the target for the whole channel"
     },
     "effect": {
       "hint": "one of the spell's effects — what it actually does",

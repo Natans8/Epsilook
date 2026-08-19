@@ -311,7 +311,10 @@ def test_a_group_tooltip_names_the_group_and_its_value(engine: LuaRuntime) -> No
     end
     """)
     tip = lua_function(engine, b"GROUP_TIP")
-    assert cast(bytes, tip(133, b"sound", 1)).decode().split("\n") == ["kit", "SPELL_Fire_Missile_Loop - 3011"]
+    # The kit's line and its tooltip both carry what the kit is FOR, which
+    # belongs to the kit and not to each file it plays.
+    assert cast(bytes, tip(133, b"sound", 1)).decode().split("\n") == [
+        "kit", "SPELL_Fire_Missile_Loop - 3011", "spells"]
     assert cast(bytes, tip(133, b"anim", 1)).decode().split("\n") == ["kit", "13464"]
 
 
@@ -388,3 +391,39 @@ def test_a_lone_column_word_prints_its_doors(engine: LuaRuntime) -> None:
     # A property cannot stand alone as a value, so its example carries one.
     assert "/elo sound file:<value>" in sound
     assert "/elo sound:{file:<value>}" in sound
+
+
+def test_a_sound_kits_type_is_said_once_on_the_kit(engine: LuaRuntime) -> None:
+    """What a kit is FOR belongs to the kit, so it sits on the kit's line and
+    is not repeated on every file the kit plays."""
+    # language=Lua
+    engine.execute(b"""
+    function SOUND_LINES(soundType)
+      local part = { axis = "sound", kind = "sound", slot = 0,
+                     values = { file = 166128, kit = 150, type = soundType, target = 1 } }
+      return Epsilook.Inspect.GroupLine(9, part, 1), Epsilook.Inspect.PartLine(9, part, 1)
+    end
+    """)
+    group, member = cast(tuple[bytes, bytes], lua_function(engine, b"SOUND_LINES")(29))
+    group_text, member_text = group.decode(), member.decode()
+    # The kit's line carries the kit and what it is for.
+    assert "kit:" in group_text
+    assert "29" in group_text, group_text
+    # The file's line carries neither: no kit said twice, no type said twice.
+    assert "29" not in member_text, member_text
+    assert ".m2" in member_text or "166128" in member_text
+    # The group's TOOLTIP reads the same rule as its line, so a value cannot
+    # show on one and go missing from the other.
+    # language=Lua
+    engine.execute(b"""
+    function GROUP_TIP_VALUES(soundType)
+      local part = { axis = "sound", kind = "sound", slot = 0,
+                     values = { file = 166128, kit = 150, type = soundType, target = 1 } }
+      local out = {}
+      local tip = { SetText = function() end,
+                    AddLine = function(_, text) out[#out + 1] = text end }
+      Epsilook.Inspect.FillGroupTooltip(tip, part)
+      return table.concat(out, " ;; ")
+    end
+    """)
+    assert "29" in str(lua_function(engine, b"GROUP_TIP_VALUES")(29))

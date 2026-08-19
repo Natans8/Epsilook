@@ -45,7 +45,7 @@ from .progress import log, phase, step, timed
 from .routes import (AreaGates, CreatureModels, Delivery, FxPayloads,
                      GameObjectData, ItemModels, KeyboundOverride, KitEffects,
                      MissileMotion, ModelSources, MountData, ProcEffects,
-                     ShapeshiftForms, SpellEffectRows, SpellNames,
+                     Reach, ShapeshiftForms, SpellEffectRows, SpellNames,
                      SpellProperties, SpellText,
                      VehicleSeats, VisualGraph, VisualMissiles,
                      implicit_target_bits, read_anim_replacements,
@@ -57,11 +57,12 @@ from .routes import (AreaGates, CreatureModels, Delivery, FxPayloads,
                      read_proc_effects, read_shapeshift_forms,
                      read_soundkit_files, read_spell_attributes,
                      read_spell_delivery, read_spell_effect_rows,
-                     read_spell_names, read_spell_properties, read_spell_text,
-                     read_spell_values, read_vehicle_seats, read_visual_graph,
+                     read_spell_names, read_spell_properties, read_spell_reach,
+                     read_spell_text, read_spell_values, read_vehicle_seats,
+                     read_visual_graph,
                      read_zone_maps, resolve_paths)
 from .routes.anims import read_anim_emotes
-from .routes.sounds import read_kit_names
+from .routes.sounds import read_kit_names, read_kit_types, sound_type_names
 from .routes.values import DescriptionValues
 from .sources import (Sources, fetch_sources, load_expansions,
                       load_local_enum, read_anim_names, read_enum_names)
@@ -342,6 +343,11 @@ class Derivations:
             return read_spell_delivery(self.tables, self.props)
 
     @cached_property
+    def reach(self) -> list[Reach]:
+        with phase("read spell reach"):
+            return read_spell_reach(self.tables, self.props)
+
+    @cached_property
     def areas(self) -> AreaGates:
         with phase("read area gates"):
             return read_area_gates(self.tables, self.zone_maps)
@@ -429,9 +435,21 @@ class Derivations:
     @cached_property
     def kit_names(self) -> list[tuple[int, str]]:
         with phase("read kit names"):
-            return read_kit_names(self.providers.pinned,
-                                  {kit for pairs in self.visuals.sounds.values()
-                                   for kit, _file in pairs})
+            return read_kit_names(self.providers.pinned, self._used_kits)
+
+    @cached_property
+    def _used_kits(self) -> set[int]:
+        """The sound kits this pack reaches, which both kit reads are scoped to."""
+        return {kit for pairs in self.visuals.sounds.values() for kit, _file in pairs}
+
+    @cached_property
+    def kit_types(self) -> dict[int, int]:
+        with phase("read kit types"):
+            return read_kit_types(self.providers.tables, self._used_kits)
+
+    @cached_property
+    def sound_type_names(self) -> dict[int, str]:
+        return sound_type_names()
 
 
 DERIVED_FIELDS = CONTEXT_FIELDS - {"build"}

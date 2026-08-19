@@ -542,8 +542,8 @@ flowchart TD
         B1["spellDelivery<br/>spellVehicleAnims<br/>spellVehicleAnimKits<br/><br/>spellAttrs inverts it:<br/>a flag naming its spells"]
     end
     subgraph C["4 · vocabularies — stored once"]
-        C1["keyed by an id, or paired<br/>as parallel arrays<br/><br/>files · areas · morphs<br/>screens · soundKitNames<br/>animKitAnims · vehicleSeats"]
-        C2["indexed by position,<br/>so the index IS the id<br/><br/>animNames · iconNames<br/>iconFids · linkKindNames<br/>bonesetNames"]
+        C1["keyed by an id, or paired<br/>as parallel arrays<br/><br/>files · areas · morphs<br/>screens · soundKitNames<br/>soundTypes · animKitAnims<br/>vehicleSeats"]
+        C2["indexed by position,<br/>so the index IS the id<br/><br/>animNames · iconNames<br/>iconFids · linkKindNames<br/>bonesetNames<br/>spellRanges, whose own<br/>of column is dense"]
     end
 
     A1 -."counts runs parallel<br/>to the dense columns".-> R1
@@ -790,7 +790,7 @@ the route that knows what a type means is the one that decided, and the walk doe
 |----------------|-----------------------------------------------------|------------------------------------------------------------------------------------------------|
 | **models**     | A model file plus the category naming its kind      | `modelRows`, `files`                                                                           |
 | **missiles**   | A projectile, its flight path and its two anchors   | `modelRows`, `missileMotions` (each path's name and its projectile count)                      |
-| **sounds**     | A sound kit, and through it the audio files         | `soundRows`, `soundKitNames`                                                                   |
+| **sounds**     | A sound kit, what it is for, and its audio files    | `soundRows`, `soundKitNames`, `soundTypes`                                                     |
 | **animations** | An animation, an anim kit, or a body region         | `animRows`, `animKitAnims`, `animNames`, `bonesetNames`, `animEmoteOneshots`, `animEmoteLoops` |
 | **chains**     | A beam: colour, textures, a sound, nested chains    | `fxRows`, `fxChains`, `fxTextures`                                                             |
 | **dissolves**  | A duration, textures and an anchor                  | `fxRows`, `dissolves`                                                                          |
@@ -962,6 +962,7 @@ missing, and promoting one takes it out of that column on its own.
 | **school**      | `spells`                    | A mask; zero is a real value meaning schoolless              |
 | **attributes**  | `spellAttrs`                | Which flags ship is a declaration, not code                  |
 | **delivery**    | `spellDelivery`             | Cast and channel are not a partition; many spells do both    |
+| **reach**       | `spellRanges`               | A band the spell names, not a distance it carries            |
 | **description** | `spellText`                 | A template, cooked to prose. See below                       |
 | **area gate**   | `mechRows`, `areas`         | Where a spell may be cast at all                             |
 | **expansion**   | `spells.eras`, `expansions` | The only route with no column in any shipped build           |
@@ -992,6 +993,28 @@ style channel fill:#d55181,fill-opacity:0.16,stroke:#d55181,stroke-width:2px
 The three numbers are `delivery.casttime`, `delivery.channelled` and `delivery.both` straight from `meta.counts`, and
 they reconcile: 48,873 + 14,228 − 3,148 is `spellDelivery`, 59,953. Everything else is `delivery.instant`, which is the
 complement rather than a flag of its own.
+
+**A spell names a distance band, and the band is what ships.** `SpellMisc.RangeIndex` points into `SpellRange`,
+whose row is a pair of edges rather than one distance: a minimum the target must be beyond and a maximum it must be
+within. A build draws on a couple of hundred distinct bands for a quarter of a million spells, so `spellRanges` ships
+the bands it uses as three short columns and one band per spell in `spells.ids` order — `of`, counted from one, so
+nought is a spell reaching no further than its own caster. Self is therefore the complement worked out at load, exactly
+as instant is for delivery, and it is over half the game.
+
+Two of the row's columns are deliberately dropped and two are kept as flags:
+
+| the row says                              | what ships                                                                    |
+|-------------------------------------------|-------------------------------------------------------------------------------|
+| `RangeMax_0` / `RangeMin_0`, at a hostile | `maxYards` / `minYards`, rounded to a tenth — the source is float32           |
+| `RangeMax_1` / `RangeMin_1`, at a friend  | nothing. They differ on a few hundred spells a build; the hostile pair ships   |
+| `Flags` bit 0                             | `melee` — the distance is a placeholder for the caster's own combat reach     |
+| `Flags` bit 1                             | `weapon` — the distance is a placeholder for the equipped ranged weapon's     |
+| `DisplayName`                             | nothing. Mostly the distance restated in words (`Fourty-One Yards`)            |
+
+The hostile pair is the one that ships because it is also the pair a cooked description reads for `$r`, which keeps the
+printed sentence and the searchable number the same distance. `RangeMax` at 50,000 is the client's marker for a band
+with no far edge; it ships verbatim and the catalogue names it `unlimited`, which is also what keeps it out of the
+measured domain — left in, the far bound of every control would be fifty thousand yards.
 
 **A description is a template, and what ships is the cooked prose.** The client resolves it at tooltip time against the
 caster's own state; a template is not searchable and a rendered tooltip is not obtainable in bulk. The governing rule is

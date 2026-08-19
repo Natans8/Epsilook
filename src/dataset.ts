@@ -16,7 +16,9 @@
  * pack to {@link fromPack}.
  */
 import type {RowAt, RowIndex, RowPack, RowTable} from "./packrows";
-import {DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED, indexRows, rowTableOf, storedAt} from "./packrows";
+import {
+    DELIVERY_BREAKS_ON_MOVE, DELIVERY_CHANNELLED, indexRows, RANGE_MELEE, RANGE_WEAPON, rowTableOf, storedAt,
+} from "./packrows";
 import type {VersionEntry} from "./data";
 
 import type {
@@ -31,7 +33,7 @@ import {
 // The kinds this file builds rows for, under their own names. Taken off the catalogue rather than off the door, which
 // carries it as a namespace so the game's nouns do not crowd out the language's. Only the spell and id columns need
 // their kinds by name — every pooled column's rows arrive under the kind word the pack ships.
-const {delivery, description, expansion, icon, name: nameKind, spellId: spellIdKind} = catalogue;
+const {delivery, description, expansion, icon, name: nameKind, range, spellId: spellIdKind} = catalogue;
 
 /** One deduplicated prose pool and the per-spell indexes into it; `of[i]` of nought means the spell has none. */
 interface TextPool {
@@ -77,6 +79,19 @@ interface Delivery {
 }
 
 /**
+ * The `spellRanges` section: the distance bands a build draws on, and the one each spell reaches with.
+ *
+ * `of` runs parallel to `spells.ids` and holds a one-based band, so nought is a spell reaching no further than its
+ * caster. The three band columns are read at `band - 1`.
+ */
+interface RangesSection {
+    readonly of: readonly number[];
+    readonly maxYards: readonly number[];
+    readonly minYards: readonly number[];
+    readonly flags: readonly number[];
+}
+
+/**
  * One loaded pack, viewed through the sections the dataset reads.
  *
  * The row tables stay on {@link LoadedPack.pack} and are reached by {@link rowTableOf}; what this resolves up front
@@ -94,6 +109,8 @@ export interface LoadedPack {
     readonly iconFids: readonly number[];
     /** Cast-and-channel per spell id; empty where the pack ships no delivery section. */
     readonly delivery: ReadonlyMap<number, Delivery>;
+    /** The distance bands and each spell's own; absent where the pack ships no range section. */
+    readonly ranges: RangesSection | undefined;
     /** Spell ids per attribute-flag word. */
     readonly attrs: ReadonlyMap<string, ReadonlySet<number>>;
     readonly expansions: ExpansionsSection;
@@ -141,6 +158,7 @@ export function fromPack(pack: RowPack, entry: VersionEntry, locale: string): Lo
         iconNames: sectionOf(pack, "iconNames") as readonly string[],
         iconFids: sectionOf(pack, "iconFids") as readonly number[],
         delivery: deliveries, attrs,
+        ranges: pack.spellRanges as RangesSection | undefined,
         expansions: sectionOf(pack, "expansions") as ExpansionsSection,
         index,
     };
@@ -202,31 +220,47 @@ const row = (kind: Kind, props: Record<string, Stored>): Row => ({kind, props});
  *
  * This is what `Column.rows()` being a read means: the reshaping the bridge used to do per call happened in the build.
  */
-class PackRowSource implements RowSource {
+export class PackRowSource implements RowSource {
     private readonly index: RowIndex;
     private readonly built: (Row | undefined)[];
+
+    /**
+     * Whether the pack names a kind this build does not declare, which is knowable before a single row is read:
+     * the table lists its kinds up front. Asking eagerly is what lets `size` trust the shipped counts in the common
+     * case and distrust them in the one case where they would over-promise.
+     */
+    private readonly unreadable: boolean;
 
     constructor(private readonly table: RowTable, private readonly kinds: Map<string, Kind>,
                 private readonly vocabs: Record<string, (value: number) => string | number | undefined>) {
         this.index = indexRows(table);
         this.built = Array.from<Row | undefined>({length: this.index.owner.length});
+        this.unreadable = table.kinds.some((word) => !kinds.has(word));
     }
 
     rows(spell: number): readonly Row[] {
         const out: Row[] = [];
         for (let i = this.index.at[spell]; i < this.index.at[spell + 1]; i++) {
-            out.push(this.rowByRef(this.table.refs[i]));
+            const held = this.rowByRef(this.table.refs[i]);
+            if (held !== undefined) out.push(held);
         }
         return out;
     }
 
-    /** How many rows the spell has, straight off the shipped counts. */
+    /**
+     * How many rows the spell has, straight off the shipped counts — unless the pack carries a kind this build does
+     * not declare, in which case those rows are not readable and the count is taken from what actually materialised.
+     * The shipped counts are the fast path and stay it; agreeing with `rows` matters more than saving the walk.
+     */
     size(spell: number): number {
-        return this.table.counts[spell];
+        return this.unreadable ? this.rows(spell).length : this.table.counts[spell];
     }
 
-    /** One pooled row by its column-wide reference, materialised once and shared with every other reader. */
-    rowByRef(ref: number): Row {
+    /**
+     * One pooled row by its column-wide reference, materialised once and shared with every other reader, or
+     * undefined where the pack ships a kind this build cannot name.
+     */
+    rowByRef(ref: number): Row | undefined {
         return this.built[ref] ??= this.materialise(this.index.owner[ref]);
     }
 
@@ -259,9 +293,12 @@ class PackRowSource implements RowSource {
      * gives back the packed colour — which needs no case of its own: the resolved value is the property's value
      * whatever type it has, and only the id-and-name pair asks what it got.
      */
-    private materialise(at: RowAt): Row {
+    private materialise(at: RowAt): Row | undefined {
         const kind = this.kinds.get(at.kind);
-        if (!kind) throw new Error(`pack ships rows of unknown kind "${at.kind}"`);
+        // A pack built by another version of this app: it ships a kind the catalogue here has renamed or dropped.
+        // Those rows are skipped rather than fatal, so a version skew between the code and the data costs the rows
+        // of that one kind instead of every query.
+        if (!kind) return undefined;
         const props: Record<string, Stored> = {};
         for (const [name, prop] of Object.entries(kind.props)) {
             const stored = storedAt(this.table, at, name);
@@ -326,7 +363,25 @@ function spellRows(l: LoadedPack, i: number): Row[] {
         }
         if (l.attrs.get("unbreakablechannel")?.has(id)) props.unbreakable = 1;
         if (l.attrs.get("actionsduringchannel")?.has(id)) props.unhindered = 1;
+        if (l.attrs.get("tracktargetinchannel")?.has(id)) props.tracking = 1;
         rows.push(row(delivery, props));
+    }
+
+    // Range exists only where the pack ships it; on such packs every spell has one row, because reaching no further
+    // than the caster is the complement rather than a shipped band. A band with no near edge carries no `min` at
+    // all — nought yards is where the caster stands, not a distance a target has to be beyond.
+    if (l.ranges) {
+        const band = l.ranges.of[i];
+        const props: Record<string, Stored> = {yards: 0};
+        if (band) {
+            props.yards = l.ranges.maxYards[band - 1];
+            const near = l.ranges.minYards[band - 1];
+            if (near > 0) props.min = near;
+            const flags = l.ranges.flags[band - 1];
+            if (flags & RANGE_MELEE) props.melee = 1;
+            if (flags & RANGE_WEAPON) props.weapon = 1;
+        }
+        rows.push(row(range, props));
     }
     return rows;
 }
@@ -427,6 +482,7 @@ function invert(l: LoadedPack, sources: ReadonlyMap<Column, PackRowSource>): Inv
             const own = owners[ref];
             if (own.length === 0) continue;
             const r = source.rowByRef(ref);
+            if (r === undefined) continue;
             for (const at of own) colPresence.add(at);
             let per = kindPresence.get(r.kind);
             if (!per) kindPresence.set(r.kind, per = new Set());

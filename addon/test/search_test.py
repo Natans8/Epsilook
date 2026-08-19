@@ -32,6 +32,9 @@ PROBES = [
     "model:{count>5 fire}", "model:{count > 5}", "missile:{from:chest}", "model:{fire | frost}",
     "sound:{fire kit:150}", "spell:{name:fire desc:kneel}", "id:{133 134}", "xpac:{wotlk legion}",
     "mech:{triggers caster}", "fx:{glow red}", "model:{fire missile", "anim:{kit count:>2}",
+    # Reach: the two sentinel words, the flags, a near edge, and a flag conjoined with a value.
+    "range:40", "range:>100", "range:10-40", "range:self", "range:unlimited", "range:melee",
+    "range:weapon", "range:{min>10}", "range:{melee unlimited}", "spell:tracking",
 ]
 """Queries across every column and most types, each answered by both engines."""
 
@@ -94,6 +97,19 @@ def test_the_api_answers_for_one_spell(engine: LuaRuntime) -> None:
     assert spell["name"] == "Fireball" and spell["school"] == "Fire"
     assert isinstance(spell["icon"], int) and spell["icon"] > 0
     assert spell["expansion"] == "Classic"
+    # A band rather than a distance, resolved: Fireball reaches forty yards
+    # from anywhere, which is the commonest band in the game.
+    assert spell["range"] == 40 and spell["rangeMin"] == 0
+    assert spell["rangeMelee"] is False and spell["rangeWeapon"] is False
+    # Slam carries the combat band, whose stored five yards is a placeholder
+    # the client replaces with the two bodies' own reach.
+    slam = as_dict(method(api, b"GetSpellDataByID")(api, 1464))
+    assert slam["rangeMelee"] is True and slam["range"] == 5
+    # Charge is the near-edge shape: a target can stand too close for it.
+    charge = as_dict(method(api, b"GetSpellDataByID")(api, 100))
+    assert (charge["rangeMin"], charge["range"]) == (8, 25)
+    # Reaching no further than the caster ships as no band at all.
+    assert as_dict(method(api, b"GetSpellDataByID")(api, 6603))["range"] == 0
     counts = as_dict(method(api, b"GetPartCounts")(api, 133))
     models = counts["model"]
     assert isinstance(models, int) and models >= 1
@@ -148,10 +164,17 @@ def test_a_sort_orders_the_answer_over_a_named_door(engine: LuaRuntime) -> None:
     """A vocabulary-backed door keys by the resolved name, and a row whose
     stored number nothing names has no name to be ordered by. Keeping the raw
     number there would put a string and a number in one key, and the first
-    comparison between two spells would raise instead of ordering them."""
+    comparison between two spells would raise instead of ordering them.
+
+    Not every door below is vocabulary-backed; they are here because each must
+    answer at all, whichever way its key is read.
+    """
     # Each door must ANSWER: before the fix a door whose vocabulary named only
     # some of its rows raised on the first comparison instead of ordering.
-    for door in ("morph", "missile", "kit", "summon", "mount"):
+    # Every word here is a real head -- neither kit has one, by the rule that
+    # `kit:` means two different things and so gets no global door, so a sound
+    # kit is reached as `sound:{kit:...}` and can be sorted on by neither name.
+    for door in ("morph", "missile", "summon", "mount"):
         assert first(engine, f"{door}:* sort:{door}", 20), door
         assert first(engine, f"{door}:* sort:-{door}", 20), door
     # And a door that does order must order both ways.

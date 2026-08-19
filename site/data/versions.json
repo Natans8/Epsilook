@@ -4,56 +4,56 @@
     "label": "Vanilla Classic 1.15.9",
     "file": "data/1.15.9.69109/manifest.json",
     "built": "2026-08-19",
-    "hash": "dff75c6b79"
+    "hash": "7d54dccdea"
   },
   {
     "id": "2.5.6.69110",
     "label": "TBC Classic 2.5.6",
     "file": "data/2.5.6.69110/manifest.json",
     "built": "2026-08-19",
-    "hash": "42f37ecb67"
+    "hash": "c4f4e312ba"
   },
   {
     "id": "3.4.3.58936",
     "label": "WotLK Classic 3.4.3",
     "file": "data/3.4.3.58936/manifest.json",
     "built": "2026-08-19",
-    "hash": "eb419c0b36"
+    "hash": "f7f35b3d73"
   },
   {
     "id": "4.4.2.60895",
     "label": "Cataclysm Classic 4.4.2",
     "file": "data/4.4.2.60895/manifest.json",
     "built": "2026-08-19",
-    "hash": "c36763f5af"
+    "hash": "c0681fd19a"
   },
   {
     "id": "5.5.4.69155",
     "label": "MoP Classic 5.5.4",
     "file": "data/5.5.4.69155/manifest.json",
     "built": "2026-08-19",
-    "hash": "2a33ed62ff"
+    "hash": "d9f830a5c1"
   },
   {
     "id": "7.3.5.26972",
     "label": "Legion 7.3.5",
     "file": "data/7.3.5.26972/manifest.json",
     "built": "2026-08-19",
-    "hash": "86ad02db7b"
+    "hash": "f94b2cdf85"
   },
   {
     "id": "8.3.7.35662",
     "label": "Battle for Azeroth 8.3.7",
     "file": "data/8.3.7.35662/manifest.json",
     "built": "2026-08-19",
-    "hash": "712747eada"
+    "hash": "c2bdf6a3fa"
   },
   {
     "id": "9.2.7-epsilon.45745",
     "label": "Epsilon 9.2.7",
     "file": "data/9.2.7-epsilon.45745/manifest.json",
     "built": "2026-08-19",
-    "hash": "0958215638",
+    "hash": "47da45bb06",
     "default": true
   },
   {
@@ -61,34 +61,34 @@
     "label": "Shadowlands 9.2.7",
     "file": "data/9.2.7.45745/manifest.json",
     "built": "2026-08-19",
-    "hash": "ad3c440657"
+    "hash": "9afc5abc64"
   },
   {
     "id": "10.2.7.55664",
     "label": "Dragonflight 10.2.7",
     "file": "data/10.2.7.55664/manifest.json",
     "built": "2026-08-19",
-    "hash": "7da17f3284"
+    "hash": "380b313b7a"
   },
   {
     "id": "11.2.7.65299",
     "label": "The War Within 11.2.7",
     "file": "data/11.2.7.65299/manifest.json",
     "built": "2026-08-19",
-    "hash": "f197b1180d"
+    "hash": "901ddc9cee"
   },
   {
     "id": "12.1.0.69273",
     "label": "Midnight 12.1.0",
     "file": "data/12.1.0.69273/manifest.json",
     "built": "2026-08-19",
-    "hash": "53050e4eec"
+    "hash": "4fa76e0729"
   },
   {
     "id": "12.1.0-ptr.69273",
     "label": "Midnight PTR 12.1.0",
     "file": "data/12.1.0-ptr.69273/manifest.json",
     "built": "2026-08-19",
-    "hash": "d9bb749906"
+    "hash": "2ecd4955e5"
   }
 ]

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from support import LuaRuntime, LuaTable, lua_function
+from support import LuaRuntime, LuaTable, as_list, lua_function, lua_table
 
 
 def test_numeric_notations_read_as_the_web_does(engine: LuaRuntime) -> None:
@@ -52,3 +52,24 @@ def test_heads_are_read_off_the_declarations(engine: LuaRuntime) -> None:
     kind_in = lua_function(engine, b"Epsilook.Schema.KindIn")
     assert cast(LuaTable, kind_in(b"model", b"mount"))[b"id"] == b"model.mount"
     assert kind_in(b"model", b"chain") is None
+
+
+def test_a_kit_and_a_sound_type_are_reachable_only_inside_their_column(engine: LuaRuntime) -> None:
+    """`kit:` means two different things -- an anim kit and a sound kit -- so it
+    gets no door of its own, and neither does the sound type. Both are reached
+    through the column that disambiguates them, and neither answers a bare word:
+    a property with no plain reading stays out of chipless search."""
+    head = lua_function(engine, b"Epsilook.Schema.HeadOf")
+    assert head(b"kit") is None
+    assert head(b"type") is None
+    # The column itself is the door, and it still is one.
+    assert head(b"sound") is not None
+    kinds = cast(LuaTable, lua_table(engine, b"Epsilook.Schema.kindById"))
+    props = cast(LuaTable, cast(LuaTable, kinds[b"sound.sound"])[b"props"])
+    plain = {}
+    for row in as_list(props):
+        prop = cast(dict, row)
+        plain[str(prop["name"])] = len(cast(list, prop.get("plain") or []))
+    # The file and the kit are read by a bare word; what the kit is FOR is not.
+    assert plain["type"] == 0, plain
+    assert plain["file"] > 0 and plain["kit"] > 0, plain

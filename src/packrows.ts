@@ -20,6 +20,17 @@ export const DELIVERY_CHANNELLED = 1 << 0;
 /** The `spellDelivery.flags` bit for a channel that ends when the caster walks. */
 export const DELIVERY_BREAKS_ON_MOVE = 1 << 1;
 
+/**
+ * The `spellRanges.flags` bit marking a band whose distance the caster's own combat reach replaces.
+ *
+ * Declared beside the build's own bits and reconciled with them by `check_range_declaration`, for the reason the
+ * delivery pair is: nothing above the pack may import the build, and a renumbered bit would answer quietly.
+ */
+export const RANGE_MELEE = 1 << 0;
+
+/** The `spellRanges.flags` bit for a band whose distance the caster's equipped ranged weapon replaces. */
+export const RANGE_WEAPON = 1 << 1;
+
 /** One kind's pooled rows: its property columns, and how each property resolves. */
 export interface KindPool {
     /** Per property, one value per pooled row. A kind carrying no property has no entry at all. */

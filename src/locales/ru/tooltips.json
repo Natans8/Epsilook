@@ -35,6 +35,7 @@
     "percent": "",
     "percentChange": "",
     "length": "",
+    "coordinate": "",
     "angle": "",
     "colour": "",
     "offset": "",
@@ -62,7 +63,17 @@
         "channel": "",
         "breaksmove": "",
         "unbreakable": "",
-        "unhindered": ""
+        "unhindered": "",
+        "tracking": ""
+      }
+    },
+    "range": {
+      "hint": "",
+      "props": {
+        "yards": "",
+        "min": "",
+        "melee": "",
+        "weapon": ""
       }
     },
     "spellId": {
@@ -126,7 +137,8 @@
     "sound": {
       "hint": "",
       "props": {
-        "kit": ""
+        "kit": "",
+        "type": ""
       }
     },
     "animKit": {
@@ -240,9 +252,6 @@
       }
     },
     "screen": {
-      "hint": ""
-    },
-    "tracking": {
       "hint": ""
     },
     "effect": {

@@ -1,0 +1,19 @@
+{
+  "enum": "SoundKit.SoundType",
+  "description": "SoundKit.SoundType -> what a sound kit is for. Surfaced as the type word on a sound pill, so a spell whose noise is an emote, a death or a tradeskill can be told from the 90% that are simply spell noises. The names are published in the WoWDBDefs DEFINITION's column comment rather than in a .dbde -- there is no SoundKit.dbde -- so they are copied here verbatim. Every build the roster packs carries the column, and -1 is the only value outside this list: 57 kits across five builds, reached by no spell, read as no type at all. Two values are both Footsteps, which is the source's own doing.",
+  "source": [
+    "https://github.com/wowdev/WoWDBDefs/blob/master/definitions/SoundKit.dbd"
+  ],
+  "keys": "SoundType",
+  "values": {
+    "0": "miscellaneous", "1": "spells", "2": "ui", "3": "footsteps",
+    "4": "weapon impact", "6": "weapon miss", "7": "greetings", "8": "casting",
+    "9": "pick up", "10": "npc combat", "12": "errors", "13": "ambient fx",
+    "14": "objects", "16": "death", "17": "npc greetings", "18": "test",
+    "19": "armor foley", "20": "footsteps", "21": "water character",
+    "22": "water liquid", "23": "tradeskills", "24": "misc fx", "25": "doodads",
+    "26": "spell fizzle", "27": "npc loops", "28": "zone music", "29": "emotes",
+    "30": "narration music", "31": "narration", "50": "zone ambience",
+    "52": "zone emitters", "53": "vehicle"
+  }
+}

@@ -24,7 +24,7 @@ import {anyOfExpr, COUNT_PROP, propOf} from "./ast";
 import type {Column} from "../schema/columns";
 import {GRAMMAR, PREFIX_OPERATORS} from "./grammar";
 import type {Kind, ParsedValue, Prop} from "../schema/kinds";
-import {hintOf, parseValue, sentinelOf, wordOf} from "../schema/kinds";
+import {flagWord, hintOf, parseValue, sentinelOf, wordOf} from "../schema/kinds";
 import {spelledNotation, spellIn} from "../vocabulary/units";
 import type {Operator} from "../vocabulary/operators";
 import {ORDERING} from "../vocabulary/operators";
@@ -517,6 +517,13 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
             return {r: "props", props: globbing, value: {op: "glob", operand: {text: pattern}}};
         },
         bare: (t): Interp => {
+            // A flag stores no value, so no notation reads an operand into one: what selects the rows carrying it
+            // is the property's own word, and that is what the matcher compares against too. Claimed before the
+            // notations, since a word is never also a quantity.
+            const flags = refs.filter((ref) => flagWord(ref.prop, propOf(ref), t));
+            if (flags.length > 0) {
+                return {r: "props", props: flags, value: {op: "contains", operand: {text: t}}};
+            }
             const claimants = refs.filter((ref) => parseValue(propOf(ref), t) !== null);
             if (claimants.length === 0) return illTyped(word, subject);
             if (claimants.length === 1) {

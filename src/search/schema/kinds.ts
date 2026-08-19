@@ -21,6 +21,7 @@ import type {Column} from "./columns";
 import {fold} from "../text/normalize";
 import type {Sentinels} from "../vocabulary/units";
 import type {AxisType, Value} from "../vocabulary/value-types";
+import {flag} from "../vocabulary/value-types";
 
 /**
  * Relevance tiers for chipless search. Only the order matters: the best tier a spell matched in decides its rank.
@@ -276,6 +277,50 @@ export function sentinelOf(prop: Prop, written: string): ParsedValue | null {
         if (folded === fold(word)) return {type: prop.types[0], value: Number(stored)};
     }
     return null;
+}
+
+/**
+ * Every spelling a property answers to: its own name, its full name, its synonyms.
+ *
+ * The name is not a field on the property — a kind's properties are keyed by it — so it is handed in.
+ *
+ * @param name The property's own name, as its kind declares it.
+ * @param prop The property.
+ * @returns The words, the declared name first.
+ */
+export function wordsOf(name: string, prop: Prop): readonly string[] {
+    return [name, ...(prop.full === undefined ? [] : [prop.full]), ...(prop.synonyms ?? [])];
+}
+
+/**
+ * Whether a property is a flag: a presence with no value behind it.
+ *
+ * Three readers turn on this and each would otherwise spell it itself — the parser claiming a bare word, the scope
+ * deciding whether two terms can hold at once, and the matcher comparing the word.
+ *
+ * @param prop The property.
+ * @returns Whether it stores nothing and is set or unset.
+ */
+export function isFlag(prop: Prop): boolean {
+    return prop.types.includes(flag);
+}
+
+/**
+ * Whether a bare operand is one of a flag property's own words.
+ *
+ * A flag stores no value, so no notation can read an operand into one: what selects the rows carrying it is the
+ * property's own word. Reading and matching share this one definition, because a word the parser claims and the
+ * matcher does not is a term that parses cleanly and then answers nothing.
+ *
+ * @param name The property's own name, as its kind declares it.
+ * @param prop The property.
+ * @param written One operand, as typed.
+ * @returns Whether the property is a flag and the operand is one of its words.
+ */
+export function flagWord(name: string, prop: Prop, written: string): boolean {
+    if (!isFlag(prop)) return false;
+    const folded = fold(written.trim());
+    return wordsOf(name, prop).some((word) => fold(word) === folded);
 }
 
 /**

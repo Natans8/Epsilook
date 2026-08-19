@@ -6,8 +6,17 @@ are what the player hears. A kit with no entries is not shipped.
 
 from __future__ import annotations
 
+from ..sources.enums import load_local_enum
 from ..tables import Tables
 from .columns import to_int
+
+SOUND_TYPE_ENUM = "sound_types"
+"""The checked-in names for `SoundKit.SoundType`.
+
+Every build the roster packs carries the column, so this is not optional and no
+version declares itself out of it. A value the enum does not name is read as no
+type at all rather than shipped as a number nobody can read.
+"""
 
 SOUNDKIT_NAME_TABLE = "SoundKitName"
 """The pinned build's table of human names for sound kits.
@@ -45,3 +54,33 @@ def read_soundkit_files(tables: Tables) -> dict[int, set[int]]:
         if kit and file:
             files.setdefault(kit, set()).add(file)
     return files
+
+
+def sound_type_names() -> dict[int, str]:
+    """What each `SoundKit.SoundType` value is called.
+
+    The names are published in the WoWDBDefs definition's column comment rather
+    than in a `.dbde`, so they are checked in rather than fetched.
+    """
+    return {value: str(name) for value, name in load_local_enum(SOUND_TYPE_ENUM).items()}
+
+
+def read_kit_types(tables: Tables, used: set[int]) -> dict[int, int]:
+    """Sound kit -> what the kit is for, for the kits this pack reaches.
+
+    The type is a property of the KIT, so it is read once per kit rather than
+    once per row. A kit whose type the enum does not name is left out, which is
+    how the one undocumented value stays off the pill.
+
+    Args:
+        tables: the pack's own tables.
+        used: the kit ids the pack actually reaches.
+    """
+    named = sound_type_names()
+    types: dict[int, int] = {}
+    for kit_id, sound_type in tables.rows("SoundKit", ["ID", "SoundType"]):
+        kit = to_int(kit_id)
+        value = to_int(sound_type)
+        if kit in used and value in named:
+            types[kit] = value
+    return types

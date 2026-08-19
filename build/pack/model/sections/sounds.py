@@ -22,3 +22,17 @@ SOUND_KIT_NAMES = register(Section(
     reads=("kit_names",),
     counts=(size("soundKitNames", "soundKitIds"),),
 ))
+
+
+SOUND_TYPES = register(Section(
+    name="soundTypes",
+    doc="What each sound type is called, the vocabulary a sound row's type reads through.",
+    module="core",
+    produce=lambda reads: {
+        "ids": sorted(reads.sound_type_names),
+        "names": [reads.sound_type_names[value]
+                  for value in sorted(reads.sound_type_names)]},
+    columns=("ids", "names"),
+    reads=("sound_type_names",),
+    counts=(size("soundTypes", "ids"),),
+))

@@ -17,7 +17,7 @@
  */
 import type {Head, Kind, Operator, Prop} from "../src/search/index";
 import {
-    CLAUSE_OPERATORS, COLUMNS, flag, HEADS, hintOf, KINDS, kindsOf, operatorsOf, OPERATORS,
+    CLAUSE_OPERATORS, COLUMNS, HEADS, hintOf, isFlag, KINDS, kindsOf, operatorsOf, OPERATORS,
 } from "../src/search/index";
 
 /**
@@ -70,8 +70,6 @@ function spell(op: Operator, samples: readonly [string, string]): string | null 
     }
 }
 
-/** Whether a property is a flag: valueless, matched by its own word. */
-const isFlag = (prop: Prop): boolean => prop.types.length === 1 && prop.types[0] === flag;
 
 /**
  * The shortest spelling that reaches one property, with a placeholder where the value goes.
@@ -82,7 +80,14 @@ const isFlag = (prop: Prop): boolean => prop.types.length === 1 && prop.types[0]
  * @returns A template whose `¤` marks the value position, or the whole query for a flag.
  */
 function template(kind: Kind, name: string, prop: Prop): string {
-    if (isFlag(prop)) return `${kind.column.key}:${name}`;
+    // A flag's word is its own value: it reaches the property wherever the property is reached, which is the
+    // kind's own door where the kind has one and the column's where it does not.
+    if (isFlag(prop)) {
+        const door = kind.global === true ? kind.word
+            : kind.word === undefined ? kind.column.key : `${kind.column.key}:{${kind.word}`;
+        return door === undefined ? `${kind.column.key}:${name}`
+            : door.endsWith("{") ? `${door}${name}}` : `${door}:${name}`;
+    }
     if (prop.prefix !== undefined) return `${prop.prefix}:¤`;
 
     const direct = kind.word === undefined ? kind.column.key : kind.global === true ? kind.word : null;

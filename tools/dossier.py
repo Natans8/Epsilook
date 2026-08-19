@@ -671,6 +671,7 @@ class Dossier:
             # and this is the route the delivery line ships (DATA_ROUTES §3s-ter)
             "delivery": self.delivery(sid, m, {a["index"] for a in attrs if a["index"] is not None}),
             "range_index": m.get("RangeIndex"),
+            "reach": self.reach(m.get("RangeIndex")),
             "speed": m.get("Speed"),
             "launch_delay": m.get("LaunchDelay"),
             "attributes": attrs,
@@ -711,6 +712,36 @@ class Dossier:
                     out["breaks_on_move"] = True
                     break
         return out
+
+    def reach(self, index: Any) -> dict[str, Any] | None:
+        """How far the spell reaches — the resolved distance band.
+
+        Mirrors the build's reach route. A spell names a band rather than a
+        distance, and the band is a pair of edges: `min_yards` 0 is a band with
+        no near edge, `max_yards` 50000 is the client's marker for one with no
+        far edge, and both edges at 0 is a spell reaching no further than its
+        caster. `melee` and `weapon` say the stored distance is a placeholder
+        the client replaces with the caster's own combat reach or their equipped
+        ranged weapon's. The hostile pair is what the pack ships; the friendly
+        one is read here beside it, since a dossier is where a difference
+        between them would be noticed.
+        """
+        rows = self.rows('SELECT * FROM {V}."SpellRange" WHERE "ID"=?', index)
+        if not rows:
+            return None
+        r = rows[0]
+        flags = int(r.get("Flags") or 0)
+        return {
+            "band": int(index),
+            "name": r.get("DisplayName_lang"),
+            "short": r.get("DisplayNameShort_lang"),
+            "max_yards": round(float(r.get("RangeMax_0") or 0), 1),
+            "min_yards": round(float(r.get("RangeMin_0") or 0), 1),
+            "max_yards_friendly": round(float(r.get("RangeMax_1") or 0), 1),
+            "min_yards_friendly": round(float(r.get("RangeMin_1") or 0), 1),
+            "melee": bool(flags & 1),
+            "weapon": bool(flags & 2),
+        }
 
     def areas(self, sid: int) -> list[dict[str, Any]]:
         """WHERE the spell may be cast — the area gate (DATA_ROUTES §3t).

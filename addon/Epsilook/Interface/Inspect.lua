@@ -57,10 +57,13 @@ local COPY_LINE = { [Inspect.COPY] = Inspect.PART, [Inspect.COPYGROUP] = Inspect
 -- actions that take that property, the parts following indented with the
 -- rest. `kind`, where set, names the one kind that groups -- an anim kit's
 -- animations under their kit, while a loose animation stands on its own --
--- and the group's label; without it the property is the label. Every
+-- and the group's label; without it the property is the label. `with` names
+-- the other properties that belong to the group rather than to each part
+-- under it -- what a sound kit is FOR is the kit's, so it is said once on the
+-- kit's line and not again on every file the kit plays. Every
 -- sound comes from a kit; an animation comes from a kit or from nowhere.
 Inspect.GROUPS = {
-	sound = { prop = "kit" },
+	sound = { prop = "kit", with = { type = true } },
 	anim = { prop = "id", kind = "kit" },
 }
 
@@ -75,6 +78,16 @@ local function groupOf(part)
 		return group
 	end
 	return nil
+end
+
+--- Whether a value belongs to the group's own line rather than to each part
+-- under it: the property the group is keyed by, and any the grouping declares
+-- beside it.
+local function grouped(grouping, name)
+	if not grouping then
+		return false
+	end
+	return name == grouping.prop or (grouping.with ~= nil and grouping.with[name] == true)
 end
 
 --- How many parts an axis's tooltip lists before it says how many more.
@@ -135,9 +148,31 @@ local function tinted(r, g, b, text)
 	return string.format("|cff%02x%02x%02x", R, G, B) .. text .. END
 end
 
+--- How far a spell reaches, as the head line writes it.
+-- A melee or weapon band carries a placeholder distance the client replaces
+-- with the caster's own reach, so there the word is the whole answer and the
+-- number would be a promise the game does not keep. Everything else is
+-- written by the catalogue, which is what turns no reach at all into `self`
+-- and a band with no far edge into `unlimited`.
+-- @param spell a SpellData
+-- @return the far edge as written, and the near edge where the band has one
+local function reach(spell)
+	if spell.rangeMelee then
+		return "melee"
+	end
+	if spell.rangeWeapon then
+		return "weapon"
+	end
+	local far = Epsilook:FormatPartValue("spell", "range", "yards", spell.range)
+	if spell.rangeMin > 0 then
+		return far, Epsilook:FormatPartValue("spell", "range", "min", spell.rangeMin)
+	end
+	return far
+end
+
 --- The head line: the spell's name as a link, its id, the known mark where
--- the player knows it, school written in the school's own colour, and
--- expansion, then the spell's own actions.
+-- the player knows it, school written in the school's own colour, expansion
+-- and how far it reaches, then the spell's own actions.
 function Inspect.HeadLine(spell)
 	local parts = { Shell.SpellLink(spell), GOLD .. spell.id .. END }
 	if Shell.Known(spell.id) then
@@ -152,6 +187,11 @@ function Inspect.HeadLine(spell)
 	end
 	if spell.expansion ~= "" then
 		parts[#parts + 1] = spell.expansion
+	end
+	local far, near = reach(spell)
+	parts[#parts + 1] = GREY .. "range " .. far .. END
+	if near then
+		parts[#parts + 1] = GREY .. "min " .. near .. END
 	end
 	if spell.iconName ~= "" then
 		parts[#parts + 1] = GREY .. "icon " .. spell.iconName .. END
@@ -453,7 +493,7 @@ function Inspect.FillGroupTooltip(tooltip, part)
 	local group = groupOf(part)
 	tooltip:SetText(group and (group.kind or group.prop) or part.kind, 1, 1, 1)
 	for _, value in ipairs(Inspect.Values(part)) do
-		if group and value.name == group.prop then
+		if grouped(group, value.name) then
 			tooltip:AddLine(written(value), 1, 1, 1)
 		end
 	end
@@ -722,16 +762,15 @@ local function actionsSplit(axis)
 	return group, rest
 end
 
---- The values of a part on one of its lines: for the group's line the group
--- property alone, for a line under a group every other, for a part on its
--- own all of them; the subject first.
+--- The values of a part on one of its lines: for the group's line the group's
+-- own, for a line under a group every other, for a part on its own all of
+-- them; the subject first.
 local function valuesFor(part, verb)
 	local grouping = groupOf(part)
-	local key = grouping and grouping.prop
 	local out = {}
 	for _, value in ipairs(Inspect.Values(part)) do
-		local grouped = value.name == key
-		if verb == Inspect.GROUP and grouped or verb ~= Inspect.GROUP and not grouped then
+		local mine = grouped(grouping, value.name)
+		if verb == Inspect.GROUP and mine or verb ~= Inspect.GROUP and not mine then
 			out[#out + 1] = value
 		end
 	end

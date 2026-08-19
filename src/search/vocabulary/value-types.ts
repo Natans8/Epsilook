@@ -479,12 +479,31 @@ export const percentChange = numeric({
     hint: t("tooltips:type.percentChange"),
 });
 
-/** A distance in yards, the unit the game and its players use. */
+/**
+ * A distance in yards, the unit the game and its players use.
+ *
+ * A sign is refused: a distance has no direction, so `-40` would parse a value that means nothing here and then
+ * select nothing forever. It is the same refusal {@link percent} makes, for the same reason.
+ */
 export const length = numeric({
     name: "length",
     storage: "float",
-    display: {unit: "yd", factor: 1},
+    display: {unit: "yd", factor: 1, sign: "refused"},
     hint: t("tooltips:type.length"),
+});
+
+/**
+ * A signed distance along one axis, in yards: where something sits rather than how far away it is.
+ *
+ * The same unit {@link length} measures and a different question, which is why the sign splits them rather than a
+ * notation doing it. How far apart two things are cannot be negative; which side of an origin one falls on can, and a
+ * type that refused the sign could not say so. The same split {@link percent} and {@link percentChange} make.
+ */
+export const coordinate = numeric({
+    name: "coordinate",
+    storage: "float",
+    display: {unit: "yd", factor: 1},
+    hint: t("tooltips:type.coordinate"),
 });
 
 /** An angle in degrees, edited with a dial rather than a slider because it wraps. */
@@ -613,7 +632,7 @@ export function composite(spec: {
  */
 export const offset = composite({
     name: "offset",
-    members: {x: length, y: length, z: length},
+    members: {x: coordinate, y: coordinate, z: coordinate},
     hint: t("tooltips:type.offset"),
 });
 

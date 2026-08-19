@@ -55,6 +55,7 @@ const CANONICAL: [string, string[]][] = [
     ["percent", ["30%", "0%", "7.5%"]],
     ["percentChange", ["+30%", "-30%", "+0%"]],
     ["length", ["5yd", "0.5yd"]],
+    ["coordinate", ["5yd", "-2yd", "0yd"]],
     ["angle", ["60deg", "27.5deg"]],
     ["colour", ["#ff00aa", "#000000"]],
     ["offset", ["0yd,0yd,1yd", "1.5yd,-2yd,0yd", ",,3yd"]],
@@ -63,8 +64,8 @@ const CANONICAL: [string, string[]][] = [
 describe("the type registry", () => {
     it("holds exactly the catalogue", () => {
         assert.deepEqual([...TYPES.keys()].toSorted(), [
-            "angle", "bitmask", "colour", "count", "enum", "flag", "id", "length", "offset", "ordinal",
-            "path", "percent", "percentChange", "seconds", "text",
+            "angle", "bitmask", "colour", "coordinate", "count", "enum", "flag", "id", "length", "offset",
+            "ordinal", "path", "percent", "percentChange", "seconds", "text",
         ]);
     });
 

@@ -7,7 +7,7 @@ from pack.routes.fx import FxPayloads, ScreenRow
 from pack.routes.kits import read_kit_effects
 from pack.routes.models import MODEL_CAT_AREA, MODEL_CAT_BARRAGE, MODEL_CAT_TRAIL, ModelSources
 from pack.routes.procedures import ProcEffects
-from pack.routes.sounds import read_soundkit_files
+from pack.routes.sounds import read_kit_types, read_soundkit_files, sound_type_names
 from support import BuildTables
 
 SPELL_VISUAL_ANIM = """\
@@ -139,3 +139,26 @@ def test_a_sound_kit_keeps_every_file_it_plays(tables: BuildTables) -> None:
     """The client picks between variations, so all of them are the kit's."""
     assert read_soundkit_files(
         tables(SoundKitEntry=SOUND_KIT_ENTRY)) == {300: {9000, 9001}}
+
+
+SOUND_KIT = """ID,SoundType
+300,29
+301,1
+302,-1
+303,53
+"""
+
+
+def test_a_kit_carries_what_it_is_for(tables: BuildTables) -> None:
+    """The type is the kit's, read once per kit; a value the enum does not name
+    is left out rather than shipped as a number nobody can read, and a kit the
+    pack never reaches is not read at all."""
+    types = read_kit_types(tables(SoundKit=SOUND_KIT), {300, 301, 302})
+    # 302 carries the one undocumented value, and 303 is a kit nothing reaches.
+    assert types == {300: 29, 301: 1}
+    names = sound_type_names()
+    assert names[29] == "emotes" and names[1] == "spells"
+    # Every value the roster's builds carry has a name, so no row loses its type
+    # to a gap in the list.
+    assert set(names) >= {0, 1, 2, 3, 4, 6, 9, 10, 12, 13, 14, 16, 17, 19, 20,
+                          21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 50, 52, 53}

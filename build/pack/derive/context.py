@@ -11,7 +11,7 @@ from ..declarations import Declarations
 from ..routes import (AreaGates, CreatureModels, Delivery, FxPayloads,
                       GameObjectData, ItemModels, KeyboundOverride, KitEffects,
                       MissileMotion, ModelSources, MountData, ProcEffects,
-                      ShapeshiftForms, SpellEffectRows, SpellNames,
+                      Reach, ShapeshiftForms, SpellEffectRows, SpellNames,
                       SpellProperties, SpellText, VehicleSeats, VisualGraph,
                       VisualMissiles)
 from .displays import ResolvedDisplays
@@ -109,10 +109,21 @@ class DeriveContext:
         default_factory=dict)
     keybinds: Mapping[int, KeyboundOverride] = field(default_factory=dict)
     delivery: Sequence[Delivery] = ()
+    reach: Sequence[Reach] = ()
     attributes: Mapping[str, Sequence[int]] = field(default_factory=dict)
     alt_names: Mapping[int, str] = field(default_factory=dict)
     kit_names: Sequence[tuple[int, str]] = ()
     """The named sound kits this pack reaches, from the pinned build."""
+
+    kit_types: Mapping[int, int] = field(default_factory=dict)
+    """What each sound kit this pack reaches is for, by kit id.
+
+    A property of the kit rather than of a row, so a spell's sound rows all
+    read their type from here.
+    """
+
+    sound_type_names: Mapping[int, str] = field(default_factory=dict)
+    """What each sound type is called, for the vocabulary the pack ships."""
 
     # What this layer derived from them.
     visuals: SpellVisuals = field(default_factory=SpellVisuals)

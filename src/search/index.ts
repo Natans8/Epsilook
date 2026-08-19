@@ -40,7 +40,8 @@ export {
 
 export type {Kind, ParsedValue, Prop} from "./schema/kinds";
 export {
-    defineKind, doorOf, formatValue, hintOf, KINDS, nameOf, operatorsOf, parseValue, propNameOf, sentinelOf, TIER,
+    defineKind, doorOf, formatValue, hintOf, isFlag, KINDS, nameOf, operatorsOf, parseValue, propNameOf,
+    sentinelOf, TIER, wordsOf,
     wordOf,
 } from "./schema/kinds";
 

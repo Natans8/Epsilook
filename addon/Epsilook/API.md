@@ -27,7 +27,7 @@ a spell's own parts (`GetPartDataByIndex`). Every id is the game's own.
 
 | record      | fields                                                                                   |
 |-------------|------------------------------------------------------------------------------------------|
-| `SpellData` | `id`, `name`, `subtext`, `icon` (file id), `iconName`, `schoolID`, `school`, `expansion` |
+| `SpellData` | `id`, `name`, `subtext`, `icon` (file id), `iconName`, `schoolID`, `school`, `expansion`, `range`, `rangeMin`, `rangeMelee`, `rangeWeapon` |
 | `SpellText` | `description`, `aura`, `encounter` (each `""` where the spell has none)                  |
 | `PartData`  | `axis`, `kind`, `slot`, `values` (property name to value)                                |
 | `Action`    | `key`, `label`, `needs`, `kind`, `except`, `effect`, `revert`, `hint`                    |
@@ -62,6 +62,11 @@ column is mounted from, in order; today the shipped data only.
 
 Names and icons are the pack's. A surface that wants what the running client says calls `GetSpellInfo(id, nil, true)`
 itself; the third argument asks the client for its original data rather than a name an addon laid over it.
+
+`range` is the furthest a target may stand, in yards: `0` where the spell reaches no further than its caster, and
+`50000` where it reaches anywhere. `rangeMin` is the nearest, `0` where there is no near edge. `rangeMelee` and
+`rangeWeapon` say the distance is a placeholder the client replaces with the caster's own combat reach or their
+equipped ranged weapon's, so a surface showing one of those shows the word rather than the number.
 
 ## Parts
 

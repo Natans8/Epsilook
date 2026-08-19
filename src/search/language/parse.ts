@@ -29,7 +29,7 @@ import type {
 } from "./ast";
 import {propOf} from "./ast";
 import {COMPARISON_STARTS, GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./grammar";
-import {wordOf} from "../schema/kinds";
+import {isFlag, wordOf} from "../schema/kinds";
 import type {Interp, Pending, ValueCtx} from "./operand";
 import {combineAlternatives, countCtx, ctxFor, kindCtx, propCtx, topCtx} from "./operand";
 import {escapeRegExp} from "../text/patterns";
@@ -78,7 +78,8 @@ const SIGNED = /^[\d.]/;
  * Whether a scope term states a bare value of the row -- no negation, no operator.
  *
  * Content dispatches over the kind's own properties, so it states a bare value of that row exactly as a bound
- * property does. A comparison is not one: two of those bound a single value from opposite sides.
+ * property does. A comparison is not one: two of those bound a single value from opposite sides. Neither is a flag
+ * word, which asserts a presence rather than a value.
  *
  * @param t One scope term.
  * @returns True when the term is a plain positive value.
@@ -87,6 +88,9 @@ function statesBareValue(t: ScopeTerm): boolean {
     const ask = t.ask;
     if (t.not || ask === null) return false;
     if (ask.on !== "content" && ask.on !== "props") return false;
+    // A flag word states no value: it says one of the row's properties is set, which holds alongside whatever the
+    // row's other properties say. Two of those are satisfiable together, so they conjoin like any other pair.
+    if (ask.on === "props" && ask.props.every((ref) => isFlag(propOf(ref)))) return false;
     return ask.value.op === "exact" || ask.value.op === "contains";
 }
 

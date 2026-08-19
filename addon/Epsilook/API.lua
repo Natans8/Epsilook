@@ -27,7 +27,8 @@
 -- explicit door for a caller that wants the cost up front.
 --
 -- Records:
---   SpellData   id, name, subtext, icon, iconName, schoolID, school, expansion
+--   SpellData   id, name, subtext, icon, iconName, schoolID, school,
+--               expansion, range, rangeMin, rangeMelee, rangeWeapon
 --   SpellText   description, aura, encounter
 --   PartData    axis, kind, slot, values (property name to value; a named
 --               property is a table of id and text)
@@ -179,6 +180,15 @@ function Epsilook:GetSpellDataByIndex(index, target)
 	out.iconName = at and cell("iconNames", "names", at, "") or ""
 	out.schoolID = cell("spells", "schools", index, 0)
 	out.school = SCHOOLS[out.schoolID] or ""
+	-- The spell carries a band rather than a distance, since a build draws on
+	-- a couple of hundred of them for every spell it has. No band is a spell
+	-- that reaches no further than its caster.
+	local band = Data.GetRangeBand(index)
+	out.range = band and cell("spellRanges", "maxYards", band, 0) or 0
+	out.rangeMin = band and cell("spellRanges", "minYards", band, 0) or 0
+	local reach = band and cell("spellRanges", "flags", band, 0) or 0
+	out.rangeMelee = reach % 2 == 1
+	out.rangeWeapon = math.floor(reach / 2) % 2 == 1
 	local era = cell("spells", "eras", index, -1)
 	local labels = Data.ReadAll("spell", "expansions", "labels") or {}
 	out.expansion = era >= 0 and labels[era + 1] or ""

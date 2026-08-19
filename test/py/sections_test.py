@@ -20,12 +20,12 @@ REGISTERED_ORDER = (
     "summons", "summonControlNames", "objects", "expansions", "fxChains",
     "fxTextures", "dissolves", "dissolveTextures", "glows", "shadowies",
     "ghostMats", "tints", "anchorNames", "spellAttrs", "spellDelivery",
-    "areas", "keybinds", "linkKindNames", "effectNames", "auraNames",
+    "spellRanges", "areas", "keybinds", "linkKindNames", "effectNames", "auraNames",
     "implicitTargetNames", "implicitTargetBits", "missileMotions", "items",
     "itemIconNames", "itemQualityNames", "attachmentNames", "modelCatNames",
     "targetNames", "speedModeNames", "modelRows", "soundRows", "animRows",
     "fxRows", "mechRows", "equippedSlots", "rowVocabs", "screens",
-    "screenTextures", "soundKitNames", "spells", "spellText", "vehicles",
+    "screenTextures", "soundKitNames", "soundTypes", "spells", "spellText", "vehicles",
     "vehicleSeats", "spellVehicleAnims", "spellVehicleAnimKits",
 )
 """Every section, in registration order, pinned on purpose.

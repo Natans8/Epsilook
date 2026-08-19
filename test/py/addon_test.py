@@ -41,7 +41,7 @@ A stand-in, not the export: the tests here are about the files, and the real
 schema needs Node to produce. What it does carry is each shape the renderer
 has to spell.
 """
-READER = ROOT / "addon" / "Epsilook" / "Reader.lua"
+READER = ROOT / "addon" / "Epsilook" / "Pack" / "Reader.lua"
 DECLARED = {section.name: section for section in SECTIONS}
 
 

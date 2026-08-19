@@ -27,6 +27,7 @@ from .models import ModelSources, read_model_sources
 from .mounts import MountData, read_mounts
 from .names import SpellNames, read_override_names, read_spell_names
 from .procedures import ProcEffects, read_proc_effects
+from .reach import Reach, read_spell_reach
 from .shapeshifts import ShapeshiftForms, read_shapeshift_forms
 from .sounds import read_soundkit_files
 from .spells import SpellProperties, read_spell_properties
@@ -52,6 +53,7 @@ __all__ = [
     "ModelSources",
     "MountData",
     "ProcEffects",
+    "Reach",
     "ScreenRow",
     "ShapeshiftForms",
     "SpellEffectRows",
@@ -88,6 +90,7 @@ __all__ = [
     "read_spell_effect_rows",
     "read_spell_names",
     "read_spell_properties",
+    "read_spell_reach",
     "read_spell_text",
     "read_spell_values",
     "read_vehicle_seats",

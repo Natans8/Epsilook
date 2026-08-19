@@ -19,10 +19,10 @@
  */
 import type {Column} from "../schema/columns";
 import type {Kind, Prop} from "../schema/kinds";
-import {sentinelOf} from "../schema/kinds";
+import {isFlag, sentinelOf, wordsOf} from "../schema/kinds";
 import type {Ask, ParsedOperand, PropRef, ScopeAsk, ValueExpr} from "../language/ast";
 import type {AxisType, Value} from "../vocabulary/value-types";
-import {flag, text} from "../vocabulary/value-types";
+import {text} from "../vocabulary/value-types";
 import {matcher} from "./value-matching";
 
 /**
@@ -185,7 +185,8 @@ export function matchProp(
 }
 
 /**
- * A set flag's matchable content is its property's words: the name, the full name, the synonyms.
+ * A set flag's matchable content is its property's words, which is the same list the parser claims a bare operand
+ * with.
  *
  * That is what lets a bare `unbreakable` select the rows that carry the flag, on a type that stores no value at all.
  * The words are compared as text, so anchoring and patterns keep their usual meanings.
@@ -197,10 +198,9 @@ function matchesFlagWord(
     name: string, prop: Prop, stored: Stored,
     expr: { readonly op: string; readonly operand: ParsedOperand },
 ): boolean {
-    if (!prop.types.includes(flag) || stored === undefined) return false;
+    if (!isFlag(prop) || stored === undefined) return false;
     if (!text.accepts.some((accepted) => accepted.name === expr.op)) return false;
-    const words = [name, ...(prop.full === undefined ? [] : [prop.full]), ...(prop.synonyms ?? [])];
-    return words.some((word) => runMatch(expr.op, text, word, textOf(expr.operand)));
+    return wordsOf(name, prop).some((word) => runMatch(expr.op, text, word, textOf(expr.operand)));
 }
 
 /**

@@ -1,4 +1,5 @@
-"""The per-spell columns of `SpellMisc`: icon, school, timing and attributes.
+"""The per-spell columns of `SpellMisc`: icon, school, timing, reach and
+attributes.
 
 A spell may carry one `SpellMisc` row per difficulty, and the base row is the
 one a player sees, so every column here resolves the same way: the base row
@@ -46,6 +47,9 @@ class SpellProperties:
     duration_index: dict[int, int] = field(default_factory=dict)
     """Spell to its `SpellDuration` id. Zero where it names no row."""
 
+    range_index: dict[int, int] = field(default_factory=dict)
+    """Spell to its `SpellRange` id. Zero where it names no row."""
+
 
 def read_spell_properties(tables: Tables,
                           spell_names: Container[int]) -> SpellProperties:
@@ -65,20 +69,21 @@ def read_spell_properties(tables: Tables,
     spells = SpellProperties()
     for row in tables.rows("SpellMisc", [
             "SpellID", "DifficultyID", "SpellIconFileDataID", "SchoolMask",
-            "CastingTimeIndex", "DurationIndex", *columns]):
+            "CastingTimeIndex", "DurationIndex", "RangeIndex", *columns]):
         spell, difficulty = to_int(row[0]), to_int(row[1])
         if spell not in spell_names:
             continue
         base = difficulty == BASE_DIFFICULTY
         # An icon of zero is no icon, so it never displaces one already found.
         # The others have no such value: zero is schoolless, no flags set, and
-        # no cast or duration row, all of which are answers.
+        # no cast, duration or range row, all of which are answers.
         if (icon := to_int(row[2])) and (base or spell not in spells.icon_fid):
             spells.icon_fid[spell] = icon
         if base or spell not in spells.school:
             spells.school[spell] = to_int(row[3])
             spells.cast_index[spell] = to_int(row[4])
             spells.duration_index[spell] = to_int(row[5])
+            spells.range_index[spell] = to_int(row[6])
             spells.attribute_words[spell] = tuple(
-                to_int(value) for value in row[6:])
+                to_int(value) for value in row[7:])
     return spells

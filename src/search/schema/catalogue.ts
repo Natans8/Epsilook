@@ -46,7 +46,7 @@ import type {Prop} from "./kinds";
 import {defineKind, TIER} from "./kinds";
 import type {AxisType} from "../vocabulary/value-types";
 import {
-    bitmask, colour, count, enumeration, flag, id, ordinal, path, percent, percentChange, seconds, text,
+    bitmask, colour, count, enumeration, flag, id, length, ordinal, path, percent, percentChange, seconds, text,
 } from "../vocabulary/value-types";
 
 /** A property with no role in chipless search. */
@@ -119,6 +119,9 @@ export const icon = defineKind({
  *
  * Wordless: the doors and the flag words carry every real question, and a word selecting "spells with a delivery
  * row" would select nearly everything, so none is spent.
+ *
+ * The four flags are attributes of the spell rather than columns of the timing row, and every one of them describes a
+ * channel: what breaks it, what cannot, what the caster may do during it, and where they are made to look.
  */
 export const delivery = defineKind({
     column: spellColumn, single: true,
@@ -138,6 +141,39 @@ export const delivery = defineKind({
             types: [flag],
             hint: t("tooltips:kind.delivery.props.unhindered")
         },
+        tracking: {types: [flag], hint: t("tooltips:kind.delivery.props.tracking")},
+    },
+});
+
+/**
+ * How far the spell reaches: the band a target has to stand in.
+ *
+ * One row per spell, as delivery is, and the far edge is what the word means — `range:40` asks for the spells that
+ * reach forty yards, because that is the number a reader has in mind when they say a spell's range. The near edge
+ * qualifies it and is rare enough to stay inside the scope: `range:{min>10}` finds the spells a target can stand too
+ * close for.
+ *
+ * A band with no far edge stores the client's own marker rather than a distance, and reaching no further than the
+ * caster is stored as nothing at all, so both are reached by their word instead of by a number.
+ *
+ * The two flags are what stops a distance from being read as one: a melee spell's band holds a placeholder the client
+ * replaces with the two bodies' reach, and a weapon spell's holds one the equipped weapon replaces. Both still carry a
+ * number, so a reader who asks for five yards gets them; the words are how they are told apart.
+ */
+export const range = defineKind({
+    column: spellColumn, word: "range", global: true, single: true,
+    hint: t("tooltips:kind.range.hint"),
+    props: {
+        yards: {
+            types: [length], sentinels: {0: "self", 50_000: "unlimited"},
+            hint: t("tooltips:kind.range.props.yards"),
+        },
+        min: {
+            types: [length], full: "minimum",
+            hint: t("tooltips:kind.range.props.min"),
+        },
+        melee: {types: [flag], hint: t("tooltips:kind.range.props.melee")},
+        weapon: {types: [flag], hint: t("tooltips:kind.range.props.weapon")},
     },
 });
 
@@ -266,6 +302,7 @@ export const sound = defineKind({
     props: {
         file: corpus(TIER.asset, path),
         kit: named(t("tooltips:kind.sound.props.kit"), TIER.asset),
+        type: {types: [enumeration], hint: t("tooltips:kind.sound.props.type")},
         target: target(),
     },
 });
@@ -477,13 +514,6 @@ export const screen = defineKind({
         texture: corpus(TIER.asset, path),
         target: target(),
     },
-});
-
-/** The caster stays turned toward the target for the whole channel. */
-export const tracking = defineKind({
-    column: fxColumn, word: "tracking", group: "behaviour",
-    hint: t("tooltips:kind.tracking.hint"),
-    props: {},
 });
 
 /* Mechanics: what a spell does. A row here renders nothing; anything visible belongs to the effects column. */

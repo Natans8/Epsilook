@@ -63,13 +63,17 @@ local floor = math.floor
 --- The `spellDelivery.flags` bits, as the build writes them.
 local DELIVERY_CHANNELLED, DELIVERY_BREAKS_ON_MOVE = 1, 2
 
+--- The `spellRanges.flags` bits, as the build writes them.
+local RANGE_MELEE, RANGE_WEAPON = 1, 2
+
 --- Which attribute column of `spellAttrs` answers a flag property of the
 -- delivery kind. The catalogue names the property and the build names the
--- column, and neither declares the other, so the pair is stated here. A third
--- would arrive as a declaration on the property and be read from the data in
--- place of this table.
-local ATTRIBUTE_COLUMNS =
-	{ unbreakable = "unbreakablechannel", unhindered = "actionsduringchannel" }
+-- column, and neither declares the other, so the pairs are stated here.
+local ATTRIBUTE_COLUMNS = {
+	unbreakable = "unbreakablechannel",
+	unhindered = "actionsduringchannel",
+	tracking = "tracktargetinchannel",
+}
 
 --- What the engine calls between slices of heavy work -- a scan that finds
 -- nearly every row, a vocabulary walked whole -- so a caller driving a search
@@ -143,6 +147,15 @@ local function spellColumns()
 			castMs = Data.GetColumn("mech", "spellDelivery", "castMs"),
 			durMs = Data.GetColumn("mech", "spellDelivery", "durMs"),
 			flags = Data.GetColumn("mech", "spellDelivery", "flags"),
+		}
+	end
+	local bands, bandBlob = Data.GetColumn("mech", "spellRanges", "maxYards")
+	if bands then
+		spells.ranges = {
+			blob = bandBlob,
+			maxYards = bands,
+			minYards = Data.GetColumn("mech", "spellRanges", "minYards"),
+			flags = Data.GetColumn("mech", "spellRanges", "flags"),
 		}
 	end
 	local attrs, attrBlob = Data.GetColumn("mech", "spellAttrs", "byFlag")
@@ -520,6 +533,42 @@ SPELL_READERS["spell.spell"] = function(cols, prop, plan, cache)
 	end
 end
 
+SPELL_READERS["spell.range"] = function(cols, prop, plan)
+	local ranges = cols.ranges
+	if not ranges then
+		return nil
+	end
+	local blob, test = ranges.blob, plan.test
+	local name = prop.name
+	if name == "yards" then
+		local maxYards = ranges.maxYards
+		return function(spell)
+			local band = Data.GetRangeBand(spell)
+			-- No band is the self complement: a reach of nought.
+			return test(band and Reader.value(blob, maxYards, band) or 0)
+		end
+	elseif name == "min" then
+		local minYards = ranges.minYards
+		return function(spell)
+			local band = Data.GetRangeBand(spell)
+			if band == nil then
+				return false
+			end
+			local near = Reader.value(blob, minYards, band)
+			return near > 0 and test(near)
+		end
+	end
+	local bit = name == "melee" and RANGE_MELEE or name == "weapon" and RANGE_WEAPON
+	if not bit then
+		return nil
+	end
+	local flags = ranges.flags
+	return function(spell)
+		local band = Data.GetRangeBand(spell)
+		return band ~= nil and hasBit(Reader.number(blob, flags, band), bit) and test(1)
+	end
+end
+
 SPELL_READERS["id.id"] = function(cols, _, plan)
 	local ids, blob, test = cols.ids, cols.blob, plan.test
 	return function(spell)
@@ -587,6 +636,39 @@ SPELL_VALUES["spell.spell"] = function(cols, prop, cache)
 			local at = rowOf(Reader.number(blob, ids, spell))
 			if at and hasBit(Reader.number(deliveryBlob, flags, at), DELIVERY_CHANNELLED) then
 				return Reader.number(deliveryBlob, durMs, at)
+			end
+			return nil
+		end
+	end
+	return nil
+end
+
+SPELL_VALUES["spell.range"] = function(cols, prop)
+	local ranges = cols.ranges
+	if not ranges then
+		return nil
+	end
+	local blob = ranges.blob
+	if prop.name == "yards" then
+		local maxYards = ranges.maxYards
+		return function(spell)
+			local band = Data.GetRangeBand(spell)
+			if band == nil then
+				-- Reaching no further than the caster sorts as no distance.
+				return 0
+			end
+			return Reader.value(blob, maxYards, band)
+		end
+	elseif prop.name == "min" then
+		local minYards = ranges.minYards
+		return function(spell)
+			local band = Data.GetRangeBand(spell)
+			if band == nil then
+				return nil
+			end
+			local near = Reader.value(blob, minYards, band)
+			if near > 0 then
+				return near
 			end
 			return nil
 		end

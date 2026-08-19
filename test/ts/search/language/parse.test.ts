@@ -964,6 +964,25 @@ it("reads juxtaposition as alternation on a kind that cannot repeat", () => {
 
     // A kind whose rows repeat is untouched — its lane is the whole point of the brace.
     assert.equal(runs("model:{fire missile}"), 1);
+
+    // A FLAG word states no value: it says one of the row's properties is set, which holds alongside whatever the
+    // row's distance is. Alternated, `range:{melee unlimited}` answered the union of the two — every melee spell
+    // plus every unlimited one — where a reader asking for both means the band that is both.
+    assert.equal(runs("range:{melee unlimited}"), 1, "a flag conjoins with a value");
+    assert.equal(runs("range:{5 40}"), 2, "two distances still alternate");
+});
+
+it("claims a flag word for the property whose own word it is", () => {
+    // A flag stores no value, so no notation can read an operand into one: what selects the rows carrying it is
+    // the property's name. Without the claim `range:melee` was an error, and only the column word reached it —
+    // which also matches every spell whose NAME says melee.
+    const parsed = parse("range:melee");
+    const ask = parsed.clauses[0].ask;
+    assert.ok(ask !== null && ask.on === "kind", "the word bound to the range kind");
+    assert.ok(ask.test?.is === "props", "the flag property claimed the word");
+    assert.deepEqual(ask.test.props.map((ref) => ref.prop), ["melee"]);
+    assert.equal(ask.test.value.op, "contains");
+    assert.deepEqual(parsed.diagnostics, []);
 });
 
 it("a range's bare bound takes the unit its phrase names, on either side", () => {

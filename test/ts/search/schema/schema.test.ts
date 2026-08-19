@@ -102,7 +102,7 @@ describe("the shipped schema", () => {
         assert.equal(HEADS.get("spell")?.role, "column");
         assert.equal(HEADS.get("name")?.role, "kind");
         assert.deepEqual(kindsOf(COLUMNS.get("spell")!).map((k) => k.word),
-            ["name", "desc", "icon", undefined]);
+            ["name", "desc", "icon", undefined, "range"]);
     });
 
     it("leaves a column's same-named kind word-less, for the same reason", () => {
@@ -133,17 +133,25 @@ describe("the shipped schema", () => {
         }
         const props = KINDS.get("spell.spell")!.props;
         assert.deepEqual(Object.keys(props),
-            ["cast", "channel", "breaksmove", "unbreakable", "unhindered"]);
-        for (const name of ["breaksmove", "unbreakable", "unhindered"]) {
+            ["cast", "channel", "breaksmove", "unbreakable", "unhindered", "tracking"]);
+        for (const name of ["breaksmove", "unbreakable", "unhindered", "tracking"]) {
             assert.deepEqual(props[name].types, [flag], name);
         }
         assert.equal(HEADS.get("cast")?.role, "prop");
         assert.equal(HEADS.get("channel")?.role, "prop");
     });
 
-    it("declares no kind the pack cannot answer", () => {
-        // A spell's range is a source the build does not read yet, so an axis for it would return nothing forever.
+    it("puts how far a spell reaches in the spell column, beside how it goes off", () => {
+        // Range is one record per spell, exactly as delivery is, and it is drawn under the spell's name rather than
+        // as a mechanic of its own. The distance is the subject, so the kind's word is the door to it.
         assert.equal(KINDS.has("mech.range"), false);
+        const range = KINDS.get("spell.range")!;
+        assert.equal(range.single, true);
+        assert.deepEqual(Object.keys(range.props), ["yards", "min", "melee", "weapon"]);
+        assert.deepEqual(range.props.yards.sentinels, {0: "self", 50_000: "unlimited"});
+        for (const name of ["melee", "weapon"]) {
+            assert.deepEqual(range.props[name].types, [flag], name);
+        }
     });
 
     it("splits invisibility into two kinds, because one word carried two quantities", () => {
@@ -217,7 +225,7 @@ describe("the shipped schema", () => {
             .flatMap((kind) => Object.values(kind.props))
             .flatMap((prop) => prop.types.map((type) => type.name)));
         assert.deepEqual([...TYPES.keys()].filter((name) => !used.has(name)).toSorted(),
-            ["angle", "length", "offset"]);
+            ["angle", "coordinate", "offset"]);
     });
 
     it("keeps the mech column out of plain search", () => {

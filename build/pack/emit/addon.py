@@ -74,16 +74,16 @@ AXES: Mapping[str, str] = {
               "shapeshiftDisplays summons summonControlNames objects files "
               "modelCatNames equippedSlots items itemIconNames "
               "itemQualityNames vehicles vehicleSeats"),
-    "sound": "soundRows soundKitNames",
+    "sound": "soundRows soundKitNames soundTypes",
     "anim": ("animRows animNames animKitAnims animKitAnimBoneset bonesetNames "
              "animEmoteOneshots animEmoteLoops spellVehicleAnims "
              "spellVehicleAnimKits"),
     "fx": ("fxRows fxChains fxTextures dissolves dissolveTextures glows "
            "shadowies ghostMats tints screens screenTextures anchorNames "
            "attachmentNames missileMotions"),
-    "mech": ("mechRows spellDelivery areas keybinds linkKindNames effectNames "
-             "auraNames implicitTargetNames implicitTargetBits targetNames "
-             "speedModeNames spellAttrs"),
+    "mech": ("mechRows spellDelivery spellRanges areas keybinds "
+             "linkKindNames effectNames auraNames implicitTargetNames "
+             "implicitTargetBits targetNames speedModeNames spellAttrs"),
     "spell": "spells expansions iconNames iconFids",
     "text": "spellText",
     "misc": "rowVocabs",

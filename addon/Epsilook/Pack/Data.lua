@@ -224,6 +224,20 @@ function Data.GetIconRow(row)
 	return icon > 0 and icon - 1 or nil
 end
 
+--- The band table row a spell's range sits at.
+--- The spell carries a band counted from one, so that nought can mean it
+--- reaches no further than its own caster; read as though it were counted from
+--- zero it is off by one, and one distance in place of another is not a thing
+--- anybody notices by looking. This is the one place the rule is applied.
+--- @param row the spell's row
+--- @return the band's row counted from zero, or nil where the spell reaches
+---   no further than its caster
+function Data.GetRangeBand(row)
+	local node, blob = Data.GetColumn("mech", "spellRanges", "of")
+	local band = node and Reader.number(blob, node, row) or 0
+	return band > 0 and band - 1 or nil
+end
+
 --- The small part of one axis's row table, read once and kept.
 local pools = {}
 

@@ -334,14 +334,20 @@ MODEL_FAMILIES: tuple[Family, ...] = (
 # The sound column.
 
 def _sounds(reads: Reads) -> Iterable[SpellRow]:
-    """Every sound file a spell plays, under the kit that plays it."""
+    """Every sound file a spell plays, under the kit that plays it.
+
+    The type is the KIT's, read once per kit and carried onto each of its rows,
+    so a spell whose noise is an emote or a death can be told from the many
+    whose noise is simply a spell.
+    """
     for spell, kit, fid, mask in reads.rows.sounds:
-        yield spell, (fid, kit, mask)
+        yield spell, (fid, kit, reads.kit_types.get(kit, ABSENT), mask)
 
 
 SOUND_FAMILIES: tuple[Family, ...] = (
-    Family(kind="sound", props=("file", "kit", "target"), rows=_sounds,
-           vocab={"file": "files", "kit": "kits"}),
+    Family(kind="sound", props=("file", "kit", "type", "target"), rows=_sounds,
+           vocab={"file": "files", "kit": "kits", "type": "soundTypes"},
+           absent={"type": ABSENT}),
 )
 
 
@@ -643,7 +649,6 @@ FX_FAMILIES: tuple[Family, ...] = (
            vocab={"object": "objects"}),
     Family(kind="screen", props=("texture", "target"), rows=_screens,
            carried=("screen",), vocab={"texture": "files"}),
-    Family(kind="tracking", props=(), rows=_attributed("tracktargetinchannel")),
 )
 
 
@@ -831,7 +836,7 @@ the per-spell columns directly.
 
 COLUMN_READS: Mapping[str, tuple[str, ...]] = {
     "model": ("spell_ids", "rows", "mounts"),
-    "sound": ("spell_ids", "rows"),
+    "sound": ("spell_ids", "rows", "kit_types"),
     "anim": ("spell_ids", "rows", "visuals", "effects", "declared", "vehicles",
              "attributes", "anim_replacements", "animkit_anims",
              "animkit_bonesets"),
@@ -860,6 +865,7 @@ VOCABULARIES: Mapping[str, Mapping[str, str]] = {
     "files": {"in": "files", "keys": "fids", "values": "paths"},
     "attachments": {"in": "attachmentNames"},
     "motions": {"in": "missileMotions", "keys": "ids", "values": "names"},
+    "soundTypes": {"in": "soundTypes", "keys": "ids", "values": "names"},
     "motionProjectiles": {"in": "missileMotions", "keys": "ids",
                           "values": "projectiles"},
     "items": {"in": "items", "keys": "ids", "values": "names"},

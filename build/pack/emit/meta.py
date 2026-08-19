@@ -20,8 +20,15 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 56
+PACK_FORMAT = 57
 """What shape the artifact is in.
+
+57 adds `spellRanges`: the distance band of every spell that reaches past
+its caster, as its far edge, its near edge and the two flags saying the
+reach is the caster's own body or their equipped weapon rather than the
+band's number. Self is the complement, so a spell absent from the section
+reaches nobody but itself, and the far edge keeps the client's own
+fifty-thousand-yard marker for a band with no far edge at all.
 
 56 names a morph's property for what it stores: the row's `display` is now
 `creature`, since a transform aura carries a creature entry and the display

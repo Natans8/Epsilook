@@ -348,6 +348,23 @@ local function propCtx(refs, word)
 	end)
 end
 
+--- Whether a bare operand is one of a flag property's own words.
+-- A flag is a presence with no value behind it, so its own spellings are what
+-- a reader types to select the rows carrying it. The spellings are the same
+-- list the matcher compares against.
+local function isFlagWord(prop, text)
+	if prop.types[1] ~= "flag" then
+		return false
+	end
+	local folded = Text.fold(text)
+	for _, word in ipairs(prop.spellings) do
+		if Text.fold(word) == folded then
+			return true
+		end
+	end
+	return false
+end
+
 --- An operand read against a kind: its properties claim it in declaration
 -- order, and a comparison no property claims falls back to counting the
 -- kind's rows, where the position allows one.
@@ -406,6 +423,19 @@ local function kindCtx(kind, countFallback)
 		return firstOf("rangeParts", lo, hi)
 	end
 	function ctx.bare(text)
+		-- A flag stores no value, so no notation reads an operand into one:
+		-- what selects the rows carrying it is the property's own word, which
+		-- is what the matcher compares against too. Claimed before the
+		-- notations, since a word is never also a quantity.
+		local flags = {}
+		for _, ref in ipairs(refs) do
+			if isFlagWord(ref.prop, text) then
+				flags[#flags + 1] = ref
+			end
+		end
+		if #flags > 0 then
+			return props(flags, opExpr("contains", { text = text }))
+		end
 		local claimants = {}
 		for _, ref in ipairs(refs) do
 			if Schema.ParseValue(ref.prop, text) ~= nil then
@@ -1105,6 +1135,21 @@ local function statesBareValue(term)
 	local ask = term.ask
 	if ask.on == "kindWord" or ask.on == "count" then
 		return false
+	end
+	-- A flag word states no value: it says one of the row's properties is set,
+	-- which holds alongside whatever the row's other properties say, so two of
+	-- them are satisfiable together and conjoin like any other pair.
+	if ask.on == "props" then
+		local allFlags = true
+		for _, ref in ipairs(ask.props) do
+			if ref.prop.types[1] ~= "flag" then
+				allFlags = false
+				break
+			end
+		end
+		if allFlags then
+			return false
+		end
 	end
 	local op = ask.value.op
 	return op == "contains" or op == "anyOf"

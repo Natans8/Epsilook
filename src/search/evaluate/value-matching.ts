@@ -163,7 +163,7 @@ define(["regex"], ["text", "path"], (stored, operand) => {
 /* ----------------------------------------------------------------------- numbers */
 
 /** Types whose stored value and operand are both numeric. */
-const NUMERIC = ["id", "count", "seconds", "percent", "percentChange", "length", "angle"];
+const NUMERIC = ["id", "count", "seconds", "percent", "percentChange", "length", "coordinate", "angle"];
 
 /**
  * Reads an operand as a number.

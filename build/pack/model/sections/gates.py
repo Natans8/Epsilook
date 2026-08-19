@@ -1,14 +1,17 @@
-"""What stops a spell, times it, or places it: flags, delivery, and areas.
+"""What stops a spell, times it, reaches with it, or places it.
 
-Three routes that answer "can I cast this, and what happens when I do" rather
+Four routes that answer "can I cast this, and what happens when I do" rather
 than "what does it look like".
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from ...derive import Reads
 from ...measure import numeric_domain
 from ...routes.delivery import BREAKS_ON_MOVE, CHANNELLED
+from ...routes.reach import MELEE, UNLIMITED, WEAPON
 from ..registry import register
 from ..section import (Cardinality, Count, CountFamily, Domain, Layout, Section, SectionColumns, size)
 
@@ -37,6 +40,72 @@ def delivery(reads: Reads) -> SectionColumns:
             "castMs": [row.cast_ms for row in rows],
             "durMs": [row.duration_ms for row in rows],
             "flags": [row.flags for row in rows]}
+
+
+NO_REACH = 0
+"""The band of a spell that reaches no further than its caster.
+
+Bands are numbered from one, so the commonest answer by far is also the
+cheapest value to store and needs no entry in the table at all.
+"""
+
+
+def reaches(reads: Reads) -> SectionColumns:
+    """How far each spell reaches: a band table, and one band per spell.
+
+    The band column runs parallel to `spells.ids`, so a reader joins by
+    position, and `NO_REACH` is a spell that reaches nobody but its caster --
+    over half of them. Shipping the band rather than the distances is what
+    makes that affordable: a build draws on a couple of hundred distinct bands
+    for a quarter of a million spells, so the table itself costs well under a
+    kilobyte and only the index is paid per spell.
+    """
+    slots: dict[tuple[float, float, int], int] = {}
+    bands: list[tuple[float, float, int]] = []
+    reach_of = {row.spell: row for row in reads.reach}
+
+    of: list[int] = []
+    for spell in reads.spell_ids:
+        row = reach_of.get(spell)
+        if row is None:
+            of.append(NO_REACH)
+            continue
+        band = (row.max_yards, row.min_yards, row.flags)
+        if (slot := slots.get(band)) is None:
+            slot = slots[band] = len(bands) + 1
+            bands.append(band)
+        of.append(slot)
+
+    return {"of": of,
+            "maxYards": [band[0] for band in bands],
+            "minYards": [band[1] for band in bands],
+            "flags": [band[2] for band in bands]}
+
+
+def reaching(columns: SectionColumns,
+             wanted: Callable[[float, float, int], bool]) -> int:
+    """How many spells carry a band the predicate accepts.
+
+    Every count this section reports is per spell rather than per band, since
+    a band shared by nine thousand spells and one used once are not the same
+    answer to "how many spells reach anywhere".
+    """
+    accepted = [wanted(far, near, flags) for far, near, flags
+                in zip(columns["maxYards"], columns["minYards"],
+                       columns["flags"])]
+    return sum(1 for band in columns["of"]
+               if band != NO_REACH and accepted[band - 1])
+
+
+def distances(columns: SectionColumns) -> list[float]:
+    """The far edge each reaching spell carries, one entry per spell.
+
+    The domain describes the distances a reader can ask for, so it is measured
+    over the spells rather than over the band table: a band is one row whether
+    one spell uses it or thirty thousand do.
+    """
+    far_edges = list(columns["maxYards"])
+    return [far_edges[band - 1] for band in columns["of"] if band != NO_REACH]
 
 
 def area_gates(reads: Reads) -> SectionColumns:
@@ -104,6 +173,38 @@ SPELL_DELIVERY = register(Section(
         Domain("channel", lambda columns, _r: numeric_domain(
             (duration for duration in columns["durMs"] if duration != 0),
             sentinels=(-1,)), unit="ms"),
+    ),
+))
+
+SPELL_RANGES = register(Section(
+    name="spellRanges",
+    doc="Each distinct distance band, and the one every spell reaches with.",
+    module="core",
+    produce=reaches,
+    columns=("of", "maxYards", "minYards", "flags"),
+    reads=("reach", "spell_ids"),
+    counts=(
+        Count("spellRanges", lambda columns, _r: sum(
+            1 for band in columns["of"] if band != NO_REACH)),
+        Count("range.bands", lambda columns, _r: len(columns["maxYards"])),
+        Count("range.unlimited", lambda columns, _r: reaching(
+            columns, lambda far, _near, _flags: far >= UNLIMITED)),
+        Count("range.minimum", lambda columns, _r: reaching(
+            columns, lambda _far, near, _flags: near > 0)),
+        Count("range.melee", lambda columns, _r: reaching(
+            columns, lambda _far, _near, flags: bool(flags & MELEE))),
+        Count("range.weapon", lambda columns, _r: reaching(
+            columns, lambda _far, _near, flags: bool(flags & WEAPON))),
+        # The complement: every spell reaching no further than its caster,
+        # which includes the ones listed in no range row at all.
+        Count("range.self", lambda columns, _r: sum(
+            1 for band in columns["of"] if band == NO_REACH)),
+    ),
+    domains=(
+        # The unlimited band is a marker rather than a distance: left in, it
+        # would put the far bound of every control at fifty thousand yards.
+        Domain("range", lambda columns, _r: numeric_domain(
+            distances(columns), sentinels=(UNLIMITED,)), unit="yd"),
     ),
 ))
 
