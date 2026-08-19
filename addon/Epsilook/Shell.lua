@@ -14,7 +14,9 @@
 -- bare; only the dozen lines at the bottom touch the client.
 --
 -- Paging holds a cursor, not a result set: the last query's tree and the spell
--- row the page stopped at, so `more` resumes the walk from there.
+-- row the page stopped at, so `more` resumes the walk from there. A search
+-- runs as a job across frames, a budgeted slice of the walk per frame, so a
+-- query over every spell costs frames and never a freeze.
 
 _G.Epsilook = _G.Epsilook or {}
 local Epsilook = _G.Epsilook
@@ -162,49 +164,121 @@ local function say(line)
 	end
 end
 
+--- How many milliseconds of one frame a running job may take, and how many
+-- spells the walk examines between two chances to yield. The client renders
+-- between a job's slices, so a search over every spell costs frames and never
+-- a freeze; a slice is small enough that the budget is overrun by at most a
+-- few hundred row reads.
+Shell.BUDGET_MS = 8
+Shell.SLICE = 500
+
+--- The job running across frames, if any, and the frame that drives it.
+local running, driver
+
+--- Run a function as a job across frames: it is resumed every frame for the
+-- budget's worth of time, and wherever it yields is where it continues. A new
+-- job replaces a running one. Under a bare interpreter, where there is no
+-- frame to drive it, the job runs to the end at once.
+-- @param job a function taking no arguments; it yields between slices
+local function run(job)
+	local create, profile = _G.CreateFrame, _G.debugprofilestop
+	if not create or not profile then
+		local co = coroutine.create(job)
+		repeat
+			local ok, err = coroutine.resume(co)
+			if not ok then
+				error(err)
+			end
+		until coroutine.status(co) ~= "suspended"
+		return
+	end
+	running = coroutine.create(job)
+	driver = driver or create("Frame")
+	driver:SetScript("OnUpdate", function()
+		local started = profile()
+		while
+			running
+			and coroutine.status(running) == "suspended"
+			and profile() - started < Shell.BUDGET_MS
+		do
+			local ok, err = coroutine.resume(running)
+			if not ok then
+				say(Shell.Said(RED .. tostring(err) .. END))
+				running = nil
+			end
+		end
+		if not running or coroutine.status(running) ~= "suspended" then
+			running = nil
+			driver:SetScript("OnUpdate", nil)
+		end
+	end)
+end
+
 --- Where the last search stopped, for `more`.
 local paging
 
---- Print one page of results for a query, from a spell row.
+--- Print one page of results for a query, from a spell row, as a job.
 -- @param tree the parsed query
 -- @param text the query as typed, for the header
 -- @param fromIndex the spell row to resume from
 local function page(tree, text, fromIndex)
-	local axes = Epsilook:GetPartAxes()
-	local step = Epsilook:FindSpells(tree, fromIndex)
-	local spell, counts = {}, {}
-	local shown, last = 0, nil
-	for _ = 1, Shell.PAGE do
-		local at, spellID = step()
-		if not at then
-			break
+	run(function()
+		local axes = Epsilook:GetPartAxes()
+		local step = Epsilook:FindSpells(tree, fromIndex, Shell.SLICE)
+		local spell, counts = {}, {}
+		local shown, last = 0, nil
+		while shown < Shell.PAGE do
+			local at, spellID = step()
+			if at == nil then
+				break
+			elseif at == false then
+				coroutine.yield()
+			else
+				Epsilook:GetSpellDataByIndex(at, spell)
+				Epsilook:GetPartCounts(spellID, counts)
+				say(Shell.ResultLine(spell, counts, axes))
+				shown, last = shown + 1, at
+			end
 		end
-		Epsilook:GetSpellDataByIndex(at, spell)
-		Epsilook:GetPartCounts(spellID, counts)
-		say(Shell.ResultLine(spell, counts, axes))
-		shown, last = shown + 1, at
-	end
-	if shown == 0 then
-		say(Shell.Said((fromIndex and "no more" or "nothing") .. " for " .. text))
-		paging = nil
-		return
-	end
-	if shown == Shell.PAGE then
-		paging = { tree = tree, text = text, index = last + 1 }
-		say(
-			Shell.Said(
-				shown
-					.. " shown; /elo more for the next "
-					.. Shell.PAGE
-					.. ", /elo count "
-					.. text
-					.. " for the total"
+		if shown == 0 then
+			say(Shell.Said((fromIndex and "no more" or "nothing") .. " for " .. text))
+			paging = nil
+		elseif shown == Shell.PAGE then
+			paging = { tree = tree, text = text, index = last + 1 }
+			say(
+				Shell.Said(
+					shown
+						.. " shown; /elo more for the next "
+						.. Shell.PAGE
+						.. ", /elo count "
+						.. text
+						.. " for the total"
+				)
 			)
-		)
-	else
-		paging = nil
-		say(Shell.Said(shown .. " for " .. text))
-	end
+		else
+			paging = nil
+			say(Shell.Said(shown .. " for " .. text))
+		end
+	end)
+end
+
+--- Count a query's matches as a job, and print the total.
+local function count(tree, text)
+	run(function()
+		local step = Epsilook:FindSpells(tree, nil, Shell.SLICE)
+		local found = 0
+		while true do
+			local at = step()
+			if at == nil then
+				break
+			elseif at == false then
+				coroutine.yield()
+			else
+				found = found + 1
+			end
+		end
+		say(Shell.Said(found .. " match " .. text))
+	end)
 end
 
 --- A query typed at the command, parsed and either run or refused.
@@ -237,7 +311,7 @@ Shell.SUBCOMMANDS = {
 			say(Shell.ProblemLine(problem))
 		end
 		if not Epsilook:IsQueryEmpty(tree) then
-			say(Shell.Said(Epsilook:GetNumMatches(tree) .. " match " .. rest))
+			count(tree, rest)
 		end
 	end,
 	inspect = function(rest)
@@ -327,6 +401,54 @@ function Shell.Send(text)
 	end
 end
 
+--- The tooltip a link shows while the mouse is over it.
+-- A spell link shows the game's own spell tooltip; the aura link shows what
+-- the aura says while it is on you, which is the pack's own text; a part's
+-- action shows the part. Only this addon's links are handled: the chat frame
+-- has other hands on the others.
+-- @param frame the chat frame the link is in
+-- @param link the link's target
+function Shell.OnHyperlinkEnter(frame, link)
+	local id, verb, axis, n = link:match("^" .. Shell.LINK .. ":(%d+):(%a+):?(%a*):?(%d*)$")
+	local tooltip = _G.GameTooltip
+	if not id or not tooltip then
+		return
+	end
+	id = tonumber(id)
+	tooltip:SetOwner(frame, "ANCHOR_CURSOR")
+	if axis ~= "" then
+		local part = Epsilook:GetPartDataByIndex(id, axis, tonumber(n))
+		if part then
+			tooltip:SetText(part.kind, 1, 1, 1)
+			tooltip:AddLine(Epsilook.Inspect.ValuesText(part), nil, nil, nil, true)
+		end
+	elseif verb == "aura" then
+		local spell = Epsilook:GetSpellDataByID(id)
+		local text = Epsilook:GetSpellTextByID(id)
+		if spell then
+			tooltip:SetText(spell.name, 1, 1, 1)
+			tooltip:AddLine(
+				text.aura ~= "" and text.aura or GREY .. "no aura text" .. END,
+				nil,
+				nil,
+				nil,
+				true
+			)
+		end
+	else
+		tooltip:SetSpellByID(id)
+	end
+	tooltip:Show()
+end
+
+--- The tooltip taken down as the mouse leaves one of this addon's links.
+function Shell.OnHyperlinkLeave(_, link)
+	local tooltip = _G.GameTooltip
+	if tooltip and link:sub(1, #Shell.LINK + 1) == Shell.LINK .. ":" then
+		tooltip:Hide()
+	end
+end
+
 --- Wire the command and the link handler into the client, once.
 -- Skipped under a bare interpreter, where none of the client's globals exist.
 local function install()
@@ -357,6 +479,13 @@ local function install()
 	end
 	if claimed > 0 then
 		_G.SlashCmdList["EPSILOOK"] = Shell.Command
+	end
+	for i = 1, (_G.NUM_CHAT_WINDOWS or 0) do
+		local frame = _G["ChatFrame" .. i]
+		if frame and frame.HookScript then
+			frame:HookScript("OnHyperlinkEnter", Shell.OnHyperlinkEnter)
+			frame:HookScript("OnHyperlinkLeave", Shell.OnHyperlinkLeave)
+		end
 	end
 	_G.hooksecurefunc("SetItemRef", function(link)
 		local id, verb, axis, n = link:match("^" .. Shell.LINK .. ":(%d+):(%a+):?(%a*):?(%d*)$")

@@ -83,3 +83,12 @@ def test_help_comes_from_the_declarations(engine: LuaRuntime) -> None:
     lines = cast(LuaTable, lua_function(engine, b"Epsilook.Shell.HelpLines")())
     text = "\n".join(str(cast(bytes, lines[i]).decode()) for i in range(1, len(list(lines.keys())) + 1))
     assert "model" in text and "cast" in text and ">=" in text
+
+
+def test_the_spell_text_record_holds_the_pools(engine: LuaRuntime) -> None:
+    api = lua_table(engine, b"Epsilook")
+    text = cast(LuaTable, method(api, b"GetSpellTextByID")(api, 317228))
+    assert cast(bytes, text[b"description"]).startswith(b"Kneel before your master")
+    assert cast(bytes, text[b"aura"]).startswith(b"Kneel before your master")
+    assert text[b"encounter"] == b""
+    assert method(api, b"GetSpellTextByID")(api, 0) is None

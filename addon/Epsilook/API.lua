@@ -28,6 +28,7 @@
 --
 -- Records:
 --   SpellData   id, name, subtext, icon, iconName, schoolID, school, expansion
+--   SpellText   description, aura, encounter
 --   PartData    axis, kind, slot, values (property name to value; a named
 --               property is a table of id and text)
 --   Action      key, label, needs, effect, revert
@@ -194,6 +195,30 @@ function Epsilook:GetSpellDataByID(spellID, target)
 		return nil
 	end
 	return self:GetSpellDataByIndex(row, target)
+end
+
+--- The prose the pack cooked for a spell: its description, what its aura
+-- says while it is on you, and its encounter text, each empty where the
+-- spell has none. The aura text is what a buff's tooltip shows.
+-- @param spellID the spell id
+-- @param target an optional table to fill instead of allocating one
+-- @return a table with description, aura, encounter; or nil where there is no such spell
+function Epsilook:GetSpellTextByID(spellID, target)
+	local row = self:GetSpellIndexByID(spellID)
+	if not row then
+		return nil
+	end
+	local out = target or {}
+	for name, column in pairs({
+		description = "descriptions",
+		aura = "auras",
+		encounter = "encounters",
+	}) do
+		local node, blob = Data.GetColumn("text", "spellText", column)
+		local slot = node and Reader.number(blob, node.of, row) or 0
+		out[name] = slot > 0 and Reader.text(blob, node.pool, slot) or ""
+	end
+	return out
 end
 
 --- How many rows of each axis a spell has.
@@ -404,10 +429,12 @@ end
 --- The spells satisfying a query, one per call.
 -- @param query text, or a query from ParseQuery
 -- @param fromIndex the spell row to start at, counted from zero; nil for the first
--- @return an iterator yielding the spell's row and its id, then nil
-function Epsilook:FindSpells(query, fromIndex)
+-- @param slice how many spells one call may examine before returning false to
+--   let the caller yield, or nil to return only hits and the end
+-- @return an iterator yielding the spell's row and its id, false on a pause, then nil
+function Epsilook:FindSpells(query, fromIndex, slice)
 	mounted(self)
-	return Search.Find(query, fromIndex)
+	return Search.Find(query, fromIndex, slice)
 end
 
 --- How many spells satisfy a query. A full walk.

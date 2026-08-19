@@ -832,10 +832,15 @@ local function advance(compiled, cursor, spell)
 end
 
 --- The spells satisfying a query, in order, one per call.
+-- With a slice, a call that has examined that many spells without a hit
+-- returns false rather than going on, so a caller running the walk across
+-- frames can yield between calls; the next call carries on where it stopped.
+-- Without one, a call returns only a hit or the end.
 -- @param query text, or a tree from `Query.Parse`
 -- @param fromIndex the spell row to start at, counted from zero; nil for the first
--- @return an iterator yielding the spell's row and its id, and nil when done
-function Search.Find(query, fromIndex)
+-- @param slice how many spells one call may examine before pausing, or nil for no pause
+-- @return an iterator yielding the spell's row and its id, false on a pause, and nil when done
+function Search.Find(query, fromIndex, slice)
 	local compiled = Search.Compile(query)
 	local cols = spellColumns()
 	local ids, blob = cols.ids, cols.blob
@@ -843,6 +848,7 @@ function Search.Find(query, fromIndex)
 	local spell = fromIndex or 0
 	local cursor = cursorAt(compiled, spell)
 	return function()
+		local examined = 0
 		while spell < total do
 			local at = spell
 			local hit = passes(compiled, at, cursor)
@@ -850,6 +856,10 @@ function Search.Find(query, fromIndex)
 			spell = spell + 1
 			if hit then
 				return at, Reader.number(blob, ids, at)
+			end
+			examined = examined + 1
+			if slice and examined >= slice then
+				return false
 			end
 		end
 		return nil
