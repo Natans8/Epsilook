@@ -37,10 +37,20 @@ local GOLD, WHITE, CYAN, GREY, RED =
 local END = "|r"
 
 --- The verbs of the links this file draws: a part's own link, a group's,
--- and an axis's count on a result line.
+-- an axis's count on a result line, and the copy that hands the chat box
+-- the number a command takes.
 Inspect.PART = "part"
 Inspect.GROUP = "group"
 Inspect.LIST = "list"
+Inspect.COPY = "copy"
+Inspect.COPYGROUP = "copygroup"
+
+--- The copy verb a line's verb draws, and the line verb a copy stands for.
+-- A copy on a group's line hands what the group's actions take and one on a
+-- part's line what the part's do, so the two are told apart the way the
+-- lines themselves are.
+local COPY_VERB = { [Inspect.PART] = Inspect.COPY, [Inspect.GROUP] = Inspect.COPYGROUP }
+local COPY_LINE = { [Inspect.COPY] = Inspect.PART, [Inspect.COPYGROUP] = Inspect.GROUP }
 
 --- How an axis's parts are grouped, where they are: `prop` is the property
 -- whose value the group shares, and the group's line leads with the
@@ -608,6 +618,22 @@ local INSERTS = {
 	play = { hint = "Shift-click to type this sound file id into chat" },
 }
 
+--- The server commands the actions send, by key, each taking the action's
+-- argument. The sound actions are not here: they are the client's own calls.
+local COMMANDS = {
+	spawn = "gob spawn %s",
+	add = "additem %s",
+	lookup = "lookup item %s",
+	summon = "npc spawn %s",
+	native = "mod native %s",
+	speed = "mod speed %s",
+	morph = "morph %s",
+	mount = "mod mount %s",
+	animKit = "mod animkit %s",
+	anim = "mod anim %s",
+	stand = "mod standstate %s",
+}
+
 --- What a shift-click on a part's line hands the chat box: the first of the
 -- line's actions that has something to hand over, rendered for the chat box.
 -- @param part a PartData
@@ -625,18 +651,43 @@ function Inspect.ClipOf(part, actions, name)
 	return nil
 end
 
---- The actions a part can take, of those offered, as links.
+--- What a copy on a part's line hands the chat box: the argument of the
+-- first of the line's actions that a server command takes, which is what a
+-- player types after that command by hand. A text argument is not one -- an
+-- item's lookup takes a model's name, and its own action already sends it --
+-- so only a number is copied, and a line whose actions are the client's own
+-- calls offers no copy at all.
+-- @param part a PartData
+-- @param actions the actions the line carries
+-- @return the number and the command it feeds, or nil
+function Inspect.CopyOf(part, actions)
+	for _, action in ipairs(actions) do
+		local command = COMMANDS[action.key]
+		local argument = command and Inspect.ArgumentOf(part, action)
+		if type(argument) == "number" then
+			return argument, command
+		end
+	end
+	return nil
+end
+
+--- The actions a part can take, of those offered, as links, and the copy
+-- that hands the chat box the number a command takes, where one does.
 -- @param spellID the spell
 -- @param part a PartData
 -- @param n the part's row on its axis, counted from one
 -- @param actions the actions to offer
+-- @param verb the line's verb, which says which copy the line draws
 -- @return the links joined, possibly empty
-function Inspect.ActionLinks(spellID, part, n, actions)
+function Inspect.ActionLinks(spellID, part, n, actions, verb)
 	local out = {}
 	for _, action in ipairs(actions) do
 		if takes(part, action) then
 			out[#out + 1] = Shell.Link(spellID, action.key, action.label, part.axis, n)
 		end
+	end
+	if COPY_VERB[verb] and Inspect.CopyOf(part, actions) then
+		out[#out + 1] = Shell.Link(spellID, COPY_VERB[verb], "Copy Entry", part.axis, n)
 	end
 	return table.concat(out, Shell.DASH)
 end
@@ -782,7 +833,7 @@ local function line(spellID, part, n, indent, label, verb)
 				end
 			end
 		end
-		links = Inspect.ActionLinks(spellID, part, n, actions)
+		links = Inspect.ActionLinks(spellID, part, n, actions, verb)
 	else
 		-- A part with no value of its own may still be named by what it
 		-- carries -- a screen part by its screen effect -- and that name is
@@ -790,7 +841,7 @@ local function line(spellID, part, n, indent, label, verb)
 		if named then
 			out = out .. Shell.Link(spellID, verb, extras[1].text, part.axis, n, WHITE)
 		end
-		links = Inspect.ActionLinks(spellID, part, n, actions)
+		links = Inspect.ActionLinks(spellID, part, n, actions, verb)
 	end
 	if links ~= "" then
 		out = out .. Shell.DASH .. links
@@ -841,6 +892,10 @@ function Inspect.HintOf(axis, verb, part)
 	elseif verb == Inspect.PART or verb == Inspect.GROUP then
 		local _, hint = Inspect.ClipOf(part, actionsFor(axis, verb), "")
 		return hint
+	elseif COPY_LINE[verb] then
+		local _, command = Inspect.CopyOf(part, actionsFor(axis, COPY_LINE[verb]))
+		return command and "Click to put this into your chat box, as ." .. command:gsub(" %%s", "") .. " takes it"
+			or nil
 	end
 	local action = actionOf(axis, verb, part)
 	return action and action.hint or nil
@@ -974,22 +1029,6 @@ end
 --- Sound handles by what was played, so a stop link can find its sound.
 local playing = {}
 
---- The server commands the actions send, by key, each taking the action's
--- argument. The sound actions are not here: they are the client's own calls.
-local COMMANDS = {
-	spawn = "gob spawn %s",
-	add = "additem %s",
-	lookup = "lookup item %s",
-	summon = "npc spawn %s",
-	native = "mod native %s",
-	speed = "mod speed %s",
-	morph = "morph %s",
-	mount = "mod mount %s",
-	animKit = "mod animkit %s",
-	anim = "mod anim %s",
-	stand = "mod standstate %s",
-}
-
 --- Execute one dossier action from its link. A part's own link does nothing
 -- on a plain click, as the game's own name links do; an axis's count prints
 -- that axis.
@@ -1008,6 +1047,13 @@ function Inspect.Execute(spellID, key, axis, n, say)
 	local part = Epsilook:GetPartDataByIndex(spellID, axis, n)
 	if not part then
 		say(Shell.Said(RED .. "that part is no longer in the pack" .. END))
+		return
+	end
+	if COPY_LINE[key] then
+		local argument = Inspect.CopyOf(part, actionsFor(axis, COPY_LINE[key]))
+		if argument then
+			Shell.Type(tostring(argument))
+		end
 		return
 	end
 	local action = actionOf(axis, key, part)

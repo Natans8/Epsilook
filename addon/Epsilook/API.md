@@ -172,6 +172,12 @@ The shell's own links are `|Hgarrmission:epsilook:<spellID>:<verb>[:<axis>:<n>]|
 any hook runs. A click executes the verb through a `SetItemRef` hook; a shift-click hands the chat box what the link
 stands for. Another addon may print these links and they will behave the same.
 
+The verb is an action's key, or one of the shell's own: `part` and `group` are a line's subject, `list` an axis's
+count, and `copy` and `copygroup` the number a server command takes, offered only on a line whose actions include
+one. Epsilon's own commands parse a bare number and read a pasted link as its bracket text, so a copy hands over the
+number rather than a link; the three commands that do take a link -- `.gob spawn`, `.npc spawn` and `.additem` --
+are handed one by a shift-click already.
+
 ## Raw data
 
 `Epsilook.data.<axis>` holds each axis file's payload as the emitter wrote it: a header describing columns and one long

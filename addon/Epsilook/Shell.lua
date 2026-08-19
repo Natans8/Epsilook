@@ -713,6 +713,22 @@ function Shell.Clip(spellID, verb, axis, n)
 	end
 end
 
+--- Put text in the chat box for the player to type a command around, opening
+-- the box first where it is shut. A shift-click hands the box what it already
+-- has open; a click on a copy is a button, so it opens one rather than doing
+-- nothing.
+-- @param text the text to insert
+function Shell.Type(text)
+	local box = _G.ChatFrame1EditBox
+	if not box or not _G.ChatEdit_InsertLink then
+		return
+	end
+	if not box:IsShown() and _G.ChatEdit_ActivateChat then
+		_G.ChatEdit_ActivateChat(box)
+	end
+	_G.ChatEdit_InsertLink(text)
+end
+
 --- Send one dot-command to the server, without its leading dot.
 -- The command library this client ships carries the command as an addon
 -- message and hands its output back; where the library is absent the
@@ -753,7 +769,7 @@ function Shell.OnHyperlinkEnter(frame, link)
 		hint = Epsilook.Inspect.HintOf(axis, verb)
 	elseif axis then
 		local part = Epsilook:GetPartDataByIndex(id, axis, n)
-		if part and verb == Epsilook.Inspect.GROUP then
+		if part and (verb == Epsilook.Inspect.GROUP or verb == Epsilook.Inspect.COPYGROUP) then
 			Epsilook.Inspect.FillGroupTooltip(tooltip, part)
 		elseif part then
 			Epsilook.Inspect.FillTooltip(tooltip, part)

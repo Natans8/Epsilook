@@ -313,3 +313,48 @@ def test_a_group_tooltip_names_the_group_and_its_value(engine: LuaRuntime) -> No
     tip = lua_function(engine, b"GROUP_TIP")
     assert cast(bytes, tip(133, b"sound", 1)).decode().split("\n") == ["kit", "SPELL_Fire_Missile_Loop - 3011"]
     assert cast(bytes, tip(133, b"anim", 1)).decode().split("\n") == ["kit", "13464"]
+
+
+def test_a_copy_is_offered_only_where_a_command_takes_the_number(engine: LuaRuntime) -> None:
+    """The copy hands the chat box what a server command takes, so it shows on a
+    model's spawnable line and on an anim kit's group line, and not on a sound,
+    whose actions are the client's own calls."""
+    # language=Lua
+    engine.execute(b"""
+    function SPAWN_ARG(id, axis, n)
+      local part = Epsilook:GetPartDataByIndex(id, axis, n)
+      for _, action in ipairs(Epsilook:GetActions(axis)) do
+        if action.key == "spawn" then
+          local argument = Epsilook.Inspect.ArgumentOf(part, action)
+          if argument then return argument end
+        end
+      end
+      return nil
+    end
+    """)
+    api = lua_table(engine, b"Epsilook")
+    part = method(api, b"GetPartDataByIndex")(api, 133, b"model", 1)
+    copied, command = cast(
+        tuple[int, bytes],
+        lua_function(engine, b"Epsilook.Inspect.CopyOf")(part, method(api, b"GetActions")(api, b"model")),
+    )
+    # The copy is exactly the argument the line's first commanded action sends.
+    assert copied == lua_function(engine, b"SPAWN_ARG")(133, b"model", 1)
+    assert command == b"gob spawn %s"
+    line = cast(bytes, lua_function(engine, b"Epsilook.Inspect.PartLine")(133, part, 1)).decode()
+    assert "|Hgarrmission:epsilook:133:copy:model:1|h[Copy Entry]|h" in line
+    # A sound plays through the client, so there is no command to copy for.
+    sound = method(api, b"GetPartDataByIndex")(api, 133, b"sound", 1)
+    assert "Copy Entry" not in cast(bytes, lua_function(engine, b"Epsilook.Inspect.PartLine")(133, sound, 1)).decode()
+    # A group's line copies what the group's own action takes, under its own verb.
+    assert "|Hgarrmission:epsilook:133:copygroup:anim:1|h[Copy Entry]|h" in dossier(engine, 133)
+
+
+def test_a_copy_hint_names_the_command_it_feeds(engine: LuaRuntime) -> None:
+    api = lua_table(engine, b"Epsilook")
+    part = method(api, b"GetPartDataByIndex")(api, 133, b"model", 1)
+    hint = lua_function(engine, b"Epsilook.Inspect.HintOf")(b"model", b"copy", part)
+    assert isinstance(hint, bytes) and ".gob spawn takes it" in hint.decode()
+    # A sound line has no command behind it, so its copy has nothing to say.
+    sound = method(api, b"GetPartDataByIndex")(api, 133, b"sound", 1)
+    assert lua_function(engine, b"Epsilook.Inspect.HintOf")(b"sound", b"copy", sound) is None
