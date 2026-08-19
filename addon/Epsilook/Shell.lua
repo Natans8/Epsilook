@@ -506,17 +506,12 @@ function Shell.OnHyperlinkEnter(frame, link)
 			end
 		end
 	elseif verb == "aura" then
-		local spell = Epsilook:GetSpellDataByID(id)
+		-- The spell's tooltip, then what the aura says while it is on you.
+		tooltip:SetSpellByID(id)
 		local text = Epsilook:GetSpellTextByID(id)
-		if spell then
-			tooltip:SetText(spell.name, 1, 1, 1)
-			tooltip:AddLine(
-				text.aura ~= "" and text.aura or GREY .. "no aura text" .. END,
-				nil,
-				nil,
-				nil,
-				true
-			)
+		if text and text.aura ~= "" then
+			tooltip:AddLine(" ")
+			tooltip:AddLine(text.aura, 1, 1, 1, true)
 		end
 	else
 		tooltip:SetSpellByID(id)
