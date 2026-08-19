@@ -99,10 +99,14 @@ local function tinted(r, g, b, text)
 	return string.format("|cff%02x%02x%02x", R, G, B) .. text .. END
 end
 
---- The head line: the spell's name as a link, its id, school written in the
--- school's own colour, and expansion, then the spell's own actions.
+--- The head line: the spell's name as a link, its id, the known mark where
+-- the player knows it, school written in the school's own colour, and
+-- expansion, then the spell's own actions.
 function Inspect.HeadLine(spell)
 	local parts = { Shell.SpellLink(spell), GOLD .. spell.id .. END }
+	if Shell.Known(spell.id) then
+		parts[#parts + 1] = GOLD .. "[known]" .. END
+	end
 	if spell.subtext ~= "" then
 		parts[#parts + 1] = GREY .. spell.subtext .. END
 	end
