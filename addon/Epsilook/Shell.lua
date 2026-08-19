@@ -124,6 +124,61 @@ function Shell.Split(message)
 	return nil, message
 end
 
+--- A message read the way `.lookup` is typed: a head word followed by a space
+-- and a token binds to that token, so `model 6dr` is `model:6dr`. The
+-- leniency is the shell's, not the grammar's -- the query the engine sees is
+-- one the web reads the same way. A head already bound, a head at the end,
+-- and anything inside quotes are left alone, and the next token must be a
+-- value rather than an exclusion or an alternation.
+-- @param message the query as typed
+-- @return the query as the engine reads it
+function Shell.Lenient(message)
+	local grammar = Epsilook.Schema.grammar
+	local out, i, n = {}, 1, #message
+	local pending
+	while i <= n do
+		local quoted, stop = message:match('^(%b"")()', i)
+		local token
+		if quoted then
+			token, i = quoted, stop
+		else
+			local word, after = message:match("^(%S+)()", i)
+			if word then
+				token, i = word, after
+			else
+				local space, after_ = message:match("^(%s+)()", i)
+				token, i = space, after_
+			end
+		end
+		if token:match("^%s+$") then
+			if not pending then
+				out[#out + 1] = token
+			end
+		elseif pending then
+			local value = token
+			if
+				value:sub(1, 1) == grammar.negate
+				or value:sub(1, 1) == grammar["or"]
+				or Epsilook.Text.fold(value) == grammar.orWord
+			then
+				out[#out + 1] = pending .. " " .. value
+			else
+				out[#out + 1] = pending .. grammar.bind .. value
+			end
+			pending = nil
+		elseif not quoted and Epsilook.Schema.HeadOf(Epsilook.Text.fold(token)) then
+			-- A bare head word: bound to the next token if one comes.
+			pending = token
+		else
+			out[#out + 1] = token
+		end
+	end
+	if pending then
+		out[#out + 1] = pending
+	end
+	return table.concat(out)
+end
+
 --- The help text, read off the declarations so it cannot fall behind them.
 -- @return a list of lines
 function Shell.HelpLines()
@@ -248,9 +303,9 @@ local function page(tree, text, fromIndex)
 			say(
 				Shell.Said(
 					shown
-						.. " shown; /elo more for the next "
-						.. Shell.PAGE
-						.. ", /elo count "
+						.. " shown - "
+						.. Shell.Link(0, "more", "Next")
+						.. " - /elo count "
 						.. text
 						.. " for the total"
 				)
@@ -283,6 +338,7 @@ end
 
 --- A query typed at the command, parsed and either run or refused.
 local function search(text)
+	text = Shell.Lenient(text)
 	local tree, problems = Epsilook:ParseQuery(text)
 	for _, problem in ipairs(problems) do
 		say(Shell.ProblemLine(problem))
@@ -306,6 +362,7 @@ Shell.SUBCOMMANDS = {
 		page(paging.tree, paging.text, paging.index)
 	end,
 	count = function(rest)
+		rest = Shell.Lenient(rest)
 		local tree, problems = Epsilook:ParseQuery(rest)
 		for _, problem in ipairs(problems) do
 			say(Shell.ProblemLine(problem))
