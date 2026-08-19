@@ -122,22 +122,27 @@ function Shell.Shown(spell)
 	return spell.name, spell.icon ~= 0 and spell.icon or nil
 end
 
---- The game's own link to a spell, as `.lookup` prints one, led by its icon.
+--- How tall a spell's icon draws on a line, in pixels.
+Shell.ICON = 16
+
+--- The game's own link to a spell, as `.lookup` prints one, its icon inside
+-- the link against the name.
 -- @param spell a SpellData
 function Shell.SpellLink(spell)
 	local name, icon = Shell.Shown(spell)
-	local link = WHITE .. "|Hspell:" .. spell.id .. "|h[" .. name .. "]|h" .. END
+	local shown = "[" .. name .. "]"
 	if icon then
-		return "|T" .. icon .. ":0|t " .. link
+		shown = "|T" .. icon .. ":" .. Shell.ICON .. "|t" .. shown
 	end
-	return link
+	return WHITE .. "|Hspell:" .. spell.id .. "|h" .. shown .. "|h" .. END
 end
 
 --- One result for a spell, as two lines: the spell, then its actions.
 -- A result wraps in a chat frame more often than not, so the wrap is designed
 -- in rather than suffered: the first line is the id, the game's own spell link
--- and what the spell is made of; the second, indented, is the actions, which
--- then sit at the same place on every result.
+-- and what the spell is made of, each count a link that lists the parts on
+-- hover and prints them on a click; the second, indented, is the actions,
+-- which then sit at the same place on every result.
 -- @param spell a SpellData
 -- @param counts the spell's part counts by axis, or nil to leave them off
 -- @param axes the axes to report, in order
@@ -149,11 +154,12 @@ function Shell.ResultLines(spell, counts, axes)
 		for _, axis in ipairs(axes) do
 			local n = counts[axis] or 0
 			if n > 0 then
-				made[#made + 1] = n .. " " .. axis
+				local label = n .. " " .. axis
+				made[#made + 1] = Shell.Link(spell.id, Epsilook.Inspect.LIST, label, axis, 0, GREY)
 			end
 		end
 		if #made > 0 then
-			head = head .. "  " .. GREY .. table.concat(made, ", ") .. END
+			head = head .. "  " .. table.concat(made, " ")
 		end
 	end
 	local links = {}
@@ -515,6 +521,8 @@ function Shell.Execute(spellID, verb, axis, n)
 	local action = not axis and spellAction(verb)
 	if axis then
 		Epsilook.Inspect.Execute(spellID, verb, axis, n, say)
+	elseif verb == NEXT.key then
+		Shell.SUBCOMMANDS.more()
 	elseif action and action.command then
 		Shell.Send(action.command .. " " .. spellID)
 	elseif action then
@@ -522,26 +530,26 @@ function Shell.Execute(spellID, verb, axis, n)
 	end
 end
 
---- Hand the chat box the number one of this addon's links stands for, as a
+--- Hand the chat box what one of this addon's links stands for, as a
 -- shift-click on any link hands it the link: the spell's id for a spell
--- action, and for a part what its first action sends, so that `.gob spawn`
--- or `.mod anim` can be typed with it by hand. Nothing happens where no chat
--- box is open, as with the game's own links.
+-- action, and for a part the game's own link or number its first action
+-- sends, so that `.gob spawn` or `.mod anim` can be typed with it by hand.
+-- Nothing happens where no chat box is open, as with the game's own links.
 -- @param spellID the spell
+-- @param verb the link's verb
 -- @param axis the part's axis, or nil for a spell action
 -- @param n the part's row on that axis
-function Shell.Clip(spellID, axis, n)
+function Shell.Clip(spellID, verb, axis, n)
 	local insert = _G.ChatEdit_InsertLink
 	if not insert then
 		return
 	end
-	local number = spellID
+	local text = tostring(spellID)
 	if axis then
-		local part = Epsilook:GetPartDataByIndex(spellID, axis, n)
-		number = part and Epsilook.Inspect.ClipOf(part)
+		text = Epsilook.Inspect.Clip(spellID, verb, axis, n)
 	end
-	if number then
-		insert(tostring(number))
+	if text then
+		insert(text)
 	end
 end
 
@@ -581,12 +589,15 @@ function Shell.OnHyperlinkEnter(frame, link)
 	local hint = action and action.hint
 	if verb == NEXT.key then
 		tooltip:SetText(NEXT.hint:format(Shell.PAGE), 1, 1, 1)
+	elseif axis and verb == Epsilook.Inspect.LIST then
+		Epsilook.Inspect.FillAxisTooltip(tooltip, id, axis)
+		hint = Epsilook.Inspect.HintOf(axis, verb)
 	elseif axis then
 		local part = Epsilook:GetPartDataByIndex(id, axis, n)
 		if part then
 			Epsilook.Inspect.FillTooltip(tooltip, part)
 		end
-		hint = Epsilook.Inspect.HintOf(axis, verb)
+		hint = Epsilook.Inspect.HintOf(axis, verb, part)
 	elseif verb == "aura" then
 		-- The spell's tooltip, then what the aura says while it is on you.
 		tooltip:SetSpellByID(id)
@@ -656,7 +667,7 @@ local function install()
 			return
 		end
 		if _G.IsModifiedClick and _G.IsModifiedClick("CHATLINK") then
-			Shell.Clip(id, axis, n)
+			Shell.Clip(id, verb, axis, n)
 		else
 			Shell.Execute(id, verb, axis, n)
 		end

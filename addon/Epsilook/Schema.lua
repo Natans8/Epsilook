@@ -28,7 +28,7 @@ local Text = Epsilook.Text
 local floor, abs = math.floor, math.abs
 
 --- The shape of declarations this file reads. Another is refused at load.
-Schema.FORMAT = 1
+Schema.FORMAT = 2
 
 --- The synthetic property behind the count word, so a cardinality reads its
 -- operands like any numeric axis. Its word is read off the grammar at load.
@@ -166,6 +166,7 @@ function Schema.Load(declared)
 	end)
 
 	Schema.roles = declared.roles
+	Schema.targetWords = declared.targetWords
 	Schema.colourNames = declared.colourNames
 	Schema.colourTolerance = declared.colourTolerance
 	Schema.heads = headsOf(Schema.columns, Schema.kinds)
@@ -500,6 +501,19 @@ function Schema.FormatType(typeName, value)
 	local declaredType = Schema.types[typeName]
 	if typeName == "colour" then
 		return string.format("#%06x", value)
+	end
+	if typeName == "bitmask" then
+		-- A target mask is written as the words of its set bits, in the
+		-- declared order; a mask with none set is written as its number.
+		local words = {}
+		for _, entry in ipairs(Schema.targetWords) do
+			if value % (entry.bit * 2) >= entry.bit then
+				words[#words + 1] = entry.word
+			end
+		end
+		if #words > 0 then
+			return table.concat(words, ", ")
+		end
 	end
 	if declaredType and #declaredType.notations > 0 then
 		local notation = declaredType.notations[1]

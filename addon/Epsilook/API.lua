@@ -31,7 +31,7 @@
 --   SpellText   description, aura, encounter
 --   PartData    axis, kind, slot, values (property name to value; a named
 --               property is a table of id and text)
---   Action      key, label, needs, effect, revert, hint
+--   Action      key, label, needs, kind, effect, revert, hint
 --   DataInfo    pack, built, format, variation, homes
 
 _G.Epsilook = _G.Epsilook or {}
@@ -369,7 +369,9 @@ end
 -- disagree about what a model affords, nor about which of those changes the
 -- world. `effect` is "read" where repeating it is harmless and offering it from
 -- stale output is safe, and "world" where neither is true. `needs` names the
--- PartData value the action takes.
+-- PartData value the action takes, and `kind`, where set, the one kind of
+-- part that takes it; the order is the order a line offers them, and the
+-- first action a part takes is the one a shift-click hands over.
 -- @param axis one of GetPartAxes()
 -- @return an array of Action, empty where the axis affords nothing
 function Epsilook:GetActions(axis)
@@ -378,6 +380,24 @@ end
 
 Epsilook.ACTIONS = {
 	model = {
+		{
+			key = "add",
+			label = "Add",
+			needs = "id",
+			kind = "item",
+			effect = "world",
+			revert = "",
+			hint = "Click to add this item to your bags",
+		},
+		{
+			key = "morph",
+			label = "Morph",
+			needs = "id",
+			kind = "display",
+			effect = "world",
+			revert = "",
+			hint = "Click to morph into this display",
+		},
 		{
 			key = "spawn",
 			label = "Spawn",
@@ -419,6 +439,26 @@ Epsilook.ACTIONS = {
 			effect = "read",
 			revert = "",
 			hint = "Click to stop this sound kit",
+		},
+	},
+	fx = {
+		{
+			key = "summon",
+			label = "Spawn",
+			needs = "creature",
+			kind = "summon",
+			effect = "world",
+			revert = "",
+			hint = "Click to spawn this creature where you stand",
+		},
+		{
+			key = "spawn",
+			label = "Spawn",
+			needs = "object",
+			kind = "object",
+			effect = "world",
+			revert = "",
+			hint = "Click to spawn this object where you stand",
 		},
 	},
 	anim = {

@@ -240,6 +240,19 @@ export const ROLES: Readonly<Record<string, BitTest>> = {
     both: {all: ROLE_BITS.caster | ROLE_BITS.target},
 };
 
+/**
+ * The bits in the order a surface writes a mask, each with the word that names it alone. A surface writes a mask as
+ * the words of its set bits, so "caster, target" is a mask holding both; the words are the roles' where a role is one
+ * bit, and name the bit plainly where the roles read it in combination.
+ */
+export const ROLE_WORDS: readonly {readonly bit: number; readonly word: string}[] = Object.freeze([
+    {bit: ROLE_BITS.caster, word: "caster"},
+    {bit: ROLE_BITS.target, word: "target"},
+    {bit: ROLE_BITS.notCaster, word: "others"},
+    {bit: ROLE_BITS.area, word: "area"},
+    {bit: ROLE_BITS.missileDest, word: "landing"},
+]);
+
 /** The role names a query may use. */
 export function roleNames(): string[] {
     return Object.keys(ROLES).toSorted();

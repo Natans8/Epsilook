@@ -16,11 +16,12 @@
  */
 import type {Notation, Operator} from "../src/search/index";
 import {
-    COLOUR_NAMES, COLOUR_TOLERANCE, COLUMNS, doorOf, GRAMMAR, hintOf, KINDS, OPERATORS, ROLES, TYPES, wordOf,
+    COLOUR_NAMES, COLOUR_TOLERANCE, COLUMNS, doorOf, GRAMMAR, hintOf, KINDS, OPERATORS, ROLE_WORDS, ROLES, TYPES,
+    wordOf,
 } from "../src/search/index";
 
 /** The shape of this output. A reader refuses another rather than misreading it. */
-const SCHEMA_FORMAT = 1;
+const SCHEMA_FORMAT = 2;
 
 /** A record with its undefined and null fields left out, so an absent declaration is an absent key. */
 function trimmed<T extends Record<string, unknown>>(record: T): Partial<T> {
@@ -103,6 +104,7 @@ function main(): void {
         types,
         operators: [...OPERATORS.values()].map(operator),
         roles: ROLES,
+        targetWords: ROLE_WORDS,
         colourTolerance: COLOUR_TOLERANCE,
         colourNames: COLOUR_NAMES,
     };

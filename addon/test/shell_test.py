@@ -29,8 +29,10 @@ def test_a_result_is_the_spell_then_its_actions(engine: LuaRuntime) -> None:
     head, actions = result(engine, 133)
     # Under a bare interpreter there is no client to ask, so the pack's name and
     # icon stand in; the icon leads the game's own spell link.
-    assert head.startswith("|cffffd100133|r - |T135812:0|t |cffffffff|Hspell:133|h[Fireball]|h|r")
-    assert "5 model" in head and "12 sound" in head
+    assert head.startswith("|cffffd100133|r - |cffffffff|Hspell:133|h|T135812:16|t[Fireball]|h|r")
+    # Each count is a link that lists the axis on hover and prints it on a click.
+    assert "|Hgarrmission:epsilook:133:list:model:0|h[5 model]|h" in head
+    assert "12 sound" in head
     assert actions.startswith("      ")
     for verb, label in (("learn", "Learn"), ("cast", "Cast"), ("inspect", "Inspect")):
         assert f"|Hgarrmission:epsilook:133:{verb}|h[{label}]|h" in actions
@@ -83,7 +85,9 @@ def test_the_dossier_prints_every_axis_the_spell_has(engine: LuaRuntime) -> None
     printed = lua_function(engine, b"DOSSIER")(133)
     assert isinstance(printed, bytes)
     text = printed.decode()
-    assert "[Fireball]" in text and "5 model" in text and "12 sound" in text and "1 mech" in text
+    assert "[Fireball]" in text and "5 Models" in text and "12 Sounds" in text and "1 Mechanics" in text
+    # Sounds are grouped under their kit: the kit's line, then its files indented.
+    assert "|cff00ccffkit:|r" in text and "\n    |cfffffffffx_fire_magic_loop_medium_01.ogg" in text
     assert "no spell" in str(lua_function(engine, b"DOSSIER")(0))
 
 
