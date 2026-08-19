@@ -55,9 +55,15 @@ Inspect.LISTED = 12
 -- and the aura it applies, an aura's own target.
 Inspect.DETAILED = { mech = true }
 
---- The kinds whose texture draws on the line, and how large: a chain's
--- strip is long and thin. An experiment in scale before it spreads.
-Inspect.TEXTURES = { ["fx.chain"] = { height = 16, width = 64 } }
+--- The kinds whose texture draws, and how large: on the line where the
+-- shape fits one -- a chain's strip is long and thin -- and in the part's
+-- tooltip, larger, for every textured kind; a dissolve is a square tile, a
+-- screen a full-screen overlay.
+Inspect.TEXTURES = {
+	["fx.chain"] = { line = { height = 16, width = 64 }, tip = { height = 32, width = 128 } },
+	["fx.dissolve"] = { tip = { height = 96, width = 96 } },
+	["fx.screen"] = { tip = { height = 90, width = 160 } },
+}
 
 --- A white square the client ships, painted by the colour arguments of the
 -- texture escape, so a colour shows as itself.
@@ -299,6 +305,13 @@ function Inspect.FillTooltip(tooltip, part)
 	for _, extra in ipairs(Epsilook:GetPartExtras(part)) do
 		local text = extra.text ~= "" and extra.text or tostring(extra.value)
 		tooltip:AddLine(GREY .. extra.name .. END .. " " .. text, 1, 1, 1)
+	end
+	local texture = Inspect.TEXTURES[part.axis .. "." .. part.kind]
+	local subject = led(Inspect.Values(part))[1]
+	if texture and texture.tip and subject and subject.path and subject.stored then
+		tooltip:AddLine(
+			"|T" .. subject.stored .. ":" .. texture.tip.height .. ":" .. texture.tip.width .. "|t"
+		)
 	end
 end
 
@@ -608,17 +621,18 @@ local function line(spellID, part, n, indent, label, verb)
 			end
 		end
 		local texture = Inspect.TEXTURES[part.axis .. "." .. part.kind]
-		if texture and subject.path and subject.stored then
+		if texture and texture.line and subject.path and subject.stored then
 			out = out
 				.. "|T"
 				.. subject.stored
 				.. ":"
-				.. texture.height
+				.. texture.line.height
 				.. ":"
-				.. texture.width
+				.. texture.line.width
 				.. "|t "
 		end
-		if Inspect.DETAILED[part.axis] or Inspect.ClipOf(part, actions, shown) then
+		local pictured = texture and texture.tip and subject.path and subject.stored
+		if Inspect.DETAILED[part.axis] or pictured or Inspect.ClipOf(part, actions, shown) then
 			out = out .. Shell.Link(spellID, verb, shown, part.axis, n, colour, icon)
 		else
 			if icon then
