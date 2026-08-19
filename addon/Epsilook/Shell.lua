@@ -654,7 +654,9 @@ function Shell.OnHyperlinkEnter(frame, link)
 		hint = Epsilook.Inspect.HintOf(axis, verb)
 	elseif axis then
 		local part = Epsilook:GetPartDataByIndex(id, axis, n)
-		if part then
+		if part and verb == Epsilook.Inspect.GROUP then
+			Epsilook.Inspect.FillGroupTooltip(tooltip, part)
+		elseif part then
 			Epsilook.Inspect.FillTooltip(tooltip, part)
 		end
 		hint = Epsilook.Inspect.HintOf(axis, verb, part)

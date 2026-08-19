@@ -302,6 +302,21 @@ function Inspect.FillTooltip(tooltip, part)
 	end
 end
 
+--- Fill a tooltip with a group: the property it is grouped under as the
+-- title and its value -- a kit's name and id -- and nothing of the part the
+-- link happens to point at, whose file is listed beneath the group anyway.
+-- @param tooltip the GameTooltip, already owned
+-- @param part the group's first part
+function Inspect.FillGroupTooltip(tooltip, part)
+	local key = Inspect.GROUPS[part.axis]
+	tooltip:SetText(key or part.kind, 1, 1, 1)
+	for _, value in ipairs(Inspect.Values(part)) do
+		if value.name == key then
+			tooltip:AddLine(written(value), 1, 1, 1)
+		end
+	end
+end
+
 --- Fill a tooltip with what a spell has on one axis: the count as the title,
 -- then each part's kind and subject, up to a limit.
 -- @param tooltip the GameTooltip, already owned
