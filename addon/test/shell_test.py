@@ -87,7 +87,8 @@ def test_the_dossier_prints_every_axis_the_spell_has(engine: LuaRuntime) -> None
     text = printed.decode()
     assert "[Fireball]" in text and "5 Models" in text and "12 Sounds" in text and "1 Mechanics" in text
     # Sounds are grouped under their kit: the kit's line, then its files indented.
-    assert "|cff00ccffkit:|r" in text and "\n    |cfffffffffx_fire_magic_loop_medium_01.ogg" in text
+    assert "|cff00ccffkit:|r" in text
+    assert "\n    |cffffffff|Hgarrmission:epsilook:133:part:sound:1|h[fx_fire_magic_loop_medium_01.ogg]|h" in text
     assert "no spell" in str(lua_function(engine, b"DOSSIER")(0))
 
 
