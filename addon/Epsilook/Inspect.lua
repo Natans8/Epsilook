@@ -408,11 +408,12 @@ local function spawnOf(part)
 	return spawn ~= nil and spawn ~= 0 and spawn or nil
 end
 
---- The emote an animation action sends: a one-shot emote plays on the current
--- animation and a looping one sets the standing pose, and each action takes
--- the other where the animation has only one.
-local function emoteOf(part, key)
-	local oneshot, loop = Epsilook:GetEmotesByAnim(needed(part, "anim") or -1)
+--- The emote an animation action sends, for the animation the action's
+-- property names: a one-shot emote plays on the current animation and a
+-- looping one sets the standing pose, and each action takes the other where
+-- the animation has only one.
+local function emoteOf(part, key, prop)
+	local oneshot, loop = Epsilook:GetEmotesByAnim(needed(part, prop) or -1)
 	local emote = key == "anim" and oneshot or loop
 	if emote == 0 then
 		emote = key == "anim" and loop or oneshot
@@ -459,7 +460,7 @@ function Inspect.ArgumentOf(part, action)
 	if action.needs == "file" and action.key == "spawn" then
 		return spawnOf(part)
 	elseif action.key == "anim" or action.key == "stand" then
-		return emoteOf(part, action.key)
+		return emoteOf(part, action.key, action.needs)
 	elseif action.key == "add" then
 		return itemNamed(part) and needed(part, action.needs) or nil
 	elseif action.key == "lookup" then
@@ -904,10 +905,12 @@ local COMMANDS = {
 	stand = "mod standstate %s",
 }
 
---- The action an axis offers under a key, or nil.
-local function actionOf(axis, key)
+--- The action a part takes under a key, or nil. A key may be declared more
+-- than once on an axis, once per kind that takes it with the property it
+-- takes it by, so the part decides which entry is meant.
+local function actionOf(axis, key, part)
 	for _, action in ipairs(Epsilook:GetActions(axis)) do
-		if action.key == key then
+		if action.key == key and takes(part, action) then
 			return action
 		end
 	end
@@ -934,8 +937,8 @@ function Inspect.Execute(spellID, key, axis, n, say)
 		say(Shell.Said(RED .. "that part is no longer in the pack" .. END))
 		return
 	end
-	local action = actionOf(axis, key)
-	if not action or not takes(part, action) then
+	local action = actionOf(axis, key, part)
+	if not action then
 		return
 	end
 	local argument = Inspect.ArgumentOf(part, action)
