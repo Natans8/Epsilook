@@ -70,7 +70,11 @@ end
 function Shell.ResultLine(spell, counts, axes)
 	local parts = { GOLD .. spell.id .. END, Shell.SpellLink(spell.id, spell.name) }
 	for _, verb in ipairs(Shell.VERBS) do
-		parts[#parts + 1] = Shell.Link(spell.id, verb)
+		-- The aura word is offered only where the spell applies one: the
+		-- mech column carries a row of its aura kind for every such effect.
+		if verb ~= "aura" or Epsilook:HasPartOfKind(spell.id, "mech", "aura") then
+			parts[#parts + 1] = Shell.Link(spell.id, verb)
+		end
 	end
 	local line = table.concat(parts, " - ")
 	if counts and axes then

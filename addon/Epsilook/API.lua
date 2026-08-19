@@ -251,6 +251,32 @@ function Epsilook:GetNumParts(spellID, axis)
 	return Data.GetNumRows(axis, row)
 end
 
+--- Whether a spell has a row of one kind on an axis.
+-- What decides whether an action that needs such a row is offered at all: a
+-- spell with no aura row has nothing for `.aura` to apply.
+-- @param spellID the spell id
+-- @param axis one of GetPartAxes()
+-- @param kindWord the kind's word, as PartData.kind carries it
+-- @return true or false
+function Epsilook:HasPartOfKind(spellID, axis, kindWord)
+	local row = self:GetSpellIndexByID(spellID)
+	if not row then
+		return false
+	end
+	local at, count = Data.GetRowRange(axis, row)
+	if not at then
+		return false
+	end
+	local table_ = Data.GetRowTable(axis)
+	for i = at, at + count - 1 do
+		local kind = Data.LocateRow(axis, Reader.number(table_.refsBlob, table_.refs, i))
+		if kind == kindWord then
+			return true
+		end
+	end
+	return false
+end
+
 --- One part of one spell: the n'th row it has on an axis.
 -- The row's properties are read by name as the catalogue declares them and
 -- resolved the way the web engine resolves them: a property whose first two
