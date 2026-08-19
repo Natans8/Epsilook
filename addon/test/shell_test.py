@@ -358,3 +358,33 @@ def test_a_copy_hint_names_the_command_it_feeds(engine: LuaRuntime) -> None:
     # A sound line has no command behind it, so its copy has nothing to say.
     sound = method(api, b"GetPartDataByIndex")(api, 133, b"sound", 1)
     assert lua_function(engine, b"Epsilook.Inspect.HintOf")(b"sound", b"copy", sound) is None
+
+
+def test_a_lone_column_word_prints_its_doors(engine: LuaRuntime) -> None:
+    """Every spell has a model, so the column word alone is answered with the
+    ways into the column rather than with a search for all of them."""
+    assert lua_function(engine, b"Epsilook.Shell.LoneColumn")(b"model") == b"model"
+    # A kind or a property alone is a real question and still searches.
+    assert lua_function(engine, b"Epsilook.Shell.LoneColumn")(b"missile") is None
+    # So is a column word with anything after it, or one already bound.
+    assert lua_function(engine, b"Epsilook.Shell.LoneColumn")(b"model fire") is None
+    assert lua_function(engine, b"Epsilook.Shell.LoneColumn")(b"model:fire") is None
+    lines = [str(line) for line in as_list(lua_function(engine, b"Epsilook.Shell.ColumnLines")(b"model"))]
+    text = "\n".join(lines)
+    assert lines[0].startswith("|cff3b9eff"), "the column wears its own tone"
+    assert "Kinds" in text and "missile" in text
+    # Every kind of the column, not only the one promoted to a top-level word.
+    for kind in ("barrage", "ground", "attached", "trail", "display", "item", "equipped", "mount"):
+        assert kind in text, kind
+    assert "motion" in text, "a kind's properties hang under it"
+    assert "/elo model:*" in text, "the search it no longer means is offered explicitly"
+    assert "chain" not in text, "fx's kinds stay in fx"
+    # A column whose only kind wears the column's own word has no door of its
+    # own, so its properties belong to the column directly.
+    sound = " ".join(
+        str(line) for line in as_list(lua_function(engine, b"Epsilook.Shell.ColumnLines")(b"sound"))
+    )
+    assert "Properties" in sound and "kit" in sound
+    # A property cannot stand alone as a value, so its example carries one.
+    assert "/elo sound file:<value>" in sound
+    assert "/elo sound:{file:<value>}" in sound

@@ -303,9 +303,11 @@ end
 -- the query the engine sees is one the web reads the same way -- and a head
 -- bound with the colon, as in `model:fire missile`, is left exactly as typed. A
 -- rest already in braces is bound as it is, and a property head, which takes
--- one value and no scope, binds to the first token alone. A head word on
--- its own asks for any value of it -- `model` is `model:*`, the spells with
--- a model -- rather than for the word as text.
+-- one value and no scope, binds to the first token alone. A head word on its
+-- own asks for any value of it -- `missile` is `missile:*` -- rather than for
+-- the word as text; a COLUMN word alone never reaches here, because every
+-- spell has a model and the shell answers that word with the column's doors
+-- instead.
 -- @param message the query as typed
 -- @return the query as the engine reads it
 function Shell.Lenient(message)
@@ -336,6 +338,96 @@ function Shell.Lenient(message)
 	return head .. grammar.bind .. open .. rest .. close
 end
 
+--- The column a lone head word names, or nil where the word is no column's.
+-- A column word alone is the one head worth answering with its doors rather
+-- than with a search: every spell has a model, so `model` on its own asks a
+-- question nobody means, while a kind or a property alone is a real one.
+-- @param message the query as typed
+-- @return the column's key, or nil
+function Shell.LoneColumn(message)
+	local word = message:match("^(%S+)%s*$")
+	if not word or word:find(Epsilook.Schema.grammar.bind, 1, true) then
+		return nil
+	end
+	local head = Epsilook.Schema.HeadOf(Epsilook.Text.fold(word))
+	if head and head.role == "column" then
+		return head.column
+	end
+	return nil
+end
+
+--- What one column holds and every door into it, read off the declarations.
+-- Printed for a lone column word, so a player who knows the column but not
+-- its words can ask the column itself.
+-- @param key the column's key
+-- @return a list of lines
+function Shell.ColumnLines(key)
+	local grammar = Epsilook.Schema.grammar
+	local column = Epsilook.Schema.columnByKey[key]
+	local tone = Shell.AXIS_COLOURS[key] or GOLD
+	local lines = { tone .. key .. END .. GREY .. "  " .. (column and column.hint or "") .. END }
+	-- Every kind of the column, not only the ones promoted to a top-level
+	-- word: `model:missile` and `model:display` are both doors and only the
+	-- first is a head in its own right. Each kind's properties hang under it,
+	-- since that is where they are reached from. A kind whose word is the
+	-- column's own is no door of its own, so its properties belong to the
+	-- column directly -- a sound is reached as `sound:{kit ...}`.
+	local kinds, props = {}, {}
+	for _, kind in ipairs(Epsilook.Schema.kindsOfColumn[key] or {}) do
+		local names = {}
+		for _, prop in ipairs(kind.props) do
+			names[#names + 1] = prop.name
+			if not kind.worded then
+				props[#props + 1] = { word = prop.name, hint = prop.hint or "" }
+			end
+		end
+		if kind.worded then
+			kinds[#kinds + 1] = { word = kind.word, hint = kind.hint, props = names }
+		end
+	end
+	local function section(title, words)
+		if #words == 0 then
+			return
+		end
+		lines[#lines + 1] = GOLD .. title .. END
+		for _, head in ipairs(words) do
+			lines[#lines + 1] = "  " .. tone .. head.word .. END .. "  " .. head.hint
+			if head.props and #head.props > 0 then
+				lines[#lines + 1] = "    " .. GREY .. table.concat(head.props, ", ") .. END
+			end
+		end
+	end
+	section("Kinds", kinds)
+	section("Properties", props)
+	local function ask(text, said)
+		lines[#lines + 1] = "  " .. GREY .. "/elo " .. text .. END .. "  " .. said
+	end
+	-- A kind word stands on its own as a value; a property does not, so an
+	-- example built from one has to carry a value or it would be a query the
+	-- reader is told to type and the engine refuses.
+	if kinds[1] then
+		lines[#lines + 1] = GOLD .. "Asking" .. END
+		ask(key .. " " .. kinds[1].word, "one of these")
+		ask(key .. grammar.bind .. kinds[1].word, "the same, bound")
+		ask(key .. grammar.bind .. grammar.wildcard, "every spell with one at all")
+	elseif props[1] then
+		lines[#lines + 1] = GOLD .. "Asking" .. END
+		ask(key .. " " .. props[1].word .. grammar.bind .. "<value>", "one of these")
+		ask(
+			key
+				.. grammar.bind
+				.. grammar.scope.open
+				.. props[1].word
+				.. grammar.bind
+				.. "<value>"
+				.. grammar.scope.close,
+			"the same, one row"
+		)
+		ask(key .. grammar.bind .. grammar.wildcard, "every spell with one at all")
+	end
+	return lines
+end
+
 --- The help text: what the command takes, then the language read off the
 -- declarations so it cannot fall behind them -- the columns with what each
 -- holds, the other head words, the operators, and how terms combine -- and
@@ -357,7 +449,7 @@ function Shell.HelpLines()
 		row("/elo next", "the next page"),
 		row("/elo count <query>", "how many match, a walk over every spell"),
 		row("/elo test", "the self-test"),
-		row("/elo options", "settings: page size, which chat window"),
+		row("/elo options", "settings"),
 		title("Columns")
 			.. GREY
 			.. " a head word, a colon, a value: model"
@@ -439,15 +531,9 @@ function Shell.HelpLines()
 	return lines
 end
 
---- The chat frame a line goes to, and the one function here that writes to
--- it: the window the player chose, the client's default where they chose
--- none or the one they chose is gone.
+--- The chat frame a line goes to, and the one function here that writes to it.
 local function say(line)
 	local frame = _G.DEFAULT_CHAT_FRAME
-	local chosen = Epsilook.Config.Get("frame")
-	if chosen and chosen > Epsilook.Config.DEFAULT_FRAME then
-		frame = _G["ChatFrame" .. chosen] or frame
-	end
 	if frame then
 		frame:AddMessage(line)
 	else
@@ -673,6 +759,13 @@ function Shell.Command(message)
 	local word, rest = Shell.Split(message)
 	if word then
 		Shell.SUBCOMMANDS[word](rest)
+		return
+	end
+	local column = Shell.LoneColumn(message)
+	if column then
+		for _, line in ipairs(Shell.ColumnLines(column)) do
+			say(line)
+		end
 		return
 	end
 	local tree, text = parsed(message)
