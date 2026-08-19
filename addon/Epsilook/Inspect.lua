@@ -63,7 +63,8 @@ Inspect.TEXTURES = { ["fx.chain"] = { height = 16, width = 64 } }
 -- texture escape, so a colour shows as itself.
 local SWATCH = "Interface/Buttons/WHITE8X8"
 
---- The head line: the spell's name as a link, its id, school and expansion.
+--- The head line: the spell's name as a link, its id, school and expansion,
+-- then the spell's own actions.
 function Inspect.HeadLine(spell)
 	local parts = { Shell.SpellLink(spell), GOLD .. spell.id .. END }
 	if spell.subtext ~= "" then
@@ -78,7 +79,9 @@ function Inspect.HeadLine(spell)
 	if spell.iconName ~= "" then
 		parts[#parts + 1] = GREY .. "icon " .. spell.iconName .. END
 	end
-	return Shell.Said(table.concat(parts, "  "))
+	return Shell.Said(
+		table.concat(parts, "  ") .. Shell.DASH .. Shell.SpellActionLinks(spell.id, "dossier")
+	)
 end
 
 --- What an axis is called on a title: the column's own label.
@@ -537,7 +540,7 @@ local function line(spellID, part, n, indent, label, verb)
 		for i = 2, #values do
 			out = out .. "  " .. beside(values[i])
 		end
-		links = Shell.SpellActionLinks(subject.id)
+		links = Shell.SpellActionLinks(subject.id, "result")
 	elseif subject then
 		local shown, icon, colour = written(subject), nil, WHITE
 		local stated = {}

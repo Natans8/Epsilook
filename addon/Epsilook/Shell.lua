@@ -45,22 +45,48 @@ local GOLD, WHITE, BLUE, CYAN, GREY, RED =
 local END = "|r"
 Shell.COLOURS = { gold = GOLD, white = WHITE, blue = BLUE, cyan = CYAN, grey = GREY, red = RED }
 
---- The actions a result offers on a spell, in the order `.lookup` prints
--- them: the word shown, what a tooltip says a click does, and the server
--- command a click sends. Inspect sends nothing; it prints the dossier. The
--- aura action is offered only where the spell applies one, which the mech
--- column says with a row of its aura kind.
+--- The actions offered on a spell, in the order `.lookup` prints them: the
+-- word shown, what a tooltip says a click does, and the server command a
+-- click sends. Inspect sends nothing; it prints the dossier. The aura action
+-- is offered only where the spell applies one, which the mech column says
+-- with a row of its aura kind. `on` says where an action is offered: a
+-- result line, the dossier's head, or both.
 Shell.SPELL_ACTIONS = {
-	{ key = "learn", label = "Learn", command = "learn", hint = "Click to learn the spell" },
-	{ key = "cast", label = "Cast", command = "cast", hint = "Click to cast the spell" },
+	{
+		key = "learn",
+		label = "Learn",
+		command = "learn",
+		hint = "Click to learn the spell",
+		on = "both",
+	},
+	{
+		key = "cast",
+		label = "Cast",
+		command = "cast",
+		hint = "Click to cast the spell",
+		on = "both",
+	},
 	{
 		key = "aura",
 		label = "Aura",
 		command = "aura",
 		hint = "Click to apply the aura to yourself",
 		auraOnly = true,
+		on = "both",
 	},
-	{ key = "inspect", label = "Inspect", hint = "Click to print everything the spell is made of" },
+	{
+		key = "unlearn",
+		label = "Unlearn",
+		command = "unlearn",
+		hint = "Click to unlearn the spell",
+		on = "dossier",
+	},
+	{
+		key = "inspect",
+		label = "Inspect",
+		hint = "Click to print everything the spell is made of",
+		on = "result",
+	},
 }
 
 --- The spell action a verb names, or nil.
@@ -150,13 +176,15 @@ end
 -- `.lookup` draws it.
 Shell.DASH = " - "
 
---- The spell actions a spell takes, as links joined.
+--- The spell actions a spell takes on one surface, as links joined.
 -- @param spellID the spell
+-- @param where "result" or "dossier"
 -- @return the links joined
-function Shell.SpellActionLinks(spellID)
+function Shell.SpellActionLinks(spellID, where)
 	local links = {}
 	for _, action in ipairs(Shell.SPELL_ACTIONS) do
-		if not action.auraOnly or Epsilook:HasPartOfKind(spellID, "mech", "aura") then
+		local offered = action.on == "both" or action.on == where
+		if offered and (not action.auraOnly or Epsilook:HasPartOfKind(spellID, "mech", "aura")) then
 			links[#links + 1] = Shell.Link(spellID, action.key, action.label)
 		end
 	end
@@ -188,7 +216,7 @@ function Shell.ResultLines(spell, counts, axes)
 			head = head .. Shell.DASH .. table.concat(made, " ")
 		end
 	end
-	return head, "      " .. Shell.SpellActionLinks(spell.id)
+	return head, "      " .. Shell.SpellActionLinks(spell.id, "result")
 end
 
 --- The addon's own prefix on a line it prints about itself, rather than about a spell.
