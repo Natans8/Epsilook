@@ -264,15 +264,25 @@ local function typedCtx(prop, word, done)
 		end
 		for _, typeName in ipairs(prop.types) do
 			if Schema.Accepts(typeName, "range") then
-				local a, b = Schema.ParseTypePair(typeName, lo, hi)
-				if a == nil then
-					a, b = Schema.ParseType(typeName, lo), Schema.ParseType(typeName, hi)
+				-- A unit written anywhere in the range is the phrase's default, so a
+				-- bare bound beside a spelled one takes it before either is read.
+				-- Each bound is then recorded as the phrase spelled it rather than as
+				-- it was typed, since that is the notation it chose and the one it has
+				-- to wear to read back as itself.
+				local loText, hiText = Schema.WornPair(typeName, lo, hi)
+				loText, hiText = loText or lo, hiText or hi
+				local a, b = Schema.ParseTypePair(typeName, loText, hiText)
+				if a ~= nil then
+					local one, two = Schema.SharedNotation(typeName, loText, hiText, a, b)
+					loText, hiText = one or loText, two or hiText
+				else
+					a, b = Schema.ParseType(typeName, loText), Schema.ParseType(typeName, hiText)
 				end
 				if a ~= nil and b ~= nil then
 					return done({
 						op = "range",
-						lo = typed(typeName, a, lo),
-						hi = typed(typeName, b, hi),
+						lo = typed(typeName, a, loText),
+						hi = typed(typeName, b, hiText),
 					})
 				end
 			end

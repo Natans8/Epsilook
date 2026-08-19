@@ -231,22 +231,25 @@ describe("binds and their values", () => {
     });
 
     it("a range's bare bounds read in ONE notation, the larger bound classifying the pair", () => {
+        // And each bound records the spelling that reading gave it, never the bare text: the pair is classified
+        // together, so spelling them apart afterwards would put a factor beside a proportion.
         const range = (q: string): unknown => valueOf(ok(q));
         assert.deepEqual(range("scale:10-90"), {
             op: "range",
-            lo: {type: "percentChange", value: -90, written: "10"},
-            hi: {type: "percentChange", value: -10, written: "90"},
+            lo: {type: "percentChange", value: -90, written: "10%"},
+            hi: {type: "percentChange", value: -10, written: "90%"},
         });
         assert.deepEqual(range("scale:2-5"), {
             op: "range",
-            lo: {type: "percentChange", value: 100, written: "2"},
-            hi: {type: "percentChange", value: 400, written: "5"},
+            lo: {type: "percentChange", value: 100, written: "x2"},
+            hi: {type: "percentChange", value: 400, written: "x5"},
         });
         assert.deepEqual(range("scale:8-12"), {
             op: "range",
-            lo: {type: "percentChange", value: -92, written: "8"},
-            hi: {type: "percentChange", value: -88, written: "12"},
+            lo: {type: "percentChange", value: -92, written: "8%"},
+            hi: {type: "percentChange", value: -88, written: "12%"},
         });
+        // A signed bound is already a change, and the sign is the notation: nothing is added to it.
         assert.deepEqual(range("scale:(-50)-10"), {
             op: "range",
             lo: {type: "percentChange", value: -50, written: "-50"},
@@ -263,15 +266,16 @@ describe("binds and their values", () => {
         });
         // The BARE bound beside it has no notation of its own, so it takes the one the phrase names -- `50`
         // here is fifty times, not fifty percent. Read alone it was −50%, which made the range run backwards.
+        // It is recorded wearing that notation, since a surface writing `50` back would read it the other way.
         assert.deepEqual(valueOf(ok("scale:x2-50")), {
             op: "range",
             lo: {type: "percentChange", value: 100, written: "x2"},
-            hi: {type: "percentChange", value: 4900, written: "50"},
+            hi: {type: "percentChange", value: 4900, written: "x50"},
         });
         // Whichever side wears it, and a range with no unit anywhere still reads its bounds together.
         assert.deepEqual(valueOf(ok("scale:50-x2")), {
             op: "range",
-            lo: {type: "percentChange", value: 4900, written: "50"},
+            lo: {type: "percentChange", value: 4900, written: "x50"},
             hi: {type: "percentChange", value: 100, written: "x2"},
         });
     });

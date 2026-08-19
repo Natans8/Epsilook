@@ -35,6 +35,8 @@ PROBES = [
     # Reach: the two sentinel words, the flags, a near edge, and a flag conjoined with a value.
     "range:40", "range:>100", "range:10-40", "range:self", "range:unlimited", "range:melee",
     "range:weapon", "range:{min>10}", "range:{melee unlimited}", "spell:tracking",
+    # A unit written anywhere in a range is the phrase's own, so both engines must read the bare bound in it.
+    "cast:2-5ms", "cast:2ms-5", "scale:x2-50", "scale:10-90", "scale:2-5",
 ]
 """Queries across every column and most types, each answered by both engines."""
 

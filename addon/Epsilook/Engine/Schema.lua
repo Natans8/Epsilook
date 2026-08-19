@@ -421,6 +421,94 @@ function Schema.ParseType(typeName, written)
 	return nil
 end
 
+--- The notation whose SYMBOL one written bound actually carries, or nil.
+-- Apart from the question `readNotation` answers, which is which notation READ
+-- the text and so names the default for a bare number. This asks the narrower
+-- one a range needs: did the reader spell a unit here, or leave it open?
+local function spelledNotation(declaredType, written)
+	local folded = Text.foldTrimmed(written)
+	if folded == "" then
+		return nil
+	end
+	for _, notation in ipairs(declaredType.notations) do
+		local _, _, symbol = splitNumber(folded, notation.position == "before")
+		if symbol and symbol ~= "" and spelled(notation, symbol) then
+			if readNotation(notation, declaredType.storage, folded, false) ~= nil then
+				return notation
+			end
+		end
+	end
+	return nil
+end
+
+--- One bare bound spelled in a notation, its symbol on the notation's side.
+local function spellIn(notation, bare)
+	if notation.position == "before" then
+		return notation.unit .. bare
+	end
+	return bare .. notation.unit
+end
+
+--- A range's bounds respelled so both read in the notation the PHRASE names.
+-- A unit written anywhere in the range is the default for the whole of it,
+-- even when it stands on the other bound: `2ms-5` is two milliseconds to five
+-- of them, where reading the bare bound alone made it five seconds. A bound
+-- carrying its own symbol is never reinterpreted, so only the bare side is
+-- respelled; with both bare there is nothing to take, and the pair reader
+-- classifies them together.
+-- @param typeName the type reading the range
+-- @param lo the lower bound, as written
+-- @param hi the upper bound, as written
+-- @return both bounds spelled in the phrase's notation, or nil where neither
+--   bound spells one
+function Schema.WornPair(typeName, lo, hi)
+	local declaredType = Schema.types[typeName]
+	if not declaredType or #declaredType.notations == 0 then
+		return nil
+	end
+	local wornLo = spelledNotation(declaredType, lo)
+	local wornHi = spelledNotation(declaredType, hi)
+	if (wornLo == nil) == (wornHi == nil) then
+		return nil
+	end
+	if wornLo == nil then
+		return spellIn(wornHi, Text.foldTrimmed(lo)), hi
+	end
+	return lo, spellIn(wornLo, Text.foldTrimmed(hi))
+end
+
+--- A bare pair of bounds spelled in the one notation that reads them as the
+-- pair reader did.
+-- The bounds of a bare range are classified TOGETHER, by the further of the
+-- two, so they cannot be spelled apart afterwards: read one at a time,
+-- `10-90` is a factor beside a proportion. Rather than restating the rule that
+-- classified them, this finds the notation reproducing both values.
+-- @param typeName the type reading the range
+-- @param lo the lower bound, as written
+-- @param hi the upper bound, as written
+-- @param a the value the pair reader gave the lower bound
+-- @param b the value it gave the upper one
+-- @return the two spellings, or nil where either bound already wears a unit or
+--   no notation reproduces the pair
+function Schema.SharedNotation(typeName, lo, hi, a, b)
+	local declaredType = Schema.types[typeName]
+	if not declaredType or #declaredType.notations == 0 then
+		return nil
+	end
+	if spelledNotation(declaredType, lo) or spelledNotation(declaredType, hi) then
+		return nil
+	end
+	for _, notation in ipairs(declaredType.notations) do
+		if notation.unit ~= "" then
+			local one, two = spellIn(notation, lo), spellIn(notation, hi)
+			if Schema.ParseType(typeName, one) == a and Schema.ParseType(typeName, two) == b then
+				return one, two
+			end
+		end
+	end
+	return nil
+end
+
 --- A range's two bounds read in ONE notation of one type.
 -- @return lo, hi; or nil where no notation reads both
 function Schema.ParseTypePair(typeName, lo, hi)

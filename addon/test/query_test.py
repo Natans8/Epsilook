@@ -68,6 +68,33 @@ def test_format_writes_the_operator_in_place_of_the_colon(engine: LuaRuntime) ->
     assert formatted(engine, "fire or frost") == "fire | frost"
 
 
+def test_a_unit_written_anywhere_in_a_range_is_the_phrase_s_own(engine: LuaRuntime) -> None:
+    """A bare bound beside a spelled one takes the sibling's notation before
+    either is read: `2ms-5` is two milliseconds to five of them, and read alone
+    the bare bound made it five seconds -- a range a thousand times too wide,
+    reported as an ordinary answer. Both bounds then carry the spelling the
+    phrase gave them, since writing the bare one back would read it the other
+    way round.
+    """
+
+    def bounds(text: str) -> tuple[object, object, object, object]:
+        # A property door binds the value; a kind door carries it on the test.
+        ask = asks(engine, text)[0]
+        held = ask.get("value") or cast(Record, ask["test"])["value"]
+        value = cast(Record, held)
+        lo, hi = cast(Record, value["lo"]), cast(Record, value["hi"])
+        return lo["value"], lo["written"], hi["value"], hi["written"]
+
+    assert bounds("cast:2ms-5") == (2, "2ms", 5, "5ms")
+    assert bounds("cast:2-5ms") == (2, "2ms", 5, "5ms")
+    # A bound wearing its own symbol is never reinterpreted.
+    assert bounds("cast:2ms-5s") == (2, "2ms", 5000, "5s")
+    # With both bare the pair reader classifies them together, by the further
+    # of the two, and they are spelled together in what it chose.
+    assert bounds("cast:2-5") == (2000, "2s", 5000, "5s")
+    assert bounds("scale:10-90") == (-90, "10%", -10, "90%")
+
+
 def test_an_operator_glued_to_a_phrase_reads_the_phrase(engine: LuaRuntime) -> None:
     value = cast(Record, cast(Record, asks(engine, 'name:="Fire Ball"')[0]["test"])["value"])
     assert value["op"] == "exact" and cast(Record, value["operand"])["value"] == "Fire Ball"

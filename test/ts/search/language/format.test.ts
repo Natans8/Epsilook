@@ -88,18 +88,34 @@ describe("the written tier", () => {
         assert.equal(written("scale:x1.5"), "scale=x1.5");
         assert.equal(canonical("scale:x1.5"), "scale=+50%");
         assert.equal(written("cast:500ms"), "cast=500ms");
-        assert.equal(written("cast:10-*"), "cast>=10");
-        assert.equal(written("scale:x2-50"), "scale:x2-50");
+        // The bare bound took the phrase's notation when it was read, so it is written wearing it.
+        assert.equal(written("scale:x2-50"), "scale:x2-x50");
+    });
+
+    it("writes the unit of the notation that read a bare number, without converging the number", () => {
+        // A bare number leaves its unit implicit and a surface writing it back leaves the reader guessing which
+        // one it landed in -- which is a real question wherever a type splits its bare numbers by size.
+        assert.equal(written("cast:2"), "cast=2s");
+        assert.equal(written("cast:1500"), "cast=1500ms", "the bare threshold, said out loud");
+        assert.equal(written("scale:2"), "scale=x2", "up to ten a bare number is a factor");
+        assert.equal(written("scale:50"), "scale=50%", "above ten it is a proportion");
+        assert.equal(written("cast:10-*"), "cast>=10s");
+        // Apart from converging, which writes the value in the type's display notation whatever was typed.
+        assert.equal(canonical("scale:50"), "scale=-50%");
+        // A pair is classified together, so it is spelled together: never a factor beside a proportion.
+        assert.equal(written("scale:10-90"), "scale:10%-90%");
+        assert.equal(written("scale:2-5"), "scale:x2-x5");
     });
 
     it("still converges structure: delimiters and anchors spell canonically around the upheld value", () => {
         assert.equal(written("model:(fire missile)"), "model:{fire missile}");
         assert.equal(written("cast:instant"), "cast:instant");
-        assert.equal(written("cast:0"), "cast=0");
+        assert.equal(written("cast:0"), "cast=0s");
     });
 
     it("is idempotent: the written form of a written form is itself", () => {
-        for (const query of ["scale:x1.5", "cast:500ms", "scale:x2-50", "cast:10-*"]) {
+        for (const query of ["scale:x1.5", "cast:500ms", "scale:x2-50", "cast:10-*", "cast:2", "scale:10-90",
+            "range:40"]) {
             const once = written(query);
             assert.equal(formatQuery(parse(once), "written"), once, query);
         }

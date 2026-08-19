@@ -32,7 +32,7 @@ import {compilePattern} from "../text/patterns";
 import type {Head} from "../schema/schema";
 import {headWord, kindIn, kindsOf} from "../schema/schema";
 import {fold, squash} from "../text/normalize";
-import type {AxisType} from "../vocabulary/value-types";
+import type {AxisType, Value} from "../vocabulary/value-types";
 import {count as countType, path as pathType} from "../vocabulary/value-types";
 
 /** How one position reads an operand. Implementations differ by what the head resolved to. */
@@ -346,27 +346,31 @@ export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value
         if (hi === GRAMMAR.wildcard && lo !== GRAMMAR.wildcard) return openBound(lo, "gte");
         for (const type of prop.types) {
             if (!accepts(type, "range")) continue;
+            // A unit written anywhere in the range is the phrase's default, so a bare bound beside a spelled
+            // one takes it: `2-5ms` is two MILLISECONDS to five, where reading the bare bound alone made it two
+            // seconds -- an inverted range nobody asked for, reported as nothing. Each bound is recorded as the
+            // PHRASE spelled it rather than as it was typed, since the sibling's unit is the notation the bare
+            // one chose and the one it has to wear to read back as itself.
+            const worn = wornPair(type, lo, hi);
+            const [loText, hiText] = [worn?.lo ?? lo, worn?.hi ?? hi];
             // Bounds written without units read together, in one notation — never half factor, half proportion.
             const pair = type.parsePair?.(lo, hi);
             if (pair !== null && pair !== undefined) {
+                const both = sharedNotation(type, loText, hiText, pair);
                 return done({
                     op: "range",
-                    lo: {type: type.name, value: pair[0], written: lo},
-                    hi: {type: type.name, value: pair[1], written: hi},
+                    lo: {type: type.name, value: pair[0], written: both?.[0] ?? loText},
+                    hi: {type: type.name, value: pair[1], written: both?.[1] ?? hiText},
                 });
             }
             if (!type.parse) continue;
-            // A unit written anywhere in the range is the phrase's default, so a bare bound beside a spelled
-            // one takes it: `2-5ms` is two MILLISECONDS to five, where reading the bare bound alone made it two
-            // seconds -- an inverted range nobody asked for, reported as nothing.
-            const worn = wornPair(type, lo, hi);
-            const a = type.parse(worn?.lo ?? lo);
-            const b = type.parse(worn?.hi ?? hi);
+            const a = type.parse(loText);
+            const b = type.parse(hiText);
             if (a !== null && b !== null) {
                 return done({
                     op: "range",
-                    lo: {type: type.name, value: a, written: lo},
-                    hi: {type: type.name, value: b, written: hi},
+                    lo: {type: type.name, value: a, written: loText},
+                    hi: {type: type.name, value: b, written: hiText},
                 });
             }
         }
@@ -460,6 +464,37 @@ export function opExpr(op: string, operand: ParsedOperand): ValueExpr {
 }
 
 /**
+ * A bare pair of bounds, spelled in the one notation that reads them as the pair reader did.
+ *
+ * The bounds of a bare range are classified TOGETHER, by the further of the two, so they cannot be spelled apart
+ * afterwards: read one at a time, `10-90` is a factor beside a proportion. Rather than restating the rule that
+ * classified them, this finds the notation that reproduces both values and hands back their spellings in it.
+ *
+ * @param type The type reading the range.
+ * @param lo The lower bound, as the phrase spelled it.
+ * @param hi The upper bound, as the phrase spelled it.
+ * @param pair The values the pair reader produced.
+ * @returns The two spellings, or null where either bound already wears a unit or no notation reproduces the pair.
+ */
+function sharedNotation(
+    type: AxisType, lo: string, hi: string, pair: readonly [Value, Value],
+): [string, string] | null {
+    const notations = type.notations;
+    const read = type.parse;
+    if (notations === undefined || read === undefined) return null;
+    const storage = type.storage === "float" ? "float" : "int";
+    if (spelledNotation(notations, storage, lo) !== null || spelledNotation(notations, storage, hi) !== null) {
+        return null;
+    }
+    for (const notation of notations) {
+        if (notation.unit === "") continue;
+        const [a, b] = [spellIn(notation, lo), spellIn(notation, hi)];
+        if (read(a) === pair[0] && read(b) === pair[1]) return [a, b];
+    }
+    return null;
+}
+
+/**
  * An operand read against a kind: its properties claim it in declaration order — the subject first — and a
  * comparison no property claims falls back to counting the kind's rows, when the operand is a count and the
  * position allows one.
@@ -528,6 +563,19 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
             if (claimants.length === 0) return illTyped(word, subject);
             if (claimants.length === 1) {
                 return propCtx(claimants, word, pend).bare(t, false);
+            }
+            // Several properties claim it. Where they all read it as one value of one type, the operand IS that
+            // value — which is what lets a bare number carry its unit into every surface that writes it back.
+            // Only a value they read differently stays raw text, since there is then nothing single to carry.
+            const readings = claimants.map((ref) => parseValue(propOf(ref), t));
+            const first = readings[0];
+            if (first !== null && readings.every((pv) =>
+                pv !== null && pv.type === first.type && pv.value === first.value)) {
+                const op = accepts(first.type, "contains") ? "contains" as const : "exact" as const;
+                return {
+                    r: "props", props: claimants,
+                    value: {op, operand: {type: first.type.name, value: first.value, written: t}},
+                };
             }
             return {r: "props", props: claimants, value: {op: "contains", operand: {text: t}}};
         },

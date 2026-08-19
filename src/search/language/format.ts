@@ -17,7 +17,9 @@ import {COMPARISONS, exact} from "../vocabulary/operators";
 import type {Ask, Clause, Parsed, ParsedOperand, PropRef, ScopeTerm, ValueExpr} from "./ast";
 import {propOf} from "./ast";
 import {escapeRegExp} from "../text/patterns";
+import type {AxisType} from "../vocabulary/value-types";
 import {TYPES} from "../vocabulary/value-types";
+import {notationOf, spellIn, spelledNotation} from "../vocabulary/units";
 
 /** Characters that would change a bare value's reading, whatever its position or type. */
 const NEEDS_PHRASE = new RegExp(`[\\s${escapeRegExp([
@@ -72,12 +74,41 @@ function readingOf(operand: ParsedOperand): Reading {
  * - `written` upholds the spelling the reader chose where the parse recorded one — `x1.5` stays `x1.5` rather than
  *   converging to `=+50%` — which is what a rendering surface echoes back. Structure still converges; only the
  *   value's own text is upheld, and only where the type has spellings to uphold: a `named` type's value has one
- *   name, so a synonym that reached it (`xpac:6`) is a way in rather than a spelling, and converges here too.
+ *   name, so a synonym that reached it (`xpac:6`) is a way in rather than a spelling, and converges here too. A
+ *   BARE number wears no symbol, which is not a choice of notation either: it keeps its own digits and gains the
+ *   unit of the notation that read it, so `cast:1500` writes as `1500ms` rather than as canonical's `1.5s`.
  * - `folded` is the canonical spelling lowered for comparison, because case never distinguishes two queries —
  *   matching folds it. Regex operands are the one exception: folding a pattern flips character classes (`\D` to
  *   `\d`), so patterns compare as written and rely on their own case-insensitive matching.
  */
 type Spelling = "canonical" | "written" | "folded";
+
+/**
+ * One written value with the unit it was read in, or the text itself where it already wears one.
+ *
+ * A bare number leaves its unit implicit, and a surface writing it back leaves the reader to guess which one it
+ * landed in — which a type splitting its bare numbers by size makes a real question: `cast:1500` is milliseconds
+ * and `cast:2` is seconds. Writing the symbol of the notation that READ it says so without changing the number,
+ * and re-reads as exactly the same value.
+ *
+ * Apart from converging, which is what the canonical tier does: `scale:10-90` is a pair of proportions, and this
+ * writes it as `10%-90%` where canonical writes the changes those proportions are stored as.
+ *
+ * @param type The operand's type.
+ * @param written The operand as the reader typed it.
+ * @returns The spelling to write, or null where the type has no notations and there is no unit to add.
+ */
+function wornSpelling(type: AxisType, written: string): string | null {
+    const notations = type.notations;
+    if (notations === undefined) return null;
+    const storage = type.storage === "float" ? "float" : "int";
+    if (spelledNotation(notations, storage, written) !== null) return written;
+    const read = notationOf(notations, storage, written);
+    if (read === null || read.unit === "") return null;
+    // A sign the notation requires is already part of what the reader typed, or absent because they left it out;
+    // either way the number itself is untouched and only the symbol is added.
+    return spellIn(read, written.trim());
+}
 
 /**
  * Writes one operand: the text as carried, or the stored value in its property's spelling.
@@ -95,7 +126,9 @@ export function operandText(
 ): string {
     if ("text" in operand) return tier === "folded" ? operand.text.toLowerCase() : operand.text;
     const type = TYPES.get(operand.type);
-    if (tier === "written" && operand.written !== undefined && type?.named !== true) return operand.written;
+    if (tier === "written" && operand.written !== undefined && type?.named !== true) {
+        return type === undefined ? operand.written : wornSpelling(type, operand.written) ?? operand.written;
+    }
     const text = at !== undefined ? formatValue(propOf(at), operand.value)
         : type?.format?.(operand.value) ?? String(operand.value);
     return tier === "folded" ? text.toLowerCase() : text;
