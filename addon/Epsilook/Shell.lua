@@ -50,7 +50,9 @@ Shell.COLOURS = { gold = GOLD, white = WHITE, blue = BLUE, cyan = CYAN, grey = G
 -- click sends. Inspect sends nothing; it prints the dossier. The aura action
 -- is offered only where the spell applies one, which the mech column says
 -- with a row of its aura kind. `on` says where an action is offered: a
--- result line, the dossier's head, or both.
+-- result line, the dossier's head, or both. Learn and unlearn are a pair:
+-- the one the spell's standing calls for shows, the client asked whether
+-- the player knows it.
 Shell.SPELL_ACTIONS = {
 	{
 		key = "learn",
@@ -58,6 +60,7 @@ Shell.SPELL_ACTIONS = {
 		command = "learn",
 		hint = "Click to learn the spell",
 		on = "both",
+		unknownOnly = true,
 	},
 	{
 		key = "cast",
@@ -79,7 +82,8 @@ Shell.SPELL_ACTIONS = {
 		label = "Unlearn",
 		command = "unlearn",
 		hint = "Click to unlearn the spell",
-		on = "dossier",
+		on = "both",
+		knownOnly = true,
 	},
 	{
 		key = "inspect",
@@ -176,14 +180,24 @@ end
 -- `.lookup` draws it.
 Shell.DASH = " - "
 
+--- Whether the player knows a spell, as the client says; never, under a
+-- bare interpreter.
+function Shell.Known(spellID)
+	return _G.IsSpellKnown ~= nil and _G.IsSpellKnown(spellID) == true
+end
+
 --- The spell actions a spell takes on one surface, as links joined.
 -- @param spellID the spell
 -- @param where "result" or "dossier"
 -- @return the links joined
 function Shell.SpellActionLinks(spellID, where)
+	local known = Shell.Known(spellID)
 	local links = {}
 	for _, action in ipairs(Shell.SPELL_ACTIONS) do
 		local offered = action.on == "both" or action.on == where
+		if action.knownOnly and not known or action.unknownOnly and known then
+			offered = false
+		end
 		if offered and (not action.auraOnly or Epsilook:HasPartOfKind(spellID, "mech", "aura")) then
 			links[#links + 1] = Shell.Link(spellID, action.key, action.label)
 		end
@@ -193,16 +207,20 @@ end
 
 --- One result for a spell, as two lines: the spell, then its actions.
 -- A result wraps in a chat frame more often than not, so the wrap is designed
--- in rather than suffered: the first line is the id, the game's own spell link
--- and what the spell is made of, each count a link that lists the parts on
--- hover and prints them on a click; the second, indented, is the actions,
--- which then sit at the same place on every result.
+-- in rather than suffered: the first line is the id, the game's own spell
+-- link, the known mark where the player knows it as `.lookup` marks it, and
+-- what the spell is made of, each count a link that lists the parts on hover
+-- and prints them on a click; the second, indented, is the actions, which
+-- then sit at the same place on every result.
 -- @param spell a SpellData
 -- @param counts the spell's part counts by axis, or nil to leave them off
 -- @param axes the axes to report, in order
 -- @return the two lines
 function Shell.ResultLines(spell, counts, axes)
 	local head = GOLD .. spell.id .. END .. Shell.DASH .. Shell.SpellLink(spell)
+	if Shell.Known(spell.id) then
+		head = head .. " " .. GOLD .. "[known]" .. END
+	end
 	if counts and axes then
 		local made = {}
 		for _, axis in ipairs(axes) do
