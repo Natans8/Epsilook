@@ -35,14 +35,40 @@ export type WorkerSay =
     | { readonly is: "result"; readonly seq: number; readonly count: number; readonly ms: number }
     | { readonly is: "failed"; readonly error: string };
 
-// The worker global scope, addressed explicitly: this module also compiles under the Node target (its message
-// types are imported by the page and the tests), where neither DOM nor worker globals exist.
-const scope = globalThis as unknown as {
+/** The global scope this module is loaded into, addressed by the two members it uses. */
+interface WorkerScope {
     postMessage(message: WorkerSay): void;
+
     addEventListener(type: "message", listener: (event: { data: WorkerAsk }) => void): void;
-};
+}
+
+/**
+ * Whether the global scope offers the two entry points this module is written against.
+ *
+ * It proves the members, not the environment: a window carries both names too. What it rules out is the Node
+ * target this file also type-checks under (its message types are imported by the page and the tests), where
+ * neither DOM nor worker globals exist at all.
+ *
+ * @param value The global scope.
+ * @returns Whether both entry points are there to call.
+ */
+function isWorkerScope(value: unknown): value is WorkerScope {
+    return typeof value === "object" && value !== null
+        && "postMessage" in value && typeof value.postMessage === "function"
+        && "addEventListener" in value && typeof value.addEventListener === "function";
+}
+
+// Narrowed through a local rather than `globalThis` itself: under the Node target that reference carries no
+// messaging members at all, and a predicate cannot widen what the lib declares.
+const host: unknown = globalThis;
+if (!isWorkerScope(host)) throw new Error("not a worker scope: no postMessage and addEventListener");
+const scope: WorkerScope = host;
 
 const say = (message: WorkerSay): void => {
+    // A worker's postMessage takes a transfer list where a window's takes a target origin, so the argument the
+    // rule asks for would be a TypeError rather than a fix. It reads the call, not the receiver, so it cannot
+    // tell the two apart.
+    // oxlint-disable-next-line unicorn/require-post-message-target-origin
     scope.postMessage(message);
 };
 
@@ -52,14 +78,13 @@ async function load(ask: Extract<WorkerAsk, { is: "load" }>): Promise<void> {
     const versions = await fetchVersions(ask.base);
     const entry = pickEntry(versions, ask.version);
     say({is: "progress", pack: entry.id, done: 0, total: 1});
-    const {loaded, locales} = await fetchPack(ask.base, entry, ask.locale ?? undefined, (done, total) => {
+    const {loaded, locales, domains} = await fetchPack(ask.base, entry, ask.locale ?? undefined, (done, total) => {
         say({is: "progress", pack: entry.id, done, total});
     });
     dataset = packDataset(loaded);
-    const meta = (loaded.pack as unknown as { meta?: { domains?: Record<string, PackDomain> } }).meta;
     say({
         is: "ready", version: entry, locale: loaded.locale, locales, versions,
-        domains: meta?.domains, spells: loaded.spells.ids.length,
+        domains, spells: loaded.spells.ids.length,
         // Read back rather than rebuilt: loading the pack is what sets the ladder, so asking for it here
         // cannot drift from the spellings the kernel matches against.
         ladder: ordinalRungs(),

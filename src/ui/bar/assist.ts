@@ -8,7 +8,7 @@
  *
  * Split out of the bar because it reaches the session through four calls and nothing reaches back into it.
  */
-import {useId, useMemo, useRef, useState} from "react";
+import {useId, useMemo, useState} from "react";
 import type {Assist} from "./open";
 import type {Offer, Offers, Vocabulary} from "./offers";
 import {flatOffers, NO_OFFERS, offerSlot, offersAt} from "./offers";
@@ -79,11 +79,11 @@ export function useBarAssist(
     // never chose instead of running their query. The count only has to DIFFER between visits, never to
     // be sequential, so a render thrown away costs nothing.
     const arrangement = JSON.stringify([text, clamped, gapAt ?? -1, caretInSlot]);
-    const visit = useRef({arrangement: "", count: 0});
-    if (visit.current.arrangement !== arrangement) {
-        visit.current = {arrangement, count: visit.current.count + 1};
-    }
-    const stamp = `${arrangement}#${String(visit.current.count)}`;
+    // Counted in STATE, adjusted during render: React re-runs this component before it renders any child, so
+    // the pass that reads the stale count is discarded rather than drawn.
+    const [visit, setVisit] = useState({arrangement: "", count: 0});
+    if (visit.arrangement !== arrangement) setVisit({arrangement, count: visit.count + 1});
+    const stamp = `${arrangement}#${String(visit.count)}`;
     const shown = (offers.groups.length > 0 || offers.takes !== null) && dismissed !== stamp;
     const lit = shown && litAt.stamp === stamp ? litAt.index : -1;
 

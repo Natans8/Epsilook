@@ -129,15 +129,21 @@ export function OpenSegment({
     // What the slot held when this session began — the boundary where Ctrl+Z stops being the platform's.
     const sessionStart = useRef(at.slot);
 
+    // What the slot opened WITH, pinned at mount rather than closed over. The effect below seeds the session
+    // once and must read these as they were when it opened, so a later render cannot re-seize the caret: the
+    // ref makes that a property of the code rather than of an empty dependency list nobody may touch.
+    const opened = useRef({seize, caret, onCaret});
+
     useLayoutEffect(() => {
         const el = input.current;
         if (el === null) return;
-        const to = caret?.at ?? el.value.length;
-        if (seize) {
+        const seed = opened.current;
+        const to = seed.caret?.at ?? el.value.length;
+        if (seed.seize) {
             el.focus();
-            el.setSelectionRange(caret?.anchor ?? to, to);
+            el.setSelectionRange(seed.caret?.anchor ?? to, to);
         }
-        onCaret(to);
+        seed.onCaret(to);
         // Mount-only on purpose: this seeds the session; afterwards the caret is the browser's.
     }, []);
     useLayoutEffect(() => {

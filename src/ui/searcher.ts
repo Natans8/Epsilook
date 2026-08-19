@@ -107,6 +107,10 @@ export class Searcher {
     }
 
     private send(ask: WorkerAsk): void {
+        // A worker's postMessage takes a transfer list where a window's takes a target origin, so the argument
+        // the rule asks for would be a TypeError rather than a fix. It reads the call, not the receiver, so it
+        // cannot tell the two apart.
+        // oxlint-disable-next-line unicorn/require-post-message-target-origin
         this.worker.postMessage(ask);
     }
 }

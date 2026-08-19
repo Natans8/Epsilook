@@ -13,7 +13,7 @@
  * as rewrites of the text, each an undoable operation.
  */
 import type {ReactElement} from "react";
-import {Fragment, useMemo, useRef, useState} from "react";
+import {Fragment, useLayoutEffect, useMemo, useRef, useState} from "react";
 import {paint, runsWithin} from "../../search/index";
 import type {BarSegment} from "./plan";
 import {segmentsOf, slotStart} from "./plan";
@@ -60,7 +60,11 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY}: {
         clearing.current();
     }, remember);
     const selection = useBarSelection(text, onText, editing);
-    clearing.current = selection.clear;
+    // Written after the render rather than during it: the session only ever calls this from an event, which is
+    // long after the layout effect has pointed it at the selection built this pass.
+    useLayoutEffect(() => {
+        clearing.current = selection.clear;
+    });
     const {
         sel, selectedText, onSelectAll, onSelectPast, onBarDown, onBarMove, onBarUp, onBarClick, onBarKeys,
     } = selection;

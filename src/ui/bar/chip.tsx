@@ -104,8 +104,8 @@ const press = (act: (e: ReactMouseEvent) => void) => (e: ReactMouseEvent): void 
  * @returns The aimed offset into the raw text, or null where the display has no character map.
  */
 function aimAt(e: ReactMouseEvent, raw: string, window: Span): number | null {
-    const at = document.caretPositionFromPoint?.(e.clientX, e.clientY);
-    if (at == null || at.offsetNode.nodeType !== Node.TEXT_NODE) return null;
+    const at = document.caretPositionFromPoint?.(e.clientX, e.clientY) ?? null;
+    if (at === null || at.offsetNode.nodeType !== Node.TEXT_NODE) return null;
     const piece = at.offsetNode.textContent ?? "";
     if (piece === "") return null;
     // First occurrence wins; ambiguity costs at most the sibling occurrence of the same word.
@@ -296,11 +296,10 @@ function stateClass(base: string, tone: string, not: boolean, warned: boolean): 
 }
 
 /** A compact chip. */
-function ChipEl({chip, warned, notes, span, text, act}: {
+function ChipEl({chip, warned, notes, text, act}: {
     readonly chip: ChipView;
     readonly warned: boolean;
     readonly notes: readonly string[];
-    readonly span: Span;
     readonly text: string;
     readonly act: SegmentActions;
 }): ReactElement {
@@ -334,11 +333,10 @@ function ChipEl({chip, warned, notes, span, text, act}: {
 }
 
 /** A lane: the scope's toned enclosure, terms as text, inner binds as chips of their own. */
-function LaneEl({lane, warned, notes, span, text, act}: {
+function LaneEl({lane, warned, notes, text, act}: {
     readonly lane: LaneView;
     readonly warned: boolean;
     readonly notes: readonly string[];
-    readonly span: Span;
     readonly text: string;
     readonly act: SegmentActions;
 }): ReactElement {
@@ -483,10 +481,10 @@ export function SettledSegment({text, at, act, selected}: {
         if (view.span.start > drawn) parts.push(raw(drawn, view.span.start, false));
         if (view.form === "chip") {
             parts.push(<ChipEl key={i} chip={view.chip} warned={view.warned} notes={view.notes}
-                               span={view.span} text={text} act={act}/>);
+                               text={text} act={act}/>);
         } else if (view.form === "lane") {
             parts.push(<LaneEl key={i} lane={view.lane} warned={view.warned} notes={view.notes}
-                               span={view.span} text={text} act={act}/>);
+                               text={text} act={act}/>);
         } else {
             parts.push(
                 <span key={i} title={view.notes.length > 0 ? view.notes.join("\n") : undefined}>

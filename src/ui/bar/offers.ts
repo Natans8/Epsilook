@@ -233,7 +233,7 @@ function doorOffers(): Offer[] {
             reads: [spelling],
         });
     }
-    return [...held.values()].sort((a, b) => menuRank(a.word) - menuRank(b.word) || a.word.localeCompare(b.word));
+    return [...held.values()].toSorted((a, b) => menuRank(a.word) - menuRank(b.word) || a.word.localeCompare(b.word));
 }
 
 /**
@@ -253,7 +253,7 @@ function kindOffers(column: Column): Offer[] {
             note: kind.hint,
             tone: column.key,
         }))
-        .sort((a, b) => a.word.localeCompare(b.word));
+        .toSorted((a, b) => a.word.localeCompare(b.word));
 }
 
 /** One property, as the offer that opens it: a flag word stands alone, everything else takes a bind. */
@@ -292,7 +292,7 @@ function propOffers(context: { role: "column"; column: Column } | { role: "kind"
             // Those are reached by opening the kind — unless the kind has no word to open, in which case the
             // column's own head is its only door and the property has to stand here.
             const wordless = mine.length === 0 || kinds.some(
-                (held) => held.word === undefined && Object.hasOwn(held.props, name));
+                (sibling) => sibling.word === undefined && Object.hasOwn(sibling.props, name));
             if (!wordless && mine.length * 2 <= kinds.length && kinds.length > 1) continue;
             const owner = mine.length < kinds.length ? mine.join(", ") : undefined;
             // A kind's FIRST property is what its own word asks for, and it is offered as a row only where
@@ -316,7 +316,7 @@ function propOffers(context: { role: "column"; column: Column } | { role: "kind"
             tone,
         });
     }
-    return [...held.values()].sort((a, b) => a.word.localeCompare(b.word));
+    return [...held.values()].toSorted((a, b) => a.word.localeCompare(b.word));
 }
 
 /**
@@ -356,13 +356,15 @@ function valueOffers(prop: Prop, tone: string, vocab: Vocabulary):
     return {sentinels, words: [...rungs, ...any], roles};
 }
 
+/** Every folded spelling one offer answers to: the word it draws, and the synonyms that also reach it. */
+const offerSpellings = (offer: Offer): string[] => [offer.word, ...(offer.reads ?? [])].map(fold);
+
 /** One group's offers, narrowed by what has been typed: what starts with it first, then what merely contains it. */
 function narrow(offers: readonly Offer[], typed: string): Offer[] {
     const held = fold(typed);
     if (held === "") return [...offers];
-    const spellings = (offer: Offer): string[] => [offer.word, ...(offer.reads ?? [])].map(fold);
-    const opens = (offer: Offer): boolean => spellings(offer).some((word) => word.startsWith(held));
-    const holds = (offer: Offer): boolean => spellings(offer).some((word) => word.includes(held));
+    const opens = (offer: Offer): boolean => offerSpellings(offer).some((word) => word.startsWith(held));
+    const holds = (offer: Offer): boolean => offerSpellings(offer).some((word) => word.includes(held));
     return [...offers.filter(opens), ...offers.filter((offer) => !opens(offer) && holds(offer))];
 }
 
@@ -499,7 +501,7 @@ function closerGhost(value: string): string {
         else if (ch === GRAMMAR.group.open) want.push(GRAMMAR.group.close);
         else if (ch === GRAMMAR.scope.close || ch === GRAMMAR.group.close) want.pop();
     }
-    return want.reverse().join("");
+    return want.toReversed().join("");
 }
 
 /**
@@ -543,7 +545,8 @@ function unitGhost(prop: Prop | null, typed: string): string {
     }
     const used = new Set([...typed.slice(0, typed.length - started.length).matchAll(/\d([a-z]+)/gi)]
         .map((hit) => hit[1].toLowerCase()));
-    const ranked = [...spellings].sort((a, b) => Number(used.has(b.toLowerCase())) - Number(used.has(a.toLowerCase())));
+    const ranked = spellings.toSorted(
+        (a, b) => Number(used.has(b.toLowerCase())) - Number(used.has(a.toLowerCase())));
     for (const spelling of ranked) {
         if (spelling.length > started.length && spelling.toLowerCase().startsWith(started)) {
             return spelling.slice(started.length);
@@ -612,14 +615,14 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     // The property whose value is being composed, whichever door reached it: a property's own door, an inner
     // bind, or a KIND's word — which is the door to its subject, the first property it declares.
     const subject = context?.role === "kind" ? Object.entries(context.kind.props)[0] : undefined;
-    const composing: Composing | null = inner !== null ? inner
-        : context?.role === "prop" ? {prop: context.prop, tone: context.tone, name: context.name}
+    const composing: Composing | null = inner ?? (
+        context?.role === "prop" ? {prop: context.prop, tone: context.tone, name: context.name}
             : subject !== undefined && bind < 0 && context?.role === "kind"
                 ? {
                     prop: subject[1], tone: context.kind.column.key,
                     name: wordOf(context.kind), what: context.kind.hint,
                 }
-                : null;
+                : null);
     const groups = ((): OfferGroup[] => {
         // A kind's scope offers its properties as well as its subject's words: `scale:{}` takes an amount, and
         // `scale:{attach:...}` is the same scope saying something else about the same row. Past an inner bind

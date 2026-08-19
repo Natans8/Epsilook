@@ -22,10 +22,13 @@ import {Classed} from "./classed";
 import frame from "./bar.module.css";
 import styles from "./plain.module.css";
 
+/** The default for a bar told of no remembered searches — one array, so the default never changes identity. */
+const NO_HISTORY: readonly string[] = [];
+
 /**
  * The plaintext editor.
  */
-export function PlainBar({text, onText, placeholder, label, history = [], vocab = NO_VOCABULARY}: {
+export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY, vocab = NO_VOCABULARY}: {
     readonly text: string;
     readonly onText: (text: string) => void;
     readonly placeholder: string;
@@ -186,9 +189,9 @@ export function PlainBar({text, onText, placeholder, label, history = [], vocab 
         // A query is one line. Pasted text can carry newlines; they become the separator they stand for,
         // rather than characters the parser would have to have an opinion about.
         if (el.value.includes("\n")) {
-            const caret = el.selectionStart;
+            const start = el.selectionStart;
             el.value = el.value.replaceAll(/\n+/gu, " ");
-            el.setSelectionRange(caret, caret);
+            el.setSelectionRange(start, start);
         }
         onText(el.value);
         track(el);

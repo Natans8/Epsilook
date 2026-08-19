@@ -2155,11 +2155,15 @@ def check_toolchain(rep: Report) -> None:
     run_tool(rep, "cli bundle", ["node", "tools/build.mjs", "--cli"],
              "esbuild tools/*.ts -> tools/*.mjs (query, measure)")
     run_tool(rep, "tests", ["npm", "test", "--silent"], "node --test over test/*.test.ts")
-    # Gated on the search 2.0 tree and the tools, which are held to the full
-    # rule set. The 1.0 modules under src/app carry a backlog of ~100 findings
-    # that predates the linter; `npx oxlint --type-aware` with no path shows
-    # them, and they are worked down rather than blocking unrelated commits.
-    run_tool(rep, "oxlint", ["npx", "oxlint", "--type-aware", "src/search", "test", "tools"],
+    # Gated on everything 2.0 is being built out of: the engine (src/search),
+    # the presentation layer (src/ui), the tools and the tests. .oxlintrc.json
+    # already names src/ui in the strict override block, so what this path list
+    # decides is only whether the tree is CHECKED, not how strictly.
+    # src/app is the one exclusion, and it is deliberate rather than an
+    # oversight: 1.0 is dead code that PHASE 14 deletes, it carries a backlog
+    # of ~100 findings predating the linter, and the standing rule is to spend
+    # nothing there. `npx oxlint --type-aware` with no path shows them.
+    run_tool(rep, "oxlint", ["npx", "oxlint", "--type-aware", "src/search", "src/ui", "test", "tools"],
              "correctness + type-aware rules, .oxlintrc.json")
     # The addon's Lua, held to the client's own interpreter. selene.toml pins
     # std = lua51, which is what stops a construct that parses on a modern Lua

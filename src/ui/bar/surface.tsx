@@ -101,7 +101,7 @@ export function Surface({offers, lit, listId, onPick, onLight}: {
     useLayoutEffect(() => {
         const el = panel.current;
         const host = el?.offsetParent;
-        if (el == null || !(host instanceof HTMLElement)) return;
+        if (el === null || !(host instanceof HTMLElement)) return;
         // The open position stamps itself in the DOM, which is also how the bar's own press handling finds it.
         const anchor = host.querySelector<HTMLElement>("[data-open]");
         const room = Math.max(0, host.clientWidth - el.offsetWidth);
@@ -111,7 +111,15 @@ export function Surface({offers, lit, listId, onPick, onLight}: {
     });
 
     if (offers.groups.length === 0 && offers.takes === null) return null;
-    let index = -1;
+    // Where each group's rows begin in the flat list the light is counted against. A row's id is its position
+    // ACROSS groups, not within one, because `flatOffers` numbers every offer in exactly this order — so the
+    // running total is worked out here rather than by a counter the draw of each row nudges.
+    const starts: number[] = [];
+    let flat = 0;
+    for (const group of offers.groups) {
+        starts.push(flat);
+        flat += group.offers.length;
+    }
     return (
         <div
             ref={panel}
@@ -138,12 +146,11 @@ export function Surface({offers, lit, listId, onPick, onLight}: {
                     )}
                 </div>
             )}
-            {offers.groups.map((group) => (
+            {offers.groups.map((group, g) => (
                 <div key={group.id} role="group" aria-labelledby={`${listId}-${group.id}`} className={styles.group}>
                     <div id={`${listId}-${group.id}`} className={styles.section}>{group.label}</div>
-                    {group.offers.map((offer) => {
-                        index += 1;
-                        const held = index;
+                    {group.offers.map((offer, i) => {
+                        const held = starts[g] + i;
                         return (
                             <Row
                                 key={`${group.id}:${offer.word}`}
