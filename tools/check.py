@@ -51,7 +51,7 @@ import sys
 import time
 import tempfile
 import tokenize
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 import mermaid
@@ -267,6 +267,17 @@ PYTHON_SOURCES = (BUILD_PACKAGE,
 FRESHNESS_CACHE_HOURS = 24
 
 
+LOG = CACHE / "check.log"
+"""Where the last run's whole report is written, colourless.
+
+A run is usually read through a pipe, and a pipe truncates: `| tail` keeps the
+summary and throws away the FAIL lines that say what to do about it, and the
+pipe's own exit status hides the failure too. The log is written whatever the
+console did with the output, so the answer to "what actually failed" is always
+one file away rather than one re-run away.
+"""
+
+
 class Report:
     """Accumulates check results and decides the exit status."""
 
@@ -274,11 +285,34 @@ class Report:
         self.quiet = quiet
         self.failed = 0
         self.warned = 0
+        self.lines: list[str] = []
 
     def _say(self, colour: str, tag: str, name: str, detail: str) -> None:
         pad = " " * max(0, 26 - len(name))
+        self.lines.append(f"{tag:>4}  {name}{pad}{detail}".rstrip())
         print(f"{colour}{tag:>4}{RESET}  {name}{pad}{DIM}{detail}{RESET}" if detail
               else f"{colour}{tag:>4}{RESET}  {name}")
+
+    def detail(self, lines: Iterable[str]) -> None:
+        """Keep a failing tool's whole output in the log without printing it.
+
+        The console shows a preview and elides the rest, which is right for
+        reading but wrong for diagnosing: the line that names the broken test
+        is routinely past the preview. The log takes the lot.
+        """
+        self.lines.extend(f"        {line}" for line in lines)
+
+    def written(self, summary: str) -> Path | None:
+        """Write the run to the log and hand back where, or nothing if it could not be."""
+        self.lines.append("")
+        self.lines.append(summary)
+        try:
+            LOG.parent.mkdir(parents=True, exist_ok=True)
+            LOG.write_text("\n".join(self.lines) + "\n", encoding="utf-8")
+        except OSError:
+            # A log nobody can write is not a reason to fail a run that passed.
+            return None
+        return LOG
 
     def ok(self, name: str, detail: str = "") -> None:
         if not self.quiet:
@@ -1902,10 +1936,11 @@ def run_tool(rep: Report, name: str, cmd: list[str], detail: str = "") -> None:
         return
     output = ((proc.stdout or "") + (proc.stderr or "")).strip().splitlines()
     rep.fail(name, output[0] if output else f"exit {proc.returncode}")
+    rep.detail(output[1:])
     for line in output[1:12]:
         print(f"        {DIM}{line}{RESET}")
     if len(output) > 12:
-        print(f"        {DIM}... {len(output) - 12} more lines{RESET}")
+        print(f"        {DIM}... {len(output) - 12} more lines, all of them in the log{RESET}")
 
 
 def check_browser_matrix(rep: Report) -> None:
@@ -2199,9 +2234,13 @@ def main() -> int:
     check_docs(rep, args.base)
 
     print()
+    warned = f", {rep.warned} warning(s)" if rep.warned else ""
+    summary = f"{rep.failed} check(s) failed{warned}" if rep.failed else f"all checks passed{warned}"
+    log = rep.written(summary)
     if rep.failed:
-        print(f"{RED}{rep.failed} check(s) failed{RESET}"
-              + (f", {rep.warned} warning(s)" if rep.warned else ""))
+        print(f"{RED}{rep.failed} check(s) failed{RESET}" + warned)
+        if log is not None:
+            print(f"{DIM}the whole report, whatever the console kept: {log}{RESET}")
         return 1
     print(f"{GREEN}all checks passed{RESET}"
           + (f", {YELLOW}{rep.warned} warning(s){RESET}" if rep.warned else ""))

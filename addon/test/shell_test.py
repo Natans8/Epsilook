@@ -443,3 +443,25 @@ def test_a_sound_kits_type_is_said_once_on_the_kit(engine: LuaRuntime) -> None:
     end
     """)
     assert "29" in str(lua_function(engine, b"GROUP_TIP_VALUES")(29))
+
+
+def test_a_count_tooltip_drops_an_extension_that_says_nothing(engine: LuaRuntime) -> None:
+    """Every model is an m2 and every texture a blp, so down a list of them the
+    suffix is the same word over and over. A sound keeps its own: a kit's files
+    come in several formats and which one this is is the informative part."""
+    # language=Lua
+    engine.execute(b"""
+    function AXIS_TIP(id, axis)
+      local out = {}
+      local tip = { SetText = function(_, t) out[#out + 1] = t end,
+                    AddLine = function(_, t) out[#out + 1] = t end }
+      Epsilook.Inspect.FillAxisTooltip(tip, id, axis)
+      return table.concat(out, " ;; ")
+    end
+    """)
+    tip = lua_function(engine, b"AXIS_TIP")
+    models = cast(bytes, tip(133, b"model")).decode()
+    assert "cfx_mage_fireball_missile" in models, models
+    assert ".m2" not in models.lower(), models
+    sounds = cast(bytes, tip(133, b"sound")).decode()
+    assert ".ogg" in sounds.lower(), "a sound's format is what a reader wants to know"

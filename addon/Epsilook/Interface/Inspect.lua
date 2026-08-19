@@ -265,6 +265,21 @@ local function basename(path)
 	return path:match("([^/\\]+)$") or path
 end
 
+--- The file extensions that tell a reader nothing: every model is an m2 and
+-- every texture a blp, so down a list of them the suffix is the same word
+-- over and over. A sound keeps its own, because a kit's files come in several
+-- formats and which one this is is the informative part.
+local MUTE_EXTENSION = { m2 = true, blp = true }
+
+--- A file name with an extension that says nothing taken off.
+local function unextended(text)
+	local stem, extension = text:match("^(.+)%.(%w+)$")
+	if stem and MUTE_EXTENSION[extension:lower()] then
+		return stem
+	end
+	return text
+end
+
 local function plain(value)
 	if value.path then
 		return basename(value.text)
@@ -510,7 +525,7 @@ function Inspect.FillAxisTooltip(tooltip, spellID, axis)
 	local part = {}
 	for i = 1, math.min(n, Inspect.LISTED) do
 		Epsilook:GetPartDataByIndex(spellID, axis, i, part)
-		tooltip:AddLine(GREY .. part.kind .. END .. " " .. (Inspect.Subject(part) or ""), 1, 1, 1)
+		tooltip:AddLine(GREY .. part.kind .. END .. " " .. unextended(Inspect.Subject(part) or ""), 1, 1, 1)
 	end
 	if n > Inspect.LISTED then
 		tooltip:AddLine("and " .. (n - Inspect.LISTED) .. " more", 0.62, 0.62, 0.62)
