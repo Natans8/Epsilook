@@ -5,7 +5,9 @@
 ## Version: 0.2
 ## OptionalDeps: Epsilook_Data
 ## X-Website: https://natans8.github.io/Epsilook/
+## SavedVariables: EpsilookSettings
 
+Config.lua
 Reader.lua
 Data.lua
 Text.lua
@@ -16,4 +18,5 @@ Search.lua
 API.lua
 Shell.lua
 Inspect.lua
+Options.lua
 SelfTest.lua

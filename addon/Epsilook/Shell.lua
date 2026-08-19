@@ -25,8 +25,11 @@ local Epsilook = _G.Epsilook
 local Shell = {}
 Epsilook.Shell = Shell
 
---- How many result lines one page prints.
-Shell.PAGE = 20
+--- How many result lines one page prints: the player's own setting.
+-- @return the page size
+function Shell.Page()
+	return Epsilook.Config.Get("page")
+end
 
 --- The link type this addon owns. A click on a chat link reaches `SetItemRef`,
 -- which handles the types it knows and then shows any other in the item
@@ -349,11 +352,12 @@ function Shell.HelpLines()
 	end
 	local lines = {
 		title("Epsilook") .. GREY .. " searches Epsilon's spells from chat" .. END,
-		row("/elo <query>", "search; a page of " .. Shell.PAGE),
+		row("/elo <query>", "search; a page of " .. Shell.Page()),
 		row("/elo <id or spell link>", "inspect one spell"),
 		row("/elo next", "the next page"),
 		row("/elo count <query>", "how many match, a walk over every spell"),
 		row("/elo test", "the self-test"),
+		row("/elo options", "settings: page size, which chat window"),
 		title("Columns")
 			.. GREY
 			.. " a head word, a colon, a value: model"
@@ -435,9 +439,15 @@ function Shell.HelpLines()
 	return lines
 end
 
---- The chat frame a line goes to, and the one function here that writes to it.
+--- The chat frame a line goes to, and the one function here that writes to
+-- it: the window the player chose, the client's default where they chose
+-- none or the one they chose is gone.
 local function say(line)
 	local frame = _G.DEFAULT_CHAT_FRAME
+	local chosen = Epsilook.Config.Get("frame")
+	if chosen and chosen > Epsilook.Config.DEFAULT_FRAME then
+		frame = _G["ChatFrame" .. chosen] or frame
+	end
 	if frame then
 		frame:AddMessage(line)
 	else
@@ -529,7 +539,7 @@ local function page(tree, text, fromIndex)
 		local step = Epsilook:FindSpells(tree, fromIndex, Shell.SLICE)
 		local spell, counts = {}, {}
 		local shown, resume = 0, nil
-		while shown < Shell.PAGE do
+		while shown < Shell.Page() do
 			local at, spellID, after = step()
 			if at == nil then
 				break
@@ -550,7 +560,7 @@ local function page(tree, text, fromIndex)
 			return
 		end
 		local seen = (fromIndex and paging and paging.seen or 0) + shown
-		if shown < Shell.PAGE then
+		if shown < Shell.Page() then
 			paging = nil
 			say(Shell.Said(seen .. " for " .. text))
 			return
@@ -629,6 +639,9 @@ Shell.SUBCOMMANDS = {
 	end,
 	test = function()
 		Epsilook:SelfTest()
+	end,
+	options = function()
+		Epsilook.Options.Show()
 	end,
 }
 
@@ -763,7 +776,7 @@ function Shell.OnHyperlinkEnter(frame, link)
 	local action = spellAction(verb)
 	local hint = action and action.hint
 	if verb == NEXT.key then
-		tooltip:SetText(NEXT.hint:format(Shell.PAGE), 1, 1, 1)
+		tooltip:SetText(NEXT.hint:format(Shell.Page()), 1, 1, 1)
 	elseif axis and verb == Epsilook.Inspect.LIST then
 		Epsilook.Inspect.FillAxisTooltip(tooltip, id, axis)
 		hint = Epsilook.Inspect.HintOf(axis, verb)

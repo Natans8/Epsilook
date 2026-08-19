@@ -178,6 +178,15 @@ one. Epsilon's own commands parse a bare number and read a pasted link as its br
 number rather than a link; the three commands that do take a link -- `.gob spawn`, `.npc spawn` and `.additem` --
 are handed one by a shift-click already.
 
+## Settings
+
+`Epsilook.Config` holds what a player may change, declared once in `Config.SETTINGS` as key, label, hint, kind and
+default. It is a layer below every interface and the engine never reads it, so a setting can change how an answer is
+shown and never what a query answers. `Config.Get(key)` reads one, `Config.Set(key, value)` chooses one and refuses a
+value the declaration does not admit, and a store written by hand keeps only what the declarations still allow.
+`Epsilook.Options` draws the client's settings panel from those same declarations, so adding a setting is one row and
+one reader. Values are saved account-wide in `EpsilookSettings`; `/elo options` opens the panel.
+
 ## Raw data
 
 `Epsilook.data.<axis>` holds each axis file's payload as the emitter wrote it: a header describing columns and one long
