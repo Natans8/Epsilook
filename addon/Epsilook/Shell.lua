@@ -57,7 +57,7 @@ Shell.SPELL_ACTIONS = {
 		key = "aura",
 		label = "Aura",
 		command = "aura",
-		hint = "Click to apply the aura to your target",
+		hint = "Click to apply the aura to yourself",
 		auraOnly = true,
 	},
 	{ key = "inspect", label = "Inspect", hint = "Click to print everything the spell is made of" },
@@ -276,18 +276,36 @@ function Shell.Lenient(message)
 	return table.concat(out, " ")
 end
 
---- The help text, read off the declarations so it cannot fall behind them.
+--- The help text: what the command takes, then the language read off the
+-- declarations so it cannot fall behind them -- the columns with what each
+-- holds, the other head words, the operators, and how terms combine -- and
+-- a few queries to start from.
 -- @return a list of lines
 function Shell.HelpLines()
 	local help = Epsilook:GetQueryHelp()
+	local grammar = Epsilook.Schema.grammar
+	local function title(text)
+		return GOLD .. text .. END
+	end
+	local function row(left, right)
+		return "  " .. GOLD .. left .. END .. "  " .. right
+	end
 	local lines = {
-		Shell.Said(
-			"/elo <query> searches; /elo <id or spell link> inspects; /elo more, count <query>, help, test"
-		),
-		Shell.Said("columns: each a head, as in model:fire"),
+		title("Epsilook") .. GREY .. " searches Epsilon's spells from chat" .. END,
+		row("/elo <query>", "search; a page of " .. Shell.PAGE .. ", [Next] pages on"),
+		row("/elo <id or spell link>", "inspect one spell"),
+		row("/elo count <query>", "how many match"),
+		row("/elo more", "the next page"),
+		row("/elo test", "the self-test"),
+		title("Columns")
+			.. GREY
+			.. " a head word, a colon, a value: model"
+			.. grammar.bind
+			.. "fire"
+			.. END,
 	}
 	for _, column in ipairs(help.columns) do
-		lines[#lines + 1] = "  " .. GOLD .. column.key .. END .. " " .. column.hint
+		lines[#lines + 1] = row(column.key, column.hint)
 	end
 	local doors = {}
 	for _, head in ipairs(help.heads) do
@@ -295,14 +313,49 @@ function Shell.HelpLines()
 			doors[#doors + 1] = head.word
 		end
 	end
-	lines[#lines + 1] = Shell.Said("other heads: " .. table.concat(doors, ", "))
+	lines[#lines + 1] = title("Other heads")
+		.. GREY
+		.. " reached the same way: scale"
+		.. grammar.bind
+		.. "+50%"
+		.. END
+	lines[#lines + 1] = "  " .. table.concat(doors, ", ")
 	local ops = {}
 	for _, op in ipairs(help.operators) do
 		ops[#ops + 1] = op.symbol
 	end
-	lines[#lines + 1] = Shell.Said(
-		"operators: " .. table.concat(ops, " ") .. "; a-b ranges; - excludes; | or between terms"
+	lines[#lines + 1] = title("Operators")
+	lines[#lines + 1] =
+		row(table.concat(ops, " "), "compare or anchor a value: cast>2s, name=Fireball")
+	lines[#lines + 1] =
+		row("a" .. grammar.range .. "b", "a range: scale" .. grammar.bind .. "10-90")
+	lines[#lines + 1] =
+		row(grammar.wildcard, "any value: model" .. grammar.bind .. grammar.wildcard)
+	lines[#lines + 1] = title("Between terms")
+	lines[#lines + 1] = row("a space", "both must hold")
+	lines[#lines + 1] = row(grammar["or"] .. " or " .. grammar.orWord, "either may")
+	lines[#lines + 1] = row(
+		grammar.negate .. "term",
+		"excludes it: fire " .. grammar.negate .. "model" .. grammar.bind .. "missile"
 	)
+	lines[#lines + 1] =
+		row(grammar.phrase .. "a phrase" .. grammar.phrase, "keeps its words together")
+	lines[#lines + 1] = row(
+		"head" .. grammar.bind .. grammar.scope.open .. "a b" .. grammar.scope.close,
+		"one row holding both: model"
+			.. grammar.bind
+			.. grammar.scope.open
+			.. "fire missile"
+			.. grammar.scope.close
+	)
+	lines[#lines + 1] = title("A head word then a space")
+		.. GREY
+		.. " binds to all that follows: /elo model 6dr fire is model"
+		.. grammar.bind
+		.. "6dr model"
+		.. grammar.bind
+		.. "fire"
+		.. END
 	return lines
 end
 
@@ -585,11 +638,10 @@ function Shell.Send(text)
 end
 
 --- The tooltip a link shows while the mouse is over it.
--- A spell link shows the game's own spell tooltip; the aura link shows what
--- the aura says while it is on you, which is the pack's own text; a part's
--- link shows everything the part carries; every one ends in what a click
--- will do. Only this addon's links are handled: the chat frame has other
--- hands on the others.
+-- A spell link shows the game's own spell tooltip, which on this client
+-- already carries what an aura says; a part's link shows everything the part
+-- carries; every one ends in what a click will do. Only this addon's links
+-- are handled: the chat frame has other hands on the others.
 -- @param frame the chat frame the link is in
 -- @param link the link's target
 function Shell.OnHyperlinkEnter(frame, link)
@@ -612,14 +664,6 @@ function Shell.OnHyperlinkEnter(frame, link)
 			Epsilook.Inspect.FillTooltip(tooltip, part)
 		end
 		hint = Epsilook.Inspect.HintOf(axis, verb, part)
-	elseif verb == "aura" then
-		-- The spell's tooltip, then what the aura says while it is on you.
-		tooltip:SetSpellByID(id)
-		local text = Epsilook:GetSpellTextByID(id)
-		if text and text.aura ~= "" then
-			tooltip:AddLine(" ")
-			tooltip:AddLine(text.aura, 1, 1, 1, true)
-		end
 	else
 		tooltip:SetSpellByID(id)
 	end

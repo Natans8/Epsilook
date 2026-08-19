@@ -2,10 +2,11 @@
 --
 -- The tree is the one the web engine's parser emits, cut down to the grammar
 -- the addon carries: plain terms, `head:value`, `-` to exclude, `|` or `or`
--- between clauses, a quoted phrase, a comparison, a range, a comma list and
--- `*` for existence. Row scopes in braces, alternatives in parentheses and
--- patterns are refused with a message rather than read, so a query that parses
--- here means the same thing on the web.
+-- between clauses, a quoted phrase, a comparison, a range, a comma list, `*`
+-- for existence, and a row scope `head:{...}` whose terms one row must
+-- satisfy together. Alternatives in parentheses and patterns are refused with
+-- a message rather than read, so a query that parses here means the same
+-- thing on the web.
 --
 -- Every character and word the grammar uses is read off the exported schema at
 -- load -- the bind, the phrase quote, the wildcard, the count and or words --
@@ -715,9 +716,8 @@ local function newParser(text)
 		[grammar.group.close] = true,
 		[grammar["or"]] = true,
 	}
-	-- Values opening with a bracket read as a construct this grammar left out.
+	-- Values opening with a paren read as a construct this grammar left out.
 	self.refused = {
-		[grammar.scope.open] = "row scopes in braces are not supported here; the web app reads them",
 		[grammar.group.open] = "alternatives in parentheses are not supported here; write a"
 			.. grammar["or"]
 			.. "b",
@@ -939,6 +939,330 @@ function Parser:innerGlue(start, negated, head, vpos, limit)
 	return stop
 end
 
+--- The position after a balanced brace run opening at `open`, or past the
+-- end where it never closes.
+function Parser:skipBraces(open, limit)
+	local grammar = Schema.grammar
+	local depth, i = 0, open
+	while i <= limit do
+		local c = self:char(i)
+		if c == grammar.phrase then
+			local _, stop = scanPhrase(self.text, i, limit)
+			i = stop
+		else
+			if c == grammar.scope.open then
+				depth = depth + 1
+			elseif c == grammar.scope.close then
+				depth = depth - 1
+				if depth == 0 then
+					return i + 1
+				end
+			end
+			i = i + 1
+		end
+	end
+	return limit + 1
+end
+
+--- Append one interpreted term to a scope's run, a failure or an empty
+-- reading kept as a term that does not run.
+function Parser:pushScopeTerm(run, negated, interp, problems, word)
+	if interp.r == "fail" then
+		problems[#problems + 1] = { severity = "error", message = interp.message }
+		run[#run + 1] = { ["not"] = negated, state = "incomplete" }
+	elseif interp.r == "empty" then
+		problems[#problems + 1] =
+			{ severity = "error", message = word .. " has no value: " .. interp.why }
+		run[#run + 1] = { ["not"] = negated, state = "incomplete" }
+	else
+		local ask
+		if interp.r == "content" then
+			ask = { on = "content", value = interp.value }
+		elseif interp.r == "props" then
+			ask = { on = "props", props = interp.props, value = interp.value }
+		elseif interp.r == "count" then
+			ask = { on = "count", value = interp.value }
+		elseif interp.r == "kindWord" then
+			ask = { on = "kindWord", kind = interp.kind }
+		else
+			ask = { on = "content", value = { op = "present" } }
+		end
+		run[#run + 1] = { ["not"] = negated, state = "ok", ask = ask }
+	end
+end
+
+--- One item inside a scope's body: a bind the head resolves, or a bare term.
+-- A comparison reads across whitespace inside a scope, `{count > 5}`; a
+-- colon binds only glued. A word the head does not know before a colon is
+-- ordinary text; inside a kind's scope an unknown word is foreign, and the
+-- caller refuses the clause.
+-- @return the position to continue from, and a message where the item is foreign
+function Parser:innerItem(head, negated, i, bodyEnd, run, problems)
+	local grammar = Schema.grammar
+	local j = self:wordEnd(i, bodyEnd)
+	local sepAt = j
+	if j > i and j <= bodyEnd and isWs(self:char(j)) then
+		local k = j
+		while k <= bodyEnd and isWs(self:char(k)) do
+			k = k + 1
+		end
+		if k <= bodyEnd and Schema.comparisonStarts[self:char(k)] then
+			sepAt = k
+		end
+	end
+	local sep = sepAt <= bodyEnd and self:char(sepAt) or ""
+	if j > i and (sep == grammar.bind or Schema.comparisonStarts[sep]) then
+		local word = Text.fold(sub(self.text, i, j - 1))
+		local ctx, foreign = innerBind(head, word)
+		if foreign then
+			return i, foreign
+		end
+		if ctx then
+			local vpos = sep == grammar.bind and sepAt + 1 or sepAt
+			local segs, stop = self:valueToken(vpos, bodyEnd)
+			if #segs == 0 then
+				problems[#problems + 1] =
+					{ severity = "warning", message = word .. " has no value here and is ignored" }
+				run[#run + 1] = { ["not"] = negated, state = "incomplete" }
+				return vpos
+			end
+			local main, extras = self:interpretSegs(segs, ctx, problems)
+			self:pushScopeTerm(run, negated, main, problems, word)
+			for _, seg in ipairs(extras) do
+				local more = self:interpretSegs({ seg }, ctxFor(head), problems)
+				self:pushScopeTerm(run, false, more, problems, seg.text)
+			end
+			return stop
+		end
+	end
+	local segs, stop = self:token(i, bodyEnd)
+	if #segs == 0 then
+		return i + 1
+	end
+	local main, extras = self:interpretSegs(segs, ctxFor(head), problems)
+	self:pushScopeTerm(run, negated, main, problems, sub(self.text, i, stop - 1))
+	for _, seg in ipairs(extras) do
+		local more = self:interpretSegs({ seg }, ctxFor(head), problems)
+		self:pushScopeTerm(run, false, more, problems, seg.text)
+	end
+	return stop
+end
+
+--- A value token inside a scope, where a comparison reads across whitespace
+-- on both sides: a lone operator followed by space and an operand is one
+-- value, `{count > 5}`. Nothing bridges towards an alternation, an exclusion
+-- or a brace.
+function Parser:valueToken(vpos, limit)
+	local grammar = Schema.grammar
+	local segs, stop = self:token(vpos, limit)
+	if #segs ~= 1 or segs[1].form ~= "bare" or not operatorAlone(segs[1].text) then
+		return segs, stop
+	end
+	local k = stop
+	while k <= limit and isWs(self:char(k)) do
+		k = k + 1
+	end
+	if k == stop or k > limit then
+		return segs, stop
+	end
+	local c = self:char(k)
+	if
+		c == grammar["or"]
+		or c == grammar.negate
+		or c == grammar.scope.close
+		or c == grammar.scope.open
+	then
+		return segs, stop
+	end
+	local more, after = self:token(k, limit)
+	if #more == 0 then
+		return segs, stop
+	end
+	-- A bare operand joins the operator as one segment, `>5`; a phrase stays
+	-- its own, as the interpreter reads an operator glued to a phrase.
+	if more[1].form == "bare" then
+		segs[1] = {
+			form = "bare",
+			text = segs[1].text .. more[1].text,
+			start = segs[1].start,
+			stop = more[1].stop,
+		}
+		table.remove(more, 1)
+	end
+	for _, seg in ipairs(more) do
+		segs[#segs + 1] = seg
+	end
+	return segs, after
+end
+
+--- Whether a scope term states a bare value of the row: no negation, no operator.
+local function statesBareValue(term)
+	if term.state ~= "ok" or term["not"] or not term.ask then
+		return false
+	end
+	local ask = term.ask
+	if ask.on == "kindWord" or ask.on == "count" then
+		return false
+	end
+	local op = ask.value.op
+	return op == "contains" or op == "anyOf"
+end
+
+--- On a kind a spell has at most one row of, several bare values in one run
+-- each become their own alternative, since one row cannot be two things;
+-- whatever else the run stated keeps every alternative company.
+local function alternateWhereSingle(head, runs)
+	if head.role ~= "kind" or head.kind.single ~= true then
+		return runs
+	end
+	local out = {}
+	for _, run in ipairs(runs) do
+		local loose, rest = {}, {}
+		for _, term in ipairs(run) do
+			if statesBareValue(term) then
+				loose[#loose + 1] = term
+			else
+				rest[#rest + 1] = term
+			end
+		end
+		if #loose < 2 then
+			out[#out + 1] = run
+		else
+			for _, term in ipairs(loose) do
+				local alternative = { term }
+				for _, other in ipairs(rest) do
+					alternative[#alternative + 1] = other
+				end
+				out[#out + 1] = alternative
+			end
+		end
+	end
+	return out
+end
+
+--- A row scope after the head's colon: `head:{inner}`. The inner terms are
+-- again alternation groups of conjunctions, each term a bind the head
+-- resolves or a bare value, and one row must satisfy a whole conjunction. A
+-- brace inside the scope has nothing to refer to and refuses the clause. A
+-- run of nothing but negations is refused too: inside a scope negation
+-- refines and needs a positive anchor. A scope never closed runs to the end
+-- of the text, with a warning.
+-- @param start where the clause began
+-- @param negated whether the clause is excluded
+-- @param head the column or kind head
+-- @param brace the position of the opening brace
+-- @param limit the end of the text
+-- @return the position to continue from
+function Parser:scope(start, negated, head, brace, limit)
+	local grammar = Schema.grammar
+	local open, close = grammar.scope.open, grammar.scope.close
+	local i, closeAt, inner = brace + 1, nil, nil
+	while i <= limit do
+		local c = self:char(i)
+		if c == grammar.phrase then
+			local _, stop = scanPhrase(self.text, i, limit)
+			i = stop
+		elseif c == open then
+			inner = inner or i
+			i = i + 1
+		elseif c == close then
+			if not inner then
+				closeAt = i
+			end
+			break
+		else
+			i = i + 1
+		end
+	end
+	if inner then
+		local stop = self:skipBraces(brace, limit)
+		self:push({ start = start, stop = stop - 1 }, negated, "invalid", nil, {
+			{ message = "a scope inside a scope has nothing to refer to" },
+		})
+		return stop
+	end
+	local bodyEnd = closeAt and closeAt - 1 or limit
+	local after = closeAt and closeAt + 1 or limit + 1
+	local problems = {}
+	local runs, run = {}, {}
+	i = brace + 1
+	while i <= bodyEnd do
+		local c = self:char(i)
+		if isWs(c) then
+			i = i + 1
+		elseif c == grammar["or"] then
+			runs[#runs + 1] = run
+			run = {}
+			i = i + 1
+		else
+			local word = self:orWordEnd(i, bodyEnd)
+			if word > i then
+				runs[#runs + 1] = run
+				run = {}
+				i = word
+			else
+				local termNot, skip = false, false
+				local nextChar = i < bodyEnd and self:char(i + 1) or ""
+				if c == grammar.negate and not nextChar:match("^[%d.]") then
+					if nextChar == "" or isWs(nextChar) or nextChar == grammar["or"] then
+						problems[#problems + 1] = { message = "the minus excludes nothing" }
+						run[#run + 1] = { ["not"] = true, state = "incomplete" }
+						i, skip = i + 1, true
+					else
+						termNot, i = true, i + 1
+					end
+				end
+				if not skip then
+					local stop, foreign = self:innerItem(head, termNot, i, bodyEnd, run, problems)
+					if foreign then
+						problems[#problems + 1] = { message = foreign }
+						self:push(
+							{ start = start, stop = after - 1 },
+							negated,
+							"invalid",
+							nil,
+							problems
+						)
+						return after
+					end
+					i = stop > i and stop or i + 1
+				end
+			end
+		end
+	end
+	runs[#runs + 1] = run
+	runs = alternateWhereSingle(head, runs)
+	for _, each in ipairs(runs) do
+		local ok, anchored = 0, false
+		for _, term in ipairs(each) do
+			if term.state == "ok" then
+				ok = ok + 1
+				if not term["not"] then
+					anchored = true
+				end
+			end
+		end
+		if ok > 0 and not anchored then
+			problems[#problems + 1] =
+				{ message = "a scope needs a positive term; a negation inside it only refines" }
+			self:push({ start = start, stop = after - 1 }, negated, "invalid", nil, problems)
+			return after
+		end
+	end
+	if not closeAt then
+		problems[#problems + 1] = { severity = "warning", message = "the scope is not closed" }
+	end
+	local test = { is = "scope", terms = runs }
+	local ask
+	if head.role == "column" then
+		ask = { on = "column", column = head.column, test = test }
+	else
+		ask = { on = "kind", kind = head.kind, test = test }
+	end
+	self:push({ start = start, stop = after - 1 }, negated, "ok", ask, problems)
+	return after
+end
+
 --- `head:` and whatever follows the colon.
 function Parser:bound(start, negated, head, vpos, limit)
 	local c = vpos <= limit and self:char(vpos) or ""
@@ -963,6 +1287,16 @@ function Parser:bound(start, negated, head, vpos, limit)
 			{ { message = refused } }
 		)
 		return stop
+	end
+	if c == Schema.grammar.scope.open then
+		if head.role == "prop" then
+			local stop = self:skipBraces(vpos, limit)
+			self:push({ start = start, stop = stop - 1 }, negated, "invalid", nil, {
+				{ message = Schema.HeadWord(head) .. " takes a value, not a scope" },
+			})
+			return stop
+		end
+		return self:scope(start, negated, head, vpos, limit)
 	end
 	if head.role ~= "prop" then
 		local glued = self:innerGlue(start, negated, head, vpos, limit)
@@ -1092,6 +1426,48 @@ local function formatExpr(expr)
 	return Schema.operators[expr.op].symbol .. quoted(expr.operand)
 end
 
+--- One scope term written back: its word and value, the exclusion before it.
+local function formatTerm(term)
+	local grammar = Schema.grammar
+	local ask = term.ask
+	local out
+	if ask.on == "kindWord" then
+		out = ask.kind.word
+	elseif ask.on == "content" then
+		out = formatExpr(ask.value)
+	elseif ask.on == "count" then
+		out = grammar.countWord
+			.. (symbolled(ask.value) and "" or grammar.bind)
+			.. formatExpr(ask.value)
+	else
+		local prop = ask.props[1].prop
+		out = prop.name .. (symbolled(ask.value) and "" or grammar.bind) .. formatExpr(ask.value)
+	end
+	if term["not"] then
+		out = grammar.negate .. out
+	end
+	return out
+end
+
+--- A scope's runs written back inside braces, terms a space apart and runs
+-- an or apart; the terms that do not run are left out.
+local function formatScope(runs)
+	local grammar = Schema.grammar
+	local groups = {}
+	for _, run in ipairs(runs) do
+		local words = {}
+		for _, term in ipairs(run) do
+			if term.state == "ok" and term.ask then
+				words[#words + 1] = formatTerm(term)
+			end
+		end
+		groups[#groups + 1] = table.concat(words, " ")
+	end
+	return grammar.scope.open
+		.. table.concat(groups, " " .. grammar["or"] .. " ")
+		.. grammar.scope.close
+end
+
 --- One clause written back as query text.
 -- The operator replaces the colon on a bind that has one: `cast>2s`, never
 -- `cast:>2s`. An inner bind keeps its property's name: `model:file=foo`. A
@@ -1122,6 +1498,8 @@ local function formatClause(clause)
 		if test.is == "exists" then
 			out = ask.on == "column" and (head .. grammar.bind .. grammar.wildcard)
 				or (ask.kind.column .. grammar.bind .. ask.kind.word)
+		elseif test.is == "scope" then
+			out = head .. grammar.bind .. formatScope(test.terms)
 		elseif ask.inner then
 			local word = test.is == "count" and grammar.countWord or test.props[1].prop.name
 			out = head .. grammar.bind .. word .. formatExpr(test.value)

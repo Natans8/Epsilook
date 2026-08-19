@@ -50,6 +50,19 @@ Inspect.GROUPS = { sound = "kit" }
 --- How many parts an axis's tooltip lists before it says how many more.
 Inspect.LISTED = 12
 
+--- The axes whose every part is a link whatever it can be handed, because
+-- the tooltip is where the part's detail lives: an effect's implicit targets
+-- and the aura it applies, an aura's own target.
+Inspect.DETAILED = { mech = true }
+
+--- The kinds whose texture draws on the line, and how large: a chain's
+-- strip is long and thin. An experiment in scale before it spreads.
+Inspect.TEXTURES = { ["fx.chain"] = { height = 16, width = 64 } }
+
+--- A white square the client ships, painted by the colour arguments of the
+-- texture escape, so a colour shows as itself.
+local SWATCH = "Interface/Buttons/WHITE8X8"
+
 --- The head line: the spell's name as a link, its id, school and expansion.
 function Inspect.HeadLine(spell)
 	local parts = { Shell.SpellLink(spell), GOLD .. spell.id .. END }
@@ -76,9 +89,10 @@ end
 
 --- The values a part carries, each written, in the catalogue's order.
 -- @param part a PartData
--- @return a list of { name, text, id, path }: the property, its value as
---   written, the stored id where the value resolved from one, and whether it
---   is a file path
+-- @return a list of { name, text, id, path, colour, stored }: the property,
+--   its value as written, the stored id where the value resolved from one,
+--   whether it is a file path, the packed colour where it is one, and the
+--   stored number itself
 function Inspect.Values(part)
 	local kind = Epsilook.Schema.kindById[part.axis .. "." .. part.kind]
 	local out = {}
@@ -90,17 +104,45 @@ function Inspect.Values(part)
 				text = Epsilook:FormatPartValue(part.axis, part.kind, prop.name, value),
 				id = type(value) == "table" and value.id or nil,
 				path = prop.types[1] == "path",
+				colour = prop.types[1] == "colour" and value or nil,
+				stored = Epsilook.Data.GetStored(part.axis, part.kind, part.slot, prop.name),
 			}
 		end
 	end
 	return out
 end
 
---- A value as plain text: a path cut to its file name, and the id where a
--- name that resolved from one is blank.
+--- A colour painted as itself: a swatch in the colour, then its hex in the
+-- colour.
+local function painted(colour)
+	local r = math.floor(colour / 65536) % 256
+	local g = math.floor(colour / 256) % 256
+	local b = colour % 256
+	local hex = string.format("%02x%02x%02x", r, g, b)
+	return "|T"
+		.. SWATCH
+		.. ":12:12:0:0:8:8:0:8:0:8:"
+		.. r
+		.. ":"
+		.. g
+		.. ":"
+		.. b
+		.. "|t"
+		.. "|cff"
+		.. hex
+		.. "#"
+		.. hex
+		.. END
+end
+
+--- A value as plain text: a path cut to its file name, a colour painted, and
+-- the id where a name that resolved from one is blank.
 local function plain(value)
 	if value.path then
 		return value.text:match("([^/\\]+)$") or value.text
+	end
+	if value.colour then
+		return painted(value.colour)
 	end
 	if value.id and value.text == "" then
 		return tostring(value.id)
@@ -187,8 +229,9 @@ function Inspect.Subject(part)
 	return first and written(first) or nil
 end
 
---- Fill a tooltip with a part: its kind as the title, then one line per value,
--- a path written whole.
+--- Fill a tooltip with a part: its kind as the title, then one line per
+-- value, a path written whole, then what the part carries beyond its
+-- properties -- an effect's implicit targets and the aura it applies.
 -- @param tooltip the GameTooltip, already owned
 -- @param part a PartData
 function Inspect.FillTooltip(tooltip, part)
@@ -196,6 +239,10 @@ function Inspect.FillTooltip(tooltip, part)
 	for _, value in ipairs(Inspect.Values(part)) do
 		local text = value.path and value.text or written(value)
 		tooltip:AddDoubleLine(value.name, text, 0.62, 0.62, 0.62, 1, 1, 1)
+	end
+	for _, extra in ipairs(Epsilook:GetPartExtras(part)) do
+		local text = extra.text ~= "" and extra.text or tostring(extra.value)
+		tooltip:AddDoubleLine(extra.name, text, 0.62, 0.62, 0.62, 1, 1, 1)
 	end
 end
 
@@ -245,13 +292,35 @@ local function emoteOf(part, key)
 	return emote ~= 0 and emote or nil
 end
 
---- The number an action sends for a part, or nil where the part cannot take
--- the action: the spawn id for a model's file, the emote for an animation,
--- the stored value the action names otherwise, and nil for an action needing
--- nothing or one the part's kind does not take.
+--- Whether an item is named anywhere the addon can reach: by the pack, or
+-- by the client where it has the item loaded. An item nobody names cannot
+-- be added by id with any confidence and is looked up by its model instead.
+local function itemNamed(part)
+	local name = part.values.name
+	if type(name) == "table" and name.text ~= "" then
+		return true
+	end
+	local id = needed(part, "id")
+	return id ~= nil and _G.GetItemInfo ~= nil and _G.GetItemInfo(id) ~= nil
+end
+
+--- A model's file name without its path or extension, what `.lookup item`
+-- finds an unnamed item's template by.
+local function modelName(part)
+	local path = part.values.file or ""
+	local name = path:match("([^/\\]+)$") or path
+	return (name:gsub("%.[^.]*$", ""))
+end
+
+--- What an action sends for a part, or nil where the part cannot take the
+-- action: the spawn id for a model's file, the emote for an animation, the
+-- model's name for an item lookup, the stored value the action names
+-- otherwise, and nil for an action needing nothing or one the part's kind
+-- does not take. An item is added only where something names it and looked
+-- up only where nothing does.
 -- @param part a PartData
 -- @param action an Action of the part's axis
--- @return the number, or nil
+-- @return the number or text, or nil
 function Inspect.ArgumentOf(part, action)
 	if action.kind and action.kind ~= part.kind or action.except == part.kind then
 		return nil
@@ -263,6 +332,10 @@ function Inspect.ArgumentOf(part, action)
 		return spawnOf(part)
 	elseif action.key == "anim" or action.key == "stand" then
 		return emoteOf(part, action.key)
+	elseif action.key == "add" then
+		return itemNamed(part) and needed(part, action.needs) or nil
+	elseif action.key == "lookup" then
+		return not itemNamed(part) and modelName(part) or nil
 	end
 	return needed(part, action.needs)
 end
@@ -421,11 +494,21 @@ end
 local function line(spellID, part, n, indent, label, verb)
 	local values, actions = valuesFor(part, verb), actionsFor(part.axis, verb)
 	local out = indent
-	if label then
-		out = out .. CYAN .. label .. ":" .. END .. " "
-	end
 	local subject = values[1]
+	if label then
+		-- A label on its own names a part that is nothing but its kind, and
+		-- takes no colon; one with a subject after it does.
+		out = out .. CYAN .. label .. (subject and ":" or "") .. END .. (subject and " " or "")
+	end
 	local vocab = subject and Epsilook.Data.GetVocabName(part.axis, part.kind, subject.name)
+	-- An item's name may be blank and yield the lead to its id; the item is
+	-- still an item, so the items reading looks past the subject.
+	local item
+	for _, value in ipairs(values) do
+		if Epsilook.Data.GetVocabName(part.axis, part.kind, value.name) == "items" then
+			item = value
+		end
+	end
 	local links
 	if vocab == "spells" then
 		-- Another spell: the game's own link to it, and its own actions.
@@ -436,13 +519,35 @@ local function line(spellID, part, n, indent, label, verb)
 		links = Shell.SpellActionLinks(subject.id)
 	elseif subject then
 		local shown, icon, colour = written(subject), nil, WHITE
-		if vocab == "items" then
+		local stated = nil
+		if item then
+			-- A name the pack resolved is an id and a text; one it could not
+			-- is the bare stored number, and then the pack has no name.
+			local id = item.id or item.stored
 			local name
-			name, icon, colour = itemShown(subject.id, subject.text)
-			shown = written({ text = name, id = subject.id })
+			name, icon, colour = itemShown(id, item.id and item.text or "")
 			colour = colour or WHITE
+			if name ~= "" then
+				shown = written({ text = name, id = id })
+			else
+				-- Nothing names the item; its model's name is what it goes by,
+				-- so the file beside it would say the same thing twice.
+				shown = modelName(part) .. " - " .. id
+				stated = "file"
+			end
 		end
-		if Inspect.ClipOf(part, actions, shown) then
+		local texture = Inspect.TEXTURES[part.axis .. "." .. part.kind]
+		if texture and subject.path and subject.stored then
+			out = out
+				.. "|T"
+				.. subject.stored
+				.. ":"
+				.. texture.height
+				.. ":"
+				.. texture.width
+				.. "|t "
+		end
+		if Inspect.DETAILED[part.axis] or Inspect.ClipOf(part, actions, shown) then
 			out = out .. Shell.Link(spellID, verb, shown, part.axis, n, colour, icon)
 		else
 			if icon then
@@ -450,7 +555,9 @@ local function line(spellID, part, n, indent, label, verb)
 			end
 			out = out .. colour .. shown .. END
 			for i = 2, #values do
-				out = out .. "  " .. beside(values[i])
+				if (values[i].text ~= "" or values[i].id) and values[i].name ~= stated then
+					out = out .. "  " .. beside(values[i])
+				end
 			end
 		end
 		links = Inspect.ActionLinks(spellID, part, n, actions)
@@ -555,9 +662,74 @@ function Inspect.Print(spellID, say)
 		say(Shell.Said(RED .. "no spell " .. tostring(spellID) .. " in this pack" .. END))
 		return
 	end
-	say(Inspect.HeadLine(spell))
+	local printed = false
+	local function printNow()
+		if printed then
+			return
+		end
+		printed = true
+		say(Inspect.HeadLine(spell))
+		for _, axis in ipairs(Epsilook:GetPartAxes()) do
+			Inspect.PrintAxis(spellID, axis, say)
+		end
+	end
+	Inspect.WhenItemsLoaded(spellID, printNow)
+end
+
+--- How long the dossier waits for the client to load an item before it
+-- prints with what it has, in seconds.
+Inspect.ITEM_WAIT = 1
+
+--- The item ids a spell's parts name that the client has not loaded yet.
+local function unloadedItems(spellID)
+	local ids = {}
+	local make = _G.Item and _G.Item.CreateFromItemID
+	if not make then
+		return ids
+	end
+	local counts = Epsilook:GetPartCounts(spellID)
 	for _, axis in ipairs(Epsilook:GetPartAxes()) do
-		Inspect.PrintAxis(spellID, axis, say)
+		for i = 1, counts[axis] or 0 do
+			local part = Epsilook:GetPartDataByIndex(spellID, axis, i)
+			for name, value in pairs(part.values) do
+				if
+					type(value) == "table"
+					and Epsilook.Data.GetVocabName(axis, part.kind, name) == "items"
+				then
+					local item = make(_G.Item, value.id)
+					if not item:IsItemEmpty() and not item:IsItemDataCached() then
+						ids[#ids + 1] = value.id
+					end
+				end
+			end
+		end
+	end
+	return ids
+end
+
+--- Run a function once the client has loaded the items a spell's parts name,
+-- so their names, icons and qualities print; at once where it has them or
+-- there is no client, and after a short wait regardless, so an item the
+-- client cannot load never holds the dossier.
+-- @param spellID the spell
+-- @param continue the function to run
+function Inspect.WhenItemsLoaded(spellID, continue)
+	local pending = unloadedItems(spellID)
+	if #pending == 0 then
+		continue()
+		return
+	end
+	local left = #pending
+	for _, id in ipairs(pending) do
+		_G.Item:CreateFromItemID(id):ContinueOnItemLoad(function()
+			left = left - 1
+			if left == 0 then
+				continue()
+			end
+		end)
+	end
+	if _G.C_Timer and _G.C_Timer.After then
+		_G.C_Timer.After(Inspect.ITEM_WAIT, continue)
 	end
 end
 
@@ -567,15 +739,13 @@ local playing = {}
 --- The server commands the actions send, by key, each taking the action's
 -- argument. The sound actions are not here: they are the client's own calls.
 local COMMANDS = {
-	spawn = "gob spawn %d",
-	add = "additem %d",
-	summon = "npc spawn %d",
-	morph = "morph %d",
-	anim = "mod anim %d",
-	stand = "mod standstate %d",
-	animkit = "mod animkit %d",
-	resetAnim = "mod stand 30",
-	resetStand = "mod stand 0",
+	spawn = "gob spawn %s",
+	add = "additem %s",
+	lookup = "lookup item %s",
+	summon = "npc spawn %s",
+	morph = "morph %s",
+	anim = "mod anim %s",
+	stand = "mod standstate %s",
 }
 
 --- The action an axis offers under a key, or nil.
@@ -598,7 +768,9 @@ end
 -- @param say the function that prints a line
 function Inspect.Execute(spellID, key, axis, n, say)
 	if key == Inspect.LIST then
-		Inspect.PrintAxis(spellID, axis, say)
+		Inspect.WhenItemsLoaded(spellID, function()
+			Inspect.PrintAxis(spellID, axis, say)
+		end)
 		return
 	end
 	local part = Epsilook:GetPartDataByIndex(spellID, axis, n)

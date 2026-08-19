@@ -27,6 +27,11 @@ PROBES = [
     "scale:10-90", "tint:red", "mech:debuff", "mech:triggers", "cast>2s", "cast:instant", "channel:unlimited",
     "spell:breaksmove", "spell:unbreakable", "fire -model:missile", "fire | frost", "name:fire model:missile",
     "kit:150", "sound:kit=150", "effect:heal", "aura:dummy", "location:*", "summon:*", "speed:>+50%",
+    # Row scopes: one row satisfies a conjunction; a count term is lifted out; negation refines.
+    "model:{fire missile}", "model:{fire -missile}", "model:{attach:chest fire}", "model:{missile}", "model:{}",
+    "model:{count>5 fire}", "model:{count > 5}", "missile:{from:chest}", "model:{fire | frost}",
+    "sound:{fire kit:150}", "spell:{name:fire desc:kneel}", "id:{133 134}", "xpac:{wotlk legion}",
+    "mech:{triggers caster}", "fx:{glow red}", "model:{fire missile", "anim:{kit count:>2}",
 ]
 """Queries across every column and most types, each answered by both engines."""
 
@@ -54,7 +59,9 @@ def first(engine: LuaRuntime, query: str, limit: int) -> list[int]:
       return out
     end
     """)
-    return [int(str(v)) for v in as_list(lua_function(engine, b"FIRST")(query.encode("utf-8"), limit))]
+    found = unwrap(lua_function(engine, b"FIRST")(query.encode("utf-8"), limit))
+    # An empty Lua table is neither list nor mapping; a query with no answer is the empty list.
+    return [] if found == {} else [int(str(v)) for v in as_list(found)]
 
 
 def test_the_iterator_resumes_where_it_stopped(engine: LuaRuntime) -> None:

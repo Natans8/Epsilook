@@ -48,7 +48,7 @@ def test_a_pasted_link_reads_as_the_id(engine: LuaRuntime) -> None:
 
 
 def test_the_cut_grammar_refuses_what_it_does_not_read(engine: LuaRuntime) -> None:
-    for text in ("model:{fire}", "model:(fire|frost)", "name:fire*", "-", "model:"):
+    for text in ("model:(fire|frost)", "name:fire*", "-", "model:", "model:{-fire}", "model:{a {b}}"):
         tree = parsed(engine, text)
         assert tree["groups"] in ([], {}), text
         assert tree["problems"], text

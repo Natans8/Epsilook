@@ -10,9 +10,8 @@
  * transform of the app rather than a second account of it.
  *
  * Only what a reader consumes is exported: an optional field a declaration leaves unset is omitted rather than
- * written as null, and a field only the web's own surfaces read (relevance tiers, the `single` fact the simplifier
- * reasons with, the qualifier warning, kind groups, operator precedence) stays out. Exporting a field nothing
- * consumes is a promise nobody made.
+ * written as null, and a field only the web's own surfaces read (relevance tiers, the qualifier warning, kind
+ * groups, operator precedence) stays out. Exporting a field nothing consumes is a promise nobody made.
  */
 import type {Notation, Operator} from "../src/search/index";
 import {
@@ -72,6 +71,9 @@ function main(): void {
         full: kind.full,
         synonyms: kind.synonyms ?? [],
         global: kind.global ?? false,
+        // A spell has at most one row of a single kind, so several bare values in one row scope on it are
+        // alternatives; a second engine reading scopes needs the fact.
+        single: kind.single,
         hint: kind.hint,
         props: Object.entries(kind.props).map(([name, prop]) => trimmed({
             name,

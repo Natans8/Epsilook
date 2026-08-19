@@ -235,8 +235,8 @@ local pools = {}
 -- and `first[#kinds + 1]` is one past the last. `marks` are the checkpoints
 -- into the counts, built on the first row range asked for.
 -- @param axis the axis
--- @return a table with kinds, first, values, vocab, absent, blob, counts,
---   countsBlob, refs, refsBlob; or nil where the axis has no row table
+-- @return a table with kinds, first, values, carried, vocab, absent, blob,
+--   counts, countsBlob, refs, refsBlob; or nil where the axis has no row table
 function Data.GetRowTable(axis)
 	local table_ = pools[axis]
 	if table_ ~= nil then
@@ -260,6 +260,7 @@ function Data.GetRowTable(axis)
 		kinds = kinds,
 		first = first,
 		values = Data.GetColumn(axis, section, "values"),
+		carried = Data.GetColumn(axis, section, "carried"),
 		vocab = Data.ReadAll(axis, section, "vocab") or {},
 		absent = Data.ReadAll(axis, section, "absent") or {},
 		blob = blob,
@@ -371,6 +372,25 @@ function Data.GetStored(axis, kind, slot, prop)
 		return nil
 	end
 	return value
+end
+
+--- A carried column's stored number on one pooled row. A carried column is
+-- one a row has beyond the properties its kind declares -- what the shipped
+-- app rebuilds a section from -- and the pack writes it beside the values.
+-- @param axis the axis
+-- @param kind the kind's word
+-- @param slot the row's slot in that kind's pool
+-- @param name the column's name
+-- @return the number, or nil where the kind carries no such column
+function Data.GetCarried(axis, kind, slot, name)
+	local table_ = Data.GetRowTable(axis)
+	local carried = table_ and table_.carried
+	local group = carried and carried.columns[kind]
+	local node = group and group.columns[name]
+	if not node then
+		return nil
+	end
+	return Reader.value(table_.blob, node, slot)
 end
 
 --- The vocabulary a property's stored number is keyed by, if any.

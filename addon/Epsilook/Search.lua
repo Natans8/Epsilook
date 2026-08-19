@@ -11,6 +11,13 @@
 -- ships as per-spell columns rather than as a row table, and that table is
 -- keyed by the kind's identity so that a renamed door does not move it.
 --
+-- Inside a row scope the terms are again alternation groups of conjunctions,
+-- and one row must satisfy a whole conjunction: each term compiles to a slot
+-- test per kind and the conjunction is their product on the one slot. A
+-- count term is the exception -- it asks about the set of rows the
+-- conjunction's row terms leave -- so it is lifted out and tested against
+-- that set's size, and a conjunction with no row terms counts every row.
+--
 -- Nothing is held. `Search.Find` returns an iterator that walks the spells in
 -- order and yields each one that passes, so a first page costs what it costs
 -- to reach the twentieth hit and a count costs the whole walk; a caller that
@@ -587,6 +594,35 @@ local function countKind(axis, table_, spell, cursor, kindWord)
 	return found
 end
 
+--- How many rows of a spell on an axis pass a kind-and-slot test.
+-- @param kindFilter a kind word, or nil for every kind
+-- @param rowTests tests by kind word, each taking a slot
+local function countRows(axis, table_, spell, cursor, kindFilter, rowTests)
+	local at, count = rowRange(axis, table_, spell, cursor)
+	if not at then
+		return 0
+	end
+	local refs, blob = table_.refs, table_.refsBlob
+	local kinds, first, n = table_.kinds, table_.first, #table_.kinds
+	local found = 0
+	for i = at, at + count - 1 do
+		local ref = Reader.number(blob, refs, i)
+		for k = 1, n do
+			if ref < first[k + 1] then
+				local kind = kinds[k]
+				if kindFilter == nil or kind == kindFilter then
+					local test = rowTests[kind]
+					if test and test(ref - first[k]) then
+						found = found + 1
+					end
+				end
+				break
+			end
+		end
+	end
+	return found
+end
+
 --- A count test on a number of rows.
 local function countTest(expr)
 	local plans = plansFor(Schema.COUNT_PROP, expr)
@@ -607,6 +643,101 @@ local function anyKind(byKind)
 		tests[#tests + 1] = test
 	end
 	return anyOf(tests) or never
+end
+
+--- A scope term's slot test on one kind, or nil where no row of the kind can
+-- satisfy it: a kind word is the kind itself, content is the union over the
+-- kind's properties, and a property term is the union over the kind's own
+-- references.
+local function termTest(cache, kind, ask, virtual)
+	if ask.on == "kindWord" then
+		if ask.kind == kind then
+			return function()
+				return true
+			end
+		end
+		return nil
+	elseif ask.on == "content" then
+		return contentTest(cache, kind, ask.value, false, virtual)
+	end
+	local tests = {}
+	for _, ref in ipairs(ask.props) do
+		if ref.kind == kind then
+			tests[#tests + 1] = propTest(cache, kind, ref.prop, ask.value, nil, virtual)
+		end
+	end
+	return anyOf(tests)
+end
+
+--- One scope conjunction compiled for one kind: the product of its row
+-- terms on one slot, a negated term negating per row. A term no row of the
+-- kind can satisfy is false there, which a negation makes true, as it is on
+-- the web.
+local function conjunctionTest(cache, kind, rowTerms, virtual)
+	local tests, n = {}, #rowTerms
+	for i, term in ipairs(rowTerms) do
+		tests[i] =
+			{ test = termTest(cache, kind, term.ask, virtual) or never, negated = term["not"] }
+	end
+	return function(slot)
+		for i = 1, n do
+			local entry = tests[i]
+			if entry.test(slot) == entry.negated then
+				return false
+			end
+		end
+		return true
+	end
+end
+
+--- A scope's terms compiled into a spell predicate over a column's rows: any
+-- conjunction holding of one row, its count terms of the rows that hold.
+local function compileScope(cache, column, kinds, kindFilter, table_, virtual, runs)
+	local filter = kindFilter and kindFilter.word or nil
+	local alternatives = {}
+	for _, run in ipairs(runs) do
+		local rowTerms, countTests = {}, {}
+		for _, term in ipairs(run) do
+			if term.state == "ok" and term.ask then
+				if term.ask.on == "count" then
+					local counting = countTest(term.ask.value)
+					if counting then
+						countTests[#countTests + 1] = { test = counting, negated = term["not"] }
+					end
+				else
+					rowTerms[#rowTerms + 1] = term
+				end
+			end
+		end
+		local byKind = {}
+		for _, kind in ipairs(kinds) do
+			byKind[kind.word] = conjunctionTest(cache, kind, rowTerms, virtual)
+		end
+		if virtual then
+			-- A column read per spell has one reading per kind; a count of
+			-- them is not a question it answers.
+			if #countTests == 0 then
+				alternatives[#alternatives + 1] = anyKind(byKind)
+			end
+		elseif #countTests == 0 then
+			alternatives[#alternatives + 1] = function(spell, cursor)
+				return anyRow(column, table_, spell, cursor, filter, byKind)
+			end
+		else
+			local m = #countTests
+			alternatives[#alternatives + 1] = function(spell, cursor)
+				local size = countRows(column, table_, spell, cursor, filter, byKind)
+				for i = 1, m do
+					local entry = countTests[i]
+					if entry.test(size) == entry.negated then
+						return false
+					end
+				end
+				return true
+			end
+		end
+	end
+	return anyOf(alternatives) or never
 end
 
 --- One clause's ask compiled into a spell predicate.
@@ -707,6 +838,10 @@ local function compileAsk(cache, ask)
 		return function(spell)
 			return counting(Reader.number(blob, counts, spell))
 		end
+	end
+
+	if test.is == "scope" then
+		return compileScope(cache, column, kinds, kindFilter, table_, virtual, test.terms)
 	end
 
 	-- Content or properties: property tests by kind.

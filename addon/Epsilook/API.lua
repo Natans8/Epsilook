@@ -344,6 +344,38 @@ function Epsilook:FormatPartValue(axis, kindWord, propName, value)
 	return Schema.FormatValue(prop, value)
 end
 
+--- The columns a part carries beyond its declared properties, each named by
+-- the section the pack ships for it. Only an effect carries any: the two
+-- implicit targets it resolves and the aura it applies. The catalogue does
+-- not declare them, so no query reads them; a surface that shows a part in
+-- full shows them.
+local EXTRAS = {
+	{ name = "targetA", section = "implicitTargetNames" },
+	{ name = "targetB", section = "implicitTargetNames" },
+	{ name = "aura", section = "auraNames" },
+}
+
+--- What a part carries beyond its declared properties, named, in a fixed
+-- order; a column the part lacks or holds nought in is left out. The naming
+-- sections are maps from the number to its name, read whole once.
+-- @param part a PartData
+-- @return a list of { name, value, text }
+function Epsilook:GetPartExtras(part)
+	mounted(self)
+	local out = {}
+	for _, extra in ipairs(EXTRAS) do
+		local value = Data.GetCarried(part.axis, part.kind, part.slot, extra.name)
+		if value and value ~= 0 then
+			local axis = Data.GetAxisOf(extra.section)
+			local names = axis and Data.ReadAll(axis, extra.section, "names") or {}
+			-- The map's keys are text, as the pack writes every key.
+			local text = names[tostring(value)] or names[value] or ""
+			out[#out + 1] = { name = extra.name, value = value, text = text }
+		end
+	end
+	return out
+end
+
 --- The id that places a model in the world, by its file id.
 -- What `.gob spawn` takes, and nought where no gameobject display is known
 -- for the file. Negative where the command reads the sign: a positive number
@@ -389,6 +421,15 @@ Epsilook.ACTIONS = {
 			effect = "world",
 			revert = "",
 			hint = "Click to add this item to your bags",
+		},
+		{
+			key = "lookup",
+			label = "Lookup",
+			needs = "file",
+			kind = "item",
+			effect = "read",
+			revert = "",
+			hint = "Click to look the item up by its model's name, since nothing here names it",
 		},
 		{
 			key = "morph",
