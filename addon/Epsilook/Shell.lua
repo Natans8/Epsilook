@@ -2,9 +2,10 @@
 --
 -- The first interface over the API, and the one that mirrors `.lookup`: a
 -- result is two lines per spell, `id - [Name]` with what it is made of and
--- then its actions `[Learn] - [Cast] - [Aura] - [Inspect]`, where the name is the game's own spell link (it carries the
--- tooltip and links on shift-click) and the action words are this addon's own
--- links, which EXECUTE when clicked rather than filling the chat box. Output
+-- then its actions `[Learn] - [Cast] - [Aura] - [Inspect]`, where the name is
+-- the game's own spell link (it carries the tooltip and links on shift-click)
+-- and the action words are this addon's own links, which EXECUTE when clicked
+-- rather than filling the chat box. Output
 -- accumulates in chat and is never replaced, so every link is absolute: it
 -- names the spell and the verb, and clicking it from old scrollback does
 -- exactly what it did the first time.
@@ -27,54 +28,122 @@ Epsilook.Shell = Shell
 --- How many result lines one page prints.
 Shell.PAGE = 20
 
---- The link type this addon owns, and the colours a line is drawn in: gold
--- for the id, white for the name (the game's own spell-link colour), the
--- client's blue for the action words, and grey for the counts that say what
--- a spell is made of.
-Shell.LINK = "epsilook"
-local GOLD, WHITE, BLUE, GREY, RED =
-	"|cffffd100", "|cffffffff", "|cff71d5ff", "|cff9d9d9d", "|cffff2020"
-local END = "|r"
+--- The link type this addon owns. A click on a chat link reaches `SetItemRef`,
+-- which handles the types it knows and then shows any other in the item
+-- tooltip, where a type it cannot draw fails before any hook on it can run.
+-- The garrison-mission branch returns early for anything that is not a
+-- mission, so an addon's links ride that prefix, as the established addons'
+-- do, and the hook sees every click.
+Shell.LINK = "garrmission:epsilook"
 
---- The actions a result line offers, in the order `.lookup` prints them.
-Shell.VERBS = { "learn", "cast", "aura", "inspect" }
-local LABELS = { learn = "Learn", cast = "Cast", aura = "Aura", inspect = "Inspect" }
+--- The colours a line is drawn in: gold for the id, white for the name (the
+-- game's own spell-link colour), the client's blue for the action words,
+-- cyan for a label the way the server's own info commands draw one, and grey
+-- for the counts that say what a spell is made of.
+local GOLD, WHITE, BLUE, CYAN, GREY, RED =
+	"|cffffd100", "|cffffffff", "|cff71d5ff", "|cff00ccff", "|cff9d9d9d", "|cffff2020"
+local END = "|r"
+Shell.COLOURS = { gold = GOLD, white = WHITE, blue = BLUE, cyan = CYAN, grey = GREY, red = RED }
+
+--- The actions a result offers on a spell, in the order `.lookup` prints
+-- them: the word shown, what a tooltip says a click does, and the server
+-- command a click sends. Inspect sends nothing; it prints the dossier. The
+-- aura action is offered only where the spell applies one, which the mech
+-- column says with a row of its aura kind.
+Shell.SPELL_ACTIONS = {
+	{ key = "learn", label = "Learn", command = "learn", hint = "Click to learn the spell" },
+	{ key = "cast", label = "Cast", command = "cast", hint = "Click to cast the spell" },
+	{
+		key = "aura",
+		label = "Aura",
+		command = "aura",
+		hint = "Click to apply the aura to your target",
+		auraOnly = true,
+	},
+	{ key = "inspect", label = "Inspect", hint = "Click to print everything the spell is made of" },
+}
+
+--- The spell action a verb names, or nil.
+local function spellAction(verb)
+	for _, action in ipairs(Shell.SPELL_ACTIONS) do
+		if action.key == verb then
+			return action
+		end
+	end
+	return nil
+end
+
+--- The word at the bottom of a full page, which pages on.
+local NEXT = { key = "more", label = "Next", hint = "Click to view the next %d results" }
 
 --- One of this addon's links, shown as a bracketed word.
 -- The link names the spell, the verb and, for a part's action, the axis and
--- the row, so that it is complete in itself: `epsilook:133:spawn:model:1`.
+-- the row, so that it is complete in itself: `...:133:spawn:model:1`.
 -- @param spellID the spell
 -- @param verb the action
--- @param label the word shown, defaulting to the verb's own
+-- @param label the word shown
 -- @param axis the axis of the part the action takes, or nil for a spell action
 -- @param n the part's row on that axis
+-- @param colour the colour code to draw it in, the action blue by default
 -- @return the link markup
-function Shell.Link(spellID, verb, label, axis, n)
+function Shell.Link(spellID, verb, label, axis, n, colour)
 	local target = Shell.LINK .. ":" .. spellID .. ":" .. verb
 	if axis then
 		target = target .. ":" .. axis .. ":" .. n
 	end
-	return BLUE .. "|H" .. target .. "|h[" .. (label or LABELS[verb] or verb) .. "]|h" .. END
+	return (colour or BLUE) .. "|H" .. target .. "|h[" .. label .. "]|h" .. END
 end
 
---- The game's own link to a spell, as `.lookup` prints one.
-function Shell.SpellLink(spellID, name)
-	return WHITE .. "|Hspell:" .. spellID .. "|h[" .. name .. "]|h" .. END
+--- The parts of one of this addon's links, or nil for any other link.
+-- @param link the link's target
+-- @return the spell id, the verb, the axis or nil, the row or nil
+function Shell.ParseLink(link)
+	local id, verb, axis, n = link:match("^" .. Shell.LINK .. ":(%d+):(%a+):?(%a*):?(%d*)$")
+	if not id then
+		return nil
+	end
+	return tonumber(id), verb, axis ~= "" and axis or nil, tonumber(n)
+end
+
+--- What the client says a spell is called and looks like, where it knows the
+-- spell, and what the pack says otherwise. The client is asked for its own
+-- data rather than for the name an addon may have laid over it for this
+-- player, so what prints is what the server would print.
+-- @param spell a SpellData
+-- @return the name, and the icon's file id or nil
+function Shell.Shown(spell)
+	local info = _G.GetSpellInfo
+	if info then
+		local name, _, icon = info(spell.id, nil, true)
+		if name then
+			return name, icon
+		end
+	end
+	return spell.name, spell.icon ~= 0 and spell.icon or nil
+end
+
+--- The game's own link to a spell, as `.lookup` prints one, led by its icon.
+-- @param spell a SpellData
+function Shell.SpellLink(spell)
+	local name, icon = Shell.Shown(spell)
+	local link = WHITE .. "|Hspell:" .. spell.id .. "|h[" .. name .. "]|h" .. END
+	if icon then
+		return "|T" .. icon .. ":0|t " .. link
+	end
+	return link
 end
 
 --- One result for a spell, as two lines: the spell, then its actions.
 -- A result wraps in a chat frame more often than not, so the wrap is designed
 -- in rather than suffered: the first line is the id, the game's own spell link
 -- and what the spell is made of; the second, indented, is the actions, which
--- then sit at the same place on every result. The aura word is offered only
--- where the spell applies one, which the mech column says with a row of its
--- aura kind.
+-- then sit at the same place on every result.
 -- @param spell a SpellData
 -- @param counts the spell's part counts by axis, or nil to leave them off
 -- @param axes the axes to report, in order
 -- @return the two lines
 function Shell.ResultLines(spell, counts, axes)
-	local head = GOLD .. spell.id .. END .. " - " .. Shell.SpellLink(spell.id, spell.name)
+	local head = GOLD .. spell.id .. END .. " - " .. Shell.SpellLink(spell)
 	if counts and axes then
 		local made = {}
 		for _, axis in ipairs(axes) do
@@ -88,9 +157,9 @@ function Shell.ResultLines(spell, counts, axes)
 		end
 	end
 	local links = {}
-	for _, verb in ipairs(Shell.VERBS) do
-		if verb ~= "aura" or Epsilook:HasPartOfKind(spell.id, "mech", "aura") then
-			links[#links + 1] = Shell.Link(spell.id, verb)
+	for _, action in ipairs(Shell.SPELL_ACTIONS) do
+		if not action.auraOnly or Epsilook:HasPartOfKind(spell.id, "mech", "aura") then
+			links[#links + 1] = Shell.Link(spell.id, action.key, action.label)
 		end
 	end
 	return head, "      " .. table.concat(links, " - ")
@@ -314,7 +383,7 @@ local function page(tree, text, fromIndex)
 				Shell.Said(
 					shown
 						.. " shown - "
-						.. Shell.Link(0, "more", "Next")
+						.. Shell.Link(0, NEXT.key, NEXT.label)
 						.. " - /elo count "
 						.. text
 						.. " for the total"
@@ -346,8 +415,10 @@ local function count(tree, text)
 	end)
 end
 
---- A query typed at the command, parsed and either run or refused.
-local function search(text)
+--- A query as typed, read leniently and parsed, its problems printed.
+-- @param text the query as typed
+-- @return the tree, or nil where there is nothing to run, and the query as the engine read it
+local function parsed(text)
 	text = Shell.Lenient(text)
 	local tree, problems = Epsilook:ParseQuery(text)
 	for _, problem in ipairs(problems) do
@@ -357,9 +428,9 @@ local function search(text)
 		if #problems == 0 then
 			say(Shell.Said("nothing to search for"))
 		end
-		return
+		return nil, text
 	end
-	page(tree, text, nil)
+	return tree, text
 end
 
 --- The subcommands and what each does with the rest of the message.
@@ -372,13 +443,9 @@ Shell.SUBCOMMANDS = {
 		page(paging.tree, paging.text, paging.index)
 	end,
 	count = function(rest)
-		rest = Shell.Lenient(rest)
-		local tree, problems = Epsilook:ParseQuery(rest)
-		for _, problem in ipairs(problems) do
-			say(Shell.ProblemLine(problem))
-		end
-		if not Epsilook:IsQueryEmpty(tree) then
-			count(tree, rest)
+		local tree, text = parsed(rest)
+		if tree then
+			count(tree, text)
 		end
 	end,
 	inspect = function(rest)
@@ -429,7 +496,10 @@ function Shell.Command(message)
 		Shell.SUBCOMMANDS[word](rest)
 		return
 	end
-	search(message)
+	local tree, text = parsed(message)
+	if tree then
+		page(tree, text, nil)
+	end
 end
 
 --- Execute one of this addon's links.
@@ -442,12 +512,36 @@ end
 -- @param axis the part's axis, where the action takes a part
 -- @param n the part's row on that axis
 function Shell.Execute(spellID, verb, axis, n)
+	local action = not axis and spellAction(verb)
 	if axis then
 		Epsilook.Inspect.Execute(spellID, verb, axis, n, say)
-	elseif verb == "inspect" then
+	elseif action and action.command then
+		Shell.Send(action.command .. " " .. spellID)
+	elseif action then
 		Epsilook.Inspect.Print(spellID, say)
-	elseif verb == "learn" or verb == "cast" or verb == "aura" then
-		Shell.Send(verb .. " " .. spellID)
+	end
+end
+
+--- Hand the chat box the number one of this addon's links stands for, as a
+-- shift-click on any link hands it the link: the spell's id for a spell
+-- action, and for a part what its first action sends, so that `.gob spawn`
+-- or `.mod anim` can be typed with it by hand. Nothing happens where no chat
+-- box is open, as with the game's own links.
+-- @param spellID the spell
+-- @param axis the part's axis, or nil for a spell action
+-- @param n the part's row on that axis
+function Shell.Clip(spellID, axis, n)
+	local insert = _G.ChatEdit_InsertLink
+	if not insert then
+		return
+	end
+	local number = spellID
+	if axis then
+		local part = Epsilook:GetPartDataByIndex(spellID, axis, n)
+		number = part and Epsilook.Inspect.ClipOf(part)
+	end
+	if number then
+		insert(tostring(number))
 	end
 end
 
@@ -468,43 +562,31 @@ function Shell.Send(text)
 	end
 end
 
---- What a tooltip says a spell link's click will do.
-local HINTS = {
-	learn = "Click to learn the spell",
-	cast = "Click to cast the spell",
-	aura = "Click to apply the aura to your target",
-	inspect = "Click to print everything the spell is made of",
-}
-
 --- The tooltip a link shows while the mouse is over it.
 -- A spell link shows the game's own spell tooltip; the aura link shows what
 -- the aura says while it is on you, which is the pack's own text; a part's
--- action shows the part; every one ends in what a click will do. Only this
--- addon's links are handled: the chat frame has other hands on the others.
+-- link shows everything the part carries; every one ends in what a click
+-- will do. Only this addon's links are handled: the chat frame has other
+-- hands on the others.
 -- @param frame the chat frame the link is in
 -- @param link the link's target
 function Shell.OnHyperlinkEnter(frame, link)
-	local id, verb, axis, n = link:match("^" .. Shell.LINK .. ":(%d+):(%a+):?(%a*):?(%d*)$")
+	local id, verb, axis, n = Shell.ParseLink(link)
 	local tooltip = _G.GameTooltip
 	if not id or not tooltip then
 		return
 	end
-	id = tonumber(id)
 	tooltip:SetOwner(frame, "ANCHOR_CURSOR")
-	local hint = HINTS[verb]
-	if verb == "more" then
-		tooltip:SetText("Click to view the next " .. Shell.PAGE .. " results", 1, 1, 1)
-	elseif axis ~= "" then
-		local part = Epsilook:GetPartDataByIndex(id, axis, tonumber(n))
+	local action = spellAction(verb)
+	local hint = action and action.hint
+	if verb == NEXT.key then
+		tooltip:SetText(NEXT.hint:format(Shell.PAGE), 1, 1, 1)
+	elseif axis then
+		local part = Epsilook:GetPartDataByIndex(id, axis, n)
 		if part then
-			tooltip:SetText(part.kind, 1, 1, 1)
-			tooltip:AddLine(Epsilook.Inspect.ValuesText(part), nil, nil, nil, true)
+			Epsilook.Inspect.FillTooltip(tooltip, part)
 		end
-		for _, action in ipairs(Epsilook:GetActions(axis)) do
-			if action.key == verb then
-				hint = action.hint
-			end
-		end
+		hint = Epsilook.Inspect.HintOf(axis, verb)
 	elseif verb == "aura" then
 		-- The spell's tooltip, then what the aura says while it is on you.
 		tooltip:SetSpellByID(id)
@@ -569,9 +651,14 @@ local function install()
 		end
 	end
 	_G.hooksecurefunc("SetItemRef", function(link)
-		local id, verb, axis, n = link:match("^" .. Shell.LINK .. ":(%d+):(%a+):?(%a*):?(%d*)$")
-		if id then
-			Shell.Execute(tonumber(id), verb, axis ~= "" and axis or nil, tonumber(n))
+		local id, verb, axis, n = Shell.ParseLink(link)
+		if not id then
+			return
+		end
+		if _G.IsModifiedClick and _G.IsModifiedClick("CHATLINK") then
+			Shell.Clip(id, axis, n)
+		else
+			Shell.Execute(id, verb, axis, n)
 		end
 	end)
 end

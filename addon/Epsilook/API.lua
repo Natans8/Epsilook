@@ -423,6 +423,14 @@ Epsilook.ACTIONS = {
 	},
 	anim = {
 		{
+			key = "animkit",
+			label = "Kit",
+			needs = "id",
+			effect = "world",
+			revert = "",
+			hint = "Click to play this animation kit on yourself",
+		},
+		{
 			key = "anim",
 			label = "Anim",
 			needs = "anim",
@@ -439,16 +447,8 @@ Epsilook.ACTIONS = {
 			hint = "Click to hold this animation as your standing pose",
 		},
 		{
-			key = "animkit",
-			label = "Kit",
-			needs = "id",
-			effect = "world",
-			revert = "",
-			hint = "Click to play this animation kit on yourself",
-		},
-		{
 			key = "resetAnim",
-			label = "Reset",
+			label = "Reset Anim",
 			needs = "",
 			effect = "world",
 			revert = "",
@@ -456,7 +456,7 @@ Epsilook.ACTIONS = {
 		},
 		{
 			key = "resetStand",
-			label = "Reset",
+			label = "Reset Stand",
 			needs = "",
 			effect = "world",
 			revert = "",

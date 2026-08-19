@@ -27,11 +27,13 @@ def result(engine: LuaRuntime, spell_id: int) -> tuple[str, str]:
 
 def test_a_result_is_the_spell_then_its_actions(engine: LuaRuntime) -> None:
     head, actions = result(engine, 133)
-    assert head.startswith("|cffffd100133|r - |cffffffff|Hspell:133|h[Fireball]|h|r")
+    # Under a bare interpreter there is no client to ask, so the pack's name and
+    # icon stand in; the icon leads the game's own spell link.
+    assert head.startswith("|cffffd100133|r - |T135812:0|t |cffffffff|Hspell:133|h[Fireball]|h|r")
     assert "5 model" in head and "12 sound" in head
     assert actions.startswith("      ")
     for verb, label in (("learn", "Learn"), ("cast", "Cast"), ("inspect", "Inspect")):
-        assert f"|Hepsilook:133:{verb}|h[{label}]|h" in actions
+        assert f"|Hgarrmission:epsilook:133:{verb}|h[{label}]|h" in actions
 
 
 def test_a_lone_spell_is_an_inspection(engine: LuaRuntime) -> None:
@@ -57,14 +59,16 @@ def test_a_part_line_carries_its_actions(engine: LuaRuntime) -> None:
     line = lua_function(engine, b"Epsilook.Inspect.PartLine")(133, part, 1)
     assert isinstance(line, bytes)
     text = line.decode()
-    assert "missile" in text and "file:" in text
+    # The line names the kind, the file by its name alone, and the part's own link.
+    assert "missile:" in text and "|Hgarrmission:epsilook:133:part:model:1|h[" in text
+    assert ".m2]" in text and "SPELLS/" not in text
     # Fireball's missile model has a known spawn id, so the spawn link is offered.
-    assert "|Hepsilook:133:spawn:model:1|h[Spawn]|h" in text
+    assert "|Hgarrmission:epsilook:133:spawn:model:1|h[Spawn]|h" in text
     sound = method(api, b"GetPartDataByIndex")(api, 133, b"sound", 1)
     sound_line = lua_function(engine, b"Epsilook.Inspect.PartLine")(133, sound, 1)
     assert isinstance(sound_line, bytes)
-    assert "|Hepsilook:133:play:sound:1|h[Play]|h" in sound_line.decode()
-    assert "|Hepsilook:133:stop:sound:1|h[Stop]|h" in sound_line.decode()
+    assert "|Hgarrmission:epsilook:133:play:sound:1|h[Play]|h" in sound_line.decode()
+    assert "|Hgarrmission:epsilook:133:stop:sound:1|h[Stop]|h" in sound_line.decode()
 
 
 def test_the_dossier_prints_every_axis_the_spell_has(engine: LuaRuntime) -> None:
