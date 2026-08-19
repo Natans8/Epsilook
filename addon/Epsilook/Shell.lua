@@ -63,6 +63,14 @@ Shell.SPELL_ACTIONS = {
 		unknownOnly = true,
 	},
 	{
+		key = "unlearn",
+		label = "Unlearn",
+		command = "unlearn",
+		hint = "Click to unlearn the spell",
+		on = "both",
+		knownOnly = true,
+	},
+	{
 		key = "cast",
 		label = "Cast",
 		command = "cast",
@@ -76,14 +84,6 @@ Shell.SPELL_ACTIONS = {
 		hint = "Click to apply the aura to yourself",
 		auraOnly = true,
 		on = "both",
-	},
-	{
-		key = "unlearn",
-		label = "Unlearn",
-		command = "unlearn",
-		hint = "Click to unlearn the spell",
-		on = "both",
-		knownOnly = true,
 	},
 	{
 		key = "inspect",
