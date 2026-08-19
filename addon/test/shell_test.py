@@ -48,6 +48,22 @@ def test_a_lone_spell_is_an_inspection(engine: LuaRuntime) -> None:
     assert lone(b"fireball") is None
 
 
+def test_the_head_line_says_how_far_the_spell_reaches(engine: LuaRuntime) -> None:
+    """The distance is written by the catalogue, so the two sentinel words
+    arrive as words; a band whose distance the client replaces says the word
+    instead of a number it does not keep."""
+    api = lua_table(engine, b"Epsilook")
+    head = lua_function(engine, b"Epsilook.Inspect.HeadLine")
+
+    def line(spell: int) -> str:
+        return cast(bytes, head(method(api, b"GetSpellDataByID")(api, spell))).decode()
+
+    assert "range 40yd" in line(133), "Fireball reaches forty yards"
+    assert "range 25yd" in line(100) and "min 8yd" in line(100), "Charge has a near edge"
+    assert "range melee" in line(1464), "Slam's five yards is a placeholder"
+    assert "range self" in line(6603), "Auto Attack reaches nobody else"
+
+
 def test_only_a_leading_subcommand_word_is_taken(engine: LuaRuntime) -> None:
     split = lua_function(engine, b"Epsilook.Shell.Split")
     assert split(b"Next") == (b"next", b"")
