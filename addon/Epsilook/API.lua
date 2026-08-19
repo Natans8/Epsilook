@@ -697,6 +697,14 @@ function Epsilook:IsQueryEmpty(query)
 	return #query.groups == 0 and #query.sorts == 0
 end
 
+--- Whether a parsed query orders its answer, which costs a walk over every
+-- spell before the first result.
+-- @param query a query from ParseQuery
+-- @return true where the query carries a sort directive
+function Epsilook:IsQuerySorted(query)
+	return #query.sorts > 0
+end
+
 --- The query language as data, for a help surface: the columns with their
 -- hints, every top-level head with its role and hint, and the operators.
 -- Read off the declarations the data carries, so it cannot fall behind them.
