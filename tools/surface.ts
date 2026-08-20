@@ -4,6 +4,7 @@
  *     npm run surface                 every column
  *     npm run surface -- fx mech      named columns only
  *     npm run surface -- --words      just the vocabulary, one word per line
+ *     npm run surface -- --check      print nothing; fail if any example does not parse
  *
  * The declarations are data, so the language they describe can be read off them before a parser or an evaluator
  * exists. That makes this a design instrument rather than a report: adding a property or widening a type's accepted
@@ -17,7 +18,7 @@
  */
 import type {Head, Kind, Operator, Prop} from "../src/search/index";
 import {
-    CLAUSE_OPERATORS, COLUMNS, HEADS, hintOf, isFlag, KINDS, kindsOf, operatorsOf, OPERATORS,
+    CLAUSE_OPERATORS, COLUMNS, HEADS, hintOf, isFlag, KINDS, kindsOf, operatorsOf, OPERATORS, parse, spokenProp,
 } from "../src/search/index";
 
 /**
@@ -79,7 +80,11 @@ function spell(op: Operator, samples: readonly [string, string]): string | null 
  * @param prop The property.
  * @returns A template whose `¤` marks the value position, or the whole query for a flag.
  */
-function template(kind: Kind, name: string, prop: Prop): string {
+function template(kind: Kind, key: string, prop: Prop): string {
+    // Every example is a query somebody is meant to be able to paste, so the property is written the way it is
+    // SPOKEN. The key is its storage identity and stops resolving the moment a word is declared, which made
+    // every example for such a property an untypeable one.
+    const name = spokenProp(key, prop);
     // A flag's word is its own value: it reaches the property wherever the property is reached, which is the
     // kind's own door where the kind has one and the column's where it does not.
     if (isFlag(prop)) {
@@ -140,7 +145,7 @@ function showKind(kind: Kind): void {
         return;
     }
     for (const [name, prop] of props) {
-        console.log(`    ${name} — ${hintOf(prop)}`);
+        console.log(`    ${spokenProp(name, prop)} — ${hintOf(prop)}`);
         const types = prop.types.map((t) => t.name).join(" or ");
         const words = Object.values(prop.sentinels ?? {});
         const sentinels = words.length > 0 ? `; also ${words.join(", ")}, by name` : "";
@@ -205,10 +210,43 @@ function showRosters(): void {
     for (const row of rows.toSorted((a, b) => a.tier - b.tier)) console.log(row.line);
 }
 
+/**
+ * Reads every example this would print back through the parser.
+ *
+ * The examples are built from the declarations, so a spelling the parser does not read is a query printed for a
+ * reader to paste that cannot work. It happened: a property spoken by a word other than its storage key printed
+ * the key, so every example for it was untypeable. Prose cannot catch that; reading the output back can.
+ *
+ * @returns The examples the parser refused, each with what it said.
+ */
+function unreadable(): string[] {
+    const bad: string[] = [];
+    for (const kind of KINDS.values()) {
+        for (const [name, prop] of Object.entries(kind.props)) {
+            for (const line of queriesFor(kind, name, prop)) {
+                const query = line.slice(0, 46).trim();
+                const found = parse(query).diagnostics.filter((d) => d.severity === "error");
+                if (found.length > 0) bad.push(`${kind.id}.${name}: ${query} — ${found[0].message}`);
+            }
+        }
+    }
+    return bad;
+}
+
 function main(): void {
     const args = process.argv.slice(2);
     const wordsOnly = args.includes("--words");
     const wanted = args.filter((a) => !a.startsWith("--"));
+
+    if (args.includes("--check")) {
+        const bad = unreadable();
+        for (const line of bad) console.error(`  ${line}`);
+        console.error(bad.length === 0
+            ? "surface: every printed example parses"
+            : `surface: ${String(bad.length)} printed example(s) the parser refuses`);
+        process.exitCode = bad.length === 0 ? 0 : 1;
+        return;
+    }
 
     if (wordsOnly) {
         for (const word of [...HEADS.keys()].toSorted()) console.log(word);

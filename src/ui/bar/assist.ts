@@ -143,7 +143,11 @@ export function useBarAssist(
                 }, true, value);
                 return;
             }
-            const best = lit >= 0 ? flat[lit] : flat[0];
+            // Unsteered, this takes exactly what the slot drew: the ghost names its own offer, so the word
+            // previewed and the word delivered cannot come apart. Reading the first row instead handed back
+            // whatever headed the list, which is only the ghost's offer when nothing further down completes
+            // the typed characters better.
+            const best = lit >= 0 ? flat[lit] : flat[offers.ghostAt];
             if (best !== undefined) applyOffer(best);
         },
     };

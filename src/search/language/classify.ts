@@ -317,7 +317,10 @@ export function paint(text: string): Run[] {
             && ask.test?.is === "scope") {
             for (const term of ask.test.terms.flat()) {
                 if (term.state !== "ok" || term.ask === null) continue;
-                if (term.ask.on !== "props" && term.ask.on !== "count") continue;
+                // A kind word takes the same door when a value follows its glue: `attach:*` asks the kind for
+                // any value of its subject, which is the same door `attach:chest` opens. Reading the ask alone
+                // would paint the two apart, though the reader typed one word in one place.
+                if (term.ask.on !== "props" && term.ask.on !== "count" && term.ask.on !== "kindWord") continue;
                 const word = runs.find((run) => run.start >= term.span.start && run.start < term.span.end
                     && run.kind === "word");
                 const next = word === undefined ? undefined : runs[runs.indexOf(word) + 1];
@@ -340,7 +343,11 @@ export function paint(text: string): Run[] {
             const inner = term.ask;
             if (inner === null) continue;
             if (inner.on === "kindWord" || (inner.on === "props" && wordValued(inner.value))) {
-                over(term.span, (run) => (run.kind === "word" ? {...run, vocab: true} : run));
+                // The term's VALUE is what came from the vocabulary; the door that opened it did not. A word
+                // wearing both marks draws two underlines at once and says it is a value and a property in the
+                // same breath, so the door keeps its own mark and the blanket passes over it.
+                over(term.span, (run) => (run.kind === "word" && run.door !== true
+                    ? {...run, vocab: true} : run));
             }
         }
     }

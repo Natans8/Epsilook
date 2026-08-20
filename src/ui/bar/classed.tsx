@@ -110,11 +110,12 @@ export function Classed({text, rich, runs: given, mirrored, selected}: {
             // excludes are one red unit, and the tone says which column that unit reaches.
             run.negated === true ? styles.runNeg
                 : run.tone === undefined ? byKind[run.kind] : TONE_CLASS[run.tone] ?? byKind[run.kind],
-            // Loudness: a word about the query keeps its column's tone and gains the weight. Under a field it
-            // gains a rule beneath it instead — weight would move the text out from under the caret, and a
-            // decoration costs no advance width at all.
-            run.kind === "meta" || run.door === true
-                ? (mirrored === true ? styles.runDoor : styles.runMeta) : undefined,
+            // Loudness is spent on the any-word alone — the one word that is a VALUE and yet not data. A door
+            // needs none: it already wears its column's tone, and a value never wears one, so the colour has
+            // already said which of the two this is. Marking doors as well made the same door read two ways,
+            // since only the ones inside an enclosure were reached. Under a field the mark is a rule rather
+            // than weight: weight would move the text out from under the caret, a decoration costs no width.
+            run.kind === "meta" ? (mirrored === true ? styles.runDoor : styles.runMeta) : undefined,
             run.vocab === true ? styles.runVocab : undefined,
             run.state === "error" ? styles.runError
                 : run.state === "warning" ? styles.runWarn : undefined,

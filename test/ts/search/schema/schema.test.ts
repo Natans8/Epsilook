@@ -14,6 +14,8 @@ import {COLUMNS, fxColumn, modelColumn} from "../../../../src/search/schema/colu
 import {defineKind, formatValue, hintOf, KINDS, operatorsOf, parseValue} from "../../../../src/search/schema/kinds";
 import {buildSchema, HEADS, kindIn, kindsOf, propIn, schemaProblems} from "../../../../src/search/schema/schema";
 import {flag, id, path, text, TYPES} from "../../../../src/search/vocabulary/value-types";
+import {parse} from "../../../../src/search/language/parse";
+import {isFlag} from "../../../../src/search/schema/kinds";
 
 describe("the shipped schema", () => {
     it("has no problems at all", () => {
@@ -231,11 +233,16 @@ describe("the shipped schema", () => {
         // A type is vocabulary and promises a reader nothing until a property declares it, so an unattached one cannot
         // produce an axis that silently answers nothing. Listing them here makes adding a type without attaching it a
         // deliberate act rather than an accident.
+        //
+        // The two left are reached as MEMBERS rather than directly: `offset` is three coordinates and `rotation` is
+        // three angles, and a composite parses each component through the type its member names. So they are in use,
+        // and no property declares one on its own because neither answers a question by itself -- a lone coordinate
+        // is half a position.
         const used = new Set([...KINDS.values()]
             .flatMap((kind) => Object.values(kind.props))
             .flatMap((prop) => prop.types.map((type) => type.name)));
         assert.deepEqual([...TYPES.keys()].filter((name) => !used.has(name)).toSorted(),
-            ["angle", "coordinate", "offset"]);
+            ["angle", "coordinate"]);
     });
 
     it("keeps the mech column out of plain search", () => {
@@ -570,5 +577,34 @@ describe("the declaration checks", () => {
             column: modelColumn, word: "stray",
             hint: "a tier without plain", props: {file: {types: [path], tier: 2}},
         })[0], /declares a relevance tier but is not plain/);
+    });
+});
+
+describe("what a property is spoken by is what the parser reads", () => {
+    it("every declared word resolves, and the storage key it replaces stops resolving", () => {
+        // A `word` is a rename of the way IN, so it has to be a way in. The generated surface builds its
+        // examples from the declaration, so a spoken word the parser did not read printed a query nobody
+        // could paste — `attach:{where:chest}` for a year, where the reader has to type `point`.
+        for (const kind of KINDS.values()) {
+            for (const [key, prop] of Object.entries(kind.props)) {
+                if (prop.word === undefined) continue;
+                // Reached the way the generated surface reaches it: a global kind opens its own scope, a
+                // wordless one is reached through its column, and every other one is named inside it.
+                const scope = (word: string): string => kind.global === true ? `${kind.word}:{${word}}`
+                    : kind.word === undefined ? `${kind.column.key}:{${word}}`
+                        : `${kind.column.key}:{${kind.word} ${word}}`;
+                const opens = (word: string): boolean => {
+                    const clause = parse(scope(`${word}:${isFlag(prop) ? "" : "*"}`)).clauses[0];
+                    const ask = clause.ask;
+                    if (ask === null || ask.on !== "column" && ask.on !== "kind") return false;
+                    const test = ask.test;
+                    if (test?.is !== "scope") return false;
+                    return test.terms.flat().some((term) => term.ask?.on === "props"
+                        && term.ask.props.some((ref) => ref.kind === kind && ref.prop === key));
+                };
+                assert.ok(opens(prop.word), `${kind.id}.${key} is spoken "${prop.word}" and does not open`);
+                assert.ok(!opens(key), `${kind.id}.${key} is spoken "${prop.word}" but the key still opens`);
+            }
+        }
     });
 });

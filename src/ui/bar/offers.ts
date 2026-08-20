@@ -122,6 +122,14 @@ export interface Offers {
      * own and are written straight into the slot, so the surface has to say which one is standing.
      */
     readonly ghostIs: "offer" | "unit" | "closer" | null;
+    /**
+     * Which offer the ghost stands for, as an index into {@link flatOffers}, or -1 where it stands for none.
+     *
+     * The ghost and the key that takes it must name ONE offer. They were each choosing their own — the ghost
+     * the first offer anywhere that completed the typed characters, the key the first row in the list — so a
+     * completion further down previewed one word and delivered another.
+     */
+    readonly ghostAt: number;
     /** Whether a minus already stands before the word, so every offer here excludes rather than asks. */
     readonly negated: boolean;
 }
@@ -157,8 +165,8 @@ export function flatOffers(offers: Offers): Offer[] {
 
 /** Nothing on offer — what a bar at rest has, since a caret it does not hold can be handed nothing. */
 export const NO_OFFERS: Offers = {
-    groups: [], typed: "", atEnd: false, stub: {start: 0, end: 0}, ghost: "", ghostIs: null, negated: false,
-    takes: null,
+    groups: [], typed: "", atEnd: false, stub: {start: 0, end: 0}, ghost: "", ghostIs: null, ghostAt: -1,
+    negated: false, takes: null,
 };
 
 /**
@@ -719,6 +727,7 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
             stub: {start: at, end: at},
             ghost: "",
             ghostIs: null,
+            ghostAt: -1,
             negated: false,
         };
     }
@@ -760,6 +769,7 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
             groups, typed, atEnd: at === slot.length, takes: null, stub,
             ghost: completes ? best.insert.slice(typed.length) : "",
             ghostIs: completes ? "offer" : null,
+            ghostAt: completes ? 0 : -1,
             negated,
         };
     }
@@ -852,9 +862,11 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     // shift the mirrored text out from under the field's own caret. It previews the first offer in ANY group
     // that completes the typed characters — a door two groups down is still the completion the keystroke wants.
     const atEnd = at === slot.length && stub.end === at;
-    const best = groups.flatMap((held) => held.offers)
-            .find((offer) => offer.shape !== "query" && fold(offer.insert).startsWith(fold(typed)))
-        ?? groups[0]?.offers[0];
+    const flat = groups.flatMap((held) => held.offers);
+    const found = flat.findIndex((offer) => offer.shape !== "query"
+        && fold(offer.insert).startsWith(fold(typed)));
+    const bestAt = found >= 0 ? found : flat.length > 0 ? 0 : -1;
+    const best = bestAt < 0 ? undefined : flat[bestAt];
     // Folded, because what the reader typed is a way IN and the offer's own spelling is the answer: `shado`
     // completes to Shadowlands and `wo` to WotLK. Taking it replaces the stub, so the case corrects itself on
     // accept -- the ghost can only ever append, and a remainder is all it has room to say.
@@ -866,5 +878,5 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     const unit = atEnd && closers === "" ? unitGhost(composing?.prop ?? null, typed) : "";
     const ghost = closers !== "" ? closers : completes ? best.insert.slice(typed.length) : unit;
     const ghostIs = ghost === "" ? null : closers !== "" ? "closer" : completes ? "offer" : "unit";
-    return {groups, typed, atEnd, takes, stub, ghost, ghostIs, negated};
+    return {groups, typed, atEnd, takes, stub, ghost, ghostIs, ghostAt: completes ? bestAt : -1, negated};
 }

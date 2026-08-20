@@ -463,3 +463,33 @@ test("a word that names no property has no notation line to introduce", () => {
     assert.equal(takes?.how, "");
     assert.match(takes?.what ?? "", /blerg/);
 });
+
+test("the ghost names the offer that taking it delivers, wherever that offer sits in the list", () => {
+    // The ghost previews the first offer in ANY group that completes the typed characters, so a door two
+    // groups down can be the completion — while the key that takes it was reading the first ROW. Where a
+    // word higher up merely CONTAINS what was typed, the two came apart: `spell:ra` drew `range` and
+    // delivered `tracking`.
+    const offers = at("spell:ra", 8);
+    assert.equal(offers.ghost, "nge");
+    const named = flatOffers(offers)[offers.ghostAt];
+    assert.equal(named.insert, "range");
+    assert.notEqual(flatOffers(offers)[0].insert, "range");
+    // The whole language, at every prefix of every door, in and out of a scope: what the slot spells is what
+    // the named offer writes. An assertion list would only cover the spellings somebody thought of.
+    for (const shell of ["", "spell:", "model:", "sound:", "mech:", "fx:", "anim:", "id:", "model:{"]) {
+        for (const word of ["i", "n", "d", "de", "r", "ra", "e", "m", "mo", "o", "ca", "att"]) {
+            const text = shell + word;
+            const here = at(text, text.length);
+            if (here.ghostIs !== "offer") continue;
+            const takes = flatOffers(here)[here.ghostAt];
+            assert.equal(takes?.insert, here.typed + here.ghost, `${text} ghosts one offer and takes another`);
+        }
+    }
+});
+
+test("a ghost that stands for no offer names none", () => {
+    // A unit and a closer are written straight into the slot, so there is no row to point at.
+    assert.equal(at("scale:15", 8).ghostAt, -1);
+    assert.equal(at('name:{"blood', 12).ghostAt, -1);
+    assert.equal(NO_OFFERS.ghostAt, -1);
+});

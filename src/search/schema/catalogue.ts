@@ -170,8 +170,11 @@ export const range = defineKind({
     column: spellColumn, word: "range", global: true, single: true,
     hint: t("tooltips:kind.range.hint"),
     props: {
+        // Spoken as the quantity rather than as the unit it happens to be stored in: a reader asks how far a
+        // spell reaches, not how many yards it is, and `40yd` already says the unit where a value needs one.
         yards: {
             types: [length], sentinels: {0: "self", 50_000: "unlimited"},
+            word: "dist", full: "distance",
             hint: t("tooltips:kind.range.props.yards"),
         },
         min: {

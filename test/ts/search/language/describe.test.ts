@@ -98,7 +98,9 @@ test("the chip displays the meaning, not the minimal spelling: an elided count s
     const c = chip("model>=4");
     // A value opening with an operator JOINS its property in one cell — `count ≥ 4` reads as one phrase, and
     // the divided cells made the property and its comparison look like two unrelated conditions.
-    assert.deepEqual(c.body, [{is: "word", text: "count"}, {is: "op", text: "≥"}, {is: "value", text: "4"}]);
+    // The property is a word ABOUT the query, so it joins as a meta piece: drawn as a value it wore the
+    // closed vocabulary's own mark, which says the reader is naming a thing to look for rather than where.
+    assert.deepEqual(c.body, [{is: "meta", text: "count"}, {is: "op", text: "≥"}, {is: "value", text: "4"}]);
     // The desugar's note rides along for the tooltip.
     assert.equal(view("model>=4").notes.length, 1);
 });
@@ -107,7 +109,7 @@ test("an anchored quantity joins its property too, the implied anchor made expli
     // `min = 5yd` is one condition: the bare number alone already is the exact ask, but beside its property
     // word the glyph is what relates the two — without it the cells read as unrelated.
     const c = chip("range:{min=5yd}");
-    assert.deepEqual(c.body, [{is: "word", text: "min"}, {is: "op", text: "="}, {is: "value", text: "5yd"}]);
+    assert.deepEqual(c.body, [{is: "meta", text: "min"}, {is: "op", text: "="}, {is: "value", text: "5yd"}]);
 });
 
 test("a lone WORDED pair keeps the lane's rendering: the bind is a capsule inside the enclosure", () => {
@@ -253,4 +255,26 @@ test("a pattern inside a scope is a pattern piece like any other, wherever the t
     const pieces = JSON.stringify(view("model:{file:/beam/}"));
     assert.ok(pieces.includes('"is":"regex"'), "a scoped pattern reaches the display model as a pattern");
     assert.ok(pieces.includes('"pattern":"beam"'), "carrying the pattern without its slashes");
+});
+
+test("a term is headed by the door the reader went through, beside a sibling as much as alone", () => {
+    // A kind's word is the door to its subject, and the lone-term promotion already puts it on the chip's
+    // head. Beside a sibling the same term fell back to the PROPERTY's own name, so adding an unrelated word
+    // to a scope renamed `range` to `yards` and `attach` to `file` — neither of which the reader typed.
+    const bind = (text: string): string => {
+        const items = lane(text).items;
+        const found = items.find((item) => item.is === "bind");
+        assert.ok(found !== undefined && found.is === "bind", `no bind in ${text}`);
+        return found.head;
+    };
+    assert.equal(bind("spell:{range:>40 fire}"), "range");
+    assert.equal(bind("model:{attach:chest fire}"), "attach");
+    assert.equal(bind("model:{display:2 fire}"), "display");
+    // Alone, the same terms head their chip with the same word — which is the agreement that was missing.
+    assert.equal(chip("spell:{range:>40}").head, "range");
+    assert.equal(chip("model:{attach:chest}").head, "attach");
+    // A word SHARED across kinds reaches all of them, so naming any one kind would be a different ask: it
+    // keeps its own name. So does a property that is not its kind's subject.
+    assert.equal(bind("model:{file:chest fire}"), "file");
+    assert.equal(bind("model:{point:chest fire}"), "point");
 });

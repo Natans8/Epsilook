@@ -303,8 +303,31 @@ function termItem(term: ScopeTerm, lone: boolean, under: Kind | null): LaneItem 
     // enclosing head IS that kind — under a COLUMN the word carries no property, and dropping it turns
     // `model:{file:*}` into the different ask `model:any`. Everything else keeps its word, because without it
     // the value would not say which aspect it constrains.
-    return under === ref.kind && subjectOf(ref)
-        ? {is: "term", ...at, body} : {is: "bind", ...at, head: spokenProp(ref.prop, propOf(ref)), body};
+    if (under === ref.kind && subjectOf(ref)) return {is: "term", ...at, body};
+    // Under a COLUMN the subject still has a door, and it is the kind's word rather than the property's own:
+    // `range:>40` and `yards:>40` are one ask, and only the first is a spelling the reader was offered. The
+    // word is available exactly when every property the value claimed belongs to that one kind — a word shared
+    // across kinds (`file:`) reaches all of them, and naming any single one of them would be a different ask.
+    const sole = soleSubject(ask.props);
+    return {is: "bind", ...at, body, head: sole === null ? spokenProp(ref.prop, propOf(ref)) : wordOf(sole)};
+}
+
+/**
+ * The kind whose own word is the door a term went through, or null.
+ *
+ * The per-term counterpart of {@link soleKind}: that one promotes a lone term's kind onto the enclosing chip's
+ * head, and this one names the same door on a term standing beside others. Without it the same term reads two
+ * ways — `spell:{range:>40}` heads itself `range` and `spell:{range:>40 fire}` heads that term `yards`, though
+ * the reader typed one word both times.
+ *
+ * @param props The properties the term's value claimed.
+ * @returns The kind, or null where they span several kinds, name no subject, or the kind has no word.
+ */
+function soleSubject(props: readonly PropRef[]): Kind | null {
+    const kinds = new Set(props.map((ref) => ref.kind));
+    if (kinds.size !== 1 || !subjectOf(props[0])) return null;
+    const only = [...kinds][0];
+    return only.word === undefined ? null : only;
 }
 
 /**
@@ -460,7 +483,10 @@ function askView(ask: Ask, not: boolean): AskView | null {
         if (bound !== null && !joined) return {as: "lane", lane: {head, tone: column.key, not, items}};
         const body = bound === null ? compactBody(only)
             : [
-                {is: "word" as const, text: bound.head},
+                // The property that opened the bind, said as what it is: a word ABOUT the query. Drawn as a
+                // value it took the closed vocabulary's own mark, so `count` and `missile` read alike though
+                // one names a thing to look for and the other names where to look.
+                {is: "meta" as const, text: bound.head},
                 ...(anchored ? [{is: "op" as const, text: glyphOf(exact)}] : []),
                 ...bound.body,
             ];

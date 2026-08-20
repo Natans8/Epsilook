@@ -105,3 +105,29 @@ test("a property is marked as the door it is, in its column's tone; a head is no
     assert.equal(at("point")?.tone, "model");
     assert.equal(at("chest")?.door, undefined);
 });
+
+test("a door is a door whatever its value: the any-word does not demote it to a vocabulary word", () => {
+    // `attach:chest` and `attach:*` open the same door — one names a point, the other takes any. Reading the
+    // resolved ask alone painted the second as a VALUE, so the word changed colour on a keystroke that only
+    // widened what it asked for.
+    for (const text of ["model:{attach:chest}", "model:{attach:*}"]) {
+        const run = runFor(text, "attach");
+        assert.equal(run.door, true, text);
+        assert.equal(run.tone, "model", text);
+        assert.equal(run.vocab, undefined, text);
+    }
+    // Standing alone it is the kind word it looks like, and takes the vocabulary's own mark.
+    assert.equal(runFor("model:{attach fire}", "attach").vocab, true);
+    assert.equal(runFor("model:{attach fire}", "attach").door, undefined);
+});
+
+test("a door never wears the value's vocabulary mark: one word says one thing", () => {
+    // The mark is blanketed over the term, so a term whose VALUE came from a closed vocabulary was marking
+    // the property that opened it too — two underlines on one word, saying it was a value and a property at
+    // once. The value keeps the mark; the door keeps its own.
+    assert.equal(runFor("id:{xpac:legion}", "xpac").door, true);
+    assert.equal(runFor("id:{xpac:legion}", "xpac").vocab, undefined);
+    assert.equal(runFor("id:{xpac:legion}", "legion").vocab, true);
+    assert.equal(runFor("model:{point:chest}", "point").vocab, undefined);
+    assert.equal(runFor("model:{point:chest}", "chest").vocab, true);
+});
