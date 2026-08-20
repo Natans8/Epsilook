@@ -85,13 +85,13 @@ describe("the shipped schema", () => {
 
     it("keeps most kind words off the top level, where the column is the noun", () => {
         // `model:mount` reads as a whole question; `mount:` alone does not say what a mount is being asked about.
-        for (const word of ["mount", "trail", "equipped", "ground", "attached", "keybind", "invis"]) {
+        for (const word of ["mount", "trail", "equipped", "ground", "worn", "keybind", "invis"]) {
             assert.equal(HEADS.has(word), false, `${word} should not be a top-level head`);
         }
     });
 
-    it("calls the model category `attached`, leaving `attach` to the attachment property", () => {
-        assert.ok(KINDS.has("model.attached"));
+    it("calls the worn-model category `worn`, leaving `attach` to the attachment property", () => {
+        assert.ok(KINDS.has("model.worn"));
         assert.equal(HEADS.has("attach"), false,
             "`attach` must stay free for the attachment property to claim");
     });

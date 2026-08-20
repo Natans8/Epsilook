@@ -11,7 +11,7 @@
 import {useId, useMemo, useState} from "react";
 import type {Assist} from "./open";
 import type {Offer, Offers, Vocabulary} from "./offers";
-import {flatOffers, NO_OFFERS, offerSlot, offersAt} from "./offers";
+import {flatOffers, NO_OFFERS, offerGhost, offerSlot, offersAt} from "./offers";
 import {slotStart, writeSlot} from "./plan";
 import {optionId} from "./surface";
 import type {EditingSession} from "./session";
@@ -107,9 +107,9 @@ export function useBarAssist(
         count: flat.length,
         open: shown,
         lit,
-        // The ghost and the light say the same thing in two places, so only one of them is ever drawn: the
-        // ghost while the reader types, the light once they have started steering the list.
-        ghost: shown && lit < 0 ? offers.ghost : "",
+        // While the reader types, the ghost is the best completion; once they steer the list — arrows or the
+        // pointer — the lit row previews instead, so what Enter would write is visible before it is taken.
+        ghost: shown ? (lit < 0 ? offers.ghost : offerGhost(offers, flat[lit])) : "",
         listId,
         activeId: lit >= 0 ? optionId(listId, lit) : undefined,
         move: (dir): void => {

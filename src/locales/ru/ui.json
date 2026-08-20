@@ -41,14 +41,19 @@
   "surface": {
     "history": "",
     "axes": "",
-    "kinds": "",
-    "props": "",
-    "sentinels": "",
-    "roles": "",
     "words": "",
+    "doors": "",
     "label": "",
+    "more": "",
     "sentinelNote": "",
     "anyNote": "",
+    "roles": {
+      "area": "",
+      "both": "",
+      "caster": "",
+      "others": "",
+      "target": ""
+    },
     "notation": "",
     "range": "",
     "clipped": "",

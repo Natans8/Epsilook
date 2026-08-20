@@ -33,6 +33,8 @@ export interface PackInfo {
      * it and its title, so what is matched and what is drawn cannot drift apart.
      */
     readonly ladder: readonly Rung[];
+    /** The words each enumeration-typed property stores in this pack, keyed `<kind word>.<prop name>`. */
+    readonly enums: Record<string, readonly string[]>;
 }
 
 /** What a load reports as it progresses. */
@@ -57,7 +59,7 @@ export class Searcher {
                 handlers.ready({
                     version: said.version, locale: said.locale, locales: said.locales,
                     versions: said.versions, domains: said.domains, spells: said.spells,
-                    ladder: said.ladder,
+                    ladder: said.ladder, enums: said.enums,
                 });
             } else if (said.is === "failed") handlers.failed(said.error);
             else {

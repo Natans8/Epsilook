@@ -87,20 +87,20 @@ const attachPoint = (hint: string): Prop => ({types: [enumeration], hint});
 /* The spell itself: what it is called, says and shows, and how it goes off. Name, desc and icon are top-level words. */
 
 export const name = defineKind({
-    column: spellColumn, word: "name", global: true,
+    column: spellColumn, word: "name", global: true, single: true,
     hint: t("tooltips:kind.name.hint"),
     props: {text: corpus(TIER.name, text)},
 });
 
 export const description = defineKind({
-    column: spellColumn, word: "desc", global: true, full: "description",
+    column: spellColumn, word: "desc", global: true, full: "description", single: true,
     hint: t("tooltips:kind.description.hint"),
     props: {text: corpus(TIER.description, text)},
 });
 
 /** The art on a spell's button. The file id stays out of chipless search, where a lone number means a spell id. */
 export const icon = defineKind({
-    column: spellColumn, word: "icon", global: true,
+    column: spellColumn, word: "icon", global: true, single: true,
     hint: t("tooltips:kind.icon.hint"),
     props: {
         name: corpus(TIER.asset, text),
@@ -229,12 +229,12 @@ export const ground = defineKind({
     props: {file: corpus(TIER.asset, path), target: target()},
 });
 
-export const attached = defineKind({
-    column: modelColumn, word: "attached", group: "worn",
-    hint: t("tooltips:kind.attached.hint"),
+export const worn = defineKind({
+    column: modelColumn, word: "worn", group: "worn",
+    hint: t("tooltips:kind.worn.hint"),
     props: {
         file: corpus(TIER.asset, path),
-        attach: attachPoint(t("tooltips:kind.attached.props.attach")),
+        attach: attachPoint(t("tooltips:kind.worn.props.attach")),
         target: target(),
     },
 });

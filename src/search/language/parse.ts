@@ -30,6 +30,7 @@ import type {
 import {propOf} from "./ast";
 import {COMPARISON_STARTS, GRAMMAR, PREFIX_OPERATORS, spellingsOf} from "./grammar";
 import {isFlag, wordOf} from "../schema/kinds";
+import {path, text} from "../vocabulary/value-types";
 import type {Interp, Pending, ValueCtx} from "./operand";
 import {combineAlternatives, countCtx, ctxFor, kindCtx, propCtx, topCtx} from "./operand";
 import {escapeRegExp} from "../text/patterns";
@@ -583,12 +584,19 @@ class Parser {
      * `xpac:{>wotlk <legion}` is satisfiable and stays a conjunction. So the split is by whether a term states a
      * bare value, which is the same line the reader sees.
      *
+     * A TEXT subject is the exception the rationale itself draws: two bare values there are substring claims,
+     * and two substrings can both describe the one row -- `name:{fire ball}` is satisfiable and the reader
+     * plainly means both. Only a subject read whole -- a rank, a quantity, an id -- makes two bare values
+     * exclusive.
+     *
      * @param head The scope's own head, which is what says whether its rows may repeat.
      * @param runs The scope's alternation groups, each a conjunction of terms.
      * @returns The groups, with a single kind's bare values moved into groups of their own.
      */
     private alternateWhereSingle(head: ScopeHead, runs: ScopeTerm[][]): ScopeTerm[][] {
         if (head.role !== "kind" || head.kind.single !== true) return runs;
+        const subject = Object.values(head.kind.props)[0];
+        if (subject !== undefined && subject.types.some((type) => type === text || type === path)) return runs;
         return runs.flatMap((run) => {
             const loose = run.filter(statesBareValue);
             if (loose.length < 2) return [run];

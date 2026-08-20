@@ -59,9 +59,28 @@ export interface Assist {
  * The open segment. Remounted per session — the mount is what seeds the input and places the caret.
  */
 export function OpenSegment({
-                                at, mode, hidden, seize, highlight, caret, placeholder, label, assist, onFlip, onKeystroke,
-                                onArrow, onEdge, onCommit, onCancel, onUndo, onRedo, onSelectAll, onSelectPast,
-                                onCaret, onWake, onSettle
+                                at,
+                                mode,
+                                hidden,
+                                seize,
+                                highlight,
+                                caret,
+                                placeholder,
+                                label,
+                                assist,
+                                onFlip,
+                                onKeystroke,
+                                onArrow,
+                                onEdge,
+                                onCommit,
+                                onCancel,
+                                onUndo,
+                                onRedo,
+                                onSelectAll,
+                                onSelectPast,
+                                onCaret,
+                                onWake,
+                                onSettle
                             }: {
     readonly at: BarPlan;
     /** How the slot sits: filling the bar (the true tail), hugging content (chip, mid-bar word), or the
@@ -391,7 +410,8 @@ export function OpenSegment({
                     }}
                     onBlur={onSettle}
                     onScroll={syncScroll}
-                    placeholder={placeholder}
+                    // A drawn ghost stands where the placeholder would, so the two may never draw together.
+                    placeholder={assist.ghost === "" ? placeholder : undefined}
                     autoComplete="off"
                     spellCheck={false}
                     // Always named: the placeholder only exists on an empty bar, and the input is the bar's

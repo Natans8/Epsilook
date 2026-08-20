@@ -41,14 +41,19 @@
   "surface": {
     "history": "Recent searches",
     "axes": "Search by axis",
-    "kinds": "Kinds",
-    "props": "Properties",
-    "sentinels": "Special values",
-    "roles": "Targets",
     "words": "Values",
+    "doors": "Properties",
     "label": "Suggestions",
+    "more": "{{count}} more — keep typing to narrow",
     "sentinelNote": "A named value, not a number",
     "anyNote": "Any value at all",
+    "roles": {
+      "area": "At a point on the ground",
+      "both": "On the caster and the target together",
+      "caster": "On the caster",
+      "others": "On someone other than the caster",
+      "target": "On the target"
+    },
     "notation": "Also reads: {{forms}}",
     "range": "{{min}} to {{max}} in this pack",
     "clipped": "outliers beyond this range exist",

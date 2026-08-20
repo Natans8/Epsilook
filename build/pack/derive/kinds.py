@@ -259,27 +259,28 @@ def build_column(families: Sequence[Family], reads: Reads,
 
 def _models(kind: str, cat: int, props: tuple[str, ...],
             pick: Callable[[ModelRow], RowValues],
-            worn: bool | None = None) -> Family:
+            carried: bool | None = None) -> Family:
     """One model category as its own kind.
 
     A weapon the caster already carries has no model of its own: its file id is
-    a sentinel naming a slot. That splits the plain attached category in two --
-    the model it draws, and the weapon it points at -- and splits only that one.
+    a sentinel naming a slot. That splits the attach category in two -- the
+    model it draws, and the weapon it points at -- and splits only that one.
     The sentinel also turns up under the other categories, where it stays with
     its own kind and reads as the label the file table gives it, because what
     the game did there is show the carried weapon flying or trailing rather than
     name a slot.
 
     Args:
-        worn: which half of the attached category this kind takes -- `True` the
-            sentinels, `False` the real models, `None` every row of the
-            category. Only the attached category passes anything but `None`.
+        carried: which half of the attach category this kind takes -- `True`
+            the carried-weapon sentinels, `False` the real models, `None` every
+            row of the category. Only the attach category passes anything but
+            `None`.
     """
 
     def rows(reads: Reads) -> Iterable[SpellRow]:
         for row in reads.rows.models:
-            if row.category != cat or (worn is not None
-                                       and (row.file < 0) is not worn):
+            if row.category != cat or (carried is not None
+                                       and (row.file < 0) is not carried):
                 continue
             yield row.spell, pick(row)
 
@@ -316,8 +317,8 @@ MODEL_FAMILIES: tuple[Family, ...] = (
             lambda row: (row.file, row.source, row.mask)),
     _models("ground", MODEL_CAT_AREA, ("file", "target"),
             lambda row: (row.file, row.mask)),
-    _models("attached", MODEL_CAT_ATTACH, ("file", "attach", "target"),
-            lambda row: (row.file, row.source, row.mask), worn=False),
+    _models("worn", MODEL_CAT_ATTACH, ("file", "attach", "target"),
+            lambda row: (row.file, row.source, row.mask), carried=False),
     _models("trail", MODEL_CAT_TRAIL, ("file", "target"),
             lambda row: (row.file, row.mask)),
     _models("display", MODEL_CAT_DISPLAY, ("id", "file", "attach", "target"),
@@ -325,7 +326,7 @@ MODEL_FAMILIES: tuple[Family, ...] = (
     _models("item", MODEL_CAT_ITEM, ("file", "id", "name", "attach", "target"),
             lambda row: (row.file, row.ref, row.ref, row.source, row.mask)),
     _models("equipped", MODEL_CAT_ATTACH, ("slot", "attach", "target"),
-            lambda row: (row.file, row.source, row.mask), worn=True),
+            lambda row: (row.file, row.source, row.mask), carried=True),
     Family(kind="mount", props=("name", "file"), rows=_mounts,
            vocab={"name": "mounts", "file": "files"}),
 )
@@ -818,7 +819,6 @@ MECH_FAMILIES: tuple[Family, ...] = (
            vocab={"key": "keybinds"}),
     Family(kind="debuff", props=(), rows=_attributed("auraisdebuff")),
 )
-
 
 COLUMN_FAMILIES: Mapping[str, tuple[Family, ...]] = {
     "model": MODEL_FAMILIES,

@@ -15,7 +15,7 @@ import type {ChangeEvent, KeyboardEvent, ReactElement} from "react";
 import {useId, useLayoutEffect, useMemo, useRef, useState} from "react";
 import {pairDelimiter, planAt, slotStart, writeSlot} from "./plan";
 import type {Offer, Vocabulary} from "./offers";
-import {flatOffers, NO_VOCABULARY, offerSlot, offersAt} from "./offers";
+import {flatOffers, NO_VOCABULARY, offerGhost, offerSlot, offersAt} from "./offers";
 import {optionId, Surface} from "./surface";
 import {Classed} from "./classed";
 // Two sheets, two jobs: the bar's own frame is shared with the chip view, the rest is this view's alone.
@@ -56,8 +56,10 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
     const flat = useMemo(() => flatOffers(offers), [offers]);
     const here = shown && lit >= 0 && lit < flat.length ? lit : -1;
     // The ghost may only be APPENDED, or it would shift the mirrored text out from under the field's caret --
-    // so it draws only with the caret at the very end of the text, and only while nothing is lit.
-    const ghosting = shown && here < 0 && offers.ghost !== "" && at === text.length;
+    // so it draws only with the caret at the very end of the text. While the reader types it is the best
+    // completion; once they steer the list, the lit row previews instead.
+    const ghost = here < 0 ? offers.ghost : offerGhost(offers, flat[here]);
+    const ghosting = shown && ghost !== "" && at === text.length;
 
     /**
      * Reports where the caret now sits, which is what decides what can be offered.
@@ -212,7 +214,7 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
                     identically and the text can never reach past the bar it is drawn in. */}
                 <span className={styles.plainInk} aria-hidden="true">
                     <Classed text={text} rich mirrored/>
-                    {ghosting && <span className={styles.ghost}>{offers.ghost}</span>}
+                    {ghosting && <span className={styles.ghost}>{ghost}</span>}
                     {/* A trailing newline keeps a text ending in a space from collapsing the last line. */}
                     {"\n"}
                 </span>
@@ -235,7 +237,8 @@ export function PlainBar({text, onText, placeholder, label, history = NO_HISTORY
                     onBlur={() => {
                         setLit(-1);
                     }}
-                    placeholder={text === "" ? placeholder : undefined}
+                    // A drawn ghost stands where the placeholder would, so the two may never draw together.
+                    placeholder={text === "" && !ghosting ? placeholder : undefined}
                     autoComplete="off"
                     spellCheck={false}
                     aria-label={label}

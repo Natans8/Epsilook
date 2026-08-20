@@ -167,6 +167,8 @@ export function Surface({offers, lit, listId, onPick, onLight}: {
                             />
                         );
                     })}
+                    {/* A capped list says what it held back — a silent cap would read as the whole list. */}
+                    {group.more > 0 && <div className={styles.moreLine}>{t("surface.more", {count: group.more})}</div>}
                 </div>
             ))}
         </div>

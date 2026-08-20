@@ -14,8 +14,8 @@ import type {BarPlan} from "./plan";
 import {termStarts} from "./plan";
 import type {Column, Kind, Prop, Rung} from "../../search/index";
 import {
-    bitmask, COUNT_PROP, flag, fold, GRAMMAR, HEADS, headWord, hintOf, kindIn, kindsOf, operatorsOf, ordinal,
-    propIn, propNameOf, TARGET_ROLES, wordOf,
+    bitmask, COUNT_PROP, enumeration, flag, fold, GRAMMAR, HEADS, headWord, hintOf, kindIn, kindsOf, operatorsOf,
+    ordinal, propIn, propNameOf, TARGET_ROLES, wordOf,
 } from "../../search/index";
 import {i18n} from "../../i18n";
 
@@ -27,8 +27,16 @@ import {i18n} from "../../i18n";
  */
 export type OfferShape = "door" | "word" | "query";
 
-/** The section an offer sits in. An identity rather than a label, so a test never reads translated prose. */
-export type GroupId = "history" | "axes" | "kinds" | "props" | "sentinels" | "roles" | "words";
+/**
+ * The section an offer sits in. An identity rather than a label, so a test never reads translated prose.
+ *
+ * Two sections inside any scope, split by what taking a row DOES rather than by where its word lives in the
+ * schema: `words` complete a condition where they stand — a sentinel, a flag, a role, a rung and the any-word
+ * are one thing to the reader — and `doors` take a value of their own, whether the door is a kind's word or a
+ * property's. A sentinel and a flag are different declarations, but a taxonomy the reader cannot see is not
+ * one the panel may draw.
+ */
+export type GroupId = "history" | "axes" | "words" | "doors";
 
 /** One thing the surface offers. */
 export interface Offer {
@@ -71,6 +79,8 @@ export interface OfferGroup {
     readonly id: GroupId;
     readonly label: string;
     readonly offers: readonly Offer[];
+    /** How many narrowed offers the section held back beyond the cap — said, never silent. */
+    readonly more: number;
 }
 
 /** What the position takes, said from the declarations: the subject, what it means, and how it is written. */
@@ -86,6 +96,10 @@ export interface Takes {
 /** What the caret can be handed, and where it would land. */
 export interface Offers {
     readonly groups: readonly OfferGroup[];
+    /** The characters the offers were narrowed against — what an accepted offer's remainder is counted from. */
+    readonly typed: string;
+    /** Whether the caret stands at the slot's very end, which is the only place a ghost may be drawn. */
+    readonly atEnd: boolean;
     /**
      * What this position takes, where the caret is composing a value.
      *
@@ -122,6 +136,13 @@ export interface Vocabulary {
     readonly rungs: readonly Rung[];
     /** The picture that belongs to a word, where one is shipped for it. */
     readonly art?: Readonly<Record<string, string>>;
+    /**
+     * The words each enumeration-typed property stores in the loaded pack, keyed `<kind word>.<prop name>`.
+     *
+     * Only the words the pack's own rows carry: a vocabulary is shared across kinds, and offering a word no
+     * row of THIS property stores would be an offer that can only ever answer nought.
+     */
+    readonly enums?: Readonly<Record<string, readonly string[]>>;
 }
 
 /** No pack loaded: the surface offers the language alone. */
@@ -134,8 +155,22 @@ export function flatOffers(offers: Offers): Offer[] {
 
 /** Nothing on offer — what a bar at rest has, since a caret it does not hold can be handed nothing. */
 export const NO_OFFERS: Offers = {
-    groups: [], stub: {start: 0, end: 0}, ghost: "", ghostIs: null, negated: false, takes: null,
+    groups: [], typed: "", atEnd: false, stub: {start: 0, end: 0}, ghost: "", ghostIs: null, negated: false,
+    takes: null,
 };
+
+/**
+ * The remainder one offer would append after what is typed — what a lit row previews in the slot.
+ *
+ * Steering the list ghosts the offer the next Enter would take, so the reader sees where a pick lands before
+ * they commit to it. Appended only, by the mirror law: an offer that does not extend the typed characters
+ * previews nothing. A remembered query previews too — it is only ever offered on an empty bar, where replacing
+ * the bar and appending to it are the same thing.
+ */
+export function offerGhost(offers: Offers, offer: Offer | undefined): string {
+    if (offer === undefined || !offers.atEnd) return "";
+    return fold(offer.insert).startsWith(fold(offers.typed)) ? offer.insert.slice(offers.typed.length) : "";
+}
 
 /**
  * What the slot would hold once an offer is taken, and where the caret would then sit in it.
@@ -246,13 +281,18 @@ function doorOffers(): Offer[] {
 function kindOffers(column: Column): Offer[] {
     return kindsOf(column)
         .filter((kind): kind is Kind & { word: string } => kind.word !== undefined)
-        .map((kind): Offer => ({
-            shape: "door",
-            word: kind.word,
-            insert: kind.word + GRAMMAR.bind,
-            note: kind.hint,
-            tone: column.key,
-        }))
+        .map((kind): Offer => {
+            // A kind with no properties has nothing a bind could name: its word alone is the whole ask, so it
+            // is offered as the word it is. Offering `pose:` taught a door the language cannot open.
+            const valueless = Object.keys(kind.props).length === 0;
+            return {
+                shape: valueless ? "word" : "door",
+                word: kind.word,
+                insert: valueless ? kind.word : kind.word + GRAMMAR.bind,
+                note: kind.hint,
+                tone: column.key,
+            };
+        })
         .toSorted((a, b) => a.word.localeCompare(b.word));
 }
 
@@ -320,30 +360,31 @@ function propOffers(context: { role: "column"; column: Column } | { role: "kind"
 }
 
 /**
- * The words one property's own value may be spelled with: its sentinels, a mask's roles, the any-word.
- *
- * ⚠ An enum's own values are missing from this list, and the reason is a missing declaration rather than a design
- * call: `chest` and the other attachment words live in the PACK's vocabularies, and no declaration says which
- * vocabulary a property reads. Both halves of the ruled picker — the word list and the cardinality that decides
- * whether to show one — wait on that link. The expansion ladder is the same gap seen from the other side: its
- * rungs are loaded from a pack, and the page never loads one.
+ * The words one property's own value may be spelled with: sentinels, rungs, roles, an enum's own list, the any-word.
  *
  * Narrowing is not done here: each list is handed to {@link group}, which is where what has been typed applies.
+ * The enum list is kept apart from the rest because its SIZE is a fact the caller rules on — a vocabulary the
+ * panel would truncate waits for a keystroke — where every other list shows however small it is.
  *
  * @param prop The property whose value is being composed.
  * @param tone The column tone every offer wears.
  * @param vocab The closed vocabularies the pack carries.
- * @returns The three lists, each in its own group's order.
+ * @param key The `<kind word>.<prop name>` the pack files an enum vocabulary under, where the property is a kind's.
+ * @returns The lists, each in its own draw order.
  */
-function valueOffers(prop: Prop, tone: string, vocab: Vocabulary):
-    { sentinels: Offer[]; words: Offer[]; roles: Offer[] } {
-    const word = (spelling: string, note: string): Offer =>
-        ({shape: "word", word: spelling, insert: spelling, note, tone, art: vocab.art?.[spelling]});
+function valueOffers(prop: Prop, tone: string, vocab: Vocabulary, key?: string):
+    { values: Offer[]; listed: Offer[]; any: Offer[] } {
+    // A spelling carrying a space would split into two terms where it lands, so it travels quoted — the phrase
+    // is the language's own spelling for exactly this, and a word vocabulary reads a quoted word.
+    const word = (spelling: string, note: string): Offer => ({
+        shape: "word", word: spelling,
+        insert: spelling.includes(" ") ? GRAMMAR.phrase + spelling + GRAMMAR.phrase : spelling,
+        note, tone, art: vocab.art?.[spelling],
+    });
     const sentinels = Object.values(prop.sentinels ?? {})
         .map((spelling) => word(spelling, i18n.t("ui:surface.sentinelNote")));
-    // A role needs no note of its own: the section it sits under already says what it answers, and a note that
-    // only restates the word is noise on every row.
-    const roles = prop.types.includes(bitmask) ? TARGET_ROLES.map((role) => word(role, "")) : [];
+    const roles = prop.types.includes(bitmask)
+        ? TARGET_ROLES.map((role) => word(role, roleNote(role))) : [];
     const any = operatorsOf(prop).includes("present")
         ? [word(GRAMMAR.anyWord, i18n.t("ui:surface.anyNote"))] : [];
     // An ordered vocabulary is small, closed and carried by the pack, so it lists itself, spelled the way the
@@ -353,7 +394,23 @@ function valueOffers(prop: Prop, tone: string, vocab: Vocabulary):
     const rungs = prop.types.includes(ordinal)
         ? vocab.rungs.map((rung) => ({...word(rung.word, rung.note ?? ""), reads: rung.reads}))
         : [];
-    return {sentinels, words: [...rungs, ...any], roles};
+    // A closed vocabulary lists itself the same way, from the words the pack's own rows store. The word is its
+    // own meaning, so a row carries no note — the takes header already says what the property is.
+    const listed = prop.types.includes(enumeration) && key !== undefined
+        ? (vocab.enums?.[key] ?? []).map((spelling) => word(spelling, "")) : [];
+    return {values: [...sentinels, ...rungs, ...roles], listed, any};
+}
+
+/** What each target role means, one line per word. Typed keys, so a note the catalog lacks cannot compile. */
+const ROLE_NOTES = {
+    area: "ui:surface.roles.area", both: "ui:surface.roles.both", caster: "ui:surface.roles.caster",
+    others: "ui:surface.roles.others", target: "ui:surface.roles.target",
+} as const;
+
+/** One role's note, or nothing for a role this map has no line for. */
+function roleNote(role: string): string {
+    const key = (ROLE_NOTES as Partial<Record<string, (typeof ROLE_NOTES)[keyof typeof ROLE_NOTES]>>)[role];
+    return key === undefined ? "" : i18n.t(key);
 }
 
 /** Every folded spelling one offer answers to: the word it draws, and the synonyms that also reach it. */
@@ -369,6 +426,13 @@ function narrow(offers: readonly Offer[], typed: string): Offer[] {
 }
 
 /**
+ * How many rows one section may draw. A closed vocabulary can run to the hundreds, and a panel that long stops
+ * being something a reader runs an eye down — the cap keeps the best matches and SAYS how many it held back,
+ * because a silent cap reads as the whole list.
+ */
+const GROUP_CAP = 40;
+
+/**
  * A narrowed group, or nothing where narrowing emptied it.
  *
  * A WORD already typed whole is dropped, because taking it would write what is already written. A door is kept:
@@ -378,14 +442,19 @@ function narrow(offers: readonly Offer[], typed: string): Offer[] {
 function group(id: GroupId, offers: readonly Offer[], typed: string): OfferGroup[] {
     const narrowed = narrow(offers, typed)
         .filter((offer) => offer.shape !== "word" || fold(offer.word) !== fold(typed));
-    return narrowed.length === 0 ? [] : [{id, label: i18n.t(`ui:surface.${id}`), offers: narrowed}];
+    if (narrowed.length === 0) return [];
+    return [{
+        id, label: i18n.t(`ui:surface.${id}`),
+        offers: narrowed.slice(0, GROUP_CAP),
+        more: Math.max(0, narrowed.length - GROUP_CAP),
+    }];
 }
 
 /** The remembered searches, newest first, as offers that replace the whole bar. */
 function historyGroup(history: readonly string[]): OfferGroup[] {
     if (history.length === 0) return [];
     const offers = history.map((query): Offer => ({shape: "query", word: query, insert: query, note: ""}));
-    return [{id: "history", label: i18n.t("ui:surface.history"), offers}];
+    return [{id: "history", label: i18n.t("ui:surface.history"), offers, more: 0}];
 }
 
 /** The property a value is being composed for, named and described as the reader reached it. */
@@ -396,13 +465,18 @@ interface Composing {
     readonly name: string;
     /** What to say it is, where the door says it better than the property does. */
     readonly what?: string;
+    /** The `<kind word>.<prop name>` a pack vocabulary is filed under, where the property is one of a kind's. */
+    readonly key?: string;
 }
 
 /** What a head opens: a column's scope, a kind's scope, or one property's value. */
 type Context =
     | { readonly role: "column"; readonly column: Column }
     | { readonly role: "kind"; readonly kind: Kind }
-    | { readonly role: "prop"; readonly prop: Prop; readonly tone: string; readonly name: string };
+    | {
+    readonly role: "prop"; readonly prop: Prop; readonly tone: string; readonly name: string;
+    readonly key: string
+};
 
 /** The head the caret's own segment sits under, resolved through the schema exactly as the parser resolves it. */
 function contextOf(plan: BarPlan): Context | null {
@@ -411,7 +485,10 @@ function contextOf(plan: BarPlan): Context | null {
     if (head === undefined) return null;
     if (head.role === "column") return {role: "column", column: head.column};
     if (head.role === "kind") return {role: "kind", kind: head.kind};
-    return {role: "prop", prop: head.prop, tone: head.kind.column.key, name: head.name};
+    return {
+        role: "prop", prop: head.prop, tone: head.kind.column.key, name: head.name,
+        key: `${wordOf(head.kind)}.${head.name}`,
+    };
 }
 
 /**
@@ -435,12 +512,15 @@ function innerProp(context: Context, word: string): Composing | null {
     // Named by the word the reader typed and described by the KIND, not by the property behind it: `xpac:` is
     // the expansion, and titling it `rung` names an internal that no reader has ever seen.
     if (subject !== undefined && named !== undefined) {
-        return {prop: subject, tone, name: folded, what: named.hint};
+        return {
+            prop: subject, tone, name: folded, what: named.hint,
+            key: `${wordOf(named)}.${Object.keys(named.props)[0]}`,
+        };
     }
     const kinds = context.role === "column" ? kindsOf(context.column) : [context.kind];
     for (const kind of kinds) {
         const name = propIn(kind, folded);
-        if (name !== undefined) return {prop: kind.props[name], tone, name};
+        if (name !== undefined) return {prop: kind.props[name], tone, name, key: `${wordOf(kind)}.${name}`};
     }
     return null;
 }
@@ -555,14 +635,22 @@ function unitGhost(prop: Prop | null, typed: string): string {
     return "";
 }
 
-/** The three value groups one property offers, in the order the surface draws them. */
-function valueGroups(prop: Prop, tone: string, typed: string, vocab: Vocabulary): OfferGroup[] {
-    const {sentinels, words, roles} = valueOffers(prop, tone, vocab);
-    return [
-        ...group("sentinels", sentinels, typed),
-        ...group("roles", roles, typed),
-        ...group("words", words, typed),
-    ];
+/**
+ * The words that complete a condition where they stand, as one group.
+ *
+ * The subject's own values first — sentinels, then a vocabulary's rungs and a mask's roles — then the scope's
+ * flag words, and the any-word last because it is the least specific claim. One section, because to the reader
+ * every row in it is the same thing: a word that finishes the ask the moment it is taken.
+ */
+function wordsGroup(composing: Composing | null, flags: readonly Offer[], typed: string,
+                    vocab: Vocabulary): OfferGroup[] {
+    const held = composing === null ? {values: [], listed: [], any: []}
+        : valueOffers(composing.prop, composing.tone, vocab, composing.key);
+    // A vocabulary the panel can show WHOLE lists itself before a keystroke — that is what a picker is. One the
+    // cap would truncate is a corpus in spirit whatever its type says, so it waits for a character and narrows
+    // in, the way the doors do.
+    const listed = typed !== "" || held.listed.length <= GROUP_CAP ? held.listed : [];
+    return group("words", [...held.values, ...listed, ...flags, ...held.any], typed);
 }
 
 /**
@@ -581,6 +669,8 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     if ((plan.before + plan.open + plan.after).trim() === "") {
         return {
             groups: [...historyGroup(history), ...group("axes", doorOffers(), "")],
+            typed: "",
+            atEnd: true,
             takes: null,
             stub: {start: at, end: at},
             ghost: "",
@@ -616,32 +706,35 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     // bind, or a KIND's word — which is the door to its subject, the first property it declares.
     const subject = context?.role === "kind" ? Object.entries(context.kind.props)[0] : undefined;
     const composing: Composing | null = inner ?? (
-        context?.role === "prop" ? {prop: context.prop, tone: context.tone, name: context.name}
+        context?.role === "prop"
+            ? {prop: context.prop, tone: context.tone, name: context.name, key: context.key}
             : subject !== undefined && bind < 0 && context?.role === "kind"
                 ? {
                     prop: subject[1], tone: context.kind.column.key,
                     name: wordOf(context.kind), what: context.kind.hint,
+                    key: `${wordOf(context.kind)}.${subject[0]}`,
                 }
                 : null);
     const groups = ((): OfferGroup[] => {
-        // A kind's scope offers its properties as well as its subject's words: `scale:{}` takes an amount, and
-        // `scale:{attach:...}` is the same scope saying something else about the same row. Past an inner bind
-        // it does NOT: there the caret is inside that property's value, where a property name is not a value.
-        if (context?.role === "kind" && composing !== null && inner === null) {
-            return [
-                ...valueGroups(composing.prop, composing.tone, typed, vocab),
-                ...group("props", propOffers(context), typed),
-            ];
-        }
-        if (composing !== null) return valueGroups(composing.prop, composing.tone, typed, vocab);
         if (context === null) return typed.length < DOOR_THRESHOLD ? [] : group("axes", doorOffers(), typed);
-        if (context.role === "prop") return [];
-        // The word before the bind is unknown here, so what is on offer is the properties it could have been.
-        if (foreign) return group("props", propOffers(context), "");
-
+        // Past an inner bind the caret is inside one property's value, where nothing but its own words answer;
+        // a property's head is the same position reached through its own door.
+        if (context.role === "prop" || inner !== null) return wordsGroup(composing, [], typed, vocab);
+        // A scope's offers, split by what taking a row DOES: the words that complete a condition where they
+        // stand — the subject's own values, the flag words, a valueless kind's word — then the doors that take
+        // a value of their own, a kind's word and a property's alike. `scale:{}` takes an amount, and
+        // `scale:{attach:...}` is the same scope saying something else about the same row.
+        const offered = [
+            ...(context.role === "column" ? kindOffers(context.column) : []),
+            ...propOffers(context),
+        ];
+        const flags = offered.filter((offer) => offer.shape === "word");
+        const doors = offered.filter((offer) => offer.shape === "door");
+        // The word before the bind is unknown here, so the scope's whole offer stands unnarrowed.
+        const narrowed = foreign ? "" : typed;
         return [
-            ...(context.role === "column" ? group("kinds", kindOffers(context.column), typed) : []),
-            ...group("props", propOffers(context), typed),
+            ...wordsGroup(composing, flags, narrowed, vocab),
+            ...group("doors", doors, narrowed),
         ];
     })();
     const scope = context !== null && context.role !== "prop" ? context : null;
@@ -671,5 +764,5 @@ export function offersAt(plan: BarPlan, caret: number, history: readonly string[
     const unit = atEnd && closers === "" ? unitGhost(composing?.prop ?? null, typed) : "";
     const ghost = closers !== "" ? closers : completes ? best.insert.slice(typed.length) : unit;
     const ghostIs = ghost === "" ? null : closers !== "" ? "closer" : completes ? "offer" : "unit";
-    return {groups, takes, stub, ghost, ghostIs, negated};
+    return {groups, typed, atEnd, takes, stub, ghost, ghostIs, negated};
 }

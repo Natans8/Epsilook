@@ -25,8 +25,8 @@ import type {
     Ask, Column, Dataset, Kind, Row, RowSource, RowTest, Rung, ScopeTerm, Stored, ValueExpr,
 } from "./search/index";
 import {
-    animColumn, catalogue, colour as colourType, COLOUR_NAMES, fold, fxColumn, id as idType, idColumn, KINDS,
-    mechColumn, modelColumn, setOrdinalLadder, soundColumn, spellColumn, squash, TARGET_ROLES,
+    animColumn, catalogue, colour as colourType, COLOUR_NAMES, enumeration, fold, fxColumn, id as idType, idColumn,
+    KINDS, mechColumn, modelColumn, setOrdinalLadder, soundColumn, spellColumn, squash, TARGET_ROLES,
     kindsOf, text as textType, wordOf,
 } from "./search/index";
 
@@ -591,6 +591,51 @@ function expansionLadder(expansions: ExpansionsSection): Rung[] {
     });
 }
 
+/** The five columns the pack ships row tables for, with the section prefix each is filed under. */
+const ROW_COLUMNS = [
+    [modelColumn, "model"], [soundColumn, "sound"], [animColumn, "anim"], [fxColumn, "fx"], [mechColumn, "mech"],
+] as const;
+
+/**
+ * The words each enumeration-typed property actually stores in this pack, keyed `<kind word>.<prop name>`.
+ *
+ * Read from the row tables' own columns rather than from the vocabularies whole, because a vocabulary is shared —
+ * the attachment names serve every kind that attaches — and a word no row of THIS property carries would be an
+ * offer that can only ever answer nought. The walk is over the pooled slots, not the spells, so it is thousands of
+ * reads per pack rather than millions.
+ *
+ * @param l The loaded pack.
+ * @returns The sorted distinct words per property, for the properties that store any.
+ */
+export function enumWords(l: LoadedPack): Record<string, readonly string[]> {
+    const vocabularies = rowVocabularies(l.pack);
+    const out: Record<string, readonly string[]> = {};
+    for (const [column, key] of ROW_COLUMNS) {
+        const table = l.pack[`${key}Rows`] as RowTable | undefined;
+        if (table === undefined) continue;
+        for (const kind of kindsOf(column)) {
+            const kindWord = wordOf(kind);
+            for (const [name, prop] of Object.entries(kind.props)) {
+                if (!prop.types.includes(enumeration)) continue;
+                const stored = table.values[kindWord]?.[name];
+                const lookup = vocabularies[table.vocab[kindWord]?.[name] ?? ""];
+                if (stored === undefined || lookup === undefined) continue;
+                const absent = table.absent[kindWord]?.[name] ?? 0;
+                const seen = new Set<number>();
+                const words = new Set<string>();
+                for (const value of stored) {
+                    if (value === absent || seen.has(value)) continue;
+                    seen.add(value);
+                    const spelling = lookup(value);
+                    if (spelling !== undefined && spelling !== "") words.add(spelling);
+                }
+                if (words.size > 0) out[`${kindWord}.${name}`] = [...words].toSorted((a, b) => a.localeCompare(b));
+            }
+        }
+    }
+    return out;
+}
+
 /**
  * Builds the {@link Dataset} the kernel runs against, over one loaded pack.
  *
@@ -616,8 +661,7 @@ export function packDataset(l: LoadedPack): Dataset {
     // Every column a spell can carry more than one of is READ. Nothing here reshapes a row any more.
     const vocabularies = rowVocabularies(l.pack);
     const packed = new Map<Column, PackRowSource>(
-        ([[modelColumn, "model"], [soundColumn, "sound"], [animColumn, "anim"],
-            [fxColumn, "fx"], [mechColumn, "mech"]] as const).map(
+        ROW_COLUMNS.map(
             ([column, key]) =>
                 [column, new PackRowSource(rowTableOf(l.pack, key), kindsByWord(column),
                     vocabularies)]));

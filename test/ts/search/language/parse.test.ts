@@ -974,6 +974,25 @@ it("reads juxtaposition as alternation on a kind that cannot repeat", () => {
     // plus every unlimited one — where a reader asking for both means the band that is both.
     assert.equal(runs("range:{melee unlimited}"), 1, "a flag conjoins with a value");
     assert.equal(runs("range:{5 40}"), 2, "two distances still alternate");
+
+    // A TEXT subject is the exception the rationale itself draws: a spell has ONE name, but two bare values on
+    // it are substring claims and both can describe it — `name:{fire ball}` is Fireball, not fire-or-ball. The
+    // single declaration exists on name, desc and icon for what it says about ROWS (a count of them answers
+    // nothing); it may not import the exclusivity that is only true of a value read whole.
+    assert.equal(runs("name:{fire ball}"), 1, "two substrings of one name conjoin");
+    assert.equal(runs("desc:{kneel dance}"), 1);
+});
+
+it("a punctuation-only operand says why it answers nothing, quoted spellings included", () => {
+    // Substring matching squashes punctuation away, so the ask is dead on arrival; a PATTERN reads the text as
+    // written, and the fix spells one. The quoted spellings took a different reading path and answered nought
+    // in silence — `name:"\""` is the same dead ask said with an escape.
+    for (const query of ['name:"---"', 'name:"\\""']) {
+        const parsed = parse(query);
+        const warned = parsed.diagnostics.filter((d) => d.severity === "warning");
+        assert.equal(warned.length, 1, query);
+        assert.match(warned[0].fix?.query ?? "", /^name:\//, query);
+    }
 });
 
 it("claims a flag word for the property whose own word it is", () => {
@@ -1045,7 +1064,7 @@ it("existence on a kind inside a scope is the kind word, not bare existence", ()
     // `model:{display:*}` says the row is a display row — exactly what `model:{display}` says. Answering a bare
     // existence dropped WHICH kind was named and the term fell back to content, so the ask became "any model
     // row at all": 130,512 rows where it names 955. A wrong ANSWER, not a wrong drawing.
-    const term = (query: string): {on: string; kind?: string} => {
+    const term = (query: string): { on: string; kind?: string } => {
         const ask = parse(query).clauses[0].ask;
         assert.ok(ask !== null && ask.on === "column" && ask.test?.is === "scope", query);
         const only = ask.test.terms.flat()[0].ask;

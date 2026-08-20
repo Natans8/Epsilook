@@ -42,138 +42,138 @@
     "bitmask": "who it plays on: caster, target, both, area or others",
     "flag": "either the spell has it or it does not"
   },
-  "target": "who it plays on — caster, target, both, area, others",
+  "target": "who it plays on",
   "kind": {
     "name": {
       "hint": "the spell's name"
     },
     "description": {
-      "hint": "what the spell says it does — its in-game description"
+      "hint": "the spell's in-game description"
     },
     "icon": {
-      "hint": "the art on the spell's button — 272,900 spells share 9,846 icons",
+      "hint": "the art on the spell's button",
       "props": {
-        "fid": "the icon's file id — the number the ⧉ copies"
+        "fid": "the icon's file id"
       }
     },
     "delivery": {
       "hint": "how the spell goes off — at once, behind a cast bar, or as a channel",
       "props": {
-        "cast": "the cast bar's length in seconds, or instant for no bar at all",
-        "channel": "the channel's length in seconds, or unlimited",
-        "breaksmove": "the cast or channel breaks if the caster moves",
-        "unbreakable": "the channel persists — moving and acting do not break it",
-        "unhindered": "the caster can act during the channel (the usual interrupts still break it)",
-        "tracking": "the caster stays facing the target for the whole channel"
+        "cast": "the cast time",
+        "channel": "the channelling length",
+        "breaksmove": "breaks if the caster moves",
+        "unbreakable": "moving and acting do not break it",
+        "unhindered": "the caster can act while channelling",
+        "tracking": "the caster stays facing the target while channelling"
       }
     },
     "range": {
-      "hint": "how far the spell reaches — the band a target has to stand in",
+      "hint": "how far the spell reaches",
       "props": {
-        "yards": "the furthest a target can stand, in yards; self for no reach at all, unlimited for anywhere",
-        "min": "the closest a target can stand, in yards — a spell a target can be too close for",
-        "melee": "the reach is the caster's own combat reach rather than the distance shown",
-        "weapon": "the reach is whatever the caster's equipped ranged weapon reaches"
+        "yards": "the furthest a target can stand",
+        "min": "the minimum distance to cast",
+        "melee": "reaches the caster's own combat reach",
+        "weapon": "reaches the equipped weapon's reach"
       }
     },
     "spellId": {
-      "hint": "the spell's own number — what .cast takes"
+      "hint": "the spell's own number"
     },
     "expansion": {
-      "hint": "the expansion that introduced it — legion, >wotlk, <=mop"
+      "hint": "the expansion that introduced it"
     },
     "missile": {
       "hint": "a projectile model in flight",
       "props": {
-        "from": "where the missile launches from",
-        "to": "where the missile lands",
-        "motion": "the trajectory it flies — parabola, forward spin, follow ground",
-        "projectiles": "how many projectiles the flight path is written for"
+        "from": "the launch point",
+        "to": "the landing point",
+        "motion": "the flight path",
+        "projectiles": "how many projectiles fly"
       }
     },
     "barrage": {
       "hint": "a volley of models fired at once",
       "props": {
-        "attach": "where the volley is fired from"
+        "attach": "the firing point"
       }
     },
     "ground": {
       "hint": "a ground or area model laid on the world"
     },
-    "attached": {
+    "worn": {
       "hint": "a model stuck to the caster or the target",
       "props": {
-        "attach": "where on the body it sits"
+        "attach": "the body point it sits on"
       }
     },
     "trail": {
       "hint": "a weapon trail that follows a swing"
     },
     "display": {
-      "hint": "a creature display model attached to the caster or target",
+      "hint": "a creature display drawn on the caster or target",
       "props": {
-        "id": "the CreatureDisplayInfo id",
-        "attach": "where on the body it is anchored"
+        "id": "the creature display's id",
+        "attach": "the body point it anchors to"
       }
     },
     "item": {
       "hint": "an in-game item's model, held by the caster",
       "props": {
-        "id": "the item's own id",
+        "id": "the item's id",
         "name": "the item's name",
-        "attach": "where on the body it is held"
+        "attach": "the body point it is held at"
       }
     },
     "equipped": {
-      "hint": "a weapon the caster already has — main hand, off hand, ranged or ammo",
+      "hint": "a weapon the caster already carries",
       "props": {
-        "slot": "which slot — main hand, off hand, ranged, ammo",
-        "attach": "where on the body it is held"
+        "slot": "the weapon slot",
+        "attach": "the body point it is held at"
       }
     },
     "mount": {
-      "hint": "the mount the spell puts you on"
+      "hint": "the mount it puts you on"
     },
     "sound": {
       "hint": "a sound file the spell plays",
       "props": {
-        "kit": "the sound kit, by name or by id",
-        "type": "what the kit is for -- spells, emotes, death, tradeskills and the rest"
+        "kit": "the sound kit",
+        "type": "what the kit is for"
       }
     },
     "animKit": {
-      "hint": "an animation played through an AnimKit — the numbered bundles",
+      "hint": "an animation played through a numbered kit",
       "props": {
-        "id": "the AnimKit's own id",
-        "boneset": "which bones it drives — head, spine, arms"
+        "id": "the kit's id",
+        "boneset": "the bones it drives"
       }
     },
     "loose": {
-      "hint": "an animation the spell's visual kit plays directly, in no AnimKit",
+      "hint": "an animation played directly, outside any kit",
       "props": {
-        "boneset": "which bones it drives — head, spine, arms"
+        "boneset": "the bones it drives"
       }
     },
     "replace": {
-      "hint": "an animation the spell swaps for another — Stand becomes StealthStand",
+      "hint": "an animation swapped for another",
       "props": {
-        "to": "what it is replaced with",
-        "from": "the animation being replaced"
+        "to": "the replacement",
+        "from": "the animation replaced"
       }
     },
     "pose": {
-      "hint": "holds the character's pose — the spell suppresses its own animation"
+      "hint": "holds the character's pose"
     },
     "passenger": {
       "hint": "what a rider plays entering, sitting in and leaving a seat",
       "props": {
-        "enter": "the animation played climbing in",
-        "sit": "the animation held in the seat",
-        "exit": "the animation played climbing out"
+        "enter": "played climbing in",
+        "sit": "held in the seat",
+        "exit": "played climbing out"
       }
     },
     "chain": {
-      "hint": "a chain or beam effect held between two points",
+      "hint": "a chain or beam held between two points",
       "props": {
         "from": "where the beam starts",
         "to": "where the beam ends",
@@ -183,26 +183,26 @@
     "dissolve": {
       "hint": "a dissolve or materialise effect",
       "props": {
-        "attach": "where on the body it plays"
+        "attach": "the body point it plays at"
       }
     },
     "shadowy": {
       "hint": "a translucent shadow pass over the model",
       "props": {
-        "attach": "where on the body it plays",
-        "colour": "the colour the shadow pass is tinted"
+        "attach": "the body point it plays at",
+        "colour": "the shadow's tint"
       }
     },
     "ghost": {
       "hint": "a ghost material swapped onto the model",
       "props": {
-        "colour": "the colour the material recolours to"
+        "colour": "the material's colour"
       }
     },
     "glow": {
-      "hint": "an edge glow or rim light around the model",
+      "hint": "an edge glow around the model",
       "props": {
-        "colour": "the glow colour"
+        "colour": "the glow's colour"
       }
     },
     "tint": {
@@ -224,9 +224,9 @@
       "hint": "a camouflage or cloaking effect"
     },
     "morph": {
-      "hint": "a morph or transform aura — the caster becomes something else",
+      "hint": "a morph aura — the caster becomes something else",
       "props": {
-        "creature": "the creature the caster becomes, by name or by id"
+        "creature": "the creature it becomes"
       }
     },
     "shapeshift": {
@@ -235,20 +235,20 @@
     "scale": {
       "hint": "a size change the aura applies",
       "props": {
-        "amount": "how much bigger or smaller: +50, x1.5 or 2 as a factor, 150 as a proportion"
+        "amount": "how much bigger or smaller"
       }
     },
     "summon": {
       "hint": "a creature the spell summons",
       "props": {
-        "creature": "the summoned creature, by name or by id",
-        "control": "how it answers to you — pet, guardian, vehicle"
+        "creature": "the creature summoned",
+        "control": "how it answers to you"
       }
     },
     "gameObject": {
-      "hint": "a gameobject the spell places — campfire, portal, banner, chest",
+      "hint": "a gameobject the spell places",
       "props": {
-        "object": "the gameobject, by name or by id"
+        "object": "the object placed"
       }
     },
     "screen": {
@@ -257,33 +257,33 @@
     "effect": {
       "hint": "one of the spell's effects — what it actually does",
       "props": {
-        "name": "the effect's name — SCHOOL_DAMAGE, JUMP_DEST"
+        "name": "the effect's name"
       }
     },
     "aura": {
       "hint": "an aura the spell applies — what it does while it holds",
       "props": {
-        "name": "the aura's name — MOD_SCALE, MOD_INVISIBILITY"
+        "name": "the aura's name"
       }
     },
     "triggers": {
       "hint": "another spell this one casts, ticks, procs or removes",
       "props": {
-        "spell": "the spell it triggers, by name or by id",
-        "how": "what makes it fire — periodically, on proc, on cast",
-        "target": "who the effect carrying the trigger is aimed at"
+        "spell": "the spell it triggers",
+        "how": "what makes it fire",
+        "target": "who carries the trigger"
       }
     },
     "origin": {
       "hint": "a spell that casts, ticks, procs or removes this one",
       "props": {
-        "spell": "the spell that triggers it, by name or by id",
-        "how": "what makes it fire — periodically, on proc, on cast",
-        "target": "who the effect carrying the trigger is aimed at"
+        "spell": "the spell that triggers it",
+        "how": "what makes it fire",
+        "target": "who carries the trigger"
       }
     },
     "location": {
-      "hint": "the places the spell is allowed to work in — anywhere else it will not cast"
+      "hint": "the places the spell is allowed to work in"
     },
     "invis": {
       "hint": "the invisibility channel the aura hides in",
@@ -294,22 +294,22 @@
     "detect": {
       "hint": "sees an invisibility channel",
       "props": {
-        "channel": "the channel it can see",
-        "count": "how many spells hide in that channel"
+        "channel": "the channel it sees",
+        "count": "how many spells hide in it"
       }
     },
     "vehicle": {
       "hint": "the vehicle the caster becomes, and its seats",
       "props": {
-        "seats": "how many seats the vehicle has",
-        "attach": "where the seat sits on the vehicle"
+        "seats": "the seat count",
+        "attach": "where a seat sits"
       }
     },
     "speed": {
-      "hint": "a movement-speed change — run, mounted, swim, flight or all at once",
+      "hint": "a movement-speed change",
       "props": {
-        "amount": "how much faster or slower: +70, x1.7 or 2 as a factor, 170 as a proportion",
-        "mode": "which movement: run, walk, fly or swim"
+        "amount": "how much faster or slower",
+        "mode": "which movement it changes"
       }
     },
     "keybind": {

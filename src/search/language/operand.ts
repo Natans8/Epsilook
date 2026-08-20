@@ -28,7 +28,7 @@ import {flagWord, hintOf, parseValue, sentinelOf, wordOf} from "../schema/kinds"
 import {spelledNotation, spellIn} from "../vocabulary/units";
 import type {Operator} from "../vocabulary/operators";
 import {ORDERING} from "../vocabulary/operators";
-import {compilePattern} from "../text/patterns";
+import {compilePattern, escapeRegExp} from "../text/patterns";
 import type {Head} from "../schema/schema";
 import {headWord, kindIn, kindsOf} from "../schema/schema";
 import {fold, squash} from "../text/normalize";
@@ -314,23 +314,26 @@ export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value
         const pv = parseValue(prop, t);
         return pv !== null ? quantity(pv.type) : prop.types.some(quantity);
     };
+    // A substring match squashes punctuation away, so an operand made of nothing else has nothing left to
+    // match on. It selects nought rather than everything (the matcher refuses it), and says so here rather
+    // than leaving the reader with an empty answer and no reason: a PATTERN reads the text as written. Fired
+    // for the quoted spelling too — `name:"\""` is the same dead ask said with an escape.
+    const punctuationSignpost = (t: string): void => {
+        if (t === "" || squash(t) !== "") return;
+        pend.push({
+            severity: "warning",
+            message: i18n.t("diagnostics:value.punctuationOnly"),
+            fix: {
+                label: i18n.t("diagnostics:fix.asPattern"),
+                query: `${word}${GRAMMAR.bind}${GRAMMAR.regex}${escapeRegExp(t)}${GRAMMAR.regex}`,
+            },
+        });
+    };
     const bareValue = (t: string): Interp => {
         const pv = parseValue(prop, t);
         if (pv === null) return illTyped(word, prop);
         const op = accepts(pv.type, "contains") ? "contains" as const : "exact" as const;
-        // A substring match squashes punctuation away, so an operand made of nothing else has nothing left to
-        // match on. It selects nought rather than everything (the matcher refuses it), and says so here rather
-        // than leaving the reader with an empty answer and no reason: a PATTERN reads the text as written.
-        if (op === "contains" && t !== "" && squash(t) === "") {
-            pend.push({
-                severity: "warning",
-                message: i18n.t("diagnostics:value.punctuationOnly"),
-                fix: {
-                    label: i18n.t("diagnostics:fix.asPattern"),
-                    query: `${word}${GRAMMAR.bind}${GRAMMAR.regex}${t}${GRAMMAR.regex}`,
-                },
-            });
-        }
+        if (op === "contains") punctuationSignpost(t);
         return done({op, operand: {type: pv.type.name, value: pv.value, written: t}});
     };
     const openBound = (bound: string, op: "gte" | "lte"): Interp | null => {
@@ -435,6 +438,7 @@ export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value
         phrase: (t): Interp => {
             const read = stringReading(t, "contains");
             if (read !== null) {
+                punctuationSignpost(t);
                 return done({op: "contains", operand: {type: read.type.name, value: read.value, written: t}});
             }
             // A phrase is a string value. Word vocabularies — sentinels, roles, rungs — are strings, so

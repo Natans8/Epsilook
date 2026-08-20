@@ -20,8 +20,13 @@ from ..derive import DeriveContext
 from ..model import SECTIONS, CountFamily, Section, SectionColumns
 from ..progress import detail
 
-PACK_FORMAT = 57
+PACK_FORMAT = 58
 """What shape the artifact is in.
+
+58 renames the worn-model row kind: a model stuck to a body ships as `worn`
+rather than `attached`, so the kind's word stops colliding with the `attach`
+property that says which body point anything rides on. A reader of 57 finds
+rows of a kind it has never heard of.
 
 57 adds `spellRanges`: the distance band of every spell that reaches past
 its caster, as its far edge, its near edge and the two flags saying the

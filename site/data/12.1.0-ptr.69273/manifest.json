@@ -1,10 +1,10 @@
 {
   "pack": "12.1.0-ptr.69273",
   "meta": {
-    "format": 57,
+    "format": 58,
     "version": "12.1.0.69273",
     "label": "Midnight PTR 12.1.0",
-    "built": "2026-08-19",
+    "built": "2026-08-20",
     "listfileTag": "202608181116",
     "tdbTag": "TDB1200.26021",
     "absentTables": [],
@@ -97,7 +97,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-4890dca27fb0.json.gz", "bytes": 12801915},
+    "core": {"file": "data/modules/core-ad7f25d00538.json.gz", "bytes": 12801918},
     "universal": {"file": "data/modules/universal-8786c54c00b0.json.gz", "bytes": 25216}
   },
   "locales": {

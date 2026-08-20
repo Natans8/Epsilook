@@ -1,10 +1,10 @@
 {
   "pack": "10.2.7.55664",
   "meta": {
-    "format": 57,
+    "format": 58,
     "version": "10.2.7.55664",
     "label": "Dragonflight 10.2.7",
-    "built": "2026-08-19",
+    "built": "2026-08-20",
     "listfileTag": "202608181116",
     "tdbTag": "TDB1027.24051",
     "absentTables": [],
@@ -115,7 +115,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-28e48a0f56ae.json.gz", "bytes": 9543105},
+    "core": {"file": "data/modules/core-9f5e1bdc00eb.json.gz", "bytes": 9543104},
     "universal": {"file": "data/modules/universal-8786c54c00b0.json.gz", "bytes": 25216}
   },
   "locales": {

@@ -8,7 +8,7 @@
 import type {PackDomain, VersionEntry} from "../data";
 import type {Dataset, Rung} from "../search/index";
 import {ordinalRungs, parse, run} from "../search/index";
-import {packDataset} from "../dataset";
+import {enumWords, packDataset} from "../dataset";
 import {fetchPack, fetchVersions, pickEntry} from "./pack";
 
 /** What the page sends the worker. */
@@ -31,6 +31,13 @@ export type WorkerSay =
      * surface offers an expansion from, which is why one array carries the name, the synonyms and the title.
      */
     readonly ladder: readonly Rung[];
+    /**
+     * The words each enumeration-typed property stores in this pack, keyed `<kind word>.<prop name>`.
+     *
+     * What the surface lists for a closed vocabulary. Read from the pack's own rows so that every offered
+     * word answers something — a vocabulary word no row carries would be an offer that can only count nought.
+     */
+    readonly enums: Record<string, readonly string[]>;
 }
     | { readonly is: "result"; readonly seq: number; readonly count: number; readonly ms: number }
     | { readonly is: "failed"; readonly error: string };
@@ -88,6 +95,7 @@ async function load(ask: Extract<WorkerAsk, { is: "load" }>): Promise<void> {
         // Read back rather than rebuilt: loading the pack is what sets the ladder, so asking for it here
         // cannot drift from the spellings the kernel matches against.
         ladder: ordinalRungs(),
+        enums: enumWords(loaded),
     });
 }
 

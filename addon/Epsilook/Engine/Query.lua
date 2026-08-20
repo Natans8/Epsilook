@@ -1168,9 +1168,20 @@ end
 --- On a kind a spell has at most one row of, several bare values in one run
 -- each become their own alternative, since one row cannot be two things;
 -- whatever else the run stated keeps every alternative company.
+-- A text subject is the exception the rationale draws itself: bare values
+-- there are substring claims, and two substrings can both describe one row,
+-- so they stay the conjunction the reader wrote.
 local function alternateWhereSingle(head, runs)
 	if head.role ~= "kind" or head.kind.single ~= true then
 		return runs
+	end
+	local subject = head.kind.props and head.kind.props[1]
+	if subject then
+		for _, held in ipairs(subject.types) do
+			if held == "text" or held == "path" then
+				return runs
+			end
+		end
 	end
 	local out = {}
 	for _, run in ipairs(runs) do

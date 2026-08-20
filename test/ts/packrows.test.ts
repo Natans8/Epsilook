@@ -12,27 +12,27 @@ import type {RowTable} from "../../src/packrows";
 import {indexRows, rowsAt, storedAt} from "../../src/packrows";
 
 /**
- * A model column holding a missile, an attached model and a carried weapon.
+ * A model column holding a missile, a worn model and a carried weapon.
  *
- * Spell 10 has the missile and the weapon; spell 20 has the attached model; spell 30 has nothing. The three kinds
- * number end to end, so the missile is ref 0, the attached model ref 1 and the weapon ref 2.
+ * Spell 10 has the missile and the weapon; spell 20 has the worn model; spell 30 has nothing. The three kinds
+ * number end to end, so the missile is ref 0, the worn model ref 1 and the weapon ref 2.
  */
 const MODELS: RowTable = {
-    kinds: ["missile", "attached", "equipped"],
+    kinds: ["missile", "worn", "equipped"],
     sizes: [1, 1, 1],
     values: {
         missile: {file: [700], from: [5], to: [9], motion: [3], target: [1]},
-        attached: {file: [800], attach: [4], target: [0]},
+        worn: {file: [800], attach: [4], target: [0]},
         equipped: {slot: [-2], attach: [-1], target: [2]},
     },
     vocab: {
         missile: {file: "files", from: "attachments", to: "attachments", motion: "motions"},
-        attached: {file: "files", attach: "attachments"},
+        worn: {file: "files", attach: "attachments"},
         equipped: {slot: "slots", attach: "attachments"},
     },
     absent: {
         missile: {from: -1, to: -1},
-        attached: {attach: -1},
+        worn: {attach: -1},
         equipped: {attach: -1},
     },
     counts: [2, 1, 0],
@@ -49,7 +49,7 @@ describe("indexing a row table", () => {
     it("gives every spell exactly the rows its count promised", () => {
         const index = indexRows(MODELS);
         assert.deepEqual(rowsAt(index, 0).map((r) => r.kind), ["missile", "equipped"]);
-        assert.deepEqual(rowsAt(index, 1).map((r) => r.kind), ["attached"]);
+        assert.deepEqual(rowsAt(index, 1).map((r) => r.kind), ["worn"]);
         assert.deepEqual(rowsAt(index, 2), []);
     });
 
@@ -57,10 +57,10 @@ describe("indexing a row table", () => {
         const index = indexRows(MODELS);
         const [missile] = rowsAt(index, 0);
         assert.equal(storedAt(MODELS, missile, "from"), 5);
-        // The attached model's target is 0, which is this property's absent value, not a mask of nobody.
-        const [attached] = rowsAt(index, 1);
-        assert.equal(storedAt(MODELS, attached, "target"), undefined);
+        // The worn model's target is 0, which is this property's absent value, not a mask of nobody.
+        const [wornRow] = rowsAt(index, 1);
+        assert.equal(storedAt(MODELS, wornRow, "target"), undefined);
         // A property the kind does not declare at all.
-        assert.equal(storedAt(MODELS, attached, "motion"), undefined);
+        assert.equal(storedAt(MODELS, wornRow, "motion"), undefined);
     });
 });

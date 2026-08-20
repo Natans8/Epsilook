@@ -94,12 +94,14 @@ def dossier(engine: LuaRuntime, spell_id: int) -> str:
     """The dossier's lines, joined, as printed under a bare interpreter."""
     # language=Lua
     engine.execute(b"""
-    function DOSSIER(id)
-      local out = {}
-      Epsilook.Inspect.Print(id, function(line) out[#out + 1] = line end)
-      return table.concat(out, "\\n")
-    end
-    """)
+                   function DOSSIER(id)
+                       local out = {}
+                       Epsilook.Inspect.Print(id, function(line)
+                           out[#out + 1] = line
+                       end)
+                       return table.concat(out, "\\n")
+                   end
+                   """)
     return cast(bytes, lua_function(engine, b"DOSSIER")(spell_id)).decode()
 
 
@@ -192,15 +194,19 @@ def tooltip_lines(engine: LuaRuntime, spell_id: int, axis: bytes, n: int) -> lis
     """The lines a part's tooltip is filled with, markup stripped."""
     # language=Lua
     engine.execute(b"""
-    function TOOLTIP_LINES(id, axis, n)
-      local out = {}
-      local tip = {}
-      function tip:SetText(text) out[#out + 1] = text end
-      function tip:AddLine(text) out[#out + 1] = text end
-      Epsilook.Inspect.FillTooltip(tip, Epsilook:GetPartDataByIndex(id, axis, n))
-      return table.concat(out, "\\n")
-    end
-    """)
+                   function TOOLTIP_LINES(id, axis, n)
+                       local out = {}
+                       local tip = {}
+                       function tip:SetText(text)
+                           out[#out + 1] = text
+                       end
+                       function tip:AddLine(text)
+                           out[#out + 1] = text
+                       end
+                       Epsilook.Inspect.FillTooltip(tip, Epsilook:GetPartDataByIndex(id, axis, n))
+                       return table.concat(out, "\\n")
+                   end
+                   """)
     text = cast(bytes, lua_function(engine, b"TOOLTIP_LINES")(spell_id, axis, n)).decode()
     return re.sub(r"\|c[0-9a-f]{8}|\|r", "", text).split("\n")
 
@@ -210,7 +216,7 @@ def test_a_creatures_tooltip_reads_down_to_what_it_looks_like(engine: LuaRuntime
     file and the textures painted over it; the kind's meaning under the title."""
     lines = tooltip_lines(engine, 118, b"fx", 1)
     assert lines[0] == "morph"
-    assert lines[1].startswith("a morph or transform aura")
+    assert lines[1].startswith("a morph aura")
     assert "creature Polymorphed Sheep - 16372" in lines
     assert lines.index("display 856") < lines.index("  model Creature/Sheep2/Sheep2.m2")
     assert "  skin Creature/Sheep2/sheep2_white.blp" in lines
@@ -259,26 +265,36 @@ def test_every_part_tooltip_fills_on_every_axis(engine: LuaRuntime) -> None:
     """A tooltip that throws half-filled never sizes itself; the filler must run clean on every axis."""
     # language=Lua
     engine.execute(b"""
-    function TOOLTIPS(list)
-      local ids = {}
-      for word in list:gmatch("%d+") do ids[#ids + 1] = tonumber(word) end
-      local tip = { n = 0 }
-      function tip:SetText() self.n = 1 end
-      function tip:AddLine() self.n = self.n + 1 end
-      local failures = {}
-      for _, id in ipairs(ids) do
-        for _, axis in ipairs(Epsilook:GetPartAxes()) do
-          for i = 1, Epsilook:GetPartCounts(id)[axis] or 0 do
-            local ok, err = pcall(Epsilook.Inspect.FillTooltip, tip, Epsilook:GetPartDataByIndex(id, axis, i))
-            if not ok then failures[#failures + 1] = axis .. " " .. id .. " " .. i .. ": " .. tostring(err) end
-          end
-          local ok, err = pcall(Epsilook.Inspect.FillAxisTooltip, tip, id, axis)
-          if not ok then failures[#failures + 1] = axis .. " " .. id .. ": " .. tostring(err) end
-        end
-      end
-      return table.concat(failures, "; ")
-    end
-    """)
+                   function TOOLTIPS(list)
+                       local ids = {}
+                       for word in list:gmatch("%d+") do
+                           ids[#ids + 1] = tonumber(word)
+                       end
+                       local tip = { n = 0 }
+                       function tip:SetText()
+                           self.n = 1
+                       end
+                       function tip:AddLine()
+                           self.n = self.n + 1
+                       end
+                       local failures = {}
+                       for _, id in ipairs(ids) do
+                           for _, axis in ipairs(Epsilook:GetPartAxes()) do
+                               for i = 1, Epsilook:GetPartCounts(id)[axis] or 0 do
+                                   local ok, err = pcall(Epsilook.Inspect.FillTooltip, tip, Epsilook:GetPartDataByIndex(id, axis, i))
+                                   if not ok then
+                                       failures[#failures + 1] = axis .. " " .. id .. " " .. i .. ": " .. tostring(err)
+                                   end
+                               end
+                               local ok, err = pcall(Epsilook.Inspect.FillAxisTooltip, tip, id, axis)
+                               if not ok then
+                                   failures[#failures + 1] = axis .. " " .. id .. ": " .. tostring(err)
+                               end
+                           end
+                       end
+                       return table.concat(failures, "; ")
+                   end
+                   """)
     # The ids cross as one string: a Python list arrives in Lua as userdata, not a table.
     failures = lua_function(engine, b"TOOLTIPS")(b"133 317228 32979 126 116 160955")
     assert failures == b"", failures
@@ -317,15 +333,19 @@ def test_a_group_tooltip_names_the_group_and_its_value(engine: LuaRuntime) -> No
     """A sound kit's group tooltip is the kit; an anim kit's is the kit's id."""
     # language=Lua
     engine.execute(b"""
-    function GROUP_TIP(id, axis, n)
-      local out = {}
-      local tip = {}
-      function tip:SetText(text) out[#out + 1] = text end
-      function tip:AddLine(text) out[#out + 1] = text end
-      Epsilook.Inspect.FillGroupTooltip(tip, Epsilook:GetPartDataByIndex(id, axis, n))
-      return table.concat(out, "\\n")
-    end
-    """)
+                   function GROUP_TIP(id, axis, n)
+                       local out = {}
+                       local tip = {}
+                       function tip:SetText(text)
+                           out[#out + 1] = text
+                       end
+                       function tip:AddLine(text)
+                           out[#out + 1] = text
+                       end
+                       Epsilook.Inspect.FillGroupTooltip(tip, Epsilook:GetPartDataByIndex(id, axis, n))
+                       return table.concat(out, "\\n")
+                   end
+                   """)
     tip = lua_function(engine, b"GROUP_TIP")
     # The kit's line and its tooltip both carry what the kit is FOR, which
     # belongs to the kit and not to each file it plays.
@@ -340,17 +360,19 @@ def test_a_copy_is_offered_only_where_a_command_takes_the_number(engine: LuaRunt
     whose actions are the client's own calls."""
     # language=Lua
     engine.execute(b"""
-    function SPAWN_ARG(id, axis, n)
-      local part = Epsilook:GetPartDataByIndex(id, axis, n)
-      for _, action in ipairs(Epsilook:GetActions(axis)) do
-        if action.key == "spawn" then
-          local argument = Epsilook.Inspect.ArgumentOf(part, action)
-          if argument then return argument end
-        end
-      end
-      return nil
-    end
-    """)
+                   function SPAWN_ARG(id, axis, n)
+                       local part = Epsilook:GetPartDataByIndex(id, axis, n)
+                       for _, action in ipairs(Epsilook:GetActions(axis)) do
+                           if action.key == "spawn" then
+                               local argument = Epsilook.Inspect.ArgumentOf(part, action)
+                               if argument then
+                                   return argument
+                               end
+                           end
+                       end
+                       return nil
+                   end
+                   """)
     api = lua_table(engine, b"Epsilook")
     part = method(api, b"GetPartDataByIndex")(api, 133, b"model", 1)
     copied, command = cast(
@@ -393,7 +415,7 @@ def test_a_lone_column_word_prints_its_doors(engine: LuaRuntime) -> None:
     assert lines[0].startswith("|cff3b9eff"), "the column wears its own tone"
     assert "Kinds" in text and "missile" in text
     # Every kind of the column, not only the one promoted to a top-level word.
-    for kind in ("barrage", "ground", "attached", "trail", "display", "item", "equipped", "mount"):
+    for kind in ("barrage", "ground", "worn", "trail", "display", "item", "equipped", "mount"):
         assert kind in text, kind
     assert "motion" in text, "a kind's properties hang under it"
     assert "/elo model:*" in text, "the search it no longer means is offered explicitly"
@@ -414,12 +436,12 @@ def test_a_sound_kits_type_is_said_once_on_the_kit(engine: LuaRuntime) -> None:
     is not repeated on every file the kit plays."""
     # language=Lua
     engine.execute(b"""
-    function SOUND_LINES(soundType)
-      local part = { axis = "sound", kind = "sound", slot = 0,
-                     values = { file = 166128, kit = 150, type = soundType, target = 1 } }
-      return Epsilook.Inspect.GroupLine(9, part, 1), Epsilook.Inspect.PartLine(9, part, 1)
-    end
-    """)
+                   function SOUND_LINES(soundType)
+                       local part = { axis = "sound", kind = "sound", slot = 0,
+                                      values = { file = 166128, kit = 150, type = soundType, target = 1 } }
+                       return Epsilook.Inspect.GroupLine(9, part, 1), Epsilook.Inspect.PartLine(9, part, 1)
+                   end
+                   """)
     group, member = cast(tuple[bytes, bytes], lua_function(engine, b"SOUND_LINES")(29))
     group_text, member_text = group.decode(), member.decode()
     # The kit's line carries the kit and what it is for.
@@ -432,16 +454,19 @@ def test_a_sound_kits_type_is_said_once_on_the_kit(engine: LuaRuntime) -> None:
     # show on one and go missing from the other.
     # language=Lua
     engine.execute(b"""
-    function GROUP_TIP_VALUES(soundType)
-      local part = { axis = "sound", kind = "sound", slot = 0,
-                     values = { file = 166128, kit = 150, type = soundType, target = 1 } }
-      local out = {}
-      local tip = { SetText = function() end,
-                    AddLine = function(_, text) out[#out + 1] = text end }
-      Epsilook.Inspect.FillGroupTooltip(tip, part)
-      return table.concat(out, " ;; ")
-    end
-    """)
+                   function GROUP_TIP_VALUES(soundType)
+                       local part = { axis = "sound", kind = "sound", slot = 0,
+                                      values = { file = 166128, kit = 150, type = soundType, target = 1 } }
+                       local out = {}
+                       local tip = { SetText = function()
+                       end,
+                                     AddLine = function(_, text)
+                                         out[#out + 1] = text
+                                     end }
+                       Epsilook.Inspect.FillGroupTooltip(tip, part)
+                       return table.concat(out, " ;; ")
+                   end
+                   """)
     assert "29" in str(lua_function(engine, b"GROUP_TIP_VALUES")(29))
 
 
@@ -451,14 +476,18 @@ def test_a_count_tooltip_drops_an_extension_that_says_nothing(engine: LuaRuntime
     come in several formats and which one this is is the informative part."""
     # language=Lua
     engine.execute(b"""
-    function AXIS_TIP(id, axis)
-      local out = {}
-      local tip = { SetText = function(_, t) out[#out + 1] = t end,
-                    AddLine = function(_, t) out[#out + 1] = t end }
-      Epsilook.Inspect.FillAxisTooltip(tip, id, axis)
-      return table.concat(out, " ;; ")
-    end
-    """)
+                   function AXIS_TIP(id, axis)
+                       local out = {}
+                       local tip = { SetText = function(_, t)
+                           out[#out + 1] = t
+                       end,
+                                     AddLine = function(_, t)
+                                         out[#out + 1] = t
+                                     end }
+                       Epsilook.Inspect.FillAxisTooltip(tip, id, axis)
+                       return table.concat(out, " ;; ")
+                   end
+                   """)
     tip = lua_function(engine, b"AXIS_TIP")
     models = cast(bytes, tip(133, b"model")).decode()
     assert "cfx_mage_fireball_missile" in models, models

@@ -805,7 +805,7 @@ row has, so a creature display and an item can share one field instead of each a
 
 | kind       | reached by                                           | what the row carries beside its file                  |
 |------------|------------------------------------------------------|-------------------------------------------------------|
-| `attached` | A kit attaching a model to a unit                    | an attachment point                                   |
+| `worn`     | A kit attaching a model to a unit                    | an attachment point                                   |
 | `missile`  | A visual's missile set                               | a motion, its projectile count, an anchor at each end |
 | `ground`   | A kit's emitter, or a procedure naming an area model | nothing                                               |
 | `trail`    | A procedure naming a weapon trail                    | nothing                                               |

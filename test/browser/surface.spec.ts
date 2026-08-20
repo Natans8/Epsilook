@@ -99,6 +99,25 @@ test("the arrows steer the list, wrapping at either end, and the field points at
     expect((await litOffer(page).textContent())?.trim().startsWith(words[words.length - 1])).toBe(true);
 });
 
+test("steering the list previews the lit offer as the slot's ghost", async () => {
+    await clearBar(page);
+    await page.keyboard.type("mo", {delay: 5});
+    // While the reader types, the ghost is the best completion.
+    await expect(ghostText(page)).toHaveText("del:");
+    // Arrowing to a row previews what taking it would write; a starts-with match extends what is typed.
+    await page.keyboard.press("ArrowDown");
+    await expect(ghostText(page)).toHaveText("del:");
+    await page.keyboard.press("ArrowDown");
+    await expect(ghostText(page)).toHaveText("rph:");
+    // The pointer lights a row exactly as the arrows do, so hovering previews too — and a row reached by
+    // containment does not extend the typed characters, so it previews nothing.
+    await offerRows(page).filter({hasText: "summon"}).hover();
+    await expect(ghostText(page)).toHaveCount(0);
+    await offerRows(page).filter({hasText: "morph"}).hover();
+    await expect(ghostText(page)).toHaveText("rph:");
+    await page.keyboard.press("Escape");
+});
+
 test("Enter takes what is lit; with nothing lit it commits the query as it stands", async () => {
     await clearBar(page);
     await page.keyboard.type("mo", {delay: 5});

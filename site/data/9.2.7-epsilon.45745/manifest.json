@@ -1,10 +1,10 @@
 {
   "pack": "9.2.7-epsilon.45745",
   "meta": {
-    "format": 57,
+    "format": 58,
     "version": "9.2.7.45745",
     "label": "Epsilon 9.2.7",
-    "built": "2026-08-19",
+    "built": "2026-08-20",
     "listfileTag": "202608181116",
     "tdbTag": "TDB927.22111",
     "absentTables": [],
@@ -132,7 +132,7 @@
     }
   },
   "modules": {
-    "core": {"file": "data/modules/core-d271950644aa.json.gz", "bytes": 7884089},
+    "core": {"file": "data/modules/core-f30e77a7a0d4.json.gz", "bytes": 7884090},
     "universal": {"file": "data/modules/universal-8786c54c00b0.json.gz", "bytes": 25216}
   },
   "locales": {

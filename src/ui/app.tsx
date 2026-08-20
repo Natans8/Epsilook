@@ -134,9 +134,15 @@ export function App({info, searcher}: {
                     {plain
                         ? <PlainBar text={text} onText={setText} placeholder={t("bar.placeholder")}
                                     label={t("bar.placeholder")} history={recentQueries()}
-                                    vocab={{rungs: info.ladder, art: expansionArt(info.ladder, BASE)}}/>
+                                    vocab={{
+                                        rungs: info.ladder, art: expansionArt(info.ladder, BASE),
+                                        enums: info.enums
+                                    }}/>
                         : <Bar text={text} onText={setText} placeholder={t("bar.placeholder")}
-                               vocab={{rungs: info.ladder, art: expansionArt(info.ladder, BASE)}}/>}
+                               vocab={{
+                                   rungs: info.ladder, art: expansionArt(info.ladder, BASE),
+                                   enums: info.enums
+                               }}/>}
                 </div>
                 <div className={styles.statusRow}>
                     <div
@@ -145,9 +151,9 @@ export function App({info, searcher}: {
                     >
                         {broken.length > 0 ? broken[0].message
                             : result !== null && (
-                                `${result.count.toLocaleString()} ${t("count.result", {count: result.count})}`
-                                + `, ${t("count.elapsed", {ms: result.ms})}`
-                            )}
+                            `${result.count.toLocaleString()} ${t("count.result", {count: result.count})}`
+                            + `, ${t("count.elapsed", {ms: result.ms})}`
+                        )}
                     </div>
                     {/* A view switch, not a command: it changes how the query is shown and never what it says.
                         Its home is this row rather than the bar, because nothing beside the bar should read as

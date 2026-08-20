@@ -33,7 +33,12 @@ class FakeWorker implements WorkerLike {
     }
 }
 
-const silent: LoadHandlers = {progress: () => {}, ready: () => {}, failed: () => {}};
+const silent: LoadHandlers = {
+    progress: () => {
+    }, ready: () => {
+    }, failed: () => {
+    }
+};
 
 test("one ask in flight: a burst of edits reaches the worker as the first ask plus only the newest follow-up", () => {
     const worker = new FakeWorker();
@@ -83,8 +88,8 @@ test("load handlers route progress, ready and failure", () => {
     });
     worker.say({is: "progress", pack: "9.2.7", done: 1, total: 4});
     worker.say({
-        is: "ready", locale: "enUS", locales: ["enUS"], versions: [], domains: undefined, ladder: [], spells: 7,
-        version: {id: "9.2.7", label: "SL", file: "x"},
+        is: "ready", locale: "enUS", locales: ["enUS"], versions: [], domains: undefined, ladder: [], enums: {},
+        spells: 7, version: {id: "9.2.7", label: "SL", file: "x"},
     });
     worker.say({is: "failed", error: "boom"});
     assert.deepEqual(seen, ["progress 9.2.7 1/4", "ready 7", "failed boom"]);
