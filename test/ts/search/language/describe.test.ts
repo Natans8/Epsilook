@@ -123,8 +123,10 @@ test("a sentinel word is an answer, not structure: value-styled, no anchor glyph
 
 test("a phrase wears its quotes: the piece marks it so the renderer draws them as delimiters", () => {
     assert.deepEqual(chip('name:"blood pool"').body, [{is: "phrase", text: "blood pool"}]);
-    // A word that needs no quotes never gains them, however it was typed.
-    assert.deepEqual(chip('name:"fire"').body, [{is: "value", text: "fire"}]);
+    // Quotes are STRICT, so a quoted word keeps them however plain it looks: the phrase is part of what the
+    // ask means, and a chip that shed it would be showing a different question.
+    assert.deepEqual(chip('name:"fire"').body, [{is: "phrase", text: "fire"}]);
+    assert.deepEqual(chip("name:fire").body, [{is: "value", text: "fire"}]);
 });
 
 test("an identity list joins with commas, identical whatever separator was typed", () => {

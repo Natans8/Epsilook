@@ -269,10 +269,19 @@ local function plansFor(prop, expr, notations)
 		if Schema.Accepts(typeName, op) then
 			local plan = {
 				type = typeName,
-				test = Match.Test(op, typeName, { value = value, text = expr.operand.text }),
+				test = Match.Test(op, typeName, {
+					value = value,
+					text = expr.operand.text,
+					verbatim = expr.operand.verbatim,
+				}),
 			}
 			if Schema.IsTextual(typeName) and (op == "contains" or op == "exact") then
-				plan.op, plan.written = op, Query.OperandText(expr.operand)
+				-- A quoted operand scans as written: quotes are strict.
+				local scanOp = op
+				if op == "contains" and expr.operand.verbatim then
+					scanOp = "verbatim"
+				end
+				plan.op, plan.written = scanOp, Query.OperandText(expr.operand)
 			end
 			out[#out + 1] = plan
 		end

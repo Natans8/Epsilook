@@ -115,6 +115,11 @@ function Match.Test(op, typeName, operand)
 		if op == "exact" then
 			return Text.equalsTest(textOf(operand))
 		elseif op == "contains" then
+			-- A quoted operand is matched as written: quotes are strict, and
+			-- the squashed substring test is the bare spelling's alone.
+			if operand.verbatim then
+				return Text.verbatimTest(textOf(operand))
+			end
 			return Text.containsTest(textOf(operand))
 		end
 		return never
@@ -213,14 +218,16 @@ Match.WINDOW = 65536
 -- in the second row is skipped.
 -- @param blob the chunk's payload
 -- @param node the text column's header entry
--- @param op "contains" or "exact"
+-- @param op "contains", "verbatim" or "exact"
 -- @param written the operand as typed
 -- @param tick a function called after each window, or nil; what lets a
 --   caller drive the scan across frames
 -- @return a set of rows counted from zero, empty where nothing matches
 function Match.ScanText(blob, node, op, written, tick)
 	local hits = {}
-	local pattern = op == "exact" and Text.exactPattern(written) or Text.containsPattern(written)
+	-- A verbatim scan wants the characters as written anywhere in a row, so it
+	-- runs the anchored test's pattern under the substring test's acceptance.
+	local pattern = op == "contains" and Text.containsPattern(written) or Text.exactPattern(written)
 	local rows = Reader.size(node)
 	if not pattern or rows == 0 then
 		return hits

@@ -69,6 +69,12 @@ local function opExpr(opName, operand)
 	return { op = opName, operand = operand }
 end
 
+--- Marks an operand as quoted, so its characters are matched as written.
+local function verbatimly(operand)
+	operand.verbatim = true
+	return operand
+end
+
 --- A typed operand.
 local function typed(typeName, value, written)
 	return { type = typeName, value = value, written = written }
@@ -295,7 +301,7 @@ local function typedCtx(prop, word, done)
 		if phrase then
 			local value, typeName = stringReading(operand, op.name)
 			if value ~= nil then
-				return done(opExpr(op.name, typed(typeName, value, operand)))
+				return done(opExpr(op.name, verbatimly(typed(typeName, value, operand))))
 			end
 			if refusesQuote(operand) then
 				return quotedQuantity()
@@ -335,7 +341,8 @@ local function typedCtx(prop, word, done)
 	function ctx.phrase(text)
 		local value, typeName = stringReading(text, "contains")
 		if value ~= nil then
-			return done(opExpr("contains", typed(typeName, value, text)))
+			-- Quotes are strict: the characters are matched as written.
+			return done(opExpr("contains", verbatimly(typed(typeName, value, text))))
 		end
 		if refusesQuote(text) then
 			return quotedQuantity()
@@ -493,7 +500,7 @@ local function kindCtx(kind, countFallback)
 		if #textual == 1 then
 			return propCtx(textual, word).phrase(text)
 		elseif #textual > 0 then
-			return props(textual, opExpr("contains", { text = text }))
+			return props(textual, opExpr("contains", { text = text, verbatim = true }))
 		elseif #wordy > 0 then
 			return propCtx(wordy, word).phrase(text)
 		elseif #readable > 0 then
@@ -543,7 +550,7 @@ local function columnCtx(column)
 		return content(opExpr("contains", { text = text }))
 	end
 	function ctx.phrase(text)
-		return content(opExpr("contains", { text = text }))
+		return content(opExpr("contains", { text = text, verbatim = true }))
 	end
 	function ctx.star()
 		return { r = "exists" }
@@ -568,7 +575,9 @@ local topCtx = {
 	range = nothing,
 	rangeParts = nothing,
 	bare = asContent,
-	phrase = asContent,
+	phrase = function(text)
+		return content(opExpr("contains", { text = text, verbatim = true }))
+	end,
 	star = function()
 		return content({ op = "present" })
 	end,

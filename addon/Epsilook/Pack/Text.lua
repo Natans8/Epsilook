@@ -191,6 +191,19 @@ function Text.containsTest(text)
 	end
 end
 
+--- A test of whole stored strings carrying a quoted operand as written.
+-- Quotes are strict: case and typography fold, punctuation and spaces stay.
+-- The squash is what the quotes opt out of, which is also what makes
+-- punctuation searchable at all.
+-- @param text the operand as typed
+-- @return a function from a stored string to true or false; never true for an empty operand
+function Text.verbatimTest(text)
+	local needle = Text.fold(text)
+	return function(stored)
+		return needle ~= "" and Text.fold(stored):find(needle, 1, true) ~= nil
+	end
+end
+
 --- A test of whole stored strings being a folded operand, whole.
 -- @param text the operand as typed
 -- @return a function from a stored string to true or false

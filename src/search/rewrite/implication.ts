@@ -24,7 +24,7 @@ import {resolveOperand, textOf} from "../evaluate/rows";
 import type {Lit, ValueSite} from "./tree";
 import {keyOfAsk, keyOfLit, scopeKinds, signedKey, term} from "./tree";
 import type {AxisType} from "../vocabulary/value-types";
-import {matcher, ROLE_MASK_LIMIT, SUBSTRING_TYPES} from "../evaluate/value-matching";
+import {matcher, ROLE_MASK_LIMIT, SUBSTRING_TYPES, verbatimContains} from "../evaluate/value-matching";
 
 /** A closed-or-open numeric interval, with the notation that read its bounds. */
 interface Interval {
@@ -149,6 +149,15 @@ function impliesText(type: AxisType, aOp: string, a: ParsedOperand, bOp: string,
         matcher(op, type.name)?.(stored, operand) ?? false;
     const aText = textOf(a);
     const bText = textOf(b);
+    if (bOp === "contains" && b.verbatim === true) {
+        // Only characters-as-written can vouch for characters-as-written. An exact value IS its folded text and
+        // a verbatim operand is contained in everything it selects; the squashed reasoning below says nothing
+        // about the punctuation a verbatim ask requires.
+        if (aOp === "exact" || (aOp === "contains" && a.verbatim === true)) {
+            return verbatimContains(aText, bText);
+        }
+        return false;
+    }
     if (bOp === "contains") {
         if (aOp === "glob") return aText.split("*").some((run) => test("contains", run, bText));
         return test("contains", aText, bText);

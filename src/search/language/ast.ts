@@ -59,10 +59,14 @@ export interface Diagnostic {
  * `written` is the operand text the reader actually typed, kept so a rendering surface can echo the spelling they
  * chose — `x1.5` stays `x1.5` — where the canonical form would converge it. Absent on an operand built
  * programmatically, which has no written spelling to uphold; equivalence never reads it.
+ *
+ * `verbatim` marks an operand the reader QUOTED: its characters are matched as written — case and typography
+ * still fold, punctuation stays — where a bare spelling's substring test squashes punctuation away. It changes
+ * what the ask MEANS, so unlike `written` it is semantic and equivalence separates on it.
  */
 export type ParsedOperand =
-    | { readonly text: string }
-    | { readonly type: string; readonly value: Value; readonly written?: string };
+    | { readonly text: string; readonly verbatim?: true }
+    | { readonly type: string; readonly value: Value; readonly written?: string; readonly verbatim?: true };
 
 /** One value expression: an operator from the registry applied to its operands. */
 export type ValueExpr =

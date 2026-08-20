@@ -126,20 +126,23 @@ const PROBES: Probe[] = [
         v1: 'model:"motion parabola"', v2: "model:{motion:parabola}", was: 7796,
         note: "1.0 phrase = keyword+value; 2.0 names the property",
     },
-    {v1: 'model:(motion "forward spin")', v2: 'model:{motion:"forward spin"}', was: 924, note: ""},
+    // Quotes are STRICT now, and 1.0's quoted keyword values were squashed — so the probes that carried a 1.0
+    // quoted value forward re-base onto the squashed bare spelling, which is the reading 1.0 actually measured.
+    // The vocabulary spells these CamelCase (HandRight, ForwardSpin), so the quoted forms rightly answer nought.
+    {v1: 'model:(motion "forward spin")', v2: "model:{motion:forwardspin}", was: 924, note: ""},
     {
         v1: 'model:"attach chest"', v2: "model:{attach:chest}|model:{from:chest}|model:{to:chest}", was: 51581,
         note: "1.0 attach unions both ends of every row; 2.0 spells that out per property",
     },
     {
         v1: 'model:(attach "right hand")',
-        v2: 'model:{attach:"right hand"}|model:{from:"right hand"}|model:{to:"right hand"}',
+        v2: "model:{attach:righthand}|model:{from:righthand}|model:{to:righthand}",
         was: 39612,
         note: "",
     },
     {
         v1: 'model:"attach right hand"',
-        v2: 'model:{attach:"right hand"}|model:{from:"right hand"}|model:{to:"right hand"}',
+        v2: "model:{attach:righthand}|model:{from:righthand}|model:{to:righthand}",
         was: 26038,
         note: "1.0 reads the whole phrase as one keyword value; same 2.0 form as the group spelling",
     },

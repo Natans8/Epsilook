@@ -149,6 +149,18 @@ define(["glob"], TEXTUAL, (stored, operand) => {
     const wanted = asText(operand);
     return wanted !== null && globToRegExp(wanted).test(squash(String(stored)));
 });
+
+/**
+ * The strict reading a QUOTED operand gets: its characters matched as written, with case and typography still
+ * folded and punctuation kept. The quote law says a quoted value is a STRING, and the squash that forgives
+ * punctuation on a bare spelling would forgive exactly what the reader deliberately typed — `name:"-a"` means
+ * the dash, and `name:"\""` is how a literal quote is searched. Dispatched by the operand's own `verbatim`
+ * mark rather than registered by type, because quotedness is a fact about the operand, not about the axis.
+ */
+export const verbatimContains: Match = (stored, operand) => {
+    const wanted = asText(operand);
+    return wanted !== null && wanted !== "" && fold(String(stored)).includes(fold(wanted));
+};
 define(["present"], TEXTUAL, (stored) => String(stored).length > 0);
 
 // A regex runs against the stored text as written — no folding, no squashing — because character-level control is

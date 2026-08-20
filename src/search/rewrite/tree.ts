@@ -115,9 +115,17 @@ export const termKeys = (run: readonly ScopeTerm[]): string[] => run.map((t) => 
  * normalised everywhere order does not matter.
  */
 
-/** A JSON-ready shape for one operand: its folded text, or its typed value. */
+/**
+ * A JSON-ready shape for one operand: its folded text, or its typed value.
+ *
+ * The verbatim mark rides along because quotes are STRICT — a quoted and a bare spelling of one text are two
+ * different asks, and a shape that merged them would let a rewrite trade one for the other. Carried only when
+ * set, so every non-verbatim shape stays what it was.
+ */
 function operandShape(operand: ParsedOperand): unknown {
-    return "text" in operand ? {text: operand.text.toLowerCase()} : {type: operand.type, value: operand.value};
+    const strict = operand.verbatim === true ? {verbatim: true} : {};
+    return "text" in operand ? {text: operand.text.toLowerCase(), ...strict}
+        : {type: operand.type, value: operand.value, ...strict};
 }
 
 /** A JSON-ready shape for one value expression. */

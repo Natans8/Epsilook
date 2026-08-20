@@ -143,18 +143,23 @@ function phrased(text: string): string {
 }
 
 /**
- * Quotes a value whose bare spelling would re-read as something other than itself.
+ * Quotes a value whose spelling requires it.
  *
- * The rule errs generous: a quoted string means the same string wherever a string is legal, so an extra phrase can
- * never change an ask — an omitted one can, which is what every branch here prevents.
+ * A VERBATIM operand keeps its quotes always: quotes are strict, so the phrase is part of what the ask means and
+ * dropping it would turn a written-as-typed match back into a squashed one. The remaining branches serve operands
+ * that were never quoted but cannot be spelled bare — text that would re-read as structure or as a number — where
+ * the phrase is the only legal spelling at all.
  */
-function bareOrPhrase(text: string, reading: Reading): string {
-    if (text === "" || NEEDS_PHRASE.test(text)) return phrased(text);
+function bareOrPhrase(text: string, reading: Reading, verbatim = false): string {
+    if (verbatim || text === "" || NEEDS_PHRASE.test(text)) return phrased(text);
     if (reading === "quantity") return text;
     if (OPENS_STRUCTURE.test(text)) return phrased(text);
     if (NUMBER_SHAPED.test(text) && (reading === "worded" || NUMBER_STRUCTURE.test(text))) return phrased(text);
     return text;
 }
+
+/** Whether an operand was quoted by the reader, so its characters are matched as written. */
+const verbatimOf = (operand: ParsedOperand): boolean => operand.verbatim === true;
 
 /** A range bound: parenthesised when a leading sign would read as the range separator. */
 function bound(text: string): string {
@@ -174,7 +179,7 @@ function bound(text: string): string {
  */
 export function operandQuoted(operand: ParsedOperand, at?: PropRef): boolean {
     const text = operandText(operand, at, "written");
-    return bareOrPhrase(text, readingOf(operand)) !== text;
+    return bareOrPhrase(text, readingOf(operand), verbatimOf(operand)) !== text;
 }
 
 /**
@@ -190,7 +195,8 @@ function valueText(value: ValueExpr, at?: PropRef, tier: Spelling = "canonical")
         case "present":
             return GRAMMAR.wildcard;
         case "contains":
-            return bareOrPhrase(operandText(value.operand, at, tier), readingOf(value.operand));
+            return bareOrPhrase(operandText(value.operand, at, tier), readingOf(value.operand),
+                verbatimOf(value.operand));
         case "glob":
             return operandText(value.operand, at, tier);
         case "regex": {
@@ -203,7 +209,7 @@ function valueText(value: ValueExpr, at?: PropRef, tier: Spelling = "canonical")
             const text = operandText(value.operand, at, tier);
             // A bare sentinel word already means the exact ask, so the anchor adds nothing to it.
             if (at !== undefined && sentinelOf(propOf(at), text) !== null) return text;
-            return `${spelling(exact)}${bareOrPhrase(text, readingOf(value.operand))}`;
+            return `${spelling(exact)}${bareOrPhrase(text, readingOf(value.operand), verbatimOf(value.operand))}`;
         }
         case "lt":
         case "lte":

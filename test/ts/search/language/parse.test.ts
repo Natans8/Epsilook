@@ -150,9 +150,9 @@ describe("binds and their values", () => {
 
     it("= anchors a phrase: IS versus contains", () => {
         assert.deepEqual(valueOf(ok('name:="Blood Pool"')),
-            {op: "exact", operand: {type: "text", value: "Blood Pool", written: "Blood Pool"}});
+            {op: "exact", operand: {type: "text", value: "Blood Pool", written: "Blood Pool", verbatim: true}});
         assert.deepEqual(valueOf(ok('name:"Blood Pool"')),
-            {op: "contains", operand: {type: "text", value: "Blood Pool", written: "Blood Pool"}});
+            {op: "contains", operand: {type: "text", value: "Blood Pool", written: "Blood Pool", verbatim: true}});
     });
 
     it("a comma list of numbers is alternation", () => {
@@ -319,27 +319,27 @@ describe("binds and their values", () => {
 describe("the quote law: a phrase is one literal string value", () => {
     it("a phrase is a leaf — colons, parens and pipes inside are data", () => {
         assert.deepEqual(valueOf(ok('name:"Embody Hero: Illidan"')),
-            {op: "contains", operand: {type: "text", value: "Embody Hero: Illidan", written: "Embody Hero: Illidan"}});
+            {op: "contains", operand: {type: "text", value: "Embody Hero: Illidan", written: "Embody Hero: Illidan", verbatim: true}});
         assert.deepEqual(valueOf(ok('name:"Elixir (Greater)"')),
-            {op: "contains", operand: {type: "text", value: "Elixir (Greater)", written: "Elixir (Greater)"}});
+            {op: "contains", operand: {type: "text", value: "Elixir (Greater)", written: "Elixir (Greater)", verbatim: true}});
         assert.deepEqual(valueOf(ok('model:"beam|chain"')),
-            {op: "contains", operand: {text: "beam|chain"}});
+            {op: "contains", operand: {text: "beam|chain", verbatim: true}});
     });
 
     it("an escaped quote is a literal quote", () => {
         assert.deepEqual(valueOf(ok(String.raw`name:"the \"real\" one"`)),
-            {op: "contains", operand: {type: "text", value: 'the "real" one', written: 'the "real" one'}});
+            {op: "contains", operand: {type: "text", value: 'the "real" one', written: 'the "real" one', verbatim: true}});
     });
 
     it("quotes never group clauses: a quoted pair stays a phrase", () => {
         assert.deepEqual(valueOf(ok('model:"fire missile"')),
-            {op: "contains", operand: {text: "fire missile"}});
+            {op: "contains", operand: {text: "fire missile", verbatim: true}});
     });
 
     it("quotes suppress the vocabulary: a quoted kind word is content", () => {
         const ask = ok('model:"missile"');
         assert.equal(ask.on, "column");
-        assert.deepEqual(valueOf(ask), {op: "contains", operand: {text: "missile"}});
+        assert.deepEqual(valueOf(ask), {op: "contains", operand: {text: "missile", verbatim: true}});
     });
 
     it("a pattern inside a phrase is literal text, not a glob", () => {
@@ -380,7 +380,7 @@ describe("the quote law: a phrase is one literal string value", () => {
         assert.ok(term.ask !== null && term.ask.on === "props");
         assert.deepEqual(term.ask.value, {
             op: "contains",
-            operand: {type: "colour", value: 0xff_00_00, written: "red"}
+            operand: {type: "colour", value: 0xff_00_00, written: "red", verbatim: true}
         });
     });
 
@@ -390,13 +390,13 @@ describe("the quote law: a phrase is one literal string value", () => {
         assert.deepEqual(byId.ask.value, {op: "exact", operand: {type: "id", value: 150, written: "150"}});
         const [byName] = termsOf(ok('sound:{kit:"150"}'));
         assert.ok(byName.ask !== null && byName.ask.on === "props");
-        assert.deepEqual(byName.ask.value, {op: "contains", operand: {type: "text", value: "150", written: "150"}});
+        assert.deepEqual(byName.ask.value, {op: "contains", operand: {type: "text", value: "150", written: "150", verbatim: true}});
     });
 
     it("an unclosed phrase runs to the end of input", () => {
         assert.deepEqual(valueOf(ok('name:"fire')), {
             op: "contains",
-            operand: {type: "text", value: "fire", written: "fire"}
+            operand: {type: "text", value: "fire", written: "fire", verbatim: true}
         });
     });
 
@@ -983,15 +983,15 @@ it("reads juxtaposition as alternation on a kind that cannot repeat", () => {
     assert.equal(runs("desc:{kneel dance}"), 1);
 });
 
-it("a punctuation-only operand says why it answers nothing, quoted spellings included", () => {
-    // Substring matching squashes punctuation away, so the ask is dead on arrival; a PATTERN reads the text as
-    // written, and the fix spells one. The quoted spellings took a different reading path and answered nought
-    // in silence — `name:"\""` is the same dead ask said with an escape.
+it("a punctuation-only operand warns on the bare spelling, and quotes make it a real ask", () => {
+    // Bare substring matching squashes punctuation away, so the bare ask is dead on arrival and the warning
+    // spells the escapes: the pattern, and the strict phrase. Quotes are STRICT, so the quoted spellings are
+    // exactly how punctuation is searched and carry no warning at all.
+    const bare = parse("name:.").diagnostics.filter((d) => d.severity === "warning");
+    assert.equal(bare.length, 1);
+    assert.match(bare[0].fix?.query ?? "", /^name:\//);
     for (const query of ['name:"---"', 'name:"\\""']) {
-        const parsed = parse(query);
-        const warned = parsed.diagnostics.filter((d) => d.severity === "warning");
-        assert.equal(warned.length, 1, query);
-        assert.match(warned[0].fix?.query ?? "", /^name:\//, query);
+        assert.deepEqual(parse(query).diagnostics, [], query);
     }
 });
 

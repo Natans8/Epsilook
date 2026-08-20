@@ -386,7 +386,7 @@ export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value
                 const read = stringReading(operand, op.name);
                 if (read !== null) {
                     return done(opExpr(op.name,
-                        {type: read.type.name, value: read.value, written: operand}));
+                        {type: read.type.name, value: read.value, written: operand, verbatim: true}));
                 }
                 // A quoted operand is a string. Sentinel words are strings; a quantity is not, so an operator
                 // applied to a quoted number is refused rather than read as the number it looks like.
@@ -438,8 +438,12 @@ export function typedCtx(prop: Prop, word: string, pend: Pending[], done: (value
         phrase: (t): Interp => {
             const read = stringReading(t, "contains");
             if (read !== null) {
-                punctuationSignpost(t);
-                return done({op: "contains", operand: {type: read.type.name, value: read.value, written: t}});
+                // Quotes are STRICT: the characters are matched as written, so quoted punctuation is exactly
+                // how punctuation is searched and no signpost stands here.
+                return done({
+                    op: "contains",
+                    operand: {type: read.type.name, value: read.value, written: t, verbatim: true},
+                });
             }
             // A phrase is a string value. Word vocabularies — sentinels, roles, rungs — are strings, so
             // quoting one of their words is harmless; a quantity has no string reading, and refusing says
@@ -601,7 +605,7 @@ export function kindCtx(kind: Kind, countFallback: boolean, pend: Pending[]): Va
             // carried as its value; several claimants share one text operand, and are all textual.
             if (textual.length === 1) return propCtx(textual, word, pend).phrase(t);
             if (textual.length > 0) {
-                return {r: "props", props: textual, value: {op: "contains", operand: {text: t}}};
+                return {r: "props", props: textual, value: {op: "contains", operand: {text: t, verbatim: true}}};
             }
             // No textual property reads it, so the string falls to the word vocabularies: sentinels and
             // word-valued properties take a quoted word; a quantity refuses a quoted number.
@@ -679,7 +683,7 @@ export function columnCtx(column: Column, pend: Pending[]): ValueCtx {
             }
             return content({op: "contains", operand: {text: t}});
         },
-        phrase: (t): Interp => content({op: "contains", operand: {text: t}}),
+        phrase: (t): Interp => content({op: "contains", operand: {text: t, verbatim: true}}),
         regex: (pattern): Interp => badPattern(pattern) ?? content({op: "regex", operand: {text: pattern}}),
         star: (): Interp => ({r: "exists"}),
         // Nothing to carry: these positions dispatch over many properties, so no one notation is
@@ -702,7 +706,7 @@ export function topCtx(): ValueCtx {
         rangeParts: (): Interp | null => null,
         glob: (pattern): Interp => content({op: "glob", operand: {text: pattern}}),
         bare: (t): Interp => content({op: "contains", operand: {text: t}}),
-        phrase: (t): Interp => content({op: "contains", operand: {text: t}}),
+        phrase: (t): Interp => content({op: "contains", operand: {text: t, verbatim: true}}),
         // Unreachable by scanning — a slash in free text is data — and defensively literal if ever called.
         regex: (pattern): Interp => content({
             op: "contains",

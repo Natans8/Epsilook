@@ -37,6 +37,9 @@ PROBES = [
     "range:weapon", "range:{min>10}", "range:{melee unlimited}", "spell:tracking",
     # A unit written anywhere in a range is the phrase's own, so both engines must read the bare bound in it.
     "cast:2-5ms", "cast:2ms-5", "scale:x2-50", "scale:10-90", "scale:2-5",
+    # Quotes are strict: a quoted operand matches its characters as written, punctuation included, while the
+    # bare spelling squashes punctuation away. Both engines must draw the same line.
+    'name:"-a"', 'name:"anti-magic"', "name:antimagic", 'name:"\\""', 'model:"fire missile"', 'desc:"you take"',
 ]
 """Queries across every column and most types, each answered by both engines."""
 

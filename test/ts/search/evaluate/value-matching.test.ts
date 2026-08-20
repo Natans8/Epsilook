@@ -8,7 +8,7 @@
 import {strict as assert} from "node:assert";
 import {describe, it} from "node:test";
 
-import {matcher, roleNames} from "../../../../src/search/evaluate/value-matching";
+import {matcher, roleNames, verbatimContains} from "../../../../src/search/evaluate/value-matching";
 import type {Rung} from "../../../../src/search/vocabulary/value-types";
 import {setOrdinalLadder, TARGET_ROLES, TYPES} from "../../../../src/search/vocabulary/value-types";
 
@@ -32,6 +32,20 @@ describe("the textual family", () => {
     it("ignores punctuation when matching part of a value", () => {
         assert.equal(run("contains", "Anti-Magic Shell", "antimagic"), true);
         assert.equal(run("contains", "Anti-Magic Shell", "magicshell"), true);
+    });
+
+    it("a quoted operand matches its characters as written — quotes are strict", () => {
+        // Case and typography still fold; punctuation and spaces stay. The bare spelling's squash is what the
+        // quotes opt out of, which is also what makes punctuation searchable at all.
+        assert.equal(verbatimContains("Anti-Magic Shell", "anti-magic"), true);
+        assert.equal(verbatimContains("Anti-Magic Shell", "antimagic"), false);
+        assert.equal(verbatimContains('"Well Fed"', '"well fed"'), true);
+        assert.equal(verbatimContains("Mark \"S\" Boomstick", '"s"'), true);
+        assert.equal(verbatimContains("A-a", "-a"), true);
+        assert.equal(verbatimContains("Aa", "-a"), false);
+        assert.equal(verbatimContains("Anti—Magic", "anti-magic"), true);
+        // An empty phrase asks for nothing and selects nothing.
+        assert.equal(verbatimContains("Fireball", ""), false);
     });
 
     it("keeps exact matching against the whole value, never a part", () => {

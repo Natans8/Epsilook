@@ -23,7 +23,7 @@ import {isFlag, sentinelOf, wordsOf} from "../schema/kinds";
 import type {Ask, ParsedOperand, PropRef, ScopeAsk, ValueExpr} from "../language/ast";
 import type {AxisType, Value} from "../vocabulary/value-types";
 import {text} from "../vocabulary/value-types";
-import {matcher} from "./value-matching";
+import {matcher, verbatimContains} from "./value-matching";
 
 /**
  * The values one row carries for one property.
@@ -179,7 +179,11 @@ export function matchProp(
             const op = bareReading(expr.op, operand.type);
             if (!operand.type.accepts.some((accepted) => accepted.name === op)) return false;
             const value = storedFor(prop, stored, operand.type);
-            return value !== undefined && runMatch(op, operand.type, value, operand.value);
+            if (value === undefined) return false;
+            // A QUOTED operand is matched as written — quotes are strict, and the squashed substring test is
+            // the bare spelling's reading alone.
+            if (op === "contains" && expr.operand.verbatim === true) return verbatimContains(value, operand.value);
+            return runMatch(op, operand.type, value, operand.value);
         }
     }
 }

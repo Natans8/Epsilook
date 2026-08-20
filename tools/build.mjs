@@ -203,6 +203,9 @@ const {values} = parseArgs({
         harness: {type: "string", default: undefined},
         cli: {type: "boolean", default: false},
         test: {type: "boolean", default: false},
+        // Binds the dev server to every interface instead of loopback, so a phone on the same network can
+        // reach it. Opt-in: loopback stays the default because an open dev server is a choice, not a fallout.
+        lan: {type: "boolean", default: false},
     },
     // let --serve and --harness appear with no port
     tokens: false,
@@ -224,13 +227,13 @@ if (values.test) {
     mkdirSync(HARNESS_DIR, {recursive: true});
     writeFileSync(resolve(HARNESS_DIR, "index.html"), HARNESS_HTML);
     const ctx = await esbuild.context(harnessOptions);
-    await ctx.serve({servedir: root, port, host: "127.0.0.1"});
+    await ctx.serve({servedir: root, port, host: values.lan ? "0.0.0.0" : "127.0.0.1"});
     console.log(`harness on http://127.0.0.1:${port}/dev/harness/ — rebuild on every request`);
 } else if (values.serve !== undefined) {
     const port = Number(values.serve);
     const ctx = await esbuild.context(options);
-    await ctx.serve({servedir: resolve(root, "site"), port, host: "127.0.0.1"});
-    console.log(`serving site/ on http://127.0.0.1:${port} — rebuild on every request`);
+    await ctx.serve({servedir: resolve(root, "site"), port, host: values.lan ? "0.0.0.0" : "127.0.0.1"});
+    console.log(`serving site/ on port ${port} — rebuild on every request`);
 } else {
     const result = await esbuild.build({...options, minify: true});
     checkReachability(result.metafile);
