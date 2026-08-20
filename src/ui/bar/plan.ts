@@ -847,6 +847,31 @@ export function removeSelection(text: string, sel: BarSelection): Commit {
     return {text: before + (strand ? after.slice(1) : after), caret: sel.from, removed: true};
 }
 
+/**
+ * Replaces a bar selection with new text, as typing or pasting over it does.
+ *
+ * The removal and the insertion are one operation: the inserted text lands where the selection stood, keeping
+ * the separator a following segment needs — and growing none at the query's end, where the reader may keep
+ * typing. Newlines in the insertion become the separator they stand for, because a query is one line.
+ *
+ * @param text The query text.
+ * @param sel The selection.
+ * @param inserted The replacement text, as typed or pasted.
+ * @returns The new text with the caret after the insertion.
+ */
+export function replaceSelection(text: string, sel: BarSelection, inserted: string): Commit {
+    const flat = inserted.replaceAll(/\s*\n\s*/g, " ").trim();
+    const gone = removeSelection(text, sel);
+    if (flat === "") return gone;
+    const after = gone.text.slice(gone.caret);
+    const glue = after.trim() === "" ? "" : " ";
+    return {
+        text: gone.text.slice(0, gone.caret) + flat + glue + after,
+        caret: gone.caret + flat.length,
+        removed: true,
+    };
+}
+
 
 /**
  * Flips exclusion at one offset: the `-` a clause or a scope term carries before its head.

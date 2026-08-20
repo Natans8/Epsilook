@@ -79,6 +79,7 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
     });
     const {
         sel, selectedText, onSelectAll, onSelectPast, onBarDown, onBarMove, onBarUp, onBarClick, onBarKeys,
+        onBarPaste,
     } = selection;
     const {
         at, gapAt, caret, session, focused, setFocused, onKeystroke, commitOpen, onArrow, onCommit, onCancel,
@@ -105,7 +106,11 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
             // Stripped of their state: a value half typed is not a value that failed, and `scale:x` on its way
             // to `scale:x5` was being squiggled as though the reader had finished and got it wrong. Diagnostics
             // belong to a committed query — which is the law's silent-while-typing half, drawn.
-            .map((run) => (run.state === undefined ? run : {...run, state: undefined})),
+            .map((run) => {
+                if (run.state === undefined) return run;
+                const {state: _dropped, ...quiet} = run;
+                return quiet;
+            }),
         [painted, at]);
     // At rest — no focus, or a bar-wide selection standing — the open position renders settled like every
     // other segment. A selection is a stretch of the settled query, so nothing inside it is in its editing form.
@@ -248,6 +253,7 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
                 onMouseUp={onBarUp}
                 onClick={onBarClick}
                 onKeyDownCapture={onBarKeys}
+                onPasteCapture={onBarPaste}
                 data-selection={sel === null ? undefined : selectedText()}
             >
                 {children}

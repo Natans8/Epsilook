@@ -9,10 +9,12 @@
  * Split out of the bar because it is orthogonal to the editing session: it reads the session's plan and calls
  * its rewrites, while the session's only knowledge of it is the one hand-off that clears it.
  */
-import type {KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent} from "react";
+import type {
+    ClipboardEvent as ReactClipboardEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent,
+} from "react";
 import {useRef, useState} from "react";
 import type {BarSelection} from "./plan";
-import {removeSelection, segmentAt, selectionOver, selectionStep, slotStart} from "./plan";
+import {removeSelection, replaceSelection, segmentAt, selectionOver, selectionStep, slotStart} from "./plan";
 import type {Aim} from "./aim";
 import {groundAim, offsetAtPoint} from "./aim";
 import type {EditingSession} from "./session";
@@ -41,6 +43,8 @@ export interface BarSelectionState {
      * the query is selected, Escape, Delete and the clipboard belong to the bar rather than to any one slot.
      */
     readonly onBarKeys: (e: ReactKeyboardEvent<HTMLDivElement>) => void;
+    /** Paste replaces the selection, exactly as typing over it does. */
+    readonly onBarPaste: (e: ReactClipboardEvent<HTMLDivElement>) => void;
 }
 
 /**
@@ -282,6 +286,27 @@ export function useBarSelection(
         }
     };
 
+    /**
+     * Paste replaces the selection, exactly as typing over it does: the removal and the pasted text land as
+     * ONE operation, so one undo takes both back. The result settles rather than opening a slot — a pasted
+     * `model:fire` arrives as the chip it spells — with the caret resting after it, and newlines become the
+     * separator they stand for, as the plain view reads them.
+     */
+    const onBarPaste = (e: ReactClipboardEvent<HTMLDivElement>): void => {
+        if (sel === null) return;
+        e.preventDefault();
+        e.stopPropagation();
+        session.pushUndo(text);
+        const step = replaceSelection(text, sel, e.clipboardData.getData("text/plain"));
+        setRange(null);
+        if (step.caret === sel.from) {
+            // Nothing pasteable arrived, so what lands is the removal alone.
+            session.restAt(step);
+            return;
+        }
+        session.restAfter(step.text, step.caret - 1);
+    };
+
     /** Ends a drag: the button is up, so no further move extends anything. */
     const onBarUp = (): void => {
         dragFrom.current = null;
@@ -294,6 +319,6 @@ export function useBarSelection(
 
     return {
         sel, clear, selectedText, deleteSelection, onSelectAll, onSelectPast,
-        onBarDown, onBarMove, onBarUp, onBarClick, onBarKeys,
+        onBarDown, onBarMove, onBarUp, onBarClick, onBarKeys, onBarPaste,
     };
 }

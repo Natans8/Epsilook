@@ -8,7 +8,8 @@ import test from "node:test";
 
 import {
     backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, grownSegment, insertAtGap, keywordBehind, openHead,
-    pairDelimiter, planAt, removeSegment, removeSelection, removeTerm, scopedForm, scopeGesture, segmentAt,
+    pairDelimiter, planAt, removeSegment, removeSelection, removeTerm, replaceSelection, scopedForm, scopeGesture,
+    segmentAt,
     segmentsOf, selectionOver, selectionStep, slotStart, termStarts, toggleSort,
 } from "../../../../src/ui/bar/plan";
 
@@ -481,6 +482,22 @@ test("removing a selection leaves no stranded separator", () => {
         {text: "big dragon", caret: 3, removed: true});
     assert.deepEqual(removeSelection("big red dragon", {from: 4, to: 7}),
         {text: "big  dragon", caret: 4, removed: true});
+});
+
+test("replacing a selection lands the new text where it stood, the caret after it", () => {
+    const text = "model:fire sound:bell cast:2s";
+    // A pasted clause takes the selected chip's place, keeping the separator the next segment needs.
+    assert.deepEqual(replaceSelection(text, {from: 0, to: 10}, "anim:walk"),
+        {text: "anim:walk sound:bell cast:2s", caret: 9, removed: true});
+    // At the query's end no separator grows: the reader may keep typing.
+    assert.deepEqual(replaceSelection(text, {from: 22, to: 29}, "fx:glow"),
+        {text: "model:fire sound:bell fx:glow", caret: 29, removed: true});
+    // Newlines become the separator they stand for, because a query is one line.
+    assert.deepEqual(replaceSelection(text, {from: 0, to: 29}, "model:fire\nsound:ice"),
+        {text: "model:fire sound:ice", caret: 20, removed: true});
+    // Nothing pasteable is the removal alone.
+    assert.deepEqual(replaceSelection(text, {from: 0, to: 10}, "  \n "),
+        {text: "sound:bell cast:2s", caret: 0, removed: true});
 });
 
 test("the delimiter pairing is one rule: enclose, spawn, step over, and take both halves back", () => {
