@@ -12,7 +12,7 @@
 import {useMemo, useRef, useState} from "react";
 import type {BarPlan, Commit, Keystroke} from "./plan";
 import {
-    commitSegment, firstDiff, grownSegment, insertAtGap, planAt, removeSegment, removeTerm, scopedForm,
+    commitSegment, firstDiff, grownSegment, insertAtGap, planAt, removeSegment, removeTerm, scopedForm, shiftScope,
     scopeGesture, segmentAt, slotStart, toggleNegation, toggleSort,
 } from "./plan";
 import type {CaretRequest} from "./open";
@@ -58,6 +58,8 @@ export interface EditingSession {
      */
     readonly writeAtGap: (value: string) => boolean;
     readonly onArrow: (dir: -1 | 1) => void;
+    /** Ctrl+] and Ctrl+[: the scope's boundary on that side adjusts at the caret — barf out, or slurp in. */
+    readonly onScopeShift: (caretInSlot: number, dir: 1 | -1) => void;
     readonly onCommit: () => void;
     readonly onCancel: () => void;
     readonly onEdge: (side: -1 | 1) => void;
@@ -268,6 +270,18 @@ export function useEditingSession(
         }
     };
 
+    /**
+     * Ctrl+] and Ctrl+[: the scope's boundary on that side adjusts at the caret — text between them barfs
+     * out of the enclosure, nothing between them slurps the neighbouring term in. The session stays open on
+     * the interior, one undoable operation either way.
+     */
+    const onScopeShift = (caretInSlot: number, dir: 1 | -1): void => {
+        if (gapAt !== null) return;
+        const step = shiftScope(text, at.before.length, caretInSlot, dir);
+        if (step === null) return;
+        applyStep(step, true, planAt(step.text, step.caret).slot);
+    };
+
     /** Enter: commit and open a FRESH tail — with a separator appended where the committed chip is the last. */
     const onCommit = (): void => {
         const step = commitOpen();
@@ -414,7 +428,8 @@ export function useEditingSession(
     return {
         at, clamped, gapAt, caret, session, focused, setFocused,
         pushUndo, openSession, openSegment, openGap, openTail, openEnd,
-        applyStep, onKeystroke, commitOpen, writeAtGap, onArrow, onCommit, onCancel, onEdge, onUndo, onRedo,
+        applyStep, onKeystroke, commitOpen, writeAtGap, onArrow, onScopeShift, onCommit, onCancel, onEdge, onUndo,
+        onRedo,
         restAfter, restAt, pressCommit, actionsFor,
     };
 }

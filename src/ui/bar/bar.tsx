@@ -82,8 +82,8 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
         onBarPaste,
     } = selection;
     const {
-        at, gapAt, caret, session, focused, setFocused, onKeystroke, commitOpen, onArrow, onCommit, onCancel,
-        onEdge, onUndo, onRedo, actionsFor, pushUndo, openTail,
+        at, gapAt, caret, session, focused, setFocused, onKeystroke, commitOpen, onArrow, onScopeShift, onCommit,
+        onCancel, onEdge, onUndo, onRedo, actionsFor, pushUndo, openTail,
     } = editing;
 
     // The panel's rewrite door: one undoable operation through the session's own machinery, so Ctrl+Z takes
@@ -139,6 +139,7 @@ export function Bar({text, onText, placeholder, vocab = NO_VOCABULARY, handle}: 
             onCaret={setCaretInSlot}
             onKeystroke={onKeystroke}
             onArrow={onArrow}
+            onScopeShift={onScopeShift}
             onEdge={onEdge}
             onCommit={onCommit}
             onCancel={onCancel}

@@ -71,6 +71,7 @@ export function OpenSegment({
                                 onFlip,
                                 onKeystroke,
                                 onArrow,
+                                onScopeShift,
                                 onEdge,
                                 onCommit,
                                 onCancel,
@@ -112,6 +113,8 @@ export function OpenSegment({
     readonly onKeystroke: (step: Keystroke, reset: boolean, held: string) => void;
     /** The caret walking out of the slot at either end. */
     readonly onArrow: (dir: -1 | 1) => void;
+    /** Ctrl+] and Ctrl+[: the scope's boundary on that side adjusts at the caret — barf out, or slurp in. */
+    readonly onScopeShift: (caretInSlot: number, dir: 1 | -1) => void;
     /** Home and End: the jump to the bar's own ends. */
     readonly onEdge: (side: -1 | 1) => void;
     /** Enter — commit the chip, simplified. */
@@ -253,6 +256,13 @@ export function OpenSegment({
                 e.preventDefault();
                 onRedo();
             }
+            return;
+        }
+        // Ctrl+] and Ctrl+[: the scope's boundary on that side adjusts at the caret — text between them
+        // leaves the enclosure (barf), nothing between them pulls the neighbouring term in (slurp).
+        if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === "]" || e.key === "[")) {
+            e.preventDefault();
+            onScopeShift(el.selectionStart ?? 0, e.key === "]" ? 1 : -1);
             return;
         }
         if (e.key === "Enter") {

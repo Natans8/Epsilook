@@ -280,6 +280,24 @@ function closePhrase(interior: string): string {
     return quote ? interior + GRAMMAR.phrase : interior;
 }
 
+/**
+ * One interior with a trailing lone escape made inert.
+ *
+ * An escape shields the character after it, and at the interior's end the next character is one the commit
+ * itself supplies — the scope's closing brace, or {@link closePhrase}'s closing quote — which the reader never
+ * typed and the escape must not eat. A lone trailing backslash means the literal character, so the commit
+ * spells it as the pair that says so. The run is counted from the end: it is maximal, so an odd count leaves
+ * exactly one escape unpaired.
+ *
+ * @param interior The scope's interior, or a segment's value.
+ * @returns The interior, its trailing escape doubled where one stood lone.
+ */
+function inertEscape(interior: string): string {
+    let run = 0;
+    while (run < interior.length && interior[interior.length - 1 - run] === GRAMMAR.escape) run += 1;
+    return run % 2 === 1 ? interior + GRAMMAR.escape : interior;
+}
+
 /** Whether the interior's final character is the closer of the scope that was opened before it. */
 function closesAtEnd(interior: string): boolean {
     return closerAt(interior) === interior.length - 1;
@@ -670,6 +688,79 @@ function spliceOut(text: string, from: number, to: number): Commit {
 }
 
 /**
+ * Adjusts an open scope's boundary on one side of the caret — structural editing's barf and slurp, folded
+ * into one context-sensitive gesture per side.
+ *
+ * With text between the caret and that side's boundary, the boundary moves TO the caret and the text leaves
+ * the enclosure without the brace — the barf: `model:{a b}` with the caret after `a` becomes `model:{a} b`.
+ * With nothing between them, the boundary moves the other way and swallows the neighbouring outside term —
+ * the slurp: `model:{a} b` with the caret at the interior's end becomes `model:{a b}`. What leaves becomes
+ * ordinary query text and reads as whatever it is out there; what enters reads as the scope reads it, errors
+ * included — the gesture is structural, never semantic.
+ *
+ * @param text The query text.
+ * @param at Any offset inside the open segment.
+ * @param caretInSlot The caret, in the slot's own coordinates.
+ * @param dir Which boundary the gesture works: 1 the closing brace, -1 the opening one.
+ * @returns The new text with the caret staying beside its interior, or null where the segment holds no scope,
+ *   the scope closes early, or nothing would move.
+ */
+export function shiftScope(text: string, at: number, caretInSlot: number, dir: 1 | -1): Keystroke | null {
+    const plan = planAt(text, at);
+    // A closer still inside the slot is the early-glued shape (`model:{a}x`), which is not an interior; the
+    // well-closed scope carries its brace as the suffix and the unclosed one gets a brace supplied below.
+    if (plan.head === null || !plan.head.scoped || closerAt(plan.slot) >= 0) return null;
+    const caret = Math.min(Math.max(0, caretInSlot), plan.slot.length);
+    const kept = dir === 1 ? plan.slot.slice(0, caret).trimEnd() : plan.slot.slice(caret).trimStart();
+    const pushed = (dir === 1 ? plan.slot.slice(caret) : plan.slot.slice(0, caret)).trim();
+    const headPart = plan.open.slice(0, plan.head.consumed);
+    if (pushed !== "") {
+        const open = headPart + kept + GRAMMAR.scope.close;
+        if (dir === 1) {
+            return {
+                text: plan.before + open + " " + pushed + plan.after,
+                caret: plan.before.length + headPart.length + kept.length,
+                operation: true,
+            };
+        }
+        return {
+            text: plan.before + pushed + " " + open + plan.after,
+            caret: plan.before.length + pushed.length + 1 + headPart.length,
+            operation: true,
+        };
+    }
+    if (dir === 1) {
+        const lead = plan.after.length - plan.after.trimStart().length;
+        const outside = plan.after.slice(lead);
+        if (outside === "") return null;
+        const starts = termStarts(outside);
+        const cut = starts.length > 1 ? starts[1] : outside.length;
+        const term = outside.slice(0, cut).trimEnd();
+        const rest = outside.slice(cut);
+        const interior = plan.slot.trimEnd();
+        const open = headPart + (interior === "" ? term : `${interior} ${term}`) + GRAMMAR.scope.close;
+        return {
+            text: plan.before + open + (rest === "" ? "" : " " + rest),
+            caret: plan.before.length + open.length - 1,
+            operation: true,
+        };
+    }
+    const outside = plan.before.trimEnd();
+    if (outside === "") return null;
+    const starts = termStarts(outside);
+    const from = starts[starts.length - 1];
+    const term = outside.slice(from);
+    const before = outside.slice(0, from);
+    const interior = plan.slot.trimStart();
+    const open = headPart + (interior === "" ? term : `${term} ${interior}`) + GRAMMAR.scope.close;
+    return {
+        text: before + open + plan.after,
+        caret: before.length + headPart.length + term.length + (interior === "" ? 0 : 1),
+        operation: true,
+    };
+}
+
+/**
  * Commits one segment: the scope simplifies to its interior where a single term remains.
  *
  * A scoped chip with one interior term drops its braces (`model:{fire}` → `model:fire` — the kernel law
@@ -705,7 +796,7 @@ export function commitSegment(text: string, at: number): Commit {
             removed: false,
         };
     }
-    let interior = closePhrase(plan.slot.trim());
+    let interior = closePhrase(inertEscape(plan.slot.trim()));
     // The simplification runs to its FIXPOINT: an interior that is itself one whole scope sheds that scope
     // too, or `model:{{fire}}` would commit to the editing form's own spelling and lose a brace pair per
     // pass instead of settling once.

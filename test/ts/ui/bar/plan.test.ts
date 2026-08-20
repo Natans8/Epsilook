@@ -9,7 +9,7 @@ import test from "node:test";
 import {
     backspaceAtStart, commitSegment, deleteAtEnd, firstDiff, grownSegment, insertAtGap, keywordBehind, openHead,
     pairDelimiter, planAt, removeSegment, removeSelection, removeTerm, replaceSelection, scopedForm, scopeGesture,
-    segmentAt,
+    segmentAt, shiftScope,
     segmentsOf, selectionOver, selectionStep, slotStart, termStarts, toggleSort,
 } from "../../../../src/ui/bar/plan";
 
@@ -482,6 +482,30 @@ test("removing a selection leaves no stranded separator", () => {
         {text: "big dragon", caret: 3, removed: true});
     assert.deepEqual(removeSelection("big red dragon", {from: 4, to: 7}),
         {text: "big  dragon", caret: 4, removed: true});
+});
+
+test("Ctrl+] and Ctrl+[ adjust the boundary at the caret: text barfs out, nothing slurps in", () => {
+    // Forward barf: what follows the caret leaves the enclosure, WITHOUT the boundary brace.
+    assert.deepEqual(shiftScope("model:{a b}", 0, 1, 1), {text: "model:{a} b", caret: 8, operation: true});
+    // Backward barf: what precedes the caret leaves to stand before the segment.
+    assert.deepEqual(shiftScope("model:{a b}", 0, 2, -1), {text: "a model:{b}", caret: 9, operation: true});
+    // Forward slurp: nothing between the caret and the closer, so the closer swallows the next term whole.
+    assert.deepEqual(shiftScope("model:{a} b c", 0, 1, 1), {text: "model:{a b} c", caret: 10, operation: true});
+    // Backward slurp mirrors it on the opener — and a chip is one term, so it comes in whole.
+    assert.deepEqual(shiftScope("x model:{a}", 4, 0, -1), {text: "model:{x a}", caret: 9, operation: true});
+    // Nothing to move on that side is a no-op, and an unscoped segment offers nothing.
+    assert.equal(shiftScope("model:{a}", 0, 1, 1), null);
+    assert.equal(shiftScope("fireball", 0, 4, 1), null);
+});
+
+test("a trailing lone escape is literal text: the commit doubles it so it cannot eat the closer", () => {
+    // The escape shields the next character, and at the slot's end the next character is the brace or quote
+    // the commit itself supplies — which the reader never typed. A lone backslash means the literal
+    // character, and the one-term shed then applies as it does to any literal term.
+    assert.equal(commitSegment("name:{\\", 0).text, "name:\\\\");
+    assert.equal(commitSegment('name:{"a\\', 0).text, 'name:"a\\\\"');
+    // An even run is already paired — every escape shields the one after it — and stays untouched.
+    assert.equal(commitSegment("name:{\\\\", 0).text, "name:\\\\");
 });
 
 test("replacing a selection lands the new text where it stood, the caret after it", () => {
