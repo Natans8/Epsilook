@@ -18,6 +18,7 @@ import {COMPARISONS, exact} from "../vocabulary/operators";
 import type {Ask, Clause, Parsed, ParsedOperand, PropRef, ScopeTerm, ValueExpr} from "./ast";
 import {propOf} from "./ast";
 import {escapeRegExp} from "../text/patterns";
+import {scopeShaped} from "./scan";
 import type {AxisType} from "../vocabulary/value-types";
 import {TYPES} from "../vocabulary/value-types";
 import {notationOf, spellIn, spelledNotation} from "../vocabulary/units";
@@ -247,11 +248,16 @@ function valueText(value: ValueExpr, at?: PropRef, tier: Spelling = "canonical",
             const glued = parts.join(GRAMMAR.or);
             // In bind position the glued spelling re-reads as this same alternation, so the written tier
             // spares the parentheses unless a phrase, a space or an empty spelling would split it. A scope's
-            // inner bind always groups: glued pipes there would split the scope's own runs.
+            // inner bind always groups — the glued pipe re-reads the same there, but the group is what tells
+            // a bind's value alternation apart from the scope's own SPACED run alternation at a glance.
             if (tier === "written" && bareSafe
                 && parts.every((p) => p !== "" && !p.includes(GRAMMAR.phrase) && !p.includes(" "))) {
                 return glued;
             }
+            // The group spelling is only legal where it re-reads as the group: a colon at its own depth makes
+            // the parser read the parentheses as a SCOPE (`(mount:horse)` binds mount), so a value the group
+            // cannot carry keeps the glued spelling, which in bind position re-reads as this same alternation.
+            if (bareSafe && scopeShaped(glued)) return glued;
             return `${GRAMMAR.group.open}${glued}${GRAMMAR.group.close}`;
         }
     }
@@ -264,15 +270,23 @@ function valueText(value: ValueExpr, at?: PropRef, tier: Spelling = "canonical",
  * A scope term's content value. Alternation glues — `fire|frost` — because a term never reads a parenthesised
  * group; the grouped spelling belongs to bind values, where {@link valueText} writes it.
  */
-function termValueText(value: ValueExpr, tier: Spelling): string {
+function termValueText(value: ValueExpr, tier: Spelling, at?: PropRef): string {
     if (value.op === "anyOf") {
-        return value.alternatives.map((alt) => valueText(alt, undefined, tier)).join(GRAMMAR.or);
+        return value.alternatives.map((alt) => valueText(alt, at, tier)).join(GRAMMAR.or);
     }
-    return valueText(value, undefined, tier);
+    return valueText(value, at, tier);
 }
 
-/** The word a scope term is written with, or null for a term with nothing evaluable to write. */
-function termText(term: ScopeTerm, tier: Spelling): string | null {
+/**
+ * The word a scope term is written with, or null for a term with nothing evaluable to write.
+ *
+ * @param term The term.
+ * @param tier The output tier, per {@link Spelling}.
+ * @param enclosing The kind whose own scope holds this term, when the scope's head IS a kind — its word is
+ *   already the door overhead, so a term never repeats it.
+ * @returns The term's text, or null.
+ */
+function termText(term: ScopeTerm, tier: Spelling, enclosing: PropRef["kind"] | null = null): string | null {
     if (term.state !== "ok" || term.ask === null) return null;
     const negate = term.not ? GRAMMAR.negate : "";
     const ask = term.ask;
@@ -282,6 +296,15 @@ function termText(term: ScopeTerm, tier: Spelling): string | null {
     const ref = ask.props[0];
     const text = valueText(ask.value, ref, tier);
     if (subjectSpeaksBare(ask.value, ref, tier, text)) return `${negate}${text}`;
+    // Inside the kind's OWN scope its word is already the door overhead: writing it again names a property the
+    // kind does not have, and the spelling stops parsing. The subject of a ONE-property kind speaks bare —
+    // every bare value the scope reads lands on that one property — and anything else binds through its name.
+    if (ref.kind === enclosing) {
+        const props = Object.keys(ref.kind.props);
+        return props.length === 1 && props[0] === ref.prop
+            ? `${negate}${termValueText(ask.value, tier, ref)}`
+            : `${negate}${bindTo(ref.prop, text)}`;
+    }
     // A kind's SUBJECT binds through the KIND's word — the door the reader has — never through the schema's
     // own property name: `mount:horse`, not the `name:horse` that surfaced a field nobody typed.
     const subject = Object.keys(ref.kind.props)[0] === ref.prop && ref.kind.word !== undefined
@@ -328,10 +351,11 @@ function clauseText(clause: Clause, tier: Spelling): string | null {
 /**
  * The lone positive term a scope's spelling promotes out of the braces, or null when the braces stay.
  *
- * A scope of one evaluable term is that term, so its spelling drops the braces — for a content or kind word, whose
- * text means the same on either side of them, and for a count whose value opens with an operator, where the
- * promoted spelling is the column-form desugar inverted and re-reads as this same scope. Every other bound word
- * stays braced: outside its scope it would mean something different, or nothing.
+ * A scope of one evaluable term is that term, so its spelling drops the braces — for a content or kind word,
+ * whose text means the same on either side of them, and for any bound word whose value opens with an OPERATOR,
+ * where the promoted spelling is the glued inner bind the parser reads back to this same one-term scope:
+ * `range:min=5yd`, `sound:count>2`, `cast>2s`. Only the colon-glued bind stays braced — a second colon in a
+ * value has no meaning, so `model:attach:chest` would read as content and the braces are what bind it.
  *
  * Exported for the simplifier, whose unwrapping rewrites and round-trip guard must agree with the formatter on
  * exactly which scopes shed their braces — both read the decision here. The decision is tier-independent: which
@@ -348,6 +372,7 @@ export function unbracedTerm(terms: ReadonlyArray<readonly ScopeTerm[]>): ScopeT
     if (ask === null) return null;
     if (ask.on === "content" || ask.on === "kindWord") return term;
     if (ask.on === "count" && OPENS_OPERATOR.test(valueText(ask.value))) return term;
+    if (ask.on === "props" && OPENS_OPERATOR.test(valueText(ask.value, ask.props[0]))) return term;
     return null;
 }
 
@@ -374,16 +399,21 @@ function askText(ask: Ask, tier: Spelling): string | null {
         return bindTo(head, valueText(test.value, ref, tier, true));
     }
 
+    const enclosing = ask.on === "kind" ? ask.kind : null;
     const runs = test.terms
         .map((run) => run
-            .map((term) => ({term, text: termText(term, tier)}))
+            .map((term) => ({term, text: termText(term, tier, enclosing)}))
             .filter((pair): pair is { term: ScopeTerm; text: string } => pair.text !== null))
         .filter((run) => run.length > 0);
     if (runs.length === 0) return exists;
     const lone = unbracedTerm(test.terms);
     if (lone !== null && lone.ask !== null) {
         if (lone.ask.on === "count") return `${head}${valueText(lone.ask.value, undefined, tier)}`;
-        const text = termText(lone, tier);
+        const text = termText(lone, tier, enclosing);
+        // A promoted BIND spells as the glued inner bind the parser reads back to this scope, converging with
+        // the directly-typed form — `cast>2s`, `range:min=5yd`. Content keeps its colon: an anchored value's
+        // `=` is the anchor, not a glue the head may absorb.
+        if (text !== null && lone.ask.on === "props") return bindTo(head, text);
         if (text !== null) return `${head}${GRAMMAR.bind}${text}`;
     }
     const body = runs.map((run) => run.map((pair) => pair.text).join(" ")).join(` ${GRAMMAR.or} `);

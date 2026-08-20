@@ -80,6 +80,16 @@ test("a doorless clause paints no doors: a colon inside a value is content, not 
     assert.equal(runFor("model:*", "*").kind, "meta");
 });
 
+test("a foreign bind marks no door: only what the parse resolved paints as a property", () => {
+    // `sound:` inside a model scope binds nothing — painting it loud in model's tone claimed a reading the
+    // parse refused. It demotes to plain text; the resolved bind beside it keeps its door.
+    const sound = runFor("model:{draenei sound:fire}", "sound");
+    assert.equal(sound.kind, "word");
+    assert.equal(sound.door, undefined);
+    assert.equal(sound.tone, undefined);
+    assert.equal(runFor("model:{draenei attach:chest}", "attach").door, true);
+});
+
 test("a property is marked as the door it is, in its column's tone; a head is not a property", () => {
     const runs = paint("sound:count>2 model:{attach:chest}");
     const at = (word: string): Run | undefined =>

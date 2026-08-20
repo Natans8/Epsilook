@@ -105,6 +105,16 @@ test("the chip displays the meaning, not the minimal spelling: an elided count s
     assert.equal(view("model>=4").notes.length, 1);
 });
 
+test("an anchored quantity joins its property too, the implied anchor made explicit between them", () => {
+    // `min = 5yd` is one condition: the bare number alone already is the exact ask, but beside its property
+    // word the glyph is what relates the two — without it the cells read as unrelated.
+    const c = chip("range:{min=5yd}");
+    assert.equal(c.sub, undefined);
+    assert.deepEqual(c.body, [{is: "word", text: "min"}, {is: "op", text: "="}, {is: "value", text: "5yd"}]);
+    // A worded value keeps the cell form: the pair reads as one saying what the other is.
+    assert.equal(chip("model:{attach:chest}").sub, "attach");
+});
+
 test("a bare number never displays bare: the notation that read it is made explicit, in its own family", () => {
     assert.deepEqual(chip("scale:5").body, [{is: "value", text: "×5"}]);
     assert.deepEqual(chip("scale:150").body, [{is: "value", text: "150%"}]);

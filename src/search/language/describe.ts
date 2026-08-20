@@ -328,6 +328,25 @@ function subjectOf(ref: PropRef): boolean {
 }
 
 /**
+ * Whether a scope's single term is an exact ask on a QUANTITY with no sentinel word — the one operator ask
+ * whose glyph the value display elides, and so the one the chip-collapse join has to put back.
+ *
+ * @param terms The scope's terms, by run.
+ * @returns True when the lone term anchors a bare quantity.
+ */
+function impliedQuantity(terms: ReadonlyArray<readonly ScopeTerm[]>): boolean {
+    const flat = terms.flat().filter((t) => t.state === "ok" && t.ask !== null);
+    if (flat.length !== 1) return false;
+    const ask = flat[0].ask;
+    if (ask === null || (ask.on !== "props" && ask.on !== "count")) return false;
+    const value = ask.value;
+    if (value.op !== "exact" || "text" in value.operand) return false;
+    const at = ask.on === "props" ? ask.props[0] : undefined;
+    if (sentinelWord(value.operand, at) !== null) return false;
+    return TYPES.get(value.operand.type)?.quantity === true;
+}
+
+/**
  * The one kind a scope's single term belongs to, or null.
  *
  * Only where the scope holds exactly one term and that term names a kind with a word of its own -- which is
@@ -440,9 +459,19 @@ function askView(ask: Ask, not: boolean): AskView | null {
         // where the value opens with an operator: `count ≥ 4` reads as one phrase, and dividing it into cells
         // made the property and its comparison look like two unrelated conditions.
         const bound = only.is === "bind" && promoted === null ? only : null;
-        const joined = bound !== null && bound.body[0]?.is === "op";
+        // A bind whose value carries an OPERATOR joins with its property into one phrase: `count ≥ 4` and
+        // `min = 5yd` each read as one condition, and dividing them into cells made the property and its
+        // value look like two unrelated ones. A quantity's implied anchor comes BACK in the joined phrase —
+        // alone the bare number already is the exact ask, but beside its property word the glyph is what
+        // relates the two. A worded value stays a cell: `from | chest` reads as the pair it is.
+        const anchored = bound !== null && bound.body[0]?.is !== "op" && impliedQuantity(test.terms);
+        const joined = bound !== null && (bound.body[0]?.is === "op" || anchored);
         const body = bound === null ? compactBody(only)
-            : joined ? [{is: "word" as const, text: bound.head}, ...bound.body]
+            : joined ? [
+                    {is: "word" as const, text: bound.head},
+                    ...(anchored ? [{is: "op" as const, text: glyphOf(exact)}] : []),
+                    ...bound.body,
+                ]
                 : [...bound.body];
         // The key is OMITTED where there is no bound property rather than set to nothing: a view is compared
         // whole, and an absent property is not the same shape as one present and empty.

@@ -58,7 +58,8 @@ describe("the walk", () => {
     it("answers the same set for a query and its formatted spellings", () => {
         for (const query of [
             "model:right:hand", 'model:"right:hand"', "sound:{kit:150}", "model:{fire -missile}",
-            "model:(fire|arcane)", "cast:instant",
+            "model:(fire|arcane)", "cast:instant", 'name:{"fire" "ball"}',
+            "model:right:hand|fire", "range:{min=5yd}", "sound:{count>2}",
         ]) {
             for (const tier of ["canonical", "written"] as const) {
                 assert.deepEqual(ids(formatQuery(parsed(query), tier)), ids(query), `${query} (${tier})`);

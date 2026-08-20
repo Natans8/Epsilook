@@ -73,12 +73,25 @@ describe("formatQuery", () => {
         assert.equal(canonical('name:"1,2"'), 'name:"1,2"');
     });
 
+    it("never repeats a kind's word inside its own scope: the subject speaks bare there", () => {
+        // Inside `name:{...}` the word is already the door overhead; writing it again names a property the
+        // kind does not have, and the spelling stopped parsing — the keymash `name:{"\"""\\}}` found it.
+        assert.equal(canonical('name:{"fire" "ball"}'), 'name:{"fire" "ball"}');
+        // The keymash spelling converges once — escapes respelled canonically — and then holds.
+        const once = canonical(String.raw`name:{"\\" "" "\\\\\}"}`);
+        assert.equal(once, String.raw`name:{"\\" "" "\\\\}"}`);
+        assert.equal(canonical(once), once);
+        // A foreign kind's subject inside a COLUMN scope keeps binding through the kind's word.
+        assert.equal(canonical("model:{mount:horse fire}"), "model:{mount:horse fire}");
+    });
+
     it("keeps a value's colon bare: quoting is not an escape, it changes the ask", () => {
         // The colon-glued shape keeps its content reading — only a comparison glues an inner bind — so the bare
         // spelling re-reads as the same content, where the phrase would flip its squashed match to a verbatim one.
         assert.equal(canonical("model:mount:horse"), "model:mount:horse");
         assert.equal(canonical("sound:kit:150"), "sound:kit:150");
-        assert.equal(canonical("model:mount:horse|fire"), "model:(mount:horse|fire)");
+        // The alternation stays GLUED: parenthesised, the inner colon would flip the group to a scope.
+        assert.equal(canonical("model:mount:horse|fire"), "model:mount:horse|fire");
         // A one-term scope promotes to the bind form, which reads the colon the same way.
         assert.equal(canonical("model:{foo:bar}"), "model:foo:bar");
         // The reader who QUOTED chose the string, and that choice stays.
